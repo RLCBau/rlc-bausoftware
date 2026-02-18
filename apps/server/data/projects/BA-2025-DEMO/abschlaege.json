@@ -1,0 +1,105 @@
+[
+  {
+    "id": "43a145f5-786e-44a3-b23f-4333a221e728",
+    "projectId": "BA-2025-DEMO",
+    "nr": 5,
+    "date": "2025-12-19",
+    "title": "Abschlagsrechnung 5",
+    "netto": 250,
+    "mwst": 19,
+    "brutto": 297.5,
+    "status": "Entwurf",
+    "rows": [
+      {
+        "lvPos": "005.001",
+        "kurztext": "Beispiel Position 5",
+        "einheit": "m",
+        "qty": 0,
+        "ep": 25,
+        "total": 0
+      },
+      {
+        "lvPos": "007.001",
+        "kurztext": "Beispiel Position 7",
+        "einheit": "m",
+        "qty": 10,
+        "ep": 25,
+        "total": 250
+      }
+    ]
+  },
+  {
+    "id": "df8159a4-9aee-483d-af42-ee40178f71a2",
+    "projectId": "BA-2025-DEMO",
+    "nr": 4,
+    "date": "2025-12-19",
+    "title": "Abschlagsrechnung 4",
+    "netto": 250,
+    "mwst": 19,
+    "brutto": 297.5,
+    "status": "Entwurf",
+    "rows": [
+      {
+        "lvPos": "007.001",
+        "kurztext": "Beispiel Position 7",
+        "einheit": "m",
+        "qty": 10,
+        "ep": 25,
+        "total": 250
+      }
+    ]
+  },
+  {
+    "id": "31c5067a-2953-467f-bf88-cfb86c03d076",
+    "projectId": "BA-2025-DEMO",
+    "nr": 3,
+    "date": "2025-12-19",
+    "title": "Abschlagsrechnung 3",
+    "netto": 250,
+    "mwst": 19,
+    "brutto": 297.5,
+    "status": "Entwurf",
+    "rows": [
+      {
+        "lvPos": "007.001",
+        "kurztext": "Beispiel Position 7",
+        "einheit": "m",
+        "qty": 10,
+        "ep": 25,
+        "total": 250
+      },
+      {
+        "lvPos": "006.001",
+        "kurztext": "Beispiel Position 6",
+        "einheit": "m",
+        "qty": 0,
+        "ep": 25,
+        "total": 0
+      }
+    ]
+  },
+  {
+    "id": "b0b5a4ac-c2af-46a3-bdd2-19cfd8426cba",
+    "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+    "nr": 2,
+    "date": "2025-12-19",
+    "title": "Abschlagsrechnung 2",
+    "netto": 0,
+    "mwst": 19,
+    "brutto": 0,
+    "status": "Entwurf",
+    "rows": []
+  },
+  {
+    "id": "c1910389-9c31-45c2-8c04-31336307eaf9",
+    "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+    "nr": 1,
+    "date": "2025-12-19",
+    "title": "Abschlagsrechnung 1",
+    "netto": 0,
+    "mwst": 19,
+    "brutto": 0,
+    "status": "Entwurf",
+    "rows": []
+  }
+]

@@ -1,0 +1,65 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "date": "2026-01-02",
+  "savedAt": "2026-01-02T14:14:07.670Z",
+  "note": "Jjjd",
+  "bemerkungen": "",
+  "rows": [
+    {
+      "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+      "date": "2026-01-02",
+      "lieferscheinNummer": "BA-2025-DEMO",
+      "quantity": 0,
+      "kostenstelle": "BA-2025-DEMO",
+      "lvItemPos": null,
+      "comment": "Jjjd",
+      "bemerkungen": "Djkf",
+      "photos": [
+        {
+          "id": "1767363237118-9e13afafd3f388",
+          "name": "rechnung-MC.M25087925166.pdf",
+          "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/DocumentPicker/F7825A89-1A4B-402B-99E2-FE070C3A3467.pdf",
+          "type": "application/pdf"
+        },
+        {
+          "id": "1767363214562-07885a3ec66336c",
+          "name": "photo_1767363214562.jpg",
+          "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/ImagePicker/7310B5B9-EF55-4C9F-AAE6-68A3A4C07F2B.jpg",
+          "type": "image/jpeg"
+        }
+      ]
+    }
+  ],
+  "items": {
+    "aufmass": [],
+    "lieferscheine": [
+      {
+        "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+        "date": "2026-01-02",
+        "lieferscheinNummer": "BA-2025-DEMO",
+        "quantity": 0,
+        "kostenstelle": "BA-2025-DEMO",
+        "lvItemPos": null,
+        "comment": "Jjjd",
+        "bemerkungen": "Djkf",
+        "photos": [
+          {
+            "id": "1767363237118-9e13afafd3f388",
+            "name": "rechnung-MC.M25087925166.pdf",
+            "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/DocumentPicker/F7825A89-1A4B-402B-99E2-FE070C3A3467.pdf",
+            "type": "application/pdf"
+          },
+          {
+            "id": "1767363214562-07885a3ec66336c",
+            "name": "photo_1767363214562.jpg",
+            "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/ImagePicker/7310B5B9-EF55-4C9F-AAE6-68A3A4C07F2B.jpg",
+            "type": "image/jpeg"
+          }
+        ]
+      }
+    ]
+  },
+  "attachments": [],
+  "upload": []
+}

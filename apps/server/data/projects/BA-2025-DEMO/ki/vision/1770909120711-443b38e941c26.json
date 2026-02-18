@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Bernhard Heitauer\nFuhrunternehmen GmbH & Co. KG\nWerk Bischofswiesen\nGreinswiesenweg 2\n83483 Bischofswiesen\nWiege- und Lieferschein\nBon-Nr. 18476\nGewicht 1.515 t\nWiegungen 2\nKunde LKS\nBaustelle Schule BW 257030\nFahrzeug LKS BGL KS 347\nDatum 23.06.2025\nZeit 08:47\nUnterschrift",
+  "rawText": "Bernhard Heitauer\nFuhrunternehmen GmbH & Co. KG\nWerk Bischofswiesen\nGreinswiesenweg 2\n83483 Bischofswiesen\nWiege- und Lieferschein\nBon-Nr. 18476\nGewicht 1.515 t\nWiegungen 2\nKunde LKS\nBaustelle Schule BW 257030\nFahrzeug LKS BGL KS 347\nDatum 23.06.2025\nZeit 08:47\nUnterschrift",
+  "entities": {
+    "extracted": [
+      {
+        "file": "IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+        "text": "Bernhard Heitauer\nFuhrunternehmen GmbH & Co. KG\nWerk Bischofswiesen\nGreinswiesenweg 2\n83483 Bischofswiesen\nWiege- und Lieferschein\nBon-Nr. 18476\nGewicht 1.515 t\nWiegungen 2\nKunde LKS\nBaustelle Schule BW 257030\nFahrzeug LKS BGL KS 347\nDatum 23.06.2025\nZeit 08:47\nUnterschrift",
+        "entities": {
+          "arbeiten": [
+            "Wiege- und Lieferschein"
+          ],
+          "materialien": [
+            "Schotter 32-56mm"
+          ],
+          "maschinen": [],
+          "personal": [
+            "LKS"
+          ],
+          "zeiten": {
+            "start": "08:47",
+            "ende": null
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+      "type": "image/jpeg",
+      "size": 5086400
+    }
+  ],
+  "createdAt": 1770909120710
+}

@@ -1,0 +1,45 @@
+{
+  "name": "rlc-web",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 5173"
+  },
+  "dependencies": {
+    "@tmcw/togeojson": "^7.1.2",
+    "@types/leaflet": "^1.9.20",
+    "axios": "^1.13.1",
+    "dxf-parser": "^1.1.2",
+    "dxf-viewer": "^1.0.46",
+    "fabric": "^6.7.1",
+    "file-saver": "^2.0.5",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
+    "leaflet": "^1.9.4",
+    "leaflet-tilelayer-wmts": "^1.0.0",
+    "leaflet.gridlayer.googlemutant": "^0.15.0",
+    "lucide-react": "^0.545.0",
+    "papaparse": "^5.5.3",
+    "pdfjs-dist": "^5.4.296",
+    "polygon-clipping": "^0.15.7",
+    "proj4": "^2.19.10",
+    "proj4leaflet": "^1.0.2",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-dxf-viewer": "^1.0.4",
+    "react-router-dom": "^6.26.2",
+    "three": "^0.180.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.9"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Lieferung von Asphalt für Straßen- und Verkehrsflächen. Gewicht und Zeitpunkte der Einfahrt und Ausfahrt sind dokumentiert.",
+  "rawText": "Lieferung von Asphalt für Straßen- und Verkehrsflächen. Gewicht und Zeitpunkte der Einfahrt und Ausfahrt sind dokumentiert.",
+  "entities": {
+    "extracted": [
+      {
+        "file": "camera_1770647992474.jpg",
+        "text": "Lieferung von Asphalt für Straßen- und Verkehrsflächen. Gewicht und Zeitpunkte der Einfahrt und Ausfahrt sind dokumentiert.",
+        "entities": {
+          "arbeiten": [
+            "Asphaltarbeiten"
+          ],
+          "materialien": [
+            "Asphalt"
+          ],
+          "maschinen": [
+            "4-Achser"
+          ],
+          "personal": [
+            "Halter Lamperberger"
+          ],
+          "zeiten": {
+            "start": "14:28",
+            "ende": "14:28"
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "camera_1770647992474.jpg",
+      "type": "image/jpeg",
+      "size": 7222825
+    }
+  ],
+  "createdAt": 1770648023412
+}

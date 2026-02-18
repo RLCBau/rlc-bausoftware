@@ -1,0 +1,44 @@
+{
+  "kind": "lieferschein",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-08",
+  "lieferscheinNummer": "",
+  "supplier": "",
+  "driver": "Fkfj",
+  "material": "",
+  "kostenstelle": "",
+  "lvItemPos": null,
+  "attachments": [
+    {
+      "id": "438cd3cd-a038-4b8f-8862-2a365bb4d5f0",
+      "name": "photo_1767882881539.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767882887947__photo_1767882881539.jpg"
+    }
+  ],
+  "workflowStatus": "FREIGEGEBEN",
+  "submittedAt": 1767949724574,
+  "id": "ls_1767949724573_16d9d2cf3827",
+  "projectFsKey": "BA-2025-DEMO",
+  "createdAt": 1767949724574,
+  "rejectionReason": null,
+  "site": "BA-2025-DEMO",
+  "quantity": 0,
+  "unit": "",
+  "comment": "",
+  "bemerkungen": "",
+  "photos": [
+    {
+      "id": "438cd3cd-a038-4b8f-8862-2a365bb4d5f0",
+      "name": "photo_1767882881539.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767882887947__photo_1767882881539.jpg"
+    }
+  ],
+  "rejectReason": null,
+  "approvedAt": 1767949742625,
+  "rejectedAt": null,
+  "approvedBy": null,
+  "savedAt": "2026-01-09T09:09:02.625Z"
+}

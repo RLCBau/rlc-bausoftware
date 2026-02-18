@@ -1,0 +1,50 @@
+{
+  "kind": "regie",
+  "id": "1767971579413-d938f83d7e2758",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-09",
+  "reportType": "REGIE",
+  "comment": "",
+  "hours": 0,
+  "unit": "Std",
+  "mitarbeiter": "",
+  "maschinen": "",
+  "materialien": "",
+  "worker": "",
+  "machine": "",
+  "material": "",
+  "quantity": 0,
+  "lvItemPos": "",
+  "regieNummer": "",
+  "auftraggeber": "",
+  "arbeitsbeginn": "",
+  "arbeitsende": "",
+  "pause1": "",
+  "pause2": "",
+  "blattNr": "",
+  "wetter": "",
+  "kostenstelle": "",
+  "bemerkungen": "",
+  "photos": [
+    {
+      "id": "1767971576798-c91ff689fe4318",
+      "name": "photo_1767971576798.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/raw/1767971582507__photo_1767971576798.jpg"
+    }
+  ],
+  "attachments": [
+    {
+      "id": "1767971576798-c91ff689fe4318",
+      "name": "photo_1767971576798.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/raw/1767971582507__photo_1767971576798.jpg"
+    }
+  ],
+  "workflowStatus": "EINGEREICHT",
+  "submittedAt": 1767971584497,
+  "rejectionReason": null,
+  "createdAt": 1767971579413,
+  "projectFsKey": "BA-2025-DEMO"
+}

@@ -1,0 +1,1782 @@
+[
+  {
+    "id": "1764441027960-baustellenfoto.jpg",
+    "file": "1764441027960-baustellenfoto.jpg",
+    "createdAt": "2025-11-29T18:30:28.035Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "5e0bcd01-777d-4b05-ba9f-7cc7f238c93b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 6
+      },
+      {
+        "id": "b7e59000-12e0-4546-8a53-fb518de87791",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "lfm",
+        "menge": 6
+      },
+      {
+        "id": "90958622-ca12-41fd-b75a-1e87e724bdbe",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 6
+      },
+      {
+        "id": "1881f080-9837-4e80-beef-3247f078181f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "35978548-6217-41ec-a173-57d64ef00345",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "f67477d1-8ea6-4c0a-8049-e0389b440cb0",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 6
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1764491593435-baustellenfoto.jpg",
+    "file": "1764491593435-baustellenfoto.jpg",
+    "createdAt": "2025-11-30T08:33:13.462Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "8af97db3-6591-422e-beb4-f1ac22e88384",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 1
+      },
+      {
+        "id": "ba17ce26-053e-4232-a064-7c1529f11ee4",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsgitter einsetzen",
+        "einheit": "St",
+        "menge": 1
+      },
+      {
+        "id": "331804a7-e740-4707-99af-dec034bcc2fa",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 1
+      },
+      {
+        "id": "31ddfde2-39be-4df5-ac32-c07ef8831a4a",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Kiestragschicht herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "e9979a3a-defc-4e38-8e7a-6ff8a4066512",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "a5c82176-ac49-4631-ad70-08304dc5fc39",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Bodenplanum herstellen",
+        "einheit": "m²",
+        "menge": 1
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsgitter einsetzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Kiestragschicht herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Bodenplanum herstellen",
+        "score": 0.95,
+        "unit": "m²"
+      }
+    ]
+  },
+  {
+    "id": "1764491873805-baustellenfoto.jpg",
+    "file": "1764491873805-baustellenfoto.jpg",
+    "createdAt": "2025-11-30T08:37:53.817Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "000cefaa-c3b3-4b34-87b9-2e409fe256a3",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 1
+      },
+      {
+        "id": "be7df186-e8bc-4716-934d-1b1911577734",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Rinnenrost aus Stahlgitter setzen",
+        "einheit": "m",
+        "menge": 1
+      },
+      {
+        "id": "4ccaa497-1664-49e3-86f5-796ec47ae9fd",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Entwässerungsrinne herstellen",
+        "einheit": "m",
+        "menge": 1
+      },
+      {
+        "id": "e0794502-493d-4887-80a8-b93bebad3daa",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Bordsteine setzen",
+        "einheit": "m",
+        "menge": 1
+      },
+      {
+        "id": "01d6258a-abc1-49b6-bae3-912186712b4f",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "07347482-c42d-4ed7-b3d6-ecf8b5b8dac4",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Tragschicht aus mineralischem Schotter herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "b88ca67b-2a6f-44f0-8935-2680dc575a05",
+        "typ": "KI",
+        "lvPos": "7",
+        "beschreibung": "Schachtabdeckungen setzen",
+        "einheit": "St",
+        "menge": 1
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Rinnenrost aus Stahlgitter setzen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "3",
+        "label": "Entwässerungsrinne herstellen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "4",
+        "label": "Bordsteine setzen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Tragschicht aus mineralischem Schotter herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "7",
+        "label": "Schachtabdeckungen setzen",
+        "score": 0.95,
+        "unit": "St"
+      }
+    ]
+  },
+  {
+    "id": "1764503557626-baustellenfoto.jpg",
+    "file": "1764503557626-baustellenfoto.jpg",
+    "createdAt": "2025-11-30T11:52:37.647Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "969844bd-d76b-4300-8f07-1a597530ac24",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 1
+      },
+      {
+        "id": "a6d48693-ed9b-46b6-b289-2e3d7ca85ab2",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "m",
+        "menge": 1
+      },
+      {
+        "id": "18e11831-9e24-40cf-958c-d5ba9e9a7075",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 1
+      },
+      {
+        "id": "edfc1e97-538e-4e3e-baa2-6d1024ef029f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "3ecfd653-76bd-4449-872b-1ce9689ba03e",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "840f422d-e08b-4739-b91b-e6c1823402f5",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Kantensteine setzen",
+        "einheit": "m",
+        "menge": 1
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Kantensteine setzen",
+        "score": 0.95,
+        "unit": "m"
+      }
+    ]
+  },
+  {
+    "id": "1764599613896-baustellenfoto.jpg",
+    "file": "1764599613896-baustellenfoto.jpg",
+    "createdAt": "2025-12-01T14:33:33.924Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "f2bbe08b-e170-450b-b896-399ad89f8f3e",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 9
+      },
+      {
+        "id": "7ae52540-e91e-445f-9cb4-e18fd1a6b8ae",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Rinnenrost aus Stahlgitter einbauen",
+        "einheit": "m",
+        "menge": 9
+      },
+      {
+        "id": "74f8556a-5252-4227-beac-767fc682c41c",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Entwässerungsrinne herstellen",
+        "einheit": "m",
+        "menge": 9
+      },
+      {
+        "id": "345770df-2ee0-4022-87fb-676da0b11ac9",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Bordsteine setzen",
+        "einheit": "m",
+        "menge": 9
+      },
+      {
+        "id": "19387cfe-290e-46cb-bf75-4aedc8526582",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 9
+      },
+      {
+        "id": "8d24e9e1-8fef-44fb-9349-7262b54f4898",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Tragschicht aus mineralischem Schotter herstellen",
+        "einheit": "m³",
+        "menge": 9
+      },
+      {
+        "id": "df7fbabf-4f7a-45d4-aaea-0d677787e82e",
+        "typ": "KI",
+        "lvPos": "7",
+        "beschreibung": "Schachtabdeckung einbauen",
+        "einheit": "St",
+        "menge": 9
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Rinnenrost aus Stahlgitter einbauen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "3",
+        "label": "Entwässerungsrinne herstellen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "4",
+        "label": "Bordsteine setzen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Tragschicht aus mineralischem Schotter herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "7",
+        "label": "Schachtabdeckung einbauen",
+        "score": 0.95,
+        "unit": "St"
+      }
+    ]
+  },
+  {
+    "id": "1764663764107-baustellenfoto.jpg",
+    "file": "1764663764107-baustellenfoto.jpg",
+    "createdAt": "2025-12-02T08:22:44.122Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "87cfd1ab-e132-4c87-9667-afe8ee15ad00",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 5
+      },
+      {
+        "id": "a260b2bb-7dd7-4c45-b447-fb4ec2c516f0",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Rinnenrost aus Stahlgitter einbauen",
+        "einheit": "m",
+        "menge": 5
+      },
+      {
+        "id": "1f4be35b-e0a3-4ecb-b84a-43ac6fd84ec7",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Entwässerungsrinne herstellen",
+        "einheit": "m",
+        "menge": 5
+      },
+      {
+        "id": "80e75587-1359-4588-97e7-0b08ecc11d05",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Bordsteine setzen",
+        "einheit": "m",
+        "menge": 5
+      },
+      {
+        "id": "e874335e-cf21-40d8-8e4d-dfb02e9d5023",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 5
+      },
+      {
+        "id": "769bdce3-e0f8-4eb2-9b3d-2349b64b0d00",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 5
+      },
+      {
+        "id": "684e68d5-e3a4-4fc9-a19e-6a36b91f8907",
+        "typ": "KI",
+        "lvPos": "7",
+        "beschreibung": "Schachtabdeckungen setzen",
+        "einheit": "St",
+        "menge": 5
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Rinnenrost aus Stahlgitter einbauen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "3",
+        "label": "Entwässerungsrinne herstellen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "4",
+        "label": "Bordsteine setzen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "7",
+        "label": "Schachtabdeckungen setzen",
+        "score": 0.95,
+        "unit": "St"
+      }
+    ]
+  },
+  {
+    "id": "1765443664079-baustellenfoto.jpg",
+    "file": "1765443664079-baustellenfoto.jpg",
+    "createdAt": "2025-12-11T09:01:04.122Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "5e0bcd01-777d-4b05-ba9f-7cc7f238c93b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 7
+      },
+      {
+        "id": "b7e59000-12e0-4546-8a53-fb518de87791",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "lfm",
+        "menge": 6
+      },
+      {
+        "id": "90958622-ca12-41fd-b75a-1e87e724bdbe",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 6
+      },
+      {
+        "id": "1881f080-9837-4e80-beef-3247f078181f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "35978548-6217-41ec-a173-57d64ef00345",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "f67477d1-8ea6-4c0a-8049-e0389b440cb0",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 6
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765542860266-baustellenfoto.jpg",
+    "file": "1765542860266-baustellenfoto.jpg",
+    "createdAt": "2025-12-12T12:34:20.294Z",
+    "note": "",
+    "extras": [],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765618034429-baustellenfoto.jpg",
+    "file": "1765618034429-baustellenfoto.jpg",
+    "createdAt": "2025-12-13T09:27:14.436Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "5e0bcd01-777d-4b05-ba9f-7cc7f238c93b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 6
+      },
+      {
+        "id": "b7e59000-12e0-4546-8a53-fb518de87791",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "lfm",
+        "menge": 8
+      },
+      {
+        "id": "90958622-ca12-41fd-b75a-1e87e724bdbe",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 6
+      },
+      {
+        "id": "1881f080-9837-4e80-beef-3247f078181f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 8
+      },
+      {
+        "id": "35978548-6217-41ec-a173-57d64ef00345",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "f67477d1-8ea6-4c0a-8049-e0389b440cb0",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 6
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765618801950-baustellenfoto.jpg",
+    "file": "1765618801950-baustellenfoto.jpg",
+    "createdAt": "2025-12-13T09:40:01.973Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "4bdc89e3-50ed-4b84-a5f5-6b368d89688b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 4
+      },
+      {
+        "id": "ac0cfde2-dc08-4564-87c7-d2ed63bcd041",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsgitter einsetzen",
+        "einheit": "St",
+        "menge": 4
+      },
+      {
+        "id": "9e3a1cda-d6cf-48d7-b3ff-68fa77bbf3da",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 4
+      },
+      {
+        "id": "5962229e-5984-4200-9b78-191b31fe5f91",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Bordsteine setzen",
+        "einheit": "m",
+        "menge": 4
+      },
+      {
+        "id": "eaa32d61-0172-4e5d-b614-bfcdbac46e03",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Frostschutzschicht herstellen",
+        "einheit": "m³",
+        "menge": 4
+      },
+      {
+        "id": "28ee9c9a-c9f4-46a7-bdaa-6329a9f011b7",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 4
+      },
+      {
+        "id": "16dcd15b-826b-40e0-91c3-35a858543347",
+        "typ": "KI",
+        "lvPos": "7",
+        "beschreibung": "Unterbau verdichten",
+        "einheit": "m²",
+        "menge": 4
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsgitter einsetzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Bordsteine setzen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "7",
+        "label": "Unterbau verdichten",
+        "score": 0.95,
+        "unit": "m²"
+      }
+    ]
+  },
+  {
+    "id": "1765618849813-baustellenfoto.jpg",
+    "file": "1765618849813-baustellenfoto.jpg",
+    "createdAt": "2025-12-13T09:40:49.833Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "4bdc89e3-50ed-4b84-a5f5-6b368d89688b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 4
+      },
+      {
+        "id": "ac0cfde2-dc08-4564-87c7-d2ed63bcd041",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsgitter einsetzen",
+        "einheit": "St",
+        "menge": 4
+      },
+      {
+        "id": "9e3a1cda-d6cf-48d7-b3ff-68fa77bbf3da",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 4
+      },
+      {
+        "id": "5962229e-5984-4200-9b78-191b31fe5f91",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Bordsteine setzen",
+        "einheit": "m",
+        "menge": 4
+      },
+      {
+        "id": "eaa32d61-0172-4e5d-b614-bfcdbac46e03",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Frostschutzschicht herstellen",
+        "einheit": "m³",
+        "menge": 4
+      },
+      {
+        "id": "28ee9c9a-c9f4-46a7-bdaa-6329a9f011b7",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 4
+      },
+      {
+        "id": "16dcd15b-826b-40e0-91c3-35a858543347",
+        "typ": "KI",
+        "lvPos": "7",
+        "beschreibung": "Unterbau verdichten",
+        "einheit": "m²",
+        "menge": 4
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsgitter einsetzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Bordsteine setzen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "7",
+        "label": "Unterbau verdichten",
+        "score": 0.95,
+        "unit": "m²"
+      }
+    ]
+  },
+  {
+    "id": "1765618974936-baustellenfoto.jpg",
+    "file": "1765618974936-baustellenfoto.jpg",
+    "createdAt": "2025-12-13T09:42:54.953Z",
+    "note": "",
+    "extras": [],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsgitter einsetzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Bordsteine setzen",
+        "score": 0.95,
+        "unit": "m"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "7",
+        "label": "Unterbau verdichten",
+        "score": 0.95,
+        "unit": "m²"
+      }
+    ]
+  },
+  {
+    "id": "1765621510383-baustellenfoto.jpg",
+    "file": "1765621510383-baustellenfoto.jpg",
+    "createdAt": "2025-12-13T10:25:10.400Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "5e0bcd01-777d-4b05-ba9f-7cc7f238c93b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 6
+      },
+      {
+        "id": "b7e59000-12e0-4546-8a53-fb518de87791",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "lfm",
+        "menge": 6
+      },
+      {
+        "id": "90958622-ca12-41fd-b75a-1e87e724bdbe",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 6
+      },
+      {
+        "id": "1881f080-9837-4e80-beef-3247f078181f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "35978548-6217-41ec-a173-57d64ef00345",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "f67477d1-8ea6-4c0a-8049-e0389b440cb0",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 6
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765623244916-baustellenfoto.jpg",
+    "file": "1765623244916-baustellenfoto.jpg",
+    "createdAt": "2025-12-13T10:54:04.935Z",
+    "note": "",
+    "extras": [],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765623263352-baustellenfoto.jpg",
+    "file": "1765623263352-baustellenfoto.jpg",
+    "createdAt": "2025-12-13T10:54:23.373Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "5e0bcd01-777d-4b05-ba9f-7cc7f238c93b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 6
+      },
+      {
+        "id": "b7e59000-12e0-4546-8a53-fb518de87791",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "lfm",
+        "menge": 6
+      },
+      {
+        "id": "90958622-ca12-41fd-b75a-1e87e724bdbe",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 6
+      },
+      {
+        "id": "1881f080-9837-4e80-beef-3247f078181f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "35978548-6217-41ec-a173-57d64ef00345",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "f67477d1-8ea6-4c0a-8049-e0389b440cb0",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 6
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765804734057-baustellenfoto.jpg",
+    "file": "1765804734057-baustellenfoto.jpg",
+    "createdAt": "2025-12-15T13:18:54.124Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "c7bf500f-2a4b-473e-b40e-79e21863c86a",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 10
+      },
+      {
+        "id": "dae1613d-58e1-4072-b97f-a469b629d145",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Rinnenrost aus Stahlgitter einbauen",
+        "einheit": "lfm",
+        "menge": 1
+      },
+      {
+        "id": "3d51b065-e937-4227-9967-07678a57f450",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Entwässerungsrinne setzen",
+        "einheit": "lfm",
+        "menge": 1
+      },
+      {
+        "id": "4aefc564-1540-4017-a140-c43033f49c31",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 1
+      },
+      {
+        "id": "f84e3da8-4ba2-4ed1-a633-65a2aa1c4611",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "37e50f26-8246-4271-a6d2-fae8aee2d52a",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 1
+      },
+      {
+        "id": "f17bca4b-9444-43be-89e2-7ecfe77aa8b1",
+        "typ": "KI",
+        "lvPos": "7",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 1
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Rinnenrost aus Stahlgitter einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Entwässerungsrinne setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "4",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "5",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "7",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765812703602-baustellenfoto.jpg",
+    "file": "1765812703602-baustellenfoto.jpg",
+    "createdAt": "2025-12-15T15:31:43.616Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "5e0bcd01-777d-4b05-ba9f-7cc7f238c93b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 6
+      },
+      {
+        "id": "b7e59000-12e0-4546-8a53-fb518de87791",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "lfm",
+        "menge": 6
+      },
+      {
+        "id": "90958622-ca12-41fd-b75a-1e87e724bdbe",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 6
+      },
+      {
+        "id": "1881f080-9837-4e80-beef-3247f078181f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "35978548-6217-41ec-a173-57d64ef00345",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "f67477d1-8ea6-4c0a-8049-e0389b440cb0",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 6
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1765812706351-baustellenfoto.jpg",
+    "file": "1765812706351-baustellenfoto.jpg",
+    "createdAt": "2025-12-15T15:31:46.366Z",
+    "note": "",
+    "extras": [
+      {
+        "id": "5e0bcd01-777d-4b05-ba9f-7cc7f238c93b",
+        "typ": "KI",
+        "lvPos": "1",
+        "beschreibung": "Pflaster aus Betonsteinpflaster verlegen",
+        "einheit": "m²",
+        "menge": 6
+      },
+      {
+        "id": "b7e59000-12e0-4546-8a53-fb518de87791",
+        "typ": "KI",
+        "lvPos": "2",
+        "beschreibung": "Entwässerungsrinne mit Gitterrost einbauen",
+        "einheit": "lfm",
+        "menge": 6
+      },
+      {
+        "id": "90958622-ca12-41fd-b75a-1e87e724bdbe",
+        "typ": "KI",
+        "lvPos": "3",
+        "beschreibung": "Schachtabdeckung setzen",
+        "einheit": "St",
+        "menge": 6
+      },
+      {
+        "id": "1881f080-9837-4e80-beef-3247f078181f",
+        "typ": "KI",
+        "lvPos": "4",
+        "beschreibung": "Frostschutzschicht unter Pflaster herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "35978548-6217-41ec-a173-57d64ef00345",
+        "typ": "KI",
+        "lvPos": "5",
+        "beschreibung": "Tragschicht aus mineralischem Material herstellen",
+        "einheit": "m³",
+        "menge": 6
+      },
+      {
+        "id": "f67477d1-8ea6-4c0a-8049-e0389b440cb0",
+        "typ": "KI",
+        "lvPos": "6",
+        "beschreibung": "Randsteine setzen",
+        "einheit": "lfm",
+        "menge": 6
+      }
+    ],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ]
+  },
+  {
+    "id": "1767360334419-baustellenfoto.jpg",
+    "file": "1767360334419-baustellenfoto.jpg",
+    "createdAt": "2026-01-02T13:25:34.494Z",
+    "note": "",
+    "extras": [],
+    "boxes": [
+      {
+        "id": "1",
+        "label": "Pflaster aus Betonsteinpflaster verlegen",
+        "score": 0.95,
+        "unit": "m²"
+      },
+      {
+        "id": "2",
+        "label": "Entwässerungsrinne mit Gitterrost einbauen",
+        "score": 0.95,
+        "unit": "lfm"
+      },
+      {
+        "id": "3",
+        "label": "Schachtabdeckung setzen",
+        "score": 0.95,
+        "unit": "St"
+      },
+      {
+        "id": "4",
+        "label": "Frostschutzschicht unter Pflaster herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "5",
+        "label": "Tragschicht aus mineralischem Material herstellen",
+        "score": 0.95,
+        "unit": "m³"
+      },
+      {
+        "id": "6",
+        "label": "Randsteine setzen",
+        "score": 0.95,
+        "unit": "lfm"
+      }
+    ],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767360334419-baustellenfoto.jpg"
+  },
+  {
+    "id": "1767363312896-foto.jpg",
+    "file": "1767363312896-foto.jpg",
+    "createdAt": "2026-01-02T14:15:13.529Z",
+    "note": "Qqwwertt",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767363312896-foto.jpg"
+  },
+  {
+    "id": "1767363313855-foto.jpg",
+    "file": "1767363313855-foto.jpg",
+    "createdAt": "2026-01-02T14:15:14.345Z",
+    "note": "Qqwwertt",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767363313855-foto.jpg"
+  },
+  {
+    "id": "1767462630091-photo_1767365086099.jpg",
+    "file": "1767462630091-photo_1767365086099.jpg",
+    "createdAt": "2026-01-03T17:50:30.224Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462630091-photo_1767365086099.jpg"
+  },
+  {
+    "id": "1767462630392-photo_1767363139958.jpg",
+    "file": "1767462630392-photo_1767363139958.jpg",
+    "createdAt": "2026-01-03T17:50:30.439Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462630392-photo_1767363139958.jpg"
+  },
+  {
+    "id": "1767462630486-rechnung-MC.M25087925166.pdf",
+    "file": "1767462630486-rechnung-MC.M25087925166.pdf",
+    "createdAt": "2026-01-03T17:50:30.501Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462630486-rechnung-MC.M25087925166.pdf"
+  },
+  {
+    "id": "1767462630670-photo_1767359154617.jpg",
+    "file": "1767462630670-photo_1767359154617.jpg",
+    "createdAt": "2026-01-03T17:50:30.722Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462630670-photo_1767359154617.jpg"
+  },
+  {
+    "id": "1767462630770-rechnung-MC.M25087925166.pdf",
+    "file": "1767462630770-rechnung-MC.M25087925166.pdf",
+    "createdAt": "2026-01-03T17:50:30.786Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462630770-rechnung-MC.M25087925166.pdf"
+  },
+  {
+    "id": "1767462630948-photo_1767358835602.jpg",
+    "file": "1767462630948-photo_1767358835602.jpg",
+    "createdAt": "2026-01-03T17:50:30.996Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462630948-photo_1767358835602.jpg"
+  },
+  {
+    "id": "1767462631031-rechnung-MC.M25087925166.pdf",
+    "file": "1767462631031-rechnung-MC.M25087925166.pdf",
+    "createdAt": "2026-01-03T17:50:31.054Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462631031-rechnung-MC.M25087925166.pdf"
+  },
+  {
+    "id": "1767462631229-photo_1767356001707.jpg",
+    "file": "1767462631229-photo_1767356001707.jpg",
+    "createdAt": "2026-01-03T17:50:31.280Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462631229-photo_1767356001707.jpg"
+  },
+  {
+    "id": "1767462631340-rechnung-MC.M25087925166.pdf",
+    "file": "1767462631340-rechnung-MC.M25087925166.pdf",
+    "createdAt": "2026-01-03T17:50:31.357Z",
+    "note": "",
+    "extras": [],
+    "boxes": [],
+    "publicUrl": "/projects/BA-2025-DEMO/fotos/1767462631340-rechnung-MC.M25087925166.pdf"
+  }
+]

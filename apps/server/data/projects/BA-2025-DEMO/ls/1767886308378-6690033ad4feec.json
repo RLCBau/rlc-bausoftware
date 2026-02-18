@@ -1,0 +1,43 @@
+{
+  "kind": "lieferschein",
+  "id": "1767886308378-6690033ad4feec",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-08",
+  "lieferscheinNummer": "091",
+  "supplier": "Baugjj",
+  "driver": "Hkkhfff",
+  "material": "Kies",
+  "kostenstelle": "BA-2025-DEMO",
+  "lvItemPos": null,
+  "workflowStatus": "FREIGEGEBEN",
+  "submittedAt": 1767886311919,
+  "createdAt": 1767886308378,
+  "projectFsKey": "BA-2025-DEMO",
+  "rejectionReason": null,
+  "attachments": [
+    {
+      "name": "photo_1767886306721.jpg",
+      "type": "image/jpeg",
+      "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\inbox\\ls\\1767886308378-6690033ad4feec\\files\\1767886313994__photo_1767886306721.jpg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767886313994__photo_1767886306721.jpg"
+    }
+  ],
+  "site": "BA-2025-DEMO",
+  "quantity": 9,
+  "unit": "M3",
+  "comment": "Kies auf Baustelle gefahren",
+  "photos": [
+    {
+      "name": "photo_1767886306721.jpg",
+      "type": "image/jpeg"
+    }
+  ],
+  "syncStatus": "PENDING",
+  "syncError": null,
+  "server": null,
+  "serverDocId": null,
+  "approvedAt": 1767886368400,
+  "approvedBy": null,
+  "savedAt": "2026-01-08T15:32:48.400Z"
+}

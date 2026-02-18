@@ -1,0 +1,28 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-04",
+  "lieferscheinNummer": "2",
+  "supplier": "Nn",
+  "site": "BA-2025-DEMO",
+  "driver": "Bbbb",
+  "material": "Jjj",
+  "quantity": 0,
+  "lvItemPos": null,
+  "id": "1767521472761-36c7e3cfce7cd4",
+  "createdAt": 1767521472762,
+  "workflowStatus": "EINGEREICHT",
+  "submittedAt": 1767521477525,
+  "syncStatus": "SENT",
+  "syncError": null,
+  "server": {
+    "ok": true,
+    "fsKey": "BA-2025-DEMO",
+    "stored": "Lieferschein_2026-01-04_1767521477589.json",
+    "reportId": "Lieferschein_2026-01-04_1767521477589"
+  },
+  "attachments": [],
+  "uploadRes": null,
+  "savedAt": "2026-01-04T10:11:58.838Z"
+}

@@ -1,0 +1,31 @@
+{
+  "kind": "lieferschein",
+  "id": "ls_1770295847595_344229829",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-02-05",
+  "lieferscheinNummer": "",
+  "material": "",
+  "kostenstelle": "",
+  "lvItemPos": "",
+  "attachments": [
+    {
+      "name": "camera_1770295858151.jpg",
+      "type": "image/jpeg",
+      "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\inbox\\ls\\ls_1770295847595_344229829\\files\\1770295873699__camera_1770295858151.jpg",
+      "url": "/projects/BA-2025-DEMO/inbox/ls/ls_1770295847595_344229829/files/1770295873699__camera_1770295858151.jpg"
+    }
+  ],
+  "workflowStatus": "EINGEREICHT",
+  "createdAt": 1770295847595,
+  "projectFsKey": "BA-2025-DEMO",
+  "submittedAt": 1770295872483,
+  "rejectionReason": null,
+  "lieferant": "",
+  "baustelle": "",
+  "fahrer": "",
+  "quantity": "",
+  "unit": "",
+  "bemerkungen": "Kjjjjkj",
+  "updatedAt": 1770295869290
+}

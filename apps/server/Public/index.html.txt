@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RLC Projekte</title>
+  <style>
+    body {
+      font-family: system-ui, Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 16px;
+      background: #f9f9f9;
+    }
+    h1 {
+      margin-bottom: 16px;
+    }
+    form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #007bff;
+      color: #fff;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    li {
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      margin-bottom: 8px;
+    }
+    small {
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>RLC Projekte</h1>
+
+  <form id="form">
+    <input id="name" placeholder="Projektname eingeben…" required />
+    <button type="submit">Hinzufügen</button>
+  </form>
+
+  <ul id="list"></ul>
+
+  <script>
+    const $list = document.getElementById("list");
+    const $form = document.getElementById("form");
+    const $name = document.getElementById("name");
+
+    async function load() {
+      const res = await fetch("/projects");
+      const items = await res.json();
+      $list.innerHTML = items.map(p =>
+        `<li><b>${escapeHtml(p.name)}</b><br><small>#${p.id} · ${new Date(p.createdAt).toLocaleString()}</small></li>`
+      ).join("");
+    }
+
+    $form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = $name.value.trim();
+      if (!name) return;
+      const res = await fetch("/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      });
+      if (res.ok) {
+        $name.value = "";
+        await load();
+      } else {
+        alert("Fehler beim Speichern");
+      }
+    });
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, m => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[m]));
+    }
+
+    load();
+  </script>
+</body>
+</html>

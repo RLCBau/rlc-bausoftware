@@ -1,0 +1,48 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "date": "2025-12-09",
+  "savedAt": "2025-12-15T15:32:12.445Z",
+  "note": "",
+  "rows": [
+    {
+      "projectId": "BA-2025-DEMO",
+      "date": "2025-12-09",
+      "lieferscheinNummer": "1",
+      "supplier": "",
+      "site": "",
+      "driver": "",
+      "material": "",
+      "quantity": 0,
+      "unit": "",
+      "kostenstelle": "",
+      "lvItemPos": "",
+      "comment": "",
+      "bemerkungen": "",
+      "photos": [],
+      "id": "f28a8c63-6fc7-4822-b6ef-c7c3c9a5f068"
+    }
+  ],
+  "items": {
+    "aufmass": [],
+    "lieferscheine": [
+      {
+        "projectId": "BA-2025-DEMO",
+        "date": "2025-12-09",
+        "lieferscheinNummer": "1",
+        "supplier": "",
+        "site": "",
+        "driver": "",
+        "material": "",
+        "quantity": 0,
+        "unit": "",
+        "kostenstelle": "",
+        "lvItemPos": "",
+        "comment": "",
+        "bemerkungen": "",
+        "photos": [],
+        "id": "f28a8c63-6fc7-4822-b6ef-c7c3c9a5f068"
+      }
+    ]
+  }
+}

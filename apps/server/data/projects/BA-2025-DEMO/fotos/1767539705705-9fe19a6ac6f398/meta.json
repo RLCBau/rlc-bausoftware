@@ -1,0 +1,25 @@
+{
+  "kind": "photo",
+  "docId": "1767539705705-9fe19a6ac6f398",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "workflowStatus": "FREIGEGEBEN",
+  "createdAt": 1767539712452,
+  "submittedAt": 1767539712452,
+  "date": "2026-01-04",
+  "comment": "Pflaster",
+  "kostenstelle": "BA-2025-DEMO",
+  "lvItemPos": null,
+  "attachments": [
+    {
+      "name": "photo_1767539675622.jpg",
+      "type": "image/jpeg",
+      "size": 1494642,
+      "relPath": "/projects/BA-2025-DEMO/fotos/1767539705705-9fe19a6ac6f398/photo_1767539675622.jpg"
+    }
+  ],
+  "approvedAt": 1767544583486,
+  "approvedBy": "",
+  "rejectionReason": null,
+  "committedAt": 1767544583486
+}

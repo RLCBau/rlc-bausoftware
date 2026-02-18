@@ -1,0 +1,3714 @@
+[
+  {
+    "pos": "001",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 2787.956,
+    "ep": 0
+  },
+  {
+    "pos": "1",
+    "text": "Schnitt 3 Zeilen",
+    "unit": "m",
+    "soll": 0,
+    "ist": 683.65,
+    "ep": 0
+  },
+  {
+    "pos": "001.001",
+    "text": "Beispiel Position 1",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "001.003",
+    "text": "Neue Position",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "001.004",
+    "text": "Neue Position",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "001.005",
+    "text": "Neue Position",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "001.310",
+    "text": "Neue Position",
+    "unit": "m",
+    "soll": 0,
+    "ist": 100,
+    "ep": 0
+  },
+  {
+    "pos": "001.311",
+    "text": "Neue Position",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "001.313",
+    "text": "Neue Position",
+    "unit": "m",
+    "soll": 50,
+    "ist": 50,
+    "ep": 0
+  },
+  {
+    "pos": "002",
+    "text": "KI: f asphaltflächen",
+    "unit": "m",
+    "soll": 0,
+    "ist": 407.1,
+    "ep": 0
+  },
+  {
+    "pos": "2",
+    "text": "Schnitt 3 Zeilen",
+    "unit": "m",
+    "soll": 0,
+    "ist": 685.46,
+    "ep": 0
+  },
+  {
+    "pos": "002.001",
+    "text": "Beispiel Position 2",
+    "unit": "m",
+    "soll": 10,
+    "ist": 171.446,
+    "ep": 25
+  },
+  {
+    "pos": "003",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 21.403,
+    "ep": 0
+  },
+  {
+    "pos": "3",
+    "text": "Höhe SEO4",
+    "unit": "m",
+    "soll": 0,
+    "ist": 687.56,
+    "ep": 0
+  },
+  {
+    "pos": "003.001",
+    "text": "Beispiel Position 3",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "4",
+    "text": "Höhe SEO3",
+    "unit": "m",
+    "soll": 0,
+    "ist": 1950,
+    "ep": 0
+  },
+  {
+    "pos": "004.001",
+    "text": "Beispiel Position 4",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "005",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 11.505,
+    "ep": 0
+  },
+  {
+    "pos": "5",
+    "text": "Höhe SEO2",
+    "unit": "m",
+    "soll": 0,
+    "ist": 841,
+    "ep": 0
+  },
+  {
+    "pos": "005.001",
+    "text": "Beispiel Position 5",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "006",
+    "text": "KI: f humusfläche",
+    "unit": "m2",
+    "soll": 0,
+    "ist": 85.723,
+    "ep": 0
+  },
+  {
+    "pos": "6",
+    "text": "Bogen",
+    "unit": "St",
+    "soll": 0,
+    "ist": 120,
+    "ep": 0
+  },
+  {
+    "pos": "006.001",
+    "text": "Beispiel Position 6",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "007",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 21.403,
+    "ep": 0
+  },
+  {
+    "pos": "7",
+    "text": "SSK",
+    "unit": "St",
+    "soll": 0,
+    "ist": 200,
+    "ep": 0
+  },
+  {
+    "pos": "007.001",
+    "text": "Beispiel Position 7",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "008",
+    "text": "KI: dg flurkarte",
+    "unit": "m2",
+    "soll": 0,
+    "ist": 9370.269,
+    "ep": 0
+  },
+  {
+    "pos": "8",
+    "text": "Einfügepunkt",
+    "unit": "St",
+    "soll": 0,
+    "ist": 350,
+    "ep": 0
+  },
+  {
+    "pos": "008.001",
+    "text": "Beispiel Position 8",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "9",
+    "text": "Pflasterfläche",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 70.31,
+    "ep": 0
+  },
+  {
+    "pos": "009.001",
+    "text": "Beispiel Position 9",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "10",
+    "text": "Pflasterfläche",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 220,
+    "ep": 0
+  },
+  {
+    "pos": "010.001",
+    "text": "Beispiel Position 10",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "11",
+    "text": "Schotter 20/40mm Kolonnenstein",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 500,
+    "ep": 0
+  },
+  {
+    "pos": "011.001",
+    "text": "Beispiel Position 11",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "12",
+    "text": "Rinne",
+    "unit": "m",
+    "soll": 0,
+    "ist": 160,
+    "ep": 0
+  },
+  {
+    "pos": "012.001",
+    "text": "Beispiel Position 12",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "13",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 100,
+    "ep": 0
+  },
+  {
+    "pos": "013.001",
+    "text": "Beispiel Position 13",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "14",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 120,
+    "ep": 0
+  },
+  {
+    "pos": "014.001",
+    "text": "Beispiel Position 14",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "15",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 200,
+    "ep": 0
+  },
+  {
+    "pos": "015.001",
+    "text": "Beispiel Position 15",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "16",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 12.52,
+    "ep": 0
+  },
+  {
+    "pos": "016.001",
+    "text": "Beispiel Position 16",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "17",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0.55,
+    "ep": 0
+  },
+  {
+    "pos": "017.001",
+    "text": "Beispiel Position 17",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "18",
+    "text": "1 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 12.27,
+    "ep": 0
+  },
+  {
+    "pos": "018.001",
+    "text": "Beispiel Position 18",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "19",
+    "text": "7 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 26.97,
+    "ep": 0
+  },
+  {
+    "pos": "019.001",
+    "text": "Beispiel Position 19",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "20",
+    "text": "Laibungsrost",
+    "unit": "m",
+    "soll": 0,
+    "ist": 26.97,
+    "ep": 0
+  },
+  {
+    "pos": "020.001",
+    "text": "Beispiel Position 20",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "21",
+    "text": "Laibungsrost 7 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 12.27,
+    "ep": 0
+  },
+  {
+    "pos": "021.001",
+    "text": "Beispiel Position 21",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "22",
+    "text": "Revisionsschacht für Drainage",
+    "unit": "St",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "022.001",
+    "text": "Beispiel Position 22",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "23",
+    "text": "Elektroschacht",
+    "unit": "St",
+    "soll": 0,
+    "ist": 4,
+    "ep": 0
+  },
+  {
+    "pos": "023.001",
+    "text": "Beispiel Position 23",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "24",
+    "text": "Laibungsrost 120cm",
+    "unit": "m",
+    "soll": 0,
+    "ist": 12.27,
+    "ep": 0
+  },
+  {
+    "pos": "024.001",
+    "text": "Beispiel Position 24",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "25",
+    "text": "1 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 26.97,
+    "ep": 0
+  },
+  {
+    "pos": "025.001",
+    "text": "Beispiel Position 25",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "26",
+    "text": "1 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 26.97,
+    "ep": 0
+  },
+  {
+    "pos": "026.001",
+    "text": "Beispiel Position 26",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "027.001",
+    "text": "Beispiel Position 27",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "028.001",
+    "text": "Beispiel Position 28",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "029.001",
+    "text": "Beispiel Position 29",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "030.001",
+    "text": "Beispiel Position 30",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "031.001",
+    "text": "Beispiel Position 31",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "032.001",
+    "text": "Beispiel Position 32",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "033.001",
+    "text": "Beispiel Position 33",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "034.001",
+    "text": "Beispiel Position 34",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "035.001",
+    "text": "Beispiel Position 35",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "036.001",
+    "text": "Beispiel Position 36",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "037.001",
+    "text": "Beispiel Position 37",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "038.001",
+    "text": "Beispiel Position 38",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "039.001",
+    "text": "Beispiel Position 39",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "040.001",
+    "text": "Beispiel Position 40",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "041.001",
+    "text": "Beispiel Position 41",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "042.001",
+    "text": "Beispiel Position 42",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "043.001",
+    "text": "Beispiel Position 43",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "044.001",
+    "text": "Beispiel Position 44",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "045.001",
+    "text": "Beispiel Position 45",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "046.001",
+    "text": "Beispiel Position 46",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "047.001",
+    "text": "Beispiel Position 47",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "048.001",
+    "text": "Beispiel Position 48",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "049.001",
+    "text": "Beispiel Position 49",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "050.001",
+    "text": "Beispiel Position 50",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "051.001",
+    "text": "Beispiel Position 51",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "052.001",
+    "text": "Beispiel Position 52",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "053.001",
+    "text": "Beispiel Position 53",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "054.001",
+    "text": "Beispiel Position 54",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "055.001",
+    "text": "Beispiel Position 55",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "056.001",
+    "text": "Beispiel Position 56",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "057.001",
+    "text": "Beispiel Position 57",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "058.001",
+    "text": "Beispiel Position 58",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "059.001",
+    "text": "Beispiel Position 59",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "060.001",
+    "text": "Beispiel Position 60",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "061.001",
+    "text": "Beispiel Position 61",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "062.001",
+    "text": "Beispiel Position 62",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "063.001",
+    "text": "Beispiel Position 63",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "064.001",
+    "text": "Beispiel Position 64",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "065.001",
+    "text": "Beispiel Position 65",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "066.001",
+    "text": "Beispiel Position 66",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "067.001",
+    "text": "Beispiel Position 67",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "068.001",
+    "text": "Beispiel Position 68",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "069.001",
+    "text": "Beispiel Position 69",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "070.001",
+    "text": "Beispiel Position 70",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "071.001",
+    "text": "Beispiel Position 71",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "072.001",
+    "text": "Beispiel Position 72",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "073.001",
+    "text": "Beispiel Position 73",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "074.001",
+    "text": "Beispiel Position 74",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "075.001",
+    "text": "Beispiel Position 75",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "076.001",
+    "text": "Beispiel Position 76",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "077.001",
+    "text": "Beispiel Position 77",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "078.001",
+    "text": "Beispiel Position 78",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "079.001",
+    "text": "Beispiel Position 79",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "080.001",
+    "text": "Beispiel Position 80",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "081.001",
+    "text": "Beispiel Position 81",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "082.001",
+    "text": "Beispiel Position 82",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "083.001",
+    "text": "Beispiel Position 83",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "084.001",
+    "text": "Beispiel Position 84",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "085.001",
+    "text": "Beispiel Position 85",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "086.001",
+    "text": "Beispiel Position 86",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "087.001",
+    "text": "Beispiel Position 87",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "088.001",
+    "text": "Beispiel Position 88",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "089.001",
+    "text": "Beispiel Position 89",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "090",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 4.88,
+    "ep": 0
+  },
+  {
+    "pos": "090.001",
+    "text": "Beispiel Position 90",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "091.001",
+    "text": "Beispiel Position 91",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "092.001",
+    "text": "Beispiel Position 92",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "093.001",
+    "text": "Beispiel Position 93",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "094.001",
+    "text": "Beispiel Position 94",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "095.001",
+    "text": "Beispiel Position 95",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "096.001",
+    "text": "Beispiel Position 96",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "097.001",
+    "text": "Beispiel Position 97",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "098.001",
+    "text": "Beispiel Position 98",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "099.001",
+    "text": "Beispiel Position 99",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "100.001",
+    "text": "Beispiel Position 100",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "101.001",
+    "text": "Beispiel Position 101",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "102.001",
+    "text": "Beispiel Position 102",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "103.001",
+    "text": "Beispiel Position 103",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "104.001",
+    "text": "Beispiel Position 104",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "105.001",
+    "text": "Beispiel Position 105",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "106.001",
+    "text": "Beispiel Position 106",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "107.001",
+    "text": "Beispiel Position 107",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "108.001",
+    "text": "Beispiel Position 108",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "109.001",
+    "text": "Beispiel Position 109",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "110.001",
+    "text": "Beispiel Position 110",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "111.001",
+    "text": "Beispiel Position 111",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "112.001",
+    "text": "Beispiel Position 112",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "113.001",
+    "text": "Beispiel Position 113",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "114.001",
+    "text": "Beispiel Position 114",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "115.001",
+    "text": "Beispiel Position 115",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "116.001",
+    "text": "Beispiel Position 116",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "117.001",
+    "text": "Beispiel Position 117",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "118.001",
+    "text": "Beispiel Position 118",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "119.001",
+    "text": "Beispiel Position 119",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "120.001",
+    "text": "Beispiel Position 120",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "121.001",
+    "text": "Beispiel Position 121",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "122.001",
+    "text": "Beispiel Position 122",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "123.001",
+    "text": "Beispiel Position 123",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "124.001",
+    "text": "Beispiel Position 124",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "125.001",
+    "text": "Beispiel Position 125",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "126.001",
+    "text": "Beispiel Position 126",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "127.001",
+    "text": "Beispiel Position 127",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "128.001",
+    "text": "Beispiel Position 128",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "129.001",
+    "text": "Beispiel Position 129",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "130.001",
+    "text": "Beispiel Position 130",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "131.001",
+    "text": "Beispiel Position 131",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "132.001",
+    "text": "Beispiel Position 132",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "133.001",
+    "text": "Beispiel Position 133",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "134.001",
+    "text": "Beispiel Position 134",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "135.001",
+    "text": "Beispiel Position 135",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "136.001",
+    "text": "Beispiel Position 136",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "137.001",
+    "text": "Beispiel Position 137",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "138.001",
+    "text": "Beispiel Position 138",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "139.001",
+    "text": "Beispiel Position 139",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "140.001",
+    "text": "Beispiel Position 140",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "141.001",
+    "text": "Beispiel Position 141",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "142.001",
+    "text": "Beispiel Position 142",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "143.001",
+    "text": "Beispiel Position 143",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "144.001",
+    "text": "Beispiel Position 144",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "145.001",
+    "text": "Beispiel Position 145",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "146.001",
+    "text": "Beispiel Position 146",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "147.001",
+    "text": "Beispiel Position 147",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "148.001",
+    "text": "Beispiel Position 148",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "149.001",
+    "text": "Beispiel Position 149",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "150",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 32.662,
+    "ep": 0
+  },
+  {
+    "pos": "150.001",
+    "text": "Beispiel Position 150",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "151.001",
+    "text": "Beispiel Position 151",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "152.001",
+    "text": "Beispiel Position 152",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "153.001",
+    "text": "Beispiel Position 153",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "154.001",
+    "text": "Beispiel Position 154",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "155.001",
+    "text": "Beispiel Position 155",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "156.001",
+    "text": "Beispiel Position 156",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "157.001",
+    "text": "Beispiel Position 157",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "158.001",
+    "text": "Beispiel Position 158",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "159.001",
+    "text": "Beispiel Position 159",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "160.001",
+    "text": "Beispiel Position 160",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "161.001",
+    "text": "Beispiel Position 161",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "162.001",
+    "text": "Beispiel Position 162",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "163.001",
+    "text": "Beispiel Position 163",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "164.001",
+    "text": "Beispiel Position 164",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "165.001",
+    "text": "Beispiel Position 165",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "166.001",
+    "text": "Beispiel Position 166",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "167.001",
+    "text": "Beispiel Position 167",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "168.001",
+    "text": "Beispiel Position 168",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "169.001",
+    "text": "Beispiel Position 169",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "170.001",
+    "text": "Beispiel Position 170",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "171.001",
+    "text": "Beispiel Position 171",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "172.001",
+    "text": "Beispiel Position 172",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "173.001",
+    "text": "Beispiel Position 173",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "174.001",
+    "text": "Beispiel Position 174",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "175.001",
+    "text": "Beispiel Position 175",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "176.001",
+    "text": "Beispiel Position 176",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "177.001",
+    "text": "Beispiel Position 177",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "178.001",
+    "text": "Beispiel Position 178",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "179.001",
+    "text": "Beispiel Position 179",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "180.001",
+    "text": "Beispiel Position 180",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "181.001",
+    "text": "Beispiel Position 181",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "182.001",
+    "text": "Beispiel Position 182",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "183.001",
+    "text": "Beispiel Position 183",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "184.001",
+    "text": "Beispiel Position 184",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "185.001",
+    "text": "Beispiel Position 185",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "186.001",
+    "text": "Beispiel Position 186",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "187.001",
+    "text": "Beispiel Position 187",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "188.001",
+    "text": "Beispiel Position 188",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "189.001",
+    "text": "Beispiel Position 189",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "190.001",
+    "text": "Beispiel Position 190",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "191.001",
+    "text": "Beispiel Position 191",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "192.001",
+    "text": "Beispiel Position 192",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "193.001",
+    "text": "Beispiel Position 193",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "194.001",
+    "text": "Beispiel Position 194",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "195.001",
+    "text": "Beispiel Position 195",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "196.001",
+    "text": "Beispiel Position 196",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "197.001",
+    "text": "Beispiel Position 197",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "198.001",
+    "text": "Beispiel Position 198",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "199.001",
+    "text": "Beispiel Position 199",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "200.001",
+    "text": "Beispiel Position 200",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "201.001",
+    "text": "Beispiel Position 201",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "202.001",
+    "text": "Beispiel Position 202",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "203.001",
+    "text": "Beispiel Position 203",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "204.001",
+    "text": "Beispiel Position 204",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "205.001",
+    "text": "Beispiel Position 205",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "206.001",
+    "text": "Beispiel Position 206",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "207.001",
+    "text": "Beispiel Position 207",
+    "unit": "m",
+    "soll": 10,
+    "ist": 100,
+    "ep": 25
+  },
+  {
+    "pos": "208.001",
+    "text": "Beispiel Position 208",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "209.001",
+    "text": "Beispiel Position 209",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "210.001",
+    "text": "Beispiel Position 210",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "211.001",
+    "text": "Beispiel Position 211",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "212.001",
+    "text": "Beispiel Position 212",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "213.001",
+    "text": "Beispiel Position 213",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "214.001",
+    "text": "Beispiel Position 214",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "215.001",
+    "text": "Beispiel Position 215",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "216.001",
+    "text": "Beispiel Position 216",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "217.001",
+    "text": "Beispiel Position 217",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "218.001",
+    "text": "Beispiel Position 218",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "219.001",
+    "text": "Beispiel Position 219",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "220.001",
+    "text": "Beispiel Position 220",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "221.001",
+    "text": "Beispiel Position 221",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "222.001",
+    "text": "Beispiel Position 222",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "223.001",
+    "text": "Beispiel Position 223",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "224.001",
+    "text": "Beispiel Position 224",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "225.001",
+    "text": "Beispiel Position 225",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "226.001",
+    "text": "Beispiel Position 226",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "227.001",
+    "text": "Beispiel Position 227",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "228.001",
+    "text": "Beispiel Position 228",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "229.001",
+    "text": "Beispiel Position 229",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "230.001",
+    "text": "Beispiel Position 230",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "231.001",
+    "text": "Beispiel Position 231",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "232.001",
+    "text": "Beispiel Position 232",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "233.001",
+    "text": "Beispiel Position 233",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "234.001",
+    "text": "Beispiel Position 234",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "235.001",
+    "text": "Beispiel Position 235",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "236.001",
+    "text": "Beispiel Position 236",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "237.001",
+    "text": "Beispiel Position 237",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "238.001",
+    "text": "Beispiel Position 238",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "239.001",
+    "text": "Beispiel Position 239",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "240.001",
+    "text": "Beispiel Position 240",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "241.001",
+    "text": "Beispiel Position 241",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "242.001",
+    "text": "Beispiel Position 242",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "243.001",
+    "text": "Beispiel Position 243",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "244.001",
+    "text": "Beispiel Position 244",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "245.001",
+    "text": "Beispiel Position 245",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "246.001",
+    "text": "Beispiel Position 246",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "247.001",
+    "text": "Beispiel Position 247",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "248.001",
+    "text": "Beispiel Position 248",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "249.001",
+    "text": "Beispiel Position 249",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "250.001",
+    "text": "Beispiel Position 250",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "251.001",
+    "text": "Beispiel Position 251",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "252.001",
+    "text": "Beispiel Position 252",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "253.001",
+    "text": "Beispiel Position 253",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "254.001",
+    "text": "Beispiel Position 254",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "255.001",
+    "text": "Beispiel Position 255",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "256.001",
+    "text": "Beispiel Position 256",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "257.001",
+    "text": "Beispiel Position 257",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "258.001",
+    "text": "Beispiel Position 258",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "259.001",
+    "text": "Beispiel Position 259",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "260.001",
+    "text": "Beispiel Position 260",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "261.001",
+    "text": "Beispiel Position 261",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "262.001",
+    "text": "Beispiel Position 262",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "263.001",
+    "text": "Beispiel Position 263",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "264.001",
+    "text": "Beispiel Position 264",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "265.001",
+    "text": "Beispiel Position 265",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "266.001",
+    "text": "Beispiel Position 266",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "267.001",
+    "text": "Beispiel Position 267",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "268.001",
+    "text": "Beispiel Position 268",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "269.001",
+    "text": "Beispiel Position 269",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "270.001",
+    "text": "Beispiel Position 270",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "271.001",
+    "text": "Beispiel Position 271",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "272.001",
+    "text": "Beispiel Position 272",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "273.001",
+    "text": "Beispiel Position 273",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "274.001",
+    "text": "Beispiel Position 274",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "275.001",
+    "text": "Beispiel Position 275",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "276.001",
+    "text": "Beispiel Position 276",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "277.001",
+    "text": "Beispiel Position 277",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "278.001",
+    "text": "Beispiel Position 278",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "279.001",
+    "text": "Beispiel Position 279",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "280.001",
+    "text": "Beispiel Position 280",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "281.001",
+    "text": "Beispiel Position 281",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "282.001",
+    "text": "Beispiel Position 282",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "283.001",
+    "text": "Beispiel Position 283",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "284.001",
+    "text": "Beispiel Position 284",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "285.001",
+    "text": "Beispiel Position 285",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "286.001",
+    "text": "Beispiel Position 286",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "287.001",
+    "text": "Beispiel Position 287",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "288.001",
+    "text": "Beispiel Position 288",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "289.001",
+    "text": "Beispiel Position 289",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "290.001",
+    "text": "Beispiel Position 290",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "291.001",
+    "text": "Beispiel Position 291",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "292.001",
+    "text": "Beispiel Position 292",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "293.001",
+    "text": "Beispiel Position 293",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "294.001",
+    "text": "Beispiel Position 294",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "295.001",
+    "text": "Beispiel Position 295",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "296.001",
+    "text": "Beispiel Position 296",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "297.001",
+    "text": "Beispiel Position 297",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "298.001",
+    "text": "Beispiel Position 298",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "299.001",
+    "text": "Beispiel Position 299",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "300.001",
+    "text": "Beispiel Position 300",
+    "unit": "m",
+    "soll": 10,
+    "ist": 0,
+    "ep": 25
+  },
+  {
+    "pos": "500",
+    "text": "KI: dg flurkarte",
+    "unit": "m2",
+    "soll": 0,
+    "ist": 9370.269,
+    "ep": 0
+  },
+  {
+    "pos": "1000",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 4.88,
+    "ep": 0
+  },
+  {
+    "pos": "5000",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 4.88,
+    "ep": 0
+  },
+  {
+    "pos": "6000",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 4.88,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.001",
+    "text": "Asphaltfläche AC 11 70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 37.73,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.002",
+    "text": "Asphaltfläche AC 11 70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 29.74,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.003",
+    "text": "Asphaltfläche AC 11 70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 29.74,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.004",
+    "text": "Asphaltfläche AC 11 70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 27.74,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.005",
+    "text": "Asphaltfläche AC 11 70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 687.56,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.006",
+    "text": "Pflasterfläche 11,50 cm",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 685.46,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.007",
+    "text": "Pflasterfläche 18,00 cm",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 683.65,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.008",
+    "text": "Pflasterfläche 3,25 cm",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 3.25,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.009",
+    "text": "Schotterfläche 12,50 cm",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 12.5,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.010",
+    "text": "Leitung DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 11,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.011",
+    "text": "Leitung DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 28.55,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.012",
+    "text": "Leitung DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 130.18,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.013",
+    "text": "Leitung DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 23.26,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.014",
+    "text": "Leitung DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 20.75,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.015",
+    "text": "Leitung DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 31.51,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.016",
+    "text": "Bogen DN 150",
+    "unit": "St",
+    "soll": 0,
+    "ist": 48.4,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.017",
+    "text": "RW DN 150 Leitung",
+    "unit": "m",
+    "soll": 0,
+    "ist": 8.4,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.018",
+    "text": "Pflaster",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 3.25,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.019",
+    "text": "Pflaster",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 11.55,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.020",
+    "text": "Schotter 20/40mm Kolonnenstein",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 12.05,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.021",
+    "text": "Rinne",
+    "unit": "m",
+    "soll": 0,
+    "ist": 19.5,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.022",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0.55,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.023",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 5.45,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.024",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 3.25,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.025",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0.55,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.026",
+    "text": "Asphalt 6cm AC16DTB/0100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 28.66,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.027",
+    "text": "Rieselschutzvlies/Bautenschutz",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 140.12,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.028",
+    "text": "Pflaster STS 0/45",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 12.27,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.029",
+    "text": "Asphalt 10cm AC16DTB/0100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 26.97,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.030",
+    "text": "Pflaster STS 0/45",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 2.27,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.031",
+    "text": "Pflaster STS 0/45",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 2.44,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.032",
+    "text": "Asphalt 10cm AC16DTB/0100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 28.66,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.033",
+    "text": "Stahltafel E",
+    "unit": "m",
+    "soll": 0,
+    "ist": 140.12,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.034",
+    "text": "Stahltafel D",
+    "unit": "m",
+    "soll": 0,
+    "ist": 10.98,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.035",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 17.84,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.036",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 14,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.037",
+    "text": "Laibungslost",
+    "unit": "cm",
+    "soll": 0,
+    "ist": 160,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.038",
+    "text": "Bogen DN 100 0,50m",
+    "unit": "m",
+    "soll": 0,
+    "ist": 5.78,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.039",
+    "text": "Revision Schacht für Drainage",
+    "unit": "St",
+    "soll": 0,
+    "ist": 5.4,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.040",
+    "text": "Stahltafel D",
+    "unit": "m",
+    "soll": 0,
+    "ist": 5.05,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.041",
+    "text": "Laibungslost",
+    "unit": "cm",
+    "soll": 0,
+    "ist": 160,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.042",
+    "text": "Breitstahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 5.1,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.043",
+    "text": "Breitstahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 14,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.044",
+    "text": "Abfangen Ankerstäbe",
+    "unit": "St",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.045",
+    "text": "Revisionsschacht für Drainage",
+    "unit": "St",
+    "soll": 0,
+    "ist": 2,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.046",
+    "text": "Bogen DN100 0,50m",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0.5,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.047",
+    "text": "Asphalt Gehweg",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 27.79,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.048",
+    "text": "Schotter 20/40mm",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 6.09,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.049",
+    "text": "Kolonnenstein",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 6.09,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.050",
+    "text": "3 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 11.4,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.051",
+    "text": "Asphalt 6cm AC16TD/B70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 27.79,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.052",
+    "text": "Asphalt 10cm AC22TD/B70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 27.79,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.053",
+    "text": "RW DN150 Rohrleitung",
+    "unit": "m",
+    "soll": 0,
+    "ist": 8.46,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.054",
+    "text": "Bogen DN150",
+    "unit": "St",
+    "soll": 0,
+    "ist": 3,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.055",
+    "text": "Bogen Red. DN250/150",
+    "unit": "St",
+    "soll": 0,
+    "ist": 1,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.056",
+    "text": "Schotter 20/40mm Kolomannstein",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 4.28,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.057",
+    "text": "2 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 10.55,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.058",
+    "text": "Kleinsteinpflaster Rinne",
+    "unit": "m",
+    "soll": 0,
+    "ist": 2.75,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.059",
+    "text": "Laibungsrost 220cm",
+    "unit": "m",
+    "soll": 0,
+    "ist": 2.2,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.060",
+    "text": "Laibungsrost 110cm",
+    "unit": "m",
+    "soll": 0,
+    "ist": 1.1,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.061",
+    "text": "Asphaltfläche 70,31 m²",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 70.31,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.062",
+    "text": "Asphalt AC16TD/B70/100 10cm",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 70.31,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.063",
+    "text": "Asphalt AC22/TB70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 70.31,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.064",
+    "text": "STS 0/45",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 70.31,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.065",
+    "text": "Plan-Nr.",
+    "unit": "St",
+    "soll": 0,
+    "ist": 1,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.066",
+    "text": "Plan-Index",
+    "unit": "St",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.067",
+    "text": "Blattgröße Breite",
+    "unit": "mm",
+    "soll": 0,
+    "ist": 1950,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.068",
+    "text": "Blattgröße Höhe",
+    "unit": "mm",
+    "soll": 0,
+    "ist": 841,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.069",
+    "text": "Rohrleitung DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 25,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.070",
+    "text": "Rohrleitung DN 300",
+    "unit": "m",
+    "soll": 0,
+    "ist": 40,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.071",
+    "text": "Schacht S1",
+    "unit": "St",
+    "soll": 0,
+    "ist": 1,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.072",
+    "text": "Schacht S2",
+    "unit": "St",
+    "soll": 0,
+    "ist": 1,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.073",
+    "text": "Kabeltrasse",
+    "unit": "m",
+    "soll": 0,
+    "ist": 30,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.074",
+    "text": "Kabelschutzrohr",
+    "unit": "m",
+    "soll": 0,
+    "ist": 15,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.075",
+    "text": "Bodenplatte Schacht",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 4,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.076",
+    "text": "Betonrohr DN 200",
+    "unit": "m",
+    "soll": 0,
+    "ist": 10,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.077",
+    "text": "Kabelschutzrohr 40 mm",
+    "unit": "m",
+    "soll": 0,
+    "ist": 20,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.078",
+    "text": "Schachtabdeckung",
+    "unit": "St",
+    "soll": 0,
+    "ist": 2,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.079",
+    "text": "Rohr DN 100",
+    "unit": "m",
+    "soll": 0,
+    "ist": 5,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.080",
+    "text": "Rohr DN 150",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "AUTO.081",
+    "text": "Kanalisation",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "P1",
+    "text": "Leistenstein (8cm)",
+    "unit": "m",
+    "soll": 0,
+    "ist": 8.45,
+    "ep": 0
+  },
+  {
+    "pos": "P2",
+    "text": "Leistenstein (8cm)",
+    "unit": "m",
+    "soll": 0,
+    "ist": 10,
+    "ep": 0
+  },
+  {
+    "pos": "P3",
+    "text": "Leistenstein gesamt",
+    "unit": "m",
+    "soll": 0,
+    "ist": 28.55,
+    "ep": 0
+  },
+  {
+    "pos": "P4",
+    "text": "Asphaltfläche",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 130.18,
+    "ep": 0
+  },
+  {
+    "pos": "P5",
+    "text": "RW DN150 Rohrleitung",
+    "unit": "m",
+    "soll": 0,
+    "ist": 23.26,
+    "ep": 0
+  },
+  {
+    "pos": "P6",
+    "text": "Asphaltfläche 10cm AC16TD/B70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 20.75,
+    "ep": 0
+  },
+  {
+    "pos": "P7",
+    "text": "Asphaltfläche 10cm AC16TD/B70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 20.75,
+    "ep": 0
+  },
+  {
+    "pos": "P8",
+    "text": "Asphaltfläche 6cm AC16TD/B70/100 + 10cm AC22/TB70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 48.4,
+    "ep": 0
+  },
+  {
+    "pos": "P9",
+    "text": "Rinne",
+    "unit": "m",
+    "soll": 0,
+    "ist": 19.5,
+    "ep": 0
+  },
+  {
+    "pos": "P10",
+    "text": "Pflasterfläche",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 1.5,
+    "ep": 0
+  },
+  {
+    "pos": "P11",
+    "text": "Pflasterfläche",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 3.25,
+    "ep": 0
+  },
+  {
+    "pos": "P12",
+    "text": "Pflasterfläche",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 11.55,
+    "ep": 0
+  },
+  {
+    "pos": "P13",
+    "text": "Schotter 20/40mm Kolonnenstein",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 12.05,
+    "ep": 0
+  },
+  {
+    "pos": "P14",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0.55,
+    "ep": 0
+  },
+  {
+    "pos": "P15",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 5.45,
+    "ep": 0
+  },
+  {
+    "pos": "P16",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 5.75,
+    "ep": 0
+  },
+  {
+    "pos": "P17",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0.55,
+    "ep": 0
+  },
+  {
+    "pos": "P18",
+    "text": "Breitsahl",
+    "unit": "m",
+    "soll": 0,
+    "ist": 0.55,
+    "ep": 0
+  },
+  {
+    "pos": "P19",
+    "text": "Stahltafel Element A",
+    "unit": "St",
+    "soll": 0,
+    "ist": 0,
+    "ep": 0
+  },
+  {
+    "pos": "P20",
+    "text": "Revisionsschacht für Drainage",
+    "unit": "St",
+    "soll": 0,
+    "ist": 2,
+    "ep": 0
+  },
+  {
+    "pos": "P21",
+    "text": "Elektroschacht",
+    "unit": "St",
+    "soll": 0,
+    "ist": 1,
+    "ep": 0
+  },
+  {
+    "pos": "P22",
+    "text": "Trenn- und Schutzlage",
+    "unit": "m",
+    "soll": 0,
+    "ist": 31.61,
+    "ep": 0
+  },
+  {
+    "pos": "P23",
+    "text": "1 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 12.27,
+    "ep": 0
+  },
+  {
+    "pos": "P24",
+    "text": "1 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 26.97,
+    "ep": 0
+  },
+  {
+    "pos": "P25",
+    "text": "Laibungsrost 120cm",
+    "unit": "m",
+    "soll": 0,
+    "ist": 1.2,
+    "ep": 0
+  },
+  {
+    "pos": "pos1",
+    "text": "Asphalt Gehweg",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 27.79,
+    "ep": 0
+  },
+  {
+    "pos": "pos2",
+    "text": "Schotter 20/40mm",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 6.09,
+    "ep": 0
+  },
+  {
+    "pos": "pos3",
+    "text": "Kolmannstein",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 6.09,
+    "ep": 0
+  },
+  {
+    "pos": "pos4",
+    "text": "3 Zeiler",
+    "unit": "m",
+    "soll": 0,
+    "ist": 11.4,
+    "ep": 0
+  },
+  {
+    "pos": "pos5",
+    "text": "Asphalt 6cm AC16TD/B70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 27.79,
+    "ep": 0
+  },
+  {
+    "pos": "pos6",
+    "text": "Asphalt 10cm AC22TD/B70/100",
+    "unit": "m²",
+    "soll": 0,
+    "ist": 27.79,
+    "ep": 0
+  },
+  {
+    "pos": "REGIE.007",
+    "text": "kies Strasse",
+    "unit": "h",
+    "soll": 0,
+    "ist": 5,
+    "ep": 0
+  },
+  {
+    "pos": "REGIE.008",
+    "text": "kies Strasse",
+    "unit": "h",
+    "soll": 0,
+    "ist": 5,
+    "ep": 0
+  },
+  {
+    "pos": "SEO2",
+    "text": "Höhe SEO2",
+    "unit": "m",
+    "soll": 0,
+    "ist": 683.65,
+    "ep": 0
+  },
+  {
+    "pos": "Test 1",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 4.88,
+    "ep": 0
+  },
+  {
+    "pos": "test 3",
+    "text": "BricsCAD Takeoff",
+    "unit": "m",
+    "soll": 0,
+    "ist": 4.88,
+    "ep": 0
+  },
+  {
+    "pos": "test2",
+    "text": "KI: dg flurkarte",
+    "unit": "m2",
+    "soll": 0,
+    "ist": 9370.269,
+    "ep": 0
+  },
+  {
+    "pos": "REGIE.009",
+    "text": "kies Strasse",
+    "unit": "h",
+    "soll": 0,
+    "ist": 5,
+    "ep": 0
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-04",
+  "material": "Jj",
+  "quantity": 0,
+  "lvItemPos": null,
+  "photos": [],
+  "id": "1767527257177-95b9922bbd89b8",
+  "createdAt": 1767527257177,
+  "workflowStatus": "EINGEREICHT",
+  "submittedAt": 1767527275372,
+  "syncStatus": "PENDING",
+  "syncError": null,
+  "server": null,
+  "attachments": [],
+  "uploadRes": null,
+  "savedAt": "2026-01-04T11:47:55.461Z"
+}

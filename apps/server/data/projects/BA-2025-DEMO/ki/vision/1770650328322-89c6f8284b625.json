@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Lieferung von Asphalt für Straßenbauarbeiten. Der Lieferschein enthält Details zu Materialien, Gewichten und Lieferbedingungen.",
+  "rawText": "Lieferung von Asphalt für Straßenbauarbeiten. Der Lieferschein enthält Details zu Materialien, Gewichten und Lieferbedingungen.",
+  "entities": {
+    "extracted": [
+      {
+        "file": "camera_1770650297444.jpg",
+        "text": "Lieferung von Asphalt für Straßenbauarbeiten. Der Lieferschein enthält Details zu Materialien, Gewichten und Lieferbedingungen.",
+        "entities": {
+          "arbeiten": [
+            "Asphaltdecken für Straßen"
+          ],
+          "materialien": [
+            "Asphalt 50/70 TL"
+          ],
+          "maschinen": [],
+          "personal": [],
+          "zeiten": {
+            "start": "14:26",
+            "ende": "14:28"
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "camera_1770650297444.jpg",
+      "type": "image/jpeg",
+      "size": 6932671
+    }
+  ],
+  "createdAt": 1770650328321
+}

@@ -1,0 +1,119 @@
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props"
+          Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{9D47D2D1-7A77-4C37-9B2C-6C8D5F8D2C7A}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>RLC.BricsCAD.Plugin</RootNamespace>
+    <AssemblyName>RLC.BricsCAD.Plugin</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+
+  <!-- BricsCAD API path -->
+  <PropertyGroup>
+    <BRICSCAD_API_DIR>C:\Programme\Bricsys\BricsCAD V24 de_DE\API\dotNet</BRICSCAD_API_DIR>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BricsCAD .NET -->
+    <Reference Include="BrxMgd">
+      <HintPath>..\..\..\..\..\Program Files\Bricsys\BricsCAD V24 de_DE\BrxMgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="TD_Mgd">
+      <HintPath>..\..\..\..\..\Program Files\Bricsys\BricsCAD V24 de_DE\TD_Mgd.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- .NET Framework -->
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Runtime.Serialization" />
+
+    <!-- FIX: required for XmlWriter/XmlReader used by serializers -->
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Commands -->
+    <Compile Include="Commands\RlcExportUtmCommand.cs" />
+    <Compile Include="Commands\RlcImportUtmCommand.cs" />
+    <Compile Include="Commands\RlcPanelCommand.cs" />
+    <Compile Include="Commands\RlcLinkCommand.cs" />
+    <Compile Include="Commands\RlcTakeoffCommand.cs" />
+
+    <!-- Plugin entry -->
+    <Compile Include="PluginEntry.cs" />
+
+    <!-- Services -->
+    <Compile Include="Services\CadTools.cs" />
+    <Compile Include="Services\Dtos.cs" />
+    <Compile Include="Services\ExportUtmCsvService.cs" />
+    <Compile Include="Services\RlcApiClient.cs" />
+    <Compile Include="Services\RlcSettings.cs" />
+    <Compile Include="Services\SettingsStore.cs" />
+    <Compile Include="Services\TakeoffService.cs" />
+    <Compile Include="Services\TakeoffStore.cs" />
+    <Compile Include="Services\UTMImportService.cs" />
+    <Compile Include="Services\XDataUtil.cs" />
+    <Compile Include="Services\GeometryUtil.cs" />
+
+    <!-- UI -->
+    <Compile Include="UI\RlcLinkDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\RlcPalette.cs" />
+    <Compile Include="UI\RlcPaletteControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+  </ItemGroup>
+
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

@@ -1,0 +1,42 @@
+{
+  "kind": "lieferschein",
+  "id": "1767877150667-310841514cbff8",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-08",
+  "lieferscheinNummer": "001",
+  "supplier": "Kiesbaugrube",
+  "driver": "Jjfjfkfjfj",
+  "material": "Kies",
+  "kostenstelle": "BA-2025-DEMO",
+  "lvItemPos": null,
+  "workflowStatus": "FREIGEGEBEN",
+  "submittedAt": 1767877156899,
+  "createdAt": 1767877150667,
+  "attachments": [
+    {
+      "name": "photo_1767877147471.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767877157596_photo_1767877147471.jpg",
+      "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\inbox\\ls\\1767877150667-310841514cbff8\\files\\1767877157596_photo_1767877147471.jpg"
+    }
+  ],
+  "site": "BA-2025-DEMO",
+  "quantity": 9,
+  "unit": "M3",
+  "comment": "Kies zur Baustelle gefahren",
+  "photos": [
+    {
+      "name": "photo_1767877147471.jpg",
+      "type": "image/jpeg"
+    }
+  ],
+  "syncStatus": "PENDING",
+  "syncError": null,
+  "server": null,
+  "serverDocId": null,
+  "approvedAt": 1767877204397,
+  "approvedBy": null,
+  "rejectionReason": null,
+  "savedAt": "2026-01-08T13:00:04.397Z"
+}

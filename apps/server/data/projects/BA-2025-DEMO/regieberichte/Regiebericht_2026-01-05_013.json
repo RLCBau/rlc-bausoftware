@@ -1,0 +1,31 @@
+{
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "date": "2026-01-05",
+  "note": "",
+  "rows": [
+    {
+      "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+      "date": "2026-01-05",
+      "photos": [
+        {
+          "id": "0c595b96-d4a3-48a0-acd1-dfef83b7b624",
+          "name": "IMG_20250514_143530.jpg",
+          "url": "blob:http://localhost:5173/9a518504-0ee3-4d93-9e00-c2aa7640515d",
+          "type": "image/jpeg"
+        }
+      ],
+      "reportType": "REGIE",
+      "unit": "m3",
+      "hours": 5,
+      "quantity": 2,
+      "regieNummer": "003",
+      "auftraggeber": "fa",
+      "worker": "eqrze",
+      "machine": "wz",
+      "id": "6c3e4dd3-942a-4e60-8fc1-359075d60df6"
+    }
+  ],
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "reportId": "013"
+}

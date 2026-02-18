@@ -1,0 +1,76 @@
+{
+  "kind": "lieferschein",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "date": "2026-01-08",
+  "note": "",
+  "rows": [
+    {
+      "id": "1767882883236-f8c84d4e826ec8",
+      "projectId": "BA-2025-DEMO",
+      "date": "2026-01-08",
+      "lieferscheinNummer": "",
+      "supplier": "",
+      "site": "BA-2025-DEMO",
+      "driver": "Fkfj",
+      "material": "",
+      "quantity": 0,
+      "unit": "",
+      "kostenstelle": "",
+      "lvItemPos": null,
+      "comment": "",
+      "bemerkungen": "",
+      "photos": [
+        {
+          "id": "438cd3cd-a038-4b8f-8862-2a365bb4d5f0",
+          "name": "photo_1767882881539.jpg",
+          "type": "image/jpeg",
+          "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767882887947__photo_1767882881539.jpg"
+        }
+      ],
+      "workflowStatus": "FREIGEGEBEN",
+      "submittedAt": 1767882885487,
+      "approvedAt": 1767882922759,
+      "rejectedAt": null,
+      "rejectReason": null
+    }
+  ],
+  "items": {
+    "aufmass": [],
+    "lieferscheine": [
+      {
+        "id": "1767882883236-f8c84d4e826ec8",
+        "projectId": "BA-2025-DEMO",
+        "date": "2026-01-08",
+        "lieferscheinNummer": "",
+        "supplier": "",
+        "site": "BA-2025-DEMO",
+        "driver": "Fkfj",
+        "material": "",
+        "quantity": 0,
+        "unit": "",
+        "kostenstelle": "",
+        "lvItemPos": null,
+        "comment": "",
+        "bemerkungen": "",
+        "photos": [
+          {
+            "id": "438cd3cd-a038-4b8f-8862-2a365bb4d5f0",
+            "name": "photo_1767882881539.jpg",
+            "type": "image/jpeg",
+            "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767882887947__photo_1767882881539.jpg"
+          }
+        ],
+        "workflowStatus": "FREIGEGEBEN",
+        "submittedAt": 1767882885487,
+        "approvedAt": 1767882922759,
+        "rejectedAt": null,
+        "rejectReason": null
+      }
+    ]
+  },
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "reportId": "001",
+  "savedAt": "2026-01-08T14:35:22.935Z",
+  "attachments": []
+}

@@ -1,0 +1,49 @@
+{
+  "kind": "regie",
+  "id": "1768672404334-cce415078e81a8",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-17",
+  "reportType": "REGIE",
+  "comment": "Jj",
+  "hours": 0,
+  "unit": "Std",
+  "mitarbeiter": "",
+  "maschinen": "",
+  "materialien": "",
+  "lvItemPos": null,
+  "regieNummer": "",
+  "auftraggeber": "",
+  "arbeitsbeginn": "",
+  "arbeitsende": "",
+  "pause1": "",
+  "pause2": "",
+  "blattNr": "",
+  "wetter": "",
+  "kostenstelle": "Jj",
+  "bemerkungen": "",
+  "photos": [
+    {
+      "id": "1768672401789-e664655df57b3",
+      "name": "photo_1768672401789.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/raw/1768672409746__photo_1768672401789.jpg"
+    }
+  ],
+  "attachments": [
+    {
+      "id": "1768672401789-e664655df57b3",
+      "name": "photo_1768672401789.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/raw/1768672409746__photo_1768672401789.jpg"
+    }
+  ],
+  "workflowStatus": "FREIGEGEBEN",
+  "submittedAt": 1768672416000,
+  "rejectionReason": null,
+  "createdAt": 1768672404334,
+  "projectFsKey": "BA-2025-DEMO",
+  "approvedAt": 1768672448869,
+  "approvedBy": null,
+  "savedAt": "2026-01-17T17:54:08.870Z"
+}

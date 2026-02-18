@@ -1,0 +1,42 @@
+{
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "date": "2026-01-05",
+  "note": "",
+  "rows": [
+    {
+      "id": "4c8291fc-25f2-4e6b-85fd-3543ad633b6d",
+      "projectId": "BA-2025-DEMO",
+      "date": "2026-01-05",
+      "worker": "Roberto",
+      "hours": 5,
+      "machine": "Bagger",
+      "material": "Kies",
+      "quantity": 9,
+      "unit": "m3",
+      "comment": "Strasse auffgefüllt",
+      "lvItemId": "",
+      "photos": [
+        {
+          "id": "a4657ae9-fb5d-4b85-8fe3-8e27caa34c84",
+          "name": "IMG_20250514_143539.jpg",
+          "url": "blob:http://localhost:5173/2eae46ab-6549-40e7-b272-7d677de0ea5c",
+          "type": "image/jpeg"
+        }
+      ],
+      "reportType": "REGIE",
+      "regieNummer": "002",
+      "auftraggeber": "gemeinde",
+      "arbeitsbeginn": "7:00",
+      "arbeitsende": "12:00",
+      "pause1": "9:00-9:30",
+      "pause2": "",
+      "blattNr": "1",
+      "wetter": "sonnig",
+      "kostenstelle": "BA-2025",
+      "bemerkungen": "die strasse wurde im bereich nord auffgefüllt"
+    }
+  ],
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "reportId": "006"
+}

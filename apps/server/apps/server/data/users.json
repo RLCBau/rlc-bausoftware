@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "id": "2f52214e-6a42-4944-aaf0-6e42110828be",
+      "email": "test@test.it",
+      "salt": "98d64775b91f961aee0633669cd17943",
+      "pwHash": "4431dffe1dc58f314eb3a780f64c9fcac7a81cd15b941095b6471877270ed8e7",
+      "mode": "SERVER_SYNC",
+      "createdAt": 1768981363793
+    }
+  ]
+}

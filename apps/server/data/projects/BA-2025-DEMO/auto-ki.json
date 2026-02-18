@@ -1,0 +1,32 @@
+{
+  "note": "",
+  "scale": "1",
+  "preview": null,
+  "sourceFile": {
+    "name": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+    "type": "application/pdf",
+    "size": 168530
+  },
+  "items": [
+    {
+      "id": "1765864946160",
+      "pos": "FILE.001",
+      "type": "COUNT",
+      "descr": "Datei importiert (Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf). KI-Parsing aktiv (OPENAI) nur wenn Bild/PDF-Preview vorhanden.",
+      "unit": "",
+      "qty": 0,
+      "source": "file"
+    }
+  ],
+  "boxes": [],
+  "extras": [],
+  "summary": "",
+  "positions": [],
+  "savedAt": "2025-12-16T06:16:45.906Z",
+  "projectIdOrCode": "BA-2025-DEMO",
+  "fsKey": "BA-2025-DEMO",
+  "meta": {
+    "updatedAt": "2025-12-16T06:16:45.906Z",
+    "fsKey": "BA-2025-DEMO"
+  }
+}

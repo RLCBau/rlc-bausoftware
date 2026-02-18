@@ -1,0 +1,798 @@
+{
+  "savedAt": "2026-01-01T12:53:17.099Z",
+  "projectIdOrCode": "BA-2025-DEMO",
+  "history": [
+    {
+      "ts": 1767271997099,
+      "count": 90,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf"
+    },
+    {
+      "ts": 1767271795315,
+      "count": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf"
+    },
+    {
+      "ts": 1767269719927,
+      "count": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf"
+    },
+    {
+      "ts": 1767194040583,
+      "count": 74,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767175097592,
+      "count": 14,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767173906416,
+      "count": 15,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767108198521,
+      "count": 18,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767103468609,
+      "count": 1,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767102320298,
+      "count": 1,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767101000129,
+      "count": 0,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767100465320,
+      "count": 1,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767100029450,
+      "count": 1,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767100021605,
+      "count": 1,
+      "source": "auto-ki"
+    },
+    {
+      "ts": 1767020112132,
+      "count": 0,
+      "source": "auto-ki"
+    }
+  ],
+  "lastRows": [
+    {
+      "pos": "SEO2",
+      "text": "Höhe SEO2",
+      "unit": "m",
+      "ist": 683.65,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "SEO3",
+      "text": "Höhe SEO3",
+      "unit": "m",
+      "ist": 685.46,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "SEO4",
+      "text": "Höhe SEO4",
+      "unit": "m",
+      "ist": 687.56,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "AUTO.001",
+      "text": "3 Zeiler",
+      "unit": "m",
+      "ist": 0.37,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "AUTO.002",
+      "text": "Schnitt",
+      "unit": "m",
+      "ist": 0.74,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "AUTO.003",
+      "text": "Köcher 3",
+      "unit": "St",
+      "ist": 3,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "1",
+      "text": "Leistenstein (8cm)",
+      "unit": "m",
+      "ist": 8.45,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "2",
+      "text": "Leistenstein (8cm)",
+      "unit": "m",
+      "ist": 10,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "3",
+      "text": "Leistenstein",
+      "unit": "m",
+      "ist": 28.55,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "4",
+      "text": "Asphalt",
+      "unit": "m²",
+      "ist": 130.18,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "5",
+      "text": "RW DN150",
+      "unit": "m",
+      "ist": 23.26,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "6",
+      "text": "Asphalt 10cm AC16TD/B70/100",
+      "unit": "m²",
+      "ist": 20.75,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "7",
+      "text": "Asphalt 10cm AC16TD/B70/100",
+      "unit": "m²",
+      "ist": 20.75,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "8",
+      "text": "Asphalt 6cm AC16TD/B70/100 + 10cm AC22/TB70/100",
+      "unit": "m²",
+      "ist": 48.4,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "9",
+      "text": "Pflaster",
+      "unit": "m²",
+      "ist": 1.5,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "10",
+      "text": "Pflaster",
+      "unit": "m²",
+      "ist": 3.25,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "11",
+      "text": "Pflaster",
+      "unit": "m²",
+      "ist": 11.55,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "12",
+      "text": "Schotter 20/40mm Kolonnenstein",
+      "unit": "m²",
+      "ist": 12.05,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "13",
+      "text": "Rinne",
+      "unit": "m",
+      "ist": 19.5,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "14",
+      "text": "Breitsahl",
+      "unit": "m",
+      "ist": 0.55,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "15",
+      "text": "Breitsahl",
+      "unit": "m",
+      "ist": 5.45,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "16",
+      "text": "Breitsahl",
+      "unit": "m",
+      "ist": 3.25,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "17",
+      "text": "Breitsahl",
+      "unit": "m",
+      "ist": 0.55,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "18",
+      "text": "Breitsahl",
+      "unit": "m",
+      "ist": 5.75,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "19",
+      "text": "Breitsahl",
+      "unit": "m",
+      "ist": 0.55,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "20",
+      "text": "Trenn und Schutzlage",
+      "unit": "m",
+      "ist": 31.61,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "21",
+      "text": "Laibungsrost",
+      "unit": "m",
+      "ist": 1.2,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "22",
+      "text": "1 Zeiler",
+      "unit": "m",
+      "ist": 12.27,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "23",
+      "text": "1 Zeiler",
+      "unit": "m",
+      "ist": 26.97,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "24",
+      "text": "Elektroschacht",
+      "unit": "St",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "25",
+      "text": "Revisionsschacht für Drainage",
+      "unit": "St",
+      "ist": 2,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "1",
+      "text": "Asphalt 6cm AC16DTB/100",
+      "unit": "m²",
+      "ist": 28.66,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "2",
+      "text": "Rieselschutzvlies/Bautenschutz",
+      "unit": "m²",
+      "ist": 140.12,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "3",
+      "text": "Pflaster STS 0/45",
+      "unit": "m²",
+      "ist": 10.98,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "4",
+      "text": "Asphalt 10cm AC16DTB/100",
+      "unit": "m²",
+      "ist": 17.84,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "5",
+      "text": "Pflaster STS 0/45",
+      "unit": "m²",
+      "ist": 2.27,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "6",
+      "text": "Pflaster STS 0/45",
+      "unit": "m²",
+      "ist": 2.4,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "7",
+      "text": "Asphalt 10cm AC16DTB/100",
+      "unit": "m²",
+      "ist": 5.78,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "8",
+      "text": "Stahltafel E",
+      "unit": "m",
+      "ist": 5.4,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "9",
+      "text": "Stahltafel E",
+      "unit": "m",
+      "ist": 1.6,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "10",
+      "text": "Stahltafel D",
+      "unit": "m",
+      "ist": 5.05,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "11",
+      "text": "Breitstahl",
+      "unit": "m",
+      "ist": 5.1,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "12",
+      "text": "Breitstahl",
+      "unit": "m",
+      "ist": 14,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "13",
+      "text": "Laibungsrost",
+      "unit": "cm",
+      "ist": 160,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "14",
+      "text": "Zeiler",
+      "unit": "m",
+      "ist": 12.52,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "15",
+      "text": "Revisionsschacht für Drainage",
+      "unit": "St",
+      "ist": 3,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "1",
+      "text": "Asphalt Gehweg",
+      "unit": "m²",
+      "ist": 27.79,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "2",
+      "text": "Schotter 20/40mm",
+      "unit": "m²",
+      "ist": 6.09,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "3",
+      "text": "Kolonnenstein",
+      "unit": "m²",
+      "ist": 6.09,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "4",
+      "text": "3 Zeiler",
+      "unit": "m",
+      "ist": 11.4,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "5",
+      "text": "Asphalt 6cm AC16TD/B70/100",
+      "unit": "m",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "6",
+      "text": "Asphalt 10cm AC22TD/B70/100",
+      "unit": "m",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "1",
+      "text": "RW DN150 Rohrleitung",
+      "unit": "m",
+      "ist": 8.46,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "2",
+      "text": "Bogen DN250/150",
+      "unit": "St",
+      "ist": 1,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "3",
+      "text": "Bogen DN150",
+      "unit": "St",
+      "ist": 3,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "4",
+      "text": "Schotter 20/40mm Kolomannstein",
+      "unit": "m²",
+      "ist": 4.28,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "5",
+      "text": "2 Zeiler",
+      "unit": "m",
+      "ist": 10.55,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "6",
+      "text": "Kleinsteinpflaster",
+      "unit": "m²",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "7",
+      "text": "Rampe 2,50m",
+      "unit": "m",
+      "ist": 2.5,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "8",
+      "text": "Rampe 4,50m",
+      "unit": "m",
+      "ist": 4.5,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "9",
+      "text": "Laibungsrost 220cm",
+      "unit": "m",
+      "ist": 2.2,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "10",
+      "text": "Laibungsrost 110cm",
+      "unit": "m",
+      "ist": 1.1,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "11",
+      "text": "Asphalt 70,31m²",
+      "unit": "m²",
+      "ist": 70.31,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "12",
+      "text": "Asphalt 6cm AC16TD/B70/100",
+      "unit": "m²",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "13",
+      "text": "Asphalt 10cm AC22/TB70/100",
+      "unit": "m²",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "14",
+      "text": "Rinne 4,00m",
+      "unit": "m",
+      "ist": 4,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "15",
+      "text": "SSK T=0,90",
+      "unit": "St",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "1",
+      "text": "Werkhof Fläche",
+      "unit": "m²",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "2",
+      "text": "Zufahrt Länge",
+      "unit": "m",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "3",
+      "text": "Schacht",
+      "unit": "St",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "4",
+      "text": "Planblattgröße",
+      "unit": "mm",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "5",
+      "text": "Maßstab",
+      "unit": "m",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "1",
+      "text": "Kanal DN 300",
+      "unit": "m",
+      "ist": 30,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "2",
+      "text": "Kanal DN 400",
+      "unit": "m",
+      "ist": 20,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "3",
+      "text": "Schacht 1000x1000",
+      "unit": "St",
+      "ist": 5,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "4",
+      "text": "Schacht 1200x1200",
+      "unit": "St",
+      "ist": 3,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "5",
+      "text": "Frostschutzschicht",
+      "unit": "m³",
+      "ist": 50,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "6",
+      "text": "Kiestragschicht",
+      "unit": "m³",
+      "ist": 40,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "7",
+      "text": "Asphalttragschicht",
+      "unit": "m²",
+      "ist": 200,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "8",
+      "text": "Asphaltdeckschicht",
+      "unit": "m²",
+      "ist": 180,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "9",
+      "text": "Bordstein",
+      "unit": "m",
+      "ist": 60,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "10",
+      "text": "Entwässerungsrinne",
+      "unit": "m",
+      "ist": 25,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "11",
+      "text": "Schachtabdeckung",
+      "unit": "St",
+      "ist": 8,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "12",
+      "text": "Rohrleitung PE DN 160",
+      "unit": "m",
+      "ist": 15,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "13",
+      "text": "Rohrleitung KG DN 200",
+      "unit": "m",
+      "ist": 10,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "14",
+      "text": "Planum",
+      "unit": "m²",
+      "ist": 300,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "15",
+      "text": "Bodenabtrag",
+      "unit": "m³",
+      "ist": 70,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "1",
+      "text": "Rohr DN 150",
+      "unit": "m",
+      "ist": 5,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "2",
+      "text": "Rohr DN 200",
+      "unit": "m",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    },
+    {
+      "pos": "3",
+      "text": "Kanalrohr",
+      "unit": "m",
+      "ist": 0,
+      "source": "Abrechnungsplan_Werkhof_mit_Zufahrt_BA2-A2.pdf",
+      "type": "COUNT"
+    }
+  ]
+}

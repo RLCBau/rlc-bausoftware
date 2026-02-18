@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "pdfjs-dist": "^5.4.296",
+    "prisma": "^6.16.2"
+  }
+}

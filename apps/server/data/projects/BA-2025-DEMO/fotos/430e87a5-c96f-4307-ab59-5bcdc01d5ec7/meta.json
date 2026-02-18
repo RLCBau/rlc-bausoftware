@@ -1,0 +1,32 @@
+{
+  "kind": "photo",
+  "docId": "430e87a5-c96f-4307-ab59-5bcdc01d5ec7",
+  "id": "430e87a5-c96f-4307-ab59-5bcdc01d5ec7",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "workflowStatus": "FREIGEGEBEN",
+  "createdAt": 1770027878128,
+  "submittedAt": 1770027878129,
+  "date": "2026-02-02",
+  "lvItemPos": null,
+  "attachments": [
+    {
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "size": 3165382,
+      "relPath": "/projects/BA-2025-DEMO/fotos/430e87a5-c96f-4307-ab59-5bcdc01d5ec7/photo.jpg",
+      "url": "/projects/BA-2025-DEMO/fotos/430e87a5-c96f-4307-ab59-5bcdc01d5ec7/photo.jpg"
+    }
+  ],
+  "files": [
+    {
+      "name": "photo.jpg",
+      "type": "image/jpeg",
+      "size": 3165382,
+      "relPath": "/projects/BA-2025-DEMO/fotos/430e87a5-c96f-4307-ab59-5bcdc01d5ec7/photo.jpg",
+      "url": "/projects/BA-2025-DEMO/fotos/430e87a5-c96f-4307-ab59-5bcdc01d5ec7/photo.jpg"
+    }
+  ],
+  "committedAt": 1770027878342
+}

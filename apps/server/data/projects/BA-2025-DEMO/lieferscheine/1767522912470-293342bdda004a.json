@@ -1,0 +1,26 @@
+{
+  "kind": "lieferschein",
+  "id": "1767522912470-293342bdda004a",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-04",
+  "attachments": [
+    {
+      "name": "photo_1767522908548.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767523331772_photo_1767522908548.jpg"
+    },
+    {
+      "name": "rechnung-MC.M25087925166.pdf",
+      "type": "application/pdf",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767523331956_rechnung-MC.M25087925166.pdf"
+    }
+  ],
+  "workflowStatus": "FREIGEGEBEN",
+  "submittedAt": 1767523332005,
+  "rejectionReason": null,
+  "createdAt": 1767522912470,
+  "approvedAt": 1767529775985,
+  "approvedBy": null,
+  "savedAt": "2026-01-04T12:29:35.985Z"
+}

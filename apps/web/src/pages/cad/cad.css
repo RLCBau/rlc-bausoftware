@@ -1,0 +1,24 @@
+.cad-root{display:flex;flex-direction:column;height:100%;}
+.cad-topbar{height:44px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e7eb;background:#fafafa;padding:0 8px;gap:8px}
+.cad-topbar-left,.cad-topbar-center,.cad-topbar-right{display:flex;align-items:center;gap:6px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid #e5e7eb;background:white;height:30px;padding:0 10px;border-radius:6px;cursor:pointer}
+.btn.danger{border-color:#f3d1d1}
+.btn.xs{height:24px;padding:0 8px}
+.btn.full{width:100%}
+.sep{width:1px;height:22px;background:#e5e7eb;margin:0 4px}
+.cad-body{display:flex;flex:1;min-height:0}
+.cad-left{width:230px;border-right:1px solid #e5e7eb;background:#fcfcfc;padding:10px;overflow:auto}
+.cad-right{width:260px;border-left:1px solid #e5e7eb;background:#fcfcfc;padding:10px;overflow:auto}
+.panel-title{font-weight:600;color:#222;margin:6px 0 8px}
+.mt{margin-top:12px}
+.tool{font-size:14px;padding:6px 8px;border-radius:6px}
+.tool.active{background:#eef2ff}
+.row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.hint{margin-top:10px;font-size:12px;color:#666;line-height:1.4}
+.layers{display:flex;flex-direction:column;gap:6px}
+.layer{display:flex;align-items:center;gap:6px}
+.layer input{flex:1;border:1px solid #e5e7eb;border-radius:6px;padding:4px 6px}
+.layer.active input{border-color:#a5b4fc;background:#eef2ff}
+.cad-canvas-wrap{flex:1;position:relative}
+.cad-canvas-wrap canvas{width:100%;height:100%}
+.cad-status{height:26px;border-top:1px solid #e5e7eb;background:#fafafa;display:flex;align-items:center;gap:16px;padding:0 10px;font-size:12px;color:#444}

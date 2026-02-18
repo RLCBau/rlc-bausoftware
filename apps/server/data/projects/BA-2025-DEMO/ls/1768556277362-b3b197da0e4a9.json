@@ -1,0 +1,35 @@
+{
+  "kind": "lieferschein",
+  "id": "1768556277362-b3b197da0e4a9",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-16",
+  "lvItemPos": null,
+  "workflowStatus": "FREIGEGEBEN",
+  "submittedAt": 1768556284469,
+  "createdAt": 1768556277362,
+  "projectFsKey": "BA-2025-DEMO",
+  "rejectionReason": null,
+  "attachments": [
+    {
+      "name": "photo_1768556274410.jpg",
+      "type": "image/jpeg",
+      "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\inbox\\ls\\1768556277362-b3b197da0e4a9\\files\\1768556286582__photo_1768556274410.jpg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1768556286582__photo_1768556274410.jpg"
+    }
+  ],
+  "quantity": 0,
+  "photos": [
+    {
+      "name": "photo_1768556274410.jpg",
+      "type": "image/jpeg"
+    }
+  ],
+  "syncStatus": "PENDING",
+  "syncError": null,
+  "server": null,
+  "serverDocId": null,
+  "approvedAt": 1768558575471,
+  "approvedBy": null,
+  "savedAt": "2026-01-16T10:16:15.471Z"
+}

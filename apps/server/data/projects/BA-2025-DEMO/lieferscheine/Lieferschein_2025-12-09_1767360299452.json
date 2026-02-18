@@ -1,0 +1,27 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "date": "2025-12-09",
+  "savedAt": "2026-01-02T13:24:59.452Z",
+  "note": "",
+  "rows": [
+    {
+      "projectId": "BA-2025-DEMO",
+      "date": "2025-12-09",
+      "photos": [],
+      "id": "b0283938-9657-4cc6-80b0-51949beaf22f"
+    }
+  ],
+  "items": {
+    "aufmass": [],
+    "lieferscheine": [
+      {
+        "projectId": "BA-2025-DEMO",
+        "date": "2025-12-09",
+        "photos": [],
+        "id": "b0283938-9657-4cc6-80b0-51949beaf22f"
+      }
+    ]
+  },
+  "attachments": null
+}

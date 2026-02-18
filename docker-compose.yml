@@ -1,0 +1,37 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    container_name: rlc-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: rlc
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d rlc"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: rlc-server
+    env_file:
+      - apps/server/.env
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/rlc?schema=public
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

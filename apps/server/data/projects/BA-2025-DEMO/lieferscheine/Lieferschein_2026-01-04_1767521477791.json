@@ -1,0 +1,48 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-04",
+  "lieferscheinNummer": "Q",
+  "supplier": "Qqq",
+  "site": "Qqqq",
+  "driver": "Qqqqq",
+  "material": "Qqqqq",
+  "quantity": 11,
+  "kostenstelle": "BA-2025-DEMO",
+  "lvItemPos": null,
+  "photos": [
+    {
+      "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/ImagePicker/FDDA0954-24F5-46E4-9A47-30C2480F079D.jpg",
+      "name": "photo_1767521313538.jpg",
+      "type": "image/jpeg"
+    }
+  ],
+  "id": "1767521315259-cd063dc7d8c5e8",
+  "createdAt": 1767521315259,
+  "workflowStatus": "EINGEREICHT",
+  "submittedAt": 1767521477525,
+  "syncStatus": "PENDING",
+  "syncError": null,
+  "server": null,
+  "attachments": [
+    {
+      "name": "photo_1767521313538.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767521477617_photo_1767521313538.jpg"
+    }
+  ],
+  "uploadRes": {
+    "ok": true,
+    "fsKey": "BA-2025-DEMO",
+    "items": [
+      {
+        "name": "photo_1767521313538.jpg",
+        "type": "image/jpeg",
+        "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\lieferscheine\\files\\1767521477617_photo_1767521313538.jpg",
+        "publicUrl": "/projects/BA-2025-DEMO/lieferscheine/files/1767521477617_photo_1767521313538.jpg"
+      }
+    ]
+  },
+  "savedAt": "2026-01-04T10:11:17.791Z"
+}

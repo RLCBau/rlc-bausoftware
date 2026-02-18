@@ -1,0 +1,36 @@
+{
+  "kind": "regie",
+  "id": "regie_1771254780439_864403110",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-02-16",
+  "arbeitsbeginn": "07:00",
+  "arbeitsende": "15:00",
+  "pause1": "00:30-01:00",
+  "pause2": "",
+  "wetter": "Regen",
+  "kostenstelle": "8888",
+  "bemerkungen": "Wetter: Regen",
+  "photos": [
+    {
+      "id": "cam_1771254826906_750273014",
+      "name": "camera_1771254826906.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/raw/1771254866075__camera_1771254826906.jpg"
+    }
+  ],
+  "attachments": [
+    {
+      "id": "cam_1771254826906_750273014",
+      "name": "camera_1771254826906.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/raw/1771254866075__camera_1771254826906.jpg"
+    }
+  ],
+  "workflowStatus": "EINGEREICHT",
+  "createdAt": 1771254780439,
+  "projectFsKey": "BA-2025-DEMO",
+  "reportType": "REGIE",
+  "comment": "",
+  "submittedAt": 1771254866462
+}

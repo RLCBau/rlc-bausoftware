@@ -1,0 +1,726 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id                    String                @id @default(uuid())
+  name                  String
+  code                  String                @unique
+  createdAt             DateTime              @default(now())
+  address               String?
+  updatedAt             DateTime              @updatedAt
+  activities            ActivityLog[]
+  companyPrices         CompanyPrice[]
+  companyProductivities CompanyProductivity[]
+  parties               Party[]
+  projects              Project[]
+  users                 User[]
+
+  // Subscription (1:1 optional)
+  subscription          CompanySubscription?
+
+  // ✅ NEW: Invites + Members (seat & invite system)
+  invites               CompanyInvite[]
+  members               CompanyMember[]
+}
+
+//
+// ✅ INVITES: ADMIN generates token -> user accepts -> becomes CompanyMember
+//
+model CompanyInvite {
+  id              String   @id @default(uuid())
+  companyId       String
+  email           String
+  role            ProjectRole
+  tokenHash       String   @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([email])
+}
+
+//
+// ✅ MEMBERS: used for seat limit + roles in company scope
+//
+model CompanyMember {
+  id        String      @id @default(uuid())
+  companyId String
+  userId    String
+  role      ProjectRole @default(MITARBEITER)
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId], name: "companyId_userId")
+  @@index([companyId, active])
+  @@index([userId])
+}
+
+model CompanySubscription {
+  id                         String             @id @default(uuid())
+  companyId                  String             @unique
+  status                     SubscriptionStatus @default(ACTIVE)
+  plan                       SubscriptionPlan   @default(MAX_UNLIMITED)
+  seatsLimit                 Int?
+  currentPeriodStart         DateTime           @default(now())
+  currentPeriodEnd           DateTime?
+  appleLatestTransactionId   String?
+  appleOriginalTransactionId String?
+  lastVerifiedAt             DateTime?
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([status, plan])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  GRACE
+  EXPIRED
+}
+
+enum SubscriptionPlan {
+  BASIC_5
+  PRO_20
+  MAX_UNLIMITED
+}
+
+model User {
+  id                String        @id @default(cuid())
+  email             String        @unique
+  password          String
+  createdAt         DateTime      @default(now())
+  companyId         String?
+  role              UserRole      @default(user)
+  currentProjectId  String?
+  appRole           String?
+  emailVerifiedAt   DateTime?
+  name              String?
+  verifyTokenExpiry DateTime?
+  verifyTokenHash   String?
+
+  activities        ActivityLog[]
+  projectMembers    ProjectMember[]
+  companyMembers    CompanyMember[]  // ✅ NEW
+
+  company           Company?      @relation(fields: [companyId], references: [id])
+  currentProject    Project?      @relation("UserCurrentProject", fields: [currentProjectId], references: [id])
+}
+
+model Project {
+  id                 String                @id @default(uuid())
+  name               String
+  code               String
+  companyId          String
+  createdAt          DateTime              @default(now())
+  description        String?
+  endDate            DateTime?
+  startDate          DateTime?
+  updatedAt          DateTime              @updatedAt
+  number             String?
+  path               String?
+  slug               String?               @unique
+  status             String                @default("active")
+  client             String?
+  place              String?
+
+  accounting         AccountingRoot?
+  activities         ActivityLog[]
+  deliveryNotes      DeliveryNote[]
+  documents          Document[]
+  lvSets             LVHeader[]
+  lvItems            LVItem[]
+  measSets           MeasurementSet[]
+  offerVersions      OfferVersion[]
+  planSnapshots      PlanSnapshot[]
+  planTasks          PlanTask[]
+
+  company            Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  files              ProjectFile[]
+  projectMembers     ProjectMember[]
+  sectionStates      ProjectSectionState[]
+  regieReports       RegieReport[]
+  resourceCapacities ResourceCapacity[]
+  currentUsers       User[]                @relation("UserCurrentProject")
+  workflowDocs       WorkflowDoc[]
+
+  @@unique([code, companyId])
+}
+
+model ProjectFile {
+  id        String   @id @default(cuid())
+  projectId String
+  relPath   String
+  kind      String
+  size      Int
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model LVItem {
+  id             String   @id @default(cuid())
+  quantity       Float?   @default(0)
+  unit           String?
+  unitPrice      Float?
+  calcResult     Float?
+  createdAt      DateTime @default(now())
+  projectId      String
+  calcExpression String?
+  calcVariables  String?
+  longText       String?
+  positionNumber String?
+  shortText      String?
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([positionNumber])
+}
+
+model RegieReport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  projectId String
+  date      DateTime @default(now())
+  hours     Float?
+  note      String?
+  quantity  Float?
+  typ       RegieTyp
+  unit      String?
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, date])
+}
+
+model DeliveryNote {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+  projectId String
+  material  String?
+  note      String?
+  qty       Float?
+  raw       Json?
+  unit      String?
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, date])
+}
+
+model OfferVersion {
+  id        Int      @id @default(autoincrement())
+  projectId String
+  filename  String
+  positions Json
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model PlanTask {
+  id        String  @id @default(cuid())
+  projectId String
+  name      String
+  dauerTage Int
+  depsJson  String
+  ressJson  String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model ResourceCapacity {
+  id        String  @id @default(cuid())
+  projectId String
+  name      String
+  capacity  Float
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model PlanSnapshot {
+  id        String   @id @default(cuid())
+  projectId String
+  start     DateTime
+  ende      DateTime
+  json      Json
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, start])
+}
+
+model ProjectMember {
+  id        String      @id @default(uuid())
+  projectId String
+  userId    String
+  role      ProjectRole
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId, role])
+}
+
+model StorageObject {
+  id        String        @id
+  bucket    String
+  key       String
+  size      BigInt
+  sha256    String
+  mime      String
+  createdAt DateTime      @default(now())
+  versions  FileVersion[]
+
+  @@index([bucket, key])
+}
+
+model Document {
+  id             String            @id @default(uuid())
+  projectId      String
+  kind           FileKind
+  name           String
+  meta           Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
+  currentVid     String?           @unique
+  current        FileVersion?      @relation("CurrentVersion", fields: [currentVid], references: [id])
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions       FileVersion[]
+  invoicePdfs    Invoice[]         @relation("InvoicePdf")
+  vendorBillPdfs VendorBill[]      @relation("VendorBillPdf")
+  workflowLinks  WorkflowDocLink[]
+
+  @@index([projectId, kind, createdAt])
+}
+
+model FileVersion {
+  id         String        @id @default(uuid())
+  documentId String
+  storageId  String
+  version    Int
+  uploadedBy String?
+  createdAt  DateTime      @default(now())
+  currentOf  Document?     @relation("CurrentVersion")
+  document   Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  storage    StorageObject @relation(fields: [storageId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([documentId, createdAt])
+}
+
+model LVHeader {
+  id        String       @id @default(uuid())
+  projectId String
+  title     String
+  version   Int          @default(1)
+  currency  String       @default("EUR")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  positions LVPosition[]
+
+  @@unique([projectId, version])
+  @@index([projectId])
+}
+
+model LVPosition {
+  id           String           @id @default(uuid())
+  lvId         String
+  position     String
+  kurztext     String
+  langtext     String?
+  einheit      String
+  menge        Decimal          @db.Decimal(18, 6)
+  einzelpreis  Decimal?         @db.Decimal(18, 4)
+  gesamt       Decimal?         @db.Decimal(18, 2)
+  parentPos    String?
+  lv           LVHeader         @relation(fields: [lvId], references: [id], onDelete: Cascade)
+  measurements MeasurementRow[] @relation("LVPos_Measurements")
+
+  @@index([lvId, position])
+}
+
+model MeasurementSet {
+  id        String           @id @default(uuid())
+  projectId String
+  title     String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  rows      MeasurementRow[]
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model MeasurementRow {
+  id           String            @id @default(uuid())
+  setId        String
+  lvPositionId String?
+  source       MeasurementSource
+  formula      String?
+  quantity     Decimal           @db.Decimal(18, 6)
+  unit         String
+  context      Json?
+  createdAt    DateTime          @default(now())
+  lvPosition   LVPosition?       @relation("LVPos_Measurements", fields: [lvPositionId], references: [id])
+  set          MeasurementSet    @relation(fields: [setId], references: [id], onDelete: Cascade)
+
+  @@index([setId])
+  @@index([lvPositionId])
+}
+
+model ProjectSectionState {
+  id        String   @id @default(uuid())
+  projectId String
+  section   Section
+  data      Json
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, section], name: "projectId_section")
+  @@index([projectId])
+}
+
+model Party {
+  id                    String       @id @default(uuid())
+  companyId             String
+  type                  PartyType
+  name                  String
+  vatId                 String?
+  email                 String?
+  phone                 String?
+  address               Json?
+  invoicesAsCustomer    Invoice[]
+  company               Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vendorBillsAsSupplier VendorBill[]
+
+  @@index([companyId, type, name])
+}
+
+model AccountingRoot {
+  id          String        @id @default(uuid())
+  projectId   String        @unique
+  currency    String        @default("EUR")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invoices    Invoice[]
+  ledger      LedgerEntry[]
+  payments    Payment[]
+  vendorBills VendorBill[]
+}
+
+model TaxRate {
+  id        String    @id @default(uuid())
+  name      String
+  rate      Decimal   @db.Decimal(5, 2)
+  validFrom DateTime
+  validTo   DateTime?
+}
+
+model Invoice {
+  id           String         @id @default(uuid())
+  accountingId String
+  number       String
+  date         DateTime
+  customerId   String
+  netAmount    Decimal        @db.Decimal(18, 2)
+  taxAmount    Decimal        @db.Decimal(18, 2)
+  grossAmount  Decimal        @db.Decimal(18, 2)
+  status       String         @default("open")
+  data         Json?
+  pdfDocId     String?
+  accounting   AccountingRoot @relation(fields: [accountingId], references: [id], onDelete: Cascade)
+  customer     Party          @relation(fields: [customerId], references: [id])
+  pdfDoc       Document?      @relation("InvoicePdf", fields: [pdfDocId], references: [id])
+
+  @@unique([accountingId, number])
+  @@index([date, status])
+  @@index([customerId])
+  @@index([pdfDocId])
+}
+
+model VendorBill {
+  id           String         @id @default(uuid())
+  accountingId String
+  number       String
+  date         DateTime
+  supplierId   String
+  netAmount    Decimal        @db.Decimal(18, 2)
+  taxAmount    Decimal        @db.Decimal(18, 2)
+  grossAmount  Decimal        @db.Decimal(18, 2)
+  status       String         @default("open")
+  data         Json?
+  pdfDocId     String?
+  accounting   AccountingRoot @relation(fields: [accountingId], references: [id], onDelete: Cascade)
+  pdfDoc       Document?      @relation("VendorBillPdf", fields: [pdfDocId], references: [id])
+  supplier     Party          @relation(fields: [supplierId], references: [id])
+
+  @@unique([accountingId, number])
+  @@index([date, status])
+  @@index([supplierId])
+  @@index([pdfDocId])
+}
+
+model Payment {
+  id           String         @id @default(uuid())
+  accountingId String
+  date         DateTime
+  amount       Decimal        @db.Decimal(18, 2)
+  method       String
+  direction    String
+  refType      String?
+  refId        String?
+  data         Json?
+  accounting   AccountingRoot @relation(fields: [accountingId], references: [id], onDelete: Cascade)
+
+  @@index([accountingId, date])
+}
+
+model LedgerEntry {
+  id            String         @id @default(uuid())
+  accountingId  String
+  date          DateTime
+  account       String
+  contraAccount String
+  amount        Decimal        @db.Decimal(18, 2)
+  text          String?
+  refType       String?
+  refId         String?
+  accounting    AccountingRoot @relation(fields: [accountingId], references: [id], onDelete: Cascade)
+
+  @@index([accountingId, date, account])
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  companyId String
+  projectId String?
+  userId    String?
+  action    String
+  meta      Json?
+  createdAt DateTime @default(now())
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([companyId, projectId, createdAt])
+}
+
+model RecipeTemplate {
+  id                    String                @id @default(cuid())
+  key                   String                @unique
+  title                 String
+  category              String
+  unit                  String
+  description           String?
+  paramsJson            Json?
+  tags                  String[]
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  companyProductivities CompanyProductivity[]
+  components            RecipeComponent[]
+  variants              RecipeVariant[]
+}
+
+model RecipeComponent {
+  id         String              @id @default(cuid())
+  templateId String
+  type       RecipeComponentType
+  refKey     String
+  qtyFormula String
+  mandatory  Boolean             @default(true)
+  riskFactor Decimal             @default(1.0) @db.Decimal(10, 4)
+  sort       Int                 @default(0)
+  note       String?
+  template   RecipeTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, type])
+  @@index([refKey])
+}
+
+model RecipeVariant {
+  id                    String                @id @default(cuid())
+  templateId            String
+  key                   String                @unique
+  unit                  String
+  params                Json
+  enabled               Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  companyProductivities CompanyProductivity[]
+  template              RecipeTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, enabled])
+}
+
+model CompanyPrice {
+  id        String   @id @default(cuid())
+  companyId String
+  refKey    String
+  price     Decimal  @db.Decimal(18, 6)
+  unit      String
+  validFrom DateTime @default(now())
+  validTo   DateTime?
+  note      String?
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, refKey, validFrom])
+  @@index([companyId, refKey])
+}
+
+model CompanyProductivity {
+  id         String         @id @default(cuid())
+  companyId  String
+  templateId String
+  variantId  String?
+  value      Decimal        @db.Decimal(18, 6)
+  unit       String
+  source     String
+  confidence Int            @default(70)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  template   RecipeTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  variant    RecipeVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([companyId, templateId])
+  @@index([companyId, variantId])
+}
+
+model WorkflowDoc {
+  id             String            @id @default(uuid())
+  projectId      String
+  type           WorkflowDocType
+  status         WorkflowStatus    @default(EINGEREICHT)
+  fsKey          String
+  fsPath         String
+  docId          String
+  date           DateTime?
+  title          String?
+  searchText     String?
+  fileCount      Int               @default(0)
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  approvedBy     String?
+  rejectedReason String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  links          WorkflowDocLink[]
+
+  @@unique([projectId, type, docId])
+  @@index([projectId, type, status, createdAt])
+  @@index([projectId, date])
+}
+
+model WorkflowDocLink {
+  id            String      @id @default(uuid())
+  workflowDocId String
+  documentId    String
+  kind          FileKind
+  note          String?
+  document      Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  workflowDoc   WorkflowDoc @relation(fields: [workflowDocId], references: [id], onDelete: Cascade)
+
+  @@index([workflowDocId])
+  @@index([documentId])
+}
+
+enum UserRole {
+  admin
+  user
+}
+
+enum RegieTyp {
+  ARBEIT
+  MASCHINE
+  MATERIAL
+  WETTER
+}
+
+enum ProjectRole {
+  ADMIN
+  BAULEITER
+  CAPOCANTIERE
+  MITARBEITER
+  KALKULATOR
+  BUCHHALTUNG
+  GAST
+}
+
+enum FileKind {
+  CAD
+  PDF
+  LV
+  IMAGE
+  DOC
+  OTHER
+}
+
+enum Section {
+  KALKULATION
+  MASSENERMITTLUNG
+  CAD
+  BUERO
+  KI
+  INFO
+  BUCHHALTUNG
+}
+
+enum MeasurementSource {
+  CAD
+  PDF
+  FOTO
+  MANUAL
+}
+
+enum PartyType {
+  CUSTOMER
+  SUPPLIER
+  PARTNER
+}
+
+enum RecipeComponentType {
+  LABOR
+  MACHINE
+  MATERIAL
+  DISPOSAL
+  SURFACE
+  OTHER
+}
+
+enum WorkflowDocType {
+  REGIE
+  LIEFERSCHEIN
+  PHOTO_NOTE
+}
+
+enum WorkflowStatus {
+  DRAFT
+  EINGEREICHT
+  FREIGEGEBEN
+  ABGELEHNT
+}

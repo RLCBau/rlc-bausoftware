@@ -1,0 +1,23 @@
+{
+  "kind": "photo",
+  "docId": "1767539428651-f3f225f263a95",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "workflowStatus": "FREIGEGEBEN",
+  "createdAt": 1767539432117,
+  "submittedAt": 1767539432117,
+  "date": "2026-01-04",
+  "lvItemPos": null,
+  "attachments": [
+    {
+      "name": "photo_1767539426568.jpg",
+      "type": "image/jpeg",
+      "size": 2772305,
+      "relPath": "/projects/BA-2025-DEMO/fotos/1767539428651-f3f225f263a95/photo_1767539426568.jpg"
+    }
+  ],
+  "approvedAt": 1767544587725,
+  "approvedBy": "",
+  "rejectionReason": null,
+  "committedAt": 1767544587725
+}

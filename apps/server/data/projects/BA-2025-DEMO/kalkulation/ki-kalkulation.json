@@ -1,0 +1,238 @@
+{
+  "meta": {
+    "mwst": 19,
+    "aufschlag": 10,
+    "kapRabatt": {
+      "—": 0,
+      "01": 0,
+      "02": 0,
+      "03": 0,
+      "04": 0
+    },
+    "kapMarkup": {
+      "—": 0,
+      "01": 0,
+      "02": 0,
+      "03": 0,
+      "04": 0
+    },
+    "offerNumber": "ANG-20260116",
+    "projectKey": "BA-2025-DEMO",
+    "savedAt": "2026-01-16T05:32:21.350Z"
+  },
+  "rows": [
+    {
+      "id": "a7e478a0-de28-4155-af91-39d24e31bd37",
+      "posNr": "LABOR:TIEFBAU",
+      "kurztext": "LABOR:TIEFBAU",
+      "einheit": "pauschal",
+      "menge": 2.5,
+      "preis": 86.73,
+      "confidence": 0.76,
+      "rabatt": 0
+    },
+    {
+      "id": "2b9c5406-c2cc-4605-9477-c2939a22c501",
+      "posNr": "MATERIAL:DICHTUNG_SCHACHT",
+      "kurztext": "MATERIAL:DICHTUNG_SCHACHT",
+      "einheit": "stk",
+      "menge": 1,
+      "preis": 73.87,
+      "confidence": 0.69,
+      "rabatt": 0
+    },
+    {
+      "id": "449d6dce-9bc4-45cb-b8eb-efdac3c9742e",
+      "posNr": "MATERIAL:MONTAGEMATERIAL",
+      "kurztext": "MATERIAL:MONTAGEMATERIAL",
+      "einheit": "stk",
+      "menge": 0.2,
+      "preis": 96.67,
+      "confidence": 0.65,
+      "rabatt": 0
+    },
+    {
+      "id": "9fb8f9fd-7c3a-496c-ac9d-30b577d7dd15",
+      "posNr": "DISPOSAL:AUSHUB",
+      "kurztext": "DISPOSAL:AUSHUB",
+      "einheit": "m",
+      "menge": 10,
+      "preis": 110.15,
+      "confidence": 0.71,
+      "rabatt": 0
+    },
+    {
+      "id": "15340b3d-b123-4d2d-b214-a39d3cd699aa",
+      "posNr": "LABOR:TIEFBAU",
+      "kurztext": "LABOR:TIEFBAU",
+      "einheit": "pauschal",
+      "menge": 4,
+      "preis": 2.57,
+      "confidence": 0.98,
+      "rabatt": 0
+    },
+    {
+      "id": "5cb75375-4fad-463e-8a7e-05beb029b6ef",
+      "posNr": "MACHINE:TRANSPORTER",
+      "kurztext": "MACHINE:TRANSPORTER",
+      "einheit": "pauschal",
+      "menge": 2,
+      "preis": 119.44,
+      "confidence": 0.71,
+      "rabatt": 0
+    },
+    {
+      "id": "5ef4ea7a-35fb-4e6a-9a70-3015a9487f26",
+      "posNr": "LABOR:TIEFBAU",
+      "kurztext": "LABOR:TIEFBAU",
+      "einheit": "pauschal",
+      "menge": 4,
+      "preis": 51.5,
+      "confidence": 0.82,
+      "rabatt": 0
+    },
+    {
+      "id": "1a4cf141-34c1-4ee4-85d9-2ff62e2d3c61",
+      "posNr": "MACHINE:TRANSPORTER",
+      "kurztext": "MACHINE:TRANSPORTER",
+      "einheit": "pauschal",
+      "menge": 2,
+      "preis": 56.19,
+      "confidence": 0.98,
+      "rabatt": 0
+    },
+    {
+      "id": "743df5da-2669-4d01-83f0-b9d775fd7ec4",
+      "posNr": "LABOR:TIEFBAU",
+      "kurztext": "LABOR:TIEFBAU",
+      "einheit": "pauschal",
+      "menge": 4,
+      "preis": 116.93,
+      "confidence": 0.95,
+      "rabatt": 0
+    },
+    {
+      "id": "8825c029-521a-4ecf-8b38-48dec4a8574b",
+      "posNr": "MACHINE:TRANSPORTER",
+      "kurztext": "MACHINE:TRANSPORTER",
+      "einheit": "pauschal",
+      "menge": 2,
+      "preis": 24.78,
+      "confidence": 0.62,
+      "rabatt": 0
+    },
+    {
+      "id": "a9ad8297-3eff-44f0-8b94-5d128dd80160",
+      "posNr": "01.001",
+      "kurztext": "Aushub Baugrube bis 1,5 m Tiefe",
+      "einheit": "m³",
+      "menge": 120,
+      "preis": 82.25,
+      "confidence": 0.93
+    },
+    {
+      "id": "1815b515-8577-48c8-b98c-10fdae6cab4e",
+      "posNr": "01.002",
+      "kurztext": "Abfuhr Erdreich bis 5 km",
+      "einheit": "t",
+      "menge": 80,
+      "preis": 56.33,
+      "confidence": 0.85
+    },
+    {
+      "id": "4b013b3b-2559-41a9-ab25-7eb2a45a531c",
+      "posNr": "01.003",
+      "kurztext": "Verfüllung mit Kies und Verdichtung",
+      "einheit": "m³",
+      "menge": 45,
+      "preis": 42.27,
+      "confidence": 0.91
+    },
+    {
+      "id": "fcf36fab-df9b-48b4-a23b-4fae11a1c32d",
+      "posNr": "02.001",
+      "kurztext": "Schalung für Fundamentwände",
+      "einheit": "m²",
+      "menge": 60,
+      "preis": 4.65,
+      "confidence": 0.98
+    },
+    {
+      "id": "72a1e626-8de7-4ddc-9a3b-47deefefb76a",
+      "posNr": "02.002",
+      "kurztext": "Bewehrung Stahl B500A",
+      "einheit": "kg",
+      "menge": 2500,
+      "preis": 23.38,
+      "confidence": 1
+    },
+    {
+      "id": "445ebecd-2c63-4d86-93e4-f1c003566fa1",
+      "posNr": "02.003",
+      "kurztext": "Beton C25/30 in Fundamente",
+      "einheit": "m³",
+      "menge": 35,
+      "preis": 40.06,
+      "confidence": 0.92
+    },
+    {
+      "id": "4ce59c44-0de1-45d7-b1de-a91e952bb4b4",
+      "posNr": "03.001",
+      "kurztext": "Speedpipe 2x40 mm verlegen",
+      "einheit": "m",
+      "menge": 240,
+      "preis": 67.03,
+      "confidence": 0.99
+    },
+    {
+      "id": "aa5a8a4a-0b52-4bd7-9055-84c6901b6749",
+      "posNr": "03.002",
+      "kurztext": "Kabelschutzrohr DN110 liefern und verlegen",
+      "einheit": "m",
+      "menge": 180,
+      "preis": 20.17,
+      "confidence": 0.83
+    },
+    {
+      "id": "4658a269-01fd-4b80-a821-3d545cc24c22",
+      "posNr": "03.003",
+      "kurztext": "Hausanschluss herstellen inkl. Abdichtung",
+      "einheit": "Stk",
+      "menge": 4,
+      "preis": 22.13,
+      "confidence": 0.64
+    },
+    {
+      "id": "e73eb202-fbcb-4125-a9e2-d13d9bf952ac",
+      "posNr": "04.001",
+      "kurztext": "Asphalttragschicht AC 22 T S",
+      "einheit": "m²",
+      "menge": 350,
+      "preis": 41.11,
+      "confidence": 0.86
+    },
+    {
+      "id": "1a6cb75d-068a-4990-82a1-5721e5c836e6",
+      "posNr": "04.002",
+      "kurztext": "Asphaltdeckschicht AC 8 D S",
+      "einheit": "m²",
+      "menge": 350,
+      "preis": 19.55,
+      "confidence": 0.96
+    },
+    {
+      "id": "efc4b656-45c0-45d9-b429-83a75231b62c",
+      "posNr": "04.003",
+      "kurztext": "Fahrbahnmarkierung weiß 12 cm",
+      "einheit": "m",
+      "menge": 300,
+      "preis": 43.47,
+      "confidence": 0.98
+    }
+  ],
+  "totals": {
+    "netto": 132984.31900000002,
+    "aufschlagWert": 13298.431900000003,
+    "brutto": 174076.473571
+  }
+}

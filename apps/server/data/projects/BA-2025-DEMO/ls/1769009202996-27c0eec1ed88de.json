@@ -1,0 +1,19 @@
+{
+  "kind": "lieferschein",
+  "id": "1769009202996-27c0eec1ed88de",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-21",
+  "lieferscheinNummer": "Jj",
+  "supplier": "Jj",
+  "lvItemPos": null,
+  "workflowStatus": "FREIGEGEBEN",
+  "submittedAt": 1769009205575,
+  "createdAt": 1769009202996,
+  "projectFsKey": "BA-2025-DEMO",
+  "rejectionReason": null,
+  "attachments": [],
+  "approvedAt": 1769009325852,
+  "approvedBy": null,
+  "savedAt": "2026-01-21T15:28:45.852Z"
+}

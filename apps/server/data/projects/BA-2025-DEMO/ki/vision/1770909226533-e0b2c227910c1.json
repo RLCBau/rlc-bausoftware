@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Alz Kies u. Recycling GmbH\nKunde: 16771\nAlzChem Trostberg GmbH\nChemiepark Trostberg / Bau\nDr.-Albert-Frank-Straße 33\n83308 Trostberg\nLieferschein: 25017064\nDatum: 05.09.2025\nUhrzeit: 07:59\nBaustelle: 22370\nAuftrag: AB22-00051\nArtikel: 4450\nKoka Granulat Werk Hart AUSGANG\nErzeuger: 16771 AlzChem Trostberg GmbH\nChemiepark Trostberg / Bau\nEntladestelle: Zementwerk LEUBE GmbH, Sankt\nLeonhard (A)\nBruttogewicht: 39,740 t\nTarawiegung: 13,500 t\nNettogewicht: 26,240 t",
+  "rawText": "Alz Kies u. Recycling GmbH\nKunde: 16771\nAlzChem Trostberg GmbH\nChemiepark Trostberg / Bau\nDr.-Albert-Frank-Straße 33\n83308 Trostberg\nLieferschein: 25017064\nDatum: 05.09.2025\nUhrzeit: 07:59\nBaustelle: 22370\nAuftrag: AB22-00051\nArtikel: 4450\nKoka Granulat Werk Hart AUSGANG\nErzeuger: 16771 AlzChem Trostberg GmbH\nChemiepark Trostberg / Bau\nEntladestelle: Zementwerk LEUBE GmbH, Sankt\nLeonhard (A)\nBruttogewicht: 39,740 t\nTarawiegung: 13,500 t\nNettogewicht: 26,240 t",
+  "entities": {
+    "extracted": [
+      {
+        "file": "IMG_6FAED538-568B-4887-A570-F0A144E18348.jpg",
+        "text": "Alz Kies u. Recycling GmbH\nKunde: 16771\nAlzChem Trostberg GmbH\nChemiepark Trostberg / Bau\nDr.-Albert-Frank-Straße 33\n83308 Trostberg\nLieferschein: 25017064\nDatum: 05.09.2025\nUhrzeit: 07:59\nBaustelle: 22370\nAuftrag: AB22-00051\nArtikel: 4450\nKoka Granulat Werk Hart AUSGANG\nErzeuger: 16771 AlzChem Trostberg GmbH\nChemiepark Trostberg / Bau\nEntladestelle: Zementwerk LEUBE GmbH, Sankt\nLeonhard (A)\nBruttogewicht: 39,740 t\nTarawiegung: 13,500 t\nNettogewicht: 26,240 t",
+        "entities": {
+          "arbeiten": [
+            "Koka Granulat Werk Hart AUSGANG"
+          ],
+          "materialien": [
+            "Koka-Material"
+          ],
+          "maschinen": [],
+          "personal": [
+            "AlzChem Trostberg GmbH"
+          ],
+          "zeiten": {
+            "start": "07:59",
+            "ende": null
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "IMG_6FAED538-568B-4887-A570-F0A144E18348.jpg",
+      "type": "image/jpeg",
+      "size": 6206941
+    }
+  ],
+  "createdAt": 1770909226532
+}

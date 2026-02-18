@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "",
+  "rawText": "",
+  "entities": {
+    "extracted": [
+      {
+        "file": "IMG_6FAED538-568B-4887-A570-F0A144E18348.jpg",
+        "text": "",
+        "entities": {}
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "IMG_6FAED538-568B-4887-A570-F0A144E18348.jpg",
+      "type": "image/jpeg",
+      "size": 6206941
+    }
+  ],
+  "createdAt": 1770971480599
+}

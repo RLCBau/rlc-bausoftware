@@ -1,0 +1,16 @@
+.bh-shell { display:grid; grid-template-columns: 280px 1fr; gap:16px; padding: 16px; }
+.bh-left { border:1px solid #e5e5e5; border-radius:10px; padding:12px; background:#fafafa; }
+.bh-left h1 { font-size:18px; margin:0 0 8px; }
+.bh-menu { display:flex; flex-direction:column; gap:6px; }
+.bh-link { padding:8px 10px; border-radius:8px; text-decoration:none; color:inherit; border:1px solid transparent; }
+.bh-link.active { background:#0d1117; color:#fff; border-color:#0d1117; }
+.bh-right { border:1px solid #e5e5e5; border-radius:10px; background:#fff; padding:16px; }
+.bh-table { width:100%; border-collapse: collapse; margin-top:10px; }
+.bh-table th, .bh-table td { border:1px solid #e5e5e5; padding:8px; text-align:left; }
+.bh-form { display:grid; gap:10px; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); align-items:end; }
+.bh-form label { display:flex; flex-direction:column; gap:6px; font-size:14px; }
+.bh-form input, .bh-form select, .bh-form textarea { padding:8px; border:1px solid #d0d0d0; border-radius:6px; }
+.bh-cards { display:grid; gap:12px; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); }
+.bh-card { border:1px solid #e5e5e5; border-radius:10px; background:#fbfbfb; padding:12px; }
+.bh-card .k { font-size:12px; color:#666; }
+.bh-card .v { font-weight:700; font-size:20px; }

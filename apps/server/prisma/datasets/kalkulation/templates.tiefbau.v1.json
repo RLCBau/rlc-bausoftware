@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "key": "TB_GRABEN_AUSHUB_STANDARD",
+      "title": "Graben ausheben (Standard)",
+      "category": "TIEFBAU",
+      "unit": "m",
+      "description": "Aushub eines Leitungsgrabens inkl. Nebenleistungen (ohne Verbau).",
+      "tags": ["graben", "aushub", "bodenklasse", "tiefbau"],
+      "paramsJson": {
+        "defaultParams": {
+          "depth_m": 1.2,
+          "width_m": 0.6,
+          "soilClass": "BK4",
+          "restricted": false,
+          "groundwater": false
+        },
+        "schema": {
+          "depth_m": { "type": "number", "min": 0.6, "max": 2.5, "step": 0.1 },
+          "width_m": { "type": "number", "min": 0.3, "max": 1.2, "step": 0.1 },
+          "soilClass": { "type": "enum", "values": ["BK2","BK3","BK4","BK5","BK6"] },
+          "restricted": { "type": "boolean" },
+          "groundwater": { "type": "boolean" }
+        }
+      },
+      "components": [
+        {
+          "type": "LABOR",
+          "refKey": "LABOR:FACHARBEITER",
+          "qtyFormula": "0.22 * params.depth_m * params.width_m",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 10
+        },
+        {
+          "type": "MACHINE",
+          "refKey": "MACHINE:BAGGER_8_14T",
+          "qtyFormula": "0.15 * params.depth_m",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 20
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="260" viewBox="0 0 1100 260">
+  <!-- Icona Tachimetro -->
+  <g transform="translate(40,20)">
+    <!-- Treppiede -->
+    <g fill="none" stroke="#A0A9B8" stroke-width="8" stroke-linecap="round">
+      <path d="M20,200 L60,120" />
+      <path d="M100,200 L60,120" />
+      <path d="M60,200 L60,120" />
+    </g>
+    <!-- Corpo strumento -->
+    <rect x="30" y="40" width="60" height="90" rx="10" fill="#1E2A47" stroke="#A0A9B8" stroke-width="6"/>
+    <rect x="20" y="55" width="20" height="60" rx="6" fill="#1E2A47" stroke="#A0A9B8" stroke-width="5"/>
+    <rect x="80" y="55" width="20" height="60" rx="6" fill="#1E2A47" stroke="#A0A9B8" stroke-width="5"/>
+    <rect x="45" y="130" width="30" height="16" rx="4" fill="#1E2A47" stroke="#A0A9B8" stroke-width="5"/>
+    <rect x="34" y="148" width="52" height="16" rx="4" fill="#1E2A47" stroke="#A0A9B8" stroke-width="5"/>
+    <circle cx="60" cy="85" r="22" fill="#7FB3FF" stroke="#A0A9B8" stroke-width="5"/>
+    <circle cx="53" cy="78" r="6" fill="#FFFFFF" opacity="0.6"/>
+    <circle cx="75" cy="68" r="5" fill="#7CFF86" stroke="#0F7A20" stroke-width="1"/>
+  </g>
+
+  <!-- Separatore -->
+  <line x1="160" y1="40" x2="160" y2="220" stroke="#A0A9B8" stroke-width="2"/>
+
+  <!-- Monogramma RLC spezzato -->
+  <g transform="translate(190,60)" stroke="#1E2A47" stroke-width="16" stroke-linecap="round" fill="none">
+    <path d="M0,0 L0,100" />
+    <path d="M0,0 L50,0" />
+    <path d="M50,0 Q80,0 80,30 Q80,60 50,60 L0,60" />
+    <path d="M40,60 L85,100" />
+    <path d="M120,0 L120,100" />
+    <path d="M120,100 L190,100" />
+    <path d="M260,20 Q220,20 200,40 Q180,60 180,100 Q180,140 200,160 Q220,180 260,180" />
+    <path d="M260,20 L300,20" />
+    <path d="M260,180 L300,180" />
+  </g>
+
+  <!-- Testo -->
+  <g transform="translate(540,70)">
+    <text x="0" y="50" font-family="Montserrat, Helvetica, Arial, sans-serif" font-weight="800" font-size="48" fill="#1E2A47">
+      RLC Bausoftware
+    </text>
+    <text x="0" y="98" font-family="Montserrat, Helvetica, Arial, sans-serif" font-weight="500" font-size="22" fill="#5C6A82">
+      KI integriert · Kalkulation · Tiefbau · Vermessung
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,22 @@
+{
+  "kind": "regie",
+  "id": "regie_1770217359828_434897753",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-02-04",
+  "arbeitsbeginn": "",
+  "arbeitsende": "",
+  "pause1": "",
+  "pause2": "",
+  "wetter": "",
+  "kostenstelle": "",
+  "bemerkungen": "",
+  "photos": [],
+  "attachments": [],
+  "workflowStatus": "EINGEREICHT",
+  "createdAt": 1770217359828,
+  "projectFsKey": "BA-2025-DEMO",
+  "reportType": "REGIE",
+  "comment": "",
+  "submittedAt": 1770217378664
+}

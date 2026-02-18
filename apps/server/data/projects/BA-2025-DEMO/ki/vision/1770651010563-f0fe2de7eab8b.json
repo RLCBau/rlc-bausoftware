@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Lieferung von Asphaltplatten für Deckschichten von Straßen und sonstigen Verkehrsflächen. Lieferung erfolgt ab Werk ohne Fracht.",
+  "rawText": "Lieferung von Asphaltplatten für Deckschichten von Straßen und sonstigen Verkehrsflächen. Lieferung erfolgt ab Werk ohne Fracht.",
+  "entities": {
+    "extracted": [
+      {
+        "file": "camera_1770650981137.jpg",
+        "text": "Lieferung von Asphaltplatten für Deckschichten von Straßen und sonstigen Verkehrsflächen. Lieferung erfolgt ab Werk ohne Fracht.",
+        "entities": {
+          "arbeiten": [
+            "Deckschichten von Straßen"
+          ],
+          "materialien": [
+            "Asphaltplatten"
+          ],
+          "maschinen": [],
+          "personal": [],
+          "zeiten": {
+            "start": "14:28",
+            "ende": "14:28"
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "camera_1770650981137.jpg",
+      "type": "image/jpeg",
+      "size": 7356927
+    }
+  ],
+  "createdAt": 1770651010562
+}

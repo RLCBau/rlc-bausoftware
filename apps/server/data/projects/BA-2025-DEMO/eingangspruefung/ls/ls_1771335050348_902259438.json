@@ -1,0 +1,33 @@
+{
+  "kind": "lieferschein",
+  "id": "ls_1771335050348_902259438",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-02-17",
+  "lieferscheinNummer": "",
+  "material": "",
+  "kostenstelle": "",
+  "lvItemPos": "",
+  "attachments": [
+    {
+      "name": "camera_1771335070324.jpg",
+      "type": "image/jpeg",
+      "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\eingangspruefung\\ls\\ls_1771335050348_902259438\\files\\1771335076496__camera_1771335070324.jpg",
+      "url": "/projects/BA-2025-DEMO/eingangspruefung/ls/ls_1771335050348_902259438/files/1771335076496__camera_1771335070324.jpg"
+    }
+  ],
+  "workflowStatus": "EINGEREICHT",
+  "createdAt": 1771335050348,
+  "projectFsKey": "BA-2025-DEMO",
+  "submittedAt": 1771335075779,
+  "rejectionReason": null,
+  "baustellenNummer": "BA-2025-Demo",
+  "bauleiterEmail": "rlcvermessung@gmail.com",
+  "lieferant": "",
+  "baustelle": "",
+  "fahrer": "",
+  "quantity": "",
+  "unit": "",
+  "bemerkungen": "Hjdjjkdjjjdhjdjjhf",
+  "updatedAt": 1771335073163
+}

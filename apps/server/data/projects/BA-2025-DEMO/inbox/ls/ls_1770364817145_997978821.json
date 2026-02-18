@@ -1,0 +1,31 @@
+{
+  "kind": "lieferschein",
+  "id": "ls_1770364817145_997978821",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-02-06",
+  "lieferscheinNummer": "100",
+  "material": "Kies",
+  "kostenstelle": "20",
+  "lvItemPos": "",
+  "attachments": [
+    {
+      "name": "camera_1770374713043.jpg",
+      "type": "image/jpeg",
+      "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\inbox\\ls\\ls_1770364817145_997978821\\files\\1770374744663__camera_1770374713043.jpg",
+      "url": "/projects/BA-2025-DEMO/inbox/ls/ls_1770364817145_997978821/files/1770374744663__camera_1770374713043.jpg"
+    }
+  ],
+  "workflowStatus": "EINGEREICHT",
+  "submittedAt": 1770374743932,
+  "rejectionReason": null,
+  "createdAt": 1770364817145,
+  "projectFsKey": "BA-2025-DEMO",
+  "lieferant": "LKS",
+  "baustelle": "BA-2025-DEMO",
+  "fahrer": "Roberto",
+  "quantity": "30",
+  "unit": "",
+  "bemerkungen": "Jjjj",
+  "updatedAt": 1770374740706
+}

@@ -1,0 +1,50 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-01-04",
+  "lieferscheinNummer": "1",
+  "supplier": "Grube",
+  "site": "BA-2025-DEMO",
+  "driver": "Kkkkkkklk",
+  "material": "Kies",
+  "quantity": 9,
+  "unit": "M3",
+  "kostenstelle": "BA-2025-Demo",
+  "lvItemPos": null,
+  "comment": "Kies auf Baustelle gefahren",
+  "photos": [
+    {
+      "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/ImagePicker/7F6F6C22-A5F0-49B3-85E7-385AB652BD64.jpg",
+      "name": "photo_1767521109972.jpg",
+      "type": "image/jpeg"
+    }
+  ],
+  "id": "1767521160798-a0a2b91284f0f8",
+  "createdAt": 1767521160798,
+  "workflowStatus": "EINGEREICHT",
+  "submittedAt": 1767521165326,
+  "syncStatus": "PENDING",
+  "syncError": null,
+  "server": null,
+  "attachments": [
+    {
+      "name": "photo_1767521109972.jpg",
+      "type": "image/jpeg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1767521165416_photo_1767521109972.jpg"
+    }
+  ],
+  "uploadRes": {
+    "ok": true,
+    "fsKey": "BA-2025-DEMO",
+    "items": [
+      {
+        "name": "photo_1767521109972.jpg",
+        "type": "image/jpeg",
+        "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\lieferscheine\\files\\1767521165416_photo_1767521109972.jpg",
+        "publicUrl": "/projects/BA-2025-DEMO/lieferscheine/files/1767521165416_photo_1767521109972.jpg"
+      }
+    ]
+  },
+  "savedAt": "2026-01-04T10:06:05.731Z"
+}

@@ -1,0 +1,40 @@
+{
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "date": "2025-12-01",
+  "note": "",
+  "rows": [
+    {
+      "projectId": "BA-2025-DEMO",
+      "date": "2026-01-05",
+      "photos": [
+        {
+          "id": "7fc81dff-15d3-4136-b63a-3e7c16b4f12c",
+          "name": "IMG_20250514_143539.jpg",
+          "url": "blob:http://localhost:5173/591667d5-4608-434d-8036-bbff945e35e7",
+          "type": "image/jpeg"
+        }
+      ],
+      "reportType": "REGIE",
+      "hours": 5,
+      "regieNummer": "001",
+      "auftraggeber": "gemeinde",
+      "worker": "Roberto",
+      "machine": "Bagger",
+      "material": "Kies",
+      "quantity": 5,
+      "unit": "m3",
+      "lvItemId": "001.001",
+      "arbeitsbeginn": "7:00",
+      "arbeitsende": "12:00",
+      "pause1": "9:00-9:30",
+      "blattNr": "1",
+      "wetter": "sonnig",
+      "kostenstelle": "BA-2025_DEMO",
+      "comment": "Straße mit Kies Aufgefüllt",
+      "id": "75feb12d-e325-465b-8663-79175176643e"
+    }
+  ],
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "reportId": "001"
+}

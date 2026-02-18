@@ -1,0 +1,59 @@
+{
+  "kind": "lieferschein",
+  "projectId": "BA-2025-DEMO",
+  "date": "2026-01-02",
+  "savedAt": "2026-01-02T14:43:59.621Z",
+  "note": "",
+  "bemerkungen": "",
+  "rows": [
+    {
+      "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+      "date": "2026-01-02",
+      "site": "BA-2025-DEMO",
+      "quantity": 0,
+      "lvItemPos": null,
+      "photos": [
+        {
+          "id": "1767365032638-2562efc58af362",
+          "name": "rechnung-MC.M25087925166.pdf",
+          "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/DocumentPicker/2B6C7FCD-7279-44DD-A952-372CD7F3A665.pdf",
+          "type": "application/pdf"
+        },
+        {
+          "id": "1767365024687-08eb91994c51b5",
+          "name": "photo_1767365024687.jpg",
+          "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/ImagePicker/C1856B2B-DC79-4032-A228-1FE629FD6915.jpg",
+          "type": "image/jpeg"
+        }
+      ]
+    }
+  ],
+  "items": {
+    "aufmass": [],
+    "lieferscheine": [
+      {
+        "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+        "date": "2026-01-02",
+        "site": "BA-2025-DEMO",
+        "quantity": 0,
+        "lvItemPos": null,
+        "photos": [
+          {
+            "id": "1767365032638-2562efc58af362",
+            "name": "rechnung-MC.M25087925166.pdf",
+            "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/DocumentPicker/2B6C7FCD-7279-44DD-A952-372CD7F3A665.pdf",
+            "type": "application/pdf"
+          },
+          {
+            "id": "1767365024687-08eb91994c51b5",
+            "name": "photo_1767365024687.jpg",
+            "uri": "file:///var/mobile/Containers/Data/Application/0F75A4E5-AB4C-40ED-8F3A-2798E716966A/Library/Caches/ExponentExperienceData/@anonymous/rlc-mobile-194c20ab-2ed7-46df-baa1-be83eb68c5b3/ImagePicker/C1856B2B-DC79-4032-A228-1FE629FD6915.jpg",
+            "type": "image/jpeg"
+          }
+        ]
+      }
+    ]
+  },
+  "attachments": [],
+  "upload": []
+}

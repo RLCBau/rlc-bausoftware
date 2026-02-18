@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Wiege- und Lieferschein für Baustelle Schule EW 257030. Kunde: LKS. Gewicht: 1,55t, 2 Wiegungen. Fahrzeug: LKS BGL KS 347. Datum: 23.06.2025, Zeit: 08:47.",
+  "rawText": "Wiege- und Lieferschein für Baustelle Schule EW 257030. Kunde: LKS. Gewicht: 1,55t, 2 Wiegungen. Fahrzeug: LKS BGL KS 347. Datum: 23.06.2025, Zeit: 08:47.",
+  "entities": {
+    "extracted": [
+      {
+        "file": "IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+        "text": "Wiege- und Lieferschein für Baustelle Schule EW 257030. Kunde: LKS. Gewicht: 1,55t, 2 Wiegungen. Fahrzeug: LKS BGL KS 347. Datum: 23.06.2025, Zeit: 08:47.",
+        "entities": {
+          "arbeiten": [
+            "Wiegungen"
+          ],
+          "materialien": [
+            "Schotter 32-56mm"
+          ],
+          "maschinen": [],
+          "personal": [],
+          "zeiten": {
+            "start": "08:47",
+            "ende": ""
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+      "type": "image/jpeg",
+      "size": 5086400
+    }
+  ],
+  "createdAt": 1770643933884
+}

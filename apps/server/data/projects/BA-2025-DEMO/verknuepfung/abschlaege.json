@@ -1,0 +1,2363 @@
+{
+  "items": [
+    {
+      "nr": 1,
+      "createdAt": "2025-12-17T09:12:54.808Z",
+      "positions": [
+        {
+          "lvPos": "003.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "004.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "007.001",
+          "qty": 10,
+          "ep": 25,
+          "total": 250,
+          "nachtragId": null
+        }
+      ],
+      "total": 250
+    },
+    {
+      "nr": 2,
+      "createdAt": "2025-12-17T09:13:52.220Z",
+      "positions": [
+        {
+          "lvPos": "001.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "002.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "003.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "004.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "005.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "006.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "007.001",
+          "qty": 10,
+          "ep": 25,
+          "total": 250,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "008.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "009.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "010.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "011.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "012.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "013.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "014.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "015.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "016.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "017.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "018.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "019.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "020.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "021.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "022.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "023.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "024.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "025.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "026.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "027.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "028.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "029.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "030.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "031.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "032.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "033.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "034.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "035.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "036.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "037.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "038.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "039.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "040.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "041.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "042.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "043.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "044.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "045.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "046.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "047.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "048.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "049.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "050.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "051.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "052.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "053.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "054.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "055.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "056.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "057.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "058.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "059.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "060.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "061.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "062.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "063.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "064.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "065.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "066.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "067.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "068.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "069.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "070.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "071.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "072.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "073.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "074.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "075.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "076.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "077.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "078.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "079.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "080.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "081.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "082.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "083.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "084.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "085.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "086.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "087.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "088.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "089.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "090.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "091.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "092.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "093.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "094.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "095.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "096.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "097.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "098.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "099.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "100.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "101.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "102.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "103.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "104.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "105.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "106.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "107.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "108.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "109.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "110.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "111.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "112.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "113.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "114.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "115.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "116.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "117.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "118.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "119.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "120.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "121.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "122.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "123.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "124.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "125.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "126.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "127.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "128.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "129.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "130.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "131.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "132.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "133.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "134.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "135.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "136.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "137.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "138.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "139.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "140.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "141.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "142.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "143.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "144.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "145.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "146.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "147.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "148.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "149.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "150.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "151.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "152.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "153.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "154.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "155.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "156.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "157.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "158.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "159.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "160.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "161.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "162.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "163.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "164.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "165.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "166.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "167.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "168.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "169.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "170.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "171.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "172.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "173.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "174.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "175.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "176.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "177.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "178.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "179.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "180.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "181.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "182.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "183.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "184.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "185.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "186.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "187.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "188.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "189.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "190.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "191.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "192.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "193.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "194.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "195.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "196.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "197.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "198.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "199.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "200.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "201.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "202.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "203.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "204.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "205.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "206.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "207.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "208.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "209.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "210.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "211.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "212.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "213.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "214.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "215.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "216.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "217.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "218.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "219.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "220.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "221.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "222.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "223.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "224.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "225.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "226.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "227.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "228.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "229.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "230.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "231.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "232.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "233.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "234.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "235.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "236.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "237.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "238.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "239.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "240.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "241.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "242.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "243.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "244.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "245.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "246.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "247.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "248.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "249.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "250.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "251.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "252.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "253.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "254.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "255.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "256.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "257.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "258.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "259.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "260.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "261.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "262.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "263.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "264.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "265.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "266.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "267.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "268.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "269.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "270.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "271.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "272.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "273.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "274.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "275.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "276.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "277.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "278.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "279.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "280.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "281.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "282.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "283.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "284.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "285.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "286.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "287.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "288.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "289.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "290.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "291.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "292.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "293.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "294.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "295.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "296.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "297.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "298.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "299.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "300.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.301",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.303",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.305",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.307",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.309",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.311",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.313",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.315",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.317",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.319",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.321",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "FOTO.323",
+          "qty": 6,
+          "ep": 0,
+          "total": 0,
+          "nachtragId": null
+        }
+      ],
+      "total": 250
+    },
+    {
+      "nr": 3,
+      "createdAt": "2025-12-19T08:41:37.668Z",
+      "positions": [
+        {
+          "lvPos": "001.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        }
+      ],
+      "total": 0
+    },
+    {
+      "nr": 4,
+      "createdAt": "2025-12-19T08:51:36.571Z",
+      "positions": [
+        {
+          "lvPos": "001.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        }
+      ],
+      "total": 0
+    },
+    {
+      "nr": 5,
+      "createdAt": "2025-12-19T08:52:55.195Z",
+      "positions": [
+        {
+          "lvPos": "001.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "002.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "003.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "007.001",
+          "qty": 10,
+          "ep": 25,
+          "total": 250,
+          "nachtragId": null
+        }
+      ],
+      "total": 250
+    },
+    {
+      "nr": 6,
+      "createdAt": "2025-12-19T08:55:10.228Z",
+      "positions": [
+        {
+          "lvPos": "001.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "002.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        }
+      ],
+      "total": 0
+    },
+    {
+      "nr": 7,
+      "createdAt": "2025-12-19T09:01:09.451Z",
+      "positions": [
+        {
+          "lvPos": "001.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "007.001",
+          "qty": 10,
+          "ep": 25,
+          "total": 250,
+          "nachtragId": null
+        }
+      ],
+      "total": 250
+    },
+    {
+      "nr": 8,
+      "createdAt": "2025-12-19T09:13:16.169Z",
+      "positions": [
+        {
+          "lvPos": "002.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "003.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "007.001",
+          "qty": 10,
+          "ep": 25,
+          "total": 250,
+          "nachtragId": null
+        },
+        {
+          "lvPos": "006.001",
+          "qty": 0,
+          "ep": 25,
+          "total": 0,
+          "nachtragId": null
+        }
+      ],
+      "total": 250
+    }
+  ]
+}

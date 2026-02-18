@@ -1,0 +1,40 @@
+{
+  "kind": "regie",
+  "id": "regie_1770967107683_672750489",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-02-13",
+  "arbeitsbeginn": "07:00",
+  "arbeitsende": "15:00",
+  "pause1": "00:30-01:00",
+  "pause2": "",
+  "wetter": "Sonnig",
+  "kostenstelle": "",
+  "bemerkungen": "0:30",
+  "photos": [
+    {
+      "id": "img_1770967198649_802509505",
+      "name": "IMG_3199.heic",
+      "type": "image/heic",
+      "url": "/projects/BA-2025-DEMO/raw/1770967278971__IMG_3199.heic"
+    }
+  ],
+  "attachments": [
+    {
+      "id": "img_1770967198649_802509505",
+      "name": "IMG_3199.heic",
+      "type": "image/heic",
+      "url": "/projects/BA-2025-DEMO/raw/1770967278971__IMG_3199.heic"
+    }
+  ],
+  "workflowStatus": "FREIGEGEBEN",
+  "createdAt": 1770967107683,
+  "projectFsKey": "BA-2025-DEMO",
+  "reportType": "REGIE",
+  "comment": "",
+  "submittedAt": 1770967304305,
+  "approvedAt": 1770967413294,
+  "approvedBy": null,
+  "rejectionReason": null,
+  "savedAt": "2026-02-13T07:23:33.294Z"
+}

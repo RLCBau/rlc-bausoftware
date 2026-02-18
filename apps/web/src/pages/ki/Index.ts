@@ -1,0 +1,12 @@
+export { default as KILayout } from "./KILayout";
+export { default as KIUebersicht } from "./Uebersicht";
+export { default as KIAutoLV } from "./AutoLV";
+export { default as KIVorschlaege } from "./Vorschlaege";
+export { default as KIFotoerkennung } from "./Fotoerkennung";
+export { default as KISprachsteuerung } from "./Sprachsteuerung";
+export { default as KIWidersprueche } from "./Widersprueche";
+export { default as KIBewertungAnalyse } from "./BewertungAnalyse";
+export { default as KIAutoAbrechnung } from "./AutoAbrechnung";
+export { default as KIRegieAuto } from "./RegieAuto";
+export { default as KIOptimierung } from "./Optimierung";
+export { default as KIMaengel } from "./Maengel";

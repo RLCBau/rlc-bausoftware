@@ -1,0 +1,16 @@
+{
+  "kind": "lieferschein",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "date": "2026-01-09",
+  "workflowStatus": "FREIGEGEBEN",
+  "id": "ls_1767949661846_7a32278412f71",
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "submittedAt": 1767955543411,
+  "createdAt": 1767955543411,
+  "rejectionReason": null,
+  "attachments": [],
+  "approvedAt": 1768672500680,
+  "approvedBy": null,
+  "savedAt": "2026-01-17T17:55:00.680Z"
+}

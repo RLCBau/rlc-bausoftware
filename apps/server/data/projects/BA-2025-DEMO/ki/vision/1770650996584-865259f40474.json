@@ -1,0 +1,44 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Lieferung von Asphalt für Deckschichten von Straßen und sonstigen Verkehrsflächen. Lieferung erfolgt ab Werk ohne Frachten.",
+  "rawText": "Lieferung von Asphalt für Deckschichten von Straßen und sonstigen Verkehrsflächen. Lieferung erfolgt ab Werk ohne Frachten.",
+  "entities": {
+    "extracted": [
+      {
+        "file": "camera_1770650981137.jpg",
+        "text": "Lieferung von Asphalt für Deckschichten von Straßen und sonstigen Verkehrsflächen. Lieferung erfolgt ab Werk ohne Frachten.",
+        "entities": {
+          "arbeiten": [
+            "Asphaltieren"
+          ],
+          "materialien": [
+            "Asphalt 308NK0145"
+          ],
+          "maschinen": [
+            "Waage"
+          ],
+          "personal": [
+            "Abholer/Fahrer",
+            "Empfänger"
+          ],
+          "zeiten": {
+            "start": "14:28",
+            "ende": "14:28"
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "camera_1770650981137.jpg",
+      "type": "image/jpeg",
+      "size": 7356927
+    }
+  ],
+  "createdAt": 1770650996584
+}

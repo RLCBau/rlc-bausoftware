@@ -1,0 +1,43 @@
+{
+  "ok": true,
+  "kind": "LIEFERSCHEIN",
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "date": "2026-02-12",
+  "screen": "Lieferschein",
+  "text": "kurzer Extrakt (max 20 Zeilen)",
+  "rawText": "kurzer Extrakt (max 20 Zeilen)",
+  "entities": {
+    "extracted": [
+      {
+        "file": "IMG_20250514_143530.jpg",
+        "text": "kurzer Extrakt (max 20 Zeilen)",
+        "entities": {
+          "lieferschein": {
+            "lieferant": null,
+            "lieferscheinNr": null,
+            "datum": null,
+            "baustelle": null,
+            "kostenstelle": null,
+            "kennzeichen": null,
+            "fahrer": null
+          },
+          "materialien": [],
+          "arbeiten": [],
+          "zeiten": {
+            "start": null,
+            "ende": null
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "IMG_20250514_143530.jpg",
+      "type": "image/jpeg",
+      "size": 2530417
+    }
+  ],
+  "createdAt": 1770903404735
+}

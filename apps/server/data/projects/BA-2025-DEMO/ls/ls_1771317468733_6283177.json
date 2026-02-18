@@ -1,0 +1,36 @@
+{
+  "kind": "lieferschein",
+  "id": "ls_1771317468733_6283177",
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "projectCode": "BA-2025-DEMO",
+  "date": "2026-02-17",
+  "lieferscheinNummer": "",
+  "material": "Kies",
+  "kostenstelle": "",
+  "lvItemPos": "",
+  "attachments": [
+    {
+      "name": "IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+      "type": "image/jpeg",
+      "storagePath": "C:\\RLC\\rlc-app\\apps\\server\\data\\projects\\BA-2025-DEMO\\eingangspruefung\\ls\\ls_1771317468733_6283177\\files\\1771317529536__IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+      "url": "/projects/BA-2025-DEMO/lieferscheine/files/1771317529536__IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg"
+    }
+  ],
+  "workflowStatus": "FREIGEGEBEN",
+  "createdAt": 1771317468733,
+  "projectFsKey": "BA-2025-DEMO",
+  "submittedAt": 1771317528765,
+  "rejectionReason": null,
+  "baustellenNummer": "BA-2025-Demo",
+  "bauleiterEmail": "rlcvermessung@gmail.com",
+  "lieferant": "Nnnnn",
+  "baustelle": "Nnnnnnn",
+  "fahrer": "Hhhhh",
+  "quantity": "50",
+  "unit": "M3",
+  "bemerkungen": "",
+  "updatedAt": 1771317526637,
+  "approvedAt": 1771317600205,
+  "approvedBy": null,
+  "savedAt": "2026-02-17T08:40:00.205Z"
+}

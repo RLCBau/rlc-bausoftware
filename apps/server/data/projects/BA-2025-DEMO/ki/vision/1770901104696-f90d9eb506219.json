@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "kind": "REGIE",
+  "projectId": "BA-2025-DEMO",
+  "date": "",
+  "screen": "",
+  "text": "Wiege- und Lieferschein für Bernhard Heitauer Fuhrunternehmen. Kunde: LKS. Baustelle: Schule BW 257030. Gewicht: 1.551 t. Wiegungen: 2. Datum: 23.06.2025. Zeit: 08:47.",
+  "rawText": "Wiege- und Lieferschein für Bernhard Heitauer Fuhrunternehmen. Kunde: LKS. Baustelle: Schule BW 257030. Gewicht: 1.551 t. Wiegungen: 2. Datum: 23.06.2025. Zeit: 08:47.",
+  "entities": {
+    "extracted": [
+      {
+        "file": "IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+        "text": "Wiege- und Lieferschein für Bernhard Heitauer Fuhrunternehmen. Kunde: LKS. Baustelle: Schule BW 257030. Gewicht: 1.551 t. Wiegungen: 2. Datum: 23.06.2025. Zeit: 08:47.",
+        "entities": {
+          "arbeiten": [
+            "Wiegen",
+            "Lieferung"
+          ],
+          "materialien": [
+            "Schotter 32-56mm"
+          ],
+          "maschinen": [],
+          "personal": [],
+          "zeiten": {
+            "start": "08:47",
+            "ende": ""
+          }
+        }
+      }
+    ]
+  },
+  "files": [
+    {
+      "name": "IMG_21B5F3EE-C319-4F78-870C-2CA98A07787C.jpg",
+      "type": "image/jpeg",
+      "size": 5086400
+    }
+  ],
+  "createdAt": 1770901104690
+}

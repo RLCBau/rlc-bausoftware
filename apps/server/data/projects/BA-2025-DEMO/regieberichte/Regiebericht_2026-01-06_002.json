@@ -1,0 +1,35 @@
+{
+  "projectId": "9de4af8c-d586-4e1b-b68c-f1be704e2eaa",
+  "date": "2026-01-06",
+  "note": "",
+  "rows": [
+    {
+      "projectId": "BA-2025-DEMO",
+      "date": "2026-01-06",
+      "photos": [],
+      "reportType": "REGIE",
+      "unit": "Std",
+      "hours": 0,
+      "quantity": 0,
+      "id": "a6b18b71-ffe5-46da-9253-cba1ae502045"
+    }
+  ],
+  "items": {
+    "aufmass": [
+      {
+        "projectId": "BA-2025-DEMO",
+        "date": "2026-01-06",
+        "photos": [],
+        "reportType": "REGIE",
+        "unit": "Std",
+        "hours": 0,
+        "quantity": 0,
+        "id": "a6b18b71-ffe5-46da-9253-cba1ae502045"
+      }
+    ],
+    "lieferscheine": []
+  },
+  "projectCode": "BA-2025-DEMO",
+  "projectFsKey": "BA-2025-DEMO",
+  "reportId": "002"
+}

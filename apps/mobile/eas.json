@@ -1,0 +1,46 @@
+{
+  "cli": {
+    "version": ">= 16.28.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.rlcbausoftware.com"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.rlcbausoftware.com"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": {},
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.rlcbausoftware.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

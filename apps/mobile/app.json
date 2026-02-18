@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "RLC Mobile",
+    "slug": "rlc-mobile",
+    "scheme": "rlcmobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.robertolocurto.rlcmobile",
+      "buildNumber": "2",
+      "icon": "./assets/icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.robertolocurto.rlcmobile"
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-mail-composer",
+      "expo-asset"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1f06501b-39e2-45c2-9903-4b2079531bb1"
+      }
+    }
+  }
+}
