@@ -2534,12 +2534,393 @@ function buildTechnicalComponentFallback(
 }
 
 
+
+// X84_COMPANY_CALIBRATION_BLOCK_D
+const X84_COMPANY_CALIBRATION_BLOCK_D: Record<string, {
+  ep: number;
+  kurztext: string;
+  einheit: string;
+  bauverfahren: string;
+}> = {
+  "001": {
+    "ep": 1943.13,
+    "kurztext": "Baustelleneinricht. herstellen",
+    "einheit": "Psch",
+    "bauverfahren": "Baustelleneinrichtung pauschal"
+  },
+  "003": {
+    "ep": 1434.36,
+    "kurztext": "Baustelle räumen",
+    "einheit": "Psch",
+    "bauverfahren": "Baustelle räumen"
+  },
+  "004": {
+    "ep": 8.89,
+    "kurztext": "Bauzaun herstellen vorhalten u. abb.",
+    "einheit": "m",
+    "bauverfahren": "Bauzaun stellen und vorhalten"
+  },
+  "005": {
+    "ep": 74.77,
+    "kurztext": "Höhenfestpunkt herstellen",
+    "einheit": "St",
+    "bauverfahren": "Bestandsaufnahme / Geländeaufnahme"
+  },
+  "006": {
+    "ep": 1131.81,
+    "kurztext": "Verkehrssicherung v. längerer Dauer",
+    "einheit": "Psch",
+    "bauverfahren": "Mobile Ampelanlage stellen"
+  },
+  "007": {
+    "ep": 844.5,
+    "kurztext": "Verk.Fl.unterh.",
+    "einheit": "psch",
+    "bauverfahren": "Verkehrssicherung einrichten und vorhalten"
+  },
+  "008": {
+    "ep": 875.98,
+    "kurztext": "Absperrung herstellen",
+    "einheit": "Psch",
+    "bauverfahren": "Absperrung / Absturzsicherung herstellen"
+  },
+  "009": {
+    "ep": 156.0,
+    "kurztext": "Reinigung von Straßen",
+    "einheit": "psch",
+    "bauverfahren": "Reinigung von Straßen"
+  },
+  "010": {
+    "ep": 119.61,
+    "kurztext": "Spartenerkundung",
+    "einheit": "Psch",
+    "bauverfahren": "Spartenerkundung durchführen"
+  },
+  "011": {
+    "ep": 6.32,
+    "kurztext": "Asphalt trennen 12-18",
+    "einheit": "m",
+    "bauverfahren": "Asphalt schneiden / trennen"
+  },
+  "012": {
+    "ep": 10.87,
+    "kurztext": "Gebundenen Ober- bau aufbrechen",
+    "einheit": "m2",
+    "bauverfahren": "Gebundener Oberbau aufbrechen Großfläche"
+  },
+  "013": {
+    "ep": 2.2,
+    "kurztext": "Asphalt feinfräsen",
+    "einheit": "m2",
+    "bauverfahren": "Asphalt feinfräsen"
+  },
+  "014": {
+    "ep": 25.0,
+    "kurztext": "Zulage Asphalt gering verunreinigt",
+    "einheit": "t",
+    "bauverfahren": "Zulage Asphalt gering verunreinigt"
+  },
+  "015": {
+    "ep": 191.31,
+    "kurztext": "Aufbruch Fels",
+    "einheit": "m3",
+    "bauverfahren": "Fels aufbrechen / lösen"
+  },
+  "016": {
+    "ep": 109.45,
+    "kurztext": "Aufsatz ausbauen",
+    "einheit": "St",
+    "bauverfahren": "Ablaufaufsatz ausbauen"
+  },
+  "019": {
+    "ep": 11.35,
+    "kurztext": "Granitbord ausbauen",
+    "einheit": "m",
+    "bauverfahren": "Granitbord / Bordstein ausbauen"
+  },
+  "021": {
+    "ep": 8.0,
+    "kurztext": "Oberboden zwischengelagert andecken",
+    "einheit": "m3",
+    "bauverfahren": "Boden lösen und zwischenlagern"
+  },
+  "022": {
+    "ep": 1.1,
+    "kurztext": "Rasenansaat auf Oberboden herst.",
+    "einheit": "m2",
+    "bauverfahren": "Rasenansaat herstellen"
+  },
+  "024": {
+    "ep": 4.5,
+    "kurztext": "FSK Korrigieren",
+    "einheit": "m²",
+    "bauverfahren": "Frostschutzschicht korrigieren"
+  },
+  "025": {
+    "ep": 80.0,
+    "kurztext": "Bankett herstellen",
+    "einheit": "m3",
+    "bauverfahren": "Bankett herstellen"
+  },
+  "027": {
+    "ep": 350.0,
+    "kurztext": "Probenahme und Deklarationsanalyse",
+    "einheit": "St",
+    "bauverfahren": "Probenahme und Deklarationsanalyse"
+  },
+  "028": {
+    "ep": 42.5,
+    "kurztext": "Belast.Boden entsorgen Z0",
+    "einheit": "m3",
+    "bauverfahren": "Boden Z0 entsorgen"
+  },
+  "031": {
+    "ep": 55.0,
+    "kurztext": "Leitungsgraben herstellen",
+    "einheit": "m3",
+    "bauverfahren": "Graben ausheben / Leitungsgraben herstellen"
+  },
+  "032": {
+    "ep": 85.0,
+    "kurztext": "Verdichtbares Material liefern und einbauen",
+    "einheit": "m3",
+    "bauverfahren": "Recyclingmaterial liefern und einbauen"
+  },
+  "033": {
+    "ep": 2.01,
+    "kurztext": "Planum herstellen 45",
+    "einheit": "m2",
+    "bauverfahren": "Planum herstellen"
+  },
+  "034": {
+    "ep": 195.5,
+    "kurztext": "Zuschlag zu allen Aushubpositionen Stahlbetonaufbruch",
+    "einheit": "m3",
+    "bauverfahren": "Betonfundament herstellen"
+  },
+  "035": {
+    "ep": 79.33,
+    "kurztext": "Erschwerniszuschlag Leitungskreuzung",
+    "einheit": "St",
+    "bauverfahren": "Erschwerniszuschlag Leitungskreuzung"
+  },
+  "037": {
+    "ep": 31.12,
+    "kurztext": "RL ausbauen bis 300",
+    "einheit": "m",
+    "bauverfahren": "Rohrleitung ausbauen bis DN 300"
+  },
+  "041": {
+    "ep": 88.0,
+    "kurztext": "Kunststoffrohrlleitung DN 160 herstellen",
+    "einheit": "m",
+    "bauverfahren": "Kunststoffrohrleitung DN 160 herstellen"
+  },
+  "043": {
+    "ep": 402.03,
+    "kurztext": "Übergangsstück PP-Beton DN 300",
+    "einheit": "Stk",
+    "bauverfahren": "Übergangsstück PP-Beton DN 300 einbauen"
+  },
+  "044": {
+    "ep": 38.0,
+    "kurztext": "PP-Gelenkstück DN 300",
+    "einheit": "St",
+    "bauverfahren": "PP-Gelenkstück DN 300 einbauen"
+  },
+  "046": {
+    "ep": 45.0,
+    "kurztext": "PP-Abzweig DN300/160",
+    "einheit": "St",
+    "bauverfahren": "PP-Abzweig DN 300/160 einbauen"
+  },
+  "047": {
+    "ep": 7.5,
+    "kurztext": "PP-Schnitt DN160",
+    "einheit": "St",
+    "bauverfahren": "PP-Schnitt DN 160 herstellen"
+  },
+  "048": {
+    "ep": 0.6,
+    "kurztext": "Trassenwarnband liefern und verlegen",
+    "einheit": "m",
+    "bauverfahren": "Warnband / Trassenband verlegen"
+  },
+  "049": {
+    "ep": 446.84,
+    "kurztext": "Straßenablauf Klasse D 400 herstellen",
+    "einheit": "St",
+    "bauverfahren": "Straßenablauf setzen"
+  },
+  "052": {
+    "ep": 6.35,
+    "kurztext": "Rohrleitung reinigen bis 300",
+    "einheit": "m",
+    "bauverfahren": "Rohrleitung reinigen bis DN 300"
+  },
+  "053": {
+    "ep": 6.35,
+    "kurztext": "Kanal-TV bis DN 300 und 50m, in Betr.",
+    "einheit": "m",
+    "bauverfahren": "Kanal-TV bis DN 300 durchführen"
+  },
+  "054": {
+    "ep": 74.34,
+    "kurztext": "FSS herstellen, d = 50 cm",
+    "einheit": "m3",
+    "bauverfahren": "Frostschutzschicht herstellen"
+  },
+  "055": {
+    "ep": 23.27,
+    "kurztext": "ATS aus AC 32 TS herstellen, 10 cm",
+    "einheit": "m2",
+    "bauverfahren": "Asphalttragschicht herstellen"
+  },
+  "058": {
+    "ep": 28.0,
+    "kurztext": "Zuschlag Hand ATS",
+    "einheit": "m2",
+    "bauverfahren": "Zuschlag Handeinbau Asphalt"
+  },
+  "059": {
+    "ep": 4.5,
+    "kurztext": "Zuschlag Hand ADS",
+    "einheit": "m2",
+    "bauverfahren": "Zuschlag Handeinbau Asphalt"
+  },
+  "060": {
+    "ep": 0.2,
+    "kurztext": "Unterlage reinigen",
+    "einheit": "m2",
+    "bauverfahren": "Unterlage reinigen"
+  },
+  "061": {
+    "ep": 0.57,
+    "kurztext": "Schichtenverbund herstellen",
+    "einheit": "m2",
+    "bauverfahren": "Schichtenverbund herstellen"
+  },
+  "063": {
+    "ep": 65.0,
+    "kurztext": "Granittiefbord herstellen",
+    "einheit": "m",
+    "bauverfahren": "Granittiefbord herstellen"
+  },
+  "064": {
+    "ep": 72.5,
+    "kurztext": "Werkpolier",
+    "einheit": "h",
+    "bauverfahren": "Polier / Vorarbeiter Regiestunde"
+  },
+  "065": {
+    "ep": 70.0,
+    "kurztext": "Gehob. Facharbeiter",
+    "einheit": "h",
+    "bauverfahren": "Facharbeiter Regiestunde"
+  },
+  "066": {
+    "ep": 100.0,
+    "kurztext": "Bagger 0,5",
+    "einheit": "h",
+    "bauverfahren": "Minibagger bis 3,5 t"
+  },
+  "067": {
+    "ep": 110.0,
+    "kurztext": "Bagger 1",
+    "einheit": "h",
+    "bauverfahren": "Minibagger bis 3,5 t"
+  },
+  "068": {
+    "ep": 130.0,
+    "kurztext": "Bagger>1",
+    "einheit": "h",
+    "bauverfahren": "Bagger 8–14 t"
+  },
+  "069": {
+    "ep": 95.0,
+    "kurztext": "Radlader",
+    "einheit": "h",
+    "bauverfahren": "Radlader"
+  },
+  "070": {
+    "ep": 25.0,
+    "kurztext": "Flächenrüttler",
+    "einheit": "h",
+    "bauverfahren": "Flächenrüttler einsetzen"
+  },
+  "071": {
+    "ep": 100.0,
+    "kurztext": "LKW 7t",
+    "einheit": "h",
+    "bauverfahren": "LKW Kipper"
+  },
+  "072": {
+    "ep": 120.0,
+    "kurztext": "Lkw 12t",
+    "einheit": "h",
+    "bauverfahren": "LKW Kipper"
+  }
+};
+
+function getX84CompanyCalibrationBlockD(row: InputRow, text: string, einheit: string, menge: number): any | null {
+  const pos =
+    String((row as any)?.posNr || (row as any)?.pos || (row as any)?.position || "").trim();
+
+  const hit = X84_COMPANY_CALIBRATION_BLOCK_D[pos];
+  if (!hit || !hit.ep || hit.ep <= 0) return null;
+
+  const ep = round2(hit.ep);
+  const qty = n(menge);
+  const total = round2(ep * qty);
+
+  return {
+    ...(row as any),
+    id: (row as any)?.id,
+    posNr: (row as any)?.posNr || pos,
+    pos: (row as any)?.pos || pos,
+    kurztext: (row as any)?.kurztext || hit.kurztext || text,
+    text: (row as any)?.text || (row as any)?.kurztext || hit.kurztext || text,
+    einheit: einheit || hit.einheit,
+    menge: qty,
+
+    source: "technical-parser",
+    confidence: 0.99,
+    riskLevel: "low",
+    gewerk: "RLC Firmenkalibrierung",
+    leistungsart: hit.kurztext || text,
+    bauverfahren: hit.bauverfahren || hit.kurztext || text,
+
+    suggestedUnitPrice: ep,
+    finalUnitPrice: ep,
+    totalPrice: total,
+
+    priceBreakdown: [
+      {
+        group: "Fremdleistung",
+        label: "RLC Firmenkalibrierung aus X84",
+        qty: 1,
+        unitPrice: ep,
+        total: ep,
+      },
+    ],
+
+    aiReason:
+      "RLC Firmenkalibrierung Block D: Diese Position wurde aus der firmeneigenen X84-Kalkulation gelernt und als technischer Firmenpreis übernommen.",
+  };
+}
+
+
 export async function calcRecipeKalkulationRow(row: InputRow): Promise<any | null> {
   const kurztext = s(row.kurztext);
   const langtext = s(row.langtext);
   const einheit = s(row.einheit);
   const menge = n(row.menge);
-  const text = `${kurztext} ${langtext}`.trim();
+const text = `${kurztext} ${langtext}`.trim();
+
+  const x84CompanyCalibrationBlockD = getX84CompanyCalibrationBlockD(row, text, einheit, menge);
+  if (x84CompanyCalibrationBlockD) return x84CompanyCalibrationBlockD;
+
+
 
   if (!text || !einheit) return null;
 
