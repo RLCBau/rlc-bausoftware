@@ -1060,16 +1060,32 @@ function showLangtextModal(text: string) {
 }
 
 function getX84CompanyFrontendOverride(row: EliteRow): number {
+  /*
+   * Firmen-Datenbank-Override:
+   * Keine hardcoded Frontend-Preise.
+   * Wahrheit ist die synchronisierte Kalkulationsdatenbank.
+   */
   const pos = String((row as any).posNr || (row as any).pos || "").trim();
+  if (!pos) return 0;
 
-  const map: Record<string, number> = {
-    "011": 6.32,
-    "013": 2.20,
-    "060": 0.20,
-    "061": 0.57,
-  };
+  try {
+    const hit = KalkulationsDatenbank.list().find((entry: any) => {
+      const entryPos = String(entry.posNr || entry.positionNumber || "").trim();
+      const source = String(entry.quelle || entry.source || "").trim();
+      return entryPos === pos && source === "x84-company-baseline";
+    });
 
-  return map[pos] || 0;
+    if (!hit) return 0;
+
+    return (
+      n((hit as any).kosten?.epNetto) ||
+      n((hit as any).preis) ||
+      n((hit as any).unitPriceNet) ||
+      n((hit as any).finalUnitPrice)
+    );
+  } catch {
+    return 0;
+  }
 }
 
 function getRlcKiUnitPrice(row: EliteRow): number {
@@ -2405,6 +2421,32 @@ export default function KalkulationMitKI() {
 const importHandoffDoneRef = React.useRef(false);
 
   const [rows, setRows] = React.useState<EliteRow[]>([]);
+
+  React.useEffect(() => {
+    if (!projectKey) return;
+
+    let alive = true;
+
+    KalkulationsDatenbank.listServer()
+      .then(() => {
+        if (!alive) return;
+
+        /*
+         * Nach Firmen-Datenbank-Sync UI neu berechnen,
+         * damit getX84CompanyFrontendOverride() die x84-company-baseline nutzt.
+         */
+        setRows((prev) =>
+          prev.map((r) => cleanRlcKiWarningState(normalizeEliteRow({ ...r })))
+        );
+      })
+      .catch(() => {
+        // Offline / nicht angemeldet: bestehender lokaler Stand bleibt aktiv.
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [projectKey]);
   const [selectedId, setSelectedId] = React.useState<string>("");
   const [auftraege, setAuftraege] = React.useState<Auftrag[]>(() => {
   AuftragStore.ensureDefault(projectKey);
@@ -9264,6 +9306,9 @@ const priceCompareTdRight: React.CSSProperties = {
   whiteSpace: "nowrap",
   fontWeight: 800,
 };
+
+
+
 
 
 
