@@ -2449,8 +2449,6 @@ async function saveKiLearningRows(
       where: {
         companyId,
         positionNumber: posNr,
-        shortText: kurztext,
-        unit: einheit,
       },
       select: {
         id: true,
@@ -2515,6 +2513,21 @@ async function saveKiLearningRows(
     };
 
     if (existing) {
+      /*
+
+       * X84-Firmen-Baseline ist die geprüfte Angebotsbasis.
+
+       * KI-Learning darf diese Position niemals überschreiben.
+
+       */
+
+      if (existing.source === "x84-company-baseline") {
+
+        continue;
+
+      }
+
+
       const existingStatus = s((existing.parameters as any)?.qualityGateStatus);
 
       /*
