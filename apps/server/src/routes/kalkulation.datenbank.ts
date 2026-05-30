@@ -192,8 +192,51 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
       if (!posNr && !kurztext) continue;
 
       const menge = n(r.menge ?? r.quantity);
-      const ep = n(r.finalUnitPrice ?? r.preis ?? r.unitPriceNet);
-      const gp = n(r.totalNet ?? r.gesamt, menge * ep);
+
+
+      const ep = n(
+
+
+        r.finalUnitPrice ??
+
+
+          r.preis ??
+
+
+          r.unitPriceNet ??
+
+
+          r.kosten?.epNetto ??
+
+
+          r.costs?.epNetto
+
+
+      );
+
+
+      const gp = n(
+
+
+        r.totalNet ??
+
+
+          r.gesamt ??
+
+
+          r.kosten?.gpNetto ??
+
+
+          r.costs?.gpNetto,
+
+
+        menge * ep
+
+
+      );
+
+
+      const incomingSource = s(r.quelle || r.source || "ki") || "ki";
 
       /*
        * Keine Datenbank-Lerneinträge ohne echten EP.
@@ -203,10 +246,17 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
 
       const existing = await prisma.kalkulationsDbEntry.findFirst({
         where: {
+
           companyId,
+
           positionNumber: posNr,
+
           shortText: kurztext,
+
           unit: einheit,
+
+          source: incomingSource,
+
         },
         select: { id: true, useCount: true, source: true, unitPriceNet: true, parameters: true },
       });
@@ -214,7 +264,7 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
       const data = {
         companyId,
         projectId: project?.id || null,
-        source: s(r.quelle || r.source || "ki") || "ki",
+        source: incomingSource,
         projectCode: s(r.projektCode || r.projectCode || project?.code || projectKey),
         projectName: s(r.projektName || r.projectName || project?.name),
 
