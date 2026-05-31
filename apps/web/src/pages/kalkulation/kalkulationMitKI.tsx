@@ -773,10 +773,14 @@ function resolveBestRlcKiPrice(row: EliteRow, allowDatabaseSearch = false): RlcK
 
   const openAiRaw = n((row as any).openAiSuggestedUnitPrice);
 
-  const checkedServer = sanitizeRlcKiPruefwert(row, serverRaw);
+  /*
+   * Serverwert nicht im Frontend nachträglich deckeln oder ersetzen.
+   * Der Server enthält bereits DB-Vergleich, X84-Reverse-Urkalkulation
+   * und Plausibilitätsprüfung. Frontend zeigt nur den Prüfwert.
+   */
   const checkedOpenAi = sanitizeRlcKiPruefwert(row, openAiRaw);
 
-  const serverEp = checkedServer.value > 0 ? checkedServer.value : 0;
+  const serverEp = serverRaw > 0 ? round2(serverRaw) : 0;
   const openAiEp = checkedOpenAi.value > 0 ? checkedOpenAi.value : 0;
 
   const libraryAvgEp =
@@ -1089,9 +1093,10 @@ function getX84CompanyFrontendOverride(row: EliteRow): number {
 }
 
 function getRlcKiUnitPrice(row: EliteRow): number {
-  const companyOverride = getX84CompanyFrontendOverride(row);
-  if (companyOverride > 0) return companyOverride;
-
+  /*
+   * Kein Frontend-Datenbank-Override beim Rendern.
+   * Server entscheidet über DB, X84-Reverse-Urkalkulation und Plausibilität.
+   */
   const decision = resolveBestRlcKiPrice(row);
   return decision.finalRlcKiEp > 0 ? decision.finalRlcKiEp : 0;
 }
@@ -1861,9 +1866,12 @@ function mergeEliteResult(
       (result as any).rlcPreisGroup ?? (oldRow as any).rlcPreisGroup,
   } as any);
 
-  const decision = resolveBestRlcKiPrice(temp, true);
-  const companyOverrideEp = getX84CompanyFrontendOverride(temp);
-  const rlcKiEp = companyOverrideEp > 0 ? companyOverrideEp : decision.finalRlcKiEp;
+  const decision = resolveBestRlcKiPrice(temp, false);
+  /*
+   * RLC-KI-Prüfwert kommt aus dem Serverergebnis.
+   * Keine lokale Datenbank-Override mehr.
+   */
+  const rlcKiEp = decision.finalRlcKiEp;
   const finalUnitPrice = angebotEp;
 
   const diff = rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
@@ -9306,6 +9314,12 @@ const priceCompareTdRight: React.CSSProperties = {
   whiteSpace: "nowrap",
   fontWeight: 800,
 };
+
+
+
+
+
+
 
 
 
