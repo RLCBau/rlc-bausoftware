@@ -1988,6 +1988,7 @@ function shouldUseOpenAIForRow(
 
 import fs from "fs";
 import path from "path";
+import { reverseUrkalkulationFromX84 } from "../kalkulation/rlcReverseUrkalkulationEngine";
 
 const KALKULATION_AI_CACHE_FILE =
   process.env.KALKULATION_AI_CACHE_FILE ||
@@ -2584,6 +2585,267 @@ function buildSummary(rows: any[]) {
   };
 }
 
+
+
+function evaluateDbComparability(row: any, result: any) {
+  const x84Ep =
+    n(row?.angebotUnitPrice) ||
+    n(row?.x84UnitPrice) ||
+    n(row?.preis) ||
+    n(row?.unitPrice) ||
+    0;
+
+  const kiEp =
+    n(result?.rlcKiUnitPrice) ||
+    n(result?.finalUnitPrice) ||
+    n(result?.suggestedUnitPrice) ||
+    0;
+
+  const unit = norm(row?.einheit ?? result?.einheit);
+  const text = norm(
+    [
+      row?.kurztext,
+      row?.langtext,
+      result?.kurztext,
+      result?.langtext,
+    ].filter(Boolean).join(" ")
+  );
+
+  const source = s(result?.source);
+  const reverse = result?.reverseUrkalkulation || null;
+
+  if (!x84Ep || !kiEp) {
+    return {
+      status: "not_checked",
+      comparable: true,
+      reason: "X84/KI-EP fehlt. Vergleich nicht möglich.",
+      x84UnitPrice: round2(x84Ep),
+      kiUnitPrice: round2(kiEp),
+      factor: x84Ep > 0 ? round2(kiEp / x84Ep) : 0,
+    };
+  }
+
+  if (source !== "database") {
+    return {
+      status: "x84_baseline",
+      comparable: true,
+      reason: "Keine direkte Datenbankbewertung. X84 wurde als Angebotsbasis rückwärts in eine Urkalkulation zerlegt.",
+      x84UnitPrice: round2(x84Ep),
+      kiUnitPrice: round2(kiEp),
+      factor: x84Ep > 0 ? round2(kiEp / x84Ep) : 0,
+      workClass: reverse?.workClass || "",
+    };
+  }
+
+  const factor = kiEp / x84Ep;
+
+  /*
+   * Historische Angebotsbasis:
+   * Wenn X84/Angebotspreis vorhanden ist, kann er aus einem alten, real kalkulierten Projekt stammen.
+   * Für die aktuelle Plausibilitätsprüfung wird deshalb ein Preisindex angesetzt.
+   * Standard aktuell: +12% Preissteigerung, mit ±12% Toleranz.
+   */
+  const historicalIndexFactor = 1.12;
+  const historicalTolerance = 0.12;
+  const expectedHistoricalEp = x84Ep * historicalIndexFactor;
+  const minHistoricalEp = expectedHistoricalEp * (1 - historicalTolerance);
+  const maxHistoricalEp = expectedHistoricalEp * (1 + historicalTolerance);
+
+  if (
+    source === "database" &&
+    x84Ep > 0 &&
+    kiEp > 0 &&
+    (kiEp < minHistoricalEp || kiEp > maxHistoricalEp)
+  ) {
+    return {
+      status: "needs_review",
+      comparable: false,
+      reason:
+        "Datenbankwert liegt außerhalb der historischen X84-Basis (+12% Preisindex, ±12% Toleranz). Prüfung über Langtext, Menge, Einheit und Urkalkulation erforderlich.",
+      x84UnitPrice: round2(x84Ep),
+      expectedHistoricalUnitPrice: round2(expectedHistoricalEp),
+      minOkUnitPrice: round2(minHistoricalEp),
+      maxOkUnitPrice: round2(maxHistoricalEp),
+      kiUnitPrice: round2(kiEp),
+      factor: round2(kiEp / expectedHistoricalEp),
+      workClass: reverse?.workClass || "",
+    };
+  }
+
+  const lightWork =
+    text.includes("druckprobe") ||
+    text.includes("druckprüfung") ||
+    text.includes("kalibrierung") ||
+    text.includes("ortungsband") ||
+    text.includes("warnband") ||
+    text.includes("trassenwarnband") ||
+    text.includes("schutzband") ||
+    text.includes("spülung") ||
+    text.includes("entkeimung");
+
+  const massUnit =
+    unit === "m" ||
+    unit === "lfm" ||
+    unit === "m²" ||
+    unit === "m2" ||
+    unit === "kg";
+
+  const massPosition = n(row?.menge ?? result?.menge) >= 1000 && massUnit;
+
+  if (lightWork && factor > 20) {
+    return {
+      status: "not_comparable",
+      comparable: false,
+      reason:
+        "Datenbankwert ist für eine leichte Neben-/Prüfleistung im Verhältnis zum X84-Preis extrem hoch. Wahrscheinlich anderer Leistungsumfang oder falscher Lernwert.",
+      x84UnitPrice: round2(x84Ep),
+      kiUnitPrice: round2(kiEp),
+      factor: round2(factor),
+      workClass: reverse?.workClass || "",
+    };
+  }
+
+  if (massPosition && factor > 50) {
+    return {
+      status: "not_comparable",
+      comparable: false,
+      reason:
+        "Massposition mit sehr großer Preisabweichung. Datenbankwert wird nicht direkt als vergleichbarer EP bewertet.",
+      x84UnitPrice: round2(x84Ep),
+      kiUnitPrice: round2(kiEp),
+      factor: round2(factor),
+      workClass: reverse?.workClass || "",
+    };
+  }
+
+  if (factor > 10 || factor < 0.1) {
+    return {
+      status: "needs_review",
+      comparable: false,
+      reason:
+        "Datenbankwert weicht stark vom X84-Preis ab. Vergleich nur mit Langtext- und Urkalkulationsprüfung zulässig.",
+      x84UnitPrice: round2(x84Ep),
+      kiUnitPrice: round2(kiEp),
+      factor: round2(factor),
+      workClass: reverse?.workClass || "",
+    };
+  }
+
+  return {
+    status: "comparable",
+    comparable: true,
+    reason: "Datenbankwert liegt in einem plausiblen Verhältnis zum X84-Preis.",
+    x84UnitPrice: round2(x84Ep),
+    kiUnitPrice: round2(kiEp),
+    factor: round2(factor),
+    workClass: reverse?.workClass || "",
+  };
+}
+
+function enrichRowWithReverseUrkalkulation(row: any, result: any) {
+  const x84UnitPrice =
+    n(row?.angebotUnitPrice) ||
+    n(row?.x84UnitPrice) ||
+    n(row?.preis) ||
+    n(row?.unitPrice) ||
+    n(result?.angebotUnitPrice) ||
+    n(result?.x84UnitPrice) ||
+    0;
+
+  const menge =
+    n(row?.menge) ||
+    n(row?.qty) ||
+    n(row?.quantity) ||
+    n(result?.menge) ||
+    0;
+
+  const x84Total =
+    n(row?.angebotTotal) ||
+    n(row?.x84Total) ||
+    n(row?.gesamt) ||
+    (x84UnitPrice > 0 && menge > 0 ? x84UnitPrice * menge : 0);
+
+  if (!x84UnitPrice || !menge) {
+    return {
+      ...result,
+      reverseUrkalkulation: null,
+    };
+  }
+
+  const reverseUrkalkulation = reverseUrkalkulationFromX84({
+    posNr: row?.posNr ?? row?.position ?? row?.pos ?? result?.posNr,
+    kurztext: row?.kurztext ?? row?.shortText ?? row?.text ?? result?.kurztext,
+    langtext: row?.langtext ?? row?.longText ?? row?.description ?? result?.langtext,
+    einheit: row?.einheit ?? row?.unit ?? result?.einheit,
+    menge,
+    x84UnitPrice,
+    x84Total,
+    projectDistanceKm:
+      n(row?.projectDistanceKm) ||
+      n(result?.projectDistanceKm) ||
+      undefined,
+    projectDurationDays:
+      n(row?.projectDurationDays) ||
+      n(result?.projectDurationDays) ||
+      undefined,
+  });
+
+  const enriched = {
+    ...result,
+    reverseUrkalkulation,
+  };
+
+  const dbComparability = evaluateDbComparability(row, enriched);
+
+  if (
+    dbComparability?.status === "not_comparable" ||
+    dbComparability?.status === "needs_review"
+  ) {
+    return {
+      ...enriched,
+      dbComparability,
+      suggestedUnitPrice: round2(x84UnitPrice),
+      finalUnitPrice: round2(x84UnitPrice),
+      rlcKiUnitPrice: round2(x84UnitPrice),
+      unitPrice: round2(x84UnitPrice),
+      preis: round2(x84UnitPrice),
+      totalNet: round2(x84Total),
+      rlcKiTotal: round2(x84Total),
+      gesamt: round2(x84Total),
+      calculationStatus: "warning",
+      riskLevel: "medium",
+      source: "x84-reverse-urkalkulation",
+      warning: [
+        s(result?.warning),
+        dbComparability?.status === "not_comparable"
+          ? "DB-Treffer nicht vergleichbar mit X84-Urkalkulation. X84 wurde rückwärts zerlegt und als belastbare Angebotsbasis verwendet."
+          : "DB-Treffer weicht stark von X84 ab. X84 wurde als Angebotsbasis beibehalten; DB nur als Prüfhinweis.",
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        s(result?.aiReason),
+        "RLC Reverse-Urkalkulation: X84 ist bei vorhandener Angebotsbasis führend. Datenbankwerte dürfen nur bei echter Vergleichbarkeit und gleichem Kontext übernommen werden.",
+        reverseUrkalkulation?.explanation || "",
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
+
+  const finalSource =
+    dbComparability?.status === "x84_baseline" &&
+    n(enriched?.finalUnitPrice) === round2(x84UnitPrice)
+      ? "x84-reverse-urkalkulation"
+      : enriched?.source;
+
+  return {
+    ...enriched,
+    source: finalSource,
+    dbComparability,
+    warning: [
+      s(result?.warning),
+      dbComparability?.status === "needs_review" ? "DB-Treffer nur nach Langtext-/Urkalkulationsprüfung vergleichbar." : "",
+    ].filter(Boolean).join(" · "),
+  };
+}
+
 router.post("/suggest-batch", async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
@@ -2674,7 +2936,10 @@ router.post("/suggest-batch", async (req, res) => {
       );
 
       const finalRows = out.map((r, index) =>
-        r || calcRuleRow(rows[index], [], "rule-engine")
+        enrichRowWithReverseUrkalkulation(
+          rows[index],
+          r || calcRuleRow(rows[index], [], "rule-engine")
+        )
       );
 
       const learningProjectKey = s(req.body?.projectCode || req.body?.projectKey);
