@@ -2604,6 +2604,68 @@ function hasHistoricalOfferBaseline(row: any): boolean {
 }
 
 
+
+function guardNoX84UnsafeOkResult(row: any, result: any) {
+  if (hasHistoricalOfferBaseline(row)) return result;
+
+  const source = s(result?.source);
+  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
+
+  const status = s(result?.calculationStatus).toLowerCase();
+  const risk = s(result?.riskLevel).toLowerCase();
+
+  const qty = n(row?.menge ?? result?.menge);
+  const ep =
+    n(result?.finalUnitPrice) ||
+    n(result?.rlcKiUnitPrice) ||
+    n(result?.suggestedUnitPrice) ||
+    n(result?.unitPrice);
+  const gp = round2(ep * qty);
+
+  const unit = norm(row?.einheit ?? result?.einheit);
+  const text = norm([
+    row?.posNr,
+    row?.position,
+    row?.kurztext,
+    row?.langtext,
+    result?.kurztext,
+    result?.langtext,
+    result?.bauverfahren,
+    result?.leistungsart,
+    result?.aiReason,
+  ].join(" "));
+
+  const riskyByPattern =
+    /(mehr- oder minderpreis|mehr.*minderpreis|mehr-.*mindertiefe|fahrzeugkosten|werkstattwagen|pkw|tieflader|verrechnungssaetze|verrechnungssätze|zwischenplanum|kabelschutzrohr|schutzrohr|kabelleerrohr|kabellehrrohr|mikrokabelleerrohr|auffuellmaterial|auffüllmaterial|dokumentation|bestandszeichnung|bohrprotokoll|hausanschluss|kabelmuffen|isolierbinde|rohrabschluss|anschluss und verbindung|verlegung ortsnetzkabel|verlegung hausanschlussleitung|zulage.*grabenaushub|rohr-.*kabelgrabenaushub|erdleitung|einbinden.*kabelleerrohre|hinweisschilder|hinweissteine|messingquetsch|messingkupplung|passstuecke|paßstücke|formstueck|formstück|boegen|bögen|strassenkappe|straßenkappe|schachtabdeckung|dichtkappen|haube|flaechen auflockern|flächen auflockern|baeume faellen|bäume fällen|betonsockel|pumpensumpf|durchlass|motorflex|endstopfen|verzinkte fittings|zulage.*zulauf|zulage.*kruemmung|zulage.*krümmung|hdpe.*schutzrohr|hdpe.*rohre|weidezaun|runddraht|schmutzfaenger|schmutzfänger|stromantrag|stromaggregat|riesel|sand 0|schroppen|trassenwarnband|pumpenstunden|ringraumdichtung|ringraumdichtungen|einsteighilfe|asphalt trennen|warnanlage|zusaetzliche anreise|zusätzliche anreise|losflansch|statik|druckerhoehungsschacht|druckerhöhungsschacht|spuelen|spülen|entkeimung|doppelsteckmuffen|einzelzugabdichtung|edelstahl.*dichtung|strassenbauvlies|straßenbauvlies|erschwernis|verkehrssicherung|mineralbeton|sprengarbeiten|besucherinformation|betonit|bentonit|bauschild|anliegerverkehr|bauzeiten|baustelleneinrichtung|besprechungsraum|transport und montage|zuschlag fabrikat|mutterboden|bachquerung|fugenband|steuerung|ferwirktechnik|fernwirktechnik|feinplanie|systemdeckel|pilotbohrung|schutzmassnahme|schutzmaßnahme|zulage.*asphaltierung|abstimmung.*projektbeteiligten|be- und entlueftungsrohr|be- und entlüftungsrohr|zulage mid|wasserbausteine|statische berechnung|wurzelstock|entwaesserungsrinne|entwässerungsrinne|lehm.*pfeiler|grenzsteine|flaechen und wege|flächen und wege|aeste zurueckschneiden|äste zurückschneiden|baustellenkoordination|ueberfahrten|überfahrten|frostsicheres kiesmaterial|frostschutzkies|frostsicheres material|90 grad-bogen|stampfbetonpfeiler|abdeckplatte|baggerstunden|kompressorstunden|zaehlerplatz|zählerplatz|elektroverteilung|wartungs- und bedienungsanleitung|einsteigleiter)/i.test(text);
+
+  const riskyByScale =
+    ((/(m|lfm|meter)/i.test(unit) && qty >= 500 && ep > 25) ||
+     (/(kg)/i.test(unit) && qty >= 500 && ep > 8) ||
+     (/(cm)/i.test(unit) && ep > 50) ||
+     (gp > 25000 && (risk === "" || risk === "low" || risk === "medium")));
+
+  if ((riskyByPattern || riskyByScale) && (status === "" || status === "ok" || status === "warning") && (risk === "" || risk === "low" || risk === "medium")) {
+    return {
+      ...result,
+      calculationStatus: "needs_review",
+      riskLevel: "high",
+      confidence: Math.min(n(result?.confidence, 0.5), 0.45),
+      warning: [
+        s(result?.warning),
+        "RLC No-X84 Outlier-Guard: Position ohne X84/Angebotsbasis darf nicht automatisch als sicher bewertet werden.",
+        `Menge ${round2(qty)} ${row?.einheit || result?.einheit || ""}, EP ${round2(ep)}, GP ${round2(gp)}.`,
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        s(result?.aiReason),
+        "RLC No-X84 Outlier-Guard: Ergebnis bleibt prüfpflichtig, weil keine historische Angebotsbasis vorhanden ist und Muster/Menge/Preis ein hohes Abweichungsrisiko zeigen.",
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
+
+  return result;
+}
+
+
 function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
   if (hasHistoricalOfferBaseline(row)) return result;
 
@@ -3167,7 +3229,8 @@ router.post("/suggest-batch", async (req, res) => {
         const base = r || calcRuleRow(rows[index], [], "rule-engine");
         const enriched = enrichRowWithReverseUrkalkulation(rows[index], base);
         const normalized = applyNoX84TechnicalUnitNormalizer(rows[index], enriched);
-        return guardNoX84ImplausibleKiResult(rows[index], normalized);
+        const unsafeGuarded = guardNoX84UnsafeOkResult(rows[index], normalized);
+        return guardNoX84ImplausibleKiResult(rows[index], unsafeGuarded);
       });
 
       const learningProjectKey = s(req.body?.projectCode || req.body?.projectKey);
