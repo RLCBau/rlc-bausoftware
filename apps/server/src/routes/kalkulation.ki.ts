@@ -2149,6 +2149,12 @@ async function calcSmartRow(
     };
   }
 
+  const hasHistoricalOfferBaselineForDb =
+    n((row as any)?.angebotUnitPrice) > 0 ||
+    n((row as any)?.x84UnitPrice) > 0 ||
+    n((row as any)?.angebotTotal) > 0 ||
+    n((row as any)?.x84Total) > 0;
+
   /*
    * X83-only / Firmen-Datenbank DIREKT:
    * Wenn PosNr exakt in der Firmen-Datenbank existiert, wird exakt dieser EP verwendet.
@@ -2165,7 +2171,7 @@ async function calcSmartRow(
       orderBy: [{ confidence: "desc" }, { updatedAt: "desc" }],
     });
 
-    if (directDb) {
+    if (hasHistoricalOfferBaselineForDb && directDb) {
       const exactDbEp = n(directDb.unitPriceNet);
       const menge = n(row.menge);
       const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
@@ -2218,7 +2224,7 @@ async function calcSmartRow(
     return dbEp > 0 && (posOk || (unitOk && m.score >= 60));
   });
 
-  if (strongCompanyDbMatch) {
+  if (hasHistoricalOfferBaselineForDb && strongCompanyDbMatch) {
     const dbRow = calcRuleRow(row, [strongCompanyDbMatch], "database");
     const exactDbEp = n(strongCompanyDbMatch.row.unitPriceNet);
     const menge = n(row.menge);
@@ -2587,6 +2593,99 @@ function buildSummary(rows: any[]) {
 
 
 
+
+function hasHistoricalOfferBaseline(row: any): boolean {
+  return (
+    n(row?.angebotUnitPrice) > 0 ||
+    n(row?.x84UnitPrice) > 0 ||
+    n(row?.angebotTotal) > 0 ||
+    n(row?.x84Total) > 0
+  );
+}
+
+function guardNoX84ImplausibleKiResult(row: any, result: any) {
+  if (hasHistoricalOfferBaseline(row)) return result;
+
+  const source = s(result?.source);
+  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
+
+  const text = norm(
+    [
+      row?.posNr,
+      row?.position,
+      row?.kurztext,
+      row?.langtext,
+      result?.kurztext,
+      result?.langtext,
+      result?.aiReason,
+    ].join(" ")
+  );
+
+  const unit = norm(row?.einheit ?? result?.einheit);
+  const qty = n(row?.menge ?? result?.menge);
+  const ep =
+    n(result?.finalUnitPrice) ||
+    n(result?.rlcKiUnitPrice) ||
+    n(result?.suggestedUnitPrice) ||
+    n(result?.unitPrice);
+
+  if (ep <= 0) return result;
+
+  let maxEp = 0;
+  let reason = "";
+
+  // Sehr günstige Prüf-/Nebenleistungen dürfen nicht wie komplette Bauleistungen kalkuliert werden.
+  if (/(druckprobe|druckpruefung|kalibrierung|ortungsband|trassenwarnband)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    maxEp = 10;
+    reason = "Prüf-/Nebenleistung pro Meter ohne X84-Baseline darf nicht als schwere Bauleistung kalkuliert werden.";
+  }
+
+  // Spülen / Reinigung pro Meter darf nicht automatisch mehrere hundert EUR/m werden.
+  if (/(kanal.*spuelen|kanal.*spülen|spuelen|spülen)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    maxEp = 25;
+    reason = "Spül-/Reinigungsleistung pro Meter ohne X84-Baseline ist über dem Plausibilitätsrahmen.";
+  }
+
+  // Schutzmatten, Sandbettung, Rohrumhüllung sind bei großen Längen kritisch.
+  if (/(schutzmatte|rohrumhuellung|rohrumhüllung|sandueberdeckung|sandüberdeckung|sohlbettung|splittueberdeckung|splittüberdeckung)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    maxEp = 60;
+    reason = "Rohrbettung/Schutzlage pro Meter ohne X84-Baseline überschreitet Plausibilitätsrahmen.";
+  }
+
+  // Stahl kg darf nicht als Bauteil pauschal mit hunderten EUR/kg laufen.
+  if (/(baustahl|bewehrung|stahl)/i.test(text) && /kg/i.test(unit)) {
+    maxEp = 8;
+    reason = "Stahlposition in kg ohne X84-Baseline wurde zu hoch klassifiziert.";
+  }
+
+  // Generische Sicherheitsleine: große Mengen mit extremem EP nicht automatisch sicher.
+  if (!maxEp && qty >= 1000 && /(m|lfm|kg)/i.test(unit) && ep > 150) {
+    maxEp = 150;
+    reason = "Große Mengen ohne X84-Baseline mit sehr hohem EP müssen manuell geprüft werden.";
+  }
+
+  if (maxEp > 0 && ep > maxEp) {    return {
+      ...result,
+      calculationStatus: "needs_review",
+      riskLevel: "high",
+      confidence: Math.min(n(result?.confidence, 0.5), 0.45),
+      warning: [
+        s(result?.warning),
+        "RLC Plausibilitätsstopp: KI-Preis ohne X84/Angebot nicht automatisch freigegeben.",
+        reason,
+        `EP ${round2(ep)} €/` + (row?.einheit || result?.einheit || "EH") + ` > Plausibilitätsgrenze ${round2(maxEp)}.`,
+      ].filter(Boolean).join(" "),
+      aiReason: [
+        s(result?.aiReason),
+        "RLC Guard No-X84: Der Preis wurde nicht als sicher freigegeben, weil keine historische Angebots-/X84-Baseline vorhanden ist und der technische Parser/Recipe einen unplausiblen EP erzeugt hat.",
+      ].filter(Boolean).join("\n"),
+    };
+  }
+
+  return result;
+}
+
+
 function evaluateDbComparability(row: any, result: any) {
   const x84Ep =
     n(row?.angebotUnitPrice) ||
@@ -2790,11 +2889,12 @@ function enrichRowWithReverseUrkalkulation(row: any, result: any) {
       undefined,
   });
 
-  const enriched = {
+  let enriched = {
     ...result,
     reverseUrkalkulation,
   };
 
+  enriched = guardNoX84ImplausibleKiResult(row, enriched);
   const dbComparability = evaluateDbComparability(row, enriched);
 
   if (
@@ -2935,12 +3035,11 @@ router.post("/suggest-batch", async (req, res) => {
         )
       );
 
-      const finalRows = out.map((r, index) =>
-        enrichRowWithReverseUrkalkulation(
-          rows[index],
-          r || calcRuleRow(rows[index], [], "rule-engine")
-        )
-      );
+      const finalRows = out.map((r, index) => {
+        const base = r || calcRuleRow(rows[index], [], "rule-engine");
+        const enriched = enrichRowWithReverseUrkalkulation(rows[index], base);
+        return guardNoX84ImplausibleKiResult(rows[index], enriched);
+      });
 
       const learningProjectKey = s(req.body?.projectCode || req.body?.projectKey);
       const learnedCount = await saveKiLearningRows(
