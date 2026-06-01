@@ -2603,6 +2603,134 @@ function hasHistoricalOfferBaseline(row: any): boolean {
   );
 }
 
+
+function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
+  if (hasHistoricalOfferBaseline(row)) return result;
+
+  const source = s(result?.source);
+  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
+
+  const text = norm(
+    [
+      row?.posNr,
+      row?.position,
+      row?.kurztext,
+      row?.langtext,
+      result?.kurztext,
+      result?.langtext,
+      result?.bauverfahren,
+      result?.leistungsart,
+      result?.aiReason,
+    ].join(" ")
+  );
+
+  const unit = norm(row?.einheit ?? result?.einheit);
+  const qty = n(row?.menge ?? result?.menge);
+
+  if (qty <= 0) return result;
+  if (!/(m|lfm|meter|kg)/i.test(unit)) return result;
+
+  const oldEp =
+    n(result?.finalUnitPrice) ||
+    n(result?.rlcKiUnitPrice) ||
+    n(result?.suggestedUnitPrice) ||
+    n(result?.unitPrice);
+
+  if (oldEp <= 0) return result;
+
+  let normalizedEp = 0;
+  let reason = "";
+
+  /*
+   * WICHTIG:
+   * Diese Werte sind keine endgültige Firmenkalkulation.
+   * Sie verhindern nur die falsche Umrechnung von St/Pauschal auf m/lfm/kg.
+   * Später werden sie durch echte Firmen-Erfahrungswerte + Urkalkulation ersetzt.
+   */
+  if (/(druckprobe|druckpruefung|druckprüfung)/i.test(text) && /(speedpipe|mikro|kabel|leer|pe|hdpe)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 0.25;
+    reason = "Druckprobe/Speedpipe wurde als Meterleistung normalisiert; St-/Pauschalansatz darf nicht als €/m übernommen werden.";
+  } else if (/(kalibrierung)/i.test(text) && /(speedpipe|mikro|kabel|leer)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 0.18;
+    reason = "Kalibrierung Speedpipe wurde als Meterleistung normalisiert.";
+  } else if (/(ortungsband|trassenwarnband|warnband)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 0.45;
+    reason = "Ortungs-/Warnband wurde als Meterleistung normalisiert.";
+  } else if (/(kanal.*spuelen|kanal.*spülen|spuelen|spülen)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 3.50;
+    reason = "Kanalspülung wurde als Meterleistung normalisiert.";
+  } else if (/(baustahl|bewehrung|stahl)/i.test(text) && /kg/i.test(unit)) {
+    normalizedEp = 2.80;
+    reason = "Baustahl kg wurde auf plausiblen kg-Ansatz normalisiert.";
+  } else if (/(wasserhaltung).*leitungsverlegung/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 8.50;
+    reason = "Wasserhaltung/Leitungsverlegung wurde als Meterleistung normalisiert.";
+  } else if (/(rohrumhuellung|rohrumhüllung|sandueberdeckung|sandüberdeckung|sohlbettung|splittueberdeckung|splittüberdeckung)/i.test(text) && /(hdpe|pe|dn|da|rohr)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 14.50;
+    reason = "Rohrbettung/Rohrumhüllung wurde als Meterleistung normalisiert; Recipe-Ansatz war für No-X84 zu hoch.";
+  } else if (/(schutzmatte|rohrschutz|kabelschutzmatte)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 6.50;
+    reason = "Schutzmatte wurde als Meterleistung normalisiert; Recipe-Ansatz war ohne X84 nicht plausibel.";
+  } else if (/(drainageleitung|drainageleitungen)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 28.00;
+    reason = "Drainageleitung wurde als Meterleistung normalisiert; technischer Parser hatte falsche schwere Bauleistung übernommen.";
+  } else if (/(polyethylenrohr|pe-trinkwasserdruckrohr|pe 100|hdpe|pehd).*dn|dn.*(polyethylenrohr|pe-trinkwasserdruckrohr|pe 100|hdpe|pehd)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 38.00;
+    reason = "PE/HDPE-Rohr wurde als Meterleistung normalisiert; extrem hoher Parserwert wurde blockiert.";
+  } else if (/(polyethylenrohr|pe-rohr|pehd|pe-r\.weich)/i.test(text) && /(m|lfm|meter)/i.test(unit) && oldEp > 120) {
+    normalizedEp = 42.00;
+    reason = "PE-Rohr Meterposition wurde normalisiert; Parserwert war ohne X84 unplausibel hoch.";
+  } else if (/(forststrassen|forststraßen).*wiederherstellen/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 24.50;
+    reason = "Forststraßen-Wiederherstellung wurde aus historischer Plausibilität als Meterleistung normalisiert.";
+  } else if (/(gesondertes haufwerk|zulage.*haufwerk)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 12.50;
+    reason = "Zulage Haufwerk wurde als Meter-Zulage normalisiert; technischer Parserwert war zu hoch.";
+  } else if (/(flaechen auflockern|flächen auflockern)/i.test(text) && /(m²|m2|qm)/i.test(unit)) {
+    normalizedEp = 2.50;
+    reason = "Flächen auflockern wurde als leichte Flächenleistung normalisiert.";
+  } else if (/(kernbohrung|kernbohrungen)/i.test(text) && /cm/i.test(unit) && oldEp > 100) {
+    normalizedEp = 18.00;
+    reason = "Kernbohrung in cm wurde normalisiert; Parserwert €/cm war unplausibel.";
+  } else if (/(zulage baugrubenaushub|baugrubenaushub)/i.test(text) && /(m³|m3|cbm)/i.test(unit) && oldEp > 150) {
+    normalizedEp = 85.00;
+    reason = "Baugrubenaushub wurde auf plausiblen m³-Ansatz normalisiert.";
+  }
+
+  if (normalizedEp <= 0) return result;
+
+  if (oldEp <= normalizedEp * 2) return result;
+
+  const total = round2(normalizedEp * qty);
+
+  return {
+    ...result,
+    baseUnitPrice: round2(normalizedEp),
+    suggestedUnitPrice: round2(normalizedEp),
+    finalUnitPrice: round2(normalizedEp),
+    rlcKiUnitPrice: round2(normalizedEp),
+    unitPrice: round2(normalizedEp),
+    preis: round2(normalizedEp),
+    totalNet: total,
+    rlcKiTotal: total,
+    gesamt: total,
+    confidence: Math.min(n(result?.confidence, 0.55), 0.55),
+    calculationStatus: "needs_review",
+    riskLevel: "high",
+    warning: [
+      s(result?.warning),
+      "RLC No-X84 Unit-Normalisierung: technischer St-/Pauschalansatz wurde nicht als EP der LV-Einheit übernommen.",
+      reason,
+      `Alter EP ${round2(oldEp)} wurde auf ${round2(normalizedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " normalisiert.",
+    ].filter(Boolean).join(" · "),
+    aiReason: [
+      s(result?.aiReason),
+      "RLC No-X84 Technical Unit Normalizer: Ohne X84/Angebotsbasis wurde eine offensichtliche Einheitenverwechslung korrigiert. Ergebnis bleibt prüfpflichtig.",
+    ].filter(Boolean).join("\n\n"),
+  };
+}
+
+
 function guardNoX84ImplausibleKiResult(row: any, result: any) {
   if (hasHistoricalOfferBaseline(row)) return result;
 
@@ -3038,7 +3166,8 @@ router.post("/suggest-batch", async (req, res) => {
       const finalRows = out.map((r, index) => {
         const base = r || calcRuleRow(rows[index], [], "rule-engine");
         const enriched = enrichRowWithReverseUrkalkulation(rows[index], base);
-        return guardNoX84ImplausibleKiResult(rows[index], enriched);
+        const normalized = applyNoX84TechnicalUnitNormalizer(rows[index], enriched);
+        return guardNoX84ImplausibleKiResult(rows[index], normalized);
       });
 
       const learningProjectKey = s(req.body?.projectCode || req.body?.projectKey);
