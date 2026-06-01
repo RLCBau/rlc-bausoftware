@@ -2666,6 +2666,125 @@ function guardNoX84UnsafeOkResult(row: any, result: any) {
 }
 
 
+
+type NoX84CompanyCalibrationItem = {
+  posNr?: string;
+  match?: string;
+  unit?: string;
+  calibratedEp?: number;
+  title?: string;
+};
+
+let noX84CompanyCalibrationCache: NoX84CompanyCalibrationItem[] | null = null;
+
+function noX84NormText(value: any): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function loadNoX84CompanyCalibration(): NoX84CompanyCalibrationItem[] {
+  if (noX84CompanyCalibrationCache) return noX84CompanyCalibrationCache;
+
+  const candidates = [
+    path.join(process.cwd(), "src/kalkulation/data/noX84CompanyCalibration.json"),
+    path.join(__dirname, "../kalkulation/data/noX84CompanyCalibration.json"),
+  ];
+
+  for (const file of candidates) {
+    try {
+      if (fs.existsSync(file)) {
+        const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+        noX84CompanyCalibrationCache = Array.isArray(parsed) ? parsed : [];
+        return noX84CompanyCalibrationCache;
+      }
+    } catch (e) {
+      console.warn("[kalkulation.ki] noX84CompanyCalibration load failed", file, e);
+    }
+  }
+
+  noX84CompanyCalibrationCache = [];
+  return noX84CompanyCalibrationCache;
+}
+
+function applyNoX84CompanyCalibration(row: any, result: any) {
+  if (hasHistoricalOfferBaseline(row)) return result;
+
+  const source = s(result?.source);
+  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
+
+  const list = loadNoX84CompanyCalibration();
+  if (!list.length) return result;
+
+  const rowPos = s(row?.posNr || row?.position).replace(/^0+/, "");
+  const rowUnit = noX84NormText(row?.einheit || result?.einheit);
+  const rowText = noX84NormText([
+    row?.kurztext,
+    row?.langtext,
+    result?.kurztext,
+    result?.langtext,
+    result?.bauverfahren,
+    result?.leistungsart,
+  ].join(" "));
+
+  const hit = list.find((x) => {
+    const p = s(x.posNr).replace(/^0+/, "");
+    const u = noX84NormText(x.unit);
+    const m = noX84NormText(x.match || x.title);
+
+    const posOk = p && rowPos && p === rowPos;
+    const unitOk = !u || !rowUnit || u === rowUnit;
+    const textOk = m && (rowText.includes(m) || m.includes(rowText));
+
+    // Sicherheitsregel:
+    // Firmenkalibrierung aus alter X84 darf bei No-X84 zunächst NUR über exakte PosNr greifen.
+    // Textmatch wie "Zuschlag" ist zu gefährlich und hat Preise auf falsche Positionen übertragen.
+    if (posOk) return true;
+
+    return false;
+  });
+
+  const ep = n(hit?.calibratedEp);
+  const qty = n(row?.menge ?? result?.menge);
+
+  if (!hit || ep <= 0 || qty <= 0) return result;
+
+  const total = round2(ep * qty);
+
+  return {
+    ...result,
+    source: "company-calibration",
+    baseUnitPrice: round2(ep),
+    suggestedUnitPrice: round2(ep),
+    finalUnitPrice: round2(ep),
+    rlcKiUnitPrice: round2(ep),
+    unitPrice: round2(ep),
+    preis: round2(ep),
+    totalNet: total,
+    rlcKiTotal: total,
+    gesamt: total,
+    confidence: Math.min(n(result?.confidence, 0.62), 0.62),
+    calculationStatus: "needs_review",
+    riskLevel: "high",
+    warning: [
+      s(result?.warning),
+      "RLC No-X84 Company Calibration: Preis aus historischem Firmenwert + Preissteigerung abgeleitet.",
+      "Kein X84 im aktuellen Projekt vorhanden; Position bleibt prüfpflichtig.",
+    ].filter(Boolean).join(" · "),
+    aiReason: [
+      s(result?.aiReason),
+      `RLC No-X84 Company Calibration: Match ${hit.posNr || ""} / ${hit.title || hit.match || ""}. Kalibrierter EP: ${round2(ep)}.`,
+    ].filter(Boolean).join("\n\n"),
+  };
+}
+
+
 function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
   if (hasHistoricalOfferBaseline(row)) return result;
 
@@ -3229,7 +3348,8 @@ router.post("/suggest-batch", async (req, res) => {
         const base = r || calcRuleRow(rows[index], [], "rule-engine");
         const enriched = enrichRowWithReverseUrkalkulation(rows[index], base);
         const normalized = applyNoX84TechnicalUnitNormalizer(rows[index], enriched);
-        const unsafeGuarded = guardNoX84UnsafeOkResult(rows[index], normalized);
+        const calibrated = applyNoX84CompanyCalibration(rows[index], normalized);
+        const unsafeGuarded = guardNoX84UnsafeOkResult(rows[index], calibrated);
         return guardNoX84ImplausibleKiResult(rows[index], unsafeGuarded);
       });
 
