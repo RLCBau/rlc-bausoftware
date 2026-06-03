@@ -1808,6 +1808,25 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Wasserhaltung / Pumpen / Grundwasser / Baugrubenentwässerung:
+- Wenn der LV-Text Wasserhaltung, Pumpen, Tauchpumpen, Grundwasser, Baugrubenentwässerung, Ableitung des Wassers, Vorfluter, Kanal, Schläuche oder Stromversorgung enthält, kalkuliere NICHT als Baustelleneinrichtungspauschale.
+- Diese Position ist eine zeitabhängige Wasserhaltungs-/Pumpenkalkulation.
+- Pumpen-Vorhaltung muss separat erscheinen: Tauchpumpen, Ersatzpumpe, Pumpentechnik.
+- Schläuche, Leitungen, Ableitung in Kanal/Vorfluter müssen separat erscheinen, wenn genannt.
+- Stromversorgung und Stromkosten müssen separat berücksichtigt werden.
+- Regelmäßige Kontrolle, Wartung, Reinigung und Funktionsprüfung müssen separat erscheinen.
+- Risiko für Pumpenausfall, Starkregen, höheren Grundwasserandrang und 24h-Betrieb muss berücksichtigt werden.
+- Wenn Dauer angegeben ist, müssen Pumpen, Strom und Kontrolle über die volle Dauer plausibel gerechnet werden.
+- Beispielstruktur:
+  1. Pumpen-Vorhaltung / Tauchpumpen / Ersatzpumpe
+  2. Schläuche / Leitungen / Ableitung
+  3. Stromversorgung / Stromkosten
+  4. Kontrolle / Wartung / Funktionsprüfung
+  5. Aufbau / Abbau / Logistik / Anfahrt
+  6. Gemeinkosten
+  7. Risiko
+  8. Gewinn
+
 Spezialregel für Gerätevorhaltung / Bauzeitunterbrechung / Stillstand / Wartezeiten:
 - Wenn der LV-Text Gerätevorhaltung, Vorhaltung, Bauzeitunterbrechung, Stillstand, Wartezeit, Wartezeiten, behördliche Freigaben, Leitungsfreigaben oder Bauablaufstörungen enthält, kalkuliere NICHT als Baustelleneinrichtungspauschale.
 - Diese Position muss als zeitabhängige Vorhalte-/Stillstandskalkulation aufgebaut werden.
@@ -2235,6 +2254,9 @@ JSON-Schema:
   const isVorhaltungOpenAi =
     /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`));
 
+  const isWasserhaltungOpenAi =
+    /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`));
+
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) =>
     isErschwernisOpenAi || isVorhaltungOpenAi ? !/verkehrssicherung|rsa/i.test(String(w || "")) : true
   );
@@ -2244,9 +2266,11 @@ JSON-Schema:
     contextSensitiveOpenAi
       ? isErschwernisOpenAi
         ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
-        : isVorhaltungOpenAi
-          ? "Kontextabhängige Position: Gerätevorhaltung/Stillstand/Wartezeiten hängt stark von Unterbrechungsdauer, betroffenen Geräten, Personalbindung, Freigaben, Bauablaufstörungen, erneuter Anfahrt und Logistik ab. Historische Preise nur als Orientierung verwenden."
-          : contextSensitiveWarning(text)
+        : isWasserhaltungOpenAi
+          ? "Kontextabhängige Position: Wasserhaltung/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Stromversorgung, Ableitung, Kontrolle/Wartung, Ausfallrisiko und Wetter ab. Historische Preise nur als Orientierung verwenden."
+          : isVorhaltungOpenAi
+            ? "Kontextabhängige Position: Gerätevorhaltung/Stillstand/Wartezeiten hängt stark von Unterbrechungsdauer, betroffenen Geräten, Personalbindung, Freigaben, Bauablaufstörungen, erneuter Anfahrt und Logistik ab. Historische Preise nur als Orientierung verwenden."
+            : contextSensitiveWarning(text)
       : "",
     ...contextQualityWarnings,
   ].filter(Boolean);
@@ -2288,18 +2312,24 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
-      ? "Tiefbau / Vorhaltung"
+    gewerk: /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
+      ? "Tiefbau / Wasserhaltung"
+      : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
+        ? "Tiefbau / Vorhaltung"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
-      ? "Gerätevorhaltung / Stillstand / Wartezeiten"
+    leistungsart: /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
+      ? "Wasserhaltung / Pumpen / Baugrubenentwässerung"
+      : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
+        ? "Gerätevorhaltung / Stillstand / Wartezeiten"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
-      ? "Zeitabhängige Vorhalte- und Stillstandskalkulation"
+    bauverfahren: /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
+      ? "Zeitabhängige Wasserhaltungs- und Pumpenkalkulation"
+      : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
+        ? "Zeitabhängige Vorhalte- und Stillstandskalkulation"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Zuschlagskalkulation für erschwerte Bauausführung"
         : s(parsed.bauverfahren) || bauverfahren,
