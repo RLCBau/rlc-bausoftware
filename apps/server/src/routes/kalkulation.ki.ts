@@ -1808,6 +1808,23 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Erschwernis / beengte Bauweise / schwierige Bauverhältnisse:
+- Wenn der LV-Text Erschwernis, beengte Bauweise, beengte Verhältnisse, Handschachtung, Anliegerverkehr, bestehende Versorgungsleitungen, erschwerte Zugänglichkeit oder erschwerte Gerätebewegung enthält, kalkuliere NICHT als normale Tiefbauposition.
+- Diese Position ist eine Zuschlags-/Erschwernisposition und muss aus Mehrzeit, Minderleistung, zusätzlicher Sicherung, Handarbeit, kleineren Geräten, Umsetzen der Geräte, Wartezeiten und Koordination berechnet werden.
+- Kalkuliere nicht automatisch die komplette Kolonne über die gesamte Bauzeit als Vollleistung. Berechne stattdessen den zusätzlichen Mehraufwand gegenüber normaler Bauweise.
+- Handschachtung muss separat erscheinen, wenn im LV genannt.
+- Arbeiten neben bestehenden Versorgungsleitungen müssen separat als Sicherungs-/Suchschachtung-/Koordinationsaufwand erscheinen.
+- Anliegerverkehr, beengte Zufahrt, Verkehrsbehinderung und zusätzliche Sicherung müssen separat bewertet werden, wenn genannt.
+- Beispielstruktur:
+  1. Mehrzeit Personal / Minderleistung
+  2. Handschachtung / Arbeiten von Hand
+  3. Kleingeräte / Minibagger / erschwerte Gerätebewegung
+  4. Sicherung bestehender Leitungen / Suchschachtung
+  5. Anliegerverkehr / beengte Logistik / Koordination
+  6. Gemeinkosten
+  7. Risiko
+  8. Gewinn
+
 Spezialregel für Dokumentation / Bestandspläne / Vermessung:
 - Wenn der LV-Text Dokumentation, Fotodokumentation, Aufmaß, Bestandspläne, Vermessungsdaten, As-Built, Übergabeunterlagen oder Behördenabstimmung enthält, kalkuliere NICHT Bauleiter oder Vermessungstechniker full-time über die gesamte Bauzeit.
 - Die Bauzeit ist nur ein Einflussfaktor für Umfang und Häufigkeit, aber keine Vollzeit-Arbeitszeit für Dokumentation.
@@ -2164,9 +2181,20 @@ JSON-Schema:
     }
   }
 
+  const isErschwernisOpenAi =
+    /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`));
+
+  const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) =>
+    isErschwernisOpenAi ? !/verkehrssicherung|rsa/i.test(String(w || "")) : true
+  );
+
   const warnings = [
-    ...buildWarnings(row, riskLevel, matches, confidence, "openai"),
-    contextSensitiveOpenAi ? contextSensitiveWarning(text) : "",
+    ...baseWarnings,
+    contextSensitiveOpenAi
+      ? isErschwernisOpenAi
+        ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
+        : contextSensitiveWarning(text)
+      : "",
     ...contextQualityWarnings,
   ].filter(Boolean);
 
@@ -2207,9 +2235,15 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: s(parsed.gewerk) || gewerk,
-    leistungsart: s(parsed.leistungsart) || leistungsart,
-    bauverfahren: s(parsed.bauverfahren) || bauverfahren,
+    gewerk: /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
+      ? "Tiefbau / Erschwernis"
+      : s(parsed.gewerk) || gewerk,
+    leistungsart: /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
+      ? "Erschwernis / beengte Bauweise"
+      : s(parsed.leistungsart) || leistungsart,
+    bauverfahren: /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
+      ? "Zuschlagskalkulation für erschwerte Bauausführung"
+      : s(parsed.bauverfahren) || bauverfahren,
 
       rlcPreisMin: round2(n(rlcPreisRange.min)),
       rlcPreisAvg: round2(n(rlcPreisRange.avg)),
