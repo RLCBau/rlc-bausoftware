@@ -211,6 +211,50 @@ function normUnit(value: any): string {
   return s(value);
 }
 
+
+function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
+  const text = norm(textRaw);
+  const unit = normUnit(unitRaw);
+
+  if (unit === "Psch" && /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal)/i.test(text)) {
+    return true;
+  }
+
+  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum)/i.test(text);
+}
+
+function contextSensitiveWarning(textRaw: any): string {
+  const text = norm(textRaw);
+
+  if (/(baustelleneinrichtung|baustelle einrichten|vorhaltung|baustellengemeinkosten)/i.test(text)) {
+    return "Kontextabhängige Position: Baustelleneinrichtung/Vorhaltung muss über Dauer, Entfernung, Personal, Geräte, Container, Logistik und Gemeinkosten urkalkuliert werden. Historische Datenbankpreise dürfen nur als Vergleich dienen.";
+  }
+
+  if (/(verkehrssicherung|erschwernis|beengte bauweise|bauzeiten|anliegerverkehr)/i.test(text)) {
+    return "Kontextabhängige Position: Preis hängt stark von Bauzeit, Verkehrsführung, Platzverhältnissen, Auflagen und Bauablauf ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(bestandspläne|bestandsplaene|bestandszeichnung|vermessung|dokumentation|wartungs- und bedienungsanleitung)/i.test(text)) {
+    return "Kontextabhängige Position: Dokumentation/Vermessung hängt von Projektumfang, Laufzeit, Datenformaten, Behördenanforderungen und Nachbearbeitung ab. Historische Preise nur als Vergleich verwenden.";
+  }
+
+  return "Kontextabhängige Position: Preis muss aus Projektparametern urkalkuliert werden. Datenbankpreis nur als historischer Vergleich.";
+}
+
+function contextSensitiveAiHint(textRaw: any, unitRaw: any): string {
+  if (!isContextSensitivePosition(textRaw, unitRaw)) return "";
+
+  return `
+WICHTIG - kontextabhängige Position:
+- Diese Position ist baustellenabhängig.
+- Verwende Datenbankpreise NICHT blind als direkten EP.
+- Historische Preise dienen nur als Vergleich.
+- Kalkuliere über Urkalkulation mit Dauer, Entfernung, Personal, Geräten, Logistik, Gemeinkosten, Risiko und Gewinn.
+- Wenn Dauer/Entfernung/Projektgröße fehlen, gib eine Warnung und konservative prüfpflichtige Kalkulation aus.
+`;
+}
+
+
 function lightSurfaceRange(text: string, unitRaw: string): { min: number; avg: number; max: number; label: string } {
   const t = norm(text);
   const u = normUnit(unitRaw);
@@ -1315,8 +1359,13 @@ function applyDatabaseMaterialPrices(
   return out;
 }
 
-function sanitizeOverheadRiskProfit(lines: PriceBreakdownLine[]): PriceBreakdownLine[] {
+function sanitizeOverheadRiskProfit(
+  lines: PriceBreakdownLine[],
+  options?: { skipCaps?: boolean }
+): PriceBreakdownLine[] {
   const out = [...lines];
+
+  if (options?.skipCaps) return out;
 
   const directGroups: PriceBreakdownGroup[] = [
     "Material",
@@ -1454,7 +1503,9 @@ function calcRuleRow(row: InputRow, matches: DbMatch[], sourceOverride?: CalcSou
   const menge = n(row.menge);
   const text = `${kurztext} ${langtext}`.trim();
 
-  const dbEp = weightedDbPrice(matches, einheit);
+  const contextSensitive = isContextSensitivePosition(text, einheit);
+  const dbEpRaw = weightedDbPrice(matches, einheit);
+  const dbEp = contextSensitive ? 0 : dbEpRaw;
   const ruleEp = basePrice(text, einheit);
   const rlcRange = rlcPreisRangeForText(text, einheit);
   const rlcAvgEp = n(rlcRange.avg);
@@ -1489,7 +1540,10 @@ function calcRuleRow(row: InputRow, matches: DbMatch[], sourceOverride?: CalcSou
   const profitCost = round2((direct + overheadCost + riskCost) * 0.1);
   const suggestedUnitPrice = round2(direct + overheadCost + riskCost + profitCost);
 
-  const warnings = buildWarnings(row, riskLevel, matches, confidence, source);
+  const warnings = [
+    ...buildWarnings(row, riskLevel, matches, confidence, source),
+    contextSensitive ? contextSensitiveWarning(text) : "",
+  ].filter(Boolean);
   const calculationStatus = calculationStatusFrom(warnings, riskLevel, confidence);
 
   const gewerk = detectGewerk(text);
@@ -1507,9 +1561,11 @@ function calcRuleRow(row: InputRow, matches: DbMatch[], sourceOverride?: CalcSou
     : "keine verwertbaren Treffer";
 
   const aiReason =
-    source === "database"
-      ? `Server-KI/Datenbank: Der Preis wurde aus ${matches.length} ähnlichen Erfahrungswert(en) der Kalkulationsdatenbank abgeleitet. Gewichteter Datenbank-EP: ${dbEp} €. Zusätzlich plausibilisiert über Gewerk ${gewerk}, Leistungsart ${leistungsart}, Verfahren ${bauverfahren}. Top-Treffer: ${matchText}.`
-      : `Server-Fallback: Kein ausreichend sicherer Datenbanktreffer und keine verwertbare OpenAI-Antwort. Preis wurde über Regel-Engine aus Einheit, Textmerkmalen, Risiko, Gemeinkosten und Gewinn aufgebaut. Regel-EP: ${ruleEp} €; Gewerk ${gewerk}, Leistungsart ${leistungsart}, Verfahren ${bauverfahren}.`;
+    contextSensitive
+      ? `RLC Urkalkulation: Kontextabhängige Position erkannt. Historische Datenbankwerte wurden nur als Vergleich betrachtet und nicht blind als EP übernommen. Historischer DB-EP: ${dbEpRaw} €. Preis muss über Dauer, Entfernung, Personal, Geräte, Logistik, Gemeinkosten, Risiko und Gewinn geprüft werden.`
+      : source === "database"
+        ? `Server-KI/Datenbank: Der Preis wurde aus ${matches.length} ähnlichen Erfahrungswert(en) der Kalkulationsdatenbank abgeleitet. Gewichteter Datenbank-EP: ${dbEp} €. Zusätzlich plausibilisiert über Gewerk ${gewerk}, Leistungsart ${leistungsart}, Verfahren ${bauverfahren}. Top-Treffer: ${matchText}.`
+        : `Server-Fallback: Kein ausreichend sicherer Datenbanktreffer und keine verwertbare OpenAI-Antwort. Preis wurde über Regel-Engine aus Einheit, Textmerkmalen, Risiko, Gemeinkosten und Gewinn aufgebaut. Regel-EP: ${ruleEp} €; Gewerk ${gewerk}, Leistungsart ${leistungsart}, Verfahren ${bauverfahren}.`;
 
   const priceBreakdown = buildPriceBreakdownFromCosts({
     einheit,
@@ -1611,8 +1667,51 @@ async function openAiCalcRow(row: InputRow, matches: DbMatch[]): Promise<any | n
   const bauverfahren = detectBauverfahren(text, einheit);
   const rlcPreisTreffer = findRlcPreisItems({ text, unit: einheit, limit: 12 });
   const rlcPreisRange = rlcPreisRangeForText(text, einheit);
+  const contextHint = contextSensitiveAiHint(text, einheit);
+
+  const projectDurationDays =
+    n((row as any).projectDurationDays) ||
+    n((row as any).durationDays) ||
+    n((row as any).bauzeitTage) ||
+    0;
+
+  const projectDistanceKm =
+    n((row as any).projectDistanceKm) ||
+    n((row as any).distanceKm) ||
+    n((row as any).entfernungKm) ||
+    0;
+
+  const projectSize =
+    s((row as any).projectSize) ||
+    s((row as any).projektGroesse) ||
+    s((row as any).baustellenGroesse);
+
+  const projectPersonnel =
+    s((row as any).projectPersonnel) ||
+    s((row as any).personal) ||
+    s((row as any).workers);
+
+  const projectMachines =
+    s((row as any).projectMachines) ||
+    s((row as any).geraete) ||
+    s((row as any).maschinen);
+
+  const projectLogistics =
+    s((row as any).projectLogistics) ||
+    s((row as any).logistik) ||
+    s((row as any).baustellenlogistik);
+
+  const projectContextBlock = [
+    projectDurationDays > 0 ? `- Projektdauer: ${projectDurationDays} Tage` : "- Projektdauer: nicht angegeben",
+    projectDistanceKm > 0 ? `- Entfernung Baustelle/Firma: ${projectDistanceKm} km` : "- Entfernung Baustelle/Firma: nicht angegeben",
+    projectSize ? `- Projektgröße/Baustellenumfang: ${projectSize}` : "- Projektgröße/Baustellenumfang: nicht angegeben",
+    projectPersonnel ? `- Personalansatz: ${projectPersonnel}` : "- Personalansatz: nicht angegeben",
+    projectMachines ? `- Geräte/Maschinen: ${projectMachines}` : "- Geräte/Maschinen: nicht angegeben",
+    projectLogistics ? `- Logistik/Randbedingungen: ${projectLogistics}` : "- Logistik/Randbedingungen: nicht angegeben",
+  ].join("\n");
 
   const prompt = `
+${contextHint}
 Du bist ein erfahrener deutscher Bau-Kalkulator für Tiefbau, Leitungsbau, Glasfaserbau, Straßenbau und Hochbau.
 
 Erstelle eine fachlich plausible Urkalkulation pro Einheit für diese LV-Position.
@@ -1626,6 +1725,9 @@ Position:
 - Erkanntes Gewerk: ${gewerk}
 - Leistungsart: ${leistungsart}
 - Bauverfahren: ${bauverfahren}
+
+Projektkontext / Baustellenparameter:
+${projectContextBlock}
 
 RLC Preisbibliothek / interne Plausibilitätswerte:
 ${rlcPreisTreffer.length
@@ -1658,9 +1760,35 @@ Wichtig:
 - Antworte ausschließlich als JSON.
 - Keine Markdown-Erklärung.
 - Alle Preise netto in EUR pro Einheit.
+- WICHTIG: Gemeinkosten, Risiko und Gewinn müssen als absolute EUR-Beträge ausgegeben werden, niemals als Prozentzahl.
+- Beispiel falsch: Gewinn price 15 total 15, wenn 15 % gemeint sind.
+- Beispiel richtig: Gewinn 15 % von 100000 EUR = price 15000 total 15000.
 - finalUnitPrice muss exakt die Summe der priceBreakdown-total-Werte pro Einheit sein.
 - priceBreakdown muss eine professionelle Urkalkulation pro Einheit enthalten.
 - Verwende realistische, konservative Baustellenwerte, nicht zu niedrige Fantasiepreise.
+- Bei kontextabhängigen Positionen wie Baustelleneinrichtung, Vorhaltung, Verkehrssicherung, Dokumentation oder Vermessung musst du Projektdauer, Entfernung, Personal, Geräte, Container, Logistik und Gemeinkosten ausdrücklich berücksichtigen.
+- Wenn Projektdauer oder Entfernung angegeben sind, darfst du nicht schreiben, dass Dauer/Entfernung/Projektgröße fehlen.
+- Bei langen Baustellenlaufzeiten muss die Vorhaltung über die gesamte Laufzeit plausibel berücksichtigt werden.
+
+Spezialregel für Baustelleneinrichtung / Vorhaltung / Baustellengemeinkosten:
+- Kalkuliere nicht als grobe Pauschale, sondern als nachvollziehbare zeitabhängige Urkalkulation.
+- Berechne die Laufzeit aus Projektdauer: Monate = Projektdauer / 30, Tage = Projektdauer.
+- Container, Baustrom, Bauwasser, Sanitär, Lagerflächen und sonstige Baustelleneinrichtung müssen über die Laufzeit monatlich oder tageweise kalkuliert werden.
+- Gerätevorhaltung darf nicht symbolisch mit kleinen Pauschalen angesetzt werden, sondern muss über Laufzeit, Geräteart und realistische Vorhaltekosten bewertet werden.
+- Personal darf nicht als komplette Kolonne über 730 Tage voll gerechnet werden, wenn es sich nur um Baustelleneinrichtung/Vorhaltung handelt; kalkuliere stattdessen anteilige Einrichtung, Kontrolle, Bauleitung, Polier, Koordination und laufende Betreuung.
+- Antransport, Abtransport, Geräteumsetzung und Entfernung zur Baustelle müssen separat berücksichtigt werden.
+- Baustellengemeinkosten müssen zur Projektdauer passen und dürfen bei langen Laufzeiten nicht unrealistisch niedrig sein.
+- Gib die priceBreakdown-Zeilen so aus, dass man Dauer, Monatsansatz oder Tagesansatz erkennen kann.
+- Beispielstruktur:
+  1. Antransport / Aufbau
+  2. Container / Baustelleneinrichtung monatlich
+  3. Baustrom / Bauwasser / Sanitär monatlich
+  4. Gerätevorhaltung / Kleingeräte / Sicherung
+  5. Bauleitung / Polier / Koordination anteilig
+  6. Logistik / Fahrten / Entfernung
+  7. Gemeinkosten
+  8. Risiko
+  9. Gewinn
 - Wenn der LV-Text Schichtdicken enthält, müssen diese technisch berechnet und als eigene Zeilen ausgegeben werden.
 - Bei m²-Positionen gilt zwingend: cm-Schichtdicke / 100 = m³ je m².
 - Verwende in priceBreakdown technische Einheiten, nicht pauschal immer m².
@@ -1788,7 +1916,10 @@ JSON-Schema:
   let priceBreakdown = sanitizeOverheadRiskProfit(
     mergePlausibilityLines(
       applyDatabaseMaterialPrices(technicalLayerPostprocess(rawPriceBreakdown, text), matches, text)
-    )
+    ),
+    {
+      skipCaps: isContextSensitivePosition(text, einheit),
+    }
   );
   let breakdownTotal = sumBreakdown(priceBreakdown);
 
@@ -1860,13 +1991,96 @@ JSON-Schema:
     Math.min(0.92, round2(n(parsed.confidence, confidenceFrom(row, riskLevel, matches, "openai"))))
   );
 
-  const warnings = buildWarnings(row, riskLevel, matches, confidence, "openai");
+  const contextSensitiveOpenAi = isContextSensitivePosition(text, einheit);
+
+  const contextQualityWarnings: string[] = [];
+
+  if (contextSensitiveOpenAi) {
+    const months = projectDurationDays > 0 ? projectDurationDays / 30 : 0;
+
+    const contextBreakdownText = norm(
+      priceBreakdown
+        .map((x) => `${x.group} ${x.name} ${x.unit} ${x.qty} ${x.price} ${x.total} ${x.note}`)
+        .join(" ")
+    );
+
+    const hasContainer = /container|baustelleneinrichtung/.test(contextBreakdownText);
+    const hasUtilities = /baustrom|bauwasser|sanitaer|sanitär|toilette|wc/.test(contextBreakdownText);
+    const hasTransport = /antransport|abtransport|transport|fahrt|fahrten|logistik/.test(contextBreakdownText);
+    const hasCoordination = /bauleitung|polier|koordination|baustellenkoordination/.test(contextBreakdownText);
+    const hasTemporalBasis = /monat|monate|monatlich|tag|tage|taeglich|täglich|laufzeit|vorhaltung/.test(contextBreakdownText);
+
+    if (projectDurationDays >= 180 && !hasTemporalBasis) {
+      contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
+    }
+
+    if (projectDurationDays >= 180 && !hasContainer) {
+      contextQualityWarnings.push("Context-Guard: Container/Baustelleneinrichtung fehlt oder ist nicht separat erkennbar.");
+    }
+
+    if (projectDurationDays >= 180 && !hasUtilities) {
+      contextQualityWarnings.push("Context-Guard: Baustrom/Bauwasser/Sanitär fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (projectDistanceKm > 0 && !hasTransport) {
+      contextQualityWarnings.push("Context-Guard: Entfernung/Antransport/Abtransport/Logistik fehlt oder ist zu schwach ausgewiesen.");
+    }
+
+    if (projectDurationDays >= 180 && !hasCoordination) {
+      contextQualityWarnings.push("Context-Guard: Bauleitung/Polier/Koordination fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    const softMinForLongSite = months >= 12 ? round2(months * 2500) : 0;
+
+    if (softMinForLongSite > 0 && finalUnitPrice > 0 && finalUnitPrice < softMinForLongSite) {
+      contextQualityWarnings.push(
+        `Context-Guard: EP ${round2(finalUnitPrice)} EUR wirkt für ${round2(months)} Monate Laufzeit auffällig niedrig. Weicher Prüfwert ca. ${softMinForLongSite} EUR.`
+      );
+    }
+
+    const contextDirectCost = round2(
+      normalizedMaterialCost +
+      normalizedLaborCost +
+      normalizedMachineCost +
+      normalizedSubcontractorCost +
+      normalizedDisposalCost
+    );
+
+    if (contextDirectCost > 0) {
+      const minRisk = round2(contextDirectCost * 0.03);
+      const minProfit = round2(contextDirectCost * 0.05);
+
+      if (normalizedRiskCost > 0 && normalizedRiskCost < minRisk) {
+        contextQualityWarnings.push(
+          `Context-Guard: Risiko ${round2(normalizedRiskCost)} EUR wirkt zu niedrig. Mindest-Prüfansatz ca. 3% der Direktkosten = ${minRisk} EUR.`
+        );
+      }
+
+      if (normalizedProfitCost > 0 && normalizedProfitCost < minProfit) {
+        contextQualityWarnings.push(
+          `Context-Guard: Gewinn ${round2(normalizedProfitCost)} EUR wirkt zu niedrig. Mindest-Prüfansatz ca. 5% der Direktkosten = ${minProfit} EUR.`
+        );
+      }
+    }
+  }
+
+  const warnings = [
+    ...buildWarnings(row, riskLevel, matches, confidence, "openai"),
+    contextSensitiveOpenAi ? contextSensitiveWarning(text) : "",
+    ...contextQualityWarnings,
+  ].filter(Boolean);
 
   const rawStatus = s(parsed.calculationStatus);
-  const calculationStatus: CalcStatus =
-    rawStatus === "ok" || rawStatus === "warning" || rawStatus === "critical"
+  const calculationStatus = contextSensitiveOpenAi
+    ? "needs_review"
+    : rawStatus === "ok" || rawStatus === "warning" || rawStatus === "critical"
       ? rawStatus
       : calculationStatusFrom(warnings, riskLevel, confidence);
+
+  const finalRiskLevel = contextSensitiveOpenAi ? "high" : riskLevel;
+  const finalConfidence = contextSensitiveOpenAi
+    ? Math.min(confidence, contextQualityWarnings.length ? 0.55 : 0.65)
+    : confidence;
 
   return {
     id: row.id,
@@ -1889,8 +2103,8 @@ JSON-Schema:
     suggestedUnitPrice,
     finalUnitPrice,
 
-    confidence,
-    riskLevel,
+    confidence: finalConfidence,
+    riskLevel: finalRiskLevel,
     calculationStatus,
 
     gewerk: s(parsed.gewerk) || gewerk,
@@ -1903,9 +2117,14 @@ JSON-Schema:
       rlcPreisSource: n(rlcPreisRange.avg) > 0 ? "RLC Preisbibliothek" : "",
       rlcPreisGroup: n(rlcPreisRange.avg) > 0 ? rlcPreisRange.matches?.[0]?.group || "" : "",
 
-    warning: s(parsed.warning) || warnings.join(" · "),
+    warning: [s(parsed.warning), ...warnings].filter(Boolean).join(" · "),
     aiReason:
-      s(parsed.aiReason) ||
+      [
+        s(parsed.aiReason),
+        contextQualityWarnings.length
+          ? "RLC Context-Guard: Die Urkalkulation ist fachlich prüfpflichtig, weil bei einer kontextabhängigen Position einzelne Pflichtbestandteile fehlen oder auffällig niedrig angesetzt wurden."
+          : "",
+      ].filter(Boolean).join("\n\n") ||
       `OpenAI-Kalkulation: Keine ausreichend sichere Datenbankbasis vorhanden. Die Urkalkulation wurde per OpenAI aus LV-Text, Einheit, Menge, Gewerk, Leistungsart und Bauverfahren erstellt. Fachliche Prüfung erforderlich.`,
 
     source: "openai",
@@ -1964,7 +2183,9 @@ function shouldUseOpenAIForRow(
   if (forceRecalculate) return true;
 
   const unit = s(row.einheit);
-  const hasStrongDb = strongDatabaseHit(matches, unit);
+  const fullText = `${s(row.kurztext)} ${s(row.langtext)}`.trim();
+  const contextSensitive = isContextSensitivePosition(fullText, unit);
+  const hasStrongDb = contextSensitive ? false : strongDatabaseHit(matches, unit);
 
   /*
    * Qualität vor Geschwindigkeit:
@@ -2263,7 +2484,14 @@ async function calcSmartRow(
    */
   const x83PriorityKurztext = String((row as any).kurztext || "").toLowerCase();
 
-  const technicalRecipeInput =
+  
+    const technicalContextText = `${s(row.kurztext)} ${s(row.langtext)}`.trim();
+    const technicalContextSensitive = isContextSensitivePosition(
+      technicalContextText,
+      s(row.einheit)
+    );
+
+const technicalRecipeInput =
     x83PriorityKurztext.includes("fsk korrigieren") ||
     (
       x83PriorityKurztext.includes("boden") &&
@@ -2277,7 +2505,7 @@ async function calcSmartRow(
 
   const technicalRecipeRow = await calcRecipeKalkulationRow(technicalRecipeInput);
 
-  if (technicalRecipeRow?.source === "technical-parser") {
+  if (!technicalContextSensitive && technicalRecipeRow?.source === "technical-parser") {
     const technicalRow = {
       ...technicalRecipeRow,
       source: "technical-parser",
@@ -2324,7 +2552,7 @@ async function calcSmartRow(
    */
   const recipeRow = await calcRecipeKalkulationRow(row);
 
-  if (recipeRow) {
+  if (!technicalContextSensitive && recipeRow) {
     const guardedRecipeRow = applyPlausibilityGuard(
       row,
       matches,
