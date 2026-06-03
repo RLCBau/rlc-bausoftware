@@ -1807,6 +1807,24 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   7. Gemeinkosten
   8. Risiko
   9. Gewinn
+
+Spezialregel für Dokumentation / Bestandspläne / Vermessung:
+- Wenn der LV-Text Dokumentation, Fotodokumentation, Aufmaß, Bestandspläne, Vermessungsdaten, As-Built, Übergabeunterlagen oder Behördenabstimmung enthält, kalkuliere NICHT Bauleiter oder Vermessungstechniker full-time über die gesamte Bauzeit.
+- Die Bauzeit ist nur ein Einflussfaktor für Umfang und Häufigkeit, aber keine Vollzeit-Arbeitszeit für Dokumentation.
+- Kalkuliere realistische Teilaufwände: z.B. regelmäßige Fotodokumentation stundenweise, Aufmaßtermine tageweise, Vermessungseinsätze nach Anzahl Termine, CAD-/Bestandsplanbearbeitung als Büroaufwand, Übergabe/Abstimmung separat.
+- Wenn keine genaue Anzahl Termine angegeben ist, verwende konservative Annahmen und schreibe sie in die note.
+- Bestandsplan/CAD/DWG/PDF/LandXML/As-Built muss als eigene priceBreakdown-Zeile erscheinen, wenn im LV erwähnt.
+- Fotodokumentation, Aufmaß, Vermessung, CAD-Bearbeitung, Übergabeunterlagen und Behörden-/AG-Abstimmung sollen getrennte Zeilen sein, wenn im LV genannt.
+- Beispielstruktur:
+  1. Fotodokumentation regelmäßig, stundenweise
+  2. Aufmaß / Massenermittlung / Aufmaßunterlagen
+  3. Vermessungseinsätze / GNSS / Tachymeter
+  4. CAD-/Bestandsplanbearbeitung / As-Built
+  5. Digitale Übergabeunterlagen / PDF/DWG/LandXML
+  6. Abstimmung Auftraggeber / Behörden
+  7. Gemeinkosten
+  8. Risiko
+  9. Gewinn
 - Wenn der LV-Text Schichtdicken enthält, müssen diese technisch berechnet und als eigene Zeilen ausgegeben werden.
 - Bei m²-Positionen gilt zwingend: cm-Schichtdicke / 100 = m³ je m².
 - Verwende in priceBreakdown technische Einheiten, nicht pauschal immer m².
@@ -2026,19 +2044,31 @@ JSON-Schema:
     const isTrafficSafetyContext =
       /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|rsa/.test(rowContextText);
 
+    const isDocumentationContext =
+      /dokumentation|fotodokumentation|aufmass|aufmaß|bestandsplan|bestandsplaene|bestandspläne|vermessung|vermessungsdaten|as-built|as built|uebergabeunterlagen|übergabeunterlagen|behoerden|behörden|auftraggeber/.test(rowContextText);
+
     const isSiteSetupContext =
+      !isTrafficSafetyContext &&
+      !isDocumentationContext &&
       /baustelleneinrichtung|vorhaltung|baustellengemeinkosten|container|baustrom|bauwasser|sanitaer|sanitär/.test(rowContextText);
 
     const hasContainer = /container|baustelleneinrichtung/.test(contextBreakdownText);
     const hasUtilities = /baustrom|bauwasser|sanitaer|sanitär|toilette|wc/.test(contextBreakdownText);
     const hasTransport = /antransport|abtransport|transport|fahrt|fahrten|logistik|anfahrt/.test(contextBreakdownText);
     const hasCoordination = /bauleitung|polier|koordination|baustellenkoordination|kontrolle|kontrollen|wartung/.test(contextBreakdownText);
-    const hasTemporalBasis = /monat|monate|monatlich|tag|tage|taeglich|täglich|laufzeit|vorhaltung|miete|wartung/.test(contextBreakdownText);
+    const hasTemporalBasis = /monat|monate|monatlich|tag|tage|taeglich|täglich|laufzeit|vorhaltung|miete|wartung|stunde|stunden|\bh\b|termin|termine|einsatz|einsaetze|einsätze/.test(contextBreakdownText);
 
     const hasTrafficSigns = /beschilderung|schild|schilder|verkehrszeichen/.test(contextBreakdownText);
     const hasBarrierMaterial = /absperr|bake|leitbake|leitkegel|schranke|sperr/.test(contextBreakdownText);
     const hasTrafficLight = /lichtsignalanlage|ampel|lsa/.test(contextBreakdownText);
     const hasTrafficControl = /verkehrsfuehrung|verkehrsführung|kontrolle|kontrollen|wartung|anpassung|rsa|stvo|genehmigung/.test(contextBreakdownText);
+
+    const hasPhotoDocumentation = /fotodokumentation|foto|bilder/.test(contextBreakdownText);
+    const hasAufmass = /aufmass|aufmaß|massenermittlung|massen/.test(contextBreakdownText);
+    const hasSurvey = /vermessung|gnss|tachymeter|vermessungsdaten/.test(contextBreakdownText);
+    const hasCadBestandsplan = /cad|bestandsplan|bestandsplaene|bestandspläne|as-built|as built|dwg|dxf/.test(contextBreakdownText);
+    const hasDigitalHandover = /uebergabe|übergabe|pdf|dwg|landxml|unterlagen/.test(contextBreakdownText);
+    const hasClientAuthorityCoordination = /auftraggeber|behoerde|behörde|behoerden|behörden|abstimmung/.test(contextBreakdownText);
 
     if (projectDurationDays >= 180 && !hasTemporalBasis) {
       contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
@@ -2068,11 +2098,35 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Verkehrssicherung: Kontrolle/Wartung/Verkehrsführung/RSA-Genehmigung fehlt oder ist nicht separat erkennbar.");
     }
 
-    if (projectDistanceKm > 0 && !hasTransport) {
+    if (isDocumentationContext && !hasPhotoDocumentation && /foto|fotodokumentation/.test(rowContextText)) {
+      contextQualityWarnings.push("Context-Guard: Dokumentation: Fotodokumentation ist im LV erwähnt, aber nicht separat kalkuliert.");
+    }
+
+    if (isDocumentationContext && !hasAufmass && /aufmass|aufmaß/.test(rowContextText)) {
+      contextQualityWarnings.push("Context-Guard: Dokumentation: Aufmaß/Massenermittlung ist im LV erwähnt, aber nicht separat kalkuliert.");
+    }
+
+    if (isDocumentationContext && !hasSurvey && /vermessung|vermessungsdaten/.test(rowContextText)) {
+      contextQualityWarnings.push("Context-Guard: Dokumentation: Vermessung/Vermessungsdaten sind im LV erwähnt, aber nicht separat kalkuliert.");
+    }
+
+    if (isDocumentationContext && !hasCadBestandsplan && /bestandsplan|bestandsplaene|bestandspläne|as-built|as built/.test(rowContextText)) {
+      contextQualityWarnings.push("Context-Guard: Dokumentation: Bestandsplan/CAD/As-Built ist im LV erwähnt, aber nicht separat kalkuliert.");
+    }
+
+    if (isDocumentationContext && !hasDigitalHandover && /uebergabe|übergabe|unterlagen|digital/.test(rowContextText)) {
+      contextQualityWarnings.push("Context-Guard: Dokumentation: Digitale Übergabeunterlagen fehlen oder sind nicht separat kalkuliert.");
+    }
+
+    if (isDocumentationContext && !hasClientAuthorityCoordination && /auftraggeber|behoerde|behörde|behoerden|behörden|abstimmung/.test(rowContextText)) {
+      contextQualityWarnings.push("Context-Guard: Dokumentation: Abstimmung mit Auftraggeber/Behörden fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (!isDocumentationContext && projectDistanceKm > 0 && !hasTransport) {
       contextQualityWarnings.push("Context-Guard: Entfernung/Antransport/Abtransport/Logistik fehlt oder ist zu schwach ausgewiesen.");
     }
 
-    if (projectDurationDays >= 180 && !hasCoordination) {
+    if (!isDocumentationContext && projectDurationDays >= 180 && !hasCoordination) {
       contextQualityWarnings.push("Context-Guard: Bauleitung/Polier/Koordination/Kontrolle fehlt oder ist nicht separat kalkuliert.");
     }
 
