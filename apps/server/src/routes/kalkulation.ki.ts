@@ -1808,6 +1808,24 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Gerätevorhaltung / Bauzeitunterbrechung / Stillstand / Wartezeiten:
+- Wenn der LV-Text Gerätevorhaltung, Vorhaltung, Bauzeitunterbrechung, Stillstand, Wartezeit, Wartezeiten, behördliche Freigaben, Leitungsfreigaben oder Bauablaufstörungen enthält, kalkuliere NICHT als Baustelleneinrichtungspauschale.
+- Diese Position muss als zeitabhängige Vorhalte-/Stillstandskalkulation aufgebaut werden.
+- Gerätevorhaltung muss separat erscheinen: z.B. Bagger, Verdichtungsgerät, Kleingeräte, Baustelleneinrichtung.
+- Personal-Wartezeiten müssen separat erscheinen: z.B. Polier anteilig, Maschinist anteilig, Bauleitung/Koordination.
+- Stillstand/Wartezeit darf nicht mit voller Kolonne über die gesamte Dauer gerechnet werden, sondern mit realistischen Anteilen oder betroffenen Tagen/Stunden.
+- Erneute Anfahrt, Abfahrt, Umsetzen und Logistik müssen separat erscheinen, wenn Entfernung angegeben ist.
+- Wenn Geräte teilweise auf der Baustelle bleiben, kalkuliere Vorhaltekosten über die Stillstands-/Unterbrechungsdauer.
+- Beispielstruktur:
+  1. Gerätevorhaltung Bagger / Kleingeräte
+  2. Personal-Wartezeit / Polier / Maschinist anteilig
+  3. Bauleitung / Koordination / Freigaben
+  4. Stillstand / Bauablaufstörung
+  5. Erneute Anfahrt / Logistik / Entfernung
+  6. Gemeinkosten
+  7. Risiko
+  8. Gewinn
+
 Spezialregel für Erschwernis / beengte Bauweise / schwierige Bauverhältnisse:
 - Wenn der LV-Text Erschwernis, beengte Bauweise, beengte Verhältnisse, Handschachtung, Anliegerverkehr, bestehende Versorgungsleitungen, erschwerte Zugänglichkeit oder erschwerte Gerätebewegung enthält, kalkuliere NICHT als normale Tiefbauposition.
 - Diese Position ist eine Zuschlags-/Erschwernisposition und muss aus Mehrzeit, Minderleistung, zusätzlicher Sicherung, Handarbeit, kleineren Geräten, Umsetzen der Geräte, Wartezeiten und Koordination berechnet werden.
@@ -2064,9 +2082,13 @@ JSON-Schema:
     const isDocumentationContext =
       /dokumentation|fotodokumentation|aufmass|aufmaß|bestandsplan|bestandsplaene|bestandspläne|vermessung|vermessungsdaten|as-built|as built|uebergabeunterlagen|übergabeunterlagen|behoerden|behörden|auftraggeber/.test(rowContextText);
 
+    const isVorhaltungContext =
+      /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|freigabe|bauablaufstoerung|bauablaufstörung/.test(rowContextText);
+
     const isSiteSetupContext =
       !isTrafficSafetyContext &&
       !isDocumentationContext &&
+      !isVorhaltungContext &&
       /baustelleneinrichtung|vorhaltung|baustellengemeinkosten|container|baustrom|bauwasser|sanitaer|sanitär/.test(rowContextText);
 
     const hasContainer = /container|baustelleneinrichtung/.test(contextBreakdownText);
@@ -2086,6 +2108,12 @@ JSON-Schema:
     const hasCadBestandsplan = /cad|bestandsplan|bestandsplaene|bestandspläne|as-built|as built|dwg|dxf/.test(contextBreakdownText);
     const hasDigitalHandover = /uebergabe|übergabe|pdf|dwg|landxml|unterlagen/.test(contextBreakdownText);
     const hasClientAuthorityCoordination = /auftraggeber|behoerde|behörde|behoerden|behörden|abstimmung/.test(contextBreakdownText);
+
+    const hasVorhaltungMachines = /geraetevorhaltung|gerätevorhaltung|bagger|verdichtungsgeraet|verdichtungsgerät|kleingeraet|kleingerät|maschine|maschinen/.test(contextBreakdownText);
+    const hasVorhaltungPersonnel = /personal-wartezeit|wartezeit|polier|maschinist|personal/.test(contextBreakdownText);
+    const hasVorhaltungCoordination = /bauleitung|koordination|freigabe|freigaben|behoerde|behörde|leitungsfreigabe/.test(contextBreakdownText);
+    const hasVorhaltungStillstand = /stillstand|bauzeitunterbrechung|bauablaufstoerung|bauablaufstörung|wartezeiten|wartezeit/.test(contextBreakdownText);
+    const hasVorhaltungLogistics = /erneute anfahrt|anfahrt|abfahrt|umsetzen|logistik|entfernung|fahrt|fahrten/.test(contextBreakdownText);
 
     if (projectDurationDays >= 180 && !hasTemporalBasis) {
       contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
@@ -2139,11 +2167,31 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Dokumentation: Abstimmung mit Auftraggeber/Behörden fehlt oder ist nicht separat kalkuliert.");
     }
 
-    if (!isDocumentationContext && projectDistanceKm > 0 && !hasTransport) {
+    if (isVorhaltungContext && !hasVorhaltungMachines) {
+      contextQualityWarnings.push("Context-Guard: Vorhaltung/Stillstand: Gerätevorhaltung ist erwähnt, aber nicht separat kalkuliert.");
+    }
+
+    if (isVorhaltungContext && !hasVorhaltungPersonnel) {
+      contextQualityWarnings.push("Context-Guard: Vorhaltung/Stillstand: Personal-Wartezeit/Polier/Maschinist fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isVorhaltungContext && !hasVorhaltungCoordination) {
+      contextQualityWarnings.push("Context-Guard: Vorhaltung/Stillstand: Bauleitung/Koordination/Freigaben fehlen oder sind nicht separat kalkuliert.");
+    }
+
+    if (isVorhaltungContext && !hasVorhaltungStillstand) {
+      contextQualityWarnings.push("Context-Guard: Vorhaltung/Stillstand: Stillstand/Wartezeiten/Bauablaufstörung fehlen oder sind nicht separat kalkuliert.");
+    }
+
+    if (isVorhaltungContext && projectDistanceKm > 0 && !hasVorhaltungLogistics) {
+      contextQualityWarnings.push("Context-Guard: Vorhaltung/Stillstand: erneute Anfahrt/Logistik/Entfernung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (!isDocumentationContext && !isVorhaltungContext && projectDistanceKm > 0 && !hasTransport) {
       contextQualityWarnings.push("Context-Guard: Entfernung/Antransport/Abtransport/Logistik fehlt oder ist zu schwach ausgewiesen.");
     }
 
-    if (!isDocumentationContext && projectDurationDays >= 180 && !hasCoordination) {
+    if (!isDocumentationContext && !isVorhaltungContext && projectDurationDays >= 180 && !hasCoordination) {
       contextQualityWarnings.push("Context-Guard: Bauleitung/Polier/Koordination/Kontrolle fehlt oder ist nicht separat kalkuliert.");
     }
 
@@ -2184,8 +2232,11 @@ JSON-Schema:
   const isErschwernisOpenAi =
     /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`));
 
+  const isVorhaltungOpenAi =
+    /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`));
+
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) =>
-    isErschwernisOpenAi ? !/verkehrssicherung|rsa/i.test(String(w || "")) : true
+    isErschwernisOpenAi || isVorhaltungOpenAi ? !/verkehrssicherung|rsa/i.test(String(w || "")) : true
   );
 
   const warnings = [
@@ -2193,7 +2244,9 @@ JSON-Schema:
     contextSensitiveOpenAi
       ? isErschwernisOpenAi
         ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
-        : contextSensitiveWarning(text)
+        : isVorhaltungOpenAi
+          ? "Kontextabhängige Position: Gerätevorhaltung/Stillstand/Wartezeiten hängt stark von Unterbrechungsdauer, betroffenen Geräten, Personalbindung, Freigaben, Bauablaufstörungen, erneuter Anfahrt und Logistik ab. Historische Preise nur als Orientierung verwenden."
+          : contextSensitiveWarning(text)
       : "",
     ...contextQualityWarnings,
   ].filter(Boolean);
@@ -2235,15 +2288,21 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
-      ? "Tiefbau / Erschwernis"
-      : s(parsed.gewerk) || gewerk,
-    leistungsart: /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
-      ? "Erschwernis / beengte Bauweise"
-      : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
-      ? "Zuschlagskalkulation für erschwerte Bauausführung"
-      : s(parsed.bauverfahren) || bauverfahren,
+    gewerk: /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
+      ? "Tiefbau / Vorhaltung"
+      : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
+        ? "Tiefbau / Erschwernis"
+        : s(parsed.gewerk) || gewerk,
+    leistungsart: /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
+      ? "Gerätevorhaltung / Stillstand / Wartezeiten"
+      : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
+        ? "Erschwernis / beengte Bauweise"
+        : s(parsed.leistungsart) || leistungsart,
+    bauverfahren: /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
+      ? "Zeitabhängige Vorhalte- und Stillstandskalkulation"
+      : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
+        ? "Zuschlagskalkulation für erschwerte Bauausführung"
+        : s(parsed.bauverfahren) || bauverfahren,
 
       rlcPreisMin: round2(n(rlcPreisRange.min)),
       rlcPreisAvg: round2(n(rlcPreisRange.avg)),
