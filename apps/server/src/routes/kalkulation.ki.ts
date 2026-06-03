@@ -1789,6 +1789,24 @@ Spezialregel für Baustelleneinrichtung / Vorhaltung / Baustellengemeinkosten:
   7. Gemeinkosten
   8. Risiko
   9. Gewinn
+
+Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
+- Wenn der LV-Text Verkehrssicherung, Verkehrsführung, Straßensperrung, Beschilderung, Absperrung, Lichtsignalanlage oder Ampel enthält, kalkuliere zeitabhängig über die volle Projektdauer.
+- Verwende die angegebene Projektdauer strikt. Beispiel: Bei 180 Tagen darf eine Lichtsignalanlage nicht nur über 30 Tage kalkuliert werden.
+- Beschilderung, Absperrmaterial, Leitbaken, Verkehrszeichen, Sperrmaterial und mobile Lichtsignalanlage müssen als eigene priceBreakdown-Zeilen erscheinen, wenn sie im LV-Text genannt sind.
+- Regelmäßige Kontrollen, Wartung, Anpassung der Verkehrsführung, RSA/StVO-Auflagen und Genehmigungs-/Koordinationsaufwand müssen separat berücksichtigt werden.
+- Logistik, Anfahrt, Aufbau, Umbau und Abbau müssen separat kalkuliert werden, besonders wenn eine Entfernung angegeben ist.
+- Bei langer Laufzeit müssen Miete/Vorhaltung der Lichtsignalanlage, Beschilderung und Absperrmaterial über die gesamte Laufzeit plausibel gerechnet werden.
+- Beispielstruktur:
+  1. Beschilderung / Verkehrszeichen
+  2. Absperrmaterial / Leitbaken / Sperrmaterial
+  3. Lichtsignalanlage / Ampel über komplette Laufzeit
+  4. Kontrollen / Wartung / Anpassung Verkehrsführung
+  5. Aufbau / Umbau / Abbau
+  6. Logistik / Fahrten / Entfernung
+  7. Gemeinkosten
+  8. Risiko
+  9. Gewinn
 - Wenn der LV-Text Schichtdicken enthält, müssen diese technisch berechnet und als eigene Zeilen ausgegeben werden.
 - Bei m²-Positionen gilt zwingend: cm-Schichtdicke / 100 = m³ je m².
 - Verwende in priceBreakdown technische Einheiten, nicht pauschal immer m².
@@ -2004,22 +2022,50 @@ JSON-Schema:
         .join(" ")
     );
 
+    const rowContextText = norm(`${kurztext} ${langtext}`);
+    const isTrafficSafetyContext =
+      /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|rsa/.test(rowContextText);
+
+    const isSiteSetupContext =
+      /baustelleneinrichtung|vorhaltung|baustellengemeinkosten|container|baustrom|bauwasser|sanitaer|sanitär/.test(rowContextText);
+
     const hasContainer = /container|baustelleneinrichtung/.test(contextBreakdownText);
     const hasUtilities = /baustrom|bauwasser|sanitaer|sanitär|toilette|wc/.test(contextBreakdownText);
-    const hasTransport = /antransport|abtransport|transport|fahrt|fahrten|logistik/.test(contextBreakdownText);
-    const hasCoordination = /bauleitung|polier|koordination|baustellenkoordination/.test(contextBreakdownText);
-    const hasTemporalBasis = /monat|monate|monatlich|tag|tage|taeglich|täglich|laufzeit|vorhaltung/.test(contextBreakdownText);
+    const hasTransport = /antransport|abtransport|transport|fahrt|fahrten|logistik|anfahrt/.test(contextBreakdownText);
+    const hasCoordination = /bauleitung|polier|koordination|baustellenkoordination|kontrolle|kontrollen|wartung/.test(contextBreakdownText);
+    const hasTemporalBasis = /monat|monate|monatlich|tag|tage|taeglich|täglich|laufzeit|vorhaltung|miete|wartung/.test(contextBreakdownText);
+
+    const hasTrafficSigns = /beschilderung|schild|schilder|verkehrszeichen/.test(contextBreakdownText);
+    const hasBarrierMaterial = /absperr|bake|leitbake|leitkegel|schranke|sperr/.test(contextBreakdownText);
+    const hasTrafficLight = /lichtsignalanlage|ampel|lsa/.test(contextBreakdownText);
+    const hasTrafficControl = /verkehrsfuehrung|verkehrsführung|kontrolle|kontrollen|wartung|anpassung|rsa|stvo|genehmigung/.test(contextBreakdownText);
 
     if (projectDurationDays >= 180 && !hasTemporalBasis) {
       contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
     }
 
-    if (projectDurationDays >= 180 && !hasContainer) {
+    if (isSiteSetupContext && projectDurationDays >= 180 && !hasContainer) {
       contextQualityWarnings.push("Context-Guard: Container/Baustelleneinrichtung fehlt oder ist nicht separat erkennbar.");
     }
 
-    if (projectDurationDays >= 180 && !hasUtilities) {
+    if (isSiteSetupContext && projectDurationDays >= 180 && !hasUtilities) {
       contextQualityWarnings.push("Context-Guard: Baustrom/Bauwasser/Sanitär fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTrafficSafetyContext && !hasTrafficSigns) {
+      contextQualityWarnings.push("Context-Guard: Verkehrssicherung: Beschilderung/Verkehrszeichen fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTrafficSafetyContext && !hasBarrierMaterial) {
+      contextQualityWarnings.push("Context-Guard: Verkehrssicherung: Absperrmaterial/Leitbaken/Sperrmaterial fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTrafficSafetyContext && /lichtsignalanlage|ampel/.test(rowContextText) && !hasTrafficLight) {
+      contextQualityWarnings.push("Context-Guard: Verkehrssicherung: Lichtsignalanlage/Ampel ist im LV erwähnt, aber nicht separat kalkuliert.");
+    }
+
+    if (isTrafficSafetyContext && projectDurationDays >= 30 && !hasTrafficControl) {
+      contextQualityWarnings.push("Context-Guard: Verkehrssicherung: Kontrolle/Wartung/Verkehrsführung/RSA-Genehmigung fehlt oder ist nicht separat erkennbar.");
     }
 
     if (projectDistanceKm > 0 && !hasTransport) {
@@ -2027,7 +2073,7 @@ JSON-Schema:
     }
 
     if (projectDurationDays >= 180 && !hasCoordination) {
-      contextQualityWarnings.push("Context-Guard: Bauleitung/Polier/Koordination fehlt oder ist nicht separat kalkuliert.");
+      contextQualityWarnings.push("Context-Guard: Bauleitung/Polier/Koordination/Kontrolle fehlt oder ist nicht separat kalkuliert.");
     }
 
     const softMinForLongSite = months >= 12 ? round2(months * 2500) : 0;
