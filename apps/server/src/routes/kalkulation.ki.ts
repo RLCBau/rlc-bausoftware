@@ -1808,6 +1808,32 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Provisorien / Umleitungen / temporäre Baustraßen / temporäre Anschlüsse:
+- Wenn der LV-Text Provisorium, provisorisch, Baustraße, Umleitung, Baustellenumleitung, temporärer Anschluss, temporäre Zufahrt, Vorhalten, Unterhalten oder Rückbau enthält, kalkuliere NICHT als normale Materialposition.
+- Diese Position muss als vollständige temporäre Maßnahme kalkuliert werden: Herstellen, Vorhalten, Unterhalten, Anpassen, Reinigen und Rückbauen.
+- Material wie Schottertragschicht, Geotextil, Platten, Rohre, Kabel, Absperrung oder Beschilderung muss als realistische Pauschale oder Mengenannahme erscheinen, niemals als symbolischer Kleinstwert.
+- Vorhaltung über die angegebene Dauer muss separat berücksichtigt werden.
+- Unterhaltung/Reinigung/Anpassung während der Laufzeit muss separat erscheinen.
+- Rückbau, Laden, Abtransport und Entsorgung/Wiederverwertung müssen separat erscheinen.
+- Logistik/Anfahrt/Materialanlieferung muss separat kalkuliert werden.
+- Wenn Herstellen/Einbau genannt ist, muss eine eigene priceBreakdown-Zeile "Herstellung / Einbau provisorische Baustraße" erscheinen.
+- Wenn Unterhalten/Reinigung/Anpassung genannt ist, muss EXAKT eine eigene priceBreakdown-Zeile "Unterhaltung / Reinigung / Anpassung während Laufzeit" erscheinen. Diese Kosten dürfen nicht in Gemeinkosten versteckt werden.
+- Wenn Umleitung/Beschilderung genannt ist, muss EXAKT eine eigene priceBreakdown-Zeile "Beschilderung / Umleitung / Verkehrsführung" erscheinen. Diese Kosten dürfen nicht in Gemeinkosten versteckt werden.
+- Wenn Rückbau genannt ist, muss eine eigene priceBreakdown-Zeile "Rückbau / Laden / Abtransport" erscheinen.
+- Wenn eine dieser LV-Komponenten fehlt, ist die Kalkulation unvollständig.
+- Beispielstruktur:
+  1. Herstellen provisorische Baustraße / Umleitung
+  2. Material Schotter / Geotextil / Tragschicht
+  3. Maschinen / Einbau / Verdichtung
+  4. Vorhaltung über Laufzeit
+  5. Unterhaltung / Reinigung / Anpassung
+  6. Beschilderung / Verkehrsführung
+  7. Rückbau / Laden / Abtransport
+  8. Logistik / Anfahrt / Materialtransporte
+  9. Gemeinkosten
+  10. Risiko
+  11. Gewinn
+
 Spezialregel für Wasserhaltung / Pumpen / Grundwasser / Baugrubenentwässerung:
 - Wenn der LV-Text Wasserhaltung, Pumpen, Tauchpumpen, Grundwasser, Baugrubenentwässerung, Ableitung des Wassers, Vorfluter, Kanal, Schläuche oder Stromversorgung enthält, kalkuliere NICHT als Baustelleneinrichtungspauschale.
 - Diese Position ist eine zeitabhängige Wasserhaltungs-/Pumpenkalkulation.
@@ -2095,7 +2121,11 @@ JSON-Schema:
     );
 
     const rowContextText = norm(`${kurztext} ${langtext}`);
+    const isProvisoriumContext =
+      /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau|unterhalten|unterhaltung/.test(rowContextText);
+
     const isTrafficSafetyContext =
+      !isProvisoriumContext &&
       /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|rsa/.test(rowContextText);
 
     const isDocumentationContext =
@@ -2133,6 +2163,14 @@ JSON-Schema:
     const hasVorhaltungCoordination = /bauleitung|koordination|freigabe|freigaben|behoerde|behörde|leitungsfreigabe/.test(contextBreakdownText);
     const hasVorhaltungStillstand = /stillstand|bauzeitunterbrechung|bauablaufstoerung|bauablaufstörung|wartezeiten|wartezeit/.test(contextBreakdownText);
     const hasVorhaltungLogistics = /erneute anfahrt|anfahrt|abfahrt|umsetzen|logistik|entfernung|fahrt|fahrten/.test(contextBreakdownText);
+
+    const hasProvisoriumHerstellung = /herstellen|herstellung|einbau|einbauen|verdichtung|baustrasse|baustraße|umleitung/.test(contextBreakdownText);
+    const hasProvisoriumMaterial = /schotter|tragschicht|geotextil|platten|material/.test(contextBreakdownText);
+    const hasProvisoriumVorhaltung = /vorhalten|vorhaltung|laufzeit|dauer|120 tage|tage/.test(contextBreakdownText);
+    const hasProvisoriumUnterhaltung = /unterhalten|unterhaltung|reinigung|anpassung|wartung/.test(contextBreakdownText);
+    const hasProvisoriumRueckbau = /rueckbau|rückbau|abtransport|entsorgung|laden/.test(contextBreakdownText);
+    const hasProvisoriumLogistik = /logistik|anfahrt|materialanlieferung|transport|abtransport/.test(contextBreakdownText);
+    const hasProvisoriumBeschilderung = /beschilderung|verkehrsfuehrung|verkehrsführung|umleitung|verkehrszeichen/.test(contextBreakdownText);
 
     if (projectDurationDays >= 180 && !hasTemporalBasis) {
       contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
@@ -2206,7 +2244,35 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Vorhaltung/Stillstand: erneute Anfahrt/Logistik/Entfernung fehlt oder ist nicht separat kalkuliert.");
     }
 
-    if (!isDocumentationContext && !isVorhaltungContext && projectDistanceKm > 0 && !hasTransport) {
+    if (isProvisoriumContext && !hasProvisoriumHerstellung) {
+      contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Herstellung/Einbau fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProvisoriumContext && !hasProvisoriumMaterial) {
+      contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Material wie Schotter/Geotextil/Tragschicht fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProvisoriumContext && projectDurationDays > 0 && !hasProvisoriumVorhaltung) {
+      contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Vorhaltung über die Laufzeit fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProvisoriumContext && !hasProvisoriumUnterhaltung) {
+      contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Unterhaltung/Reinigung/Anpassung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProvisoriumContext && !hasProvisoriumRueckbau) {
+      contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Rückbau/Laden/Abtransport fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProvisoriumContext && projectDistanceKm > 0 && !hasProvisoriumLogistik) {
+      contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Logistik/Anfahrt/Materialtransporte fehlen oder sind nicht separat kalkuliert.");
+    }
+
+    if (isProvisoriumContext && /umleitung|beschilderung/.test(rowContextText) && !hasProvisoriumBeschilderung) {
+      contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Beschilderung/Umleitung/Verkehrsführung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (!isDocumentationContext && !isVorhaltungContext && !isProvisoriumContext && projectDistanceKm > 0 && !hasTransport) {
       contextQualityWarnings.push("Context-Guard: Entfernung/Antransport/Abtransport/Logistik fehlt oder ist zu schwach ausgewiesen.");
     }
 
@@ -2312,22 +2378,28 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
-      ? "Tiefbau / Wasserhaltung"
+    gewerk: /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(norm(`${kurztext} ${langtext}`))
+      ? "Tiefbau / Provisorien"
+      : /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
+        ? "Tiefbau / Wasserhaltung"
       : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Vorhaltung"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
-      ? "Wasserhaltung / Pumpen / Baugrubenentwässerung"
+    leistungsart: /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(norm(`${kurztext} ${langtext}`))
+      ? "Provisorium / Baustraße / Umleitung"
+      : /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
+        ? "Wasserhaltung / Pumpen / Baugrubenentwässerung"
       : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
         ? "Gerätevorhaltung / Stillstand / Wartezeiten"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
-      ? "Zeitabhängige Wasserhaltungs- und Pumpenkalkulation"
+    bauverfahren: /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(norm(`${kurztext} ${langtext}`))
+      ? "Temporäre Herstellung, Vorhaltung, Unterhaltung und Rückbau"
+      : /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
+        ? "Zeitabhängige Wasserhaltungs- und Pumpenkalkulation"
       : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
         ? "Zeitabhängige Vorhalte- und Stillstandskalkulation"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
