@@ -218,12 +218,12 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
 
   if (
     unit === "Psch" &&
-    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text)
+    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text)
   ) {
     return true;
   }
 
-  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text);
+  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text);
 }
 
 function contextSensitiveWarning(textRaw: any): string {
@@ -1815,6 +1815,28 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Baustellenlogistik / Zufahrt / Lager / Versorgung:
+- Wenn der LV-Text Baustellenlogistik, Baustellenzufahrt, Zufahrtssicherung, Lagerflächen, Zwischenlager, Materialumschlag, Baustrom, Baustellenbeleuchtung, Stromprovisorium, Baustellenwasser, Spezialgeräte-Miete oder Mietverlängerung enthält, kalkuliere NICHT als Provisorium/Baustraße und NICHT als allgemeine Baustelleneinrichtung.
+- Diese Position muss als Logistik-, Lager- und Versorgungsmaßnahme über Bauzeit, Vorhaltung, Betrieb, Kontrolle und Rückbau kalkuliert werden.
+- Baustellenzufahrt/Zufahrtssicherung muss separat erscheinen, wenn genannt.
+- Lagerfläche/Zwischenlager/Materialumschlag muss separat erscheinen, wenn genannt.
+- Baustrom/Stromprovisorium/Baustellenbeleuchtung muss separat erscheinen, wenn genannt.
+- Baustellenwasser/Wasseranschluss muss separat erscheinen, wenn genannt.
+- Spezialgeräte-Miete/Mietverlängerung muss separat erscheinen, wenn genannt.
+- Rückbau/Abbau/Logistik/Anfahrt muss separat kalkuliert werden.
+- Beispielstruktur:
+  1. Baustellenzufahrt / Zufahrtssicherung
+  2. Lagerflächen / Zwischenlager
+  3. Materialumschlag / Radlader / Stapler
+  4. Baustrom / Stromprovisorium / Beleuchtung
+  5. Baustellenwasser / Wasseranschluss
+  6. Spezialgeräte-Miete / Mietverlängerung
+  7. Kontrolle / Betrieb / Vorhaltung während Laufzeit
+  8. Rückbau / Abbau / Logistik / Anfahrt
+  9. Gemeinkosten
+  10. Risiko
+  11. Gewinn
+
 Spezialregel für Schutzmaßnahmen / Umwelt / Natur / Anwohner:
 - Wenn der LV-Text Schutzmaßnahmen, Lärmschutz, Staubschutz, Erschütterungsschutz, Baumschutz, Wurzelschutz, Gewässerschutz, Ölbindemittel, Havarie-Schutz, Anwohnerinformation, Beweissicherung oder Zustandsdokumentation enthält, kalkuliere NICHT als allgemeine Dokumentation oder Baustelleneinrichtung.
 - Diese Position muss als Schutzmaßnahmenpaket über Dauer, Aufbau, Kontrolle, Unterhaltung, Dokumentation und Rückbau kalkuliert werden.
@@ -2410,6 +2432,149 @@ JSON-Schema:
   const testingGuardContext =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
 
+  const logisticsFallbackContext =
+    /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
+
+  if (logisticsFallbackContext) {
+    const logisticsText = norm(
+      priceBreakdown
+        .map((x) => `${x.group} ${x.name} ${x.note}`)
+        .join(" ")
+    );
+
+    const missingRequiredLogisticsParts =
+      !/zufahrt|baustellenzufahrt|zufahrtssicherung/.test(logisticsText) ||
+      !/lagerfläche|lagerflaeche|zwischenlager|lagerflächen|lagerflaechen/.test(logisticsText) ||
+      !/materialumschlag|umschlag|radlader|stapler/.test(logisticsText) ||
+      !/baustrom|stromprovisorium|beleuchtung|baustellenbeleuchtung/.test(logisticsText) ||
+      !/baustellenwasser|wasseranschluss|bauwasser|wasser/.test(logisticsText) ||
+      !/spezialgeräte|spezialgeraete|miete|mietverlängerung|mietverlaengerung/.test(logisticsText) ||
+      !/kontrolle|betrieb|vorhaltung|laufzeit|unterhaltung/.test(logisticsText) ||
+      !/rückbau|rueckbau|abbau|logistik|anfahrt/.test(logisticsText);
+
+    const hasOnlyGenericLogistics =
+      priceBreakdown.length <= 3 ||
+      !/zufahrt|lager|umschlag|baustrom|beleuchtung|wasser|spezialgerät|spezialgeraet|miete|vorhaltung|rückbau|rueckbau/.test(logisticsText) ||
+      missingRequiredLogisticsParts;
+
+    if (hasOnlyGenericLogistics) {
+      priceBreakdown = [
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Baustellenzufahrt / Zufahrtssicherung",
+          unit: einheit,
+          qty: 1,
+          price: 1500,
+          total: 1500,
+          note: "Fallback: Zufahrt herstellen/sichern separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gemeinkosten",
+          name: "Lagerflächen / Zwischenlager",
+          unit: einheit,
+          qty: 1,
+          price: 1200,
+          total: 1200,
+          note: "Fallback: Lagerfläche/Zwischenlager separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Maschinen",
+          name: "Materialumschlag / Radlader / Stapler",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: Materialumschlag mit Gerät separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Material",
+          name: "Baustrom / Stromprovisorium / Beleuchtung",
+          unit: einheit,
+          qty: 1,
+          price: 1500,
+          total: 1500,
+          note: "Fallback: Baustrom/Beleuchtung über Laufzeit separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Material",
+          name: "Baustellenwasser / Wasseranschluss",
+          unit: einheit,
+          qty: 1,
+          price: 900,
+          total: 900,
+          note: "Fallback: Baustellenwasser/Wasseranschluss separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Spezialgeräte-Miete / Mietverlängerung",
+          unit: einheit,
+          qty: 1,
+          price: 2200,
+          total: 2200,
+          note: "Fallback: Spezialgeräte-Miete/Mietverlängerung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Personal",
+          name: "Kontrolle / Betrieb / Vorhaltung während Laufzeit",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: Kontrolle/Betrieb/Vorhaltung über Laufzeit separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "LKW / Transport",
+          name: "Rückbau / Abbau / Logistik / Anfahrt",
+          unit: einheit,
+          qty: 1,
+          price: projectDistanceKm > 0 ? 1200 : 900,
+          total: projectDistanceKm > 0 ? 1200 : 900,
+          note: `Fallback: Rückbau/Logistik separat angesetzt${projectDistanceKm > 0 ? `, Entfernung ${projectDistanceKm} km` : ""}.`,
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gemeinkosten",
+          name: "Gemeinkosten",
+          unit: einheit,
+          qty: 1,
+          price: 1600,
+          total: 1600,
+          note: "Fallback: Gemeinkosten.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Risiko",
+          name: "Risiko",
+          unit: einheit,
+          qty: 1,
+          price: 900,
+          total: 900,
+          note: "Fallback: Risiko wegen Logistik-/Vorhaltungsabhängigkeit.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gewinn",
+          name: "Gewinn",
+          unit: einheit,
+          qty: 1,
+          price: 1200,
+          total: 1200,
+          note: "Fallback: Gewinn.",
+        },
+      ];
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
+  }
+
   if (testingGuardContext && priceBreakdown.length) {
     const testingDirectGroups: PriceBreakdownGroup[] = [
       "Material",
@@ -2542,7 +2707,11 @@ JSON-Schema:
 
     const rowContextText = norm(`${kurztext} ${langtext}`);
 
+    const isLogisticsContext =
+      /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(rowContextText);
+
     const isProtectionContext =
+      !isLogisticsContext &&
       /schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz/.test(rowContextText);
 
     const isTemporarySupplyContext =
@@ -2550,6 +2719,7 @@ JSON-Schema:
       /notleitung|temporaer.*anschluss|temporär.*anschluss|temporaere.*anschluesse|temporäre.*anschlüsse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckpruefung|druckprüfung|absperrarmatur|formstueck|formstück/.test(rowContextText);
 
     const isProvisoriumContext =
+      !isLogisticsContext &&
       !isProtectionContext &&
       !isTemporarySupplyContext &&
       /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau|unterhalten|unterhaltung/.test(rowContextText);
@@ -2583,6 +2753,15 @@ JSON-Schema:
     const hasContainer = /container|baustelleneinrichtung/.test(contextBreakdownText);
     const hasUtilities = /baustrom|bauwasser|sanitaer|sanitär|toilette|wc/.test(contextBreakdownText);
     const hasTransport = /antransport|abtransport|transport|fahrt|fahrten|logistik|anfahrt/.test(contextBreakdownText);
+
+    const hasLogisticsAccess = /zufahrt|baustellenzufahrt|zufahrtssicherung|sicherung/.test(contextBreakdownText);
+    const hasLogisticsStorage = /lagerfläche|lagerflaeche|zwischenlager|lager/.test(contextBreakdownText);
+    const hasLogisticsHandling = /materialumschlag|umschlag|radlader|stapler/.test(contextBreakdownText);
+    const hasLogisticsPowerLight = /baustrom|stromprovisorium|beleuchtung|baustellenbeleuchtung|verteiler/.test(contextBreakdownText);
+    const hasLogisticsWater = /baustellenwasser|wasseranschluss|bauwasser/.test(contextBreakdownText);
+    const hasLogisticsRental = /spezialgeräte|spezialgeraete|miete|mietverlängerung|mietverlaengerung/.test(contextBreakdownText);
+    const hasLogisticsOperation = /kontrolle|betrieb|vorhaltung|laufzeit|unterhaltung/.test(contextBreakdownText);
+    const hasLogisticsRemoval = /rückbau|rueckbau|abbau|logistik|anfahrt/.test(contextBreakdownText);
 
     const hasProtectionNoiseDustVibration = /lärmschutz|laermschutz|staubschutz|erschütterung|erschuetterung/.test(contextBreakdownText);
     const hasProtectionTreeRoot = /baumschutz|wurzelschutz|baum|wurzel/.test(contextBreakdownText);
@@ -2628,6 +2807,38 @@ JSON-Schema:
     const hasTempSupplyControl = /kontrolle|kontroll|wartung|taeglich|täglich/.test(contextBreakdownText);
     const hasTempSupplyRemoval = /rueckbau|rückbau|trennung|abtransport|laden/.test(contextBreakdownText);
     const hasTempSupplyLogistics = /logistik|anfahrt|materialanlieferung|transport|abtransport/.test(contextBreakdownText);
+
+    if (isLogisticsContext && /baustellenzufahrt|zufahrtssicherung/.test(rowContextText) && !hasLogisticsAccess) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Baustellenzufahrt/Zufahrtssicherung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isLogisticsContext && /lagerfläche|lagerflaeche|zwischenlager/.test(rowContextText) && !hasLogisticsStorage) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Lagerfläche/Zwischenlager fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isLogisticsContext && /materialumschlag/.test(rowContextText) && !hasLogisticsHandling) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Materialumschlag/Radlader/Stapler fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isLogisticsContext && /baustrom|stromprovisorium|beleuchtung|baustellenbeleuchtung/.test(rowContextText) && !hasLogisticsPowerLight) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Baustrom/Stromprovisorium/Beleuchtung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isLogisticsContext && /baustellenwasser|wasseranschluss|bauwasser/.test(rowContextText) && !hasLogisticsWater) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Baustellenwasser/Wasseranschluss fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isLogisticsContext && /spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(rowContextText) && !hasLogisticsRental) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Spezialgeräte-Miete/Mietverlängerung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isLogisticsContext && projectDurationDays > 0 && !hasLogisticsOperation) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Kontrolle/Betrieb/Vorhaltung über die Laufzeit fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isLogisticsContext && !hasLogisticsRemoval) {
+      contextQualityWarnings.push("Context-Guard: Baustellenlogistik: Rückbau/Abbau/Logistik/Anfahrt fehlt oder ist nicht separat kalkuliert.");
+    }
 
     if (isProtectionContext && /lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz/.test(rowContextText) && !hasProtectionNoiseDustVibration) {
       contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: Lärm-/Staub-/Erschütterungsschutz fehlt oder ist nicht separat kalkuliert.");
@@ -2846,12 +3057,15 @@ JSON-Schema:
   const isTestingOpenAi =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
 
+  const isLogisticsOpenAi =
+    /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
+
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
     const msg = String(w || "");
 
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
 
-    return isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi || isTestingOpenAi
+    return isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi || isTestingOpenAi || isLogisticsOpenAi
       ? !/verkehrssicherung|rsa/i.test(msg)
       : true;
   });
@@ -2887,6 +3101,9 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isLogisticsReturn =
+    /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(returnContextText);
+
   const isProtectionReturn =
     /schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz/.test(returnContextText);
 
@@ -2932,8 +3149,10 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: isProtectionReturn
-      ? "Tiefbau / Schutzmaßnahmen"
+    gewerk: isLogisticsReturn
+      ? "Tiefbau / Baustellenlogistik"
+      : isProtectionReturn
+        ? "Tiefbau / Schutzmaßnahmen"
       : isTestingReturn
         ? "Tiefbau / Prüfungen"
       : isDisposalReturn
@@ -2949,8 +3168,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: isProtectionReturn
-      ? "Umwelt-, Natur- und Anwohnerschutz"
+    leistungsart: isLogisticsReturn
+      ? "Zufahrt / Lager / Baustellenversorgung"
+      : isProtectionReturn
+        ? "Umwelt-, Natur- und Anwohnerschutz"
       : isTestingReturn
         ? "Prüfung / Abnahme / technische Nachweise"
       : isDisposalReturn
@@ -2966,8 +3187,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: isProtectionReturn
-      ? "Schutzmaßnahmen mit Aufbau, Kontrolle, Dokumentation und Rückbau"
+    bauverfahren: isLogisticsReturn
+      ? "Logistik-, Lager- und Versorgungsmaßnahmen mit Vorhaltung und Rückbau"
+      : isProtectionReturn
+        ? "Schutzmaßnahmen mit Aufbau, Kontrolle, Dokumentation und Rückbau"
       : isTestingReturn
         ? "Technische Prüfung mit Spülung, TV-Inspektion, Dichtheitsprüfung und Dokumentation"
       : isDisposalReturn
