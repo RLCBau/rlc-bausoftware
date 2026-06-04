@@ -233,7 +233,11 @@ function contextSensitiveWarning(textRaw: any): string {
     return "Kontextabhängige Position: Kampfmittel/Altlasten/Bodenrisiken/Beweissicherung hängt stark von Verdachtslage, Sondierungsumfang, Bodenklasse, Analytik, Gutachter, Sicherheitsfreigabe, baubegleitender Kontrolle, Dokumentation und Haftungsrisiko ab. Historische Preise nur als Orientierung verwenden.";
   }
 
-  if (/(spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand)/i.test(text)) {
+  if (/(wasserhaltung|grundwasserabsenkung|baugrubenentwässerung|baugrubenentwaesserung|pumpensumpf|pumpenanlage|filterbrunnen|drainage|wasserableitung|einleitgenehmigung|dauerbetrieb|pumpenwartung|notstrom|ausfallsicherung|grundwasserhaltung)/i.test(text)) {
+    return "Kontextabhängige Position: Wasserhaltung/Grundwasser/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Filterbrunnen, Ableitung, Einleitgenehmigung, Wartung, Notstrom, Ausfallsicherung und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand)/i.test(text)) {
     return "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
   }
 
@@ -2967,8 +2971,155 @@ JSON-Schema:
     }
   }
 
+  const waterHoldingFallbackContext =
+    /wasserhaltung|grundwasserabsenkung|baugrubenentwässerung|baugrubenentwaesserung|pumpensumpf|pumpenanlage|filterbrunnen|drainage|wasserableitung|einleitgenehmigung|dauerbetrieb|pumpenwartung|notstrom|ausfallsicherung|grundwasserhaltung/.test(norm(`${kurztext} ${langtext}`));
+
+  if (waterHoldingFallbackContext) {
+    const waterText = norm(
+      priceBreakdown
+        .map((x) => `${x.group} ${x.name} ${x.note}`)
+        .join(" ")
+    );
+
+    const hasGenericAuthorityBreakdown =
+      /genehmigung|genehmigungen|behördenauflagen|behoerdenauflagen|verkehrsrechtliche anordnung|denkmalpflege|archäologie|archaeologie|sigeko|arbeitssicherheit|sicherheitskonzept|kampfmittel/.test(waterText);
+
+    const hasGenericSpecialCivilBreakdown =
+      /spezialtiefbau|spundwand|bohrpfahl|unterfangung|microtunneling|rohrvortrieb|pressung/.test(waterText);
+
+    const missingRequiredWaterParts =
+      !/pumpe|pumpenanlage|pumpensumpf/.test(waterText) ||
+      !/grundwasser|wasserhaltung|baugrubenentwässerung|baugrubenentwaesserung/.test(waterText) ||
+      !/ableitung|einleitgenehmigung/.test(waterText) ||
+      !/dauerbetrieb|wartung|kontrolle/.test(waterText) ||
+      !/notstrom|ausfallsicherung/.test(waterText);
+
+    if (
+      priceBreakdown.length < 8 ||
+      hasGenericAuthorityBreakdown ||
+      hasGenericSpecialCivilBreakdown ||
+      missingRequiredWaterParts
+    ) {
+      priceBreakdown = [
+        {
+          id: crypto.randomUUID(),
+          group: "LKW / Transport",
+          name: "Anfahrt / Einrichtung / Aufbau Wasserhaltung",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: Anfahrt, Einrichtung und Aufbau separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Maschinen",
+          name: "Pumpenanlage / Pumpensumpf / Filterbrunnen",
+          unit: einheit,
+          qty: 1,
+          price: 6800,
+          total: 6800,
+          note: "Fallback: Pumpenanlage, Pumpensumpf und Filterbrunnen separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Grundwasserabsenkung / Baugrubenentwässerung",
+          unit: einheit,
+          qty: 1,
+          price: 8500,
+          total: 8500,
+          note: "Fallback: Grundwasserabsenkung und Baugrubenentwässerung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Material",
+          name: "Drainage / Wasserableitung / Leitungen",
+          unit: einheit,
+          qty: 1,
+          price: 3200,
+          total: 3200,
+          note: "Fallback: Drainage, Wasserableitung und Leitungen separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Einleitgenehmigung / Wasserrecht / Nachweise",
+          unit: einheit,
+          qty: 1,
+          price: 2400,
+          total: 2400,
+          note: "Fallback: Einleitgenehmigung und Nachweise separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Personal",
+          name: "Dauerbetrieb / Kontrolle / Pumpenwartung",
+          unit: einheit,
+          qty: 1,
+          price: 5400,
+          total: 5400,
+          note: "Fallback: Dauerbetrieb, Kontrolle und Pumpenwartung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Maschinen",
+          name: "Notstrom / Ausfallsicherung",
+          unit: einheit,
+          qty: 1,
+          price: 2600,
+          total: 2600,
+          note: "Fallback: Notstrom und Ausfallsicherung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "LKW / Transport",
+          name: "Rückbau / Abbau / Abtransport",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: Rückbau, Abbau und Abtransport separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gemeinkosten",
+          name: "Gemeinkosten",
+          unit: einheit,
+          qty: 1,
+          price: 2800,
+          total: 2800,
+          note: "Fallback: Gemeinkosten.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Risiko",
+          name: "Risiko",
+          unit: einheit,
+          qty: 1,
+          price: 2600,
+          total: 2600,
+          note: "Fallback: Risiko wegen Wasserandrang, Dauerbetrieb und Ausfallrisiko.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gewinn",
+          name: "Gewinn",
+          unit: einheit,
+          qty: 1,
+          price: 3400,
+          total: 3400,
+          note: "Fallback: Gewinn.",
+        },
+      ];
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
+  }
+
   const authorityFallbackContext =
     !riskSoilFallbackContext &&
+    !waterHoldingFallbackContext &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|freigaben/.test(norm(`${kurztext} ${langtext}`));
 
   if (authorityFallbackContext) {
@@ -3741,10 +3892,12 @@ JSON-Schema:
     /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
 
   const isAuthorityOpenAi =
+    !isWasserhaltungOpenAi &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
 
   const isSpecialCivilOpenAi =
-    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(`${kurztext} ${langtext}`));
+    !isWasserhaltungOpenAi &&
+    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(`${kurztext} ${langtext}`));
 
   const isHouseConnectionOpenAi =
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(norm(`${kurztext} ${langtext}`));
@@ -3762,13 +3915,15 @@ JSON-Schema:
       : true;
   });
 
-  const warnings = [
+  let warnings = [
     ...baseWarnings,
     contextSensitiveOpenAi
       ? isHouseConnectionOpenAi
         ? "Kontextabhängige Position: Hausanschluss/Gebäudeeinführung/Arbeiten im Bestand hängt stark von Zugang, Innenhof, Privatgrund, Handschachtung, Kernbohrung, Hauseinführung, Schutz vorhandener Oberflächen, Eigentümerabstimmung, Wiederherstellung und Dokumentation ab. Historische Preise nur als Orientierung verwenden."
-        : isSpecialCivilOpenAi
-          ? "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden."
+        : isWasserhaltungOpenAi
+          ? "Kontextabhängige Position: Wasserhaltung/Grundwasser/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Filterbrunnen, Ableitung, Einleitgenehmigung, Wartung, Notstrom, Ausfallsicherung und Rückbau ab. Historische Preise nur als Orientierung verwenden."
+          : isSpecialCivilOpenAi
+            ? "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden."
           : isErschwernisOpenAi
           ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
           : isTestingOpenAi
@@ -3800,13 +3955,18 @@ JSON-Schema:
   const isHouseConnectionReturn =
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(returnContextText);
 
+  const isWaterHoldingReturn =
+    /wasserhaltung|grundwasserabsenkung|baugrubenentwässerung|baugrubenentwaesserung|pumpensumpf|pumpenanlage|filterbrunnen|drainage|wasserableitung|einleitgenehmigung|dauerbetrieb|pumpenwartung|notstrom|ausfallsicherung|grundwasserhaltung/.test(returnContextText);
+
   const isSpecialCivilReturn =
-    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(returnContextText);
+    !isWaterHoldingReturn &&
+    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(returnContextText);
 
   const isRiskSoilReturn =
     /kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenklasse unbekannt|bodenanalyse|gutachter|sicherheitsfreigabe|beweissicherung|zustandsaufnahme|rissprotokoll|baubegleitende kontrolle|bodenrisiko|bodenrisiken/.test(returnContextText);
 
   const isAuthorityReturn =
+    !isWaterHoldingReturn &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(returnContextText);
 
   const isLogisticsReturn =
@@ -3857,8 +4017,10 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: isRiskSoilReturn
-      ? "Tiefbau / Kampfmittel & Altlasten"
+    gewerk: isWaterHoldingReturn
+      ? "Tiefbau / Wasserhaltung"
+      : isRiskSoilReturn
+        ? "Tiefbau / Kampfmittel & Altlasten"
       : isHouseConnectionReturn
         ? "Tiefbau / Hausanschlüsse & Bestand"
       : isSpecialCivilReturn
@@ -3884,8 +4046,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: isRiskSoilReturn
-      ? "Kampfmittel / Altlasten / Bodenrisiken / Beweissicherung"
+    leistungsart: isWaterHoldingReturn
+      ? "Wasserhaltung / Grundwasser / Pumpen / Baugrubenentwässerung"
+      : isRiskSoilReturn
+        ? "Kampfmittel / Altlasten / Bodenrisiken / Beweissicherung"
       : isHouseConnectionReturn
         ? "Hausanschluss / Gebäudeeinführung / Arbeiten im Bestand"
       : isSpecialCivilReturn
@@ -3911,8 +4075,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: isRiskSoilReturn
-      ? "Baubegleitende Sondierung, Analyse, Gutachterleistung, Freigabe und Dokumentation"
+    bauverfahren: isWaterHoldingReturn
+      ? "Temporäre Wasserhaltung mit Pumpenanlage, Ableitung, Wartung, Notstrom und Rückbau"
+      : isRiskSoilReturn
+        ? "Baubegleitende Sondierung, Analyse, Gutachterleistung, Freigabe und Dokumentation"
       : isHouseConnectionReturn
         ? "Gebäudenahe Ausführung mit Handschachtung, Kernbohrung, Hauseinführung und Wiederherstellung"
       : isSpecialCivilReturn
