@@ -218,16 +218,20 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
 
   if (
     unit === "Psch" &&
-    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text)
+    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben|spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage)/i.test(text)
   ) {
     return true;
   }
 
-  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text);
+  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben|spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage)/i.test(text);
 }
 
 function contextSensitiveWarning(textRaw: any): string {
   const text = norm(textRaw);
+
+  if (/(spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage)/i.test(text)) {
+    return "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
+  }
 
   if (/(genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text)) {
     return "Kontextabhängige Position: Behörden/Genehmigungen/Auflagen/Sicherheit hängt stark von Laufzeit, Auflagen, Terminen, Fachstellen, verkehrsrechtlicher Anordnung, SiGeKo, Kampfmittel, Denkmalpflege, Freigaben und Dokumentationspflichten ab. Historische Preise nur als Orientierung verwenden.";
@@ -980,14 +984,19 @@ function applyPlausibilityGuard(row: InputRow, matches: DbMatch[], aiRow: any, f
    * X84 bleibt Vergleichswert im Frontend, aber nicht Server-Wahrheit für finalUnitPrice.
    */
 
-  if (!isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && minEp > 0 && guardedEp > 0 && guardedEp < minEp) {
+  const isSpecialCivilGuardContext =
+    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/i.test(
+      norm(`${s((row as any).kurztext)} ${s((row as any).langtext)}`)
+    );
+
+  if (!isSpecialCivilGuardContext && !isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && minEp > 0 && guardedEp > 0 && guardedEp < minEp) {
     notes.push(
       `Plausibilitätsgrenze aktiv: KI-EP ${round2(guardedEp)} EUR liegt unter Mindestansatz ${round2(minEp)} EUR.`
     );
     guardedEp = minEp;
   }
 
-  if (!isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && maxEp > 0 && guardedEp > maxEp) {
+  if (!isSpecialCivilGuardContext && !isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && maxEp > 0 && guardedEp > maxEp) {
     notes.push(
       `Plausibilitätsdeckel aktiv: KI-EP ${round2(guardedEp)} EUR liegt über dem fachlichen Maximalansatz ${round2(maxEp)} EUR. Finaler EP wurde gedeckelt.`
     );
@@ -1823,6 +1832,27 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Spezialtiefbau / schwierige Bauverfahren:
+- Wenn der LV-Text Spezialtiefbau, Baugrubenverbau, Spundwand, Bohrpfahl, Unterfangung, komplexe Wasserhaltung, Bodenverbesserung, HDI, Injektion, Pressung, Microtunneling oder Rohrvortrieb enthält, kalkuliere NICHT als Asphaltzulage, Nebenleistung, einfache Rohrleitung oder Firmenkalibrierung.
+- Diese Position muss als komplexes Spezialtiefbauverfahren mit Geräteantransport, Spezialgerät, Fachkolonne, Verbau, Wasserhaltung, Vortrieb/Pressung, Dokumentation, Risiko und Rückbau kalkuliert werden.
+- Baugrubenverbau/Spundwand/Bohrpfahl/Unterfangung müssen separat erscheinen, wenn genannt.
+- Wasserhaltung komplex muss separat erscheinen, wenn genannt.
+- Bodenverbesserung/HDI/Injektion müssen separat erscheinen, wenn genannt.
+- Pressung/Microtunneling/Rohrvortrieb müssen separat erscheinen, wenn genannt.
+- Spezialgeräte-Antransport, Einrichtung, Rückbau und Dokumentation müssen separat erscheinen.
+- Beispielstruktur:
+  1. Spezialgeräte-Antransport / Einrichtung
+  2. Baugrubenverbau / Spundwand / Bohrpfahl / Unterfangung
+  3. Komplexe Wasserhaltung
+  4. Bodenverbesserung / HDI / Injektion
+  5. Pressung / Microtunneling / Rohrvortrieb
+  6. Spezialtiefbau-Kolonne / Bauleitung / Vermessung
+  7. Rückbau / Abbau / Logistik
+  8. Dokumentation / Nachweise
+  9. Gemeinkosten
+  10. Risiko
+  11. Gewinn
+
 Spezialregel für Behörden / Genehmigungen / Auflagen / Sicherheit:
 - Wenn der LV-Text Genehmigungen, Behördenauflagen, verkehrsrechtliche Anordnung, Abstimmung mit Behörden, SiGeKo, Arbeitssicherheit, Sicherheitskonzept, Denkmalpflege, archäologische Begleitung, Kampfmittelsondierung, Freigabe oder Dokumentation enthält, kalkuliere NICHT als normale Dokumentation, Vorhaltung oder allgemeine Baustelleneinrichtung.
 - Diese Position muss als Behörden-, Sicherheits- und Freigabemanagement über Laufzeit, Termine, externe Fachstellen, Unterlagen, Begehungen und Dokumentation kalkuliert werden.
@@ -2461,6 +2491,167 @@ JSON-Schema:
 
   const testingGuardContext =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
+
+  const specialCivilFallbackContext =
+    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(`${kurztext} ${langtext}`));
+
+  if (specialCivilFallbackContext) {
+    const specialCivilTotal = sumBreakdown(priceBreakdown);
+    const specialCivilGrossTotal =
+      normUnit(einheit) === "m" && menge > 1
+        ? round2(specialCivilTotal * menge)
+        : specialCivilTotal;
+
+    const specialCivilText = norm(
+      priceBreakdown
+        .map((x) => `${x.group} ${x.name} ${x.note}`)
+        .join(" ")
+    );
+
+    const missingRequiredSpecialCivilParts =
+      !/antransport|einrichtung|spezialgerät|spezialgeraet/.test(specialCivilText) ||
+      !/verbau|spundwand|bohrpfahl|unterfangung/.test(specialCivilText) ||
+      !/wasserhaltung|pumpen/.test(specialCivilText) ||
+      !/bodenverbesserung|hdi|injektion/.test(specialCivilText) ||
+      !/pressung|microtunneling|rohrvortrieb|vortrieb/.test(specialCivilText) ||
+      !/kolonne|bauleitung|vermessung/.test(specialCivilText) ||
+      !/rückbau|rueckbau|abbau|logistik/.test(specialCivilText);
+
+    if (
+      priceBreakdown.length === 0 ||
+      missingRequiredSpecialCivilParts ||
+      specialCivilTotal <= 0 ||
+      specialCivilGrossTotal < 75000
+    ) {
+      priceBreakdown = [
+        {
+          id: crypto.randomUUID(),
+          group: "LKW / Transport",
+          name: "Spezialgeräte-Antransport / Einrichtung",
+          unit: einheit,
+          qty: 1,
+          price: 6500,
+          total: 6500,
+          note: "Fallback: Spezialgerät-Antransport und Einrichtung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Baugrubenverbau / Spundwand / Bohrpfahl / Unterfangung",
+          unit: einheit,
+          qty: 1,
+          price: 12000,
+          total: 12000,
+          note: "Fallback: komplexer Verbau separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Maschinen",
+          name: "Komplexe Wasserhaltung / Pumpen",
+          unit: einheit,
+          qty: 1,
+          price: 4500,
+          total: 4500,
+          note: "Fallback: Wasserhaltung/Pumpen separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Bodenverbesserung / HDI / Injektion",
+          unit: einheit,
+          qty: 1,
+          price: 7000,
+          total: 7000,
+          note: "Fallback: Bodenverbesserung/HDI/Injektion separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Pressung / Microtunneling / Rohrvortrieb",
+          unit: einheit,
+          qty: 1,
+          price: 18000,
+          total: 18000,
+          note: "Fallback: Vortrieb/Pressung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Personal",
+          name: "Spezialtiefbau-Kolonne / Bauleitung / Vermessung",
+          unit: einheit,
+          qty: 1,
+          price: 9500,
+          total: 9500,
+          note: "Fallback: Fachkolonne/Bauleitung/Vermessung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "LKW / Transport",
+          name: "Rückbau / Abbau / Logistik",
+          unit: einheit,
+          qty: 1,
+          price: 4000,
+          total: 4000,
+          note: "Fallback: Rückbau/Logistik separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Personal",
+          name: "Dokumentation / Nachweise",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: Dokumentation/Nachweise separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gemeinkosten",
+          name: "Gemeinkosten",
+          unit: einheit,
+          qty: 1,
+          price: 6000,
+          total: 6000,
+          note: "Fallback: Gemeinkosten.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Risiko",
+          name: "Risiko",
+          unit: einheit,
+          qty: 1,
+          price: 5500,
+          total: 5500,
+          note: "Fallback: hohes Risiko wegen Spezialtiefbau/beengter Bauweise.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gewinn",
+          name: "Gewinn",
+          unit: einheit,
+          qty: 1,
+          price: 7000,
+          total: 7000,
+          note: "Fallback: Gewinn.",
+        },
+      ];
+
+      if (normUnit(einheit) === "m" && menge > 1) {
+        for (const line of priceBreakdown) {
+          const totalPauschal = n(line.total);
+          const epPerUnit = round2(totalPauschal / menge);
+
+          line.unit = einheit;
+          line.qty = 1;
+          line.price = epPerUnit;
+          line.total = epPerUnit;
+          line.note = `${s(line.note)} · RLC Spezialtiefbau: Pauschalansatz auf ${menge} ${einheit} umgelegt.`;
+        }
+      }
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
+  }
 
   const authorityFallbackContext =
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
@@ -3237,11 +3428,15 @@ JSON-Schema:
   const isAuthorityOpenAi =
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
 
+  const isSpecialCivilOpenAi =
+    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(`${kurztext} ${langtext}`));
+
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
     const msg = String(w || "");
 
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
     if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
+    if (isSpecialCivilOpenAi && /erschwernis|beengte bauweise/i.test(msg)) return false;
 
     return isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi || isTestingOpenAi || isLogisticsOpenAi
       ? !/verkehrssicherung|rsa/i.test(msg)
@@ -3251,9 +3446,11 @@ JSON-Schema:
   const warnings = [
     ...baseWarnings,
     contextSensitiveOpenAi
-      ? isErschwernisOpenAi
-        ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
-        : isTestingOpenAi
+      ? isSpecialCivilOpenAi
+        ? "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden."
+        : isErschwernisOpenAi
+          ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
+          : isTestingOpenAi
           ? "Kontextabhängige Position: Prüfungen/Abnahmen/technische Nachweise hängen stark von Leitungslänge, DN, Prüfverfahren, Spülung, TV-Inspektion, Geräteeinsatz, Auswertung, Protokollen, Abnahme und Anfahrt ab. Historische Preise nur als Orientierung verwenden."
           : isDisposalOpenAi
             ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
@@ -3279,6 +3476,9 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isSpecialCivilReturn =
+    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(returnContextText);
+
   const isAuthorityReturn =
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(returnContextText);
 
@@ -3330,8 +3530,10 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: isAuthorityReturn
-      ? "Tiefbau / Behörden & Sicherheit"
+    gewerk: isSpecialCivilReturn
+      ? "Tiefbau / Spezialtiefbau"
+      : isAuthorityReturn
+        ? "Tiefbau / Behörden & Sicherheit"
       : isLogisticsReturn
         ? "Tiefbau / Baustellenlogistik"
       : isProtectionReturn
@@ -3351,8 +3553,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: isAuthorityReturn
-      ? "Genehmigungen / Auflagen / Sicherheitskoordination"
+    leistungsart: isSpecialCivilReturn
+      ? "Spezialtiefbau / schwierige Bauverfahren"
+      : isAuthorityReturn
+        ? "Genehmigungen / Auflagen / Sicherheitskoordination"
       : isLogisticsReturn
         ? "Zufahrt / Lager / Baustellenversorgung"
       : isProtectionReturn
@@ -3372,8 +3576,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: isAuthorityReturn
-      ? "Behörden-, Sicherheits- und Freigabemanagement mit Dokumentation"
+    bauverfahren: isSpecialCivilReturn
+      ? "Verbau, Wasserhaltung, Bodenverbesserung, Pressung und Rohrvortrieb"
+      : isAuthorityReturn
+        ? "Behörden-, Sicherheits- und Freigabemanagement mit Dokumentation"
       : isLogisticsReturn
         ? "Logistik-, Lager- und Versorgungsmaßnahmen mit Vorhaltung und Rückbau"
       : isProtectionReturn
@@ -3774,6 +3980,9 @@ async function calcSmartRow(
       s(row.einheit)
     );
 
+    const technicalSpecialCivilSensitive =
+      /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(technicalContextText));
+
 const technicalRecipeInput =
     x83PriorityKurztext.includes("fsk korrigieren") ||
     (
@@ -3788,7 +3997,7 @@ const technicalRecipeInput =
 
   const technicalRecipeRow = await calcRecipeKalkulationRow(technicalRecipeInput);
 
-  if (!technicalContextSensitive && technicalRecipeRow?.source === "technical-parser") {
+  if (!technicalContextSensitive && !technicalSpecialCivilSensitive && technicalRecipeRow?.source === "technical-parser") {
     const technicalRow = {
       ...technicalRecipeRow,
       source: "technical-parser",
@@ -3835,7 +4044,7 @@ const technicalRecipeInput =
    */
   const recipeRow = await calcRecipeKalkulationRow(row);
 
-  if (!technicalContextSensitive && recipeRow) {
+  if (!technicalContextSensitive && !technicalSpecialCivilSensitive && recipeRow) {
     const guardedRecipeRow = applyPlausibilityGuard(
       row,
       matches,
