@@ -218,16 +218,24 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
 
   if (
     unit === "Psch" &&
-    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text)
+    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text)
   ) {
     return true;
   }
 
-  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text);
+  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text);
 }
 
 function contextSensitiveWarning(textRaw: any): string {
   const text = norm(textRaw);
+
+  if (/(genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text)) {
+    return "Kontextabhängige Position: Behörden/Genehmigungen/Auflagen/Sicherheit hängt stark von Laufzeit, Auflagen, Terminen, Fachstellen, verkehrsrechtlicher Anordnung, SiGeKo, Kampfmittel, Denkmalpflege, Freigaben und Dokumentationspflichten ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text)) {
+    return "Kontextabhängige Position: Baustellenlogistik/Zufahrt/Lager/Versorgung hängt stark von Bauzeit, Zufahrt, Lagerflächen, Baustrom, Wasser, Beleuchtung, Gerätemiete, Betrieb, Kontrolle, Rückbau und Logistik ab. Historische Preise nur als Orientierung verwenden.";
+  }
 
   if (/(schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text)) {
     return "Kontextabhängige Position: Schutzmaßnahmen/Umwelt/Natur/Anwohner hängen stark von Bauzeit, Auflagen, Schutzumfang, Kontrollintervallen, Dokumentation, Rückbau, Risiken und örtlichen Bedingungen ab. Historische Preise nur als Orientierung verwenden.";
@@ -1815,6 +1823,28 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Behörden / Genehmigungen / Auflagen / Sicherheit:
+- Wenn der LV-Text Genehmigungen, Behördenauflagen, verkehrsrechtliche Anordnung, Abstimmung mit Behörden, SiGeKo, Arbeitssicherheit, Sicherheitskonzept, Denkmalpflege, archäologische Begleitung, Kampfmittelsondierung, Freigabe oder Dokumentation enthält, kalkuliere NICHT als normale Dokumentation, Vorhaltung oder allgemeine Baustelleneinrichtung.
+- Diese Position muss als Behörden-, Sicherheits- und Freigabemanagement über Laufzeit, Termine, externe Fachstellen, Unterlagen, Begehungen und Dokumentation kalkuliert werden.
+- Genehmigungen/Behördenauflagen müssen separat erscheinen.
+- Verkehrsrechtliche Anordnung muss separat erscheinen.
+- SiGeKo/Arbeitssicherheit/Sicherheitskonzept müssen separat erscheinen.
+- Denkmalpflege/archäologische Begleitung müssen separat erscheinen.
+- Kampfmittelsondierung/Freigabe muss separat erscheinen.
+- Behördentermine/Abstimmung/Dokumentation müssen separat erscheinen.
+- Beispielstruktur:
+  1. Genehmigungen / Behördenauflagen
+  2. Verkehrsrechtliche Anordnung
+  3. Behördenabstimmung / Termine / Freigaben
+  4. SiGeKo / Arbeitssicherheit / Sicherheitskonzept
+  5. Denkmalpflege / archäologische Begleitung
+  6. Kampfmittelsondierung / Freigabe
+  7. Dokumentation / Unterlagen / Nachweise
+  8. Anfahrt / Logistik
+  9. Gemeinkosten
+  10. Risiko
+  11. Gewinn
+
 Spezialregel für Baustellenlogistik / Zufahrt / Lager / Versorgung:
 - Wenn der LV-Text Baustellenlogistik, Baustellenzufahrt, Zufahrtssicherung, Lagerflächen, Zwischenlager, Materialumschlag, Baustrom, Baustellenbeleuchtung, Stromprovisorium, Baustellenwasser, Spezialgeräte-Miete oder Mietverlängerung enthält, kalkuliere NICHT als Provisorium/Baustraße und NICHT als allgemeine Baustelleneinrichtung.
 - Diese Position muss als Logistik-, Lager- und Versorgungsmaßnahme über Bauzeit, Vorhaltung, Betrieb, Kontrolle und Rückbau kalkuliert werden.
@@ -2432,6 +2462,144 @@ JSON-Schema:
   const testingGuardContext =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
 
+  const authorityFallbackContext =
+    /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
+
+  if (authorityFallbackContext) {
+    const authorityText = norm(
+      priceBreakdown
+        .map((x) => `${x.group} ${x.name} ${x.note}`)
+        .join(" ")
+    );
+
+    const missingRequiredAuthorityParts =
+      !/genehmigung|behörde|behoerde|auflage/.test(authorityText) ||
+      !/verkehrsrechtliche anordnung|verkehrsrechtlich/.test(authorityText) ||
+      !/sigeko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter/.test(authorityText) ||
+      !/denkmal|archäologisch|archaeologisch/.test(authorityText) ||
+      !/kampfmittel|sondierung|freigabe/.test(authorityText) ||
+      !/dokumentation|unterlagen|nachweise/.test(authorityText);
+
+    const authorityTotal = sumBreakdown(priceBreakdown);
+
+    if (priceBreakdown.length <= 5 || missingRequiredAuthorityParts || authorityTotal > 60000) {
+      priceBreakdown = [
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Genehmigungen / Behördenauflagen",
+          unit: einheit,
+          qty: 1,
+          price: 2200,
+          total: 2200,
+          note: "Fallback: Genehmigungen/Behördenauflagen separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Verkehrsrechtliche Anordnung",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: verkehrsrechtliche Anordnung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Personal",
+          name: "Behördenabstimmung / Termine / Freigaben",
+          unit: einheit,
+          qty: 1,
+          price: 3600,
+          total: 3600,
+          note: "Fallback: Behördenabstimmung über Laufzeit separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "SiGeKo / Arbeitssicherheit / Sicherheitskonzept",
+          unit: einheit,
+          qty: 1,
+          price: 4200,
+          total: 4200,
+          note: "Fallback: Sicherheitskoordination separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Denkmalpflege / archäologische Begleitung",
+          unit: einheit,
+          qty: 1,
+          price: 3500,
+          total: 3500,
+          note: "Fallback: Denkmalpflege/Archäologie separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Kampfmittelsondierung / Freigabe",
+          unit: einheit,
+          qty: 1,
+          price: 6500,
+          total: 6500,
+          note: "Fallback: Kampfmittelsondierung/Freigabe separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Personal",
+          name: "Dokumentation / Unterlagen / Nachweise",
+          unit: einheit,
+          qty: 1,
+          price: 2400,
+          total: 2400,
+          note: "Fallback: Dokumentation/Nachweise separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "LKW / Transport",
+          name: "Anfahrt / Logistik / Ortstermine",
+          unit: einheit,
+          qty: 1,
+          price: projectDistanceKm > 0 ? 1200 : 900,
+          total: projectDistanceKm > 0 ? 1200 : 900,
+          note: `Fallback: Ortstermine/Anfahrt separat angesetzt${projectDistanceKm > 0 ? `, Entfernung ${projectDistanceKm} km` : ""}.`,
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gemeinkosten",
+          name: "Gemeinkosten",
+          unit: einheit,
+          qty: 1,
+          price: 2500,
+          total: 2500,
+          note: "Fallback: Gemeinkosten.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Risiko",
+          name: "Risiko",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: Risiko wegen Behörden-/Freigabeabhängigkeit.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gewinn",
+          name: "Gewinn",
+          unit: einheit,
+          qty: 1,
+          price: 2400,
+          total: 2400,
+          note: "Fallback: Gewinn.",
+        },
+      ];
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
+  }
+
   const logisticsFallbackContext =
     /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
 
@@ -2707,7 +2875,11 @@ JSON-Schema:
 
     const rowContextText = norm(`${kurztext} ${langtext}`);
 
+    const isAuthorityContext =
+      /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(rowContextText);
+
     const isLogisticsContext =
+      !isAuthorityContext &&
       /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(rowContextText);
 
     const isProtectionContext =
@@ -2734,11 +2906,13 @@ JSON-Schema:
       /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(rowContextText);
 
     const isDocumentationContext =
+      !isAuthorityContext &&
       !isProtectionContext &&
       !isTestingContext &&
       /dokumentation|fotodokumentation|aufmass|aufmaß|bestandsplan|bestandsplaene|bestandspläne|vermessung|vermessungsdaten|as-built|as built|uebergabeunterlagen|übergabeunterlagen|behoerden|behörden|auftraggeber/.test(rowContextText);
 
     const isVorhaltungContext =
+      !isAuthorityContext &&
       !isProtectionContext &&
       !isTestingContext &&
       /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|freigabe|bauablaufstoerung|bauablaufstörung/.test(rowContextText);
@@ -3060,10 +3234,14 @@ JSON-Schema:
   const isLogisticsOpenAi =
     /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
 
+  const isAuthorityOpenAi =
+    /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
+
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
     const msg = String(w || "");
 
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
+    if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
 
     return isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi || isTestingOpenAi || isLogisticsOpenAi
       ? !/verkehrssicherung|rsa/i.test(msg)
@@ -3101,6 +3279,9 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isAuthorityReturn =
+    /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(returnContextText);
+
   const isLogisticsReturn =
     /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(returnContextText);
 
@@ -3149,8 +3330,10 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: isLogisticsReturn
-      ? "Tiefbau / Baustellenlogistik"
+    gewerk: isAuthorityReturn
+      ? "Tiefbau / Behörden & Sicherheit"
+      : isLogisticsReturn
+        ? "Tiefbau / Baustellenlogistik"
       : isProtectionReturn
         ? "Tiefbau / Schutzmaßnahmen"
       : isTestingReturn
@@ -3168,8 +3351,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: isLogisticsReturn
-      ? "Zufahrt / Lager / Baustellenversorgung"
+    leistungsart: isAuthorityReturn
+      ? "Genehmigungen / Auflagen / Sicherheitskoordination"
+      : isLogisticsReturn
+        ? "Zufahrt / Lager / Baustellenversorgung"
       : isProtectionReturn
         ? "Umwelt-, Natur- und Anwohnerschutz"
       : isTestingReturn
@@ -3187,8 +3372,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: isLogisticsReturn
-      ? "Logistik-, Lager- und Versorgungsmaßnahmen mit Vorhaltung und Rückbau"
+    bauverfahren: isAuthorityReturn
+      ? "Behörden-, Sicherheits- und Freigabemanagement mit Dokumentation"
+      : isLogisticsReturn
+        ? "Logistik-, Lager- und Versorgungsmaßnahmen mit Vorhaltung und Rückbau"
       : isProtectionReturn
         ? "Schutzmaßnahmen mit Aufbau, Kontrolle, Dokumentation und Rückbau"
       : isTestingReturn
