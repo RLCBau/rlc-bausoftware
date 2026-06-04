@@ -229,6 +229,10 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
 function contextSensitiveWarning(textRaw: any): string {
   const text = norm(textRaw);
 
+  if (/(kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenklasse unbekannt|bodenanalyse|gutachter|sicherheitsfreigabe|beweissicherung|zustandsaufnahme|rissprotokoll|baubegleitende kontrolle|bodenrisiko|bodenrisiken)/i.test(text)) {
+    return "Kontextabhängige Position: Kampfmittel/Altlasten/Bodenrisiken/Beweissicherung hängt stark von Verdachtslage, Sondierungsumfang, Bodenklasse, Analytik, Gutachter, Sicherheitsfreigabe, baubegleitender Kontrolle, Dokumentation und Haftungsrisiko ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
   if (/(spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand)/i.test(text)) {
     return "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
   }
@@ -1877,6 +1881,25 @@ Spezialregel für Spezialtiefbau / schwierige Bauverfahren:
   10. Risiko
   11. Gewinn
 
+Spezialregel für Kampfmittel / Altlasten / Bodenrisiken / Beweissicherung:
+- Wenn der LV-Text Kampfmittel, Kampfmittelsondierung, Altlasten, Bodenkontamination, Bodenklasse unbekannt, Bodenanalyse, Gutachter, Sicherheitsfreigabe, Beweissicherung, Zustandsaufnahme, Rissprotokoll oder baubegleitende Kontrolle enthält, kalkuliere NICHT als allgemeine Behörden-/Genehmigungsposition.
+- Diese Position muss als Risiko-/Gutachter-/Sondierungsleistung mit Fachfirma, Analyse, Freigabe, Beweissicherung und baubegleitender Kontrolle kalkuliert werden.
+- Kampfmittelsondierung/Sicherheitsfreigabe muss separat erscheinen.
+- Altlasten/Bodenkontamination/Bodenanalyse muss separat erscheinen.
+- Gutachter/Fachfirma muss separat erscheinen.
+- Beweissicherung/Zustandsaufnahme/Rissprotokoll muss separat erscheinen.
+- Baubegleitende Kontrolle muss separat erscheinen.
+- Beispielstruktur:
+  1. Anfahrt / Einrichtung / Koordination
+  2. Kampfmittelsondierung / Sicherheitsfreigabe
+  3. Altlastenprüfung / Bodenkontamination / Bodenanalyse
+  4. Gutachter / Fachfirma / baubegleitende Kontrolle
+  5. Beweissicherung / Zustandsaufnahme / Rissprotokoll
+  6. Dokumentation / Nachweise / Freigabeunterlagen
+  7. Gemeinkosten
+  8. Risiko
+  9. Gewinn
+
 Spezialregel für Behörden / Genehmigungen / Auflagen / Sicherheit:
 - Wenn der LV-Text Genehmigungen, Behördenauflagen, verkehrsrechtliche Anordnung, Abstimmung mit Behörden, SiGeKo, Arbeitssicherheit, Sicherheitskonzept, Denkmalpflege, archäologische Begleitung, Kampfmittelsondierung, Freigabe oder Dokumentation enthält, kalkuliere NICHT als normale Dokumentation, Vorhaltung oder allgemeine Baustelleneinrichtung.
 - Diese Position muss als Behörden-, Sicherheits- und Freigabemanagement über Laufzeit, Termine, externe Fachstellen, Unterlagen, Begehungen und Dokumentation kalkuliert werden.
@@ -2516,6 +2539,133 @@ JSON-Schema:
   const testingGuardContext =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
 
+  const riskSoilFallbackContext =
+    /kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenklasse unbekannt|bodenanalyse|gutachter|sicherheitsfreigabe|beweissicherung|zustandsaufnahme|rissprotokoll|baubegleitende kontrolle|bodenrisiko|bodenrisiken/.test(norm(`${kurztext} ${langtext}`));
+
+  if (riskSoilFallbackContext) {
+    const riskSoilText = norm(
+      priceBreakdown
+        .map((x) => `${x.group} ${x.name} ${x.note}`)
+        .join(" ")
+    );
+
+    const riskSoilTotal = sumBreakdown(priceBreakdown);
+
+    const hasGenericAuthorityBreakdown =
+      /genehmigung|genehmigungen|behördenauflagen|behoerdenauflagen|verkehrsrechtliche anordnung|denkmalpflege|archäologie|archaeologie|sigeko|arbeitssicherheit|sicherheitskonzept/.test(riskSoilText);
+
+    const missingRequiredRiskSoilParts =
+      !/anfahrt|einrichtung|koordination/.test(riskSoilText) ||
+      !/kampfmittel|sondierung|sicherheitsfreigabe|freigabe/.test(riskSoilText) ||
+      !/altlast|bodenkontamination|bodenanalyse|bodenklasse/.test(riskSoilText) ||
+      !/gutachter|fachfirma|baubegleitende kontrolle/.test(riskSoilText) ||
+      !/beweissicherung|zustandsaufnahme|rissprotokoll/.test(riskSoilText) ||
+      !/dokumentation|nachweise|freigabeunterlagen/.test(riskSoilText);
+
+    if (
+      priceBreakdown.length < 8 ||
+      hasGenericAuthorityBreakdown ||
+      missingRequiredRiskSoilParts ||
+      riskSoilTotal < 26000 ||
+      riskSoilTotal > 46000
+    ) {
+      priceBreakdown = [
+        {
+          id: crypto.randomUUID(),
+          group: "LKW / Transport",
+          name: "Anfahrt / Einrichtung / Koordination",
+          unit: einheit,
+          qty: 1,
+          price: 1800,
+          total: 1800,
+          note: "Fallback: Anfahrt, Einrichtung und Koordination separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Kampfmittelsondierung / Sicherheitsfreigabe",
+          unit: einheit,
+          qty: 1,
+          price: 8500,
+          total: 8500,
+          note: "Fallback: Kampfmittelsondierung und Sicherheitsfreigabe separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Altlastenprüfung / Bodenkontamination / Bodenanalyse",
+          unit: einheit,
+          qty: 1,
+          price: 7200,
+          total: 7200,
+          note: "Fallback: Bodenanalyse/Altlastenprüfung separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Gutachter / Fachfirma / baubegleitende Kontrolle",
+          unit: einheit,
+          qty: 1,
+          price: 6200,
+          total: 6200,
+          note: "Fallback: Gutachter/Fachfirma/baubegleitende Kontrolle separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Fremdleistung",
+          name: "Beweissicherung / Zustandsaufnahme / Rissprotokoll",
+          unit: einheit,
+          qty: 1,
+          price: 4200,
+          total: 4200,
+          note: "Fallback: Beweissicherung/Zustandsaufnahme/Rissprotokoll separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Personal",
+          name: "Dokumentation / Nachweise / Freigabeunterlagen",
+          unit: einheit,
+          qty: 1,
+          price: 2400,
+          total: 2400,
+          note: "Fallback: Dokumentation und Freigabeunterlagen separat angesetzt.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gemeinkosten",
+          name: "Gemeinkosten",
+          unit: einheit,
+          qty: 1,
+          price: 2600,
+          total: 2600,
+          note: "Fallback: Gemeinkosten.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Risiko",
+          name: "Risiko",
+          unit: einheit,
+          qty: 1,
+          price: 2200,
+          total: 2200,
+          note: "Fallback: Risiko wegen Kampfmittel-/Altlasten-/Freigabeabhängigkeit.",
+        },
+        {
+          id: crypto.randomUUID(),
+          group: "Gewinn",
+          name: "Gewinn",
+          unit: einheit,
+          qty: 1,
+          price: 3000,
+          total: 3000,
+          note: "Fallback: Gewinn.",
+        },
+      ];
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
+  }
+
   const houseConnectionFallbackContext =
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(norm(`${kurztext} ${langtext}`));
 
@@ -2818,7 +2968,8 @@ JSON-Schema:
   }
 
   const authorityFallbackContext =
-    /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
+    !riskSoilFallbackContext &&
+    /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|freigaben/.test(norm(`${kurztext} ${langtext}`));
 
   if (authorityFallbackContext) {
     const authorityText = norm(
@@ -3652,6 +3803,9 @@ JSON-Schema:
   const isSpecialCivilReturn =
     /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(returnContextText);
 
+  const isRiskSoilReturn =
+    /kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenklasse unbekannt|bodenanalyse|gutachter|sicherheitsfreigabe|beweissicherung|zustandsaufnahme|rissprotokoll|baubegleitende kontrolle|bodenrisiko|bodenrisiken/.test(returnContextText);
+
   const isAuthorityReturn =
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(returnContextText);
 
@@ -3703,8 +3857,10 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: isHouseConnectionReturn
-      ? "Tiefbau / Hausanschlüsse & Bestand"
+    gewerk: isRiskSoilReturn
+      ? "Tiefbau / Kampfmittel & Altlasten"
+      : isHouseConnectionReturn
+        ? "Tiefbau / Hausanschlüsse & Bestand"
       : isSpecialCivilReturn
         ? "Tiefbau / Spezialtiefbau"
       : isAuthorityReturn
@@ -3728,8 +3884,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: isHouseConnectionReturn
-      ? "Hausanschluss / Gebäudeeinführung / Arbeiten im Bestand"
+    leistungsart: isRiskSoilReturn
+      ? "Kampfmittel / Altlasten / Bodenrisiken / Beweissicherung"
+      : isHouseConnectionReturn
+        ? "Hausanschluss / Gebäudeeinführung / Arbeiten im Bestand"
       : isSpecialCivilReturn
         ? "Spezialtiefbau / schwierige Bauverfahren"
       : isAuthorityReturn
@@ -3753,8 +3911,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: isHouseConnectionReturn
-      ? "Gebäudenahe Ausführung mit Handschachtung, Kernbohrung, Hauseinführung und Wiederherstellung"
+    bauverfahren: isRiskSoilReturn
+      ? "Baubegleitende Sondierung, Analyse, Gutachterleistung, Freigabe und Dokumentation"
+      : isHouseConnectionReturn
+        ? "Gebäudenahe Ausführung mit Handschachtung, Kernbohrung, Hauseinführung und Wiederherstellung"
       : isSpecialCivilReturn
         ? "Verbau, Wasserhaltung, Bodenverbesserung, Pressung und Rohrvortrieb"
       : isAuthorityReturn
