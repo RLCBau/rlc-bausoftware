@@ -216,11 +216,14 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
   const text = norm(textRaw);
   const unit = normUnit(unitRaw);
 
-  if (unit === "Psch" && /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal)/i.test(text)) {
+  if (
+    unit === "Psch" &&
+    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis)/i.test(text)
+  ) {
     return true;
   }
 
-  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum)/i.test(text);
+  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis)/i.test(text);
 }
 
 function contextSensitiveWarning(textRaw: any): string {
@@ -1808,6 +1811,92 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Entsorgung / Deponie / belasteter Boden / Haufwerk / Analytik:
+- Wenn der LV-Text Entsorgung, Deponie, belasteter Boden, Haufwerk, Probenahme, Deklarationsanalytik, ErsatzbaustoffV, LAGA, Wiegescheine oder Entsorgungsnachweise enthält, kalkuliere NICHT als Reinigung oder einfache Transportposition.
+- Diese Position muss aus mehreren Kostenblöcken aufgebaut werden: Probenahme, Analytik, Klassifizierung, Laden, Transport, Deponiegebühren, Nachweise und Risiko.
+- Deponieklasse/Materialklasse ist entscheidend. Wenn sie fehlt, muss die Kalkulation prüfpflichtig bleiben.
+- Transport muss über Entfernung, LKW-Fahrten, Menge und Dichte plausibel gerechnet werden.
+- Deponiegebühren müssen separat erscheinen.
+- Analytik/Probenahme/Deklaration müssen separat erscheinen, wenn genannt.
+- Wiegescheine, Entsorgungsnachweise und Dokumentation müssen separat erscheinen.
+- Beispielstruktur:
+  1. Probenahme / Haufwerksbeprobung
+  2. Deklarationsanalytik / Einstufung ErsatzbaustoffV/LAGA
+  3. Laden / Umschlag
+  4. Transport zur Deponie
+  5. Deponiegebühren / Annahmegebühren
+  6. Wiegescheine / Entsorgungsnachweise
+  7. Bauleitung / Nachweisführung
+  8. Gemeinkosten
+  9. Risiko
+  10. Gewinn
+
+Spezialregel für temporäre Anschlüsse / Notleitungen / provisorische Medienversorgung:
+- Wenn der LV-Text temporärer Anschluss, temporäre Anschlüsse, Notleitung, provisorische Leitung, provisorische Medienversorgung, Ersatzversorgung, Anschluss an Bestand, Druckprüfung, Absperrarmaturen, Formstücke oder tägliche Kontrolle enthält, kalkuliere NICHT als normale Rohrleitungsposition.
+- Diese Position muss als vollständige temporäre Versorgungsmaßnahme kalkuliert werden: Herstellen, Anschließen, Prüfen, Betreiben/Vorhalten, Kontrollieren und Rückbauen.
+- Rohrmaterial, Formstücke, Absperrarmaturen und Verbindungsteile müssen separat erscheinen, wenn genannt.
+- Anschluss an Bestand / Bestandseinbindung muss separat erscheinen.
+- Druckprüfung / Spülung / Inbetriebnahme muss separat erscheinen, wenn genannt.
+- Vorhaltung/Betrieb über die angegebene Laufzeit muss separat erscheinen.
+- Tägliche/regelmäßige Kontrolle und Wartung müssen separat erscheinen.
+- Rückbau, Trennung, Laden, Abtransport und Wiederherstellung müssen separat erscheinen.
+- Logistik/Anfahrt/Materialanlieferung muss separat kalkuliert werden.
+- Beispielstruktur:
+  1. Rohrmaterial / Formstücke / Armaturen
+  2. Herstellen / Verlegen temporäre Notleitung
+  3. Anschluss an Bestand / Einbindung
+  4. Druckprüfung / Spülung / Inbetriebnahme
+  5. Vorhaltung / Betrieb über Laufzeit
+  6. Kontrolle / Wartung
+  7. Rückbau / Trennung / Abtransport
+  8. Logistik / Anfahrt / Materialtransporte
+  9. Gemeinkosten
+  10. Risiko
+  11. Gewinn
+
+Spezialregel für Entsorgung / Deponie / belasteter Boden / Haufwerk / Analytik:
+- Wenn der LV-Text Entsorgung, Deponie, belasteter Boden, Haufwerk, Probenahme, Deklarationsanalytik, ErsatzbaustoffV, LAGA, Wiegescheine oder Entsorgungsnachweise enthält, kalkuliere NICHT als Reinigung oder einfache Transportposition.
+- Diese Position muss aus mehreren Kostenblöcken aufgebaut werden: Probenahme, Analytik, Klassifizierung, Laden, Transport, Deponiegebühren, Nachweise und Risiko.
+- Deponieklasse/Materialklasse ist entscheidend. Wenn sie fehlt, muss die Kalkulation prüfpflichtig bleiben.
+- Transport muss über Entfernung, LKW-Fahrten, Menge und Dichte plausibel gerechnet werden.
+- Deponiegebühren müssen separat erscheinen.
+- Analytik/Probenahme/Deklaration müssen separat erscheinen, wenn genannt.
+- Wiegescheine, Entsorgungsnachweise und Dokumentation müssen separat erscheinen.
+- Beispielstruktur:
+  1. Probenahme / Haufwerksbeprobung
+  2. Deklarationsanalytik / Einstufung ErsatzbaustoffV/LAGA
+  3. Laden / Umschlag
+  4. Transport zur Deponie
+  5. Deponiegebühren / Annahmegebühren
+  6. Wiegescheine / Entsorgungsnachweise
+  7. Bauleitung / Nachweisführung
+  8. Gemeinkosten
+  9. Risiko
+  10. Gewinn
+
+Spezialregel für temporäre Anschlüsse / Notleitungen / provisorische Medienversorgung:
+- Wenn der LV-Text temporärer Anschluss, temporäre Anschlüsse, Notleitung, provisorische Leitung, provisorische Medienversorgung, Ersatzversorgung, Anschluss an Bestand, Druckprüfung, Absperrarmaturen, Formstücke oder tägliche Kontrolle enthält, kalkuliere NICHT als normale Rohrleitungsposition.
+- Diese Position muss als vollständige temporäre Versorgungsmaßnahme kalkuliert werden: Herstellen, Anschließen, Prüfen, Betreiben/Vorhalten, Kontrollieren und Rückbauen.
+- Rohrmaterial, Formstücke, Absperrarmaturen und Verbindungsteile müssen separat erscheinen, wenn genannt.
+- Anschluss an Bestand / Bestandseinbindung muss separat erscheinen.
+- Druckprüfung / Spülung / Inbetriebnahme muss separat erscheinen, wenn genannt.
+- Vorhaltung/Betrieb über die angegebene Laufzeit muss separat erscheinen.
+- Tägliche/regelmäßige Kontrolle und Wartung müssen separat erscheinen.
+- Rückbau, Trennung, Laden, Abtransport und Wiederherstellung müssen separat erscheinen.
+- Logistik/Anfahrt/Materialanlieferung muss separat kalkuliert werden.
+- Beispielstruktur:
+  1. Rohrmaterial / Formstücke / Armaturen
+  2. Herstellen / Verlegen temporäre Notleitung
+  3. Anschluss an Bestand / Einbindung
+  4. Druckprüfung / Spülung / Inbetriebnahme
+  5. Vorhaltung / Betrieb über Laufzeit
+  6. Kontrolle / Wartung
+  7. Rückbau / Trennung / Abtransport
+  8. Logistik / Anfahrt / Materialtransporte
+  9. Gemeinkosten
+  10. Risiko
+  11. Gewinn
+
 Spezialregel für Provisorien / Umleitungen / temporäre Baustraßen / temporäre Anschlüsse:
 - Wenn der LV-Text Provisorium, provisorisch, Baustraße, Umleitung, Baustellenumleitung, temporärer Anschluss, temporäre Zufahrt, Vorhalten, Unterhalten oder Rückbau enthält, kalkuliere NICHT als normale Materialposition.
 - Diese Position muss als vollständige temporäre Maßnahme kalkuliert werden: Herstellen, Vorhalten, Unterhalten, Anpassen, Reinigen und Rückbauen.
@@ -2039,6 +2128,116 @@ JSON-Schema:
   );
   let breakdownTotal = sumBreakdown(priceBreakdown);
 
+  const disposalFallbackContext =
+    /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(norm(`${kurztext} ${langtext}`));
+
+  if (disposalFallbackContext && breakdownTotal <= 0) {
+    priceBreakdown = [
+      {
+        id: crypto.randomUUID(),
+        group: "Entsorgung",
+        name: "Probenahme / Haufwerksbeprobung",
+        unit: einheit,
+        qty: 1,
+        price: 10,
+        total: 10,
+        note: "Fallback: prüfpflichtige Schätzung, da Deponie-/Materialklasse fehlt.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Entsorgung",
+        name: "Deklarationsanalytik / Einstufung ErsatzbaustoffV/LAGA",
+        unit: einheit,
+        qty: 1,
+        price: 15,
+        total: 15,
+        note: "Fallback: Analytik/Einstufung separat angesetzt.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Maschinen",
+        name: "Laden / Umschlag",
+        unit: einheit,
+        qty: 1,
+        price: 20,
+        total: 20,
+        note: "Fallback: Laden/Umschlag pro Einheit.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "LKW / Transport",
+        name: "Transport zur Deponie",
+        unit: einheit,
+        qty: 1,
+        price: projectDistanceKm > 0 ? 30 : 20,
+        total: projectDistanceKm > 0 ? 30 : 20,
+        note: `Fallback: Transport prüfpflichtig kalkuliert${projectDistanceKm > 0 ? `, Entfernung ${projectDistanceKm} km` : ""}.`,
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Entsorgung",
+        name: "Deponiegebühren / Annahmegebühren",
+        unit: einheit,
+        qty: 1,
+        price: 45,
+        total: 45,
+        note: "Fallback: Deponieklasse fehlt, daher konservative prüfpflichtige Annahme.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Entsorgung",
+        name: "Wiegescheine / Entsorgungsnachweise",
+        unit: einheit,
+        qty: 1,
+        price: 5,
+        total: 5,
+        note: "Fallback: Nachweise separat angesetzt.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Personal",
+        name: "Bauleitung / Nachweisführung",
+        unit: einheit,
+        qty: 1,
+        price: 6,
+        total: 6,
+        note: "Fallback: Nachweisführung/Bauleitung anteilig.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Gemeinkosten",
+        name: "Gemeinkosten",
+        unit: einheit,
+        qty: 1,
+        price: 10,
+        total: 10,
+        note: "Fallback: Gemeinkosten.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Risiko",
+        name: "Risiko",
+        unit: einheit,
+        qty: 1,
+        price: 8,
+        total: 8,
+        note: "Fallback: erhöhtes Risiko wegen fehlender Material-/Deponieklasse.",
+      },
+      {
+        id: crypto.randomUUID(),
+        group: "Gewinn",
+        name: "Gewinn",
+        unit: einheit,
+        qty: 1,
+        price: 12,
+        total: 12,
+        note: "Fallback: Gewinn.",
+      },
+    ];
+
+    breakdownTotal = sumBreakdown(priceBreakdown);
+  }
+
   /*
    * Harte Fachlogik:
    * Reine Abfuhr-/Transportpositionen ohne Entsorgung/Deponie dürfen von OpenAI
@@ -2075,6 +2274,47 @@ JSON-Schema:
       },
     ];
     breakdownTotal = rlcTransportAvg;
+  }
+
+  if (disposalFallbackContext && priceBreakdown.length) {
+    const disposalDirectGroups: PriceBreakdownGroup[] = [
+      "Material",
+      "Personal",
+      "Maschinen",
+      "LKW / Transport",
+      "Entsorgung",
+      "Fremdleistung",
+      "Gemeinkosten",
+    ];
+
+    const disposalBase = round2(
+      priceBreakdown
+        .filter((x) => disposalDirectGroups.includes(x.group))
+        .reduce((sum, x) => sum + n(x.total), 0)
+    );
+
+    if (disposalBase > 0) {
+      const maxRisk = round2(disposalBase * 0.12);
+      const maxProfit = round2(disposalBase * 0.15);
+
+      for (const line of priceBreakdown) {
+        if (line.group === "Risiko" && n(line.total) > maxRisk) {
+          line.qty = 1;
+          line.price = maxRisk;
+          line.total = maxRisk;
+          line.note = "RLC Guard: Risiko für Entsorgung auf plausiblen Maximalwert begrenzt, da OpenAI Wert pro m³ unplausibel hoch war.";
+        }
+
+        if (line.group === "Gewinn" && n(line.total) > maxProfit) {
+          line.qty = 1;
+          line.price = maxProfit;
+          line.total = maxProfit;
+          line.note = "RLC Guard: Gewinn für Entsorgung auf plausiblen Maximalwert begrenzt, da OpenAI Wert pro m³ unplausibel hoch war.";
+        }
+      }
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
   }
 
   /**
@@ -2121,12 +2361,16 @@ JSON-Schema:
     );
 
     const rowContextText = norm(`${kurztext} ${langtext}`);
+    const isTemporarySupplyContext =
+      /notleitung|temporaer.*anschluss|temporär.*anschluss|temporaere.*anschluesse|temporäre.*anschlüsse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckpruefung|druckprüfung|absperrarmatur|formstueck|formstück/.test(rowContextText);
+
     const isProvisoriumContext =
+      !isTemporarySupplyContext &&
       /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau|unterhalten|unterhaltung/.test(rowContextText);
 
     const isTrafficSafetyContext =
       !isProvisoriumContext &&
-      /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|rsa/.test(rowContextText);
+      /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|\brsa\b/.test(rowContextText);
 
     const isDocumentationContext =
       /dokumentation|fotodokumentation|aufmass|aufmaß|bestandsplan|bestandsplaene|bestandspläne|vermessung|vermessungsdaten|as-built|as built|uebergabeunterlagen|übergabeunterlagen|behoerden|behörden|auftraggeber/.test(rowContextText);
@@ -2149,7 +2393,7 @@ JSON-Schema:
     const hasTrafficSigns = /beschilderung|schild|schilder|verkehrszeichen/.test(contextBreakdownText);
     const hasBarrierMaterial = /absperr|bake|leitbake|leitkegel|schranke|sperr/.test(contextBreakdownText);
     const hasTrafficLight = /lichtsignalanlage|ampel|lsa/.test(contextBreakdownText);
-    const hasTrafficControl = /verkehrsfuehrung|verkehrsführung|kontrolle|kontrollen|wartung|anpassung|rsa|stvo|genehmigung/.test(contextBreakdownText);
+    const hasTrafficControl = /verkehrsfuehrung|verkehrsführung|kontrolle|kontrollen|wartung|anpassung|\brsa\b|stvo|genehmigung/.test(contextBreakdownText);
 
     const hasPhotoDocumentation = /fotodokumentation|foto|bilder/.test(contextBreakdownText);
     const hasAufmass = /aufmass|aufmaß|massenermittlung|massen/.test(contextBreakdownText);
@@ -2171,6 +2415,15 @@ JSON-Schema:
     const hasProvisoriumRueckbau = /rueckbau|rückbau|abtransport|entsorgung|laden/.test(contextBreakdownText);
     const hasProvisoriumLogistik = /logistik|anfahrt|materialanlieferung|transport|abtransport/.test(contextBreakdownText);
     const hasProvisoriumBeschilderung = /beschilderung|verkehrsfuehrung|verkehrsführung|umleitung|verkehrszeichen/.test(contextBreakdownText);
+
+    const hasTempSupplyMaterial = /rohr|rohrmaterial|formstueck|formstück|armatur|absperr|material/.test(contextBreakdownText);
+    const hasTempSupplyInstall = /herstellen|verlegen|einbau|montage|notleitung|provisorische leitung/.test(contextBreakdownText);
+    const hasTempSupplyConnection = /anschluss|bestand|einbindung|anschliessen|anschließen/.test(contextBreakdownText);
+    const hasTempSupplyPressureTest = /druckpruefung|druckprüfung|spuelung|spülung|inbetriebnahme|pruefung|prüfung/.test(contextBreakdownText);
+    const hasTempSupplyOperation = /vorhaltung|betrieb|betreiben|laufzeit|dauer|90 tage|tage/.test(contextBreakdownText);
+    const hasTempSupplyControl = /kontrolle|kontroll|wartung|taeglich|täglich/.test(contextBreakdownText);
+    const hasTempSupplyRemoval = /rueckbau|rückbau|trennung|abtransport|laden/.test(contextBreakdownText);
+    const hasTempSupplyLogistics = /logistik|anfahrt|materialanlieferung|transport|abtransport/.test(contextBreakdownText);
 
     if (projectDurationDays >= 180 && !hasTemporalBasis) {
       contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
@@ -2272,7 +2525,39 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Beschilderung/Umleitung/Verkehrsführung fehlt oder ist nicht separat kalkuliert.");
     }
 
-    if (!isDocumentationContext && !isVorhaltungContext && !isProvisoriumContext && projectDistanceKm > 0 && !hasTransport) {
+    if (isTemporarySupplyContext && !hasTempSupplyMaterial) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Rohrmaterial/Formstücke/Armaturen fehlen oder sind nicht separat kalkuliert.");
+    }
+
+    if (isTemporarySupplyContext && !hasTempSupplyInstall) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Herstellen/Verlegen/Montage der Notleitung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTemporarySupplyContext && !hasTempSupplyConnection) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Anschluss an Bestand/Einbindung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTemporarySupplyContext && /druckpruefung|druckprüfung|spuelung|spülung/.test(rowContextText) && !hasTempSupplyPressureTest) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Druckprüfung/Spülung/Inbetriebnahme fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTemporarySupplyContext && projectDurationDays > 0 && !hasTempSupplyOperation) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Vorhaltung/Betrieb über die Laufzeit fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTemporarySupplyContext && /kontrolle|wartung|taeglich|täglich/.test(rowContextText) && !hasTempSupplyControl) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Kontrolle/Wartung fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTemporarySupplyContext && /rueckbau|rückbau/.test(rowContextText) && !hasTempSupplyRemoval) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Rückbau/Trennung/Abtransport fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isTemporarySupplyContext && projectDistanceKm > 0 && !hasTempSupplyLogistics) {
+      contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Logistik/Anfahrt/Materialtransporte fehlen oder sind nicht separat kalkuliert.");
+    }
+
+    if (!isDocumentationContext && !isVorhaltungContext && !isProvisoriumContext && !isTemporarySupplyContext && projectDistanceKm > 0 && !hasTransport) {
       contextQualityWarnings.push("Context-Guard: Entfernung/Antransport/Abtransport/Logistik fehlt oder ist zu schwach ausgewiesen.");
     }
 
@@ -2323,8 +2608,13 @@ JSON-Schema:
   const isWasserhaltungOpenAi =
     /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`));
 
+  const isDisposalOpenAi =
+    /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(norm(`${kurztext} ${langtext}`));
+
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) =>
-    isErschwernisOpenAi || isVorhaltungOpenAi ? !/verkehrssicherung|rsa/i.test(String(w || "")) : true
+    isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi
+      ? !/verkehrssicherung|rsa/i.test(String(w || ""))
+      : true
   );
 
   const warnings = [
@@ -2332,9 +2622,11 @@ JSON-Schema:
     contextSensitiveOpenAi
       ? isErschwernisOpenAi
         ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
-        : isWasserhaltungOpenAi
-          ? "Kontextabhängige Position: Wasserhaltung/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Stromversorgung, Ableitung, Kontrolle/Wartung, Ausfallrisiko und Wetter ab. Historische Preise nur als Orientierung verwenden."
-          : isVorhaltungOpenAi
+        : isDisposalOpenAi
+          ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
+          : isWasserhaltungOpenAi
+            ? "Kontextabhängige Position: Wasserhaltung/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Stromversorgung, Ableitung, Kontrolle/Wartung, Ausfallrisiko und Wetter ab. Historische Preise nur als Orientierung verwenden."
+            : isVorhaltungOpenAi
             ? "Kontextabhängige Position: Gerätevorhaltung/Stillstand/Wartezeiten hängt stark von Unterbrechungsdauer, betroffenen Geräten, Personalbindung, Freigaben, Bauablaufstörungen, erneuter Anfahrt und Logistik ab. Historische Preise nur als Orientierung verwenden."
             : contextSensitiveWarning(text)
       : "",
@@ -2352,6 +2644,21 @@ JSON-Schema:
   const finalConfidence = contextSensitiveOpenAi
     ? Math.min(confidence, contextQualityWarnings.length ? 0.55 : 0.65)
     : confidence;
+
+  const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isDisposalReturn =
+    /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(returnContextText);
+  const isTempSupplyReturn =
+    /notleitung|temporaer.*anschluss|temporär.*anschluss|temporaere.*anschluesse|temporäre.*anschlüsse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckpruefung|druckprüfung|absperrarmatur|formstueck|formstück/.test(returnContextText);
+  const isProvisoriumReturn =
+    !isTempSupplyReturn &&
+    /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(returnContextText);
+  const isWasserhaltungReturn =
+    /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(returnContextText);
+  const isVorhaltungReturn =
+    /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(returnContextText);
+  const isErschwernisReturn =
+    /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(returnContextText);
 
   return {
     id: row.id,
@@ -2378,28 +2685,40 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(norm(`${kurztext} ${langtext}`))
-      ? "Tiefbau / Provisorien"
-      : /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
-        ? "Tiefbau / Wasserhaltung"
+    gewerk: isDisposalReturn
+      ? "Tiefbau / Entsorgung"
+      : isTempSupplyReturn
+        ? "Tiefbau / Temporäre Versorgung"
+      : isProvisoriumReturn
+        ? "Tiefbau / Provisorien"
+        : isWasserhaltungReturn
+          ? "Tiefbau / Wasserhaltung"
       : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Vorhaltung"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(norm(`${kurztext} ${langtext}`))
-      ? "Provisorium / Baustraße / Umleitung"
-      : /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
-        ? "Wasserhaltung / Pumpen / Baugrubenentwässerung"
+    leistungsart: isDisposalReturn
+      ? "Entsorgung / Deponie / belasteter Boden"
+      : isTempSupplyReturn
+        ? "Temporärer Anschluss / Notleitung / Medienversorgung"
+      : isProvisoriumReturn
+        ? "Provisorium / Baustraße / Umleitung"
+        : isWasserhaltungReturn
+          ? "Wasserhaltung / Pumpen / Baugrubenentwässerung"
       : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
         ? "Gerätevorhaltung / Stillstand / Wartezeiten"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(norm(`${kurztext} ${langtext}`))
-      ? "Temporäre Herstellung, Vorhaltung, Unterhaltung und Rückbau"
-      : /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(norm(`${kurztext} ${langtext}`))
-        ? "Zeitabhängige Wasserhaltungs- und Pumpenkalkulation"
+    bauverfahren: isDisposalReturn
+      ? "Entsorgungskalkulation mit Analytik, Transport, Deponie und Nachweisen"
+      : isTempSupplyReturn
+        ? "Temporäre Herstellung, Prüfung, Betrieb und Rückbau"
+      : isProvisoriumReturn
+        ? "Temporäre Herstellung, Vorhaltung, Unterhaltung und Rückbau"
+        : isWasserhaltungReturn
+          ? "Zeitabhängige Wasserhaltungs- und Pumpenkalkulation"
       : /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(norm(`${kurztext} ${langtext}`))
         ? "Zeitabhängige Vorhalte- und Stillstandskalkulation"
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
