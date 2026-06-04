@@ -218,16 +218,20 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
 
   if (
     unit === "Psch" &&
-    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung)/i.test(text)
+    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text)
   ) {
     return true;
   }
 
-  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung)/i.test(text);
+  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text);
 }
 
 function contextSensitiveWarning(textRaw: any): string {
   const text = norm(textRaw);
+
+  if (/(schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text)) {
+    return "Kontextabhängige Position: Schutzmaßnahmen/Umwelt/Natur/Anwohner hängen stark von Bauzeit, Auflagen, Schutzumfang, Kontrollintervallen, Dokumentation, Rückbau, Risiken und örtlichen Bedingungen ab. Historische Preise nur als Orientierung verwenden.";
+  }
 
   if (/(baustelleneinrichtung|baustelle einrichten|vorhaltung|baustellengemeinkosten)/i.test(text)) {
     return "Kontextabhängige Position: Baustelleneinrichtung/Vorhaltung muss über Dauer, Entfernung, Personal, Geräte, Container, Logistik und Gemeinkosten urkalkuliert werden. Historische Datenbankpreise dürfen nur als Vergleich dienen.";
@@ -1811,6 +1815,27 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Schutzmaßnahmen / Umwelt / Natur / Anwohner:
+- Wenn der LV-Text Schutzmaßnahmen, Lärmschutz, Staubschutz, Erschütterungsschutz, Baumschutz, Wurzelschutz, Gewässerschutz, Ölbindemittel, Havarie-Schutz, Anwohnerinformation, Beweissicherung oder Zustandsdokumentation enthält, kalkuliere NICHT als allgemeine Dokumentation oder Baustelleneinrichtung.
+- Diese Position muss als Schutzmaßnahmenpaket über Dauer, Aufbau, Kontrolle, Unterhaltung, Dokumentation und Rückbau kalkuliert werden.
+- Lärmschutz/Staubschutz/Erschütterungsschutz müssen separat erscheinen, wenn genannt.
+- Baum-/Wurzelschutz und Gewässerschutz müssen separat erscheinen, wenn genannt.
+- Ölbindemittel/Havarie-Schutz müssen separat erscheinen, wenn genannt.
+- Anwohnerinformation, Beweissicherung und Zustandsdokumentation müssen separat erscheinen, wenn genannt.
+- Regelmäßige Kontrolle/Unterhaltung über die Laufzeit muss separat erscheinen.
+- Rückbau/Abbau und Logistik müssen separat kalkuliert werden.
+- Beispielstruktur:
+  1. Lärmschutz / Staubschutz / Erschütterungsschutz
+  2. Baumschutz / Wurzelschutz
+  3. Gewässerschutz / Ölbindemittel / Havarie-Schutz
+  4. Anwohnerinformation
+  5. Beweissicherung / Zustandsdokumentation
+  6. Kontrolle / Unterhaltung während Laufzeit
+  7. Rückbau / Abbau / Logistik
+  8. Gemeinkosten
+  9. Risiko
+  10. Gewinn
+
 Spezialregel für Prüfungen / Abnahmen / technische Nachweise:
 - Wenn der LV-Text Dichtheitsprüfung, Druckprüfung, Spülung, TV-Inspektion, Kamerabefahrung, Prüfprotokolle, Abnahmeunterlagen, Funktionsprüfung oder Bestandsfreigabe enthält, kalkuliere NICHT als allgemeine Dokumentation, Vorhaltung oder normale Rohrleitung.
 - Diese Position muss als technische Prüf-/Nachweisleistung kalkuliert werden.
@@ -1875,6 +1900,27 @@ Spezialregel für temporäre Anschlüsse / Notleitungen / provisorische Medienve
   9. Gemeinkosten
   10. Risiko
   11. Gewinn
+
+Spezialregel für Schutzmaßnahmen / Umwelt / Natur / Anwohner:
+- Wenn der LV-Text Schutzmaßnahmen, Lärmschutz, Staubschutz, Erschütterungsschutz, Baumschutz, Wurzelschutz, Gewässerschutz, Ölbindemittel, Havarie-Schutz, Anwohnerinformation, Beweissicherung oder Zustandsdokumentation enthält, kalkuliere NICHT als allgemeine Dokumentation oder Baustelleneinrichtung.
+- Diese Position muss als Schutzmaßnahmenpaket über Dauer, Aufbau, Kontrolle, Unterhaltung, Dokumentation und Rückbau kalkuliert werden.
+- Lärmschutz/Staubschutz/Erschütterungsschutz müssen separat erscheinen, wenn genannt.
+- Baum-/Wurzelschutz und Gewässerschutz müssen separat erscheinen, wenn genannt.
+- Ölbindemittel/Havarie-Schutz müssen separat erscheinen, wenn genannt.
+- Anwohnerinformation, Beweissicherung und Zustandsdokumentation müssen separat erscheinen, wenn genannt.
+- Regelmäßige Kontrolle/Unterhaltung über die Laufzeit muss separat erscheinen.
+- Rückbau/Abbau und Logistik müssen separat kalkuliert werden.
+- Beispielstruktur:
+  1. Lärmschutz / Staubschutz / Erschütterungsschutz
+  2. Baumschutz / Wurzelschutz
+  3. Gewässerschutz / Ölbindemittel / Havarie-Schutz
+  4. Anwohnerinformation
+  5. Beweissicherung / Zustandsdokumentation
+  6. Kontrolle / Unterhaltung während Laufzeit
+  7. Rückbau / Abbau / Logistik
+  8. Gemeinkosten
+  9. Risiko
+  10. Gewinn
 
 Spezialregel für Prüfungen / Abnahmen / technische Nachweise:
 - Wenn der LV-Text Dichtheitsprüfung, Druckprüfung, Spülung, TV-Inspektion, Kamerabefahrung, Prüfprotokolle, Abnahmeunterlagen, Funktionsprüfung oder Bestandsfreigabe enthält, kalkuliere NICHT als allgemeine Dokumentation, Vorhaltung oder normale Rohrleitung.
@@ -2495,29 +2541,40 @@ JSON-Schema:
     );
 
     const rowContextText = norm(`${kurztext} ${langtext}`);
+
+    const isProtectionContext =
+      /schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz/.test(rowContextText);
+
     const isTemporarySupplyContext =
+      !isProtectionContext &&
       /notleitung|temporaer.*anschluss|temporär.*anschluss|temporaere.*anschluesse|temporäre.*anschlüsse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckpruefung|druckprüfung|absperrarmatur|formstueck|formstück/.test(rowContextText);
 
     const isProvisoriumContext =
+      !isProtectionContext &&
       !isTemporarySupplyContext &&
       /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau|unterhalten|unterhaltung/.test(rowContextText);
 
     const isTrafficSafetyContext =
+      !isProtectionContext &&
       !isProvisoriumContext &&
       /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|\brsa\b/.test(rowContextText);
 
     const isTestingContext =
+      !isProtectionContext &&
       /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(rowContextText);
 
     const isDocumentationContext =
+      !isProtectionContext &&
       !isTestingContext &&
       /dokumentation|fotodokumentation|aufmass|aufmaß|bestandsplan|bestandsplaene|bestandspläne|vermessung|vermessungsdaten|as-built|as built|uebergabeunterlagen|übergabeunterlagen|behoerden|behörden|auftraggeber/.test(rowContextText);
 
     const isVorhaltungContext =
+      !isProtectionContext &&
       !isTestingContext &&
       /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|freigabe|bauablaufstoerung|bauablaufstörung/.test(rowContextText);
 
     const isSiteSetupContext =
+      !isProtectionContext &&
       !isTrafficSafetyContext &&
       !isDocumentationContext &&
       !isVorhaltungContext &&
@@ -2526,6 +2583,14 @@ JSON-Schema:
     const hasContainer = /container|baustelleneinrichtung/.test(contextBreakdownText);
     const hasUtilities = /baustrom|bauwasser|sanitaer|sanitär|toilette|wc/.test(contextBreakdownText);
     const hasTransport = /antransport|abtransport|transport|fahrt|fahrten|logistik|anfahrt/.test(contextBreakdownText);
+
+    const hasProtectionNoiseDustVibration = /lärmschutz|laermschutz|staubschutz|erschütterung|erschuetterung/.test(contextBreakdownText);
+    const hasProtectionTreeRoot = /baumschutz|wurzelschutz|baum|wurzel/.test(contextBreakdownText);
+    const hasProtectionWaterHavarie = /gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie/.test(contextBreakdownText);
+    const hasProtectionResidents = /anwohner|information|bürger|buerger/.test(contextBreakdownText);
+    const hasProtectionEvidence = /beweissicherung|zustandsdokumentation|zustand|dokumentation/.test(contextBreakdownText);
+    const hasProtectionControl = /kontrolle|unterhaltung|wartung|regelmäßig|regelmaessig/.test(contextBreakdownText);
+    const hasProtectionRemovalLogistics = /rückbau|rueckbau|abbau|logistik|anfahrt/.test(contextBreakdownText);
     const hasCoordination = /bauleitung|polier|koordination|baustellenkoordination|kontrolle|kontrollen|wartung/.test(contextBreakdownText);
     const hasTemporalBasis = /monat|monate|monatlich|tag|tage|taeglich|täglich|laufzeit|vorhaltung|miete|wartung|stunde|stunden|\bh\b|termin|termine|einsatz|einsaetze|einsätze/.test(contextBreakdownText);
 
@@ -2564,7 +2629,35 @@ JSON-Schema:
     const hasTempSupplyRemoval = /rueckbau|rückbau|trennung|abtransport|laden/.test(contextBreakdownText);
     const hasTempSupplyLogistics = /logistik|anfahrt|materialanlieferung|transport|abtransport/.test(contextBreakdownText);
 
-    if (projectDurationDays >= 180 && !hasTemporalBasis) {
+    if (isProtectionContext && /lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz/.test(rowContextText) && !hasProtectionNoiseDustVibration) {
+      contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: Lärm-/Staub-/Erschütterungsschutz fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProtectionContext && /baumschutz|wurzelschutz/.test(rowContextText) && !hasProtectionTreeRoot) {
+      contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: Baum-/Wurzelschutz fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProtectionContext && /gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie/.test(rowContextText) && !hasProtectionWaterHavarie) {
+      contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: Gewässerschutz/Ölbindemittel/Havarie-Schutz fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProtectionContext && /anwohnerinformation/.test(rowContextText) && !hasProtectionResidents) {
+      contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: Anwohnerinformation fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProtectionContext && /beweissicherung|zustandsdokumentation/.test(rowContextText) && !hasProtectionEvidence) {
+      contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: Beweissicherung/Zustandsdokumentation fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProtectionContext && projectDurationDays > 0 && !hasProtectionControl) {
+      contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: regelmäßige Kontrolle/Unterhaltung über die Laufzeit fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (isProtectionContext && !hasProtectionRemovalLogistics) {
+      contextQualityWarnings.push("Context-Guard: Schutzmaßnahmen: Rückbau/Abbau/Logistik fehlt oder ist nicht separat kalkuliert.");
+    }
+
+    if (!isProtectionContext && projectDurationDays >= 180 && !hasTemporalBasis) {
       contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
     }
 
@@ -2696,7 +2789,7 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Temporäre Versorgung: Logistik/Anfahrt/Materialtransporte fehlen oder sind nicht separat kalkuliert.");
     }
 
-    if (!isDocumentationContext && !isVorhaltungContext && !isProvisoriumContext && !isTemporarySupplyContext && projectDistanceKm > 0 && !hasTransport) {
+    if (!isProtectionContext && !isDocumentationContext && !isVorhaltungContext && !isProvisoriumContext && !isTemporarySupplyContext && projectDistanceKm > 0 && !hasTransport) {
       contextQualityWarnings.push("Context-Guard: Entfernung/Antransport/Abtransport/Logistik fehlt oder ist zu schwach ausgewiesen.");
     }
 
@@ -2794,6 +2887,9 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isProtectionReturn =
+    /schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz/.test(returnContextText);
+
   const isTestingReturn =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(returnContextText);
 
@@ -2836,8 +2932,10 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: isTestingReturn
-      ? "Tiefbau / Prüfungen"
+    gewerk: isProtectionReturn
+      ? "Tiefbau / Schutzmaßnahmen"
+      : isTestingReturn
+        ? "Tiefbau / Prüfungen"
       : isDisposalReturn
         ? "Tiefbau / Entsorgung"
       : isTempSupplyReturn
@@ -2851,8 +2949,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: isTestingReturn
-      ? "Prüfung / Abnahme / technische Nachweise"
+    leistungsart: isProtectionReturn
+      ? "Umwelt-, Natur- und Anwohnerschutz"
+      : isTestingReturn
+        ? "Prüfung / Abnahme / technische Nachweise"
       : isDisposalReturn
         ? "Entsorgung / Deponie / belasteter Boden"
       : isTempSupplyReturn
@@ -2866,8 +2966,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: isTestingReturn
-      ? "Technische Prüfung mit Spülung, TV-Inspektion, Dichtheitsprüfung und Dokumentation"
+    bauverfahren: isProtectionReturn
+      ? "Schutzmaßnahmen mit Aufbau, Kontrolle, Dokumentation und Rückbau"
+      : isTestingReturn
+        ? "Technische Prüfung mit Spülung, TV-Inspektion, Dichtheitsprüfung und Dokumentation"
       : isDisposalReturn
         ? "Entsorgungskalkulation mit Analytik, Transport, Deponie und Nachweisen"
       : isTempSupplyReturn
