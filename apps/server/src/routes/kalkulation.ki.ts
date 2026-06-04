@@ -218,12 +218,12 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
 
   if (
     unit === "Psch" &&
-    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis)/i.test(text)
+    /(baustell|einrichtung|vorhaltung|verkehrssicherung|bestands|vermess|erschwernis|dokumentation|bauleitung|koordination|bauzeiten|pauschal|notleitung|temporär|temporaer|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung)/i.test(text)
   ) {
     return true;
   }
 
-  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis)/i.test(text);
+  return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung)/i.test(text);
 }
 
 function contextSensitiveWarning(textRaw: any): string {
@@ -1811,6 +1811,28 @@ Spezialregel für Verkehrssicherung / Verkehrsführung / RSA:
   8. Risiko
   9. Gewinn
 
+Spezialregel für Prüfungen / Abnahmen / technische Nachweise:
+- Wenn der LV-Text Dichtheitsprüfung, Druckprüfung, Spülung, TV-Inspektion, Kamerabefahrung, Prüfprotokolle, Abnahmeunterlagen, Funktionsprüfung oder Bestandsfreigabe enthält, kalkuliere NICHT als allgemeine Dokumentation, Vorhaltung oder normale Rohrleitung.
+- Diese Position muss als technische Prüf-/Nachweisleistung kalkuliert werden.
+- Spülung/Reinigung muss separat erscheinen, wenn genannt.
+- TV-Inspektion/Kamerabefahrung muss separat erscheinen, wenn genannt.
+- Dichtheitsprüfung/Druckprüfung muss separat erscheinen, wenn genannt.
+- Prüfgerät/Messgerät/TV-Kamera/Spülfahrzeug muss separat berücksichtigt werden.
+- Auswertung, Prüfprotokolle, Dokumentation, Abnahmeunterlagen und Bestandsfreigabe müssen separat erscheinen.
+- Anfahrt/Logistik muss separat kalkuliert werden, wenn Entfernung angegeben ist.
+- Bei Einheit m muss der EP längenbezogen realistisch bleiben; Gemeinkosten, Risiko und Gewinn dürfen nicht als riesige €/m-Werte angesetzt werden.
+- Beispielstruktur:
+  1. Spülung / Reinigung Leitung
+  2. TV-Inspektion / Kamerabefahrung
+  3. Dichtheitsprüfung / Druckprüfung
+  4. Prüfgerät / TV-Kamera / Spülfahrzeug
+  5. Auswertung / Prüfprotokolle / Dokumentation
+  6. Abnahmeunterlagen / Bestandsfreigabe
+  7. Anfahrt / Logistik
+  8. Gemeinkosten
+  9. Risiko
+  10. Gewinn
+
 Spezialregel für Entsorgung / Deponie / belasteter Boden / Haufwerk / Analytik:
 - Wenn der LV-Text Entsorgung, Deponie, belasteter Boden, Haufwerk, Probenahme, Deklarationsanalytik, ErsatzbaustoffV, LAGA, Wiegescheine oder Entsorgungsnachweise enthält, kalkuliere NICHT als Reinigung oder einfache Transportposition.
 - Diese Position muss aus mehreren Kostenblöcken aufgebaut werden: Probenahme, Analytik, Klassifizierung, Laden, Transport, Deponiegebühren, Nachweise und Risiko.
@@ -1853,6 +1875,28 @@ Spezialregel für temporäre Anschlüsse / Notleitungen / provisorische Medienve
   9. Gemeinkosten
   10. Risiko
   11. Gewinn
+
+Spezialregel für Prüfungen / Abnahmen / technische Nachweise:
+- Wenn der LV-Text Dichtheitsprüfung, Druckprüfung, Spülung, TV-Inspektion, Kamerabefahrung, Prüfprotokolle, Abnahmeunterlagen, Funktionsprüfung oder Bestandsfreigabe enthält, kalkuliere NICHT als allgemeine Dokumentation, Vorhaltung oder normale Rohrleitung.
+- Diese Position muss als technische Prüf-/Nachweisleistung kalkuliert werden.
+- Spülung/Reinigung muss separat erscheinen, wenn genannt.
+- TV-Inspektion/Kamerabefahrung muss separat erscheinen, wenn genannt.
+- Dichtheitsprüfung/Druckprüfung muss separat erscheinen, wenn genannt.
+- Prüfgerät/Messgerät/TV-Kamera/Spülfahrzeug muss separat berücksichtigt werden.
+- Auswertung, Prüfprotokolle, Dokumentation, Abnahmeunterlagen und Bestandsfreigabe müssen separat erscheinen.
+- Anfahrt/Logistik muss separat kalkuliert werden, wenn Entfernung angegeben ist.
+- Bei Einheit m muss der EP längenbezogen realistisch bleiben; Gemeinkosten, Risiko und Gewinn dürfen nicht als riesige €/m-Werte angesetzt werden.
+- Beispielstruktur:
+  1. Spülung / Reinigung Leitung
+  2. TV-Inspektion / Kamerabefahrung
+  3. Dichtheitsprüfung / Druckprüfung
+  4. Prüfgerät / TV-Kamera / Spülfahrzeug
+  5. Auswertung / Prüfprotokolle / Dokumentation
+  6. Abnahmeunterlagen / Bestandsfreigabe
+  7. Anfahrt / Logistik
+  8. Gemeinkosten
+  9. Risiko
+  10. Gewinn
 
 Spezialregel für Entsorgung / Deponie / belasteter Boden / Haufwerk / Analytik:
 - Wenn der LV-Text Entsorgung, Deponie, belasteter Boden, Haufwerk, Probenahme, Deklarationsanalytik, ErsatzbaustoffV, LAGA, Wiegescheine oder Entsorgungsnachweise enthält, kalkuliere NICHT als Reinigung oder einfache Transportposition.
@@ -2317,6 +2361,96 @@ JSON-Schema:
     }
   }
 
+  const testingGuardContext =
+    /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
+
+  if (testingGuardContext && priceBreakdown.length) {
+    const testingDirectGroups: PriceBreakdownGroup[] = [
+      "Material",
+      "Personal",
+      "Maschinen",
+      "LKW / Transport",
+      "Fremdleistung",
+    ];
+
+    const testingBase = round2(
+      priceBreakdown
+        .filter((x) => testingDirectGroups.includes(x.group))
+        .reduce((sum, x) => sum + n(x.total), 0)
+    );
+
+    if (testingBase > 0) {
+      const maxOverhead = round2(testingBase * 0.12);
+      const maxRisk = round2(testingBase * 0.08);
+      const maxProfit = round2(testingBase * 0.12);
+
+      for (const line of priceBreakdown) {
+        if (line.group === "Gemeinkosten" && n(line.total) > maxOverhead) {
+          line.qty = 1;
+          line.price = maxOverhead;
+          line.total = maxOverhead;
+          line.note = "RLC Guard: Gemeinkosten für Prüf-/Nachweisleistung auf plausiblen Maximalwert begrenzt.";
+        }
+
+        if (line.group === "Risiko" && n(line.total) > maxRisk) {
+          line.qty = 1;
+          line.price = maxRisk;
+          line.total = maxRisk;
+          line.note = "RLC Guard: Risiko für Prüf-/Nachweisleistung auf plausiblen Maximalwert begrenzt.";
+        }
+
+        if (line.group === "Gewinn" && n(line.total) > maxProfit) {
+          line.qty = 1;
+          line.price = maxProfit;
+          line.total = maxProfit;
+          line.note = "RLC Guard: Gewinn für Prüf-/Nachweisleistung auf plausiblen Maximalwert begrenzt.";
+        }
+      }
+
+      const directAfterCaps = round2(
+        priceBreakdown
+          .filter((x) => testingDirectGroups.includes(x.group))
+          .reduce((sum, x) => sum + n(x.total), 0)
+      );
+
+      const minRisk = round2(directAfterCaps * 0.03);
+      const minProfit = round2(directAfterCaps * 0.05);
+
+      for (const line of priceBreakdown) {
+        if (line.group === "Risiko" && n(line.total) < minRisk) {
+          line.qty = 1;
+          line.price = minRisk;
+          line.total = minRisk;
+          line.note = "RLC Guard: Risiko für Prüf-/Nachweisleistung auf Mindestwert 3% der Direktkosten gesetzt.";
+        }
+
+        if (line.group === "Gewinn" && n(line.total) < minProfit) {
+          line.qty = 1;
+          line.price = minProfit;
+          line.total = minProfit;
+          line.note = "RLC Guard: Gewinn für Prüf-/Nachweisleistung auf Mindestwert 5% der Direktkosten gesetzt.";
+        }
+      }
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
+
+    const testingRlcMax = n(rlcPreisRange?.max);
+    const testingHardCap = round2(Math.max(testingRlcMax > 0 ? testingRlcMax * 1.8 : 0, 45));
+
+    if (testingHardCap > 0 && breakdownTotal > testingHardCap) {
+      const factor = testingHardCap / breakdownTotal;
+
+      for (const line of priceBreakdown) {
+        line.price = round2(n(line.price) * factor);
+        line.total = round2(n(line.total) * factor);
+        line.note = `${s(line.note)} · RLC Guard: Prüf-/Nachweisleistung auf fachlichen Maximalwert ${testingHardCap} EUR/${einheit} skaliert.`;
+      }
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+    }
+  }
+
   /**
    * Quelle der Wahrheit ist ab hier die Urkalkulation pro Einheit.
    * Dadurch bleiben Hauptkosten, EP, PDF und Frontend immer konsistent.
@@ -2372,10 +2506,15 @@ JSON-Schema:
       !isProvisoriumContext &&
       /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|\brsa\b/.test(rowContextText);
 
+    const isTestingContext =
+      /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(rowContextText);
+
     const isDocumentationContext =
+      !isTestingContext &&
       /dokumentation|fotodokumentation|aufmass|aufmaß|bestandsplan|bestandsplaene|bestandspläne|vermessung|vermessungsdaten|as-built|as built|uebergabeunterlagen|übergabeunterlagen|behoerden|behörden|auftraggeber/.test(rowContextText);
 
     const isVorhaltungContext =
+      !isTestingContext &&
       /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|freigabe|bauablaufstoerung|bauablaufstörung/.test(rowContextText);
 
     const isSiteSetupContext =
@@ -2611,20 +2750,29 @@ JSON-Schema:
   const isDisposalOpenAi =
     /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(norm(`${kurztext} ${langtext}`));
 
-  const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) =>
-    isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi
-      ? !/verkehrssicherung|rsa/i.test(String(w || ""))
-      : true
-  );
+  const isTestingOpenAi =
+    /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
+
+  const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
+    const msg = String(w || "");
+
+    if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
+
+    return isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi || isTestingOpenAi
+      ? !/verkehrssicherung|rsa/i.test(msg)
+      : true;
+  });
 
   const warnings = [
     ...baseWarnings,
     contextSensitiveOpenAi
       ? isErschwernisOpenAi
         ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
-        : isDisposalOpenAi
-          ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
-          : isWasserhaltungOpenAi
+        : isTestingOpenAi
+          ? "Kontextabhängige Position: Prüfungen/Abnahmen/technische Nachweise hängen stark von Leitungslänge, DN, Prüfverfahren, Spülung, TV-Inspektion, Geräteeinsatz, Auswertung, Protokollen, Abnahme und Anfahrt ab. Historische Preise nur als Orientierung verwenden."
+          : isDisposalOpenAi
+            ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
+            : isWasserhaltungOpenAi
             ? "Kontextabhängige Position: Wasserhaltung/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Stromversorgung, Ableitung, Kontrolle/Wartung, Ausfallrisiko und Wetter ab. Historische Preise nur als Orientierung verwenden."
             : isVorhaltungOpenAi
             ? "Kontextabhängige Position: Gerätevorhaltung/Stillstand/Wartezeiten hängt stark von Unterbrechungsdauer, betroffenen Geräten, Personalbindung, Freigaben, Bauablaufstörungen, erneuter Anfahrt und Logistik ab. Historische Preise nur als Orientierung verwenden."
@@ -2646,6 +2794,9 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isTestingReturn =
+    /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(returnContextText);
+
   const isDisposalReturn =
     /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(returnContextText);
   const isTempSupplyReturn =
@@ -2685,8 +2836,10 @@ JSON-Schema:
     riskLevel: finalRiskLevel,
     calculationStatus,
 
-    gewerk: isDisposalReturn
-      ? "Tiefbau / Entsorgung"
+    gewerk: isTestingReturn
+      ? "Tiefbau / Prüfungen"
+      : isDisposalReturn
+        ? "Tiefbau / Entsorgung"
       : isTempSupplyReturn
         ? "Tiefbau / Temporäre Versorgung"
       : isProvisoriumReturn
@@ -2698,8 +2851,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Tiefbau / Erschwernis"
         : s(parsed.gewerk) || gewerk,
-    leistungsart: isDisposalReturn
-      ? "Entsorgung / Deponie / belasteter Boden"
+    leistungsart: isTestingReturn
+      ? "Prüfung / Abnahme / technische Nachweise"
+      : isDisposalReturn
+        ? "Entsorgung / Deponie / belasteter Boden"
       : isTempSupplyReturn
         ? "Temporärer Anschluss / Notleitung / Medienversorgung"
       : isProvisoriumReturn
@@ -2711,8 +2866,10 @@ JSON-Schema:
       : /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(norm(`${kurztext} ${langtext}`))
         ? "Erschwernis / beengte Bauweise"
         : s(parsed.leistungsart) || leistungsart,
-    bauverfahren: isDisposalReturn
-      ? "Entsorgungskalkulation mit Analytik, Transport, Deponie und Nachweisen"
+    bauverfahren: isTestingReturn
+      ? "Technische Prüfung mit Spülung, TV-Inspektion, Dichtheitsprüfung und Dokumentation"
+      : isDisposalReturn
+        ? "Entsorgungskalkulation mit Analytik, Transport, Deponie und Nachweisen"
       : isTempSupplyReturn
         ? "Temporäre Herstellung, Prüfung, Betrieb und Rückbau"
       : isProvisoriumReturn
