@@ -4034,6 +4034,7 @@ JSON-Schema:
     !isWasserhaltungOpenAi &&
     !isTrafficSafetyOpenAi &&
     !isDocumentationOpenAi &&
+    !isVorhaltungOpenAi &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
 
   const isSpecialCivilOpenAi =
@@ -4119,9 +4120,12 @@ JSON-Schema:
   const isRiskSoilReturn =
     /kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenklasse unbekannt|bodenanalyse|gutachter|sicherheitsfreigabe|beweissicherung|zustandsaufnahme|rissprotokoll|baubegleitende kontrolle|bodenrisiko|bodenrisiken/.test(returnContextText);
 
+  const isVorhaltungReturn =
+    /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(returnContextText);
   const isAuthorityReturn =
     !isWaterHoldingReturn &&
     !isDocumentationReturn &&
+    !isVorhaltungReturn &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(returnContextText);
 
   const isSiteSetupReturn =
@@ -4151,8 +4155,6 @@ JSON-Schema:
     /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(returnContextText);
   const isWasserhaltungReturn =
     /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(returnContextText);
-  const isVorhaltungReturn =
-    /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(returnContextText);
   const isErschwernisReturn =
     /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(returnContextText);
 
