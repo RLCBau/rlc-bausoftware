@@ -4221,6 +4221,8 @@ JSON-Schema:
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
     if (isTempSupplyOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|dokumentation\/vermessung|prüfung|pruefung/i.test(msg)) return false;
     if (isSurfaceRestorationOpenAi && /entsorgung\/deponieklasse|bestandsanschluss|verkehrssicherung|rsa|dokumentation\/vermessung|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung/i.test(msg)) return false;
+    if (/schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|schutzplatten|oberflächenschutz|oberflaechenschutz/i.test(text) && /hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|bestandsanschluss|hauseinführung|hauseinfuehrung|kernbohrung|privatgrund|handschachtung/i.test(msg)) return false;
+    if (/behörden|behoerden|genehmigung|genehmigungen|auflagen|sigeko|sige ko|sicherheitskonzept|verkehrsrechtliche anordnung|fachstellen|freigaben/i.test(text) && /dokumentation\/vermessung|bestandspläne|bestandsplaene|as-built|gnss|tachymeter|cad/i.test(msg)) return false;
     if (isAuthorityOpenAi && /dokumentation\/vermessung|bestandspläne|as-built/i.test(msg)) return false;
     if (/schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen/i.test(text) && /hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|bestandsanschluss/i.test(msg)) return false;
     if (/erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen/i.test(text) && /hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|bestandsanschluss|schutzmaßnahmen|schutzmassnahmen/i.test(msg)) return false;
@@ -4239,7 +4241,13 @@ JSON-Schema:
     ...baseWarnings,
     contextSensitiveOpenAi
       ? isHouseConnectionOpenAi
-        ? "Kontextabhängige Position: Hausanschluss/Gebäudeeinführung/Arbeiten im Bestand hängt stark von Zugang, Innenhof, Privatgrund, Handschachtung, Kernbohrung, Hauseinführung, Schutz vorhandener Oberflächen, Eigentümerabstimmung, Wiederherstellung und Dokumentation ab. Historische Preise nur als Orientierung verwenden."
+        ? /schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|schutzplatten|oberflächenschutz|oberflaechenschutz/i.test(text)
+          ? /erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen|geringe lagerflächen|geringe lagerflaechen|erschwerte logistik|langsamere ausführung|langsamere ausfuehrung|zusätzliche koordination|zusaetzliche koordination/i.test(text)
+            ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Platzverhältnissen, Handschachtung, Leitungsbestand, Lagerflächen, Gerätebewegung, Logistik, langsameren Arbeitsabläufen und zusätzlicher Koordination ab. Historische Preise nur als Orientierung verwenden."
+            : "Kontextabhängige Position: Schutzmaßnahmen/Bestandssicherung/Oberflächenschutz hängt stark von vorhandenen Leitungen, Oberflächen, Gebäuden, Sicherungsart, Kontrollaufwand, Rückbau, Wiederherstellung und Bauzeit ab. Historische Preise nur als Orientierung verwenden."
+          : /behörden|behoerden|genehmigung|genehmigungen|auflagen|sigeko|sige ko|sicherheitskonzept|verkehrsrechtliche anordnung|fachstellen|freigaben/i.test(text)
+          ? "Kontextabhängige Position: Behörden/Genehmigungen/Auflagen/Sicherheit hängt stark von Laufzeit, Auflagen, Terminen, Fachstellen, verkehrsrechtlicher Anordnung, SiGeKo, Freigaben, Abstimmungen, Nachweisen und Dokumentationspflichten ab. Historische Preise nur als Orientierung verwenden."
+          : "Kontextabhängige Position: Hausanschluss/Gebäudeeinführung/Arbeiten im Bestand hängt stark von Zugang, Innenhof, Privatgrund, Handschachtung, Kernbohrung, Hauseinführung, Schutz vorhandener Oberflächen, Eigentümerabstimmung, Wiederherstellung und Dokumentation ab. Historische Preise nur als Orientierung verwenden."
         : isWasserhaltungOpenAi
           ? "Kontextabhängige Position: Wasserhaltung/Grundwasser/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Filterbrunnen, Ableitung, Einleitgenehmigung, Wartung, Notstrom, Ausfallsicherung und Rückbau ab. Historische Preise nur als Orientierung verwenden."
           : isSpecialCivilOpenAi
@@ -4250,6 +4258,8 @@ JSON-Schema:
           ? "Kontextabhängige Position: Prüfungen/Abnahmen/technische Nachweise hängen stark von Leitungslänge, DN, Prüfverfahren, Spülung, TV-Inspektion, Geräteeinsatz, Auswertung, Protokollen, Abnahme und Anfahrt ab. Historische Preise nur als Orientierung verwenden."
           : isTrafficSafetyOpenAi
           ? "Kontextabhängige Position: Verkehrssicherung/RSA/Umleitung/Beschilderung hängt stark von Bauzeit, Verkehrsführung, verkehrsrechtlicher Anordnung, Beschilderung, Absperrmaterial, Lichtsignalanlage, täglicher Kontrolle, Wartung, Anpassung, Anwohnerverkehr, Aufbau, Vorhaltung und Rückbau ab. Historische Preise nur als Orientierung verwenden."
+          : /behörden|behoerden|genehmigung|genehmigungen|auflagen|sigeko|sige ko|sicherheitskonzept|verkehrsrechtliche anordnung|fachstellen|freigaben/i.test(text)
+          ? "Kontextabhängige Position: Behörden/Genehmigungen/Auflagen/Sicherheit hängt stark von Laufzeit, Auflagen, Terminen, Fachstellen, verkehrsrechtlicher Anordnung, SiGeKo, Freigaben, Abstimmungen, Nachweisen und Dokumentationspflichten ab. Historische Preise nur als Orientierung verwenden."
           : isDocumentationOpenAi
           ? "Kontextabhängige Position: Dokumentation/Vermessung/Bestandspläne/As-Built hängt stark von Projektumfang, Bauzeit, Vermessungsterminen, GNSS-/Tachymeteraufnahmen, CAD-Nachbearbeitung, Datenformaten, Übergabeunterlagen, Auftraggeberabstimmung und digitaler Nachweisführung ab. Historische Preise nur als Orientierung verwenden."
           : isTempSupplyOpenAi
