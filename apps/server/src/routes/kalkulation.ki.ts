@@ -241,6 +241,10 @@ function contextSensitiveWarning(textRaw: any): string {
     return "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
   }
 
+  if (/(verkehrssicherung|verkehrsfuehrung|verkehrsführung|rsa|beschilderung|absperrung|sperrung|umleitung|lichtsignalanlage|ampel|baustellenampel|verkehrszeichen|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr)/i.test(text)) {
+    return "Kontextabhängige Position: Verkehrssicherung/RSA/Umleitung/Beschilderung hängt stark von Bauzeit, Verkehrsführung, verkehrsrechtlicher Anordnung, Beschilderung, Absperrmaterial, Lichtsignalanlage, täglicher Kontrolle, Wartung, Anpassung, Anwohnerverkehr, Aufbau, Vorhaltung und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
   if (/(genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text)) {
     return "Kontextabhängige Position: Behörden/Genehmigungen/Auflagen/Sicherheit hängt stark von Laufzeit, Auflagen, Terminen, Fachstellen, verkehrsrechtlicher Anordnung, SiGeKo, Kampfmittel, Denkmalpflege, Freigaben und Dokumentationspflichten ab. Historische Preise nur als Orientierung verwenden.";
   }
@@ -3547,16 +3551,16 @@ JSON-Schema:
       !isProtectionContext &&
       /notleitung|temporaer.*anschluss|temporär.*anschluss|temporaere.*anschluesse|temporäre.*anschlüsse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckpruefung|druckprüfung|absperrarmatur|formstueck|formstück/.test(rowContextText);
 
+    const isTrafficSafetyContext =
+      !isProtectionContext &&
+      /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(rowContextText);
+
     const isProvisoriumContext =
       !isLogisticsContext &&
       !isProtectionContext &&
       !isTemporarySupplyContext &&
+      !isTrafficSafetyContext &&
       /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau|unterhalten|unterhaltung/.test(rowContextText);
-
-    const isTrafficSafetyContext =
-      !isProtectionContext &&
-      !isProvisoriumContext &&
-      /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|lichtsignalanlage|ampel|\brsa\b/.test(rowContextText);
 
     const isTestingContext =
       !isProtectionContext &&
@@ -3891,8 +3895,12 @@ JSON-Schema:
   const isLogisticsOpenAi =
     /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
 
+  const isTrafficSafetyOpenAi =
+    /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(norm(`${kurztext} ${langtext}`));
+
   const isAuthorityOpenAi =
     !isWasserhaltungOpenAi &&
+    !isTrafficSafetyOpenAi &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
 
   const isSpecialCivilOpenAi =
@@ -3906,6 +3914,7 @@ JSON-Schema:
     const msg = String(w || "");
 
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
+    if (isTrafficSafetyOpenAi && /baustelleneinrichtung|provisorium|baustraße|baustrasse|spezialtiefbau|behörden|behoerden/i.test(msg)) return false;
     if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
     if (isSpecialCivilOpenAi && /erschwernis|beengte bauweise/i.test(msg)) return false;
     if (isHouseConnectionOpenAi && /erschwernis|beengte bauweise/i.test(msg)) return false;
@@ -3928,6 +3937,8 @@ JSON-Schema:
           ? "Kontextabhängige Position: Erschwernis/beengte Bauweise hängt stark von Bauzeit, Platzverhältnissen, Handschachtung, Leitungsbestand, Anliegerverkehr, Gerätebewegung und Sicherungsaufwand ab. Historische Preise nur als Orientierung verwenden."
           : isTestingOpenAi
           ? "Kontextabhängige Position: Prüfungen/Abnahmen/technische Nachweise hängen stark von Leitungslänge, DN, Prüfverfahren, Spülung, TV-Inspektion, Geräteeinsatz, Auswertung, Protokollen, Abnahme und Anfahrt ab. Historische Preise nur als Orientierung verwenden."
+          : isTrafficSafetyOpenAi
+          ? "Kontextabhängige Position: Verkehrssicherung/RSA/Umleitung/Beschilderung hängt stark von Bauzeit, Verkehrsführung, verkehrsrechtlicher Anordnung, Beschilderung, Absperrmaterial, Lichtsignalanlage, täglicher Kontrolle, Wartung, Anpassung, Anwohnerverkehr, Aufbau, Vorhaltung und Rückbau ab. Historische Preise nur als Orientierung verwenden."
           : isDisposalOpenAi
             ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
             : isWasserhaltungOpenAi
@@ -3980,10 +3991,15 @@ JSON-Schema:
 
   const isDisposalReturn =
     /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(returnContextText);
+
+  const isTrafficSafetyReturn =
+    /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(returnContextText);
+
   const isTempSupplyReturn =
     /notleitung|temporaer.*anschluss|temporär.*anschluss|temporaere.*anschluesse|temporäre.*anschlüsse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckpruefung|druckprüfung|absperrarmatur|formstueck|formstück/.test(returnContextText);
   const isProvisoriumReturn =
     !isTempSupplyReturn &&
+    !isTrafficSafetyReturn &&
     /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(returnContextText);
   const isWasserhaltungReturn =
     /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(returnContextText);
@@ -4035,6 +4051,8 @@ JSON-Schema:
         ? "Tiefbau / Prüfungen"
       : isDisposalReturn
         ? "Tiefbau / Entsorgung"
+      : isTrafficSafetyReturn
+        ? "Tiefbau / Verkehrssicherung"
       : isTempSupplyReturn
         ? "Tiefbau / Temporäre Versorgung"
       : isProvisoriumReturn
@@ -4064,6 +4082,8 @@ JSON-Schema:
         ? "Prüfung / Abnahme / technische Nachweise"
       : isDisposalReturn
         ? "Entsorgung / Deponie / belasteter Boden"
+      : isTrafficSafetyReturn
+        ? "Verkehrssicherung / RSA / Umleitung / Beschilderung"
       : isTempSupplyReturn
         ? "Temporärer Anschluss / Notleitung / Medienversorgung"
       : isProvisoriumReturn
@@ -4093,6 +4113,8 @@ JSON-Schema:
         ? "Technische Prüfung mit Spülung, TV-Inspektion, Dichtheitsprüfung und Dokumentation"
       : isDisposalReturn
         ? "Entsorgungskalkulation mit Analytik, Transport, Deponie und Nachweisen"
+      : isTrafficSafetyReturn
+        ? "RSA-konforme Verkehrsführung mit Aufbau, Vorhaltung, täglicher Kontrolle und Rückbau"
       : isTempSupplyReturn
         ? "Temporäre Herstellung, Prüfung, Betrieb und Rückbau"
       : isProvisoriumReturn
