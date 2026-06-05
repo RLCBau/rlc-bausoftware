@@ -249,8 +249,12 @@ function contextSensitiveWarning(textRaw: any): string {
     return "Kontextabhängige Position: Behörden/Genehmigungen/Auflagen/Sicherheit hängt stark von Laufzeit, Auflagen, Terminen, Fachstellen, verkehrsrechtlicher Anordnung, SiGeKo, Kampfmittel, Denkmalpflege, Freigaben und Dokumentationspflichten ab. Historische Preise nur als Orientierung verwenden.";
   }
 
-  if (/(baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text)) {
-    return "Kontextabhängige Position: Baustellenlogistik/Zufahrt/Lager/Versorgung hängt stark von Bauzeit, Zufahrt, Lagerflächen, Baustrom, Wasser, Beleuchtung, Gerätemiete, Betrieb, Kontrolle, Rückbau und Logistik ab. Historische Preise nur als Orientierung verwenden.";
+  if (/(baustelleneinrichtung|baustelle einrichten|vorhaltung|baustellengemeinkosten|bürocontainer|buero container|büro container|buero-container|büro-container|mannschaftscontainer|sanitärcontainer|sanitaercontainer|containeranlage|baustrom|bauwasser|baustellenbeleuchtung)/i.test(text)) {
+    return "Kontextabhängige Position: Baustelleneinrichtung/Vorhaltung/Container/Baustrom/Bauwasser hängt stark von Bauzeit, Containeranzahl, Miete, Aufbau, Betrieb, Reinigung, Wartung, Baustrom, Bauwasser, Beleuchtung, Zufahrt, Entfernung, Kontrolle, Rückbau und Gemeinkosten ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text)) {
+    return "Kontextabhängige Position: Baustellenlogistik/Zufahrt/Lager/Versorgung hängt stark von Bauzeit, Zufahrt, Lagerflächen, Gerätemiete, Betrieb, Kontrolle, Rückbau und Logistik ab. Historische Preise nur als Orientierung verwenden.";
   }
 
   if (/(schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text)) {
@@ -3507,8 +3511,46 @@ JSON-Schema:
   const normalizedRiskCost = sumBreakdownGroup(priceBreakdown, ["Risiko"]);
   const normalizedProfitCost = sumBreakdownGroup(priceBreakdown, ["Gewinn"]);
 
-  const suggestedUnitPrice = round2(breakdownTotal || directTotal);
-  const finalUnitPrice = suggestedUnitPrice;
+  let suggestedUnitPrice = round2(breakdownTotal || directTotal);
+  let finalUnitPrice = suggestedUnitPrice;
+
+  const siteSetupGuardText = norm(`${kurztext} ${langtext}`);
+  const isLongSiteSetupGuard =
+    /baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|containeranlage|bürocontainer|buero container|büro container|buero-container|büro-container|mannschaftscontainer|sanitärcontainer|sanitaercontainer|lagercontainer|baustrom|bauwasser|baustellenbeleuchtung|sanitaer|sanitär/.test(siteSetupGuardText) &&
+    projectDurationDays >= 180 &&
+    normUnit(einheit) === "Psch";
+
+  if (isLongSiteSetupGuard) {
+    const months = Math.max(1, projectDurationDays / 30);
+    const setupOnce = 8500;
+    const dismantleOnce = 6500;
+    const monthlyContainer = 1800 * months;
+    const monthlyUtilities = 700 * months;
+    const monthlyCleaningControl = 650 * months;
+    const distanceLogistics = Math.max(2500, projectDistanceKm * 45);
+    const minSiteSetup = round2(
+      setupOnce +
+      dismantleOnce +
+      monthlyContainer +
+      monthlyUtilities +
+      monthlyCleaningControl +
+      distanceLogistics
+    );
+
+    if (finalUnitPrice < minSiteSetup) {
+      const factor = finalUnitPrice > 0 ? minSiteSetup / finalUnitPrice : 1;
+
+      for (const line of priceBreakdown) {
+        line.price = round2(n(line.price) * factor);
+        line.total = round2(n(line.total) * factor);
+        line.note = `${s(line.note)} · RLC Guard: Langzeit-Baustelleneinrichtung auf Mindest-Urkalkulation ${minSiteSetup} EUR skaliert.`;
+      }
+
+      breakdownTotal = sumBreakdown(priceBreakdown);
+      suggestedUnitPrice = round2(breakdownTotal || minSiteSetup);
+      finalUnitPrice = suggestedUnitPrice;
+    }
+  }
 
   const rawRisk = s(parsed.riskLevel);
   const riskLevel: RiskLevel =
@@ -3539,9 +3581,14 @@ JSON-Schema:
     const isAuthorityContext =
       /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(rowContextText);
 
+    const isSiteSetupContext =
+      !isAuthorityContext &&
+      /baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|containeranlage|bürocontainer|buero container|büro container|buero-container|büro-container|mannschaftscontainer|sanitärcontainer|sanitaercontainer|lagercontainer|baustrom|bauwasser|baustellenbeleuchtung|sanitaer|sanitär/.test(rowContextText);
+
     const isLogisticsContext =
       !isAuthorityContext &&
-      /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(rowContextText);
+      !isSiteSetupContext &&
+      /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(rowContextText);
 
     const isProtectionContext =
       !isLogisticsContext &&
@@ -3578,12 +3625,15 @@ JSON-Schema:
       !isTestingContext &&
       /geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|freigabe|bauablaufstoerung|bauablaufstörung/.test(rowContextText);
 
-    const isSiteSetupContext =
-      !isProtectionContext &&
-      !isTrafficSafetyContext &&
-      !isDocumentationContext &&
-      !isVorhaltungContext &&
-      /baustelleneinrichtung|vorhaltung|baustellengemeinkosten|container|baustrom|bauwasser|sanitaer|sanitär/.test(rowContextText);
+    const isSiteSetupLongDurationContext =
+      isSiteSetupContext ||
+      (
+        !isProtectionContext &&
+        !isTrafficSafetyContext &&
+        !isDocumentationContext &&
+        !isVorhaltungContext &&
+        /baustelleneinrichtung|vorhaltung|baustellengemeinkosten|container|baustrom|bauwasser|sanitaer|sanitär/.test(rowContextText)
+      );
 
     const hasContainer = /container|baustelleneinrichtung/.test(contextBreakdownText);
     const hasUtilities = /baustrom|bauwasser|sanitaer|sanitär|toilette|wc/.test(contextBreakdownText);
@@ -3707,11 +3757,11 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Bei langer Laufzeit fehlt eine erkennbare Monats-/Tages-/Vorhaltungsbasis im priceBreakdown.");
     }
 
-    if (isSiteSetupContext && projectDurationDays >= 180 && !hasContainer) {
+    if (isSiteSetupLongDurationContext && projectDurationDays >= 180 && !hasContainer) {
       contextQualityWarnings.push("Context-Guard: Container/Baustelleneinrichtung fehlt oder ist nicht separat erkennbar.");
     }
 
-    if (isSiteSetupContext && projectDurationDays >= 180 && !hasUtilities) {
+    if (isSiteSetupLongDurationContext && projectDurationDays >= 180 && !hasUtilities) {
       contextQualityWarnings.push("Context-Guard: Baustrom/Bauwasser/Sanitär fehlt oder ist nicht separat kalkuliert.");
     }
 
@@ -3787,7 +3837,7 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Vorhaltung über die Laufzeit fehlt oder ist nicht separat kalkuliert.");
     }
 
-    if (isProvisoriumContext && !hasProvisoriumUnterhaltung) {
+    if (isProvisoriumContext && !isSiteSetupLongDurationContext && !hasProvisoriumUnterhaltung) {
       contextQualityWarnings.push("Context-Guard: Provisorium/Baustraße: Unterhaltung/Reinigung/Anpassung fehlt oder ist nicht separat kalkuliert.");
     }
 
@@ -3892,8 +3942,12 @@ JSON-Schema:
   const isTestingOpenAi =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
 
+  const isSiteSetupOpenAi =
+    /baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|containeranlage|bürocontainer|buero container|büro container|buero-container|büro-container|mannschaftscontainer|sanitärcontainer|sanitaercontainer|lagercontainer|baustrom|bauwasser|baustellenbeleuchtung|sanitaer|sanitär/.test(norm(`${kurztext} ${langtext}`));
+
   const isLogisticsOpenAi =
-    /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
+    !isSiteSetupOpenAi &&
+    /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
 
   const isTrafficSafetyOpenAi =
     /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(norm(`${kurztext} ${langtext}`));
@@ -3945,6 +3999,8 @@ JSON-Schema:
             ? "Kontextabhängige Position: Wasserhaltung/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Stromversorgung, Ableitung, Kontrolle/Wartung, Ausfallrisiko und Wetter ab. Historische Preise nur als Orientierung verwenden."
             : isVorhaltungOpenAi
             ? "Kontextabhängige Position: Gerätevorhaltung/Stillstand/Wartezeiten hängt stark von Unterbrechungsdauer, betroffenen Geräten, Personalbindung, Freigaben, Bauablaufstörungen, erneuter Anfahrt und Logistik ab. Historische Preise nur als Orientierung verwenden."
+            : isSiteSetupOpenAi
+            ? "Kontextabhängige Position: Baustelleneinrichtung/Vorhaltung/Container/Baustrom/Bauwasser hängt stark von Bauzeit, Containeranzahl, Miete, Aufbau, Betrieb, Reinigung, Wartung, Baustrom, Bauwasser, Beleuchtung, Zufahrt, Entfernung, Kontrolle, Rückbau und Gemeinkosten ab. Historische Preise nur als Orientierung verwenden."
             : contextSensitiveWarning(text)
       : "",
     ...contextQualityWarnings,
@@ -3980,8 +4036,12 @@ JSON-Schema:
     !isWaterHoldingReturn &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(returnContextText);
 
+  const isSiteSetupReturn =
+    /baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|containeranlage|bürocontainer|buero container|büro container|buero-container|büro-container|mannschaftscontainer|sanitärcontainer|sanitaercontainer|lagercontainer|baustrom|bauwasser|baustellenbeleuchtung|sanitaer|sanitär/.test(returnContextText);
+
   const isLogisticsReturn =
-    /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(returnContextText);
+    !isSiteSetupReturn &&
+    /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(returnContextText);
 
   const isProtectionReturn =
     /schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz/.test(returnContextText);
@@ -4043,6 +4103,8 @@ JSON-Schema:
         ? "Tiefbau / Spezialtiefbau"
       : isAuthorityReturn
         ? "Tiefbau / Behörden & Sicherheit"
+      : isSiteSetupReturn
+        ? "Tiefbau / Baustelleneinrichtung"
       : isLogisticsReturn
         ? "Tiefbau / Baustellenlogistik"
       : isProtectionReturn
@@ -4074,6 +4136,8 @@ JSON-Schema:
         ? "Spezialtiefbau / schwierige Bauverfahren"
       : isAuthorityReturn
         ? "Genehmigungen / Auflagen / Sicherheitskoordination"
+      : isSiteSetupReturn
+        ? "Baustelleneinrichtung / Vorhaltung / Container / Baustrom / Bauwasser"
       : isLogisticsReturn
         ? "Zufahrt / Lager / Baustellenversorgung"
       : isProtectionReturn
@@ -4105,6 +4169,8 @@ JSON-Schema:
         ? "Verbau, Wasserhaltung, Bodenverbesserung, Pressung und Rohrvortrieb"
       : isAuthorityReturn
         ? "Behörden-, Sicherheits- und Freigabemanagement mit Dokumentation"
+      : isSiteSetupReturn
+        ? "Einrichtung, Betrieb, Vorhaltung, Unterhaltung und Rückbau der Baustelleneinrichtung"
       : isLogisticsReturn
         ? "Logistik-, Lager- und Versorgungsmaßnahmen mit Vorhaltung und Rückbau"
       : isProtectionReturn
