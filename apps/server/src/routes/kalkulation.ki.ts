@@ -237,6 +237,10 @@ function contextSensitiveWarning(textRaw: any): string {
     return "Kontextabhängige Position: Wasserhaltung/Grundwasser/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Filterbrunnen, Ableitung, Einleitgenehmigung, Wartung, Notstrom, Ausfallsicherung und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
   }
 
+  if (/(dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung)/i.test(text)) {
+    return "Kontextabhängige Position: Dokumentation/Vermessung/Bestandspläne/As-Built hängt stark von Projektumfang, Bauzeit, Vermessungsterminen, GNSS-/Tachymeteraufnahmen, CAD-Nachbearbeitung, Datenformaten, Übergabeunterlagen, Auftraggeberabstimmung und digitaler Nachweisführung ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
   if (/(spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand)/i.test(text)) {
     return "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
   }
@@ -3495,6 +3499,77 @@ JSON-Schema:
     }
   }
 
+  const documentationGuardText = norm(`${kurztext} ${langtext}`);
+  const isDocumentationBreakdownGuard =
+    /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(documentationGuardText);
+
+  const breakdownLooksAuthorityContaminated =
+    priceBreakdown.some((x) =>
+      /genehmigung|behörden|behoerden|verkehrsrechtliche anordnung|sigeko|arbeitssicherheit|denkmalpflege|archäolog|archaeolog|kampfmittel|freigabe/.test(
+        norm(`${x.group} ${x.name} ${x.note}`)
+      )
+    );
+
+  if (isDocumentationBreakdownGuard && breakdownLooksAuthorityContaminated) {
+    const km = Math.max(0, projectDistanceKm || 0);
+    const days = Math.max(1, projectDurationDays || 1);
+
+    const makeLine = (
+      group: PriceBreakdownGroup,
+      name: string,
+      price: number,
+      note: string
+    ): PriceBreakdownLine => ({
+      id: `rlc-doc-${Math.random().toString(36).slice(2)}`,
+      group,
+      name,
+      unit: "Psch",
+      qty: 1,
+      price: round2(price),
+      total: round2(price),
+      note,
+    });
+
+    const photoDoc = 1800;
+    const aufmass = 3200;
+    const survey = 5200;
+    const cadAsBuilt = 6800;
+    const digitalHandover = 2800;
+    const clientCoordination = 1800;
+    const travelLogistics = Math.max(900, km * 35);
+    const projectDurationFactor = Math.max(1, Math.min(3, days / 90));
+
+    const directDoc =
+      photoDoc +
+      aufmass +
+      survey +
+      cadAsBuilt +
+      digitalHandover +
+      clientCoordination +
+      travelLogistics;
+
+    const durationSurcharge = round2((projectDurationFactor - 1) * 2500);
+    const overhead = round2((directDoc + durationSurcharge) * 0.1);
+    const risk = round2((directDoc + durationSurcharge) * 0.06);
+    const profit = round2((directDoc + durationSurcharge + overhead + risk) * 0.08);
+
+    priceBreakdown = [
+      makeLine("Personal", "Fotodokumentation / digitale Baustellendokumentation", photoDoc, "Fotodokumentation und strukturierte digitale Nachweisführung."),
+      makeLine("Personal", "Aufmaß / Massenermittlung", aufmass, "Aufmaß, Mengenermittlung und prüffähige Zusammenstellung."),
+      makeLine("Fremdleistung", "Vermessung GNSS / Tachymeter", survey, "Vermessung von Leitungen, Schächten und relevanten Ausführungspunkten."),
+      makeLine("Fremdleistung", "CAD-Bearbeitung / Bestandspläne / As-Built", cadAsBuilt, "CAD-Nachbearbeitung, Bestandsplanerstellung und As-Built-Dokumentation."),
+      makeLine("Personal", "Übergabeunterlagen PDF/DWG/DXF/LandXML", digitalHandover, "Digitale Übergabeunterlagen in geforderten Datenformaten."),
+      makeLine("Personal", "Abstimmung Auftraggeber / Planprüfung", clientCoordination, "Fachliche Abstimmung mit Auftraggeber und Planprüfung; keine Behörden-/Genehmigungsposition."),
+      makeLine("LKW / Transport", "Anfahrt / Ortstermine / Vermessungstermine", travelLogistics, `Baustellenanfahrt und Ortstermine, Entfernung ca. ${km} km.`),
+      makeLine("Gemeinkosten", "Projektlaufzeit-Zuschlag Dokumentation", durationSurcharge, `Zuschlag für Koordination über ca. ${days} Tage Bauzeit.`),
+      makeLine("Gemeinkosten", "Gemeinkosten", overhead, "Gemeinkosten für Dokumentations- und Vermessungsabwicklung."),
+      makeLine("Risiko", "Risiko", risk, "Prüfpflichtiges Risiko wegen unklarer Detailtiefe, Datenformaten und Übergabeanforderungen."),
+      makeLine("Gewinn", "Gewinn", profit, "Kalkulatorischer Gewinn."),
+    ].filter((x) => x.total > 0);
+
+    breakdownTotal = sumBreakdown(priceBreakdown);
+  }
+
   /**
    * Quelle der Wahrheit ist ab hier die Urkalkulation pro Einheit.
    * Dadurch bleiben Hauptkosten, EP, PDF und Frontend immer konsistent.
@@ -3952,9 +4027,13 @@ JSON-Schema:
   const isTrafficSafetyOpenAi =
     /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(norm(`${kurztext} ${langtext}`));
 
+  const isDocumentationOpenAi =
+    /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(norm(`${kurztext} ${langtext}`));
+
   const isAuthorityOpenAi =
     !isWasserhaltungOpenAi &&
     !isTrafficSafetyOpenAi &&
+    !isDocumentationOpenAi &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(norm(`${kurztext} ${langtext}`));
 
   const isSpecialCivilOpenAi =
@@ -3962,6 +4041,7 @@ JSON-Schema:
     /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(`${kurztext} ${langtext}`));
 
   const isHouseConnectionOpenAi =
+    !isDocumentationOpenAi &&
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(norm(`${kurztext} ${langtext}`));
 
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
@@ -3969,6 +4049,7 @@ JSON-Schema:
 
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
     if (isTrafficSafetyOpenAi && /baustelleneinrichtung|provisorium|baustraße|baustrasse|spezialtiefbau|behörden|behoerden/i.test(msg)) return false;
+    if (isDocumentationOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|behörden|behoerden|kampfmittel|denkmalpflege|sigeko|arbeitssicherheit|verkehrssicherung|rsa/i.test(msg)) return false;
     if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
     if (isSpecialCivilOpenAi && /erschwernis|beengte bauweise/i.test(msg)) return false;
     if (isHouseConnectionOpenAi && /erschwernis|beengte bauweise/i.test(msg)) return false;
@@ -3993,6 +4074,8 @@ JSON-Schema:
           ? "Kontextabhängige Position: Prüfungen/Abnahmen/technische Nachweise hängen stark von Leitungslänge, DN, Prüfverfahren, Spülung, TV-Inspektion, Geräteeinsatz, Auswertung, Protokollen, Abnahme und Anfahrt ab. Historische Preise nur als Orientierung verwenden."
           : isTrafficSafetyOpenAi
           ? "Kontextabhängige Position: Verkehrssicherung/RSA/Umleitung/Beschilderung hängt stark von Bauzeit, Verkehrsführung, verkehrsrechtlicher Anordnung, Beschilderung, Absperrmaterial, Lichtsignalanlage, täglicher Kontrolle, Wartung, Anpassung, Anwohnerverkehr, Aufbau, Vorhaltung und Rückbau ab. Historische Preise nur als Orientierung verwenden."
+          : isDocumentationOpenAi
+          ? "Kontextabhängige Position: Dokumentation/Vermessung/Bestandspläne/As-Built hängt stark von Projektumfang, Bauzeit, Vermessungsterminen, GNSS-/Tachymeteraufnahmen, CAD-Nachbearbeitung, Datenformaten, Übergabeunterlagen, Auftraggeberabstimmung und digitaler Nachweisführung ab. Historische Preise nur als Orientierung verwenden."
           : isDisposalOpenAi
             ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
             : isWasserhaltungOpenAi
@@ -4019,7 +4102,11 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isDocumentationReturn =
+    /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(returnContextText);
+
   const isHouseConnectionReturn =
+    !isDocumentationReturn &&
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(returnContextText);
 
   const isWaterHoldingReturn =
@@ -4034,6 +4121,7 @@ JSON-Schema:
 
   const isAuthorityReturn =
     !isWaterHoldingReturn &&
+    !isDocumentationReturn &&
     /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(returnContextText);
 
   const isSiteSetupReturn =
@@ -4097,6 +4185,8 @@ JSON-Schema:
       ? "Tiefbau / Wasserhaltung"
       : isRiskSoilReturn
         ? "Tiefbau / Kampfmittel & Altlasten"
+      : isDocumentationReturn
+        ? "Tiefbau / Dokumentation & Vermessung"
       : isHouseConnectionReturn
         ? "Tiefbau / Hausanschlüsse & Bestand"
       : isSpecialCivilReturn
@@ -4130,6 +4220,8 @@ JSON-Schema:
       ? "Wasserhaltung / Grundwasser / Pumpen / Baugrubenentwässerung"
       : isRiskSoilReturn
         ? "Kampfmittel / Altlasten / Bodenrisiken / Beweissicherung"
+      : isDocumentationReturn
+        ? "Dokumentation / Vermessung / Bestandspläne / As-Built"
       : isHouseConnectionReturn
         ? "Hausanschluss / Gebäudeeinführung / Arbeiten im Bestand"
       : isSpecialCivilReturn
@@ -4163,6 +4255,8 @@ JSON-Schema:
       ? "Temporäre Wasserhaltung mit Pumpenanlage, Ableitung, Wartung, Notstrom und Rückbau"
       : isRiskSoilReturn
         ? "Baubegleitende Sondierung, Analyse, Gutachterleistung, Freigabe und Dokumentation"
+      : isDocumentationReturn
+        ? "Digitale Bestandsaufnahme, CAD-/As-Built-Erstellung und Übergabedokumentation"
       : isHouseConnectionReturn
         ? "Gebäudenahe Ausführung mit Handschachtung, Kernbohrung, Hauseinführung und Wiederherstellung"
       : isSpecialCivilReturn
