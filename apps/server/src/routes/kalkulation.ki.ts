@@ -3501,7 +3501,8 @@ JSON-Schema:
 
   const surfaceGuardText = norm(`${kurztext} ${langtext}`);
   const isSurfaceBreakdownGuard =
-    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verdichtung|verkehrsfreigabe|aufbruchmaterial/.test(surfaceGuardText);
+    !/geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(surfaceGuardText) &&
+    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verkehrsfreigabe|aufbruchmaterial/.test(surfaceGuardText);
 
   const surfaceBreakdownLooksContaminated =
     priceBreakdown.some((x) =>
@@ -3641,6 +3642,8 @@ JSON-Schema:
   const documentationGuardText = norm(`${kurztext} ${langtext}`);
   const isDocumentationBreakdownGuard =
     !isSurfaceBreakdownGuard &&
+    !/entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(documentationGuardText) &&
+    !/kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenanalyse|gutachter|sicherheitsfreigabe|bodenrisiko|bodenrisiken/.test(documentationGuardText) &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(documentationGuardText);
 
   const breakdownLooksAuthorityContaminated =
@@ -4158,7 +4161,8 @@ JSON-Schema:
     /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(norm(`${kurztext} ${langtext}`));
 
   const isSurfaceRestorationOpenAi =
-    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verdichtung|verkehrsfreigabe|aufbruchmaterial/.test(norm(`${kurztext} ${langtext}`));
+    !isVorhaltungOpenAi &&
+    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verkehrsfreigabe|aufbruchmaterial/.test(norm(`${kurztext} ${langtext}`));
 
   const isTempSupplyOpenAi =
     /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(norm(`${kurztext} ${langtext}`));
@@ -4181,6 +4185,8 @@ JSON-Schema:
   const isDocumentationOpenAi =
     !isTempSupplyOpenAi &&
     !isSurfaceRestorationOpenAi &&
+    !isDisposalOpenAi &&
+    !/kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenanalyse|gutachter|sicherheitsfreigabe|bodenrisiko|bodenrisiken/.test(norm(`${kurztext} ${langtext}`)) &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(norm(`${kurztext} ${langtext}`));
 
   const isAuthorityOpenAi =
@@ -4265,7 +4271,8 @@ JSON-Schema:
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
   const isSurfaceRestorationReturn =
-    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verdichtung|verkehrsfreigabe|aufbruchmaterial/.test(returnContextText);
+    !/geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(returnContextText) &&
+    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verkehrsfreigabe|aufbruchmaterial/.test(returnContextText);
 
   const isTempSupplyReturn =
     /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(returnContextText);
@@ -4273,6 +4280,8 @@ JSON-Schema:
   const isDocumentationReturn =
     !isTempSupplyReturn &&
     !isSurfaceRestorationReturn &&
+    !/entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(returnContextText) &&
+    !/kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenanalyse|gutachter|sicherheitsfreigabe|bodenrisiko|bodenrisiken/.test(returnContextText) &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(returnContextText);
 
   const isHouseConnectionReturn =
