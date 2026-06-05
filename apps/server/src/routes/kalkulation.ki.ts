@@ -3499,6 +3499,82 @@ JSON-Schema:
     }
   }
 
+  const surfaceGuardText = norm(`${kurztext} ${langtext}`);
+  const isSurfaceBreakdownGuard =
+    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verdichtung|verkehrsfreigabe|aufbruchmaterial/.test(surfaceGuardText);
+
+  const surfaceBreakdownLooksContaminated =
+    priceBreakdown.some((x) =>
+      /rlc-doc|hausanschluss|hauseinführung|hauseinfuehrung|kernbohrung|wanddurchführung|wanddurchfuehrung|bestandsplan|as-built|fotodokumentation|vermessung|cad-bearbeitung|übergabeunterlagen|uebergabeunterlagen|verkehrssicherung|rsa|notleitung|medienversorgung/.test(
+        norm(`${x.group} ${x.name} ${x.note}`)
+      )
+    ) || round2(breakdownTotal || directTotal) < 25000;
+
+  if (isSurfaceBreakdownGuard && surfaceBreakdownLooksContaminated) {
+    const km = Math.max(0, projectDistanceKm || 0);
+
+    const makeSurfaceLine = (
+      group: PriceBreakdownGroup,
+      name: string,
+      price: number,
+      note: string
+    ): PriceBreakdownLine => ({
+      id: `rlc-surface-${Math.random().toString(36).slice(2)}`,
+      group,
+      name,
+      unit: "Psch",
+      qty: 1,
+      price: round2(price),
+      total: round2(price),
+      note,
+    });
+
+    const aufbruch = 5200;
+    const entsorgung = 4200;
+    const frostschutz = 9800;
+    const asphaltTrag = 11200;
+    const asphaltDeck = 9800;
+    const pflaster = 7600;
+    const bordstein = 7200;
+    const verdichtung = 4200;
+    const verkehrNeben = 3200;
+    const logistik = Math.max(1800, km * 45);
+
+    const direct =
+      aufbruch +
+      entsorgung +
+      frostschutz +
+      asphaltTrag +
+      asphaltDeck +
+      pflaster +
+      bordstein +
+      verdichtung +
+      verkehrNeben +
+      logistik;
+
+    const overhead = round2(direct * 0.1);
+    const risk = round2(direct * 0.07);
+    const profit = round2((direct + overhead + risk) * 0.08);
+
+    priceBreakdown = [
+      makeSurfaceLine("Fremdleistung", "Aufbruch / Fräsen / Ausbau Oberfläche", aufbruch, "Aufbruch und Vorbereitung der Verkehrsfläche."),
+      makeSurfaceLine("Entsorgung", "Entsorgung Aufbruchmaterial", entsorgung, "Laden, Transport und Entsorgung von Aufbruchmaterial."),
+      makeSurfaceLine("Material", "Frostschutz / Schottertragschicht", frostschutz, "Einbau und Verdichtung der Frostschutz- und Schottertragschicht."),
+      makeSurfaceLine("Fremdleistung", "Asphalttragschicht", asphaltTrag, "Einbau Asphalttragschicht inkl. Geräte und Kolonne."),
+      makeSurfaceLine("Fremdleistung", "Asphaltdeckschicht", asphaltDeck, "Einbau Asphaltdeckschicht inkl. Anschluss an Bestand."),
+      makeSurfaceLine("Fremdleistung", "Pflasterflächen / Anpassungen", pflaster, "Wiederherstellung Pflasterflächen und Anpassungsarbeiten."),
+      makeSurfaceLine("Fremdleistung", "Bordsteine / Rinnen", bordstein, "Bordstein- und Rinnenarbeiten ca. 45 m."),
+      makeSurfaceLine("Maschinen", "Verdichtung / Walze / Rüttelplatte", verdichtung, "Geräteeinsatz für Verdichtung und Oberflächenherstellung."),
+      makeSurfaceLine("Personal", "Arbeiten unter Verkehr / Anwohner / Nebenarbeiten", verkehrNeben, "Nebenarbeiten, Anwohnerverkehr und Verkehrsfreigabe."),
+      makeSurfaceLine("LKW / Transport", "Logistik / Materiallieferung / Anfahrt", logistik, `Materiallieferung, Geräte- und Baustellenlogistik, Entfernung ca. ${km} km.`),
+      makeSurfaceLine("Gemeinkosten", "Gemeinkosten", overhead, "Gemeinkosten für Oberflächenwiederherstellung."),
+      makeSurfaceLine("Risiko", "Risiko", risk, "Risiko wegen Anschluss an Bestand, Verkehrslage und Mischflächen."),
+      makeSurfaceLine("Gewinn", "Gewinn", profit, "Kalkulatorischer Gewinn."),
+    ];
+
+    breakdownTotal = sumBreakdown(priceBreakdown);
+  }
+
   const tempSupplyGuardText = norm(`${kurztext} ${langtext}`);
   const isTempSupplyBreakdownGuard =
     /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(tempSupplyGuardText);
@@ -3564,6 +3640,7 @@ JSON-Schema:
 
   const documentationGuardText = norm(`${kurztext} ${langtext}`);
   const isDocumentationBreakdownGuard =
+    !isSurfaceBreakdownGuard &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(documentationGuardText);
 
   const breakdownLooksAuthorityContaminated =
@@ -3715,6 +3792,9 @@ JSON-Schema:
     );
 
     const rowContextText = norm(`${kurztext} ${langtext}`);
+
+    const isSurfaceRestorationContext =
+      /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verdichtung|verkehrsfreigabe|aufbruchmaterial/.test(rowContextText);
 
     const isAuthorityContext =
       /genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben/.test(rowContextText);
@@ -3903,11 +3983,11 @@ JSON-Schema:
       contextQualityWarnings.push("Context-Guard: Baustrom/Bauwasser/Sanitär fehlt oder ist nicht separat kalkuliert.");
     }
 
-    if (isTrafficSafetyContext && !hasTrafficSigns) {
+    if (isTrafficSafetyContext && !isSurfaceRestorationContext && !hasTrafficSigns) {
       contextQualityWarnings.push("Context-Guard: Verkehrssicherung: Beschilderung/Verkehrszeichen fehlt oder ist nicht separat kalkuliert.");
     }
 
-    if (isTrafficSafetyContext && !hasBarrierMaterial) {
+    if (isTrafficSafetyContext && !isSurfaceRestorationContext && !hasBarrierMaterial) {
       contextQualityWarnings.push("Context-Guard: Verkehrssicherung: Absperrmaterial/Leitbaken/Sperrmaterial fehlt oder ist nicht separat kalkuliert.");
     }
 
@@ -4077,6 +4157,9 @@ JSON-Schema:
   const isDisposalOpenAi =
     /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(norm(`${kurztext} ${langtext}`));
 
+  const isSurfaceRestorationOpenAi =
+    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verdichtung|verkehrsfreigabe|aufbruchmaterial/.test(norm(`${kurztext} ${langtext}`));
+
   const isTempSupplyOpenAi =
     /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(norm(`${kurztext} ${langtext}`));
 
@@ -4092,10 +4175,12 @@ JSON-Schema:
     /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(norm(`${kurztext} ${langtext}`));
 
   const isTrafficSafetyOpenAi =
+    !isSurfaceRestorationOpenAi &&
     /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(norm(`${kurztext} ${langtext}`));
 
   const isDocumentationOpenAi =
     !isTempSupplyOpenAi &&
+    !isSurfaceRestorationOpenAi &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(norm(`${kurztext} ${langtext}`));
 
   const isAuthorityOpenAi =
@@ -4112,6 +4197,7 @@ JSON-Schema:
   const isHouseConnectionOpenAi =
     !isDocumentationOpenAi &&
     !isTempSupplyOpenAi &&
+    !isSurfaceRestorationOpenAi &&
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(norm(`${kurztext} ${langtext}`));
 
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
@@ -4119,6 +4205,7 @@ JSON-Schema:
 
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
     if (isTempSupplyOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|dokumentation\/vermessung|prüfung|pruefung/i.test(msg)) return false;
+    if (isSurfaceRestorationOpenAi && /entsorgung\/deponieklasse|bestandsanschluss|verkehrssicherung|rsa|dokumentation\/vermessung|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung/i.test(msg)) return false;
     if (isTrafficSafetyOpenAi && /baustelleneinrichtung|provisorium|baustraße|baustrasse|spezialtiefbau|behörden|behoerden/i.test(msg)) return false;
     if (isDocumentationOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|behörden|behoerden|kampfmittel|denkmalpflege|sigeko|arbeitssicherheit|verkehrssicherung|rsa/i.test(msg)) return false;
     if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
@@ -4149,6 +4236,8 @@ JSON-Schema:
           ? "Kontextabhängige Position: Dokumentation/Vermessung/Bestandspläne/As-Built hängt stark von Projektumfang, Bauzeit, Vermessungsterminen, GNSS-/Tachymeteraufnahmen, CAD-Nachbearbeitung, Datenformaten, Übergabeunterlagen, Auftraggeberabstimmung und digitaler Nachweisführung ab. Historische Preise nur als Orientierung verwenden."
           : isTempSupplyOpenAi
           ? "Kontextabhängige Position: Temporäre Versorgung/Notleitung/Medienversorgung hängt stark von Rohrmaterial, Formstücken, Armaturen, Anschluss an Bestand, Druckprüfung, Spülung, Betrieb, Kontrolle, Wartung, Laufzeit, Rückbau, Trennung, Abtransport und Logistik ab. Historische Preise nur als Orientierung verwenden."
+          : isSurfaceRestorationOpenAi
+          ? "Kontextabhängige Position: Oberflächenwiederherstellung/Asphalt/Pflaster/Bordstein hängt stark von Fläche, Schichtaufbau, Aufbruch, Entsorgung, Frostschutz, Tragschichten, Asphalt, Pflaster, Bordstein, Verkehrslage, Anwohnerverkehr, Anschluss an Bestand und Nebenarbeiten ab. Historische Preise nur als Orientierung verwenden."
           : isDisposalOpenAi
             ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
             : isWasserhaltungOpenAi
@@ -4175,16 +4264,21 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isSurfaceRestorationReturn =
+    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verdichtung|verkehrsfreigabe|aufbruchmaterial/.test(returnContextText);
+
   const isTempSupplyReturn =
     /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(returnContextText);
 
   const isDocumentationReturn =
     !isTempSupplyReturn &&
+    !isSurfaceRestorationReturn &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(returnContextText);
 
   const isHouseConnectionReturn =
     !isDocumentationReturn &&
     !isTempSupplyReturn &&
+    !isSurfaceRestorationReturn &&
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(returnContextText);
 
   const isWaterHoldingReturn =
@@ -4262,6 +4356,8 @@ JSON-Schema:
       ? "Tiefbau / Wasserhaltung"
       : isRiskSoilReturn
         ? "Tiefbau / Kampfmittel & Altlasten"
+      : isSurfaceRestorationReturn
+        ? "Straßenbau / Oberflächenwiederherstellung"
       : isDocumentationReturn
         ? "Tiefbau / Dokumentation & Vermessung"
       : isTempSupplyReturn
@@ -4299,6 +4395,8 @@ JSON-Schema:
       ? "Wasserhaltung / Grundwasser / Pumpen / Baugrubenentwässerung"
       : isRiskSoilReturn
         ? "Kampfmittel / Altlasten / Bodenrisiken / Beweissicherung"
+      : isSurfaceRestorationReturn
+        ? "Asphalt / Pflaster / Bordstein / Wiederherstellung"
       : isDocumentationReturn
         ? "Dokumentation / Vermessung / Bestandspläne / As-Built"
       : isTempSupplyReturn
@@ -4336,6 +4434,8 @@ JSON-Schema:
       ? "Temporäre Wasserhaltung mit Pumpenanlage, Ableitung, Wartung, Notstrom und Rückbau"
       : isRiskSoilReturn
         ? "Baubegleitende Sondierung, Analyse, Gutachterleistung, Freigabe und Dokumentation"
+      : isSurfaceRestorationReturn
+        ? "Wiederherstellung von Verkehrsflächen mit Tragschichten, Asphalt, Pflaster, Bordstein und Anschluss an Bestand"
       : isDocumentationReturn
         ? "Digitale Bestandsaufnahme, CAD-/As-Built-Erstellung und Übergabedokumentation"
       : isTempSupplyReturn
