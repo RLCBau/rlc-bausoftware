@@ -3499,6 +3499,69 @@ JSON-Schema:
     }
   }
 
+  const tempSupplyGuardText = norm(`${kurztext} ${langtext}`);
+  const isTempSupplyBreakdownGuard =
+    /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(tempSupplyGuardText);
+
+  const tempSupplyBreakdownLooksContaminated =
+    priceBreakdown.some((x) =>
+      /hausanschluss|hauseinführung|hauseinfuehrung|kernbohrung|wanddurchführung|wanddurchfuehrung|privatfläche|privatflaeche|bestandsplan|as-built|fotodokumentation|genehmigung|behörden|behoerden|kampfmittel|sigeko|denkmalpflege/.test(
+        norm(`${x.group} ${x.name} ${x.note}`)
+      )
+    ) || round2(breakdownTotal || directTotal) < 12000;
+
+  if (isTempSupplyBreakdownGuard && tempSupplyBreakdownLooksContaminated) {
+    const km = Math.max(0, projectDistanceKm || 0);
+    const days = Math.max(1, projectDurationDays || 1);
+    const months = Math.max(1, days / 30);
+
+    const makeTempLine = (
+      group: PriceBreakdownGroup,
+      name: string,
+      price: number,
+      note: string
+    ): PriceBreakdownLine => ({
+      id: `rlc-temp-${Math.random().toString(36).slice(2)}`,
+      group,
+      name,
+      unit: "Psch",
+      qty: 1,
+      price: round2(price),
+      total: round2(price),
+      note,
+    });
+
+    const material = 8500;
+    const montage = 7200;
+    const anschluss = 4200;
+    const pruefung = 2600;
+    const betrieb = 1800 * months;
+    const kontrolle = 1200 * months;
+    const rueckbau = 4200;
+    const logistik = Math.max(1800, km * 40);
+
+    const direct = material + montage + anschluss + pruefung + betrieb + kontrolle + rueckbau + logistik;
+    const overhead = round2(direct * 0.1);
+    const risk = round2(direct * 0.08);
+    const profit = round2((direct + overhead + risk) * 0.08);
+
+    priceBreakdown = [
+      makeTempLine("Material", "Rohrmaterial / Formstücke / Absperrarmaturen", material, "Material für provisorische Notleitung und temporäre Medienversorgung."),
+      makeTempLine("Personal", "Herstellung / Montage der Notleitung", montage, "Montage, Verlegen und Sichern der temporären Versorgung."),
+      makeTempLine("Fremdleistung", "Temporärer Anschluss an Bestand / Einbindung", anschluss, "Einbindung, Anschluss und Trennung vom Bestand."),
+      makeTempLine("Fremdleistung", "Druckprüfung / Spülung / Inbetriebnahme", pruefung, "Prüfung, Spülung und Inbetriebnahme vor Nutzung."),
+      makeTempLine("Personal", "Betrieb / Vorhaltung über Laufzeit", betrieb, `Betrieb und Vorhaltung über ca. ${days} Tage.`),
+      makeTempLine("Personal", "Tägliche Kontrolle / Wartung", kontrolle, "Regelmäßige Kontrolle, Wartung und Störungsbereitschaft."),
+      makeTempLine("LKW / Transport", "Rückbau / Trennung / Abtransport", rueckbau, "Rückbau, Trennung, Laden und Abtransport."),
+      makeTempLine("LKW / Transport", "Logistik / Anfahrt / Materialtransport", logistik, `Anfahrt und Materialtransporte, Entfernung ca. ${km} km.`),
+      makeTempLine("Gemeinkosten", "Gemeinkosten", overhead, "Gemeinkosten für temporäre Versorgung."),
+      makeTempLine("Risiko", "Risiko", risk, "Risiko wegen Betrieb, Ausfall, Bestandseinbindung und Laufzeit."),
+      makeTempLine("Gewinn", "Gewinn", profit, "Kalkulatorischer Gewinn."),
+    ];
+
+    breakdownTotal = sumBreakdown(priceBreakdown);
+  }
+
   const documentationGuardText = norm(`${kurztext} ${langtext}`);
   const isDocumentationBreakdownGuard =
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(documentationGuardText);
@@ -4014,7 +4077,11 @@ JSON-Schema:
   const isDisposalOpenAi =
     /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(norm(`${kurztext} ${langtext}`));
 
+  const isTempSupplyOpenAi =
+    /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(norm(`${kurztext} ${langtext}`));
+
   const isTestingOpenAi =
+    !isTempSupplyOpenAi &&
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(norm(`${kurztext} ${langtext}`));
 
   const isSiteSetupOpenAi =
@@ -4028,6 +4095,7 @@ JSON-Schema:
     /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(norm(`${kurztext} ${langtext}`));
 
   const isDocumentationOpenAi =
+    !isTempSupplyOpenAi &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(norm(`${kurztext} ${langtext}`));
 
   const isAuthorityOpenAi =
@@ -4043,12 +4111,14 @@ JSON-Schema:
 
   const isHouseConnectionOpenAi =
     !isDocumentationOpenAi &&
+    !isTempSupplyOpenAi &&
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(norm(`${kurztext} ${langtext}`));
 
   const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
     const msg = String(w || "");
 
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
+    if (isTempSupplyOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|dokumentation\/vermessung|prüfung|pruefung/i.test(msg)) return false;
     if (isTrafficSafetyOpenAi && /baustelleneinrichtung|provisorium|baustraße|baustrasse|spezialtiefbau|behörden|behoerden/i.test(msg)) return false;
     if (isDocumentationOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|behörden|behoerden|kampfmittel|denkmalpflege|sigeko|arbeitssicherheit|verkehrssicherung|rsa/i.test(msg)) return false;
     if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
@@ -4077,6 +4147,8 @@ JSON-Schema:
           ? "Kontextabhängige Position: Verkehrssicherung/RSA/Umleitung/Beschilderung hängt stark von Bauzeit, Verkehrsführung, verkehrsrechtlicher Anordnung, Beschilderung, Absperrmaterial, Lichtsignalanlage, täglicher Kontrolle, Wartung, Anpassung, Anwohnerverkehr, Aufbau, Vorhaltung und Rückbau ab. Historische Preise nur als Orientierung verwenden."
           : isDocumentationOpenAi
           ? "Kontextabhängige Position: Dokumentation/Vermessung/Bestandspläne/As-Built hängt stark von Projektumfang, Bauzeit, Vermessungsterminen, GNSS-/Tachymeteraufnahmen, CAD-Nachbearbeitung, Datenformaten, Übergabeunterlagen, Auftraggeberabstimmung und digitaler Nachweisführung ab. Historische Preise nur als Orientierung verwenden."
+          : isTempSupplyOpenAi
+          ? "Kontextabhängige Position: Temporäre Versorgung/Notleitung/Medienversorgung hängt stark von Rohrmaterial, Formstücken, Armaturen, Anschluss an Bestand, Druckprüfung, Spülung, Betrieb, Kontrolle, Wartung, Laufzeit, Rückbau, Trennung, Abtransport und Logistik ab. Historische Preise nur als Orientierung verwenden."
           : isDisposalOpenAi
             ? "Kontextabhängige Position: Entsorgung/Deponie/belasteter Boden hängt stark von Materialklasse, Analytik, Deponieklasse, Menge, Transportentfernung, Deponiegebühren und Nachweispflichten ab. Historische Preise nur als Orientierung verwenden."
             : isWasserhaltungOpenAi
@@ -4103,11 +4175,16 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const isTempSupplyReturn =
+    /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(returnContextText);
+
   const isDocumentationReturn =
+    !isTempSupplyReturn &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(returnContextText);
 
   const isHouseConnectionReturn =
     !isDocumentationReturn &&
+    !isTempSupplyReturn &&
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(returnContextText);
 
   const isWaterHoldingReturn =
@@ -4147,8 +4224,6 @@ JSON-Schema:
   const isTrafficSafetyReturn =
     /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(returnContextText);
 
-  const isTempSupplyReturn =
-    /notleitung|temporaer.*anschluss|temporär.*anschluss|temporaere.*anschluesse|temporäre.*anschlüsse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckpruefung|druckprüfung|absperrarmatur|formstueck|formstück/.test(returnContextText);
   const isProvisoriumReturn =
     !isTempSupplyReturn &&
     !isTrafficSafetyReturn &&
@@ -4189,6 +4264,8 @@ JSON-Schema:
         ? "Tiefbau / Kampfmittel & Altlasten"
       : isDocumentationReturn
         ? "Tiefbau / Dokumentation & Vermessung"
+      : isTempSupplyReturn
+        ? "Tiefbau / Temporäre Versorgung"
       : isHouseConnectionReturn
         ? "Tiefbau / Hausanschlüsse & Bestand"
       : isSpecialCivilReturn
@@ -4224,6 +4301,8 @@ JSON-Schema:
         ? "Kampfmittel / Altlasten / Bodenrisiken / Beweissicherung"
       : isDocumentationReturn
         ? "Dokumentation / Vermessung / Bestandspläne / As-Built"
+      : isTempSupplyReturn
+        ? "Temporärer Anschluss / Notleitung / Medienversorgung"
       : isHouseConnectionReturn
         ? "Hausanschluss / Gebäudeeinführung / Arbeiten im Bestand"
       : isSpecialCivilReturn
@@ -4259,6 +4338,8 @@ JSON-Schema:
         ? "Baubegleitende Sondierung, Analyse, Gutachterleistung, Freigabe und Dokumentation"
       : isDocumentationReturn
         ? "Digitale Bestandsaufnahme, CAD-/As-Built-Erstellung und Übergabedokumentation"
+      : isTempSupplyReturn
+        ? "Temporäre Herstellung, Prüfung, Betrieb und Rückbau"
       : isHouseConnectionReturn
         ? "Gebäudenahe Ausführung mit Handschachtung, Kernbohrung, Hauseinführung und Wiederherstellung"
       : isSpecialCivilReturn
