@@ -281,12 +281,21 @@ function applyNoX84LinearPriceGuard(input: {
   } else if (isMeter && /lwl.*miko|lwl.*mikro|miko-kabel|mikrokabel|miko kabel|12 fasern/.test(text)) {
     cap = 10;
     reason = "LWL/Mikro-Kabel linearer Meteransatz";
-  } else if (isMeter && /verlegung.*mittelspannungskabel|verlegung.*ortsnetzkabel/.test(text)) {
+  } else if (isMeter && /(mikrokabelleerrohrverbund|mikrokabelleerrohr|mikrokabel.*leerrohr)/.test(text)) {
+    cap = 10;
+    reason = "Mikrokabelleerrohrverbund linearer Meteransatz";
+  } else if (isMeter && /(schutzmatte.*kabelverleg|kabelverleg.*schutzmatte)/.test(text)) {
+    cap = 10;
+    reason = "Schutzmatte Kabelverlegung linearer Meteransatz";
+  } else if (isMeter && /(verlegung.*mittelspannungskabel|mittelspannungskabel|verlegung.*ortsnetzkabel|ortsnetzkabel)/.test(text)) {
     cap = 32;
     reason = "Kabelverlegung ohne Tiefbau-Komplettpaket";
   } else if (isMeter && /zwischenplanum/.test(text)) {
     cap = 20;
     reason = "Zwischenplanum linearer Ansatz";
+  } else if (isMeter && /drainageleitung|drainageleitungen/.test(text)) {
+    cap = 28;
+    reason = "Drainageleitung linearer Meteransatz";
   }
 
   if (
@@ -295,6 +304,14 @@ function applyNoX84LinearPriceGuard(input: {
   ) {
     cap = 25;
     reason = "Zuschlag Rohrgrabenaushub Bodenklasse 6";
+  }
+
+  if (
+    unit === "cm" &&
+    /(mehr- oder minderpreis|mehr.*minderpreis)/.test(text)
+  ) {
+    cap = 25;
+    reason = "Mehr-/Minderpreis cm ohne X84-Basis";
   }
 
   if (cap > 0 && ep > cap) {
@@ -5364,6 +5381,118 @@ async function saveKiLearningRows(
   return saved;
 }
 
+
+function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
+  const groups = new Map<string, any[]>();
+
+  for (const row of rows) {
+    const kurz = rlcNoX84Norm(row?.kurztext || row?.shortText || row?.text || "");
+    const lang = rlcNoX84Norm(row?.langtext || row?.longText || row?.description || "");
+    const unit = rlcNoX84Norm(row?.einheit || row?.unit || "");
+    const ep = round2(
+      n(row?.finalUnitPrice) ||
+      n(row?.rlcKiUnitPrice) ||
+      n(row?.unitPrice) ||
+      n(row?.preis) ||
+      n(row?.suggestedUnitPrice)
+    );
+
+    if (!kurz || !unit || ep <= 0) continue;
+
+    const langKey = lang.slice(0, 220);
+    const key = `${kurz}|${langKey}|${unit}|${ep}`;
+
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(row);
+  }
+
+  const duplicateKeys = new Map<string, {
+    count: number;
+    qtySum: number;
+    totalSum: number;
+    posList: string;
+    label: string;
+  }>();
+
+  for (const [key, items] of groups.entries()) {
+    if (items.length < 2) continue;
+
+    const qtySum = items.reduce((sum, r) => sum + n(r?.menge ?? r?.quantity), 0);
+    const totalSum = items.reduce((sum, r) => {
+      const ep =
+        n(r?.finalUnitPrice) ||
+        n(r?.rlcKiUnitPrice) ||
+        n(r?.unitPrice) ||
+        n(r?.preis) ||
+        n(r?.suggestedUnitPrice);
+      const qty = n(r?.menge ?? r?.quantity);
+      return sum + (n(r?.totalNet) || n(r?.rlcKiTotal) || n(r?.gesamt) || ep * qty);
+    }, 0);
+
+    const unit = rlcNoX84Norm(items[0]?.einheit || items[0]?.unit || "");
+    const isLinear = /^(m|lfm|meter|laufmeter|laufende meter)$/.test(unit);
+
+    // Kein Preis-Cut: nur fachliche Warnung.
+    // Auslösen nur bei echter Relevanz, damit kleine Wiederholungen nicht stören.
+    if (
+      (isLinear && qtySum >= 5000 && totalSum >= 50000) ||
+      totalSum >= 100000
+    ) {
+      duplicateKeys.set(key, {
+        count: items.length,
+        qtySum: round2(qtySum),
+        totalSum: round2(totalSum),
+        posList: items.map((r) => s(r?.posNr || r?.position || r?.pos)).filter(Boolean).join(", "),
+        label: s(items[0]?.kurztext || items[0]?.shortText || items[0]?.text || "Position"),
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    const kurz = rlcNoX84Norm(row?.kurztext || row?.shortText || row?.text || "");
+    const lang = rlcNoX84Norm(row?.langtext || row?.longText || row?.description || "");
+    const unit = rlcNoX84Norm(row?.einheit || row?.unit || "");
+    const ep = round2(
+      n(row?.finalUnitPrice) ||
+      n(row?.rlcKiUnitPrice) ||
+      n(row?.unitPrice) ||
+      n(row?.preis) ||
+      n(row?.suggestedUnitPrice)
+    );
+
+    const key = `${kurz}|${lang.slice(0, 220)}|${unit}|${ep}`;
+    const dup = duplicateKeys.get(key);
+    if (!dup) return row;
+
+    const warningText =
+      `RLC Mengen-/Positionsduplikat-Guard: "${dup.label}" erscheint ${dup.count}x mit identischem/nahezu identischem Langtext, Einheit und EP. ` +
+      `Summe Menge ${dup.qtySum}, Summe GP ${dup.totalSum} €. Positionen: ${dup.posList}. ` +
+      `Prüfen, ob echte getrennte Bauabschnitte vorliegen oder Import-/Cache-/LV-Duplikate.`;
+
+    return {
+      ...row,
+      calculationStatus: "needs_review",
+      riskLevel: "high",
+      confidence: Math.min(n(row?.confidence, 0.5), 0.45),
+      warning: [
+        s(row?.warning),
+        warningText,
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        s(row?.aiReason),
+        warningText,
+      ].filter(Boolean).join("\n\n"),
+      duplicateQuantityGuard: {
+        applied: true,
+        count: dup.count,
+        qtySum: dup.qtySum,
+        totalSum: dup.totalSum,
+        positions: dup.posList,
+      },
+    };
+  });
+}
+
 function buildSummary(rows: any[]) {
   const totalNet = rows.reduce((sum, r) => sum + n(r.finalUnitPrice) * n(r.menge), 0);
   const avgConfidence = rows.length
@@ -6203,22 +6332,23 @@ router.post("/suggest-batch", async (req, res) => {
         const unsafeGuarded = guardNoX84UnsafeOkResult(rows[index], calibrated);
         return guardNoX84ImplausibleKiResult(rows[index], unsafeGuarded);
       });
+        const guardedFinalRows = applyDuplicateQuantityOutlierGuard(finalRows);
 
-      const learningProjectKey = s(req.body?.projectCode || req.body?.projectKey);
-      const learnedCount = await saveKiLearningRows(
-        companyId,
-        learningProjectKey,
-        finalRows
-      );
+        const learningProjectKey = s(req.body?.projectCode || req.body?.projectKey);
+        const learnedCount = await saveKiLearningRows(
+          companyId,
+          learningProjectKey,
+          guardedFinalRows
+        );
 
       console.log("[kalkulation.ki] learning", {
-        rows: finalRows.length,
+        rows: guardedFinalRows.length,
         learnedCount,
         durationMs: Date.now() - startedAt,
         maxParallelRows,
         maxOpenAiRowsPerBatch,
         openAiUsed,
-        sources: finalRows.reduce((acc: any, r: any) => {
+        sources: guardedFinalRows.reduce((acc: any, r: any) => {
           const key = r?.source || "unknown";
           acc[key] = (acc[key] || 0) + 1;
           return acc;
@@ -6229,9 +6359,9 @@ router.post("/suggest-batch", async (req, res) => {
         ok: true,
         source: "server",
         engine: "database-recipe-openai-rule-engine-parallel-v2",
-        rows: finalRows,
+        rows: guardedFinalRows,
         summary: {
-          ...buildSummary(finalRows),
+          ...buildSummary(guardedFinalRows),
           learnedCount,
           forceRecalculate,
           cacheBypassed: forceRecalculate,
