@@ -4160,9 +4160,14 @@ JSON-Schema:
   const isDisposalOpenAi =
     /entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(norm(`${kurztext} ${langtext}`));
 
+  const surfacePriorityText = norm(`${kurztext} ${langtext}`);
+  const blocksSurfaceRestoration =
+    /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen|handschachtung/.test(surfacePriorityText);
+
   const isSurfaceRestorationOpenAi =
     !isVorhaltungOpenAi &&
-    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verkehrsfreigabe|aufbruchmaterial/.test(norm(`${kurztext} ${langtext}`));
+    !blocksSurfaceRestoration &&
+    /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verkehrsfreigabe|aufbruchmaterial/.test(surfacePriorityText);
 
   const isTempSupplyOpenAi =
     /notleitung|provisorische leitung|temporäre medienversorgung|temporaere medienversorgung|medienversorgung|ersatzversorgung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|temporär.*anschluss|temporaer.*anschluss/.test(norm(`${kurztext} ${langtext}`));
@@ -4182,12 +4187,16 @@ JSON-Schema:
     !isSurfaceRestorationOpenAi &&
     /verkehrssicherung|verkehrsfuehrung|verkehrsführung|strassensperrung|straßensperrung|sperrung|beschilderung|absperrung|lichtsignalanlage|baustellenampel|ampel|verkehrszeichen|leitbake|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr|\brsa\b/.test(norm(`${kurztext} ${langtext}`));
 
+  const documentationPriorityText = norm(`${kurztext} ${langtext}`);
+  const blocksDocumentation =
+    /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|funktionsprüfung|funktionspruefung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|erschwernis|beengte bauweise|handschachtung|kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenanalyse|gutachter|sicherheitsfreigabe|bodenrisiko|bodenrisiken/.test(documentationPriorityText);
+
   const isDocumentationOpenAi =
     !isTempSupplyOpenAi &&
     !isSurfaceRestorationOpenAi &&
     !isDisposalOpenAi &&
-    !/kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenanalyse|gutachter|sicherheitsfreigabe|bodenrisiko|bodenrisiken/.test(norm(`${kurztext} ${langtext}`)) &&
-    /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(norm(`${kurztext} ${langtext}`));
+    !blocksDocumentation &&
+    /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(documentationPriorityText);
 
   const isAuthorityOpenAi =
     !isWasserhaltungOpenAi &&
@@ -4212,6 +4221,9 @@ JSON-Schema:
     if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
     if (isTempSupplyOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|dokumentation\/vermessung|prüfung|pruefung/i.test(msg)) return false;
     if (isSurfaceRestorationOpenAi && /entsorgung\/deponieklasse|bestandsanschluss|verkehrssicherung|rsa|dokumentation\/vermessung|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung/i.test(msg)) return false;
+    if (isAuthorityOpenAi && /dokumentation\/vermessung|bestandspläne|as-built/i.test(msg)) return false;
+    if (/schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen/i.test(text) && /hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|bestandsanschluss/i.test(msg)) return false;
+    if (/erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen/i.test(text) && /hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|bestandsanschluss|schutzmaßnahmen|schutzmassnahmen/i.test(msg)) return false;
     if (isTrafficSafetyOpenAi && /baustelleneinrichtung|provisorium|baustraße|baustrasse|spezialtiefbau|behörden|behoerden/i.test(msg)) return false;
     if (isDocumentationOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|behörden|behoerden|kampfmittel|denkmalpflege|sigeko|arbeitssicherheit|verkehrssicherung|rsa/i.test(msg)) return false;
     if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
@@ -4271,7 +4283,7 @@ JSON-Schema:
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
   const isSurfaceRestorationReturn =
-    !/geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung/.test(returnContextText) &&
+    !/geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen|handschachtung/.test(returnContextText) &&
     /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verkehrsfreigabe|aufbruchmaterial/.test(returnContextText);
 
   const isTempSupplyReturn =
@@ -4282,12 +4294,22 @@ JSON-Schema:
     !isSurfaceRestorationReturn &&
     !/entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis/.test(returnContextText) &&
     !/kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenanalyse|gutachter|sicherheitsfreigabe|bodenrisiko|bodenrisiken/.test(returnContextText) &&
+    !/dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|funktionsprüfung|funktionspruefung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|erschwernis|beengte bauweise|handschachtung/.test(returnContextText) &&
     /dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung/.test(returnContextText);
+
+  const isErschwernisReturn =
+    /erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen|geringe lagerflächen|geringe lagerflaechen|erschwerte logistik|langsamere ausführung|langsamere ausfuehrung|zusätzliche koordination|zusaetzliche koordination/.test(returnContextText);
+
+  const isProtectionReturn =
+    !/hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen/.test(returnContextText) &&
+    /schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|schutzplatten|oberflächenschutz|oberflaechenschutz|kontrollmaßnahmen|kontrollmassnahmen/.test(returnContextText);
 
   const isHouseConnectionReturn =
     !isDocumentationReturn &&
     !isTempSupplyReturn &&
     !isSurfaceRestorationReturn &&
+    !isErschwernisReturn &&
+    !isProtectionReturn &&
     /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/.test(returnContextText);
 
   const isWaterHoldingReturn =
@@ -4313,10 +4335,9 @@ JSON-Schema:
 
   const isLogisticsReturn =
     !isSiteSetupReturn &&
+    !/erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen|geringe lagerflächen|geringe lagerflaechen|erschwerte logistik|langsamere ausführung|langsamere ausfuehrung|zusätzliche koordination|zusaetzliche koordination|handschachtung/.test(returnContextText) &&
     /baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung/.test(returnContextText);
 
-  const isProtectionReturn =
-    /schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz/.test(returnContextText);
 
   const isTestingReturn =
     /dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung/.test(returnContextText);
@@ -4333,8 +4354,6 @@ JSON-Schema:
     /provisor|baustrasse|baustraße|umleitung|baustellenumleitung|temporaer|temporär|rueckbau|rückbau/.test(returnContextText);
   const isWasserhaltungReturn =
     /wasserhaltung|pumpe|pumpen|tauchpumpe|grundwasser|baugrubenentwaesserung|baugrubenentwässerung|vorfluter|ableitung.*wasser/.test(returnContextText);
-  const isErschwernisReturn =
-    /erschwernis|beengte|beengt|handschachtung|anliegerverkehr|versorgungsleitung|erschwerte/.test(returnContextText);
 
   return {
     id: row.id,
@@ -4371,6 +4390,12 @@ JSON-Schema:
         ? "Tiefbau / Dokumentation & Vermessung"
       : isTempSupplyReturn
         ? "Tiefbau / Temporäre Versorgung"
+      : isErschwernisReturn
+        ? "Tiefbau / Erschwernis & Bestand"
+      : isLogisticsReturn
+        ? "Tiefbau / Baustellenlogistik"
+      : isProtectionReturn
+        ? "Tiefbau / Schutzmaßnahmen"
       : isHouseConnectionReturn
         ? "Tiefbau / Hausanschlüsse & Bestand"
       : isSpecialCivilReturn
@@ -4410,6 +4435,12 @@ JSON-Schema:
         ? "Dokumentation / Vermessung / Bestandspläne / As-Built"
       : isTempSupplyReturn
         ? "Temporärer Anschluss / Notleitung / Medienversorgung"
+      : isErschwernisReturn
+        ? "Erschwernis / beengte Bauweise / Arbeiten im Bestand"
+      : isLogisticsReturn
+        ? "Zufahrt / Lager / Baustellenversorgung"
+      : isProtectionReturn
+        ? "Schutzmaßnahmen / Bestandssicherung / Oberflächenschutz"
       : isHouseConnectionReturn
         ? "Hausanschluss / Gebäudeeinführung / Arbeiten im Bestand"
       : isSpecialCivilReturn
@@ -4449,6 +4480,12 @@ JSON-Schema:
         ? "Digitale Bestandsaufnahme, CAD-/As-Built-Erstellung und Übergabedokumentation"
       : isTempSupplyReturn
         ? "Temporäre Herstellung, Prüfung, Betrieb und Rückbau"
+      : isErschwernisReturn
+        ? "Erschwerte Ausführung mit Handschachtung, beengter Logistik und zusätzlicher Koordination"
+      : isLogisticsReturn
+        ? "Logistik-, Lager- und Versorgungsmaßnahmen mit Vorhaltung und Rückbau"
+      : isProtectionReturn
+        ? "Sichern, Schützen, Kontrollieren und Rückbauen vorhandener Anlagen"
       : isHouseConnectionReturn
         ? "Gebäudenahe Ausführung mit Handschachtung, Kernbohrung, Hauseinführung und Wiederherstellung"
       : isSpecialCivilReturn
