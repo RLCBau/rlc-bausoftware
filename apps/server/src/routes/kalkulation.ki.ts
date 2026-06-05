@@ -214,6 +214,14 @@ function normUnit(value: any): string {
 
 function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
   const text = norm(textRaw);
+  
+  // RLC FIX:
+  // Kabelverlegung darf nicht als Dokumentation/Vermessung context-sensitive eingestuft werden,
+  // nur weil im Langtext "Dokumentation" als Nebenleistung vorkommt.
+  if (isRlcCableInstallationText(text)) {
+    return false;
+  }
+
   const unit = normUnit(unitRaw);
 
   if (
@@ -224,6 +232,86 @@ function isContextSensitivePosition(textRaw: any, unitRaw: any): boolean {
   }
 
   return /(baustelleneinrichtung|baustelle einrichten|baustellengemeinkosten|vorhaltung|gerätevorhaltung|geraetevorhaltung|verkehrssicherung|bestandspläne|bestandsplaene|bestandszeichnung|vermessung|erschwernis|beengte bauweise|bauleitung|baustellenkoordination|dokumentation|wartungs- und bedienungsanleitung|bauzeiten|anliegerverkehr|besucherinformation|bauschild|besprechungsraum|notleitung|temporärer anschluss|temporaerer anschluss|temporäre anschlüsse|temporaere anschluesse|provisorische leitung|medienversorgung|ersatzversorgung|anschluss an bestand|druckprüfung|druckpruefung|absperrarmatur|formstück|formstueck|entsorgung|deponie|belasteter boden|belastet|haufwerk|analytik|deklarationsanalytik|laga|ersatzbaustoffv|wiegeschein|entsorgungsnachweis|dichtheitsprüfung|dichtheitspruefung|druckprüfung|druckpruefung|spülung|spuelung|tv-inspektion|kamerabefahrung|prüfprotokoll|pruefprotokoll|abnahmeunterlagen|bestandsfreigabe|funktionsprüfung|funktionspruefung|schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz|baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|baustrom|baustellenbeleuchtung|stromprovisorium|baustellenwasser|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung|genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben|spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand)/i.test(text);
+}
+
+
+function rlcNoX84Norm(v: any): string {
+  return String(v ?? "")
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function applyNoX84LinearPriceGuard(input: {
+  textRaw: any;
+  unitRaw: any;
+  mengeRaw: any;
+  epRaw: any;
+  hasRealX84?: boolean;
+}): { applied: boolean; ep: number; warning: string } {
+  const text = rlcNoX84Norm(input.textRaw);
+  const unit = rlcNoX84Norm(input.unitRaw);
+  const menge = Number(input.mengeRaw || 0);
+  const ep = Number(input.epRaw || 0);
+
+  if (input.hasRealX84 || !Number.isFinite(ep) || ep <= 0 || menge <= 20) {
+    return { applied: false, ep, warning: "" };
+  }
+
+  const isMeter = /^(m|lfm|laufmeter|laufende meter|meter)$/.test(unit);
+  const isVolume = /^(m3|m³|cbm|kubikmeter)$/.test(unit);
+
+  let cap = 0;
+  let reason = "";
+
+  if (
+    isMeter &&
+    /hausanschlussleitung|verlegung hausanschlussleitung|hausanschluss.*leitung|anschlussleitung/.test(text) &&
+    !/kernbohrung|hauseinfuehrung|gebaeudeeinfuehrung|wanddurchfuehrung/.test(text)
+  ) {
+    cap = 11.4;
+    reason = "Hausanschlussleitung als lineare Leitungsverlegung";
+  } else if (isMeter && /kabelschutzrohr/.test(text)) {
+    cap = 30;
+    reason = "Kabelschutzrohr ohne eindeutige Komplettleistung";
+  } else if (isMeter && /lwl.*miko|lwl.*mikro|miko-kabel|mikrokabel|miko kabel|12 fasern/.test(text)) {
+    cap = 10;
+    reason = "LWL/Mikro-Kabel linearer Meteransatz";
+  } else if (isMeter && /verlegung.*mittelspannungskabel|verlegung.*ortsnetzkabel/.test(text)) {
+    cap = 32;
+    reason = "Kabelverlegung ohne Tiefbau-Komplettpaket";
+  } else if (isMeter && /zwischenplanum/.test(text)) {
+    cap = 20;
+    reason = "Zwischenplanum linearer Ansatz";
+  }
+
+  if (
+    isVolume &&
+    /zuschlag.*rohrgrabenaushub.*(bd-kl\.?\s*6|bkl\.?\s*6|bodenklasse\s*6|klasse\s*6)/.test(text)
+  ) {
+    cap = 25;
+    reason = "Zuschlag Rohrgrabenaushub Bodenklasse 6";
+  }
+
+  if (cap > 0 && ep > cap) {
+    return {
+      applied: true,
+      ep: cap,
+      warning: `RLC No-X84 Preisguard: ${reason}; EP von ${ep.toFixed(2)} auf ${cap.toFixed(2)} €/Einheit plausibilisiert. Ohne X84 bleibt Position prüfpflichtig.`,
+    };
+  }
+
+  return { applied: false, ep, warning: "" };
+}
+
+
+function isRlcCableInstallationText(textRaw: any): boolean {
+  const text = norm(textRaw);
+  return /(mittelspannungskabel|ortsnetzkabel|niederspannungskabel|stromkabel|energiekabel|kabelverlegung|verlegung.*kabel|kabel.*verleg|erdkabel|kabelgraben)/i.test(text);
 }
 
 function contextSensitiveWarning(textRaw: any): string {
@@ -3731,6 +3819,25 @@ JSON-Schema:
 
   let suggestedUnitPrice = round2(breakdownTotal || directTotal);
   let finalUnitPrice = suggestedUnitPrice;
+  const noX84LinearGuard = applyNoX84LinearPriceGuard({
+    textRaw: `${kurztext || ""} ${langtext || ""}`,
+    unitRaw: einheit,
+    mengeRaw: menge,
+    epRaw: finalUnitPrice,
+    hasRealX84:
+      Number((row as any).angebotUnitPrice || 0) > 0 ||
+      Number((row as any).angebotTotal || 0) > 0 ||
+      Number((row as any).originalPreKiPrice || 0) > 0 ||
+      Number((row as any).x84UnitPrice || 0) > 0 ||
+      String((row as any).gaebType || (row as any).importType || (row as any).importSource || "")
+        .toLowerCase()
+        .includes("x84"),
+  });
+
+  if (noX84LinearGuard.applied) {
+    finalUnitPrice = noX84LinearGuard.ep;
+  }
+
 
   const siteSetupGuardText = norm(`${kurztext} ${langtext}`);
   const isLongSiteSetupGuard =
@@ -4122,6 +4229,27 @@ JSON-Schema:
       );
     }
 
+      const noX84FinalLinearGuard = applyNoX84LinearPriceGuard({
+        textRaw: `${kurztext || ""} ${langtext || ""}`,
+        unitRaw: einheit,
+        mengeRaw: menge,
+        epRaw: finalUnitPrice,
+        hasRealX84:
+          Number((row as any).angebotUnitPrice || 0) > 0 ||
+          Number((row as any).angebotTotal || 0) > 0 ||
+          Number((row as any).originalPreKiPrice || 0) > 0 ||
+          Number((row as any).x84UnitPrice || 0) > 0 ||
+          String((row as any).gaebType || (row as any).importType || (row as any).importSource || "")
+            .toLowerCase()
+            .includes("x84"),
+      });
+
+      if (noX84FinalLinearGuard.applied) {
+        finalUnitPrice = noX84FinalLinearGuard.ep;
+        suggestedUnitPrice = noX84FinalLinearGuard.ep;
+        contextQualityWarnings.push(noX84FinalLinearGuard.warning);
+      }
+
     const contextDirectCost = round2(
       normalizedMaterialCost +
       normalizedLaborCost +
@@ -4292,6 +4420,18 @@ JSON-Schema:
     : confidence;
 
   const returnContextText = norm(`${kurztext} ${langtext}`);
+  const returnUnitText = norm(`${einheit || ""}`);
+  const returnMenge = Number(menge || 0);
+
+  const isMeterUnitReturn =
+    /^(m|lfm|laufmeter|laufende meter|meter)$/.test(returnUnitText);
+
+  const isLinearHouseConnectionLineReturn =
+    isMeterUnitReturn &&
+    returnMenge > 20 &&
+    /hausanschlussleitung|hausanschluss.*leitung|verlegung hausanschlussleitung|hausanschlussrohr|anschlussleitung/.test(returnContextText) &&
+    !/kernbohrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|wanddurchführung|wanddurchfuehrung/.test(returnContextText);
+
   const isSurfaceRestorationReturn =
     !/geraetevorhaltung|gerätevorhaltung|bauzeitunterbrechung|stillstand|wartezeit|wartezeiten|leitungsfreigabe|behoerdliche freigabe|behördliche freigabe|bauablaufstoerung|bauablaufstörung|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|erschwernis|beengte bauweise|beengte platzverhältnisse|beengten platzverhaeltnissen|handschachtung/.test(returnContextText) &&
     /oberfläche|oberflaeche|oberflächen|oberflaechen|wiederherstellung|verkehrsfläche|verkehrsflaeche|asphalt|asphaltaufbruch|fräsen|fraesen|frostschutz|schottertragschicht|asphalttragschicht|asphaltdeckschicht|pflaster|pflasterfläche|pflasterflaeche|bordstein|bordsteine|rinne|rinnen|verkehrsfreigabe|aufbruchmaterial/.test(returnContextText);
@@ -4315,6 +4455,7 @@ JSON-Schema:
     /schutzmaßnahmen|schutzmassnahmen|schutz vorhandener|bestandsleitungen|vorhandene leitungen|schutzplatten|oberflächenschutz|oberflaechenschutz|kontrollmaßnahmen|kontrollmassnahmen/.test(returnContextText);
 
   const isHouseConnectionReturn =
+    !isLinearHouseConnectionLineReturn &&
     !isDocumentationReturn &&
     !isTempSupplyReturn &&
     !isSurfaceRestorationReturn &&
@@ -4406,6 +4547,8 @@ JSON-Schema:
         ? "Tiefbau / Baustellenlogistik"
       : isProtectionReturn
         ? "Tiefbau / Schutzmaßnahmen"
+      : isLinearHouseConnectionLineReturn
+        ? "Tiefbau / Leitungsbau"
       : isHouseConnectionReturn
         ? "Tiefbau / Hausanschlüsse & Bestand"
       : isSpecialCivilReturn
@@ -4451,6 +4594,8 @@ JSON-Schema:
         ? "Zufahrt / Lager / Baustellenversorgung"
       : isProtectionReturn
         ? "Schutzmaßnahmen / Bestandssicherung / Oberflächenschutz"
+      : isLinearHouseConnectionLineReturn
+        ? "Hausanschlussleitung / Leitungsverlegung"
       : isHouseConnectionReturn
         ? "Hausanschluss / Gebäudeeinführung / Arbeiten im Bestand"
       : isSpecialCivilReturn
@@ -4496,6 +4641,8 @@ JSON-Schema:
         ? "Logistik-, Lager- und Versorgungsmaßnahmen mit Vorhaltung und Rückbau"
       : isProtectionReturn
         ? "Sichern, Schützen, Kontrollieren und Rückbauen vorhandener Anlagen"
+      : isLinearHouseConnectionLineReturn
+        ? "Lineare Leitungsverlegung nach Meteransatz ohne Hausanschluss-Pauschale"
       : isHouseConnectionReturn
         ? "Gebäudenahe Ausführung mit Handschachtung, Kernbohrung, Hauseinführung und Wiederherstellung"
       : isSpecialCivilReturn
@@ -5291,19 +5438,41 @@ function guardNoX84UnsafeOkResult(row: any, result: any) {
      (gp > 25000 && (risk === "" || risk === "low" || risk === "medium")));
 
   if ((riskyByPattern || riskyByScale) && (status === "" || status === "ok" || status === "warning") && (risk === "" || risk === "low" || risk === "medium")) {
+    const guarded = applyNoX84LinearPriceGuard({
+      textRaw: text,
+      unitRaw: unit,
+      mengeRaw: qty,
+      epRaw: ep,
+      hasRealX84: false,
+    });
+
+    const finalEp = guarded.applied ? round2(guarded.ep) : round2(ep);
+    const finalGp = round2(finalEp * qty);
+
     return {
       ...result,
+      baseUnitPrice: finalEp,
+      suggestedUnitPrice: finalEp,
+      finalUnitPrice: finalEp,
+      rlcKiUnitPrice: finalEp,
+      unitPrice: finalEp,
+      preis: finalEp,
+      totalNet: finalGp,
+      rlcKiTotal: finalGp,
+      gesamt: finalGp,
       calculationStatus: "needs_review",
       riskLevel: "high",
       confidence: Math.min(n(result?.confidence, 0.5), 0.45),
       warning: [
         s(result?.warning),
         "RLC No-X84 Outlier-Guard: Position ohne X84/Angebotsbasis darf nicht automatisch als sicher bewertet werden.",
-        `Menge ${round2(qty)} ${row?.einheit || result?.einheit || ""}, EP ${round2(ep)}, GP ${round2(gp)}.`,
+        guarded.applied ? guarded.warning : "",
+        `Menge ${round2(qty)} ${row?.einheit || result?.einheit || ""}, EP ${round2(finalEp)}, GP ${round2(finalGp)}.`,
       ].filter(Boolean).join(" · "),
       aiReason: [
         s(result?.aiReason),
         "RLC No-X84 Outlier-Guard: Ergebnis bleibt prüfpflichtig, weil keine historische Angebotsbasis vorhanden ist und Muster/Menge/Preis ein hohes Abweichungsrisiko zeigen.",
+        guarded.applied ? `RLC No-X84 Preisdeckel angewendet: ursprünglicher EP ${round2(ep)} -> geprüfter EP ${round2(finalEp)}.` : "",
       ].filter(Boolean).join("\n\n"),
     };
   }
@@ -5403,12 +5572,29 @@ function applyNoX84CompanyCalibration(row: any, result: any) {
 
   const total = round2(ep * qty);
 
+  const noX84GuardedEp = applyNoX84LinearPriceGuard({
+    textRaw: `${row.kurztext || row.shortText || row.text || ""} ${row.langtext || ""}`,
+    unitRaw: row.einheit || row.unit,
+    mengeRaw: row.menge || row.quantity,
+    epRaw: ep,
+    hasRealX84:
+      Number((row as any).angebotUnitPrice || 0) > 0 ||
+      Number((row as any).angebotTotal || 0) > 0 ||
+      Number((row as any).originalPreKiPrice || 0) > 0 ||
+      Number((row as any).x84UnitPrice || 0) > 0 ||
+      String((row as any).gaebType || (row as any).importType || (row as any).importSource || "")
+        .toLowerCase()
+        .includes("x84"),
+  });
+
+  const noX84FinalEp = noX84GuardedEp.applied ? noX84GuardedEp.ep : round2(ep);
+
   return {
     ...result,
     source: "company-calibration",
-    baseUnitPrice: round2(ep),
-    suggestedUnitPrice: round2(ep),
-    finalUnitPrice: round2(ep),
+    baseUnitPrice: noX84FinalEp,
+    suggestedUnitPrice: noX84FinalEp,
+    finalUnitPrice: noX84FinalEp,
     rlcKiUnitPrice: round2(ep),
     unitPrice: round2(ep),
     preis: round2(ep),
@@ -5530,11 +5716,30 @@ function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
 
   const total = round2(normalizedEp * qty);
 
+  const noX84GuardedNormalizedEp = applyNoX84LinearPriceGuard({
+    textRaw: `${row.kurztext || row.shortText || row.text || ""} ${row.langtext || ""}`,
+    unitRaw: row.einheit || row.unit,
+    mengeRaw: row.menge || row.quantity,
+    epRaw: normalizedEp,
+    hasRealX84:
+      Number((row as any).angebotUnitPrice || 0) > 0 ||
+      Number((row as any).angebotTotal || 0) > 0 ||
+      Number((row as any).originalPreKiPrice || 0) > 0 ||
+      Number((row as any).x84UnitPrice || 0) > 0 ||
+      String((row as any).gaebType || (row as any).importType || (row as any).importSource || "")
+        .toLowerCase()
+        .includes("x84"),
+  });
+
+  const noX84FinalNormalizedEp = noX84GuardedNormalizedEp.applied
+    ? noX84GuardedNormalizedEp.ep
+    : round2(normalizedEp);
+
   return {
     ...result,
-    baseUnitPrice: round2(normalizedEp),
-    suggestedUnitPrice: round2(normalizedEp),
-    finalUnitPrice: round2(normalizedEp),
+    baseUnitPrice: noX84FinalNormalizedEp,
+    suggestedUnitPrice: noX84FinalNormalizedEp,
+    finalUnitPrice: noX84FinalNormalizedEp,
     rlcKiUnitPrice: round2(normalizedEp),
     unitPrice: round2(normalizedEp),
     preis: round2(normalizedEp),
