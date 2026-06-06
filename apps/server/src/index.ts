@@ -62,7 +62,7 @@ import fotosRoutes from "./routes/fotos";
 import inboxRouter from "./routes/inbox";
 import photosRouter from "./routes/photos"; // legacy (lo teniamo come /api/photos-legacy)
 import regiePdfRoutes from "./routes/regiePdf";
-
+import tagesberichtRoutes from "./routes/tagesbericht";
 import sollistRoutes from "./routes/sollist";
 
 import cadRoutes from "./routes/cad";
@@ -72,12 +72,16 @@ import autoKiRouter from "./routes/autoKi";
 
 import kalkulationRecipesRoutes from "./routes/kalkulation.recipes";
 import kalkulationVariantsRoutes from "./routes/kalkulation.variants";
+import kalkulationDatenbankRoutes from "./routes/kalkulation.datenbank";
+import kalkulationKiRoutes from "./routes/kalkulation.ki";
 import companyPricesRouter from "./routes/companyPrices";
 import kalkulationKiHandoffRoutes from "./routes/kalkulationKiHandoff";
 import adminAuthRoutes from "./routes/admin.auth";
-
+import kalkulationAngebotRoutes from "./routes/kalkulation.angebot";
+import kalkulationMengenRoutes from "./routes/kalkulation.mengen";
+import kalkulationRechnungRoutes from "./routes/kalkulation.rechnung";
 import { requireAuth, requireVerifiedEmail } from "./middleware/auth";
-
+import { auditTrail } from "./middleware/audit";
 /* ✅ LICENSE (Server Upgrade) */
 import { requireServerLicense } from "./middleware/license";
 import licenseRoutes from "./routes/license";
@@ -88,8 +92,10 @@ import companyInvitesRoutes from "./routes/company.invites";
 import companyAdminRoutes from "./routes/company.admin";
 import kiLs from "./routes/ki.lieferschein";
 import kiDebug from "./routes/ki.debug";
+import multer from "multer";
 
 /* ======================= CRASH SHIELD (NO BREAKING CHANGES) ======================= */
+const pdfUpload = multer({ storage: multer.memoryStorage() });
 const DEBUG_MEMORY = (process.env.DEBUG_MEMORY || "").toLowerCase() === "on";
 
 function fmtMB(n: number) {
@@ -141,6 +147,18 @@ function requestId() {
 }
 
 const app = express();
+
+
+// =======================
+// Static: Projects (MUST be before routes / 404)
+// =======================
+app.use(
+  "/projects",
+  express.static(PROJECTS_ROOT, {
+    fallthrough: false, // se non trova il file -> 404 static (non JSON catch-all)
+  })
+);
+console.log("[DEBUG] PROJECTS_ROOT =", PROJECTS_ROOT);
 const PORT = Number(process.env.PORT || 4000);
 
 /* ======================= MINI DEBUG ENV (non-breaking) ======================= */
@@ -182,11 +200,13 @@ app.set("trust proxy", 1);
 
 app.use(
   helmet({
+    hsts: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 app.use(compression());
 app.use(requestId());
+app.use(auditTrail());
 app.use(morgan("combined"));
 
 const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
@@ -309,7 +329,7 @@ app.use((req, _res, next) => {
     req.auth = {
       sub: "dev-user",
       role: "ADMIN",
-      company: (process.env.DEV_COMPANY_ID || "").trim() || "dev-company",
+      companyId: (process.env.DEV_COMPANY_ID || "").trim() || "dev-company",
     };
 
     (req as any).user = {
@@ -323,7 +343,6 @@ app.use((req, _res, next) => {
 });
 
 /* ======================= Static ======================= */
-app.use("/projects", express.static(PROJECTS_ROOT, { fallthrough: true }));
 app.use("/files", express.static(PROJECTS_ROOT, { fallthrough: true }));
 
 /* ======================= Health / Debug ======================= */
@@ -523,6 +542,50 @@ app.get(
   }
 );
 
+app.post(
+  "/api/projects/:fsKey/pdfs/upload",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  pdfUpload.single("file"),
+  async (req, res) => {
+    try {
+      const fsKey = String(req.params.fsKey || "").trim();
+      if (!fsKey || !isSafeFsKey(fsKey)) {
+        return res.status(400).json({ ok: false, error: "invalid fsKey" });
+      }
+
+      const file = (req as any).file;
+      if (!file?.buffer) {
+        return res.status(400).json({ ok: false, error: "missing file" });
+      }
+
+      const original = String(file.originalname || "document.pdf").trim();
+      const safeName = original.replace(/[^A-Za-z0-9._-]/g, "_");
+      const finalName = safeName.toLowerCase().endsWith(".pdf")
+        ? safeName
+        : `${safeName}.pdf`;
+
+      const dirAbs = path.join(PROJECTS_ROOT, fsKey, "pdfs");
+      fs.mkdirSync(dirAbs, { recursive: true });
+
+      const outAbs = path.join(dirAbs, finalName);
+      fs.writeFileSync(outAbs, file.buffer);
+
+      return res.json({
+        ok: true,
+        name: finalName,
+        url: `/projects/${encodeURIComponent(fsKey)}/pdfs/${encodeURIComponent(finalName)}`,
+      });
+    } catch (e: any) {
+      console.error("POST /api/projects/:fsKey/pdfs/upload failed:", e);
+      return res.status(500).json({
+        ok: false,
+        error: e?.message || "pdf upload failed",
+      });
+    }
+  }
+);
 /* ======================= Projekt Bootstrap (DB) ======================= */
 app.get(
   "/api/projects/:id/bootstrap",
@@ -741,10 +804,16 @@ app.get(
 app.use("/api/aufmass", aufmassRoutes);
 app.use("/api/import", importRoutes);
 app.use("/api/gps", gpsRoutes);
-
+app.use("/api/fotos", fotosRoutes);
 /* auth */
 app.use("/api/auth", adminAuthRoutes);
 app.use("/api/auth", authRoutes);
+
+/* ✅ project-lv API */
+app.use(
+  "/api/project-lv",
+  projectLvRoutes
+);
 
 /* whoami + license */
 app.use("/api/whoami", requireAuth, whoamiRoutes);
@@ -839,13 +908,16 @@ app.use("/api/company", companyInvitesRoutes);
 app.use("/api/company", companyAdminRoutes);
 
 /* misc */
-app.use(
-  "/api",
-  requireAuth,
-  requireCompany,
-  requireActiveSubscription,
-  verknuepfungRoutes
-);
+// ❌ REMOVE – rompe routing fotos
+// app.use(
+//   "/api",
+//   requireAuth,
+//   requireCompany,
+//   requireActiveSubscription,
+//   requireServerLicense(),
+//   fotosRoutes
+// );
+
 app.use(
   "/api/pdf",
   requireAuth,
@@ -891,7 +963,8 @@ app.use(
   bricscadRoutes
 );
 app.use(
-  "/api",
+  
+"/api",
   requireAuth,
   requireCompany,
   requireActiveSubscription,
@@ -912,6 +985,7 @@ app.use(
  * =========================================================
  * ✅ FIX CRITICO (FOTOS INBOX):
  * L'app chiama /api/photos/inbox/list ma i dati stanno in routes/fotos.ts
+
  * Quindi montiamo lo STESSO router anche su /api/photos.
  *
  * IMPORTANTE: /api/photos NON deve puntare al vecchio photosRouter,
@@ -920,12 +994,9 @@ app.use(
  * =========================================================
  */
 app.use(
-  "/api/photos",
-  requireAuth,
-  requireCompany,
-  requireActiveSubscription,
-  requireServerLicense(),
-  fotosRoutes // ✅ alias: /api/photos/inbox/list -> routes/fotos.ts
+  "/api/photos",  
+   requireAuth,
+   fotosRoutes // ✅ alias: /api/photos/inbox/list -> routes/fotos.ts
 );
 app.use(
   "/api/photos-legacy",
@@ -934,6 +1005,7 @@ app.use(
   requireActiveSubscription,
   requireServerLicense(),
   photosRouter
+
 );
 
 /**
@@ -942,23 +1014,20 @@ app.use(
 app.use(
   "/api/fotos",
   requireAuth,
-  requireCompany,
-  requireActiveSubscription,
-  requireServerLicense(),
   fotosRoutes
 );
 
 /**
  * ✅ (compat) alcune vecchie chiamate potrebbero usare /api/... diretto
  */
-app.use(
-  "/api",
-  requireAuth,
-  requireCompany,
-  requireActiveSubscription,
-  requireServerLicense(),
-  fotosRoutes
-);
+// app.use(
+//   "/api",
+//   requireAuth,
+//   requireCompany,
+//   requireActiveSubscription,
+//   requireServerLicense(),
+//   fotosRoutes
+// );
 
 /* regie (SERVER upgrade required) */
 app.use(
@@ -1007,15 +1076,6 @@ app.use(
   sollistRoutes
 );
 
-/* ✅ project-lv API */
-app.use(
-  "/api",
-  requireAuth,
-  requireCompany,
-  requireActiveSubscription,
-  projectLvRoutes
-);
-
 /* ✅ files API */
 app.use(
   "/api/files",
@@ -1054,6 +1114,18 @@ app.use(
   lvRoutes
 );
 
+// RLC GAEB/LV Import-Routen:
+// /api/projects/:projectId/import
+// /api/projects/:projectId/import-file
+// /api/projects/:projectId/position
+app.use(
+  "/api/projects",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  projectLvRoutes
+);
+
 /* kalkulation */
 app.use(
   "/api/kalkulation",
@@ -1068,6 +1140,66 @@ app.use(
   requireCompany,
   requireActiveSubscription,
   kalkulationVariantsRoutes
+);
+
+app.use(
+  "/api/kalkulation",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  kalkulationDatenbankRoutes
+);
+
+app.use(
+  "/api/kalkulation/ki",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  kalkulationKiRoutes
+);
+
+
+app.use(
+  "/api/kalkulation/angebot",
+  requireAuth,
+  requireServerLicense(),
+  requireVerifiedEmail,
+  requireCompany,
+  requireActiveSubscription,
+  kalkulationAngebotRoutes
+);
+
+app.use(
+  "/api/kalkulation/mengen",
+  requireAuth,
+  requireServerLicense(),
+  requireVerifiedEmail,
+  requireCompany,
+  requireActiveSubscription,
+  kalkulationMengenRoutes
+);
+
+app.use(
+  "/api/kalkulation/rechnung",
+  requireAuth,
+  requireServerLicense(),
+  requireVerifiedEmail,
+  requireCompany,
+  requireActiveSubscription,
+  kalkulationRechnungRoutes
+);
+app.use("/api/tagesbericht", tagesberichtRoutes);
+app.use("/api/tagesberichte", tagesberichtRoutes);
+
+
+app.use(
+  "/api",
+  requireAuth,
+  requireServerLicense(),
+  requireVerifiedEmail,
+  requireCompany,
+  requireActiveSubscription,
+  verknuepfungRoutes
 );
 app.use(
   "/api/company-prices",

@@ -556,10 +556,85 @@ async function resolveProject(companyId: string, projectIdOrCode: string) {
       "project.companyId=",
       fallback.companyId
     );
+    return fallback;
   }
 
-  return fallback;
+  // RLC FS fallback:
+  // /api/projects può mostrare progetti FS come BA-2026-021 con dbId nel project.json.
+  // La route import deve quindi accettare anche fsKey/code e risolvere il vero DB id.
+  try {
+    const fs = await import("node:fs/promises");
+    const pathMod = await import("node:path");
+
+    const projectsRoot =
+      process.env.PROJECTS_ROOT ||
+      process.env.RLC_PROJECTS_ROOT ||
+      "/app/data/projects";
+
+    const projectJsonPath = pathMod.join(projectsRoot, key, "project.json");
+    const raw = await fs.readFile(projectJsonPath, "utf8");
+    const meta = JSON.parse(raw);
+
+    const dbId = String(meta.dbId || meta.id || "").trim();
+    const code = String(meta.code || meta.projectCode || meta.fsKey || key).trim();
+
+    const fsProject = await prisma.project.findFirst({
+      where: {
+        OR: [
+          ...(dbId ? [{ id: dbId }] : []),
+          ...(code ? [{ code }] : []),
+          { code: key },
+        ],
+      },
+    });
+
+    if (fsProject) {
+      log(
+        "RLC FS project resolved.",
+        "requested=",
+        key,
+        "dbId=",
+        dbId,
+        "code=",
+        code,
+        "project.id=",
+        fsProject.id
+      );
+      return fsProject;
+    }
+
+    // RLC DB self-healing:
+    // Il progetto esiste nel filesystem ma manca nella tabella Project.
+    // Ricreiamo il record DB minimo, così import LV/GAEB può funzionare.
+    if (dbId && code) {
+      const created = await prisma.project.create({
+        data: {
+          id: dbId,
+          companyId,
+          code,
+          name: String(meta.name || meta.title || code),
+        },
+      });
+
+      log(
+        "RLC FS project recreated in DB.",
+        "requested=",
+        key,
+        "project.id=",
+        created.id,
+        "code=",
+        created.code
+      );
+
+      return created;
+    }
+  } catch (e: any) {
+    log("RLC FS project fallback failed:", key, e?.message || e);
+  }
+
+  return null;
 }
+
 
 async function getLvHeaderByVersion(projectId: string, version?: number | null) {
   return prisma.lVHeader.findFirst({
@@ -1870,7 +1945,7 @@ router.post("/:projectId/import", async (req, res) => {
     }
 
     const projectId = project.id;
-    const itemsRaw = Array.isArray(req.body?.items) ? req.body.items : [];
+    const itemsRaw = Array.isArray(req.body?.items) ? req.body.items : (Array.isArray(req.body?.rows) ? req.body.rows : []);
 
     if (!itemsRaw.length) {
       return res.status(400).json({
