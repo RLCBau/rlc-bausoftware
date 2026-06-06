@@ -1106,15 +1106,8 @@ app.use(
   requireActiveSubscription,
   projectsRoutes
 );
-app.use(
-  "/api/projects",
-  requireAuth,
-  requireCompany,
-  requireActiveSubscription,
-  lvRoutes
-);
-
-// RLC GAEB/LV Import-Routen:
+// RLC GAEB/LV Projekt-Routen:
+// /api/projects/:projectId/lv
 // /api/projects/:projectId/import
 // /api/projects/:projectId/import-file
 // /api/projects/:projectId/position
@@ -1124,6 +1117,14 @@ app.use(
   requireCompany,
   requireActiveSubscription,
   projectLvRoutes
+);
+
+app.use(
+  "/api/projects",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  lvRoutes
 );
 
 /* kalkulation */

@@ -780,25 +780,39 @@ async function handleGetProjectLv(req: Request, res: Response) {
 
       log("LV aus DB gefunden. Header:", header.id, "Anzahl Pos:", positions.length);
 
-      return res.json({
-        ok: true,
-        source: "db",
-        header: {
-          id: header.id,
-          title: header.title,
-          currency: header.currency,
-          version: header.version,
-        },
-        items: positions.map((p) => ({
+        const mappedItems = positions.map((p) => ({
           id: p.id,
           pos: p.position,
+          position: p.position,
+          posNr: p.position,
           text: p.kurztext,
+          kurztext: p.kurztext,
           langtext: p.langtext || "",
           unit: p.einheit,
+          einheit: p.einheit,
           quantity: p.menge ?? 0,
+          menge: p.menge ?? 0,
           ep: p.einzelpreis ?? 0,
-        })),
-      });
+          einzelpreis: p.einzelpreis ?? 0,
+          preis: p.einzelpreis ?? 0,
+          gesamt: p.gesamt ?? (Number(p.menge ?? 0) * Number(p.einzelpreis ?? 0)),
+        }));
+
+        return res.json({
+          ok: true,
+          source: "db",
+          header: {
+            id: header.id,
+            title: header.title,
+            currency: header.currency,
+            version: header.version,
+          },
+          page: Number((req.query as any)?.page || 1),
+          pageSize: Number((req.query as any)?.pageSize || mappedItems.length),
+          total: mappedItems.length,
+          rows: mappedItems,
+          items: mappedItems,
+        });
     }
 
     const folderById = path.join(PROJECTS_ROOT, project.id);
@@ -935,6 +949,7 @@ async function handleGetProjectLv(req: Request, res: Response) {
 }
 }
 
+router.get("/:projectId/lv", handleGetProjectLv);
 router.get("/:projectId", (req, res) => {
   (req as any).params.projectId = req.params.projectId;
   return handleGetProjectLv(req, res);
