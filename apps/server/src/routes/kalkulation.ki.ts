@@ -641,6 +641,134 @@ function strongDatabaseHit(matches: DbMatch[], unit: string): boolean {
   return false;
 }
 
+function rlcExtractTechnicalFacts(value: string): Set<string> {
+  const t = norm(value);
+  const facts = new Set<string>();
+
+  const patterns: Array<[RegExp, string]> = [
+    [/dn\s*\d+|da\s*\d+|d\s*\d+|\b\d+\s*mm\b|\b\d+\s*cm\b/g, "dimension"],
+    [/pe\s*hd|pehd|pvc|pp|stahl|beton|kunststoff|guss|steinzeug/g, "material"],
+    [/kabelschutzrohr|schutzrohr|speedpipe|leerrohr|rohr/g, "rohr"],
+    [/sandbett|sandbettung|rohrumhuellung|rohrumhüllung|bettung|umhuellung|umhüllung/g, "bettung"],
+    [/warnband|trassenwarnband|schutzmatte|kabelschutzmatte/g, "schutz"],
+    [/muffe|bogen|abzweig|kupplung|formstueck|formstück|zubehoer|zubehör/g, "zubehoer"],
+    [/aushub|graben|rohrgraben|leitungsgraben|boden/g, "aushub"],
+    [/verfuell|verfüll|verdicht|frostschutz|schotter|kies/g, "verfuellung"],
+    [/asphalt|pflaster|bordstein|randstein|rinne|deckschicht|tragschicht/g, "oberflaeche"],
+    [/entsorgung|deponie|abfuhr|laden|transport/g, "entsorgung_transport"],
+    [/liefern|lieferung/g, "liefern"],
+    [/verlegen|einbauen|montieren|setzen|herstellen/g, "einbauen"],
+    [/pausch|psch|vorhalten|betreiben|baustelleneinrichtung|verkehrssicherung|wasserhaltung|dokumentation|vermessung/g, "context"],
+  ];
+
+  for (const [rx, label] of patterns) {
+    if (rx.test(t)) facts.add(label);
+  }
+
+  return facts;
+}
+
+function rlcFactOverlapScore(a: Set<string>, b: Set<string>): number {
+  if (!a.size && !b.size) return 0.5;
+  if (!a.size || !b.size) return 0;
+
+  let hit = 0;
+  for (const x of a) {
+    if (b.has(x)) hit++;
+  }
+
+  return hit / Math.max(a.size, b.size);
+}
+
+function checkDbPriceComparability(row: any, db: any, match?: DbMatch) {
+  const reasons: string[] = [];
+  const notes: string[] = [];
+
+  const rowUnit = s(row?.einheit ?? row?.unit);
+  const dbUnit = s(db?.unit ?? db?.einheit);
+  const rowUnitNorm = norm(rowUnit);
+  const dbUnitNorm = norm(dbUnit);
+
+  const rowText = `${s(row?.posNr)} ${s(row?.kurztext)} ${s(row?.langtext)}`.trim();
+  const dbText = `${s(db?.positionNumber)} ${s(db?.shortText)} ${s(db?.longText)}`.trim();
+
+  const fullRowNorm = norm(rowText);
+  const fullDbNorm = norm(dbText);
+
+  if (!rowText || !dbText) {
+    reasons.push("LV-Text oder Datenbank-Langtext fehlt.");
+  }
+
+  if (rowUnitNorm && dbUnitNorm && rowUnitNorm !== dbUnitNorm) {
+    reasons.push(`Einheit nicht vergleichbar: LV=${rowUnit || "—"}, DB=${dbUnit || "—"}.`);
+  }
+
+  if (/psch|pausch/.test(rowUnitNorm) || /psch|pausch/.test(dbUnitNorm)) {
+    reasons.push("Pauschalposition: Datenbankwert darf nur als Vergleich dienen.");
+  }
+
+  if (isContextSensitivePosition(rowText, rowUnit)) {
+    reasons.push("Context-sensitive Position: Preis hängt von Dauer, Entfernung, Logistik, Personal/Geräten und Projektgröße ab.");
+  }
+
+  const rowFacts = rlcExtractTechnicalFacts(rowText);
+  const dbFacts = rlcExtractTechnicalFacts(dbText);
+  const overlap = rlcFactOverlapScore(rowFacts, dbFacts);
+
+  if (overlap < 0.55) {
+    reasons.push(`Technische Bestandteile nicht ausreichend vergleichbar (${Math.round(overlap * 100)}%).`);
+  } else {
+    notes.push(`Technische Bestandteile vergleichbar (${Math.round(overlap * 100)}%).`);
+  }
+
+  const rowHasLiefern = fullRowNorm.includes("liefern") || fullRowNorm.includes("lieferung");
+  const dbHasLiefern = fullDbNorm.includes("liefern") || fullDbNorm.includes("lieferung");
+  const rowHasEinbau = /verlegen|einbauen|montieren|setzen|herstellen/.test(fullRowNorm);
+  const dbHasEinbau = /verlegen|einbauen|montieren|setzen|herstellen/.test(fullDbNorm);
+
+  if (rowHasLiefern !== dbHasLiefern) {
+    reasons.push("Leistungsumfang Lieferung ist nicht gleich.");
+  }
+
+  if (rowHasEinbau !== dbHasEinbau) {
+    reasons.push("Leistungsumfang Einbau/Verlegung ist nicht gleich.");
+  }
+
+  const rowMenge = n(row?.menge);
+  if (rowMenge <= 0) {
+    reasons.push("Menge fehlt oder ist 0.");
+  }
+
+  const score = n(match?.score);
+  if (match && score < 65) {
+    reasons.push(`Datenbank-Matchscore zu niedrig (${score}).`);
+  }
+
+  const rowPos = s(row?.posNr);
+  const dbPos = s(db?.positionNumber);
+  const posExact = rowPos && dbPos && norm(rowPos) === norm(dbPos);
+
+  if (!posExact && overlap < 0.7) {
+    reasons.push("Keine identische Positionsnummer und technische Ähnlichkeit nicht stark genug.");
+  }
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
+    notes,
+    overlap,
+    posExact,
+    rowFacts: Array.from(rowFacts),
+    dbFacts: Array.from(dbFacts),
+  };
+}
+
+function dbComparabilityWarning(dbCheck: any): string {
+  const parts = Array.isArray(dbCheck?.reasons) ? dbCheck.reasons : [];
+  if (!parts.length) return "";
+  return "Datenbankpreis gefunden, aber technische Vergleichbarkeit nicht ausreichend bestätigt: " + parts.join(" · ");
+}
+
 function confidenceFrom(row: InputRow, risk: RiskLevel, matches: DbMatch[], source: CalcSource): number {
   let score = source === "openai" ? 0.82 : source === "database" ? 0.76 : 0.62;
 
@@ -5026,37 +5154,48 @@ async function calcSmartRow(
     });
 
     if (hasHistoricalOfferBaselineForDb && directDb) {
-      const exactDbEp = n(directDb.unitPriceNet);
-      const menge = n(row.menge);
-      const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
+      const dbCheck = checkDbPriceComparability(row, directDb);
 
-      const companyDbRow = {
-        ...row,
-        source: "database",
-        suggestedUnitPrice: exactDbEp,
-        finalUnitPrice: exactDbEp,
-        rlcKiUnitPrice: exactDbEp,
-        unitPrice: exactDbEp,
-        preis: exactDbEp,
-        totalNet: exactDbTotal,
-        rlcKiTotal: exactDbTotal,
-        gesamt: exactDbTotal,
-        confidence: 0.99,
-        calculationStatus: "ok",
-        riskLevel: "low",
-        warning: "",
-        aiReason: [
-          "Firmen-Datenbank Direktmatch: exakter Firmenwert aus X84-Baseline verwendet.",
-          "Position: " + s(directDb.positionNumber),
-          "EP netto: " + exactDbEp,
-        ].join("\n\n"),
-      };
+      if (dbCheck.ok) {
+        const exactDbEp = n(directDb.unitPriceNet);
+        const menge = n(row.menge);
+        const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
 
-      const companyDbCacheKey = cacheKeyForRow(row);
-      kalkulationAiCache.set(companyDbCacheKey, companyDbRow);
-      scheduleKalkulationAiCacheSave();
+        const companyDbRow = {
+          ...row,
+          source: "database",
+          suggestedUnitPrice: exactDbEp,
+          finalUnitPrice: exactDbEp,
+          rlcKiUnitPrice: exactDbEp,
+          unitPrice: exactDbEp,
+          preis: exactDbEp,
+          totalNet: exactDbTotal,
+          rlcKiTotal: exactDbTotal,
+          gesamt: exactDbTotal,
+          confidence: 0.96,
+          calculationStatus: "ok",
+          riskLevel: "low",
+          warning: "Datenbankpreis technisch geprüft: Einheit, Langtext, Menge und Leistungsbestandteile vergleichbar.",
+          aiReason: [
+            "Firmen-Datenbank Direktmatch technisch verifiziert.",
+            "Position: " + s(directDb.positionNumber),
+            "EP netto: " + exactDbEp,
+            "Vergleich: " + dbCheck.notes.join(" · "),
+          ].filter(Boolean).join("\n\n"),
+        };
 
-      return companyDbRow;
+        const companyDbCacheKey = cacheKeyForRow(row);
+        kalkulationAiCache.set(companyDbCacheKey, companyDbRow);
+        scheduleKalkulationAiCacheSave();
+
+        return companyDbRow;
+      }
+
+      console.warn(
+        "[kalkulation.ki] Firmen-Datenbank Direktmatch nicht übernommen:",
+        s(row.posNr),
+        dbComparabilityWarning(dbCheck)
+      );
     }
   }
 
@@ -5079,36 +5218,47 @@ async function calcSmartRow(
   });
 
   if (hasHistoricalOfferBaselineForDb && strongCompanyDbMatch) {
-    const dbRow = calcRuleRow(row, [strongCompanyDbMatch], "database");
-    const exactDbEp = n(strongCompanyDbMatch.row.unitPriceNet);
-    const menge = n(row.menge);
-    const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
+    const dbCheck = checkDbPriceComparability(row, strongCompanyDbMatch.row, strongCompanyDbMatch);
 
-    const companyDbRow = {
-      ...dbRow,
-      source: "database",
-      suggestedUnitPrice: exactDbEp,
-      finalUnitPrice: exactDbEp,
-      unitPrice: exactDbEp,
-      preis: exactDbEp,
-      totalNet: exactDbTotal,
-      gesamt: exactDbTotal,
-      confidence: 0.99,
-      calculationStatus: "ok",
-      riskLevel: "low",
-      warning: "",
-      aiReason: [
-        "Firmen-Datenbank priorisiert: exakter Firmenwert aus X84-Baseline verwendet.",
-        "Position: " + s(strongCompanyDbMatch.row.positionNumber),
-        "EP netto: " + exactDbEp,
-      ].filter(Boolean).join("\n\n"),
-    };
+    if (dbCheck.ok) {
+      const dbRow = calcRuleRow(row, [strongCompanyDbMatch], "database");
+      const exactDbEp = n(strongCompanyDbMatch.row.unitPriceNet);
+      const menge = n(row.menge);
+      const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
 
-    const companyDbCacheKey = cacheKeyForRow(row);
-    kalkulationAiCache.set(companyDbCacheKey, companyDbRow);
-    scheduleKalkulationAiCacheSave();
+      const companyDbRow = {
+        ...dbRow,
+        source: "database",
+        suggestedUnitPrice: exactDbEp,
+        finalUnitPrice: exactDbEp,
+        unitPrice: exactDbEp,
+        preis: exactDbEp,
+        totalNet: exactDbTotal,
+        gesamt: exactDbTotal,
+        confidence: 0.96,
+        calculationStatus: "ok",
+        riskLevel: "low",
+        warning: "Datenbankpreis technisch geprüft: Einheit, Langtext, Menge und Leistungsbestandteile vergleichbar.",
+        aiReason: [
+          "Firmen-Datenbank priorisiert und technisch verifiziert.",
+          "Position: " + s(strongCompanyDbMatch.row.positionNumber),
+          "EP netto: " + exactDbEp,
+          "Vergleich: " + dbCheck.notes.join(" · "),
+        ].filter(Boolean).join("\n\n"),
+      };
 
-    return companyDbRow;
+      const companyDbCacheKey = cacheKeyForRow(row);
+      kalkulationAiCache.set(companyDbCacheKey, companyDbRow);
+      scheduleKalkulationAiCacheSave();
+
+      return companyDbRow;
+    }
+
+    console.warn(
+      "[kalkulation.ki] Starker Firmen-Datenbanktreffer nicht blind übernommen:",
+      s(row.posNr),
+      dbComparabilityWarning(dbCheck)
+    );
   }
 
   /*
@@ -5984,19 +6134,95 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
     row?.shortText,
     row?.text,
     row?.langtext,
-    result?.kurztext,
-    result?.langtext,
-    result?.gewerk,
-    result?.leistungsart,
-    result?.bauverfahren,
   ].join(" "));
 
+  const rowUnitForPsch = norm(row?.einheit ?? row?.unit ?? result?.einheit);
+  const rowQtyForPsch = n(row?.menge ?? result?.menge, 1);
+  const isStrictPschUnit = /(psch|pausch)/.test(rowUnitForPsch);
+  const isSmallPschQty = rowQtyForPsch > 0 && rowQtyForPsch <= 2;
+
   const directPschEp =
-    /(baustelleneinrichtung|baustellen.*einrichtung|baustelle.*vorhalten|baustelle.*betreiben|container|baustrom|bauwasser)/.test(directPschText)
+    isStrictPschUnit &&
+    isSmallPschQty &&
+    /baustelleneinrichtung.*herstellen.*vorhalten.*betreiben/.test(directPschText) &&
+    !/(abbauen|räumen|raeumen)/.test(directPschText)
       ? 85000
-      : /(erschwernis|beengte bauweise|steig|steigen|zufahrt|handarbeit|bestand|bestandsplaene|bestandspläne|vermessung|dokumentation)/.test(directPschText)
+      : isStrictPschUnit &&
+        isSmallPschQty &&
+        /erschwernis.*trasse.*steigen/.test(directPschText)
         ? 55000
         : 0;
+
+  let directLinearEp = 0;
+  let directLinearReason = "";
+
+  if (/(verlegung mittelspannungskabel|verlegung ortsnetzkabel)/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 8.00;
+    directLinearReason = "RLC Calibration Guard V8: Kabelverlegung als reine Meterposition kalibriert.";
+  } else if (/zwischenplanum/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 0.90;
+    directLinearReason = "RLC Calibration Guard V8: Zwischenplanum als leichte Zuschlagsposition kalibriert.";
+  } else if (/(kalibrierung).*speedpipe/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 0.18;
+    directLinearReason = "RLC Calibration Guard V8: Kalibrierung Speedpipe als Meter-Prüfleistung kalibriert.";
+  } else if (/(druckprobe).*speedpipe/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 0.25;
+    directLinearReason = "RLC Calibration Guard V8: Druckprobe Speedpipe als Meter-Prüfleistung kalibriert.";
+  } else if (/zulage abtrag/.test(directPschText) && /(m2|m²|qm)/.test(unit)) {
+    directLinearEp = 5.00;
+    directLinearReason = "RLC Calibration Guard V8: Zulage Abtrag als leichte Flächenzulage kalibriert.";
+  } else if (/zuschlag.*rueckverfuellung|zuschlag.*rückverfüllung/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 6.50;
+    directLinearReason = "RLC Calibration Guard V8: Zuschlag Rückverfüllung als Meterzuschlag kalibriert.";
+  } else if (/rohrumhuellung.*sand.*hdpe.*da 50|rohrumhüllung.*sand.*hdpe.*da 50/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 1.90;
+    directLinearReason = "RLC Calibration Guard V8: Rohrumhüllung Sand HDPE DA50 auf realistischen Meteransatz kalibriert.";
+  } else if (/lwl.*miko.*kabel|lwl.*mikro.*kabel/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 1.50;
+    directLinearReason = "RLC Calibration Guard V8: LWL-Mikrokabel als leichte Meterposition kalibriert.";
+  } else if (/fahrzeugkosten.*(pkw|werkstattwagen)/.test(directPschText) && /km/.test(unit)) {
+    directLinearEp = 0.60;
+    directLinearReason = "RLC Calibration Guard V8: Fahrzeugkosten pro km kalibriert.";
+  } else if (/unterlage reinigen.*schichtenverbund/.test(directPschText) && /(m2|m²|qm)/.test(unit)) {
+    directLinearEp = 0.70;
+    directLinearReason = "RLC Calibration Guard V8: Unterlage reinigen als leichte Flächenleistung kalibriert.";
+  } else if (/schichtenverbund herstellen/.test(directPschText) && /(m2|m²|qm)/.test(unit)) {
+    directLinearEp = 0.80;
+    directLinearReason = "RLC Calibration Guard V8: Schichtenverbund herstellen als leichte Flächenleistung kalibriert.";
+  } else if (/zaeune abbauen|zäune abbauen/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 7.00;
+    directLinearReason = "RLC Calibration Guard V8: Zäune abbauen als Meterleistung kalibriert.";
+  }
+
+  if (directLinearEp > 0) {
+    const total = round2(directLinearEp * Math.max(1, qty));
+
+    return {
+      ...result,
+      baseUnitPrice: directLinearEp,
+      suggestedUnitPrice: directLinearEp,
+      finalUnitPrice: directLinearEp,
+      rlcKiUnitPrice: directLinearEp,
+      unitPrice: directLinearEp,
+      preis: directLinearEp,
+      totalNet: total,
+      rlcKiTotal: total,
+      gesamt: total,
+      confidence: Math.min(n(result?.confidence, 0.58), 0.58),
+      calculationStatus: "needs_review",
+      riskLevel: "high",
+      warning: [
+        s(result?.warning),
+        directLinearReason,
+        `Alter EP ${round2(ep)} wurde auf ${round2(directLinearEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
+        "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        s(result?.aiReason),
+        "RLC Calibration Guard V8: Lineare No-X84-Position wurde anhand X84-Benchmark-Familie kalibriert, ohne X84 direkt zu kopieren.",
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
 
   if (directPschEp > 0) {
     const total = round2(directPschEp * Math.max(1, qty));
@@ -6047,12 +6273,15 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   ].join(" "));
 
   const isBaustelleneinrichtungPsch =
-    /(baustelleneinrichtung|baustellen.*einrichtung|baustelle.*vorhalten|baustelle.*betreiben|container|baustrom|bauwasser)/.test(calibrationText) &&
-    /(psch|pausch|st)/.test(unit);
+    /(baustelleneinrichtung.*herstellen.*vorhalten.*betreiben)/.test(directPschText) &&
+    !/(abbauen|räumen|raeumen)/.test(directPschText) &&
+    isStrictPschUnit &&
+    isSmallPschQty;
 
   const isErschwernisPsch =
-    /(erschwernis|beengte bauweise|steig|steigen|zufahrt|handarbeit|bestand|bestandsplaene|bestandspläne|vermessung|dokumentation)/.test(calibrationText) &&
-    /(psch|pausch|st)/.test(unit);
+    /erschwernis.*trasse.*steigen/.test(directPschText) &&
+    isStrictPschUnit &&
+    isSmallPschQty;
 
   let calibratedEp = 0;
   let calibrationReason = "";
@@ -6075,19 +6304,62 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   } else if (family === "rohrumhuellung" && /(m|lfm|meter)/.test(unit)) {
     calibratedEp = 6.50;
     calibrationReason = "RLC Calibration Guard: Rohrumhüllung/Sohlbettung ohne X84 auf realistischen Meteransatz kalibriert.";
-  } else if (family === "baustelleneinrichtung" || isBaustelleneinrichtungPsch) {
+  } else if (isBaustelleneinrichtungPsch) {
     calibratedEp = Math.max(ep, 85000);
-    calibrationReason = "RLC Calibration Guard: Baustelleneinrichtung ist eine context-sensitive Pauschale und darf nicht niedrig standardisiert werden.";
-  } else if (family === "context_psch" || isErschwernisPsch) {
+    calibrationReason = "RLC Calibration Guard: Baustelleneinrichtung herstellen/vorhalten/betreiben als echte Psch-Position kalibriert.";
+  } else if (isErschwernisPsch) {
     calibratedEp = Math.max(ep, 55000);
-    calibrationReason = "RLC Calibration Guard: Erschwernis/Dokumentation/Vermessung als Pauschale context-sensitive kalibriert.";
+    calibrationReason = "RLC Calibration Guard: Erschwernis Trasse innerhalb von Steigen als echte Psch-Position kalibriert.";
   }
 
   if (calibratedEp > 0 && Math.abs(calibratedEp - ep) > 0.01) {
     const total = round2(calibratedEp * qty);
 
+    const isSchutzmatteCalibration = family === "schutzmatte";
+    const calibratedMainName = isSchutzmatteCalibration
+      ? "Rohrschutz Schutzmatte liefern und einbauen"
+      : s(result?.priceBreakdown?.[0]?.name) || s(result?.bauverfahren) || "Kalibrierte RLC-Leistung";
+
+    const calibratedGroup = isSchutzmatteCalibration
+      ? "Material"
+      : s(result?.priceBreakdown?.[0]?.group) || "Leistung";
+
+    const calibratedBreakdown = Array.isArray(result?.priceBreakdown) && result.priceBreakdown.length
+      ? result.priceBreakdown.map((line: any, index: number) => {
+          if (index !== 0) return line;
+          return {
+            ...line,
+            group: calibratedGroup,
+            name: calibratedMainName,
+            unit: row?.einheit || result?.einheit || line?.unit || "EH",
+            qty: 1,
+            price: round2(calibratedEp),
+            total: round2(calibratedEp),
+            note: isSchutzmatteCalibration
+              ? "RLC Calibration Guard: Schutzmatte/Rohrschutz als eigene Leistungsfamilie kalibriert."
+              : s(line?.note) || "RLC Calibration Guard",
+          };
+        })
+      : [
+          {
+            id: "rlc-calibration-main",
+            group: calibratedGroup,
+            name: calibratedMainName,
+            unit: row?.einheit || result?.einheit || "EH",
+            qty: 1,
+            price: round2(calibratedEp),
+            total: round2(calibratedEp),
+            note: "RLC Calibration Guard",
+          },
+        ];
+
     return {
       ...result,
+      gewerk: isSchutzmatteCalibration ? "Kabelschutz / Rohrschutz" : result?.gewerk,
+      leistungsart: isSchutzmatteCalibration ? "Schutzmatte liefern und einbauen" : result?.leistungsart,
+      bauverfahren: isSchutzmatteCalibration ? "Mechanischer Rohrschutz mit Schutzmatte" : result?.bauverfahren,
+      priceBreakdown: calibratedBreakdown,
+      rlcPreisGroup: isSchutzmatteCalibration ? "Material" : result?.rlcPreisGroup,
       baseUnitPrice: round2(calibratedEp),
       suggestedUnitPrice: round2(calibratedEp),
       finalUnitPrice: round2(calibratedEp),
@@ -6103,11 +6375,14 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
       warning: [
         s(result?.warning),
         calibrationReason,
+        isSchutzmatteCalibration ? "Falscher Speedpipe-/Mikro-Leerrohr-Resolver wurde fachlich auf Schutzmatte/Rohrschutz korrigiert." : "",
         `Alter EP ${round2(ep)} wurde auf ${round2(calibratedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
         "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
       ].filter(Boolean).join(" · "),
       aiReason: [
-        s(result?.aiReason),
+        isSchutzmatteCalibration
+          ? "RLC Schutzmatte-Fix: Position wurde als Rohrschutz/Schutzmatte erkannt. Speedpipe-Text aus dem generischen Resolver wurde überschrieben."
+          : s(result?.aiReason),
         "RLC Calibration Guard V2: X84-Benchmark wurde nicht kopiert, sondern zur Ableitung realistischer No-X84-Kalkulationsbereiche genutzt.",
       ].filter(Boolean).join("\n\n"),
     };
