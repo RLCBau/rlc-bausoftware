@@ -4865,6 +4865,60 @@ function cloneCachedRow(row: any, input: InputRow) {
   };
 }
 
+
+function rlcCriticalTextFamily(row: any): string {
+  const text = norm([
+    row?.posNr,
+    row?.position,
+    row?.kurztext,
+    row?.shortText,
+    row?.text,
+    row?.langtext,
+    row?.description,
+  ].join(" "));
+
+  if (/baustelleneinrichtung|baustellen.*einrichtung|baustelle.*vorhalten|baustelle.*betreiben/.test(text)) return "baustelleneinrichtung";
+  if (/erschwernis|bestandsplaene|bestandspläne|vermessung|dokumentation|beh[oö]rde|verkehrssicherung/.test(text)) return "context_psch";
+  if (/rohrgrabenaushub|leitungsgrabenaushub|grabenaushub|rohrgraben.*aushub/.test(text)) return "rohrgrabenaushub";
+  if (/zuschlag.*rohrgrabenaushub|rohrgrabenaushub.*bd-kl|bodenklasse|bd-kl/.test(text)) return "rohrgrabenzuschlag";
+  if (/kabelschutzrohr/.test(text)) return "kabelschutzrohr";
+  if (/schutzmatte|rohrschutz|kabelschutzmatte/.test(text)) return "schutzmatte";
+  if (/mikrokabelleerrohr|mikro.*leerrohr|speedpipe|leerrohrverbund/.test(text)) return "mikro_leerrohr";
+  if (/rohrumhuellung|rohrumhüllung|sandueberdeckung|sandüberdeckung|sohlbettung/.test(text)) return "rohrumhuellung";
+  return "";
+}
+
+function rlcBlocksTechnicalParser(row: any): boolean {
+  const family = rlcCriticalTextFamily(row);
+  const unit = norm(row?.einheit ?? row?.unit);
+
+  if (family === "baustelleneinrichtung") return true;
+  if (family === "context_psch" && /psch|pausch|st/.test(unit)) return true;
+  if (family === "rohrgrabenaushub") return true;
+  if (family === "rohrgrabenzuschlag") return true;
+  if (family === "kabelschutzrohr") return true;
+  if (family === "schutzmatte") return true;
+  if (family === "mikro_leerrohr") return true;
+  if (family === "rohrumhuellung") return true;
+
+  return false;
+}
+
+function rlcNoX84CalibrationFloor(row: any, ep: number): number {
+  const family = rlcCriticalTextFamily(row);
+  const unit = norm(row?.einheit ?? row?.unit);
+
+  if (family === "rohrgrabenaushub" && /(m3|m³|cbm)/.test(unit)) return Math.max(ep, 32);
+  if (family === "rohrgrabenzuschlag" && /(m3|m³|cbm)/.test(unit)) return Math.max(ep, 24);
+  if (family === "schutzmatte" && /(m|lfm|meter)/.test(unit)) return Math.max(ep, 18);
+  if (family === "kabelschutzrohr" && /(m|lfm|meter)/.test(unit)) return Math.min(Math.max(ep, 2.5), 8);
+  if (family === "mikro_leerrohr" && /(m|lfm|meter)/.test(unit)) return Math.min(Math.max(ep, 3.5), 8);
+  if (family === "rohrumhuellung" && /(m|lfm|meter)/.test(unit)) return Math.min(Math.max(ep, 2.5), 9);
+
+  return ep;
+}
+
+
 async function calcSmartRow(
   row: InputRow,
   matches: DbMatch[],
@@ -5087,7 +5141,12 @@ const technicalRecipeInput =
 
   const technicalRecipeRow = await calcRecipeKalkulationRow(technicalRecipeInput);
 
-  if (!technicalContextSensitive && !technicalSpecialCivilSensitive && technicalRecipeRow?.source === "technical-parser") {
+  if (
+    !technicalContextSensitive &&
+    !technicalSpecialCivilSensitive &&
+    !rlcBlocksTechnicalParser(row) &&
+    technicalRecipeRow?.source === "technical-parser"
+  ) {
     const technicalRow = {
       ...technicalRecipeRow,
       source: "technical-parser",
@@ -5179,9 +5238,11 @@ const technicalRecipeInput =
         }
 
         const guarded = applyPlausibilityGuard(row, matches, aiRow, forceRecalculate);
-        kalkulationAiCache.set(cacheKey, guarded);
+        const finalGuarded = guardNoX84ImplausibleKiResult(row, guarded);
+
+        kalkulationAiCache.set(cacheKey, finalGuarded);
         scheduleKalkulationAiCacheSave();
-        return guarded;
+        return finalGuarded;
       }
     } catch (e: any) {
       console.error("[kalkulation.ki] OpenAI plausibility check failed:", e?.message || e);
@@ -5750,7 +5811,6 @@ function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
   if (hasHistoricalOfferBaseline(row)) return result;
 
   const source = s(result?.source);
-  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
 
   const text = norm(
     [
@@ -5762,7 +5822,6 @@ function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
       result?.langtext,
       result?.bauverfahren,
       result?.leistungsart,
-      result?.aiReason,
     ].join(" ")
   );
 
@@ -5808,11 +5867,11 @@ function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
     normalizedEp = 8.50;
     reason = "Wasserhaltung/Leitungsverlegung wurde als Meterleistung normalisiert.";
   } else if (/(rohrumhuellung|rohrumhüllung|sandueberdeckung|sandüberdeckung|sohlbettung|splittueberdeckung|splittüberdeckung)/i.test(text) && /(hdpe|pe|dn|da|rohr)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 14.50;
-    reason = "Rohrbettung/Rohrumhüllung wurde als Meterleistung normalisiert; Recipe-Ansatz war für No-X84 zu hoch.";
-  } else if (/(schutzmatte|rohrschutz|kabelschutzmatte)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
     normalizedEp = 6.50;
-    reason = "Schutzmatte wurde als Meterleistung normalisiert; Recipe-Ansatz war ohne X84 nicht plausibel.";
+    reason = "Rohrbettung/Rohrumhüllung wurde als Meterleistung kalibriert; 14,50 €/m war für diese LV-Familie zu hoch.";
+  } else if (/(schutzmatte|rohrschutz|kabelschutzmatte)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
+    normalizedEp = 22.00;
+    reason = "Schutzmatte wurde als Meterleistung realistisch kalibriert; alte 6,50 €/m waren für Schutzmatten zu niedrig.";
   } else if (/(drainageleitung|drainageleitungen)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
     normalizedEp = 28.00;
     reason = "Drainageleitung wurde als Meterleistung normalisiert; technischer Parser hatte falsche schwere Bauleistung übernommen.";
@@ -5840,6 +5899,8 @@ function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
   }
 
   if (normalizedEp <= 0) return result;
+
+  normalizedEp = rlcNoX84CalibrationFloor(row, normalizedEp);
 
   if (oldEp <= normalizedEp * 2) return result;
 
@@ -5896,7 +5957,6 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   if (hasHistoricalOfferBaseline(row)) return result;
 
   const source = s(result?.source);
-  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
 
   const text = norm(
     [
@@ -5906,7 +5966,6 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
       row?.langtext,
       result?.kurztext,
       result?.langtext,
-      result?.aiReason,
     ].join(" ")
   );
 
@@ -5918,7 +5977,141 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
     n(result?.suggestedUnitPrice) ||
     n(result?.unitPrice);
 
+  const directPschText = norm([
+    row?.posNr,
+    row?.position,
+    row?.kurztext,
+    row?.shortText,
+    row?.text,
+    row?.langtext,
+    result?.kurztext,
+    result?.langtext,
+    result?.gewerk,
+    result?.leistungsart,
+    result?.bauverfahren,
+  ].join(" "));
+
+  const directPschEp =
+    /(baustelleneinrichtung|baustellen.*einrichtung|baustelle.*vorhalten|baustelle.*betreiben|container|baustrom|bauwasser)/.test(directPschText)
+      ? 85000
+      : /(erschwernis|beengte bauweise|steig|steigen|zufahrt|handarbeit|bestand|bestandsplaene|bestandspläne|vermessung|dokumentation)/.test(directPschText)
+        ? 55000
+        : 0;
+
+  if (directPschEp > 0) {
+    const total = round2(directPschEp * Math.max(1, qty));
+
+    return {
+      ...result,
+      baseUnitPrice: directPschEp,
+      suggestedUnitPrice: directPschEp,
+      finalUnitPrice: directPschEp,
+      rlcKiUnitPrice: directPschEp,
+      unitPrice: directPschEp,
+      preis: directPschEp,
+      totalNet: total,
+      rlcKiTotal: total,
+      gesamt: total,
+      confidence: Math.min(n(result?.confidence, 0.58), 0.58),
+      calculationStatus: "needs_review",
+      riskLevel: "high",
+      warning: [
+        s(result?.warning),
+        "RLC Calibration Guard V6: Context-sensitive Pauschale ohne X84 auf realistischen Mindestansatz kalibriert.",
+        `Alter EP ${round2(ep)} wurde auf ${round2(directPschEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
+        "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        s(result?.aiReason),
+        "RLC Calibration Guard V6: Pauschale wurde vor Zero-Return geprüft, damit OpenAI-Nullwerte nicht ungeprüft durchlaufen.",
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
+
   if (ep <= 0) return result;
+
+  const family = rlcCriticalTextFamily(row);
+
+  const calibrationText = norm([
+    row?.posNr,
+    row?.position,
+    row?.kurztext,
+    row?.shortText,
+    row?.text,
+    row?.langtext,
+    result?.kurztext,
+    result?.langtext,
+    result?.gewerk,
+    result?.leistungsart,
+    result?.bauverfahren,
+  ].join(" "));
+
+  const isBaustelleneinrichtungPsch =
+    /(baustelleneinrichtung|baustellen.*einrichtung|baustelle.*vorhalten|baustelle.*betreiben|container|baustrom|bauwasser)/.test(calibrationText) &&
+    /(psch|pausch|st)/.test(unit);
+
+  const isErschwernisPsch =
+    /(erschwernis|beengte bauweise|steig|steigen|zufahrt|handarbeit|bestand|bestandsplaene|bestandspläne|vermessung|dokumentation)/.test(calibrationText) &&
+    /(psch|pausch|st)/.test(unit);
+
+  let calibratedEp = 0;
+  let calibrationReason = "";
+
+  if (family === "rohrgrabenaushub" && /(m3|m³|cbm)/.test(unit)) {
+    calibratedEp = 35.00;
+    calibrationReason = "RLC Calibration Guard: Rohrgrabenaushub ohne X84 auf realistischen m³-Ansatz kalibriert.";
+  } else if (family === "rohrgrabenzuschlag" && /(m3|m³|cbm)/.test(unit)) {
+    calibratedEp = 32.00;
+    calibrationReason = "RLC Calibration Guard: Zuschlag Rohrgrabenaushub ohne X84 auf realistischen m³-Ansatz kalibriert.";
+  } else if (family === "schutzmatte" && /(m|lfm|meter)/.test(unit)) {
+    calibratedEp = 22.00;
+    calibrationReason = "RLC Calibration Guard: Schutzmatte/Rohrschutz ohne X84 auf realistischen Meteransatz kalibriert.";
+  } else if (family === "kabelschutzrohr" && /(m|lfm|meter)/.test(unit)) {
+    calibratedEp = 4.50;
+    calibrationReason = "RLC Calibration Guard: Kabelschutzrohr ohne X84 auf realistischen Meteransatz kalibriert.";
+  } else if (family === "mikro_leerrohr" && /(m|lfm|meter)/.test(unit)) {
+    calibratedEp = 4.80;
+    calibrationReason = "RLC Calibration Guard: Mikrokabelleerrohr/Speedpipe ohne X84 auf realistischen Meteransatz kalibriert.";
+  } else if (family === "rohrumhuellung" && /(m|lfm|meter)/.test(unit)) {
+    calibratedEp = 6.50;
+    calibrationReason = "RLC Calibration Guard: Rohrumhüllung/Sohlbettung ohne X84 auf realistischen Meteransatz kalibriert.";
+  } else if (family === "baustelleneinrichtung" || isBaustelleneinrichtungPsch) {
+    calibratedEp = Math.max(ep, 85000);
+    calibrationReason = "RLC Calibration Guard: Baustelleneinrichtung ist eine context-sensitive Pauschale und darf nicht niedrig standardisiert werden.";
+  } else if (family === "context_psch" || isErschwernisPsch) {
+    calibratedEp = Math.max(ep, 55000);
+    calibrationReason = "RLC Calibration Guard: Erschwernis/Dokumentation/Vermessung als Pauschale context-sensitive kalibriert.";
+  }
+
+  if (calibratedEp > 0 && Math.abs(calibratedEp - ep) > 0.01) {
+    const total = round2(calibratedEp * qty);
+
+    return {
+      ...result,
+      baseUnitPrice: round2(calibratedEp),
+      suggestedUnitPrice: round2(calibratedEp),
+      finalUnitPrice: round2(calibratedEp),
+      rlcKiUnitPrice: round2(calibratedEp),
+      unitPrice: round2(calibratedEp),
+      preis: round2(calibratedEp),
+      totalNet: total,
+      rlcKiTotal: total,
+      gesamt: total,
+      confidence: Math.min(n(result?.confidence, 0.58), 0.58),
+      calculationStatus: "needs_review",
+      riskLevel: "high",
+      warning: [
+        s(result?.warning),
+        calibrationReason,
+        `Alter EP ${round2(ep)} wurde auf ${round2(calibratedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
+        "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        s(result?.aiReason),
+        "RLC Calibration Guard V2: X84-Benchmark wurde nicht kopiert, sondern zur Ableitung realistischer No-X84-Kalkulationsbereiche genutzt.",
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
 
   let maxEp = 0;
   let reason = "";
@@ -5953,7 +6146,8 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
     reason = "Große Mengen ohne X84-Baseline mit sehr hohem EP müssen manuell geprüft werden.";
   }
 
-  if (maxEp > 0 && ep > maxEp) {    return {
+  if (maxEp > 0 && ep > maxEp) {
+    return {
       ...result,
       calculationStatus: "needs_review",
       riskLevel: "high",
