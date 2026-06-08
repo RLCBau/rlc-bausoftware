@@ -1,5 +1,7 @@
 ﻿// apps/web/src/pages/kalkulation/KalkulationsDatenbankPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+
+import { runRlcAction } from "../../lib/rlcProgress";
 import { useNavigate } from "react-router-dom";
 import { LV, type LVPos } from "./store.lv";
 import { useProject } from "../../store/useProject";
@@ -7,7 +9,6 @@ import {
   KalkulationsDatenbank,
   type KalkulationsQuelle,
   type RisikoStufe,
-  type RessourcenTyp,
   type KalkulationsRessource,
   type KalkulationsParameter,
   type KalkulationsKosten,
@@ -59,6 +60,8 @@ const QUELLEN: FilterQuelle[] = [
   "server",
 ];
 
+const DB_LOAD_LIMIT = 200;
+const DB_TABLE_LIMIT = 10;
 const RISIKEN: FilterRisiko[] = [
   "alle",
   "niedrig",
@@ -67,7 +70,7 @@ const RISIKEN: FilterRisiko[] = [
   "kritisch",
 ];
 
-const RESSOURCEN_TYPEN: RessourcenTyp[] = [
+const RESSOURCEN_TYPEN: Array<KalkulationsRessource["typ"]> = [
   "personal",
   "maschine",
   "material",
@@ -675,9 +678,7 @@ export default function KalkulationsDatenbankPage() {
 
   const importRef = useRef<HTMLInputElement>(null);
 
-  const [rows, setRows] = useState<KalkulationsErfahrung[]>(() =>
-    KalkulationsDatenbank.list()
-  );
+  const [rows, setRows] = useState<KalkulationsErfahrung[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [quelle, setQuelle] = useState<FilterQuelle>("alle");
@@ -687,6 +688,12 @@ export default function KalkulationsDatenbankPage() {
   const [qualityFilter, setQualityFilter] = useState<DbQualityFilter>("alle");
   const [info, setInfo] = useState("");
   const [syncMode, setSyncMode] = useState<"local" | "server">("local");
+  const [serverTotal, setServerTotal] = useState(0);
+  const [serverOffset, setServerOffset] = useState(0);
+  const [serverLimit, setServerLimit] = useState(DB_LOAD_LIMIT);
+  const [serverHasNext, setServerHasNext] = useState(false);
+  const [serverHasPrev, setServerHasPrev] = useState(false);
+  const [buttonFeedback, setButtonFeedback] = useState("");
 
   const selected = useMemo(
     () => rows.find((x) => x.id === selectedId) || rows[0] || null,
@@ -698,7 +705,14 @@ export default function KalkulationsDatenbankPage() {
   }, [rows, selectedId]);
 
   useEffect(() => {
-    void refreshFromServer("Datenbank geladen.");
+    const t = window.setTimeout(() => {
+      const localRows = KalkulationsDatenbank.list().slice(0, DB_LOAD_LIMIT);
+      setRows(localRows);
+      setSyncMode("local");
+      showInfo("Lokale Datenbank geladen. Server-Synchronisierung nur manuell.");
+    }, 0);
+
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -714,48 +728,60 @@ export default function KalkulationsDatenbankPage() {
     showInfo(message);
   }
 
-  async function refreshFromServer(message = "") {
-    const localRows = KalkulationsDatenbank.list();
-    const serverRows = await tryServerList();
+  function handleButtonFeedback(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement | null;
+    const button = target?.closest("button") as HTMLButtonElement | null;
 
-    if (serverRows) {
-      const map = new Map<string, KalkulationsErfahrung>();
+    if (!button || button.disabled) return;
 
-      for (const r of localRows) {
-        map.set(r.id, r);
-      }
+    const label = String(button.innerText || button.textContent || "Aktion")
+      .replace(/\s+/g, " ")
+      .trim();
 
-      for (const r of serverRows) {
-        const old = map.get(r.id);
-        if (!old || String(r.updatedAt || "") >= String(old.updatedAt || "")) {
-          map.set(r.id, r);
-        }
-      }
+    setButtonFeedback(label ? `RLC arbeitet: ${label}` : "RLC arbeitet...");
+    document.body.style.cursor = "progress";
 
-      const merged = Array.from(map.values()).sort((a, b) =>
-        String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+    window.setTimeout(() => {
+      document.body.style.cursor = "";
+      setButtonFeedback("");
+    }, 1000);
+  }
+  async function refreshFromServer(message = "", nextOffset = serverOffset) {
+    try {
+      const page = await KalkulationsDatenbank.listServerPage(
+        DB_LOAD_LIMIT,
+        nextOffset
       );
 
-      KalkulationsDatenbank.bulkUpsert(merged);
+      setRows(page.rows);
+      setSyncMode("server");
+      setServerTotal(page.total);
+      setServerOffset(page.offset);
+      setServerLimit(page.limit);
+      setServerHasNext(page.hasNext);
+      setServerHasPrev(page.hasPrev);
 
-      if (localRows.length && !serverRows.length) {
-        void tryServerBulkUpsert(localRows);
-      }
+      if (page.rows[0]?.id) setSelectedId(page.rows[0].id);
 
-      setRows(merged);
-      setSyncMode(serverRows.length ? "server" : "local");
+      const pageNumber = Math.floor(page.offset / page.limit) + 1;
+      const pageCount = Math.max(1, Math.ceil(page.total / page.limit));
+
       showInfo(
         message ||
-          (serverRows.length
-            ? "Server-Datenbank synchronisiert."
-            : "Lokale Datenbank geladen · Server leer.")
+          `Server-Datenbank geladen: ${page.total} Positionen · Seite ${pageNumber} von ${pageCount}`
       );
       return;
+    } catch {
+      const localRows = KalkulationsDatenbank.list().slice(0, DB_LOAD_LIMIT);
+      setRows(localRows);
+      setSyncMode("local");
+      setServerTotal(localRows.length);
+      setServerOffset(0);
+      setServerLimit(DB_LOAD_LIMIT);
+      setServerHasNext(false);
+      setServerHasPrev(false);
+      showInfo(message || "Lokale Datenbank geladen. Server nicht erreichbar.");
     }
-
-    setRows(localRows);
-    setSyncMode("local");
-    showInfo(message || "Lokale Datenbank geladen.");
   }
 
   const gewerke = useMemo(() => {
@@ -874,7 +900,7 @@ export default function KalkulationsDatenbankPage() {
         report.push(`✓ Pos. ${entry.posNr || "—"} – Einheit ergänzt: leer → ${unit}.`);
       }
 
-      if (action === "fixRessourcen" && !entry.ressourcen?.length && entryEp(entry) > 0) {
+      if (action === "fixKostenaufbau" && !entry.ressourcen?.length && entryEp(entry) > 0) {
         const resources = makeAutoResources(entry);
         if (resources.length) {
           updated = {
@@ -883,11 +909,11 @@ export default function KalkulationsDatenbankPage() {
             updatedAt: new Date().toISOString(),
           };
           changed += 1;
-          report.push(`✓ Pos. ${entry.posNr || "—"} – Ressourcen automatisch erzeugt.`);
+          report.push(`✓ Pos. ${entry.posNr || "—"} – Kostenaufbau automatisch erzeugt.`);
         }
       }
 
-      if (action === "fixEpAusRessourcen" && entry.ressourcen?.length) {
+      if (action === "fixEpAusKostenaufbau" && entry.ressourcen?.length) {
         const ep = round2(entry.ressourcen.reduce((sum, r) => sum + n(r.einzelpreis), 0));
         const gp = round2(ep * Math.max(1, n(entry.menge)));
         const oldEp = entryEp(entry);
@@ -970,7 +996,8 @@ export default function KalkulationsDatenbankPage() {
   const filtered = useMemo(() => {
     const q = norm(query);
 
-    let out = rows.filter((row) => {
+        const duplicateIds = qualityFilter === "dubletten" ? dbDuplicateIds(rows) : new Set<string>();
+let out = rows.filter((row) => {
       if (quelle !== "alle" && row.quelle !== quelle) return false;
       if (risiko !== "alle" && row.risiko !== risiko) return false;
       if (gewerk !== "alle" && row.parameter?.gewerk !== gewerk) return false;
@@ -1039,7 +1066,12 @@ export default function KalkulationsDatenbankPage() {
     return out;
   }, [rows, query, quelle, risiko, gewerk, sortKey, qualityFilter]);
 
-  const stats = useMemo(() => {
+  
+  const visibleRows = useMemo(
+    () => filtered,
+    [filtered]
+  );
+const stats = useMemo(() => {
     const total = rows.length;
     const used = rows.reduce((s, r) => s + n(r.verwendungen), 0);
     const highRisk = rows.filter(
@@ -1063,6 +1095,7 @@ export default function KalkulationsDatenbankPage() {
     refresh("Neue Kalkulationsposition erstellt.");
     setSelectedId(created.id);
     void tryServerBulkUpsert([created]);
+    navigate(`/kalkulation/datenbank/position/${created.id}`);
   }
 
   function deleteEntry(id: string) {
@@ -1271,7 +1304,8 @@ export default function KalkulationsDatenbankPage() {
   }, [rows]);
 
   return (
-    <div style={page}>
+    <div style={page} onClickCapture={handleButtonFeedback}>
+      {buttonFeedback ? <div style={actionFeedback}>{buttonFeedback}</div> : null}
       <section style={heroCard}>
         <div>
           <div style={eyebrow}>RLC KI · Erfahrungsdatenbank</div>
@@ -1285,7 +1319,7 @@ export default function KalkulationsDatenbankPage() {
 
         <div style={heroActions}>
           <button type="button" style={btnPrimary} onClick={addEntry}>
-            + Eintrag
+            Neue Position
           </button>
 
           <button
@@ -1300,13 +1334,48 @@ export default function KalkulationsDatenbankPage() {
             Aus LV übernehmen
           </button>
 
-          <button
-            type="button"
-            style={btnSecondary}
-            onClick={() => void refreshFromServer("Datenbank synchronisiert.")}
-          >
-            Synchronisieren
-          </button>
+          <div style={serverPager}>
+            <button
+              type="button"
+              style={btnSecondary}
+              disabled={syncMode !== "server" || !serverHasPrev}
+              onClick={() =>
+                void refreshFromServer(
+                  "",
+                  Math.max(serverOffset - serverLimit, 0)
+                )
+              }
+            >
+              ◀ Vorherige Seite
+            </button>
+
+            <div style={serverPagerInfo}>
+              Datenbank-Server: {serverTotal || rows.length} Positionen · Seite{" "}
+              {serverTotal
+                ? Math.floor(serverOffset / serverLimit) + 1
+                : 1}{" "}
+              von {serverTotal ? Math.max(1, Math.ceil(serverTotal / serverLimit)) : 1}
+            </div>
+
+            <button
+              type="button"
+              style={btnSecondary}
+              disabled={syncMode !== "server" || !serverHasNext}
+              onClick={() =>
+                void refreshFromServer("", serverOffset + serverLimit)
+              }
+            >
+              Nächste Seite ▶
+            </button>
+
+            <button
+              type="button"
+              style={btnSecondary}
+              onClick={() => void refreshFromServer("Datenbank synchronisiert.", 0)}
+            >
+              Server verbinden
+            </button>
+          </div>
 
           <button
             type="button"
@@ -1403,7 +1472,7 @@ export default function KalkulationsDatenbankPage() {
             <h2 style={sectionTitle}>Suche & Filter</h2>
             <div style={sectionText}>
               Suche nach Position, Text, Gewerk, Bauverfahren, Bodenklasse,
-              KI-Hinweis oder Notiz.
+              KI-Prüfhinweis oder Notiz.
             </div>
           </div>
         </div>
@@ -1483,35 +1552,35 @@ export default function KalkulationsDatenbankPage() {
           </button>
 
           <button type="button" style={qualityFilter === "ressourcenFehlen" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("ressourcenFehlen")}>
-            Ressourcen fehlen
+            Kostenbestandteile fehlen
           </button>
 
           <button type="button" style={qualityFilter === "risikoHoch" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("risikoHoch")}>
-            Risiko hoch
+            Prüfung nötig
           </button>
 
           <button type="button" style={qualityFilter === "confidenceNiedrig" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("confidenceNiedrig")}>
-            Confidence niedrig
+            Sicherheit niedrig
           </button>
 
           <button type="button" style={qualityFilter === "dubletten" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("dubletten")}>
-            Dubletten
+            Doppelte Preise prüfen
           </button>
 
           <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixEinheiten")}>
             Einheiten automatisch ergänzen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixRessourcen")}>
-            Ressourcen erzeugen
+          <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixKostenaufbau")}>
+            Kostenbestandteile erstellen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixEpAusRessourcen")}>
-            EP aus Ressourcen berechnen
+          <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixEpAusKostenaufbau")}>
+            EP aus Bestandteilen berechnen
           </button>
 
           <button type="button" style={btnSecondary} onClick={() => applyDbFix("recalculateConfidence")}>
-            Confidence neu bewerten
+            Sicherheit neu bewerten
           </button>
         </div>
 
@@ -1533,7 +1602,8 @@ export default function KalkulationsDatenbankPage() {
                 <tr>
                   <th style={th}>PosNr</th>
                   <th style={th}>Kurztext</th>
-                  <th style={th}>Gewerk</th>
+                                    <th style={th}>Projekt</th>
+<th style={th}>Gewerk</th>
                   <th style={th}>ME</th>
                   <th style={thRight}>Menge</th>
                   <th style={thRight}>EP netto</th>
@@ -1546,7 +1616,7 @@ export default function KalkulationsDatenbankPage() {
               </thead>
 
               <tbody>
-                {filtered.map((row, i) => {
+                {visibleRows.map((row, i) => {
                   const active = selected?.id === row.id;
 
                   return (
@@ -1567,7 +1637,11 @@ export default function KalkulationsDatenbankPage() {
                         </div>
                       </td>
 
-                      <td style={td}>{row.parameter?.gewerk || "—"}</td>
+                                            <td style={tdText}>
+                        <b>{row.projektCode || projectCode || "—"}</b>
+                        <div style={tiny}>{row.projektName || projectName || "Ohne Projektname"}</div>
+                      </td>
+<td style={td}>{row.parameter?.gewerk || "—"}</td>
                       <td style={td}>{row.einheit || "—"}</td>
                       <td style={tdRight}>{num(row.menge, 3)}</td>
                       <td style={tdRight}>{money(entryEp(row))}</td>
@@ -1584,6 +1658,16 @@ export default function KalkulationsDatenbankPage() {
 
                       <td style={td}>
                         <div style={actionCol}>
+                          <button
+                            type="button"
+                            style={btnSecondary}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/kalkulation/datenbank/position/${row.id}`);
+                            }}
+                          >
+                            Position bearbeiten
+                          </button>
                           <button
                             type="button"
                             style={btnMini}
@@ -1613,7 +1697,7 @@ export default function KalkulationsDatenbankPage() {
 
                 {!filtered.length ? (
                   <tr>
-                    <td colSpan={11} style={emptyCell}>
+                    <td colSpan={12} style={emptyCell}>
                       Keine Kalkulationen gefunden. Lege einen Eintrag an oder
                       übernimm Positionen aus dem LV / der KI-Kalkulation.
                     </td>
@@ -1623,505 +1707,6 @@ export default function KalkulationsDatenbankPage() {
             </table>
           </div>
         </section>
-
-        <aside style={sideCard}>
-          <div style={sectionHead}>
-            <div>
-              <h2 style={sectionTitle}>Detail / Bearbeitung</h2>
-              <div style={sectionText}>
-                Hier wird die Erfahrung fachlich gepflegt und für die KI verbessert.
-              </div>
-            </div>
-          </div>
-
-          {selected ? (
-            <div style={detailStack}>
-              <div style={detailHeader}>
-                <div>
-                  <div style={label}>Eintrag</div>
-                  <div style={sideTitle}>
-                    {selected.posNr || "—"} · {selected.kurztext || "Ohne Kurztext"}
-                  </div>
-                </div>
-
-                <span style={riskStyle(selected.risiko)}>
-                  {risikoLabel(selected.risiko)}
-                </span>
-              </div>
-
-              <div style={formGrid2}>
-                <Field label="PosNr">
-                  <input
-                    style={input}
-                    value={selected.posNr}
-                    onChange={(e) => updateSelected({ posNr: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Einheit">
-                  <input
-                    style={input}
-                    value={selected.einheit}
-                    onChange={(e) => updateSelected({ einheit: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Menge">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.menge}
-                    onChange={(e) => {
-                      const menge = n(e.target.value);
-                      updateSelected({
-                        menge,
-                        kosten: {
-                          ...selected.kosten,
-                          gpNetto: round2(menge * n(selected.kosten.epNetto)),
-                        },
-                      });
-                    }}
-                  />
-                </Field>
-
-                <Field label="Quelle">
-                  <select
-                    style={input}
-                    value={selected.quelle}
-                    onChange={(e) =>
-                      updateSelected({ quelle: e.target.value as KalkulationsQuelle })
-                    }
-                  >
-                    {QUELLEN.filter((x) => x !== "alle").map((q) => (
-                      <option key={q} value={q}>
-                        {quelleLabel(q)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="Kurztext">
-                <input
-                  style={input}
-                  value={selected.kurztext}
-                  onChange={(e) => updateSelected({ kurztext: e.target.value })}
-                />
-              </Field>
-
-              <Field label="Langtext">
-                <textarea
-                  style={{ ...input, minHeight: 90 }}
-                  value={selected.langtext}
-                  onChange={(e) => updateSelected({ langtext: e.target.value })}
-                />
-              </Field>
-
-              <div style={separator} />
-
-              <h3 style={subTitle}>Technische Parameter</h3>
-
-              <div style={formGrid2}>
-                <Field label="Gewerk">
-                  <input
-                    style={input}
-                    value={selected.parameter?.gewerk || ""}
-                    onChange={(e) => updateParameter({ gewerk: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Leistungsart">
-                  <input
-                    style={input}
-                    value={selected.parameter?.leistungsart || ""}
-                    onChange={(e) => updateParameter({ leistungsart: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Bauverfahren">
-                  <input
-                    style={input}
-                    value={selected.parameter?.bauverfahren || ""}
-                    onChange={(e) => updateParameter({ bauverfahren: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Bodenklasse">
-                  <input
-                    style={input}
-                    value={selected.parameter?.bodenklasse || ""}
-                    onChange={(e) => updateParameter({ bodenklasse: e.target.value })}
-                  />
-                </Field>
-
-                <Field label="Grabentiefe m">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.parameter?.grabentiefeM ?? ""}
-                    onChange={(e) => updateParameter({ grabentiefeM: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Grabenbreite m">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.parameter?.grabenbreiteM ?? ""}
-                    onChange={(e) => updateParameter({ grabenbreiteM: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="DN / Durchmesser mm">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.parameter?.rohrDurchmesserMm ?? ""}
-                    onChange={(e) =>
-                      updateParameter({ rohrDurchmesserMm: n(e.target.value) })
-                    }
-                  />
-                </Field>
-
-                <Field label="Entfernung km">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.parameter?.baustellenEntfernungKm ?? ""}
-                    onChange={(e) =>
-                      updateParameter({ baustellenEntfernungKm: n(e.target.value) })
-                    }
-                  />
-                </Field>
-
-                <Field label="Fahrzeit min">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.parameter?.fahrzeitMin ?? ""}
-                    onChange={(e) => updateParameter({ fahrzeitMin: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Bauzeit Tage">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.parameter?.bauzeitTage ?? ""}
-                    onChange={(e) => updateParameter({ bauzeitTage: n(e.target.value) })}
-                  />
-                </Field>
-              </div>
-
-              <div style={checkGrid}>
-                <Check
-                  label="Innerorts"
-                  checked={!!selected.parameter?.innerorts}
-                  onChange={(v) => updateParameter({ innerorts: v })}
-                />
-                <Check
-                  label="Beengter Arbeitsraum"
-                  checked={!!selected.parameter?.beengterArbeitsraum}
-                  onChange={(v) => updateParameter({ beengterArbeitsraum: v })}
-                />
-                <Check
-                  label="Grundwasser"
-                  checked={!!selected.parameter?.grundwasser}
-                  onChange={(v) => updateParameter({ grundwasser: v })}
-                />
-                <Check
-                  label="Verkehrssicherung"
-                  checked={!!selected.parameter?.verkehrssicherung}
-                  onChange={(v) => updateParameter({ verkehrssicherung: v })}
-                />
-                <Check
-                  label="Handarbeit"
-                  checked={!!selected.parameter?.handarbeit}
-                  onChange={(v) => updateParameter({ handarbeit: v })}
-                />
-                <Check
-                  label="Nachtarbeit"
-                  checked={!!selected.parameter?.nachtarbeit}
-                  onChange={(v) => updateParameter({ nachtarbeit: v })}
-                />
-                <Check
-                  label="Erschwerte Bedingungen"
-                  checked={!!selected.parameter?.erschwerteBedingungen}
-                  onChange={(v) => updateParameter({ erschwerteBedingungen: v })}
-                />
-                <Check
-                  label="Transport notwendig"
-                  checked={!!selected.parameter?.transportNotwendig}
-                  onChange={(v) => updateParameter({ transportNotwendig: v })}
-                />
-              </div>
-
-              <div style={separator} />
-
-              <div style={sectionHead}>
-                <div>
-                  <h3 style={subTitle}>Ressourcen</h3>
-                  <div style={sectionText}>
-                    Personal, Maschinen, Material, Fremdleistung und Entsorgung.
-                  </div>
-                </div>
-
-                <button type="button" style={btnSecondary} onClick={addResource}>
-                  + Ressource
-                </button>
-              </div>
-
-              <div style={resourceList}>
-                {selected.ressourcen.map((r) => (
-                  <div key={r.id} style={resourceBox}>
-                    <div style={resourceTop}>
-                      <select
-                        style={smallInput}
-                        value={r.typ}
-                        onChange={(e) =>
-                          updateResource(r.id, { typ: e.target.value as RessourcenTyp })
-                        }
-                      >
-                        {RESSOURCEN_TYPEN.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-
-                      <button
-                        type="button"
-                        style={btnDangerMini}
-                        onClick={() => removeResource(r.id)}
-                      >
-                        Entfernen
-                      </button>
-                    </div>
-
-                    <input
-                      style={input}
-                      value={r.bezeichnung}
-                      onChange={(e) =>
-                        updateResource(r.id, { bezeichnung: e.target.value })
-                      }
-                      placeholder="z.B. Bagger 8t / Facharbeiter / Kies 0-32"
-                    />
-
-                    <div style={formGrid4}>
-                      <input
-                        style={input}
-                        value={r.einheit}
-                        onChange={(e) =>
-                          updateResource(r.id, { einheit: e.target.value })
-                        }
-                        placeholder="ME"
-                      />
-                      <input
-                        type="number"
-                        style={input}
-                        value={r.menge}
-                        onChange={(e) =>
-                          updateResource(r.id, { menge: n(e.target.value) })
-                        }
-                        placeholder="Menge"
-                      />
-                      <input
-                        type="number"
-                        style={input}
-                        value={r.einzelpreis}
-                        onChange={(e) =>
-                          updateResource(r.id, { einzelpreis: n(e.target.value) })
-                        }
-                        placeholder="EP"
-                      />
-                      <div style={resourceTotalBox}>{money(r.gesamtpreis)}</div>
-                    </div>
-                  </div>
-                ))}
-
-                {!selected.ressourcen.length ? (
-                  <div style={emptySmall}>Noch keine Ressourcen angelegt.</div>
-                ) : null}
-              </div>
-
-              <div style={separator} />
-
-              <h3 style={subTitle}>Kosten & Bewertung</h3>
-
-              <div style={formGrid2}>
-                <Field label="Material">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.material}
-                    onChange={(e) => updateKosten({ material: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Lohn">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.lohn}
-                    onChange={(e) => updateKosten({ lohn: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Maschinen">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.maschinen}
-                    onChange={(e) => updateKosten({ maschinen: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Fremdleistung">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.fremdleistung}
-                    onChange={(e) =>
-                      updateKosten({ fremdleistung: n(e.target.value) })
-                    }
-                  />
-                </Field>
-
-                <Field label="Entsorgung">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.entsorgung}
-                    onChange={(e) => updateKosten({ entsorgung: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Transport">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.transport}
-                    onChange={(e) => updateKosten({ transport: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Gemeinkosten">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.gemeinkosten}
-                    onChange={(e) =>
-                      updateKosten({ gemeinkosten: n(e.target.value) })
-                    }
-                  />
-                </Field>
-
-                <Field label="Risiko">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.risiko}
-                    onChange={(e) => updateKosten({ risiko: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Gewinn">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.gewinn}
-                    onChange={(e) => updateKosten({ gewinn: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="EP netto">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.epNetto}
-                    onChange={(e) => updateKosten({ epNetto: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="GP netto">
-                  <input
-                    type="number"
-                    style={input}
-                    value={selected.kosten.gpNetto}
-                    onChange={(e) => updateKosten({ gpNetto: n(e.target.value) })}
-                  />
-                </Field>
-
-                <Field label="Confidence 0-1">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    max={1}
-                    style={input}
-                    value={selected.confidence}
-                    onChange={(e) =>
-                      updateSelected({ confidence: n(e.target.value) })
-                    }
-                  />
-                </Field>
-
-                <Field label="Risiko-Stufe">
-                  <select
-                    style={input}
-                    value={selected.risiko}
-                    onChange={(e) =>
-                      updateSelected({ risiko: e.target.value as RisikoStufe })
-                    }
-                  >
-                    {RISIKEN.filter((x): x is RisikoStufe => x !== "alle").map((r) => (
-                      <option key={r} value={r}>
-                        {risikoLabel(r)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="KI-Hinweis">
-                <textarea
-                  style={{ ...input, minHeight: 80 }}
-                  value={selected.kiHinweis || ""}
-                  onChange={(e) => updateSelected({ kiHinweis: e.target.value })}
-                />
-              </Field>
-
-              <Field label="Kalkulator-Notiz">
-                <textarea
-                  style={{ ...input, minHeight: 80 }}
-                  value={selected.kalkulatorNotiz || ""}
-                  onChange={(e) =>
-                    updateSelected({ kalkulatorNotiz: e.target.value })
-                  }
-                />
-              </Field>
-
-              <div style={footerActions}>
-                <button type="button" style={btnPrimary} onClick={() => copyToLv(selected)}>
-                  Ins aktuelle LV übernehmen
-                </button>
-
-                <button
-                  type="button"
-                  style={btnDanger}
-                  onClick={() => deleteEntry(selected.id)}
-                >
-                  Eintrag löschen
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={emptySmall}>
-              Kein Eintrag ausgewählt. Erstelle einen neuen Eintrag oder übernimm
-              Positionen aus dem LV.
-            </div>
-          )}
-        </aside>
       </section>
     </div>
   );
@@ -2214,6 +1799,40 @@ const btnFilterActive: React.CSSProperties = {
   border: "1px solid #2563EB",
   background: "#EFF6FF",
   color: "#1D4ED8",
+};
+
+const serverPager: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flexWrap: "wrap",
+  border: "1px solid rgba(255,255,255,0.25)",
+  background: "rgba(255,255,255,0.08)",
+  borderRadius: 16,
+  padding: 6,
+};
+
+const serverPagerInfo: React.CSSProperties = {
+  border: "1px solid #CBD5E1",
+  background: "#F8FAFC",
+  color: "#0F172A",
+  borderRadius: 12,
+  padding: "10px 14px",
+  fontWeight: 900,
+  fontSize: 13,
+};
+
+const actionFeedback: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 50,
+  border: "1px solid #BFDBFE",
+  background: "#EFF6FF",
+  color: "#1E3A8A",
+  borderRadius: 14,
+  padding: "12px 16px",
+  fontWeight: 900,
+  boxShadow: "0 10px 24px rgba(15,23,42,0.10)",
 };
 
 const page: React.CSSProperties = {
@@ -2353,7 +1972,7 @@ const smallInput: React.CSSProperties = {
 
 const mainGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(0,1fr) 470px",
+  gridTemplateColumns: "1fr",
   gap: 16,
   alignItems: "start",
 };
@@ -2367,9 +1986,11 @@ const sideCard: React.CSSProperties = {
 };
 
 const tableWrap: React.CSSProperties = {
-  overflow: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 14,
+  overflowX: "auto",
+  overflowY: "auto",
+  maxHeight: 720,
 };
 
 const table: React.CSSProperties = {
@@ -2438,6 +2059,25 @@ const detailStack: React.CSSProperties = {
   gap: 14,
 };
 
+const advancedDetails: React.CSSProperties = {
+  border: "1px solid #E5E7EB",
+  background: "#F8FAFC",
+  borderRadius: 14,
+  padding: 14,
+};
+
+const advancedSummary: React.CSSProperties = {
+  cursor: "pointer",
+  fontWeight: 900,
+  color: "#1D4ED8",
+  userSelect: "none",
+};
+
+const advancedContent: React.CSSProperties = {
+  marginTop: 14,
+  display: "grid",
+  gap: 16,
+};
 const detailHeader: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -2643,6 +2283,60 @@ const badgeCriticalDark: React.CSSProperties = {
   background: "#7F1D1D",
   color: "#FFFFFF",
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

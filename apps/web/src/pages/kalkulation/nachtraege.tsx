@@ -1,34 +1,97 @@
-// apps/web/src/pages/kalkulation/Nachtraege.tsx
+﻿// apps/web/src/pages/kalkulation/nachtraege.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-// import { Projects } from "./projectStore";  // ⬅️ NON SERVE PIÙ
+
+import { runRlcAction } from "../../lib/rlcProgress";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Changes, type ChangeRow, type ChangeStatus } from "./changeStore";
 import { useProject } from "../../store/useProject";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 
 const API =
   (import.meta as any)?.env?.VITE_API_URL ||
   (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+  "";
 
 const MWST_KEY = "rlc_changes_mwst_v1";
-const STATI: ChangeStatus[] = ["Entwurf", "Abgegeben", "Beauftragt", "Abgelehnt"];
-
-// ✅ Draft import (von Regiebericht)
 const NACHTRAG_BUFFER_KEY = "rlc:nachtrag-buffer";
+const ANGEBOT_NACHTRAG_ONLY_KEY = "rlc_angebot_nachtrag_only_v1";
+const COMPANY_RECIPE_KEY = "rlc_company_resource_recipes_v1";
+const KI_HANDOFF_KEY = "rlc_kalkulation_ki_handoff_v1";
+const MANUELL_HANDOFF_KEY = "rlc_kalkulation_manuell_handoff_v1";
+const RECIPE_CONTEXT_KEY = "rlc_recipes_new_position_context_v1";
+const EXT_STORE_KEY = "rlc_changes_ext_v2";
+
+const STATI: ChangeStatus[] = [
+  "Entwurf",
+  "Abgegeben",
+  "Beauftragt",
+  "Abgelehnt",
+];
+
+type NachtragRow = ChangeRow & {
+  langtext?: string;
+
+  materialCost?: number;
+  laborCost?: number;
+  machineCost?: number;
+  subcontractorCost?: number;
+  disposalCost?: number;
+  transportCost?: number;
+  overheadCost?: number;
+  riskCost?: number;
+  profitCost?: number;
+
+  baseUnitPrice?: number;
+  suggestedUnitPrice?: number;
+  finalUnitPrice?: number;
+
+  riskLevel?: "low" | "medium" | "high";
+  calculationStatus?: "ok" | "warning" | "critical" | "manual";
+
+  gewerk?: string;
+  leistungsart?: string;
+  bauverfahren?: string;
+
+  warning?: string;
+  aiReason?: string;
+  priceBreakdown?: any[];
+};
+
+type ProjectLike = {
+  id?: string;
+  code?: string;
+  number?: string;
+  projektnummer?: string;
+  name?: string;
+  projectName?: string;
+  place?: string;
+  ort?: string;
+  location?: string;
+};
+
+type NachtragQualityFilter =
+  | "alle"
+  | "Entwurf"
+  | "Abgegeben"
+  | "Beauftragt"
+  | "Abgelehnt"
+  | "begruendungFehlt"
+  | "epFehlt"
+  | "mengeFehlt"
+  | "einheitFehlt"
+  | "doppelte";
 
 type NachtragDraftRow = {
   pos?: string;
   posNr?: string;
   kurztext?: string;
   title?: string;
+  langtext?: string;
   einheit?: string;
   unit?: string;
   qty?: number;
   mengeDelta?: number;
+  preis?: number;
   begruendung?: string;
-  langtext?: string;
   note?: string;
   hint?: string;
   regieRowId?: string;
@@ -36,135 +99,68 @@ type NachtragDraftRow = {
 };
 
 type NachtragDraft = {
-  projectId?: string; // BA-...
-  projectKey?: string; // BA-... (alternativ)
+  projectId?: string;
+  projectKey?: string;
   createdAt?: number;
   source?: "REGIE" | string;
   rows?: NachtragDraftRow[];
 };
 
-/* === UI helpers === */
-const toolbar: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "center",
-  margin: "12px 0",
-  flexWrap: "wrap",
-};
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "10px 8px",
-  borderBottom: "1px solid #eee",
-  background: "#fafafa",
-  fontWeight: 600,
-  whiteSpace: "nowrap",
-};
-const td: React.CSSProperties = {
-  padding: "8px",
-  borderBottom: "1px solid #f5f5f5",
-};
-const tdRight: React.CSSProperties = { ...td, textAlign: "right", whiteSpace: "nowrap" };
-const tdNum: React.CSSProperties = { ...td, textAlign: "right" };
-const tdChk: React.CSSProperties = { ...td, textAlign: "center", width: 36 };
-const inp = (w: number, align: "left" | "right" = "left"): React.CSSProperties => ({
-  width: w,
-  padding: "6px 8px",
-  textAlign: align,
-  border: "1px solid #ddd",
-  borderRadius: 6,
-});
-const numInp: React.CSSProperties = {
-  width: 80,
-  marginLeft: 6,
-  padding: "6px 8px",
-  border: "1px solid #ddd",
-  borderRadius: 6,
-};
-const searchInp: React.CSSProperties = {
-  padding: "6px 10px",
-  minWidth: 280,
-  border: "1px solid #ddd",
-  borderRadius: 6,
-};
-const selectInp: React.CSSProperties = {
-  padding: "6px 10px",
-  border: "1px solid #ddd",
-  borderRadius: 6,
-  background: "#fff",
-};
-const totalsBar: React.CSSProperties = {
-  position: "sticky",
-  bottom: 0,
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 16,
-  marginTop: 14,
-  paddingTop: 10,
-  background: "linear-gradient(180deg, rgba(255,255,255,0) 0%, #fff 35%)",
-};
-const sumBox: React.CSSProperties = {
-  border: "1px solid #eee",
-  borderRadius: 8,
-  padding: "10px 14px",
-  minWidth: 220,
-  background: "#fcfcfc",
-};
-const pill: React.CSSProperties = {
-  display: "inline-block",
-  padding: "2px 8px",
-  borderRadius: 999,
-  border: "1px solid transparent",
-  fontSize: 12,
-  fontWeight: 600,
-};
-const btnGroup: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center" };
-const primaryBtn: React.CSSProperties = {
-  fontWeight: 700,
-  border: "1px solid #2b7",
-  background: "#eafff4",
-  padding: "6px 10px",
-  borderRadius: 6,
-};
-const projBadge: React.CSSProperties = {
-  border: "1px solid #eee",
-  borderRadius: 999,
-  padding: "6px 12px",
-  background: "#fafafa",
-  display: "flex",
-  gap: 8,
-  alignItems: "center",
-  whiteSpace: "nowrap",
+type KalkulationHandoffRow = {
+  id?: string;
+  auftragId?: string;
+  auftragName?: string;
+  auftragType?: "haupt" | "unter" | string;
+
+  posNr?: string;
+  pos?: string;
+  kurztext?: string;
+  title?: string;
+  langtext?: string;
+  einheit?: string;
+  unit?: string;
+
+  menge?: number;
+  qty?: number;
+  mengeDelta?: number;
+
+  preis?: number;
+  ep?: number;
+  finalUnitPrice?: number;
+  suggestedUnitPrice?: number;
+  baseUnitPrice?: number;
+
+  gesamt?: number;
+  aiReason?: string;
+  warning?: string;
+  source?: string;
+  meta?: any;
 };
 
-const fmtEUR = (v: number) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(v || 0);
+type KalkulationHandoff = {
+  ts?: number;
+  source?: string;
+  projectKey?: string;
+  projectTitle?: string;
+  auftragId?: string;
+  auftragName?: string;
+  auftragType?: "haupt" | "unter" | string;
+  rows?: KalkulationHandoffRow[];
+};
 
-const fmtNum = (v: number, d = 2) =>
-  new Intl.NumberFormat("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d }).format(
-    Number.isFinite(Number(v)) ? Number(v) : 0
-  );
-
-function StatusPill({ s }: { s: ChangeStatus }) {
-  const map: Record<ChangeStatus, React.CSSProperties> = {
-    Entwurf: { background: "#eef2ff", color: "#273ea3", borderColor: "#cdd5ff" },
-    Abgegeben: { background: "#fff7e6", color: "#8c5b00", borderColor: "#ffe0a3" },
-    Beauftragt: { background: "#e8fff1", color: "#0b7a3c", borderColor: "#b6f1cf" },
-    Abgelehnt: { background: "#ffecec", color: "#a01818", borderColor: "#ffc9c9" },
-  };
-  return <span style={{ ...pill, ...(map[s] || {}) }}>{s}</span>;
-}
-
-/* ================= SERVER MAPPING ================= */
-
-type ServerNachtragStatus = "offen" | "inBearbeitung" | "freigegeben" | "abgelehnt";
+type ServerNachtragStatus =
+  | "offen"
+  | "inBearbeitung"
+  | "freigegeben"
+  | "abgelehnt";
 
 type ServerNachtrag = {
   id: string;
   projectKey: string;
   lvPos: string;
-  number: string; // N01
+  number: string;
   title: string;
+  langtext?: string;
   qty: number;
   unit: string;
   ep: number;
@@ -175,55 +171,380 @@ type ServerNachtrag = {
   updatedAt: string;
 };
 
-function toUiStatus(s: ServerNachtragStatus): ChangeStatus {
-  if (s === "freigegeben") return "Beauftragt";
-  if (s === "abgelehnt") return "Abgelehnt";
-  if (s === "inBearbeitung") return "Abgegeben";
-  return "Entwurf"; // "offen"
+type AngebotNachtragOnlyBuffer = {
+  version: "nachtrag-only-v1";
+  ts: number;
+  source: "nachtraege";
+  projectKey: string;
+  projectTitle: string;
+  mwst: number;
+  rows: NachtragRow[];
+};
+
+type ExtDB = Record<string, NachtragRow[]>;
+
+/* ================= API / STORAGE HELPERS ================= */
+
+function apiUrl(path: string): string {
+  const cleanApi = String(API || "").replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return cleanApi ? `${cleanApi}${cleanPath}` : cleanPath;
 }
 
-function toServerStatus(s: ChangeStatus): ServerNachtragStatus {
-  if (s === "Beauftragt") return "freigegeben";
-  if (s === "Abgelehnt") return "abgelehnt";
-  if (s === "Abgegeben") return "inBearbeitung";
+function getAuthToken(): string {
+  try {
+    const directKeys = [
+      "token",
+      "authToken",
+      "accessToken",
+      "rlc_token",
+      "rlc_auth_token",
+      "rlc_access_token",
+      "rlc.auth.token",
+    ];
+
+    for (const key of directKeys) {
+      const value = localStorage.getItem(key);
+      if (value && value.trim()) return value.trim();
+    }
+
+    const jsonKeys = [
+      "auth",
+      "user",
+      "session",
+      "rlc_auth",
+      "rlc_session",
+      "rlc.auth",
+      "rlc.session",
+    ];
+
+    for (const key of jsonKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+        const token =
+          parsed?.token ??
+          parsed?.accessToken ??
+          parsed?.authToken ??
+          parsed?.jwt ??
+          parsed?.data?.token ??
+          parsed?.data?.accessToken ??
+          parsed?.user?.token ??
+          parsed?.user?.accessToken;
+
+        if (typeof token === "string" && token.trim()) return token.trim();
+      } catch {
+        //
+      }
+    }
+  } catch {
+    //
+  }
+
+  return "";
+}
+
+function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
+  const token = getAuthToken();
+
+  return {
+    ...(extra || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const hasBody = typeof init.body !== "undefined";
+
+    const res = await fetch(apiUrl(path), {
+      ...init,
+      credentials: "include",
+      signal: controller.signal,
+      headers: withAuthHeaders({
+        ...(hasBody ? { "Content-Type": "application/json" } : {}),
+        ...((init.headers as Record<string, string>) || {}),
+      }),
+    });
+
+    const text = await res.text().catch(() => "");
+    let data: any = null;
+
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+
+    if (!res.ok) {
+      const msg =
+        data?.error ||
+        data?.message ||
+        text ||
+        `Server-Fehler (${res.status})`;
+
+      throw new Error(msg);
+    }
+
+    return data as T;
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error(
+        "Gateway Timeout. Der Server hat nicht rechtzeitig geantwortet."
+      );
+    }
+
+    throw e;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function loadExtDb(): ExtDB {
+  try {
+    return JSON.parse(localStorage.getItem(EXT_STORE_KEY) || "{}") as ExtDB;
+  } catch {
+    return {};
+  }
+}
+
+function saveExtDb(db: ExtDB) {
+  localStorage.setItem(EXT_STORE_KEY, JSON.stringify(db));
+}
+
+function loadExtRows(pid: string): NachtragRow[] {
+  const db = loadExtDb();
+  const extRows = Array.isArray(db[pid]) ? db[pid] : [];
+
+  if (extRows.length) return extRows.map(normalizeRow);
+
+  return Changes.list(pid).map((row) =>
+    normalizeRow({
+      ...row,
+      langtext: "",
+    })
+  );
+}
+
+function saveExtRows(pid: string, rows: NachtragRow[]) {
+  const clean = rows.map(normalizeRow);
+  const db = loadExtDb();
+
+  db[pid] = clean;
+  saveExtDb(db);
+
+  Changes.clear(pid);
+
+  clean.forEach((row) => {
+    Changes.upsert(pid, {
+      id: row.id,
+      posNr: row.posNr,
+      kurztext: row.kurztext,
+      einheit: row.einheit,
+      mengeDelta: row.mengeDelta,
+      preis: row.preis,
+      status: row.status,
+      begruendung: row.begruendung,
+    });
+  });
+}
+
+function clearExtRows(pid: string) {
+  const db = loadExtDb();
+  db[pid] = [];
+  saveExtDb(db);
+  Changes.clear(pid);
+}
+
+/* ================= VALUE HELPERS ================= */
+
+function safeId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+function n(value: unknown, fallback = 0): number {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
+
+  const x = typeof value === "number" ? value : Number(normalized);
+  return Number.isFinite(x) ? x : fallback;
+}
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function money(value: unknown): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+  }).format(n(value));
+}
+
+function fmtNum(value: unknown, digits = 2): string {
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(n(value));
+}
+
+function getCurrentProject(projectCtx: any): ProjectLike | null {
+  const candidate =
+    projectCtx?.currentProject ??
+    projectCtx?.project ??
+    projectCtx?.selectedProject ??
+    projectCtx?.current ??
+    (typeof projectCtx?.getCurrentProject === "function"
+      ? projectCtx.getCurrentProject()
+      : null);
+
+  if (candidate && typeof candidate === "object") {
+    return candidate as ProjectLike;
+  }
+
+  try {
+    const g = globalThis as any;
+    return (g.__RLC_CURRENT_PROJECT ?? null) as ProjectLike | null;
+  } catch {
+    return null;
+  }
+}
+
+function buildKeys(currentProject: ProjectLike | null) {
+  const projectIdUuid = String(currentProject?.id || "").trim();
+
+  const projectCodeFs = String(
+    currentProject?.code ||
+      currentProject?.number ||
+      currentProject?.projektnummer ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
+
+  const apiKey = projectCodeFs || projectIdUuid || "";
+  const serverProjectKey = projectCodeFs || apiKey || "";
+  const pid = projectIdUuid || projectCodeFs || "_none_";
+
+  return { projectIdUuid, projectCodeFs, apiKey, serverProjectKey, pid };
+}
+
+function projectTitle(project: ProjectLike | null): string {
+  if (!project) return "Kein Projekt gewählt";
+
+  const code =
+    project.code ||
+    project.number ||
+    project.projektnummer ||
+    project.id ||
+    "Projekt";
+
+  const name = project.name || project.projectName || "Projekt";
+
+  return `${code} — ${name}`;
+}
+
+function toUiStatus(status: ServerNachtragStatus): ChangeStatus {
+  if (status === "freigegeben") return "Beauftragt";
+  if (status === "abgelehnt") return "Abgelehnt";
+  if (status === "inBearbeitung") return "Abgegeben";
+  return "Entwurf";
+}
+
+function toServerStatus(status: ChangeStatus): ServerNachtragStatus {
+  if (status === "Beauftragt") return "freigegeben";
+  if (status === "Abgelehnt") return "abgelehnt";
+  if (status === "Abgegeben") return "inBearbeitung";
   return "offen";
 }
 
-function fromServer(n: ServerNachtrag): ChangeRow {
+function normalizeRow(row: Partial<NachtragRow>): NachtragRow {
   return {
-    id: n.id,
-    posNr: n.lvPos || "",
-    kurztext: n.title || "",
-    einheit: n.unit || "m",
-    mengeDelta: Number(n.qty || 0),
-    preis: Number(n.ep || 0),
-    status: toUiStatus(n.status),
-    begruendung: n.note || "",
-  } as ChangeRow;
+    id: String(row.id || safeId()),
+    posNr: String(row.posNr || ""),
+    kurztext: String(row.kurztext || ""),
+    langtext: String(row.langtext || ""),
+    einheit: String(row.einheit || "m"),
+    mengeDelta: n(row.mengeDelta),
+    preis: n(row.preis),
+    status: (row.status || "Entwurf") as ChangeStatus,
+    begruendung: String(row.begruendung || ""),
+
+    materialCost: n(row.materialCost),
+    laborCost: n(row.laborCost),
+    machineCost: n(row.machineCost),
+    subcontractorCost: n(row.subcontractorCost),
+    disposalCost: n(row.disposalCost),
+    transportCost: n(row.transportCost),
+    overheadCost: n(row.overheadCost),
+    riskCost: n(row.riskCost),
+    profitCost: n(row.profitCost),
+
+    baseUnitPrice: n(row.baseUnitPrice),
+    suggestedUnitPrice: n(row.suggestedUnitPrice),
+    finalUnitPrice: n(row.finalUnitPrice),
+
+    riskLevel: row.riskLevel,
+    calculationStatus: row.calculationStatus,
+
+    gewerk: String(row.gewerk || ""),
+    leistungsart: String(row.leistungsart || ""),
+    bauverfahren: String(row.bauverfahren || ""),
+
+    warning: String(row.warning || ""),
+    aiReason: String(row.aiReason || ""),
+    priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [],
+  };
+}
+
+function fromServer(row: ServerNachtrag): NachtragRow {
+  return normalizeRow({
+    id: row.id,
+    posNr: row.lvPos || "",
+    kurztext: row.title || "",
+    langtext: row.langtext || "",
+    einheit: row.unit || "m",
+    mengeDelta: n(row.qty),
+    preis: n(row.ep),
+    status: toUiStatus(row.status),
+    begruendung: row.note || "",
+  });
 }
 
 function toServer(
   projectKey: string,
-  row: ChangeRow,
+  row: NachtragRow,
   existingNumber?: string,
   existingCreatedAt?: string
 ): ServerNachtrag {
-  const qty = Number(row.mengeDelta || 0);
-  const ep = Number(row.preis || 0);
-  const total = qty * ep;
-
+  const qty = n(row.mengeDelta);
+  const ep = n(row.preis);
   const now = new Date().toISOString();
 
   return {
-    id: String(row.id || ""),
+    id: String(row.id || safeId()),
     projectKey,
     lvPos: String(row.posNr || ""),
     number: existingNumber || "",
     title: String(row.kurztext || ""),
+    langtext: String(row.langtext || ""),
     qty,
     unit: String(row.einheit || "m"),
     ep,
-    total,
+    total: round2(qty * ep),
     status: toServerStatus((row.status || "Entwurf") as ChangeStatus),
     note: String(row.begruendung || ""),
     createdAt: existingCreatedAt || now,
@@ -231,99 +552,169 @@ function toServer(
   };
 }
 
-async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(txt || `Server-Fehler (${res.status})`);
+function mergeRowsKeepLocal(prev: NachtragRow[], incoming: NachtragRow[]) {
+  const byId = new Map<string, NachtragRow>();
+
+  for (const row of incoming) {
+    byId.set(String(row.id), normalizeRow(row));
   }
-  return (await res.json()) as T;
+
+  for (const row of prev) {
+    const id = String(row.id);
+    const serverRow = byId.get(id);
+
+    byId.set(
+      id,
+      normalizeRow({
+        ...(serverRow || {}),
+        ...row,
+        langtext: row.langtext || serverRow?.langtext || "",
+      })
+    );
+  }
+
+  return Array.from(byId.values()).map(normalizeRow);
 }
 
-/* ================= MERGE HELPERS ================= */
+function mergeByPosNrKeepExisting(prev: NachtragRow[], incoming: NachtragRow[]) {
+  const key = (s: unknown) => String(s || "").trim();
+  const byPos = new Map<string, NachtragRow>();
 
-function mergeRowsKeepLocal(prev: ChangeRow[], incoming: ChangeRow[]) {
-  const byId = new Map<string, ChangeRow>();
-  for (const r of prev) byId.set(String(r.id), r);
-
-  for (const r of incoming) {
-    const id = String(r.id);
-    if (!byId.has(id)) byId.set(id, r);
+  for (const row of prev) {
+    const k = key(row.posNr);
+    if (k) byPos.set(k, row);
   }
 
-  const prevIds = new Set(prev.map((x) => String(x.id)));
-  const newOnes = incoming.filter((x) => !prevIds.has(String(x.id)));
-  return [...newOnes, ...prev];
-}
+  const added: NachtragRow[] = [];
 
-// ✅ Merge by PosNr (keine Duplikate), lokale Zeilen haben Vorrang
-function mergeByPosNrKeepExisting(prev: ChangeRow[], incoming: ChangeRow[]) {
-  const norm = (s: any) => String(s || "").trim();
-  const byPos = new Map<string, ChangeRow>();
-
-  // zuerst prev (local gewinnt)
-  for (const r of prev) {
-    const k = norm(r.posNr);
-    if (k) byPos.set(k, r);
-  }
-
-  // dann incoming nur wenn PosNr nicht existiert
-  for (const r of incoming) {
-    const k = norm(r.posNr);
+  for (const row of incoming) {
+    const k = key(row.posNr);
     if (!k) continue;
-    if (!byPos.has(k)) byPos.set(k, r);
+
+    if (!byPos.has(k)) {
+      byPos.set(k, row);
+      added.push(row);
+    }
   }
 
-  // Reihenfolge: incoming zuerst (neu oben), dann rest
-  const incomingKeys = new Set(incoming.map((x) => norm(x.posNr)).filter(Boolean));
-  const outIncoming: ChangeRow[] = [];
-  const outRest: ChangeRow[] = [];
+  const addedIds = new Set(added.map((x) => String(x.id)));
+  const rest = Array.from(byPos.values()).filter(
+    (x) => !addedIds.has(String(x.id))
+  );
 
-  for (const k of Array.from(byPos.keys())) {
-    const row = byPos.get(k)!;
-    if (incomingKeys.has(k) && !prev.find((p) => norm(p.posNr) === k)) outIncoming.push(row);
-    else outRest.push(row);
-  }
-
-  return [...outIncoming, ...outRest];
+  return [...added, ...rest].map(normalizeRow);
 }
 
-function parseCsv(text: string) {
-  const raw = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+function nachtragDuplicateKey(row: NachtragRow): string {
+  const text = `${row.posNr || ""} ${row.kurztext || ""} ${row.langtext || ""}`
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (text.length < 6) return "";
+
+  return [
+    text,
+    String(row.einheit || "").trim().toLowerCase(),
+    round2(n(row.mengeDelta)),
+    round2(n(row.preis)),
+  ].join("|");
+}
+
+function getNachtragDuplicateIds(rows: NachtragRow[]): Set<string> {
+  const map = new Map<string, NachtragRow[]>();
+
+  for (const row of rows) {
+    const key = nachtragDuplicateKey(row);
+    if (!key) continue;
+
+    const list = map.get(key) || [];
+    list.push(row);
+    map.set(key, list);
+  }
+
+  const ids = new Set<string>();
+
+  for (const group of map.values()) {
+    if (group.length > 1) {
+      group.forEach((row) => ids.add(row.id));
+    }
+  }
+
+  return ids;
+}
+
+function mergeByIdKeepExisting(prev: NachtragRow[], incoming: NachtragRow[]) {
+  const byId = new Map<string, NachtragRow>();
+
+  for (const row of prev) {
+    byId.set(String(row.id), normalizeRow(row));
+  }
+
+  const added: NachtragRow[] = [];
+
+  for (const row of incoming) {
+    const clean = normalizeRow(row);
+    const id = String(clean.id);
+
+    if (!byId.has(id)) {
+      byId.set(id, clean);
+      added.push(clean);
+    }
+  }
+
+  const addedIds = new Set(added.map((x) => String(x.id)));
+  const rest = Array.from(byId.values()).filter(
+    (x) => !addedIds.has(String(x.id))
+  );
+
+  return [...added, ...rest].map(normalizeRow);
+}
+
+/* CSV:
+   PosNr;Kurztext;Langtext;Einheit;DeltaMenge;EP (netto);Status;Begründung
+*/
+function parseCsv(text: string): NachtragRow[] {
+  const raw = String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+
   if (!raw) return [];
 
   const sep = raw.includes(";") ? ";" : ",";
   const lines = raw
     .split("\n")
-    .map((l) => l.trim())
+    .map((line) => line.trim())
     .filter(Boolean);
+
   if (!lines.length) return [];
 
   const header = lines[0].toLowerCase();
   const hasHeader =
     header.includes("pos") ||
     header.includes("kurz") ||
+    header.includes("lang") ||
     header.includes("einheit") ||
     header.includes("status");
 
   const start = hasHeader ? 1 : 0;
-  const out: ChangeRow[] = [];
+  const out: NachtragRow[] = [];
 
-  for (let i = start; i < lines.length; i++) {
+  for (let i = start; i < lines.length; i += 1) {
     const line = lines[i];
-
     const cells: string[] = [];
     let cur = "";
     let inQ = false;
-    for (let j = 0; j < line.length; j++) {
+
+    for (let j = 0; j < line.length; j += 1) {
       const ch = line[j];
+
       if (ch === '"') {
         if (inQ && line[j + 1] === '"') {
           cur += '"';
-          j++;
+          j += 1;
         } else {
           inQ = !inQ;
         }
@@ -334,237 +725,343 @@ function parseCsv(text: string) {
         cur += ch;
       }
     }
+
     cells.push(cur);
 
-    const posNr = (cells[0] ?? "").trim();
-    const kurztext = (cells[1] ?? "").trim();
-    const einheit = (cells[2] ?? "m").trim() || "m";
-    const mengeDelta = Number(String(cells[3] ?? "0").replace(",", ".")) || 0;
-    const preis = Number(String(cells[4] ?? "0").replace(",", ".")) || 0;
-    const statusRaw = (cells[5] ?? "Entwurf").trim() as any;
-    const status: ChangeStatus = STATI.includes(statusRaw) ? statusRaw : "Entwurf";
-    const begruendung = (cells[6] ?? "").trim();
+    const hasLangtextColumn = hasHeader && header.includes("lang");
 
-    out.push({
-      id: (globalThis as any)?.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-      posNr,
-      kurztext,
-      einheit,
-      mengeDelta,
-      preis,
-      status,
-      begruendung,
-    } as any);
+    const posNr = cells[0] || "";
+    const kurztext = cells[1] || "";
+    const langtext = hasLangtextColumn ? cells[2] || "" : "";
+    const einheit = hasLangtextColumn ? cells[3] || "m" : cells[2] || "m";
+    const mengeDelta = hasLangtextColumn ? cells[4] : cells[3];
+    const preis = hasLangtextColumn ? cells[5] : cells[4];
+    const statusRaw = String(
+      hasLangtextColumn ? cells[6] || "Entwurf" : cells[5] || "Entwurf"
+    ).trim() as ChangeStatus;
+    const begruendung = hasLangtextColumn ? cells[7] || "" : cells[6] || "";
+
+    const status = STATI.includes(statusRaw) ? statusRaw : "Entwurf";
+
+    out.push(
+      normalizeRow({
+        id: safeId(),
+        posNr,
+        kurztext,
+        langtext,
+        einheit,
+        mengeDelta: n(mengeDelta),
+        preis: n(preis),
+        status,
+        begruendung,
+      })
+    );
   }
 
   return out;
 }
 
-/* ================= PDF HELPERS (Regiebericht-Style) ================= */
-
-function safeText(s: any) {
-  return String(s ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+function csvCell(value: unknown): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-function drawBox(doc: jsPDF, x: number, y: number, w: number, h: number, lw = 0.3) {
-  doc.setLineWidth(lw);
-  doc.rect(x, y, w, h);
+function safeFileName(value: string): string {
+  return String(value || "Nachtraege")
+    .replace(/[^\w.-]+/g, "_")
+    .replace(/_+/g, "_");
 }
 
-function textInBox(
-  doc: jsPDF,
-  label: string,
-  value: string,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  opts?: { labelW?: number; alignValue?: "left" | "right"; boldValue?: boolean }
-) {
-  const labelW = opts?.labelW ?? Math.min(26, w * 0.35);
-  const padX = 2.5;
-  const midY = y + h / 2 + 1.2;
-
-  // label
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(label, x + padX, midY);
-
-  // divider
-  doc.setLineWidth(0.2);
-  doc.line(x + labelW, y, x + labelW, y + h);
-
-  // value
-  doc.setFont("helvetica", opts?.boldValue ? "bold" : "normal");
-  const v = safeText(value);
-  const align = opts?.alignValue ?? "left";
-  const vx = align === "right" ? x + w - padX : x + labelW + padX;
-  doc.text(v, vx, midY, { align });
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-/* ================= PROJECT KEY POLICY (FIX) ================= */
-/**
- * ✅ Policy allineata al server verknuepfung.ts:
- * - Preferisci SEMPRE BA-... (currentProject.code) come chiave API (FS-key)
- * - Se manca code, fallback a UUID
- * - pid (local store) resta UUID se presente per non rompere Changes.*
- */
-function buildKeys(currentProject: any) {
-  const projectIdUuid = String(currentProject?.id || "").trim();
-  const projectCodeFs = String(currentProject?.code || "").trim();
+function readKalkulationHandoff(): KalkulationHandoff | null {
+  const keys = [KI_HANDOFF_KEY, MANUELL_HANDOFF_KEY];
 
-  // ✅ questa è la chiave da usare per le chiamate /api/verknuepfung/... (preferisci code)
-  const apiKey = (projectCodeFs || projectIdUuid || "").trim();
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
 
-  // ✅ questa è la key da scrivere nel payload come projectKey (sempre code se disponibile)
-  const serverProjectKey = (projectCodeFs || apiKey || "").trim();
+      const parsed = JSON.parse(raw) as KalkulationHandoff;
+      const rows = Array.isArray(parsed?.rows) ? parsed.rows : [];
 
-  // local store key (come prima)
-  const pid = projectIdUuid || "_none_";
+      if (rows.length) return parsed;
+    } catch {
+      //
+    }
+  }
 
-  return { projectIdUuid, projectCodeFs, apiKey, serverProjectKey, pid };
+  return null;
 }
+
+function handoffMatchesProject(
+  handoff: KalkulationHandoff | null,
+  currentProject: ProjectLike | null,
+  apiKey: string
+): boolean {
+  if (!handoff) return false;
+
+  const hk = String(handoff.projectKey || "").trim().toUpperCase();
+  if (!hk) return true;
+
+  const currentKey = String(
+    currentProject?.code ||
+      currentProject?.number ||
+      currentProject?.projektnummer ||
+      currentProject?.id ||
+      apiKey ||
+      ""
+  )
+    .trim()
+    .toUpperCase();
+
+  return !currentKey || hk === currentKey;
+}
+
+function mapHandoffRowsToNachtraege(handoff: KalkulationHandoff): NachtragRow[] {
+  const rows = Array.isArray(handoff.rows) ? handoff.rows : [];
+
+  return rows
+    .map((row) => {
+      const posNr = String(row.posNr || row.pos || "").trim();
+      const kurztext = String(row.kurztext || row.title || "").trim();
+      const langtext = String(row.langtext || "").trim();
+
+      const einheit = String(row.einheit || row.unit || "m").trim() || "m";
+
+      const mengeDelta = n(row.mengeDelta ?? row.menge ?? row.qty, 0);
+      const preis = n(
+        row.preis ??
+          row.ep ??
+          row.finalUnitPrice ??
+          row.suggestedUnitPrice ??
+          row.baseUnitPrice,
+        0
+      );
+
+      const auftragName = String(row.auftragName || handoff.auftragName || "").trim();
+
+      const begruendungParts = [
+        "Aus Rezept / Urkalkulation übernommen.",
+        auftragName ? `Auftrag: ${auftragName}` : "",
+        row.warning ? `Hinweis: ${row.warning}` : "",
+        row.aiReason ? `Kalkulationshinweis: ${row.aiReason}` : "",
+      ].filter(Boolean);
+
+      if (!posNr && !kurztext) return null;
+
+      return normalizeRow({
+        id: `REZEPT-${String(row.id || `${posNr}-${Date.now()}`)}`,
+        posNr,
+        kurztext: kurztext || (posNr ? `Nachtrag zu ${posNr}` : "Nachtrag"),
+        langtext,
+        einheit,
+        mengeDelta,
+        preis,
+        status: "Entwurf",
+        begruendung: begruendungParts.join("\n"),
+
+        materialCost: n((row as any).materialCost),
+        laborCost: n((row as any).laborCost),
+        machineCost: n((row as any).machineCost),
+        subcontractorCost: n((row as any).subcontractorCost),
+        disposalCost: n((row as any).disposalCost),
+        transportCost: n((row as any).transportCost),
+        overheadCost: n((row as any).overheadCost),
+        riskCost: n((row as any).riskCost),
+        profitCost: n((row as any).profitCost),
+
+        baseUnitPrice: n((row as any).baseUnitPrice),
+        suggestedUnitPrice: n((row as any).suggestedUnitPrice),
+        finalUnitPrice: n((row as any).finalUnitPrice),
+
+        riskLevel: (row as any).riskLevel,
+        calculationStatus: (row as any).calculationStatus,
+
+        gewerk: String((row as any).gewerk || ""),
+        leistungsart: String((row as any).leistungsart || ""),
+        bauverfahren: String((row as any).bauverfahren || ""),
+
+        warning: String(row.warning || ""),
+        aiReason: String(row.aiReason || ""),
+        priceBreakdown: Array.isArray((row as any).priceBreakdown)
+          ? (row as any).priceBreakdown
+          : Array.isArray(row.meta?.priceBreakdown)
+            ? row.meta.priceBreakdown
+            : [],
+      });
+    })
+    .filter(Boolean) as NachtragRow[];
+}
+
+function StatusPill({ status }: { status: ChangeStatus }) {
+  return <span style={statusStyle(status)}>{status}</span>;
+}
+
+/* ================= COMPONENT ================= */
 
 export default function NachtraegePage() {
-  const { currentProject } = useProject();
+  const projectCtx: any = useProject();
+  const currentProject = getCurrentProject(projectCtx);
+
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { apiKey, serverProjectKey, pid } = useMemo(() => buildKeys(currentProject), [currentProject]);
+  const { apiKey, serverProjectKey, pid } = useMemo(
+    () => buildKeys(currentProject),
+    [currentProject]
+  );
 
-  const [rows, setRows] = useState<ChangeRow[]>([]);
-  const [mwst, setMwst] = useState<number>(() => Number(localStorage.getItem(MWST_KEY) ?? 19));
+  const [rows, setRows] = useState<NachtragRow[]>([]);
+  const [mwst, setMwst] = useState<number>(() =>
+    Number(localStorage.getItem(MWST_KEY) ?? 19)
+  );
   const [q, setQ] = useState("");
-  const [filterStatus, setFilterStatus] = useState<ChangeStatus | "Alle">("Alle");
+  const [filterStatus, setFilterStatus] = useState<ChangeStatus | "Alle">(
+    "Alle"
+  );
   const [sortKey, setSortKey] = useState<"pos" | "status" | "value">("pos");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [info, setInfo] = useState<string | null>(null);
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [qualityFilter, setQualityFilter] = useState<NachtragQualityFilter>("alle");
 
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  // ✅ Draft UI state (Regie erst prüfen/bearbeiten, dann übernehmen)
   const [draft, setDraft] = useState<NachtragDraft | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
   const [draftSel, setDraftSel] = useState<Record<number, boolean>>({});
 
-  // ✅ Import from regie only once per mount
+  const [recipeDraft, setRecipeDraft] = useState<KalkulationHandoff | null>(null);
+  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [recipeSel, setRecipeSel] = useState<Record<number, boolean>>({});
+
   const importedDraftRef = useRef(false);
+  const importedRecipeRef = useRef(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function saveLocal(nextRows: NachtragRow[]) {
+    const cleanRows = nextRows.map(normalizeRow);
+    saveExtRows(pid, cleanRows);
+    setRows(cleanRows);
+  }
 
   async function load() {
-    setInfo(null);
+    setInfo("");
 
-    // ✅ se non ho alcuna key => fallback local
+    const localRows = loadExtRows(pid);
+
     if (!apiKey) {
-      setRows(Changes.list(pid));
+      setRows(localRows);
       setSelected({});
       return;
     }
 
     setLoading(true);
+
     try {
       const data = await apiJson<{ ok: boolean; items: ServerNachtrag[] }>(
         `/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`
       );
-      const items = Array.isArray(data?.items) ? data.items : [];
-      const incoming = items.map(fromServer);
 
-      setRows((prev) => mergeRowsKeepLocal(prev, incoming));
+      const incoming = Array.isArray(data?.items)
+        ? data.items.map(fromServer)
+        : [];
+
+      const merged = mergeRowsKeepLocal(localRows, incoming);
+
+      saveLocal(merged);
       setSelected({});
+      setInfo("");
     } catch (e: any) {
-      setInfo(e?.message || "Fehler beim Laden (Server)");
-      setRows(Changes.list(pid));
+      const msg = String(e?.message || e || "");
+
+      if (msg.includes("Kein Token") || msg.includes("401")) {
+        setInfo("Server nicht geladen: Kein gültiger Login-Token vorhanden.");
+      } else if (msg.includes("504") || msg.toLowerCase().includes("gateway")) {
+        setInfo(
+          "Server nicht geladen: Gateway Timeout. Lokale Daten bleiben aktiv."
+        );
+      } else {
+        setInfo(`Server nicht geladen: ${msg}`);
+      }
+
+      setRows(localRows);
       setSelected({});
     } finally {
       setLoading(false);
     }
   }
 
-  async function persist(nextRows: ChangeRow[]) {
-    // ✅ offline fallback
+  async function saveServerNow(customRows?: NachtragRow[]) {
+    const sourceRows = (customRows ?? rows).map(normalizeRow);
+
+    saveLocal(sourceRows);
+
     if (!apiKey) {
-      nextRows.forEach((r) => Changes.upsert(pid, r));
-      setRows(Changes.list(pid));
+      setInfo("Kein Server-Key vorhanden. Nachträge wurden nur lokal gespeichert.");
       return;
     }
 
-    let existing: ServerNachtrag[] = [];
-    try {
-      const d = await apiJson<{ ok: boolean; items: ServerNachtrag[] }>(
-        `/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`
-      );
-      existing = Array.isArray(d?.items) ? d.items : [];
-    } catch {
-      existing = [];
-    }
+    setLoading(true);
+    setInfo("");
 
-    const metaById = new Map<string, { number: string; createdAt: string }>();
-    for (const n of existing) {
-      metaById.set(String(n.id), {
-        number: String(n.number || ""),
-        createdAt: String(n.createdAt || ""),
+    try {
+      let existing: ServerNachtrag[] = [];
+
+      try {
+        const data = await apiJson<{ ok: boolean; items: ServerNachtrag[] }>(
+          `/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`
+        );
+
+        existing = Array.isArray(data?.items) ? data.items : [];
+      } catch {
+        existing = [];
+      }
+
+      const metaById = new Map<string, { number: string; createdAt: string }>();
+
+      for (const item of existing) {
+        metaById.set(String(item.id), {
+          number: String(item.number || ""),
+          createdAt: String(item.createdAt || ""),
+        });
+      }
+
+      const payloadItems = sourceRows.map((row) => {
+        const meta = metaById.get(String(row.id));
+        return toServer(serverProjectKey, row, meta?.number, meta?.createdAt);
       });
+
+      await apiJson(`/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`, {
+        method: "PUT",
+        body: JSON.stringify({ items: payloadItems }),
+      });
+
+      setRows(sourceRows);
+      setInfo("Nachträge erfolgreich am Server gespeichert.");
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+
+      if (msg.includes("Kein Token") || msg.includes("401")) {
+        setInfo(
+          "Server-Speicherung nicht möglich: Kein gültiger Login-Token vorhanden."
+        );
+      } else if (msg.includes("504") || msg.toLowerCase().includes("gateway")) {
+        setInfo(
+          "Server-Timeout beim Speichern. Die Nachträge bleiben lokal gespeichert."
+        );
+      } else {
+        setInfo(`Server-Speicherung fehlgeschlagen: ${msg}`);
+      }
+    } finally {
+      setLoading(false);
     }
-
-    const payloadItems: ServerNachtrag[] = nextRows.map((r) => {
-      const m = metaById.get(String(r.id));
-      return toServer(serverProjectKey, r, m?.number || "", m?.createdAt || "");
-    });
-
-    await apiJson(`/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`, {
-      method: "PUT",
-      body: JSON.stringify({ items: payloadItems }),
-    });
-
-    setRows(nextRows);
   }
-
-  // ✅ DRAFT FROM REGIE: NICHT automatisch übernehmen, sondern erst bearbeiten/prüfen
-  useEffect(() => {
-    if (importedDraftRef.current) return;
-
-    const qs = new URLSearchParams(location.search);
-    const from = qs.get("from");
-    if (from !== "regie") return;
-
-    if (!currentProject) return;
-
-    try {
-      const raw = localStorage.getItem(NACHTRAG_BUFFER_KEY);
-      if (!raw) return;
-
-      const d = JSON.parse(raw) as NachtragDraft;
-      const dRows = Array.isArray(d?.rows) ? d.rows : [];
-      if (!dRows.length) return;
-
-      // project check: query projectId OR draft.projectId OR draft.projectKey must match currentProject.code/id
-      const qsProjectId = String(qs.get("projectId") || "").trim();
-      const currentKey = String(currentProject.code || currentProject.id || "").trim();
-      const draftKey = String(d.projectId || d.projectKey || "").trim();
-
-      // se draftKey presente, deve combaciare (con query o current)
-      const matches =
-        !draftKey ||
-        draftKey === currentKey ||
-        (!!qsProjectId && draftKey === qsProjectId);
-
-      if (!matches) return;
-
-      importedDraftRef.current = true;
-
-      // apri draft editor
-      setDraft(d);
-      setDraftOpen(true);
-
-      // default: tutti selezionati
-      const sel: Record<number, boolean> = {};
-      for (let i = 0; i < dRows.length; i++) sel[i] = true;
-      setDraftSel(sel);
-    } catch (e) {
-      console.warn("Nachtrag Draft Read fehlgeschlagen:", e);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search, currentProject]);
 
   useEffect(() => {
     void load();
@@ -576,253 +1073,413 @@ export default function NachtraegePage() {
   }, [mwst]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (e.key === "Enter" && tag !== "TEXTAREA" && tag !== "INPUT" && tag !== "SELECT") {
-        e.preventDefault();
-        add();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        exportCSV();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, apiKey]);
+    if (importedDraftRef.current) return;
+
+    const qs = new URLSearchParams(location.search);
+    const from = qs.get("from");
+    if (from !== "regie" && from !== "rezepte") return;
+    if (!currentProject) return;
+
+    try {
+      const raw = localStorage.getItem(NACHTRAG_BUFFER_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as NachtragDraft;
+      const draftRows = Array.isArray(parsed?.rows) ? parsed.rows : [];
+
+      if (!draftRows.length) return;
+
+      const qsProjectId = String(qs.get("projectId") || "").trim();
+
+      const currentKey = String(
+        currentProject.code ||
+          currentProject.number ||
+          currentProject.projektnummer ||
+          currentProject.id ||
+          ""
+      ).trim();
+
+      const draftKey = String(parsed.projectId || parsed.projectKey || "").trim();
+
+      const matches =
+        !draftKey ||
+        draftKey === currentKey ||
+        (!!qsProjectId && draftKey === qsProjectId);
+
+      if (!matches) return;
+
+      importedDraftRef.current = true;
+      setDraft(parsed);
+      setDraftOpen(true);
+
+      const sel: Record<number, boolean> = {};
+      draftRows.forEach((_, i) => {
+        sel[i] = true;
+      });
+      setDraftSel(sel);
+    } catch {
+      //
+    }
+  }, [location.search, currentProject]);
+
+  useEffect(() => {
+    if (importedRecipeRef.current) return;
+
+    const qs = new URLSearchParams(location.search);
+    const from = String(qs.get("from") || "").trim().toLowerCase();
+
+    if (from !== "rezepte" && from !== "recipe" && from !== "urkalkulation") {
+      return;
+    }
+
+    const handoff = readKalkulationHandoff();
+    if (!handoff) return;
+    if (!handoffMatchesProject(handoff, currentProject, apiKey)) return;
+
+    const handoffRows = Array.isArray(handoff.rows) ? handoff.rows : [];
+    if (!handoffRows.length) return;
+
+    importedRecipeRef.current = true;
+    setRecipeDraft(handoff);
+    setRecipeOpen(true);
+
+    const sel: Record<number, boolean> = {};
+    handoffRows.forEach((_, i) => {
+      sel[i] = true;
+    });
+    setRecipeSel(sel);
+
+    setInfo("Rezept-/Urkalkulationspositionen erkannt. Bitte prüfen und übernehmen.");
+  }, [location.search, currentProject, apiKey]);
+
+  const duplicateIds = useMemo(() => getNachtragDuplicateIds(rows), [rows]);
 
   const viewRows = useMemo(() => {
-    let r = [...rows];
-    if (filterStatus !== "Alle") r = r.filter((x) => (x.status || "Entwurf") === filterStatus);
+    let result = [...rows];
+
+    if (filterStatus !== "Alle") {
+      result = result.filter((x) => (x.status || "Entwurf") === filterStatus);
+    }
+
+    if (qualityFilter !== "alle") {
+      result = result.filter((row) => {
+        if (qualityFilter === "Entwurf") return row.status === "Entwurf";
+        if (qualityFilter === "Abgegeben") return row.status === "Abgegeben";
+        if (qualityFilter === "Beauftragt") return row.status === "Beauftragt";
+        if (qualityFilter === "Abgelehnt") return row.status === "Abgelehnt";
+        if (qualityFilter === "begruendungFehlt") return !String(row.begruendung || "").trim();
+        if (qualityFilter === "epFehlt") return n(row.preis) <= 0;
+        if (qualityFilter === "mengeFehlt") return n(row.mengeDelta) === 0;
+        if (qualityFilter === "einheitFehlt") return !String(row.einheit || "").trim();
+        if (qualityFilter === "doppelte") return duplicateIds.has(row.id);
+        return true;
+      });
+    }
+
     if (q.trim()) {
-      const s0 = q.toLowerCase();
-      r = r.filter(
+      const s = q.toLowerCase();
+
+      result = result.filter(
         (x) =>
-          (x.posNr || "").toLowerCase().includes(s0) ||
-          (x.kurztext || "").toLowerCase().includes(s0) ||
-          (x.begruendung || "").toLowerCase().includes(s0)
+          String(x.posNr || "").toLowerCase().includes(s) ||
+          String(x.kurztext || "").toLowerCase().includes(s) ||
+          String(x.langtext || "").toLowerCase().includes(s) ||
+          String(x.begruendung || "").toLowerCase().includes(s)
       );
     }
-    if (sortKey === "pos") r.sort((a, b) => (a.posNr || "").localeCompare(b.posNr || ""));
-    if (sortKey === "status")
-      r.sort((a, b) => STATI.indexOf(a.status || "Entwurf") - STATI.indexOf(b.status || "Entwurf"));
-    if (sortKey === "value")
-      r.sort((a, b) => (b.mengeDelta || 0) * (b.preis || 0) - (a.mengeDelta || 0) * (a.preis || 0));
-    return r;
-  }, [rows, q, filterStatus, sortKey]);
+
+    if (sortKey === "pos") {
+      result.sort((a, b) =>
+        String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
+          numeric: true,
+          sensitivity: "base",
+        })
+      );
+    }
+
+    if (sortKey === "status") {
+      result.sort(
+        (a, b) =>
+          STATI.indexOf((a.status || "Entwurf") as ChangeStatus) -
+          STATI.indexOf((b.status || "Entwurf") as ChangeStatus)
+      );
+    }
+
+    if (sortKey === "value") {
+      result.sort(
+        (a, b) => n(b.mengeDelta) * n(b.preis) - n(a.mengeDelta) * n(a.preis)
+      );
+    }
+
+    return result;
+  }, [rows, q, filterStatus, sortKey, qualityFilter, duplicateIds]);
+
+  const selectedRows = useMemo(() => {
+    const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
+    return rows.filter((row) => ids.has(row.id)).map(normalizeRow);
+  }, [rows, selected]);
 
   const totals = useMemo(() => {
-    const netto = viewRows.reduce((s0, r) => s0 + (r.mengeDelta || 0) * (r.preis || 0), 0);
-    const brutto = netto * (1 + (mwst || 0) / 100);
-    return { netto, brutto };
-  }, [viewRows, mwst]);
+    const netto = viewRows.reduce(
+      (sum, row) => sum + n(row.mengeDelta) * n(row.preis),
+      0
+    );
 
-  /** CRUD **/
-  const add = (tpl?: Partial<ChangeRow>) => {
-    const newRow: ChangeRow = {
-      id: (globalThis as any)?.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-      kurztext: tpl?.kurztext ?? "",
-      einheit: tpl?.einheit ?? "m",
+    const brutto = netto * (1 + n(mwst) / 100);
+
+    return {
+      netto: round2(netto),
+      brutto: round2(brutto),
+      count: viewRows.length,
+      selected: Object.values(selected).filter(Boolean).length,
+      beauftragt: viewRows.filter((r) => r.status === "Beauftragt").length,
+      offen: viewRows.filter((r) => r.status === "Entwurf").length,
+    };
+  }, [viewRows, mwst, selected]);
+
+  const draftRows = useMemo(
+    () => (Array.isArray(draft?.rows) ? draft.rows : []),
+    [draft]
+  );
+
+  const recipeRows = useMemo(
+    () => (Array.isArray(recipeDraft?.rows) ? recipeDraft.rows : []),
+    [recipeDraft]
+  );
+
+  function add(tpl?: Partial<NachtragRow>) {
+    const row = normalizeRow({
+      id: safeId(),
+      posNr: tpl?.posNr || "",
+      kurztext: tpl?.kurztext || "",
+      langtext: tpl?.langtext || "",
+      einheit: tpl?.einheit || "m",
       mengeDelta: tpl?.mengeDelta ?? 0,
       preis: tpl?.preis ?? 0,
-      status: (tpl?.status ?? "Entwurf") as any,
-      posNr: tpl?.posNr ?? "",
-      begruendung: tpl?.begruendung ?? "",
-    } as any;
-
-    const next = [newRow, ...rows];
-    void persist(next).catch((e: any) => setInfo(e?.message || "Fehler beim Speichern"));
-    setSelected({});
-  };
-
-  const save = (patch: Partial<ChangeRow> & { id: string }) => {
-    const idx = rows.findIndex((x) => x.id === patch.id);
-    if (idx === -1) return;
-    const next = [...rows];
-    next[idx] = { ...next[idx], ...patch };
-    setRows(next);
-    void persist(next).catch((e: any) => setInfo(e?.message || "Fehler beim Speichern"));
-  };
-
-  const del = (id: string) => {
-    const next = rows.filter((x) => x.id !== id);
-    void persist(next).catch((e: any) => setInfo(e?.message || "Fehler beim Speichern"));
-    setSelected((s0) => {
-      const n = { ...s0 };
-      delete n[id];
-      return n;
+      status: tpl?.status || "Entwurf",
+      begruendung: tpl?.begruendung || "",
     });
-  };
 
-  const delSelected = () => {
+    const next = [row, ...rows];
+
+    saveLocal(next);
+    setSelected({});
+    setInfo("");
+  }
+
+  function save(patch: Partial<NachtragRow> & { id: string }) {
+    const next = rows.map((row) =>
+      row.id === patch.id ? normalizeRow({ ...row, ...patch }) : row
+    );
+
+    saveLocal(next);
+    setInfo("");
+  }
+
+  function del(id: string) {
+    const next = rows.filter((row) => row.id !== id);
+    saveLocal(next);
+
+    setSelected((s) => {
+      const copy = { ...s };
+      delete copy[id];
+      return copy;
+    });
+
+    setInfo("");
+  }
+
+  function duplicate(row: NachtragRow) {
+    add({
+      ...row,
+      id: undefined,
+      status: "Entwurf",
+      begruendung: `${row.begruendung || ""}`.trim(),
+    });
+  }
+
+  function delSelected() {
     const ids = Object.keys(selected).filter((k) => selected[k]);
     if (!ids.length) return;
     if (!confirm(`${ids.length} Nachtrag/Nachträge löschen?`)) return;
-    const next = rows.filter((r) => !ids.includes(r.id));
-    void persist(next).catch((e: any) => setInfo(e?.message || "Fehler beim Speichern"));
+
+    const next = rows.filter((row) => !ids.includes(row.id));
+
+    saveLocal(next);
     setSelected({});
-  };
+    setInfo("");
+  }
 
-  const duplicate = (r0: ChangeRow) => {
-    add({ ...r0, id: undefined });
-  };
+  function clearAll() {
+    if (!confirm("Alle Nachträge löschen?")) return;
 
-  const clearAll = () => {
-    if (confirm("Alle Nachträge löschen?")) {
-      void persist([]).catch((e: any) => setInfo(e?.message || "Fehler beim Speichern"));
-      setRows([]);
-      setSelected({});
-    }
-  };
+    clearExtRows(pid);
+    setRows([]);
+    setSelected({});
+    setInfo("");
+  }
 
-  /** ✅ Draft → Nachträge übernehmen (bearbeitbar) **/
-  const draftRows = useMemo(() => (Array.isArray(draft?.rows) ? draft!.rows! : []), [draft]);
+  function updateDraftRow(index: number, patch: Partial<NachtragDraftRow>) {
+    if (!draft) return;
 
-  const applyDraft = async () => {
+    const nextRows = Array.isArray(draft.rows) ? [...draft.rows] : [];
+    if (!nextRows[index]) return;
+
+    nextRows[index] = { ...nextRows[index], ...patch };
+    setDraft({ ...draft, rows: nextRows });
+  }
+
+  function updateRecipeRow(index: number, patch: Partial<KalkulationHandoffRow>) {
+    if (!recipeDraft) return;
+
+    const nextRows = Array.isArray(recipeDraft.rows) ? [...recipeDraft.rows] : [];
+    if (!nextRows[index]) return;
+
+    nextRows[index] = { ...nextRows[index], ...patch };
+    setRecipeDraft({ ...recipeDraft, rows: nextRows });
+  }
+
+  async function applyDraft() {
     if (!draftRows.length) {
       setDraftOpen(false);
       setDraft(null);
       return;
     }
 
-    const selectedIdx = Object.keys(draftSel)
-      .map((k) => Number(k))
+    const selectedIndexes = Object.keys(draftSel)
+      .map((key) => Number(key))
       .filter((i) => draftSel[i]);
 
-    if (!selectedIdx.length) {
-      // nichts ausgewählt -> einfach schließen, aber buffer NICHT löschen (damit du es nicht verlierst)
+    if (!selectedIndexes.length) {
       setDraftOpen(false);
       return;
     }
 
-    const imported: ChangeRow[] = selectedIdx
+    const imported = selectedIndexes
       .map((i) => draftRows[i])
-      .map((r) => {
-        const posNr = String(r.posNr || r.pos || "").trim();
+      .map((row) => {
+        const posNr = String(row.posNr || row.pos || "").trim();
+
         const kurztext =
-          String(r.kurztext || r.title || "").trim() ||
+          String(row.kurztext || row.title || "").trim() ||
           (posNr ? `Nachtrag zu ${posNr}` : "");
 
-        const einheit = String(r.einheit || r.unit || "m").trim() || "m";
-        const mengeDelta = Number(r.mengeDelta ?? r.qty ?? 0) || 0;
+        const langtext = String(row.langtext || "").trim();
+        const einheit = String(row.einheit || row.unit || "m").trim() || "m";
+        const mengeDelta = n(row.mengeDelta ?? row.qty);
+        const preis = n(row.preis);
 
         const begruendung = String(
-          r.begruendung || r.langtext || r.note || r.hint || "aus Regiebericht"
+          row.begruendung || row.note || row.hint || "aus Regiebericht"
         ).trim();
 
         if (!posNr && !kurztext) return null;
 
-        // ✅ stabile ID (wenn regieRowId vorhanden -> nutze das; sonst UUID)
-        const baseId =
-          String(r.regieRowId || "").trim() ||
-          ((globalThis as any)?.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`);
-
-        return {
-          id: `REGIE-${baseId}`,
+        return normalizeRow({
+          id: `REGIE-${String(row.regieRowId || safeId())}`,
           posNr,
           kurztext,
+          langtext,
           einheit,
           mengeDelta,
-          preis: 0,
+          preis,
           status: "Entwurf",
           begruendung,
-        } as any;
+        });
       })
-      .filter(Boolean) as ChangeRow[];
+      .filter(Boolean) as NachtragRow[];
 
     if (!imported.length) {
       setDraftOpen(false);
       return;
     }
 
-    // ✅ merge + persist
-    setRows((prev) => {
-      const merged = mergeByPosNrKeepExisting(prev, imported);
-      void persist(merged).catch((e: any) => setInfo(e?.message || "Fehler beim Speichern"));
-      return merged;
-    });
+    const merged = mergeByPosNrKeepExisting(rows, imported);
+
+    saveLocal(merged);
     setSelected({});
 
-    // ✅ buffer löschen (sonst kommt es wieder)
     try {
       localStorage.removeItem(NACHTRAG_BUFFER_KEY);
-    } catch {}
+      setDraftOpen(false);
+      setDraft(null);
+      setInfo("Regie-Entwurf wurde in Nachträge übernommen.");
 
-    // ✅ close
-    setDraftOpen(false);
-    setDraft(null);
-
-    // ✅ clean URL (optional: entferne from=regie)
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.delete("from");
-      u.searchParams.delete("projectId");
-      window.history.replaceState({}, "", u.toString());
-    } catch {}
-  };
-
-  const discardDraft = () => {
-    if (!confirm("Regie-Entwurf verwerfen? (Buffer wird gelöscht)")) return;
-    try {
-      localStorage.removeItem(NACHTRAG_BUFFER_KEY);
-    } catch {}
-    setDraftOpen(false);
-    setDraft(null);
-  };
-
-  const updateDraftRow = (idx: number, patch: Partial<NachtragDraftRow>) => {
-    if (!draft) return;
-    const r0 = Array.isArray(draft.rows) ? [...draft.rows] : [];
-    if (!r0[idx]) return;
-    r0[idx] = { ...r0[idx], ...patch };
-    setDraft({ ...draft, rows: r0 });
-    // bewusst NICHT in localStorage schreiben, damit du erst bestätigst
-  };
-
-  /** CSV/PDF **/
-  const exportCSV = () => {
-    try {
-      if (!apiKey) {
-        const csv = Changes.exportCSV(pid);
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "nachtraege.csv";
-        a.click();
-        URL.revokeObjectURL(url);
-        return;
-      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("from");
+      url.searchParams.delete("projectId");
+      window.history.replaceState({}, "", url.toString());
     } catch {
-      // fallback sotto
+      //
+    }
+  }
+
+  function applyRecipeDraft() {
+    if (!recipeDraft || !recipeRows.length) {
+      setRecipeOpen(false);
+      setRecipeDraft(null);
+      return;
     }
 
-    const lines = [
-      "PosNr;Kurztext;Einheit;DeltaMenge;EP (netto);Status;Begründung",
-      ...viewRows.map((r) =>
-        [
-          r.posNr || "",
-          `"${String(r.kurztext || "").replace(/"/g, '""')}"`,
-          r.einheit || "",
-          String(r.mengeDelta || 0),
-          String(r.preis || 0),
-          String(r.status || "Entwurf"),
-          `"${String(r.begruendung || "").replace(/"/g, '""')}"`,
-        ].join(";")
-      ),
-    ].join("\n");
+    const selectedIndexes = Object.keys(recipeSel)
+      .map((key) => Number(key))
+      .filter((i) => recipeSel[i]);
 
-    const blob = new Blob([lines], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "nachtraege.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    if (!selectedIndexes.length) {
+      setRecipeOpen(false);
+      return;
+    }
 
-  const importCSV = (text: string) => {
+    const selectedHandoff: KalkulationHandoff = {
+      ...recipeDraft,
+      rows: selectedIndexes.map((i) => recipeRows[i]).filter(Boolean),
+    };
+
+    const imported = mapHandoffRowsToNachtraege(selectedHandoff);
+
+    if (!imported.length) {
+      setRecipeOpen(false);
+      return;
+    }
+
+    const merged = mergeByIdKeepExisting(rows, imported);
+
+    saveLocal(merged);
+    setSelected({});
+    setRecipeOpen(false);
+    setRecipeDraft(null);
+    setInfo(`${imported.length} Position(en) aus Rezept / Urkalkulation übernommen.`);
+
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("from");
+      window.history.replaceState({}, "", url.toString());
+    } catch {
+      //
+    }
+  }
+
+  function discardDraft() {
+    if (!confirm("Regie-Entwurf verwerfen?")) return;
+
+    try {
+      localStorage.removeItem(NACHTRAG_BUFFER_KEY);
+    } catch {
+      //
+    }
+
+    setDraftOpen(false);
+    setDraft(null);
+  }
+
+  function discardRecipeDraft() {
+    if (!confirm("Rezept-/Urkalkulations-Entwurf verwerfen?")) return;
+
+    setRecipeOpen(false);
+    setRecipeDraft(null);
+  }
+
+  function importCSV(text: string) {
     const parsed = parseCsv(text);
 
     if (!parsed.length) {
@@ -831,653 +1488,1479 @@ export default function NachtraegePage() {
     }
 
     const next = [...parsed, ...rows];
-    setRows(next);
-    void persist(next).catch((e: any) => setInfo(e?.message || "Fehler beim Speichern"));
-  };
 
-  const pasteRows = () => {
-    const example = `PosNr;Kurztext;Einheit;DeltaMenge;EP (netto);Status;Begründung
-03.0005;"Mehrlänge Speedpipe";m;85;36.5;Entwurf;"Auftraggeber wünscht zusätzliche Trasse"`;
-    const t = prompt("Zeilen einfügen (CSV mit ; – Kopfzeile erlaubt):", example);
-    if (!t) return;
-    importCSV(t);
-  };
+    saveLocal(next);
+    setInfo(`${parsed.length} Nachtragsposition(en) aus CSV importiert.`);
+  }
 
-  // ✅ PDF Export (professioneller, kleiner, passt 100% in A4)
-  const toPDF = () => {
-    try {
-      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  function pasteRows() {
+    const example = `PosNr;Kurztext;Langtext;Einheit;DeltaMenge;EP (netto);Status;Begründung
+03.0005;"Mehrlänge Speedpipe";"Zusätzliche Trassenlänge inkl. Nebenarbeiten";m;85;36.5;Entwurf;"Auftraggeber wünscht zusätzliche Trasse"`;
 
-      const pageW = doc.internal.pageSize.getWidth(); // 210
-      const pageH = doc.internal.pageSize.getHeight(); // 297
+    const text = prompt(
+      "Zeilen einfügen (CSV mit ; – Kopfzeile erlaubt):",
+      example
+    );
 
-      const marginX = 14;
-      const topY = 12;
+    if (!text) return;
 
-      const usableW = pageW - marginX * 2; // 182mm
+    importCSV(text);
+  }
 
-      const projTitle = currentProject
-        ? `${currentProject.code || ""} – ${currentProject.name || ""}`.trim()
-        : "Kein Projekt";
-      const place = currentProject?.place ? String(currentProject.place) : "";
+  function exportCSV() {
+    const lines = [
+      "PosNr;Kurztext;Langtext;Einheit;DeltaMenge;EP (netto);Status;Begründung",
+      ...viewRows.map((row) =>
+        [
+          row.posNr || "",
+          csvCell(row.kurztext || ""),
+          csvCell(row.langtext || ""),
+          row.einheit || "",
+          String(n(row.mengeDelta)),
+          String(n(row.preis)),
+          String(row.status || "Entwurf"),
+          csvCell(row.begruendung || ""),
+        ].join(";")
+      ),
+    ].join("\n");
 
-      const dateStr = new Intl.DateTimeFormat("de-DE", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
+    const blob = new Blob([lines], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, "nachtraege.csv");
+  }
 
-      // ---------- Header (Box-Stil) ----------
-      const headerH = 24;
-      doc.setLineWidth(0.35);
-      doc.rect(marginX, topY, usableW, headerH);
+  function openAngebotWithRows(sourceRows: NachtragRow[], modeLabel: string) {
+    const cleanRows = sourceRows.map(normalizeRow);
 
-      const leftW = usableW * 0.68;
-      const rightW = usableW - leftW;
-
-      doc.setLineWidth(0.25);
-      doc.line(marginX + leftW, topY, marginX + leftW, topY + headerH);
-
-      // Titel
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text("Nachträge", marginX + 3, topY + 7.5);
-
-      // Projekt / Ort
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.5);
-      doc.text(`Projekt: ${String(projTitle)}`, marginX + 3, topY + 14);
-      if (place) doc.text(`Ort: ${String(place)}`, marginX + 3, topY + 19.2);
-
-      // rechte Felder: Datum + MwSt
-      const rx = marginX + leftW;
-      const rowH = headerH / 2;
-
-      doc.rect(rx, topY, rightW, rowH);
-      doc.rect(rx, topY + rowH, rightW, rowH);
-
-      doc.setFontSize(9.5);
-      doc.text("Datum:", rx + 2.5, topY + rowH / 2 + 1.2);
-      doc.text(dateStr, rx + rightW - 2.5, topY + rowH / 2 + 1.2, { align: "right" });
-
-      doc.text("MwSt:", rx + 2.5, topY + rowH + rowH / 2 + 1.2);
-      doc.text(`${fmtNum(mwst || 0, 0)} %`, rx + rightW - 2.5, topY + rowH + rowH / 2 + 1.2, {
-        align: "right",
-      });
-
-      // ---------- Tabelle ----------
-      const tableY = topY + headerH + 10;
-
-      const body = viewRows.map((r) => {
-        const z = (r.mengeDelta || 0) * (r.preis || 0);
-
-        const k = String(r.kurztext || "");
-        const l = String(r.begruendung || "");
-        const textCombined = l ? `${k}\n${l}` : k;
-
-        return [
-          String(r.posNr || ""),
-          textCombined,
-          String(r.einheit || ""),
-          fmtNum(r.mengeDelta || 0, 2),
-          fmtNum(r.preis || 0, 2),
-          String(r.status || "Entwurf"),
-          fmtEUR(z),
-        ];
-      });
-
-      const colW = {
-        pos: 22,
-        text: 74,
-        me: 10,
-        menge: 16,
-        ep: 20,
-        status: 20,
-        total: 20,
-      }; // totale = 182
-
-      autoTable(doc, {
-        startY: tableY,
-        margin: { left: marginX, right: marginX },
-        theme: "grid",
-        head: [["PosNr", "Kurztext / Langtext", "ME", "Menge", "EP (netto)", "Status", "Zeilen-Netto"]],
-        body,
-        styles: {
-          font: "helvetica",
-          fontSize: 9,
-          textColor: 0,
-          cellPadding: 2.2,
-          lineColor: [0, 0, 0],
-          lineWidth: 0.18,
-          valign: "middle",
-          overflow: "linebreak",
-        },
-        headStyles: {
-          fontStyle: "bold",
-          fillColor: [255, 255, 255],
-          textColor: 0,
-          lineWidth: 0.25,
-        },
-        columnStyles: {
-          0: { cellWidth: colW.pos },
-          1: { cellWidth: colW.text },
-          2: { cellWidth: colW.me, halign: "center" },
-          3: { cellWidth: colW.menge, halign: "right" },
-          4: { cellWidth: colW.ep, halign: "right" },
-          5: { cellWidth: colW.status },
-          6: { cellWidth: colW.total, halign: "right" },
-        },
-        didParseCell: (data) => {
-          if (data.section === "body" && data.column.index === 1) {
-            data.cell.styles.minCellHeight = 12;
-          }
-        },
-      });
-
-      const finalY =
-        (doc as any).lastAutoTable?.finalY != null ? (doc as any).lastAutoTable.finalY : tableY;
-
-      // ---------- Totali (box in basso a destra) ----------
-      const boxW = 80;
-      const boxH = 9.5;
-      const bx = pageW - marginX - boxW;
-      const by = Math.min(finalY + 10, pageH - 2 * boxH - 10);
-
-      doc.setLineWidth(0.25);
-      doc.rect(bx, by, boxW, boxH);
-      doc.rect(bx, by + boxH, boxW, boxH);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text(`Gesamt Netto: ${fmtEUR(totals.netto)}`, bx + boxW - 2.5, by + 6.2, { align: "right" });
-      doc.text(`Gesamt Brutto: ${fmtEUR(totals.brutto)}`, bx + boxW - 2.5, by + boxH + 6.2, {
-        align: "right",
-      });
-
-      const safeCode = (currentProject?.code || "Projekt").replace(/[^\w.-]+/g, "_");
-      doc.save(`Nachtraege_${safeCode}.pdf`);
-    } catch (e: any) {
-      alert("PDF Export fehlgeschlagen: " + (e?.message || e));
+    if (!cleanRows.length) {
+      alert("Bitte zuerst mindestens einen Nachtrag auswählen oder erfassen.");
+      return;
     }
-  };
 
-  // ✅ kleine Draft-Badge
-  const draftBadge: React.CSSProperties = {
-    marginBottom: 10,
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid #BBF7D0",
-    background: "#F0FDF4",
-    color: "#14532D",
-    fontSize: 13,
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    flexWrap: "wrap",
-  };
+    const buffer: AngebotNachtragOnlyBuffer = {
+      version: "nachtrag-only-v1",
+      ts: Date.now(),
+      source: "nachtraege",
+      projectKey: apiKey,
+      projectTitle: projectTitle(currentProject),
+      mwst: n(mwst, 19),
+      rows: cleanRows,
+    };
+
+    localStorage.setItem(ANGEBOT_NACHTRAG_ONLY_KEY, JSON.stringify(buffer));
+    setInfo(`${cleanRows.length} Nachtrag/Nachträge für Angebot vorbereitet (${modeLabel}).`);
+    navigate("/kalkulation/angebot?mode=nachtrag-only&from=nachtraege");
+  }
+
+  function openAngebotFromSelection() {
+    openAngebotWithRows(selectedRows, "Auswahl");
+  }
+
+  function openAngebotFromAllNachtraege() {
+    openAngebotWithRows(rows, "alle Nachträge");
+  }
+
+  async function exportPDF() {
+    try {
+      const projectCode = String(
+        currentProject?.code ||
+          currentProject?.number ||
+          currentProject?.projektnummer ||
+          apiKey ||
+          "Projekt"
+      ).trim();
+
+      const projectName = String(
+        currentProject?.name || currentProject?.projectName || ""
+      ).trim();
+
+      const projectPlace = String(
+        currentProject?.place ||
+          currentProject?.ort ||
+          currentProject?.location ||
+          ""
+      ).trim();
+
+      const payload = {
+        title: "Nachträge",
+        project: {
+          id: currentProject?.id || "",
+          code: projectCode,
+          number: projectCode,
+          name: projectName,
+          location: projectPlace,
+        },
+        options: {
+          mwst,
+          dateISO: new Date().toISOString().slice(0, 10),
+          payment:
+            "Zahlungsbedingungen: 30 Tage netto. Nachträge vorbehaltlich Prüfung und Beauftragung.",
+        },
+        rows: viewRows.map((row) => ({
+          id: row.id,
+          posNr: row.posNr,
+          kurztext: row.kurztext,
+          text: row.kurztext,
+          langtext: row.langtext,
+          einheit: row.einheit,
+          unit: row.einheit,
+          menge: n(row.mengeDelta),
+          qty: n(row.mengeDelta),
+          preis: n(row.preis),
+          ep: n(row.preis),
+          status: row.status || "Entwurf",
+          begruendung: row.begruendung || "",
+          note: row.begruendung || "",
+          zeilen: round2(n(row.mengeDelta) * n(row.preis)),
+          total: round2(n(row.mengeDelta) * n(row.preis)),
+
+          materialCost: n(row.materialCost),
+          laborCost: n(row.laborCost),
+          machineCost: n(row.machineCost),
+          subcontractorCost: n(row.subcontractorCost),
+          disposalCost: n(row.disposalCost),
+          transportCost: n(row.transportCost),
+          overheadCost: n(row.overheadCost),
+          riskCost: n(row.riskCost),
+          profitCost: n(row.profitCost),
+
+          baseUnitPrice: n(row.baseUnitPrice),
+          suggestedUnitPrice: n(row.suggestedUnitPrice),
+          finalUnitPrice: n(row.finalUnitPrice),
+
+          riskLevel: row.riskLevel || "",
+          calculationStatus: row.calculationStatus || "",
+
+          gewerk: row.gewerk || "",
+          leistungsart: row.leistungsart || "",
+          bauverfahren: row.bauverfahren || "",
+
+          warning: row.warning || "",
+          aiReason: row.aiReason || "",
+          priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [],
+        })),
+        totals: {
+          netto: totals.netto,
+          mwst,
+          steuer: round2(totals.netto * (n(mwst) / 100)),
+          brutto: totals.brutto,
+        },
+      };
+
+      const res = await fetch(apiUrl("/api/pdf/nachtraege"), {
+        method: "POST",
+        credentials: "include",
+        headers: withAuthHeaders({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `PDF Fehler (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      downloadBlob(blob, `Nachtraege_${safeFileName(projectCode)}.pdf`);
+    } catch (e: any) {
+      alert(`PDF Export fehlgeschlagen: ${e?.message || e}`);
+    }
+  }
+
+  function applyNachtragKiFilter(filter: NachtragQualityFilter) {
+    setQualityFilter(filter);
+
+    if (
+      filter === "Entwurf" ||
+      filter === "Abgegeben" ||
+      filter === "Beauftragt" ||
+      filter === "Abgelehnt"
+    ) {
+      setFilterStatus(filter);
+    } else {
+      setFilterStatus("Alle");
+    }
+
+    setInfo(`KI-Filter aktiviert: ${filter}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function completeMissingNachtragData() {
+    const next = rows.map((row) => {
+      const patch: Partial<NachtragRow> = {};
+
+      if (!String(row.einheit || "").trim()) patch.einheit = "m";
+
+      if (!String(row.begruendung || "").trim()) {
+        patch.begruendung =
+          "Automatisch ergänzt: Begründung muss fachlich geprüft werden.";
+      }
+
+      if (!String(row.kurztext || "").trim()) {
+        patch.kurztext = row.posNr ? `Nachtrag zu ${row.posNr}` : "Nachtrag";
+      }
+
+      return normalizeRow({ ...row, ...patch });
+    });
+
+    saveLocal(next);
+    setRows(next);
+    setInfo("Fehlende Nachtragsdaten automatisch ergänzt. Bitte fachlich prüfen.");
+  }
+
+  useEffect(() => {
+    function handleNachtraegeCommand(event: Event) {
+      const detail = (event as CustomEvent<{ filter?: string; action?: string }>).detail;
+      if (!detail) return;
+
+      const filter = String(detail.filter || "") as NachtragQualityFilter;
+      const action = String(detail.action || "");
+
+      if (filter) applyNachtragKiFilter(filter);
+
+      if (action === "completeMissing") completeMissingNachtragData();
+      if (action === "angebotAuswahl") openAngebotFromSelection();
+      if (action === "angebotAlle") openAngebotFromAllNachtraege();
+      if (action === "pdfExport") void exportPDF();
+      if (action === "serverSpeichern") void saveServerNow();
+    }
+
+    window.addEventListener("rlc:nachtraege-command", handleNachtraegeCommand);
+
+    return () => {
+      window.removeEventListener("rlc:nachtraege-command", handleNachtraegeCommand);
+    };
+  });
 
   return (
-    <div style={{ padding: 16 }}>
-      {!currentProject && (
-        <div
-          style={{
-            marginBottom: "0.75rem",
-            padding: "0.5rem 0.75rem",
-            borderRadius: 6,
-            background: "#FEF2F2",
-            color: "#991B1B",
-            fontSize: "0.85rem",
-          }}
-        >
-          Kein Projekt gewählt. Bitte zuerst unter <b>Start (Projekt auswählen)</b> ein Projekt auswählen.
+    <div style={page}>
+      <section style={heroCard}>
+        <div>
+          <div style={eyebrow}>RLC Elite Nachtragsmanagement</div>
+          <h1 style={title}>Nachträge erstellen</h1>
+          <p style={subtitle}>
+            Nachträge professionell erfassen, aus Regie oder Urkalkulation übernehmen,
+            dokumentieren, lokal bearbeiten, als PDF ausgeben und bei Bedarf serverseitig speichern.
+          </p>
         </div>
-      )}
 
-      {currentProject && (
-        <div
-          style={{
-            marginBottom: "0.75rem",
-            padding: "0.5rem 0.75rem",
-            borderRadius: 999,
-            background: "#ECFEFF",
-            color: "#0F766E",
-            fontSize: "0.85rem",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          Aktuelles Projekt:{" "}
-          <b>
-            {currentProject.code} – {currentProject.name}
-          </b>
-          {currentProject.place ? <> • {currentProject.place}</> : null}
-        </div>
-      )}
+        <div style={heroActions}>
+          <button style={btnPrimary} onClick={() => add()}>
+            + Nachtrag
+          </button>
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 8,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <nav style={{ color: "#888", fontSize: 13 }}>RLC / 1. Kalkulation /</nav>
-          <h2 style={{ margin: 0 }}>Nachträge erstellen</h2>
-        </div>
-        <div style={projBadge}>
-          {currentProject ? (
-            <>
-              <b>{currentProject.code}</b>
-              <span>— {currentProject.name}</span>
-            </>
-          ) : (
-            "kein Projekt ausgewählt"
-          )}
-        </div>
-      </div>
+          {recipeDraft ? (
+            <button style={btnPrimary} onClick={() => setRecipeOpen(!recipeOpen)}>
+              Rezept prüfen / übernehmen
+            </button>
+          ) : null}
 
-      {/* ✅ Regie Draft Hinweis + Öffnen */}
-      {draft && (
-        <div style={draftBadge}>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <b>Regie-Entwurf vorhanden</b>
-            <span>
-              Quelle: <b>{String(draft.source || "REGIE")}</b>
-            </span>
-            <span>
-              Zeilen: <b>{draftRows.length}</b>
-            </span>
-            {draft.createdAt ? (
-              <span>
-                erstellt:{" "}
-                <b>
-                  {new Intl.DateTimeFormat("de-DE", {
-                    year: "numeric",
-                    month: "2-digit",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }).format(new Date(draft.createdAt))}
-                </b>
-              </span>
-            ) : null}
+          <button
+            style={btnSecondary}
+            onClick={() => navigate("/kalkulation/rezepte")}
+          >
+            Zur Urkalkulation
+          </button>
+
+          <button
+            style={btnSecondary}
+            onClick={() => navigate("/kalkulation/manuell")}
+          >
+            Zur manuellen Kalkulation
+          </button>
+
+          <button
+            style={btnSecondary}
+            onClick={() => navigate("/kalkulation/mit-ki")}
+          >
+            Zur KI-Kalkulation
+          </button>
+
+          <button
+            style={btnPrimary}
+            onClick={openAngebotFromSelection}
+            disabled={!selectedRows.length}
+          >
+            Angebot aus Auswahl
+          </button>
+
+          <button
+            style={btnSecondary}
+            onClick={openAngebotFromAllNachtraege}
+            disabled={!rows.length}
+          >
+            Angebot alle Nachträge
+          </button>
+
+          <button style={btnSecondary} onClick={() => void exportPDF()} disabled={!rows.length}>
+            PDF Export
+          </button>
+
+          <button style={btnSecondary} onClick={() => void load()} disabled={loading}>
+            {loading ? "Lädt…" : "Server laden"}
+          </button>
+
+          <button
+            style={btnSecondary}
+            onClick={() => void saveServerNow()}
+            disabled={loading || rows.length === 0}
+          >
+            {loading ? "Speichert…" : "Server speichern"}
+          </button>
+        </div>
+
+        <div style={heroMeta}>
+          Projekt: <b>{projectTitle(currentProject)}</b>
+          <span> · Server-Key: </span>
+          <b>{apiKey || "—"}</b>
+          <span> · Modus: lokal zuerst, Server manuell</span>
+        </div>
+      </section>
+
+      {info ? <div style={alertBox(info)}>{info}</div> : null}
+
+      {recipeDraft ? (
+        <section style={recipeCard}>
+          <div>
+            <b>Rezept-/Urkalkulations-Entwurf vorhanden</b>
+            <div style={muted}>
+              Quelle: {recipeDraft.source || "rezepte"} · Zeilen: {recipeRows.length}
+              {recipeDraft.auftragName ? ` · Auftrag: ${recipeDraft.auftragName}` : ""}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={() => setDraftOpen(true)}>Regie prüfen / bearbeiten</button>
-            <button style={primaryBtn} onClick={() => void applyDraft()}>
+
+          <div style={buttonRow}>
+            <button style={btnSecondary} onClick={() => setRecipeOpen(!recipeOpen)}>
+              Prüfen / bearbeiten
+            </button>
+
+            <button style={btnPrimary} onClick={applyRecipeDraft}>
               In Nachträge übernehmen
             </button>
-            <button onClick={discardDraft}>Verwerfen</button>
+
+            <button style={btnDanger} onClick={discardRecipeDraft}>
+              Verwerfen
+            </button>
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {info && (
-        <div
-          style={{
-            marginBottom: 10,
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #FECACA",
-            background: "#FEF2F2",
-            color: "#991B1B",
-            fontSize: 13,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {info}
-        </div>
-      )}
-
-      {/* ✅ Draft Editor (inline Panel, nicht Modal -> kein extra UI Framework) */}
-      {draft && draftOpen && (
-        <div
-          style={{
-            marginBottom: 12,
-            border: "1px solid #e5e7eb",
-            borderRadius: 12,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              padding: "10px 12px",
-              background: "#fafafa",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: 10,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <b>Regie-Entwurf bearbeiten</b>
-              <span style={{ color: "#666" }}>(erst nach „Übernehmen“ wird gespeichert)</span>
+      {recipeDraft && recipeOpen ? (
+        <section style={card}>
+          <div style={sectionHead}>
+            <div>
+              <h2 style={sectionTitle}>Rezept / Urkalkulation übernehmen</h2>
+              <div style={sectionText}>
+                Diese Positionen kommen aus der Rezeptkalkulation und werden erst nach
+                „Übernehmen“ als Nachträge gespeichert.
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+
+            <div style={buttonRow}>
               <button
+                style={btnSecondary}
                 onClick={() => {
-                  const sel: Record<number, boolean> = {};
-                  for (let i = 0; i < draftRows.length; i++) sel[i] = true;
-                  setDraftSel(sel);
+                  const s: Record<number, boolean> = {};
+                  recipeRows.forEach((_, i) => {
+                    s[i] = true;
+                  });
+                  setRecipeSel(s);
                 }}
               >
                 Alles auswählen
               </button>
-              <button
-                onClick={() => {
-                  const sel: Record<number, boolean> = {};
-                  for (let i = 0; i < draftRows.length; i++) sel[i] = false;
-                  setDraftSel(sel);
-                }}
-              >
+
+              <button style={btnSecondary} onClick={() => setRecipeSel({})}>
                 Alles abwählen
               </button>
-              <button onClick={() => setDraftOpen(false)}>Schließen</button>
-              <button style={primaryBtn} onClick={() => void applyDraft()}>
-                In Nachträge übernehmen
+
+              <button style={btnPrimary} onClick={applyRecipeDraft}>
+                Übernehmen
               </button>
-              <button onClick={discardDraft}>Verwerfen</button>
             </div>
           </div>
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div style={tableWrap}>
+            <table style={{ ...table, minWidth: 1320 }}>
               <thead>
                 <tr>
-                  {["", "PosNr", "Kurztext", "ME", "Δ-Menge", "Begründung"].map((h, i) => (
-                    <th
-                      key={i}
-                      style={{
-                        ...th,
-                        background: "#fff",
-                        borderBottom: "1px solid #eee",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  <th style={thSmall}></th>
+                  <th style={th}>PosNr</th>
+                  <th style={th}>Kurztext</th>
+                  <th style={th}>Langtext</th>
+                  <th style={th}>ME</th>
+                  <th style={thRight}>Menge</th>
+                  <th style={thRight}>EP netto</th>
+                  <th style={th}>Begründung</th>
                 </tr>
               </thead>
+
               <tbody>
-                {draftRows.map((r, idx) => {
-                  const posNr = String(r.posNr || r.pos || "");
-                  const kurztext = String(r.kurztext || r.title || "");
-                  const me = String(r.einheit || r.unit || "m");
-                  const qty = Number(r.mengeDelta ?? r.qty ?? 0) || 0;
-                  const begr = String(r.begruendung || r.langtext || r.note || r.hint || "");
+                {recipeRows.map((row, index) => {
+                  const posNr = String(row.posNr || row.pos || "");
+                  const kurztext = String(row.kurztext || row.title || "");
+                  const langtext = String(row.langtext || "");
+                  const einheit = String(row.einheit || row.unit || "m");
+                  const menge = n(row.mengeDelta ?? row.menge ?? row.qty);
+                  const preis = n(
+                    row.preis ??
+                      row.ep ??
+                      row.finalUnitPrice ??
+                      row.suggestedUnitPrice ??
+                      row.baseUnitPrice
+                  );
+
+                  const begruendung = String(
+                    row.warning ||
+                      row.aiReason ||
+                      "Aus Rezept / Urkalkulation übernommen."
+                  );
 
                   return (
-                    <tr key={idx} style={{ background: idx % 2 === 1 ? "#fcfcfc" : "#fff" }}>
-                      <td style={tdChk}>
+                    <tr key={index}>
+                      <td style={tdCenter}>
                         <input
                           type="checkbox"
-                          checked={!!draftSel[idx]}
-                          onChange={(e) => setDraftSel((s0) => ({ ...s0, [idx]: e.target.checked }))}
+                          checked={!!recipeSel[index]}
+                          onChange={(e) =>
+                            setRecipeSel((s) => ({
+                              ...s,
+                              [index]: e.target.checked,
+                            }))
+                          }
                         />
                       </td>
+
                       <td style={td}>
                         <input
+                          style={cellInput}
                           value={posNr}
-                          onChange={(e) => updateDraftRow(idx, { posNr: e.target.value })}
-                          style={inp(110)}
+                          onChange={(e) =>
+                            updateRecipeRow(index, { posNr: e.target.value })
+                          }
                         />
                       </td>
+
                       <td style={td}>
                         <input
+                          style={cellInput}
                           value={kurztext}
-                          onChange={(e) => updateDraftRow(idx, { kurztext: e.target.value })}
-                          style={inp(520)}
+                          onChange={(e) =>
+                            updateRecipeRow(index, { kurztext: e.target.value })
+                          }
                         />
                       </td>
+
+                      <td style={td}>
+                        <textarea
+                          style={cellTextarea}
+                          value={langtext}
+                          onChange={(e) =>
+                            updateRecipeRow(index, { langtext: e.target.value })
+                          }
+                        />
+                      </td>
+
                       <td style={td}>
                         <input
-                          value={me}
-                          onChange={(e) => updateDraftRow(idx, { einheit: e.target.value })}
-                          style={inp(70)}
+                          style={{ ...cellInput, width: 70 }}
+                          value={einheit}
+                          onChange={(e) =>
+                            updateRecipeRow(index, { einheit: e.target.value })
+                          }
                         />
                       </td>
-                      <td style={tdNum}>
+
+                      <td style={tdRight}>
                         <input
                           type="number"
-                          value={qty}
-                          onChange={(e) => updateDraftRow(idx, { mengeDelta: Number(e.target.value || 0) })}
-                          style={inp(120, "right")}
+                          style={{ ...cellInput, width: 100, textAlign: "right" }}
+                          value={menge}
+                          onChange={(e) =>
+                            updateRecipeRow(index, {
+                              menge: n(e.target.value),
+                            })
+                          }
                         />
                       </td>
-                      <td style={td}>
+
+                      <td style={tdRight}>
                         <input
-                          value={begr}
-                          onChange={(e) => updateDraftRow(idx, { begruendung: e.target.value })}
-                          style={inp(420)}
+                          type="number"
+                          style={{ ...cellInput, width: 100, textAlign: "right" }}
+                          value={preis}
+                          onChange={(e) =>
+                            updateRecipeRow(index, {
+                              preis: n(e.target.value),
+                            })
+                          }
+                        />
+                      </td>
+
+                      <td style={td}>
+                        <textarea
+                          style={cellTextarea}
+                          value={begruendung}
+                          onChange={(e) =>
+                            updateRecipeRow(index, {
+                              warning: e.target.value,
+                            })
+                          }
                         />
                       </td>
                     </tr>
                   );
                 })}
-                {draftRows.length === 0 && (
+
+                {!recipeRows.length ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: 12, color: "#666" }}>
-                      Keine Draft-Zeilen vorhanden.
+                    <td colSpan={8} style={emptyCell}>
+                      Keine Rezept-Zeilen vorhanden.
                     </td>
                   </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      <div style={toolbar}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <label>
-            MwSt %
-            <input
-              type="number"
-              value={mwst}
-              onChange={(e) => setMwst(Number(e.target.value || 0))}
-              style={numInp}
-            />
-          </label>
+      {draft ? (
+        <section style={draftCard}>
+          <div>
+            <b>Regie-Entwurf vorhanden</b>
+            <div style={muted}>
+              Quelle: {draft.source || "REGIE"} · Zeilen: {draftRows.length}
+            </div>
+          </div>
+
+          <div style={buttonRow}>
+            <button style={btnSecondary} onClick={() => setDraftOpen(!draftOpen)}>
+              Prüfen / bearbeiten
+            </button>
+
+            <button style={btnPrimary} onClick={() => void applyDraft()}>
+              In Nachträge übernehmen
+            </button>
+
+            <button style={btnDanger} onClick={discardDraft}>
+              Verwerfen
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {draft && draftOpen ? (
+        <section style={card}>
+          <div style={sectionHead}>
+            <div>
+              <h2 style={sectionTitle}>Regie-Entwurf bearbeiten</h2>
+              <div style={sectionText}>
+                Erst nach „Übernehmen“ werden diese Zeilen als Nachträge gespeichert.
+              </div>
+            </div>
+
+            <div style={buttonRow}>
+              <button
+                style={btnSecondary}
+                onClick={() => {
+                  const s: Record<number, boolean> = {};
+                  draftRows.forEach((_, i) => {
+                    s[i] = true;
+                  });
+                  setDraftSel(s);
+                }}
+              >
+                Alles auswählen
+              </button>
+
+              <button style={btnSecondary} onClick={() => setDraftSel({})}>
+                Alles abwählen
+              </button>
+
+              <button style={btnPrimary} onClick={() => void applyDraft()}>
+                Übernehmen
+              </button>
+            </div>
+          </div>
+
+          <div style={tableWrap}>
+            <table style={{ ...table, minWidth: 1250 }}>
+              <thead>
+                <tr>
+                  <th style={thSmall}></th>
+                  <th style={th}>PosNr</th>
+                  <th style={th}>Kurztext</th>
+                  <th style={th}>Langtext</th>
+                  <th style={th}>ME</th>
+                  <th style={thRight}>Δ-Menge</th>
+                  <th style={th}>Begründung</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {draftRows.map((row, index) => {
+                  const posNr = String(row.posNr || row.pos || "");
+                  const kurztext = String(row.kurztext || row.title || "");
+                  const langtext = String(row.langtext || "");
+                  const einheit = String(row.einheit || row.unit || "m");
+                  const mengeDelta = n(row.mengeDelta ?? row.qty);
+                  const begruendung = String(row.begruendung || row.note || row.hint || "");
+
+                  return (
+                    <tr key={index}>
+                      <td style={tdCenter}>
+                        <input
+                          type="checkbox"
+                          checked={!!draftSel[index]}
+                          onChange={(e) =>
+                            setDraftSel((s) => ({
+                              ...s,
+                              [index]: e.target.checked,
+                            }))
+                          }
+                        />
+                      </td>
+
+                      <td style={td}>
+                        <input
+                          style={cellInput}
+                          value={posNr}
+                          onChange={(e) =>
+                            updateDraftRow(index, { posNr: e.target.value })
+                          }
+                        />
+                      </td>
+
+                      <td style={td}>
+                        <input
+                          style={cellInput}
+                          value={kurztext}
+                          onChange={(e) =>
+                            updateDraftRow(index, { kurztext: e.target.value })
+                          }
+                        />
+                      </td>
+
+                      <td style={td}>
+                        <textarea
+                          style={cellTextarea}
+                          value={langtext}
+                          onChange={(e) =>
+                            updateDraftRow(index, { langtext: e.target.value })
+                          }
+                        />
+                      </td>
+
+                      <td style={td}>
+                        <input
+                          style={{ ...cellInput, width: 70 }}
+                          value={einheit}
+                          onChange={(e) =>
+                            updateDraftRow(index, { einheit: e.target.value })
+                          }
+                        />
+                      </td>
+
+                      <td style={tdRight}>
+                        <input
+                          type="number"
+                          style={{ ...cellInput, width: 100, textAlign: "right" }}
+                          value={mengeDelta}
+                          onChange={(e) =>
+                            updateDraftRow(index, {
+                              mengeDelta: n(e.target.value),
+                            })
+                          }
+                        />
+                      </td>
+
+                      <td style={td}>
+                        <input
+                          style={cellInput}
+                          value={begruendung}
+                          onChange={(e) =>
+                            updateDraftRow(index, {
+                              begruendung: e.target.value,
+                            })
+                          }
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {!draftRows.length ? (
+                  <tr>
+                    <td colSpan={7} style={emptyCell}>
+                      Keine Draft-Zeilen vorhanden.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
+      <section style={grid4}>
+        <KpiCard label="Netto gesamt" value={money(totals.netto)} />
+        <KpiCard label="Brutto gesamt" value={money(totals.brutto)} />
+        <KpiCard
+          label="Nachträge"
+          value={String(totals.count)}
+          sub={`${totals.offen} Entwurf`}
+        />
+        <KpiCard
+          label="Beauftragt"
+          value={String(totals.beauftragt)}
+          sub={`${totals.selected} ausgewählt`}
+        />
+      </section>
+
+      <section style={card}>
+        <div style={sectionHead}>
+          <div>
+            <h2 style={sectionTitle}>Steuerung & Export</h2>
+            <div style={sectionText}>
+              Suche, Statusfilter, CSV/PDF-Export, Angebot-Übergabe und Server-Synchronisierung.
+            </div>
+          </div>
+        </div>
+
+        <div style={toolbarGrid}>
           <input
-            placeholder="Suchen… (PosNr / Text / Grund)"
+            placeholder="Suchen… PosNr / Kurztext / Langtext / Begründung"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            style={searchInp}
+            style={input}
           />
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)} style={selectInp}>
+
+          <select
+            value={filterStatus}
+            onChange={(e) =>
+              setFilterStatus(e.target.value as ChangeStatus | "Alle")
+            }
+            style={input}
+          >
             <option>Alle</option>
             {STATI.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
+              <option key={s}>{s}</option>
             ))}
           </select>
-          <select value={sortKey} onChange={(e) => setSortKey(e.target.value as any)} style={selectInp}>
+
+          <select
+            value={sortKey}
+            onChange={(e) =>
+              setSortKey(e.target.value as "pos" | "status" | "value")
+            }
+            style={input}
+          >
             <option value="pos">Sortierung: Position</option>
             <option value="status">Sortierung: Status</option>
             <option value="value">Sortierung: Wert</option>
           </select>
 
-          <button onClick={() => void load()} disabled={loading}>
-            {loading ? "Lädt…" : "Vom Server laden"}
+          <input
+            type="number"
+            value={mwst}
+            onChange={(e) => setMwst(n(e.target.value))}
+            style={input}
+            placeholder="MwSt %"
+          />
+        </div>
+
+        <div style={buttonRow}>
+          <button style={btnSecondary} onClick={() => fileRef.current?.click()}>
+            CSV Import
+          </button>
+
+          <button style={btnSecondary} onClick={pasteRows}>
+            Zeilen einfügen
+          </button>
+
+          <button style={btnSecondary} onClick={exportCSV}>
+            CSV Export
+          </button>
+
+          <button style={btnSecondary} onClick={() => void exportPDF()}>
+            PDF Export
+          </button>
+
+          <button
+            style={btnPrimary}
+            onClick={openAngebotFromSelection}
+            disabled={!selectedRows.length}
+          >
+            Angebot aus Auswahl
+          </button>
+
+          <button
+            style={btnSecondary}
+            onClick={openAngebotFromAllNachtraege}
+            disabled={!rows.length}
+          >
+            Angebot alle Nachträge
+          </button>
+
+          <button style={btnSecondary} onClick={() => navigate("/kalkulation/angebot")}>
+            Angebot öffnen
+          </button>
+
+          <button style={btnSecondary} onClick={() => navigate("/kalkulation/rezepte")}>
+            Urkalkulation
+          </button>
+
+          <button
+            style={btnSecondary}
+            onClick={() => void saveServerNow()}
+            disabled={loading || rows.length === 0}
+          >
+            Server speichern
+          </button>
+
+          <button
+            style={btnDanger}
+            onClick={delSelected}
+            disabled={!Object.values(selected).some(Boolean)}
+          >
+            Auswahl löschen
+          </button>
+
+          <button style={btnDanger} onClick={clearAll}>
+            Alles löschen
           </button>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <div style={btnGroup}>
-            <button onClick={() => fileRef.current?.click()}>CSV Import</button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const r = new FileReader();
-                r.onload = () => importCSV(String(r.result || ""));
-                r.readAsText(f, "utf-8");
-                (e.target as HTMLInputElement).value = "";
-              }}
-            />
-            <button onClick={pasteRows}>Zeilen einfügen</button>
-            <button onClick={exportCSV}>CSV Export</button>
-            <button onClick={toPDF}>PDF Export</button>
-          </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
 
-          <div style={btnGroup}>
-            <button style={primaryBtn} onClick={() => add()}>
-              + Nachtrag
-            </button>
-            <button onClick={delSelected} disabled={!Object.values(selected).some(Boolean)}>
-              Auswahl löschen
-            </button>
-            <button onClick={clearAll}>Alles löschen</button>
-          </div>
+            const reader = new FileReader();
+            reader.onload = () => {
+              importCSV(String(reader.result || ""));
+              if (fileRef.current) fileRef.current.value = "";
+            };
+            reader.readAsText(file, "utf-8");
+          }}
+        />
+      </section>
 
-          <div style={btnGroup}>
-            <button onClick={() => navigate("/kalkulation/manuell")}>⇢ Manuell</button>
-            <button onClick={() => navigate("/kalkulation/mit-ki")}>⇢ KI</button>
+      <section style={card}>
+        <div style={sectionHead}>
+          <div>
+            <h2 style={sectionTitle}>Nachtragspositionen</h2>
+            <div style={sectionText}>
+              Änderungen werden sofort lokal gespeichert. Der Server wird erst mit
+              „Server speichern“ aktualisiert.
+            </div>
           </div>
         </div>
-      </div>
 
-      <div style={{ overflowX: "auto", border: "1px solid #eee", borderRadius: 10 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead style={{ position: "sticky", top: 0, background: "#fafafa", zIndex: 1 }}>
-            <tr>
-              {["", "PosNr", "Kurztext", "ME", "Δ-Menge", "EP (netto)", "Status", "Begründung", "Zeilen-Netto", "Aktion"].map(
-                (h, i) => (
-                  <th key={i} style={th}>
-                    {h}
-                  </th>
-                )
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {viewRows.map((r, idx) => {
-              const z = (r.mengeDelta || 0) * (r.preis || 0);
-              const isSel = !!selected[r.id];
+        <div style={tableWrap}>
+          <table style={table}>
+            <thead>
+              <tr>
+                <th style={thSmall}></th>
+                <th style={th}>PosNr</th>
+                <th style={th}>Kurztext</th>
+                <th style={th}>Langtext</th>
+                <th style={th}>ME</th>
+                <th style={thRight}>Δ-Menge</th>
+                <th style={thRight}>EP netto</th>
+                <th style={th}>Status</th>
+                <th style={th}>Begründung</th>
+                <th style={thRight}>Zeilen-Netto</th>
+                <th style={th}>Aktion</th>
+              </tr>
+            </thead>
 
-              return (
-                <tr key={r.id} style={{ background: idx % 2 === 1 ? "#fcfcfc" : "#fff" }}>
-                  <td style={tdChk}>
-                    <input
-                      type="checkbox"
-                      checked={isSel}
-                      onChange={(e) => setSelected((s0) => ({ ...s0, [r.id]: e.target.checked }))}
-                    />
-                  </td>
+            <tbody>
+              {viewRows.map((row, index) => {
+                const total = n(row.mengeDelta) * n(row.preis);
+                const isSelected = !!selected[row.id];
 
-                  <td style={td}>
-                    <input
-                      value={r.posNr || ""}
-                      onChange={(e) => save({ id: r.id, posNr: e.target.value })}
-                      style={inp(110)}
-                    />
-                  </td>
+                return (
+                  <tr
+                    key={row.id}
+                    style={{
+                      background: isSelected
+                        ? "#EFF6FF"
+                        : index % 2
+                        ? "#FCFCFC"
+                        : "#FFFFFF",
+                    }}
+                  >
+                    <td style={tdCenter}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) =>
+                          setSelected((s) => ({
+                            ...s,
+                            [row.id]: e.target.checked,
+                          }))
+                        }
+                      />
+                    </td>
 
-                  <td style={td}>
-                    <input
-                      value={r.kurztext}
-                      onChange={(e) => save({ id: r.id, kurztext: e.target.value })}
-                      style={inp(500)}
-                    />
-                  </td>
+                    <td style={td}>
+                      <input
+                        style={{ ...cellInput, width: 100 }}
+                        value={row.posNr || ""}
+                        onChange={(e) =>
+                          save({ id: row.id, posNr: e.target.value })
+                        }
+                      />
+                    </td>
 
-                  <td style={td}>
-                    <input
-                      value={r.einheit || "m"}
-                      onChange={(e) => save({ id: r.id, einheit: e.target.value })}
-                      style={inp(60)}
-                    />
-                  </td>
+                    <td style={td}>
+                      <input
+                        style={cellInput}
+                        value={row.kurztext || ""}
+                        onChange={(e) =>
+                          save({ id: row.id, kurztext: e.target.value })
+                        }
+                      />
+                    </td>
 
-                  <td style={tdNum}>
-                    <input
-                      type="number"
-                      value={r.mengeDelta}
-                      onChange={(e) => save({ id: r.id, mengeDelta: Number(e.target.value || 0) })}
-                      style={{
-                        ...inp(120, "right"),
-                        borderColor:
-                          (r.mengeDelta || 0) === 0 ? "#ddd" : (r.mengeDelta || 0) > 0 ? "#c6f3d8" : "#ffc9c9",
-                        background:
-                          (r.mengeDelta || 0) === 0 ? "#fff" : (r.mengeDelta || 0) > 0 ? "#f6fffb" : "#fff5f5",
-                      }}
-                    />
-                  </td>
+                    <td style={td}>
+                      <textarea
+                        style={cellTextarea}
+                        value={row.langtext || ""}
+                        placeholder="Langtext / ausführliche Leistungsbeschreibung"
+                        onChange={(e) =>
+                          save({ id: row.id, langtext: e.target.value })
+                        }
+                      />
+                    </td>
 
-                  <td style={tdNum}>
-                    <input
-                      type="number"
-                      value={r.preis ?? 0}
-                      onChange={(e) => save({ id: r.id, preis: Number(e.target.value || 0) })}
-                      style={inp(120, "right")}
-                    />
-                  </td>
+                    <td style={td}>
+                      <input
+                        style={{ ...cellInput, width: 62 }}
+                        value={row.einheit || "m"}
+                        onChange={(e) =>
+                          save({ id: row.id, einheit: e.target.value })
+                        }
+                      />
+                    </td>
 
-                  <td style={td}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <select
-                        value={r.status || "Entwurf"}
-                        onChange={(e) => save({ id: r.id, status: e.target.value as ChangeStatus })}
-                        style={selectInp}
+                    <td style={tdRight}>
+                      <input
+                        type="number"
+                        style={{
+                          ...cellInput,
+                          width: 95,
+                          textAlign: "right",
+                          background:
+                            n(row.mengeDelta) > 0
+                              ? "#F0FDF4"
+                              : n(row.mengeDelta) < 0
+                              ? "#FEF2F2"
+                              : "#FFFFFF",
+                        }}
+                        value={row.mengeDelta ?? 0}
+                        onChange={(e) =>
+                          save({ id: row.id, mengeDelta: n(e.target.value) })
+                        }
+                      />
+                    </td>
+
+                    <td style={tdRight}>
+                      <input
+                        type="number"
+                        style={{ ...cellInput, width: 95, textAlign: "right" }}
+                        value={row.preis ?? 0}
+                        onChange={(e) =>
+                          save({ id: row.id, preis: n(e.target.value) })
+                        }
+                      />
+                    </td>
+
+                    <td style={td}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "center",
+                        }}
                       >
-                        {STATI.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      <StatusPill s={r.status || "Entwurf"} />
-                    </div>
-                  </td>
+                        <select
+                          value={row.status || "Entwurf"}
+                          onChange={(e) =>
+                            save({
+                              id: row.id,
+                              status: e.target.value as ChangeStatus,
+                            })
+                          }
+                          style={{ ...cellInput, width: 130 }}
+                        >
+                          {STATI.map((s) => (
+                            <option key={s}>{s}</option>
+                          ))}
+                        </select>
 
-                  <td style={td}>
-                    <input
-                      value={r.begruendung || ""}
-                      onChange={(e) => save({ id: r.id, begruendung: e.target.value })}
-                      style={inp(360)}
-                    />
-                  </td>
+                        <StatusPill
+                          status={(row.status || "Entwurf") as ChangeStatus}
+                        />
+                      </div>
+                    </td>
 
-                  <td style={{ ...tdNum, fontWeight: 700 }}>{fmtEUR(z)}</td>
+                    <td style={td}>
+                      <input
+                        style={cellInput}
+                        value={row.begruendung || ""}
+                        onChange={(e) =>
+                          save({ id: row.id, begruendung: e.target.value })
+                        }
+                      />
+                    </td>
 
-                  <td style={tdRight}>
-                    <button onClick={() => duplicate(r)}>Duplizieren</button>{" "}
-                    <button onClick={() => del(r.id)}>Löschen</button>
+                    <td style={tdRight}>{money(total)}</td>
+
+                    <td style={td}>
+                      <div style={buttonRowCompact}>
+                        <button style={btnMini} onClick={() => duplicate(row)}>
+                          Duplizieren
+                        </button>
+
+                        <button style={btnDangerMini} onClick={() => del(row.id)}>
+                          Löschen
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {!viewRows.length ? (
+                <tr>
+                  <td colSpan={11} style={emptyCell}>
+                    Noch keine Nachträge vorhanden.
                   </td>
                 </tr>
-              );
-            })}
-            {viewRows.length === 0 && (
-              <tr>
-                <td colSpan={10} style={{ padding: 14, color: "#777" }}>
-                  Noch keine Nachträge.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={totalsBar}>
-        <div style={sumBox}>
-          <div>Gesamt Netto</div>
-          <div style={{ fontWeight: 700 }}>{fmtEUR(totals.netto)}</div>
+              ) : null}
+            </tbody>
+          </table>
         </div>
-        <div style={sumBox}>
-          <div>Gesamt Brutto</div>
-          <div style={{ fontWeight: 700 }}>{fmtEUR(totals.brutto)}</div>
-        </div>
-      </div>
+      </section>
     </div>
   );
 }
+
+/* ================= UI ================= */
+
+function KpiCard({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div style={kpiCard}>
+      <div style={kpiLabel}>{label}</div>
+      <div style={kpiValue}>{value}</div>
+      {sub ? <div style={kpiSub}>{sub}</div> : null}
+    </div>
+  );
+}
+
+function statusStyle(status: ChangeStatus): React.CSSProperties {
+  if (status === "Beauftragt") return badgeOk;
+  if (status === "Abgegeben") return badgeWarn;
+  if (status === "Abgelehnt") return badgeCritical;
+  return badgeNeutral;
+}
+
+function alertBox(text: string): React.CSSProperties {
+  const lower = text.toLowerCase();
+
+  const isOk =
+    lower.includes("erfolgreich") ||
+    lower.includes("gespeichert") ||
+    lower.includes("lokal") ||
+    lower.includes("übernommen") ||
+    lower.includes("erkannt") ||
+    lower.includes("angebot vorbereitet");
+
+  if (isOk && !lower.includes("fehlgeschlagen") && !lower.includes("timeout")) {
+    return alertSuccess;
+  }
+
+  return alertError;
+}
+
+/* ================= STYLES ================= */
+
+const page: React.CSSProperties = {
+  display: "grid",
+  gap: 16,
+  padding: 16,
+};
+
+const heroCard: React.CSSProperties = {
+  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  color: "#FFFFFF",
+  borderRadius: 18,
+  padding: 22,
+  display: "grid",
+  gap: 14,
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+};
+
+const eyebrow: React.CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  opacity: 0.8,
+  fontWeight: 800,
+};
+
+const title: React.CSSProperties = {
+  margin: "4px 0",
+  fontSize: 30,
+  fontWeight: 900,
+};
+
+const subtitle: React.CSSProperties = {
+  margin: 0,
+  maxWidth: 980,
+  opacity: 0.88,
+  lineHeight: 1.55,
+};
+
+const heroActions: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const heroMeta: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.9,
+};
+
+const grid4: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gap: 12,
+};
+
+const kpiCard: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+};
+
+const kpiLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748B",
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+};
+
+const kpiValue: React.CSSProperties = {
+  marginTop: 6,
+  fontSize: 22,
+  color: "#0F172A",
+  fontWeight: 900,
+};
+
+const kpiSub: React.CSSProperties = {
+  marginTop: 3,
+  fontSize: 12,
+  color: "#64748B",
+};
+
+const card: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+};
+
+const draftCard: React.CSSProperties = {
+  ...card,
+  border: "1px solid #BBF7D0",
+  background: "#F0FDF4",
+  color: "#14532D",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const recipeCard: React.CSSProperties = {
+  ...card,
+  border: "1px solid #BFDBFE",
+  background: "#EFF6FF",
+  color: "#1E3A8A",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const sectionHead: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  marginBottom: 12,
+};
+
+const sectionTitle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 17,
+  color: "#0F172A",
+  fontWeight: 900,
+};
+
+const sectionText: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 13,
+  color: "#64748B",
+};
+
+const muted: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.8,
+  marginTop: 3,
+};
+
+const toolbarGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(260px,1fr) 180px 200px 120px",
+  gap: 10,
+};
+
+const input: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  borderRadius: 10,
+  padding: "9px 11px",
+  fontSize: 13,
+  width: "100%",
+  boxSizing: "border-box",
+  background: "#FFFFFF",
+};
+
+const tableWrap: React.CSSProperties = {
+  overflow: "auto",
+  border: "1px solid #E5E7EB",
+  borderRadius: 12,
+};
+
+const table: React.CSSProperties = {
+  width: "100%",
+  minWidth: 1460,
+  borderCollapse: "collapse",
+};
+
+const th: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 9px",
+  fontSize: 12,
+  color: "#475569",
+  background: "#F8FAFC",
+  borderBottom: "1px solid #E5E7EB",
+  whiteSpace: "nowrap",
+  fontWeight: 900,
+};
+
+const thRight: React.CSSProperties = {
+  ...th,
+  textAlign: "right",
+};
+
+const thSmall: React.CSSProperties = {
+  ...th,
+  width: 42,
+  textAlign: "center",
+};
+
+const td: React.CSSProperties = {
+  padding: "8px 9px",
+  fontSize: 12,
+  borderBottom: "1px solid #F1F5F9",
+  verticalAlign: "middle",
+};
+
+const tdRight: React.CSSProperties = {
+  ...td,
+  textAlign: "right",
+  whiteSpace: "nowrap",
+  fontWeight: 800,
+};
+
+const tdCenter: React.CSSProperties = {
+  ...td,
+  textAlign: "center",
+};
+
+const emptyCell: React.CSSProperties = {
+  padding: 16,
+  color: "#64748B",
+  fontSize: 13,
+};
+
+const cellInput: React.CSSProperties = {
+  border: "1px solid #E5E7EB",
+  borderRadius: 8,
+  padding: "6px 8px",
+  fontSize: 12,
+  background: "#FFFFFF",
+  boxSizing: "border-box",
+  width: "100%",
+};
+
+const cellTextarea: React.CSSProperties = {
+  ...cellInput,
+  minWidth: 260,
+  minHeight: 58,
+  resize: "vertical",
+  fontFamily: "inherit",
+  lineHeight: 1.35,
+};
+
+const buttonRow: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center",
+  marginTop: 12,
+};
+
+const buttonRowCompact: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap",
+};
+
+const btnBase: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  borderRadius: 10,
+  padding: "9px 13px",
+  fontSize: 13,
+  fontWeight: 800,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const btnPrimary: React.CSSProperties = {
+  ...btnBase,
+  border: "1px solid #2563EB",
+  background: "#2563EB",
+  color: "#FFFFFF",
+};
+
+const btnSecondary: React.CSSProperties = {
+  ...btnBase,
+  background: "#FFFFFF",
+  color: "#0F172A",
+};
+
+const btnDanger: React.CSSProperties = {
+  ...btnBase,
+  border: "1px solid #FECACA",
+  background: "#FEF2F2",
+  color: "#B91C1C",
+};
+
+const btnMini: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  background: "#FFFFFF",
+  color: "#0F172A",
+  borderRadius: 8,
+  padding: "6px 9px",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const btnDangerMini: React.CSSProperties = {
+  ...btnMini,
+  border: "1px solid #FECACA",
+  background: "#FEF2F2",
+  color: "#B91C1C",
+};
+
+const alertError: React.CSSProperties = {
+  border: "1px solid #FECACA",
+  background: "#FEF2F2",
+  color: "#B91C1C",
+  borderRadius: 12,
+  padding: "10px 12px",
+  fontSize: 13,
+  fontWeight: 700,
+  whiteSpace: "pre-wrap",
+};
+
+const alertSuccess: React.CSSProperties = {
+  border: "1px solid #BBF7D0",
+  background: "#F0FDF4",
+  color: "#14532D",
+  borderRadius: 12,
+  padding: "10px 12px",
+  fontSize: 13,
+  fontWeight: 700,
+  whiteSpace: "pre-wrap",
+};
+
+const badgeNeutral: React.CSSProperties = {
+  display: "inline-flex",
+  border: "1px solid #CBD5E1",
+  background: "#F8FAFC",
+  color: "#475569",
+  borderRadius: 999,
+  padding: "4px 9px",
+  fontSize: 11,
+  fontWeight: 900,
+};
+
+const badgeOk: React.CSSProperties = {
+  ...badgeNeutral,
+  border: "1px solid #BBF7D0",
+  background: "#F0FDF4",
+  color: "#15803D",
+};
+
+const badgeWarn: React.CSSProperties = {
+  ...badgeNeutral,
+  border: "1px solid #FDE68A",
+  background: "#FFFBEB",
+  color: "#B45309",
+};
+
+const badgeCritical: React.CSSProperties = {
+  ...badgeNeutral,
+  border: "1px solid #FECACA",
+  background: "#FEF2F2",
+  color: "#B91C1C",
+};
+
+
+
+
+
+
+
+
+
+
+
+

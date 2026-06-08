@@ -1,5 +1,7 @@
 ﻿// apps/web/src/pages/kalkulation/kalkulationMitKI.tsx
 import React from "react";
+
+import { runRlcAction } from "../../lib/rlcProgress";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
@@ -444,10 +446,33 @@ function lineNet(row: EliteRow): number {
   const rab = n(row.rabatt);
   return round2(raw * (1 - rab / 100));
 }
+function rowHasRealX84(row: EliteRow): boolean {
+  const anyRow = row as any;
+
+  const marker = String(
+    anyRow.gaebType ||
+      anyRow.importType ||
+      anyRow.importMode ||
+      anyRow.importSource ||
+      anyRow.source ||
+      anyRow.quelle ||
+      ""
+  ).toLowerCase();
+
+  return (
+    anyRow.x84Imported === true ||
+    anyRow.hasX84 === true ||
+    anyRow.angebotImported === true ||
+    anyRow.offerImported === true ||
+    marker.includes("x84")
+  );
+}
+
 function getOfferUnitPrice(row: EliteRow): number {
-  // Wichtig:
-  // Angebot X84 darf NICHT auf den aktuellen KI-Preis zurückfallen.
-  // Sonst werden Angebot und RLC-KI identisch.
+  // X84/Angebot darf nur aus echtem X84-Import kommen.
+  // Niemals aus preis/finalUnitPrice/suggestedUnitPrice ableiten.
+  if (!rowHasRealX84(row)) return 0;
+
   return (
     n((row as any).angebotUnitPrice) ||
     n((row as any).originalPreKiPrice) ||
@@ -818,7 +843,7 @@ function resolveBestRlcKiPrice(row: EliteRow, allowDatabaseSearch = false): RlcK
     /*
      * RLC-Bibliothek ist ab jetzt nur Kontroll-/Anzeigeinformation.
      * Sie darf Server, Recipe, Datenbank oder OpenAI nicht blockieren.
-     * Fachliche Warnungen werden separat angezeigt.
+     * Fachliche Prüfhinweise werden separat angezeigt.
      */
     return true;
   }
@@ -1132,7 +1157,7 @@ function clearOldKiProposalFields(row: EliteRow): EliteRow {
 
     openAiRejected: true,
 
-    // Alte künstliche Warnungen entfernen
+    // Alte künstliche Prüfhinweise entfernen
     warning: "",
     calculationStatus: "ok",
     riskLevel: "medium",
@@ -1802,7 +1827,13 @@ const finalUnitPrice =
 
 function fromLvRows(rows: LVPos[]): EliteRow[] {
   return rows.map((r) => {
-    const importedEp = n((r as any).angebotUnitPrice) || n((r as any).originalPreKiPrice) || n(r.preis);
+    const realX84 =
+      rowHasRealX84(r as any) ||
+      String((r as any).gaebType || (r as any).importType || "").toLowerCase().includes("x84");
+
+    const importedEp = realX84
+      ? n((r as any).angebotUnitPrice) || n((r as any).originalPreKiPrice) || n(r.preis)
+      : 0;
 
     const base = normalizeEliteRow({
       ...r,
@@ -1813,7 +1844,7 @@ function fromLvRows(rows: LVPos[]): EliteRow[] {
       finalUnitPrice: n(r.finalUnitPrice) || importedEp,
       suggestedUnitPrice: n(r.suggestedUnitPrice) || importedEp,
       confidence: r.confidence,
-      calculationStatus: r.preis != null ? "manual" : "critical",
+      calculationStatus: realX84 && importedEp > 0 ? "manual" : "critical",
       riskLevel: "medium",
       rabatt: 0,
     });
@@ -1872,7 +1903,7 @@ function mergeEliteResult(
    * Keine lokale Datenbank-Override mehr.
    */
   const rlcKiEp = decision.finalRlcKiEp;
-  const finalUnitPrice = angebotEp;
+  const finalUnitPrice = angebotEp > 0 ? angebotEp : rlcKiEp;
 
   const diff = rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
   const diffPct =
@@ -1912,7 +1943,7 @@ function mergeEliteResult(
     preis: finalUnitPrice,
     gesamt: round2(menge * finalUnitPrice),
 
-    priceDecision: "x84",
+    priceDecision: angebotEp > 0 ? "x84" : "rlcKi",
 
     confidence: Math.max(
       n(result.confidence),
@@ -2472,6 +2503,52 @@ const selectedAuftrag = React.useMemo(
 );
     const [serverBusy, setServerBusy] = React.useState(false);
   const [serverStatus, setServerStatus] = React.useState("");
+  const [activeAction, setActiveAction] = React.useState<{
+    id: string;
+    label: string;
+    progress: number;
+    status: "running" | "success" | "error";
+  } | null>(null);
+
+  async function runWithAction(
+    id: string,
+    label: string,
+    fn: () => void | Promise<void>
+  ) {
+    let progressTimer: number | undefined;
+
+    try {
+      setActiveAction({ id, label, progress: 8, status: "running" });
+      setServerStatus(`${label}: RLC arbeitet…`);
+
+      progressTimer = window.setInterval(() => {
+        setActiveAction((prev) => {
+          if (!prev || prev.id !== id || prev.status !== "running") return prev;
+
+          const nextProgress = Math.min(
+            92,
+            prev.progress + Math.max(2, Math.round((100 - prev.progress) * 0.08))
+          );
+
+          return { ...prev, progress: nextProgress };
+        });
+      }, 450);
+
+      await Promise.resolve(fn());
+
+      setActiveAction({ id, label, progress: 100, status: "success" });
+      setServerStatus(`${label}: abgeschlossen`);
+      window.setTimeout(() => setActiveAction(null), 1600);
+    } catch (e) {
+      setActiveAction({ id, label, progress: 100, status: "error" });
+      setServerStatus(`${label}: Fehler`);
+      window.setTimeout(() => setActiveAction(null), 2600);
+      throw e;
+    } finally {
+      if (progressTimer) window.clearInterval(progressTimer);
+    }
+  }
+  const [x84OfferNet, setX84OfferNet] = React.useState(0);
   const [lastKiSource, setLastKiSource] = React.useState("");
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [activeHint, setActiveHint] = React.useState("");
@@ -3201,7 +3278,7 @@ const activeKiDecision = React.useMemo(() => {
       level: "warning",
       title: "Prüfung erforderlich",
       text: `${summary.critical} kritische Position(en), ${summary.highRisk} Hochrisiko-Position(en). Vor Export bitte fachlich prüfen.`,
-      nextLabel: "Warnungen prüfen",
+      nextLabel: "Prüfhinweise prüfen",
       filter: "warnungen",
       action: "",
       readyForExport: false,
@@ -3214,7 +3291,7 @@ const activeKiDecision = React.useMemo(() => {
       level: "warning",
       title: "Kalkulation plausibel, aber mit Hinweisen",
       text: `${summary.warnings} Position(en) haben Warnhinweise. Export ist möglich, aber vorher fachlich prüfen.`,
-      nextLabel: "Warnungen prüfen",
+      nextLabel: "Prüfhinweise prüfen",
       filter: "warnungen",
       action: "",
       readyForExport: true,
@@ -3808,6 +3885,34 @@ function kiIsRealCalcRow(row: Partial<EliteRow>) {
   return !kiIsStructuralRow(row);
 }
 
+function kiSourceShort(row: any): string {
+  const source = String(row?.source || "").toLowerCase();
+
+  if (source.includes("company-calibration")) return "RLC-KI · Firmenkalibrierung";
+  if (source.includes("database")) return "Datenbank";
+  if (source.includes("openai")) return "OpenAI";
+  if (source.includes("technical-parser")) return "RLC-KI · technische Kalkulation";
+  if (source.includes("recipe")) return "RLC-KI · Rezept/Urkalkulation";
+  if (source.includes("rule")) return "RLC-KI · Regelwerk";
+  if (source.includes("x84")) return "X84 / Angebotsbasis";
+
+  return "RLC-KI";
+}
+
+function kiRowShortStatus(row: any): string {
+  const source = kiSourceShort(row);
+  const ep = getUnitPrice(row);
+  const gp = lineNet(row);
+
+  const status =
+    row?.riskLevel === "high" || row?.calculationStatus === "warning"
+      ? "prüfpflichtig"
+      : row?.calculationStatus === "critical"
+        ? "kritisch prüfen"
+        : "berechnet";
+
+  return `${source} · ${status} · EP ${money(ep)} · GP ${money(gp)}`;
+}
 function compactKiWarningText(value: string): string {
   const raw = String(value || "").replace(/\s+/g, " ").trim();
   if (!raw) return "";
@@ -4391,6 +4496,52 @@ const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
       setTimeout(() => setServerStatus(""), 2200);
     }
   }
+
+
+  async function loadX84OfferTotalOnly() {
+    if (!projectKey) return;
+
+    try {
+      const r = await fetch(
+        apiUrl(`/api/projects/${encodeURIComponent(projectKey)}/lv?page=1&pageSize=2000`),
+        {
+          method: "GET",
+          credentials: "include",
+          headers: authJsonHeaders(),
+        }
+      );
+
+      const json = await r.json().catch(() => null);
+
+      const serverRows = Array.isArray(json?.rows)
+        ? json.rows
+        : Array.isArray(json?.items)
+          ? json.items
+          : [];
+
+      if (!r.ok || !serverRows.length) {
+        setX84OfferNet(0);
+        return;
+      }
+
+      const total = serverRows.reduce((sum: number, x: any) => {
+        const menge = n(x.menge ?? x.quantity);
+        const ep = n(x.ep ?? x.einzelpreis ?? x.preis);
+        const gesamt = n(x.gesamt ?? x.total ?? x.totalNet);
+        return sum + (gesamt || round2(menge * ep));
+      }, 0);
+
+      setX84OfferNet(round2(total));
+    } catch (e) {
+      console.error("[RLC] X84 total load failed", e);
+      setX84OfferNet(0);
+    }
+  }
+
+  React.useEffect(() => {
+    void loadX84OfferTotalOnly();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey]);
 
   async function saveToProjectServer() {
     if (!projectKey) {
@@ -5233,7 +5384,7 @@ return (
         <button
           type="button"
           style={btnPrimary}
-          onClick={runPrimaryKiAction}
+          onClick={() => void runWithAction("ki-start", "KI starten", () => runPrimaryKiAction())}
           disabled={loading || !rows.length}
         >
           {loading ? "KI arbeitet…" : "KI starten"}
@@ -5242,7 +5393,7 @@ return (
         <button
           type="button"
           style={btnSecondary}
-          onClick={() => void runEliteCalculation(true)}
+          onClick={() => void runWithAction("ki-fast", "KI neu berechnen schnell", () => runEliteCalculation(true))}
           disabled={loading || !rows.length}
           title="Schnelle Neuberechnung: ignoriert falsche alte Preise, nutzt DB/Rule-Engine/Plausibilitätsdeckel und nur wenige OpenAI-Prüfungen."
         >
@@ -5252,7 +5403,7 @@ return (
         <button
           type="button"
           style={btnSecondary}
-          onClick={() => void runEliteCalculation(true, true)}
+          onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
           disabled={loading || !rows.length}
           title="Langsame Tiefprüfung: nutzt OpenAI für deutlich mehr Positionen. Nur bei Bedarf verwenden."
         >
@@ -5262,7 +5413,7 @@ return (
         <button
           type="button"
           style={btnSecondary}
-          onClick={autoCompleteMissingFields}
+          onClick={() => void runWithAction("ki-complete", "Ergänzen", () => autoCompleteMissingFields())}
           disabled={!rows.length}
         >
           Ergänzen
@@ -5271,7 +5422,7 @@ return (
         <button
           type="button"
           style={btnSecondary}
-          onClick={saveToProjectServer}
+          onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
           disabled={serverBusy || !projectKey}
         >
           Speichern
@@ -5280,7 +5431,7 @@ return (
         <button
           type="button"
           style={btnSecondary}
-          onClick={loadFromProjectServer}
+          onClick={() => void runWithAction("server-load", "Laden", () => loadFromProjectServer())}
           disabled={serverBusy || !projectKey}
         >
           Laden
@@ -5296,6 +5447,7 @@ return (
       </div>
 
       {serverStatus ? <div style={heroStatus}>{serverStatus}</div> : null}
+      {activeAction ? <RlcActionProgress action={activeAction} /> : null}
     </section>
 
     {showQuickActions ? (
@@ -5378,7 +5530,7 @@ return (
           <button
             type="button"
             style={compactActionButton}
-            onClick={handlePdfExport}
+            onClick={() => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport())}
             disabled={!rows.length || pdfBusy}
           >
             <b>{pdfBusy ? "PDF…" : "PDF Angebot"}</b>
@@ -5388,7 +5540,7 @@ return (
           <button
             type="button"
             style={compactActionButton}
-            onClick={handleUrkalkulationPdfExport}
+            onClick={() => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport())}
             disabled={!rows.length || pdfBusy}
           >
             <b>Urkalkulation PDF</b>
@@ -5456,20 +5608,20 @@ return (
     <section style={grid4Compact}>
       <KpiCard
         label="Angebot X84 netto"
-        value={money(summary.angebotNet)}
-        sub={`Brutto ${money(summary.angebotGross)}`}
+        value={(x84OfferNet || summary.angebotNet) > 0 ? money(x84OfferNet || summary.angebotNet) : "Nicht importiert"}
+        sub={(x84OfferNet || summary.angebotNet) > 0 ? `Brutto ${money(round2((x84OfferNet || summary.angebotNet) * 1.19))}` : "Kein X84 vorhanden · RLC-KI ist Arbeitskalkulation"}
       />
 
       <KpiCard
         label="RLC-KI netto"
         value={money(summary.rlcKiNet || summary.net)}
-        sub={`Brutto ${money(summary.rlcKiGross || summary.gross)} · Differenz ${money(summary.diffNet)} · ${summary.diffPct}%`}
+        sub={(x84OfferNet || summary.angebotNet) > 0 ? `Brutto ${money(round2((x84OfferNet || summary.angebotNet) * 1.19))}` : "Kein X84 vorhanden · RLC-KI ist Arbeitskalkulation"}
       />
 
       <KpiCard
         label="Prüfen"
         value={`${summary.critical + summary.highRisk}`}
-        sub={`${summary.critical} kritisch · ${summary.highRisk} Hochrisiko`}
+        sub={summary.highRisk > 0 ? "Bitte jede Position prüfen · fachliche Prüfung erforderlich · RLC-KI übernimmt keine Haftung" : `${summary.critical} kritisch · fachlich geprüft`}
       />
 
       <KpiCard
@@ -5726,7 +5878,7 @@ return (
                 <button
                   type="button"
                   style={btnPrimary}
-                  onClick={runPrimaryKiAction}
+                  onClick={() => void runWithAction("ki-start", "KI starten", () => runPrimaryKiAction())}
                   disabled={loading || !rows.length}
                 >
                   {loading ? "KI arbeitet…" : "KI kalkulieren"}
@@ -5735,7 +5887,7 @@ return (
                 <button
                   type="button"
                   style={btnSecondary}
-                  onClick={() => void runEliteCalculation(true)}
+                  onClick={() => void runWithAction("ki-fast", "KI neu berechnen schnell", () => runEliteCalculation(true))}
                   disabled={loading || !rows.length}
                   title="Schnelle Neuberechnung mit begrenzter OpenAI-Prüfung."
                 >
@@ -5745,7 +5897,7 @@ return (
                 <button
                   type="button"
                   style={btnSecondary}
-                  onClick={() => void runEliteCalculation(true, true)}
+                  onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
                   disabled={loading || !rows.length}
                   title="Langsame Tiefprüfung mit deutlich mehr OpenAI-Prüfungen."
                 >
@@ -5793,7 +5945,7 @@ return (
                     <button
                       type="button"
                       style={lvMenuItem}
-                      onClick={handlePdfExport}
+                      onClick={() => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport())}
                       disabled={!rows.length || pdfBusy}
                     >
                       PDF Angebot
@@ -5802,7 +5954,7 @@ return (
                     <button
                       type="button"
                       style={lvMenuItem}
-                      onClick={handleUrkalkulationPdfExport}
+                      onClick={() => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport())}
                       disabled={!rows.length || pdfBusy}
                     >
                       Urkalkulation PDF
@@ -5811,7 +5963,7 @@ return (
                     <button
                       type="button"
                       style={lvMenuItem}
-                      onClick={() => exportGaeb("x83")}
+                      onClick={() => void runRlcAction("ki-export-x83", "GAEB X83 exportieren", () => exportGaeb("x83"))}
                       disabled={!rows.length}
                     >
                       GAEB X83
@@ -5820,7 +5972,7 @@ return (
                     <button
                       type="button"
                       style={lvMenuItem}
-                      onClick={() => exportGaeb("x84")}
+                      onClick={() => void runRlcAction("ki-export-x84", "GAEB X84 exportieren", () => exportGaeb("x84"))}
                       disabled={!rows.length}
                     >
                       GAEB X84
@@ -5849,14 +6001,14 @@ return (
                 active={viewFilter === "warnungen"}
                 onClick={() => setViewFilter("warnungen")}
               >
-                Warnungen {problemCounts.warnungen}
+                Prüfhinweise {problemCounts.warnungen}
               </FilterButton>
 
               <FilterButton
                 active={viewFilter === "hochrisiko"}
                 onClick={() => setViewFilter("hochrisiko")}
               >
-                Hochrisiko {problemCounts.hochrisiko}
+                Prüfpflichtig {problemCounts.hochrisiko}
               </FilterButton>
 
               <FilterButton
@@ -5870,7 +6022,7 @@ return (
                 active={viewFilter === "sicher"}
                 onClick={() => setViewFilter("sicher")}
               >
-                Sicher {problemCounts.sicher}
+                Direkt sicher {problemCounts.sicher}
               </FilterButton>
 
               <span style={filterMeta}>
@@ -5892,15 +6044,15 @@ return (
               style={btnSecondary}
               onClick={selectWarningsForOpenAi}
               disabled={!rows.length}
-              title="Wählt Warnungen, kritische Positionen, Hochrisiko und Positionen ohne DB für OpenAI aus."
+              title="Wählt Warnungen, kritische Positionen, Prüfpflichtig und Positionen ohne DB für OpenAI aus."
             >
-              Warnungen auswählen
+              Prüfhinweise auswählen
             </button>
 
             <button
               type="button"
               style={btnPrimary}
-              onClick={() => void runSelectedOpenAiCheck()}
+              onClick={() => void runRlcAction("ki-openai-selected", "Auswahl mit OpenAI prüfen", () => runSelectedOpenAiCheck())}
               disabled={loading || selectedOpenAiIds.length === 0}
               title="Prüft nur die ausgewählten Positionen mit OpenAI."
             >
@@ -5948,7 +6100,7 @@ return (
             <button
               type="button"
               style={btnPrimary}
-              onClick={saveAllToKnowledge}
+              onClick={() => void runRlcAction("ki-save-knowledge", "In Datenbank übertragen", () => saveAllToKnowledge())}
               disabled={!rows.length}
               title="Überträgt alle aktuell kalkulierten LV-Positionen in die Kalkulationsdatenbank."
             >
@@ -6092,7 +6244,7 @@ return (
 ) : null}
 
                           {r.warning && !rowHasOpenAiProposal(r) ? (
-                            <div style={lvMiniWarning}>{r.warning}</div>
+                            <div style={lvMiniWarning}>{kiRowShortStatus(r)}</div>
                           ) : null}
 
                           {rowHasOpenAiProposal(r) ? (
@@ -6762,6 +6914,50 @@ return (
 }
 
 /* ================= UI ================= */
+
+function RlcActionProgress({
+  action,
+}: {
+  action: {
+    id: string;
+    label: string;
+    progress: number;
+    status: "running" | "success" | "error";
+  };
+}) {
+  const progress = Math.max(0, Math.min(100, Math.round(action.progress)));
+
+  return (
+    <div style={rlcActionProgressWrap}>
+      <div style={rlcActionProgressTop}>
+        <b>
+          {action.status === "running"
+            ? "RLC arbeitet…"
+            : action.status === "success"
+              ? "Abgeschlossen"
+              : "Fehler"}
+        </b>
+        <span>{action.label} · {progress}%</span>
+      </div>
+
+      <div style={rlcActionProgressTrack}>
+        <div
+          style={{
+            ...rlcActionProgressFill,
+            width: `${progress}%`,
+            background:
+              action.status === "error"
+                ? "linear-gradient(90deg,#DC2626,#EF4444)"
+                : action.status === "success"
+                  ? "linear-gradient(90deg,#16A34A,#22C55E)"
+                  : "linear-gradient(90deg,#2563EB,#60A5FA)",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 
 function FilterButton({
   active,
@@ -9479,6 +9675,56 @@ const priceCompareTdRight: React.CSSProperties = {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const rlcActionProgressWrap: React.CSSProperties = {
+  marginTop: 12,
+  padding: "12px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(191,219,254,0.95)",
+  background: "rgba(239,246,255,0.98)",
+  boxShadow: "0 8px 22px rgba(15,23,42,0.08)",
+};
+
+const rlcActionProgressTop: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  fontSize: 13,
+  color: "#0F172A",
+  marginBottom: 8,
+};
+
+const rlcActionProgressTrack: React.CSSProperties = {
+  height: 10,
+  borderRadius: 999,
+  background: "#DBEAFE",
+  overflow: "hidden",
+};
+
+const rlcActionProgressFill: React.CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  transition: "width 420ms ease",
+};
 
 
 
