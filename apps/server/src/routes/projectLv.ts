@@ -692,11 +692,10 @@ async function handleLvSearch(req: Request, res: Response) {
 
     const projectId = project.id;
 
-    const header = await prisma.lVHeader.findFirst({
-      where: { projectId },
-      orderBy: { version: "desc" },
-      select: { id: true, version: true, title: true },
-    });
+    const headerBase = await selectCleanOriginalLvHeader(projectId);
+    const header = headerBase
+      ? { id: headerBase.id, version: headerBase.version, title: headerBase.title }
+      : null;
 
     if (!header) return res.json({ ok: true, items: [] });
 
@@ -746,6 +745,55 @@ router.get("/projects/:projectId/lv/search", handleLvSearch);
 router.get("/:projectId/lv/search", handleLvSearch);
 router.get("/project-lv/:projectId/lv/search", handleLvSearch);
 
+
+async function summarizeLvHeaderForSelection(headerId: string) {
+  const rows = await prisma.lVPosition.findMany({
+    where: { lvId: headerId },
+    orderBy: { position: "asc" },
+    select: {
+      position: true,
+      kurztext: true,
+      menge: true,
+      einzelpreis: true,
+      gesamt: true,
+    },
+  });
+
+  const total = rows.reduce((s, r) => {
+    const qty = num(r.menge);
+    const ep = num(r.einzelpreis);
+    const gp = num(r.gesamt);
+    return s + (gp > 0 ? gp : qty * ep);
+  }, 0);
+
+  return {
+    count: rows.length,
+    total,
+    first: rows[0]?.position || "",
+    sample: String(rows[0]?.kurztext || "").trim(),
+  };
+}
+
+async function selectCleanOriginalLvHeader(projectId: string) {
+  const headers = await prisma.lVHeader.findMany({
+    where: { projectId },
+    orderBy: { version: "asc" },
+  });
+
+  if (!headers.length) return null;
+
+  for (const h of headers) {
+    const s = await summarizeLvHeaderForSelection(h.id);
+    if (s.count > 0 && s.total > 0 && s.sample) {
+      return h;
+    }
+  }
+
+  // Fallback: se non esiste una versione positiva pulita, usa l'ultima disponibile.
+  return headers[headers.length - 1] || null;
+}
+
+
 async function handleGetProjectLv(req: Request, res: Response) {
   try {
     const companyId = await ensureCompanyId(req);
@@ -767,10 +815,13 @@ async function handleGetProjectLv(req: Request, res: Response) {
 
     const projectId = project.id;
 
-    const header = await prisma.lVHeader.findFirst({
-      where: { projectId },
-      orderBy: { version: "desc" },
-    });
+    const requestedVersion = Number((req.query as any)?.version);
+    const header =
+      Number.isFinite(requestedVersion) && requestedVersion > 0
+        ? await prisma.lVHeader.findFirst({
+            where: { projectId, version: requestedVersion },
+          })
+        : await selectCleanOriginalLvHeader(projectId);
 
     if (header) {
       const positions = await prisma.lVPosition.findMany({
@@ -1785,16 +1836,12 @@ function parseExcelImport(buffer: Buffer, filename = "Importiertes LV") {
 async function enrichGaebX84RowsWithLatestLv(projectId: string, items: any[]): Promise<any[]> {
   if (!Array.isArray(items) || !items.length) return items;
 
-  const latestHeader = await prisma.lVHeader.findFirst({
-    where: { projectId },
-    orderBy: { version: "desc" },
-    select: { id: true },
-  });
+  const originalHeader = await selectCleanOriginalLvHeader(projectId);
 
-  if (!latestHeader?.id) return items;
+  if (!originalHeader?.id) return items;
 
   const basePositions = await prisma.lVPosition.findMany({
-    where: { lvId: latestHeader.id },
+    where: { lvId: originalHeader.id },
     select: {
       position: true,
       kurztext: true,
