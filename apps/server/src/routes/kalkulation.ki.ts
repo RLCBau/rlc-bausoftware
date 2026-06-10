@@ -5783,6 +5783,47 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
       };
     }
 
+
+      const qtyForExtremeGuard = n(row?.menge ?? row?.quantity);
+      const gpDiffAgainstOffer = round2((ep - offerEp) * qtyForExtremeGuard);
+      const factorAgainstOffer = offerEp > 0 && ep > 0 ? round2(ep / offerEp) : 0;
+
+      const isExtremeAgainstX84 =
+        offerEp > 0 &&
+        ep > 0 &&
+        qtyForExtremeGuard > 0 &&
+        (
+          factorAgainstOffer >= 10 ||
+          (Math.abs(gpDiffAgainstOffer) >= 50000 && factorAgainstOffer >= 3) ||
+          (offerEp < 1 && ep >= 10 && qtyForExtremeGuard >= 1000)
+        );
+
+      if (isExtremeAgainstX84) {
+        const warningText =
+          `RLC X84-Extreme-Abweichungs-Guard: KI-/Parser-EP ${ep} EUR/${unit} weicht extrem vom X84-Angebots-EP ${offerEp} EUR/${unit} ab. ` +
+          `Faktor ${factorAgainstOffer}, GP-Differenz ${gpDiffAgainstOffer} EUR. ` +
+          `X84-Angebotsbasis wurde beibehalten; Position muss fachlich geprüft werden.`;
+
+        return {
+          ...row,
+          baseUnitPrice: offerEp,
+          suggestedUnitPrice: offerEp,
+          finalUnitPrice: offerEp,
+          calculationStatus: "needs_review",
+          riskLevel: "high",
+          confidence: Math.min(n(row?.confidence, 0.5), 0.45),
+          warning: [s(row?.warning), warningText].filter(Boolean).join(" · "),
+          aiReason: [s(row?.aiReason), warningText].filter(Boolean).join("\n\n"),
+          x84ExtremeDeviationGuard: {
+            applied: true,
+            originalKiEp: ep,
+            offerEp,
+            factor: factorAgainstOffer,
+            gpDiff: gpDiffAgainstOffer,
+            unit,
+          },
+        };
+      }
     const dup = duplicateKeys.get(key);
     if (!dup) return row;
 
