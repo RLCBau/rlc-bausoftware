@@ -1160,6 +1160,38 @@ function plausibilityMaxEp(text: string, unit: string): number {
   return 0;
 }
 
+
+function isKleinteileZulagenGuardPosition(textRaw: string, unitRaw: string): boolean {
+  const t = norm(textRaw);
+  const u = norm(unitRaw);
+
+  const isSmallUnit =
+    /^(st|stk|stück|stueck|cm|m|lfm|laufmeter|meter|kg|psch)$/.test(u);
+
+  const hasSmallPartText =
+    /dichtkappe|dichtkappen|endstopfen|stopfen|kappe|kappen|muffe|muffen|doppelsteckmuffe|einzelzugabdichtung|abdichtung|ringraumdichtung|isolierbinde|messingkupplung|messingquetschverschraubung|rohrabschluss|formstück|formstueck|bogen|boegen|passstück|passstueck|hinweisschild|hinweisstein|haube|bohrprotokoll/.test(t);
+
+  const hasAddonText =
+    /zulage|mehrpreis|minderpreis|mehr- oder minderpreis|erschwernis|mehr-\/minderpreis|mindertiefe|schachtzulage/.test(t);
+
+  const isCmSensitive = /^(cm)$/.test(u) && /kernbohrung|mehr|minder|tiefe|schacht|zulage/.test(t);
+
+  return isSmallUnit && (hasSmallPartText || hasAddonText || isCmSensitive);
+}
+
+function x84AnchorEpFromRow(row: any): number {
+  return (
+    n(row?.angebotUnitPrice) ||
+    n(row?.x84UnitPrice) ||
+    n(row?.originalPreKiPrice) ||
+    n(row?.originalUnitPrice) ||
+    n(row?.einzelpreis) ||
+    n(row?.ep) ||
+    n(row?.preis)
+  );
+}
+
+
 function oldReferenceEp(row: InputRow, matches: DbMatch[]): number {
   const oldEp = n(row.preis);
   const dbEp = weightedDbPrice(matches, s(row.einheit));
@@ -1203,6 +1235,30 @@ function applyPlausibilityGuard(row: InputRow, matches: DbMatch[], aiRow: any, f
 
   let guardedEp = aiEp;
   const notes: string[] = [];
+
+  const kleinteileGuardText = `${s((row as any).kurztext)} ${s((row as any).langtext)}`;
+  const kleinteileGuardUnit = s((row as any).einheit);
+  const kleinteileGuardActive = isKleinteileZulagenGuardPosition(kleinteileGuardText, kleinteileGuardUnit);
+  const x84AnchorEp = x84AnchorEpFromRow(row as any);
+
+  /*
+   * RLC Kleinteile/Zulagen Soft Guard:
+   * Kleine Zubehör-, Zulagen-, Mehr-/Minderpreis- und cm-Positionen dürfen nicht
+   * unbemerkt mit schwerer Komponentenkalkulation oder universellem Preisresolver
+   * auf ein Vielfaches des X84-/Angebots-EP springen.
+   *
+   * Wichtig: Soft Guard ändert den EP noch nicht. Er markiert nur fachlich prüfpflichtig.
+   */
+  const kleinteileRatio =
+    kleinteileGuardActive && x84AnchorEp > 0 && guardedEp > 0
+      ? guardedEp / x84AnchorEp
+      : 0;
+
+  if (kleinteileRatio >= 5) {
+    notes.push(
+      `RLC Kleinteile/Zulagen-Guard: EP ${round2(guardedEp)} € liegt ${round2(kleinteileRatio)}x über X84-/Angebots-EP ${round2(x84AnchorEp)} €. Position fachlich prüfen; keine automatische OK-Freigabe.`
+    );
+  }
 
   /*
    * RLC Preisgruppen-Guard:
@@ -1299,8 +1355,16 @@ function applyPlausibilityGuard(row: InputRow, matches: DbMatch[], aiRow: any, f
     suggestedUnitPrice: round2(guardedEp),
     finalUnitPrice: round2(guardedEp),
 
-    calculationStatus: aiRow.calculationStatus === "critical" ? "critical" : "warning",
-    riskLevel: aiRow.riskLevel === "high" ? "high" : "medium",
+    calculationStatus: notes.some((x) => x.includes("Kleinteile/Zulagen-Guard"))
+      ? "needs_review"
+      : aiRow.calculationStatus === "critical"
+        ? "critical"
+        : "warning",
+    riskLevel: notes.some((x) => x.includes("Kleinteile/Zulagen-Guard"))
+      ? "high"
+      : aiRow.riskLevel === "high"
+        ? "high"
+        : "medium",
 
     warning: [s(aiRow.warning), ...notes].filter(Boolean).join(" · "),
     aiReason: [s(aiRow.aiReason), ...notes].filter(Boolean).join("\n\n"),
@@ -5672,6 +5736,53 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
     );
 
     const key = `${kurz}|${lang.slice(0, 220)}|${unit}|${ep}`;
+
+    const fullText = `${kurz} ${lang}`;
+    const isSmallSupplement =
+      /mehr\s*-?\s*oder\s*-?\s*minderpreis|mehrpreis|minderpreis|zulage|zuschlag/.test(fullText) &&
+      /^(cm|mm)$/.test(unit);
+
+    const offerEp = round2(
+      n(row?.angebotUnitPrice) ||
+      n(row?.originalPreKiPrice) ||
+      n(row?.x84UnitPrice) ||
+      n(row?.reverseUrkalkulation?.x84UnitPrice) ||
+      n(row?.dbComparability?.x84UnitPrice) ||
+      n(row?.preis)
+    );
+
+    const explodedAgainstOffer =
+      isSmallSupplement &&
+      offerEp > 0 &&
+      ep > 0 &&
+      ep / offerEp >= 10;
+
+    if (explodedAgainstOffer) {
+      const warningText =
+        `RLC Kleinteile/Zulagen-Guard: Position ist als Mehr-/Minderpreis, Zulage oder Zuschlag je ${unit} erkennbar. ` +
+        `KI-/Bibliothekspreis ${ep} EUR/${unit}, Angebotsbasis ${offerEp} EUR/${unit}, Faktor ${round2(ep / offerEp)}. ` +
+        `Angebotsbasis wurde beibehalten; Position muss fachlich geprüft werden.`;
+
+      return {
+        ...row,
+        baseUnitPrice: offerEp,
+        suggestedUnitPrice: offerEp,
+        finalUnitPrice: offerEp,
+        calculationStatus: "needs_review",
+        riskLevel: "high",
+        confidence: Math.min(n(row?.confidence, 0.5), 0.45),
+        warning: [s(row?.warning), warningText].filter(Boolean).join(" · "),
+        aiReason: [s(row?.aiReason), warningText].filter(Boolean).join("\n\n"),
+        kleinteileZulagenGuard: {
+          applied: true,
+          originalKiEp: ep,
+          offerEp,
+          factor: round2(ep / offerEp),
+          unit,
+        },
+      };
+    }
+
     const dup = duplicateKeys.get(key);
     if (!dup) return row;
 
@@ -6315,13 +6426,77 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   if (calibratedEp > 0 && Math.abs(calibratedEp - ep) > 0.01) {
     const total = round2(calibratedEp * qty);
 
-    const isSchutzmatteCalibration = family === "schutzmatte";
-    const calibratedMainName = isSchutzmatteCalibration
-      ? "Rohrschutz Schutzmatte liefern und einbauen"
+    const familyMeta: Record<string, any> = {
+      rohrgrabenaushub: {
+        gewerk: "Erdarbeiten",
+        leistungsart: "Rohrgrabenaushub",
+        bauverfahren: "Leitungsgraben herstellen / Rohrgrabenaushub",
+        group: "Erdarbeiten",
+        name: "Rohrgrabenaushub Bodenklasse 3-5",
+        note: "RLC Calibration Guard: Rohrgrabenaushub als eigene Erdarbeiten-Familie kalibriert.",
+        fixWarning: "Falscher Resolver wurde fachlich auf Rohrgrabenaushub/Erdarbeiten korrigiert.",
+        fixReason: "RLC Familien-Fix: Position wurde als Rohrgrabenaushub erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
+      },
+      rohrgrabenzuschlag: {
+        gewerk: "Erdarbeiten",
+        leistungsart: "Zuschlag Rohrgrabenaushub",
+        bauverfahren: "Zuschlag Bodenklasse / Erschwernis Aushub",
+        group: "Erdarbeiten",
+        name: "Zuschlag Rohrgrabenaushub Bodenklasse",
+        note: "RLC Calibration Guard: Zuschlag Rohrgrabenaushub als eigene Erdarbeiten-Familie kalibriert.",
+        fixWarning: "Falscher Resolver wurde fachlich auf Zuschlag Rohrgrabenaushub korrigiert.",
+        fixReason: "RLC Familien-Fix: Position wurde als Zuschlag Rohrgrabenaushub erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
+      },
+      schutzmatte: {
+        gewerk: "Kabelschutz / Rohrschutz",
+        leistungsart: "Schutzmatte liefern und einbauen",
+        bauverfahren: "Mechanischer Rohrschutz mit Schutzmatte",
+        group: "Material",
+        name: "Rohrschutz Schutzmatte liefern und einbauen",
+        note: "RLC Calibration Guard: Schutzmatte/Rohrschutz als eigene Leistungsfamilie kalibriert.",
+        fixWarning: "Falscher Speedpipe-/Mikro-Leerrohr-Resolver wurde fachlich auf Schutzmatte/Rohrschutz korrigiert.",
+        fixReason: "RLC Schutzmatte-Fix: Position wurde als Rohrschutz/Schutzmatte erkannt. Speedpipe-Text aus dem generischen Resolver wurde überschrieben.",
+      },
+      kabelschutzrohr: {
+        gewerk: "Kabelschutz / Rohrschutz",
+        leistungsart: "Kabelschutzrohr",
+        bauverfahren: "Kabelschutzrohr liefern/verlegen nach LV-Text",
+        group: "Material",
+        name: "Kabelschutzrohr",
+        note: "RLC Calibration Guard: Kabelschutzrohr als eigene Leistungsfamilie kalibriert.",
+        fixWarning: "Falscher PE-Wasserleitungs-/Rohr-Resolver wurde fachlich auf Kabelschutzrohr korrigiert.",
+        fixReason: "RLC Familien-Fix: Position wurde als Kabelschutzrohr erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
+      },
+      mikro_leerrohr: {
+        gewerk: "Glasfaser / Speedpipe",
+        leistungsart: "Mikrokabelleerrohrverbund / Speedpipe",
+        bauverfahren: "Mikrorohrverbund verlegen",
+        group: "Material",
+        name: "Mikrokabelleerrohrverbund / Speedpipe",
+        note: "RLC Calibration Guard: Mikrokabelleerrohr/Speedpipe als eigene Leistungsfamilie kalibriert.",
+        fixWarning: "Falscher Leerrohr-/Kabelzug-Resolver wurde fachlich auf Mikrokabelleerrohrverbund korrigiert.",
+        fixReason: "RLC Familien-Fix: Position wurde als Mikrokabelleerrohrverbund/Speedpipe erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
+      },
+      rohrumhuellung: {
+        gewerk: "Leitungsbau / Rohrbettung",
+        leistungsart: "Rohrumhüllung / Bettungssand",
+        bauverfahren: "Rohrbettung und Rohrumhüllung herstellen",
+        group: "Material",
+        name: "Rohrumhüllung / Bettungssand herstellen",
+        note: "RLC Calibration Guard: Rohrumhüllung/Bettungssand als eigene Leistungsfamilie kalibriert.",
+        fixWarning: "Falscher Resolver wurde fachlich auf Rohrumhüllung/Bettungssand korrigiert.",
+        fixReason: "RLC Familien-Fix: Position wurde als Rohrumhüllung/Bettungssand erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
+      },
+    };
+
+    const meta = familyMeta[family] || null;
+
+    const calibratedMainName = meta
+      ? meta.name
       : s(result?.priceBreakdown?.[0]?.name) || s(result?.bauverfahren) || "Kalibrierte RLC-Leistung";
 
-    const calibratedGroup = isSchutzmatteCalibration
-      ? "Material"
+    const calibratedGroup = meta
+      ? meta.group
       : s(result?.priceBreakdown?.[0]?.group) || "Leistung";
 
     const calibratedBreakdown = Array.isArray(result?.priceBreakdown) && result.priceBreakdown.length
@@ -6335,8 +6510,8 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
             qty: 1,
             price: round2(calibratedEp),
             total: round2(calibratedEp),
-            note: isSchutzmatteCalibration
-              ? "RLC Calibration Guard: Schutzmatte/Rohrschutz als eigene Leistungsfamilie kalibriert."
+            note: meta
+              ? meta.note
               : s(line?.note) || "RLC Calibration Guard",
           };
         })
@@ -6355,11 +6530,11 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
 
     return {
       ...result,
-      gewerk: isSchutzmatteCalibration ? "Kabelschutz / Rohrschutz" : result?.gewerk,
-      leistungsart: isSchutzmatteCalibration ? "Schutzmatte liefern und einbauen" : result?.leistungsart,
-      bauverfahren: isSchutzmatteCalibration ? "Mechanischer Rohrschutz mit Schutzmatte" : result?.bauverfahren,
+      gewerk: meta ? meta.gewerk : result?.gewerk,
+      leistungsart: meta ? meta.leistungsart : result?.leistungsart,
+      bauverfahren: meta ? meta.bauverfahren : result?.bauverfahren,
       priceBreakdown: calibratedBreakdown,
-      rlcPreisGroup: isSchutzmatteCalibration ? "Material" : result?.rlcPreisGroup,
+      rlcPreisGroup: meta ? meta.group : result?.rlcPreisGroup,
       baseUnitPrice: round2(calibratedEp),
       suggestedUnitPrice: round2(calibratedEp),
       finalUnitPrice: round2(calibratedEp),
@@ -6375,13 +6550,13 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
       warning: [
         s(result?.warning),
         calibrationReason,
-        isSchutzmatteCalibration ? "Falscher Speedpipe-/Mikro-Leerrohr-Resolver wurde fachlich auf Schutzmatte/Rohrschutz korrigiert." : "",
+        meta ? meta.fixWarning : "",
         `Alter EP ${round2(ep)} wurde auf ${round2(calibratedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
         "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
       ].filter(Boolean).join(" · "),
       aiReason: [
-        isSchutzmatteCalibration
-          ? "RLC Schutzmatte-Fix: Position wurde als Rohrschutz/Schutzmatte erkannt. Speedpipe-Text aus dem generischen Resolver wurde überschrieben."
+        meta
+          ? meta.fixReason
           : s(result?.aiReason),
         "RLC Calibration Guard V2: X84-Benchmark wurde nicht kopiert, sondern zur Ableitung realistischer No-X84-Kalkulationsbereiche genutzt.",
       ].filter(Boolean).join("\n\n"),
