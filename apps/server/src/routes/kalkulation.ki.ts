@@ -5784,25 +5784,48 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
     }
 
 
+      // RLC_SAFE_BASELINE_GUARDS_START
       const qtyForExtremeGuard = n(row?.menge ?? row?.quantity);
       const gpDiffAgainstOffer = round2((ep - offerEp) * qtyForExtremeGuard);
       const factorAgainstOffer = offerEp > 0 && ep > 0 ? round2(ep / offerEp) : 0;
 
-      const isExtremeAgainstX84 =
+      const isOfferBaselineExtremeOutlier =
         offerEp > 0 &&
         ep > 0 &&
         qtyForExtremeGuard > 0 &&
         (
           factorAgainstOffer >= 10 ||
-          (Math.abs(gpDiffAgainstOffer) >= 50000 && factorAgainstOffer >= 3) ||
-          (offerEp < 1 && ep >= 10 && qtyForExtremeGuard >= 1000)
+          factorAgainstOffer <= 0.1 ||
+          (Math.abs(gpDiffAgainstOffer) >= 50000 && (factorAgainstOffer >= 3 || factorAgainstOffer <= 0.35))
         );
 
-      if (isExtremeAgainstX84) {
+      const isLinearMaterialBaselineOutlier =
+        /rohrumh[uü]llung|sand[uü]berdeckung|splitt[uü]berdeckung|sohlbettung|bettung|schutzmatte|ortungsband|trassenwarnband|kabelschutzrohr|mikrokabel|mikroroh?r|leer[r]?ohr|lwl|baustahl|stahl|bewehrung|hdpe|pe\s*100|druckrohr|kanal\s*sp[uü]len|druckprobe/.test(fullText) &&
+        /^(m|lfm|meter|laufmeter|laufende meter|kg)$/.test(unit) &&
+        offerEp > 0 &&
+        ep > 0 &&
+        qtyForExtremeGuard > 0 &&
+        factorAgainstOffer >= 1.75 &&
+        Math.abs(gpDiffAgainstOffer) >= 25000;
+
+      const isContextBaselineOutlier =
+        /rohrgrabenaushub|baugrubenaushub|aushub|bodenklasse|bd-kl|r[üu]ckverf[üu]llung|auff[üu]llmaterial|erschwernis|baustelleneinrichtung|verkehrssicherung|wasserhaltung|pilotbohrung|horizontalbohrung|schacht|pumpstation|fertigteilschacht|forststraßen|zwischenplanum/.test(fullText) &&
+        offerEp > 0 &&
+        ep > 0 &&
+        qtyForExtremeGuard > 0 &&
+        Math.abs(gpDiffAgainstOffer) >= 50000 &&
+        (factorAgainstOffer >= 1.75 || factorAgainstOffer <= 0.35);
+
+      if (isOfferBaselineExtremeOutlier || isLinearMaterialBaselineOutlier || isContextBaselineOutlier) {
+        const guardType = isLinearMaterialBaselineOutlier
+          ? "linear-material"
+          : isContextBaselineOutlier
+            ? "context-baseline"
+            : "baseline-extreme";
+
         const warningText =
-          `RLC X84-Extreme-Abweichungs-Guard: KI-/Parser-EP ${ep} EUR/${unit} weicht extrem vom X84-Angebots-EP ${offerEp} EUR/${unit} ab. ` +
-          `Faktor ${factorAgainstOffer}, GP-Differenz ${gpDiffAgainstOffer} EUR. ` +
-          `X84-Angebotsbasis wurde beibehalten; Position muss fachlich geprüft werden.`;
+          `RLC Angebotsbasis-Guard (${guardType}): KI-/Parser-EP ${ep} EUR/${unit}, Angebotsbasis ${offerEp} EUR/${unit}, Faktor ${factorAgainstOffer}, GP-Differenz ${gpDiffAgainstOffer} EUR. ` +
+          `Ohne echte Urkalkulation mit Projektdauer, Entfernung, Bauablauf, Geräten, Personal und Logistik darf RLC die Angebotsbasis nicht automatisch überschreiben. Angebotsbasis wurde beibehalten; Position bleibt prüfpflichtig.`;
 
         return {
           ...row,
@@ -5814,8 +5837,33 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
           confidence: Math.min(n(row?.confidence, 0.5), 0.45),
           warning: [s(row?.warning), warningText].filter(Boolean).join(" · "),
           aiReason: [s(row?.aiReason), warningText].filter(Boolean).join("\n\n"),
-          x84ExtremeDeviationGuard: {
+          offerBaselineGuard: {
             applied: true,
+            type: guardType,
+            originalKiEp: ep,
+            offerEp,
+            factor: factorAgainstOffer,
+            gpDiff: gpDiffAgainstOffer,
+            unit,
+          },
+          x84ExtremeDeviationGuard: {
+            applied: guardType === "baseline-extreme",
+            originalKiEp: ep,
+            offerEp,
+            factor: factorAgainstOffer,
+            gpDiff: gpDiffAgainstOffer,
+            unit,
+          },
+          linearMaterialBaselineGuard: {
+            applied: guardType === "linear-material",
+            originalKiEp: ep,
+            offerEp,
+            factor: factorAgainstOffer,
+            gpDiff: gpDiffAgainstOffer,
+            unit,
+          },
+          contextBaselineGuard: {
+            applied: guardType === "context-baseline",
             originalKiEp: ep,
             offerEp,
             factor: factorAgainstOffer,
@@ -5824,6 +5872,7 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
           },
         };
       }
+      // RLC_SAFE_BASELINE_GUARDS_END
     const dup = duplicateKeys.get(key);
     if (!dup) return row;
 
