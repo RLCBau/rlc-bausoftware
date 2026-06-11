@@ -469,15 +469,36 @@ function rowHasRealX84(row: EliteRow): boolean {
 }
 
 function getOfferUnitPrice(row: EliteRow): number {
-  // X84/Angebot darf nur aus echtem X84-Import kommen.
-  // Niemals aus preis/finalUnitPrice/suggestedUnitPrice ableiten.
-  if (!rowHasRealX84(row)) return 0;
-
-  return (
+  /*
+   * X84/Angebotspreis:
+   * - echte Angebotsfelder haben Vorrang
+   * - alte/importierte X84-Zeilen können den EP nur in row.preis haben
+   * - finalUnitPrice/suggestedUnitPrice werden NICHT als X84 abgeleitet
+   */
+  const direct =
     n((row as any).angebotUnitPrice) ||
     n((row as any).originalPreKiPrice) ||
-    0
-  );
+    n((row as any).x84UnitPrice) ||
+    n((row as any).reverseUrkalkulation?.x84UnitPrice) ||
+    n((row as any).dbComparability?.x84UnitPrice);
+
+  if (direct > 0) return direct;
+
+  const hasKiResult =
+    n((row as any).rlcKiUnitPrice) > 0 ||
+    n((row as any).openAiSuggestedUnitPrice) > 0 ||
+    (Array.isArray((row as any).priceBreakdown) && (row as any).priceBreakdown.length > 0) ||
+    String((row as any).source || "").trim().length > 0;
+
+  if (!hasKiResult && n(row.preis) > 0) {
+    return n(row.preis);
+  }
+
+  if (rowHasRealX84(row) && n(row.preis) > 0) {
+    return n(row.preis);
+  }
+
+  return 0;
 }
 
 function offerLineNet(row: EliteRow): number {
@@ -2550,6 +2571,8 @@ const selectedAuftrag = React.useMemo(
   }
   const [x84OfferNet, setX84OfferNet] = React.useState(0);
   const [lastKiSource, setLastKiSource] = React.useState("");
+
+  const [kiMode, setKiMode] = React.useState<"offer-check" | "new-calculation">("new-calculation");
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [activeHint, setActiveHint] = React.useState("");
 
@@ -4214,21 +4237,29 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
     .filter((row) => kiIsRealCalcRow(row) && (forceRecalculate || expertMode || !(row as any).preisManuellGeprueft))
     .map((row) => {
       const storedOfferUnitPrice =
-        n((row as any).angebotUnitPrice) ||
-        n((row as any).originalPreKiPrice);
+        kiMode === "offer-check"
+          ? n((row as any).angebotUnitPrice) ||
+            n((row as any).originalPreKiPrice) ||
+            n((row as any).x84UnitPrice) ||
+            n((row as any).reverseUrkalkulation?.x84UnitPrice) ||
+            n((row as any).dbComparability?.x84UnitPrice)
+          : 0;
 
       const calculationStartEp =
-        storedOfferUnitPrice > 0 ? storedOfferUnitPrice : getUnitPrice(row);
+        kiMode === "offer-check" && storedOfferUnitPrice > 0
+          ? storedOfferUnitPrice
+          : 0;
 
       return {
         ...row,
 
-        // X84-Angebotspreis bleibt getrennt und wird nicht künstlich aus KI erzeugt.
+        // Angebot prüfen: echte Angebotsbasis mitsenden.
+        // Neue Kalkulation: keine Angebotsbasis mitsenden, RLC kalkuliert aus Null.
         angebotUnitPrice: storedOfferUnitPrice,
         angebotTotal: storedOfferUnitPrice > 0 ? round2(n(row.menge) * storedOfferUnitPrice) : 0,
         originalPreKiPrice: storedOfferUnitPrice,
+        x84UnitPrice: storedOfferUnitPrice,
 
-        // Nur Startwert für KI-Berechnung.
         preis: calculationStartEp,
         finalUnitPrice: calculationStartEp,
       } as EliteRow;
@@ -5380,6 +5411,38 @@ return (
         <button type="button" style={btnSecondary} onClick={addRow}>
           + Position
         </button>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            padding: "6px",
+            border: "1px solid #d7dde8",
+            borderRadius: 12,
+            background: "#f8fafc",
+          }}
+        >
+          <button
+            type="button"
+            style={kiMode === "new-calculation" ? btnPrimary : btnSecondary}
+            onClick={() => setKiMode("new-calculation")}
+            disabled={loading}
+            title="Ohne Angebotsbasis: RLC erstellt die Kalkulation aus LV, Langtext, Menge, Einheit, Datenbank und Urkalkulation."
+          >
+            Neue Kalkulation erstellen
+          </button>
+
+          <button
+            type="button"
+            style={kiMode === "offer-check" ? btnPrimary : btnSecondary}
+            onClick={() => setKiMode("offer-check")}
+            disabled={loading}
+            title="Mit Angebotsbasis: RLC prüft vorhandene Preise und schützt sie mit Guards vor KI-Ausreißern."
+          >
+            Angebot prüfen
+          </button>
+        </div>
 
         <button
           type="button"
@@ -9725,6 +9788,15 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
+
+
+
+
+
+
 
 
 
