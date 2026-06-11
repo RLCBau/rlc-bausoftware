@@ -657,7 +657,37 @@ function writeAll(rows: LVPos[]) {
   const key = lvStorageKey();
   if (!key) return;
 
-  localStorage.setItem(key, JSON.stringify(sortRows(dedupeById(rows))));
+  const cleaned = sortRows(dedupeById(rows));
+  const payload = JSON.stringify(cleaned);
+
+  try {
+    localStorage.setItem(key, payload);
+  } catch (e) {
+    const msg = String((e as any)?.name || (e as any)?.message || e);
+
+    if (msg.includes("QuotaExceeded") || msg.includes("quota")) {
+      try {
+        const currentProjectKey = currentLvProjectKey();
+
+        Object.keys(localStorage)
+          .filter((k) =>
+            k.startsWith(`${KEY}:`) &&
+            currentProjectKey &&
+            k !== `${KEY}:${currentProjectKey}`
+          )
+          .forEach((k) => localStorage.removeItem(k));
+
+        localStorage.setItem(key, payload);
+        console.warn("[LV] localStorage quota bereinigt, alte LV-Projekte entfernt.");
+        return;
+      } catch (retryError) {
+        console.warn("[LV] localStorage voll. LV wird nur im Speicher/Server weitergeführt.", retryError);
+        return;
+      }
+    }
+
+    console.warn("[LV] writeAll localStorage failed:", e);
+  }
 }
 
 function parseCsvLine(line: string, sep = ";"): string[] {
@@ -1345,6 +1375,7 @@ export const LV_CAD = {
     return mapped.length;
   },
 };
+
 
 
 

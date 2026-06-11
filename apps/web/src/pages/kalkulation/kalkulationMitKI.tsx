@@ -2804,30 +2804,48 @@ function importHandoff() {
   function normalizeImportedStorageRows(rawRows: any[]): EliteRow[] {
     return rawRows
       .map((x: any) => {
-        const ep =
+        const sourceKind = String(
+          x.gaebType || x.importType || x.format || x.source || x.name || ""
+        ).toLowerCase();
+
+        const explicitOfferEp =
           n(x.angebotUnitPrice) ||
           n(x.originalPreKiPrice) ||
+          n(x.x84UnitPrice);
+
+        const rawEp =
           n(x.preis) ||
           n(x.ep) ||
           n(x.unitPrice) ||
           n(x.finalUnitPrice);
 
+        const isRealOfferImport =
+          sourceKind.includes("x84") ||
+          sourceKind.includes("angebot") ||
+          explicitOfferEp > 0;
+
+        const offerEp = isRealOfferImport ? (explicitOfferEp || rawEp) : 0;
+        const workEp = offerEp > 0 ? offerEp : rawEp;
+
         return normalizeEliteRow({
           ...x,
           id: String(x.id || safeId()),
-          posNr: x.posNr || x.pos || x.position || x.lvPos || "",
+          posNr: x.posNr || x.position || x.oz || "",
           kurztext: x.kurztext || x.text || x.title || x.shortText || "",
           langtext: x.langtext || x.description || x.longText || "",
           einheit: x.einheit || x.unit || x.me || "",
           menge: n(x.menge ?? x.qty ?? x.quantity),
 
-          angebotUnitPrice: n(x.angebotUnitPrice) || ep,
-          angebotTotal: round2(n(x.menge ?? x.qty ?? x.quantity) * ep),
-          originalPreKiPrice: n(x.originalPreKiPrice) || ep,
+          // Nur echte X84-/Angebotsdaten dürfen Angebotsbasis werden.
+          // X83 darf NICHT automatisch als Angebot/X84 gespeichert werden.
+          angebotUnitPrice: offerEp,
+          angebotTotal: offerEp > 0 ? round2(n(x.menge ?? x.qty ?? x.quantity) * offerEp) : 0,
+          originalPreKiPrice: offerEp,
+          x84UnitPrice: offerEp,
 
-          preis: n(x.preis) || ep,
-          finalUnitPrice: n(x.finalUnitPrice) || ep,
-          suggestedUnitPrice: n(x.suggestedUnitPrice) || ep,
+          preis: workEp,
+          finalUnitPrice: workEp,
+          suggestedUnitPrice: n(x.suggestedUnitPrice) || workEp,
 
           auftragId: x.auftragId || selectedAuftragId || "",
           auftragName: x.auftragName || selectedAuftrag?.name || "",
@@ -9788,6 +9806,7 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
 
 
 
