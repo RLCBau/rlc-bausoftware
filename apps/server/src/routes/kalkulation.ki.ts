@@ -5742,14 +5742,17 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
       /mehr\s*-?\s*oder\s*-?\s*minderpreis|mehrpreis|minderpreis|zulage|zuschlag/.test(fullText) &&
       /^(cm|mm)$/.test(unit);
 
-    const offerEp = round2(
-      n(row?.angebotUnitPrice) ||
-      n(row?.originalPreKiPrice) ||
-      n(row?.x84UnitPrice) ||
-      n(row?.reverseUrkalkulation?.x84UnitPrice) ||
-      n(row?.dbComparability?.x84UnitPrice) ||
-      n(row?.preis)
-    );
+    const offerBaselineCandidates = [
+      { source: "angebotUnitPrice", value: n(row?.angebotUnitPrice) },
+      { source: "originalPreKiPrice", value: n(row?.originalPreKiPrice) },
+      { source: "x84UnitPrice", value: n(row?.x84UnitPrice) },
+      { source: "reverseUrkalkulation.x84UnitPrice", value: n(row?.reverseUrkalkulation?.x84UnitPrice) },
+      { source: "dbComparability.x84UnitPrice", value: n(row?.dbComparability?.x84UnitPrice) },
+    ];
+
+    const selectedOfferBaseline = offerBaselineCandidates.find((x) => x.value > 0);
+    const offerEp = round2(selectedOfferBaseline?.value || 0);
+    const offerBaselineSource = selectedOfferBaseline?.source || "";
 
     const explodedAgainstOffer =
       isSmallSupplement &&
@@ -5840,6 +5843,7 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
           offerBaselineGuard: {
             applied: true,
             type: guardType,
+            source: offerBaselineSource,
             originalKiEp: ep,
             offerEp,
             factor: factorAgainstOffer,
