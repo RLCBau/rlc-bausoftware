@@ -6361,7 +6361,25 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   let directLinearEp = 0;
   let directLinearReason = "";
 
-  if (/(verlegung mittelspannungskabel|verlegung ortsnetzkabel)/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+  if (/schichtenverbund|haftkleber|bitumenemulsion/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
+    directLinearEp = /(m2|m²|qm)/.test(unit) ? 0.85 : 4.50;
+    directLinearReason = "RLC Calibration Guard V9: Schichtenverbund/Zulage ohne X84 als leichte Nebenleistung kalibriert.";
+  } else if (/losflansch/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
+    directLinearEp = 250.00;
+    directLinearReason = "RLC Calibration Guard V9: Losflansch ohne X84 auf realistischen Stückpreis kalibriert.";
+  } else if (/handschachtung|handschacht/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 180.00;
+    directLinearReason = "RLC Calibration Guard V9: Handschachtung ohne X84 auf realistischen m³-Ansatz kalibriert.";
+  } else if (/ringraumdichtung/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
+    directLinearEp = 450.00;
+    directLinearReason = "RLC Calibration Guard V9: Ringraumdichtung ohne X84 auf realistischen Stückpreis kalibriert.";
+  } else if (/hausanschluss.*lwl|lwl.*hausanschluss/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
+    directLinearEp = 1200.00;
+    directLinearReason = "RLC Calibration Guard V9: LWL-Hausanschluss ohne X84 auf prüfpflichtigen Stückansatz kalibriert.";
+  } else if (/spülen|spuelen|entkeimung/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
+    directLinearEp = 650.00;
+    directLinearReason = "RLC Calibration Guard V9: Spülen/Entkeimung als Stückposition ohne X84 kalibriert.";
+  } else if (/(verlegung mittelspannungskabel|verlegung ortsnetzkabel)/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
     directLinearEp = 8.00;
     directLinearReason = "RLC Calibration Guard V8: Kabelverlegung als reine Meterposition kalibriert.";
   } else if (/zwischenplanum/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
@@ -6691,14 +6709,57 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   }
 
   if (maxEp > 0 && ep > maxEp) {
+    const cappedEp = round2(maxEp);
+    const cappedTotal = round2(cappedEp * Math.max(1, qty));
+    const cappedBreakdown = Array.isArray(result?.priceBreakdown) && result.priceBreakdown.length
+      ? result.priceBreakdown.map((line: any, index: number) =>
+          index === 0
+            ? {
+                ...line,
+                unit: row?.einheit || result?.einheit || line?.unit || "EH",
+                qty: 1,
+                price: cappedEp,
+                total: cappedEp,
+                note: [s(line?.note), "RLC No-X84 Hard Cap angewendet"].filter(Boolean).join(" · "),
+              }
+            : {
+                ...line,
+                price: 0,
+                total: 0,
+                note: [s(line?.note), "Durch RLC No-X84 Hard Cap auf Hauptzeile konsolidiert"].filter(Boolean).join(" · "),
+              }
+        ).filter((line: any) => n(line.total) > 0)
+      : [
+          {
+            id: "rlc-no-x84-hardcap",
+            group: "Material",
+            name: "RLC No-X84 plausibilisierter Ansatz",
+            unit: row?.einheit || result?.einheit || "EH",
+            qty: 1,
+            price: cappedEp,
+            total: cappedEp,
+            note: "Automatisch gedeckelt, da kein X84/Angebot vorhanden ist.",
+          },
+        ];
+
     return {
       ...result,
+      baseUnitPrice: cappedEp,
+      suggestedUnitPrice: cappedEp,
+      finalUnitPrice: cappedEp,
+      rlcKiUnitPrice: cappedEp,
+      unitPrice: cappedEp,
+      preis: cappedEp,
+      totalNet: cappedTotal,
+      rlcKiTotal: cappedTotal,
+      gesamt: cappedTotal,
+      priceBreakdown: cappedBreakdown,
       calculationStatus: "needs_review",
       riskLevel: "high",
       confidence: Math.min(n(result?.confidence, 0.5), 0.45),
       warning: [
         s(result?.warning),
-        "RLC Plausibilitätsstopp: KI-Preis ohne X84/Angebot nicht automatisch freigegeben.",
+        "RLC Plausibilitätsstopp: KI-Preis ohne X84/Angebot wurde hart gedeckelt und bleibt prüfpflichtig.",
         reason,
         `EP ${round2(ep)} €/` + (row?.einheit || result?.einheit || "EH") + ` > Plausibilitätsgrenze ${round2(maxEp)}.`,
       ].filter(Boolean).join(" "),
@@ -6981,11 +7042,19 @@ router.post("/suggest-batch", async (req, res) => {
     const rows: InputRow[] = Array.isArray(req.body?.rows) ? req.body.rows : [];
     if (!rows.length) return res.status(400).json({ ok: false, error: "NO_ROWS" });
 
-    const options = req.body?.options || {};
-      const useOpenAIIfNoDatabaseHit = options.useOpenAIIfNoDatabaseHit !== false;
+    const options = { ...(req.body || {}), ...(req.body?.options || {}) };
+
+      // RLC SPEED FIX:
+      // Standard-Kalkulation darf OpenAI nicht massenhaft verwenden.
+      // OpenAI nur wenn explizit expertMode / forceOpenAIReview / useOpenAIIfNoDatabaseHit=true.
+      const useOpenAIIfNoDatabaseHit =
+        options.useOpenAIIfNoDatabaseHit === true ||
+        options.expertMode === true ||
+        options.forceOpenAIReview === true;
+
       const maxOpenAiRowsPerBatch = Math.max(
         0,
-        Math.min(20, n(options.maxOpenAiRowsPerBatch, 5))
+        Math.min(20, n(options.maxOpenAiRowsPerBatch, useOpenAIIfNoDatabaseHit ? 5 : 0))
       );
       const forceRecalculate =
         options.forceRecalculate === true ||
@@ -7007,7 +7076,7 @@ router.post("/suggest-batch", async (req, res) => {
        */
       const maxParallelRows = Math.max(
         1,
-        Math.min(2, n(options.maxParallelRows, forceRecalculate ? 1 : 2))
+        Math.min(8, n(options.maxParallelRows, forceRecalculate ? 6 : 4))
       );
 
       async function processRow(index: number) {
