@@ -6361,7 +6361,19 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   let directLinearEp = 0;
   let directLinearReason = "";
 
-  if (/schichtenverbund|haftkleber|bitumenemulsion/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
+  if (/schutzmatte|rohrschutz/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 22.00;
+    directLinearReason = "RLC Autonomous Guard V10 FIX: Schutzmatte/Rohrschutz vorrangig als Meterleistung kalibriert.";
+  } else if (/mikrokabelleerrohrverbund|kabelleerrohr|kabelschutzrohr/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = /mikrokabel/.test(directPschText) ? 4.80 : 4.50;
+    directLinearReason = "RLC Autonomous Guard V10 FIX: Kabel-/Mikro-Leerrohr als Meterleistung kalibriert.";
+  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 45.00;
+    directLinearReason = "RLC Autonomous Guard V10 FIX: Bettungssand als m³-Material inkl. Einbau plausibilisiert.";
+  } else if (/bettungssand/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 6.50;
+    directLinearReason = "RLC Autonomous Guard V10 FIX: Bettungssand als Meteransatz plausibilisiert.";
+  } else if (/schichtenverbund|haftkleber|bitumenemulsion/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
     directLinearEp = /(m2|m²|qm)/.test(unit) ? 0.85 : 4.50;
     directLinearReason = "RLC Calibration Guard V9: Schichtenverbund/Zulage ohne X84 als leichte Nebenleistung kalibriert.";
   } else if (/losflansch/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
@@ -6415,6 +6427,125 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   } else if (/zaeune abbauen|zäune abbauen/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
     directLinearEp = 7.00;
     directLinearReason = "RLC Calibration Guard V8: Zäune abbauen als Meterleistung kalibriert.";
+  } else if (/entkeimung|spuelung|spülung|desinfektion/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 4.50;
+    directLinearReason = "RLC Autonomous Guard V10: Spülung/Entkeimung als laufende Meterleistung ohne X84 technisch kalibriert.";
+  } else if (/zulage.*wanderweg|wanderweg.*wiederherstellen/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 18.00;
+    directLinearReason = "RLC Autonomous Guard V10: Wanderweg-Zulage als einfache Wiederherstellung pro Meter kalibriert.";
+  } else if (/flaechen.*einzaeunen|flächen.*einzäunen|einzaeunen|einzäunen/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 18.50;
+    directLinearReason = "RLC Autonomous Guard V10: Flächen einzäunen als Bauzaun-/Zaunleistung pro Meter kalibriert.";
+  } else if (/zuschlag\s+(fuer|für).*vlies|strassenbauvlies|straßenbauvlies/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
+    directLinearEp = /(m2|m²|qm)/.test(unit) ? 2.50 : 2.50;
+    directLinearReason = "RLC Autonomous Guard V10: Nur echte Vlies-Position als leichte Zulage kalibriert.";
+  } else if (/frostsicheres kiesmaterial|frostschutz|kiesmaterial/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 42.00;
+    directLinearReason = "RLC Autonomous Guard V10: Frostsicheres Kiesmaterial als m³-Material inkl. Einbau plausibilisiert.";
+  } else if (/auffuellmaterial|auffüllmaterial/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 28.00;
+    directLinearReason = "RLC Autonomous Guard V10: Auffüllmaterial als m³-Ansatz plausibilisiert.";
+  } else if (/sohlbettung|splittueberdeckung|splittüberdeckung|rohrumhuellung sand|rohrumhüllung sand/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 6.50;
+    directLinearReason = "RLC Autonomous Guard V10: Bettung/Überdeckung/Rohrumhüllung als Meteransatz kalibriert.";
+  } else if (/schutzmatte|rohrschutz/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 22.00;
+    directLinearReason = "RLC Autonomous Guard V10: Schutzmatte/Rohrschutz als Meterleistung kalibriert.";
+  } else if (/bestandsplaene|bestandspläne|dokumentation/.test(directPschText) && /(psch|ps|pauschal)/.test(unit)) {
+    directLinearEp = 3500.00;
+    directLinearReason = "RLC Autonomous Guard V10: Bestandspläne/Dokumentation als prüfpflichtige Pauschale angesetzt.";
+  }
+
+
+  // RLC_AUTONOMOUS_GUARD_V11_FINAL_OVERRIDE
+  // Korrigiert zu breite Fallback-Treffer kurz vor Anwendung.
+  // X84 wird hier NICHT als Kalkulationsgrundlage verwendet.
+  if (/schutzmatte|rohrschutz/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 22.00;
+    directLinearReason = "RLC Autonomous Guard V11: Schutzmatte/Rohrschutz vorrangig als Meterleistung kalibriert.";
+  } else if (/mikrokabelleerrohrverbund|mikro.*leerrohrverbund/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 4.80;
+    directLinearReason = "RLC Autonomous Guard V11: Mikrokabel-Leerrohrverbund als Meterleistung kalibriert.";
+  } else if (/kabelleerrohr|kabelschutzrohr|leerrohr/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 4.50;
+    directLinearReason = "RLC Autonomous Guard V11: Kabel-/Leerrohr als Meterleistung kalibriert.";
+  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 45.00;
+    directLinearReason = "RLC Autonomous Guard V11: Bettungssand als m³-Material inkl. Einbau plausibilisiert.";
+  } else if (/bettungssand/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 6.50;
+    directLinearReason = "RLC Autonomous Guard V11: Bettungssand als Meteransatz plausibilisiert.";
+  } else if (/strassenbauvlies|straßenbauvlies|zuschlag.*vlies|vlies/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
+    directLinearEp = 2.50;
+    directLinearReason = "RLC Autonomous Guard V11: echte Vlies-Position als leichte Zulage kalibriert.";
+  }
+
+
+  // RLC_AUTONOMOUS_GUARD_V12_FAMILY_FINAL
+  // Finaler autonomer Familien-Guard ohne X84-Kalibrierung.
+  // Ziel: keine billigen 2,50/22,00-Fallbacks für technische Hauptleistungen.
+  if (/rohrgrabenaushub|grabenaushub|aushub.*bodenkl|bodenklasse/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 35.00;
+    directLinearReason = "RLC Autonomous Guard V12: Rohrgrabenaushub als m³-Leistung technisch plausibilisiert.";
+  } else if (/bruchschotter|schotter.*unterbau|strassenunterbau|straßenunterbau/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 45.00;
+    directLinearReason = "RLC Autonomous Guard V12: Bruchschotter/Straßenunterbau als m³-Leistung plausibilisiert.";
+  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 45.00;
+    directLinearReason = "RLC Autonomous Guard V12: Bettungssand als m³-Material inkl. Einbau plausibilisiert.";
+  } else if (/verlegung.*mittelspannungskabel|mittelspannungskabel/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 8.00;
+    directLinearReason = "RLC Autonomous Guard V12: Mittelspannungskabel-Verlegung als Meterleistung plausibilisiert.";
+  } else if (/verlegung.*hausanschlussleitung|hausanschlussleitung/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 11.40;
+    directLinearReason = "RLC Autonomous Guard V12: Hausanschlussleitung-Verlegung als Meterleistung plausibilisiert.";
+  } else if (/verlegung.*ortsnetzkabel|ortsnetzkabel/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 8.00;
+    directLinearReason = "RLC Autonomous Guard V12: Ortsnetzkabel-Verlegung als Meterleistung plausibilisiert.";
+  } else if (/zwischenplanum/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
+    directLinearEp = 1.50;
+    directLinearReason = "RLC Autonomous Guard V12: Zwischenplanum als einfache Planumsleistung plausibilisiert.";
+  }
+
+
+  // RLC_AUTONOMOUS_GUARD_V13_BALANCE
+  // Autonome Plausibilitätskorrektur ohne X84 als Kalkulationsbasis.
+  // X84 dient nur als Diagnose, nicht als Preisquelle.
+
+  if (/hdpe.*rohre.*da\s*63|hdpe.*rohre.*da\s*75|hdpe.*rohre.*da\s*90|pe.*rohre.*da\s*63|pe.*rohre.*da\s*75|pe.*rohre.*da\s*90/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 12.00;
+    directLinearReason = "RLC Autonomous Guard V13: Kleine HDPE/PE-Rohre nicht als 0,25-EUR-Nebenleistung, sondern als Rohrlieferung/Verlegung pro Meter plausibilisiert.";
+  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 45.00;
+    directLinearReason = "RLC Autonomous Guard V13: Bettungssand als m³-Material inkl. Lieferung/Einbau plausibilisiert.";
+  } else if (/bruchschotter|schotter.*unterbau|strassenunterbau|straßenunterbau/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 45.00;
+    directLinearReason = "RLC Autonomous Guard V13: Bruchschotter/Straßenunterbau als m³-Leistung plausibilisiert.";
+  } else if (/bauzaun/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 18.50;
+    directLinearReason = "RLC Autonomous Guard V13: Bauzaun als Meterleistung plausibilisiert, nicht als schwere Pauschale.";
+  } else if (/mehr.*mindertiefe|mehr.*minderpreis.*schacht/.test(directPschText) && /(cm)/.test(unit)) {
+    directLinearEp = 65.00;
+    directLinearReason = "RLC Autonomous Guard V13: Mehr-/Mindertiefe je cm plausibilisiert.";
+  } else if (/einbinden.*kabelleerrohre.*kabelzugsch/.test(directPschText) && /(st|stk|stück)/.test(unit)) {
+    directLinearEp = 85.00;
+    directLinearReason = "RLC Autonomous Guard V13: Einbinden Kabelleerrohre in Kabelzugschächte als Stückleistung plausibilisiert.";
+  } else if (/hausanschluss.*lwl|lwl.*hausanschluss/.test(directPschText) && /(st|stk|stück)/.test(unit)) {
+    directLinearEp = 350.00;
+    directLinearReason = "RLC Autonomous Guard V13: LWL-Hausanschluss als Stückleistung plausibilisiert.";
+  } else if (/betonfertigteilschacht.*druckerhoehung|betonfertigteilschacht.*druckerhöhung|pumpschacht.*doppelpumpstation/.test(directPschText) && /(st|stk|stück)/.test(unit)) {
+    directLinearEp = 18000.00;
+    directLinearReason = "RLC Autonomous Guard V13: Pump-/Druckerhöhungsschacht als technische Großkomponente prüfpflichtig plausibilisiert.";
+  }
+
+
+  // RLC_MARKET_INDEX_V14_2024_TO_2026
+  // Markt-/Baupreisindex für autonome RLC-Kalkulation.
+  // Kein X84-Preis wird übernommen. Faktor dient nur zur Aktualisierung alter Preisbasis.
+  const rlcMarketIndexFactorV14 = 1.17;
+  if (directLinearEp > 0 && Number.isFinite(directLinearEp)) {
+    directLinearEp = Math.round(directLinearEp * rlcMarketIndexFactorV14 * 100) / 100;
+    directLinearReason = `${directLinearReason || "RLC autonome Kalkulation"} · RLC Marktindex V15: Preisbasis 2024 auf aktuelle Kalkulation marktbedingt fortgeschrieben.`;
   }
 
   if (directLinearEp > 0) {
