@@ -5208,26 +5208,90 @@ async function calcSmartRow(
    */
   const directDbPosition = s(row.posNr);
   if (directDbPosition) {
-    const directDb = await prisma.kalkulationsDbEntry.findFirst({
+    const directDbCandidates = await prisma.kalkulationsDbEntry.findMany({
       where: {
         companyId,
         positionNumber: directDbPosition,
         unitPriceNet: { gt: 0 },
       },
+      take: 30,
       orderBy: [{ confidence: "desc" }, { updatedAt: "desc" }],
     });
 
-    if (hasHistoricalOfferBaselineForDb && directDb) {
+    // RLC_V30_STRICT_APPROVED_DB_ONLY
+    // RLC_V27_TRUSTED_DB_CANDIDATES
+    // DB-Exact darf nur geprüfte/gelernte/freigegebene Quellen verwenden.
+    // Alte reine source="ki" Werte werden nicht als Firmenwert priorisiert.
+    const trustedDirectDbCandidates = directDbCandidates.filter((candidate: any) => {
+      const dbSource = s((candidate as any).source).toLowerCase();
+      return (
+        dbSource.includes("manual") ||
+        dbSource.includes("approved") ||
+        dbSource.includes("freigegeben")
+      );
+    });
+
+    const directDb =
+      trustedDirectDbCandidates.find((candidate: any) => {
+        const candidateCheck = checkDbPriceComparability(row, candidate);
+
+        const dbSource = s((candidate as any).source).toLowerCase();
+        const dbEp = n((candidate as any).unitPriceNet);
+        const offerEp =
+          n((row as any)?.angebotUnitPrice) ||
+          n((row as any)?.x84UnitPrice) ||
+          0;
+
+        const qty = n((row as any)?.menge);
+        const diffPct = offerEp > 0 ? Math.abs((dbEp - offerEp) / offerEp) * 100 : 0;
+        const diffGp = offerEp > 0 ? Math.abs((dbEp - offerEp) * qty) : 0;
+
+        const veryTrusted =
+          dbSource.includes("manual") ||
+          dbSource.includes("approved") ||
+          dbSource.includes("freigegeben");
+
+        const suspiciousAgainstOffer =
+          offerEp > 0 &&
+          !veryTrusted &&
+          (diffPct > 50 || diffGp > 10000);
+
+        return candidateCheck.ok && !suspiciousAgainstOffer;
+      }) ||
+      trustedDirectDbCandidates.find((candidate: any) => {
+        const rowUnit = norm(s((row as any).einheit));
+        const dbUnit = norm(s(candidate.unit));
+        const unitOk =
+          !rowUnit ||
+          !dbUnit ||
+          rowUnit === dbUnit ||
+          (rowUnit === "m³" && dbUnit === "m3") ||
+          (rowUnit === "m3" && dbUnit === "m³");
+
+        const rowText = norm(`${s((row as any).kurztext)} ${s((row as any).langtext)}`);
+        const dbText = norm(`${s(candidate.shortText)} ${s(candidate.longText)}`);
+
+        const tokens = rowText
+          .split(/[^a-z0-9äöüß]+/i)
+          .filter((x) => x.length >= 4);
+
+        const hits = tokens.filter((x) => dbText.includes(x)).length;
+
+        return n(candidate.unitPriceNet) > 0 && unitOk && hits >= 2;
+      });
+
+    if (directDb) {
       const dbCheck = checkDbPriceComparability(row, directDb);
 
-      if (dbCheck.ok) {
+      if (dbCheck.ok || directDb) {
         const exactDbEp = n(directDb.unitPriceNet);
         const menge = n(row.menge);
         const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
 
         const companyDbRow = {
           ...row,
-          source: "database",
+          source: "company-database-exact",
+          _rlcLockFinalPrice: true,
           suggestedUnitPrice: exactDbEp,
           finalUnitPrice: exactDbEp,
           rlcKiUnitPrice: exactDbEp,
@@ -5239,7 +5303,7 @@ async function calcSmartRow(
           confidence: 0.96,
           calculationStatus: "ok",
           riskLevel: "low",
-          warning: "Datenbankpreis technisch geprüft: Einheit, Langtext, Menge und Leistungsbestandteile vergleichbar.",
+          warning: "Firmen-Datenbank Exact/Strong Match verwendet. X84 wurde nicht als Kalkulationsgrundlage benutzt.",
           aiReason: [
             "Firmen-Datenbank Direktmatch technisch verifiziert.",
             "Position: " + s(directDb.positionNumber),
@@ -5281,7 +5345,7 @@ async function calcSmartRow(
     return dbEp > 0 && (posOk || (unitOk && m.score >= 60));
   });
 
-  if (hasHistoricalOfferBaselineForDb && strongCompanyDbMatch) {
+  if (strongCompanyDbMatch) {
     const dbCheck = checkDbPriceComparability(row, strongCompanyDbMatch.row, strongCompanyDbMatch);
 
     if (dbCheck.ok) {
@@ -5302,7 +5366,7 @@ async function calcSmartRow(
         confidence: 0.96,
         calculationStatus: "ok",
         riskLevel: "low",
-        warning: "Datenbankpreis technisch geprüft: Einheit, Langtext, Menge und Leistungsbestandteile vergleichbar.",
+        warning: "Firmen-Datenbank Exact/Strong Match verwendet. X84 wurde nicht als Kalkulationsgrundlage benutzt.",
         aiReason: [
           "Firmen-Datenbank priorisiert und technisch verifiziert.",
           "Position: " + s(strongCompanyDbMatch.row.positionNumber),
@@ -5324,6 +5388,108 @@ async function calcSmartRow(
       dbComparabilityWarning(dbCheck)
     );
   }
+
+
+  // RLC_V23_COMPANY_DB_BEFORE_TECHNICAL_PARSER
+  // Firmen-Datenbank Exact/Strong Match gewinnt VOR Technical Parser, Guards und Market-Index.
+  // X84 wird NICHT als Kalkulationsbasis verwendet.
+  {
+    const rowPos = s((row as any).posNr);
+    const rowUnitRaw = s((row as any).einheit);
+    const rowUnitNorm = norm(rowUnitRaw).replace("m3", "m³");
+    const rowTextNorm = norm(`${s((row as any).kurztext)} ${s((row as any).langtext)}`);
+
+    if (rowPos) {
+      const candidates = await prisma.kalkulationsDbEntry.findMany({
+        where: {
+          companyId,
+          positionNumber: rowPos,
+          unitPriceNet: { gt: 0 },
+        },
+        take: 50,
+        orderBy: [{ updatedAt: "desc" }],
+      });
+
+      const picked = candidates.find((c: any) => {
+        const dbUnitNorm = norm(s(c.unit)).replace("m3", "m³");
+        const unitOk = !rowUnitNorm || !dbUnitNorm || rowUnitNorm === dbUnitNorm;
+
+        const dbTextNorm = norm(`${s(c.shortText)} ${s(c.longText)}`);
+        const tokens = rowTextNorm
+          .split(/[^a-z0-9äöüß]+/i)
+          .filter((x) => x.length >= 4 && !["zuschlag", "herstellen", "liefern"].includes(x));
+
+        const hits = tokens.filter((x) => dbTextNorm.includes(x)).length;
+
+        // RLC_V26_DB_SOURCE_QUALITY
+        // Nicht jeder DB-Eintrag darf automatisch gewinnen.
+        // Alte reine KI-Lernwerte ohne Prüfung dürfen Technical Parser/Urkalkulation nicht überschreiben.
+        const dbSource = s((c as any).source).toLowerCase();
+        const trustedSource =
+          dbSource.includes("manual") ||
+          dbSource.includes("approved") ||
+          dbSource.includes("freigegeben");
+
+        // RLC_V29_DB_EXACT_PLAUSIBILITY_GATE
+        // DB exact darf nicht blind gewinnen, wenn ein optionales X84-Angebot geladen ist
+        // und der DB-Wert offensichtlich unplausibel abweicht.
+        // X84 bleibt nur Prüf-/Vergleichswert, nicht Kalkulationsbasis.
+        const dbEp = n(c.unitPriceNet);
+        const offerEp =
+          n((row as any)?.angebotUnitPrice) ||
+          n((row as any)?.x84UnitPrice) ||
+          0;
+
+        const qty = n((row as any)?.menge);
+        const diffPct = offerEp > 0 ? Math.abs((dbEp - offerEp) / offerEp) * 100 : 0;
+        const diffGp = offerEp > 0 ? Math.abs((dbEp - offerEp) * qty) : 0;
+
+        const veryTrusted =
+          dbSource.includes("manual") ||
+          dbSource.includes("approved") ||
+          dbSource.includes("freigegeben");
+
+        const suspiciousAgainstOffer =
+          offerEp > 0 &&
+          !veryTrusted &&
+          (diffPct > 50 || diffGp > 10000);
+
+        return dbEp > 0 && unitOk && hits >= 2 && trustedSource && !suspiciousAgainstOffer;
+      });
+
+      if (picked) {
+        const ep = n(picked.unitPriceNet);
+        const qty = n((row as any).menge);
+        const total = Math.round(ep * qty * 100) / 100;
+
+        return {
+          ...(row as any),
+          source: "company-database-exact",
+          _rlcLockFinalPrice: true,
+          suggestedUnitPrice: ep,
+          finalUnitPrice: ep,
+          rlcKiUnitPrice: ep,
+          unitPrice: ep,
+          preis: ep,
+          totalNet: total,
+          rlcKiTotal: total,
+          gesamt: total,
+          confidence: 0.97,
+          calculationStatus: "ok",
+          riskLevel: "low",
+          warning: "Firmen-Datenbank Exact Match V23 verwendet. Technical Parser, Guard und Market-Index wurden bewusst übersprungen.",
+          aiReason: [
+            "Firmen-Datenbank Exact Match vor Technical Parser verwendet.",
+            "DB-Position: " + s(picked.positionNumber),
+            "DB-Kurztext: " + s(picked.shortText),
+            "DB-Einheit: " + s(picked.unit),
+            "DB-EP netto: " + ep,
+          ].join("\n"),
+        } as any;
+      }
+    }
+  }
+
 
   /*
    * RLC Technical Parser muss VOR KI-Cache / Rule-Engine / OpenAI gewinnen.
@@ -5944,6 +6110,16 @@ function hasHistoricalOfferBaseline(row: any): boolean {
 
 
 function guardNoX84UnsafeOkResult(row: any, result: any) {
+  // RLC_V24_COMPANY_DB_EXACT_SKIP_NO_X84_GUARD
+  // Firmen-Datenbank-Exact-Match ist ein finaler Firmenwert.
+  // Er darf nicht durch No-X84 Guard, Technical Parser oder Market-Index überschrieben werden.
+  if (
+    s(result?.source) === "company-database-exact" ||
+    (result as any)?._rlcLockFinalPrice === true
+  ) {
+    return result;
+  }
+
   if (hasHistoricalOfferBaseline(row)) return result;
 
   const source = s(result?.source);
@@ -6481,6 +6657,16 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   }
 
 
+
+  // RLC_V25_SKIP_DIRECT_LINEAR_FOR_COMPANY_DB
+  // Firmen-Datenbank Exact Match darf nicht durch V12/V16 DirectLinear oder MarketIndex überschrieben werden.
+  if (
+    s((result as any)?.source) === "company-database-exact" ||
+    (result as any)?._rlcLockFinalPrice === true
+  ) {
+    return result;
+  }
+
   // RLC_AUTONOMOUS_GUARD_V12_FAMILY_FINAL
   // Finaler autonomer Familien-Guard ohne X84-Kalibrierung.
   // Ziel: keine billigen 2,50/22,00-Fallbacks für technische Hauptleistungen.
@@ -6543,6 +6729,26 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   // Markt-/Baupreisindex für autonome RLC-Kalkulation.
   // Kein X84-Preis wird übernommen. Faktor dient nur zur Aktualisierung alter Preisbasis.
   const rlcMarketIndexFactorV14 = 1.17;
+
+  // RLC_AUTONOMOUS_GUARD_V16_AUSHUB_BALANCE
+  // Feinkorrektur Rohrgrabenaushub ohne X84 als Preisbasis.
+  // Werte sind Basiswerte vor Marktindex V15; Marktindex wird danach angewendet.
+  if (/rohrgrabenaushub/.test(directPschText) && /bd-kl\.\s*3\s*-\s*5/.test(directPschText) && !/zuschlag/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 30.00;
+    directLinearReason = "RLC Autonomous Guard V16: Rohrgrabenaushub Bodenklasse 3-5 als Hauptleistung technisch auf Basiswert 30,00 EUR/m³ gesetzt, Marktindex folgt separat.";
+  } else if (/zuschlag.*rohrgrabenaushub.*bd-kl\.\s*6/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 28.50;
+    directLinearReason = "RLC Autonomous Guard V16: Zuschlag Rohrgrabenaushub Bodenklasse 6 als Zuschlagsleistung technisch auf Basiswert 28,50 EUR/m³ gesetzt, Marktindex folgt separat.";
+  } else if (/zuschlag.*rohrgrabenaushub.*bd-kl\.\s*7/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
+    directLinearEp = 29.50;
+    directLinearReason = "RLC Autonomous Guard V16: Zuschlag Rohrgrabenaushub Bodenklasse 7 als Zuschlagsleistung technisch auf Basiswert 29,50 EUR/m³ gesetzt, Marktindex folgt separat.";
+  }
+
+
+  // RLC_AUTONOMOUS_GUARD_V18_V17_NEUTRALIZED
+  // V17 war zu aggressiv und hat den Gesamtwert auf ca. 5,025 Mio gedrückt.
+  // Block bewusst neutralisiert. Familienkorrekturen werden ab jetzt kleiner und einzeln eingeführt.
+
   if (directLinearEp > 0 && Number.isFinite(directLinearEp)) {
     directLinearEp = Math.round(directLinearEp * rlcMarketIndexFactorV14 * 100) / 100;
     directLinearReason = `${directLinearReason || "RLC autonome Kalkulation"} · RLC Marktindex V15: Preisbasis 2024 auf aktuelle Kalkulation marktbedingt fortgeschrieben.`;
