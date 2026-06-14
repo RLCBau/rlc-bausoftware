@@ -6754,6 +6754,18 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   // V31 war zu aggressiv und wurde neutralisiert.
   // Weitere Korrekturen erfolgen nur noch gezielt pro Einzelposition/Familie nach Report.
 
+
+  // RLC_V33_MICRO_ERSCHWERNIS_HDD
+  // Micro-Korrektur nach V32: nur die größten echten Unterbewertungen anheben.
+  // Ziel: ca. +95k, ohne Gruppenlogik breit zu verändern.
+  if (/erschwernis.*trasse.*steigen/.test(directPschText) && /(psch|pauschal)/.test(unit)) {
+    directLinearEp = 115000.00;
+    directLinearReason = "RLC V33: Erschwernis Trasse in Steigen als komplexe Pauschale plausibilisiert.";
+  } else if (/pilotbohrung.*da\s*180/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
+    directLinearEp = 70.00;
+    directLinearReason = "RLC V33: Pilotbohrung DA 180 vorsichtig angehoben, ohne HDD-Gruppe breit zu überschreiben.";
+  }
+
   if (directLinearEp > 0 && Number.isFinite(directLinearEp)) {
     directLinearEp = Math.round(directLinearEp * rlcMarketIndexFactorV14 * 100) / 100;
     directLinearReason = `${directLinearReason || "RLC autonome Kalkulation"} · RLC Marktindex V15: Preisbasis 2024 auf aktuelle Kalkulation marktbedingt fortgeschrieben.`;
