@@ -6749,6 +6749,11 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
   // V17 war zu aggressiv und hat den Gesamtwert auf ca. 5,025 Mio gedrückt.
   // Block bewusst neutralisiert. Familienkorrekturen werden ab jetzt kleiner und einzeln eingeführt.
 
+
+  // RLC_V32_V31_NEUTRALIZED
+  // V31 war zu aggressiv und wurde neutralisiert.
+  // Weitere Korrekturen erfolgen nur noch gezielt pro Einzelposition/Familie nach Report.
+
   if (directLinearEp > 0 && Number.isFinite(directLinearEp)) {
     directLinearEp = Math.round(directLinearEp * rlcMarketIndexFactorV14 * 100) / 100;
     directLinearReason = `${directLinearReason || "RLC autonome Kalkulation"} · RLC Marktindex V15: Preisbasis 2024 auf aktuelle Kalkulation marktbedingt fortgeschrieben.`;
