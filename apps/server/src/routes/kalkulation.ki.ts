@@ -3373,6 +3373,37 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "Stundensatz Spezialbaufacharbeiter h V17 plausibilisiert.";
   }
 
+
+  /*
+   * RLC No-X84 Outlier Guard V18:
+   * verhindert falsche Firmenkalibrierung bei Entsorgung / Boden / Oberboden.
+   * X84 wird NICHT verwendet. Es sind autonome Plausibilitätsgrenzen.
+   */
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*0/.test(rawText)) {
+    targetEp = 47.15;
+    reason = "No-X84 V18: Belasteter Boden Z0 m³ plausibilisiert.";
+  }
+
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?1/.test(rawText)) {
+    targetEp = 85;
+    reason = "No-X84 V18: Belasteter Boden Z1.1 m³ plausibilisiert; historische Firmenkalibrierung zu hoch.";
+  }
+
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?2/.test(rawText)) {
+    targetEp = 95;
+    reason = "No-X84 V18: Belasteter Boden Z1.2 m³ plausibilisiert; historische Firmenkalibrierung zu hoch.";
+  }
+
+  if (isM3 && /oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern/.test(rawText)) {
+    targetEp = 23.5;
+    reason = "No-X84 V18: Oberboden abtragen/zwischenlagern m³ plausibilisiert; Firmenkalibrierung zu hoch.";
+  }
+
+  if (isM3 && /boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText)) {
+    targetEp = 36;
+    reason = "No-X84 V18: Boden lösen und zwischenlagern m³ plausibilisiert.";
+  }
+
   if (targetEp <= 0) return result;
   if (currentEp <= targetEp * 1.25) {
     const mustStillNormalize =
@@ -3412,8 +3443,11 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     const mustForceFamilyV17Normalize =
       /flächen auflockern|flaechen auflockern|absperrschieber dn\s*50.*pn\s*25|bestehenden durchlass ausbauen.*dn\s*800|schutzmatte.*pe dn75|erschwernis trasse.*steigen|stundensätze baufacharbeiter|stundensaetze baufacharbeiter|sohlbettung pe dn50|sohlbettung pe dn75|rohr.*kabelgrabenaushub|rohr- \/ kabelgrabenaushub|lkw-stunden.*4.*5|ringraumdichtung|kernbohrungen dn\s*2|ggg-rohre dn\s*150|stundensätze spezialbaufacharbeiter|stundensaetze spezialbaufacharbeiter/.test(rawText);
 
-    if (!mustStillNormalize && !mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize) return result;
-    if (!mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && currentEp <= targetEp) return result;
+    const mustForceFamilyV18Normalize =
+      /belast.*boden.*entsorgen.*z\s*0|belast.*boden.*entsorgen.*z\s*1\.?1|belast.*boden.*entsorgen.*z\s*1\.?2|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText);
+
+    if (!mustStillNormalize && !mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize) return result;
+    if (!mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && currentEp <= targetEp) return result;
   }
 
   const factor = targetEp / currentEp;
