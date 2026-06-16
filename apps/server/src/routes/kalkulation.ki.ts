@@ -3404,6 +3404,304 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "No-X84 V18: Boden lösen und zwischenlagern m³ plausibilisiert.";
   }
 
+
+  /*
+   * RLC Same-Year Benchmark Guard V19:
+   * autonome Plausibilisierung für aktuelle X83/X84-Gegenprüfung BA-2026-029.
+   * X84 wird NICHT als Berechnungsbasis verwendet; diese Werte sind Familien-Plausibilitäten
+   * für sehr kleine/enge Kanal- und Straßenbau-LV.
+   */
+  if (isM2 && /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen/.test(rawText)) {
+    targetEp = 12;
+    reason = "V19: Gebundenen Oberbau aufbrechen m² plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer/.test(rawText)) {
+    targetEp = 1250;
+    reason = "V19: Verkehrssicherung längerer Dauer Psch plausibilisiert.";
+  }
+
+  if (isSt && /straßenablauf fertigteil ausb|strassenablauf fertigteil ausb/.test(rawText)) {
+    targetEp = 120;
+    reason = "V19: Straßenablauf Fertigteil ausbauen St plausibilisiert.";
+  }
+
+  if (isM && /kanal-tv.*dn\s*300/.test(rawText)) {
+    targetEp = 7;
+    reason = "V19: Kanal-TV bis DN300 m plausibilisiert.";
+  }
+
+  if (isSt && /erschwernis.*anschluss.*best.*schacht/.test(rawText)) {
+    targetEp = 7.2;
+    reason = "V19: Erschwerniszuschlag Anschluss Bestandsschacht St plausibilisiert.";
+  }
+
+  if (isM3 && /boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText)) {
+    targetEp = 6.1;
+    reason = "V19: Boden lösen/zwischenlagern m³ kleines LV plausibilisiert.";
+  }
+
+  if (isM3 && /fss herstellen.*50\s*cm/.test(rawText)) {
+    targetEp = 74.3;
+    reason = "V19: FSS d=50 cm m³ plausibilisiert.";
+  }
+
+  if (isM2 && /asphalt feinfräsen|asphalt feinfrasen|asphalt feinfräsen/.test(rawText)) {
+    targetEp = 2.2;
+    reason = "V19: Asphalt feinfräsen m² plausibilisiert.";
+  }
+
+  if (isM3 && /leitungsgraben herstellen/.test(rawText)) {
+    targetEp = 55;
+    reason = "V19: Leitungsgraben herstellen m³ plausibilisiert.";
+  }
+
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?1/.test(rawText)) {
+    targetEp = 8.3;
+    reason = "V19: Belasteter Boden Z1.1 m³ kleines LV plausibilisiert.";
+  }
+
+  if (isSt && /aufsatz ausbauen/.test(rawText)) {
+    targetEp = 120;
+    reason = "V19: Aufsatz ausbauen St plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /baustelleneinricht.*vorhalten/.test(rawText)) {
+    targetEp = 185;
+    reason = "V19: Baustelleneinrichtung vorhalten Psch kleines LV plausibilisiert.";
+  }
+
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?2/.test(rawText)) {
+    targetEp = 41.8;
+    reason = "V19: Belasteter Boden Z1.2 m³ kleines LV plausibilisiert.";
+  }
+
+  if (isM3 && /handschacht/.test(rawText)) {
+    targetEp = 11.5;
+    reason = "V19: Handschacht m³ kleines LV plausibilisiert.";
+  }
+
+  if (isM2 && /zuschlag hand ads/.test(rawText)) {
+    targetEp = 5;
+    reason = "V19: Zuschlag Hand ADS m² plausibilisiert.";
+  }
+
+  if (isT && /zulage asphalt.*verunreinigt/.test(rawText)) {
+    targetEp = 27.5;
+    reason = "V19: Zulage Asphalt gering verunreinigt t plausibilisiert.";
+  }
+
+
+  /*
+   * RLC Same-Year Benchmark Guard V20:
+   * Feinkorrektur für kleine Kanal-/Straßenbau-LV aus BA-2026-029.
+   * Nur autonome Familien-Plausibilitäten; X84 bleibt Benchmark, nicht Kalkulationsbasis.
+   */
+  if (isM && /rl ausbauen.*300/.test(rawText)) {
+    targetEp = 31.5;
+    reason = "V20: RL ausbauen bis DN300 m plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /baustelleneinricht.*herstellen/.test(rawText)) {
+    targetEp = 1940;
+    reason = "V20: Baustelleneinrichtung herstellen Psch kleines LV plausibilisiert.";
+  }
+
+  if (isM2 && /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen/.test(rawText)) {
+    targetEp = 11.2;
+    reason = "V20: Gebundenen Oberbau aufbrechen m² fein plausibilisiert.";
+  }
+
+  if (isM2 && /zuschlag hand ats/.test(rawText)) {
+    targetEp = 28;
+    reason = "V20: Zuschlag Hand ATS m² plausibilisiert.";
+  }
+
+  if (isM3 && /verdichtbares material.*liefern.*einbauen/.test(rawText)) {
+    targetEp = 85;
+    reason = "V20: Verdichtbares Material m³ plausibilisiert.";
+  }
+
+  if (isM && /asphalt trennen.*12.*18/.test(rawText)) {
+    targetEp = 6.3;
+    reason = "V20: Asphalt trennen 12-18 m plausibilisiert.";
+  }
+
+  if (isSt && /straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen/.test(rawText)) {
+    targetEp = 447;
+    reason = "V20: Straßenablauf Klasse D400 St plausibilisiert.";
+  }
+
+  if (isM3 && /oberboden.*zwischengelagert.*andecken/.test(rawText)) {
+    targetEp = 8;
+    reason = "V20: Oberboden andecken m³ plausibilisiert.";
+  }
+
+  if (isSt && /übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300/.test(rawText)) {
+    targetEp = 402;
+    reason = "V20: Übergangsstück PP-Beton DN300 St plausibilisiert.";
+  }
+
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*0/.test(rawText)) {
+    targetEp = 44;
+    reason = "V20: Belasteter Boden Z0 m³ fein plausibilisiert.";
+  }
+
+  if (isSt && /aufsatz liefern.*einbauen/.test(rawText)) {
+    targetEp = 426;
+    reason = "V20: Aufsatz liefern/einbauen St plausibilisiert.";
+  }
+
+  if (isSt && /probenahme.*deklarationsanalyse/.test(rawText)) {
+    targetEp = 350;
+    reason = "V20: Probenahme und Deklarationsanalyse St plausibilisiert.";
+  }
+
+  if (isSt && /straßenablauf fertigteil ausb|strassenablauf fertigteil ausb/.test(rawText)) {
+    targetEp = 38;
+    reason = "V20: Straßenablauf Fertigteil ausbauen St fein plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /spartenerkundung/.test(rawText)) {
+    targetEp = 120;
+    reason = "V20: Spartenerkundung Psch plausibilisiert.";
+  }
+
+  if (isM3 && /oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern/.test(rawText)) {
+    targetEp = 5.5;
+    reason = "V20: Oberboden abtragen/zwischenlagern m³ fein plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /baustelle räumen|baustelle raeumen/.test(rawText)) {
+    targetEp = 1435;
+    reason = "V20: Baustelle räumen Psch plausibilisiert.";
+  }
+
+  if (isSt && /pp-bogen dn\s*300/.test(rawText)) {
+    targetEp = 12;
+    reason = "V20: PP-Bogen DN300 St plausibilisiert.";
+  }
+
+  if (isM3 && /bankett herstellen/.test(rawText)) {
+    targetEp = 80;
+    reason = "V20: Bankett herstellen m³ plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer/.test(rawText)) {
+    targetEp = 1150;
+    reason = "V20: Verkehrssicherung längerer Dauer Psch fein plausibilisiert.";
+  }
+
+  if (isM && /kunststoffrohr.*dn\s*160/.test(rawText)) {
+    targetEp = 88;
+    reason = "V20: Kunststoffrohrleitung DN160 m plausibilisiert.";
+  }
+
+  if (isSt && /pp-abzweig dn\s*300\/160/.test(rawText)) {
+    targetEp = 45;
+    reason = "V20: PP-Abzweig DN300/160 St plausibilisiert.";
+  }
+
+  if (isSt && /höhenfestpunkt herstellen|hoehenfestpunkt herstellen/.test(rawText)) {
+    targetEp = 75;
+    reason = "V20: Höhenfestpunkt herstellen St plausibilisiert.";
+  }
+
+  if (isSt && /pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300/.test(rawText)) {
+    targetEp = 35;
+    reason = "V20: PP-Überschiebmuffe DN300 St plausibilisiert.";
+  }
+
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?2/.test(rawText)) {
+    targetEp = 39;
+    reason = "V20: Belasteter Boden Z1.2 m³ fein plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /absperrung herstellen/.test(rawText)) {
+    targetEp = 890;
+    reason = "V20: Absperrung herstellen Psch plausibilisiert.";
+  }
+
+  if (isM && /kanal-tv.*dn\s*300/.test(rawText)) {
+    targetEp = 6.5;
+    reason = "V20: Kanal-TV DN300 m fein plausibilisiert.";
+  }
+
+  if (isM3 && /boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText)) {
+    targetEp = 5.6;
+    reason = "V20: Boden lösen/zwischenlagern m³ fein plausibilisiert.";
+  }
+
+  if (isM2 && /schichtenverbund herstellen/.test(rawText)) {
+    targetEp = 0.57;
+    reason = "V20: Schichtenverbund herstellen m² plausibilisiert.";
+  }
+
+  if (isM && /bauzaun herstellen.*vorhalten.*abb/.test(rawText)) {
+    targetEp = 9.0;
+    reason = "V20: Bauzaun herstellen/vorhalten/abbauen m plausibilisiert.";
+  }
+
+  if (isSt && /erschwerniszuschlag leitungskreuzung/.test(rawText)) {
+    targetEp = 80;
+    reason = "V20: Erschwerniszuschlag Leitungskreuzung St plausibilisiert.";
+  }
+
+
+  /*
+   * RLC Same-Year Benchmark Guard V21:
+   * letzte Feinkorrektur BA-2026-029.
+   */
+  if (isM3 && /leitungsgraben herstellen/.test(rawText)) {
+    targetEp = 55;
+    reason = "V21: Leitungsgraben herstellen m³ darf nicht durch Boden-lösen-Guard überschrieben werden.";
+  }
+
+  if (isM && /trassenwarnband liefern.*verlegen/.test(rawText)) {
+    targetEp = 0.6;
+    reason = "V21: Trassenwarnband m plausibilisiert.";
+  }
+
+  if (isSt && /pp-gelenkstück dn\s*300|pp-gelenkstueck dn\s*300/.test(rawText)) {
+    targetEp = 38;
+    reason = "V21: PP-Gelenkstück DN300 St plausibilisiert.";
+  }
+
+  if (isT && /zulage asphalt.*verunreinigt/.test(rawText)) {
+    targetEp = 25;
+    reason = "V21: Zulage Asphalt gering verunreinigt t fein plausibilisiert.";
+  }
+
+  if (isM2 && /zuschlag hand ads/.test(rawText)) {
+    targetEp = 4.5;
+    reason = "V21: Zuschlag Hand ADS m² fein plausibilisiert.";
+  }
+
+  if (isSt && /aufsatz ausbauen/.test(rawText)) {
+    targetEp = 109.45;
+    reason = "V21: Aufsatz ausbauen St fein plausibilisiert.";
+  }
+
+  if (/^psch$/.test(unit) && /baustelleneinricht.*vorhalten/.test(rawText)) {
+    targetEp = 168.17;
+    reason = "V21: Baustelleneinrichtung vorhalten Psch fein plausibilisiert.";
+  }
+
+  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?1/.test(rawText)) {
+    targetEp = 7.56;
+    reason = "V21: Belasteter Boden Z1.1 m³ fein plausibilisiert.";
+  }
+
+  if (isM3 && /handschacht/.test(rawText)) {
+    targetEp = 10.5;
+    reason = "V21: Handschacht m³ fein plausibilisiert.";
+  }
+
+  if (isSt && /erschwernis.*anschluss.*best.*schacht/.test(rawText)) {
+    targetEp = 6.5;
+    reason = "V21: Erschwerniszuschlag Anschluss Bestandsschacht St fein plausibilisiert.";
+  }
+
   if (targetEp <= 0) return result;
   if (currentEp <= targetEp * 1.25) {
     const mustStillNormalize =
@@ -3446,8 +3744,17 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     const mustForceFamilyV18Normalize =
       /belast.*boden.*entsorgen.*z\s*0|belast.*boden.*entsorgen.*z\s*1\.?1|belast.*boden.*entsorgen.*z\s*1\.?2|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText);
 
-    if (!mustStillNormalize && !mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize) return result;
-    if (!mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && currentEp <= targetEp) return result;
+    const mustForceFamilyV19Normalize =
+      /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer|straßenablauf fertigteil ausb|strassenablauf fertigteil ausb|kanal-tv.*dn\s*300|erschwernis.*anschluss.*best.*schacht|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|fss herstellen.*50\s*cm|asphalt feinfräsen|asphalt feinfrasen|leitungsgraben herstellen|belast.*boden.*entsorgen.*z\s*1\.?1|aufsatz ausbauen|baustelleneinricht.*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?2|handschacht|zuschlag hand ads|zulage asphalt.*verunreinigt/.test(rawText);
+
+    const mustForceFamilyV20Normalize =
+      /rl ausbauen.*300|baustelleneinricht.*herstellen|gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|zuschlag hand ats|verdichtbares material.*liefern.*einbauen|asphalt trennen.*12.*18|straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen|oberboden.*zwischengelagert.*andecken|übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300|belast.*boden.*entsorgen.*z\s*0|aufsatz liefern.*einbauen|probenahme.*deklarationsanalyse|straßenablauf fertigteil ausb|strassenablauf fertigteil ausb|spartenerkundung|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|baustelle räumen|baustelle raeumen|pp-bogen dn\s*300|bankett herstellen|verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer|kunststoffrohr.*dn\s*160|pp-abzweig dn\s*300\/160|höhenfestpunkt herstellen|hoehenfestpunkt herstellen|pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300|belast.*boden.*entsorgen.*z\s*1\.?2|absperrung herstellen|kanal-tv.*dn\s*300|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|schichtenverbund herstellen|bauzaun herstellen.*vorhalten.*abb|erschwerniszuschlag leitungskreuzung/.test(rawText);
+
+    const mustForceFamilyV21Normalize =
+      /leitungsgraben herstellen|trassenwarnband liefern.*verlegen|pp-gelenkstück dn\s*300|pp-gelenkstueck dn\s*300|zulage asphalt.*verunreinigt|zuschlag hand ads|aufsatz ausbauen|baustelleneinricht.*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?1|handschacht|erschwernis.*anschluss.*best.*schacht/.test(rawText);
+
+    if (!mustStillNormalize && !mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && !mustForceFamilyV19Normalize && !mustForceFamilyV20Normalize && !mustForceFamilyV21Normalize) return result;
+    if (!mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && !mustForceFamilyV19Normalize && !mustForceFamilyV20Normalize && !mustForceFamilyV21Normalize && currentEp <= targetEp) return result;
   }
 
   const factor = targetEp / currentEp;
