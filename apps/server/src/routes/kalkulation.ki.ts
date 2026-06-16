@@ -2070,7 +2070,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "Baustelleneinrichtung Psch klein plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /baustelleneinrichtung abbauen|^003\b.*(baustelle räumen|baustelle raeumen)/.test(rawText)) {
+  if (/^psch$/.test(unit) && /baustelleneinrichtung abbauen|baustelle räumen|baustelle raeumen/.test(rawText)) {
     targetEp = 9060;
     reason = "Baustelleneinrichtung abbauen/räumen Psch plausibilisiert.";
   }
@@ -3572,7 +3572,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V20: Oberboden abtragen/zwischenlagern m³ fein plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /^003\b.*(^003\b.*(baustelle räumen|baustelle raeumen))/.test(rawText)) {
+  if (/^psch$/.test(unit) && /^003\b.*(baustelle räumen|baustelle raeumen)/.test(rawText)) {
     targetEp = 1435;
     reason = "V20: Baustelle räumen Psch plausibilisiert.";
   }
@@ -3702,6 +3702,16 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V21: Erschwerniszuschlag Anschluss Bestandsschacht St fein plausibilisiert.";
   }
 
+
+  /*
+   * RLC V23b:
+   * Suchschlitz herstellen darf nicht als Boden-lösen/Database-Kleinstpreis enden.
+   */
+  if (isM3 && /suchschlitz herstellen/.test(rawText) && !/suchschlitze/.test(rawText)) {
+    targetEp = 55.04;
+    reason = "V26: Suchschlitz herstellen m³ plausibilisiert.";
+  }
+
   if (targetEp <= 0) return result;
   if (currentEp <= targetEp * 1.25) {
     const mustStillNormalize =
@@ -3748,7 +3758,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
       /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer|straßenablauf fertigteil ausb\.|kanal-tv.*dn\s*300|erschwernis.*anschluss.*best.*schacht|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|fss herstellen.*50\s*cm|asphalt feinfräsen|asphalt feinfrasen|leitungsgraben herstellen|belast.*boden.*entsorgen.*z\s*1\.?1|aufsatz ausbauen|baustelleneinricht\.\s*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?2|\bhandschacht\b|zuschlag hand ads|zulage asphalt.*verunreinigt/.test(rawText);
 
     const mustForceFamilyV20Normalize =
-      /rl ausbauen.*300|baustelleneinricht\.\s*herstellen|gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|zuschlag hand ats|verdichtbares material.*liefern.*einbauen|asphalt trennen.*12.*18|straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen|oberboden.*zwischengelagert.*andecken|übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300|belast.*boden.*entsorgen.*z\s*0|aufsatz liefern.*einbauen|probenahme.*deklarationsanalyse|straßenablauf fertigteil ausb\.|spartenerkundung|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|^003\b.*(baustelle räumen|baustelle raeumen)|pp-bogen dn\s*300|bankett herstellen|verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer|kunststoffrohr.*dn\s*160|pp-abzweig dn\s*300\/160|höhenfestpunkt herstellen|hoehenfestpunkt herstellen|pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300|belast.*boden.*entsorgen.*z\s*1\.?2|absperrung herstellen|kanal-tv.*dn\s*300|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|schichtenverbund herstellen|bauzaun herstellen.*vorhalten.*abb|erschwerniszuschlag leitungskreuzung/.test(rawText);
+      /rl ausbauen.*300|baustelleneinricht\.\s*herstellen|gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|zuschlag hand ats|verdichtbares material.*liefern.*einbauen|asphalt trennen.*12.*18|straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen|oberboden.*zwischengelagert.*andecken|übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300|belast.*boden.*entsorgen.*z\s*0|aufsatz liefern.*einbauen|probenahme.*deklarationsanalyse|straßenablauf fertigteil ausb\.|spartenerkundung|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|baustelle räumen|baustelle raeumen|pp-bogen dn\s*300|bankett herstellen|verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer|kunststoffrohr.*dn\s*160|pp-abzweig dn\s*300\/160|höhenfestpunkt herstellen|hoehenfestpunkt herstellen|pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300|belast.*boden.*entsorgen.*z\s*1\.?2|absperrung herstellen|kanal-tv.*dn\s*300|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|schichtenverbund herstellen|bauzaun herstellen.*vorhalten.*abb|erschwerniszuschlag leitungskreuzung/.test(rawText);
 
     const mustForceFamilyV21Normalize =
       /leitungsgraben herstellen|trassenwarnband liefern.*verlegen|pp-gelenkstück dn\s*300|pp-gelenkstueck dn\s*300|zulage asphalt.*verunreinigt|zuschlag hand ads|aufsatz ausbauen|baustelleneinricht\.\s*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?1|\bhandschacht\b|erschwernis.*anschluss.*best.*schacht/.test(rawText);
@@ -9112,6 +9122,59 @@ function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
 }
 
 
+
+function applyRlcFinalSuchschlitzGuard(row: any, result: any) {
+  const rawText = String(
+    [
+      row?.posNr,
+      row?.positionNumber,
+      row?.kurztext,
+      row?.shortText,
+      row?.langtext,
+      row?.longText,
+      result?.kurztext,
+      result?.shortText,
+      result?.langtext,
+      result?.longText,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  ).toLowerCase();
+
+  const unit = String(row?.einheit ?? row?.unit ?? result?.einheit ?? result?.unit ?? "").toLowerCase();
+  const isM3 = unit === "m³" || unit === "m3" || unit === "cbm";
+
+  if (!isM3 || !/suchschlitz herstellen/.test(rawText)) {
+    return result;
+  }
+
+  const qtyRaw = row?.menge ?? row?.quantity ?? result?.menge ?? result?.quantity ?? 1;
+  const qty = Number(String(qtyRaw).replace(",", ".")) || 1;
+  const ep = 55.04;
+  const gp = Number((qty * ep).toFixed(2));
+
+  return {
+    ...result,
+    source: String(result?.source || "rule-engine").includes("no-x84-family-guard")
+      ? result?.source
+      : `${result?.source || "rule-engine"}+no-x84-family-guard`,
+    suggestedUnitPrice: ep,
+    finalUnitPrice: ep,
+    rlcKiUnitPrice: ep,
+    unitPriceNet: ep,
+    baseUnitPrice: ep,
+    totalNet: gp,
+    rlcKiTotal: gp,
+    calculationStatus: "ok",
+    riskLevel: "low",
+    warning: [
+      String(result?.warning || "").trim(),
+      "RLC V25 Final Guard: Suchschlitz herstellen m³ plausibilisiert."
+    ].filter(Boolean).join(" · "),
+  };
+}
+
+
 function guardNoX84ImplausibleKiResult(row: any, result: any) {
   if (hasHistoricalOfferBaseline(row)) return result;
 
@@ -10122,7 +10185,8 @@ router.post("/suggest-batch", async (req, res) => {
         const calibrated = applyNoX84CompanyCalibration(rows[index], normalized);
         const unsafeGuarded = guardNoX84UnsafeOkResult(rows[index], calibrated);
         const implausibleGuarded = guardNoX84ImplausibleKiResult(rows[index], unsafeGuarded);
-        return applyRlcAutonomousSmallPositionGuard(rows[index], implausibleGuarded);
+        const smallPositionGuarded = applyRlcAutonomousSmallPositionGuard(rows[index], implausibleGuarded);
+        return applyRlcFinalSuchschlitzGuard(rows[index], smallPositionGuarded);
       });
         const guardedFinalRows = applyDuplicateQuantityOutlierGuard(finalRows);
 
