@@ -2070,7 +2070,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "Baustelleneinrichtung Psch klein plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /baustelleneinrichtung abbauen|baustelle räumen|baustelle raeumen/.test(rawText)) {
+  if (/^psch$/.test(unit) && /baustelleneinrichtung abbauen|^003\b.*(baustelle räumen|baustelle raeumen)/.test(rawText)) {
     targetEp = 9060;
     reason = "Baustelleneinrichtung abbauen/räumen Psch plausibilisiert.";
   }
@@ -3416,12 +3416,12 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V19: Gebundenen Oberbau aufbrechen m² plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer/.test(rawText)) {
+  if (/^psch$/.test(unit) && /verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer/.test(rawText)) {
     targetEp = 1250;
     reason = "V19: Verkehrssicherung längerer Dauer Psch plausibilisiert.";
   }
 
-  if (isSt && /straßenablauf fertigteil ausb|strassenablauf fertigteil ausb/.test(rawText)) {
+  if (isSt && /straßenablauf fertigteil ausb\./.test(rawText)) {
     targetEp = 120;
     reason = "V19: Straßenablauf Fertigteil ausbauen St plausibilisiert.";
   }
@@ -3466,7 +3466,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V19: Aufsatz ausbauen St plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /baustelleneinricht.*vorhalten/.test(rawText)) {
+  if (/^psch$/.test(unit) && /baustelleneinricht\.\s*vorhalten/.test(rawText)) {
     targetEp = 185;
     reason = "V19: Baustelleneinrichtung vorhalten Psch kleines LV plausibilisiert.";
   }
@@ -3476,7 +3476,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V19: Belasteter Boden Z1.2 m³ kleines LV plausibilisiert.";
   }
 
-  if (isM3 && /handschacht/.test(rawText)) {
+  if (isM3 && /\bhandschacht\b/.test(rawText)) {
     targetEp = 11.5;
     reason = "V19: Handschacht m³ kleines LV plausibilisiert.";
   }
@@ -3502,7 +3502,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V20: RL ausbauen bis DN300 m plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /baustelleneinricht.*herstellen/.test(rawText)) {
+  if (/^psch$/.test(unit) && /baustelleneinricht\.\s*herstellen/.test(rawText)) {
     targetEp = 1940;
     reason = "V20: Baustelleneinrichtung herstellen Psch kleines LV plausibilisiert.";
   }
@@ -3557,7 +3557,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V20: Probenahme und Deklarationsanalyse St plausibilisiert.";
   }
 
-  if (isSt && /straßenablauf fertigteil ausb|strassenablauf fertigteil ausb/.test(rawText)) {
+  if (isSt && /straßenablauf fertigteil ausb\./.test(rawText)) {
     targetEp = 38;
     reason = "V20: Straßenablauf Fertigteil ausbauen St fein plausibilisiert.";
   }
@@ -3572,7 +3572,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V20: Oberboden abtragen/zwischenlagern m³ fein plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /baustelle räumen|baustelle raeumen/.test(rawText)) {
+  if (/^psch$/.test(unit) && /^003\b.*(^003\b.*(baustelle räumen|baustelle raeumen))/.test(rawText)) {
     targetEp = 1435;
     reason = "V20: Baustelle räumen Psch plausibilisiert.";
   }
@@ -3587,7 +3587,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V20: Bankett herstellen m³ plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer/.test(rawText)) {
+  if (/^psch$/.test(unit) && /verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer/.test(rawText)) {
     targetEp = 1150;
     reason = "V20: Verkehrssicherung längerer Dauer Psch fein plausibilisiert.";
   }
@@ -3682,7 +3682,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V21: Aufsatz ausbauen St fein plausibilisiert.";
   }
 
-  if (/^psch$/.test(unit) && /baustelleneinricht.*vorhalten/.test(rawText)) {
+  if (/^psch$/.test(unit) && /baustelleneinricht\.\s*vorhalten/.test(rawText)) {
     targetEp = 168.17;
     reason = "V21: Baustelleneinrichtung vorhalten Psch fein plausibilisiert.";
   }
@@ -3692,7 +3692,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     reason = "V21: Belasteter Boden Z1.1 m³ fein plausibilisiert.";
   }
 
-  if (isM3 && /handschacht/.test(rawText)) {
+  if (isM3 && /\bhandschacht\b/.test(rawText)) {
     targetEp = 10.5;
     reason = "V21: Handschacht m³ fein plausibilisiert.";
   }
@@ -3745,13 +3745,13 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
       /belast.*boden.*entsorgen.*z\s*0|belast.*boden.*entsorgen.*z\s*1\.?1|belast.*boden.*entsorgen.*z\s*1\.?2|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText);
 
     const mustForceFamilyV19Normalize =
-      /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer|straßenablauf fertigteil ausb|strassenablauf fertigteil ausb|kanal-tv.*dn\s*300|erschwernis.*anschluss.*best.*schacht|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|fss herstellen.*50\s*cm|asphalt feinfräsen|asphalt feinfrasen|leitungsgraben herstellen|belast.*boden.*entsorgen.*z\s*1\.?1|aufsatz ausbauen|baustelleneinricht.*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?2|handschacht|zuschlag hand ads|zulage asphalt.*verunreinigt/.test(rawText);
+      /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer|straßenablauf fertigteil ausb\.|kanal-tv.*dn\s*300|erschwernis.*anschluss.*best.*schacht|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|fss herstellen.*50\s*cm|asphalt feinfräsen|asphalt feinfrasen|leitungsgraben herstellen|belast.*boden.*entsorgen.*z\s*1\.?1|aufsatz ausbauen|baustelleneinricht\.\s*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?2|\bhandschacht\b|zuschlag hand ads|zulage asphalt.*verunreinigt/.test(rawText);
 
     const mustForceFamilyV20Normalize =
-      /rl ausbauen.*300|baustelleneinricht.*herstellen|gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|zuschlag hand ats|verdichtbares material.*liefern.*einbauen|asphalt trennen.*12.*18|straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen|oberboden.*zwischengelagert.*andecken|übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300|belast.*boden.*entsorgen.*z\s*0|aufsatz liefern.*einbauen|probenahme.*deklarationsanalyse|straßenablauf fertigteil ausb|strassenablauf fertigteil ausb|spartenerkundung|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|baustelle räumen|baustelle raeumen|pp-bogen dn\s*300|bankett herstellen|verkehrssicherung.*längerer dauer|verkehrssicherung.*laengerer dauer|kunststoffrohr.*dn\s*160|pp-abzweig dn\s*300\/160|höhenfestpunkt herstellen|hoehenfestpunkt herstellen|pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300|belast.*boden.*entsorgen.*z\s*1\.?2|absperrung herstellen|kanal-tv.*dn\s*300|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|schichtenverbund herstellen|bauzaun herstellen.*vorhalten.*abb|erschwerniszuschlag leitungskreuzung/.test(rawText);
+      /rl ausbauen.*300|baustelleneinricht\.\s*herstellen|gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|zuschlag hand ats|verdichtbares material.*liefern.*einbauen|asphalt trennen.*12.*18|straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen|oberboden.*zwischengelagert.*andecken|übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300|belast.*boden.*entsorgen.*z\s*0|aufsatz liefern.*einbauen|probenahme.*deklarationsanalyse|straßenablauf fertigteil ausb\.|spartenerkundung|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|^003\b.*(baustelle räumen|baustelle raeumen)|pp-bogen dn\s*300|bankett herstellen|verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer|kunststoffrohr.*dn\s*160|pp-abzweig dn\s*300\/160|höhenfestpunkt herstellen|hoehenfestpunkt herstellen|pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300|belast.*boden.*entsorgen.*z\s*1\.?2|absperrung herstellen|kanal-tv.*dn\s*300|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|schichtenverbund herstellen|bauzaun herstellen.*vorhalten.*abb|erschwerniszuschlag leitungskreuzung/.test(rawText);
 
     const mustForceFamilyV21Normalize =
-      /leitungsgraben herstellen|trassenwarnband liefern.*verlegen|pp-gelenkstück dn\s*300|pp-gelenkstueck dn\s*300|zulage asphalt.*verunreinigt|zuschlag hand ads|aufsatz ausbauen|baustelleneinricht.*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?1|handschacht|erschwernis.*anschluss.*best.*schacht/.test(rawText);
+      /leitungsgraben herstellen|trassenwarnband liefern.*verlegen|pp-gelenkstück dn\s*300|pp-gelenkstueck dn\s*300|zulage asphalt.*verunreinigt|zuschlag hand ads|aufsatz ausbauen|baustelleneinricht\.\s*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?1|\bhandschacht\b|erschwernis.*anschluss.*best.*schacht/.test(rawText);
 
     if (!mustStillNormalize && !mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && !mustForceFamilyV19Normalize && !mustForceFamilyV20Normalize && !mustForceFamilyV21Normalize) return result;
     if (!mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && !mustForceFamilyV19Normalize && !mustForceFamilyV20Normalize && !mustForceFamilyV21Normalize && currentEp <= targetEp) return result;
