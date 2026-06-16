@@ -1,4 +1,5 @@
 // apps/server/src/index.ts
+import globalKnowledgeRouter from "./routes/globalKnowledge";
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -802,6 +803,7 @@ app.get(
 
 /* ======================= Route Registration ======================= */
 app.use("/api/aufmass", aufmassRoutes);
+app.use("/api/global-knowledge", globalKnowledgeRouter);
 app.use("/api/import", importRoutes);
 app.use("/api/gps", gpsRoutes);
 app.use("/api/fotos", fotosRoutes);

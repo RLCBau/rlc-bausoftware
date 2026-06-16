@@ -7749,6 +7749,125 @@ function rlcNoX84CalibrationFloor(row: any, ep: number): number {
 }
 
 
+
+function globalKnowledgeSimilarity(row: InputRow, item: any): number {
+  const rowText = s(`${row.kurztext ?? ""} ${row.langtext ?? ""}`).toLowerCase();
+  const itemText = s(`${item.shortText ?? ""} ${item.longText ?? ""}`).toLowerCase();
+
+  const rowUnit = s(row.einheit).toLowerCase();
+  const itemUnit = s(item.unit).toLowerCase();
+
+  const rowTokens = new Set(
+    rowText
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .split(/\s+/)
+      .filter((x) => x.length >= 4)
+  );
+
+  const itemTokens = new Set(
+    itemText
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .split(/\s+/)
+      .filter((x) => x.length >= 4)
+  );
+
+  let score = 0;
+
+  if (rowUnit && itemUnit && rowUnit === itemUnit) score += 25;
+  if (s(item.shortText).toLowerCase() === s(row.kurztext).toLowerCase()) score += 45;
+  if (s(item.shortText).toLowerCase().includes(s(row.kurztext).toLowerCase())) score += 25;
+  if (s(row.kurztext).toLowerCase().includes(s(item.shortText).toLowerCase())) score += 25;
+
+  let overlap = 0;
+  for (const token of rowTokens) {
+    if (itemTokens.has(token)) overlap += 1;
+  }
+
+  score += Math.min(30, overlap * 10);
+
+  if (s(item.category) && rowText.includes(s(item.category).toLowerCase())) score += 10;
+  if (s(item.gewerk) && rowText.includes(s(item.gewerk).toLowerCase())) score += 8;
+
+  return score;
+}
+
+async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any> {
+  try {
+    const text = s(`${row.kurztext ?? ""} ${row.langtext ?? ""}`);
+    const unit = s(row.einheit);
+
+    if (!text.trim()) return result;
+
+    const tokens = text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim()
+      .split(/\s+/)
+      .filter((x) => x.length >= 4)
+      .slice(0, 6);
+
+    if (!tokens.length) return result;
+
+    const q = tokens[0];
+
+    const matches = await prisma.rlcGlobalKnowledgeAggregated.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              ...tokens.map((token) => ({ normalizedKey: { contains: token } })),
+              ...tokens.map((token) => ({ shortText: { contains: token, mode: "insensitive" as const } })),
+              ...tokens.map((token) => ({ longText: { contains: token, mode: "insensitive" as const } })),
+              ...tokens.map((token) => ({ gewerk: { contains: token, mode: "insensitive" as const } })),
+              ...tokens.map((token) => ({ category: { contains: token, mode: "insensitive" as const } })),
+            ],
+          },
+          unit ? { unit: { contains: unit, mode: "insensitive" } } : {},
+        ],
+      },
+      orderBy: [
+        { confidence: "desc" },
+        { sampleCount: "desc" },
+        { updatedAt: "desc" },
+      ],
+      take: 3,
+    });
+
+    const scoredMatches = matches
+      .map((m: any) => ({ ...m, globalKnowledgeSimilarity: globalKnowledgeSimilarity(row, m) }))
+      .filter((m: any) => m.globalKnowledgeSimilarity >= 45)
+      .sort((a: any, b: any) => b.globalKnowledgeSimilarity - a.globalKnowledgeSimilarity);
+
+    const best = scoredMatches[0];
+    if (!best) return result;
+
+    const note = `Global Knowledge Vergleich: ${best.priceMin ?? "-"}–${best.priceMax ?? "-"} €/` +
+      `${(best.unit ?? unit) || "Einheit"}, Ø ${best.priceAvg ?? "-"} €/` +
+      `${(best.unit ?? unit) || "Einheit"}, Confidence ${best.confidence}. Nur Vergleichswert, kein finaler Kalkulationspreis.`;
+
+    return {
+      ...result,
+      globalKnowledgeMatch: best,
+      globalKnowledgeMatches: scoredMatches,
+      globalKnowledgePriceMin: best.priceMin,
+      globalKnowledgePriceAvg: best.priceAvg,
+      globalKnowledgePriceMax: best.priceMax,
+      globalKnowledgeConfidence: best.confidence,
+      globalKnowledgeSource: Array.isArray(best.sources) ? best.sources.join(', ') : '',
+      warning: [s(result?.warning), note].filter(Boolean).join(" · "),
+      aiReason: [s(result?.aiReason), note].filter(Boolean).join("\n\n"),
+    };
+  } catch (e: any) {
+    return {
+      ...result,
+      warning: [
+        s(result?.warning),
+        `Global Knowledge Vergleich konnte nicht geladen werden: ${e?.message ?? "unknown error"}`,
+      ].filter(Boolean).join(" · "),
+    };
+  }
+}
+
 async function calcSmartRow(
   row: InputRow,
   matches: DbMatch[],
@@ -10143,6 +10262,7 @@ router.post("/suggest-batch", async (req, res) => {
           );
 
           out[index] = applyRlcAutonomousSmallPositionGuard(row, out[index]);
+          out[index] = await applyGlobalKnowledgeHint(row, out[index]);
 
           if (out[index]?.source !== "openai" && budgetLeft > 0) {
             openAiUsed = Math.max(0, openAiUsed - 1);
