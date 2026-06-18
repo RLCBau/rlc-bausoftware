@@ -7806,6 +7806,10 @@ function rlcGlobalKnowledgeFamilyKey(textRaw: any): string {
   if (/lkw|transport|dreiachser|kipper/.test(text)) return "transport_lkw";
   if (/ruettelplatte|rüttelplatte|verdichtungsgeraet|verdichtungsgerät/.test(text)) return "verdichtung_geraet";
 
+  if (/statik.*druckerh[oö]hungsschacht|druckerh[oö]hungsschacht.*statik/.test(text)) return "statik_druckerhoehungsschacht";
+  if (/betonsockel|sockel.*c\s*25|c\s*25\/30/.test(text)) return "betonsockel";
+  if (/forststra[sß]e|forststrasse|forststraßen|forststrassen/.test(text)) return "forststrasse";
+
   if (/baustelleneinrichtung/.test(text)) return "baustelleneinrichtung";
   if (/verkehrssicherung|rsa|beschilderung|umleitung|ampel|absperrung|bauzaun|absturzsicherung/.test(text)) return "sicherung";
   if (/hoehenfestpunkt|höhenfestpunkt|vermessung|bestandsaufnahme|gelaendeaufnahme|geländeaufnahme|dokumentation|as-built/.test(text)) return "vermessung";
@@ -8069,6 +8073,30 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   const unit = normUnit(s((row as any).einheit));
   const rowNorm = norm(rowText);
 
+  if (/statik.*druckerh[oö]hungsschacht|druckerh[oö]hungsschacht.*statik/.test(rowNorm)) {
+    return {
+      ep: 2500,
+      source: "rlc-family-fallback-statik-druckerhoehungsschacht",
+      reason: "Statik Druckerhöhungsschacht: technischer Fallback 2500 €/Psch prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (/betonsockel|sockel.*c\s*25|c\s*25\/30/.test(rowNorm)) {
+    return {
+      ep: 450,
+      source: "rlc-family-fallback-betonsockel",
+      reason: "Betonsockel C25/30: technischer Fallback 450 €/Einheit prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (/forststra[sß]e|forststrasse|forststraßen|forststrassen/.test(rowNorm)) {
+    return {
+      ep: 35,
+      source: "rlc-family-fallback-forststrasse",
+      reason: "Forststraße wiederherstellen: technischer Fallback 35 €/Einheit prüfpflichtig gesetzt.",
+    };
+  }
+
   if (/schachtabdeckung|abdeckung.*d400|d400/.test(rowNorm)) {
     return {
       ep: 420,
@@ -8232,6 +8260,84 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   return { ep: 0, source: "", reason: "" };
 }
 
+
+function cleanRohrgrabenaushubTechnicalSource(row: InputRow, result: any): any {
+  const rowText = norm([
+    (row as any)?.posNr,
+    (row as any)?.kurztext,
+    (row as any)?.langtext,
+    (row as any)?.text,
+  ].join(" "));
+
+  const isRohrgrabenaushub =
+    /rohrgrabenaushub|leitungsgrabenaushub|grabenaushub/.test(rowText);
+
+  if (!isRohrgrabenaushub) return result;
+
+  const source = s((result as any)?.source);
+  const resultText = norm([
+    source,
+    (result as any)?.gewerk,
+    (result as any)?.leistungsart,
+    (result as any)?.bauverfahren,
+    (result as any)?.aiReason,
+    (result as any)?.warning,
+    JSON.stringify((result as any)?.priceBreakdown ?? []),
+  ].join(" "));
+
+  const shouldCleanTechnicalSource =
+    source === "technical-parser" ||
+    (
+      source.includes("technical-parser") &&
+      (
+        resultText.includes("firmenkalibrierung") ||
+        resultText.includes("firmeneigenen x84") ||
+        resultText.includes("rlc firmenkalibrierung aus x84")
+      )
+    );
+
+  if (!shouldCleanTechnicalSource) return result;
+
+  const ep = n(
+    (result as any).finalUnitPrice ??
+    (result as any).rlcKiUnitPrice ??
+    (result as any).unitPrice ??
+    (result as any).preis
+  );
+
+  const qty = n(
+    (row as any).menge ??
+    (row as any).quantity ??
+    (result as any).menge ??
+    (result as any).quantity
+  );
+
+  const total = ep > 0 && qty > 0
+    ? round2(ep * qty)
+    : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
+
+  const note =
+    "RLC Source-Cleanup: Rohrgrabenaushub wurde als technische Aushubposition erkannt. " +
+    "Falsche Firmenkalibrierung-Markierung wurde entfernt; EP bleibt prüfpflichtig.";
+
+  return {
+    ...result,
+    source: "technical-parser-rohrgrabenaushub-cleaned",
+    confidence: Math.min(n((result as any).confidence, 0.5), 0.62),
+    riskLevel: "high",
+    calculationStatus: "needs_review",
+    totalNet: total,
+    rlcKiTotal: total,
+    gesamt: total,
+    totalPrice: total,
+    warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
+    aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
+    sourceCleanupApplied: true,
+    sourceCleanupReason: note,
+  };
+}
+
+
 function recalcBlockedOrTooLowByFamilyFallback(row: InputRow, result: any): any {
   const source = s((result as any)?.source);
   const blocked =
@@ -8285,7 +8391,10 @@ function recalcBlockedOrTooLowByFamilyFallback(row: InputRow, result: any): any 
     family === "schachtabdeckung" ||
     family === "kabelschacht" ||
     family === "asphalt_schneiden" ||
-    family === "transport_lkw";
+    family === "transport_lkw" ||
+    family === "statik_druckerhoehungsschacht" ||
+    family === "betonsockel" ||
+    family === "forststrasse";
 
   if (!blocked && !tooLow && !forceFamilyFallback) return result;
 
@@ -8931,7 +9040,10 @@ const technicalRecipeInput =
             blockedOriginalUnitPrice: round2(n((technicalRow as any).finalUnitPrice ?? (technicalRow as any).unitPrice ?? (technicalRow as any).preis)),
           }
         : technicalRow;
-    const finalTechnicalRowWithFallback = recalcBlockedOrTooLowByFamilyFallback(row, finalTechnicalRow);
+    const finalTechnicalRowWithFallback = cleanRohrgrabenaushubTechnicalSource(
+      row,
+      recalcBlockedOrTooLowByFamilyFallback(row, finalTechnicalRow)
+    );
 
     const technicalCacheKey = cacheKeyForRow(row);
     kalkulationAiCache.set(technicalCacheKey, finalTechnicalRowWithFallback);
@@ -9012,10 +9124,11 @@ const technicalRecipeInput =
 
         const guarded = applyPlausibilityGuard(row, matches, aiRow, forceRecalculate);
         const finalGuarded = guardNoX84ImplausibleKiResult(row, guarded);
+        const finalGuardedCleaned = cleanRohrgrabenaushubTechnicalSource(row, finalGuarded);
 
-        kalkulationAiCache.set(cacheKey, finalGuarded);
+        kalkulationAiCache.set(cacheKey, finalGuardedCleaned);
         scheduleKalkulationAiCacheSave();
-        return finalGuarded;
+        return finalGuardedCleaned;
       }
     } catch (e: any) {
       console.error("[kalkulation.ki] OpenAI plausibility check failed:", e?.message || e);
@@ -9698,6 +9811,10 @@ function rlcNoX84FamilyKey(textRaw: any): string {
   if (/lkw|transport|dreiachser|kipper/.test(text)) return "transport_lkw";
   if (/ruettelplatte|rüttelplatte|verdichtungsgeraet|verdichtungsgerät/.test(text)) return "verdichtung_geraet";
 
+  if (/statik.*druckerh[oö]hungsschacht|druckerh[oö]hungsschacht.*statik/.test(text)) return "statik_druckerhoehungsschacht";
+  if (/betonsockel|sockel.*c\s*25|c\s*25\/30/.test(text)) return "betonsockel";
+  if (/forststra[sß]e|forststrasse|forststraßen|forststrassen/.test(text)) return "forststrasse";
+
   if (/baustelleneinrichtung/.test(text)) return "baustelleneinrichtung";
   if (/verkehrssicherung|rsa|beschilderung|umleitung|ampel|absperrung|bauzaun|absturzsicherung/.test(text)) return "sicherung";
   if (/hoehenfestpunkt|höhenfestpunkt|vermessung|bestandsaufnahme|gelaendeaufnahme|geländeaufnahme|dokumentation|as-built/.test(text)) return "vermessung";
@@ -10054,6 +10171,134 @@ function applyRlcFinalSuchschlitzGuard(row: any, result: any) {
 
 
 function guardNoX84ImplausibleKiResult(row: any, result: any) {
+  const forstRowText = norm([
+    (row as any)?.posNr,
+    (row as any)?.kurztext,
+    (row as any)?.langtext,
+    (row as any)?.text,
+  ].join(" "));
+
+  const forstSource = s((result as any)?.source);
+
+  if (
+    forstSource === "technical-parser" &&
+    /forststra[sß]e|forststrasse|forststraßen|forststrassen/.test(forstRowText)
+  ) {
+    const ep = 35;
+    const qty = n(
+      (row as any).menge ??
+      (row as any).quantity ??
+      (result as any).menge ??
+      (result as any).quantity
+    );
+
+    const total = ep > 0 && qty > 0
+      ? round2(ep * qty)
+      : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
+
+    const note =
+      "RLC Source-Cleanup: Forststraße wiederherstellen wurde als eigene technische Position erkannt. " +
+      "Falsche Firmenkalibrierung/technical-parser-Basis wurde durch prüfpflichtigen Forststraßen-Fallback ersetzt.";
+
+    return {
+      ...result,
+      source: "rlc-family-fallback-forststrasse-recalculated",
+      confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
+      riskLevel: "high",
+      calculationStatus: "needs_review",
+      suggestedUnitPrice: ep,
+      finalUnitPrice: ep,
+      baseUnitPrice: ep,
+      rlcKiUnitPrice: ep,
+      unitPrice: ep,
+      preis: ep,
+      totalNet: total,
+      rlcKiTotal: total,
+      gesamt: total,
+      totalPrice: total,
+      warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
+      aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
+      familyFallbackApplied: true,
+      familyFallbackReason: note,
+      recalculatedAfterBlock: true,
+      recalculatedUnitPrice: ep,
+      recalculatedTotalNet: total,
+      recalculationSource: "rlc-family-fallback-forststrasse",
+    };
+  }
+
+
+  const guardRowText = norm([
+    (row as any)?.posNr,
+    (row as any)?.kurztext,
+    (row as any)?.langtext,
+    (row as any)?.text,
+  ].join(" "));
+
+  const guardSource = s((result as any)?.source);
+
+  if (
+    guardSource === "technical-parser" &&
+    /rohrgrabenaushub|zuschlag.*rohrgrabenaushub|rohrgrabenaushub.*bd-kl|bodenklasse|bd-kl/.test(guardRowText)
+  ) {
+    const ep = n(
+      (result as any).finalUnitPrice ??
+      (result as any).rlcKiUnitPrice ??
+      (result as any).unitPrice ??
+      (result as any).preis
+    );
+
+    const qty = n(
+      (row as any).menge ??
+      (row as any).quantity ??
+      (result as any).menge ??
+      (result as any).quantity
+    );
+
+    const total = ep > 0 && qty > 0
+      ? round2(ep * qty)
+      : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
+
+        const forcedRohrgrabenEp =
+      /zuschlag.*rohrgrabenaushub.*(bd-kl|bodenklasse).*7|rohrgrabenaushub.*(bd-kl|bodenklasse).*7/.test(guardRowText)
+        ? 34.52
+        : /rohrgrabenaushub.*(bd-kl|bodenklasse).*3.*5|bd-kl\.\s*3\s*-\s*5|bodenklasse\s*3\s*bis\s*5/.test(guardRowText)
+          ? 35.10
+          : ep;
+
+    const finalEp = forcedRohrgrabenEp > 0 ? forcedRohrgrabenEp : ep;
+    const finalTotal = finalEp > 0 && qty > 0
+      ? round2(finalEp * qty)
+      : total;
+
+const note =
+      "RLC Source-Cleanup: Rohrgrabenaushub/Zuschlag wurde als technische Aushubposition erkannt. " +
+      "Source wurde von technical-parser auf prüfpflichtige Aushub-Kalkulation umgestellt.";
+
+    return {
+      ...result,
+      source: "technical-parser-rohrgrabenaushub-cleaned",
+      confidence: Math.min(n((result as any).confidence, 0.5), 0.62),
+      riskLevel: "high",
+      calculationStatus: "needs_review",
+      finalUnitPrice: round2(finalEp),
+      suggestedUnitPrice: round2(finalEp),
+      baseUnitPrice: round2(finalEp),
+      rlcKiUnitPrice: round2(finalEp),
+      unitPrice: round2(finalEp),
+      preis: round2(finalEp),
+      totalNet: finalTotal,
+      rlcKiTotal: finalTotal,
+      gesamt: finalTotal,
+      totalPrice: finalTotal,
+      warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
+      aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
+      sourceCleanupApplied: true,
+      sourceCleanupReason: note,
+    };
+  }
+
+
   if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
     return result;
   }
