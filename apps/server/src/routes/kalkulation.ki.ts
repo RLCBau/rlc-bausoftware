@@ -7859,18 +7859,109 @@ function blockBadCompanyCalibrationByGlobalKnowledge(row: InputRow, result: any)
     `aber die Preisbasis ist nicht vergleichbar. KI-EP ${round2(ep)} €/Einheit liegt über ` +
     `GlobalMax ${round2(gkMax)} €/Einheit × 3. Preis bleibt prüfpflichtig.`;
 
+  const gkAvg = n((gk as any).priceAvg);
+  const gkMin = n((gk as any).priceMin);
+  const fallbackEp = gkAvg > 0 ? gkAvg : gkMin > 0 ? gkMin : 0;
+  const qty = n((row as any).menge ?? (row as any).quantity ?? (result as any).menge ?? (result as any).quantity);
+  const recalculatedTotal = fallbackEp > 0 && qty > 0 ? round2(fallbackEp * qty) : n((result as any).totalNet ?? (result as any).gesamt);
+
+  const recalcNote = fallbackEp > 0
+    ? `RLC Block+Recalculate: blockierter Firmenpreis wurde nicht als finaler EP verwendet. Neuer prüfpflichtiger EP aus Global Knowledge Ø ${round2(fallbackEp)} €/Einheit.`
+    : `RLC Block+Recalculate: blockierter Firmenpreis wurde entfernt, aber kein belastbarer Alternativ-EP gefunden.`;
+
   return {
     ...result,
-    source: "company-calibration-blocked-by-global-knowledge",
-    confidence: Math.min(n((result as any).confidence, 0.5), 0.45),
+    source: "company-calibration-blocked-by-global-knowledge-recalculated",
+    confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
     riskLevel: "high",
     calculationStatus: "needs_review",
-    warning: [s((result as any).warning), warn].filter(Boolean).join(" · "),
-    aiReason: [s((result as any).aiReason), warn].filter(Boolean).join("\n\n"),
+    suggestedUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).suggestedUnitPrice,
+    finalUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).finalUnitPrice,
+    baseUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).baseUnitPrice,
+    rlcKiUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).rlcKiUnitPrice,
+    unitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).unitPrice,
+    preis: fallbackEp > 0 ? round2(fallbackEp) : (result as any).preis,
+    totalNet: recalculatedTotal,
+    rlcKiTotal: recalculatedTotal,
+    gesamt: recalculatedTotal,
+    totalPrice: recalculatedTotal,
+    warning: [s((result as any).warning), warn, recalcNote].filter(Boolean).join(" · "),
+    aiReason: [s((result as any).aiReason), warn, recalcNote].filter(Boolean).join("\n\n"),
     globalKnowledgeCompanyCalibrationBlocked: true,
     globalKnowledgeCompanyCalibrationBlockReason: warn,
+    recalculatedAfterBlock: fallbackEp > 0,
+    recalculatedUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : null,
+    recalculatedTotalNet: recalculatedTotal,
+    recalculationSource: fallbackEp > 0 ? "global-knowledge-average" : "none",
+    blockedOriginalUnitPrice: round2(ep),
   };
 }
+
+
+function recalcBlockedTechnicalAfterGlobalKnowledge(row: InputRow, result: any): any {
+  const blocked =
+    (result as any)?.technicalParserBlocked === true ||
+    s((result as any)?.source).includes("technical-parser-blocked-by-family-mismatch");
+
+  if (!blocked) return result;
+
+  const alreadyRecalculated = (result as any)?.recalculatedAfterBlock === true;
+  if (alreadyRecalculated) return result;
+
+  const gk = (result as any)?.globalKnowledgeMatch;
+  if (!gk) return result;
+
+  const rowUnit = normUnit(s((row as any).einheit));
+  const gkUnit = normUnit(s((gk as any).unit));
+  const sameUnit = !!rowUnit && !!gkUnit && rowUnit === gkUnit;
+
+  const gkConfidence = n((gk as any).confidence);
+  const gkAvg = n((gk as any).priceAvg);
+  const gkMin = n((gk as any).priceMin);
+  const fallbackEp = gkAvg > 0 ? gkAvg : gkMin > 0 ? gkMin : 0;
+
+  if (!sameUnit || gkConfidence < 0.5 || fallbackEp <= 0) return result;
+
+  const qty = n((row as any).menge ?? (row as any).quantity ?? (result as any).menge ?? (result as any).quantity);
+  const total = qty > 0 ? round2(fallbackEp * qty) : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
+
+  const oldEp = n(
+    (result as any).finalUnitPrice ??
+    (result as any).rlcKiUnitPrice ??
+    (result as any).unitPrice ??
+    (result as any).preis
+  );
+
+  const note =
+    `RLC Block+Recalculate: Nach Global-Knowledge-Treffer wurde der blockierte technical-parser Preis ersetzt. ` +
+    `Neuer prüfpflichtiger EP aus Global Knowledge Ø ${round2(fallbackEp)} €/Einheit.`;
+
+  return {
+    ...result,
+    source: "technical-parser-blocked-by-family-mismatch-recalculated-gk",
+    confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
+    riskLevel: "high",
+    calculationStatus: "needs_review",
+    suggestedUnitPrice: round2(fallbackEp),
+    finalUnitPrice: round2(fallbackEp),
+    baseUnitPrice: round2(fallbackEp),
+    rlcKiUnitPrice: round2(fallbackEp),
+    unitPrice: round2(fallbackEp),
+    preis: round2(fallbackEp),
+    totalNet: total,
+    rlcKiTotal: total,
+    gesamt: total,
+    totalPrice: total,
+    warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
+    aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
+    recalculatedAfterBlock: true,
+    recalculatedUnitPrice: round2(fallbackEp),
+    recalculatedTotalNet: total,
+    recalculationSource: "global-knowledge-average-after-hint",
+    blockedOriginalUnitPrice: round2(oldEp),
+  };
+}
+
 
 async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any> {
   try {
@@ -7982,7 +8073,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
         : `Global Knowledge Confidence-Guard: starker Vergleichstreffer (${gkConfidence}) bestätigt Plausibilität. Preis bleibt KI-/Regel-Ergebnis, Global Knowledge ist nur Kontrollwert.`
       : "";
 
-    return blockBadCompanyCalibrationByGlobalKnowledge(row, {
+    return recalcBlockedTechnicalAfterGlobalKnowledge(row, blockBadCompanyCalibrationByGlobalKnowledge(row, {
       ...result,
       confidence: boostedConfidence,
       riskLevel: boostedRiskLevel,
@@ -7996,7 +8087,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
       globalKnowledgeSource: Array.isArray(best.sources) ? best.sources.join(', ') : '',
       warning: [s(result?.warning), note, trustNote].filter(Boolean).join(" · "),
       aiReason: [s(result?.aiReason), note, trustNote].filter(Boolean).join("\n\n"),
-    });
+    }));
   } catch (e: any) {
     return {
       ...result,
@@ -8438,17 +8529,45 @@ const technicalRecipeInput =
     };
 
       const technicalMismatchReason = rlcNoX84CompanyCalibrationMismatch(row, technicalRow, null);
+      const gkForBlockedTechnical = (technicalRow as any).globalKnowledgeMatch;
+      const gkBlockedAvg = n(gkForBlockedTechnical?.priceAvg);
+      const gkBlockedMin = n(gkForBlockedTechnical?.priceMin);
+      const blockedFallbackEp = gkBlockedAvg > 0 ? gkBlockedAvg : gkBlockedMin > 0 ? gkBlockedMin : 0;
+      const blockedQty = n((row as any).menge ?? (row as any).quantity ?? (technicalRow as any).menge ?? (technicalRow as any).quantity);
+      const blockedTotal = blockedFallbackEp > 0 && blockedQty > 0
+        ? round2(blockedFallbackEp * blockedQty)
+        : n((technicalRow as any).totalNet ?? (technicalRow as any).gesamt ?? (technicalRow as any).totalPrice);
+
+      const technicalRecalcNote = blockedFallbackEp > 0
+        ? `RLC Block+Recalculate: technical-parser Ergebnis blockiert; neuer prüfpflichtiger EP aus Global Knowledge Ø ${round2(blockedFallbackEp)} €/Einheit.`
+        : `RLC Block+Recalculate: technical-parser Ergebnis blockiert; kein belastbarer Alternativ-EP gefunden.`;
+
       const finalTechnicalRow = technicalMismatchReason
         ? {
             ...technicalRow,
-            source: "technical-parser-blocked-by-family-mismatch",
-            confidence: Math.min(n((technicalRow as any).confidence, 0.5), 0.45),
+            source: "technical-parser-blocked-by-family-mismatch-recalculated",
+            confidence: Math.min(n((technicalRow as any).confidence, 0.5), blockedFallbackEp > 0 ? 0.52 : 0.45),
             riskLevel: "high",
             calculationStatus: "needs_review",
-            warning: [s((technicalRow as any).warning), technicalMismatchReason].filter(Boolean).join(" · "),
-            aiReason: [s((technicalRow as any).aiReason), technicalMismatchReason].filter(Boolean).join("\n\n"),
+            suggestedUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).suggestedUnitPrice,
+            finalUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).finalUnitPrice,
+            baseUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).baseUnitPrice,
+            rlcKiUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).rlcKiUnitPrice,
+            unitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).unitPrice,
+            preis: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).preis,
+            totalNet: blockedTotal,
+            rlcKiTotal: blockedTotal,
+            gesamt: blockedTotal,
+            totalPrice: blockedTotal,
+            warning: [s((technicalRow as any).warning), technicalMismatchReason, technicalRecalcNote].filter(Boolean).join(" · "),
+            aiReason: [s((technicalRow as any).aiReason), technicalMismatchReason, technicalRecalcNote].filter(Boolean).join("\n\n"),
             technicalParserBlocked: true,
             technicalParserBlockReason: technicalMismatchReason,
+            recalculatedAfterBlock: blockedFallbackEp > 0,
+            recalculatedUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : null,
+            recalculatedTotalNet: blockedTotal,
+            recalculationSource: blockedFallbackEp > 0 ? "global-knowledge-average" : "none",
+            blockedOriginalUnitPrice: round2(n((technicalRow as any).finalUnitPrice ?? (technicalRow as any).unitPrice ?? (technicalRow as any).preis)),
           }
         : technicalRow;
     const technicalCacheKey = cacheKeyForRow(row);
