@@ -7845,8 +7845,67 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
       `${(best.unit ?? unit) || "Einheit"}, Ø ${best.priceAvg ?? "-"} €/` +
       `${(best.unit ?? unit) || "Einheit"}, Confidence ${best.confidence}. Nur Vergleichswert, kein finaler Kalkulationspreis.`;
 
+    const gkConfidence = n(best.confidence);
+    const gkMin = n(best.priceMin);
+    const gkMax = n(best.priceMax);
+    const gkRangeRatio = gkMin > 0 && gkMax > 0 ? gkMax / gkMin : 999;
+
+    const gkStrong =
+      gkConfidence >= 0.7 &&
+      !best.isContextSensitive &&
+      gkRangeRatio <= 4;
+
+    const resultEp = n(
+      (result as any).finalUnitPrice ??
+      (result as any).rlcKiUnitPrice ??
+      (result as any).unitPrice ??
+      (result as any).preis
+    );
+
+    const gkOutlier =
+      gkStrong &&
+      resultEp > 0 &&
+      gkMax > 0 &&
+      resultEp > gkMax * 3;
+
+    const boostedConfidence = gkOutlier
+      ? Math.min(n((result as any).confidence), 0.45)
+      : gkStrong
+        ? Math.min(
+            0.92,
+            Math.max(
+              n((result as any).confidence),
+              gkConfidence,
+              n((result as any).confidence) + 0.08
+            )
+          )
+        : n((result as any).confidence);
+
+    const boostedRiskLevel =
+      gkOutlier
+        ? "high"
+        : gkStrong && s((result as any).riskLevel) === "high"
+          ? "medium"
+          : (result as any).riskLevel;
+
+    const boostedStatus =
+      gkOutlier
+        ? "needs_review"
+        : gkStrong && s((result as any).calculationStatus) === "critical"
+          ? "warning"
+          : (result as any).calculationStatus;
+
+    const trustNote = gkStrong
+      ? gkOutlier
+        ? `Global Knowledge Outlier-Guard: KI-EP ${resultEp} €/Einheit liegt deutlich über Global-Knowledge-Max ${gkMax} €/Einheit bei Confidence ${gkConfidence}. Position bleibt fachlich prüfpflichtig; Preis wurde nicht automatisch ersetzt.`
+        : `Global Knowledge Confidence-Guard: starker Vergleichstreffer (${gkConfidence}) bestätigt Plausibilität. Preis bleibt KI-/Regel-Ergebnis, Global Knowledge ist nur Kontrollwert.`
+      : "";
+
     return {
       ...result,
+      confidence: boostedConfidence,
+      riskLevel: boostedRiskLevel,
+      calculationStatus: boostedStatus,
       globalKnowledgeMatch: best,
       globalKnowledgeMatches: scoredMatches,
       globalKnowledgePriceMin: best.priceMin,
@@ -7854,8 +7913,8 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
       globalKnowledgePriceMax: best.priceMax,
       globalKnowledgeConfidence: best.confidence,
       globalKnowledgeSource: Array.isArray(best.sources) ? best.sources.join(', ') : '',
-      warning: [s(result?.warning), note].filter(Boolean).join(" · "),
-      aiReason: [s(result?.aiReason), note].filter(Boolean).join("\n\n"),
+      warning: [s(result?.warning), note, trustNote].filter(Boolean).join(" · "),
+      aiReason: [s(result?.aiReason), note, trustNote].filter(Boolean).join("\n\n"),
     };
   } catch (e: any) {
     return {
