@@ -7750,6 +7750,50 @@ function rlcNoX84CalibrationFloor(row: any, ep: number): number {
 
 
 
+
+function rlcGlobalKnowledgeFamilyKey(textRaw: any): string {
+  const text = norm(String(textRaw || ""));
+
+  if (/rohrschutzmatte|kabelschutzmatte|schutzmatte/.test(text)) return "schutzmatte";
+  if (/kabelschutzrohr|schutzrohr|kabelleerrohr|kabellehrrohr|leerrohr|dn\s*110/.test(text)) return "kabelschutzrohr";
+  if (/rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(text)) return "rohrgraben";
+  if (/hausanschluss|hausanschlussleitung|hauseinfuehrung|hauseinführung|anschluss an bestand/.test(text)) return "hausanschluss";
+  if (/pflaster|betonpflaster|natursteinpflaster|klinkerpflaster|oekopflaster|ökopflaster/.test(text)) return "pflaster";
+  if (/bordstein|randstein|hochbord|tiefbord|leistenstein|einzeiler|dreizeiler/.test(text)) return "bordstein";
+  if (/entsorgen|entsorgung|kippe|deponie|aushubmaterial.*abfahren|boden.*abfahren/.test(text)) return "entsorgung";
+  if (/kanal|kanalrohr|kg-rohr|kg rohr|dn\s*150|schmutzwasser|regenwasser/.test(text)) return "kanal";
+  if (/auffuellung|auffüllung|frostschutz|frostschutzmaterial|schotter|kies|mineralbeton|verfuell|verfüll/.test(text)) return "auffuellung";
+  if (/auskofferung|auskoffern|boden auskoffern/.test(text)) return "auskofferung";
+
+  return "";
+}
+
+function rlcGlobalKnowledgeFamilyCompatible(row: InputRow, item: any): boolean {
+  const rowText = [
+    (row as any).posNr,
+    (row as any).kurztext,
+    (row as any).shortText,
+    (row as any).text,
+    (row as any).langtext,
+    (row as any).longText,
+  ].join(" ");
+
+  const itemText = [
+    (item as any).normalizedKey,
+    (item as any).shortText,
+    (item as any).longText,
+    (item as any).category,
+    (item as any).gewerk,
+  ].join(" ");
+
+  const rowFamily = rlcGlobalKnowledgeFamilyKey(rowText);
+  const itemFamily = rlcGlobalKnowledgeFamilyKey(itemText);
+
+  if (!rowFamily || !itemFamily) return item.globalKnowledgeSimilarity >= 70;
+  return rowFamily === itemFamily;
+}
+
+
 function globalKnowledgeSimilarity(row: InputRow, item: any): number {
   const rowText = s(`${row.kurztext ?? ""} ${row.langtext ?? ""}`).toLowerCase();
   const itemText = s(`${item.shortText ?? ""} ${item.longText ?? ""}`).toLowerCase();
@@ -8007,7 +8051,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
 
     const scoredMatches = matches
       .map((m: any) => ({ ...m, globalKnowledgeSimilarity: globalKnowledgeSimilarity(row, m) }))
-      .filter((m: any) => m.globalKnowledgeSimilarity >= 45)
+      .filter((m: any) => m.globalKnowledgeSimilarity >= 70 || rlcGlobalKnowledgeFamilyCompatible(row, m))
       .sort((a: any, b: any) => b.globalKnowledgeSimilarity - a.globalKnowledgeSimilarity);
 
     const best = scoredMatches[0];
