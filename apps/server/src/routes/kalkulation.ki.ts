@@ -8437,10 +8437,24 @@ const technicalRecipeInput =
       ].filter(Boolean).join("\n\n"),
     };
 
+      const technicalMismatchReason = rlcNoX84CompanyCalibrationMismatch(row, technicalRow, null);
+      const finalTechnicalRow = technicalMismatchReason
+        ? {
+            ...technicalRow,
+            source: "technical-parser-blocked-by-family-mismatch",
+            confidence: Math.min(n((technicalRow as any).confidence, 0.5), 0.45),
+            riskLevel: "high",
+            calculationStatus: "needs_review",
+            warning: [s((technicalRow as any).warning), technicalMismatchReason].filter(Boolean).join(" · "),
+            aiReason: [s((technicalRow as any).aiReason), technicalMismatchReason].filter(Boolean).join("\n\n"),
+            technicalParserBlocked: true,
+            technicalParserBlockReason: technicalMismatchReason,
+          }
+        : technicalRow;
     const technicalCacheKey = cacheKeyForRow(row);
-    kalkulationAiCache.set(technicalCacheKey, technicalRow);
+    kalkulationAiCache.set(technicalCacheKey, finalTechnicalRow);
     scheduleKalkulationAiCacheSave();
-    return technicalRow;
+    return finalTechnicalRow;
   }
 
   const cacheKey = cacheKeyForRow(row);
@@ -9146,6 +9160,60 @@ function loadNoX84CompanyCalibration(): NoX84CompanyCalibrationItem[] {
   return noX84CompanyCalibrationCache;
 }
 
+
+function rlcNoX84FamilyKey(textRaw: any): string {
+  const text = norm(String(textRaw || ""));
+
+  if (/rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(text)) return "rohrgraben";
+  if (/kabelschutzrohr|schutzrohr|kabelleerrohr|kabellehrrohr|leerrohr/.test(text)) return "kabelschutzrohr";
+  if (/rohrschutzmatte|kabelschutzmatte|schutzmatte/.test(text)) return "schutzmatte";
+  if (/pflaster|betonpflaster|natursteinpflaster|klinkerpflaster|oekopflaster|ökopflaster/.test(text)) return "pflaster";
+  if (/bordstein|randstein|hochbord|tiefbord|leistenstein|einzeiler|dreizeiler/.test(text)) return "bordstein";
+  if (/auskofferung|auskoffern|boden auskoffern/.test(text)) return "auskofferung";
+  if (/auffuellung|auffüllung|frostschutz|frostschutzmaterial|schotter|kies|mineralbeton|verfuell|verfüll/.test(text)) return "auffuellung";
+  if (/entsorgen|entsorgung|kippe|deponie|aushubmaterial.*abfahren|boden.*abfahren/.test(text)) return "entsorgung";
+  if (/hausanschluss|hausanschlussleitung|hauseinfuehrung|hauseinführung|anschluss an bestand/.test(text)) return "hausanschluss";
+  if (/kanal|kanalrohr|kg-rohr|kg rohr|dn\s*150|schmutzwasser|regenwasser/.test(text)) return "kanal";
+  if (/baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(text)) return "baustelleneinrichtung";
+  if (/bauzaun|absperrung|absturzsicherung|verkehrssicherung/.test(text)) return "sicherung";
+  if (/hoehenfestpunkt|höhenfestpunkt|vermessung|bestandsaufnahme|gelaendeaufnahme|geländeaufnahme/.test(text)) return "vermessung";
+  if (/spartenerkundung|sparten.*erkundung|leitungsfreigabe/.test(text)) return "spartenerkundung";
+  if (/ueberfahrt|überfahrt|ueberfahrten|überfahrten/.test(text)) return "ueberfahrt";
+
+  return "";
+}
+
+function rlcNoX84CompanyCalibrationMismatch(row: any, result: any, hit: any): string {
+  const rowText = [
+    row?.posNr,
+    row?.kurztext,
+    row?.shortText,
+    row?.text,
+    row?.langtext,
+    row?.longText,
+  ].join(" ");
+
+  const resultText = [
+    result?.gewerk,
+    result?.leistungsart,
+    result?.bauverfahren,
+    result?.aiReason,
+    result?.warning,
+    JSON.stringify(result?.priceBreakdown ?? []),
+    hit?.title,
+    hit?.match,
+  ].join(" ");
+
+  const rowFamily = rlcNoX84FamilyKey(rowText);
+  const resultFamily = rlcNoX84FamilyKey(resultText);
+
+  if (!rowFamily || !resultFamily) return "";
+  if (rowFamily === resultFamily) return "";
+
+  return `RLC Family-Mismatch-Guard: Firmenkalibrierung blockiert. LV-Familie "${rowFamily}" passt nicht zur Kalibrierungsbasis "${resultFamily}".`;
+}
+
+
 function applyNoX84CompanyCalibration(row: any, result: any) {
   if (hasHistoricalOfferBaseline(row)) return result;
 
@@ -9187,6 +9255,21 @@ function applyNoX84CompanyCalibration(row: any, result: any) {
   const qty = n(row?.menge ?? result?.menge);
 
   if (!hit || ep <= 0 || qty <= 0) return result;
+
+  const mismatchReason = rlcNoX84CompanyCalibrationMismatch(row, result, hit);
+  if (mismatchReason) {
+    return {
+      ...result,
+      source: "company-calibration-blocked-by-family-mismatch",
+      confidence: Math.min(n(result?.confidence, 0.5), 0.45),
+      riskLevel: "high",
+      calculationStatus: "needs_review",
+      warning: [s(result?.warning), mismatchReason].filter(Boolean).join(" · "),
+      aiReason: [s(result?.aiReason), mismatchReason].filter(Boolean).join("\n\n"),
+      companyCalibrationBlocked: true,
+      companyCalibrationBlockReason: mismatchReason,
+    };
+  }
 
   const total = round2(ep * qty);
 
