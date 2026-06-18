@@ -7791,6 +7791,87 @@ function globalKnowledgeSimilarity(row: InputRow, item: any): number {
   return score;
 }
 
+function blockBadCompanyCalibrationByGlobalKnowledge(row: InputRow, result: any): any {
+  const source = s((result as any)?.source).toLowerCase();
+  const calibrationText = norm([
+    source,
+    s((result as any)?.gewerk),
+    s((result as any)?.leistungsart),
+    s((result as any)?.bauverfahren),
+    s((result as any)?.aiReason),
+    s((result as any)?.warning),
+    JSON.stringify((result as any)?.priceBreakdown ?? []),
+  ].join(" "));
+
+  const isCompanyCalibration =
+    source.includes("company-calibration") ||
+    calibrationText.includes("firmenkalibrierung") ||
+    calibrationText.includes("firmeneigenen x84") ||
+    calibrationText.includes("rlc firmenkalibrierung aus x84");
+
+  if (!isCompanyCalibration) {
+    return result;
+  }
+
+  const gk = (result as any)?.globalKnowledgeMatch;
+  if (!gk) return result;
+
+  const rowUnit = normUnit(s((row as any).einheit));
+  const gkUnit = normUnit(s((gk as any).unit));
+  const sameUnit = !!rowUnit && !!gkUnit && rowUnit === gkUnit;
+
+  const rowText = norm(`${s((row as any).posNr)} ${s((row as any).kurztext)} ${s((row as any).langtext)}`);
+  const gkText = norm(`${s((gk as any).shortText)} ${s((gk as any).longText)} ${s((gk as any).category)} ${s((gk as any).gewerk)} ${s((gk as any).normalizedKey)}`);
+
+  const rowIsBaustelle = /baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(rowText);
+  const gkIsBaustelle = /baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(gkText);
+  const resultIsBaustelle = /baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(calibrationText);
+
+  const rowIsRohrgraben = /rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(rowText);
+  const gkIsRohrgraben = /rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(gkText);
+  const resultIsRohrgraben = /rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(calibrationText);
+
+  const comparableFamily =
+    (rowIsBaustelle && gkIsBaustelle && resultIsBaustelle) ||
+    (rowIsRohrgraben && gkIsRohrgraben && resultIsRohrgraben);
+
+  const gkConfidence = n((gk as any).confidence);
+  const gkMax = n((gk as any).priceMax);
+  const ep = n(
+    (result as any).finalUnitPrice ??
+    (result as any).rlcKiUnitPrice ??
+    (result as any).suggestedUnitPrice ??
+    (result as any).unitPrice ??
+    (result as any).preis
+  );
+
+  const mustBlock =
+    sameUnit &&
+    gkConfidence >= 0.7 &&
+    gkMax > 0 &&
+    ep > gkMax * 3 &&
+    !comparableFamily;
+
+  if (!mustBlock) return result;
+
+  const warn =
+    `Firmenkalibrierung blockiert: Global Knowledge zeigt starken Vergleich (${gkConfidence}), ` +
+    `aber die Preisbasis ist nicht vergleichbar. KI-EP ${round2(ep)} €/Einheit liegt über ` +
+    `GlobalMax ${round2(gkMax)} €/Einheit × 3. Preis bleibt prüfpflichtig.`;
+
+  return {
+    ...result,
+    source: "company-calibration-blocked-by-global-knowledge",
+    confidence: Math.min(n((result as any).confidence, 0.5), 0.45),
+    riskLevel: "high",
+    calculationStatus: "needs_review",
+    warning: [s((result as any).warning), warn].filter(Boolean).join(" · "),
+    aiReason: [s((result as any).aiReason), warn].filter(Boolean).join("\n\n"),
+    globalKnowledgeCompanyCalibrationBlocked: true,
+    globalKnowledgeCompanyCalibrationBlockReason: warn,
+  };
+}
+
 async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any> {
   try {
     const text = s(`${row.kurztext ?? ""} ${row.langtext ?? ""}`);
@@ -7901,7 +7982,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
         : `Global Knowledge Confidence-Guard: starker Vergleichstreffer (${gkConfidence}) bestätigt Plausibilität. Preis bleibt KI-/Regel-Ergebnis, Global Knowledge ist nur Kontrollwert.`
       : "";
 
-    return {
+    return blockBadCompanyCalibrationByGlobalKnowledge(row, {
       ...result,
       confidence: boostedConfidence,
       riskLevel: boostedRiskLevel,
@@ -7915,7 +7996,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
       globalKnowledgeSource: Array.isArray(best.sources) ? best.sources.join(', ') : '',
       warning: [s(result?.warning), note, trustNote].filter(Boolean).join(" · "),
       aiReason: [s(result?.aiReason), note, trustNote].filter(Boolean).join("\n\n"),
-    };
+    });
   } catch (e: any) {
     return {
       ...result,
