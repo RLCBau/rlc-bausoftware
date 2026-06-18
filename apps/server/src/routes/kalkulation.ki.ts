@@ -7760,14 +7760,58 @@ function rlcGlobalKnowledgeFamilyKey(textRaw: any): string {
 
   if (/rohrschutzmatte|kabelschutzmatte|schutzmatte/.test(text)) return "schutzmatte";
   if (/kabelschutzrohr|schutzrohr|kabelleerrohr|kabellehrrohr|leerrohr|dn\s*110/.test(text)) return "kabelschutzrohr";
-  if (/rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(text)) return "rohrgraben";
+  if (/mikroroh?r|mikro.*rohr|mikrorohrverband|speedpipe|lwl.*rohr|glasfaser.*rohr|leerrohrverbund/.test(text)) return "lwl_mikrorohr";
+  if (/lwl|glasfaser|telekom|vodafone/.test(text)) return "lwl_glasfaser";
+
+  if (/gasleitung|gasrohr|pe\s*dn\s*63/.test(text)) return "gasleitung";
+  if (/wasserleitung|trinkwasserleitung|wasserrohr|dn\s*100/.test(text)) return "wasserleitung";
+  if (/fernwaerme|fernwärme|nahwaerme|nahwärme/.test(text)) return "fernwaerme";
+  if (/mittelspannung|stromkabel|energiekabel|kabel.*verlegen/.test(text)) return "strom_kabel";
   if (/hausanschluss|hausanschlussleitung|hauseinfuehrung|hauseinführung|anschluss an bestand/.test(text)) return "hausanschluss";
+
+  if (/asphalt.*schneiden|asphaltschnitt|schneiden.*asphalt/.test(text)) return "asphalt_schneiden";
+  if (/asphalt.*aufnehmen|asphalt.*entsorgen|asphaltdecke.*aufnehmen/.test(text)) return "asphalt_aufnehmen";
+  if (/asphalttragschicht|tragschicht.*asphalt/.test(text)) return "asphalt_tragschicht";
+  if (/asphaltdeckschicht|deckschicht.*asphalt/.test(text)) return "asphalt_deckschicht";
+
+  if (/suchschlitz|suchgraben|erkundungsschlitz/.test(text)) return "suchschlitz";
+  if (/rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(text)) return "rohrgraben";
+  if (/handschachtung|handschacht/.test(text)) return "handschachtung";
+  if (/verbau|grabenverbau/.test(text)) return "verbau";
+  if (/spundwand/.test(text)) return "spundwand";
+  if (/horizontalbohrung|hdd|spuelbohrung|spülbohrung|bohrung/.test(text)) return "hdd";
+
   if (/pflaster|betonpflaster|natursteinpflaster|klinkerpflaster|oekopflaster|ökopflaster/.test(text)) return "pflaster";
   if (/bordstein|randstein|hochbord|tiefbord|leistenstein|einzeiler|dreizeiler/.test(text)) return "bordstein";
+  if (/asphalt.*schneiden|asphaltschnitt|schneiden.*asphalt/.test(text)) return "asphalt_schneiden";
+  if (/asphalt.*aufnehmen|asphalt.*entsorgen|asphaltdecke.*aufnehmen/.test(text)) return "asphalt_aufnehmen";
+  if (/asphalttragschicht|tragschicht.*asphalt/.test(text)) return "asphalt_tragschicht";
+  if (/asphaltdeckschicht|deckschicht.*asphalt/.test(text)) return "asphalt_deckschicht";
+  if (/bankett/.test(text)) return "bankett";
+
+  if (/schachtabdeckung|abdeckung.*d400|d400/.test(text)) return "schachtabdeckung";
+  if (/strassenablauf|straßenablauf|ablauf.*setzen/.test(text)) return "strassenablauf";
+  if (/kabelschacht/.test(text)) return "kabelschacht";
+  if (/schacht.*dn|fertigteilschacht|schacht.*setzen/.test(text)) return "schacht";
+
   if (/entsorgen|entsorgung|kippe|deponie|aushubmaterial.*abfahren|boden.*abfahren/.test(text)) return "entsorgung";
   if (/kanal|kanalrohr|kg-rohr|kg rohr|dn\s*150|schmutzwasser|regenwasser/.test(text)) return "kanal";
-  if (/auffuellung|auffüllung|frostschutz|frostschutzmaterial|schotter|kies|mineralbeton|verfuell|verfüll/.test(text)) return "auffuellung";
+  if (/auffuellung|auffüllung|frostschutz|frostschutzmaterial|schotter|kies|mineralbeton|verfuell|verfüll|sandbettung|bettung/.test(text)) return "auffuellung";
   if (/auskofferung|auskoffern|boden auskoffern/.test(text)) return "auskofferung";
+  if (/fluessigboden|flüssigboden/.test(text)) return "fluessigboden";
+  if (/warnband|trassenband/.test(text)) return "warnband";
+
+  if (/regiestunde.*facharbeiter|facharbeiter.*nachweis|arbeiter.*nachweis/.test(text)) return "regie_personal";
+  if (/regiestunde.*bagger|mobilbagger|kettenbagger|bagger.*nachweis/.test(text)) return "regie_bagger";
+  if (/lkw|transport|dreiachser|kipper/.test(text)) return "transport_lkw";
+  if (/ruettelplatte|rüttelplatte|verdichtungsgeraet|verdichtungsgerät/.test(text)) return "verdichtung_geraet";
+
+  if (/baustelleneinrichtung/.test(text)) return "baustelleneinrichtung";
+  if (/verkehrssicherung|rsa|beschilderung|umleitung|ampel|absperrung|bauzaun|absturzsicherung/.test(text)) return "sicherung";
+  if (/hoehenfestpunkt|höhenfestpunkt|vermessung|bestandsaufnahme|gelaendeaufnahme|geländeaufnahme|dokumentation|as-built/.test(text)) return "vermessung";
+  if (/spartenerkundung|sparten.*erkundung|leitungsfreigabe/.test(text)) return "spartenerkundung";
+  if (/ueberfahrt|überfahrt|ueberfahrten|überfahrten/.test(text)) return "ueberfahrt";
+  if (/rasenansaat|oberboden|planum|fsk korrigieren|frostschutzschicht korrigieren|aufsatz ausbauen|reinigung von strassen|reinigung von straßen|probenahme|deklarationsanalyse|verdichtbares material|recyclingmaterial|betonfundament|wurzelstock|kunststoffrohrleitung|rohrleitung ausbauen|abstimmung mit projektbeteiligten/.test(text)) return "fremdfamilie";
 
   return "";
 }
@@ -8023,6 +8067,31 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
 
   const family = rlcGlobalKnowledgeFamilyKey(rowText);
   const unit = normUnit(s((row as any).einheit));
+  const rowNorm = norm(rowText);
+
+  if (/schachtabdeckung|abdeckung.*d400|d400/.test(rowNorm)) {
+    return {
+      ep: 420,
+      source: "rlc-family-fallback-schachtabdeckung",
+      reason: "Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (/strassenablauf|straßenablauf/.test(rowNorm)) {
+    return {
+      ep: 850,
+      source: "rlc-family-fallback-strassenablauf",
+      reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (/kabelschacht/.test(rowNorm)) {
+    return {
+      ep: 900,
+      source: "rlc-family-fallback-kabelschacht",
+      reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
+    };
+  }
 
   if (family === "kabelschutzrohr" && unit === "m") {
     return {
@@ -8053,6 +8122,110 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
       ep: 145,
       source: "rlc-family-fallback-kanal-dn150",
       reason: "Kanalrohr DN150 verlegen inkl. Bettung: technischer Fallback 145 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "suchschlitz" && unit === "m") {
+    return {
+      ep: 55,
+      source: "rlc-family-fallback-suchschlitz",
+      reason: "Suchschlitz zur Leitungserkundung: technischer Fallback 55 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "gasleitung" && unit === "m") {
+    return {
+      ep: 42,
+      source: "rlc-family-fallback-gasleitung",
+      reason: "Gasleitung PE als Meterleistung: technischer Fallback 42 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if ((family === "lwl_mikrorohr" || family === "lwl_glasfaser") && unit === "m") {
+    return {
+      ep: 10,
+      source: "rlc-family-fallback-lwl-mikrorohr",
+      reason: "LWL/Mikrorohrverband als Meterleistung: technischer Fallback 10 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "strom_kabel" && unit === "m") {
+    return {
+      ep: 32,
+      source: "rlc-family-fallback-stromkabel",
+      reason: "Strom-/Mittelspannungskabel als Meterleistung: technischer Fallback 32 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "asphalt_schneiden" && /^(m|lfm|meter)$/.test(unit)) {
+    return {
+      ep: 11,
+      source: "rlc-family-fallback-asphalt-schneiden",
+      reason: "Asphalt schneiden als Meterleistung: technischer Fallback 11 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "strassenablauf" && /^(st|stk|stück|stueck)$/.test(unit)) {
+    return {
+      ep: 850,
+      source: "rlc-family-fallback-strassenablauf",
+      reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "schacht" && /^(st|stk|stück|stueck)$/.test(unit)) {
+    return {
+      ep: 1800,
+      source: "rlc-family-fallback-schacht",
+      reason: "Fertigteilschacht setzen: technischer Fallback 1800 €/St prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "schachtabdeckung" && /^(st|stk|stück|stueck)$/.test(unit)) {
+    return {
+      ep: 420,
+      source: "rlc-family-fallback-schachtabdeckung",
+      reason: "Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "kabelschacht" && /^(st|stk|stück|stueck)$/.test(unit)) {
+    return {
+      ep: 900,
+      source: "rlc-family-fallback-kabelschacht",
+      reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "transport_lkw" && unit === "h") {
+    return {
+      ep: 95,
+      source: "rlc-family-fallback-lkw-transport",
+      reason: "LKW Transport auf Nachweis: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "regie_personal" && unit === "h") {
+    return {
+      ep: 58,
+      source: "rlc-family-fallback-regie-personal",
+      reason: "Regiestunde Facharbeiter: technischer Fallback 58 €/h prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "regie_bagger" && unit === "h") {
+    return {
+      ep: 95,
+      source: "rlc-family-fallback-regie-bagger",
+      reason: "Regiestunde Bagger inkl. Fahrer: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (/fels|klasse 6|klasse 7/.test(norm([row?.kurztext, row?.langtext, (row as any)?.text].join(" "))) && (unit === "m³" || unit === "m3")) {
+    return {
+      ep: 95,
+      source: "rlc-family-fallback-fels",
+      reason: "Fels/Bodenklasse 6-7 lösen/laden/entsorgen: technischer Fallback 95 €/m³ prüfpflichtig gesetzt.",
     };
   }
 
@@ -8093,9 +8266,28 @@ function recalcBlockedOrTooLowByFamilyFallback(row: InputRow, result: any): any 
     (family === "kabelschutzrohr" && currentEp > 0 && currentEp < 12) ||
     (family === "bordstein" && currentEp > 0 && currentEp < 45) ||
     (family === "entsorgung" && currentEp > 0 && currentEp > 250) ||
-    (family === "kanal" && currentEp > 0 && currentEp < 80);
+    (family === "kanal" && currentEp > 0 && currentEp < 80) ||
+    (family === "suchschlitz" && currentEp > 0 && (currentEp < 25 || currentEp > 120)) ||
+    (family === "gasleitung" && currentEp > 0 && currentEp < 18) ||
+    ((family === "lwl_mikrorohr" || family === "lwl_glasfaser") && currentEp > 0 && currentEp < 7) ||
+    (family === "strom_kabel" && currentEp > 0 && currentEp < 20) ||
+    (family === "asphalt_schneiden" && currentEp > 0 && currentEp < 5) ||
+    (family === "strassenablauf" && currentEp > 0 && currentEp < 250) ||
+    (family === "schacht" && currentEp > 0 && currentEp < 500) ||
+    (family === "schachtabdeckung" && currentEp > 0 && currentEp < 180) ||
+    (family === "kabelschacht" && currentEp > 0 && currentEp < 400) ||
+    (family === "regie_personal" && currentEp > 0 && currentEp < 42) ||
+    (family === "regie_bagger" && currentEp > 0 && currentEp < 65) ||
+    (family === "transport_lkw" && currentEp > 0 && (currentEp < 65 || currentEp > 180));
 
-  if (!blocked && !tooLow) return result;
+  const forceFamilyFallback =
+    family === "strassenablauf" ||
+    family === "schachtabdeckung" ||
+    family === "kabelschacht" ||
+    family === "asphalt_schneiden" ||
+    family === "transport_lkw";
+
+  if (!blocked && !tooLow && !forceFamilyFallback) return result;
 
   const qty = n((row as any).menge ?? (row as any).quantity ?? (result as any).menge ?? (result as any).quantity);
   const total = qty > 0 ? round2(fallback.ep * qty) : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
@@ -8739,10 +8931,12 @@ const technicalRecipeInput =
             blockedOriginalUnitPrice: round2(n((technicalRow as any).finalUnitPrice ?? (technicalRow as any).unitPrice ?? (technicalRow as any).preis)),
           }
         : technicalRow;
+    const finalTechnicalRowWithFallback = recalcBlockedOrTooLowByFamilyFallback(row, finalTechnicalRow);
+
     const technicalCacheKey = cacheKeyForRow(row);
-    kalkulationAiCache.set(technicalCacheKey, finalTechnicalRow);
+    kalkulationAiCache.set(technicalCacheKey, finalTechnicalRowWithFallback);
     scheduleKalkulationAiCacheSave();
-    return finalTechnicalRow;
+    return finalTechnicalRowWithFallback;
   }
 
   const cacheKey = cacheKeyForRow(row);
@@ -9456,21 +9650,60 @@ function loadNoX84CompanyCalibration(): NoX84CompanyCalibrationItem[] {
 function rlcNoX84FamilyKey(textRaw: any): string {
   const text = norm(String(textRaw || ""));
 
-  if (/rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(text)) return "rohrgraben";
-  if (/kabelschutzrohr|schutzrohr|kabelleerrohr|kabellehrrohr|leerrohr/.test(text)) return "kabelschutzrohr";
   if (/rohrschutzmatte|kabelschutzmatte|schutzmatte/.test(text)) return "schutzmatte";
+  if (/kabelschutzrohr|schutzrohr|kabelleerrohr|kabellehrrohr|leerrohr|dn\s*110/.test(text)) return "kabelschutzrohr";
+  if (/mikroroh?r|mikro.*rohr|mikrorohrverband|speedpipe|lwl.*rohr|glasfaser.*rohr|leerrohrverbund/.test(text)) return "lwl_mikrorohr";
+  if (/lwl|glasfaser|telekom|vodafone/.test(text)) return "lwl_glasfaser";
+
+  if (/gasleitung|gasrohr|pe\s*dn\s*63/.test(text)) return "gasleitung";
+  if (/wasserleitung|trinkwasserleitung|wasserrohr|dn\s*100/.test(text)) return "wasserleitung";
+  if (/fernwaerme|fernwärme|nahwaerme|nahwärme/.test(text)) return "fernwaerme";
+  if (/mittelspannung|stromkabel|energiekabel|kabel.*verlegen/.test(text)) return "strom_kabel";
+  if (/hausanschluss|hausanschlussleitung|hauseinfuehrung|hauseinführung|anschluss an bestand/.test(text)) return "hausanschluss";
+
+  if (/asphalt.*schneiden|asphaltschnitt|schneiden.*asphalt/.test(text)) return "asphalt_schneiden";
+  if (/asphalt.*aufnehmen|asphalt.*entsorgen|asphaltdecke.*aufnehmen/.test(text)) return "asphalt_aufnehmen";
+  if (/asphalttragschicht|tragschicht.*asphalt/.test(text)) return "asphalt_tragschicht";
+  if (/asphaltdeckschicht|deckschicht.*asphalt/.test(text)) return "asphalt_deckschicht";
+
+  if (/suchschlitz|suchgraben|erkundungsschlitz/.test(text)) return "suchschlitz";
+  if (/rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(text)) return "rohrgraben";
+  if (/handschachtung|handschacht/.test(text)) return "handschachtung";
+  if (/verbau|grabenverbau/.test(text)) return "verbau";
+  if (/spundwand/.test(text)) return "spundwand";
+  if (/horizontalbohrung|hdd|spuelbohrung|spülbohrung|bohrung/.test(text)) return "hdd";
+
   if (/pflaster|betonpflaster|natursteinpflaster|klinkerpflaster|oekopflaster|ökopflaster/.test(text)) return "pflaster";
   if (/bordstein|randstein|hochbord|tiefbord|leistenstein|einzeiler|dreizeiler/.test(text)) return "bordstein";
-  if (/auskofferung|auskoffern|boden auskoffern/.test(text)) return "auskofferung";
-  if (/auffuellung|auffüllung|frostschutz|frostschutzmaterial|schotter|kies|mineralbeton|verfuell|verfüll/.test(text)) return "auffuellung";
+  if (/asphalt.*schneiden|asphaltschnitt|schneiden.*asphalt/.test(text)) return "asphalt_schneiden";
+  if (/asphalt.*aufnehmen|asphalt.*entsorgen|asphaltdecke.*aufnehmen/.test(text)) return "asphalt_aufnehmen";
+  if (/asphalttragschicht|tragschicht.*asphalt/.test(text)) return "asphalt_tragschicht";
+  if (/asphaltdeckschicht|deckschicht.*asphalt/.test(text)) return "asphalt_deckschicht";
+  if (/bankett/.test(text)) return "bankett";
+
+  if (/schachtabdeckung|abdeckung.*d400|d400/.test(text)) return "schachtabdeckung";
+  if (/strassenablauf|straßenablauf|ablauf.*setzen/.test(text)) return "strassenablauf";
+  if (/kabelschacht/.test(text)) return "kabelschacht";
+  if (/schacht.*dn|fertigteilschacht|schacht.*setzen/.test(text)) return "schacht";
+
   if (/entsorgen|entsorgung|kippe|deponie|aushubmaterial.*abfahren|boden.*abfahren/.test(text)) return "entsorgung";
-  if (/hausanschluss|hausanschlussleitung|hauseinfuehrung|hauseinführung|anschluss an bestand/.test(text)) return "hausanschluss";
   if (/kanal|kanalrohr|kg-rohr|kg rohr|dn\s*150|schmutzwasser|regenwasser/.test(text)) return "kanal";
-  if (/baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(text)) return "baustelleneinrichtung";
-  if (/bauzaun|absperrung|absturzsicherung|verkehrssicherung/.test(text)) return "sicherung";
-  if (/hoehenfestpunkt|höhenfestpunkt|vermessung|bestandsaufnahme|gelaendeaufnahme|geländeaufnahme/.test(text)) return "vermessung";
+  if (/auffuellung|auffüllung|frostschutz|frostschutzmaterial|schotter|kies|mineralbeton|verfuell|verfüll|sandbettung|bettung/.test(text)) return "auffuellung";
+  if (/auskofferung|auskoffern|boden auskoffern/.test(text)) return "auskofferung";
+  if (/fluessigboden|flüssigboden/.test(text)) return "fluessigboden";
+  if (/warnband|trassenband/.test(text)) return "warnband";
+
+  if (/regiestunde.*facharbeiter|facharbeiter.*nachweis|arbeiter.*nachweis/.test(text)) return "regie_personal";
+  if (/regiestunde.*bagger|mobilbagger|kettenbagger|bagger.*nachweis/.test(text)) return "regie_bagger";
+  if (/lkw|transport|dreiachser|kipper/.test(text)) return "transport_lkw";
+  if (/ruettelplatte|rüttelplatte|verdichtungsgeraet|verdichtungsgerät/.test(text)) return "verdichtung_geraet";
+
+  if (/baustelleneinrichtung/.test(text)) return "baustelleneinrichtung";
+  if (/verkehrssicherung|rsa|beschilderung|umleitung|ampel|absperrung|bauzaun|absturzsicherung/.test(text)) return "sicherung";
+  if (/hoehenfestpunkt|höhenfestpunkt|vermessung|bestandsaufnahme|gelaendeaufnahme|geländeaufnahme|dokumentation|as-built/.test(text)) return "vermessung";
   if (/spartenerkundung|sparten.*erkundung|leitungsfreigabe/.test(text)) return "spartenerkundung";
   if (/ueberfahrt|überfahrt|ueberfahrten|überfahrten/.test(text)) return "ueberfahrt";
+  if (/rasenansaat|oberboden|planum|fsk korrigieren|frostschutzschicht korrigieren|aufsatz ausbauen|reinigung von strassen|reinigung von straßen|probenahme|deklarationsanalyse|verdichtbares material|recyclingmaterial|betonfundament|wurzelstock|kunststoffrohrleitung|rohrleitung ausbauen|abstimmung mit projektbeteiligten/.test(text)) return "fremdfamilie";
 
   return "";
 }
@@ -9485,13 +9718,24 @@ function rlcNoX84CompanyCalibrationMismatch(row: any, result: any, hit: any): st
     row?.longText,
   ].join(" ");
 
+  const breakdownNames = Array.isArray(result?.priceBreakdown)
+    ? result.priceBreakdown
+        .map((x: any) => [x?.group, x?.label, x?.name, x?.unit].filter(Boolean).join(" "))
+        .join(" ")
+    : "";
+
+  /*
+   * Wichtig:
+   * warning/aiReason enthalten generische Boilerplate-Texte wie "Leitungsgraben",
+   * "Graben", "Bettung" usw. Diese dürfen NICHT für die Familienbasis zählen,
+   * sonst entstehen falsche Mismatches bei Asphalt, Flüssigboden, Fernwärme usw.
+   */
   const resultText = [
+    result?.source,
     result?.gewerk,
     result?.leistungsart,
     result?.bauverfahren,
-    result?.aiReason,
-    result?.warning,
-    JSON.stringify(result?.priceBreakdown ?? []),
+    breakdownNames,
     hit?.title,
     hit?.match,
   ].join(" ");
