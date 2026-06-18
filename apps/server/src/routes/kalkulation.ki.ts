@@ -1195,6 +1195,10 @@ function x84AnchorEpFromRow(row: any): number {
 
 
 function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
+  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
+    return result;
+  }
+
   if (!result || typeof result !== "object") return result;
 
   const rawText = norm([
@@ -8007,6 +8011,127 @@ function recalcBlockedTechnicalAfterGlobalKnowledge(row: InputRow, result: any):
 }
 
 
+function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: string; reason: string } {
+  const rowText = [
+    (row as any).posNr,
+    (row as any).kurztext,
+    (row as any).shortText,
+    (row as any).text,
+    (row as any).langtext,
+    (row as any).longText,
+  ].join(" ");
+
+  const family = rlcGlobalKnowledgeFamilyKey(rowText);
+  const unit = normUnit(s((row as any).einheit));
+
+  if (family === "kabelschutzrohr" && unit === "m") {
+    return {
+      ep: 18,
+      source: "rlc-family-fallback-kabelschutzrohr",
+      reason: "Kabelschutzrohr DN/Schutzrohr als Meterleistung: Mindestansatz 18 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "bordstein" && unit === "m") {
+    return {
+      ep: 95,
+      source: "rlc-family-fallback-bordstein",
+      reason: "Bordstein setzen inkl. Rückenstütze: technischer Fallback 95 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "entsorgung" && (unit === "m³" || unit === "m3")) {
+    return {
+      ep: 45,
+      source: "rlc-family-fallback-entsorgung",
+      reason: "Aushub/Boden entsorgen inkl. Laden, Transport und Kippe: technischer Fallback 45 €/m³ prüfpflichtig gesetzt.",
+    };
+  }
+
+  if (family === "kanal" && unit === "m") {
+    return {
+      ep: 145,
+      source: "rlc-family-fallback-kanal-dn150",
+      reason: "Kanalrohr DN150 verlegen inkl. Bettung: technischer Fallback 145 €/m prüfpflichtig gesetzt.",
+    };
+  }
+
+  return { ep: 0, source: "", reason: "" };
+}
+
+function recalcBlockedOrTooLowByFamilyFallback(row: InputRow, result: any): any {
+  const source = s((result as any)?.source);
+  const blocked =
+    (result as any)?.technicalParserBlocked === true ||
+    (result as any)?.companyCalibrationBlocked === true ||
+    (result as any)?.globalKnowledgeCompanyCalibrationBlocked === true ||
+    source.includes("blocked-by-family-mismatch") ||
+    source.includes("blocked-by-global-knowledge");
+
+  const currentEp = n(
+    (result as any).finalUnitPrice ??
+    (result as any).rlcKiUnitPrice ??
+    (result as any).unitPrice ??
+    (result as any).preis
+  );
+
+  const fallback = rlcFamilyFallbackEp(row, result);
+  if (fallback.ep <= 0) return result;
+
+  const rowText = [
+    (row as any).posNr,
+    (row as any).kurztext,
+    (row as any).shortText,
+    (row as any).text,
+    (row as any).langtext,
+    (row as any).longText,
+  ].join(" ");
+
+  const family = rlcGlobalKnowledgeFamilyKey(rowText);
+
+  const tooLow =
+    (family === "kabelschutzrohr" && currentEp > 0 && currentEp < 12) ||
+    (family === "bordstein" && currentEp > 0 && currentEp < 45) ||
+    (family === "entsorgung" && currentEp > 0 && currentEp > 250) ||
+    (family === "kanal" && currentEp > 0 && currentEp < 80);
+
+  if (!blocked && !tooLow) return result;
+
+  const qty = n((row as any).menge ?? (row as any).quantity ?? (result as any).menge ?? (result as any).quantity);
+  const total = qty > 0 ? round2(fallback.ep * qty) : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
+
+  const note =
+    `RLC Family-Fallback-Recalculate: ${fallback.reason} ` +
+    `Alter EP ${round2(currentEp)} €/Einheit wurde nicht als sicher übernommen.`;
+
+  return {
+    ...result,
+    source: `${fallback.source}-recalculated`,
+    confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
+    riskLevel: "high",
+    calculationStatus: "needs_review",
+    suggestedUnitPrice: round2(fallback.ep),
+    finalUnitPrice: round2(fallback.ep),
+    baseUnitPrice: round2(fallback.ep),
+    rlcKiUnitPrice: round2(fallback.ep),
+    unitPrice: round2(fallback.ep),
+    preis: round2(fallback.ep),
+    totalNet: total,
+    rlcKiTotal: total,
+    gesamt: total,
+    totalPrice: total,
+    warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
+    aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
+    recalculatedAfterBlock: true,
+    recalculatedUnitPrice: round2(fallback.ep),
+    recalculatedTotalNet: total,
+    recalculationSource: fallback.source,
+    blockedOriginalUnitPrice: round2(currentEp),
+    familyFallbackApplied: true,
+    familyFallbackReason: fallback.reason,
+  };
+}
+
 async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any> {
   try {
     const text = s(`${row.kurztext ?? ""} ${row.langtext ?? ""}`);
@@ -8055,7 +8180,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
       .sort((a: any, b: any) => b.globalKnowledgeSimilarity - a.globalKnowledgeSimilarity);
 
     const best = scoredMatches[0];
-    if (!best) return result;
+    if (!best) return recalcBlockedOrTooLowByFamilyFallback(row, result);
 
     const note = `Global Knowledge Vergleich: ${best.priceMin ?? "-"}–${best.priceMax ?? "-"} €/` +
       `${(best.unit ?? unit) || "Einheit"}, Ø ${best.priceAvg ?? "-"} €/` +
@@ -9184,6 +9309,10 @@ function hasHistoricalOfferBaseline(row: any): boolean {
 
 
 function guardNoX84UnsafeOkResult(row: any, result: any) {
+  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
+    return result;
+  }
+
   // RLC_V24_COMPANY_DB_EXACT_SKIP_NO_X84_GUARD
   // Firmen-Datenbank-Exact-Match ist ein finaler Firmenwert.
   // Er darf nicht durch No-X84 Guard, Technical Parser oder Market-Index überschrieben werden.
@@ -9681,6 +9810,10 @@ function applyRlcFinalSuchschlitzGuard(row: any, result: any) {
 
 
 function guardNoX84ImplausibleKiResult(row: any, result: any) {
+  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
+    return result;
+  }
+
   if (hasHistoricalOfferBaseline(row)) return result;
 
   const source = s(result?.source);
