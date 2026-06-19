@@ -53,6 +53,7 @@ type EliteRow = LVPos & {
 
   angebotUnitPrice?: number;
   angebotTotal?: number;
+  x84UnitPrice?: number;
 
   rlcKiUnitPrice?: number;
   rlcKiTotal?: number;
@@ -274,6 +275,15 @@ function getProjectObject(projectCtx: any): any {
   );
 }
 
+function hasRealX84ForProject(projectKey: string): boolean {
+  try {
+    if (!projectKey || typeof localStorage === "undefined") return false;
+    const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+    return String(parsed?.format || "").toUpperCase() === "X84";
+  } catch {
+    return false;
+  }
+}
 function getProjectKey(projectCtx: any): string {
   const projectObj = getProjectObject(projectCtx);
 
@@ -1701,6 +1711,7 @@ auftragType: row.auftragType,
 
     angebotUnitPrice: n((row as any).angebotUnitPrice),
     angebotTotal: n((row as any).angebotTotal),
+    x84UnitPrice: n((row as any).x84UnitPrice),
 
     rlcKiUnitPrice: n((row as any).rlcKiUnitPrice),
     rlcKiTotal: n((row as any).rlcKiTotal),
@@ -1718,7 +1729,11 @@ auftragType: row.auftragType,
     profitCost: n(row.profitCost),
 
     baseUnitPrice: n(row.baseUnitPrice),
-    suggestedUnitPrice: n(row.suggestedUnitPrice, unitPrice),
+    // WICHTIG:
+    // suggestedUnitPrice/baseUnitPrice sind KI-/Serverfelder.
+    // Sie dürfen NICHT automatisch aus X84/preis/finalUnitPrice befüllt werden,
+    // sonst wird ein importiertes X84 fälschlich als RLC-KI angezeigt.
+    suggestedUnitPrice: n(row.suggestedUnitPrice),
     finalUnitPrice: unitPrice,
     priceDecision: ((row as any).priceDecision || "x84") as any,
 
@@ -1863,7 +1878,10 @@ function fromLvRows(rows: LVPos[]): EliteRow[] {
       originalPreKiPrice: importedEp,
 
       finalUnitPrice: n(r.finalUnitPrice) || importedEp,
-      suggestedUnitPrice: n(r.suggestedUnitPrice) || importedEp,
+      suggestedUnitPrice: realX84 ? 0 : n(r.suggestedUnitPrice),
+      baseUnitPrice: realX84 ? 0 : n((r as any).baseUnitPrice),
+      rlcKiUnitPrice: realX84 ? 0 : n((r as any).rlcKiUnitPrice),
+      rlcKiTotal: realX84 ? 0 : n((r as any).rlcKiTotal),
       confidence: r.confidence,
       calculationStatus: realX84 && importedEp > 0 ? "manual" : "critical",
       riskLevel: "medium",
@@ -1880,34 +1898,65 @@ function fromLvRows(rows: LVPos[]): EliteRow[] {
 
 function mergeEliteResult(
   oldRow: EliteRow,
-  result: EliteKalkulationResultRow
+  result: EliteKalkulationResultRow,
+  mode: "offer-check" | "new-calculation" = "offer-check"
 ): EliteRow {
   const resultBreakdown = normalizeBreakdown(result.priceBreakdown);
   const oldBreakdown = normalizeBreakdown(oldRow.priceBreakdown);
+  const menge = n(result.menge ?? oldRow.menge);
 
-  const angebotEp =
+  /*
+   * WICHTIG:
+   * In "Neue Kalkulation erstellen" darf aus alten Frontend-Feldern
+   * (preis/finalUnitPrice) keine künstliche X84-/Angebotsbasis entstehen.
+   * Angebotsbasis gibt es nur im Modus "Angebot prüfen" und nur aus
+   * expliziten Angebotsfeldern.
+   */
+  const existingOfferEp =
     n((oldRow as any).angebotUnitPrice) ||
     n((oldRow as any).originalPreKiPrice) ||
-    n(oldRow.preis) ||
-    n(oldRow.finalUnitPrice);
+    n((oldRow as any).x84UnitPrice);
 
-  const menge = n(result.menge ?? oldRow.menge);
+  const resultOfferEp =
+    n((result as any).angebotUnitPrice) ||
+    n((result as any).originalPreKiPrice) ||
+    n((result as any).x84UnitPrice);
+
+  /*
+   * X84 bleibt immer Vergleichsbasis im Frontend.
+   * Auch bei "Neue Kalkulation" wird X84 NICHT an den Server als Preisbasis gesendet,
+   * darf aber nach der Serverantwort nicht aus der Anzeige gelöscht werden.
+   */
+  const angebotEp = existingOfferEp || (mode === "offer-check" ? resultOfferEp : 0);
+
+  const serverEp =
+    n((result as any).rlcKiUnitPrice) ||
+    n(result.finalUnitPrice) ||
+    n(result.suggestedUnitPrice) ||
+    n(result.baseUnitPrice) ||
+    n((result as any).unitPrice) ||
+    n((result as any).preis) ||
+    0;
+
+  const normalizedResult = {
+    ...result,
+    rlcKiUnitPrice: serverEp,
+    rlcKiTotal: serverEp > 0 ? round2(menge * serverEp) : 0,
+    finalUnitPrice: serverEp,
+    suggestedUnitPrice: n(result.suggestedUnitPrice) || serverEp,
+    baseUnitPrice: n(result.baseUnitPrice) || serverEp,
+    preis: serverEp,
+    totalNet: serverEp > 0 ? round2(menge * serverEp) : 0,
+  } as any;
 
   const temp = normalizeEliteRow({
     ...oldRow,
-    ...result,
+    ...normalizedResult,
 
     angebotUnitPrice: angebotEp,
-    angebotTotal: round2(menge * angebotEp),
+    angebotTotal: angebotEp > 0 ? round2(menge * angebotEp) : 0,
     originalPreKiPrice: angebotEp,
-
-    rlcKiUnitPrice:
-      n((result as any).rlcKiUnitPrice) ||
-      n(result.finalUnitPrice) ||
-      n(result.suggestedUnitPrice) ||
-      n(result.baseUnitPrice),
-
-    openAiSuggestedUnitPrice: n((result as any).openAiSuggestedUnitPrice),
+    x84UnitPrice: angebotEp,
 
     rlcPreisMin: (result as any).rlcPreisMin ?? (oldRow as any).rlcPreisMin,
     rlcPreisAvg: (result as any).rlcPreisAvg ?? (oldRow as any).rlcPreisAvg,
@@ -1919,14 +1968,10 @@ function mergeEliteResult(
   } as any);
 
   const decision = resolveBestRlcKiPrice(temp, false);
-  /*
-   * RLC-KI-Prüfwert kommt aus dem Serverergebnis.
-   * Keine lokale Datenbank-Override mehr.
-   */
-  const rlcKiEp = decision.finalRlcKiEp;
-  const finalUnitPrice = angebotEp > 0 ? angebotEp : rlcKiEp;
+  const rlcKiEp = decision.finalRlcKiEp || serverEp;
+  const finalUnitPrice = mode === "offer-check" && angebotEp > 0 ? angebotEp : rlcKiEp;
 
-  const diff = rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
+  const diff = rlcKiEp > 0 && angebotEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
   const diffPct =
     rlcKiEp > 0 && angebotEp > 0 ? round2((diff / angebotEp) * 100) : 0;
 
@@ -1949,8 +1994,9 @@ function mergeEliteResult(
     profitCost: result.profitCost ?? oldRow.profitCost,
 
     angebotUnitPrice: angebotEp,
-    angebotTotal: round2(menge * angebotEp),
+    angebotTotal: angebotEp > 0 ? round2(menge * angebotEp) : 0,
     originalPreKiPrice: angebotEp,
+    x84UnitPrice: angebotEp,
 
     rlcKiUnitPrice: rlcKiEp,
     rlcKiTotal: rlcKiEp > 0 ? round2(menge * rlcKiEp) : 0,
@@ -1958,13 +2004,13 @@ function mergeEliteResult(
     priceDifference: diff,
     priceDifferencePct: diffPct,
 
-    baseUnitPrice: result.baseUnitPrice ?? oldRow.baseUnitPrice,
-    suggestedUnitPrice: rlcKiEp || result.suggestedUnitPrice || oldRow.suggestedUnitPrice,
+    baseUnitPrice: n(result.baseUnitPrice) || rlcKiEp,
+    suggestedUnitPrice: n(result.suggestedUnitPrice) || rlcKiEp,
     finalUnitPrice,
     preis: finalUnitPrice,
     gesamt: round2(menge * finalUnitPrice),
 
-    priceDecision: angebotEp > 0 ? "x84" : "rlcKi",
+    priceDecision: mode === "offer-check" && angebotEp > 0 ? "x84" : "rlcKi",
 
     confidence: Math.max(
       n(result.confidence),
@@ -1973,12 +2019,12 @@ function mergeEliteResult(
     ),
 
     riskLevel:
-      Math.abs(diffPct) >= 35
+      mode === "offer-check" && Math.abs(diffPct) >= 35
         ? "high"
         : result.riskLevel ?? oldRow.riskLevel ?? "medium",
 
     calculationStatus:
-      Math.abs(diffPct) >= 35
+      mode === "offer-check" && Math.abs(diffPct) >= 35
         ? "warning"
         : result.calculationStatus ?? oldRow.calculationStatus ?? "manual",
 
@@ -2005,12 +2051,61 @@ function mergeEliteResult(
       .filter(Boolean)
       .join("\n\n"),
 
-    source: (result as any).source || oldRow.source || "ki",
+    source: (result as any).source || "server",
 
     priceBreakdown: resultBreakdown.length ? resultBreakdown : oldBreakdown,
   } as any);
 
-  return enhanceKalkulatorInsertions(merged);
+  const enhanced = enhanceKalkulatorInsertions(merged);
+
+  /*
+   * RLC FIX:
+   * Server-KI Ergebnis muss nach allen Frontend-Enrichments gewinnen.
+   * Sonst können alte lokale Fallbacks/Enhancer z.B. 057 Auffüllmaterial
+   * wieder von Server 3,50 €/m³ auf lokalen Altwert 28 €/m³ zurücksetzen.
+   */
+  const strictServerEp =
+    n((result as any).rlcKiUnitPrice) ||
+    n((result as any).finalUnitPrice) ||
+    n((result as any).suggestedUnitPrice) ||
+    n((result as any).baseUnitPrice) ||
+    n((result as any).unitPrice) ||
+    n((result as any).preis);
+
+  if (strictServerEp > 0) {
+    const strictServerTotal = round2(menge * strictServerEp);
+    const strictDiff = angebotEp > 0 ? round2(strictServerEp - angebotEp) : 0;
+    const strictDiffPct =
+      angebotEp > 0 ? round2((strictDiff / angebotEp) * 100) : 0;
+
+    return normalizeEliteRow({
+      ...enhanced,
+
+      rlcKiUnitPrice: strictServerEp,
+      rlcKiTotal: strictServerTotal,
+
+      baseUnitPrice: n((result as any).baseUnitPrice) || strictServerEp,
+      suggestedUnitPrice: n((result as any).suggestedUnitPrice) || strictServerEp,
+
+      // Server-KI ist immer der RLC-KI-Preis. X84 bleibt separat in angebotUnitPrice/x84UnitPrice.
+      finalUnitPrice: strictServerEp,
+      preis: strictServerEp,
+      gesamt: strictServerTotal,
+
+      priceDifference: strictDiff,
+      priceDifferencePct: strictDiffPct,
+
+      source: (result as any).source || enhanced.source,
+      warning: (result as any).warning ?? enhanced.warning,
+      aiReason: (result as any).aiReason ?? enhanced.aiReason,
+      riskLevel: ((result as any).riskLevel || enhanced.riskLevel) as RiskLevel,
+      calculationStatus: ((result as any).calculationStatus || enhanced.calculationStatus) as CalcStatus,
+      confidence: n((result as any).confidence) || enhanced.confidence,
+      priceBreakdown: resultBreakdown.length ? resultBreakdown : enhanced.priceBreakdown,
+    } as any);
+  }
+
+  return enhanced;
 }
 function keepX84AsFinalPrice(row: EliteRow): EliteRow {
   const angebotEp =
@@ -2242,7 +2337,7 @@ function saveRowsToDatenbank(
       const gp = round2(n(r.menge) * ep * (1 - n(r.rabatt) / 100));
 
       return KalkulationsDatenbank.fromCalculatedPosition({
-        quelle: "ki",
+        quelle: String((r as any).datenbankQuelle || (r as any).source || "ki"),
         projektCode: projectKey,
         projektName: projectTitle,
 
@@ -2596,6 +2691,16 @@ const selectedAuftrag = React.useMemo(
   const [showCommercialSettings, setShowCommercialSettings] =
     React.useState(false);
   const [showChapterSettings, setShowChapterSettings] = React.useState(false);
+  const [priceDiffView, setPriceDiffView] = React.useState<
+    | "outside10"
+    | "higher10"
+    | "lower10"
+    | "inside10"
+    | "over20"
+    | "over10000"
+    | "all"
+    | "missing"
+  >("outside10");
 
   const [mwst, setMwst] = React.useState(19);
   const [globalMarkup, setGlobalMarkup] = React.useState<number>(() => {
@@ -2843,9 +2948,14 @@ function importHandoff() {
           originalPreKiPrice: offerEp,
           x84UnitPrice: offerEp,
 
+          // X84/Angebot darf als finaler Angebotswert erscheinen,
+          // aber NIEMALS als RLC-KI-Vorschlag.
           preis: workEp,
           finalUnitPrice: workEp,
-          suggestedUnitPrice: n(x.suggestedUnitPrice) || workEp,
+          suggestedUnitPrice: isRealOfferImport ? 0 : n(x.suggestedUnitPrice),
+          baseUnitPrice: isRealOfferImport ? 0 : n(x.baseUnitPrice),
+          rlcKiUnitPrice: isRealOfferImport ? 0 : n(x.rlcKiUnitPrice),
+          rlcKiTotal: isRealOfferImport ? 0 : n(x.rlcKiTotal),
 
           auftragId: x.auftragId || selectedAuftragId || "",
           auftragName: x.auftragName || selectedAuftrag?.name || "",
@@ -2854,6 +2964,7 @@ function importHandoff() {
           confidence: typeof x.confidence === "number" ? x.confidence : 0.75,
           calculationStatus: x.calculationStatus || "manual",
           riskLevel: x.riskLevel || "medium",
+          priceDecision: isRealOfferImport ? "x84" : ((x as any).priceDecision || "manual"),
         });
       })
       .filter((r: EliteRow) => {
@@ -2884,9 +2995,76 @@ function importHandoff() {
     }
   }
 
+  function readStoredX84OfferMap(): Map<string, number> {
+    const map = new Map<string, number>();
+
+    try {
+      const raw = localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`);
+      if (!raw) return map;
+
+      const parsed = JSON.parse(raw);
+      const rawRows = extractRowsFromParsed(parsed);
+
+      for (const x of rawRows) {
+        const pos = String(x?.posNr || x?.position || x?.oz || "").trim();
+        if (!pos) continue;
+
+        const ep =
+          n(x?.angebotUnitPrice) ||
+          n(x?.originalPreKiPrice) ||
+          n(x?.x84UnitPrice) ||
+          n(x?.ep) ||
+          n(x?.einzelpreis) ||
+          n(x?.unitPrice) ||
+          n(x?.preis);
+
+        if (ep > 0) map.set(pos, ep);
+      }
+    } catch {
+      //
+    }
+
+    return map;
+  }
+
+  function mergeStoredX84OfferPrices(input: EliteRow[]): EliteRow[] {
+    const x84Map = readStoredX84OfferMap();
+    if (!x84Map.size) return input;
+
+    return input.map((row) => {
+      const pos = String(row.posNr || "").trim();
+      const offerEp = x84Map.get(pos) || getOfferUnitPrice(row);
+
+      if (offerEp <= 0) return row;
+
+      const rlcEp = n((row as any).rlcKiUnitPrice);
+
+      return normalizeEliteRow({
+        ...row,
+        angebotUnitPrice: offerEp,
+        x84UnitPrice: offerEp,
+        originalPreKiPrice: offerEp,
+        angebotTotal: round2(n(row.menge) * offerEp),
+
+        // X84 darf RLC-KI nicht überschreiben.
+        rlcKiUnitPrice: rlcEp,
+        rlcKiTotal: rlcEp > 0 ? round2(n(row.menge) * rlcEp) : 0,
+        suggestedUnitPrice: rlcEp > 0 ? n((row as any).suggestedUnitPrice) : 0,
+        baseUnitPrice: rlcEp > 0 ? n((row as any).baseUnitPrice) : 0,
+      });
+    });
+  }
+
+  /*
+   * Wichtig:
+   * Wenn nach einer KI-Kalkulation ein X84 importiert wird, darf der X84-Import
+   * NICHT die gesamte KI-Kalkulation ersetzen. Wir laden daher zuerst den
+   * Kalkulationsstand und mergen X84 nur als Vergleichspreis.
+   * Wenn es noch keinen Kalkulationsstand gibt, wird der GAEB/X83/X84-Import geladen.
+   */
   const keys = [
     localBackupKey(projectKey),
-    `rlc_kalkulation_mit_ki_elite_v1:${projectKey}`,
+    `rlc_lv_data_v1:${projectKey}`,
     `rlc_gaeb_import_v1:${projectKey}`,
     `RLC_POSITIONLV_${projectKey}`,
   ];
@@ -2895,26 +3073,15 @@ function importHandoff() {
     const loaded = tryLoadRowsFromKey(key);
 
     if (loaded.length) {
-      const safeLoaded = sanitizeRowsForStorage(loaded);
+      const safeLoaded = sanitizeRowsForStorage(mergeStoredX84OfferPrices(loaded));
       setRows(safeLoaded);
       LV.setAll(safeLoaded as LVPos[]);
 
-      try {
-        localStorage.setItem(
-          localBackupKey(projectKey),
-          JSON.stringify({
-            meta: {
-              projectKey,
-              projectTitle,
-              restoredFrom: key,
-              restoredAt: new Date().toISOString(),
-            },
-            rows: safeLoaded,
-          })
-        );
-      } catch {
-        //
-      }
+      // Wichtig:
+      // localBackupKey(projectKey) = rlc_kalkulation_mit_ki_elite_v1.
+      // Diese Datei darf NUR echte KI/Kalkulationsdaten enthalten.
+      // LV/X83/X84-Quellen dürfen hier niemals automatisch hineinkopiert werden,
+      // sonst wird ein importiertes LV fälschlich als KI-Ergebnis gezählt.
 
       setServerStatus(`${safeLoaded.length} LV-Positionen geladen`);
       setTimeout(() => setServerStatus(""), 2500);
@@ -3208,8 +3375,9 @@ const selectedAuftragSummary = React.useMemo(() => {
   return { net, count, priced };
 }, [rows, selectedAuftragId]);
 
-const topPriceDiffRows = React.useMemo(() => {
-  return rows.filter((r) => !kiIsStructuralRow(r) && getRlcKiUnitPrice(r) > 0)
+const priceDiffRows = React.useMemo(() => {
+  return rows
+    .filter((r) => !kiIsStructuralRow(r))
     .map((r) => {
       const angebotEp = getOfferUnitPrice(r);
       const kiEp = getRlcKiUnitPrice(r);
@@ -3220,13 +3388,26 @@ const topPriceDiffRows = React.useMemo(() => {
       const diffEp = round2(kiEp - angebotEp);
       const diffGp = round2(kiGp - angebotGp);
       const diffPct = angebotEp > 0 ? round2((diffEp / angebotEp) * 100) : 0;
-
       const absDiffPct = Math.abs(diffPct);
 
+      let gruppe:
+        | "RLC_HOEHER_UEBER_10"
+        | "RLC_NIEDRIGER_UEBER_10"
+        | "INNERHALB_10"
+        | "OHNE_VERGLEICH" = "OHNE_VERGLEICH";
+
+      if (angebotEp > 0 && kiEp > 0) {
+        if (diffPct > 10) gruppe = "RLC_HOEHER_UEBER_10";
+        else if (diffPct < -10) gruppe = "RLC_NIEDRIGER_UEBER_10";
+        else gruppe = "INNERHALB_10";
+      }
+
       let empfehlung = "OK";
-      if (absDiffPct > 30) empfehlung = "Kritisch";
-      else if (absDiffPct > 15) empfehlung = "Prüfen";
-      else if (absDiffPct > 5) empfehlung = "Leicht abweichend";
+      if (gruppe === "OHNE_VERGLEICH") empfehlung = "Ohne Vergleich";
+      else if (absDiffPct >= 30) empfehlung = "Kritisch";
+      else if (absDiffPct >= 20) empfehlung = "Prüfen";
+      else if (absDiffPct > 10) empfehlung = diffPct > 0 ? "RLC höher > 10%" : "RLC niedriger > 10%";
+      else empfehlung = "Innerhalb ±10%";
 
       return {
         id: r.id,
@@ -3241,13 +3422,69 @@ const topPriceDiffRows = React.useMemo(() => {
         diffEp,
         diffGp,
         diffPct,
+        gruppe,
         empfehlung,
       };
-    })
-    .filter((r) => r.angebotEp > 0 && r.kiEp > 0 && Math.abs(r.diffPct) > 5)
-    .sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp))
-    .slice(0, 20);
+    });
 }, [rows]);
+
+const priceDiffReport = React.useMemo(() => {
+  const byAbsGp = (a: any, b: any) => Math.abs(b.diffGp) - Math.abs(a.diffGp);
+  const byHigherGp = (a: any, b: any) => b.diffGp - a.diffGp;
+  const byLowerGp = (a: any, b: any) => a.diffGp - b.diffGp;
+
+  const comparable = priceDiffRows.filter((r) => r.angebotEp > 0 && r.kiEp > 0);
+  const higher10 = comparable.filter((r) => r.gruppe === "RLC_HOEHER_UEBER_10").sort(byHigherGp);
+  const lower10 = comparable.filter((r) => r.gruppe === "RLC_NIEDRIGER_UEBER_10").sort(byLowerGp);
+  const inside10 = comparable.filter((r) => r.gruppe === "INNERHALB_10").sort(byAbsGp);
+  const missing = priceDiffRows.filter((r) => r.gruppe === "OHNE_VERGLEICH").sort(byAbsGp);
+  const outside10 = [...higher10, ...lower10].sort(byAbsGp);
+  const over20Pct = comparable.filter((r) => Math.abs(r.diffPct) >= 20).sort(byAbsGp);
+  const over10000Gp = comparable.filter((r) => Math.abs(r.diffGp) >= 10000).sort(byAbsGp);
+
+  return {
+    all: comparable.sort(byAbsGp),
+    comparable,
+    higher10,
+    lower10,
+    inside10,
+    missing,
+    outside10,
+    topAbs: [...outside10].sort(byAbsGp).slice(0, 30),
+    over20Pct,
+    over10000Gp,
+    counts: {
+      total: priceDiffRows.length,
+      comparable: comparable.length,
+      outside10: outside10.length,
+      higher10: higher10.length,
+      lower10: lower10.length,
+      inside10: inside10.length,
+      missing: missing.length,
+    },
+    sums: {
+      x84: round2(comparable.reduce((sum, r) => sum + r.angebotGp, 0)),
+      rlc: round2(comparable.reduce((sum, r) => sum + r.kiGp, 0)),
+      diff: round2(comparable.reduce((sum, r) => sum + r.diffGp, 0)),
+      higher: round2(higher10.reduce((sum, r) => sum + r.diffGp, 0)),
+      lower: round2(lower10.reduce((sum, r) => sum + r.diffGp, 0)),
+      inside: round2(inside10.reduce((sum, r) => sum + r.diffGp, 0)),
+    },
+  };
+}, [priceDiffRows]);
+
+const activePriceDiffRows = React.useMemo(() => {
+  if (priceDiffView === "higher10") return priceDiffReport.higher10;
+  if (priceDiffView === "lower10") return priceDiffReport.lower10;
+  if (priceDiffView === "inside10") return priceDiffReport.inside10;
+  if (priceDiffView === "over20") return priceDiffReport.over20Pct;
+  if (priceDiffView === "over10000") return priceDiffReport.over10000Gp;
+  if (priceDiffView === "all") return priceDiffReport.all;
+  if (priceDiffView === "missing") return priceDiffReport.missing;
+  return priceDiffReport.outside10;
+}, [priceDiffReport, priceDiffView]);
+
+const topPriceDiffRows = activePriceDiffRows;
 const activeKiDecision = React.useMemo(() => {
   if (!rows.length) {
     return {
@@ -3457,88 +3694,162 @@ function sanitizeRowsForStorage(input: EliteRow[]): EliteRow[] {
     }));
   });
 }
-function persistRows(next: EliteRow[]) {
+function compactKiRowsForStorage(rows: EliteRow[], projectKeyForX84?: string): any[] {
+  const hasRealX84 = projectKeyForX84 ? hasRealX84ForProject(projectKeyForX84) : false;
+
+  return rows.map((r: any) => ({
+    id: r.id,
+    auftragId: r.auftragId,
+    auftragName: r.auftragName,
+    parentPosNr: r.parentPosNr,
+
+    posNr: r.posNr,
+    positionNumber: r.positionNumber,
+    kurztext: r.kurztext,
+    shortText: r.shortText,
+    langtext: typeof r.langtext === "string" ? r.langtext.slice(0, 1200) : r.langtext,
+
+    menge: r.menge,
+    quantity: r.quantity,
+    einheit: r.einheit,
+    unit: r.unit,
+
+    angebotUnitPrice: hasRealX84 ? r.angebotUnitPrice : 0,
+    angebotTotal: hasRealX84 ? r.angebotTotal : 0,
+    angebotTotalNet: hasRealX84 ? r.angebotTotalNet : 0,
+    originalPreKiPrice: hasRealX84 ? r.originalPreKiPrice : 0,
+    x84UnitPrice: hasRealX84 ? r.x84UnitPrice : 0,
+    x84TotalNet: hasRealX84 ? r.x84TotalNet : 0,
+
+    materialCost: r.materialCost,
+    laborCost: r.laborCost,
+    machineCost: r.machineCost,
+    subcontractorCost: r.subcontractorCost,
+    disposalCost: r.disposalCost,
+    overheadCost: r.overheadCost,
+    riskCost: r.riskCost,
+    profitCost: r.profitCost,
+
+    baseUnitPrice: r.baseUnitPrice,
+    suggestedUnitPrice: r.suggestedUnitPrice,
+    finalUnitPrice: r.finalUnitPrice,
+    rlcKiUnitPrice: r.rlcKiUnitPrice,
+    rlcKiTotal: r.rlcKiTotal,
+    totalNet: r.totalNet,
+
+    confidence: r.confidence,
+    riskLevel: r.riskLevel,
+    calculationStatus: r.calculationStatus,
+    status: r.status,
+    source: r.source,
+    warning: r.warning,
+    pruefHinweis: r.pruefHinweis,
+    priceDecision: r.priceDecision,
+  }));
+}
+function persistRows(next: EliteRow[], modeOverride?: "offer-check" | "new-calculation") {
+  const persistKiMode = modeOverride || kiMode;
   const safeInput = sanitizeRowsForStorage(next);
 
-  const normalized = safeInput.map((r: EliteRow) => {
-    const angebotEp =
+  const normalized = safeInput.map((r: EliteRow, idx: number) => {
+    const originalRow: any = Array.isArray(next) ? (next as any[])[idx] || {} : {};
+    const explicitOfferEp =
       n((r as any).angebotUnitPrice) ||
       n((r as any).originalPreKiPrice) ||
-      n(r.preis) ||
-      n(r.finalUnitPrice) ||
+      n((r as any).x84UnitPrice);
+
+    // X84/Angebot bleibt immer Vergleichsbasis.
+    // Es darf aber niemals als RLC-KI-Preis interpretiert werden.
+    const angebotEp = explicitOfferEp;
+
+    const rlcKiEp =
+      n((r as any).rlcKiUnitPrice) ||
       0;
 
-    const decision = ((r as any).priceDecision || "x84") as
+    const decision = ((r as any).priceDecision || (persistKiMode === "offer-check" ? "x84" : "rlcKi")) as
       | "x84"
       | "rlcKi"
       | "manual";
 
-    const rlcKiEp = getRlcKiUnitPrice(r);
+    const manualEp = n((r as any).finalUnitPrice);
 
-    let finalEp = angebotEp;
+    const finalEp =
+      decision === "rlcKi" && rlcKiEp > 0
+        ? rlcKiEp
+        : decision === "manual" && manualEp > 0
+          ? manualEp
+          : angebotEp > 0
+            ? angebotEp
+            : rlcKiEp;
 
-    if (decision === "rlcKi" && rlcKiEp > 0) finalEp = rlcKiEp;
-    if (decision === "manual" && n(r.finalUnitPrice) > 0) {
-      finalEp = n(r.finalUnitPrice);
-    }
+    const diff = angebotEp > 0 && rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
+    const diffPct = angebotEp > 0 && rlcKiEp > 0 ? round2((diff / angebotEp) * 100) : 0;
 
     return cleanRlcKiWarningState(normalizeEliteRow({
       ...r,
 
+      // Nur echte Angebotsbasis speichern; nie aus KI-Preis ableiten.
       angebotUnitPrice: angebotEp,
-      angebotTotal: round2(n(r.menge) * angebotEp),
+      angebotTotal: angebotEp > 0 ? round2(n(r.menge) * angebotEp) : 0,
       originalPreKiPrice: angebotEp,
+      x84UnitPrice: angebotEp,
 
       rlcKiUnitPrice: rlcKiEp,
       rlcKiTotal: rlcKiEp > 0 ? round2(n(r.menge) * rlcKiEp) : 0,
 
-      priceDifference: rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0,
-      priceDifferencePct:
-        rlcKiEp > 0 && angebotEp > 0
-          ? round2(((rlcKiEp - angebotEp) / angebotEp) * 100)
-          : 0,
+      priceDifference: diff,
+      priceDifferencePct: diffPct,
 
-      priceDecision: decision,
       finalUnitPrice: finalEp,
       preis: finalEp,
       gesamt: round2(n(r.menge) * finalEp),
-
-      confidence: r.confidence,
+      priceDecision: decision,
     }));
   });
 
-  setRows(normalized);
-  LV.setAll(normalized as LVPos[]);
+  const normalizedWithX84Learning = normalized.map((r: any, idx: number) => {
+    const originalRow: any = Array.isArray(next) ? (next as any[])[idx] || {} : {};
+
+    return {
+      ...r,
+      x84BenchmarkEp: originalRow.x84BenchmarkEp ?? r.x84BenchmarkEp,
+      x84BenchmarkGp: originalRow.x84BenchmarkGp ?? r.x84BenchmarkGp,
+      x84BenchmarkDiffPct: originalRow.x84BenchmarkDiffPct ?? r.x84BenchmarkDiffPct,
+      x84BenchmarkDiffGp: originalRow.x84BenchmarkDiffGp ?? r.x84BenchmarkDiffGp,
+      x84BenchmarkStatus: originalRow.x84BenchmarkStatus ?? r.x84BenchmarkStatus,
+      x84BenchmarkLearningSignal: originalRow.x84BenchmarkLearningSignal ?? r.x84BenchmarkLearningSignal,
+      x84BenchmarkUsedAsPrice: originalRow.x84BenchmarkUsedAsPrice ?? r.x84BenchmarkUsedAsPrice,
+      x84BenchmarkNote: originalRow.x84BenchmarkNote ?? r.x84BenchmarkNote,
+    };
+  });
+
+  setRows(normalizedWithX84Learning);
 
   try {
-    const payload = {
-      meta: {
-        projectKey,
-        projectTitle,
-        offer,
-        client,
-        company,
-        mwst,
-        globalMarkup,
-        aufschlag: globalMarkup,
-        kapRabatt,
-        kapMarkup,
-        offerNumber: offer.number,
-        savedAt: new Date().toISOString(),
-      },
-      rows: normalized,
-      summary,
-      chapterTotals,
-      totals: {
-        netto: summary.net,
-        aufschlagWert: summary.globalMarkupValue,
-        brutto: summary.gross,
-      },
-    };
-
-    localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
-  } catch {
-    // Lokale Sicherung darf UI nicht blockieren.
+    localStorage.setItem(
+      localBackupKey(projectKey),
+      JSON.stringify({
+        meta: {
+          projectKey,
+          projectTitle,
+          updatedAt: new Date().toISOString(),
+          kiMode: persistKiMode,
+        },
+        rows: compactKiRowsForStorage(normalizedWithX84Learning, projectKey).map((r: any, idx: number) => ({
+          ...r,
+          x84BenchmarkEp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkEp,
+          x84BenchmarkGp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkGp,
+          x84BenchmarkDiffPct: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkDiffPct,
+          x84BenchmarkDiffGp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkDiffGp,
+          x84BenchmarkStatus: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkStatus,
+          x84BenchmarkLearningSignal: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkLearningSignal,
+          x84BenchmarkUsedAsPrice: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkUsedAsPrice,
+          x84BenchmarkNote: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkNote,
+        })),
+      })
+    );
+  } catch (e) {
+    console.warn("[KI] local backup failed:", e);
   }
 }
 function updateRow(id: string, patch: Partial<EliteRow>) {
@@ -4234,17 +4545,502 @@ function kiEmitResult(
     })
   );
 }
-async function runEliteCalculation(forceRecalculate = false, expertMode = false) {
+
+function buildNoX84KiPayloadRows(rows: any[]): any[] {
+  return (Array.isArray(rows) ? rows : []).map((r: any, index: number) => ({
+    id: String(r.id ?? r.rowId ?? `row-${index + 1}`),
+    posNr: String(r.posNr ?? r.pos ?? r.positionNumber ?? r.position ?? ""),
+    kurztext: String(r.kurztext ?? r.shortText ?? r.text ?? ""),
+    langtext: String(r.langtext ?? r.longText ?? r.description ?? ""),
+    einheit: String(r.einheit ?? r.unit ?? ""),
+    menge: Number(r.menge ?? r.quantity ?? r.qty ?? 0) || 0,
+  }));
+}
+
+
+function buildRlcX84DiffReport(rows: any[], projectKey: string): any {
+  const list = Array.isArray(rows) ? rows : [];
+
+  const toNum = (v: any): number => {
+    const x = Number(v ?? 0);
+    return Number.isFinite(x) ? x : 0;
+  };
+
+  const qtyOf = (r: any): number =>
+    toNum(r.menge) || toNum(r.quantity) || toNum(r.qty);
+
+  const rlcEpOf = (r: any): number =>
+    toNum(r.finalUnitPrice) || toNum(r.rlcKiUnitPrice) || toNum(r.unitPrice) || toNum(r.preis);
+
+  const rlcGpOf = (r: any): number =>
+    toNum(r.totalNet) ||
+    toNum(r.rlcKiTotal) ||
+    toNum(r.totalPrice) ||
+    toNum(r.gesamt) ||
+    Math.round(rlcEpOf(r) * qtyOf(r) * 100) / 100;
+
+  const x84EpOf = (r: any): number =>
+    toNum(r.x84UnitPrice) || toNum(r.angebotUnitPrice) || toNum(r.originalPreKiPrice);
+
+  const x84GpOf = (r: any): number => {
+    const gp = toNum(r.x84Total) || toNum(r.angebotTotal) || toNum(r.originalPreKiTotal);
+    if (gp > 0) return gp;
+    const ep = x84EpOf(r);
+    const qty = qtyOf(r);
+    return ep > 0 && qty > 0 ? Math.round(ep * qty * 100) / 100 : 0;
+  };
+
+  const compact = (r: any) => {
+    const qty = qtyOf(r);
+    const x84Ep = x84EpOf(r);
+    const rlcEp = rlcEpOf(r);
+    const x84Gp = x84GpOf(r);
+    const rlcGp = rlcGpOf(r);
+    const diffGp = Math.round((rlcGp - x84Gp) * 100) / 100;
+    const diffPct = x84Gp > 0 ? Math.round((diffGp / x84Gp) * 10000) / 100 : 0;
+
+    let status = "OK";
+    if (Math.abs(diffPct) >= 30 || Math.abs(diffGp) >= 10000) status = "Kritisch";
+    else if (diffPct > 10) status = "RLC höher > 10%";
+    else if (diffPct < -10) status = "RLC niedriger > 10%";
+    else if (Math.abs(diffPct) > 5) status = "Prüfen";
+
+    return {
+      id: r.id,
+      posNr: r.posNr ?? r.pos,
+      kurztext: r.kurztext ?? r.text ?? "",
+      einheit: r.einheit ?? r.unit ?? "",
+      menge: qty,
+      x84Ep,
+      rlcEp,
+      x84Gp,
+      rlcGp,
+      diffPct,
+      diffGp,
+      status,
+      source: r.source,
+      riskLevel: r.riskLevel,
+      calculationStatus: r.calculationStatus,
+      warning: r.warning,
+    };
+  };
+
+  const comparable = list.map(compact).filter((r) => r.x84Ep > 0 && r.rlcEp > 0 && r.menge > 0);
+
+  const totalX84 = comparable.reduce((s, r) => s + r.x84Gp, 0);
+  const totalRlc = comparable.reduce((s, r) => s + r.rlcGp, 0);
+  const delta = totalRlc - totalX84;
+
+  const critical = comparable
+    .filter((r) => r.status === "Kritisch")
+    .sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+
+  const rlcHigher = comparable
+    .filter((r) => r.diffGp > 0 && r.status !== "OK")
+    .sort((a, b) => b.diffGp - a.diffGp);
+
+  const rlcLower = comparable
+    .filter((r) => r.diffGp < 0 && r.status !== "OK")
+    .sort((a, b) => a.diffGp - b.diffGp);
+
+  const over10000 = comparable
+    .filter((r) => Math.abs(r.diffGp) >= 10000)
+    .sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+
+  return {
+    ok: true,
+    projectKey,
+    createdAt: new Date().toISOString(),
+    count: comparable.length,
+    totalX84: Math.round(totalX84 * 100) / 100,
+    totalRlc: Math.round(totalRlc * 100) / 100,
+    delta: Math.round(delta * 100) / 100,
+    deltaPct: totalX84 > 0 ? Math.round((delta / totalX84) * 10000) / 100 : 0,
+    summary: {
+      criticalCount: critical.length,
+      rlcHigherCount: rlcHigher.length,
+      rlcLowerCount: rlcLower.length,
+      over10000Count: over10000.length,
+    },
+    topByAbsDiff: [...comparable].sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp)).slice(0, 150),
+    critical: critical.slice(0, 150),
+    rlcHigher: rlcHigher.slice(0, 150),
+    rlcLower: rlcLower.slice(0, 150),
+    over10000: over10000.slice(0, 150),
+  };
+}
+
+
+function rlcBuildX84DiffSummarySafe(items: any[]) {
+  const n = (v: any) => {
+    const x = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
+    return Number.isFinite(x) ? x : 0;
+  };
+
+  const rows = Array.isArray(items) ? items : [];
+
+  let comparableCount = 0;
+  let rlcHigherCount = 0;
+  let rlcLowerCount = 0;
+  let within10Count = 0;
+  let outside10Count = 0;
+  let over20Count = 0;
+  let over10000Count = 0;
+  let criticalCount = 0;
+
+  for (const r of rows) {
+    const qty = n(r.menge ?? r.quantity);
+
+    const x84Ep = n(
+      r.x84Ep ??
+      r.x84UnitPrice ??
+      r.angebotUnitPrice ??
+      r.offerUnitPrice ??
+      r.originalPreKiPrice ??
+      r.reverseUrkalkulation?.x84UnitPrice ??
+      r.dbComparability?.x84UnitPrice
+    );
+
+    const rlcEp = n(
+      r.rlcEp ??
+      r.rlcKiUnitPrice ??
+      r.finalUnitPrice ??
+      r.suggestedUnitPrice ??
+      r.preis ??
+      r.unitPrice
+    );
+
+    if (!(qty > 0 && x84Ep > 0 && rlcEp > 0)) continue;
+
+    comparableCount++;
+
+    const x84Gp = qty * x84Ep;
+    const rlcGp = qty * rlcEp;
+    const diffGp = rlcGp - x84Gp;
+    const diffPct = x84Gp !== 0 ? (diffGp / x84Gp) * 100 : 0;
+
+    if (diffPct > 10) {
+      rlcHigherCount++;
+      outside10Count++;
+    } else if (diffPct < -10) {
+      rlcLowerCount++;
+      outside10Count++;
+    } else {
+      within10Count++;
+    }
+
+    if (Math.abs(diffPct) > 20) over20Count++;
+    if (Math.abs(diffGp) > 10000) over10000Count++;
+
+    if (Math.abs(diffPct) > 20 || Math.abs(diffGp) > 10000) {
+      criticalCount++;
+    }
+  }
+
+  return {
+    count: comparableCount,
+    comparableCount,
+    outside10Count,
+    rlcHigherCount,
+    rlcLowerCount,
+    within10Count,
+    over20Count,
+    over10000Count,
+    criticalCount,
+  };
+}
+function saveRlcX84LearningReport(rows: any[], projectKey: string) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+
+  const entries = safeRows
+    .filter((r: any) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none")
+    .map((r: any) => {
+      const x84Ep = Number(r.x84BenchmarkEp || 0);
+      const rlcEp = Number(r.rlcKiUnitPrice || r.finalUnitPrice || r.preis || 0);
+      const qty = Number(r.menge || r.quantity || 0);
+      const diffPct = Number(r.x84BenchmarkDiffPct || 0);
+      const diffGp = Number(r.x84BenchmarkDiffGp || 0);
+
+      let bucket = r.x84BenchmarkLearningSignal;
+
+      if (Math.abs(diffPct) >= 50 && Math.abs(diffGp) >= 500) {
+        bucket = "technical_review_required";
+      }
+
+      return {
+        posNr: r.posNr,
+        kurztext: String(r.kurztext || "").slice(0, 160),
+        einheit: r.einheit,
+        menge: qty,
+        x84Ep,
+        rlcEp,
+        diffPct,
+        diffGp,
+        status: r.x84BenchmarkStatus,
+        signal: r.x84BenchmarkLearningSignal,
+        bucket,
+        usedAsPrice: false,
+        source: String(r.source || "").slice(0, 120),
+      };
+    })
+    .sort((a: any, b: any) => Math.abs(b.diffGp || 0) - Math.abs(a.diffGp || 0))
+    .slice(0, 200);
+
+  const summary = {
+    stableReferenceCount: entries.filter((x: any) => x.bucket === "stable_reference").length,
+    softLearningCandidateCount: entries.filter((x: any) => x.bucket === "soft_learning_candidate").length,
+    lowPriorityLearningCandidateCount: entries.filter((x: any) => x.bucket === "low_priority_learning_candidate").length,
+    strongLearningCandidateCount: entries.filter((x: any) => x.bucket === "strong_learning_candidate").length,
+    technicalReviewRequiredCount: entries.filter((x: any) => x.bucket === "technical_review_required").length,
+  };
+
+  const report = {
+    ok: true,
+    projectKey,
+    createdAt: new Date().toISOString(),
+    count: entries.length,
+    summary,
+    entries,
+  };
+
+  const storageKey = `rlc_x84_learning_report_v1:${projectKey}`;
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(report));
+    console.log("[RLC-KI] X84 Learning Report saved", {
+      storageKey,
+      count: report.count,
+      summary: report.summary,
+    });
+  } catch (e) {
+    console.warn("[RLC-KI] X84 Learning Report localStorage quota exceeded, saving compact top 50", e);
+
+    const compactReport = {
+      ...report,
+      entries: entries.slice(0, 50),
+      count: Math.min(entries.length, 50),
+      compact: true,
+    };
+
+    localStorage.setItem(storageKey, JSON.stringify(compactReport));
+  }
+
+  return report;
+}
+function saveRlcX84LearningApprovalDraft(rows: any[], projectKey: string) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+
+  const candidates = safeRows
+    .filter((r: any) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none")
+    .map((r: any) => {
+      const x84Ep = Number(r.x84BenchmarkEp || 0);
+      const rlcEp = Number(r.rlcKiUnitPrice || r.finalUnitPrice || r.preis || 0);
+      const qty = Number(r.menge || r.quantity || 0);
+      const diffPct = Number(r.x84BenchmarkDiffPct || 0);
+      const diffGp = Number(r.x84BenchmarkDiffGp || 0);
+      const absPct = Math.abs(diffPct);
+      const absGp = Math.abs(diffGp);
+
+      let approvalLevel: "safe_review" | "soft_review" | "manual_review" | "blocked_review" = "manual_review";
+
+      if (r.x84BenchmarkLearningSignal === "stable_reference" && absPct <= 10) {
+        approvalLevel = "safe_review";
+      } else if (r.x84BenchmarkLearningSignal === "soft_learning_candidate" && absPct <= 15) {
+        approvalLevel = "soft_review";
+      }
+
+      if (absPct >= 50 || absGp >= 50000 || r.x84BenchmarkUsedAsPrice === true) {
+        approvalLevel = "blocked_review";
+      }
+
+      return {
+        id: r.id,
+        posNr: r.posNr,
+        kurztext: String(r.kurztext || "").slice(0, 160),
+        einheit: r.einheit,
+        menge: qty,
+
+        x84Ep,
+        rlcEp,
+        diffPct,
+        diffGp,
+
+        source: String(r.source || "").slice(0, 140),
+        riskLevel: r.riskLevel || "",
+        calculationStatus: r.calculationStatus || "",
+
+        learningSignal: r.x84BenchmarkLearningSignal,
+        benchmarkStatus: r.x84BenchmarkStatus,
+        approvalLevel,
+
+        decision: "pending",
+        approvedForCompanyDb: false,
+        approvedForGlobalKnowledge: false,
+        usedAsPrice: false,
+
+        note:
+          "Nur Freigabe-Entwurf. X84 wird nicht automatisch als Preis übernommen und nicht automatisch in die Datenbank geschrieben.",
+      };
+    })
+    .sort((a: any, b: any) => {
+      const levelOrder: Record<string, number> = {
+        safe_review: 1,
+        soft_review: 2,
+        manual_review: 3,
+        blocked_review: 4,
+      };
+
+      const la = levelOrder[a.approvalLevel] || 9;
+      const lb = levelOrder[b.approvalLevel] || 9;
+
+      if (la !== lb) return la - lb;
+      return Math.abs(b.diffGp || 0) - Math.abs(a.diffGp || 0);
+    })
+    .slice(0, 200);
+
+  const summary = {
+    total: candidates.length,
+    safeReviewCount: candidates.filter((x: any) => x.approvalLevel === "safe_review").length,
+    softReviewCount: candidates.filter((x: any) => x.approvalLevel === "soft_review").length,
+    manualReviewCount: candidates.filter((x: any) => x.approvalLevel === "manual_review").length,
+    blockedReviewCount: candidates.filter((x: any) => x.approvalLevel === "blocked_review").length,
+    approvedForCompanyDbCount: 0,
+    approvedForGlobalKnowledgeCount: 0,
+  };
+
+  const draft = {
+    ok: true,
+    projectKey,
+    createdAt: new Date().toISOString(),
+    mode: "approval_draft_only",
+    autoWriteToDatabase: false,
+    x84UsedAsPrice: false,
+    summary,
+    candidates,
+  };
+
+  const storageKey = `rlc_x84_learning_approval_draft_v1:${projectKey}`;
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(draft));
+    console.log("[RLC-KI] X84 Learning Approval Draft saved", {
+      storageKey,
+      summary,
+    });
+  } catch (e) {
+    console.warn("[RLC-KI] Approval Draft quota exceeded, saving compact top 50", e);
+
+    const compactDraft = {
+      ...draft,
+      candidates: candidates.slice(0, 50),
+      compact: true,
+      summary: {
+        ...summary,
+        total: Math.min(candidates.length, 50),
+      },
+    };
+
+    localStorage.setItem(storageKey, JSON.stringify(compactDraft));
+  }
+
+  return draft;
+}
+
+function applyX84BenchmarkLearningToRows(rows: any[], diffReport: any): any[] {
+  const list =
+    Array.isArray(diffReport?.rows) ? diffReport.rows :
+    Array.isArray(diffReport?.allRows) ? diffReport.allRows :
+    Array.isArray(diffReport?.topByAbsDiff) ? diffReport.topByAbsDiff :
+    [];
+
+  const byPos = new Map<string, any>();
+  for (const d of list) {
+    const pos = String(d?.posNr ?? d?.pos ?? "").trim();
+    if (pos) byPos.set(pos, d);
+  }
+
+  return (Array.isArray(rows) ? rows : []).map((r: any) => {
+    const pos = String(r?.posNr ?? r?.pos ?? "").trim();
+    const d = byPos.get(pos);
+    if (!d) return r;
+
+    const x84Ep = Number(d.x84Ep ?? d.x84UnitPrice ?? d.angebotUnitPrice ?? 0);
+    const rlcEp = Number(d.rlcEp ?? r.rlcKiUnitPrice ?? r.finalUnitPrice ?? 0);
+    const diffPct = Number(d.diffPct ?? 0);
+    const diffGp = Number(d.diffGp ?? 0);
+
+    if (!x84Ep || !rlcEp) return r;
+
+    const absPct = Math.abs(diffPct);
+    const absGp = Math.abs(diffGp);
+
+    let status = "ok";
+    let signal = "none";
+
+    if (absPct <= 10) {
+      status = "within_10_percent";
+      signal = "stable_reference";
+    } else if (absPct <= 15) {
+      status = "review_light";
+      signal = "soft_learning_candidate";
+    } else if (absGp <= 500) {
+      status = "review_small_amount";
+      signal = "low_priority_learning_candidate";
+    } else {
+      status = "review_required";
+      signal = "strong_learning_candidate";
+    }
+
+    return {
+      ...r,
+      x84BenchmarkEp: x84Ep,
+      x84BenchmarkDiffPct: diffPct,
+      x84BenchmarkDiffGp: diffGp,
+      x84BenchmarkStatus: status,
+      x84BenchmarkLearningSignal: signal,
+      x84BenchmarkUsedAsPrice: false,
+      x84BenchmarkNote:
+        "X84 wurde nur als Benchmark/Lernsignal gespeichert. Der Preis wurde nicht blind aus X84 übernommen.",
+    };
+  });
+}
+
+function saveRlcX84DiffReport(rows: any[], projectKey: string): any {
+  const baseReport = buildRlcX84DiffReport(rows, projectKey);
+  const safeSummary = rlcBuildX84DiffSummarySafe(rows);
+
+  const report = {
+    ...baseReport,
+    count: safeSummary.count,
+    summary: safeSummary,
+  };
+  const storageKey = `rlc_last_ki_x84_diff_report_v1:${projectKey}`;
+
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(report));
+    console.log("[RLC-KI] X84 Diff Report saved", {
+      storageKey,
+      count: report.count,
+      totalX84: report.totalX84,
+      totalRlc: report.totalRlc,
+      delta: report.delta,
+      deltaPct: report.deltaPct,
+      summary: report.summary,
+    });
+    console.table(report.topByAbsDiff.slice(0, 30));
+  } catch (e) {
+    console.warn("[RLC-KI] could not save X84 Diff Report", e);
+  }
+
+  return report;
+}
+async function runEliteCalculation(forceRecalculate = false, expertMode = false, modeOverride?: "offer-check" | "new-calculation") {
+  const effectiveKiMode = modeOverride || kiMode;
   if (!rows.length) {
     alert("Keine Positionen vorhanden.");
     return;
   }
 
-  /*
-   * Original-EP vor KI sichern.
-   * Wichtig: Nach mehreren KI-Testläufen darf die Stabilitätsbremse nicht gegen bereits
-   * veränderte KI-Preise vergleichen, sondern gegen den ersten stabilen EP.
-   */
   const preparedRows = rows.map((row) =>
     kiIsStructuralRow(row)
       ? normalizeEliteRow(kiPrepareStructuralRow(row))
@@ -4255,7 +5051,7 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
     .filter((row) => kiIsRealCalcRow(row) && (forceRecalculate || expertMode || !(row as any).preisManuellGeprueft))
     .map((row) => {
       const storedOfferUnitPrice =
-        kiMode === "offer-check"
+        effectiveKiMode === "offer-check"
           ? n((row as any).angebotUnitPrice) ||
             n((row as any).originalPreKiPrice) ||
             n((row as any).x84UnitPrice) ||
@@ -4264,7 +5060,7 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
           : 0;
 
       const calculationStartEp =
-        kiMode === "offer-check" && storedOfferUnitPrice > 0
+        effectiveKiMode === "offer-check" && storedOfferUnitPrice > 0
           ? storedOfferUnitPrice
           : 0;
 
@@ -4280,10 +5076,153 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
 
         preis: calculationStartEp,
         finalUnitPrice: calculationStartEp,
+
+        // Neue Kalkulation ignoriert alte KI-/manuelle Preiswerte vollständig.
+        rlcKiUnitPrice: effectiveKiMode === "offer-check" ? n((row as any).rlcKiUnitPrice) : 0,
+        rlcKiTotal: effectiveKiMode === "offer-check" ? n((row as any).rlcKiTotal) : 0,
+        suggestedUnitPrice: effectiveKiMode === "offer-check" ? n((row as any).suggestedUnitPrice) : 0,
+        baseUnitPrice: effectiveKiMode === "offer-check" ? n((row as any).baseUnitPrice) : 0,
+        priceDecision: effectiveKiMode === "offer-check" ? (row as any).priceDecision : "rlcKi",
+        source: effectiveKiMode === "offer-check" ? (row as any).source : undefined,
       } as EliteRow;
     });
 
   const beforeRows = kiCloneRows(preparedRows);
+
+  /*
+   * Performance-Regel:
+   * - normale KI / Neue Kalkulation: große Server-Batches, KEIN OpenAI-Massenlauf
+   * - Expertprüfung: kleinere Batches, OpenAI erlaubt
+   */
+  const batchSize = expertMode ? 20 : 50;
+  const batches: EliteRow[][] = [];
+
+  for (let i = 0; i < rowsForKi.length; i += batchSize) {
+    batches.push(rowsForKi.slice(i, i + batchSize));
+  }
+
+  try {
+    const fullRequestRows =
+      effectiveKiMode === "offer-check"
+        ? rowsForKi
+        : buildNoX84KiPayloadRows(rowsForKi);
+
+    const fullWithX84Fields = fullRequestRows.filter((r: any) =>
+      Number(r.x84UnitPrice ?? 0) > 0 ||
+      Number(r.angebotUnitPrice ?? 0) > 0 ||
+      Number(r.originalPreKiPrice ?? 0) > 0 ||
+      Number(r.preis ?? 0) > 0 ||
+      Number(r.gesamt ?? 0) > 0
+    ).length;
+
+    const fullPayload = {
+      forceRecalculate,
+      rows: fullRequestRows,
+      maxParallelRows: expertMode ? 4 : 10,
+      maxOpenAiRowsPerBatch: expertMode ? Math.min(batchSize, 10) : 0,
+      expertMode,
+      useOpenAIIfNoDatabaseHit: expertMode,
+      forceOpenAIReview: expertMode,
+      debug: {
+        sourceInput: effectiveKiMode === "offer-check"
+          ? "offer-check-full-rowsForKi"
+          : "gaeb-import-no-x84-clean-full",
+        projectKey,
+        requestRows: fullRequestRows.length,
+        batches: batches.length,
+        batchSize,
+        withX84Fields: fullWithX84Fields,
+        createdAt: new Date().toISOString(),
+      },
+    };
+
+    localStorage.setItem(
+      `rlc_last_ki_full_request_payload_v1:${projectKey}`,
+      JSON.stringify(fullPayload)
+    );
+
+    console.log("[RLC-KI] FULL request payload saved", {
+      storageKey: `rlc_last_ki_full_request_payload_v1:${projectKey}`,
+      sourceInput: fullPayload.debug.sourceInput,
+      rows: fullPayload.debug.requestRows,
+      batches: fullPayload.debug.batches,
+      withX84Fields: fullPayload.debug.withX84Fields,
+    });
+  } catch (e) {
+    console.warn("[RLC-KI] could not save FULL request payload", e);
+  }
+
+  async function callServerKiBatch(batchRows: EliteRow[], batchIndex: number) {
+    const res = await fetch(apiUrl("/api/kalkulation/ki/suggest-batch"), {
+      method: "POST",
+      credentials: "include",
+      headers: authJsonHeaders(),
+      body: JSON.stringify((() => {
+        const requestRows =
+          effectiveKiMode === "offer-check"
+            ? batchRows
+            : buildNoX84KiPayloadRows(batchRows);
+
+        const withX84Fields = requestRows.filter((r: any) =>
+          Number(r.x84UnitPrice ?? 0) > 0 ||
+          Number(r.angebotUnitPrice ?? 0) > 0 ||
+          Number(r.originalPreKiPrice ?? 0) > 0 ||
+          Number(r.preis ?? 0) > 0 ||
+          Number(r.gesamt ?? 0) > 0
+        ).length;
+
+        const payload = {
+          forceRecalculate,
+          rows: requestRows,
+          maxParallelRows: expertMode ? 4 : 10,
+          maxOpenAiRowsPerBatch: expertMode ? Math.min(batchRows.length, 10) : 0,
+          expertMode,
+          useOpenAIIfNoDatabaseHit: expertMode,
+          forceOpenAIReview: expertMode,
+          debug: {
+            sourceInput: effectiveKiMode === "offer-check" ? "offer-check-batchRows" : "gaeb-import-no-x84-clean",
+            projectKey,
+            batchRows: batchRows.length,
+            requestRows: requestRows.length,
+            withX84Fields,
+            createdAt: new Date().toISOString(),
+          },
+        };
+
+        try {
+          const storageKey = `rlc_last_ki_request_payload_v1:${projectKey}`;
+          localStorage.setItem(storageKey, JSON.stringify(payload));
+          console.log("[RLC-KI] request payload saved", {
+            storageKey,
+            sourceInput: payload.debug.sourceInput,
+            rows: payload.debug.requestRows,
+            withX84Fields,
+          });
+        } catch (e) {
+          console.warn("[RLC-KI] could not save request payload", e);
+        }
+
+        return payload;
+      })()),
+    });
+
+    const text = await res.text();
+    let json: any = null;
+
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      throw new Error(`KI_BATCH_${batchIndex}_INVALID_JSON_STATUS_${res.status}: ${text.slice(0, 300)}`);
+    }
+
+    if (!res.ok || !json?.ok || !Array.isArray(json.rows)) {
+      throw new Error(
+        `KI_BATCH_${batchIndex}_FAILED_STATUS_${res.status}: ${json?.error || json?.message || text.slice(0, 300)}`
+      );
+    }
+
+    return json;
+  }
 
   try {
     kiEmitStart(
@@ -4295,38 +5234,96 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
     );
     kiEmitProgress(18, "LV-Positionen werden vorbereitet…");
 
-    
+    if (!rowsForKi.length) {
+      const unchangedNext = normalizeKiWarningRows(preparedRows);
+      persistRows(unchangedNext, effectiveKiMode);
+      kiEmitProgress(96, "Keine Server-KI nötig…");
+      kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, unchangedNext, {
+        checkedCount: preparedRows.length,
+        skippedCount: preparedRows.length,
+        serverRequestedCount: 0,
+        serverReturnedCount: 0,
+        localFallbackCount: 0,
+      });
+      setServerStatus("Keine Server-KI nötig: alle Positionen sind bereits geprüft.");
+      setTimeout(() => setServerStatus(""), 3000);
+      return;
+    }
+
     kiStartSmoothProgress({
       from: 18,
       to: 82,
-      text: "Server-KI / OpenAI berechnet Positionen…",
-      estimatedMs: Math.max(5000, rowsForKi.length * 350),
-    });
-    const res = await eliteCalculateRows(projectKey, rowsForKi, {
-      forceRecalculate,
-      maxParallelRows: expertMode ? 4 : forceRecalculate ? 8 : 6,
-      maxOpenAiRowsPerBatch: expertMode ? 50 : forceRecalculate ? 8 : 8,
-      expertMode,
-      useOpenAIIfNoDatabaseHit: expertMode || !forceRecalculate,
+      text: `Server-KI berechnet ${rowsForKi.length} Position(en) in ${batches.length} Batch(es)…`,
+      estimatedMs: Math.max(5000, rowsForKi.length * (expertMode ? 650 : 120)),
     });
 
-    
+    const allServerRows: EliteKalkulationResultRow[] = [];
+    const batchSummaries: any[] = [];
+    const startedAt = Date.now();
+
+    for (let i = 0; i < batches.length; i += 1) {
+      const batch = batches[i];
+      const from = i * batchSize + 1;
+      const to = Math.min(rowsForKi.length, from + batch.length - 1);
+
+      setServerStatus(`Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`);
+      kiEmitProgress(
+        Math.min(82, Math.round(22 + (i / Math.max(1, batches.length)) * 58)),
+        `Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`
+      );
+
+      const json = await callServerKiBatch(batch, i + 1);
+      allServerRows.push(...json.rows);
+      batchSummaries.push(json.summary || {});
+    }
+
+    const returnedById = new Set<string>();
+    const returnedByPos = new Set<string>();
+
+    for (const item of allServerRows) {
+      if ((item as any).id) returnedById.add(String((item as any).id));
+      if ((item as any).posNr) returnedByPos.add(String((item as any).posNr));
+    }
+
+    const missingRequested = rowsForKi.filter(
+      (row) => !returnedById.has(String(row.id)) && !returnedByPos.has(String(row.posNr || ""))
+    );
+
+    if (missingRequested.length > 0) {
+      throw new Error(
+        `KI_SERVER_INCOMPLETE_RESULT: ${missingRequested.length} von ${rowsForKi.length} Position(en) fehlen. Beispiel: ${kiRowLabel(missingRequested[0])}`
+      );
+    }
+
     kiStopSmoothProgress();
     kiEmitProgress(84, "KI-Ergebnisse werden übernommen…");
 
+
     const byKey = new Map<string, EliteKalkulationResultRow>();
 
-    for (const item of res.rows) {
-      const key = item.id || item.posNr;
-      if (key) byKey.set(String(key), item);
+    for (const item of allServerRows) {
+      const id = (item as any).id;
+      const pos = (item as any).posNr;
+      if (id) byKey.set(String(id), item);
+      if (pos) byKey.set(String(pos), item);
     }
 
+    const requestedIds = new Set(rowsForKi.map((r) => String(r.id)));
+    const requestedPos = new Set(rowsForKi.map((r) => String(r.posNr || "")).filter(Boolean));
+
     const next = preparedRows.map((old) => {
-      const result = byKey.get(old.id) || byKey.get(old.posNr);
+      const result = byKey.get(String(old.id)) || byKey.get(String(old.posNr || ""));
+      const wasRequested = requestedIds.has(String(old.id)) || requestedPos.has(String(old.posNr || ""));
+
+      if (wasRequested && !result) {
+        throw new Error(`KI_RESULT_MISSING_FOR_${kiRowLabel(old)}`);
+      }
 
       const base = result
-        ? mergeEliteResult(old, result)
-        : enhanceKalkulatorInsertions(old);
+        ? mergeEliteResult(old, result, effectiveKiMode)
+        : kiIsStructuralRow(old)
+          ? normalizeEliteRow(kiPrepareStructuralRow(old))
+          : old;
 
       return {
         ...base,
@@ -4336,7 +5333,7 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
       };
     });
 
-    kiEmitProgress(78, "Änderungen werden gespeichert…");
+    kiEmitProgress(88, "Änderungen werden gespeichert…");
 
     const cleanedNext = next.map((r) =>
       kiIsStructuralRow(r)
@@ -4354,6 +5351,8 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
             suggestedUnitPrice: 0,
             finalUnitPrice: 0,
             preis: 0,
+            rlcKiUnitPrice: 0,
+            rlcKiTotal: 0,
             priceBreakdown: [],
             riskLevel: "low" as RiskLevel,
             calculationStatus: "ok" as CalcStatus,
@@ -4364,55 +5363,77 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false)
         : r
     );
 
-    persistRows(normalizeKiWarningRows(cleanedNext));
+    const cleanedNextNormalized = normalizeKiWarningRows(cleanedNext);
+    saveRlcX84DiffReport(cleanedNextNormalized, projectKey);
+
+    const x84DiffReportForLearning = JSON.parse(
+      localStorage.getItem(`rlc_last_ki_x84_diff_report_v1:${projectKey}`) || "{}"
+    );
+
+    const cleanedNextWithX84Learning = applyX84BenchmarkLearningToRows(
+      cleanedNextNormalized,
+      x84DiffReportForLearning
+    );
+
+    saveRlcX84LearningReport(cleanedNextWithX84Learning, projectKey);
+    saveRlcX84LearningApprovalDraft(cleanedNextWithX84Learning, projectKey);
+    persistRows(cleanedNextWithX84Learning, effectiveKiMode);
     // saveRowsToDatenbank(cleanedNext, projectKey, projectTitle); // deaktiviert: KI-Kalkulation darf Datenbank nicht automatisch füllen
 
-    setLastKiSource(res.source === "server" ? "Server-KI" : "Lokale Fallback-KI");
+    const durationMs = Date.now() - startedAt;
+    const openAiUsed = batchSummaries.reduce((sum, x) => sum + n(x?.openAiUsed), 0);
+    const serverSummary = {
+      totalNet: round2(cleanedNext.reduce((sum, r) => sum + n(r.rlcKiTotal), 0)),
+      durationMs,
+      openAiUsed,
+      batchCount: batches.length,
+      checkedCount: preparedRows.length,
+      skippedCount: preparedRows.length - rowsForKi.length,
+      serverRequestedCount: rowsForKi.length,
+      serverReturnedCount: allServerRows.length,
+      localFallbackCount: 0,
+      maxParallelRows: expertMode ? 4 : 10,
+    };
 
-    const kiDurationSec =
-      typeof (res.summary as any)?.durationMs === "number"
-        ? `${((res.summary as any).durationMs / 1000).toFixed(1).replace(".", ",")} s`
-        : "";
+    setLastKiSource("Server-KI");
 
-    const kiSpeedInfo =
-      res.source === "server"
-        ? [
-            kiDurationSec ? `Zeit: ${kiDurationSec}` : "",
-            typeof (res.summary as any)?.openAiUsed === "number"
-              ? `OpenAI: ${(res.summary as any).openAiUsed}`
-              : "",
-            typeof (res.summary as any)?.maxParallelRows === "number"
-              ? `Parallel: ${(res.summary as any).maxParallelRows}`
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" · ")
-        : "";
+    const kiDurationSec = `${(durationMs / 1000).toFixed(1).replace(".", ",")} s`;
+    const kiSpeedInfo = [
+      `Zeit: ${kiDurationSec}`,
+      `Batch: ${batches.length}`,
+      openAiUsed > 0 ? `OpenAI: ${openAiUsed}` : "OpenAI: 0",
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
     setServerStatus(
-      res.source === "server"
-        ? `KI-Prüfung abgeschlossen · X84 bleibt final · RLC-KI nur Prüfwert${kiSpeedInfo ? " · " + kiSpeedInfo : ""}`
-        : "Fallback-Kalkulation abgeschlossen · Texte und Preisaufbau ergänzt · Datenbank lokal aktualisiert"
+      `KI-Prüfung abgeschlossen · Server-KI · ${rowsForKi.length} Position(en) · ${kiSpeedInfo}`
     );
     kiEmitProgress(96, "Änderungsprotokoll wird erstellt…");
-    kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, cleanedNext, res.summary);
+    kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, cleanedNext, serverSummary);
 
     setTimeout(() => setServerStatus(""), 3500);
-  } catch {
+  } catch (e) {
     kiStopSmoothProgress();
+    console.error("[RLC-KI] server calculation failed", e);
+
     window.dispatchEvent(
       new CustomEvent("rlc:ki-action-result", {
         detail: {
           title: "KI-Kalkulation fehlgeschlagen",
           changes: [],
-          warnings: ["Die KI-Kalkulation konnte nicht abgeschlossen werden. Bitte Server/API prüfen."],
+          warnings: [
+            "Die Server-KI konnte nicht abgeschlossen werden. Es wurde nichts gespeichert und kein lokaler/manual Fallback übernommen.",
+            e instanceof Error ? e.message : "Unbekannter Fehler",
+          ],
           unchanged: [],
         },
       })
     );
 
-    setServerStatus("KI-Kalkulation fehlgeschlagen");
-    setTimeout(() => setServerStatus(""), 3500);
+    setLastKiSource("Server-KI Fehler");
+    setServerStatus("KI-Kalkulation fehlgeschlagen · nichts gespeichert");
+    setTimeout(() => setServerStatus(""), 4500);
   }
 }
 
@@ -5395,6 +6416,246 @@ function runPrimaryKiAction() {
   void runEliteCalculation();
 }
 
+function showRlcX84LearningApprovalDraft() {
+  const storageKey = `rlc_x84_learning_approval_draft_v1:${projectKey}`;
+
+  let draft: any = {};
+  try {
+    draft = JSON.parse(localStorage.getItem(storageKey) || "{}");
+  } catch {
+    draft = {};
+  }
+
+  const candidates = Array.isArray(draft?.candidates) ? draft.candidates : [];
+  const summary = draft?.summary || {};
+
+  console.log("[RLC-KI] Learning Approval Draft", {
+    storageKey,
+    ok: draft?.ok,
+    mode: draft?.mode,
+    autoWriteToDatabase: draft?.autoWriteToDatabase,
+    x84UsedAsPrice: draft?.x84UsedAsPrice,
+    summary,
+  });
+
+  console.table(
+    candidates.slice(0, 80).map((r: any) => ({
+      posNr: r.posNr,
+      kurztext: r.kurztext,
+      x84Ep: r.x84Ep,
+      rlcEp: r.rlcEp,
+      diffPct: r.diffPct,
+      diffGp: r.diffGp,
+      approvalLevel: r.approvalLevel,
+      decision: r.decision,
+      companyDb: r.approvedForCompanyDb,
+      globalDb: r.approvedForGlobalKnowledge,
+      source: r.source,
+    }))
+  );
+
+  const approveSafe = window.confirm(
+    [
+      "RLC X84-Learning Freigabeentwurf",
+      "",
+      `Kandidaten: ${summary.total ?? candidates.length}`,
+      `Safe Review: ${summary.safeReviewCount ?? 0}`,
+      `Soft Review: ${summary.softReviewCount ?? 0}`,
+      `Manual Review: ${summary.manualReviewCount ?? 0}`,
+      `Blocked Review: ${summary.blockedReviewCount ?? 0}`,
+      "",
+      "Möchtest du alle SAFE REVIEW Kandidaten als geprüfte Learning-Kandidaten vormerken?",
+      "",
+      "Wichtig: X84 wird NICHT als Preis übernommen.",
+    ].join("\n")
+  );
+
+  if (!approveSafe) return;
+
+  const approved = candidates
+    .filter((r: any) => r.approvalLevel === "safe_review")
+    .map((r: any) => ({
+      ...r,
+      decision: "approved",
+      approvedForCompanyDb: true,
+      approvedForGlobalKnowledge: false,
+      usedAsPrice: false,
+      approvedAt: new Date().toISOString(),
+      approvalSource: "manual_safe_review_approval",
+      note:
+        "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen.",
+    }));
+
+  const approvedKey = `rlc_x84_learning_approved_v1:${projectKey}`;
+
+  localStorage.setItem(
+    approvedKey,
+    JSON.stringify({
+      ok: true,
+      projectKey,
+      createdAt: new Date().toISOString(),
+      mode: "approved_learning_candidates_only",
+      autoWriteToDatabase: false,
+      x84UsedAsPrice: false,
+      count: approved.length,
+      entries: approved,
+    })
+  );
+
+  const writeDb = window.confirm(
+    [
+      "Freigegebene Learning-Kandidaten wurden vorgemerkt.",
+      "",
+      `Freigegeben: ${approved.length}`,
+      "",
+      "Jetzt wirklich in die Firmen-Datenbank übernehmen?",
+      "",
+      "Gespeichert wird der RLC-KI-Preis, NICHT der X84-Preis.",
+    ].join("\n")
+  );
+
+  if (!writeDb) {
+    alert(
+      [
+        "Learning-Kandidaten vorgemerkt.",
+        "",
+        `Freigegeben: ${approved.length}`,
+        "",
+        "Noch nicht in die Firmen-Datenbank geschrieben.",
+      ].join("\n")
+    );
+    return;
+  }
+
+  const learnedRows = approved
+    .filter((r: any) => Number(r.rlcEp || 0) > 0)
+    .map((r: any, idx: number) =>
+      normalizeEliteRow({
+        id: `x84-learning-approved-${r.posNr || idx}`,
+        posNr: String(r.posNr || ""),
+        kurztext: String(r.kurztext || ""),
+        langtext:
+          `RLC X84 Benchmark Learning geprüft. ` +
+          `X84 EP ${r.x84Ep} wurde nur als Vergleich genutzt. ` +
+          `Gespeichert wird der geprüfte RLC-KI EP ${r.rlcEp}.`,
+        einheit: String(r.einheit || ""),
+        menge: Number(r.menge || 1) || 1,
+
+        rlcKiUnitPrice: Number(r.rlcEp || 0),
+        finalUnitPrice: Number(r.rlcEp || 0),
+        suggestedUnitPrice: Number(r.rlcEp || 0),
+        baseUnitPrice: Number(r.rlcEp || 0),
+        preis: Number(r.rlcEp || 0),
+        gesamt: round2((Number(r.menge || 1) || 1) * Number(r.rlcEp || 0)),
+        rlcKiTotal: round2((Number(r.menge || 1) || 1) * Number(r.rlcEp || 0)),
+
+        angebotUnitPrice: Number(r.x84Ep || 0),
+        x84UnitPrice: Number(r.x84Ep || 0),
+        originalPreKiPrice: Number(r.x84Ep || 0),
+
+        source: "x84-approved-learning-rlc-price",
+        datenbankQuelle: "x84-approved-learning-rlc-price",
+        calculationStatus: "ok",
+        riskLevel: "low",
+        confidence: 0.92,
+        warning: "",
+        aiReason:
+          "Manuell freigegebener X84-Benchmark-Learning-Kandidat. " +
+          "X84 wurde nur als Vergleich genutzt; gespeichert wurde der geprüfte RLC-KI-Preis.",
+      } as any)
+    );
+
+  const count = saveRowsToDatenbank(learnedRows as any, projectKey, projectTitle);
+
+  setServerStatus(`✅ ${count} geprüfte Learning-Kandidat(en) in Firmen-Datenbank übernommen`);
+  setTimeout(() => setServerStatus(""), 3500);
+
+  console.log("[RLC-KI] Approved Learning written to Firmen-Datenbank", {
+    count,
+    projectKey,
+  });
+
+  alert(
+    [
+      "Firmen-Datenbank aktualisiert.",
+      "",
+      `Übernommen: ${count}`,
+      "",
+      "Quelle: geprüfte RLC-KI Learning-Kandidaten.",
+      "X84 wurde nicht als Preis gespeichert.",
+    ].join("\n")
+  );
+}
+function renderPriceDiffTable(title: string, text: string, list: typeof topPriceDiffRows) {
+  if (!list.length) return null;
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-end", marginBottom: 10 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "#10204a" }}>{title}</h3>
+          <div style={sectionText}>{text}</div>
+        </div>
+        <div style={priceCompareBadge}>{list.length} Position(en)</div>
+      </div>
+
+      <div style={priceCompareTableWrap}>
+        <table style={priceCompareTable}>
+          <thead>
+            <tr>
+              <th style={priceCompareTh}>Pos.</th>
+              <th style={priceCompareTh}>Kurztext</th>
+              <th style={priceCompareThRight}>Menge</th>
+              <th style={priceCompareTh}>ME</th>
+              <th style={priceCompareThRight}>EP X84</th>
+              <th style={priceCompareThRight}>EP RLC-KI</th>
+              <th style={priceCompareThRight}>Diff. %</th>
+              <th style={priceCompareThRight}>Diff. GP</th>
+              <th style={priceCompareTh}>Bewertung</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((r) => (
+              <tr
+                key={`${title}-${r.id}`}
+                style={priceCompareTr}
+                onClick={() => {
+                  setSelectedId(r.id);
+                  setViewFilter("alle");
+                }}
+              >
+                <td style={priceCompareTdStrong}>{r.posNr || "—"}</td>
+                <td style={priceCompareTd}>{r.kurztext || "—"}</td>
+                <td style={priceCompareTdRight}>{qty(r.menge)}</td>
+                <td style={priceCompareTd}>{r.einheit || "—"}</td>
+                <td style={priceCompareTdRight}>{money(r.angebotEp)}</td>
+                <td style={priceCompareTdRight}>{money(r.kiEp)}</td>
+                <td style={priceCompareTdRight}>{r.diffPct}%</td>
+                <td style={priceCompareTdRight}>{money(r.diffGp)}</td>
+                <td style={priceCompareTd}>
+                  <span
+                    style={
+                      Math.abs(r.diffPct) >= 30
+                        ? badgeCritical
+                        : Math.abs(r.diffPct) >= 20
+                          ? badgeWarn
+                          : Math.abs(r.diffPct) >= 10
+                            ? badgeInfo
+                            : badgeOk
+                    }
+                  >
+                    {r.empfehlung}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 return (
   <div style={page}>
     <input
@@ -5444,7 +6705,10 @@ return (
           <button
             type="button"
             style={kiMode === "new-calculation" ? btnPrimary : btnSecondary}
-            onClick={() => setKiMode("new-calculation")}
+            onClick={() => {
+              setKiMode("new-calculation");
+              void runWithAction("ki-new-calculation", "Neue Kalkulation erstellen", () => runEliteCalculation(true, false, "new-calculation"));
+            }}
             disabled={loading}
             title="Ohne Angebotsbasis: RLC erstellt die Kalkulation aus LV, Langtext, Menge, Einheit, Datenbank und Urkalkulation."
           >
@@ -5454,7 +6718,10 @@ return (
           <button
             type="button"
             style={kiMode === "offer-check" ? btnPrimary : btnSecondary}
-            onClick={() => setKiMode("offer-check")}
+            onClick={() => {
+              setKiMode("offer-check");
+              void runWithAction("ki-offer-check", "Angebot prüfen", () => runEliteCalculation(true, false, "offer-check"));
+            }}
             disabled={loading}
             title="Mit Angebotsbasis: RLC prüft vorhandene Preise und schützt sie mit Guards vor KI-Ausreißern."
           >
@@ -5479,6 +6746,16 @@ return (
           title="Schnelle Neuberechnung: ignoriert falsche alte Preise, nutzt DB/Rule-Engine/Plausibilitätsdeckel und nur wenige OpenAI-Prüfungen."
         >
           KI neu berechnen schnell
+        </button>
+
+        <button
+          type="button"
+          style={btnSecondary}
+          onClick={showRlcX84LearningApprovalDraft}
+          disabled={loading}
+          title="Zeigt den X84-Benchmark-Learning-Freigabeentwurf. Es wird nichts automatisch in die Datenbank geschrieben."
+        >
+          Learning prüfen / freigeben
         </button>
 
         <button
@@ -5689,14 +6966,34 @@ return (
     <section style={grid4Compact}>
       <KpiCard
         label="Angebot X84 netto"
-        value={(x84OfferNet || summary.angebotNet) > 0 ? money(x84OfferNet || summary.angebotNet) : "Nicht importiert"}
-        sub={(x84OfferNet || summary.angebotNet) > 0 ? `Brutto ${money(round2((x84OfferNet || summary.angebotNet) * 1.19))}` : "Kein X84 vorhanden · RLC-KI ist Arbeitskalkulation"}
+        value={(() => {
+          try {
+            const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+            const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
+            const offerNet = x84OfferNet || summary.angebotNet;
+            return hasRealX84 && offerNet > 0 ? money(offerNet) : "Keine X84 geladen";
+          } catch {
+            return "Keine X84 geladen";
+          }
+        })()}
+        sub={(() => {
+          try {
+            const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+            const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
+            const offerNet = x84OfferNet || summary.angebotNet;
+            return hasRealX84 && offerNet > 0
+              ? `Brutto ${money(round2(offerNet * 1.19))}`
+              : "Nur X83/LV vorhanden · keine Angebotsdatei";
+          } catch {
+            return "Nur X83/LV vorhanden · keine Angebotsdatei";
+          }
+        })()}
       />
 
       <KpiCard
         label="RLC-KI netto"
-        value={money(summary.rlcKiNet || summary.net)}
-        sub={(x84OfferNet || summary.angebotNet) > 0 ? `Brutto ${money(round2((x84OfferNet || summary.angebotNet) * 1.19))}` : "Kein X84 vorhanden · RLC-KI ist Arbeitskalkulation"}
+        value={loading ? "Wird berechnet…" : summary.rlcKiNet > 0 ? money(summary.rlcKiNet) : "0,00 €"}
+        sub={loading ? "Server-KI berechnet gerade echte RLC-Preise" : summary.rlcKiNet > 0 ? `Brutto ${money(summary.rlcKiGross)}` : "Noch keine RLC-KI berechnet"}
       />
 
       <KpiCard
@@ -5711,107 +7008,77 @@ return (
         sub={`${summary.priced}/${summary.total} kalkuliert`}
       />
     </section>
-    {topPriceDiffRows.length > 0 ? (
+    {(() => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+        return String(parsed?.format || "").toUpperCase() === "X84";
+      } catch {
+        return false;
+      }
+    })() && priceDiffReport.counts.total > 0 ? (
       <section style={priceCompareCard}>
         <div style={sectionHead}>
           <div>
-            <h2 style={sectionTitle}>Preisvergleich X84 ↔ RLC-KI</h2>
+            <h2 style={sectionTitle}>Optionaler Angebotsvergleich X84 ↔ RLC-KI</h2>
             <div style={sectionText}>
-              Größte Abweichungen zwischen Angebotspreis X84 und RLC-KI-Vergleichspreis. X84 bleibt final, KI ist nur Prüfwert.
+              Optionaler Vergleich aller {priceDiffReport.counts.total} Positionen. X84 ist nur eine externe Angebots-/Vergleichsdatei und keine Kalkulationsgrundlage der RLC-KI.
             </div>
           </div>
 
           <div style={priceCompareBadge}>
-            Top {topPriceDiffRows.length} Differenzen
+            {priceDiffReport.counts.outside10} Abweichungen &gt; ±10%
           </div>
         </div>
 
-        <div style={priceCompareTableWrap}>
-          <table style={priceCompareTable}>
-            <thead>
-              <tr>
-                <th style={priceCompareTh}>Pos.</th>
-                <th style={priceCompareTh}>Kurztext</th>
-                <th style={priceCompareThRight}>Menge</th>
-                <th style={priceCompareTh}>ME</th>
-                <th style={priceCompareThRight}>EP X84</th>
-                <th style={priceCompareThRight}>EP RLC-KI</th>
-                <th style={priceCompareThRight}>Diff. EP</th>
-                <th style={priceCompareThRight}>Diff. %</th>
-                <th style={priceCompareThRight}>Diff. GP</th>
-                <th style={priceCompareTh}>Bewertung</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {topPriceDiffRows.map((r) => (
-                <tr
-                  key={r.id}
-                  style={priceCompareTr}
-                  onClick={() => {
-                    setSelectedId(r.id);
-                    setViewFilter("alle");
-                    // Kein automatisches Scrollen bei Positionsauswahl.
-                  }}
-                >
-                  <td style={priceCompareTdStrong}>{r.posNr || "—"}</td>
-                  <td style={priceCompareTd}>{r.kurztext || "—"}</td>
-                  <td style={priceCompareTdRight}>{qty(r.menge)}</td>
-                  <td style={priceCompareTd}>{r.einheit || "—"}</td>
-                  <td style={priceCompareTdRight}>{money(r.angebotEp)}</td>
-                  <td style={priceCompareTdRight}>{money(r.kiEp)}</td>
-                  <td style={priceCompareTdRight}>{money(r.diffEp)}</td>
-                  <td style={priceCompareTdRight}>{r.diffPct}%</td>
-                  <td style={priceCompareTdRight}>{money(r.diffGp)}</td>
-                  <td style={priceCompareTd}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <span
-                        style={
-                          Math.abs(r.diffPct) > 30
-                            ? badgeCritical
-                            : Math.abs(r.diffPct) > 15
-                              ? badgeWarn
-                              : Math.abs(r.diffPct) > 5
-                                ? badgeInfo
-                                : badgeOk
-                        }
-                      >
-                        {r.empfehlung}
-                      </span>
-
-                      <button
-                        type="button"
-                        style={btnMini}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedId(r.id);
-                          setViewFilter("alle");
-                          scrollToLvPosition(r.id);
-                        }}
-                      >
-                        Bearbeiten
-                      </button>
-
-                      <button
-                        type="button"
-                        style={btnMini}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          applyKiSuggestedPrice(r.id);
-                          setSelectedId(r.id);
-                          setViewFilter("alle");
-                          scrollToLvPosition(r.id);
-                        }}
-                      >
-                        KI übernehmen
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 18 }}>
+          <KpiCard label="Alle Positionen" value={`${priceDiffReport.counts.total}`} sub={`${priceDiffReport.counts.comparable} vergleichbar · ${priceDiffReport.counts.missing} ohne Vergleich`} />
+          <KpiCard label="RLC-KI höher als X84 >10%" value={`${priceDiffReport.counts.higher10}`} sub={`${money(priceDiffReport.sums.higher)} GP-Differenz`} />
+          <KpiCard label="RLC-KI niedriger als X84 >10%" value={`${priceDiffReport.counts.lower10}`} sub={`${money(priceDiffReport.sums.lower)} GP-Differenz`} />
+          <KpiCard label="Innerhalb ±10%" value={`${priceDiffReport.counts.inside10}`} sub={`${money(priceDiffReport.sums.inside)} GP-Differenz`} />
+          <KpiCard label="Differenz zum X84-Vergleich" value={money(priceDiffReport.sums.diff)} sub={`${money(priceDiffReport.sums.x84)} X84 ↔ ${money(priceDiffReport.sums.rlc)} RLC-KI`} />
         </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+          {[
+            ["outside10", `Außerhalb ±10% (${priceDiffReport.counts.outside10})`],
+            ["higher10", `RLC höher >10% (${priceDiffReport.counts.higher10})`],
+            ["lower10", `RLC niedriger >10% (${priceDiffReport.counts.lower10})`],
+            ["inside10", `Innerhalb ±10% (${priceDiffReport.counts.inside10})`],
+            ["over20", `Über ±20% (${priceDiffReport.over20Pct.length})`],
+            ["over10000", `Über 10.000 € (${priceDiffReport.over10000Gp.length})`],
+            ["all", `Alle vergleichbaren (${priceDiffReport.counts.comparable})`],
+            ["missing", `Ohne Vergleich (${priceDiffReport.counts.missing})`],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              style={priceDiffView === key ? btnPrimary : btnSecondary}
+              onClick={() => setPriceDiffView(key as any)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {renderPriceDiffTable(
+          priceDiffView === "higher10"
+            ? "RLC-KI höher als X84 um mehr als 10%"
+            : priceDiffView === "lower10"
+              ? "RLC-KI niedriger als X84 um mehr als 10%"
+              : priceDiffView === "inside10"
+                ? "Positionen innerhalb ±10%"
+                : priceDiffView === "over20"
+                  ? "Positionen über ±20%"
+                  : priceDiffView === "over10000"
+                    ? "Positionen über 10.000 € GP-Differenz"
+                    : priceDiffView === "all"
+                      ? "Alle vergleichbaren Positionen"
+                      : priceDiffView === "missing"
+                        ? "Positionen ohne Vergleich"
+                        : "Alle Vergleichsabweichungen über ±10%",
+          "Die Tabelle ist vollständig für den gewählten Filter. Diese Analyse bewertet eine externe X84-Datei gegen die autonome RLC-Kalkulation; sie kalibriert die RLC-KI nicht automatisch.",
+          activePriceDiffRows
+        )}
       </section>
     ) : null}
     {/* KI interna rimossa: ora lavora solo il RLC-KI Assistent globale */}
@@ -6198,7 +7465,7 @@ return (
                     <th style={lvTh}>Kurztext</th>
                     <th style={lvThRight}>Menge</th>
                     <th style={lvTh}>ME</th>
-                    <th style={lvThRight}>EP X84</th>
+                    <th style={lvThRight}>{hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}</th>
                     <th style={lvThRight}>EP RLC-KI</th>
                     <th style={lvThRight}>EP final</th>
                     <th style={lvThRight}>GP final</th>
@@ -6309,7 +7576,7 @@ return (
             r.langtext || "—",
             "",
             `Menge: ${qty(r.menge)} ${r.einheit || "EH"}`,
-            `EP X84: ${money(getOfferUnitPrice(r))}`,
+            `${hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}: ${hasRealX84ForProject(projectKey) ? money(getOfferUnitPrice(r)) : "—"}`,
             `EP RLC-KI: ${money(getRlcKiUnitPrice(r))}`,
             `EP final: ${money(getUnitPrice(r))}`,
             `Gesamt netto: ${money(lineNet(r))}`,
@@ -9806,6 +11073,46 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
