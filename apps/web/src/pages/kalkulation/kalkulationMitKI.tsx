@@ -2321,8 +2321,47 @@ function saveRowsToDatenbank(
 
   if (!valid.length) return 0;
 
+  const datenbankDuplicateKey = (r: any) =>
+    [
+      String(projectKey || "").trim().toLowerCase(),
+      String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+      String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+      String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+      String(r?.datenbankQuelle || r?.quelle || r?.source || "ki").trim().toLowerCase(),
+    ].join("||");
+
+  const existingKeys = new Set(
+    KalkulationsDatenbank.list().map((r: any) =>
+      [
+        String(r?.projektCode || "").trim().toLowerCase(),
+        String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+        String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+        String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+        String(r?.quelle || r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase(),
+      ].join("||")
+    )
+  );
+
+  const seenKeys = new Set<string>();
+
+  const uniqueValid = valid.filter((r: any) => {
+    const key = datenbankDuplicateKey(r);
+    if (existingKeys.has(key)) return false;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+
+  if (!uniqueValid.length) {
+    console.log("[RLC-KI] V48C Datenbank Duplicate Guard: no new rows", {
+      projectKey,
+      skipped: valid.length,
+    });
+    return 0;
+  }
+
   KalkulationsDatenbank.bulkUpsert(
-    valid.map((r) => {
+    uniqueValid.map((r) => {
       const currentBreakdown = getCurrentBreakdown(r);
       const costs = databaseCostsFromCurrentRow({
         ...r,
@@ -2337,7 +2376,7 @@ function saveRowsToDatenbank(
       const gp = round2(n(r.menge) * ep * (1 - n(r.rabatt) / 100));
 
       return KalkulationsDatenbank.fromCalculatedPosition({
-        quelle: String((r as any).datenbankQuelle || (r as any).source || "ki"),
+        quelle: String((r as any).datenbankQuelle || (r as any).source || "ki") as any,
         projektCode: projectKey,
         projektName: projectTitle,
 
@@ -2376,7 +2415,7 @@ function saveRowsToDatenbank(
     })
   );
 
-  return valid.length;
+  return uniqueValid.length;
 }
 
 function findDatenbankMatches(row: EliteRow | null): KalkulationsSuchTreffer[] {
@@ -6565,9 +6604,65 @@ function showRlcX84LearningApprovalDraft() {
       } as any)
     );
 
-  const count = saveRowsToDatenbank(learnedRows as any, projectKey, projectTitle);
+  const duplicateKey = (r: any) =>
+    [
+      String(projectKey || "").trim().toLowerCase(),
+      String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+      String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+      String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+      String(r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase(),
+    ].join("||");
 
-  setServerStatus(`✅ ${count} geprüfte Learning-Kandidat(en) in Firmen-Datenbank übernommen`);
+  const dbWrittenKey = `rlc_x84_learning_db_written_v1:${projectKey}`;
+
+  const dbWrittenRaw = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(dbWrittenKey) || "{}");
+    } catch {
+      return {};
+    }
+  })();
+
+  const alreadyWrittenKeys = new Set<string>(
+    Array.isArray(dbWrittenRaw?.keys) ? dbWrittenRaw.keys.map(String) : []
+  );
+
+  const uniqueLearnedRows: any[] = [];
+  const uniqueLearningKeys: string[] = [];
+  const seenLearningKeys = new Set<string>();
+
+  for (const row of learnedRows as any[]) {
+    const key = duplicateKey(row);
+    if (alreadyWrittenKeys.has(key)) continue;
+    if (seenLearningKeys.has(key)) continue;
+    seenLearningKeys.add(key);
+    uniqueLearningKeys.push(key);
+    uniqueLearnedRows.push(row);
+  }
+
+  if (!uniqueLearnedRows.length) {
+    setServerStatus("ℹ️ Keine neuen Learning-Kandidaten: bereits in Firmen-Datenbank gespeichert");
+    setTimeout(() => setServerStatus(""), 3500);
+    console.log("[RLC-KI] V48B Duplicate Guard: no new DB learning rows", {
+      projectKey,
+      skipped: learnedRows.length,
+    });
+    return;
+  }
+
+  const count = saveRowsToDatenbank(uniqueLearnedRows as any, projectKey, projectTitle);
+
+  localStorage.setItem(
+    dbWrittenKey,
+    JSON.stringify({
+      ok: true,
+      projectKey,
+      updatedAt: new Date().toISOString(),
+      keys: Array.from(new Set([...Array.from(alreadyWrittenKeys), ...uniqueLearningKeys])),
+    })
+  );
+
+  setServerStatus(`✅ ${count} neue geprüfte Learning-Kandidat(en) in Firmen-Datenbank übernommen`);
   setTimeout(() => setServerStatus(""), 3500);
 
   console.log("[RLC-KI] Approved Learning written to Firmen-Datenbank", {
@@ -11073,56 +11168,5 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
