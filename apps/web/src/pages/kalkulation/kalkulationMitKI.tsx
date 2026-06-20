@@ -6511,18 +6511,32 @@ function showRlcX84LearningApprovalDraft() {
 
   if (!approveSafe) return;
 
+  const approveGlobalKnowledge = window.confirm(
+    [
+      "Auch anonym in die RLC Global Knowledge übernehmen?",
+      "",
+      "Ja = technische Preis-/Positionsdaten werden anonymisiert und aggregiert an RLC Global Knowledge übergeben.",
+      "Nein = Speicherung nur in der Firmen-Datenbank.",
+      "",
+      "Es werden keine Kundendaten, Projektdokumente oder Auftraggeberdaten übernommen.",
+    ].join("\n")
+  );
+
   const approved = candidates
     .filter((r: any) => r.approvalLevel === "safe_review")
     .map((r: any) => ({
       ...r,
       decision: "approved",
       approvedForCompanyDb: true,
-      approvedForGlobalKnowledge: false,
+      approvedForGlobalKnowledge: approveGlobalKnowledge,
       usedAsPrice: false,
       approvedAt: new Date().toISOString(),
-      approvalSource: "manual_safe_review_approval",
-      note:
-        "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen.",
+      approvalSource: approveGlobalKnowledge
+        ? "manual_safe_review_company_and_global_approval"
+        : "manual_safe_review_company_only_approval",
+      note: approveGlobalKnowledge
+        ? "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Anonyme Übernahme in RLC Global Knowledge wurde bestätigt."
+        : "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Speicherung nur in Firmen-Datenbank.",
     }));
 
   const approvedKey = `rlc_x84_learning_approved_v1:${projectKey}`;
@@ -6537,6 +6551,8 @@ function showRlcX84LearningApprovalDraft() {
       autoWriteToDatabase: false,
       x84UsedAsPrice: false,
       count: approved.length,
+      approvedForCompanyDbCount: approved.filter((r: any) => r.approvedForCompanyDb).length,
+      approvedForGlobalKnowledgeCount: approved.filter((r: any) => r.approvedForGlobalKnowledge).length,
       entries: approved,
     })
   );
@@ -6594,6 +6610,8 @@ function showRlcX84LearningApprovalDraft() {
 
         source: "x84-approved-learning-rlc-price",
         datenbankQuelle: "x84-approved-learning-rlc-price",
+        approvedForCompanyDb: true,
+        approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge),
         calculationStatus: "ok",
         riskLevel: "low",
         confidence: 0.92,
@@ -11168,5 +11186,8 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
 
 
