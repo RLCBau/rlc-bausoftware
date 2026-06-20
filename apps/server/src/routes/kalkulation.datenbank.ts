@@ -47,6 +47,190 @@ function normalizeRiskLevel(value: any): string {
   return "mittel";
 }
 
+
+function normGlobal(value: any): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[.,;:|]+$/g, "")
+    .trim();
+}
+
+function normGlobalUnit(value: any): string {
+  const u = String(value || "").trim();
+  if (u.toLowerCase() === "m2") return "m²";
+  if (u.toLowerCase() === "m3") return "m³";
+  return u;
+}
+
+function globalKnowledgeKeyOf(row: any): string {
+  return [
+    normGlobal(row.shortText),
+    normGlobalUnit(row.unit).toLowerCase(),
+    normGlobal(row.trade),
+    normGlobal(row.serviceType),
+    normGlobal(row.constructionMethod),
+    normGlobal(row.soilClass),
+  ].join("||");
+}
+
+function globalMedian(values: number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function globalRound2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function globalPlausibleRange(unit: string) {
+  const u = normGlobalUnit(unit);
+  if (u === "m") return { min: 0.5, max: 1500 };
+  if (u === "m²") return { min: 0.5, max: 1500 };
+  if (u === "m³") return { min: 1, max: 2500 };
+  if (u === "h") return { min: 20, max: 350 };
+  if (u === "St") return { min: 1, max: 25000 };
+  if (u === "Psch") return { min: 1, max: 100000 };
+  return { min: 0.5, max: 50000 };
+}
+
+function globalQualityConfidence(args: {
+  prices: number[];
+  companyCount: number;
+  unit: string;
+}): number {
+  const { prices, companyCount, unit } = args;
+  if (!prices.length) return 0.2;
+
+  const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+  const max = Math.max(...prices);
+  const min = Math.min(...prices);
+  const range = globalPlausibleRange(unit);
+
+  let confidence = 0.55;
+
+  confidence += Math.min(prices.length, 10) * 0.03;
+  confidence += Math.min(companyCount, 5) * 0.04;
+
+  if (prices.length < 2) confidence -= 0.12;
+  if (companyCount < 2) confidence -= 0.08;
+  if (avg < range.min) confidence -= 0.25;
+  if (max > range.max) confidence -= 0.25;
+  if (min <= 0) confidence -= 0.3;
+
+  return Math.max(0.2, Math.min(0.95, globalRound2(confidence)));
+}
+
+function isApprovedForGlobalKnowledge(row: any): boolean {
+  const value =
+    row?.approvedForGlobalKnowledge ??
+    row?.parameters?.approvedForGlobalKnowledge ??
+    row?.parameter?.approvedForGlobalKnowledge ??
+    false;
+
+  return value === true || value === "true" || value === 1 || value === "1";
+}
+
+async function refreshGlobalPriceKnowledgeForEntry(entryId: string): Promise<boolean> {
+  const anchor = await prisma.kalkulationsDbEntry.findUnique({
+    where: { id: entryId },
+  });
+
+  if (!anchor || !anchor.shortText || Number(anchor.unitPriceNet || 0) <= 0) {
+    return false;
+  }
+
+  const normalizedKey = globalKnowledgeKeyOf(anchor);
+  if (!normalizedKey || normalizedKey.startsWith("||")) return false;
+
+  /*
+   * V49 Global Learning Bridge:
+   * Recalculate only the affected global group.
+   * No client/project names are copied. Global Knowledge stores only anonymized aggregates.
+   */
+  const allRows = await prisma.kalkulationsDbEntry.findMany({
+    where: {
+      unitPriceNet: { gt: 0 },
+      shortText: { not: "" },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  const group = allRows.filter((row) => globalKnowledgeKeyOf(row) === normalizedKey);
+  if (!group.length) return false;
+
+  const prices = group
+    .map((row) => Number(row.unitPriceNet || 0))
+    .filter((price) => Number.isFinite(price) && price > 0);
+
+  if (!prices.length) return false;
+
+  const newest = group[0];
+  const companies = new Set(group.map((row) => row.companyId).filter(Boolean));
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+  const medianPrice = globalMedian(prices);
+  const unit = normGlobalUnit(newest.unit);
+
+  await prisma.rlcGlobalPriceKnowledge.upsert({
+    where: { normalizedKey },
+    create: {
+      normalizedKey,
+      positionNumber: newest.positionNumber || null,
+      shortText: newest.shortText || "",
+      unit,
+      trade: newest.trade || null,
+      serviceType: newest.serviceType || null,
+      constructionMethod: newest.constructionMethod || null,
+      soilClass: newest.soilClass || null,
+      minPrice: globalRound2(minPrice),
+      avgPrice: globalRound2(avgPrice),
+      maxPrice: globalRound2(maxPrice),
+      medianPrice: globalRound2(medianPrice),
+      sampleCount: prices.length,
+      sourceCompanyCount: companies.size,
+      country: "DE",
+      priceYear: new Date().getFullYear(),
+      confidence: globalQualityConfidence({
+        prices,
+        companyCount: companies.size,
+        unit,
+      }),
+      firstSeenAt: new Date(),
+      lastSeenAt: new Date(),
+    },
+    update: {
+      positionNumber: newest.positionNumber || null,
+      shortText: newest.shortText || "",
+      unit,
+      trade: newest.trade || null,
+      serviceType: newest.serviceType || null,
+      constructionMethod: newest.constructionMethod || null,
+      soilClass: newest.soilClass || null,
+      minPrice: globalRound2(minPrice),
+      avgPrice: globalRound2(avgPrice),
+      maxPrice: globalRound2(maxPrice),
+      medianPrice: globalRound2(medianPrice),
+      sampleCount: prices.length,
+      sourceCompanyCount: companies.size,
+      country: "DE",
+      priceYear: new Date().getFullYear(),
+      confidence: globalQualityConfidence({
+        prices,
+        companyCount: companies.size,
+        unit,
+      }),
+      lastSeenAt: new Date(),
+    },
+  });
+
+  return true;
+}
+
+
 function mapEntry(row: any) {
   return {
     id: row.id,
@@ -123,6 +307,7 @@ router.get("/datenbank", async (req, res) => {
     const q = s(req.query.q).toLowerCase();
     const projectKey = s(req.query.projectKey);
     const limit = Math.min(Math.max(n(req.query.limit, 200), 1), 1000);
+    const offset = Math.max(n(req.query.offset, 0), 0);
 
     const project = await resolveProject(companyId, projectKey);
 
@@ -153,19 +338,77 @@ router.get("/datenbank", async (req, res) => {
       ];
     }
 
-    const rows = await prisma.kalkulationsDbEntry.findMany({
+    const [rows, total] = await Promise.all([
+      prisma.kalkulationsDbEntry.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        skip: offset,
+        take: limit,
+      }),
+      prisma.kalkulationsDbEntry.count({ where }),
+    ]);
+
+    return res.json({
+      ok: true,
+      count: rows.length,
+      total,
+      limit,
+      offset,
+      hasNext: offset + rows.length < total,
+      hasPrev: offset > 0,
+      rows: rows.map(mapEntry),
+    });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e?.message || "LIST_FAILED" });
+  }
+});
+
+
+router.get("/global-price-knowledge/search", async (req, res) => {
+  try {
+    const q = s(req.query.q).toLowerCase();
+    const unit = s(req.query.unit);
+    const minConfidence = Math.max(0, Math.min(n(req.query.minConfidence, 0.4), 0.95));
+    const limit = Math.min(Math.max(n(req.query.limit, 20), 1), 100);
+
+    const where: any = {
+      confidence: { gte: minConfidence },
+    };
+
+    if (unit) {
+      where.unit = unit;
+    }
+
+    if (q) {
+      where.OR = [
+        { shortText: { contains: q, mode: "insensitive" } },
+        { trade: { contains: q, mode: "insensitive" } },
+        { serviceType: { contains: q, mode: "insensitive" } },
+        { constructionMethod: { contains: q, mode: "insensitive" } },
+      ];
+    }
+
+    const rows = await prisma.rlcGlobalPriceKnowledge.findMany({
       where,
-      orderBy: { updatedAt: "desc" },
+      orderBy: [
+        { confidence: "desc" },
+        { sampleCount: "desc" },
+        { updatedAt: "desc" },
+      ],
       take: limit,
     });
 
     return res.json({
       ok: true,
       count: rows.length,
-      rows: rows.map(mapEntry),
+      minConfidence,
+      rows,
     });
   } catch (e: any) {
-    return res.status(500).json({ ok: false, error: e?.message || "LIST_FAILED" });
+    return res.status(500).json({
+      ok: false,
+      error: e?.message || "GLOBAL_PRICE_KNOWLEDGE_SEARCH_FAILED",
+    });
   }
 });
 
@@ -244,22 +487,22 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
        */
       if (ep <= 0) continue;
 
-      const existing = await prisma.kalkulationsDbEntry.findFirst({
-        where: {
-
-          companyId,
-
-          positionNumber: posNr,
-
-          shortText: kurztext,
-
-          unit: einheit,
-
-          source: incomingSource,
-
-        },
-        select: { id: true, useCount: true, source: true, unitPriceNet: true, parameters: true },
-      });
+        const existing = await prisma.kalkulationsDbEntry.findFirst({
+          where: {
+            companyId,
+            positionNumber: posNr,
+            shortText: kurztext,
+            unit: einheit,
+          },
+          orderBy: { updatedAt: "desc" },
+          select: {
+            id: true,
+            useCount: true,
+            source: true,
+            unitPriceNet: true,
+            parameters: true,
+          },
+        });
 
       const data = {
         companyId,
@@ -303,6 +546,8 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
         calculatorNote: s(r.kalkulatorNotiz || r.calculatorNote),
       };
 
+      let savedEntryId = "";
+
       if (existing) {
         const existingQualityStatus = s((existing.parameters as any)?.qualityGateStatus);
         const incomingEp = n(ep);
@@ -324,13 +569,23 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
           continue;
         }
 
-        await prisma.kalkulationsDbEntry.update({
+        const updated = await prisma.kalkulationsDbEntry.update({
           where: { id: existing.id },
           data,
+          select: { id: true },
         });
+        savedEntryId = updated.id;
       } else {
         if (ep <= 0) continue;
-        await prisma.kalkulationsDbEntry.create({ data });
+        const created = await prisma.kalkulationsDbEntry.create({
+          data,
+          select: { id: true },
+        });
+        savedEntryId = created.id;
+      }
+
+      if (savedEntryId && isApprovedForGlobalKnowledge(r)) {
+        await refreshGlobalPriceKnowledgeForEntry(savedEntryId);
       }
 
       saved += 1;
