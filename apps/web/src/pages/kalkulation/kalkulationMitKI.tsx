@@ -2352,13 +2352,109 @@ function saveRowsToDatenbank(
     return true;
   });
 
-  if (!uniqueValid.length) {
+  const serverSyncSourceRows = uniqueValid.length
+    ? uniqueValid
+    : valid.filter((r: any) => Boolean((r as any).approvedForGlobalKnowledge));
+
+  if (!uniqueValid.length && !serverSyncSourceRows.length) {
     console.log("[RLC-KI] V48C Datenbank Duplicate Guard: no new rows", {
       projectKey,
       skipped: valid.length,
     });
     return 0;
   }
+
+  if (!uniqueValid.length && serverSyncSourceRows.length) {
+    console.log("[RLC-KI] V51D server sync despite local duplicate", {
+      projectKey,
+      serverSyncRows: serverSyncSourceRows.length,
+      localNewRows: 0,
+    });
+  }
+
+  const serverSyncRows = serverSyncSourceRows.map((r: any) => {
+    const currentBreakdown = getCurrentBreakdown(r);
+    const ep =
+      sumBreakdown(currentBreakdown) > 0
+        ? sumBreakdown(currentBreakdown)
+        : getUnitPrice(r);
+    const gp = round2(n(r.menge) * ep * (1 - n(r.rabatt) / 100));
+
+    return {
+      posNr: r.posNr || "",
+      kurztext: r.kurztext || "",
+      langtext: r.langtext || "",
+      einheit: r.einheit || "",
+      menge: n(r.menge),
+
+      finalUnitPrice: ep,
+      unitPriceNet: ep,
+      totalNet: gp,
+
+      materialCost: n(r.materialCost),
+      laborCost: n(r.laborCost),
+      machineCost: n(r.machineCost),
+      transportCost: n((r as any).transportCost),
+      subcontractorCost: n(r.subcontractorCost),
+      disposalCost: n(r.disposalCost),
+      overheadCost: n(r.overheadCost),
+      riskCost: n(r.riskCost),
+      profitCost: n(r.profitCost),
+
+      gewerk: r.gewerk || "",
+      leistungsart: r.leistungsart || "",
+      bauverfahren: r.bauverfahren || "",
+      bodenklasse: (r as any).bodenklasse || "",
+
+      source: String((r as any).datenbankQuelle || (r as any).source || "ki"),
+      datenbankQuelle: String((r as any).datenbankQuelle || (r as any).source || "ki"),
+
+      approvedForCompanyDb: Boolean((r as any).approvedForCompanyDb),
+      approvedForGlobalKnowledge: Boolean((r as any).approvedForGlobalKnowledge),
+
+      confidence: n(r.confidence, 0.75),
+      riskLevel: r.riskLevel || "medium",
+      aiReason: r.aiReason || "",
+      warning: r.warning || "",
+    };
+  });
+
+  void fetch(apiUrl("/api/kalkulation/datenbank/bulk-upsert"), {
+    method: "POST",
+    credentials: "include",
+    headers: authJsonHeaders(),
+    body: JSON.stringify({
+      projectKey,
+      projectTitle,
+      rows: serverSyncRows,
+    }),
+  })
+    .then(async (res) => {
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        console.warn("[RLC-KI] V51 server datenbank sync failed", {
+          status: res.status,
+          json,
+          projectKey,
+          count: serverSyncRows.length,
+        });
+        return;
+      }
+
+      console.log("[RLC-KI] V51 server datenbank sync ok", {
+        projectKey,
+        saved: json.saved,
+        rows: serverSyncRows.length,
+        globalCandidates: serverSyncRows.filter((r: any) => r.approvedForGlobalKnowledge).length,
+      });
+    })
+    .catch((error) => {
+      console.warn("[RLC-KI] V51 server datenbank sync error", {
+        projectKey,
+        count: serverSyncRows.length,
+        error,
+      });
+    });
 
   KalkulationsDatenbank.bulkUpsert(
     uniqueValid.map((r) => {
@@ -6584,8 +6680,8 @@ function showRlcX84LearningApprovalDraft() {
 
   const learnedRows = approved
     .filter((r: any) => Number(r.rlcEp || 0) > 0)
-    .map((r: any, idx: number) =>
-      normalizeEliteRow({
+    .map((r: any, idx: number) => ({
+      ...normalizeEliteRow({
         id: `x84-learning-approved-${r.posNr || idx}`,
         posNr: String(r.posNr || ""),
         kurztext: String(r.kurztext || ""),
@@ -6610,8 +6706,6 @@ function showRlcX84LearningApprovalDraft() {
 
         source: "x84-approved-learning-rlc-price",
         datenbankQuelle: "x84-approved-learning-rlc-price",
-        approvedForCompanyDb: true,
-        approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge),
         calculationStatus: "ok",
         riskLevel: "low",
         confidence: 0.92,
@@ -6619,9 +6713,10 @@ function showRlcX84LearningApprovalDraft() {
         aiReason:
           "Manuell freigegebener X84-Benchmark-Learning-Kandidat. " +
           "X84 wurde nur als Vergleich genutzt; gespeichert wurde der geprüfte RLC-KI-Preis.",
-      } as any)
-    );
-
+      } as any),
+      approvedForCompanyDb: true,
+      approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge),
+    }));
   const duplicateKey = (r: any) =>
     [
       String(projectKey || "").trim().toLowerCase(),
@@ -11186,6 +11281,11 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
+
+
 
 
 
