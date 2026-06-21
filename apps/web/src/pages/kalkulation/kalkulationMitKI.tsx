@@ -6551,6 +6551,30 @@ function runPrimaryKiAction() {
   void runEliteCalculation();
 }
 
+function rlcCanSendToGlobalKnowledge(row: any): boolean {
+  const ep = Number(row?.rlcEp ?? row?.finalUnitPrice ?? row?.preis ?? 0);
+  const qty = Number(row?.menge ?? row?.quantity ?? 0);
+  const unit = String(row?.einheit ?? row?.unit ?? "").trim();
+  const text = String(row?.kurztext ?? row?.shortText ?? "").trim();
+  const confidence = Number(row?.confidence ?? 0.75);
+  const approvalLevel = String(row?.approvalLevel || "").trim();
+  const diffPct = Math.abs(Number(row?.diffPct ?? 0));
+
+  if (!text) return false;
+  if (!unit) return false;
+  if (!Number.isFinite(ep) || ep <= 0) return false;
+  if (!Number.isFinite(qty) || qty <= 0) return false;
+  if (confidence < 0.5) return false;
+  if (approvalLevel === "blocked_review" || approvalLevel === "manual_review") return false;
+  if (diffPct > 20) return false;
+
+  const unitLower = unit.toLowerCase();
+  const lumpSumUnit = unitLower === "psch" || unitLower === "st" || unitLower === "stk";
+
+  if (!lumpSumUnit && ep > 5000) return false;
+
+  return true;
+}
 function rlcX84LearningCandidateKey(r: any): string {
   return [
     String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
@@ -6568,7 +6592,7 @@ function showRlcX84LearningFreigabeModal(
   selectedKeys: string[];
 }> {
   if (typeof document === "undefined") {
-    const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review");
+    const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
     return Promise.resolve({
       ok: true,
       writeCompanyDb: true,
@@ -6577,7 +6601,7 @@ function showRlcX84LearningFreigabeModal(
     });
   }
 
-  const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review");
+  const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
 
   const esc = (value: any) =>
     String(value ?? "")
@@ -6608,7 +6632,7 @@ function showRlcX84LearningFreigabeModal(
         return `
           <tr>
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">
-              <input type="checkbox" data-rlc-learning-index="${idx}" checked />
+              <input type="checkbox" data-rlc-learning-index="${idx}" ${r.approvalLevel === "safe_review" ? "checked" : ""} />
             </td>
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:700;">${esc(r.posNr)}</td>
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
@@ -6616,6 +6640,9 @@ function showRlcX84LearningFreigabeModal(
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;">${Number(r.rlcEp || 0).toFixed(2)}</td>
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${diff.toFixed(2)}%</td>
             <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${diffGp.toFixed(2)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;font-weight:800;color:${r.approvalLevel === "safe_review" ? "#166534" : "#92400e"};">
+              ${esc(r.approvalLevel)}
+            </td>
           </tr>
         `;
       })
@@ -6653,7 +6680,7 @@ function showRlcX84LearningFreigabeModal(
           </label>
 
           <div style="margin-left:auto;font-size:13px;color:#64748b;">
-            Safe Review: <b>${safe.length}</b>
+            Freigabekandidaten: <b>${safe.length}</b> · Ausgewählt: <b id="rlcLearningSelectedCount">${safe.filter((r: any) => r.approvalLevel === "safe_review").length}</b>
           </div>
         </div>
 
@@ -6668,6 +6695,7 @@ function showRlcX84LearningFreigabeModal(
                 <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">RLC EP</th>
                 <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Diff %</th>
                 <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Diff GP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Level</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -6695,6 +6723,12 @@ function showRlcX84LearningFreigabeModal(
     }) => {
       overlay.remove();
       resolve(result);
+    };
+
+    const updateSelectedCount = () => {
+      const count = overlay.querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]:checked").length;
+      const el = overlay.querySelector<HTMLElement>("#rlcLearningSelectedCount");
+      if (el) el.textContent = String(count);
     };
 
     const collectSelectedKeys = () =>
@@ -6735,7 +6769,366 @@ function showRlcX84LearningFreigabeModal(
         .forEach((input) => {
           input.checked = checked;
         });
+      updateSelectedCount();
     });
+
+    overlay
+      .querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]")
+      .forEach((input) => {
+        input.addEventListener("change", updateSelectedCount);
+      });
+
+    updateSelectedCount();
+  });
+}
+function showRlcCopilotModal() {
+  if (typeof document === "undefined") return;
+
+  const realRows = rows.filter((r: any) => !kiIsStructuralRow(r));
+  const pricedRows = realRows.filter((r: any) => getUnitPrice(r) > 0);
+  const missingPriceRows = realRows.filter((r: any) => getUnitPrice(r) <= 0);
+  const warningRows = realRows.filter((r: any) => r.calculationStatus === "warning");
+  const criticalRows = realRows.filter((r: any) => r.calculationStatus === "critical");
+  const highRiskRows = realRows.filter((r: any) => r.riskLevel === "high");
+  const lowConfidenceRows = realRows.filter((r: any) => n(r.confidence, 0.75) < 0.6);
+
+  const outlierRows = realRows.filter((r: any) => {
+    const ep = getUnitPrice(r);
+    const gp = lineNet(r);
+    const qty = n(r.menge);
+    const unit = String(r.einheit || "").trim();
+    return (
+      ep <= 0 ||
+      qty <= 0 ||
+      !unit ||
+      gp > 50000 ||
+      qty > 10000 ||
+      n(r.confidence, 0.75) < 0.6 ||
+      r.riskLevel === "high" ||
+      r.calculationStatus === "critical" ||
+      r.calculationStatus === "warning" ||
+      Boolean((r as any).globalKnowledgeBlockedByQualityGuard)
+    );
+  });
+
+  const totalNet = realRows.reduce((sum: number, r: any) => sum + lineNet(r), 0);
+  const coveragePct = realRows.length ? Math.round((pricedRows.length / realRows.length) * 100) : 0;
+
+  const nextSteps: string[] = [];
+
+  if (missingPriceRows.length) {
+    nextSteps.push(`${missingPriceRows.length} Position(en) ohne EP zuerst kalkulieren.`);
+  }
+
+  if (criticalRows.length || highRiskRows.length) {
+    nextSteps.push(`${criticalRows.length + highRiskRows.length} kritische / Hochrisiko-Position(en) fachlich prüfen.`);
+  }
+
+  if (outlierRows.length) {
+    nextSteps.push(`Outlier Report öffnen und ${outlierRows.length} auffällige Position(en) prüfen.`);
+  }
+
+  if (lowConfidenceRows.length) {
+    nextSteps.push(`${lowConfidenceRows.length} Position(en) mit niedriger Confidence nachrechnen.`);
+  }
+
+  if (!nextSteps.length && realRows.length) {
+    nextSteps.push("Kalkulation wirkt stabil. Nächster Schritt: Angebot / Urkalkulation PDF vorbereiten.");
+  }
+
+  const esc = (value: any) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const topOutliers = outlierRows
+    .slice()
+    .sort((a: any, b: any) => Math.abs(lineNet(b)) - Math.abs(lineNet(a)))
+    .slice(0, 12);
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: Arial, sans-serif;
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      width: min(980px, 96vw);
+      max-height: 88vh;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 24px 80px rgba(15,23,42,.35);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    ">
+      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+        <div style="font-size:20px;font-weight:900;color:#0f172a;">
+          RLC Copilot
+        </div>
+        <div style="font-size:13px;color:#475569;margin-top:6px;">
+          Lokale technische Analyse der aktuellen Kalkulation. Keine automatische Preisänderung.
+        </div>
+      </div>
+
+      <div style="padding:18px 24px;overflow:auto;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#f8fafc;">
+            <div style="font-size:12px;color:#64748b;">Positionen</div>
+            <div style="font-size:22px;font-weight:900;color:#0f172a;">${realRows.length}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#f8fafc;">
+            <div style="font-size:12px;color:#64748b;">Deckung</div>
+            <div style="font-size:22px;font-weight:900;color:#0f172a;">${coveragePct}%</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#f8fafc;">
+            <div style="font-size:12px;color:#64748b;">Netto</div>
+            <div style="font-size:22px;font-weight:900;color:#0f172a;">${Number(totalNet).toFixed(2)} €</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#fef2f2;">
+            <div style="font-size:12px;color:#991b1b;">Outlier</div>
+            <div style="font-size:22px;font-weight:900;color:#991b1b;">${outlierRows.length}</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:16px;">
+          <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:8px;">
+            Copilot-Einschätzung
+          </div>
+          <div style="font-size:14px;color:#334155;line-height:1.5;">
+            Roberto, ich sehe aktuell <b>${realRows.length}</b> echte Positionen.
+            Davon sind <b>${pricedRows.length}</b> mit EP kalkuliert.
+            Es gibt <b>${warningRows.length}</b> Warnungen, <b>${criticalRows.length}</b> kritische Positionen
+            und <b>${highRiskRows.length}</b> Hochrisiko-Positionen.
+          </div>
+        </div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:16px;">
+          <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:8px;">
+            Empfohlene nächste Schritte
+          </div>
+          <ol style="margin:0;padding-left:20px;color:#334155;font-size:14px;line-height:1.6;">
+            ${nextSteps.map((s) => `<li>${esc(s)}</li>`).join("")}
+          </ol>
+        </div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+          <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:8px;">
+            Top auffällige Positionen
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:#f1f5f9;">
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Pos.</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Kurztext</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">EP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">GP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                topOutliers.length
+                  ? topOutliers.map((r: any) => `
+                    <tr>
+                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:800;">${esc(r.posNr)}</td>
+                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
+                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(getUnitPrice(r)).toFixed(2)}</td>
+                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(lineNet(r)).toFixed(2)}</td>
+                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.calculationStatus || r.riskLevel || "")}</td>
+                    </tr>
+                  `).join("")
+                  : `<tr><td colspan="5" style="padding:14px;text-align:center;color:#64748b;">Keine auffälligen Positionen gefunden.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;gap:12px;justify-content:flex-end;">
+        <button data-action="outliers" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
+          Outlier Report öffnen
+        </button>
+        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
+          Schließen
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", () => {
+    overlay.remove();
+  });
+
+  overlay.querySelector<HTMLButtonElement>('[data-action="outliers"]')?.addEventListener("click", () => {
+    overlay.remove();
+    showRlcOutlierReportModal();
+  });
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+}
+function showRlcOutlierReportModal() {
+  if (typeof document === "undefined") return;
+
+  const esc = (value: any) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const outliers = rows
+    .filter((r: any) => !kiIsStructuralRow(r))
+    .map((r: any) => {
+      const ep = getUnitPrice(r);
+      const gp = lineNet(r);
+      const qty = n(r.menge);
+      const confidence = n(r.confidence, 0.75);
+      const unit = String(r.einheit || "").trim();
+      const issues: string[] = [];
+
+      if (ep <= 0) issues.push("EP fehlt / 0");
+      if (qty <= 0) issues.push("Menge fehlt / 0");
+      if (!unit) issues.push("Einheit fehlt");
+      if (ep > 5000 && !["Psch", "St", "Stk"].includes(unit)) issues.push("EP sehr hoch");
+      if (gp > 50000) issues.push("GP sehr hoch");
+      if (qty > 10000) issues.push("Menge sehr hoch");
+      if (confidence < 0.6) issues.push("Confidence niedrig");
+      if (r.riskLevel === "high") issues.push("Risk high");
+      if (r.calculationStatus === "critical") issues.push("Critical");
+      if (r.calculationStatus === "warning") issues.push("Warning");
+      if ((r as any).globalKnowledgeBlockedByQualityGuard) issues.push("Global Guard blockiert");
+
+      return {
+        id: r.id,
+        posNr: r.posNr || "",
+        kurztext: r.kurztext || "",
+        einheit: unit,
+        menge: qty,
+        ep,
+        gp,
+        confidence,
+        riskLevel: r.riskLevel || "",
+        status: r.calculationStatus || "",
+        issues,
+      };
+    })
+    .filter((r: any) => r.issues.length > 0)
+    .sort((a: any, b: any) => {
+      const gpDiff = Math.abs(b.gp || 0) - Math.abs(a.gp || 0);
+      if (gpDiff !== 0) return gpDiff;
+      return b.issues.length - a.issues.length;
+    });
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: Arial, sans-serif;
+  `;
+
+  const rowsHtml = outliers.slice(0, 300).map((r: any) => `
+    <tr>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:800;">${esc(r.posNr)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${esc(r.menge)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.einheit)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(r.ep || 0).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:800;">${Number(r.gp || 0).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${Number(r.confidence || 0).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.riskLevel)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.status)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#92400e;font-weight:700;">${esc(r.issues.join(" · "))}</td>
+    </tr>
+  `).join("");
+
+  overlay.innerHTML = `
+    <div style="
+      width: min(1240px, 96vw);
+      max-height: 88vh;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 24px 80px rgba(15,23,42,.35);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    ">
+      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+        <div style="font-size:20px;font-weight:900;color:#0f172a;">
+          RLC Outlier Report
+        </div>
+        <div style="font-size:13px;color:#475569;margin-top:6px;">
+          Automatische Prüfung auf auffällige EP, GP, Mengen, Confidence, Risiko, Status und Global-Knowledge-Guard.
+        </div>
+      </div>
+
+      <div style="padding:14px 24px;border-bottom:1px solid #e5e7eb;background:#fff;display:flex;gap:16px;align-items:center;">
+        <div style="font-size:14px;color:#0f172a;font-weight:800;">
+          Auffällige Positionen: ${outliers.length}
+        </div>
+        <div style="font-size:13px;color:#64748b;">
+          Anzeige max. 300 Positionen
+        </div>
+      </div>
+
+      <div style="overflow:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead style="position:sticky;top:0;background:#f1f5f9;z-index:1;">
+            <tr>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Pos.</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Kurztext</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Menge</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">EH</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">EP</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">GP</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Conf.</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Risk</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Status</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Grund</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || `<tr><td colspan="10" style="padding:20px;text-align:center;color:#64748b;">Keine Outlier gefunden.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;gap:12px;justify-content:flex-end;">
+        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
+          Schließen
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", () => {
+    overlay.remove();
+  });
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
   });
 }
 async function showRlcX84LearningApprovalDraft() {
@@ -6782,12 +7175,13 @@ async function showRlcX84LearningApprovalDraft() {
   const selectedFreigabeKeys = new Set(freigabe.selectedKeys);
   const approveGlobalKnowledge = freigabe.approveGlobalKnowledge;
   const approved = candidates
-    .filter((r: any) => r.approvalLevel === "safe_review" && selectedFreigabeKeys.has(rlcX84LearningCandidateKey(r)))
+    .filter((r: any) => (r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review") && selectedFreigabeKeys.has(rlcX84LearningCandidateKey(r)))
     .map((r: any) => ({
       ...r,
       decision: "approved",
       approvedForCompanyDb: true,
-      approvedForGlobalKnowledge: approveGlobalKnowledge,
+      approvedForGlobalKnowledge: approveGlobalKnowledge && rlcCanSendToGlobalKnowledge(r),
+      globalKnowledgeBlockedByQualityGuard: approveGlobalKnowledge && !rlcCanSendToGlobalKnowledge(r),
       usedAsPrice: false,
       approvedAt: new Date().toISOString(),
       approvalSource: approveGlobalKnowledge
@@ -6855,7 +7249,8 @@ async function showRlcX84LearningApprovalDraft() {
           "X84 wurde nur als Vergleich genutzt; gespeichert wurde der geprüfte RLC-KI-Preis.",
       } as any),
       approvedForCompanyDb: true,
-      approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge),
+      approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge) && rlcCanSendToGlobalKnowledge(r),
+      globalKnowledgeBlockedByQualityGuard: Boolean((r as any).globalKnowledgeBlockedByQualityGuard),
     }));
   const duplicateKey = (r: any) =>
     [
@@ -7104,6 +7499,26 @@ return (
           title="Zeigt den X84-Benchmark-Learning-Freigabeentwurf. Es wird nichts automatisch in die Datenbank geschrieben."
         >
           Learning prüfen / freigeben
+        </button>
+
+        <button
+          type="button"
+          style={btnSecondary}
+          onClick={showRlcOutlierReportModal}
+          disabled={!rows.length}
+          title="Zeigt auffällige Positionen: EP/GP/Menge/Confidence/Risiko/Status/Global-Guard."
+        >
+          Outlier Report
+        </button>
+
+        <button
+          type="button"
+          style={btnSecondary}
+          onClick={showRlcCopilotModal}
+          disabled={!rows.length}
+          title="RLC Copilot analysiert die aktuelle Kalkulation und schlägt nächste Schritte vor."
+        >
+          RLC Copilot
         </button>
 
         <button
@@ -11421,6 +11836,13 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
+
+
+
+
 
 
 
