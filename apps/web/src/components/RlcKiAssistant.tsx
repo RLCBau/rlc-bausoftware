@@ -648,6 +648,8 @@ export default function RlcKiAssistant() {
   const [activeKiSuggestion, setActiveKiSuggestion] =
     React.useState<ActiveKiSuggestion | null>(null);
 const [kiSignalPulse, setKiSignalPulse] = React.useState(false);
+  const [secretaryAlert, setSecretaryAlert] = React.useState("");
+  const secretaryLastSignatureRef = React.useRef("");
     const moduleKey = getModuleKey(pathname);
   const pageKey = getPageKey(pathname);
   const current = routeLabel(pathname);
@@ -945,9 +947,7 @@ const [kiSignalPulse, setKiSignalPulse] = React.useState(false);
       rlcNum((runtime as any)?.rlcKiNet) ||
       rlcNum((runtime as any)?.rlcKiTotal) ||
       rlcNum((runtime as any)?.kiNet) ||
-      rlcNum((runtime as any)?.kiTotal) ||
-      rlcNum((runtime as any)?.totalNet) ||
-      rlcNum((runtime as any)?.net);
+      rlcNum((runtime as any)?.kiTotal);
 
     const hasRuntimeKiCalculation = runtimeKiNet > 0;
     return {
@@ -1542,6 +1542,98 @@ const [kiSignalPulse, setKiSignalPulse] = React.useState(false);
     return secondaryBtn;
   }
 
+  React.useEffect(() => {
+    if (pageKey !== "kalkulation-mit-ki") return;
+
+    const problems = {
+      duplicates: Number(lvStats.duplicateCount || 0),
+      missingUnits: Number(lvStats.missingUnits || 0),
+      missingQty: Number(lvStats.missingQty || 0),
+      missingPrice: Number(lvStats.missingPrice || 0),
+      missingBreakdown: Number(lvStats.missingBreakdown || 0),
+      net: Number(lvStats.net || 0),
+    };
+
+    const totalProblems =
+      problems.duplicates +
+      problems.missingUnits +
+      problems.missingQty +
+      problems.missingPrice +
+      problems.missingBreakdown;
+
+    const signature = [
+      pathname,
+      problems.duplicates,
+      problems.missingUnits,
+      problems.missingQty,
+      problems.missingPrice,
+      problems.missingBreakdown,
+      Math.round(problems.net),
+    ].join("|");
+
+    if (!totalProblems && problems.net > 0) {
+      setSecretaryAlert(
+        "Roberto, die Kalkulation wirkt vollständig. Nächster Schritt: Outlier Report prüfen und danach Angebot/Export vorbereiten."
+      );
+      return;
+    }
+
+    if (!totalProblems) return;
+
+    const nextStep =
+      problems.duplicates > 0
+        ? `Zuerst ${problems.duplicates} doppelte LV-Position(en) bereinigen.`
+        : problems.missingPrice > 0
+          ? `Zuerst ${problems.missingPrice} Position(en) ohne EP kalkulieren.`
+          : problems.missingBreakdown > 0
+            ? `Zuerst ${problems.missingBreakdown} Position(en) ohne Urkalkulation prüfen.`
+            : problems.missingUnits > 0
+              ? `Zuerst ${problems.missingUnits} fehlende Einheit(en) ergänzen.`
+              : problems.missingQty > 0
+                ? `Zuerst ${problems.missingQty} fehlende Menge(n) ergänzen.`
+                : "Outlier Report prüfen.";
+
+    const message =
+      `Roberto, ich kontrolliere das Projekt automatisch. ` +
+      `Ich habe ${totalProblems} offene Prüfpunkte gefunden. ` +
+      nextStep;
+
+    setSecretaryAlert(message);
+
+    if (secretaryLastSignatureRef.current !== signature) {
+      secretaryLastSignatureRef.current = signature;
+      setOpen(true);
+      setTab("steuerung");
+      setKiSignalPulse(true);
+      window.setTimeout(() => setKiSignalPulse(false), 1200);
+    }
+  }, [
+    pageKey,
+    pathname,
+    lvStats.duplicateCount,
+    lvStats.missingUnits,
+    lvStats.missingQty,
+    lvStats.missingPrice,
+    lvStats.missingBreakdown,
+    lvStats.net,
+  ]);
+
+  function openKalkulationOutlierReportFromAssistant() {
+    const fn = (window as any).rlcOpenKalkulationOutlierReport;
+    if (typeof fn === "function") {
+      fn();
+      return;
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        text:
+          "Outlier Report ist auf dieser Seite noch nicht verbunden. Öffne ihn über den Button in der Kalkulation oder lade die Seite neu.",
+      },
+    ]);
+  }
   function renderActions(actions: AssistantAction[]) {
     return actions.map((action) => (
       <button
@@ -1578,7 +1670,13 @@ function renderStats() {
 
           <div style={statsRow}>
             <span>Netto RLC-KI</span>
-            <b>{money(lvStats.net)}</b>
+            <b>
+              {lvStats.net > 0
+                ? money(lvStats.net)
+                : runtimeKalkulationSummary
+                  ? "Wird berechnet…"
+                  : "0,00 €"}
+            </b>
           </div>
 
           <div style={statsRow}>
@@ -2156,7 +2254,7 @@ function renderStats() {
               <div style={headLeft}>
                 <div style={botIcon}>🤖</div>
                 <div>
-                  <div style={title}>RLC-KI Assistent</div>
+                  <div style={title}>RLC-KI Sekretärin</div>
                   <div style={sub}>{current}</div>
                 </div>
               </div>
@@ -2187,6 +2285,23 @@ function renderStats() {
             {tab === "steuerung" ? (
               <div style={body}>
                 <div style={speech}>{pageIntro(pageKey)}</div>
+
+                {secretaryAlert ? (
+                  <div
+                    style={{
+                      border: "1px solid #BFDBFE",
+                      background: "#EFF6FF",
+                      color: "#1E3A8A",
+                      borderRadius: 14,
+                      padding: 14,
+                      fontWeight: 900,
+                      lineHeight: 1.45,
+                      animation: kiSignalPulse ? "rlcKiBoxPulse 1.1s ease-in-out" : undefined,
+                    }}
+                  >
+                    {secretaryAlert}
+                  </div>
+                ) : null}
 
                 {status ? <div style={successBox}>{status}</div> : null}
 
@@ -2260,6 +2375,16 @@ function renderStats() {
                 </div>
 
                 <div style={quickGrid}>
+                  {pageKey === "kalkulation-mit-ki" ? (
+                    <button
+                      type="button"
+                      style={quickBtnButton}
+                      onClick={openKalkulationOutlierReportFromAssistant}
+                    >
+                      Outlier Report öffnen
+                    </button>
+                  ) : null}
+
                   <button
                     type="button"
                     style={quickBtnButton}
@@ -2866,6 +2991,11 @@ const activeKiButton: React.CSSProperties = {
   cursor: "pointer",
   justifySelf: "start",
 };
+
+
+
+
+
 
 
 

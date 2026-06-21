@@ -6781,206 +6781,6 @@ function showRlcX84LearningFreigabeModal(
     updateSelectedCount();
   });
 }
-function showRlcCopilotModal() {
-  if (typeof document === "undefined") return;
-
-  const realRows = rows.filter((r: any) => !kiIsStructuralRow(r));
-  const pricedRows = realRows.filter((r: any) => getUnitPrice(r) > 0);
-  const missingPriceRows = realRows.filter((r: any) => getUnitPrice(r) <= 0);
-  const warningRows = realRows.filter((r: any) => r.calculationStatus === "warning");
-  const criticalRows = realRows.filter((r: any) => r.calculationStatus === "critical");
-  const highRiskRows = realRows.filter((r: any) => r.riskLevel === "high");
-  const lowConfidenceRows = realRows.filter((r: any) => n(r.confidence, 0.75) < 0.6);
-
-  const outlierRows = realRows.filter((r: any) => {
-    const ep = getUnitPrice(r);
-    const gp = lineNet(r);
-    const qty = n(r.menge);
-    const unit = String(r.einheit || "").trim();
-    return (
-      ep <= 0 ||
-      qty <= 0 ||
-      !unit ||
-      gp > 50000 ||
-      qty > 10000 ||
-      n(r.confidence, 0.75) < 0.6 ||
-      r.riskLevel === "high" ||
-      r.calculationStatus === "critical" ||
-      r.calculationStatus === "warning" ||
-      Boolean((r as any).globalKnowledgeBlockedByQualityGuard)
-    );
-  });
-
-  const totalNet = realRows.reduce((sum: number, r: any) => sum + lineNet(r), 0);
-  const coveragePct = realRows.length ? Math.round((pricedRows.length / realRows.length) * 100) : 0;
-
-  const nextSteps: string[] = [];
-
-  if (missingPriceRows.length) {
-    nextSteps.push(`${missingPriceRows.length} Position(en) ohne EP zuerst kalkulieren.`);
-  }
-
-  if (criticalRows.length || highRiskRows.length) {
-    nextSteps.push(`${criticalRows.length + highRiskRows.length} kritische / Hochrisiko-Position(en) fachlich prüfen.`);
-  }
-
-  if (outlierRows.length) {
-    nextSteps.push(`Outlier Report öffnen und ${outlierRows.length} auffällige Position(en) prüfen.`);
-  }
-
-  if (lowConfidenceRows.length) {
-    nextSteps.push(`${lowConfidenceRows.length} Position(en) mit niedriger Confidence nachrechnen.`);
-  }
-
-  if (!nextSteps.length && realRows.length) {
-    nextSteps.push("Kalkulation wirkt stabil. Nächster Schritt: Angebot / Urkalkulation PDF vorbereiten.");
-  }
-
-  const esc = (value: any) =>
-    String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-
-  const topOutliers = outlierRows
-    .slice()
-    .sort((a: any, b: any) => Math.abs(lineNet(b)) - Math.abs(lineNet(a)))
-    .slice(0, 12);
-
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-    background: rgba(15, 23, 42, 0.55);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    font-family: Arial, sans-serif;
-  `;
-
-  overlay.innerHTML = `
-    <div style="
-      width: min(980px, 96vw);
-      max-height: 88vh;
-      background: #ffffff;
-      border-radius: 18px;
-      box-shadow: 0 24px 80px rgba(15,23,42,.35);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    ">
-      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
-        <div style="font-size:20px;font-weight:900;color:#0f172a;">
-          RLC Copilot
-        </div>
-        <div style="font-size:13px;color:#475569;margin-top:6px;">
-          Lokale technische Analyse der aktuellen Kalkulation. Keine automatische Preisänderung.
-        </div>
-      </div>
-
-      <div style="padding:18px 24px;overflow:auto;">
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
-          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#f8fafc;">
-            <div style="font-size:12px;color:#64748b;">Positionen</div>
-            <div style="font-size:22px;font-weight:900;color:#0f172a;">${realRows.length}</div>
-          </div>
-          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#f8fafc;">
-            <div style="font-size:12px;color:#64748b;">Deckung</div>
-            <div style="font-size:22px;font-weight:900;color:#0f172a;">${coveragePct}%</div>
-          </div>
-          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#f8fafc;">
-            <div style="font-size:12px;color:#64748b;">Netto</div>
-            <div style="font-size:22px;font-weight:900;color:#0f172a;">${Number(totalNet).toFixed(2)} €</div>
-          </div>
-          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:12px;background:#fef2f2;">
-            <div style="font-size:12px;color:#991b1b;">Outlier</div>
-            <div style="font-size:22px;font-weight:900;color:#991b1b;">${outlierRows.length}</div>
-          </div>
-        </div>
-
-        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:16px;">
-          <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:8px;">
-            Copilot-Einschätzung
-          </div>
-          <div style="font-size:14px;color:#334155;line-height:1.5;">
-            Roberto, ich sehe aktuell <b>${realRows.length}</b> echte Positionen.
-            Davon sind <b>${pricedRows.length}</b> mit EP kalkuliert.
-            Es gibt <b>${warningRows.length}</b> Warnungen, <b>${criticalRows.length}</b> kritische Positionen
-            und <b>${highRiskRows.length}</b> Hochrisiko-Positionen.
-          </div>
-        </div>
-
-        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:16px;">
-          <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:8px;">
-            Empfohlene nächste Schritte
-          </div>
-          <ol style="margin:0;padding-left:20px;color:#334155;font-size:14px;line-height:1.6;">
-            ${nextSteps.map((s) => `<li>${esc(s)}</li>`).join("")}
-          </ol>
-        </div>
-
-        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
-          <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:8px;">
-            Top auffällige Positionen
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead>
-              <tr style="background:#f1f5f9;">
-                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Pos.</th>
-                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Kurztext</th>
-                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">EP</th>
-                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">GP</th>
-                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${
-                topOutliers.length
-                  ? topOutliers.map((r: any) => `
-                    <tr>
-                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:800;">${esc(r.posNr)}</td>
-                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
-                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(getUnitPrice(r)).toFixed(2)}</td>
-                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(lineNet(r)).toFixed(2)}</td>
-                      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.calculationStatus || r.riskLevel || "")}</td>
-                    </tr>
-                  `).join("")
-                  : `<tr><td colspan="5" style="padding:14px;text-align:center;color:#64748b;">Keine auffälligen Positionen gefunden.</td></tr>`
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;gap:12px;justify-content:flex-end;">
-        <button data-action="outliers" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
-          Outlier Report öffnen
-        </button>
-        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
-          Schließen
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", () => {
-    overlay.remove();
-  });
-
-  overlay.querySelector<HTMLButtonElement>('[data-action="outliers"]')?.addEventListener("click", () => {
-    overlay.remove();
-    showRlcOutlierReportModal();
-  });
-
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) overlay.remove();
-  });
-}
 function showRlcOutlierReportModal() {
   if (typeof document === "undefined") return;
 
@@ -7130,6 +6930,9 @@ function showRlcOutlierReportModal() {
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) overlay.remove();
   });
+}
+if (typeof window !== "undefined") {
+  (window as any).rlcOpenKalkulationOutlierReport = showRlcOutlierReportModal;
 }
 async function showRlcX84LearningApprovalDraft() {
   const storageKey = `rlc_x84_learning_approval_draft_v1:${projectKey}`;
@@ -7500,28 +7303,7 @@ return (
         >
           Learning prüfen / freigeben
         </button>
-
-        <button
-          type="button"
-          style={btnSecondary}
-          onClick={showRlcOutlierReportModal}
-          disabled={!rows.length}
-          title="Zeigt auffällige Positionen: EP/GP/Menge/Confidence/Risiko/Status/Global-Guard."
-        >
-          Outlier Report
-        </button>
-
-        <button
-          type="button"
-          style={btnSecondary}
-          onClick={showRlcCopilotModal}
-          disabled={!rows.length}
-          title="RLC Copilot analysiert die aktuelle Kalkulation und schlägt nächste Schritte vor."
-        >
-          RLC Copilot
-        </button>
-
-        <button
+<button
           type="button"
           style={btnSecondary}
           onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
@@ -11836,6 +11618,8 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
 
 
 
