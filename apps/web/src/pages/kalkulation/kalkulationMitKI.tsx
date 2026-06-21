@@ -2710,7 +2710,33 @@ export default function KalkulationMitKI() {
   const csvInputRef = React.useRef<HTMLInputElement | null>(null);
 const importHandoffDoneRef = React.useRef(false);
 
-  const [rows, setRows] = React.useState<EliteRow[]>([]);
+  const [rows, setRows] = React.useState<EliteRow[]>(() => {
+    if (!projectKey || typeof localStorage === "undefined") return [];
+
+    try {
+      const raw = localStorage.getItem(localBackupKey(projectKey));
+      if (!raw) return [];
+
+      const parsed = JSON.parse(raw);
+      const rawRows = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.rows)
+          ? parsed.rows
+          : Array.isArray(parsed?.items)
+            ? parsed.items
+            : Array.isArray(parsed?.positions)
+              ? parsed.positions
+              : [];
+
+      if (!rawRows.length) return [];
+
+      return sanitizeRowsForStorage(
+        rawRows.map((x: any) => normalizeEliteRow(x))
+      );
+    } catch {
+      return [];
+    }
+  });
 
   React.useEffect(() => {
     if (!projectKey) return;
@@ -3197,6 +3223,39 @@ function importHandoff() {
    * Kalkulationsstand und mergen X84 nur als Vergleichspreis.
    * Wenn es noch keinen Kalkulationsstand gibt, wird der GAEB/X83/X84-Import geladen.
    */
+  try {
+    const rawKiBackup = localStorage.getItem(localBackupKey(projectKey));
+    if (rawKiBackup) {
+      const parsedKiBackup = JSON.parse(rawKiBackup);
+      const source = String(parsedKiBackup?.source || "");
+      const backupRows = Array.isArray(parsedKiBackup)
+        ? parsedKiBackup
+        : Array.isArray(parsedKiBackup?.rows)
+          ? parsedKiBackup.rows
+          : [];
+
+      const backupSafeRows = sanitizeRowsForStorage(
+        backupRows.map((x: any) => normalizeEliteRow(x))
+      );
+
+      const backupKiNet = backupSafeRows.reduce((sum: number, r: any) => {
+        return sum + n(r.rlcKiTotal ?? r.totalNet ?? r.gesamt);
+      }, 0);
+
+      if (
+        backupSafeRows.length &&
+        backupKiNet > 0
+      ) {
+        setRows(backupSafeRows);
+        setServerStatus("KI-Kalkulation geladen");
+        setTimeout(() => setServerStatus(""), 1800);
+        return;
+      }
+    }
+  } catch {
+    // Wenn der KI-Backup beschädigt ist, darf normaler LV-Fallback weiterlaufen.
+  }
+
   const keys = [
     localBackupKey(projectKey),
     `rlc_lv_data_v1:${projectKey}`,
@@ -5169,6 +5228,387 @@ function saveRlcX84DiffReport(rows: any[], projectKey: string): any {
 
   return report;
 }
+function scheduleKiAutoSaveAfterCalculation(snapshotRows: EliteRow[], modeOverride?: "offer-check" | "new-calculation") {
+  if (!projectKey || typeof window === "undefined") return;
+
+  const safeRows = sanitizeRowsForStorage(snapshotRows);
+  const payload = {
+    ok: true,
+    projectKey,
+    projectTitle,
+    savedAt: new Date().toISOString(),
+    source: "rlc-ki-autosave",
+    mode: modeOverride || kiMode,
+    rows: safeRows,
+    meta: {
+      mwst,
+      globalMarkup,
+      projectKey,
+      projectTitle,
+    },
+  };
+
+  try {
+    localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+    localStorage.setItem(`rlc_kalkulation_mit_ki_elite_v1:${projectKey}`, JSON.stringify(payload));
+    setServerStatus("Automatisch gespeichert");
+    window.setTimeout(() => setServerStatus(""), 1800);
+  } catch {
+    // Lokaler Autosave darf die Kalkulation niemals blockieren.
+  }
+
+  // Server-Autosave temporaneamente disattivato:
+  // saveToProjectServer() usa rows dal React-State e può salvare uno stato vecchio.
+  // Il salvataggio locale usa invece snapshotRows corretto.
+}
+function showOfferCheckModal(input: {
+  comparable: Array<{
+    row: EliteRow;
+    offerEp: number;
+    rlcEp: number;
+    offerGp: number;
+    rlcGp: number;
+    diffGp: number;
+    diffPct: number;
+  }>;
+  offerTotal: number;
+  rlcTotal: number;
+  diffTotal: number;
+  diffPctTotal: number;
+  outside10: number;
+  rlcHigher: number;
+  rlcLower: number;
+}) {
+  if (typeof document === "undefined") {
+    alert(
+      [
+        "Angebot prüfen – Vergleich ohne Neuberechnung",
+        "",
+        `Vergleichbare Positionen: ${input.comparable.length}`,
+        `X84 / Angebot netto: ${money(input.offerTotal)}`,
+        `RLC-KI netto: ${money(input.rlcTotal)}`,
+        `Differenz: ${money(input.diffTotal)} (${input.diffPctTotal}%)`,
+        "",
+        "Wichtig: Es wurde keine neue Kalkulation erstellt und kein Preis geändert.",
+      ].join("\n")
+    );
+    return;
+  }
+
+  const esc = (value: any) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const topRows = [...input.comparable]
+    .sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp))
+    .slice(0, 15);
+
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.zIndex = "99999";
+  overlay.style.background = "rgba(15,23,42,0.55)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.padding = "24px";
+
+  overlay.innerHTML = `
+    <div style="width:min(1100px,96vw);max-height:90vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.35);display:flex;flex-direction:column;">
+      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+        <div style="font-size:21px;font-weight:900;color:#0f172a;">Angebot prüfen</div>
+        <div style="font-size:13px;color:#475569;margin-top:6px;">
+          Vergleich RLC-KI gegen X84 / Angebot. Keine Neuberechnung, keine Preisänderung.
+        </div>
+      </div>
+
+      <div style="padding:20px 24px;overflow:auto;">
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px;">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">X84 / Angebot netto</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(input.offerTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">RLC-KI netto</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(input.rlcTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Differenz</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(input.diffTotal)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;">${input.diffPctTotal}%</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Außerhalb ±10%</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${input.outside10}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;">RLC höher ${input.rlcHigher} · niedriger ${input.rlcLower}</div>
+          </div>
+        </div>
+
+        <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:10px;">
+          Größte Abweichungen
+        </div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead style="background:#f8fafc;color:#334155;">
+              <tr>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Pos.</th>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Kurztext</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">EP X84</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">EP RLC-KI</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Diff. GP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${topRows
+                .map(
+                  (x) => `
+                    <tr>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:800;">${esc(x.row.posNr)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;">${esc(x.row.kurztext)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.offerEp)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.rlcEp)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:800;">${money(x.diffGp)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${x.diffPct}%</td>
+                    </tr>
+                  `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:14px;font-size:13px;color:#475569;line-height:1.45;">
+          Hinweis: Diese Prüfung verändert keine Preise. Die offizielle RLC-Kalkulation bleibt unverändert.
+        </div>
+      </div>
+
+      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;gap:10px;">
+        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
+          Schließen
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", close);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
+  });
+}
+function runOfferCheckOnly() {
+  if (!rows.length) {
+    alert("Keine Positionen vorhanden.");
+    return;
+  }
+
+  const hasX84 = hasRealX84ForProject(projectKey);
+  if (!hasX84) {
+    alert("Keine echte X84-/Angebotsbasis geladen. Angebot prüfen ist nur als Vergleich nach X84/Angebot sinnvoll.");
+    return;
+  }
+
+  const realRows = rows.filter((r) => kiIsRealCalcRow(r));
+  const comparable = realRows
+    .map((r) => {
+      const qty = n(r.menge);
+      const offerEp = getOfferUnitPrice(r);
+      const rlcEp = getRlcKiUnitPrice(r);
+      const offerGp = round2(qty * offerEp);
+      const rlcGp = round2(qty * rlcEp);
+      const diffGp = round2(rlcGp - offerGp);
+      const diffPct = offerGp > 0 ? round2((diffGp / offerGp) * 100) : 0;
+
+      return {
+        row: r,
+        offerEp,
+        rlcEp,
+        offerGp,
+        rlcGp,
+        diffGp,
+        diffPct,
+      };
+    })
+    .filter((x) => x.offerEp > 0 && x.rlcEp > 0);
+
+  const offerTotal = round2(comparable.reduce((sum, x) => sum + x.offerGp, 0));
+  const rlcTotal = round2(comparable.reduce((sum, x) => sum + x.rlcGp, 0));
+  const diffTotal = round2(rlcTotal - offerTotal);
+  const diffPctTotal = offerTotal > 0 ? round2((diffTotal / offerTotal) * 100) : 0;
+
+  const outside10 = comparable.filter((x) => Math.abs(x.diffPct) > 10).length;
+  const rlcHigher = comparable.filter((x) => x.diffGp > 0).length;
+  const rlcLower = comparable.filter((x) => x.diffGp < 0).length;
+
+  setServerStatus(
+    `Angebot geprüft: ${comparable.length} Positionen · Differenz ${money(diffTotal)} (${diffPctTotal}%)`
+  );
+  window.setTimeout(() => setServerStatus(""), 4500);
+
+  showOfferCheckModal({
+    comparable,
+    offerTotal,
+    rlcTotal,
+    diffTotal,
+    diffPctTotal,
+    outside10,
+    rlcHigher,
+    rlcLower,
+  });
+}
+function showExpertReviewModal(currentRows: EliteRow[], expertRows: EliteRow[]) {
+  if (typeof document === "undefined") {
+    alert("KI Expertprüfung abgeschlossen. Änderungen wurden nicht automatisch übernommen.");
+    return;
+  }
+
+  const esc = (value: any) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const oldById = new Map(currentRows.map((r: any) => [String(r.id), r]));
+
+  const changes = expertRows
+    .map((next: any) => {
+      const old = oldById.get(String(next.id));
+      if (!old) return null;
+
+      const oldEp = getRlcKiUnitPrice(old as EliteRow) || n((old as any).finalUnitPrice);
+      const newEp = getRlcKiUnitPrice(next as EliteRow) || n((next as any).finalUnitPrice);
+      const qty = n((next as any).menge);
+      const diffEp = round2(newEp - oldEp);
+      const diffGp = round2(diffEp * qty);
+      const diffPct = oldEp > 0 ? round2((diffEp / oldEp) * 100) : 0;
+
+      return {
+        row: next,
+        oldEp,
+        newEp,
+        diffEp,
+        diffGp,
+        diffPct,
+      };
+    })
+    .filter((x: any) => x && Math.abs(x.diffGp) > 0.01)
+    .sort((a: any, b: any) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+
+  const oldTotal = round2(currentRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
+  const newTotal = round2(expertRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
+  const diffTotal = round2(newTotal - oldTotal);
+  const diffPctTotal = oldTotal > 0 ? round2((diffTotal / oldTotal) * 100) : 0;
+
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.zIndex = "99999";
+  overlay.style.background = "rgba(15,23,42,0.55)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.padding = "24px";
+
+  overlay.innerHTML = `
+    <div style="width:min(1100px,96vw);max-height:90vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.35);display:flex;flex-direction:column;">
+      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+        <div style="font-size:21px;font-weight:900;color:#0f172a;">KI Expertprüfung</div>
+        <div style="font-size:13px;color:#475569;margin-top:6px;">
+          Tiefprüfung abgeschlossen. Die Kalkulation wurde nicht automatisch geändert.
+        </div>
+      </div>
+
+      <div style="padding:20px 24px;overflow:auto;">
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px;">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Aktuelle RLC-KI</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(oldTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Expertprüfung Vorschlag</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(newTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Differenz</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(diffTotal)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;">${diffPctTotal}%</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Geänderte Positionen</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${changes.length}</div>
+          </div>
+        </div>
+
+        <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:10px;">Größte Änderungen</div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead style="background:#f8fafc;color:#334155;">
+              <tr>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Pos.</th>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Kurztext</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Alt EP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Expert EP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Diff. GP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${changes.slice(0, 20).map((x: any) => `
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:800;">${esc(x.row.posNr)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;">${esc(x.row.kurztext)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.oldEp)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.newEp)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:800;">${money(x.diffGp)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${x.diffPct}%</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:14px;font-size:13px;color:#475569;line-height:1.45;">
+          Hinweis: Die Expertprüfung ist ein Prüfbericht. Erst mit “Änderungen übernehmen” wird die Kalkulation ersetzt.
+        </div>
+      </div>
+
+      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;gap:10px;">
+        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
+          Nicht übernehmen
+        </button>
+        <button data-action="apply" style="padding:10px 16px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
+          Änderungen übernehmen
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+
+  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", close);
+  overlay.querySelector<HTMLButtonElement>('[data-action="apply"]')?.addEventListener("click", () => {
+    persistRows(expertRows, "new-calculation");
+    scheduleKiAutoSaveAfterCalculation(expertRows, "new-calculation");
+    setServerStatus("Expertprüfung übernommen");
+    window.setTimeout(() => setServerStatus(""), 2500);
+    close();
+  });
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
+  });
+}
 async function runEliteCalculation(forceRecalculate = false, expertMode = false, modeOverride?: "offer-check" | "new-calculation") {
   const effectiveKiMode = modeOverride || kiMode;
   if (!rows.length) {
@@ -5372,6 +5812,7 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false,
     if (!rowsForKi.length) {
       const unchangedNext = normalizeKiWarningRows(preparedRows);
       persistRows(unchangedNext, effectiveKiMode);
+      scheduleKiAutoSaveAfterCalculation(unchangedNext, effectiveKiMode);
       kiEmitProgress(96, "Keine Server-KI nötig…");
       kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, unchangedNext, {
         checkedCount: preparedRows.length,
@@ -5509,10 +5950,29 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false,
       cleanedNextNormalized,
       x84DiffReportForLearning
     );
-
     saveRlcX84LearningReport(cleanedNextWithX84Learning, projectKey);
     saveRlcX84LearningApprovalDraft(cleanedNextWithX84Learning, projectKey);
-    persistRows(cleanedNextWithX84Learning, effectiveKiMode);
+
+    if (expertMode) {
+      try {
+        localStorage.setItem(
+          `rlc_ki_expert_review_v1:${projectKey}`,
+          JSON.stringify({
+            ok: true,
+            projectKey,
+            projectTitle,
+            createdAt: new Date().toISOString(),
+            rows: sanitizeRowsForStorage(cleanedNextWithX84Learning),
+          })
+        );
+      } catch {}
+
+      showExpertReviewModal(beforeRows, cleanedNextWithX84Learning);
+    } else {
+      persistRows(cleanedNextWithX84Learning, effectiveKiMode);
+      scheduleKiAutoSaveAfterCalculation(cleanedNextWithX84Learning, effectiveKiMode);
+    }
+
     // saveRowsToDatenbank(cleanedNext, projectKey, projectTitle); // deaktiviert: KI-Kalkulation darf Datenbank nicht automatisch füllen
 
     const durationMs = Date.now() - startedAt;
@@ -7233,10 +7693,6 @@ return (
       </div>
 
       <div style={compactToolbar}>
-        <button type="button" style={btnSecondary} onClick={addRow}>
-          + Position
-        </button>
-
         <div
           style={{
             display: "flex",
@@ -7253,9 +7709,11 @@ return (
             style={kiMode === "new-calculation" ? btnPrimary : btnSecondary}
             onClick={() => {
               setKiMode("new-calculation");
-              void runWithAction("ki-new-calculation", "Neue Kalkulation erstellen", () => runEliteCalculation(true, false, "new-calculation"));
+              void runWithAction("ki-new-calculation", "Neue Kalkulation erstellen", () =>
+                runEliteCalculation(true, false, "new-calculation")
+              );
             }}
-            disabled={loading}
+            disabled={loading || !rows.length}
             title="Ohne Angebotsbasis: RLC erstellt die Kalkulation aus LV, Langtext, Menge, Einheit, Datenbank und Urkalkulation."
           >
             Neue Kalkulation erstellen
@@ -7263,92 +7721,31 @@ return (
 
           <button
             type="button"
-            style={kiMode === "offer-check" ? btnPrimary : btnSecondary}
+            style={btnSecondary}
             onClick={() => {
-              setKiMode("offer-check");
-              void runWithAction("ki-offer-check", "Angebot prüfen", () => runEliteCalculation(true, false, "offer-check"));
+              void runWithAction("ki-offer-check", "Angebot prüfen", () =>
+                runOfferCheckOnly()
+              );
             }}
-            disabled={loading}
-            title="Mit Angebotsbasis: RLC prüft vorhandene Preise und schützt sie mit Guards vor KI-Ausreißern."
+            disabled={loading || !rows.length}
+            title="Prüft eine vorhandene Angebots-/X84-Basis. Dieser Modus ist Kontrolle, nicht Hauptkalkulation."
           >
             Angebot prüfen
           </button>
         </div>
 
-        <button
-          type="button"
-          style={btnPrimary}
-          onClick={() => void runWithAction("ki-start", "KI starten", () => runPrimaryKiAction())}
-          disabled={loading || !rows.length}
-        >
-          {loading ? "KI arbeitet…" : "KI starten"}
+        <button type="button" style={btnSecondary} onClick={addRow}>
+          Neue Position erstellen
         </button>
 
         <button
           type="button"
           style={btnSecondary}
-          onClick={() => void runWithAction("ki-fast", "KI neu berechnen schnell", () => runEliteCalculation(true))}
-          disabled={loading || !rows.length}
-          title="Schnelle Neuberechnung: ignoriert falsche alte Preise, nutzt DB/Rule-Engine/Plausibilitätsdeckel und nur wenige OpenAI-Prüfungen."
+          onClick={() => setShowQuickActions((v) => !v)}
         >
-          KI neu berechnen schnell
+          {showQuickActions ? "Funktionen schließen" : "Funktionen"}
         </button>
-
-        <button
-          type="button"
-          style={btnSecondary}
-          onClick={showRlcX84LearningApprovalDraft}
-          disabled={loading}
-          title="Zeigt den X84-Benchmark-Learning-Freigabeentwurf. Es wird nichts automatisch in die Datenbank geschrieben."
-        >
-          Learning prüfen / freigeben
-        </button>
-<button
-          type="button"
-          style={btnSecondary}
-          onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
-          disabled={loading || !rows.length}
-          title="Langsame Tiefprüfung: nutzt OpenAI für deutlich mehr Positionen. Nur bei Bedarf verwenden."
-        >
-          KI Expertprüfung
-        </button>
-
-        <button
-          type="button"
-          style={btnSecondary}
-          onClick={() => void runWithAction("ki-complete", "Ergänzen", () => autoCompleteMissingFields())}
-          disabled={!rows.length}
-        >
-          Ergänzen
-        </button>
-
-        <button
-          type="button"
-          style={btnSecondary}
-          onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
-          disabled={serverBusy || !projectKey}
-        >
-          Speichern
-        </button>
-
-        <button
-          type="button"
-          style={btnSecondary}
-          onClick={() => void runWithAction("server-load", "Laden", () => loadFromProjectServer())}
-          disabled={serverBusy || !projectKey}
-        >
-          Laden
-        </button>
-
-        <button
-  type="button"
-  style={btnSecondary}
-  onClick={() => setShowQuickActions((v) => !v)}
->
-  {showQuickActions ? "Funktionen schließen" : "Funktionen"}
-</button>
       </div>
-
       {serverStatus ? <div style={heroStatus}>{serverStatus}</div> : null}
       {activeAction ? <RlcActionProgress action={activeAction} /> : null}
     </section>
@@ -7365,6 +7762,56 @@ return (
         </div>
 
         <div style={compactActionGrid}>
+          <button
+            type="button"
+            style={compactActionButton}
+            onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
+            disabled={loading || !rows.length}
+          >
+            <b>KI Expertprüfung</b>
+            <span>Langsame Tiefprüfung nur bei Bedarf</span>
+          </button>
+
+          <button
+            type="button"
+            style={compactActionButton}
+            onClick={showRlcX84LearningApprovalDraft}
+            disabled={loading}
+          >
+            <b>Learning prüfen / freigeben</b>
+            <span>Geprüfte Kandidaten in Firmen-Datenbank übernehmen</span>
+          </button>
+
+          <button
+            type="button"
+            style={compactActionButton}
+            onClick={() => void runWithAction("ki-complete", "Fehlende Daten ergänzen", () => autoCompleteMissingFields())}
+            disabled={!rows.length}
+          >
+            <b>Fehlende Daten ergänzen</b>
+            <span>Kurztext, Langtext, Einheit und fehlende Felder ergänzen</span>
+          </button>
+
+          <button
+            type="button"
+            style={compactActionButton}
+            onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
+            disabled={serverBusy || !projectKey}
+          >
+            <b>Speichern</b>
+            <span>Aktuellen Stand manuell sichern</span>
+          </button>
+
+          <button
+            type="button"
+            style={compactActionButton}
+            onClick={() => void runWithAction("server-load", "Laden", () => loadFromProjectServer())}
+            disabled={serverBusy || !projectKey}
+          >
+            <b>Laden</b>
+            <span>Gespeicherten Stand wiederherstellen</span>
+          </button>
+
           <button
             type="button"
             style={compactActionButton}
@@ -7770,39 +8217,10 @@ return (
               <div style={exportRow}>
                 <button
                   type="button"
-                  style={btnPrimary}
-                  onClick={() => void runWithAction("ki-start", "KI starten", () => runPrimaryKiAction())}
-                  disabled={loading || !rows.length}
-                >
-                  {loading ? "KI arbeitet…" : "KI kalkulieren"}
-                </button>
-
-                <button
-                  type="button"
-                  style={btnSecondary}
-                  onClick={() => void runWithAction("ki-fast", "KI neu berechnen schnell", () => runEliteCalculation(true))}
-                  disabled={loading || !rows.length}
-                  title="Schnelle Neuberechnung mit begrenzter OpenAI-Prüfung."
-                >
-                  KI neu berechnen schnell
-                </button>
-
-                <button
-                  type="button"
-                  style={btnSecondary}
-                  onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
-                  disabled={loading || !rows.length}
-                  title="Langsame Tiefprüfung mit deutlich mehr OpenAI-Prüfungen."
-                >
-                  KI Expertprüfung
-                </button>
-
-                <button
-                  type="button"
                   style={btnSecondary}
                   onClick={addRow}
                 >
-                  + Position
+                  Neue Position erstellen
                 </button>
 
                 <details style={lvMenuWrap}>
@@ -11618,6 +12036,38 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
