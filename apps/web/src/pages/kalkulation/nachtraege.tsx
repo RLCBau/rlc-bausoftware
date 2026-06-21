@@ -305,6 +305,85 @@ async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 }
 
+type KalkulationBasisRow = {
+  id?: string;
+  posNr?: string;
+  pos?: string;
+  kurztext?: string;
+  title?: string;
+  langtext?: string;
+  einheit?: string;
+  unit?: string;
+  menge?: number;
+  quantity?: number;
+  preis?: number;
+  finalUnitPrice?: number;
+  rlcKiUnitPrice?: number;
+  rlcKiTotal?: number;
+  totalNet?: number;
+  gesamt?: number;
+  calculationStatus?: string;
+  riskLevel?: string;
+  confidence?: number;
+};
+
+function loadKalkulationBasis(projectKey: string): KalkulationBasisRow[] {
+  if (!projectKey || typeof localStorage === "undefined") return [];
+
+  const keys = [
+    `rlc_kalkulation_mit_ki_elite_v1:${projectKey}`,
+    `rlc_lv_data_v1:${projectKey}`,
+    `rlc_gaeb_import_v1:${projectKey}`,
+  ];
+
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const rawRows = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.rows)
+          ? parsed.rows
+          : Array.isArray(parsed?.items)
+            ? parsed.items
+            : [];
+
+      const rows = rawRows
+        .map((r: any) => ({
+          ...r,
+          posNr: String(r?.posNr || r?.pos || r?.positionNumber || "").trim(),
+          kurztext: String(r?.kurztext || r?.shortText || r?.title || "").trim(),
+          langtext: String(r?.langtext || r?.longText || "").trim(),
+          einheit: String(r?.einheit || r?.unit || "").trim(),
+          menge: n(r?.menge ?? r?.quantity),
+          preis: n(r?.rlcKiUnitPrice ?? r?.finalUnitPrice ?? r?.preis ?? r?.unitPrice),
+          rlcKiTotal: n(r?.rlcKiTotal ?? r?.totalNet ?? r?.gesamt),
+          calculationStatus: String(r?.calculationStatus || ""),
+          riskLevel: String(r?.riskLevel || ""),
+          confidence: n(r?.confidence),
+        }))
+        .filter((r: any) => r.posNr || r.kurztext);
+
+      if (rows.length) return rows;
+    } catch {
+      //
+    }
+  }
+
+  return [];
+}
+
+function kalkulationBasisNet(rows: KalkulationBasisRow[]): number {
+  return round2(
+    rows.reduce((sum, r: any) => {
+      const total = n(r.rlcKiTotal ?? r.totalNet ?? r.gesamt);
+      if (total > 0) return sum + total;
+      return sum + n(r.menge ?? r.quantity) * n(r.preis ?? r.finalUnitPrice);
+    }, 0)
+  );
+}
 function loadExtDb(): ExtDB {
   try {
     return JSON.parse(localStorage.getItem(EXT_STORE_KEY) || "{}") as ExtDB;
@@ -918,6 +997,15 @@ export default function NachtraegePage() {
     [currentProject]
   );
 
+  const kalkulationBasis = useMemo(
+    () => loadKalkulationBasis(apiKey || serverProjectKey),
+    [apiKey, serverProjectKey]
+  );
+
+  const kalkulationBasisNetto = useMemo(
+    () => kalkulationBasisNet(kalkulationBasis),
+    [kalkulationBasis]
+  );
   const [rows, setRows] = useState<NachtragRow[]>([]);
   const [mwst, setMwst] = useState<number>(() =>
     Number(localStorage.getItem(MWST_KEY) ?? 19)
@@ -1814,6 +1902,14 @@ export default function NachtraegePage() {
           <span> · Server-Key: </span>
           <b>{apiKey || "—"}</b>
           <span> · Modus: lokal zuerst, Server manuell</span>
+          {kalkulationBasis.length ? (
+            <span>
+              {" "}· Kalkulationsbasis: <b>{kalkulationBasis.length}</b> Pos. /{" "}
+              <b>{money(kalkulationBasisNetto)}</b>
+            </span>
+          ) : (
+            <span> · Keine RLC-KI Kalkulationsbasis geladen</span>
+          )}
         </div>
       </section>
 
@@ -2212,9 +2308,9 @@ export default function NachtraegePage() {
           sub={`${totals.offen} Entwurf`}
         />
         <KpiCard
-          label="Beauftragt"
-          value={String(totals.beauftragt)}
-          sub={`${totals.selected} ausgewählt`}
+          label="Kalkulationsbasis"
+          value={String(kalkulationBasis.length)}
+          sub={`${money(kalkulationBasisNetto)} RLC-KI`}
         />
       </section>
 
@@ -2952,6 +3048,14 @@ const badgeCritical: React.CSSProperties = {
   background: "#FEF2F2",
   color: "#B91C1C",
 };
+
+
+
+
+
+
+
+
 
 
 

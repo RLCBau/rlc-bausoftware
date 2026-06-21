@@ -6035,9 +6035,23 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false,
   function autoCompleteMissingFields() {
     if (!rows.length) return;
 
+    const missingCount =
+      problemCounts.kurztextFehlt +
+      problemCounts.langtextFehlt +
+      problemCounts.einheitFehlt +
+      problemCounts.mengeFehlt +
+      problemCounts.preisFehlt +
+      problemCounts.preisaufbauFehlt;
+
+    if (missingCount <= 0) {
+      setServerStatus("Keine fehlenden Daten gefunden");
+      window.setTimeout(() => setServerStatus(""), 2500);
+      return;
+    }
+
     const beforeRows = kiCloneRows(rows);
 
-    kiEmitStart("Fehlende Daten werden ergänzt…");
+    kiEmitStart("Fehlende Daten werden geprüft…");
     kiEmitProgress(25, "Kurztexte, Langtexte, Einheiten und Preisaufbau werden geprüft…");
 
     const next = rows.map((r) => kiIsStructuralRow(r) ? normalizeEliteRow(kiPrepareStructuralRow(r)) : enhanceKalkulatorInsertions(r));
@@ -6427,17 +6441,17 @@ setServerStatus("PDF Fehler");
   try {
     setPdfBusy(true);
     setServerStatus("Urkalkulation PDF wird erzeugt…");
+    const realRowsForPdf = rows.filter((r) => !kiIsStructuralRow(r));
+    const auftragRows = selectedAuftragId
+      ? realRowsForPdf.filter((r) => r.auftragId === selectedAuftragId)
+      : realRowsForPdf;
 
-    const exportRows = selectedAuftragId
-      ? rows.filter((r) => r.auftragId === selectedAuftragId)
-      : rows;
+    const exportRows = auftragRows.length ? auftragRows : realRowsForPdf;
+    const exportSelectedAuftrag = auftragRows.length && selectedAuftragId ? selectedAuftrag : null;
 
     if (!exportRows.length) {
-      alert(
-        selectedAuftragId
-          ? "Für diesen Auftrag sind keine Positionen vorhanden."
-          : "Keine Positionen vorhanden."
-      );
+      setServerStatus("Keine Positionen für Urkalkulation PDF vorhanden");
+      window.setTimeout(() => setServerStatus(""), 2500);
       return;
     }
 
@@ -6447,7 +6461,7 @@ setServerStatus("PDF Fehler");
       rows: exportRows,
       summary,
       offer,
-      selectedAuftrag: selectedAuftragId ? selectedAuftrag : null,
+      selectedAuftrag: exportSelectedAuftrag,
       client,
       company,
       globalMarkup,
@@ -7785,11 +7799,11 @@ return (
           <button
             type="button"
             style={compactActionButton}
-            onClick={() => void runWithAction("ki-complete", "Fehlende Daten ergänzen", () => autoCompleteMissingFields())}
+            onClick={() => void runWithAction("ki-complete", "Fehlende Daten prüfen", () => autoCompleteMissingFields())}
             disabled={!rows.length}
           >
-            <b>Fehlende Daten ergänzen</b>
-            <span>Kurztext, Langtext, Einheit und fehlende Felder ergänzen</span>
+            <b>Fehlende Daten prüfen</b>
+            <span>Prüft fehlende Kurztexte, Langtexte, Einheiten, Mengen und Preisaufbau</span>
           </button>
 
           <button
@@ -12036,6 +12050,11 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
+
+
 
 
 
