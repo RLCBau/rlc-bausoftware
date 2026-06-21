@@ -6551,7 +6551,194 @@ function runPrimaryKiAction() {
   void runEliteCalculation();
 }
 
-function showRlcX84LearningApprovalDraft() {
+function rlcX84LearningCandidateKey(r: any): string {
+  return [
+    String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+    String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+    String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+  ].join("||");
+}
+
+function showRlcX84LearningFreigabeModal(
+  candidates: any[]
+): Promise<{
+  ok: boolean;
+  writeCompanyDb: boolean;
+  approveGlobalKnowledge: boolean;
+  selectedKeys: string[];
+}> {
+  if (typeof document === "undefined") {
+    const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review");
+    return Promise.resolve({
+      ok: true,
+      writeCompanyDb: true,
+      approveGlobalKnowledge: false,
+      selectedKeys: safe.map(rlcX84LearningCandidateKey),
+    });
+  }
+
+  const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review");
+
+  const esc = (value: any) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: rgba(15, 23, 42, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+    `;
+
+    const rows = safe
+      .slice(0, 200)
+      .map((r: any, idx: number) => {
+        const diff = Number(r.diffPct || 0);
+        const diffGp = Number(r.diffGp || 0);
+        return `
+          <tr>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">
+              <input type="checkbox" data-rlc-learning-index="${idx}" checked />
+            </td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:700;">${esc(r.posNr)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(r.x84Ep || 0).toFixed(2)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;">${Number(r.rlcEp || 0).toFixed(2)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${diff.toFixed(2)}%</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${diffGp.toFixed(2)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    overlay.innerHTML = `
+      <div style="
+        width: min(1180px, 96vw);
+        max-height: 88vh;
+        background: #ffffff;
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(15,23,42,.35);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      ">
+        <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+          <div style="font-size:20px;font-weight:900;color:#0f172a;">
+            RLC X84 Learning freigeben
+          </div>
+          <div style="font-size:13px;color:#475569;margin-top:6px;">
+            X84 bleibt nur Benchmark. Gespeichert wird ausschließlich der geprüfte RLC-KI-Preis.
+          </div>
+        </div>
+
+        <div style="padding:14px 24px;display:flex;gap:18px;align-items:center;border-bottom:1px solid #e5e7eb;background:#fff;">
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:700;color:#0f172a;">
+            <input id="rlcLearningSelectAll" type="checkbox" checked />
+            Alle safe_review Positionen auswählen
+          </label>
+
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:700;color:#0f172a;">
+            <input id="rlcLearningGlobal" type="checkbox" />
+            Auch anonym in RLC Global Knowledge übernehmen
+          </label>
+
+          <div style="margin-left:auto;font-size:13px;color:#64748b;">
+            Safe Review: <b>${safe.length}</b>
+          </div>
+        </div>
+
+        <div style="overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead style="position:sticky;top:0;background:#f1f5f9;z-index:1;">
+              <tr>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;width:44px;"></th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Pos.</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Kurztext</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">X84 EP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">RLC EP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Diff %</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Diff GP</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
+        <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;gap:12px;justify-content:flex-end;">
+          <button data-action="cancel" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
+            Abbrechen
+          </button>
+          <button data-action="approve" style="padding:10px 18px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
+            Ausgewählte freigeben
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = (result: {
+      ok: boolean;
+      writeCompanyDb: boolean;
+      approveGlobalKnowledge: boolean;
+      selectedKeys: string[];
+    }) => {
+      overlay.remove();
+      resolve(result);
+    };
+
+    const collectSelectedKeys = () =>
+      Array.from(
+        overlay.querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]:checked")
+      )
+        .map((el) => safe[Number(el.dataset.rlcLearningIndex)])
+        .filter(Boolean)
+        .map(rlcX84LearningCandidateKey);
+
+    overlay.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.addEventListener("click", () => {
+      close({ ok: false, writeCompanyDb: false, approveGlobalKnowledge: false, selectedKeys: [] });
+    });
+
+    overlay.querySelector<HTMLButtonElement>('[data-action="approve"]')?.addEventListener("click", () => {
+      const selectedKeys = collectSelectedKeys();
+      const approveGlobalKnowledge = Boolean(
+        overlay.querySelector<HTMLInputElement>("#rlcLearningGlobal")?.checked
+      );
+
+      if (!selectedKeys.length) {
+        alert("Bitte mindestens eine Position auswählen.");
+        return;
+      }
+
+      close({
+        ok: true,
+        writeCompanyDb: true,
+        approveGlobalKnowledge,
+        selectedKeys,
+      });
+    });
+
+    overlay.querySelector<HTMLInputElement>("#rlcLearningSelectAll")?.addEventListener("change", (event) => {
+      const checked = Boolean((event.target as HTMLInputElement).checked);
+      overlay
+        .querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]")
+        .forEach((input) => {
+          input.checked = checked;
+        });
+    });
+  });
+}
+async function showRlcX84LearningApprovalDraft() {
   const storageKey = `rlc_x84_learning_approval_draft_v1:${projectKey}`;
 
   let draft: any = {};
@@ -6589,37 +6776,13 @@ function showRlcX84LearningApprovalDraft() {
     }))
   );
 
-  const approveSafe = window.confirm(
-    [
-      "RLC X84-Learning Freigabeentwurf",
-      "",
-      `Kandidaten: ${summary.total ?? candidates.length}`,
-      `Safe Review: ${summary.safeReviewCount ?? 0}`,
-      `Soft Review: ${summary.softReviewCount ?? 0}`,
-      `Manual Review: ${summary.manualReviewCount ?? 0}`,
-      `Blocked Review: ${summary.blockedReviewCount ?? 0}`,
-      "",
-      "Möchtest du alle SAFE REVIEW Kandidaten als geprüfte Learning-Kandidaten vormerken?",
-      "",
-      "Wichtig: X84 wird NICHT als Preis übernommen.",
-    ].join("\n")
-  );
+  const freigabe = await showRlcX84LearningFreigabeModal(candidates);
+  if (!freigabe.ok) return;
 
-  if (!approveSafe) return;
-
-  const approveGlobalKnowledge = window.confirm(
-    [
-      "Auch anonym in die RLC Global Knowledge übernehmen?",
-      "",
-      "Ja = technische Preis-/Positionsdaten werden anonymisiert und aggregiert an RLC Global Knowledge übergeben.",
-      "Nein = Speicherung nur in der Firmen-Datenbank.",
-      "",
-      "Es werden keine Kundendaten, Projektdokumente oder Auftraggeberdaten übernommen.",
-    ].join("\n")
-  );
-
+  const selectedFreigabeKeys = new Set(freigabe.selectedKeys);
+  const approveGlobalKnowledge = freigabe.approveGlobalKnowledge;
   const approved = candidates
-    .filter((r: any) => r.approvalLevel === "safe_review")
+    .filter((r: any) => r.approvalLevel === "safe_review" && selectedFreigabeKeys.has(rlcX84LearningCandidateKey(r)))
     .map((r: any) => ({
       ...r,
       decision: "approved",
@@ -6653,31 +6816,8 @@ function showRlcX84LearningApprovalDraft() {
     })
   );
 
-  const writeDb = window.confirm(
-    [
-      "Freigegebene Learning-Kandidaten wurden vorgemerkt.",
-      "",
-      `Freigegeben: ${approved.length}`,
-      "",
-      "Jetzt wirklich in die Firmen-Datenbank übernehmen?",
-      "",
-      "Gespeichert wird der RLC-KI-Preis, NICHT der X84-Preis.",
-    ].join("\n")
-  );
-
-  if (!writeDb) {
-    alert(
-      [
-        "Learning-Kandidaten vorgemerkt.",
-        "",
-        `Freigegeben: ${approved.length}`,
-        "",
-        "Noch nicht in die Firmen-Datenbank geschrieben.",
-      ].join("\n")
-    );
-    return;
-  }
-
+  const writeDb = freigabe.writeCompanyDb;
+  if (!writeDb) return;
   const learnedRows = approved
     .filter((r: any) => Number(r.rlcEp || 0) > 0)
     .map((r: any, idx: number) => ({
@@ -11281,6 +11421,7 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
 
 
 
