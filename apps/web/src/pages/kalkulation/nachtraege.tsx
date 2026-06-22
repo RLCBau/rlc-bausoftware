@@ -1341,71 +1341,166 @@ export default function NachtraegePage() {
       return;
     }
 
-    const term = prompt(
-      "Position aus Kalkulation wählen: PosNr oder Suchtext eingeben",
-      ""
-    );
+    if (typeof document === "undefined") return;
 
-    if (term === null) return;
+    const existing = document.getElementById("rlc-nachtrag-position-picker");
+    if (existing) existing.remove();
 
-    const q = String(term || "").trim().toLowerCase();
+    const esc = (value: unknown) =>
+      String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 
-    const matches = kalkulationBasis
-      .filter((r) => {
-        if (!q) return true;
+    const overlay = document.createElement("div");
+    overlay.id = "rlc-nachtrag-position-picker";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "99999";
+    overlay.style.background = "rgba(15,23,42,0.45)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "24px";
 
-        return (
-          String(r.posNr || "").toLowerCase().includes(q) ||
-          String(r.kurztext || "").toLowerCase().includes(q) ||
-          String(r.langtext || "").toLowerCase().includes(q)
-        );
-      })
-      .slice(0, 20);
+    const modal = document.createElement("div");
+    modal.style.width = "min(1180px, 96vw)";
+    modal.style.maxHeight = "88vh";
+    modal.style.background = "#fff";
+    modal.style.borderRadius = "22px";
+    modal.style.boxShadow = "0 24px 80px rgba(15,23,42,0.35)";
+    modal.style.overflow = "hidden";
+    modal.style.display = "flex";
+    modal.style.flexDirection = "column";
 
-    if (!matches.length) {
-      setInfo("Keine passende Position in der Kalkulationsbasis gefunden.");
-      return;
-    }
+    let currentMatches: KalkulationBasisRow[] = [];
 
-    let selected: KalkulationBasisRow = matches[0] as KalkulationBasisRow;
+    const renderRows = (query: string) => {
+      const q = String(query || "").trim().toLowerCase();
 
-    if (matches.length > 1) {
-      const list = matches
-        .map((r, i) => {
-          return `${i + 1}) ${r.posNr || "—"} · ${r.kurztext || "Ohne Kurztext"} · ${r.einheit || "—"} · ${money(n(r.preis))}`;
+      currentMatches = kalkulationBasis
+        .filter((r) => {
+          if (!q) return true;
+          return (
+            String(r.posNr || "").toLowerCase().includes(q) ||
+            String(r.kurztext || "").toLowerCase().includes(q) ||
+            String(r.langtext || "").toLowerCase().includes(q)
+          );
         })
-        .join("\n");
+        .slice(0, 80);
 
-      const pick = prompt(
-        `Mehrere Positionen gefunden. Nummer wählen:\n\n${list}`,
-        "1"
-      );
+      const rowsHtml = currentMatches.length
+        ? currentMatches
+            .map((r, i) => {
+              return `
+                <tr>
+                  <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-weight:800;color:#0f172a;">${esc(r.posNr || "—")}</td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;">
+                    <div style="font-weight:800;color:#0f172a;">${esc(r.kurztext || "Ohne Kurztext")}</div>
+                    <div style="font-size:12px;color:#64748b;max-width:620px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.langtext || "")}</div>
+                  </td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#0f172a;">${esc(r.einheit || "—")}</td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#0f172a;">${esc(String(r.menge || ""))}</td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:900;color:#0f172a;">${esc(money(n(r.preis)))}</td>
+                  <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">
+                    <button data-pick-index="${i}" style="padding:9px 13px;border-radius:10px;border:0;background:#2563eb;color:white;font-weight:900;cursor:pointer;">
+                      Übernehmen
+                    </button>
+                  </td>
+                </tr>
+              `;
+            })
+            .join("")
+        : `<tr><td colspan="6" style="padding:24px;text-align:center;color:#64748b;">Keine passende Position gefunden.</td></tr>`;
 
-      if (pick === null) return;
+      const tbody = modal.querySelector("[data-role='rows']");
+      const count = modal.querySelector("[data-role='count']");
+      if (tbody) tbody.innerHTML = rowsHtml;
+      if (count) count.textContent = `${currentMatches.length} Treffer`;
+    };
 
-      const rawIndex = Number(pick) - 1;
-      const idx = Number.isFinite(rawIndex)
-        ? Math.max(0, Math.min(matches.length - 1, rawIndex))
-        : 0;
+    modal.innerHTML = `
+      <div style="padding:22px 26px;border-bottom:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;">
+        <div>
+          <div style="font-size:22px;font-weight:950;color:#0f172a;">Position aus Kalkulation wählen</div>
+          <div style="font-size:13px;color:#475569;margin-top:6px;">
+            Basis: ${esc(String(kalkulationBasis.length))} Positionen / ${esc(money(kalkulationBasisNetto))} RLC-KI
+          </div>
+        </div>
+        <button data-action="close" style="width:42px;height:42px;border-radius:14px;border:1px solid #cbd5e1;background:#fff;font-size:24px;font-weight:900;cursor:pointer;">×</button>
+      </div>
 
-      selected = matches[idx] as KalkulationBasisRow;
-    }
+      <div style="padding:18px 26px;border-bottom:1px solid #e5e7eb;display:flex;gap:12px;align-items:center;">
+        <input data-role="search" placeholder="Suchen nach PosNr, Kurztext oder Langtext..." style="flex:1;padding:13px 15px;border-radius:12px;border:1px solid #cbd5e1;font-size:15px;outline:none;" autofocus />
+        <div data-role="count" style="font-size:13px;font-weight:800;color:#475569;min-width:90px;text-align:right;"></div>
+      </div>
 
-    add({
-      posNr: selected.posNr || "",
-      kurztext: selected.kurztext || "",
-      langtext: selected.langtext || "",
-      einheit: selected.einheit || "",
-      mengeDelta: 0,
-      preis: n(selected.preis),
-      status: "Entwurf",
-      begruendung: "Nachtrag aus Kalkulationsbasis übernommen. Begründung ergänzen.",
+      <div style="overflow:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <thead style="position:sticky;top:0;background:#f1f5f9;z-index:1;">
+            <tr>
+              <th style="padding:11px 12px;text-align:left;color:#334155;">Pos.</th>
+              <th style="padding:11px 12px;text-align:left;color:#334155;">Kurztext / Langtext</th>
+              <th style="padding:11px 12px;text-align:left;color:#334155;">ME</th>
+              <th style="padding:11px 12px;text-align:right;color:#334155;">Menge</th>
+              <th style="padding:11px 12px;text-align:right;color:#334155;">EP netto</th>
+              <th style="padding:11px 12px;text-align:right;color:#334155;">Aktion</th>
+            </tr>
+          </thead>
+          <tbody data-role="rows"></tbody>
+        </table>
+      </div>
+
+      <div style="padding:16px 26px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;">
+        <button data-action="close" style="padding:11px 18px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;font-weight:900;cursor:pointer;">
+          Schließen
+        </button>
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+
+    overlay.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      if (target === overlay || target.dataset.action === "close") {
+        close();
+        return;
+      }
+
+      const pickIndexRaw = target.dataset.pickIndex;
+      if (pickIndexRaw !== undefined) {
+        const selected = currentMatches[Number(pickIndexRaw)];
+        if (!selected) return;
+
+        add({
+          posNr: selected.posNr || "",
+          kurztext: selected.kurztext || "",
+          langtext: selected.langtext || "",
+          einheit: selected.einheit || "",
+          mengeDelta: 0,
+          preis: n(selected.preis),
+          status: "Entwurf",
+          begruendung: "Nachtrag aus Kalkulationsbasis übernommen. Begründung ergänzen.",
+        });
+
+        setInfo(
+          `Nachtrag aus Kalkulationsbasis vorbereitet: ${selected.posNr || ""} ${selected.kurztext || ""}`.trim()
+        );
+
+        close();
+      }
     });
 
-    setInfo(
-      `Nachtrag aus Kalkulationsbasis vorbereitet: ${selected.posNr || ""} ${selected.kurztext || ""}`.trim()
-    );
+    const search = modal.querySelector("[data-role='search']") as HTMLInputElement | null;
+    search?.addEventListener("input", () => renderRows(search.value));
+    renderRows("");
+    setTimeout(() => search?.focus(), 50);
   }
+
   function add(tpl?: Partial<NachtragRow>) {
     const row = normalizeRow({
       id: safeId(),
@@ -3112,6 +3207,7 @@ const badgeCritical: React.CSSProperties = {
   background: "#FEF2F2",
   color: "#B91C1C",
 };
+
 
 
 
