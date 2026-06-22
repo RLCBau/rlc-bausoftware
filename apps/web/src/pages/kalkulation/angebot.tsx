@@ -1731,19 +1731,13 @@ export default function AngebotPage() {
 
         <div style={buttonRow}>
           <button style={btnSecondary} onClick={() => navigate("/kalkulation/lv-import")}>
-            LV bearbeiten
+            LV / Positionen
           </button>
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/rezepte")}>
-            Urkalkulation
+          <button style={btnSecondary} onClick={() => navigate("/kalkulation/mit-ki")}>
+            Kalkulation
           </button>
           <button style={btnSecondary} onClick={() => navigate("/kalkulation/nachtraege")}>
             Nachträge
-          </button>
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/manuell")}>
-            Manuell
-          </button>
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/mit-ki")}>
-            KI-Kalkulation
           </button>
           <button style={btnSecondary} onClick={() => navigate("/kalkulation/gaeb")}>
             GAEB
@@ -1758,7 +1752,7 @@ export default function AngebotPage() {
             <div style={sectionText}>
               {isNachtragOnlyMode
                 ? "Vorschau nur der ausgewählten Nachtragspositionen."
-                : "Kompakte Vorschau aus LV und Nachträgen. Änderungen an Preisen oder Mengen erfolgen in LV, Urkalkulation, Nachträge, Manuell oder KI-Kalkulation."}
+                : "Kompakte Vorschau aus LV, RLC-KI-Kalkulation und Nachträgen. Änderungen erfolgen in LV / Positionen, Kalkulation oder Nachträge."}
             </div>
           </div>
         </div>
@@ -1850,8 +1844,7 @@ export default function AngebotPage() {
               {!offerRows.length && !activeNachtraege.length ? (
                 <tr>
                   <td colSpan={8} style={{ ...td, color: "#64748B" }}>
-                    Kein LV und keine aktiven Nachträge vorhanden. Bitte zuerst Positionen
-                    importieren, manuell erfassen, über Urkalkulation erstellen oder Nachträge übernehmen.
+                    Kein LV und keine aktiven Nachträge vorhanden. Bitte zuerst Positionen importieren, in der Kalkulation berechnen oder Nachträge übernehmen.
                   </td>
                 </tr>
               ) : null}
@@ -2309,6 +2302,9 @@ const sumValue: React.CSSProperties = {
   color: "#0F172A",
   fontWeight: 900,
 };
+
+
+
 
 
 
