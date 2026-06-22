@@ -1467,11 +1467,11 @@ export default function AngebotPage() {
     <div style={page}>
       <PageHeader
         breadcrumb="RLC Module / Kalkulation"
-        title={isNachtragOnlyMode ? "Nachtragsangebot generieren" : "Angebot generieren"}
+        title={isNachtragOnlyMode ? "Nachtragsangebot erstellen" : "Angebot / Export"}
         subtitle={
           isNachtragOnlyMode
             ? "Angebotsausgabe nur für ausgewählte Nachtragspositionen."
-            : "Professionelle Angebotsausgabe aus LV, Urkalkulation, Nachträgen, manueller Kalkulation oder KI-Kalkulation."
+            : "Angebot aus aktueller RLC-KI-Kalkulation, LV und Nachträgen erstellen."
         }
       />
 
@@ -1509,7 +1509,7 @@ export default function AngebotPage() {
           <p style={subtitle}>
             {isNachtragOnlyMode
               ? "Dieses Angebot enthält ausschließlich die ausgewählten Nachtragspositionen."
-              : "Das Angebot liest automatisch den gemeinsamen LV-Store und die vorhandenen Nachträge. Dadurch sind LV, Urkalkulation, Nachträge, Manuell, Preise und KI-Kalkulation sauber verbunden."}
+              : "Das Angebot wird aus der aktuellen RLC-KI-Kalkulation und den vorhandenen Nachträgen erzeugt."}
           </p>
         </div>
 
@@ -2309,6 +2309,7 @@ const sumValue: React.CSSProperties = {
   color: "#0F172A",
   fontWeight: 900,
 };
+
 
 
 

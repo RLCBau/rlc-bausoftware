@@ -1470,28 +1470,107 @@ export default function NachtraegePage() {
         close();
         return;
       }
-
       const pickIndexRaw = target.dataset.pickIndex;
       if (pickIndexRaw !== undefined) {
         const selected = currentMatches[Number(pickIndexRaw)];
         if (!selected) return;
 
-        add({
-          posNr: selected.posNr || "",
-          kurztext: selected.kurztext || "",
-          langtext: selected.langtext || "",
-          einheit: selected.einheit || "",
-          mengeDelta: 0,
-          preis: n(selected.preis),
-          status: "Entwurf",
-          begruendung: "Nachtrag aus Kalkulationsbasis übernommen. Begründung ergänzen.",
+        modal.innerHTML = `
+          <div style="padding:22px 26px;border-bottom:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;">
+            <div>
+              <div style="font-size:22px;font-weight:950;color:#0f172a;">Nachtrag aus Position erstellen</div>
+              <div style="font-size:13px;color:#475569;margin-top:6px;">
+                ${esc(selected.posNr || "—")} · ${esc(selected.kurztext || "Ohne Kurztext")} · EP ${esc(money(n(selected.preis)))}
+              </div>
+            </div>
+            <button data-action="close" style="width:42px;height:42px;border-radius:14px;border:1px solid #cbd5e1;background:#fff;font-size:24px;font-weight:900;cursor:pointer;">×</button>
+          </div>
+
+          <div style="padding:24px 26px;display:grid;gap:18px;">
+            <div style="border:1px solid #e5e7eb;border-radius:16px;padding:16px;background:#f8fafc;">
+              <div style="font-weight:900;color:#0f172a;margin-bottom:6px;">Ausgewählte LV-Position</div>
+              <div style="font-size:14px;color:#0f172a;font-weight:800;">${esc(selected.posNr || "—")} · ${esc(selected.kurztext || "")}</div>
+              <div style="font-size:13px;color:#64748b;margin-top:6px;line-height:1.45;max-height:90px;overflow:auto;">${esc(selected.langtext || "")}</div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px 1fr 180px;gap:14px;">
+              <div>
+                <label style="font-size:12px;font-weight:900;color:#475569;">ME</label>
+                <input value="${esc(selected.einheit || "")}" disabled style="width:100%;margin-top:6px;padding:12px;border-radius:12px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:800;" />
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:900;color:#475569;">Δ-Menge Nachtrag</label>
+                <input data-role="delta" type="number" step="0.01" placeholder="z.B. 10" style="width:100%;margin-top:6px;padding:12px;border-radius:12px;border:1px solid #cbd5e1;font-weight:800;" />
+              </div>
+              <div>
+                <label style="font-size:12px;font-weight:900;color:#475569;">EP netto</label>
+                <input value="${esc(money(n(selected.preis)))}" disabled style="width:100%;margin-top:6px;padding:12px;border-radius:12px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:800;text-align:right;" />
+              </div>
+            </div>
+
+            <div>
+              <label style="font-size:12px;font-weight:900;color:#475569;">Begründung</label>
+              <textarea data-role="reason" placeholder="Warum ist dieser Nachtrag notwendig?" style="width:100%;min-height:110px;margin-top:6px;padding:12px;border-radius:12px;border:1px solid #cbd5e1;font-size:14px;line-height:1.45;"></textarea>
+            </div>
+
+            <div data-role="error" style="display:none;color:#b91c1c;font-weight:800;font-size:13px;"></div>
+          </div>
+
+          <div style="padding:16px 26px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:space-between;gap:10px;">
+            <button data-action="back" style="padding:11px 18px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;font-weight:900;cursor:pointer;">
+              Zurück
+            </button>
+            <button data-action="create-nachtrag" style="padding:11px 18px;border-radius:12px;border:0;background:#2563eb;color:white;font-weight:950;cursor:pointer;">
+              Nachtrag erstellen
+            </button>
+          </div>
+        `;
+
+        const deltaInput = modal.querySelector("[data-role='delta']") as HTMLInputElement | null;
+        setTimeout(() => deltaInput?.focus(), 50);
+
+        modal.querySelector("[data-action='back']")?.addEventListener("click", () => {
+          addFromKalkulationBasis();
         });
 
-        setInfo(
-          `Nachtrag aus Kalkulationsbasis vorbereitet: ${selected.posNr || ""} ${selected.kurztext || ""}`.trim()
-        );
+        modal.querySelector("[data-action='create-nachtrag']")?.addEventListener("click", () => {
+          const delta = n((modal.querySelector("[data-role='delta']") as HTMLInputElement | null)?.value);
+          const reason = String((modal.querySelector("[data-role='reason']") as HTMLTextAreaElement | null)?.value || "").trim();
+          const errorBox = modal.querySelector("[data-role='error']") as HTMLElement | null;
 
-        close();
+          if (delta === 0) {
+            if (errorBox) {
+              errorBox.style.display = "block";
+              errorBox.textContent = "Bitte eine Δ-Menge ungleich 0 eingeben.";
+            }
+            return;
+          }
+
+          if (!reason) {
+            if (errorBox) {
+              errorBox.style.display = "block";
+              errorBox.textContent = "Bitte eine Begründung eingeben.";
+            }
+            return;
+          }
+
+          add({
+            posNr: selected.posNr || "",
+            kurztext: selected.kurztext || "",
+            langtext: selected.langtext || "",
+            einheit: selected.einheit || "",
+            mengeDelta: delta,
+            preis: n(selected.preis),
+            status: "Entwurf",
+            begruendung: reason,
+          });
+
+          setInfo(
+            `Nachtrag erstellt: ${selected.posNr || ""} ${selected.kurztext || ""}`.trim()
+          );
+
+          close();
+        });
       }
     });
 
@@ -3207,6 +3286,7 @@ const badgeCritical: React.CSSProperties = {
   background: "#FEF2F2",
   color: "#B91C1C",
 };
+
 
 
 
