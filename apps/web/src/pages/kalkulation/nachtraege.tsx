@@ -1335,6 +1335,77 @@ export default function NachtraegePage() {
     [recipeDraft]
   );
 
+  function addFromKalkulationBasis() {
+    if (!kalkulationBasis.length) {
+      setInfo("Keine Kalkulationsbasis vorhanden. Bitte zuerst die Kalkulation berechnen.");
+      return;
+    }
+
+    const term = prompt(
+      "Position aus Kalkulation wählen: PosNr oder Suchtext eingeben",
+      ""
+    );
+
+    if (term === null) return;
+
+    const q = String(term || "").trim().toLowerCase();
+
+    const matches = kalkulationBasis
+      .filter((r) => {
+        if (!q) return true;
+
+        return (
+          String(r.posNr || "").toLowerCase().includes(q) ||
+          String(r.kurztext || "").toLowerCase().includes(q) ||
+          String(r.langtext || "").toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 20);
+
+    if (!matches.length) {
+      setInfo("Keine passende Position in der Kalkulationsbasis gefunden.");
+      return;
+    }
+
+    let selected: KalkulationBasisRow = matches[0] as KalkulationBasisRow;
+
+    if (matches.length > 1) {
+      const list = matches
+        .map((r, i) => {
+          return `${i + 1}) ${r.posNr || "—"} · ${r.kurztext || "Ohne Kurztext"} · ${r.einheit || "—"} · ${money(n(r.preis))}`;
+        })
+        .join("\n");
+
+      const pick = prompt(
+        `Mehrere Positionen gefunden. Nummer wählen:\n\n${list}`,
+        "1"
+      );
+
+      if (pick === null) return;
+
+      const rawIndex = Number(pick) - 1;
+      const idx = Number.isFinite(rawIndex)
+        ? Math.max(0, Math.min(matches.length - 1, rawIndex))
+        : 0;
+
+      selected = matches[idx] as KalkulationBasisRow;
+    }
+
+    add({
+      posNr: selected.posNr || "",
+      kurztext: selected.kurztext || "",
+      langtext: selected.langtext || "",
+      einheit: selected.einheit || "",
+      mengeDelta: 0,
+      preis: n(selected.preis),
+      status: "Entwurf",
+      begruendung: "Nachtrag aus Kalkulationsbasis übernommen. Begründung ergänzen.",
+    });
+
+    setInfo(
+      `Nachtrag aus Kalkulationsbasis vorbereitet: ${selected.posNr || ""} ${selected.kurztext || ""}`.trim()
+    );
+  }
   function add(tpl?: Partial<NachtragRow>) {
     const row = normalizeRow({
       id: safeId(),
@@ -1833,7 +1904,7 @@ export default function NachtraegePage() {
         </div>
 
         <div style={heroActions}>
-          <button style={btnPrimary} onClick={() => add()}>
+          <button style={btnPrimary} onClick={addFromKalkulationBasis}>
             + Nachtrag
           </button>
 
@@ -1852,16 +1923,9 @@ export default function NachtraegePage() {
 
           <button
             style={btnSecondary}
-            onClick={() => navigate("/kalkulation/manuell")}
-          >
-            Zur manuellen Kalkulation
-          </button>
-
-          <button
-            style={btnSecondary}
             onClick={() => navigate("/kalkulation/mit-ki")}
           >
-            Zur KI-Kalkulation
+            Zur Kalkulation
           </button>
 
           <button
@@ -3048,6 +3112,10 @@ const badgeCritical: React.CSSProperties = {
   background: "#FEF2F2",
   color: "#B91C1C",
 };
+
+
+
+
 
 
 
