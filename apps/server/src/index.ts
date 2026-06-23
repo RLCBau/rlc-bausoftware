@@ -35,6 +35,7 @@ import whoamiRoutes from "./routes/whoami";
 /* ---- ROUTES (domain) ---- */
 import gaebRoutes from "./routes/gaeb.routes";
 import versionsvergleichRoutes from "./routes/versionsvergleich";
+import kalkulationStorageRoutes from "./routes/kalkulation.storage";
 import kiRoutes from "./routes/ki";
 import abrechnungRoutes from "./routes/abrechnung";
 import buchhaltungRoutes from "./routes/buchhaltung";
@@ -1161,6 +1162,17 @@ app.use(
   kalkulationKiRoutes
 );
 
+
+
+app.use(
+  "/api/kalkulation/storage",
+  requireAuth,
+  requireServerLicense(),
+  requireVerifiedEmail,
+  requireCompany,
+  requireActiveSubscription,
+  kalkulationStorageRoutes
+);
 
 app.use(
   "/api/kalkulation/angebot",
