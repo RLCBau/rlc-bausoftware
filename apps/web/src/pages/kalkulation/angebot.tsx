@@ -722,7 +722,24 @@ export default function AngebotPage() {
       isNachtragOnlyMode ? "nachtrag-only" : "full"
     );
 
+    
     try {
+      localStorage.setItem(
+        "rlc_kalkulation_angebot_handoff_v1",
+        JSON.stringify({
+          version: "angebot-handoff-v1",
+          source: "angebot",
+          meta: snapshot.meta,
+          totals: snapshot.totals,
+          summary: snapshot.totals,
+          offer: {
+            number: `ANG-${projectKey}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
+            clientName: "",
+          },
+          savedAt: new Date().toISOString(),
+        })
+      );
+
       setServerBusy(true);
       setStatus("Speichere Angebot …");
 
@@ -750,7 +767,7 @@ export default function AngebotPage() {
         return;
       }
 
-      setStatus("Angebot gespeichert");
+      setStatus("Angebot gespeichert · lokal für Angebotsverfolgung verfügbar");
       setTimeout(() => setStatus(""), 2200);
     } catch {
       localStorage.setItem(localBackupKey(projectKey), JSON.stringify(snapshot));
@@ -2302,6 +2319,9 @@ const sumValue: React.CSSProperties = {
   color: "#0F172A",
   fontWeight: 900,
 };
+
+
+
 
 
 
