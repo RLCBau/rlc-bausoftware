@@ -1,5 +1,6 @@
 ﻿// apps/web/src/pages/kalkulation/Versionsvergleich.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { apiUrl } from "../../lib/apiBase";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProject } from "../../store/useProject";
@@ -213,7 +214,12 @@ function loadVersions(projectKey: string): VersionRow[] {
 }
 
 function saveVersions(projectKey: string, versions: VersionRow[]) {
-  localStorage.setItem(storeKey(projectKey), JSON.stringify(versions));
+  try {
+    localStorage.setItem(storeKey(projectKey), JSON.stringify(versions));
+  } catch {
+    // Große Versionsvergleiche werden serverseitig gespeichert.
+    // LocalStorage bleibt nur ein optionaler Browser-Cache.
+  }
 }
 function analysisStoreKey(projectKey: string): string {
   return `rlc_versionsvergleich_analysis_v1:${projectKey}`;
@@ -244,6 +250,49 @@ function saveAnalysisResult(projectKey: string, result: AnalysisResult) {
   } catch {
     //
   }
+}
+
+function getVersionAuthHeaders(extra: Record<string, string> = {}) {
+  const token =
+    localStorage.getItem("rlc_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    localStorage.getItem("accessToken") ||
+    sessionStorage.getItem("rlc_token") ||
+    sessionStorage.getItem("token") ||
+    "";
+
+  return {
+    ...extra,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+function extractServerVersions(data: any): VersionRow[] {
+  const raw =
+    data?.data?.versions ||
+    data?.versions ||
+    data?.snapshot?.data?.versions ||
+    [];
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+function extractServerAnalysis(data: any): AnalysisResult | null {
+  const raw =
+    data?.data?.analysis ||
+    data?.analysis ||
+    data?.snapshot?.data?.analysis ||
+    null;
+
+  if (!raw || typeof raw.title !== "string") return null;
+
+  return {
+    title: String(raw.title || ""),
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+    changes: Array.isArray(raw.changes) ? raw.changes.map(String) : [],
+    unchanged: Array.isArray(raw.unchanged) ? raw.unchanged.map(String) : [],
+  };
 }
 function extractRowsFromStoredCalc(parsed: any): any[] {
   if (Array.isArray(parsed)) return parsed;
@@ -731,7 +780,157 @@ export default function VersionsvergleichPage() {
     saveVersions(projectKey, next);
   }
 
-  function createSnapshot() {
+  
+  async function saveVersionsToServer() {
+    try {
+      setInfo("Speichere Versionsvergleich auf Server …");
+
+      const res = await fetch(
+        apiUrl(`/api/kalkulation/storage/versionsvergleich/${encodeURIComponent(projectKey || "NO_PROJECT")}/save`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: getVersionAuthHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({
+            data: {
+              versions,
+              selected,
+              viewMode,
+              savedAt: new Date().toISOString(),
+              projectKey,
+              projectName,
+            },
+          }),
+        }
+      );
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || json?.ok === false) {
+        setInfo(`Server-Speichern fehlgeschlagen: ${json?.error || res.status}`);
+        return;
+      }
+
+      setInfo(`Versionsvergleich auf Server gespeichert · ${versions.length} Version(en).`);
+    } catch (e: any) {
+      setInfo(`Server-Speichern fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
+    }
+  }
+
+  async function loadVersionsFromServer() {
+    try {
+      setInfo("Lade Versionsvergleich vom Server …");
+
+      const res = await fetch(
+        apiUrl(`/api/kalkulation/storage/versionsvergleich/${encodeURIComponent(projectKey || "NO_PROJECT")}`),
+        {
+          method: "GET",
+          credentials: "include",
+          headers: getVersionAuthHeaders(),
+        }
+      );
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || json?.ok === false) {
+        setInfo(`Server-Laden fehlgeschlagen: ${json?.error || res.status}`);
+        return;
+      }
+
+      const serverVersions = extractServerVersions(json);
+
+      if (!serverVersions.length) {
+        setInfo("Keine Vergleichsversionen auf dem Server gefunden.");
+        return;
+      }
+
+      setVersions(serverVersions);
+      setSelected(json?.data?.selected || {});
+      setViewMode(json?.data?.viewMode || "all");
+      setInfo(`Versionsvergleich vom Server geladen · ${serverVersions.length} Version(en). Lokaler Browser-Speicher wurde nicht überschrieben.`);
+    } catch (e: any) {
+      setInfo(`Server-Laden fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
+    }
+  }
+
+  async function saveAnalysisToServer(resultOverride?: AnalysisResult | null) {
+    const current = resultOverride || analysis;
+
+    if (!current) {
+      setInfo("Keine Analyse vorhanden. Bitte zuerst Analyse starten.");
+      return;
+    }
+
+    try {
+      setInfo("Speichere Angebotsanalyse auf Server …");
+
+      const res = await fetch(
+        apiUrl(`/api/kalkulation/storage/angebotsanalyse/${encodeURIComponent(projectKey || "NO_PROJECT")}/save`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: getVersionAuthHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({
+            data: {
+              analysis: current,
+              selected,
+              selectedVersionIds: selectedVersions.map((v) => v.id),
+              savedAt: new Date().toISOString(),
+              projectKey,
+              projectName,
+            },
+          }),
+        }
+      );
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || json?.ok === false) {
+        setInfo(`Analyse-Server-Speichern fehlgeschlagen: ${json?.error || res.status}`);
+        return;
+      }
+
+      setInfo("Angebotsanalyse auf Server gespeichert.");
+    } catch (e: any) {
+      setInfo(`Analyse-Server-Speichern fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
+    }
+  }
+
+  async function loadAnalysisFromServer() {
+    try {
+      setInfo("Lade Angebotsanalyse vom Server …");
+
+      const res = await fetch(
+        apiUrl(`/api/kalkulation/storage/angebotsanalyse/${encodeURIComponent(projectKey || "NO_PROJECT")}`),
+        {
+          method: "GET",
+          credentials: "include",
+          headers: getVersionAuthHeaders(),
+        }
+      );
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || json?.ok === false) {
+        setInfo(`Analyse-Server-Laden fehlgeschlagen: ${json?.error || res.status}`);
+        return;
+      }
+
+      const serverAnalysis = extractServerAnalysis(json);
+
+      if (!serverAnalysis) {
+        setInfo("Keine Angebotsanalyse auf dem Server gefunden.");
+        return;
+      }
+
+      setAnalysis(serverAnalysis);
+      saveAnalysisResult(projectKey, serverAnalysis);
+      setInfo("Angebotsanalyse vom Server geladen.");
+    } catch (e: any) {
+      setInfo(`Analyse-Server-Laden fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
+    }
+  }
+function createSnapshot() {
     const loaded = loadCurrentVersionRows(projectKey);
     const lvRows = loaded.rows;
 
@@ -870,6 +1069,7 @@ export default function VersionsvergleichPage() {
           const result = analyseVersion(selectedVersions[0]);
           setAnalysis(result);
           saveAnalysisResult(projectKey, result);
+          void saveAnalysisToServer(result);
           setInfo("Angebotsanalyse der ausgewählten Version erstellt und gespeichert.");
           return;
         }
@@ -878,6 +1078,7 @@ export default function VersionsvergleichPage() {
           const result = analyseCompare(compareRows, selectedVersions);
           setAnalysis(result);
           saveAnalysisResult(projectKey, result);
+          void saveAnalysisToServer(result);
           setInfo("Versionsvergleich der ausgewählten Versionen erstellt und gespeichert.");
           return;
         }
@@ -1005,6 +1206,21 @@ export default function VersionsvergleichPage() {
 
           <button style={btnPrimary} disabled={!selectedVersions.length} onClick={runAnalysis}>
             Analyse starten
+          </button>
+          <button style={btnSecondary} disabled={!versions.length} onClick={saveVersionsToServer}>
+            Server speichern
+          </button>
+
+          <button style={btnSecondary} onClick={loadVersionsFromServer}>
+            Server laden
+          </button>
+
+          <button style={btnSecondary} disabled={!analysis} onClick={() => saveAnalysisToServer()}>
+            Analyse speichern
+          </button>
+
+          <button style={btnSecondary} onClick={loadAnalysisFromServer}>
+            Analyse laden
           </button>
 
           <button
@@ -1625,6 +1841,15 @@ const emptyCell: React.CSSProperties = {
   color: "#64748B",
   fontSize: 13,
 };
+
+
+
+
+
+
+
+
+
 
 
 
