@@ -1,7 +1,7 @@
 ﻿// apps/mobile/App.tsx
 import "react-native-gesture-handler";
 import React, { useEffect } from "react";
-import { View } from "react-native";
+import { View, StatusBar } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -176,7 +176,7 @@ function withGlobalKi(ScreenComponent: any, screenName: string) {
       };
 
     return (
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: "#F4F7FB" }}>
         <ScreenComponent {...props} />
         <RlcKiFloatingButton
           projectId={String(params.projectId || projectCode || "").trim()}
@@ -248,6 +248,7 @@ export default function App() {
 
   return (
     <NavigationContainer>
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F7FB" />
       <Stack.Navigator
         initialRouteName="Start"
         screenOptions={{
@@ -436,6 +437,7 @@ export default function App() {
     </NavigationContainer>
   );
 }
+
 
 
 
