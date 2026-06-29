@@ -37,7 +37,7 @@ import {
   type QueueItem,
 } from "../lib/offlineQueue";
 import { DocActionBar } from "../components/DocActionBar";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Regie">;
 
@@ -685,10 +685,10 @@ export default function RegieScreen({ route, navigation }: Props) {
         backgroundColor: "#12324A",
       },
       headerTitleStyle: {
-        color: "#FFFFFF",
+        color: COLORS.card,
         fontWeight: "800",
       },
-      headerTintColor: "#FFFFFF",
+      headerTintColor: COLORS.card,
       headerRight: undefined,
     });
   }, [navigation, projectId, projectFsKey]);
@@ -2450,7 +2450,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-  wrap: { padding: 16, paddingBottom: 30, gap: 12 },
+  wrap: { padding: RLC_SPACING.page, paddingBottom: 30, gap: 12 },
 
   headerRow: {
     flexDirection: "row",
@@ -2535,7 +2535,7 @@ const s = StyleSheet.create({
     gap: 10,
     ...Platform.select({
       ios: {
-        shadowColor: "#0F172A",
+        shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 6 },
@@ -2569,7 +2569,7 @@ const s = StyleSheet.create({
     gap: 12,
     ...Platform.select({
       ios: {
-        shadowColor: "#0F172A",
+        shadowColor: COLORS.text,
         shadowOpacity: 0.05,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 4 },
@@ -2631,7 +2631,7 @@ const s = StyleSheet.create({
   thumbWrap: {
     width: 92,
     height: 92,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     overflow: "hidden",
     position: "relative",
   },
@@ -2650,7 +2650,7 @@ const s = StyleSheet.create({
   thumbDelTxt: { color: "#fff", fontWeight: "900" },
 
   attCard: {
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     padding: 10,
     backgroundColor: COLORS.card2,
     borderWidth: 1,
@@ -2724,7 +2724,7 @@ const s = StyleSheet.create({
   },
   modalCard: {
     width: "100%",
-    borderRadius: 18,
+    borderRadius: RLC_RADIUS.card,
     padding: 14,
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -2759,6 +2759,7 @@ const s = StyleSheet.create({
   },
   modalBtnTxt: { color: COLORS.textLight, fontWeight: "900" },
 });
+
 
 
 

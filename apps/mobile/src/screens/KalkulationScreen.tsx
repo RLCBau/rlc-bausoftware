@@ -18,7 +18,7 @@ import type { RouteProp } from "@react-navigation/native";
 
 import type { KalkulationFilterType, RootStackParamList } from "../navigation/types";
 import { api } from "../lib/api";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Rt = RouteProp<RootStackParamList, "Kalkulation">;
@@ -573,14 +573,14 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.bg },
   centerText: { marginTop: 12, fontWeight: "900", color: COLORS.text },
 
-  header: { padding: 16, paddingBottom: 10, backgroundColor: COLORS.bg },
+  header: { padding: RLC_SPACING.page, paddingBottom: 10, backgroundColor: COLORS.bg },
   headerTitle: { color: COLORS.text, fontSize: 34, fontWeight: "900", lineHeight: 40 },
   headerSub: { color: COLORS.sub, marginTop: 4, fontWeight: "900", fontSize: 16 },
   statsRow: { flexDirection: "row", gap: 8, marginTop: 14 },
   statBox: {
     flex: 1,
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     padding: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -623,13 +623,13 @@ const styles = StyleSheet.create({
 
   rows: { paddingHorizontal: 16, paddingBottom: 26 },
   emptyRows: { flexGrow: 1, alignItems: "center", justifyContent: "center" },
-  emptyState: { margin: 16, padding: 16, borderRadius: 16, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
+  emptyState: { margin: 16, padding: RLC_SPACING.page, borderRadius: 16, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
   emptyTitle: { color: COLORS.text, fontWeight: "900", fontSize: 20, marginBottom: 8 },
   emptyText: { color: COLORS.sub, fontWeight: "900", lineHeight: 20 },
   emptyAction: { marginTop: 14, backgroundColor: COLORS.accent, borderRadius: 12, padding: 14, alignItems: "center" },
   emptyActionText: { color: "#fff", fontWeight: "900" },
 
-  card: { backgroundColor: COLORS.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border, marginBottom: 10 },
+  card: { backgroundColor: COLORS.card, borderRadius: RLC_RADIUS.button, padding: 14, borderWidth: 1, borderColor: COLORS.border, marginBottom: 10 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "flex-start" },
   pos: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
   gp: { color: COLORS.text, fontSize: 18, fontWeight: "900", maxWidth: "62%", textAlign: "right" },
@@ -638,5 +638,6 @@ const styles = StyleSheet.create({
   meta: { color: COLORS.sub, backgroundColor: COLORS.card2, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, fontWeight: "900", fontSize: 12 },
   warning: { color: "#92400e", marginTop: 10, fontWeight: "800", lineHeight: 18 },
 });
+
 
 

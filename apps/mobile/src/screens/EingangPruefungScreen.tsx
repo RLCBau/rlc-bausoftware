@@ -34,7 +34,7 @@ import { getProjectRoles } from "../storage/projectMeta";
 import { queueFlush, queueIsLocked, QueueItem } from "../lib/offlineQueue";
 
 // Theme
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 
 // ✅ PDF Exporter + Mail
 import {
@@ -2774,7 +2774,7 @@ const s = StyleSheet.create({
   headerBtn: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     borderWidth: 1,
     borderColor: UI.border,
     backgroundColor: UI.card,
@@ -2792,7 +2792,7 @@ const s = StyleSheet.create({
   headerBtnAccent: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     borderWidth: 1,
     borderColor: UI.accentDark,
     backgroundColor: UI.accentDark,
@@ -2808,8 +2808,8 @@ const s = StyleSheet.create({
   },
 
   listPad: {
-    padding: 16,
-    paddingBottom: 28,
+    padding: RLC_SPACING.page,
+    paddingBottom: RLC_SPACING.bottomKi,
     gap: 12,
   },
 
@@ -2957,8 +2957,8 @@ const s = StyleSheet.create({
   },
 
   emptyCard: {
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: RLC_RADIUS.card,
+    padding: RLC_SPACING.page,
     backgroundColor: UI.card,
     borderWidth: 1,
     borderColor: UI.border,
@@ -2982,14 +2982,14 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.45)",
     justifyContent: "center",
-    padding: 16,
+    padding: RLC_SPACING.page,
   },
 
   modalCard: {
     width: "100%",
     maxWidth: 520,
     alignSelf: "center",
-    borderRadius: 18,
+    borderRadius: RLC_RADIUS.card,
     padding: 14,
     backgroundColor: UI.card,
     borderWidth: 1,
@@ -3026,7 +3026,7 @@ const s = StyleSheet.create({
     borderColor: UI.border,
     backgroundColor: UI.inputBg,
     color: UI.text,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     paddingHorizontal: 12,
     paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }) as any,
     textAlignVertical: "top",
@@ -3042,7 +3042,7 @@ const s = StyleSheet.create({
   modalBtnSecondary: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     borderWidth: 1,
     borderColor: UI.border,
     backgroundColor: UI.card2,
@@ -3060,7 +3060,7 @@ const s = StyleSheet.create({
   modalBtnDanger: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     borderWidth: 1,
     borderColor: "#C33",
     backgroundColor: "#C33",
@@ -3075,6 +3075,7 @@ const s = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
 
 
 

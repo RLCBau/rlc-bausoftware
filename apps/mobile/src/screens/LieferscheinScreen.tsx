@@ -40,7 +40,7 @@ import { queueAdd } from "../lib/offlineQueue";
 // Action bar
 import { DocActionBar } from "../components/DocActionBar";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Lieferschein">;
 
@@ -750,10 +750,10 @@ export default function LieferscheinScreen({ route, navigation }: Props) {
         backgroundColor: "#12324A",
       },
       headerTitleStyle: {
-        color: "#FFFFFF",
+        color: COLORS.card,
         fontWeight: "800",
       },
-      headerTintColor: "#FFFFFF",
+      headerTintColor: COLORS.card,
       headerRight: undefined,
     });
   }, [navigation, projectId, projectFsKey, mode]);
@@ -2225,7 +2225,7 @@ ${materialText}` : ""}${warnings}`,
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-  wrap: { padding: 16, paddingBottom: 30, gap: 12 },
+  wrap: { padding: RLC_SPACING.page, paddingBottom: 30, gap: 12 },
 
   headerRow: {
     flexDirection: "row",
@@ -2310,7 +2310,7 @@ const s = StyleSheet.create({
     gap: 10,
     ...Platform.select({
       ios: {
-        shadowColor: "#0F172A",
+        shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 6 },
@@ -2351,7 +2351,7 @@ const s = StyleSheet.create({
     gap: 12,
     ...Platform.select({
       ios: {
-        shadowColor: "#0F172A",
+        shadowColor: COLORS.text,
         shadowOpacity: 0.05,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 4 },
@@ -2388,7 +2388,7 @@ const s = StyleSheet.create({
   },
 
   attCard: {
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     padding: 10,
     backgroundColor: COLORS.card2,
     borderWidth: 1,
@@ -2466,7 +2466,7 @@ const s = StyleSheet.create({
   },
   modalCard: {
     width: "100%",
-    borderRadius: 18,
+    borderRadius: RLC_RADIUS.card,
     padding: 14,
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -2501,6 +2501,7 @@ const s = StyleSheet.create({
   },
   modalBtnTxt: { color: COLORS.textLight, fontWeight: "900" },
 });
+
 
 
 

@@ -13,7 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
@@ -849,7 +849,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
-  wrap: { padding: 16, paddingBottom: 28 },
+  wrap: { padding: RLC_SPACING.page, paddingBottom: RLC_SPACING.bottomKi },
 
   center: {
     flex: 1,
@@ -897,7 +897,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     padding: 12,
     marginBottom: 12,
   },
@@ -941,7 +941,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 12,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     marginBottom: 10,
     backgroundColor: COLORS.card,
   },
@@ -1075,6 +1075,7 @@ const s = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
 
 
 

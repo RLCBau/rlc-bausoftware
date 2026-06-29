@@ -19,7 +19,7 @@ import * as XLSX from "xlsx";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
@@ -1294,7 +1294,7 @@ const s = StyleSheet.create({
   loading: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
 
   wrap: {
-    padding: 16,
+    padding: RLC_SPACING.page,
     paddingBottom: 32,
     backgroundColor: COLORS.bg,
   },
@@ -1416,7 +1416,7 @@ const s = StyleSheet.create({
 
   input: {
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.inputBg,
@@ -1465,7 +1465,7 @@ const s = StyleSheet.create({
 
   readonlyBox: {
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.bg,
@@ -1529,7 +1529,7 @@ const s = StyleSheet.create({
 
   summary: {
     borderRadius: 20,
-    padding: 16,
+    padding: RLC_SPACING.page,
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -1621,7 +1621,7 @@ const s = StyleSheet.create({
   actionBtn: {
     flex: 1,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
@@ -1660,6 +1660,7 @@ const s = StyleSheet.create({
     opacity: 0.6,
   },
 });
+
 
 
 

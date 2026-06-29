@@ -29,7 +29,7 @@ import { RootStackParamList } from "../navigation/types";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { api, looksLikeProjectCode } from "../lib/api";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 import { DocActionBar } from "../components/DocActionBar";
 
 import {
@@ -825,10 +825,10 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
         backgroundColor: "#12324A",
       },
       headerTitleStyle: {
-        color: "#FFFFFF",
+        color: COLORS.card,
         fontWeight: "800",
       },
-      headerTintColor: "#FFFFFF",
+      headerTintColor: COLORS.card,
       headerRight: undefined,
     });
   }, [navigation, projectId, baKey, projectCodeParam, mode]);
@@ -1909,7 +1909,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: RLC_SPACING.page, paddingBottom: 40 }}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backTxt}>Zurück</Text>
@@ -2349,7 +2349,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     ...Platform.select({
       ios: {
-        shadowColor: "#0F172A",
+        shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 6 },
@@ -2394,7 +2394,7 @@ const styles = StyleSheet.create({
   previewMain: {
     width: "100%",
     height: 220,
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     backgroundColor: COLORS.card2,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -2424,7 +2424,7 @@ const styles = StyleSheet.create({
   link: { color: COLORS.accent, fontWeight: "900" },
 
   histRow: {
-    borderRadius: 14,
+    borderRadius: RLC_RADIUS.button,
     padding: 12,
     backgroundColor: COLORS.card2,
     borderWidth: 1,
@@ -2452,10 +2452,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.45)",
     justifyContent: "flex-end",
-    padding: 16,
+    padding: RLC_SPACING.page,
   },
   modalCard: {
-    borderRadius: 18,
+    borderRadius: RLC_RADIUS.card,
     padding: 14,
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -2485,6 +2485,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
 });
+
 
 
 

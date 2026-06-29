@@ -16,7 +16,7 @@ import type { RouteProp } from "@react-navigation/native";
 
 import type { RootStackParamList } from "../navigation/types";
 import { api } from "../lib/api";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING, RLC_RADIUS } from "../ui/theme";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Rt = RouteProp<RootStackParamList, "KiCalculation">;
@@ -453,7 +453,7 @@ function Info({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { padding: RLC_SPACING.page, paddingBottom: 32 },
   hero: { backgroundColor: COLORS.card, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
   heroTitle: { color: COLORS.text, fontSize: 34, fontWeight: "900", lineHeight: 40 },
   heroSub: { color: COLORS.sub, marginTop: 4, fontWeight: "900", fontSize: 16 },
@@ -476,5 +476,6 @@ const styles = StyleSheet.create({
   action: { backgroundColor: COLORS.card2, borderRadius: 12, padding: 14, alignItems: "center" },
   actionText: { color: COLORS.text, fontWeight: "900" },
 });
+
 
 
