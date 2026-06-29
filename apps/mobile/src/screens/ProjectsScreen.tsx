@@ -1,4 +1,4 @@
-// apps/mobile/src/screens/ProjectsScreen.tsx
+﻿// apps/mobile/src/screens/ProjectsScreen.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -11,6 +11,10 @@ import {
   TextInput,
   RefreshControl,
   Platform,
+  Modal,
+  KeyboardAvoidingView,
+  ScrollView,
+  Keyboard,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -24,6 +28,7 @@ import {
   // @ts-ignore (se non esiste, rimuovi questa riga)
   IS_DEV,
 } from "../lib/api";
+import { COLORS } from "../ui/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Projects">;
 
@@ -41,12 +46,7 @@ type ProjectCounters = {
   ls: Counter;
 };
 
-const ZERO: Counter = {
-  draft: 0,
-  eingereicht: 0,
-  freigegeben: 0,
-  abgelehnt: 0,
-};
+const ZERO: Counter = { draft: 0, eingereicht: 0, freigegeben: 0, abgelehnt: 0 };
 
 /** AsyncStorage keys */
 const KEY_MODE = "rlc_mobile_mode";
@@ -94,9 +94,7 @@ function titleOf(p: Project) {
 
 function subOf(p: Project) {
   const code = String((p as any)?.code || "").trim();
-  const num = String(
-    (p as any)?.baustellenNummer || (p as any)?.number || ""
-  ).trim();
+  const num = String((p as any)?.baustellenNummer || (p as any)?.number || "").trim();
   const ort = String((p as any)?.ort || (p as any)?.place || "").trim();
   const kunde = String((p as any)?.kunde || (p as any)?.client || "").trim();
 
@@ -186,9 +184,7 @@ function lieferscheinKeys(projectKey: string) {
   };
 }
 
-async function loadCountersForProject(
-  projectKey: string
-): Promise<ProjectCounters> {
+async function loadCountersForProject(projectKey: string): Promise<ProjectCounters> {
   const rk = regieKeys(projectKey);
   const lk = lieferscheinKeys(projectKey);
 
@@ -223,9 +219,9 @@ function sumCounter(c: Counter) {
 =========================== */
 
 type LocalProject = {
-  id: string; // local id
+  id: string;
   name: string;
-  code?: string; // BA-...
+  code?: string;
   baustellenNummer?: string;
   ort?: string;
   kunde?: string;
@@ -263,8 +259,7 @@ function makeLocalId() {
 
 /** ✅ FlatList keys: make them unique even if backend returns duplicate ids */
 function listKeyOf(p: Project, index: number) {
-  const base = String((p as any)?.id || projectFsKey(p) || "").trim() || "row";
-  // index suffix prevents React "same key" warning when duplicates exist
+  const base = String(projectFsKey(p) || (p as any)?.id || "").trim() || "row";
   return `${base}__${index}`;
 }
 
@@ -278,22 +273,31 @@ export default function ProjectsScreen({ navigation }: Props) {
   const [q, setQ] = useState("");
 
   const [mode, setMode] = useState<"SERVER_SYNC" | "NUR_APP">("SERVER_SYNC");
-
   const isStandalone = mode === ("NUR_APP" as any);
 
-  // ✅ BA code map state (scoped by mode)
   const [codeMap, setCodeMap] = useState<Record<string, string>>({});
 
-  // editing state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
 
-  // ✅ when user tapped a project without BA-code, we remember and navigate right after saving
   const [pendingOpen, setPendingOpen] = useState<Project | null>(null);
 
-  // counters[fsKey] = { regie, ls }
   const [counters, setCounters] = useState<Record<string, ProjectCounters>>({});
   const countersReqId = useRef(0);
+
+  const [newOpen, setNewOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newClient, setNewClient] = useState("");
+  const [newPlace, setNewPlace] = useState("");
+  const [newNumber, setNewNumber] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const resetNewForm = useCallback(() => {
+    setNewName("");
+    setNewClient("");
+    setNewPlace("");
+    setNewNumber("");
+  }, []);
 
   const readMode = useCallback(async (): Promise<"SERVER_SYNC" | "NUR_APP"> => {
     try {
@@ -304,7 +308,6 @@ export default function ProjectsScreen({ navigation }: Props) {
       }
     } catch {}
 
-    // ✅ FIX: always keep state consistent with returned fallback
     setMode("SERVER_SYNC");
     return "SERVER_SYNC";
   }, []);
@@ -318,13 +321,9 @@ export default function ProjectsScreen({ navigation }: Props) {
     try {
       setLoading(true);
 
-      // always re-check mode (in case user switched)
       const mNow = await readMode();
-
-      // always refresh code map (scoped)
       await readCodeMap(mNow);
 
-      // STANDALONE: load local projects
       if (mNow === "NUR_APP") {
         const local = await loadLocalProjects();
         const arr = local.map(localToProject);
@@ -348,11 +347,9 @@ export default function ProjectsScreen({ navigation }: Props) {
         if (myReq === countersReqId.current) {
           setCounters((prev) => ({ ...prev, ...next }));
         }
-
         return;
       }
 
-      // SERVER_SYNC: load from api
       const list = await api.projects();
       const arr = Array.isArray(list) ? list : [];
       setItems(arr);
@@ -426,24 +423,14 @@ export default function ProjectsScreen({ navigation }: Props) {
         return;
       }
 
-      // ✅ BA code from map first, fallback to p.code
-      const baCode = getBaForProject(
-        codeMap,
-        projectId,
-        String((p as any)?.code || "")
-      );
+      const baCode = getBaForProject(codeMap, projectId, String((p as any)?.code || ""));
       const codeOk = looksLikeProjectCode(baCode);
 
-      // ✅ SERVER_SYNC: se BA mancante/errato -> resta qui e chiedi BA
       if (!isStandalone && !codeOk) {
-        const current = getBaForProject(
-          codeMap,
-          projectId,
-          String((p as any)?.code || "")
-        );
+        const current = getBaForProject(codeMap, projectId, String((p as any)?.code || ""));
         setEditingId(projectId);
         setEditingValue(current);
-        setPendingOpen(p); // ✅ remember: user wanted to open THIS project
+        setPendingOpen(p);
         return;
       }
 
@@ -479,47 +466,45 @@ export default function ProjectsScreen({ navigation }: Props) {
     [counters]
   );
 
-  const onCreateLocalProject = useCallback(async () => {
-    try {
-      const nameDefault = `Projekt ${new Date().getFullYear()}`;
-      const id = makeLocalId();
+  const onCreateLocalProject = useCallback(
+    async (preset?: Partial<LocalProject>) => {
+      try {
+        const nameDefault = String(preset?.name || `Projekt ${new Date().getFullYear()}`).trim();
+        const id = makeLocalId();
 
-      const lp: LocalProject = {
-        id,
-        name: nameDefault,
-        createdAt: Date.now(),
-      };
+        const lp: LocalProject = {
+          id,
+          name: nameDefault,
+          kunde: preset?.kunde ? String(preset.kunde) : undefined,
+          ort: preset?.ort ? String(preset.ort) : undefined,
+          baustellenNummer: preset?.baustellenNummer ? String(preset.baustellenNummer) : undefined,
+          createdAt: Date.now(),
+        };
 
-      const list = await loadLocalProjects();
-      const next = [lp, ...(Array.isArray(list) ? list : [])];
-      await saveLocalProjects(next);
+        const list = await loadLocalProjects();
+        const next = [lp, ...(Array.isArray(list) ? list : [])];
+        await saveLocalProjects(next);
 
-      const p = localToProject(lp);
-      setItems((prev) => [p, ...prev]);
+        const p = localToProject(lp);
+        setItems((prev) => [p, ...prev]);
 
-      // open immediately
-      await openProject(p);
-    } catch (e: any) {
-      Alert.alert(
-        "Projekt",
-        e?.message || "Lokales Projekt konnte nicht erstellt werden."
-      );
-    }
-  }, [openProject]);
+        await openProject(p);
+      } catch (e: any) {
+        Alert.alert("Projekt", e?.message || "Lokales Projekt konnte nicht erstellt werden.");
+      }
+    },
+    [openProject]
+  );
 
   const startEdit = useCallback(
     (p: Project) => {
       const projectId = String((p as any)?.id || "").trim();
       if (!projectId) return;
 
-      const current = getBaForProject(
-        codeMap,
-        projectId,
-        String((p as any)?.code || "")
-      );
+      const current = getBaForProject(codeMap, projectId, String((p as any)?.code || ""));
       setEditingId(projectId);
       setEditingValue(current);
-      setPendingOpen(null); // manual edit does not auto-open
+      setPendingOpen(null);
     },
     [codeMap]
   );
@@ -541,16 +526,12 @@ export default function ProjectsScreen({ navigation }: Props) {
       next[projectId] = ba;
       setCodeMap(next);
 
-      // ✅ save codemap scoped by current mode
       await saveCodeMap(mode, next);
 
-      // optional: if local project, persist into local projects list too
       if (/^local-/i.test(projectId)) {
         try {
           const list = await loadLocalProjects();
-          const updated = (list || []).map((x) =>
-            x.id === projectId ? { ...x, code: ba } : x
-          );
+          const updated = (list || []).map((x) => (x.id === projectId ? { ...x, code: ba } : x));
           await saveLocalProjects(updated);
         } catch {}
       }
@@ -558,11 +539,8 @@ export default function ProjectsScreen({ navigation }: Props) {
       setEditingId(null);
       setEditingValue("");
 
-      // ✅ snapshot pendingOpen BEFORE we clear it
       const pending = pendingOpen;
-      const shouldAutoOpen =
-        pending && String((pending as any)?.id || "").trim() === projectId;
-
+      const shouldAutoOpen = pending && String((pending as any)?.id || "").trim() === projectId;
       setPendingOpen(null);
 
       if (shouldAutoOpen && looksLikeProjectCode(ba)) {
@@ -576,6 +554,60 @@ export default function ProjectsScreen({ navigation }: Props) {
     [codeMap, editingValue, pendingOpen, navigation, mode]
   );
 
+  const onPressNew = useCallback(() => {
+    resetNewForm();
+    setNewOpen(true);
+  }, [resetNewForm]);
+
+  const submitNewProject = useCallback(async () => {
+    const name = String(newName || "").trim();
+    const client = String(newClient || "").trim();
+    const place = String(newPlace || "").trim();
+    const number = String(newNumber || "").trim();
+
+    if (!name) {
+      Alert.alert("Neues Projekt", "Bitte Projektnamen eingeben.");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      Keyboard.dismiss();
+
+      if (isStandalone) {
+        await onCreateLocalProject({
+          name,
+          kunde: client || undefined,
+          ort: place || undefined,
+          baustellenNummer: number || undefined,
+        });
+        setNewOpen(false);
+        return;
+      }
+
+      const resp = await api.createProject({
+        name,
+        client: client || "",
+        place: place || "",
+        number: number || null,
+      });
+
+      const created: Project | null = resp?.project ? (resp.project as Project) : null;
+
+      await load();
+
+      setNewOpen(false);
+
+      if (created?.id) {
+        await openProject(created);
+      }
+    } catch (e: any) {
+      Alert.alert("Neues Projekt", humanizeLoadError(e));
+    } finally {
+      setCreating(false);
+    }
+  }, [newName, newClient, newPlace, newNumber, isStandalone, onCreateLocalProject, load, openProject]);
+
   function StatPill({
     label,
     c,
@@ -586,30 +618,22 @@ export default function ProjectsScreen({ navigation }: Props) {
     kind: "REGIE" | "LS";
   }) {
     const total = sumCounter(c);
-    const accent = kind === "REGIE" ? "#0B57D0" : "#1A7F37";
+    const accent = kind === "REGIE" ? COLORS.accent : COLORS.accentDark;
 
     return (
-      <View style={s.pill}>
-        <View style={[s.pillDot, { backgroundColor: accent }]} />
-        <Text style={s.pillLabel}>{label}</Text>
-        <View style={s.pillNums}>
+      <View style={s.statPill}>
+        <View style={[s.statPillDot, { backgroundColor: accent }]} />
+        <Text style={s.statPillLabel}>{label}</Text>
+        <View style={s.statPillNums}>
           {total > 0 ? (
             <>
-              {c.draft > 0 ? (
-                <Text style={s.pillNumMuted}>D {c.draft}</Text>
-              ) : null}
-              {c.eingereicht > 0 ? (
-                <Text style={s.pillNumBlue}>E {c.eingereicht}</Text>
-              ) : null}
-              {c.freigegeben > 0 ? (
-                <Text style={s.pillNumGreen}>F {c.freigegeben}</Text>
-              ) : null}
-              {c.abgelehnt > 0 ? (
-                <Text style={s.pillNumRed}>A {c.abgelehnt}</Text>
-              ) : null}
+              {c.draft > 0 ? <Text style={s.statNumMuted}>D {c.draft}</Text> : null}
+              {c.eingereicht > 0 ? <Text style={s.statNumBlue}>E {c.eingereicht}</Text> : null}
+              {c.freigegeben > 0 ? <Text style={s.statNumGreen}>F {c.freigegeben}</Text> : null}
+              {c.abgelehnt > 0 ? <Text style={s.statNumRed}>A {c.abgelehnt}</Text> : null}
             </>
           ) : (
-            <Text style={s.pillNumMuted}>0</Text>
+            <Text style={s.statNumMuted}>0</Text>
           )}
         </View>
       </View>
@@ -619,15 +643,9 @@ export default function ProjectsScreen({ navigation }: Props) {
   function renderItem({ item }: { item: Project }) {
     const projectId = String((item as any)?.id || "").trim();
 
-    // ✅ BA from map (preferred) else item.code
-    const baCode = getBaForProject(
-      codeMap,
-      projectId,
-      String((item as any)?.code || "")
-    );
+    const baCode = getBaForProject(codeMap, projectId, String((item as any)?.code || ""));
     const codeOk = looksLikeProjectCode(baCode);
 
-    // counters should follow FS policy (prefer BA if available, else uuid/local id)
     const fsKey = codeOk ? baCode : projectFsKey(item);
 
     if (fsKey && !counters[fsKey]) {
@@ -640,7 +658,7 @@ export default function ProjectsScreen({ navigation }: Props) {
     return (
       <Pressable style={s.card} onPress={() => openProject(item)}>
         <View style={s.cardTop}>
-          <View style={{ flex: 1 }}>
+          <View style={s.cardTextWrap}>
             <Text style={s.title} numberOfLines={1}>
               {titleOf(item)}
             </Text>
@@ -650,21 +668,18 @@ export default function ProjectsScreen({ navigation }: Props) {
           </View>
 
           {baCode ? (
-            <View
-              style={[s.badge, { borderColor: codeOk ? "#1a7f37" : "#c33" }]}
-            >
-              <Text style={[s.badgeTxt, { color: codeOk ? "#1a7f37" : "#c33" }]}>
+            <View style={[s.badge, { borderColor: codeOk ? COLORS.accent : COLORS.text }]}>
+              <Text style={[s.badgeTxt, { color: codeOk ? COLORS.accentDark : COLORS.text }]}>
                 {codeOk ? "BA" : "CODE?"}
               </Text>
             </View>
           ) : (
-            <View style={[s.badge, { borderColor: "#999" }]}>
-              <Text style={[s.badgeTxt, { color: "#999" }]}>—</Text>
+            <View style={s.badge}>
+              <Text style={s.badgeTxt}>—</Text>
             </View>
           )}
         </View>
 
-        {/* ✅ NEW: BA-Code editor row */}
         <View style={s.codeRow}>
           <Text style={s.codeLabel}>BA-Code</Text>
 
@@ -675,49 +690,46 @@ export default function ProjectsScreen({ navigation }: Props) {
                 onChangeText={setEditingValue}
                 placeholder="BA-2025-DEMO"
                 autoCapitalize="characters"
+                placeholderTextColor="#B8C1CC"
                 style={s.codeInput}
               />
 
-              <Pressable
-                style={s.codeBtn}
-                onPress={(e: any) => {
-                  // prevent card navigation
-                  e?.stopPropagation?.();
-                  saveEdit(item);
-                }}
-              >
-                <Text style={s.codeBtnTxt}>Speichern</Text>
-              </Pressable>
+              <View style={s.codeActionsRow}>
+                <Pressable
+                  style={s.codeBtnPrimary}
+                  onPress={(e: any) => {
+                    e?.stopPropagation?.();
+                    saveEdit(item);
+                  }}
+                >
+                  <Text style={s.codeBtnPrimaryTxt}>Speichern</Text>
+                </Pressable>
 
-              <Pressable
-                style={[s.codeBtn, s.codeBtnGhost]}
-                onPress={(e: any) => {
-                  e?.stopPropagation?.();
-                  cancelEdit();
-                }}
-              >
-                <Text style={[s.codeBtnTxt, s.codeBtnGhostTxt]}>Abbrechen</Text>
-              </Pressable>
+                <Pressable
+                  style={s.codeBtnGhost}
+                  onPress={(e: any) => {
+                    e?.stopPropagation?.();
+                    cancelEdit();
+                  }}
+                >
+                  <Text style={s.codeBtnGhostTxt}>Abbrechen</Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={s.codeViewWrap}>
-              <Text
-                style={[
-                  s.codeValue,
-                  !codeOk && baCode ? { color: "#C33" } : null,
-                ]}
-              >
+              <Text style={[s.codeValue, !codeOk && baCode ? s.codeValueWarn : null]}>
                 {baCode || "Nicht gesetzt"}
               </Text>
 
               <Pressable
-                style={s.codeBtn}
+                style={s.codeBtnPrimary}
                 onPress={(e: any) => {
                   e?.stopPropagation?.();
                   startEdit(item);
                 }}
               >
-                <Text style={s.codeBtnTxt}>{baCode ? "Ändern" : "Setzen"}</Text>
+                <Text style={s.codeBtnPrimaryTxt}>{baCode ? "Ändern" : "Setzen"}</Text>
               </Pressable>
             </View>
           )}
@@ -729,9 +741,7 @@ export default function ProjectsScreen({ navigation }: Props) {
         </View>
 
         {!codeOk && baCode ? (
-          <Text style={s.warn}>
-            Hinweis: BA-Code ist ungültig. Verwende Format BA-YYYY-XXX.
-          </Text>
+          <Text style={s.warn}>Hinweis: BA-Code ist ungültig. Verwende Format BA-YYYY-XXX.</Text>
         ) : null}
       </Pressable>
     );
@@ -742,78 +752,63 @@ export default function ProjectsScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.bg}>
-        <View style={s.header}>
+        <View style={s.headerCard}>
           <View style={s.headerRow}>
             <Pressable onPress={goBackSafe} style={s.backBtn}>
               <Text style={s.backTxt}>Projekt</Text>
             </Pressable>
 
-            <View style={{ flex: 1 }} />
-            {isStandalone ? (
-              <View style={s.modePill}>
-                <Text style={s.modeTxt}>NUR_APP</Text>
-              </View>
-            ) : (
-              <View style={s.modePill}>
-                <Text style={s.modeTxt}>SERVER</Text>
-              </View>
-            )}
+            <View style={s.headerSpacer} />
+
+            <View style={s.modePill}>
+              <Text style={s.modeTxt}>{isStandalone ? "NUR_APP" : "SERVER"}</Text>
+            </View>
           </View>
 
-          <Text style={s.brandTop}>RLC Bausoftware</Text>
-          <Text style={s.brandSub}>mobile</Text>
-          <Text style={s.h1}>Projekte</Text>
+          <Text style={s.eyebrow}>RLC Bausoftware</Text>
+          <Text style={s.eyebrowSub}>mobile</Text>
+          <View style={s.titleRow}>
+            <Text style={s.h1}>Projekte</Text>
+
+            <Pressable onPress={onPressNew} style={s.newBtn}>
+              <Text style={s.newBtnTxt}>+ Neu</Text>
+            </Pressable>
+          </View>
 
           <TextInput
             value={q}
             onChangeText={setQ}
             placeholder="Suchen (Code, Name, Ort, Kunde …)"
-            placeholderTextColor="rgba(255,255,255,0.65)"
+            placeholderTextColor="#B8C1CC"
             style={s.search}
             autoCapitalize="none"
           />
 
           {isStandalone && listEmpty ? (
-            <View style={{ marginTop: 12 }}>
-              <Pressable
-                style={s.ctaBtn}
-                onPress={onCreateLocalProject}
-                disabled={loading}
-              >
-                <Text style={s.ctaTxt}>
-                  {loading ? "Bitte warten..." : "Projekt lokal erstellen"}
-                </Text>
+            <View style={s.ctaWrap}>
+              <Pressable style={s.ctaBtn} onPress={() => onPressNew()} disabled={loading}>
+                <Text style={s.ctaTxt}>{loading ? "Bitte warten..." : "Projekt erstellen"}</Text>
               </Pressable>
               <Text style={s.ctaHint}>
-                Offline-Modus: Projekte werden lokal gespeichert. Sync ist
-                deaktiviert.
+                Offline-Modus: Projekte werden lokal gespeichert. Sync ist deaktiviert.
               </Text>
             </View>
           ) : null}
         </View>
 
-        {/* ✅ LIST */}
         <View style={s.listWrap}>
           <FlatList
             data={filtered}
-            // ✅ IMPORTANT: always unique keys (fixes "same key" warning if backend duplicates ids)
             keyExtractor={(x, i) => listKeyOf(x, i)}
             renderItem={renderItem}
-            contentContainerStyle={{
-              paddingVertical: 12,
-              gap: 12,
-              paddingBottom: 28,
-            }}
+            contentContainerStyle={s.listContent}
             refreshControl={
-              <RefreshControl
-                refreshing={loading}
-                onRefresh={load}
-                tintColor="#fff"
-              />
+              <RefreshControl refreshing={loading} onRefresh={load} tintColor={COLORS.accent} />
             }
+            showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              <View style={{ paddingVertical: 24 }}>
-                <Text style={{ color: "rgba(255,255,255,0.75)" }}>
+              <View style={s.emptyWrap}>
+                <Text style={s.emptyText}>
                   {isStandalone
                     ? "Keine lokalen Projekte. Erstelle ein Projekt oben."
                     : "Keine Projekte gefunden. Ziehe zum Aktualisieren nach unten."}
@@ -822,116 +817,256 @@ export default function ProjectsScreen({ navigation }: Props) {
             }
           />
         </View>
+
+        <Modal visible={newOpen} transparent animationType="fade" onRequestClose={() => setNewOpen(false)}>
+          <Pressable style={s.modalBackdrop} onPress={() => setNewOpen(false)} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={s.modalWrap}
+          >
+            <View style={s.modalCard}>
+              <Text style={s.modalTitle}>Neues Projekt</Text>
+
+              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <Text style={s.modalLabel}>Projektname *</Text>
+                <TextInput
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder="z.B. Trinkwasserleitung BA III"
+                  placeholderTextColor="#B8C1CC"
+                  style={s.modalInput}
+                />
+
+                <Text style={s.modalLabel}>Kunde</Text>
+                <TextInput
+                  value={newClient}
+                  onChangeText={setNewClient}
+                  placeholder="z.B. Gemeinde / Stadtwerke"
+                  placeholderTextColor="#B8C1CC"
+                  style={s.modalInput}
+                />
+
+                <Text style={s.modalLabel}>Ort</Text>
+                <TextInput
+                  value={newPlace}
+                  onChangeText={setNewPlace}
+                  placeholder="z.B. Bischofswiesen"
+                  placeholderTextColor="#B8C1CC"
+                  style={s.modalInput}
+                />
+
+                <Text style={s.modalLabel}>BaustellenNummer</Text>
+                <TextInput
+                  value={newNumber}
+                  onChangeText={setNewNumber}
+                  placeholder="z.B. 2026-001"
+                  placeholderTextColor="#B8C1CC"
+                  style={s.modalInput}
+                />
+
+                <View style={s.modalBtnsRow}>
+                  <Pressable
+                    style={[s.modalBtn, s.modalBtnGhost]}
+                    onPress={() => {
+                      setNewOpen(false);
+                      resetNewForm();
+                    }}
+                    disabled={creating}
+                  >
+                    <Text style={[s.modalBtnTxt, s.modalBtnGhostTxt]}>Abbrechen</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[s.modalBtn, s.modalBtnPrimary, creating ? s.modalBtnDisabled : null]}
+                    onPress={submitNewProject}
+                    disabled={creating}
+                  >
+                    <Text style={s.modalBtnPrimaryTxt}>{creating ? "Erstelle..." : "Erstellen"}</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={s.modalHint}>
+                  {isStandalone
+                    ? "NUR_APP: Projekt wird lokal gespeichert."
+                    : "SERVER: Projekt wird am Server erstellt und synchronisiert."}
+                </Text>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     </SafeAreaView>
   );
 }
 
-// ===========================
-// Styles
-// ===========================
-
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0B1720" },
-  bg: { flex: 1, backgroundColor: "#0B1720" },
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
 
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 14,
-    backgroundColor: "#0B1720",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+  bg: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+
+  headerCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 6,
+    marginBottom: 8,
   },
+
+  headerSpacer: {
+    flex: 1,
+  },
+
   backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
-  backTxt: { color: "#fff", fontWeight: "900" },
+
+  backTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 13,
+  },
 
   modePill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
+
   modeTxt: {
-    color: "rgba(255,255,255,0.9)",
+    color: COLORS.text,
     fontWeight: "900",
     fontSize: 12,
   },
 
-  brandTop: {
-    color: "rgba(255,255,255,0.88)",
-    fontSize: 14,
-    fontWeight: "800",
+  eyebrow: {
+    color: COLORS.accentDark,
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 0.3,
   },
-  brandSub: {
-    color: "rgba(255,255,255,0.60)",
+
+  eyebrowSub: {
     marginTop: 2,
+    color: COLORS.sub,
     fontSize: 12,
     fontWeight: "800",
   },
 
-  h1: { marginTop: 10, fontSize: 34, fontWeight: "900", color: "#fff" },
+  titleRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  h1: {
+    flex: 1,
+    fontSize: 32,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  newBtn: {
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+
+  newBtnTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+  },
 
   search: {
-    marginTop: 12,
+    marginTop: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: COLORS.border,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }),
-    backgroundColor: "rgba(255,255,255,0.08)",
-    color: "#fff",
+    backgroundColor: COLORS.inputBg,
+    color: COLORS.text,
     fontSize: 14,
     fontWeight: "700",
   },
 
+  ctaWrap: {
+    marginTop: 14,
+  },
+
   ctaBtn: {
-    marginTop: 4,
-    backgroundColor: "#111",
+    backgroundColor: COLORS.text,
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: "center",
   },
-  ctaTxt: { color: "#fff", fontWeight: "900" },
-  ctaHint: {
-    marginTop: 8,
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 12,
-    fontWeight: "700",
+
+  ctaTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
   },
 
-  listWrap: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
+  ctaHint: {
+    marginTop: 8,
+    color: COLORS.sub,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+
+  listWrap: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+
+  listContent: {
+    paddingVertical: 12,
+    gap: 12,
+    paddingBottom: 28,
+  },
 
   card: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
+    borderColor: COLORS.border,
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.1,
+        shadowColor: COLORS.text,
+        shadowOpacity: 0.06,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 6 },
       },
-      android: { elevation: 3 },
+      android: { elevation: 2 },
       default: {},
     }),
   },
@@ -942,29 +1077,50 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-  title: { fontSize: 16, fontWeight: "900", color: "#0B1720" },
-  sub: { marginTop: 6, opacity: 0.75, fontWeight: "700", color: "#0B1720" },
+
+  cardTextWrap: {
+    flex: 1,
+  },
+
+  title: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  sub: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
 
   badge: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card2,
+    borderColor: COLORS.border,
   },
-  badgeTxt: { fontSize: 11, fontWeight: "900" },
 
-  // ✅ BA-Code row styles
+  badgeTxt: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
   codeRow: {
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "rgba(11,23,32,0.08)",
+    borderTopColor: COLORS.border,
   },
+
   codeLabel: {
     fontSize: 12,
     fontWeight: "900",
-    color: "rgba(11,23,32,0.70)",
+    color: COLORS.sub,
   },
 
   codeViewWrap: {
@@ -973,48 +1129,74 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
+
   codeValue: {
     flex: 1,
     fontWeight: "900",
-    color: "#0B1720",
+    color: COLORS.text,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: "rgba(11,23,32,0.06)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(11,23,32,0.08)",
+    borderColor: COLORS.border,
+  },
+
+  codeValueWarn: {
+    color: COLORS.text,
   },
 
   codeEditWrap: {
     marginTop: 8,
     gap: 10,
   },
+
   codeInput: {
     borderWidth: 1,
-    borderColor: "rgba(11,23,32,0.16)",
-    backgroundColor: "#fff",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }),
     fontWeight: "900",
-    color: "#0B1720",
+    color: COLORS.text,
   },
 
-  codeBtn: {
+  codeActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  codeBtnPrimary: {
     alignSelf: "flex-start",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#111",
+    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
   },
-  codeBtnTxt: { color: "#fff", fontWeight: "900" },
+
+  codeBtnPrimaryTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+  },
 
   codeBtnGhost: {
-    backgroundColor: "transparent",
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(11,23,32,0.20)",
+    borderColor: COLORS.border,
   },
-  codeBtnGhostTxt: { color: "#0B1720" },
+
+  codeBtnGhostTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
 
   statsRow: {
     marginTop: 12,
@@ -1023,29 +1205,171 @@ const s = StyleSheet.create({
     flexWrap: "wrap",
   },
 
-  pill: {
+  statPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    backgroundColor: "rgba(11,23,32,0.06)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(11,23,32,0.08)",
+    borderColor: COLORS.border,
   },
-  pillDot: { width: 8, height: 8, borderRadius: 99 },
-  pillLabel: { fontSize: 12, fontWeight: "900", color: "#0B1720" },
 
-  pillNums: { flexDirection: "row", alignItems: "center", gap: 8 },
-  pillNumMuted: {
+  statPillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+
+  statPillLabel: {
     fontSize: 12,
     fontWeight: "900",
-    color: "rgba(11,23,32,0.55)",
+    color: COLORS.text,
   },
-  pillNumBlue: { fontSize: 12, fontWeight: "900", color: "#0B57D0" },
-  pillNumGreen: { fontSize: 12, fontWeight: "900", color: "#1A7F37" },
-  pillNumRed: { fontSize: 12, fontWeight: "900", color: "#C33" },
 
-  warn: { marginTop: 10, color: "#c33", fontSize: 12, fontWeight: "800" },
+  statPillNums: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  statNumMuted: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: COLORS.sub,
+  },
+
+  statNumBlue: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: COLORS.accent,
+  },
+
+  statNumGreen: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: COLORS.accentDark,
+  },
+
+  statNumRed: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  warn: {
+    marginTop: 10,
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  emptyWrap: {
+    paddingVertical: 24,
+  },
+
+  emptyText: {
+    color: COLORS.sub,
+    lineHeight: 20,
+    fontWeight: "700",
+  },
+
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15,23,42,0.45)",
+  },
+
+  modalWrap: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 16,
+  },
+
+  modalCard: {
+    borderRadius: 20,
+    backgroundColor: COLORS.card,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: COLORS.text,
+    marginBottom: 10,
+  },
+
+  modalLabel: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  modalInput: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }),
+    fontWeight: "800",
+    color: COLORS.text,
+    backgroundColor: COLORS.inputBg,
+  },
+
+  modalBtnsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+    justifyContent: "flex-end",
+  },
+
+  modalBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+
+  modalBtnTxt: {
+    fontWeight: "900",
+  },
+
+  modalBtnGhost: {
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  modalBtnGhostTxt: {
+    color: COLORS.text,
+  },
+
+  modalBtnPrimary: {
+    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+
+  modalBtnPrimaryTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+  },
+
+  modalBtnDisabled: {
+    opacity: 0.7,
+  },
+
+  modalHint: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.sub,
+    lineHeight: 18,
+  },
 });
+
+

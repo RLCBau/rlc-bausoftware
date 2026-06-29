@@ -1,4 +1,4 @@
-// apps/mobile/src/screens/InboxScreen.tsx
+﻿// apps/mobile/src/screens/InboxScreen.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -20,27 +20,29 @@ import {
   extractBaCode,
   Project,
 } from "../lib/api";
+import { COLORS } from "../ui/theme";
 
 // ✅ Team / Rollen (per prefill Email Versand Ansprechpartner)
 import { getProjectRoles } from "../storage/projectMeta";
 
-// ✅ PDF Export + Email (stabile, allineato con Regie/Lieferschein/Photos)
+// ✅ PDF Export + Email
 import {
   exportRegiePdfToProject,
   exportLieferscheinPdfToProject,
   exportPhotosPdfToProject,
+  exportTagesberichtPdfToProject,
   emailPdf,
 } from "../lib/exporters/projectExport";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Inbox">;
 
-/** AsyncStorage keys (aligned with ProjectsScreen/LoginScreen) */
+/** AsyncStorage keys */
 const KEY_MODE = "rlc_mobile_mode";
 const KEY_LOCAL_PROJECTS = "rlc_mobile_local_projects_v1";
 const CODEMAP_KEY = "rlc_project_code_map_v1";
 
 type WorkflowStatus = "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT";
-type Kind = "REGIE" | "LS" | "PHOTOS";
+type Kind = "REGIE" | "LS" | "PHOTOS" | "TAGESBERICHT";
 
 type InboxItem = {
   kind: Kind;
@@ -48,7 +50,7 @@ type InboxItem = {
   projectTitle: string;
   projectCode?: string; // BA-...
   projectKey: string; // FS key (BA-... o local-...)
-  id: string; // stable id
+  id: string;
   title: string;
   status: WorkflowStatus;
   createdAt?: number;
@@ -70,15 +72,6 @@ async function loadCodeMap(): Promise<Record<string, string>> {
   return (await loadJson<Record<string, string>>(CODEMAP_KEY)) || {};
 }
 
-function getBaForProject(
-  map: Record<string, string>,
-  projectId: string,
-  fallback?: string
-) {
-  return extractBaCode(map?.[projectId] || fallback || "") || "";
-}
-
-/** keys used elsewhere (ProjectsScreen) */
 function regieInboxKeys(projectKey: string) {
   return [`rlc_mobile_inbox_regie:${projectKey}`];
 }
@@ -97,6 +90,13 @@ function photosInboxKeys(projectKey: string) {
     `rlc_mobile_inbox_photos_notes:${projectKey}`,
     `rlc_mobile_inbox_fotos:${projectKey}`,
     `rlc_mobile_inbox_fotos_notizen:${projectKey}`,
+  ];
+}
+function tagesberichtInboxKeys(projectKey: string) {
+  return [
+    `rlc_tagesbericht_list:${projectKey}`,
+    `rlc_mobile_inbox_tagesbericht:${projectKey}`,
+    `rlc_mobile_inbox_tagesberichte:${projectKey}`,
   ];
 }
 
@@ -134,7 +134,13 @@ function titleOf(p: Project) {
 
 function inferRowTitle(kind: Kind, r: any): string {
   const nr = String(
-    r?.nr || r?.number || r?.regieNr || r?.lieferscheinNr || r?.id || ""
+    r?.nr ||
+      r?.number ||
+      r?.regieNr ||
+      r?.lieferscheinNr ||
+      r?.id ||
+      r?.docId ||
+      ""
   )
     .trim()
     .slice(0, 18);
@@ -149,7 +155,15 @@ function inferRowTitle(kind: Kind, r: any): string {
       ? String(date).slice(0, 10)
       : "";
 
-  const base = kind === "REGIE" ? "Regie" : kind === "LS" ? "Lieferschein" : "Photos";
+  const base =
+    kind === "REGIE"
+      ? "Regie"
+      : kind === "LS"
+      ? "Lieferschein"
+      : kind === "TAGESBERICHT"
+      ? "Tagesbericht"
+      : "Fotos";
+
   const p1 = nr ? `#${nr}` : "";
   const p2 = dateStr ? `${dateStr}` : "";
   return [base, p1, p2].filter(Boolean).join(" ");
@@ -187,14 +201,14 @@ function badgeText(st: WorkflowStatus) {
 }
 
 function badgeColor(st: WorkflowStatus) {
-  if (st === "EINGEREICHT") return "#0B57D0";
-  if (st === "FREIGEGEBEN") return "#1A7F37";
-  if (st === "ABGELEHNT") return "#C33";
-  return "rgba(11,23,32,0.55)";
+  if (st === "EINGEREICHT") return COLORS.accentDark;
+  if (st === "FREIGEGEBEN") return COLORS.accent;
+  if (st === "ABGELEHNT") return "#B00020";
+  return COLORS.sub;
 }
 
 /** =========================
- * ✅ Stable id
+ * Stable id
  * ========================= */
 function hash32(input: string) {
   let h = 2166136261;
@@ -212,20 +226,27 @@ function stableStringifyLite(r: any) {
     createdAt: r?.createdAt ?? r?.created_at ?? r?.timestamp ?? null,
     updatedAt: r?.updatedAt ?? r?.updated_at ?? r?.mtime ?? null,
     status: r?.workflowStatus ?? r?.status ?? null,
-    comment: r?.comment ?? r?.bemerkungen ?? r?.notes ?? r?.note ?? null,
+    comment:
+      r?.comment ??
+      r?.bemerkungen ??
+      r?.notes ??
+      r?.note ??
+      r?.workDone ??
+      r?.issues ??
+      null,
     kostenstelle: r?.kostenstelle ?? null,
   };
   return JSON.stringify(lite);
 }
 function inferIdStable(kind: Kind, projectKey: string, r: any): string {
-  const explicit = String(r?.id || r?.opId || r?.uuid || "").trim();
+  const explicit = String(r?.id || r?.opId || r?.uuid || r?.docId || "").trim();
   if (explicit) return explicit;
   const base = `${kind}::${projectKey}::${stableStringifyLite(r)}`;
   return `h_${hash32(base)}`;
 }
 
 /** =========================================================
- * ✅ FS-key resolver (GUARANTEES BA if possible)
+ * FS-key resolver
  * ======================================================= */
 function resolveProjectFsKeyForInbox(opts: {
   project: Project;
@@ -253,7 +274,7 @@ function resolveProjectFsKeyForInbox(opts: {
 }
 
 /** =========================================================
- * ✅ Email parsing helpers (multi-mail support)
+ * Email parsing helpers
  * ======================================================= */
 function splitEmails(v: any): string[] {
   const s = String(v ?? "").trim();
@@ -277,7 +298,7 @@ function splitEmails(v: any): string[] {
 }
 
 /** =========================================================
- * ✅ Normalize file metas (string uri -> {uri,name,type})
+ * Normalize file metas
  * ======================================================= */
 function inferMimeFromUri(uri: string) {
   const u = String(uri || "").toLowerCase();
@@ -316,7 +337,6 @@ function normalizeFileMetaArray(
     });
   }
 
-  // dedupe by uri
   const seen = new Set<string>();
   return out.filter((f) => {
     const u = String(f?.uri || "");
@@ -338,8 +358,8 @@ export default function InboxScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [syncing] = useState(false);
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [codeMap, setCodeMap] = useState<Record<string, string>>({});
+  const [, setProjects] = useState<Project[]>([]);
+  const [, setCodeMap] = useState<Record<string, string>>({});
   const [items, setItems] = useState<InboxItem[]>([]);
 
   const [tab, setTab] = useState<Kind>("REGIE");
@@ -358,7 +378,6 @@ export default function InboxScreen({ navigation }: Props) {
     return "SERVER_SYNC";
   }, []);
 
-  // ✅ OFFLINE ONLY: Inbox exists only in NUR_APP
   const enforceNurApp = useCallback(async () => {
     const mNow = await readMode();
     if (mNow !== "NUR_APP") {
@@ -373,7 +392,6 @@ export default function InboxScreen({ navigation }: Props) {
   }, [navigation, readMode]);
 
   const loadProjects = useCallback(async (_mNow: "SERVER_SYNC" | "NUR_APP") => {
-    // ✅ force local projects only
     const local = (await loadJson<LocalProject[]>(KEY_LOCAL_PROJECTS)) || [];
     const arr: Project[] = local.map((lp) => ({
       id: lp.id,
@@ -413,10 +431,11 @@ export default function InboxScreen({ navigation }: Props) {
         const projectKey = fsKey;
         const projectTitle = titleOf(p);
 
-        const [regieInbox, lsInbox, photosInbox] = await Promise.all([
+        const [regieInbox, lsInbox, photosInbox, tagesberichtInbox] = await Promise.all([
           loadArrayFromFirstKey(regieInboxKeys(projectKey)),
           loadArrayFromFirstKey(lsInboxKeys(projectKey)),
           loadArrayFromFirstKey(photosInboxKeys(projectKey)),
+          loadArrayFromFirstKey(tagesberichtInboxKeys(projectKey)),
         ]);
 
         for (const r of regieInbox || []) {
@@ -484,6 +503,28 @@ export default function InboxScreen({ navigation }: Props) {
             raw: r,
           });
         }
+
+        for (const r of tagesberichtInbox || []) {
+          const st = inferStatus(r);
+          const ts = pickTs(r);
+          const id = inferIdStable("TAGESBERICHT", projectKey, r);
+          const dedupeKey = `TAGESBERICHT:${projectKey}:${id}`;
+          if (seen.has(dedupeKey)) continue;
+          seen.add(dedupeKey);
+          out.push({
+            kind: "TAGESBERICHT",
+            projectId,
+            projectTitle,
+            projectCode: ba,
+            projectKey,
+            id,
+            title: inferRowTitle("TAGESBERICHT", r),
+            status: st,
+            createdAt: ts.createdAt,
+            updatedAt: ts.updatedAt,
+            raw: r,
+          });
+        }
       }
 
       out.sort((a, b) => {
@@ -513,13 +554,15 @@ export default function InboxScreen({ navigation }: Props) {
     const regie = items.filter((x) => x.kind === "REGIE").length;
     const ls = items.filter((x) => x.kind === "LS").length;
     const photos = items.filter((x) => x.kind === "PHOTOS").length;
-    return { regie, ls, photos };
+    const tagesbericht = items.filter((x) => x.kind === "TAGESBERICHT").length;
+    return { regie, ls, photos, tagesbericht };
   }, [items]);
 
   const filteredItems = useMemo(() => {
     if (tab === "REGIE") return items.filter((x) => x.kind === "REGIE");
     if (tab === "LS") return items.filter((x) => x.kind === "LS");
-    return items.filter((x) => x.kind === "PHOTOS");
+    if (tab === "PHOTOS") return items.filter((x) => x.kind === "PHOTOS");
+    return items.filter((x) => x.kind === "TAGESBERICHT");
   }, [items, tab]);
 
   const openProjectHome = useCallback(
@@ -565,6 +608,20 @@ export default function InboxScreen({ navigation }: Props) {
       return;
     }
 
+    if (it.kind === "TAGESBERICHT") {
+      navigation.navigate(
+        "TagesberichtEditor" as any,
+        {
+          projectId: it.projectId,
+          projectCode: it.projectCode || it.projectKey,
+          title: it.projectTitle,
+          tagesberichtId: editId,
+          fromInbox: true,
+        } as any
+      );
+      return;
+    }
+
     navigation.navigate(
       "PhotosNotes" as any,
       {
@@ -590,11 +647,11 @@ export default function InboxScreen({ navigation }: Props) {
     return (
       <Pressable
         onPress={() => setTab(k)}
-        style={[s.tabBtn, active ? s.tabBtnActive : null]}
+        style={[s.tabBtn, active && s.tabBtnActive]}
       >
-        <Text style={[s.tabTxt, active ? s.tabTxtActive : null]}>{label}</Text>
-        <View style={[s.tabCountPill, active ? s.tabCountPillActive : null]}>
-          <Text style={[s.tabCountTxt, active ? s.tabCountTxtActive : null]}>
+        <Text style={[s.tabTxt, active && s.tabTxtActive]}>{label}</Text>
+        <View style={[s.tabCountPill, active && s.tabCountPillActive]}>
+          <Text style={[s.tabCountTxt, active && s.tabCountTxtActive]}>
             {count}
           </Text>
         </View>
@@ -629,11 +686,21 @@ export default function InboxScreen({ navigation }: Props) {
       const poolB = normalizeFileMetaArray(r?.attachments);
       const poolC = normalizeFileMetaArray(r?.photos);
 
-      const fromLines = Array.isArray(r?.rows)
+      const fromRows = Array.isArray(r?.rows)
         ? normalizeFileMetaArray((r.rows || []).flatMap((x: any) => x?.photos || []))
         : [];
 
-      const mergedPool = normalizeFileMetaArray([...poolA, ...poolB, ...poolC, ...fromLines]);
+      const fromLines = Array.isArray(r?.lines)
+        ? normalizeFileMetaArray((r.lines || []).flatMap((x: any) => x?.photos || []))
+        : [];
+
+      const mergedPool = normalizeFileMetaArray([
+        ...poolA,
+        ...poolB,
+        ...poolC,
+        ...fromRows,
+        ...fromLines,
+      ]);
 
       const mainUri = String(r?.imageUri || r?.imageMeta?.uri || "").trim();
       const mainArr = mainUri
@@ -646,11 +713,26 @@ export default function InboxScreen({ navigation }: Props) {
 
       const dateYmd = toYmd(r?.date || r?.datum || r?.createdAt || r?.timestamp);
       const text =
-        String(r?.rows?.[0]?.comment || r?.comment || r?.text || r?.leistung || "").trim() ||
-        String(r?.bemerkungen || r?.notes || r?.note || "").trim();
+        String(
+          r?.rows?.[0]?.comment ||
+            r?.lines?.[0]?.taetigkeit ||
+            r?.workDone ||
+            r?.comment ||
+            r?.text ||
+            r?.leistung ||
+            ""
+        ).trim() ||
+        String(r?.bemerkungen || r?.notes || r?.note || r?.issues || "").trim();
 
-      const hours = (r?.rows?.[0]?.hours ?? r?.hours ?? undefined) as any;
-      const note = String(r?.bemerkungen || r?.notes || r?.note || "").trim();
+      const hours =
+        (r?.rows?.[0]?.hours ??
+          r?.lines?.[0]?.stunden ??
+          r?.hours ??
+          undefined) as any;
+
+      const note = String(
+        r?.bemerkungen || r?.notes || r?.note || r?.issues || ""
+      ).trim();
 
       const rowForExporter =
         it.kind === "REGIE"
@@ -669,7 +751,9 @@ export default function InboxScreen({ navigation }: Props) {
                   attachments: Array.isArray(r?.attachments)
                     ? normalizeFileMetaArray(r.attachments)
                     : mergedPool,
-                  photos: Array.isArray(r?.photos) ? normalizeFileMetaArray(r.photos) : mergedPool,
+                  photos: Array.isArray(r?.photos)
+                    ? normalizeFileMetaArray(r.photos)
+                    : mergedPool,
                 },
               },
             }
@@ -687,6 +771,29 @@ export default function InboxScreen({ navigation }: Props) {
                   files: mergedPool,
                   attachments: Array.isArray(r?.attachments)
                     ? normalizeFileMetaArray(r.attachments)
+                    : mergedPool,
+                },
+              },
+            }
+          : it.kind === "TAGESBERICHT"
+          ? {
+              kind: "TAGESBERICHT",
+              payload: {
+                date: dateYmd,
+                text,
+                note,
+                files: mergedPool,
+                row: {
+                  ...r,
+                  date: dateYmd,
+                  reportType: "TAGESBERICHT",
+                  docType: "TAGESBERICHT",
+                  files: mergedPool,
+                  attachments: Array.isArray(r?.attachments)
+                    ? normalizeFileMetaArray(r.attachments)
+                    : mergedPool,
+                  photos: Array.isArray(r?.photos)
+                    ? normalizeFileMetaArray(r.photos)
                     : mergedPool,
                 },
               },
@@ -729,6 +836,16 @@ export default function InboxScreen({ navigation }: Props) {
             projectTitle: it.projectTitle,
             row: rowForExporter,
             filenameHint: `Lieferschein_${hintDate}_${shortId}`,
+          });
+          Alert.alert("PDF", "Browser: Bitte im Druckdialog als PDF speichern.");
+          return;
+        }
+        if (it.kind === "TAGESBERICHT") {
+          await exportTagesberichtPdfToProject({
+            projectFsKey: fsKey,
+            projectTitle: it.projectTitle,
+            row: rowForExporter,
+            filenameHint: `Tagesbericht_${hintDate}_${shortId}`,
           });
           Alert.alert("PDF", "Browser: Bitte im Druckdialog als PDF speichern.");
           return;
@@ -786,6 +903,18 @@ export default function InboxScreen({ navigation }: Props) {
         return;
       }
 
+      if (it.kind === "TAGESBERICHT") {
+        const out = await exportTagesberichtPdfToProject({
+          projectFsKey: fsKey,
+          projectTitle: it.projectTitle,
+          row: rowForExporter,
+          filenameHint: `Tagesbericht_${hintDate}_${shortId}`,
+        });
+        if (!out?.pdfUri) throw new Error("PDF Export fehlgeschlagen (kein pdfUri).");
+        await sendMail(out as any, `Tagesbericht ${fsKey} (${(out as any).date})`);
+        return;
+      }
+
       const out = await exportPhotosPdfToProject({
         projectFsKey: fsKey,
         projectTitle: it.projectTitle,
@@ -800,9 +929,16 @@ export default function InboxScreen({ navigation }: Props) {
   }, []);
 
   function renderRow({ item }: { item: InboxItem }) {
-    const accent = item.kind === "REGIE" ? "#0B57D0" : item.kind === "LS" ? "#1A7F37" : "#7A4DFF";
-    const stColor = badgeColor(item.status);
+    const accent =
+      item.kind === "REGIE"
+        ? COLORS.accent
+        : item.kind === "LS"
+        ? COLORS.accentDark
+        : item.kind === "TAGESBERICHT"
+        ? "#12324A"
+        : COLORS.text;
 
+    const stColor = badgeColor(item.status);
     const ts = item.updatedAt ?? item.createdAt;
     const tsStr = ts ? new Date(ts).toLocaleString() : "";
 
@@ -810,7 +946,7 @@ export default function InboxScreen({ navigation }: Props) {
       <View style={s.rowCard}>
         <View style={s.rowTop}>
           <View style={[s.kindDot, { backgroundColor: accent }]} />
-          <View style={{ flex: 1 }}>
+          <View style={s.rowTextWrap}>
             <Text style={s.rowTitle} numberOfLines={1}>
               {item.title}
             </Text>
@@ -821,7 +957,7 @@ export default function InboxScreen({ navigation }: Props) {
             </Text>
           </View>
 
-          <View style={[s.badge, { borderColor: stColor }]}>
+          <View style={[s.badge, { borderColor: stColor, backgroundColor: COLORS.card2 }]}>
             <Text style={[s.badgeTxt, { color: stColor }]}>{badgeText(item.status)}</Text>
           </View>
         </View>
@@ -835,8 +971,8 @@ export default function InboxScreen({ navigation }: Props) {
             <Text style={[s.btnTxt, s.btnGhostTxt]}>Zum Projekt</Text>
           </Pressable>
 
-          <Pressable style={[s.btn]} onPress={() => onPdfEmail(item)}>
-            <Text style={s.btnTxt}>PDF / E-Mail</Text>
+          <Pressable style={s.btnPrimary} onPress={() => onPdfEmail(item)}>
+            <Text style={s.btnPrimaryTxt}>PDF / E-Mail</Text>
           </Pressable>
         </View>
       </View>
@@ -846,23 +982,34 @@ export default function InboxScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.bg}>
-        <View style={s.header}>
+        <View style={s.headerCard}>
           <View style={s.headerRow}>
             <Pressable onPress={() => navigation.goBack()} style={s.backBtn}>
               <Text style={s.backTxt}>Zurück</Text>
             </Pressable>
-            <View style={{ flex: 1 }} />
+
+            <View style={s.headerSpacer} />
+
             <View style={s.modePill}>
               <Text style={s.modeTxt}>{mode === "NUR_APP" ? "NUR_APP" : "SERVER"}</Text>
             </View>
           </View>
 
+          <Text style={s.eyebrow}>RLC Bausoftware</Text>
           <Text style={s.h1}>Inbox (Offline)</Text>
+          <Text style={s.sub}>
+            Lokale Entwürfe und Offline-Dokumente ohne Server-Synchronisierung.
+          </Text>
 
           <View style={s.tabsRow}>
             <TabButton k="REGIE" label="Regie" count={counts.regie} />
             <TabButton k="LS" label="Lieferscheine" count={counts.ls} />
-            <TabButton k="PHOTOS" label="Photos" count={counts.photos} />
+            <TabButton k="PHOTOS" label="Fotos" count={counts.photos} />
+            <TabButton
+              k="TAGESBERICHT"
+              label="Tagesberichte"
+              count={counts.tagesbericht}
+            />
           </View>
 
           <View style={s.actionsRow}>
@@ -871,24 +1018,35 @@ export default function InboxScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
-          <Text style={s.hint}>
-            Hinweis: Diese Inbox ist nur für NUR_APP (offline). Keine Server-Synchronisierung.
-          </Text>
+          <View style={s.infoBox}>
+            <Text style={s.infoTitle}>Hinweis</Text>
+            <Text style={s.infoText}>
+              Diese Inbox ist nur für NUR_APP (offline). Keine Server-Synchronisierung.
+            </Text>
+          </View>
         </View>
 
         <FlatList
           data={filteredItems}
           keyExtractor={(x) => `${x.kind}:${x.projectKey}:${x.id}`}
           renderItem={renderRow}
-          contentContainerStyle={{ padding: 16, paddingBottom: 30, gap: 12 }}
+          contentContainerStyle={s.listContent}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={loadInbox} tintColor="#fff" />
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={loadInbox}
+              tintColor={COLORS.accent}
+            />
           }
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={{ padding: 16 }}>
-              <Text style={{ color: "rgba(255,255,255,0.75)", fontWeight: "700" }}>
-                {"Keine offenen Einträge in dieser Kategorie."}
-              </Text>
+            <View style={s.emptyWrap}>
+              <View style={s.emptyCard}>
+                <Text style={s.emptyTitle}>Keine offenen Einträge</Text>
+                <Text style={s.emptyText}>
+                  In dieser Kategorie sind aktuell keine Offline-Dokumente vorhanden.
+                </Text>
+              </View>
             </View>
           }
         />
@@ -898,40 +1056,96 @@ export default function InboxScreen({ navigation }: Props) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0B1720" },
-  bg: { flex: 1, backgroundColor: "#0B1720" },
-
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
   },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+
+  bg: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+
+  headerCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+
+  headerSpacer: {
+    flex: 1,
+  },
+
   backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
-  backTxt: { color: "#fff", fontWeight: "900" },
+
+  backTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 13,
+  },
 
   modePill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
-  modeTxt: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12 },
 
-  h1: { fontSize: 34, fontWeight: "900", color: "#fff" },
+  modeTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 12,
+  },
 
-  tabsRow: { marginTop: 12, flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  eyebrow: {
+    color: COLORS.accentDark,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+
+  h1: {
+    marginTop: 8,
+    fontSize: 30,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  sub: {
+    marginTop: 8,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  tabsRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
   tabBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -940,84 +1154,234 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
+
   tabBtnActive: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.28)",
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
   },
-  tabTxt: { color: "rgba(255,255,255,0.78)", fontWeight: "900" },
-  tabTxtActive: { color: "#fff" },
+
+  tabTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  tabTxtActive: {
+    color: COLORS.textLight,
+  },
 
   tabCountPill: {
     minWidth: 28,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.border,
     alignItems: "center",
   },
-  tabCountPillActive: {
-    backgroundColor: "rgba(0,0,0,0.35)",
-    borderColor: "rgba(255,255,255,0.24)",
-  },
-  tabCountTxt: { color: "rgba(255,255,255,0.85)", fontWeight: "900" },
-  tabCountTxtActive: { color: "#fff" },
 
-  actionsRow: { marginTop: 12, flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  tabCountPillActive: {
+    backgroundColor: COLORS.accentDark,
+    borderColor: COLORS.accentDark,
+  },
+
+  tabCountTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 12,
+  },
+
+  tabCountTxtActive: {
+    color: COLORS.textLight,
+  },
+
+  actionsRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
   actionBtn: {
     alignSelf: "flex-start",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#111",
+    backgroundColor: COLORS.text,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.text,
   },
-  actionTxt: { color: "#fff", fontWeight: "900" },
 
-  hint: { marginTop: 10, color: "rgba(255,255,255,0.65)", fontWeight: "700" },
+  actionTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  infoBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  infoTitle: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  infoText: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 19,
+    fontSize: 13,
+  },
+
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 30,
+    gap: 12,
+  },
 
   rowCard: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
+    borderColor: COLORS.border,
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
-        shadowOpacity: 0.1,
+        shadowColor: COLORS.text,
+        shadowOpacity: 0.06,
         shadowRadius: 10,
         shadowOffset: { width: 0, height: 6 },
       },
-      android: { elevation: 3 },
+      android: { elevation: 2 },
       default: {},
     }),
   },
-  rowTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  kindDot: { width: 10, height: 10, borderRadius: 99, marginTop: 5 },
 
-  rowTitle: { fontSize: 16, fontWeight: "900", color: "#0B1720" },
-  rowSub: { marginTop: 6, opacity: 0.75, fontWeight: "700", color: "#0B1720" },
+  rowTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+
+  rowTextWrap: {
+    flex: 1,
+  },
+
+  kindDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginTop: 5,
+  },
+
+  rowTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  rowSub: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 18,
+    fontSize: 13,
+  },
 
   badge: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: "#fff",
     alignSelf: "flex-start",
   },
-  badgeTxt: { fontSize: 11, fontWeight: "900" },
 
-  rowActions: { marginTop: 12, flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  btn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, backgroundColor: "#111" },
-  btnTxt: { color: "#fff", fontWeight: "900" },
+  badgeTxt: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
 
-  btnGhost: { backgroundColor: "transparent", borderWidth: 1, borderColor: "rgba(11,23,32,0.20)" },
-  btnGhostTxt: { color: "#0B1720" },
+  rowActions: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  btn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+
+  btnTxt: {
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  btnGhost: {
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  btnGhostTxt: {
+    color: COLORS.text,
+  },
+
+  btnPrimary: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+
+  btnPrimaryTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  emptyWrap: {
+    paddingTop: 4,
+  },
+
+  emptyCard: {
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  emptyTitle: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 15,
+  },
+
+  emptyText: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 20,
+    fontSize: 13,
+  },
 });
+
+

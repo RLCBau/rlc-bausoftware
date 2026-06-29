@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/offlineQueue.ts
+﻿// apps/mobile/src/lib/offlineQueue.ts
 import { getJson, setJson, uid } from "./storage";
 
 /** ===== Web-Align Types (aus ManuellFoto.tsx) ===== */
@@ -77,6 +77,19 @@ export type QueueItemBase = {
   result?: any;
 };
 
+export type TagesberichtLineQueue = {
+  id: string;
+  von?: string;
+  bis?: string;
+  pauseMin?: number;
+  stunden?: number;
+  mitarbeiter?: string;
+  maschine?: string;
+  ort?: string;
+  taetigkeit?: string;
+  notiz?: string;
+};
+
 export type QueueItem =
   | (QueueItemBase & {
       kind: "REGIE";
@@ -140,6 +153,24 @@ export type QueueItem =
         comment?: string;
         bemerkungen?: string;
         files?: DateiMeta[];
+      };
+    })
+  | (QueueItemBase & {
+      kind: "TAGESBERICHT";
+      payload: {
+        date: string;
+        weather?: string;
+        temperature?: string;
+        issues?: string;
+        notes?: string;
+        lines?: TagesberichtLineQueue[];
+
+        // summary compat
+        text?: string;
+        note?: string;
+
+        // esteso
+        row?: any;
       };
     });
 
@@ -638,3 +669,4 @@ export async function queueProcessPending(
 ) {
   return queueFlush(executor, options);
 }
+

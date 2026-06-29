@@ -1,18 +1,18 @@
-// apps/mobile/src/lib/api.ts  (FULL FILE – merged, nothing deleted)
+﻿// apps/mobile/src/lib/api.ts  (FULL FILE – merged, nothing deleted)
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
 import { getToken } from "./auth";
 
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { Asset } from "expo-asset";
 
 const API_URL_STORAGE_KEY = "api_base_url";
 
-/**
- * =========================
- * Company Branding (Header + Logo) – Offline Cache (B)
- * =========================
- */
+// =========================
+// Company Branding (Header + Logo) – Offline Cache (B)
+// =========================
+const COMPANY_BRANDING_LAST_SYNC_KEY = "rlc_company_branding_last_sync_ms_v1";
+const COMPANY_BRANDING_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
 const COMPANY_HEADER_CACHE_KEY = "rlc_company_header_cache_v1";
 const COMPANY_LOGO_CACHE_REL = "logo"; // file name without ext
 const COMPANY_CACHE_DIR = `${
@@ -30,6 +30,11 @@ export type CompanyHeader = {
   updatedAt?: string;
 };
 
+type CompanyHeaderCachePayload = {
+  ts: number; // savedAt ms
+  header: CompanyHeader | null;
+};
+
 async function ensureCompanyCacheDir() {
   if (!COMPANY_CACHE_DIR) return;
   try {
@@ -42,61 +47,122 @@ async function ensureCompanyCacheDir() {
   } catch {}
 }
 
-function guessExtFromLogoPath(logoPath?: string | null) {
-  const p = String(logoPath || "").toLowerCase();
-  if (p.endsWith(".png")) return ".png";
-  if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return ".jpg";
-  if (p.endsWith(".webp")) return ".webp";
-  return ".png";
-}
-
-async function cachedLogoUriForExt(ext: string) {
-  await ensureCompanyCacheDir();
-  const safeExt = ext.startsWith(".") ? ext : `.${ext}`;
-  return `${COMPANY_CACHE_DIR}${COMPANY_LOGO_CACHE_REL}${safeExt}`;
-}
-
-async function findAnyCachedLogoUri(): Promise<string | null> {
-  await ensureCompanyCacheDir();
-  const tries = [".png", ".jpg", ".webp"];
-  for (const ext of tries) {
-    const uri = await cachedLogoUriForExt(ext);
-    try {
-      const info = await FileSystem.getInfoAsync(uri);
-      if (info.exists && info.isDirectory === false) return uri;
-    } catch {}
-  }
-  return null;
-}
-
-async function cleanupCachedCompanyLogos() {
-  try {
-    await ensureCompanyCacheDir();
-    const tries = [".png", ".jpg", ".webp"];
-    for (const ext of tries) {
-      const uri = await cachedLogoUriForExt(ext);
-      try {
-        await FileSystem.deleteAsync(uri, { idempotent: true });
-      } catch {}
-    }
-  } catch {}
-}
-
-async function cacheCompanyHeaderLocally(header: CompanyHeader) {
-  try {
-    await AsyncStorage.setItem(
-      COMPANY_HEADER_CACHE_KEY,
-      JSON.stringify(header || {})
-    );
-  } catch {}
-}
-
-async function readCachedCompanyHeader(): Promise<CompanyHeader | null> {
+async function readCompanyHeaderCache(): Promise<CompanyHeaderCachePayload | null> {
   try {
     const raw = await AsyncStorage.getItem(COMPANY_HEADER_CACHE_KEY);
     if (!raw) return null;
-    const j = JSON.parse(raw);
-    return j && typeof j === "object" ? (j as CompanyHeader) : null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.ts !== "number") return null;
+    return parsed as CompanyHeaderCachePayload;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCompanyHeaderCache(header: CompanyHeader | null) {
+  try {
+    const payload: CompanyHeaderCachePayload = { ts: Date.now(), header };
+    await AsyncStorage.setItem(COMPANY_HEADER_CACHE_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+// ---- inFlight guard (prevents request spam)
+let _companyHeaderInFlight: Promise<CompanyHeader | null> | null = null;
+
+export async function getCompanyHeaderCached(opts?: {
+  force?: boolean;
+  maxAgeMs?: number; // default 6h
+}): Promise<CompanyHeader | null> {
+  const force = !!opts?.force;
+  const maxAgeMs =
+    typeof opts?.maxAgeMs === "number" ? opts!.maxAgeMs : 6 * 60 * 60 * 1000;
+
+  // 1) serve from cache if fresh
+  if (!force) {
+    const cached = await readCompanyHeaderCache();
+    if (cached?.header && Date.now() - cached.ts < maxAgeMs) {
+      return cached.header;
+    }
+  }
+
+  // 2) dedupe concurrent calls
+  if (_companyHeaderInFlight) return _companyHeaderInFlight;
+
+  // 3) fetch once
+  _companyHeaderInFlight = (async () => {
+    try {
+      // IMPORTANT: this must call your authenticated fetchJson
+      const resp = await apiFetchJson("/api/company/header", { method: "GET" });
+      const header: CompanyHeader | null = resp?.ok
+        ? (resp.company as CompanyHeader)
+        : null;
+
+      await writeCompanyHeaderCache(header);
+
+      // optional: prefetch logo if present
+      if (resp?.ok && resp?.company?.logoUrl) {
+        // don't block
+        void downloadCompanyLogoIfNeeded(
+          String(resp.company.logoUrl),
+          header?.updatedAt
+        );
+      }
+
+      return header;
+    } catch {
+      // fallback to stale cache if exists
+      const cached = await readCompanyHeaderCache();
+      return cached?.header ?? null;
+    } finally {
+      _companyHeaderInFlight = null;
+    }
+  })();
+
+  return _companyHeaderInFlight;
+}
+
+// ---- Logo caching (optional)
+function logoLocalPath(ext: string) {
+  return `${COMPANY_CACHE_DIR}${COMPANY_LOGO_CACHE_REL}.${ext}`;
+}
+
+async function findExistingLogoFile(): Promise<string | null> {
+  try {
+    await ensureCompanyCacheDir();
+    const exts = ["png", "jpg", "jpeg", "webp"];
+    for (const ext of exts) {
+      const p = logoLocalPath(ext);
+      const info = await FileSystem.getInfoAsync(p);
+      if (info.exists) return p;
+    }
+  } catch {}
+  return null;
+}
+
+async function downloadCompanyLogoIfNeeded(logoUrlRel: string, updatedAt?: string) {
+  try {
+    await ensureCompanyCacheDir();
+
+    // if we already have a logo file, keep it (simple strategy)
+    const existing = await findExistingLogoFile();
+    if (existing) return existing;
+
+    // decide extension fallback
+    const extGuess = logoUrlRel.toLowerCase().includes(".webp")
+      ? "webp"
+      : logoUrlRel.toLowerCase().includes(".jpg") ||
+        logoUrlRel.toLowerCase().includes(".jpeg")
+      ? "jpg"
+      : "png";
+
+    const target = logoLocalPath(extGuess);
+
+    const absUrl = apiResolveUrl(logoUrlRel); // must exist in your api layer
+    const dl = await FileSystem.downloadAsync(absUrl, target, {
+      headers: await apiAuthHeaders(), // must return Authorization header
+    });
+
+    return dl?.uri ?? null;
   } catch {
     return null;
   }
@@ -115,6 +181,8 @@ const ENV_API_URL_RAW = (process.env.EXPO_PUBLIC_API_URL?.trim() || "").replace(
   /\/$/,
   ""
 );
+
+console.log("[RLC] ENV_API_URL_RAW =", ENV_API_URL_RAW);
 
 // ✅ Default for real devices (Tunnel)
 const FALLBACK_API_URL = "https://api.rlcbausoftware.com";
@@ -181,7 +249,7 @@ export function extractBaCode(s?: string) {
   const m = raw.match(/(BA-\d{4}[-_][A-Z0-9]+)\b/i);
   if (m?.[1]) return m[1].toUpperCase().replace(/_/g, "-");
 
-  const m2 = raw.match(/local-(BA-\d{4}[-_][A-Z0-9]+)\b/i);
+  const m2 = raw.match(/\b(BA-\d{4}[-_][A-Z0-9]+)\b/i);
   if (m2?.[1]) return m2[1].toUpperCase().replace(/_/g, "-");
 
   return null;
@@ -208,10 +276,8 @@ export function sanitizeFsKey(v: string): string {
 /**
  * ✅ BA-only check (per funzioni SERVER/ONLINE)
  */
-export function looksLikeProjectCode(s: string) {
-  const raw = String(s || "").trim();
-  const ba = extractBaCode(raw);
-  return !!ba;
+export function looksLikeProjectCode(v: string) {
+  return /^BA-\d{4}-[A-Z0-9]+$/i.test(String(v || "").trim());
 }
 
 /** =========================
@@ -347,11 +413,7 @@ function isOfflineLikeError(e: any) {
   );
 }
 
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number
-) {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
   const hasAbort = typeof AbortController !== "undefined";
   if (!hasAbort) return fetch(url, init);
 
@@ -363,7 +425,44 @@ async function fetchWithTimeout(
     clearTimeout(t);
   }
 }
+/**
+ * ✅ SERVER token hardening:
+ * - In SERVER mode, NEVER send "local:..." tokens
+ * - Always prefer SERVER_SYNC token bucket
+ */
+async function getServerTokenSafe(): Promise<string | null> {
+  try {
+    const mode = (await AsyncStorage.getItem("rlc_mobile_mode")) || "SERVER_SYNC";
 
+    let t: any = null;
+    try {
+      t = await getToken();
+    } catch {
+      t = await getToken(); // fallback compatibilità
+    }
+
+    // ✅ normalize: support string OR object { token: "..." }
+    let token = "";
+    if (typeof t === "string") token = t;
+    else if (t && typeof t === "object") {
+      token = String((t as any).token || (t as any).accessToken || "");
+    } else token = "";
+
+    token = String(token || "").trim();
+
+    // Se siamo in SERVER mode, non inviare mai token local:...
+    if (mode !== "NUR_APP" && token.startsWith("local:")) return null;
+
+    // token deve sembrare un JWT (3 parti)
+    if (mode !== "NUR_APP") {
+      if (!token || token.length < 10) return null;
+    }
+
+    return token || null;
+  } catch {
+    return null;
+  }
+}
 /**
  * ✅ IMPORTANT:
  * - Non inviare Authorization su endpoint pubblici, altrimenti token sporchi/legacy
@@ -374,18 +473,25 @@ function isPublicEndpoint(path: string) {
   return (
     p.startsWith("/api/auth/") ||
     p === "/api/health" ||
+    p === "/health" ||
     p.startsWith("/api/license/")
   );
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await getToken();
+  const token = await getServerTokenSafe();
 
   const headers: Record<string, string> = { ...(init.headers as any) };
+  // ✅ RN FormData detection (instanceof è inaffidabile su Expo/RN)
+  const bodyAny: any = (init as any)?.body;
   const isForm =
-    typeof FormData !== "undefined" && init.body instanceof FormData;
+    !!bodyAny &&
+    typeof bodyAny === "object" &&
+    typeof bodyAny.append === "function" &&
+    (Array.isArray(bodyAny._parts) ||
+      String(bodyAny?.constructor?.name || "").toLowerCase() === "formdata");
 
-  // ✅ per FormData non settare Content-Type (boundary)
+  // ✅ per FormData NON settare Content-Type (boundary lo mette fetch)
   if (!isForm) headers["Content-Type"] = "application/json";
   headers["Accept"] = "application/json";
 
@@ -438,7 +544,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   const text = await res.text().catch(() => "");
-  return (text ? JSON.parse(text) : null) as T;
+  if (!text) return null as T;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("Ungültige Server-Antwort (kein JSON)");
+  }
 }
 
 function looksLikeMissingEndpoint(err: any) {
@@ -462,9 +574,7 @@ export function projectFsKey(p: Project): string {
   return key || String(p.id || "").trim();
 }
 
-export async function resolveProjectCode(
-  projectIdOrCode: string
-): Promise<string> {
+export async function resolveProjectCode(projectIdOrCode: string): Promise<string> {
   const raw = String(projectIdOrCode || "").trim();
   if (!raw) return "";
 
@@ -482,6 +592,26 @@ export async function resolveProjectCode(
   }
 
   return raw;
+}
+
+/** =========================
+ *  Projects – create (SERVER)
+ *  ========================= */
+export async function createProject(payload: {
+  name: string;
+  client?: string;
+  place?: string;
+  number?: string | null;
+}): Promise<any> {
+  return request<any>("/api/projects", {
+    method: "POST",
+    body: JSON.stringify({
+      name: String(payload?.name ?? "Neues Projekt"),
+      client: String(payload?.client ?? ""),
+      place: String(payload?.place ?? ""),
+      number: payload?.number ?? null,
+    }),
+  });
 }
 
 /** =========================
@@ -528,12 +658,11 @@ async function asUploadableUri(uri: string) {
   if (u.startsWith("file://")) return u;
 
   try {
-    const extGuess =
-      u.toLowerCase().includes(".pdf")
-        ? ".pdf"
-        : u.toLowerCase().includes(".png")
-        ? ".png"
-        : ".jpg";
+    const extGuess = u.toLowerCase().includes(".pdf")
+      ? ".pdf"
+      : u.toLowerCase().includes(".png")
+      ? ".png"
+      : ".jpg";
 
     const tmp = `${FileSystem.cacheDirectory}upl_${Date.now()}${extGuess}`;
     await FileSystem.copyAsync({ from: u, to: tmp });
@@ -660,6 +789,49 @@ function regieCommitEndpoint() {
   return `/api/regie/commit/regiebericht`;
 }
 
+// TAGESBERICHT
+function tagesberichtSubmitEndpoint() {
+  return `/api/tagesbericht`;
+}
+function tagesberichtSubmitEndpointPlural() {
+  return `/api/tagesberichte`;
+}
+function tagesberichtInboxSubmitEndpoint() {
+  return `/api/tagesbericht/inbox/submit`;
+}
+function tagesberichtInboxSubmitEndpointPlural() {
+  return `/api/tagesberichte/inbox/submit`;
+}
+function tagesberichtInboxListEndpoint(projectId: string) {
+  return `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(projectId)}`;
+}
+function tagesberichtInboxListEndpointPlural(projectId: string) {
+  return `/api/tagesberichte/inbox/list?projectId=${encodeURIComponent(projectId)}`;
+}
+function tagesberichtInboxReadEndpoint(projectId: string, docId: string) {
+  return `/api/tagesbericht/inbox/read?projectId=${encodeURIComponent(projectId)}&docId=${encodeURIComponent(docId)}`;
+}
+function tagesberichtInboxReadEndpointPlural(projectId: string, docId: string) {
+  return `/api/tagesberichte/inbox/read?projectId=${encodeURIComponent(projectId)}&docId=${encodeURIComponent(docId)}`;
+}
+function tagesberichtInboxApproveEndpoint() {
+  return `/api/tagesbericht/inbox/approve`;
+}
+function tagesberichtInboxApproveEndpointPlural() {
+  return `/api/tagesberichte/inbox/approve`;
+}
+function tagesberichtInboxRejectEndpoint() {
+  return `/api/tagesbericht/inbox/reject`;
+}
+function tagesberichtInboxRejectEndpointPlural() {
+  return `/api/tagesberichte/inbox/reject`;
+}
+function tagesberichtCommitEndpoint() {
+  return `/api/tagesbericht/commit`;
+}
+function tagesberichtCommitEndpointPlural() {
+  return `/api/tagesberichte/commit`;
+}
 // LIEFERSCHEIN (NEW inbox workflow)
 function lsSubmitEndpoint() {
   return `/api/ls`;
@@ -713,11 +885,273 @@ function supportChatEndpoint() {
   return `/api/support/chat`;
 }
 
+/**
+ * ✅ PASSWORD RESET
+ */
+function passwordResetRequestEndpoint() {
+  return `/api/auth/password-reset/request`;
+}
+function passwordResetConfirmEndpoint() {
+  return `/api/auth/password-reset/confirm`;
+}
+
+/* KALKULATION */
+function kalkulationAngebotEndpoint(projectCode: string) {
+  return `/api/kalkulation/angebot/${encodeURIComponent(projectCode)}`;
+}
+function kalkulationAngebotSaveEndpoint(projectCode: string) {
+  return `/api/kalkulation/angebot/${encodeURIComponent(projectCode)}/save`;
+}
+function kalkulationAngebotDeleteEndpoint(projectCode: string, id: string) {
+  return `/api/kalkulation/angebot/${encodeURIComponent(projectCode)}/${encodeURIComponent(id)}`;
+}
+
+function kalkulationMengenEndpoint(projectCode: string) {
+  return `/api/kalkulation/mengen/${encodeURIComponent(projectCode)}`;
+}
+function kalkulationMengenSaveEndpoint(projectCode: string) {
+  return `/api/kalkulation/mengen/${encodeURIComponent(projectCode)}/save`;
+}
+function kalkulationMengenDeleteEndpoint(projectCode: string, id: string) {
+  return `/api/kalkulation/mengen/${encodeURIComponent(projectCode)}/${encodeURIComponent(id)}`;
+}
+
+function kalkulationRechnungEndpoint(projectCode: string) {
+  return `/api/kalkulation/rechnung/${encodeURIComponent(projectCode)}`;
+}
+function kalkulationRechnungSaveEndpoint(projectCode: string) {
+  return `/api/kalkulation/rechnung/${encodeURIComponent(projectCode)}/save`;
+}
+function kalkulationRechnungDeleteEndpoint(projectCode: string, id: string) {
+  return `/api/kalkulation/rechnung/${encodeURIComponent(projectCode)}/${encodeURIComponent(id)}`;
+}
+
+
+function savedKiKalkulationEndpoint(projectCode: string) {
+  // Einheitlicher Server-Snapshot für Web + Mobile:
+  // GET /api/kalkulation/storage/ki/:projectCode
+  return `/api/kalkulation/storage/ki/${encodeURIComponent(projectCode)}`;
+}
+function savedKiKalkulationSaveEndpoint(projectCode: string) {
+  // Einheitlicher Server-Snapshot für Web + Mobile:
+  // POST /api/kalkulation/storage/ki/:projectCode/save
+  return `/api/kalkulation/storage/ki/${encodeURIComponent(projectCode)}/save`;
+}
+function mobileKalkulationEndpoint(projectCode: string) {
+  return `/api/mobile/projects/${encodeURIComponent(projectCode)}/kalkulation`;
+}
+function projectKalkulationEndpoint(projectCode: string) {
+  return `/api/projects/${encodeURIComponent(projectCode)}/kalkulation`;
+}
+function projectLvEndpoint(projectCode: string) {
+  return `/api/project-lv/${encodeURIComponent(projectCode)}`;
+}
+function projectLvPositionsEndpoint(projectCode: string) {
+  return `/api/project-lv/${encodeURIComponent(projectCode)}/positions`;
+}
+function mobileKalkulationOutliersEndpoint(projectCode: string) {
+  return `/api/mobile/projects/${encodeURIComponent(projectCode)}/kalkulation/outliers`;
+}
+function projectKalkulationOutliersEndpoint(projectCode: string) {
+  return `/api/projects/${encodeURIComponent(projectCode)}/kalkulation/outliers`;
+}
+function mobileKiKalkulationRunEndpoint(projectCode: string) {
+  return `/api/mobile/projects/${encodeURIComponent(projectCode)}/kalkulation/ki/run`;
+}
+function projectKiKalkulationRunEndpoint(projectCode: string) {
+  return `/api/projects/${encodeURIComponent(projectCode)}/kalkulation/ki/run`;
+}
+function kalkulationKiSuggestBatchEndpoint() {
+  return `/api/kalkulation/ki/suggest-batch`;
+}
+function mobileCopilotChatEndpoint() {
+  return `/api/mobile/copilot/chat`;
+}
+function copilotChatEndpoint() {
+  return `/api/copilot/chat`;
+}
+
+export type MobileKalkulationRow = {
+  id?: string;
+  positionId?: string;
+  posNr?: string;
+  positionsnummer?: string;
+  kurztext?: string;
+  langtext?: string;
+  einheit?: string;
+  menge?: number | string;
+  quantity?: number | string;
+  ep?: number | string;
+  gp?: number | string;
+  preis?: number | string;
+  unitPrice?: number | string;
+  finalUnitPrice?: number | string;
+  rlcKiUnitPrice?: number | string;
+  totalNet?: number | string;
+  warning?: string;
+  warnings?: string[];
+  riskLevel?: string;
+  calculationStatus?: string;
+  source?: string;
+  duplicate?: boolean;
+  isDuplicate?: boolean;
+  [key: string]: any;
+};
+
+export type MobileKalkulationPayload = {
+  ok?: boolean;
+  projectId?: string;
+  projectCode?: string;
+  rows?: MobileKalkulationRow[];
+  positions?: MobileKalkulationRow[];
+  outliers?: MobileKalkulationRow[];
+  summary?: any;
+  totalNet?: number;
+  source?: string;
+  [key: string]: any;
+};
+
+function extractMobileKalkulationRows(payload: any): MobileKalkulationRow[] {
+  if (Array.isArray(payload)) return payload as MobileKalkulationRow[];
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.positions)) return payload.positions;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data?.rows)) return payload.data.rows;
+  if (Array.isArray(payload?.data?.positions)) return payload.data.positions;
+  return [];
+}
+
+function mobileNumber(value: any): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const cleaned = value.replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+
+function mobilePayloadTotal(payload: any): number {
+  return mobileNumber(
+    payload?.summary?.rlcKiNet ??
+      payload?.summary?.rlcKiTotalNet ??
+      payload?.summary?.totalNet ??
+      payload?.summary?.netto ??
+      payload?.summary?.net ??
+      payload?.totals?.netto ??
+      payload?.totals?.net ??
+      payload?.data?.summary?.rlcKiNet ??
+      payload?.data?.summary?.rlcKiTotalNet ??
+      payload?.data?.summary?.totalNet ??
+      payload?.data?.summary?.netto ??
+      payload?.data?.summary?.net ??
+      payload?.data?.totals?.netto ??
+      payload?.data?.totals?.net ??
+      payload?.data?.totalNet ??
+      payload?.data?.netto ??
+      payload?.totalNet ??
+      payload?.netto
+  );
+}
+
+function mobileRowEp(row: MobileKalkulationRow): number {
+  return mobileNumber(
+    row?.rlcKiUnitPrice ??
+      row?.kiUnitPrice ??
+      row?.calculatedUnitPrice ??
+      row?.finalUnitPrice ??
+      row?.suggestedUnitPrice ??
+      row?.unitPriceNet ??
+      row?.unitPrice ??
+      row?.ep ??
+      row?.preis
+  );
+}
+
+function mobileRowGp(row: MobileKalkulationRow): number {
+  const explicit = mobileNumber(
+    row?.rlcKiTotal ??
+      row?.kiTotal ??
+      row?.calculatedTotal ??
+      row?.totalNet ??
+      row?.total ??
+      row?.gp ??
+      row?.gesamt
+  );
+  if (explicit > 0) return explicit;
+  const qty = mobileNumber(row?.menge ?? row?.quantity);
+  const ep = mobileRowEp(row);
+  return qty > 0 && ep > 0 ? Math.round(qty * ep * 100) / 100 : 0;
+}
+
+function mobileRowsHavePrices(rows: MobileKalkulationRow[]): boolean {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  const priced = rows.filter((r) => mobileRowEp(r) > 0 || mobileRowGp(r) > 0).length;
+  return priced / rows.length >= 0.4;
+}
+
+function normalizeMobileSavedKalkulationPayload(
+  payload: MobileKalkulationPayload,
+  projectKey: string
+): MobileKalkulationPayload {
+  const rows = extractMobileKalkulationRows(payload);
+  const explicitTotal = mobilePayloadTotal(payload);
+  const rowTotal = rows.reduce((sum, r) => sum + mobileRowGp(r), 0);
+  return {
+    ...(payload || {}),
+    ok: payload?.ok ?? true,
+    exists: (payload as any)?.exists ?? rows.length > 0,
+    projectCode: projectKey,
+    rows,
+    totalNet: explicitTotal > 0 ? explicitTotal : rowTotal,
+  };
+}
+
+function mobileRowWarning(row: MobileKalkulationRow): string {
+  if (Array.isArray(row?.warnings)) return row.warnings.join(" · ");
+  return String(row?.warning || "");
+}
+
+function isMobileOutlierRow(row: MobileKalkulationRow): boolean {
+  const w = mobileRowWarning(row).toLowerCase();
+  const status = String(row?.calculationStatus || "").toLowerCase();
+  const risk = String(row?.riskLevel || "").toLowerCase();
+  const ep = mobileNumber(row?.finalUnitPrice ?? row?.rlcKiUnitPrice ?? row?.ep ?? row?.unitPrice ?? row?.preis);
+  return (
+    risk === "high" ||
+    status.includes("review") ||
+    w.includes("outlier") ||
+    w.includes("plaus") ||
+    w.includes("abweich") ||
+    w.includes("kritisch") ||
+    w.includes("prüfpflichtig") ||
+    ep <= 0
+  );
+}
+
+async function requestFirstMobileKalkulation(
+  paths: string[],
+  init: RequestInit = {}
+): Promise<MobileKalkulationPayload> {
+  let lastError: any = null;
+  for (const path of paths.filter(Boolean)) {
+    try {
+      const res = await request<any>(path, init);
+      return res as MobileKalkulationPayload;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error("Keine Kalkulationsdaten gefunden.");
+}
+
 export type SupportChatRequest = {
   message: string;
   projectId?: string;
   projectCode?: string;
   mode?: "NUR_APP" | "SERVER_SYNC";
+  language?: "de" | "it" | "en";
   context?: {
     pending?: number;
     queueLocked?: boolean;
@@ -792,8 +1226,7 @@ function extractLocalImagesOnly(arr: any[]): UploadFileInput[] {
 
     const t = String(a?.type || "").toLowerCase();
     const type =
-      t ||
-      (uri.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+      t || (uri.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
 
     out.push({ uri, name: a?.name, type });
   }
@@ -843,9 +1276,7 @@ async function ensureFsDir(dir: string) {
 
 async function getOfflineTemplateUri(): Promise<string> {
   // apps/mobile/src/lib/api.ts -> ../../assets/pdf/...
-  const asset = Asset.fromModule(
-    require("../../assets/pdf/regie_template.pdf")
-  );
+  const asset = Asset.fromModule(require("../../assets/pdf/regie_template.pdf"));
   try {
     if (!asset.localUri) await asset.downloadAsync();
   } catch {
@@ -856,9 +1287,7 @@ async function getOfflineTemplateUri(): Promise<string> {
   return uri;
 }
 
-export async function getPdfTemplateUri(opts?: {
-  mode?: "SERVER_SYNC" | "NUR_APP";
-}) {
+export async function getPdfTemplateUri(opts?: { mode?: "SERVER_SYNC" | "NUR_APP" }) {
   const mode = opts?.mode || "SERVER_SYNC";
 
   if (mode === "NUR_APP") {
@@ -924,29 +1353,55 @@ function fotosNotesDeleteEndpoint(projectId: string, id: string) {
     projectId
   )}/fotos/notes/${encodeURIComponent(id)}`;
 }
+function fotosInboxSubmitEndpoint() {
+  return `/api/fotos/inbox/submit`;
+}
+function fotosInboxUploadEndpoint() {
+  return `/api/fotos/inbox/upload`;
+}
+function fotosInboxListEndpoint(projectId: string) {
+  return `/api/fotos/inbox/list?projectId=${encodeURIComponent(projectId)}`;
+}
 function isHttpUrl(u?: string) {
   const s = String(u || "");
   return s.startsWith("http://") || s.startsWith("https://");
 }
 
 /**
- * ✅ upload PHOTO_NOTE as ONE record (main + many files)
+ * ✅ upload PHOTO_NOTE as ONE record (INBOX / Eingangsprüfung)
  */
 async function uploadPhotoNoteToServer(projectKey: string, row: any) {
+  const docId = String(
+    row?.id || row?.docId || `ph_${Date.now()}_${Math.floor(Math.random() * 1e9)}`
+  ).trim();
+
+  const submitPayload = {
+    projectId: projectKey,
+    projectCode: projectKey,
+    docId,
+    id: docId,
+    date:
+      String(row?.date || "").slice(0, 10) ||
+      new Date().toISOString().slice(0, 10),
+    note: String(row?.note || row?.comment || ""),
+    comment: String(row?.comment || row?.note || ""),
+    bemerkungen: String(row?.bemerkungen || row?.comment || row?.note || ""),
+    kostenstelle: String(row?.kostenstelle || ""),
+    lvItemPos: String(row?.lvItemPos || ""),
+    extras: row?.extras ?? undefined,
+    boxes: row?.boxes ?? undefined,
+  };
+
+  const submitRes = await request<any>(fotosInboxSubmitEndpoint(), {
+    method: "POST",
+    body: JSON.stringify(submitPayload),
+  });
+
   const fd = new FormData();
-
-  const id = String(row?.id || row?.docId || "").trim();
-  if (id) fd.append("id", id);
-
-  const d = String(row?.date || "").slice(0, 10);
-  if (d) fd.append("date", d);
-
-  fd.append("kostenstelle", String(row?.kostenstelle || ""));
-  fd.append("lvItemPos", String(row?.lvItemPos || ""));
-  fd.append("note", String(row?.note || row?.comment || ""));
-
-  if (row?.extras) fd.append("extras", JSON.stringify(row.extras));
-  if (row?.boxes) fd.append("boxes", JSON.stringify(row.boxes));
+  fd.append("projectId", projectKey);
+  fd.append("projectCode", projectKey);
+  fd.append("docId", docId);
+  fd.append("id", docId);
 
   const imageUri = row?.imageUri ? String(row.imageUri) : "";
   if (imageUri && !isHttpUrl(imageUri)) {
@@ -975,10 +1430,106 @@ async function uploadPhotoNoteToServer(projectKey: string, row: any) {
     fd.append("files", { uri: uploadUri, name, type });
   }
 
-  return request<any>(fotosNotesEndpoint(projectKey), {
+  const uploadRes = await request<any>(fotosInboxUploadEndpoint(), {
     method: "POST",
     body: fd,
   });
+
+  return {
+    ok: true,
+    projectId: projectKey,
+    docId,
+    submitRes,
+    uploadRes,
+  };
+}
+async function getLastBrandingSyncMs(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(COMPANY_BRANDING_LAST_SYNC_KEY);
+    const n = raw ? Number(raw) : 0;
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function setLastBrandingSyncMs(ms: number): Promise<void> {
+  try {
+    await AsyncStorage.setItem(COMPANY_BRANDING_LAST_SYNC_KEY, String(ms || 0));
+  } catch {}
+}
+
+async function brandingSyncAllowedNow(minIntervalMs = COMPANY_BRANDING_MIN_INTERVAL_MS) {
+  const last = await getLastBrandingSyncMs();
+  const now = Date.now();
+  return now - last >= minIntervalMs;
+}
+
+/** =========================
+ *  Missing helper implementations used above
+ *  ========================= */
+
+async function apiAuthHeaders(): Promise<Record<string, string>> {
+  const token = await getServerTokenSafe();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "X-App-Version": appVersion(),
+    ...(appBuild() ? { "X-App-Build": appBuild() } : {}),
+  };
+}
+
+function apiResolveUrl(relOrAbs: string): string {
+  const raw = String(relOrAbs || "").trim();
+  if (!raw) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = coerceApiHost(API_URL).replace(/\/$/, "");
+  if (raw.startsWith("/")) return `${base}${raw}`;
+  return `${base}/${raw}`;
+}
+
+async function apiFetchJson(path: string, init: RequestInit = {}) {
+  return request<any>(path, init);
+}
+
+async function cacheCompanyHeaderLocally(header: CompanyHeader | null): Promise<void> {
+  await writeCompanyHeaderCache(header);
+}
+
+async function readCachedCompanyHeader(): Promise<CompanyHeader | null> {
+  const cached = await readCompanyHeaderCache();
+  return cached?.header ?? null;
+}
+
+function guessExtFromLogoPath(logoPath?: string | null): "png" | "jpg" | "jpeg" | "webp" {
+  const s = String(logoPath || "").toLowerCase();
+  if (s.includes(".webp")) return "webp";
+  if (s.includes(".jpeg")) return "jpeg";
+  if (s.includes(".jpg")) return "jpg";
+  return "png";
+}
+
+async function cachedLogoUriForExt(
+  ext: "png" | "jpg" | "jpeg" | "webp"
+): Promise<string> {
+  await ensureCompanyCacheDir();
+  return logoLocalPath(ext);
+}
+
+async function cleanupCachedCompanyLogos(): Promise<void> {
+  try {
+    await ensureCompanyCacheDir();
+    const exts = ["png", "jpg", "jpeg", "webp"];
+    for (const ext of exts) {
+      const p = logoLocalPath(ext);
+      try {
+        await FileSystem.deleteAsync(p, { idempotent: true });
+      } catch {}
+    }
+  } catch {}
+}
+
+async function findAnyCachedLogoUri(): Promise<string | null> {
+  return findExistingLogoFile();
 }
 
 export const api = {
@@ -1003,7 +1554,9 @@ export const api = {
     if (!raw) return raw;
     if (/^https?:\/\//i.test(raw)) return raw;
 
-    const base = API_URL.replace(/\/$/, "");
+    // usa la base "statica" migliore possibile MA coerente col fallback
+    // (per runtime override usa absUrlAsync)
+    const base = coerceApiHost(API_URL).replace(/\/$/, "");
     if (raw.startsWith("/")) return `${base}${raw}`;
     return `${base}/${raw}`;
   },
@@ -1019,7 +1572,7 @@ export const api = {
   },
 
   async health(): Promise<any> {
-    return request<any>("/api/health", { method: "GET" });
+    return request<any>("/health", { method: "GET" });
   },
 
   async licenseStatus(): Promise<any> {
@@ -1070,8 +1623,8 @@ export const api = {
           ok: true,
           type: "warning",
           answer:
-            "Sembra che tu sia offline. Appena torna la connessione, riprova.\n\n" +
-            "Tip: se hai elementi in coda (pending), apri Inbox e verifica se c’è un item in errore.",
+            "Du bist offenbar offline. Sobald die Verbindung wieder da ist, versuche es erneut.\n\n" +
+            "Tipp: Wenn Einträge in der Queue stehen, öffne die Inbox und prüfe, ob ein Eintrag im Fehlerstatus ist.",
           actions: [],
         };
       }
@@ -1080,8 +1633,8 @@ export const api = {
           ok: true,
           type: "warning",
           answer:
-            "Il server non risponde (TIMEOUT). Potrebbe essere la connessione o il tunnel.\n\n" +
-            "Tip: prova a riaprire l’app o a cambiare rete, poi riprova.",
+            "Der Server antwortet nicht (TIMEOUT). Das kann an der Verbindung oder am Tunnel liegen.\n\n" +
+            "Tipp: App neu öffnen oder Netzwerk wechseln und danach erneut versuchen.",
           actions: [],
         };
       }
@@ -1089,8 +1642,7 @@ export const api = {
         ok: true,
         type: "warning",
         answer:
-          "Non riesco a contattare il supporto in questo momento.\n\n" +
-          `Errore: ${msg}`,
+          "Ich kann den Support im Moment nicht erreichen.\n\n" + `Fehler: ${msg}`,
         actions: [],
       };
     }
@@ -1154,7 +1706,7 @@ export const api = {
       const base = await getApiUrl();
       const url = `${base}${companyLogoEndpoint()}`;
 
-      const token = await getToken();
+      const token = await getServerTokenSafe();
       const headers: Record<string, string> = {
         Accept: "*/*",
         "X-App-Version": appVersion(),
@@ -1180,18 +1732,45 @@ export const api = {
    * One-shot: refresh header + logo into offline cache.
    * Use this after login, or in Settings screen.
    */
-  async syncCompanyBrandingToOfflineCache(): Promise<{
-    header: CompanyHeader | null;
-    logoUri: string | null;
-  }> {
+  async syncCompanyBrandingToOfflineCache(opts?: {
+    minIntervalMs?: number;
+    force?: boolean;
+  }): Promise<{ header: CompanyHeader | null; logoUri: string | null }> {
+    const minIntervalMs =
+      typeof opts?.minIntervalMs === "number"
+        ? Math.max(0, opts!.minIntervalMs)
+        : COMPANY_BRANDING_MIN_INTERVAL_MS;
+
+    const force = !!opts?.force;
+
+    // 0) se non è permesso syncare ora -> ritorna cache e basta (NO rete)
+    if (!force) {
+      const ok = await brandingSyncAllowedNow(minIntervalMs);
+      if (!ok) {
+        const headerCached = await api.getCompanyHeaderCached().catch(() => null);
+        const logoCached = await api.getCompanyLogoCachedUri().catch(() => null);
+        return { header: headerCached, logoUri: logoCached };
+      }
+    }
+
+    // 1) blocca subito timestamp (anti-loop)
+    await setLastBrandingSyncMs(Date.now());
+
+    // 2) prova rete una volta sola
     let header: CompanyHeader | null = null;
     try {
       header = await api.getCompanyHeader();
     } catch {
-      header = await api.getCompanyHeaderCached();
+      header = await api.getCompanyHeaderCached().catch(() => null);
     }
 
-    const logoUri = await api.downloadCompanyLogoToCache(false);
+    let logoUri: string | null = null;
+    try {
+      logoUri = await api.downloadCompanyLogoToCache(false);
+    } catch {
+      logoUri = await api.getCompanyLogoCachedUri().catch(() => null);
+    }
+
     return { header, logoUri };
   },
 
@@ -1225,10 +1804,7 @@ export const api = {
   },
 
   // ADMIN: upload logo (file:// / content:// supported)
-  async uploadCompanyLogoAdmin(
-    fileUri: string,
-    mime?: string
-  ): Promise<CompanyHeader> {
+  async uploadCompanyLogoAdmin(fileUri: string, mime?: string): Promise<CompanyHeader> {
     const uri = await asUploadableUri(String(fileUri || ""));
     if (!uri) throw new Error("logo uri missing");
 
@@ -1302,6 +1878,25 @@ export const api = {
     });
   },
 
+  async passwordResetRequest(email: string) {
+    return request<any>(passwordResetRequestEndpoint(), {
+      method: "POST",
+      body: JSON.stringify({
+        email: String(email || "").trim(),
+      }),
+    });
+  },
+
+  async passwordResetConfirm(token: string, password: string) {
+    return request<any>(passwordResetConfirmEndpoint(), {
+      method: "POST",
+      body: JSON.stringify({
+        token: String(token || "").trim(),
+        password: String(password || ""),
+      }),
+    });
+  },
+
   async login(
     email: string,
     password: string,
@@ -1354,6 +1949,362 @@ export const api = {
     if (Array.isArray(r)) return r;
     if (r && Array.isArray((r as any).projects)) return (r as any).projects;
     return [];
+  },
+
+  async createProject(payload: {
+    name: string;
+    client?: string;
+    place?: string;
+    number?: string | null;
+  }): Promise<any> {
+    return createProject(payload);
+  },
+
+
+  /** =========================
+   * KALKULATION MOBILE / COPILOT
+   * ========================= */
+
+  async getMobileKalkulation(
+    projectIdOrCode: string,
+    projectCode?: string
+  ): Promise<MobileKalkulationPayload> {
+    const projectKey = await resolveProjectCode(projectCode || projectIdOrCode);
+
+    // Wichtig:
+    // Mobile darf für "Kalkulation" nicht das rohe LV (/api/project-lv/...) als
+    // gespeicherte KI-Kalkulation akzeptieren. Sonst erscheinen 465 Positionen
+    // mit EP/GP 0,00 €. Darum lesen wir zuerst die gleiche KI-Snapshot-Route wie Web.
+    const savedPaths = [
+      savedKiKalkulationEndpoint(projectKey),
+      mobileKalkulationEndpoint(projectKey),
+      projectKalkulationEndpoint(projectKey),
+    ];
+
+    let lastError: any = null;
+    for (const path of savedPaths) {
+      try {
+        const payload = await request<any>(path, { method: "GET" });
+        const normalized = normalizeMobileSavedKalkulationPayload(payload, projectKey);
+        const rows = extractMobileKalkulationRows(normalized);
+
+        if ((payload as any)?.exists === false) continue;
+        if (rows.length > 0 && mobileRowsHavePrices(rows)) return normalized;
+
+        // Wenn ein Endpoint nur Summary ohne Preiszeilen liefert, nicht als gültige
+        // Kalkulation akzeptieren. Mobile braucht positionsweise EP/GP.
+        if (rows.length === 0 && mobilePayloadTotal(payload) > 0) {
+          lastError = new Error("Server liefert nur Summary, aber keine Kalkulationspositionen.");
+        }
+      } catch (e) {
+        lastError = e;
+      }
+    }
+
+    return {
+      ok: false,
+      exists: false,
+      projectCode: projectKey,
+      rows: [],
+      totalNet: 0,
+      source: "no-saved-server-kalkulation",
+      error:
+        String(lastError?.message || lastError || "") ||
+        "Keine gespeicherte KI-Kalkulation auf dem Server gefunden.",
+    };
+  },
+
+  async getProjectKalkulation(projectIdOrCode: string, projectCode?: string) {
+    return this.getMobileKalkulation(projectIdOrCode, projectCode);
+  },
+
+  async getKalkulationRows(projectIdOrCode: string, projectCode?: string) {
+    return this.getMobileKalkulation(projectIdOrCode, projectCode);
+  },
+
+  async saveKiKalkulationSnapshot(projectIdOrCode: string, payload: MobileKalkulationPayload, projectCode?: string) {
+    const projectKey = await resolveProjectCode(projectCode || projectIdOrCode);
+    return request<any>(savedKiKalkulationSaveEndpoint(projectKey), {
+      method: "POST",
+      body: JSON.stringify({
+        data: {
+          ...(payload || {}),
+          ok: payload?.ok ?? true,
+          projectKey,
+          projectCode: projectKey,
+          savedAt: new Date().toISOString(),
+        },
+      }),
+    });
+  },
+
+  async getProjectLv(projectIdOrCode: string, projectCode?: string) {
+    return this.getMobileKalkulation(projectIdOrCode, projectCode);
+  },
+
+  async getMobileKalkulationOutliers(
+    projectIdOrCode: string,
+    projectCode?: string
+  ): Promise<MobileKalkulationPayload> {
+    const projectKey = await resolveProjectCode(projectCode || projectIdOrCode);
+    try {
+      const payload = await requestFirstMobileKalkulation([
+        mobileKalkulationOutliersEndpoint(projectKey),
+        projectKalkulationOutliersEndpoint(projectKey),
+      ], { method: "GET" });
+      const outliers = extractMobileKalkulationRows(payload).filter(isMobileOutlierRow);
+      return { ...(payload || {}), ok: payload?.ok ?? true, projectCode: projectKey, outliers, rows: outliers };
+    } catch {
+      const payload = await this.getMobileKalkulation(projectKey);
+      const rows = extractMobileKalkulationRows(payload);
+      const outliers = rows.filter(isMobileOutlierRow);
+      return { ...(payload || {}), ok: true, projectCode: projectKey, outliers, rows: outliers };
+    }
+  },
+
+  async getProjectKalkulationOutliers(projectIdOrCode: string, projectCode?: string) {
+    return this.getMobileKalkulationOutliers(projectIdOrCode, projectCode);
+  },
+
+  async getKalkulationOutliers(projectIdOrCode: string, projectCode?: string) {
+    return this.getMobileKalkulationOutliers(projectIdOrCode, projectCode);
+  },
+
+  async runMobileKiCalculation(payload: {
+    projectId?: string;
+    projectCode?: string;
+    forceRecalculate?: boolean;
+    rows?: MobileKalkulationRow[];
+    [key: string]: any;
+  }): Promise<any> {
+    const projectKey = await resolveProjectCode(payload?.projectCode || payload?.projectId || "");
+    const bodyBase = {
+      ...(payload || {}),
+      projectId: projectKey,
+      projectCode: projectKey,
+      forceRecalculate: !!payload?.forceRecalculate,
+    };
+
+    try {
+      return await request<any>(mobileKiKalkulationRunEndpoint(projectKey), {
+        method: "POST",
+        body: JSON.stringify(bodyBase),
+      });
+    } catch {}
+
+    try {
+      return await request<any>(projectKiKalkulationRunEndpoint(projectKey), {
+        method: "POST",
+        body: JSON.stringify(bodyBase),
+      });
+    } catch {}
+
+    const existing = payload?.rows?.length
+      ? { rows: payload.rows }
+      : await this.getMobileKalkulation(projectKey);
+    const rows = extractMobileKalkulationRows(existing);
+
+    const calculated = await request<any>(kalkulationKiSuggestBatchEndpoint(), {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: projectKey,
+        projectCode: projectKey,
+        forceRecalculate: !!payload?.forceRecalculate,
+        rows,
+      }),
+    });
+
+    // Wenn Mobile wirklich eine neue KI-Kalkulation anstößt, wird das Ergebnis
+    // ebenfalls als Server-Snapshot gespeichert. Normalfall bleibt: Web rechnet,
+    // Mobile liest nur den gespeicherten Snapshot.
+    const calculatedRows = extractMobileKalkulationRows(calculated);
+    if (calculatedRows.length > 0 && mobileRowsHavePrices(calculatedRows)) {
+      const totalNet = calculatedRows.reduce((sum, r) => sum + mobileRowGp(r), 0);
+      try {
+        await request<any>(savedKiKalkulationSaveEndpoint(projectKey), {
+          method: "POST",
+          body: JSON.stringify({
+            data: {
+              ok: true,
+              projectKey,
+              projectCode: projectKey,
+              source: "mobile-ki-calculation",
+              savedAt: new Date().toISOString(),
+              rows: calculatedRows,
+              summary: {
+                totalNet,
+                net: totalNet,
+                netto: totalNet,
+                rlcKiNet: totalNet,
+              },
+              totals: {
+                net: totalNet,
+                netto: totalNet,
+              },
+            },
+          }),
+        });
+      } catch {
+        // Snapshot-Speicherung darf das KI-Ergebnis nicht blockieren.
+      }
+    }
+
+    return calculated;
+  },
+
+  async runProjectKiCalculation(projectIdOrCode: string, opts?: { projectCode?: string; forceRecalculate?: boolean }) {
+    return this.runMobileKiCalculation({
+      projectId: projectIdOrCode,
+      projectCode: opts?.projectCode,
+      forceRecalculate: opts?.forceRecalculate,
+    });
+  },
+
+  async calculateProjectKi(projectIdOrCode: string, projectCode?: string, forceRecalculate?: boolean) {
+    return this.runMobileKiCalculation({ projectId: projectIdOrCode, projectCode, forceRecalculate });
+  },
+
+  async mobileCopilotChat(payload: any): Promise<SupportChatResponse> {
+    const fixed = {
+      ...(payload || {}),
+      message: String(payload?.message || "").trim(),
+      context: {
+        ...(payload?.context || {}),
+        screen: payload?.context?.screen || payload?.entryMode || "RlcCopilot",
+        projectId: payload?.projectId,
+        projectCode: payload?.projectCode,
+        title: payload?.title,
+        positionId: payload?.positionId,
+        posNr: payload?.posNr,
+        appVersion: appVersion(),
+        appBuild: appBuild(),
+      },
+    };
+
+    if (!fixed.message) return { ok: false, error: "message missing" };
+
+    try {
+      return await request<SupportChatResponse>(mobileCopilotChatEndpoint(), {
+        method: "POST",
+        body: JSON.stringify(fixed),
+      });
+    } catch {}
+
+    try {
+      return await request<SupportChatResponse>(copilotChatEndpoint(), {
+        method: "POST",
+        body: JSON.stringify(fixed),
+      });
+    } catch {}
+
+    return this.supportChat(fixed as any);
+  },
+
+  async askRlcCopilot(payload: any): Promise<SupportChatResponse> {
+    return this.mobileCopilotChat(payload);
+  },
+
+  async askSupportChat(message: string, context?: any): Promise<SupportChatResponse> {
+    return this.supportChat({
+      ...(context || {}),
+      message: String(message || ""),
+      context: {
+        ...(context?.context || {}),
+        projectId: context?.projectId,
+        projectCode: context?.projectCode,
+        screen: context?.entryMode || context?.screen || "RlcCopilot",
+      },
+    } as any);
+  },
+
+    /** =========================
+   * KALKULATION: ANGEBOT
+   * ========================= */
+
+  async getAngebote(projectIdOrCode: string): Promise<any[]> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    const res = await request<any>(kalkulationAngebotEndpoint(projectCode), {
+      method: "GET",
+    });
+    return Array.isArray(res) ? res : [];
+  },
+
+  async saveAngebot(projectIdOrCode: string, doc: any): Promise<any> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    return request<any>(kalkulationAngebotSaveEndpoint(projectCode), {
+      method: "POST",
+      body: JSON.stringify({
+        ...(doc || {}),
+        projectCode,
+      }),
+    });
+  },
+
+  async deleteAngebot(projectIdOrCode: string, id: string): Promise<any> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    return request<any>(kalkulationAngebotDeleteEndpoint(projectCode, id), {
+      method: "DELETE",
+    });
+  },
+
+  /** =========================
+   * KALKULATION: MENGEN
+   * ========================= */
+
+  async getMengen(projectIdOrCode: string): Promise<any[]> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    const res = await request<any>(kalkulationMengenEndpoint(projectCode), {
+      method: "GET",
+    });
+    return Array.isArray(res) ? res : [];
+  },
+
+  async saveMengen(projectIdOrCode: string, doc: any): Promise<any> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    return request<any>(kalkulationMengenSaveEndpoint(projectCode), {
+      method: "POST",
+      body: JSON.stringify({
+        ...(doc || {}),
+        projectCode,
+      }),
+    });
+  },
+
+  async deleteMengen(projectIdOrCode: string, id: string): Promise<any> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    return request<any>(kalkulationMengenDeleteEndpoint(projectCode, id), {
+      method: "DELETE",
+    });
+  },
+
+  /** =========================
+   * KALKULATION: RECHNUNG
+   * ========================= */
+
+  async getRechnungen(projectIdOrCode: string): Promise<any[]> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    const res = await request<any>(kalkulationRechnungEndpoint(projectCode), {
+      method: "GET",
+    });
+    return Array.isArray(res) ? res : [];
+  },
+
+  async saveRechnung(projectIdOrCode: string, doc: any): Promise<any> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    return request<any>(kalkulationRechnungSaveEndpoint(projectCode), {
+      method: "POST",
+      body: JSON.stringify({
+        ...(doc || {}),
+        projectCode,
+      }),
+    });
+  },
+
+  async deleteRechnung(projectIdOrCode: string, id: string): Promise<any> {
+    const projectCode = await resolveProjectCode(projectIdOrCode);
+    return request<any>(kalkulationRechnungDeleteEndpoint(projectCode, id), {
+      method: "DELETE",
+    });
   },
 
   /** =========================
@@ -1441,10 +2392,75 @@ export const api = {
     });
   },
 
-  async kiLieferscheinSuggest(
-    projectIdOrCode: string,
-    payload: any
-  ): Promise<any> {
+  async kiRegieSuggest(projectIdOrCode: string, payload: any): Promise<any> {
+    const projectKey = await resolveProjectCode(projectIdOrCode);
+
+    const row = payload?.row || payload || {};
+    const text = String(payload?.text || "").trim();
+
+    const rowsText = Array.isArray(row?.rows)
+      ? row.rows
+          .map((r: any, i: number) =>
+            [
+              `Zeile ${i + 1}`,
+              r?.machine ? `Maschine: ${r.machine}` : "",
+              r?.worker ? `Mitarbeiter: ${r.worker}` : "",
+              r?.hours ? `Std: ${r.hours}` : "",
+              r?.material ? `Material: ${r.material}` : "",
+              r?.quantity ? `Menge: ${r.quantity}` : "",
+              r?.unit ? `Einheit: ${r.unit}` : "",
+              r?.comment ? `Leistung: ${r.comment}` : "",
+            ].filter(Boolean).join(" | ")
+          )
+          .join("\n")
+      : "";
+
+    const finalText =
+      text ||
+      [
+        row?.bemerkungen ? `Bemerkungen: ${row.bemerkungen}` : "",
+        row?.kostenstelle ? `Kostenstelle: ${row.kostenstelle}` : "",
+        row?.ort ? `Ort: ${row.ort}` : "",
+        row?.arbeitsbeginn ? `Arbeitsbeginn: ${row.arbeitsbeginn}` : "",
+        row?.arbeitsende ? `Arbeitsende: ${row.arbeitsende}` : "",
+        rowsText,
+      ].filter(Boolean).join("\n");
+
+    return api.kiSuggest({
+      kind: "REGIE",
+      screen: "Regie",
+      docType: "REGIEBERICHT",
+      projectId: projectKey,
+      projectCode: projectKey,
+      strict: true,
+      text: finalText || "Regiebericht ohne Textinhalt",
+      row,
+      instruction:
+        "Extrahiere strukturierte Felder fuer einen deutschen Regiebericht im Tiefbau. Antworte nur mit JSON. Felder: arbeitsbeginn, arbeitsende, pause1, pause2, wetter, temperatur, kostenstelle, ort, taetigkeit, maschine, mitarbeiter, stunden, material, menge, einheit, kommentar. Keine freien Floskeln.",
+      expectedJson: {
+        fieldPatches: {
+          arbeitsbeginn: "",
+          arbeitsende: "",
+          pause1: "",
+          pause2: "",
+          wetter: "",
+          temperatur: "",
+          kostenstelle: "",
+          ort: "",
+          taetigkeit: "",
+          maschine: "",
+          mitarbeiter: "",
+          stunden: "",
+          material: "",
+          menge: "",
+          einheit: "",
+          kommentar: ""
+        }
+      }
+    });
+  },
+
+  async kiLieferscheinSuggest(projectIdOrCode: string, payload: any): Promise<any> {
     const projectKey = await resolveProjectCode(projectIdOrCode);
 
     const att = Array.isArray(payload?.attachments) ? payload.attachments : [];
@@ -1663,10 +2679,7 @@ export const api = {
     const attachments = Array.isArray(row?.attachments) ? row.attachments : [];
     const all = [...attachments, ...photos].filter(Boolean);
 
-    const { namedAll, localFiles, localByOrder } = buildNamedLocalFiles(
-      all,
-      "regie"
-    );
+    const { namedAll, localFiles, localByOrder } = buildNamedLocalFiles(all, "regie");
 
     let uploadRes: any = null;
     if (localFiles.length) {
@@ -1725,6 +2738,233 @@ export const api = {
     const submitRes = await api.submitRegieInbox(projectKey, submitPayload);
     return { ...submitRes, attachments: attachmentsFinal, uploadRes };
   },
+
+    /** =========================
+   * TAGESBERICHT
+   * ========================= */
+
+  async submitTagesberichtInbox(projectIdOrCode: string, payload: any) {
+    const projectKey = await resolveProjectCode(projectIdOrCode);
+    return request<any>(tagesberichtSubmitEndpoint(), {
+      method: "POST",
+      body: JSON.stringify({
+        ...(payload || {}),
+        projectId: projectKey,
+        projectCode: projectKey,
+      }),
+    });
+  },
+
+  async tagesberichtInboxList(projectIdOrCode: string) {
+  const projectKey = await resolveProjectCode(projectIdOrCode);
+
+  const candidates = [
+    tagesberichtInboxListEndpoint(projectKey),
+    tagesberichtInboxListEndpointPlural(projectKey),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, { method: "GET" });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht inbox list failed");
+},
+
+  async tagesberichtReject(
+  projectIdOrCode: string,
+  docId: string,
+  reason: string
+) {
+  const projectKey = await resolveProjectCode(projectIdOrCode);
+
+  const body = {
+    projectId: projectKey,
+    docId,
+    reason,
+  };
+
+  const candidates = [
+    tagesberichtInboxRejectEndpoint(),
+    tagesberichtInboxRejectEndpointPlural(),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht reject failed");
+},
+
+   async commitTagesbericht(projectIdOrCode: string, payload: any) {
+  const projectKey = await resolveProjectCode(projectIdOrCode);
+
+  const body = {
+    ...(payload || {}),
+    projectId: projectKey,
+    projectCode: projectKey,
+  };
+
+  const candidates = [
+    tagesberichtCommitEndpoint(),
+    tagesberichtCommitEndpointPlural(),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht commit failed");
+},
+
+async tagesberichtInboxRead(projectIdOrCode: string, docId: string) {
+  const projectKey = await resolveProjectCode(projectIdOrCode);
+
+  const candidates = [
+    tagesberichtInboxReadEndpoint(projectKey, docId),
+    tagesberichtInboxReadEndpointPlural(projectKey, docId),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, { method: "GET" });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht inbox read failed");
+},
+
+async tagesberichtApprove(
+  projectIdOrCode: string,
+  docId: string,
+  approvedBy?: string
+) {
+  const projectKey = await resolveProjectCode(projectIdOrCode);
+
+  const body = {
+    projectId: projectKey,
+    docId,
+    approvedBy: approvedBy || undefined,
+  };
+
+  const candidates = [
+    tagesberichtInboxApproveEndpoint(),
+    tagesberichtInboxApproveEndpointPlural(),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht approve failed");
+},
+
+  async pushTagesberichtToServer(projectIdOrCode: string, row: any) {
+  const projectKey = await resolveProjectCode(projectIdOrCode);
+
+  const now = Date.now();
+  const date =
+    String(row?.date || "").slice(0, 10) ||
+    new Date().toISOString().slice(0, 10);
+
+  const docId = String(
+    row?.id || row?.docId || `tb_${now}_${Math.floor(Math.random() * 1e9)}`
+  ).trim();
+
+  const lines = Array.isArray(row?.lines) ? row.lines : [];
+
+  const normalizedLines = lines.map((x: any, idx: number) => {
+    const pauseMinNum = Number(x?.pauseMin ?? 0) || 0;
+    const stundenNum =
+      x?.stunden != null && String(x.stunden).trim() !== ""
+        ? Number(x.stunden) || 0
+        : 0;
+
+    return {
+      id: String(x?.id || `tb_line_${idx + 1}`),
+      von: String(x?.von || "").trim(),
+      bis: String(x?.bis || "").trim(),
+      pauseMin: pauseMinNum,
+      stunden: stundenNum,
+      mitarbeiter: String(x?.mitarbeiter || "").trim(),
+      maschine: String(x?.maschine || "").trim(),
+      ort: String(x?.ort || "").trim(),
+      taetigkeit: String(
+        x?.taetigkeit || x?.tätigkeit || x?.workDone || ""
+      ).trim(),
+      notiz: String(x?.notiz || x?.note || "").trim(),
+    };
+  });
+
+  const summaryText = normalizedLines
+    .map((x: any) => String(x?.taetigkeit || "").trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" | ");
+
+  const payload = {
+    ...stripLocalUris(row),
+    id: docId,
+    docId,
+    projectId: projectKey,
+    projectCode: projectKey,
+    date,
+    weather: String(row?.weather || "").trim(),
+    temperature: String(row?.temperature || "").trim(),
+    workers: String(row?.workers || "").trim(),
+    machines: String(row?.machines || "").trim(),
+    workDone: String(row?.workDone || summaryText || "").trim(),
+    issues: String(row?.issues || "").trim(),
+    notes: String(row?.notes || "").trim(),
+    text: String(row?.text || summaryText || "").trim(),
+    note: String(row?.note || row?.notes || "").trim(),
+    lines: normalizedLines,
+    reportType: "TAGESBERICHT",
+    docType: "TAGESBERICHT",
+    workflowStatus: "EINGEREICHT",
+    submittedAt: Number(row?.submittedAt || now),
+    createdAt: Number(row?.createdAt || now),
+    updatedAt: now,
+  };
+
+  return await api.submitTagesberichtInbox(projectKey, payload);
+},
 
   /** =========================
    * LIEFERSCHEIN (NEW inbox workflow)
@@ -1871,8 +3111,9 @@ export const api = {
     }
 
     const docId = String(submitRes?.docId || row?.id || "").trim();
-    if (!docId)
+    if (!docId) {
       throw new Error("Lieferschein submit fehlgeschlagen: docId fehlt.");
+    }
 
     let uploadRes: any = null;
     let inboxItems: UploadedLsInboxItem[] = [];
@@ -1904,17 +3145,14 @@ export const api = {
       const name = String(p._stableName || stableNameOf(p, "lieferschein"));
 
       const byName =
-        inboxItems.find(
-          (u) => String(u?.name || "").trim() === String(name).trim()
-        ) || null;
+        inboxItems.find((u) => String(u?.name || "").trim() === String(name).trim()) ||
+        null;
 
       const localIdx = localByOrder.findIndex(
         (x: any) => String(x?.uri || "") === String(p?.uri || "")
       );
       const byOrder =
-        localIdx >= 0 && localIdx < inboxItems.length
-          ? inboxItems[localIdx]
-          : null;
+        localIdx >= 0 && localIdx < inboxItems.length ? inboxItems[localIdx] : null;
 
       const hit = byName || byOrder;
 
@@ -1997,21 +3235,20 @@ export const api = {
     const projectKey = await resolveProjectCode(projectIdOrCode);
 
     const ba = extractBaCode(projectKey);
-    if (!ba)
-      throw new Error(
-        "BA-Code fehlt (Photos Server-Sync benötigt BA-xxxx-...)"
-      );
+    if (!ba) {
+      throw new Error("BA-Code fehlt (Photos Server-Sync benötigt BA-xxxx-...)");
+    }
 
     const date =
       String(row?.date || "").slice(0, 10) ||
       new Date().toISOString().slice(0, 10);
 
+    const generatedId = `ph_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+
     const rFixed = {
       ...row,
-      id:
-        row?.id ||
-        row?.docId ||
-        `ph_${Date.now()}_${Math.floor(Math.random() * 1e9)}`,
+      id: row?.id || row?.docId || generatedId,
+      docId: row?.docId || row?.id || generatedId,
       date,
       note: row?.note ?? row?.comment ?? "",
       files: Array.isArray(row?.files)
@@ -2023,14 +3260,21 @@ export const api = {
 
     const saved = await uploadPhotoNoteToServer(ba, rFixed);
 
-    return { ok: true, projectId: ba, saved };
+    return {
+      ok: true,
+      projectId: ba,
+      docId: saved?.docId,
+      submitRes: saved?.submitRes,
+      uploadRes: saved?.uploadRes,
+      saved,
+    };
   },
 
   async photosNotesList(projectIdOrCode: string) {
     const projectKey = await resolveProjectCode(projectIdOrCode);
     const ba = extractBaCode(projectKey);
     if (!ba) throw new Error("BA-Code fehlt");
-    return request<any>(fotosNotesEndpoint(ba), { method: "GET" });
+    return request<any>(fotosInboxListEndpoint(ba), { method: "GET" });
   },
 
   async photosNotesDelete(projectIdOrCode: string, id: string) {
@@ -2041,10 +3285,73 @@ export const api = {
       method: "DELETE",
     });
   },
+
+  async exportLvToFile(
+    projectCode: string,
+    type: "excel" | "pdf" | "gaeb",
+    version?: number
+  ) {
+    const base = `/api/project-lv/${encodeURIComponent(projectCode)}/export/${type}`;
+    const path = version ? `${base}?version=${version}` : base;
+
+    const apiBase = await getApiUrl();
+    const url = `${apiBase}${path}`;
+    const headers = await apiAuthHeaders();
+
+    const filename =
+      type === "excel"
+        ? `lv_${projectCode}${version ? `_v${version}` : ""}.xlsx`
+        : type === "pdf"
+        ? `lv_${projectCode}${version ? `_v${version}` : ""}.pdf`
+        : `lv_${projectCode}${version ? `_v${version}` : ""}.x83.xml`;
+
+    const exportDir = `${
+      FileSystem.cacheDirectory || FileSystem.documentDirectory || ""
+    }exports/`;
+
+    await ensureFsDir(exportDir);
+
+    const fileUri = `${exportDir}${filename}`;
+
+    try {
+      await FileSystem.deleteAsync(fileUri, { idempotent: true });
+    } catch {}
+
+    const dl = await FileSystem.downloadAsync(url, fileUri, { headers });
+
+    const info = await FileSystem.getInfoAsync(dl.uri);
+    if (!info.exists) {
+      throw new Error(`Export failed (${type})`);
+    }
+
+    return {
+      uri: dl.uri,
+      filename,
+      mimeType:
+        type === "excel"
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : type === "pdf"
+          ? "application/pdf"
+          : "application/xml",
+    };
+  },
+
+  /** =========================
+   * PDF LIST
+   * ========================= */
+
+ async projectPdfs(
+  projectFsKey: string
+): Promise<Array<{ name: string; url: string; folder?: string; mtime?: string }>> {
+  return projectPdfs(projectFsKey);
+},
 };
 
 export { request };
-export type { CompanyHeader };
+
+/* =========================
+ * EXPORT HELPERS
+ * ========================= */
 
 export async function kiPhotoAnalyze(form: FormData) {
   return api.kiPhotoAnalyze(form);
@@ -2056,20 +3363,80 @@ export async function kiSuggestLieferschein(
 ) {
   return api.kiLieferscheinSuggest(projectIdOrCode, payload);
 }
-export async function kiSuggestPhotos(projectIdOrCode: string, payload: any) {
+
+export async function kiSuggestPhotos(
+  projectIdOrCode: string,
+  payload: any
+) {
   return api.kiPhotosSuggest(projectIdOrCode, payload);
 }
 
 export async function photosNotesList(projectIdOrCode: string) {
   return api.photosNotesList(projectIdOrCode);
 }
-export async function photosNotesDelete(projectIdOrCode: string, id: string) {
+
+export async function photosNotesDelete(
+  projectIdOrCode: string,
+  id: string
+) {
   return api.photosNotesDelete(projectIdOrCode, id);
 }
 
-/**
- * ✅ Support Chat export helper (optional, but convenient)
- */
+/* =========================
+ * TAGESBERICHT
+ * ========================= */
+
+export async function tagesberichtInboxList(
+  projectIdOrCode: string
+) {
+  return api.tagesberichtInboxList(projectIdOrCode);
+}
+
+export async function tagesberichtInboxRead(
+  projectIdOrCode: string,
+  docId: string
+) {
+  return api.tagesberichtInboxRead(projectIdOrCode, docId);
+}
+
+export async function tagesberichtApprove(
+  projectIdOrCode: string,
+  docId: string,
+  approvedBy?: string
+) {
+  return api.tagesberichtApprove(projectIdOrCode, docId, approvedBy);
+}
+
+export async function tagesberichtReject(
+  projectIdOrCode: string,
+  docId: string,
+  reason: string
+) {
+  return api.tagesberichtReject(projectIdOrCode, docId, reason);
+}
+
+/* =========================
+ * AUTH
+ * ========================= */
+
+export async function passwordResetRequest(email: string) {
+  return api.passwordResetRequest(email);
+}
+
+export async function passwordResetConfirm(
+  token: string,
+  password: string
+) {
+  return api.passwordResetConfirm(token, password);
+}
+
+/* =========================
+ * SUPPORT CHAT
+ * ========================= */
+
 export async function supportChat(payload: SupportChatRequest) {
   return api.supportChat(payload);
 }
+
+
+

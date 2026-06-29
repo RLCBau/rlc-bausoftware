@@ -1,6 +1,10 @@
-// apps/mobile/src/screens/RegieScreen.tsx
+﻿// apps/mobile/src/screens/RegieScreen.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
+import { parseRlcRegie } from "../lib/rlcKiFieldParser";
 import {
+  Keyboard,
+  SafeAreaView,
   View,
   Text,
   TextInput,
@@ -17,19 +21,23 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { api, looksLikeProjectCode } from "../lib/api";
-
-// ✅ Unified PDF model (same layout for all)
+import { Ionicons } from "@expo/vector-icons";
 import { exportRegiePdfToProject, emailPdf } from "../lib/exporters/projectExport";
-
-// ✅ Offline Queue
-import { queueAdd } from "../lib/offlineQueue";
-
-// ✅ Action bar
+import { hydrateRowForPreview } from "../lib/hydratePreview";
+import {
+  queueAdd,
+  queueNormalizeExisting,
+  queueProcessPending,
+  type QueueItem,
+} from "../lib/offlineQueue";
 import { DocActionBar } from "../components/DocActionBar";
+import { COLORS } from "../ui/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Regie">;
 
@@ -45,18 +53,14 @@ function regieInboxKeys(projectKey: string) {
 
 type DateiMeta = { id?: string; name?: string; uri?: string; type?: string };
 
-// ✅ doc type (server has 3 checkboxes)
-export type RegieDocType = "REGIE" | "TAGESBERICHT" | "BAUTAGEBUCH";
+// Regie only
+export type RegieDocType = "REGIE";
 
-function docTypeLabel(t?: RegieDocType) {
-  if (t === "TAGESBERICHT") return "Tagesbericht";
-  if (t === "BAUTAGEBUCH") return "Bautagebuch";
+function docTypeLabel(_: RegieDocType = "REGIE") {
   return "Regiebericht";
 }
 
-function docTypeShort(t?: RegieDocType) {
-  if (t === "TAGESBERICHT") return "TB";
-  if (t === "BAUTAGEBUCH") return "BB";
+function docTypeShort(_: RegieDocType = "REGIE") {
   return "RB";
 }
 
@@ -83,10 +87,10 @@ type RegieRow = {
     material?: string;
     quantity?: number | string;
     unit?: string;
-    photos?: DateiMeta[]; // (bleibt im Model, UI-Button entfernt)
+    photos?: DateiMeta[];
   }>;
 
-  attachments?: DateiMeta[]; // ✅ Projekt-Pool Anhänge (Quelle für PDF)
+  attachments?: DateiMeta[];
 
   workflowStatus?: "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT";
   createdAt?: number;
@@ -123,7 +127,7 @@ async function setJson(key: string, v: any) {
 function normalizeProjectKey(input: string, projectIdFallback: string) {
   const v = String(input || "").trim();
   if (v) return v;
-  return `local-${projectIdFallback || "unknown"}`;
+  return String(projectIdFallback || "unknown").trim();
 }
 
 function toDateInput(v: any) {
@@ -134,22 +138,52 @@ function toDateInput(v: any) {
 
 function normalizeFiles(input: any[]): DateiMeta[] {
   const arr = Array.isArray(input) ? input : [];
-  return arr
-    .filter(Boolean)
-    .map((f) => ({
+  const out: DateiMeta[] = [];
+
+  for (const f of arr) {
+    if (!f) continue;
+
+    if (typeof f === "string") {
+      const uri = String(f).trim();
+      if (!uri) continue;
+      out.push({
+        id: uid("f"),
+        uri,
+        name: uri.split("/").pop() || `file_${Date.now()}`,
+        type: undefined,
+      });
+      continue;
+    }
+
+    const uri = String(f?.uri || f?.url || f?.publicUrl || f?.path || "").trim();
+    if (!uri) continue;
+
+    out.push({
       id: f?.id || uid("f"),
-      uri: f?.uri || f?.url || f?.path,
+      uri,
       type: f?.type || f?.mime || f?.mimeType,
-      name: f?.name || f?.filename,
-    }))
-    .filter((x) => !!x.uri);
+      name: f?.name || f?.filename || uri.split("/").pop() || `file_${Date.now()}`,
+    });
+  }
+
+  const seen = new Set<string>();
+  return out.filter((x) => {
+    const u = String(x?.uri || "").trim();
+    if (!u) return false;
+    if (seen.has(u)) return false;
+    seen.add(u);
+    return true;
+  });
 }
 
-/**
- * ✅ PDF: NUR aus Projekt-Anhängen (damit es immer funktioniert wie von dir beschrieben)
- */
 function mergeAllPhotosForPdf(row: RegieRow): DateiMeta[] {
-  return normalizeFiles(row.attachments || []);
+  return normalizeFiles([
+    ...(row.attachments || []),
+    ...((row as any)?.files || []),
+    ...((row as any)?.photos || []),
+    ...((row as any)?.imageUri ? [{ uri: (row as any).imageUri }] : []),
+    ...((row as any)?.imageMeta?.uri ? [{ uri: (row as any).imageMeta.uri }] : []),
+  ]);
 }
 
 function inferImageMetaFromUri(uri: string) {
@@ -163,6 +197,132 @@ function inferImageMetaFromUri(uri: string) {
   if (u.endsWith(".webp")) return { ext: "webp", mime: "image/webp" };
 
   return { ext: "jpg", mime: "image/jpeg" };
+}
+
+function normDir(d: string) {
+  return d.endsWith("/") ? d : d + "/";
+}
+
+function safeFsKey(k: string) {
+  return String(k || "")
+    .trim()
+    .replace(/[^\w.\-]+/g, "_")
+    .slice(0, 80);
+}
+
+async function ensureDir(dirUri: string) {
+  const d = normDir(dirUri);
+  const info = await FileSystem.getInfoAsync(d);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(d, { intermediates: true });
+  }
+}
+
+function isPhUri(u?: string) {
+  const s = String(u || "");
+  return s.startsWith("ph://") || s.startsWith("assets-library://");
+}
+
+function isFileUri(u?: string) {
+  const s = String(u || "");
+  return s.startsWith("file://");
+}
+
+function extFromNameOrUri(name?: string, uri?: string, type?: string) {
+  const n = String(name || "").toLowerCase();
+  const u = String(uri || "").toLowerCase();
+  const t = String(type || "").toLowerCase();
+
+  if (t.includes("pdf") || n.endsWith(".pdf") || u.endsWith(".pdf")) return "pdf";
+  if (t.includes("png") || n.endsWith(".png") || u.endsWith(".png")) return "png";
+  if (t.includes("webp") || n.endsWith(".webp") || u.endsWith(".webp")) return "webp";
+  if (t.includes("heic") || n.endsWith(".heic") || u.endsWith(".heic")) return "heic";
+  if (t.includes("heif") || n.endsWith(".heif") || u.endsWith(".heif")) return "heif";
+  if (t.includes("jpeg") || n.endsWith(".jpeg") || u.endsWith(".jpeg")) return "jpeg";
+  if (t.includes("jpg") || n.endsWith(".jpg") || u.endsWith(".jpg")) return "jpg";
+  return "bin";
+}
+
+function shouldConvertToJpegByExt(ext: string) {
+  const e = String(ext || "").toLowerCase();
+  return e === "heic" || e === "heif";
+}
+
+async function convertToJpegIfNeeded(uri: string, hint?: { name?: string; type?: string }) {
+  if (Platform.OS === "web") return uri;
+
+  const ext = extFromNameOrUri(hint?.name, uri, hint?.type);
+  const needs = isPhUri(uri) || shouldConvertToJpegByExt(ext);
+  if (!needs) return uri;
+
+  const tries = [
+    { resize: { width: 1400 } as any, compress: 0.9 },
+    { resize: { width: 1100 } as any, compress: 0.85 },
+  ];
+
+  for (const t of tries) {
+    try {
+      const out = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: t.resize }],
+        { compress: t.compress, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      if (out?.uri) return out.uri;
+    } catch {}
+  }
+  return uri;
+}
+
+async function persistToProjectFileUri(params: {
+  projectFsKey: string;
+  uri: string;
+  nameHint?: string;
+  typeHint?: string;
+  prefix?: string;
+}): Promise<string> {
+  const { projectFsKey, uri, nameHint, typeHint, prefix } = params;
+
+  const input = String(uri || "").trim();
+  if (!input) return "";
+  if (Platform.OS === "web") return input;
+
+  const root = String(FileSystem.documentDirectory || "").trim();
+  if (!root) return input;
+
+  const fsKey = safeFsKey(projectFsKey);
+  const base = normDir(root);
+  const dir = `${base}projects/${fsKey}/inbox/regie/files/`;
+  await ensureDir(dir);
+
+  const converted = await convertToJpegIfNeeded(input, { name: nameHint, type: typeHint });
+
+  const ext0 = extFromNameOrUri(nameHint, input, typeHint);
+  const ext =
+    isPhUri(input) || shouldConvertToJpegByExt(ext0) || converted !== input ? "jpg" : ext0;
+
+  const fileNameSafeBase =
+    String(nameHint || "")
+      .trim()
+      .replace(/[\/\\?%*:|"<>]/g, "-")
+      .replace(/\s+/g, "_")
+      .slice(0, 80) || "";
+
+  const baseName = fileNameSafeBase
+    ? fileNameSafeBase.replace(/\.(\w{1,6})$/, "")
+    : `${prefix || "f"}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+
+  const target = `${dir}${baseName}.${ext}`;
+
+  try {
+    try {
+      await FileSystem.deleteAsync(target, { idempotent: true });
+    } catch {}
+    await FileSystem.copyAsync({ from: converted, to: target });
+    return target.startsWith("file://") ? target : `file://${target}`;
+  } catch {
+    if (isFileUri(converted)) return converted;
+    return input;
+  }
 }
 
 async function pickImageFromLibrary(): Promise<DateiMeta | null> {
@@ -251,23 +411,16 @@ function badgeColor(st?: RegieRow["workflowStatus"]) {
   return "rgba(255,255,255,0.55)";
 }
 
-function normalizeDocType(v: any): RegieDocType {
-  const s = String(v || "").toUpperCase().trim();
-  if (s === "TAGESBERICHT") return "TAGESBERICHT";
-  if (s === "BAUTAGEBUCH") return "BAUTAGEBUCH";
+function normalizeDocType(_: any): RegieDocType {
   return "REGIE";
 }
 
-/** ✅ KI text context (nur echte Felder, keine Fantasie) */
 function buildKiTextFromRow(r: RegieRow) {
   const headerBits: string[] = [];
-  if (r.kostenstelle)
-    headerBits.push(`Kostenstelle: ${String(r.kostenstelle)}`);
+  if (r.kostenstelle) headerBits.push(`Kostenstelle: ${String(r.kostenstelle)}`);
   if (r.wetter) headerBits.push(`Wetter: ${String(r.wetter)}`);
-  if (r.arbeitsbeginn)
-    headerBits.push(`Arbeitsbeginn: ${String(r.arbeitsbeginn)}`);
-  if (r.arbeitsende)
-    headerBits.push(`Arbeitsende: ${String(r.arbeitsende)}`);
+  if (r.arbeitsbeginn) headerBits.push(`Arbeitsbeginn: ${String(r.arbeitsbeginn)}`);
+  if (r.arbeitsende) headerBits.push(`Arbeitsende: ${String(r.arbeitsende)}`);
   if (r.pause1) headerBits.push(`Pause1: ${String(r.pause1)}`);
   if (r.pause2) headerBits.push(`Pause2: ${String(r.pause2)}`);
 
@@ -278,11 +431,9 @@ function buildKiTextFromRow(r: RegieRow) {
       if (l?.kostenstelle) bits.push(`KS: ${String(l.kostenstelle)}`);
       if (l?.worker) bits.push(`Mitarbeiter: ${String(l.worker)}`);
       if (l?.machine) bits.push(`Maschine: ${String(l.machine)}`);
-      if (l?.hours != null && String(l.hours).trim() !== "")
-        bits.push(`Std: ${String(l.hours)}`);
+      if (l?.hours != null && String(l.hours).trim() !== "") bits.push(`Std: ${String(l.hours)}`);
       if (l?.material) bits.push(`Material: ${String(l.material)}`);
-      if (l?.quantity != null && String(l.quantity).trim() !== "")
-        bits.push(`Menge: ${String(l.quantity)}`);
+      if (l?.quantity != null && String(l.quantity).trim() !== "") bits.push(`Menge: ${String(l.quantity)}`);
       if (l?.unit) bits.push(`Einheit: ${String(l.unit)}`);
       if (l?.comment) bits.push(`Kommentar: ${String(l.comment)}`);
       const joined = bits.filter(Boolean).join(" | ");
@@ -299,40 +450,111 @@ function buildKiTextFromRow(r: RegieRow) {
     .trim();
 }
 
-/** ✅ Normalize KI server responses to one shape for UI */
 function normalizeKiResult(raw: any) {
-  const suggestions = Array.isArray(raw?.suggestions)
-    ? raw.suggestions
-    : Array.isArray(raw?.data?.suggestions)
-    ? raw.data.suggestions
-    : Array.isArray(raw?.result?.suggestions)
-    ? raw.result.suggestions
-    : null;
+  const root =
+    raw?.data && typeof raw.data === "object"
+      ? raw.data
+      : raw?.result && typeof raw.result === "object"
+      ? raw.result
+      : raw;
 
-  const first = suggestions?.[0] || raw?.suggestion || raw?.data?.suggestion || null;
+  const suggestions =
+    Array.isArray(root?.suggestions) ? root.suggestions :
+    Array.isArray(raw?.suggestions) ? raw.suggestions :
+    [];
 
-  const errorObj = raw?.error ? raw : raw?.data?.error ? raw.data : null;
+  const firstSuggestion =
+    suggestions[0] ||
+    root?.suggestion ||
+    raw?.suggestion ||
+    null;
 
-  const notes =
-    String(first?.notes || raw?.notes || "") ||
-    (errorObj ? JSON.stringify(errorObj, null, 2) : "");
+  const directFields =
+    root?.fields ||
+    raw?.fields ||
+    root?.extractedFields ||
+    raw?.extractedFields ||
+    root?.fieldPatches ||
+    raw?.fieldPatches ||
+    null;
+
+  const fallbackDirectObject =
+    !firstSuggestion &&
+    root &&
+    typeof root === "object" &&
+    (
+      root.comment != null ||
+      root.kommentar != null ||
+      root.leistung != null ||
+      root.worker != null ||
+      root.mitarbeiter != null ||
+      root.machine != null ||
+      root.maschine != null ||
+      root.hours != null ||
+      root.std != null ||
+      root.stunden != null ||
+      root.material != null ||
+      root.quantity != null ||
+      root.menge != null ||
+      root.unit != null ||
+      root.einheit != null ||
+      root.arbeitsbeginn != null ||
+      root.arbeitsende != null ||
+      root.pause1 != null ||
+      root.pause2 != null ||
+      root.kostenstelle != null ||
+      root.wetter != null ||
+      root.bemerkungen != null
+    )
+      ? root
+      : null;
+
+  const fieldPatches =
+    firstSuggestion?.fieldPatches ||
+    firstSuggestion?.extractedFields ||
+    firstSuggestion?.patch ||
+    firstSuggestion?.fields ||
+    directFields ||
+    fallbackDirectObject ||
+    null;
+
+  const errorMessage = String(
+    root?.error?.message ||
+      raw?.error?.message ||
+      root?.message ||
+      raw?.message ||
+      ""
+  ).trim();
+
+  const notes = String(
+    firstSuggestion?.notes ||
+      root?.notes ||
+      raw?.notes ||
+      errorMessage ||
+      ""
+  ).trim();
+
+  const suggestion =
+    fieldPatches
+      ? {
+          ...(firstSuggestion && typeof firstSuggestion === "object"
+            ? firstSuggestion
+            : {}),
+          fieldPatches,
+        }
+      : firstSuggestion || fallbackDirectObject;
 
   return {
-    suggestion: first,
+    suggestion: suggestion || null,
     notes: notes || "",
     raw,
+    errorMessage,
   };
 }
 
-/**
- * ✅ Read one Regie inbox doc from SERVER if it isn't in local AsyncStorage.
- * Endpoint: GET /api/regie/inbox/read?projectId=BA-...&docId=...
- * Returns { snapshot } OR snapshot directly.
- */
 async function serverReadRegieInbox(projectFsKey: string, docId: string) {
   const token = await AsyncStorage.getItem("auth_token");
 
-  // base dinamico: usa api.getApiUrl() se esiste, altrimenti api.apiUrl
   let base = "";
   try {
     base = String(
@@ -362,13 +584,20 @@ async function serverReadRegieInbox(projectFsKey: string, docId: string) {
   return json?.snapshot || json;
 }
 
-/**
- * ✅ FIX: normalize server snapshot shapes to RegieRow
- * Supports shapes:
- * - { payload: { row: {...}, files/attachments/... } }
- * - { row: {...} }
- * - already RegieRow
- */
+function emptyLine() {
+  return {
+    kostenstelle: "",
+    machine: "",
+    worker: "",
+    hours: "",
+    comment: "",
+    material: "",
+    quantity: "",
+    unit: "",
+    photos: [] as DateiMeta[],
+  };
+}
+
 function normalizeServerRegieSnapshot(snapRaw: any, editId: string): RegieRow | null {
   if (!snapRaw || typeof snapRaw !== "object") return null;
 
@@ -381,7 +610,6 @@ function normalizeServerRegieSnapshot(snapRaw: any, editId: string): RegieRow | 
     (rowFromDirect && typeof rowFromDirect === "object" && rowFromDirect) ||
     snapRaw;
 
-  // attachments can live in multiple places depending on server
   const attPool =
     base?.attachments ??
     payload?.attachments ??
@@ -396,21 +624,9 @@ function normalizeServerRegieSnapshot(snapRaw: any, editId: string): RegieRow | 
       ? base.rows
       : Array.isArray(payload?.rows) && payload.rows.length
       ? payload.rows
-      : [
-          {
-            kostenstelle: "",
-            machine: "",
-            worker: "",
-            hours: "",
-            comment: "",
-            material: "",
-            quantity: "",
-            unit: "",
-            photos: [],
-          },
-        ];
+      : [emptyLine()];
 
-  const dt = normalizeDocType(base?.docType ?? payload?.docType ?? "REGIE");
+  const dt = "REGIE" as RegieDocType;
 
   const out: RegieRow = {
     ...base,
@@ -424,7 +640,6 @@ function normalizeServerRegieSnapshot(snapRaw: any, editId: string): RegieRow | 
     updatedAt: Number(base?.updatedAt || payload?.updatedAt || Date.now()),
   };
 
-  // Ensure string fields exist
   out.arbeitsbeginn = String(out.arbeitsbeginn || "");
   out.arbeitsende = String(out.arbeitsende || "");
   out.pause1 = String(out.pause1 || "");
@@ -436,56 +651,100 @@ function normalizeServerRegieSnapshot(snapRaw: any, editId: string): RegieRow | 
   return out;
 }
 
+function normalizeInboxSnapshotRegie(snapRaw: any, editId: string): RegieRow | null {
+  const fixed = normalizeServerRegieSnapshot(snapRaw, editId);
+  if (!fixed) return null;
+
+  return {
+    ...fixed,
+    rows:
+      Array.isArray(fixed.rows) && fixed.rows.length
+        ? fixed.rows.map((r: any) => ({
+            ...emptyLine(),
+            ...r,
+            photos: normalizeFiles(r?.photos || r?.attachments || r?.files || []),
+          }))
+        : [emptyLine()],
+    attachments: normalizeFiles(fixed.attachments || []),
+  };
+}
+
 export default function RegieScreen({ route, navigation }: Props) {
   const { projectId, projectCode, title, editId } = route.params as any;
   const fromInbox = Boolean((route.params as any)?.fromInbox);
+  const inboxSnapshot = (route.params as any)?.inboxSnapshot;
 
   const projectFsKey = useMemo(
     () => normalizeProjectKey(String(projectCode || ""), String(projectId || "")),
     [projectCode, projectId]
   );
 
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerStyle: {
+        backgroundColor: "#12324A",
+      },
+      headerTitleStyle: {
+        color: "#FFFFFF",
+        fontWeight: "800",
+      },
+      headerTintColor: "#FFFFFF",
+      headerRight: undefined,
+    });
+  }, [navigation, projectId, projectFsKey]);
+
   const [mode, setMode] = useState<"SERVER_SYNC" | "NUR_APP">("SERVER_SYNC");
   const [submitting, setSubmitting] = useState(false);
 
   const [authToken, setAuthToken] = useState<string>("");
 
-  const [row, setRow] = useState<RegieRow>(() => ({
-    id: editId ? String(editId) : uid("regie"),
-    date: ymdNow(),
-    docType: "REGIE",
-    arbeitsbeginn: "",
-    arbeitsende: "",
-    pause1: "",
-    pause2: "",
-    wetter: "",
-    kostenstelle: "",
-    bemerkungen: "",
-    rows: [
-      {
-        kostenstelle: "",
-        machine: "",
-        worker: "",
-        hours: "",
-        comment: "",
-        material: "",
-        quantity: "",
-        unit: "",
-        photos: [],
-      },
-    ],
-    attachments: [],
-    workflowStatus: "DRAFT",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }));
+  const [row, setRow] = useState<RegieRow>(() =>
+    inboxSnapshot
+      ? normalizeInboxSnapshotRegie(inboxSnapshot, String(editId || uid("regie"))) || {
+          id: editId ? String(editId) : uid("regie"),
+          date: ymdNow(),
+          docType: "REGIE",
+          arbeitsbeginn: "",
+          arbeitsende: "",
+          pause1: "",
+          pause2: "",
+          wetter: "",
+          kostenstelle: "",
+          bemerkungen: "",
+          rows: [emptyLine()],
+          attachments: [],
+          workflowStatus: "DRAFT",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+      : {
+          id: editId ? String(editId) : uid("regie"),
+          date: ymdNow(),
+          docType: "REGIE",
+          arbeitsbeginn: "",
+          arbeitsende: "",
+          pause1: "",
+          pause2: "",
+          wetter: "",
+          kostenstelle: "",
+          bemerkungen: "",
+          rows: [emptyLine()],
+          attachments: [],
+          workflowStatus: "DRAFT",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+  );
 
   const [list, setList] = useState<RegieRow[]>([]);
   const loadLock = useRef(0);
+  const inboxSnapshotAppliedRef = useRef(false);
 
   const [kiOpen, setKiOpen] = useState(false);
   const [kiBusy, setKiBusy] = useState(false);
   const [kiSuggestion, setKiSuggestion] = useState<any>(null);
+  const [kiInput, setKiInput] = useState("");
+  const kiInputOverrideRef = useRef("");
 
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -510,6 +769,8 @@ export default function RegieScreen({ route, navigation }: Props) {
     }
   }, []);
 
+  const openRlcKiChat = useCallback(() => {}, []);
+
   async function persistToInbox(nextRow: RegieRow) {
     const keys = regieInboxKeys(projectFsKey);
     const primaryKey = keys[0];
@@ -524,58 +785,138 @@ export default function RegieScreen({ route, navigation }: Props) {
     setList(nextList);
   }
 
+  const applyInboxSnapshotIfAny = useCallback(async () => {
+    if (!fromInbox || !inboxSnapshot || inboxSnapshotAppliedRef.current) return false;
+
+    const fixed = normalizeInboxSnapshotRegie(inboxSnapshot, String(editId || uid("regie")));
+    if (!fixed) return false;
+
+    const hydratedRaw = await hydrateRowForPreview(fixed, projectFsKey);
+    const hydrated = {
+      ...fixed,
+      ...hydratedRaw,
+      attachments: normalizeFiles(
+        hydratedRaw?.attachments || hydratedRaw?.files || hydratedRaw?.photos || fixed.attachments || []
+      ),
+      rows:
+        Array.isArray(hydratedRaw?.rows) && hydratedRaw.rows.length
+          ? hydratedRaw.rows.map((r: any) => ({
+              ...emptyLine(),
+              ...r,
+              photos: normalizeFiles(r?.photos || r?.attachments || r?.files || []),
+            }))
+          : fixed.rows || [emptyLine()],
+    };
+
+    setRow(hydrated);
+    inboxSnapshotAppliedRef.current = true;
+
+    try {
+      await persistToInbox({
+        ...fixed,
+        workflowStatus: (fixed.workflowStatus as any) || "EINGEREICHT",
+        updatedAt: Date.now(),
+        createdAt: fixed.createdAt || Date.now(),
+      });
+    } catch {}
+
+    return true;
+  }, [fromInbox, inboxSnapshot, editId, projectFsKey]);
+
   const loadInboxList = useCallback(async () => {
     const my = ++loadLock.current;
     try {
       const arr = await loadArrayFromFirstKey(regieInboxKeys(projectFsKey));
       const next = (Array.isArray(arr) ? (arr as RegieRow[]) : []).map((x) => ({
         ...x,
-        docType: normalizeDocType((x as any)?.docType),
+        docType: "REGIE" as RegieDocType,
         attachments: normalizeFiles((x as any)?.attachments || []),
-        rows: Array.isArray((x as any)?.rows) && (x as any).rows.length ? (x as any).rows : (x as any)?.rows,
+        rows:
+          Array.isArray((x as any)?.rows) && (x as any).rows.length
+            ? (x as any).rows.map((r: any) => ({
+                ...emptyLine(),
+                ...r,
+                photos: normalizeFiles(r?.photos || r?.attachments || r?.files || []),
+              }))
+            : [emptyLine()],
       }));
 
       next.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       if (my === loadLock.current) setList(next);
 
       if (editId) {
+        const appliedSnapshot = await applyInboxSnapshotIfAny();
+        if (appliedSnapshot) return;
+
         const found = next.find((x) => String(x.id) === String(editId));
         if (found) {
+          const hydratedRaw = await hydrateRowForPreview(found, projectFsKey);
+
           setRow({
             ...found,
-            docType: normalizeDocType((found as any)?.docType),
+            ...hydratedRaw,
+            docType: "REGIE",
             rows:
-              Array.isArray(found.rows) && found.rows.length
-                ? found.rows
-                : [
-                    {
-                      kostenstelle: "",
-                      machine: "",
-                      worker: "",
-                      hours: "",
-                      comment: "",
-                      material: "",
-                      quantity: "",
-                      unit: "",
-                      photos: [],
-                    },
-                  ],
-            attachments: normalizeFiles(found.attachments || []),
+              Array.isArray(hydratedRaw?.rows) && hydratedRaw.rows.length
+                ? hydratedRaw.rows.map((r: any) => ({
+                    ...emptyLine(),
+                    ...r,
+                    photos: normalizeFiles(
+                      r?.photos || r?.attachments || r?.files || []
+                    ),
+                  }))
+                : Array.isArray(found.rows) && found.rows.length
+                ? found.rows.map((r: any) => ({
+                    ...emptyLine(),
+                    ...r,
+                    photos: normalizeFiles(
+                      r?.photos || r?.attachments || r?.files || []
+                    ),
+                  }))
+                : [emptyLine()],
+            attachments: normalizeFiles(
+              hydratedRaw?.attachments ||
+                hydratedRaw?.files ||
+                hydratedRaw?.photos ||
+                found.attachments ||
+                []
+            ),
           });
         } else if (
           fromInbox &&
           mode === "SERVER_SYNC" &&
           looksLikeProjectCode(projectFsKey)
         ) {
-          // ✅ fallback: leggere dal SERVER inbox se non esiste localmente
           try {
             const snap = await serverReadRegieInbox(projectFsKey, String(editId));
             const fixed = normalizeServerRegieSnapshot(snap, String(editId));
 
             if (fixed) {
-              setRow(fixed);
+              const hydratedRaw = await hydrateRowForPreview(fixed, projectFsKey);
+              const hydrated = {
+                ...fixed,
+                ...hydratedRaw,
+                rows:
+                  Array.isArray(hydratedRaw?.rows) && hydratedRaw.rows.length
+                    ? hydratedRaw.rows.map((r: any) => ({
+                        ...emptyLine(),
+                        ...r,
+                        photos: normalizeFiles(r?.photos || r?.attachments || r?.files || []),
+                      }))
+                    : Array.isArray(fixed.rows) && fixed.rows.length
+                    ? fixed.rows.map((r: any) => ({
+                        ...emptyLine(),
+                        ...r,
+                        photos: normalizeFiles(r?.photos || r?.attachments || r?.files || []),
+                      }))
+                    : [emptyLine()],
+                attachments: normalizeFiles(
+                  hydratedRaw?.attachments || hydratedRaw?.files || hydratedRaw?.photos || fixed.attachments || []
+                ),
+              };
 
-              // ✅ save to local inbox so it opens next time too
+              setRow(hydrated);
+
               await persistToInbox({
                 ...fixed,
                 workflowStatus: (fixed.workflowStatus as any) || "EINGEREICHT",
@@ -583,15 +924,13 @@ export default function RegieScreen({ route, navigation }: Props) {
                 createdAt: fixed.createdAt || Date.now(),
               });
             }
-          } catch {
-            // silent fallback
-          }
+          } catch {}
         }
       }
     } catch (e: any) {
       Alert.alert("Regie", e?.message || "Inbox konnte nicht geladen werden.");
     }
-  }, [projectFsKey, editId, fromInbox, mode]);
+  }, [projectFsKey, editId, fromInbox, mode, applyInboxSnapshotIfAny]);
 
   useEffect(() => {
     readMode();
@@ -622,17 +961,7 @@ export default function RegieScreen({ route, navigation }: Props) {
   const addLine = useCallback(() => {
     setRow((r) => {
       const lines = Array.isArray(r.rows) ? [...r.rows] : [];
-      lines.push({
-        kostenstelle: "",
-        machine: "",
-        worker: "",
-        hours: "",
-        comment: "",
-        material: "",
-        quantity: "",
-        unit: "",
-        photos: [],
-      });
+      lines.push(emptyLine());
       return { ...r, rows: lines, updatedAt: Date.now() };
     });
   }, []);
@@ -641,19 +970,7 @@ export default function RegieScreen({ route, navigation }: Props) {
     setRow((r) => {
       const lines = Array.isArray(r.rows) ? [...r.rows] : [];
       lines.splice(idx, 1);
-      if (!lines.length) {
-        lines.push({
-          kostenstelle: "",
-          machine: "",
-          worker: "",
-          hours: "",
-          comment: "",
-          material: "",
-          quantity: "",
-          unit: "",
-          photos: [],
-        });
-      }
+      if (!lines.length) lines.push(emptyLine());
       return { ...r, rows: lines, updatedAt: Date.now() };
     });
   }, []);
@@ -661,44 +978,74 @@ export default function RegieScreen({ route, navigation }: Props) {
   const addAttachment = useCallback(async () => {
     Alert.alert("Anhang hinzufügen", "Was möchtest du hinzufügen?", [
       {
-        text: "📷 Kamera",
+        text: "Kamera",
         onPress: async () => {
           const f = await takePhotoWithCamera();
           if (!f) return;
+          const persisted = await persistToProjectFileUri({
+            projectFsKey,
+            uri: String(f.uri || ""),
+            nameHint: f.name || `camera_${Date.now()}.jpg`,
+            typeHint: f.type || "image/jpeg",
+            prefix: "att",
+          });
           setRow((r) => ({
             ...r,
-            attachments: [...(r.attachments || []), f],
+            attachments: normalizeFiles([
+              ...(r.attachments || []),
+              { ...f, uri: persisted || f.uri },
+            ]),
             updatedAt: Date.now(),
           }));
         },
       },
       {
-        text: "🖼️ Galerie",
+        text: "Galerie",
         onPress: async () => {
           const f = await pickImageFromLibrary();
           if (!f) return;
+          const persisted = await persistToProjectFileUri({
+            projectFsKey,
+            uri: String(f.uri || ""),
+            nameHint: f.name || `photo_${Date.now()}.jpg`,
+            typeHint: f.type || "image/jpeg",
+            prefix: "att",
+          });
           setRow((r) => ({
             ...r,
-            attachments: [...(r.attachments || []), f],
+            attachments: normalizeFiles([
+              ...(r.attachments || []),
+              { ...f, uri: persisted || f.uri },
+            ]),
             updatedAt: Date.now(),
           }));
         },
       },
       {
-        text: "📎 Datei",
+        text: "Datei",
         onPress: async () => {
           const f = await pickFile();
           if (!f) return;
+          const persisted = await persistToProjectFileUri({
+            projectFsKey,
+            uri: String(f.uri || ""),
+            nameHint: f.name || `file_${Date.now()}`,
+            typeHint: f.type || "application/octet-stream",
+            prefix: "file",
+          });
           setRow((r) => ({
             ...r,
-            attachments: [...(r.attachments || []), f],
+            attachments: normalizeFiles([
+              ...(r.attachments || []),
+              { ...f, uri: persisted || f.uri },
+            ]),
             updatedAt: Date.now(),
           }));
         },
       },
       { text: "Abbrechen", style: "cancel" },
     ]);
-  }, []);
+  }, [projectFsKey]);
 
   const removeAttachment = useCallback((id: string) => {
     setRow((r) => ({
@@ -716,30 +1063,22 @@ export default function RegieScreen({ route, navigation }: Props) {
         ...row,
         id: String(row.id || uid("regie")),
         date: toDateInput(row.date) || ymdNow(),
-        docType: normalizeDocType(row.docType),
+        docType: "REGIE",
         workflowStatus: row.workflowStatus || "DRAFT",
         createdAt: row.createdAt || Date.now(),
         updatedAt: Date.now(),
         attachments: normalizeFiles(row.attachments || []),
         rows:
           Array.isArray(row.rows) && row.rows.length
-            ? row.rows
-            : [
-                {
-                  kostenstelle: "",
-                  machine: "",
-                  worker: "",
-                  hours: "",
-                  comment: "",
-                  material: "",
-                  quantity: "",
-                  unit: "",
-                  photos: [],
-                },
-              ],
+            ? row.rows.map((r: any) => ({
+                ...emptyLine(),
+                ...r,
+                photos: normalizeFiles(r?.photos || []),
+              }))
+            : [emptyLine()],
       };
       await persistToInbox(next);
-      Alert.alert("Gespeichert", `${docTypeLabel(next.docType)} wurde offline gespeichert.`);
+      Alert.alert("Gespeichert", "Regiebericht wurde offline gespeichert.");
     } catch (e: any) {
       Alert.alert("Speichern", e?.message || "Speichern fehlgeschlagen.");
     }
@@ -753,87 +1092,71 @@ export default function RegieScreen({ route, navigation }: Props) {
         ...row,
         id: String(row.id || uid("regie")),
         date: toDateInput(row.date) || ymdNow(),
-        docType: normalizeDocType(row.docType),
+        docType: "REGIE",
         workflowStatus: "EINGEREICHT",
         createdAt: row.createdAt || Date.now(),
         updatedAt: Date.now(),
         attachments: normalizeFiles(row.attachments || []),
         rows:
           Array.isArray(row.rows) && row.rows.length
-            ? row.rows
-            : [
-                {
-                  kostenstelle: "",
-                  machine: "",
-                  worker: "",
-                  hours: "",
-                  comment: "",
-                  material: "",
-                  quantity: "",
-                  unit: "",
-                  photos: [],
-                },
-              ],
+            ? row.rows.map((r: any) => ({
+                ...emptyLine(),
+                ...r,
+                photos: normalizeFiles(r?.photos || []),
+              }))
+            : [emptyLine()],
       };
 
       await persistToInbox(next);
 
-      // ✅ Server queue only in SERVER_SYNC and only if BA-...
       if (mode === "SERVER_SYNC" && looksLikeProjectCode(projectFsKey)) {
-        await queueAdd({
-          kind: "REGIE",
-          projectId: projectFsKey, // FS-key policy
-          payload: {
-            docType: next.docType,
-            date: next.date,
-            text: String(next?.rows?.[0]?.comment || next?.bemerkungen || ""),
-            hours: (next?.rows?.[0]?.hours as any) ?? undefined,
-            note: String(next.bemerkungen || ""),
-            row: next,
-          },
-        } as any);
+        const res = await (api as any).pushRegieToServer(projectFsKey, next);
+
+        
       }
 
-      Alert.alert("Einreichen", "In Inbox gespeichert. Sync/Queue erfolgt über Inbox → Sync.");
+      Alert.alert("Einreichen", "Eingereicht + gespeichert.");
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert("Einreichen", e?.message || "Einreichen fehlgeschlagen.");
+      Alert.alert(
+        "Regie FEHLER",
+        String(e?.message || e || "Einreichen fehlgeschlagen.")
+      );
     } finally {
       setSubmitting(false);
     }
   }, [row, mode, projectFsKey, navigation]);
 
-  // ✅ Build exporter-row (queue-style) so PDF includes files + docType
   const makeRowForExporter = useCallback(() => {
     const files = mergeAllPhotosForPdf(row);
-    const dt = normalizeDocType(row.docType);
 
     return {
       kind: "REGIE",
       payload: {
-        docType: dt,
+        docType: "REGIE" as RegieDocType,
         date: String(toDateInput(row.date) || ymdNow()),
         text: String(row?.rows?.[0]?.comment || row?.bemerkungen || ""),
         hours: (row?.rows?.[0]?.hours as any) ?? undefined,
         note: String(row?.bemerkungen || ""),
         files,
-        row: { ...row, docType: dt },
+        row: { ...row, docType: "REGIE" as RegieDocType },
       },
     };
   }, [row]);
 
   const buildPdf = useCallback(async () => {
-    const dt = normalizeDocType(row.docType);
     const out = await exportRegiePdfToProject({
       projectFsKey,
       projectTitle: String(title || "Projekt"),
-      filenameHint: `${docTypeLabel(dt)}_${toDateInput(row.date) || ymdNow()}`,
+      filenameHint: `Regiebericht_${toDateInput(row.date) || ymdNow()}`,
       row: makeRowForExporter(),
     });
     return out;
   }, [projectFsKey, title, row, makeRowForExporter]);
 
   const onOpenPdf = useCallback(async () => {
+    console.log("PDF FILES:", mergeAllPhotosForPdf(row));
+
     const out = await buildPdf();
     if (Platform.OS === "web") {
       Alert.alert("PDF", "Browser: Bitte im Druckdialog als PDF speichern.");
@@ -846,10 +1169,9 @@ export default function RegieScreen({ route, navigation }: Props) {
         Alert.alert("PDF", "PDF konnte nicht geöffnet werden.");
       }
     }
-  }, [buildPdf]);
+  }, [buildPdf, row]);
 
   const onEmailPdf = useCallback(async () => {
-    const dt = normalizeDocType(row.docType);
     const out = await buildPdf();
 
     const att =
@@ -859,10 +1181,10 @@ export default function RegieScreen({ route, navigation }: Props) {
 
     await emailPdf({
       subject: out.fileName,
-      body: `${docTypeLabel(dt)} ${projectFsKey} (${out.date})`,
+      body: `Regiebericht ${projectFsKey} (${out.date})`,
       attachments: att as any,
     });
-  }, [buildPdf, projectFsKey, row.docType]);
+  }, [buildPdf, projectFsKey]);
 
   const onPdfPreview = useCallback(async () => {
     try {
@@ -881,30 +1203,64 @@ export default function RegieScreen({ route, navigation }: Props) {
 
   const openFromHistory = useCallback(
     (x: RegieRow) => {
-      const fixed = { ...x, docType: normalizeDocType((x as any)?.docType) };
-      navigation.setParams?.({ editId: fixed.id, fromInbox: true } as any);
-      setRow({
-        ...fixed,
-        rows:
-          Array.isArray(fixed.rows) && fixed.rows.length
-            ? fixed.rows
-            : [
-                {
-                  kostenstelle: "",
-                  machine: "",
-                  worker: "",
-                  hours: "",
-                  comment: "",
-                  material: "",
-                  quantity: "",
-                  unit: "",
-                  photos: [],
-                },
-              ],
-        attachments: normalizeFiles(fixed.attachments || []),
-      });
+      hydrateRowForPreview(x, projectFsKey)
+        .then((hydratedRaw: any) => {
+          const fixed = {
+            ...x,
+            ...hydratedRaw,
+            docType: "REGIE" as RegieDocType,
+            rows:
+              Array.isArray(hydratedRaw?.rows) && hydratedRaw.rows.length
+                ? hydratedRaw.rows.map((r: any) => ({
+                    ...emptyLine(),
+                    ...r,
+                    photos: normalizeFiles(
+                      r?.photos || r?.attachments || r?.files || []
+                    ),
+                  }))
+                : Array.isArray(x.rows) && x.rows.length
+                ? x.rows.map((r: any) => ({
+                    ...emptyLine(),
+                    ...r,
+                    photos: normalizeFiles(
+                      r?.photos || r?.attachments || r?.files || []
+                    ),
+                  }))
+                : [emptyLine()],
+            attachments: normalizeFiles(
+              hydratedRaw?.attachments ||
+                hydratedRaw?.files ||
+                hydratedRaw?.photos ||
+                x.attachments ||
+                []
+            ),
+          };
+
+          navigation.setParams?.({ editId: fixed.id, fromInbox: true } as any);
+          setRow(fixed);
+        })
+        .catch(() => {
+          const fixed = {
+            ...x,
+            docType: "REGIE" as RegieDocType,
+            rows:
+              Array.isArray(x.rows) && x.rows.length
+                ? x.rows.map((r: any) => ({
+                    ...emptyLine(),
+                    ...r,
+                    photos: normalizeFiles(
+                      r?.photos || r?.attachments || r?.files || []
+                    ),
+                  }))
+                : [emptyLine()],
+            attachments: normalizeFiles(x.attachments || []),
+          };
+
+          navigation.setParams?.({ editId: fixed.id, fromInbox: true } as any);
+          setRow(fixed);
+        });
     },
-    [navigation]
+    [navigation, projectFsKey]
   );
 
   const onReset = useCallback(() => {
@@ -919,32 +1275,48 @@ export default function RegieScreen({ route, navigation }: Props) {
       wetter: "",
       kostenstelle: "",
       bemerkungen: "",
-      rows: [
-        {
-          kostenstelle: "",
-          machine: "",
-          worker: "",
-          hours: "",
-          comment: "",
-          material: "",
-          quantity: "",
-          unit: "",
-          photos: [],
-        },
-      ],
+      rows: [emptyLine()],
       attachments: [],
       workflowStatus: "DRAFT",
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
   }, []);
-
-  // ✅ KI: FIX - immer JSON-Objekt schicken (nicht "BA-..." als String)
-  const onKiSuggest = useCallback(async () => {
+const onKiSuggest = useCallback(async () => {
     try {
       setKiOpen(true);
       setKiBusy(true);
       setKiSuggestion(null);
+
+      if (mode === "NUR_APP") {
+        const hasAttachments =
+          Array.isArray(row.attachments) && row.attachments.length > 0;
+        const hasLines = Array.isArray(row.rows) && row.rows.length > 0;
+        const hasContent =
+          !!String(row.kostenstelle || "").trim() ||
+          !!String(row.bemerkungen || "").trim() ||
+          !!String(row.wetter || "").trim() ||
+          !!String(row.arbeitsbeginn || "").trim() ||
+          !!String(row.arbeitsende || "").trim();
+
+        setKiSuggestion({
+          notes:
+            "KI ist im Modus NUR_APP nicht verfügbar.\n\n" +
+            "Im lokalen Modus werden keine Daten an den Server gesendet und keine KI-Analyse ausgeführt.\n\n" +
+            "Bitte nutze SERVER_SYNC für KI-Vorschläge, OCR und automatische Feldbefüllung.\n\n" +
+            `Dokumenttyp: Regiebericht\n` +
+            `Anhänge vorhanden: ${hasAttachments ? "ja" : "nein"}\n` +
+            `Zeilen vorhanden: ${hasLines ? "ja" : "nein"}\n` +
+            `Formularinhalt vorhanden: ${hasContent ? "ja" : "nein"}`,
+          suggestion: null,
+          raw: {
+            mode,
+            docType: "REGIE",
+            localOnly: true,
+          },
+        });
+        return;
+      }
 
       const fn =
         (api as any)?.kiRegieSuggest ||
@@ -961,29 +1333,37 @@ export default function RegieScreen({ route, navigation }: Props) {
         return;
       }
 
-      const dt = normalizeDocType(row.docType);
       const payload = {
         projectId: projectFsKey,
         projectFsKey,
-        docType: dt,
+        docType: "REGIE",
         date: String(toDateInput(row.date) || ymdNow()),
-        text: buildKiTextFromRow(row),
-        row: { ...row, docType: dt },
+        text: [String(kiInputOverrideRef.current || kiInput || "").trim(), buildKiTextFromRow(row)].filter(Boolean).join("\n\n"),
+        row: { ...row, docType: "REGIE" as RegieDocType },
+        _client: {
+          mode,
+          docType: "REGIE",
+        },
       };
 
       let res: any = null;
 
-      // Versuch 1: (payload)
       try {
         if (fn.length <= 1) res = await fn(payload);
         else res = await fn(payload);
       } catch (e1: any) {
-        // Versuch 2: (projectFsKey, payload)
         try {
           res = await fn(projectFsKey, payload);
         } catch (e2: any) {
           throw e2 || e1;
         }
+      }
+
+      if (res && typeof res === "object") {
+        (res as any)._clientDebug = {
+          mode,
+          docType: "REGIE",
+        };
       }
 
       const normalized = normalizeKiResult(res);
@@ -997,72 +1377,573 @@ export default function RegieScreen({ route, navigation }: Props) {
     } finally {
       setKiBusy(false);
     }
-  }, [projectFsKey, row]);
+  }, [kiInput, mode, projectFsKey, row]);
+  // RLC_KI_MODULE_HANDLER_REGIE_V2_LOCAL_FILL
+  useEffect(() => {
+    return registerRlcKiModuleHandler("Regie", async (payload: any) => {
+      const input = String(payload?.input || "").trim();
+      setKiInput(input);
 
-  // ✅ APPLY KI => "Füllen"
+      const parsed = parseRlcRegie(input);
+
+      const toIsoDate = (v: any) => {
+        const s = String(v || "").trim();
+        const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        return s || ymdNow();
+      };
+
+      setRow((r) => {
+        const mitarbeiter = Array.isArray(parsed.mitarbeiter) ? parsed.mitarbeiter : [];
+        const geraete = Array.isArray(parsed.geraete) ? parsed.geraete : [];
+        const material = Array.isArray(parsed.material) ? parsed.material : [];
+
+        const n = Math.max(1, mitarbeiter.length, geraete.length, material.length);
+
+        const lines = Array.from({ length: n }).map((_, i) => {
+          const p = mitarbeiter[i];
+          const g = geraete[i];
+          const m = material[i];
+
+          return {
+            ...emptyLine(),
+            worker: p?.name || "",
+            machine: g?.name || "",
+            hours: p?.hours || g?.hours || "",
+            material: m?.name || "",
+            quantity: m?.quantity || "",
+            unit: m?.unit || "",
+            comment: parsed.taetigkeit || "",
+          };
+        });
+
+        const warnings =
+          parsed.warnings?.length
+            ? `
+
+RLC KI Hinweise:
+${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
+            : "";
+
+        return {
+          ...r,
+          date: toIsoDate(parsed.datum || r.date),
+          wetter: parsed.wetter || r.wetter || "",
+          bemerkungen: `${parsed.taetigkeit || parsed.bemerkung || r.bemerkungen || ""}${warnings}`,
+          rows: lines,
+          updatedAt: Date.now(),
+        };
+      });
+
+      setKiOpen(false);
+      return { ok: true, handled: true, message: "REGIE_FIELDS_FILLED" };
+    });
+  }, []);
+
   const applyKiSuggestion = useCallback(() => {
     try {
-      const sug = kiSuggestion?.suggestion;
-      const patches = sug?.fieldPatches || sug?.fields || sug?.patches || null;
-      if (!patches || typeof patches !== "object") {
-        Alert.alert("KI", "Kein 'fieldPatches' gefunden.");
+      const sug = kiSuggestion?.suggestion || null;
+
+      let fp: any =
+        sug?.fieldPatches ||
+        sug?.extractedFields ||
+        sug?.patch ||
+        sug?.fields ||
+        sug ||
+        null;
+
+      if (!fp) {
+        Alert.alert("KI", "Kein KI-Vorschlag vorhanden.");
         return;
       }
 
-      // ---- Header keys (support both German + internal keys)
-      const headerPatch: Partial<RegieRow> = {};
+      const toFlatObject = (input: any): Record<string, any> => {
+        if (!input) return {};
 
-      const ks = patches.kostenstelle ?? patches.kostenStelle ?? patches.ks ?? undefined;
-      if (ks != null) headerPatch.kostenstelle = String(ks);
+        if (typeof input === "object" && !Array.isArray(input)) {
+          return input;
+        }
 
-      const bemerk = patches.bemerkungen ?? patches.bemerkung ?? patches.note ?? undefined;
-      if (bemerk != null) headerPatch.bemerkungen = String(bemerk);
+        if (Array.isArray(input)) {
+          const out: Record<string, any> = {};
+          for (const p of input) {
+            if (!p) continue;
 
-      const ab = patches.arbeitsbeginn ?? patches.start ?? patches.von ?? undefined;
-      if (ab != null) headerPatch.arbeitsbeginn = String(ab);
+            const path = typeof p.path === "string" ? p.path : "";
+            if (path) {
+              const k = path
+                .replace(/^\//, "")
+                .replace(/^row\//, "")
+                .replace(/\//g, ".")
+                .trim();
+              if (k) out[k] = p.value;
+              continue;
+            }
 
-      const ae = patches.arbeitsende ?? patches.ende ?? patches.bis ?? undefined;
-      if (ae != null) headerPatch.arbeitsende = String(ae);
+            const field = String(p.field || p.key || p.name || "").trim();
+            if (field) out[field] = p.value ?? p.val ?? p.v ?? p.data;
+          }
+          return out;
+        }
 
-      const p1 = patches.pause1 ?? patches.pause_1 ?? undefined;
-      if (p1 != null) headerPatch.pause1 = String(p1);
+        return {};
+      };
 
-      const p2 = patches.pause2 ?? patches.pause_2 ?? undefined;
-      if (p2 != null) headerPatch.pause2 = String(p2);
+      fp = toFlatObject(fp);
 
-      // ---- Line 1 patch
-      const line0Patch: any = {};
+      if (!fp || typeof fp !== "object" || !Object.keys(fp).length) {
+        Alert.alert("KI", "KI-Felder leer oder unbekanntes Format.");
+        return;
+      }
 
-      const cmt = patches.comment ?? patches.kommentar ?? patches.leistung ?? undefined;
-      if (cmt != null) line0Patch.comment = String(cmt);
+      const getFirst = (...vals: any[]) => {
+        for (const v of vals) {
+          if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+        }
+        return "";
+      };
 
-      const worker = patches.worker ?? patches.mitarbeiter ?? patches.person ?? undefined;
-      if (worker != null) line0Patch.worker = String(worker);
+      const sstr = (v: any) => String(v ?? "").trim();
+      const has = (v: any) => sstr(v).length > 0;
 
-      const machine = patches.machine ?? patches.maschinen ?? patches.geraet ?? undefined;
-      if (machine != null) line0Patch.machine = String(machine);
+      const isDateLike = (v: any) => {
+        const s = sstr(v);
+        return /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{2}\.\d{2}\.\d{4}$/.test(s);
+      };
 
-      const material = patches.material ?? patches.materialien ?? undefined;
-      if (material != null) line0Patch.material = String(material);
+      const isTimeLike = (v: any) => {
+        const s = sstr(v);
+        return /^\d{1,2}:\d{2}$/.test(s);
+      };
 
-      const hours = patches.hours ?? patches.std ?? patches.stunden ?? undefined;
-      if (hours != null && String(hours).trim() !== "") line0Patch.hours = hours;
+      const normalizeTime = (v: any) => {
+        const s = sstr(v);
+        if (!s) return "";
+        if (/^\d{1,2}:\d{2}$/.test(s)) {
+          const [h, m] = s.split(":");
+          return `${String(h).padStart(2, "0")}:${m}`;
+        }
+        return s;
+      };
 
-      const unit = patches.unit ?? patches.einheit ?? undefined;
-      if (unit != null) line0Patch.unit = String(unit);
+      const normalizePause = (v: any) => {
+        const s = sstr(v);
+        if (!s) return "";
+        if (/^\d{1,2}:\d{2}$/.test(s)) return normalizeTime(s);
+        if (/^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$/.test(s)) {
+          const [a, b] = s.split("-").map((x) => normalizeTime(x.trim()));
+          return `${a}-${b}`;
+        }
+        return s;
+      };
 
-      const lks = patches.lineKostenstelle ?? patches.kostenstelle_zeile ?? undefined;
-      if (lks != null) line0Patch.kostenstelle = String(lks);
+      const toNumberString = (v: any) => {
+        if (v == null) return "";
+        if (typeof v === "number" && Number.isFinite(v)) return String(v);
+
+        let x = String(v).trim();
+        if (!x) return "";
+
+        x = x.replace(/\s/g, "");
+        if (x.includes(".") && x.includes(",")) {
+          x = x.replace(/\./g, "").replace(",", ".");
+        } else {
+          x = x.replace(",", ".");
+        }
+
+        const n = Number(x);
+        return Number.isFinite(n) ? String(n) : "";
+      };
+
+      const parseTimeToMinutes = (x: string) => {
+        const [hh, mm] = String(x).split(":").map(Number);
+        if (!Number.isFinite(hh) || !Number.isFinite(mm)) return NaN;
+        return hh * 60 + mm;
+      };
+
+      const calcHoursFromHeader = (start: string, end: string, p1?: string, p2?: string) => {
+        const s = parseTimeToMinutes(start);
+        const e = parseTimeToMinutes(end);
+        if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) return "";
+
+        let diff = e - s;
+        let breakMin = 0;
+
+        const addPause = (p?: string) => {
+          const v = String(p || "").trim();
+          if (!v) return;
+
+          if (/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(v)) {
+            const [a, b] = v.split("-");
+            const aa = parseTimeToMinutes(a);
+            const bb = parseTimeToMinutes(b);
+            if (Number.isFinite(aa) && Number.isFinite(bb) && bb > aa) {
+              breakMin += bb - aa;
+            }
+            return;
+          }
+
+          if (/^\d{2}:\d{2}$/.test(v)) {
+            const mins = parseTimeToMinutes(v);
+            if (Number.isFinite(mins)) breakMin += mins;
+          }
+        };
+
+        addPause(p1);
+        addPause(p2);
+
+        const total = Math.max(0, diff - breakMin) / 60;
+        if (!(total > 0)) return "";
+        return String(Number(total.toFixed(2)));
+      };
+
+      const looksLikeMachineWord = (v: any) => {
+        const s = sstr(v).toLowerCase();
+        return (
+          s.includes("bagger") ||
+          s.includes("minibagger") ||
+          s.includes("radlader") ||
+          s.includes("walze") ||
+          s.includes("lkw") ||
+          s.includes("kran") ||
+          s.includes("fräse") ||
+          s.includes("fraese") ||
+          s.includes("gerät") ||
+          s.includes("geraet")
+        );
+      };
+
+      const looksLikeWorkComment = (v: any) => {
+        const s = sstr(v).toLowerCase();
+        return (
+          s.includes("baugrube") ||
+          s.includes("aufgefüllt") ||
+          s.includes("aufgefuellt") ||
+          s.includes("verlegt") ||
+          s.includes("eingebaut") ||
+          s.includes("ausgehoben") ||
+          s.includes("verdichtet") ||
+          s.includes("abgebrochen") ||
+          s.includes("hergestellt")
+        );
+      };
+
+      const cleanupWorker = (workerRaw: any, machineRaw: any) => {
+        let w = sstr(workerRaw);
+        const m = sstr(machineRaw);
+
+        if (!w) return "";
+
+        if (m && w.toLowerCase().endsWith(m.toLowerCase())) {
+          w = w.slice(0, w.length - m.length).trim();
+        }
+
+        if (looksLikeMachineWord(w)) return "";
+        return w;
+      };
+
+      const cleanupMachine = (machineRaw: any, workerRaw: any) => {
+        let m = sstr(machineRaw);
+        const w = sstr(workerRaw);
+
+        if (!m && looksLikeMachineWord(w)) m = w;
+        if (!m) return "";
+
+        return looksLikeMachineWord(m) ? m : "";
+      };
+
+      const buildRegieComment = (params: {
+        start?: string;
+        end?: string;
+        ort?: string;
+        machine?: string;
+        worker?: string;
+        action?: string;
+      }) => {
+        const start = sstr(params.start);
+        const end = sstr(params.end);
+        const ort = sstr(params.ort);
+        const machine = sstr(params.machine);
+        const worker = sstr(params.worker);
+        const action = sstr(params.action);
+
+        if (!action) return "";
+
+        let text = "";
+
+        if (start && end) {
+          text += `Von ${start} bis ${end} wurde `;
+        } else {
+          text += `Es wurde `;
+        }
+
+        let actionText = action;
+
+        if (/^die\s+/i.test(actionText) || /^der\s+/i.test(actionText) || /^das\s+/i.test(actionText)) {
+          text += actionText;
+        } else {
+          text += actionText;
+        }
+
+        if (ort) text += ` in ${ort}`;
+        if (machine) text += ` mit dem ${machine}`;
+        if (worker) text += ` durch ${worker}`;
+
+        text += `.`;
+
+        return text
+          .replace(/\s+\./g, ".")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+      };
+
+      const arbeitsbeginnVal = getFirst(
+        fp.arbeitsbeginn,
+        fp.start,
+        fp.von,
+        fp.begin,
+        fp.startzeit
+      );
+
+      const arbeitsendeVal = getFirst(
+        fp.arbeitsende,
+        fp.ende,
+        fp.bis,
+        fp.end,
+        fp.endzeit
+      );
+
+      const pause1Val = getFirst(fp.pause1, fp.pause_1, fp.pause, fp.break1);
+      const pause2Val = getFirst(fp.pause2, fp.pause_2, fp.break2);
+
+      const wetterVal = getFirst(fp.wetter, fp.weather);
+      const kostenstelleVal = getFirst(
+        fp.kostenstelle,
+        fp.kostenStelle,
+        fp.ks,
+        fp.costCenter,
+        fp.cost_center,
+        fp.kst
+      );
+
+      const bemerkungenVal = getFirst(
+        fp.bemerkungen,
+        fp.bemerkung,
+        fp.note,
+        fp.notes,
+        fp.headerComment
+      );
+
+      const lineKostenstelleVal = getFirst(
+        fp.lineKostenstelle,
+        fp.kostenstelle_zeile,
+        fp.zeileKostenstelle
+      );
+
+      const commentVal = getFirst(
+        fp.comment,
+        fp.kommentar,
+        fp.leistung,
+        fp.leistungText,
+        fp.arbeitsleistung,
+        fp.text,
+        fp.beschreibung,
+        fp.description,
+        fp.technicalText,
+        fp.technischerText,
+        fp.taetigkeit,
+        fp.taetigkeit,
+        fp.activity,
+        fp.work,
+        fp.action
+      );
+
+      const workerVal = getFirst(
+        fp.worker,
+        fp.mitarbeiter,
+        fp.person,
+        fp.name,
+        fp.arbeiter,
+        fp.employee,
+        fp.personal,
+        fp.kolonne
+      );
+      const machineVal = getFirst(
+        fp.machine,
+        fp.maschine,
+        fp.geraet,
+        fp.geraet,
+        fp.equipment,
+        fp.baufahrzeug,
+        fp.fahrzeug,
+        fp.maschineTyp
+      );
+      const materialVal = getFirst(
+        fp.material,
+        fp.materialien,
+        fp.mat,
+        fp.stoff,
+        fp.baustoff,
+        fp.produkt,
+        fp.bezeichnung
+      );
+      const quantityVal = getFirst(
+        fp.quantity,
+        fp.menge,
+        fp.qty,
+        fp.amount,
+        fp.anzahl,
+        fp.volume,
+        fp.masse
+      );
+      const unitVal = getFirst(
+        fp.unit,
+        fp.einheit,
+        fp.me,
+        fp.eh,
+        fp.mengeneinheit
+      );
+      const hoursVal = getFirst(
+        fp.hours,
+        fp.std,
+        fp.stunden,
+        fp.arbeitsstunden,
+        fp.leistungsstunden,
+        fp.zeit
+      );
+      const ortVal = getFirst(
+        fp.ort,
+        fp.baustelle,
+        fp.einsatzort,
+        fp.place,
+        fp.location,
+        fp.abschnitt,
+        fp.bereich,
+        fp.stelle
+      );
+
+      const hourlyMode =
+        has(arbeitsbeginnVal) ||
+        has(arbeitsendeVal) ||
+        has(hoursVal) ||
+        looksLikeWorkComment(commentVal);
 
       setRow((r) => {
+        const next: RegieRow = { ...r, docType: "REGIE" };
         const lines = Array.isArray(r.rows) ? [...r.rows] : [];
-        if (!lines.length) lines.push({});
-        lines[0] = { ...(lines[0] || {}), ...line0Patch };
-        return { ...r, ...headerPatch, rows: lines, updatedAt: Date.now() };
+        if (!lines.length) lines.push(emptyLine());
+
+        if (has(arbeitsbeginnVal) && isTimeLike(arbeitsbeginnVal)) {
+          next.arbeitsbeginn = normalizeTime(arbeitsbeginnVal);
+        }
+
+        if (has(arbeitsendeVal) && isTimeLike(arbeitsendeVal)) {
+          next.arbeitsende = normalizeTime(arbeitsendeVal);
+        }
+
+        if (has(pause1Val)) {
+          next.pause1 = normalizePause(pause1Val);
+        }
+
+        if (has(pause2Val)) {
+          next.pause2 = normalizePause(pause2Val);
+        }
+
+        if (has(wetterVal) && !isDateLike(wetterVal) && !isTimeLike(wetterVal)) {
+          next.wetter = sstr(wetterVal);
+        }
+
+        if (has(kostenstelleVal) && !isDateLike(kostenstelleVal)) {
+          next.kostenstelle = sstr(kostenstelleVal);
+        }
+
+        const line0 = { ...(lines[0] || emptyLine()) };
+
+        if (has(lineKostenstelleVal) && !isDateLike(lineKostenstelleVal)) {
+          line0.kostenstelle = sstr(lineKostenstelleVal);
+        } else if (has(kostenstelleVal) && !line0.kostenstelle) {
+          line0.kostenstelle = sstr(kostenstelleVal);
+        }
+
+        const cleanMachine = cleanupMachine(machineVal, workerVal);
+        const cleanWorker = cleanupWorker(workerVal, machineVal);
+
+        if (cleanMachine) line0.machine = cleanMachine;
+        if (cleanWorker) line0.worker = cleanWorker;
+
+        if (has(materialVal) && !isDateLike(materialVal)) {
+          line0.material = sstr(materialVal);
+        }
+
+        const qStr = toNumberString(quantityVal);
+        if (qStr) {
+          line0.quantity = qStr;
+        }
+
+        if (has(unitVal) && !isDateLike(unitVal)) {
+          line0.unit = sstr(unitVal);
+        }
+
+        const hStr = toNumberString(hoursVal);
+        if (hStr) {
+          line0.hours = hStr;
+        }
+
+        let finalHours = String(line0.hours || "").trim();
+        if (
+          (!finalHours || finalHours === "9") &&
+          has(next.arbeitsbeginn) &&
+          has(next.arbeitsende)
+        ) {
+          const calc = calcHoursFromHeader(
+            String(next.arbeitsbeginn || ""),
+            String(next.arbeitsende || ""),
+            String(next.pause1 || ""),
+            String(next.pause2 || "")
+          );
+          if (calc) {
+            line0.hours = calc;
+            finalHours = calc;
+          }
+        }
+
+        if (finalHours) {
+          if (!has(line0.unit)) line0.unit = "Std";
+        }
+
+        let finalComment = "";
+        if (has(commentVal) && !isDateLike(commentVal)) {
+          finalComment = sstr(commentVal);
+        }
+
+        const maybeBuiltComment = buildRegieComment({
+          start: next.arbeitsbeginn,
+          end: next.arbeitsende,
+          ort: ortVal,
+          machine: cleanMachine || line0.machine,
+          worker: cleanWorker || line0.worker,
+          action: finalComment,
+        });
+
+        if (maybeBuiltComment && looksLikeWorkComment(finalComment)) {
+          finalComment = maybeBuiltComment;
+        }
+
+        if (finalComment) {
+          line0.comment = finalComment;
+          next.bemerkungen = finalComment;
+        } else if (has(bemerkungenVal) && !isDateLike(bemerkungenVal)) {
+          next.bemerkungen = sstr(bemerkungenVal);
+        }
+
+        lines[0] = line0;
+        next.rows = lines;
+        next.updatedAt = Date.now();
+
+        return next;
       });
 
       Alert.alert("KI", "Felder wurden eingefüllt.");
-      // Optional: modal schließen
       setKiOpen(false);
     } catch (e: any) {
       Alert.alert("KI", e?.message || "Füllen fehlgeschlagen.");
@@ -1137,7 +2018,7 @@ export default function RegieScreen({ route, navigation }: Props) {
             onChangeText={(v) => updateLine(index, { kostenstelle: v })}
             style={s.input}
             placeholder="z.B. KS-01"
-            placeholderTextColor="rgba(255,255,255,0.45)"
+            placeholderTextColor="#B8C1CC"
           />
 
           <View style={s.grid2}>
@@ -1148,7 +2029,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateLine(index, { machine: v })}
                 style={s.input}
                 placeholder="z.B. Bagger"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1158,7 +2039,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateLine(index, { worker: v })}
                 style={s.input}
                 placeholder="Name"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
           </View>
@@ -1172,7 +2053,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 style={s.input}
                 keyboardType="decimal-pad"
                 placeholder="z.B. 7.5"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1182,7 +2063,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateLine(index, { material: v })}
                 style={s.input}
                 placeholder="z.B. Rohr DN150"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
           </View>
@@ -1196,7 +2077,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 style={s.input}
                 keyboardType="decimal-pad"
                 placeholder="z.B. 12"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1206,7 +2087,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateLine(index, { unit: v })}
                 style={s.input}
                 placeholder="m / Stk"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
           </View>
@@ -1217,11 +2098,9 @@ export default function RegieScreen({ route, navigation }: Props) {
             onChangeText={(v) => updateLine(index, { comment: v })}
             style={[s.input, { minHeight: 70, textAlignVertical: "top" }]}
             multiline
-            placeholder="Beschreibung…"
-            placeholderTextColor="rgba(255,255,255,0.45)"
+            placeholder="Beschreibung..."
+            placeholderTextColor="#B8C1CC"
           />
-
-          {/* ❌ FOTO BUTTON ENTFERNT */}
         </View>
       );
     },
@@ -1233,29 +2112,27 @@ export default function RegieScreen({ route, navigation }: Props) {
     const bc = badgeColor(st);
     const ts = item.updatedAt || item.createdAt;
     const tsStr = ts ? new Date(ts).toLocaleString() : "";
-    const dt = normalizeDocType((item as any)?.docType);
 
     return (
       <Pressable style={s.histCard} onPress={() => openFromHistory(item)}>
         <View style={s.histTop}>
           <Text style={s.histTitle} numberOfLines={1}>
-            {docTypeShort(dt)} {String(item.date || "").slice(0, 10)} •{" "}
-            {docTypeLabel(dt)}
+            {docTypeShort("REGIE")} {String(item.date || "").slice(0, 10)} - Regiebericht
           </Text>
           <View style={[s.badge, { borderColor: bc }]}>
             <Text style={[s.badgeTxt, { color: bc }]}>{badgeText(st)}</Text>
           </View>
         </View>
         <Text style={s.histSub} numberOfLines={2}>
-          {item.kostenstelle ? `KS: ${item.kostenstelle}` : "—"}
-          {tsStr ? ` • ${tsStr}` : ""}
+          {item.kostenstelle ? `KS: ${item.kostenstelle}` : "-"}
+          {tsStr ? ` - ${tsStr}` : ""}
         </Text>
       </Pressable>
     );
   }
 
   return (
-    <View style={s.safe}>
+    <SafeAreaView style={s.safe}>
       <ScrollView contentContainerStyle={s.wrap}>
         <View style={s.headerRow}>
           <Pressable onPress={() => navigation.goBack()} style={s.backBtn}>
@@ -1269,38 +2146,18 @@ export default function RegieScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        <Text style={s.h1}>{docTypeLabel(normalizeDocType(row.docType))}</Text>
+        <Text style={s.h1}>Regiebericht</Text>
         <Text style={s.h2}>{String(title || "Projekt")}</Text>
 
-        {/* Type selector */}
-        <View style={s.typeRow}>
-          {(["REGIE", "TAGESBERICHT", "BAUTAGEBUCH"] as RegieDocType[]).map(
-            (t) => {
-              const active = normalizeDocType(row.docType) === t;
-              return (
-                <Pressable
-                  key={t}
-                  onPress={() => updateRow({ docType: t })}
-                  style={[s.typePill, active ? s.typePillActive : null]}
-                >
-                  <Text style={[s.typeTxt, active ? s.typeTxtActive : null]}>
-                    {docTypeLabel(t)}
-                  </Text>
-                </Pressable>
-              );
-            }
-          )}
-        </View>
-
-        {/* Actions row */}
         <View style={s.actionsRow}>
-          <Pressable style={s.actionBtn} onPress={onKiSuggest} disabled={kiBusy}>
-            <Text style={s.actionTxt}>{kiBusy ? "KI..." : "✨ KI"}</Text>
+          <Pressable style={[s.actionBtn, { display: "none" }]} onPress={onKiSuggest} disabled={kiBusy}>
+            <Text style={s.actionTxt}>{kiBusy ? "KI..." : "KI"}</Text>
           </Pressable>
+
           <Pressable style={s.actionBtn} onPress={onPdfPreview} disabled={pdfBusy}>
-            <Text style={s.actionTxt}>{pdfBusy ? "PDF..." : "📄 PDF Vorschau"}</Text>
+            <Text style={s.actionTxt}>{pdfBusy ? "PDF..." : "PDF Vorschau"}</Text>
           </Pressable>
-          <View style={s.pill}>
+<View style={s.pill}>
             <Text style={s.pillTxt}>{projectFsKey}</Text>
           </View>
         </View>
@@ -1312,7 +2169,7 @@ export default function RegieScreen({ route, navigation }: Props) {
             onChangeText={(v) => updateRow({ date: v })}
             style={s.input}
             placeholder="YYYY-MM-DD"
-            placeholderTextColor="rgba(255,255,255,0.45)"
+            placeholderTextColor="#B8C1CC"
           />
 
           <View style={s.grid2}>
@@ -1323,7 +2180,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateRow({ arbeitsbeginn: v })}
                 style={s.input}
                 placeholder="07:00"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1333,7 +2190,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateRow({ arbeitsende: v })}
                 style={s.input}
                 placeholder="16:00"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
           </View>
@@ -1346,7 +2203,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateRow({ pause1: v })}
                 style={s.input}
                 placeholder="00:30"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1356,7 +2213,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateRow({ pause2: v })}
                 style={s.input}
                 placeholder="00:00"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
           </View>
@@ -1369,7 +2226,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateRow({ wetter: v })}
                 style={s.input}
                 placeholder="z.B. sonnig"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1379,7 +2236,7 @@ export default function RegieScreen({ route, navigation }: Props) {
                 onChangeText={(v) => updateRow({ kostenstelle: v })}
                 style={s.input}
                 placeholder="z.B. KS-01"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="#B8C1CC"
               />
             </View>
           </View>
@@ -1390,8 +2247,8 @@ export default function RegieScreen({ route, navigation }: Props) {
             onChangeText={(v) => updateRow({ bemerkungen: v })}
             style={[s.input, { minHeight: 80, textAlignVertical: "top" }]}
             multiline
-            placeholder="Notizen…"
-            placeholderTextColor="rgba(255,255,255,0.45)"
+            placeholder="Notizen..."
+            placeholderTextColor="#B8C1CC"
           />
         </View>
 
@@ -1469,7 +2326,6 @@ export default function RegieScreen({ route, navigation }: Props) {
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* KI Preview Modal */}
       <Modal
         visible={kiOpen}
         transparent
@@ -1478,9 +2334,35 @@ export default function RegieScreen({ route, navigation }: Props) {
       >
         <View style={s.modalWrap}>
           <View style={s.modalCard}>
-            <Text style={s.modalH}>✨ KI Vorschlag</Text>
-            {kiBusy ? (
-              <Text style={s.modalMuted}>KI läuft…</Text>
+            <Text style={s.modalH}>KI Vorschlag</Text>
+            
+            <Text style={s.modalLabel}>KI Eingabe</Text>
+            <TextInput
+              value={kiInput}
+              onChangeText={setKiInput}
+              placeholder="Was soll RLC ausfüllen?"
+              placeholderTextColor="#B8C1CC"
+              multiline
+              style={[s.input, { minHeight: 88, textAlignVertical: "top" }]}
+            />
+            <Pressable
+              onPress={() => Keyboard.dismiss()}
+              style={{
+                alignSelf: "flex-end",
+                marginTop: 8,
+                marginBottom: 8,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: "#EAF1FF",
+              }}
+            >
+              <Text style={{ color: "#2563EB", fontWeight: "900" }}>
+                Tastatur schließen
+              </Text>
+            </Pressable>
+{kiBusy ? (
+              <Text style={s.modalMuted}>KI läuft...</Text>
             ) : (
               <>
                 {!!kiSuggestion?.notes && (
@@ -1499,14 +2381,20 @@ export default function RegieScreen({ route, navigation }: Props) {
             <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
               <Pressable
                 style={[s.modalBtn, { flex: 1, opacity: kiBusy ? 0.6 : 1 }]}
-                onPress={applyKiSuggestion}
+                onPress={() => {
+                      Keyboard.dismiss();
+                      applyKiSuggestion();
+                    }}
                 disabled={kiBusy || !kiSuggestion?.suggestion}
               >
                 <Text style={s.modalBtnTxt}>Füllen</Text>
               </Pressable>
               <Pressable
                 style={[s.modalBtn, { flex: 1 }]}
-                onPress={() => setKiOpen(false)}
+                onPress={() => {
+                      Keyboard.dismiss();
+                      setKiOpen(false);
+                    }}
               >
                 <Text style={s.modalBtnTxt}>Schließen</Text>
               </Pressable>
@@ -1515,7 +2403,6 @@ export default function RegieScreen({ route, navigation }: Props) {
         </View>
       </Modal>
 
-      {/* PDF Vorschau Modal */}
       <Modal
         visible={pdfOpen}
         transparent
@@ -1524,9 +2411,9 @@ export default function RegieScreen({ route, navigation }: Props) {
       >
         <View style={s.modalWrap}>
           <View style={s.modalCard}>
-            <Text style={s.modalH}>📄 PDF Vorschau</Text>
+            <Text style={s.modalH}>PDF Vorschau</Text>
             {pdfBusy ? (
-              <Text style={s.modalMuted}>PDF wird erstellt…</Text>
+              <Text style={s.modalMuted}>PDF wird erstellt...</Text>
             ) : (
               <>
                 <Text style={s.modalMuted}>{pdfMeta?.fileName || "PDF bereit"}</Text>
@@ -1557,12 +2444,12 @@ export default function RegieScreen({ route, navigation }: Props) {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0B1720" },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
   wrap: { padding: 16, paddingBottom: 30, gap: 12 },
 
   headerRow: {
@@ -1571,44 +2458,46 @@ const s = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
+
+  headerKiBtn: { display: "none",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#DDF1FF",
+    borderWidth: 1,
+    borderColor: "#A8D3F5",
+  },
+  headerKiTxt: {
+    color: "#12324A",
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
   backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
-  backTxt: { color: "#fff", fontWeight: "900" },
+  backTxt: { color: COLORS.text, fontWeight: "900" },
 
   modePill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
-  modeTxt: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12 },
+  modeTxt: { color: COLORS.text, fontWeight: "900", fontSize: 12 },
 
-  h1: { fontSize: 34, fontWeight: "900", color: "#fff" },
-  h2: { color: "rgba(255,255,255,0.75)", fontWeight: "800", marginTop: -6 },
-
-  typeRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  typePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  typePillActive: {
-    backgroundColor: "#111",
-    borderColor: "rgba(255,255,255,0.22)",
-  },
-  typeTxt: { color: "rgba(255,255,255,0.75)", fontWeight: "900" },
-  typeTxtActive: { color: "#fff" },
+  h1: { fontSize: 32, fontWeight: "900", color: COLORS.text },
+  h2: { color: COLORS.sub, fontWeight: "800", marginTop: -4 },
 
   actionsRow: {
     flexDirection: "row",
@@ -1621,82 +2510,107 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#111",
+    backgroundColor: COLORS.accent,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.accentDark,
   },
-  actionTxt: { color: "#fff", fontWeight: "900" },
+  actionTxt: { color: COLORS.textLight, fontWeight: "900" },
 
   pill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
-  pillTxt: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12 },
+  pillTxt: { color: COLORS.text, fontWeight: "900", fontSize: 12 },
 
   card: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
     gap: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0F172A",
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
   },
-  label: { color: "rgba(255,255,255,0.78)", fontWeight: "900" },
+
+  label: { color: COLORS.text, fontWeight: "900" },
+
   input: {
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(0,0,0,0.25)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: "#fff",
+    color: COLORS.text,
     fontWeight: "800",
   },
+
   grid2: { flexDirection: "row", gap: 10 },
 
   section: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
     gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0F172A",
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: { elevation: 1 },
+      default: {},
+    }),
   },
+
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
   },
-  sectionH: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  sectionH: { color: COLORS.text, fontWeight: "900", fontSize: 16 },
 
   smallBtn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#111",
+    backgroundColor: COLORS.accent,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.accentDark,
   },
-  smallBtnTxt: { color: "#fff", fontWeight: "900" },
-  smallBtnGhost: {
-    backgroundColor: "transparent",
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  smallBtnTxtGhost: { color: "rgba(255,255,255,0.85)", fontWeight: "900" },
+  smallBtnTxt: { color: COLORS.textLight, fontWeight: "900" },
 
-  muted: { color: "rgba(255,255,255,0.65)", fontWeight: "700" },
+  smallBtnGhost: {
+    backgroundColor: COLORS.card,
+    borderColor: COLORS.border,
+  },
+  smallBtnTxtGhost: { color: COLORS.text, fontWeight: "900" },
+
+  muted: { color: COLORS.sub, fontWeight: "700" },
 
   lineCard: {
     borderRadius: 16,
     padding: 12,
-    backgroundColor: "rgba(0,0,0,0.18)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
     gap: 10,
   },
   lineTop: {
@@ -1705,9 +2619,8 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-  lineTitle: { color: "#fff", fontWeight: "900" },
+  lineTitle: { color: COLORS.text, fontWeight: "900" },
 
-  // (styles bleiben; nichts löschen)
   photoRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1739,9 +2652,9 @@ const s = StyleSheet.create({
   attCard: {
     borderRadius: 14,
     padding: 10,
-    backgroundColor: "rgba(0,0,0,0.18)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -1750,37 +2663,37 @@ const s = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: COLORS.card2,
   },
   attFile: {
     width: 56,
     height: 56,
     borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: COLORS.card2,
     alignItems: "center",
     justifyContent: "center",
   },
-  attFileTxt: { color: "#fff", fontWeight: "900" },
-  attName: { color: "#fff", fontWeight: "900" },
-  attUri: { color: "rgba(255,255,255,0.65)", fontWeight: "700", marginTop: 2 },
+  attFileTxt: { color: COLORS.accent, fontWeight: "900" },
+  attName: { color: COLORS.text, fontWeight: "900" },
+  attUri: { color: COLORS.sub, fontWeight: "700", marginTop: 2 },
   attDel: {
     width: 34,
     height: 34,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: "#FFF1F3",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: "#F3C7CF",
     alignItems: "center",
     justifyContent: "center",
   },
-  attDelTxt: { color: "#fff", fontWeight: "900" },
+  attDelTxt: { color: "#C33", fontWeight: "900" },
 
   histCard: {
     borderRadius: 16,
     padding: 12,
-    backgroundColor: "rgba(0,0,0,0.18)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
     gap: 8,
   },
   histTop: {
@@ -1789,22 +2702,22 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
   },
-  histTitle: { color: "#fff", fontWeight: "900", flex: 1 },
-  histSub: { color: "rgba(255,255,255,0.70)", fontWeight: "800" },
+  histTitle: { color: COLORS.text, fontWeight: "900", flex: 1 },
+  histSub: { color: COLORS.sub, fontWeight: "800" },
 
   badge: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: "rgba(0,0,0,0.20)",
+    backgroundColor: COLORS.card,
     alignSelf: "flex-start",
   },
   badgeTxt: { fontSize: 11, fontWeight: "900" },
 
   modalWrap: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(15,23,42,0.45)",
     alignItems: "center",
     justifyContent: "flex-end",
     padding: 14,
@@ -1813,15 +2726,20 @@ const s = StyleSheet.create({
     width: "100%",
     borderRadius: 18,
     padding: 14,
-    backgroundColor: "#0B1720",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: COLORS.border,
   },
-  modalH: { color: "#fff", fontWeight: "900", fontSize: 18 },
-  modalMuted: { color: "rgba(255,255,255,0.70)", fontWeight: "800", marginTop: 6 },
+  modalH: { color: COLORS.text, fontWeight: "900", fontSize: 18 },
+  modalLabel: { fontSize: 13, fontWeight: "800", color: COLORS.sub, marginTop: 12, marginBottom: 6 },
+  modalMuted: {
+    color: COLORS.sub,
+    fontWeight: "800",
+    marginTop: 6,
+  },
   modalBody: {
     marginTop: 10,
-    color: "rgba(255,255,255,0.85)",
+    color: COLORS.text,
     fontWeight: "700",
     fontFamily: Platform.select({
       ios: "Menlo",
@@ -1835,9 +2753,36 @@ const s = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#111",
+    backgroundColor: COLORS.accent,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.accentDark,
   },
-  modalBtnTxt: { color: "#fff", fontWeight: "900" },
+  modalBtnTxt: { color: COLORS.textLight, fontWeight: "900" },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

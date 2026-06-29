@@ -1,11 +1,10 @@
-import { getJson, setJson } from "../lib/storage";
+﻿import { getJson, setJson } from "../lib/storage";
 
 export type SessionRole =
   | "BAULEITER"
-  | "ABRECHNUNG"
   | "BUERO"
+  | "KALKULATOR"
   | "POLIER"
-  | "VERMESSUNG"
   | "FAHRER"
   | "MITARBEITER";
 
@@ -33,3 +32,6 @@ export async function setSession(projectId: string, s: Omit<Session, "ts">) {
 export async function clearSession(projectId: string) {
   await setJson(key(projectId), null);
 }
+
+
+

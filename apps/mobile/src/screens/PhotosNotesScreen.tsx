@@ -1,6 +1,10 @@
-// apps/mobile/src/screens/PhotosNotesScreen.tsx
-import React, { useCallback, useMemo, useState } from "react";
+﻿// apps/mobile/src/screens/PhotosNotesScreen.tsx
+import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
+import { parseRlcFotos } from "../lib/rlcKiFieldParser";
 import {
+  Keyboard,
+  SafeAreaView,
   View,
   Text,
   TextInput,
@@ -33,6 +37,8 @@ import {
   queueCleanupDone,
   queueNormalizeExisting,
   queueProcessPending,
+  queueStats,
+  queueList,
   type QueueItem,
   type DateiMeta,
   type ExtraRow,
@@ -49,28 +55,24 @@ type Props = NativeStackScreenProps<RootStackParamList, "PhotosNotes">;
 const KEY_MODE = "rlc_mobile_mode";
 
 /** =========================
- * ✅ KEYS POLICY (HARD)
- * SERVER_SYNC  -> server inbox key:
+ * OK KEYS POLICY (HARD)
+ * SERVER_SYNC  -> server inbox key (legacy UI mirror only):
  *   rlc_mobile_inbox_fotos:${BA-...}
  *
  * LOCAL STORE (used for UI/history/edit ALWAYS):
  *   rlc_mobile_offline_fotos:${localKey}
  *
- * InboxScreen (offline UI) reads AsyncStorage keys like:
- *   rlc_mobile_inbox_photos:${BA-...}
- *   rlc_mobile_inbox_fotos:${BA-...}   (legacy/synonym)
+ * InboxScreen reads:
+ *   rlc_mobile_inbox_photos:${FSKEY}
+ *   rlc_mobile_inbox_fotos:${FSKEY}
  * ========================= */
 
 function inboxFotosKey(projectKey: string) {
   return `rlc_mobile_inbox_fotos:${projectKey}`;
 }
-
-/** ✅ InboxScreen expects this too */
 function inboxPhotosKey(projectKey: string) {
   return `rlc_mobile_inbox_photos:${projectKey}`;
 }
-
-/** ✅ Local store key (history/edit) */
 function offlineKey(localKey: string) {
   return `rlc_mobile_offline_fotos:${localKey}`;
 }
@@ -101,27 +103,43 @@ function uid(prefix = "ph") {
 
 function normalizeFiles(input: any[]): DateiMeta[] {
   const arr = Array.isArray(input) ? input : [];
-  const out: DateiMeta[] = arr
-    .filter(Boolean)
-    .map((f) => ({
-      id: String(f?.id || uid("f")),
-      name: f?.name,
-      uri: f?.uri,
-      type: f?.type,
-    }))
-    .filter((x) => !!x.uri);
+  const out: DateiMeta[] = [];
 
-  // dedupe by uri
-  const seen = new Set<string>();
-  const ded: DateiMeta[] = [];
-  for (const f of out) {
-    const u = String(f.uri || "");
-    if (!u) continue;
-    if (seen.has(u)) continue;
-    seen.add(u);
-    ded.push(f);
+  for (const f of arr) {
+    if (!f) continue;
+
+    if (typeof f === "string") {
+      const uri = String(f).trim();
+      if (!uri) continue;
+      out.push({
+        id: uid("f"),
+        name: uri.split("/").pop() || `file_${Date.now()}`,
+        uri,
+        type: undefined,
+      });
+      continue;
+    }
+
+    const uri = String(f?.uri || f?.url || f?.path || "").trim();
+    if (!uri) continue;
+
+    out.push({
+      id: String(f?.id || uid("f")),
+      name:
+        f?.name || f?.filename || uri.split("/").pop() || `file_${Date.now()}`,
+      uri,
+      type: f?.type || f?.mime || f?.mimeType,
+    });
   }
-  return ded;
+
+  const seen = new Set<string>();
+  return out.filter((x) => {
+    const u = String(x?.uri || "").trim();
+    if (!u) return false;
+    if (seen.has(u)) return false;
+    seen.add(u);
+    return true;
+  });
 }
 
 function hasAnyContent(row: any): boolean {
@@ -135,35 +153,19 @@ function hasAnyContent(row: any): boolean {
   return anyText || anyField || anyFile || anyMain;
 }
 
-function inferImageMetaFromUri(uri: string) {
-  const u = String(uri || "").toLowerCase();
-  if (u.endsWith(".heic") || u.includes("heic"))
-    return { ext: "heic", mime: "image/heic" };
-  if (u.endsWith(".heif") || u.includes("heif"))
-    return { ext: "heif", mime: "image/heif" };
-  if (u.endsWith(".png")) return { ext: "png", mime: "image/png" };
-  if (u.endsWith(".webp")) return { ext: "webp", mime: "image/webp" };
-  return { ext: "jpg", mime: "image/jpeg" };
-}
-
 /** =========================================================
- * ✅ PERSIST FILE URI (FIX preview nere / riapertura)
- * - converte ph:// + HEIC/HEIF -> JPEG in cache
- * - copia tutto in documentDirectory/projects/<FSKEY>/inbox/fotos/files/
- * - ritorna SEMPRE file://... stabile
+ * OK PERSIST FILE URI (FIX preview nere / riapertura)
  * ========================================================= */
 
 function normDir(d: string) {
   return d.endsWith("/") ? d : d + "/";
 }
-
 function safeFsKey(k: string) {
   return String(k || "")
     .trim()
     .replace(/[^\w.\-]+/g, "_")
     .slice(0, 80);
 }
-
 async function ensureDir(dirUri: string) {
   const d = normDir(dirUri);
   const info = await FileSystem.getInfoAsync(d);
@@ -171,14 +173,9 @@ async function ensureDir(dirUri: string) {
     await FileSystem.makeDirectoryAsync(d, { intermediates: true });
   }
 }
-
 function isPhUri(u?: string) {
   const s = String(u || "");
   return s.startsWith("ph://") || s.startsWith("assets-library://");
-}
-function isContentUri(u?: string) {
-  const s = String(u || "");
-  return s.startsWith("content://");
 }
 function isFileUri(u?: string) {
   const s = String(u || "");
@@ -203,12 +200,14 @@ function shouldConvertToJpegByExt(ext: string) {
   return e === "heic" || e === "heif";
 }
 
-async function convertToJpegIfNeeded(uri: string, hint?: { name?: string; type?: string }) {
+async function convertToJpegIfNeeded(
+  uri: string,
+  hint?: { name?: string; type?: string }
+) {
   if (Platform.OS === "web") return uri;
 
   const ext = extFromNameOrUri(hint?.name, uri, hint?.type);
   const needs = isPhUri(uri) || shouldConvertToJpegByExt(ext);
-
   if (!needs) return uri;
 
   const tries = [
@@ -224,12 +223,8 @@ async function convertToJpegIfNeeded(uri: string, hint?: { name?: string; type?:
         { compress: t.compress, format: ImageManipulator.SaveFormat.JPEG }
       );
       if (out?.uri) return out.uri;
-    } catch {
-      // try next
-    }
+    } catch {}
   }
-
-  // fallback: originale (potrebbe restare non leggibile, ma evitiamo crash)
   return uri;
 }
 
@@ -244,7 +239,6 @@ async function persistToProjectFileUri(params: {
 
   const input = String(uri || "").trim();
   if (!input) return "";
-
   if (Platform.OS === "web") return input;
 
   const root = String(FileSystem.documentDirectory || "").trim();
@@ -255,13 +249,16 @@ async function persistToProjectFileUri(params: {
   const dir = `${base}projects/${fsKey}/inbox/fotos/files/`;
   await ensureDir(dir);
 
-  // convert ph:// / heic -> jpeg (cache file://)
-  const converted = await convertToJpegIfNeeded(input, { name: nameHint, type: typeHint });
+  const converted = await convertToJpegIfNeeded(input, {
+    name: nameHint,
+    type: typeHint,
+  });
 
-  // decide ext (after conversion, force jpg)
   const ext0 = extFromNameOrUri(nameHint, input, typeHint);
   const ext =
-    (isPhUri(input) || shouldConvertToJpegByExt(ext0) || converted !== input) ? "jpg" : ext0;
+    isPhUri(input) || shouldConvertToJpegByExt(ext0) || converted !== input
+      ? "jpg"
+      : ext0;
 
   const fileNameSafeBase =
     String(nameHint || "")
@@ -277,354 +274,24 @@ async function persistToProjectFileUri(params: {
   const target = `${dir}${baseName}.${ext}`;
 
   try {
-    // overwrite idempotent
     try {
       await FileSystem.deleteAsync(target, { idempotent: true });
     } catch {}
-
-    // copy works for file:// and content:// (android). For ph:// we converted already.
     await FileSystem.copyAsync({ from: converted, to: target });
-
     return target.startsWith("file://") ? target : `file://${target}`;
   } catch (e: any) {
     const msg = String(e?.message || e);
-    console.log("[PHOTOS] persistToProjectFileUri FAILED:", msg, { input, converted, target });
-
+    console.log("[PHOTOS] persistToProjectFileUri FAILED:", msg, {
+      input,
+      converted,
+      target,
+    });
     if (isFileUri(converted)) return converted;
     return input;
   }
 }
 
-/** =========================
- * ✅ serverRequest (token + base api url)
- * ========================= */
-async function serverRequest<T>(
-  path: string,
-  init: RequestInit = {}
-): Promise<T> {
-  const token = await AsyncStorage.getItem("auth_token");
-  const headers: Record<string, any> = { ...(init.headers as any) };
-
-  // set content-type only for JSON (NOT for FormData)
-  // NOTE: RN FormData exists at runtime
-  // eslint-disable-next-line no-undef
-  if (!headers["Content-Type"] && !(init.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-  }
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  let base = "";
-  try {
-    base = String(
-      (api as any)?.getApiUrl
-        ? await (api as any).getApiUrl()
-        : (api as any)?.apiUrl || ""
-    ).replace(/\/$/, "");
-  } catch {
-    base = String((api as any)?.apiUrl || "").replace(/\/$/, "");
-  }
-
-  if (!base) {
-    throw new Error("API Base URL missing (apiUrl/getApiUrl).");
-  }
-
-  const res = await fetch(`${base}${path}`, { ...init, headers });
-  const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
-  return (text ? JSON.parse(text) : null) as T;
-}
-
-/** =========================
- * ✅ Upload to SERVER INBOX (HARD FIX)
- * ========================= */
-async function uploadPhotoNoteToServerInbox(ba: string, payload: any) {
-  const docId =
-    String(payload?.docId || payload?.id || "").trim() || uid("ph");
-  const date = String(payload?.date || ymdToday()).slice(0, 10);
-
-  const fd = new FormData();
-  fd.append("projectId", ba);
-  fd.append("docId", docId);
-  fd.append("date", date);
-  fd.append("workflowStatus", "EINGEREICHT");
-  fd.append("comment", String(payload?.comment || payload?.note || ""));
-  fd.append("bemerkungen", String(payload?.bemerkungen || ""));
-  fd.append("kostenstelle", String(payload?.kostenstelle || ""));
-  fd.append("lvItemPos", payload?.lvItemPos ?? "");
-
-  if (payload?.extras) fd.append("extras", JSON.stringify(payload.extras));
-  if (payload?.boxes) fd.append("boxes", JSON.stringify(payload.boxes));
-
-  // ✅ MAIN MUST be fieldname "main"
-  if (payload?.imageUri) {
-    const uri = String(payload.imageUri).trim();
-    if (uri) {
-      const meta = inferImageMetaFromUri(uri);
-      fd.append(
-        "main",
-        { uri, name: `main_${docId}.${meta.ext}`, type: meta.mime } as any
-      );
-    }
-  }
-
-  // ✅ Attachments MUST be fieldname "files"
-  const arr = Array.isArray(payload?.files) ? payload.files : [];
-  for (const f of arr) {
-    const uri = String(f?.uri || "").trim();
-    if (!uri) continue;
-
-    const meta = inferImageMetaFromUri(uri);
-    const name = String(f?.name || `file_${docId}.${meta.ext}`).trim();
-    const type = String(f?.type || meta.mime).trim();
-
-    fd.append("files", { uri, name, type } as any);
-  }
-
-  return await serverRequest<any>("/api/fotos/inbox/upload", {
-    method: "POST",
-    body: fd as any,
-  });
-}
-
-/** =========================
- * ✅ KI helpers
- * ========================= */
-
-type KiFieldPatches = Partial<{
-  comment: string;
-  bemerkungen: string;
-  kostenstelle: string;
-  lvItemPos: string | null;
-  arbeitsbeginn: string;
-  arbeitsende: string;
-  pause1: string;
-  pause2: string;
-  mitarbeiter: string;
-  maschinen: string;
-  materialien: string;
-  hours: number;
-  unit: string;
-}>;
-
-type KiSuggestion = {
-  title?: string;
-  summary?: string;
-  fieldPatches?: KiFieldPatches;
-  notes?: string;
-};
-
-type KiUiResult = {
-  mode: "NUR_APP" | "SERVER_SYNC";
-  humanText: string;
-  suggestions: KiSuggestion[];
-  raw?: any;
-};
-
-function normalizeWs(s: string) {
-  return String(s || "").replace(/\s+/g, " ").trim();
-}
-
-function makeHumanTextFromSuggestion(s: KiSuggestion, fallback = "") {
-  const lines: string[] = [];
-  if (s?.title) lines.push(`• ${s.title}`);
-  if (s?.summary) lines.push(s.summary);
-  if (s?.notes) lines.push(`\nHinweise:\n${s.notes}`);
-
-  const fp = s?.fieldPatches || {};
-  const fpLines: string[] = [];
-  if (fp.comment) fpLines.push(`Notiz: ${fp.comment}`);
-  if (fp.bemerkungen && fp.bemerkungen !== fp.comment)
-    fpLines.push(`Bemerkungen: ${fp.bemerkungen}`);
-  if (fp.kostenstelle) fpLines.push(`Kostenstelle: ${fp.kostenstelle}`);
-  if (fp.lvItemPos) fpLines.push(`LV Pos: ${fp.lvItemPos}`);
-  if (fp.arbeitsbeginn || fp.arbeitsende)
-    fpLines.push(
-      `Zeit: ${fp.arbeitsbeginn || "—"} bis ${fp.arbeitsende || "—"}`
-    );
-  if (fp.pause1) fpLines.push(`Pause 1: ${fp.pause1}`);
-  if (fp.pause2) fpLines.push(`Pause 2: ${fp.pause2}`);
-  if (fp.mitarbeiter) fpLines.push(`Mitarbeiter: ${fp.mitarbeiter}`);
-  if (fp.maschinen) fpLines.push(`Maschinen: ${fp.maschinen}`);
-  if (fp.materialien) fpLines.push(`Materialien: ${fp.materialien}`);
-  if (typeof fp.hours === "number")
-    fpLines.push(`Stunden: ${fp.hours} ${fp.unit || "Std"}`);
-
-  if (fpLines.length) {
-    lines.push(
-      `\nVorschlag (übernehmbar):\n${fpLines.map((x) => `- ${x}`).join("\n")}`
-    );
-  }
-
-  return normalizeWs(lines.join("\n").trim()) || fallback;
-}
-
-/**
- * ✅ NUR_APP KI (NO SERVER, NO PHOTO ANALYSIS)
- */
-function buildLocalKiResult(row: any): KiUiResult {
-  const noteRaw = String(row?.comment || row?.note || "").trim();
-  const note = noteRaw.toLowerCase();
-  const hasPhoto = !!row?.imageUri;
-  const fCount = Array.isArray(row?.files) ? row.files.length : 0;
-
-  const fp: KiFieldPatches = {};
-
-  let title = "Text-Assistent (Offline)";
-  let summary = "Basierend auf deiner Notiz – ohne Server, ohne Fotoanalyse.";
-  const hints: string[] = [];
-
-  if (hasPhoto)
-    hints.push(
-      "Foto ist vorhanden (offline gespeichert), wird aber in NUR_APP nicht analysiert."
-    );
-  if (fCount) hints.push(`${fCount} Anhang/Anhänge vorhanden (offline).`);
-
-  const isAsphalt =
-    note.includes("asphalt") ||
-    note.includes("asphaltiert") ||
-    note.includes("asphaltieren") ||
-    note.includes("teer") ||
-    note.includes("bitumen");
-
-  const isPatch =
-    note.includes("flicken") ||
-    note.includes("patch") ||
-    note.includes("repar") ||
-    note.includes("ausbesser") ||
-    note.includes("sanier");
-
-  const hasVonBis = /\bvon\b.*\bbis\b/.test(note);
-  const hasMeters = /\b(\d+(?:[.,]\d+)?)\s*(m|lfm|meter)\b/.test(note);
-  const hasSqm = /\b(\d+(?:[.,]\d+)?)\s*(m2|qm)\b/.test(note);
-  const hasTons = /\b(\d+(?:[.,]\d+)?)\s*(t|tonnen)\b/.test(note);
-
-  if (isAsphalt) {
-    title = "Asphalt / Straßenfläche";
-    summary =
-      "Ich formuliere dir eine saubere Notiz für die Fotodokumentation und lasse Platzhalter für Maße/Abschnitt.";
-
-    const parts: string[] = [];
-    if (isPatch) parts.push("Asphalt ausgebessert / repariert");
-    else parts.push("Asphaltarbeiten durchgeführt");
-
-    if (!hasVonBis) parts.push("Abschnitt: von ___ bis ___");
-    if (!hasMeters && !hasSqm) parts.push("Menge: ___ m / ___ m²");
-    if (hasTons) parts.push("Material: ___ t Asphalt (falls relevant)");
-
-    parts.push(
-      "Ort/Details: ___ (Straße, Hausnr., Stationierung, Randbereiche)"
-    );
-
-    fp.comment = parts.join(" • ");
-    fp.bemerkungen = fp.comment;
-    fp.unit = "Std";
-    fp.hours = 0;
-
-    hints.push(
-      "Trage ‘von…bis…’ als Abschnitt (Stationierung oder Straßennamen + Hausnummern) ein."
-    );
-    if (!hasMeters && !hasSqm)
-      hints.push("Wenn du Maße hast: m (Länge) oder m² (Fläche) ergänzen.");
-  } else {
-    title = "Allgemeine Fotodokumentation";
-    summary =
-      "Ich baue dir aus deiner Notiz eine brauchbare Dokumentationszeile mit Platzhaltern.";
-
-    const base = noteRaw ? noteRaw : "Arbeiten durchgeführt";
-    const parts: string[] = [base];
-
-    if (!hasVonBis) parts.push("Abschnitt: von ___ bis ___");
-    if (!hasMeters && !hasSqm && !hasTons)
-      parts.push("Menge: ___ (z.B. m / m² / Stk / t)");
-
-    parts.push("Ort/Details: ___");
-
-    fp.comment = parts.join(" • ");
-    fp.bemerkungen = fp.comment;
-    fp.unit = "Std";
-    fp.hours = 0;
-
-    hints.push(
-      "Wenn du nur ein Wort schreibst (z.B. ‘Asphaltiert’), ergänze Abschnitt + Menge."
-    );
-  }
-
-  if (String(row?.kostenstelle || "").trim()) {
-    fp.kostenstelle = String(row.kostenstelle).trim();
-  }
-  if (String(row?.lvItemPos || "").trim()) {
-    fp.lvItemPos = String(row.lvItemPos).trim();
-  } else {
-    fp.lvItemPos = null;
-  }
-
-  const suggestion: KiSuggestion = {
-    title,
-    summary,
-    notes: hints.length ? hints.map((h) => `• ${h}`).join("\n") : "",
-    fieldPatches: fp,
-  };
-
-  const humanText = makeHumanTextFromSuggestion(suggestion, "Kein Vorschlag.");
-
-  return {
-    mode: "NUR_APP",
-    humanText,
-    suggestions: [suggestion],
-    raw: { local: true },
-  };
-}
-
-function extractFirstFieldPatches(res: any): KiFieldPatches | null {
-  const s0 =
-    res?.suggestions?.[0] ||
-    res?.data?.suggestions?.[0] ||
-    res?.result?.suggestions?.[0] ||
-    null;
-
-  const fp = s0?.fieldPatches || s0?.patches || res?.fieldPatches || null;
-  if (!fp || typeof fp !== "object") return null;
-  return fp as KiFieldPatches;
-}
-
-function buildUiResultFromServer(res: any): KiUiResult {
-  const fp = extractFirstFieldPatches(res) || {};
-  const s0 =
-    res?.suggestions?.[0] ||
-    res?.data?.suggestions?.[0] ||
-    res?.result?.suggestions?.[0] ||
-    {};
-  const suggestion: KiSuggestion = {
-    title: s0?.title || "KI Vorschlag",
-    summary: s0?.summary || "",
-    notes: s0?.notes || "",
-    fieldPatches: fp,
-  };
-
-  const humanText = makeHumanTextFromSuggestion(
-    suggestion,
-    "KI hat geantwortet, aber ohne verwertbaren Vorschlag."
-  );
-
-  return {
-    mode: "SERVER_SYNC",
-    humanText,
-    suggestions: [suggestion],
-    raw: res,
-  };
-}
-
-function looksLikeMissingEndpoint(err: any) {
-  const msg = String(err?.message || "").toLowerCase();
-  return (
-    msg.includes("404") ||
-    msg.includes("not found") ||
-    msg.includes("cannot post") ||
-    msg.includes("cannot get")
-  );
-}
-
-/** ✅ upsert helper (keeps behavior consistent) */
+/** OK upsert helper */
 function upsertRow(list: any[], row: any) {
   const next = Array.isArray(list) ? [...list] : [];
   const idx = next.findIndex(
@@ -635,41 +302,486 @@ function upsertRow(list: any[], row: any) {
   return next;
 }
 
-/** ✅ Write Photos rows to Offline-Inbox keys so InboxScreen can display immediately */
+/** OK Write Photos rows to Offline-Inbox keys so InboxScreen can display immediately */
 async function writePhotosToOfflineInbox(projectKey: string, row: any) {
   const k1 = inboxPhotosKey(projectKey);
-  const k2 = inboxFotosKey(projectKey); // legacy/synonym used by InboxScreen fallback list
+  const k2 = inboxFotosKey(projectKey);
 
   const arr1 = await loadArray(k1);
-  const next1 = upsertRow(arr1, row);
-  await saveArray(k1, next1);
+  await saveArray(k1, upsertRow(arr1, row));
 
   const arr2 = await loadArray(k2);
-  const next2 = upsertRow(arr2, row);
-  await saveArray(k2, next2);
+  await saveArray(k2, upsertRow(arr2, row));
+}
+
+function normalizeInboxSnapshotPhoto(snapRaw: any, editId: string) {
+  if (!snapRaw || typeof snapRaw !== "object") return null;
+
+  const payload = (snapRaw as any)?.payload;
+  const rowFromPayload = payload?.row;
+  const rowFromDirect = (snapRaw as any)?.row;
+
+  const base: any =
+    (rowFromPayload && typeof rowFromPayload === "object" && rowFromPayload) ||
+    (rowFromDirect && typeof rowFromDirect === "object" && rowFromDirect) ||
+    snapRaw;
+
+  const filesPool =
+    base?.files ??
+    base?.attachments ??
+    base?.photos ??
+    payload?.files ??
+    payload?.attachments ??
+    payload?.photos ??
+    [];
+
+  const normalizedFiles = normalizeFiles(filesPool);
+
+  const explicitMain =
+    String(
+      base?.imageUri || base?.imageMeta?.uri || base?.image?.uri || ""
+    ).trim() || null;
+
+  const fallbackMain =
+    normalizedFiles.find((f) => {
+      const u = String(f?.uri || "").toLowerCase();
+      const t = String(f?.type || "").toLowerCase();
+      return (
+        t.startsWith("image/") ||
+        u.endsWith(".jpg") ||
+        u.endsWith(".jpeg") ||
+        u.endsWith(".png") ||
+        u.endsWith(".webp") ||
+        u.endsWith(".heic") ||
+        u.endsWith(".heif")
+      );
+    })?.uri || null;
+
+  return {
+    ...base,
+    id: String(base?.id || base?.docId || (snapRaw as any)?.id || editId),
+    kind: "fotos",
+    workflowStatus: (base?.workflowStatus ||
+      payload?.workflowStatus ||
+      "EINGEREICHT") as "DRAFT" | "EINGEREICHT",
+    projectId: base?.projectId ?? null,
+    projectCode: base?.projectCode ?? null,
+    date: String(base?.date || payload?.date || ymdToday()).slice(0, 10),
+    kostenstelle: String(base?.kostenstelle || ""),
+    lvItemPos: String(base?.lvItemPos || "").trim() || null,
+    ortAbschnitt: String(
+      base?.ortAbschnitt || base?.location || base?.ort || ""
+    ),
+    location: String(base?.location || base?.ortAbschnitt || base?.ort || ""),
+    ort: String(base?.ort || base?.ortAbschnitt || base?.location || ""),
+    kategorie: String(base?.kategorie || base?.category || ""),
+    category: String(base?.category || base?.kategorie || ""),
+    gewerk: String(base?.gewerk || base?.trade || ""),
+    trade: String(base?.trade || base?.gewerk || ""),
+    fotoStatus: String(base?.fotoStatus || base?.statusFoto || base?.status || ""),
+    statusFoto: String(base?.statusFoto || base?.fotoStatus || base?.status || ""),
+    tags: Array.isArray(base?.tags)
+      ? base.tags.join(", ")
+      : String(base?.tags || ""),
+    comment: String(base?.comment || base?.note || base?.bemerkungen || ""),
+    bemerkungen: String(
+      base?.bemerkungen || base?.comment || base?.note || ""
+    ),
+    note: String(base?.note || base?.comment || base?.bemerkungen || ""),
+    imageUri: explicitMain || fallbackMain,
+    files: normalizedFiles,
+    attachments: normalizedFiles,
+    photos: normalizedFiles,
+    extras: Array.isArray(base?.extras) ? base.extras : undefined,
+    boxes: Array.isArray(base?.boxes) ? base.boxes : undefined,
+    updatedAt: String(base?.updatedAt || nowIso()),
+    createdAt: String(base?.createdAt || nowIso()),
+  };
+}
+
+function normalizeKiPhotosResult(raw: any) {
+  const root =
+    raw?.data && typeof raw.data === "object"
+      ? raw.data
+      : raw?.result && typeof raw.result === "object"
+      ? raw.result
+      : raw;
+
+  const suggestions = Array.isArray(root?.suggestions)
+    ? root.suggestions
+    : Array.isArray(raw?.suggestions)
+    ? raw.suggestions
+    : [];
+
+  const firstSuggestion =
+    suggestions[0] || root?.suggestion || raw?.suggestion || null;
+
+  const directFields =
+    root?.fields ||
+    raw?.fields ||
+    root?.extractedFields ||
+    raw?.extractedFields ||
+    root?.fieldPatches ||
+    raw?.fieldPatches ||
+    null;
+
+  const fallbackDirectObject =
+    !firstSuggestion &&
+    root &&
+    typeof root === "object" &&
+    (root.note != null ||
+      root.comment != null ||
+      root.bemerkungen != null ||
+      root.kostenstelle != null ||
+      root.lvItemPos != null ||
+      root.lvPos != null ||
+      root.materialien != null ||
+      root.materials != null ||
+      root.extras != null ||
+      root.boxes != null)
+      ? root
+      : null;
+
+  const fieldPatches =
+    firstSuggestion?.fieldPatches ||
+    firstSuggestion?.extractedFields ||
+    firstSuggestion?.patch ||
+    firstSuggestion?.fields ||
+    directFields ||
+    fallbackDirectObject ||
+    null;
+
+  const errorMessage = String(
+    root?.error?.message ||
+      raw?.error?.message ||
+      root?.message ||
+      raw?.message ||
+      ""
+  ).trim();
+
+  const notes = String(
+    firstSuggestion?.notes ||
+      root?.notes ||
+      raw?.notes ||
+      errorMessage ||
+      "KI Analyse abgeschlossen."
+  ).trim();
+
+  const suggestion = fieldPatches
+    ? {
+        ...(firstSuggestion && typeof firstSuggestion === "object"
+          ? firstSuggestion
+          : {}),
+        fieldPatches,
+      }
+    : firstSuggestion || fallbackDirectObject;
+
+  return {
+    suggestion: suggestion || null,
+    notes,
+    raw,
+    errorMessage,
+  };
+}
+
+function toFlatKiObject(input: any): Record<string, any> {
+  if (!input) return {};
+
+  if (typeof input === "object" && !Array.isArray(input)) {
+    return input;
+  }
+
+  if (Array.isArray(input)) {
+    const out: Record<string, any> = {};
+    for (const p of input) {
+      if (!p) continue;
+
+      const path = typeof p.path === "string" ? p.path : "";
+      if (path) {
+        const k = path
+          .replace(/^\//, "")
+          .replace(/^row\//, "")
+          .replace(/\//g, ".")
+          .trim();
+        if (k) out[k] = p.value;
+        continue;
+      }
+
+      const field = String(p.field || p.key || p.name || "").trim();
+      if (field) out[field] = p.value ?? p.val ?? p.v ?? p.data;
+    }
+    return out;
+  }
+
+  return {};
+}
+
+function normalizeExtras(input: any): ExtraRow[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+
+  const out = input
+    .map((x) => {
+      if (!x || typeof x !== "object") return null;
+
+      return {
+        id: String(
+          x.id || `extra_${Date.now()}_${Math.random().toString(16).slice(2)}`
+        ),
+        typ: "KI",
+        lvPos: String(x.lvPos || x.lv || x.position || "").trim() || undefined,
+        beschreibung: String(
+          x.label || x.name || x.key || x.value || x.text || x.val || ""
+        ).trim(),
+        einheit: String(x.einheit || x.unit || "").trim(),
+        menge: x.menge == null || x.menge === "" ? 0 : Number(x.menge),
+      } as ExtraRow;
+    })
+    .filter((x): x is ExtraRow => !!x && !!x.beschreibung);
+
+  return out.length ? out : undefined;
+}
+
+function normalizeBoxes(input: any): DetectBox[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+
+  const out = input
+    .map((b) => {
+      if (!b || typeof b !== "object") return null;
+
+      const x = Number(b.x);
+      const y = Number(b.y);
+      const w = Number(b.w ?? b.width);
+      const h = Number(b.h ?? b.height);
+
+      if (![x, y, w, h].every(Number.isFinite)) return null;
+
+      return {
+        id: String(
+          b.id || `box_${Date.now()}_${Math.random().toString(16).slice(2)}`
+        ),
+        x,
+        y,
+        w,
+        h,
+        label: String(b.label || b.name || "").trim() || undefined,
+        score: Number.isFinite(Number(b.score)) ? Number(b.score) : undefined,
+      } as DetectBox;
+    })
+    .filter((x): x is DetectBox => !!x);
+
+  return out.length ? out : undefined;
+}
+
+function sstr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function firstNonEmpty(...vals: any[]) {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return "";
+}
+
+function isDateLike(v: any) {
+  const s = sstr(v);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{2}\.\d{2}\.\d{4}$/.test(s);
+}
+
+function capitalizeGermanSentence(input: string) {
+  const s = sstr(input);
+  if (!s) return "";
+  const normalized = s.replace(/\s+/g, " ").trim();
+  const first = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return /[.!?]$/.test(first) ? first : `${first}.`;
+}
+
+function inferTechnicalNote(rawText: string, fp?: Record<string, any>) {
+  const source = sstr(
+    firstNonEmpty(
+      fp?.technicalText,
+      fp?.technischerText,
+      fp?.description,
+      fp?.beschreibung,
+      fp?.summary,
+      fp?.text,
+      fp?.note,
+      fp?.comment,
+      fp?.bemerkungen,
+      rawText
+    )
+  );
+
+  if (!source) return "";
+
+  const src = source.toLowerCase();
+
+  const dnMatch =
+    source.match(/\bDN\s*[-]?\s*(\d+(?:[.,]\d+)?)\b/i) ||
+    source.match(/\b(\d+(?:[.,]\d+)?)\s*mm\b/i);
+  const dn = dnMatch ? String(dnMatch[1]).replace(",", ".") : "";
+
+  const hasRohr = /\brohr|rohre|leitung|leitungen\b/i.test(src);
+  const hasSpeedpipe = /\bspeedpipe\b/i.test(src);
+  const hasKabel = /\bkabel|kabelleitung|leitungen\b/i.test(src);
+  const hasGraben = /\bgraben\b/i.test(src);
+  const hasVerlegt = /\bverlegt|verlegung\b/i.test(src);
+  const hasEingezogen = /\beingezogen|eingezogenen\b/i.test(src);
+  const hasAuffuellen = /\baufgefüllt|aufgef[üu]llt|verfüllt|verfullt\b/i.test(src);
+
+  if (hasSpeedpipe && dn && (hasVerlegt || hasEingezogen)) {
+    return `Speedpipe DN ${dn} wurde verlegt.`;
+  }
+  if (hasSpeedpipe && dn) {
+    return `Speedpipe DN ${dn} wurde eingebaut.`;
+  }
+  if (hasRohr && dn && hasVerlegt) {
+    return `Es wurden Rohre DN ${dn} verlegt.`;
+  }
+  if (hasRohr && dn) {
+    return `Rohr DN ${dn} wurde eingebaut.`;
+  }
+  if (hasGraben && hasKabel && hasVerlegt) {
+    return `Im Graben wurden Kabel verlegt.`;
+  }
+  if (hasGraben && hasKabel) {
+    return `Im Graben wurden Kabel eingebaut.`;
+  }
+  if (hasGraben && hasAuffuellen) {
+    return `Die Baugrube wurde aufgefüllt.`;
+  }
+  if (hasKabel && hasVerlegt) {
+    return `Es wurden Kabel verlegt.`;
+  }
+  if (hasRohr && hasVerlegt) {
+    return capitalizeGermanSentence(source);
+  }
+
+  return capitalizeGermanSentence(source);
+}
+
+function buildKiSuggestionFromFields(
+  rawText: string,
+  fields: Record<string, any>
+): { fieldPatches: Record<string, any>; notes: string } {
+  const noteVal = firstNonEmpty(
+    fields.note,
+    fields.comment,
+    fields.bemerkungen,
+    fields.text,
+    fields.description,
+    fields.beschreibung,
+    fields.summary,
+    fields.technicalText,
+    fields.technischerText
+  );
+
+  const technicalNote = inferTechnicalNote(
+    String(noteVal || rawText || ""),
+    fields
+  );
+
+  const next: Record<string, any> = {
+    ...fields,
+  };
+
+  if (technicalNote && !isDateLike(technicalNote)) {
+    next.note = technicalNote;
+    next.comment = technicalNote;
+    next.bemerkungen = technicalNote;
+    if (!next.technicalText) next.technicalText = technicalNote;
+  }
+
+  if (!next.kostenstelle && fields.costCenter) next.kostenstelle = fields.costCenter;
+  if (!next.lvItemPos && fields.lvPos) next.lvItemPos = fields.lvPos;
+  if (!next.lvItemPos && fields.lvPosition) next.lvItemPos = fields.lvPosition;
+
+  const extras = normalizeExtras(
+    next.extras ?? next.materialien ?? next.materials ?? null
+  );
+  if (extras) next.extras = extras;
+
+  const boxes = normalizeBoxes(
+    next.boxes ?? next.detectBoxes ?? next.detections ?? null
+  );
+  if (boxes) next.boxes = boxes;
+
+  return {
+    fieldPatches: next,
+    notes: technicalNote || "KI Analyse abgeschlossen.",
+  };
 }
 
 export default function PhotosNotesScreen({ route, navigation }: Props) {
-  const projectId = String((route.params as any)?.projectId || "").trim(); // UUID
-  const projectCodeParam = String((route.params as any)?.projectCode || "").trim(); // FS-key (BA-... o local-...)
+  const projectId = String((route.params as any)?.projectId || "").trim();
+  const projectCodeParam = String(
+    (route.params as any)?.projectCode || ""
+  ).trim();
   const title = String((route.params as any)?.title || "").trim();
   const editId = String((route.params as any)?.editId || "").trim();
   const fromInbox = !!(route.params as any)?.fromInbox;
+  const inboxSnapshot = (route.params as any)?.inboxSnapshot;
+
+  const initialSnapshot = useMemo(() => {
+    if (!inboxSnapshot) return null;
+    return normalizeInboxSnapshotPhoto(
+      inboxSnapshot,
+      String(editId || "ph_inbox")
+    );
+  }, [inboxSnapshot, editId]);
 
   const [mode, setMode] = useState<"SERVER_SYNC" | "NUR_APP">("SERVER_SYNC");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const [date, setDate] = useState(ymdToday());
-  const [kostenstelle, setKostenstelle] = useState("");
-  const [lvItemPos, setLvItemPos] = useState("");
-  const [note, setNote] = useState("");
+  const [date, setDate] = useState(initialSnapshot?.date || ymdToday());
+  const [kostenstelle, setKostenstelle] = useState(
+    initialSnapshot?.kostenstelle || ""
+  );
+  const [lvItemPos, setLvItemPos] = useState(initialSnapshot?.lvItemPos || "");
+  const [ortAbschnitt, setOrtAbschnitt] = useState(
+    initialSnapshot?.ortAbschnitt ||
+      initialSnapshot?.location ||
+      initialSnapshot?.ort ||
+      ""
+  );
+  const [kategorie, setKategorie] = useState(
+    initialSnapshot?.kategorie || initialSnapshot?.category || ""
+  );
+  const [gewerk, setGewerk] = useState(
+    initialSnapshot?.gewerk || initialSnapshot?.trade || ""
+  );
+  const [fotoStatus, setFotoStatus] = useState(
+    initialSnapshot?.fotoStatus ||
+      initialSnapshot?.statusFoto ||
+      initialSnapshot?.status ||
+      ""
+  );
+  const [tags, setTags] = useState(
+    Array.isArray(initialSnapshot?.tags)
+      ? initialSnapshot.tags.join(", ")
+      : String(initialSnapshot?.tags || "")
+  );
+  const [note, setNote] = useState(
+    initialSnapshot?.note ||
+      initialSnapshot?.comment ||
+      initialSnapshot?.bemerkungen ||
+      ""
+  );
 
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [files, setFiles] = useState<DateiMeta[]>([]);
+  const [imageUri, setImageUri] = useState<string | null>(
+    initialSnapshot?.imageUri || null
+  );
+  const [files, setFiles] = useState<DateiMeta[]>(
+    normalizeFiles(initialSnapshot?.files || [])
+  );
 
-  const [extras, setExtras] = useState<ExtraRow[] | undefined>(undefined);
-  const [boxes, setBoxes] = useState<DetectBox[] | undefined>(undefined);
+  const [extras, setExtras] = useState<ExtraRow[] | undefined>(
+    initialSnapshot?.extras
+  );
+  const [boxes, setBoxes] = useState<DetectBox[] | undefined>(
+    initialSnapshot?.boxes
+  );
 
   const [history, setHistory] = useState<any[]>([]);
 
@@ -678,38 +790,48 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
 
   const [kiOpen, setKiOpen] = useState(false);
   const [kiLoading, setKiLoading] = useState(false);
-  const [kiUi, setKiUi] = useState<KiUiResult | null>(null);
+  const [kiUi, setKiUi] = useState<any | null>(null);
+  const [kiInput, setKiInput] = useState("");
+  const kiInputOverrideRef = useRef("");
 
-  // ✅ BA-key solo se projectCodeParam è BA-...
+  const inboxSnapshotAppliedRef = useRef(false);
+  const focusLoadGuardRef = useRef<string>("");
+
   const baKey = useMemo(() => {
-    const s = String(projectCodeParam || "").trim();
-    return looksLikeProjectCode(s) ? s : "";
-  }, [projectCodeParam]);
+    const a = String(projectCodeParam || "").trim();
+    const c = String((route.params as any)?.projectId || "").trim();
+    const pick = a || c;
+    return looksLikeProjectCode(pick) ? pick : "";
+  }, [projectCodeParam, (route.params as any)?.projectId]);
 
-  // ✅ offline localKey per NUR_APP (also used for SERVER_SYNC UI/history/edit)
   const localKey = useMemo(() => {
-    return projectId ? `local-${projectId}` : "local-unknown";
+    return String(projectId || "").trim() || "unknown";
   }, [projectId]);
 
-  // ✅ IMPORTANT: Inbox uses FS-key (can be BA-... OR local-...)
-  // We must use the same key when coming from Inbox->Bearbeiten
   const inboxProjectKey = useMemo(() => {
-    return String(projectCodeParam || baKey || localKey || "").trim();
-  }, [projectCodeParam, baKey, localKey]);
+    return String(baKey || "").trim();
+  }, [baKey]);
 
-  const projectTitle = useMemo(
-    () => title || baKey || localKey || "Projekt",
-    [title, baKey, localKey]
-  );
+  const projectTitle = useMemo(() => title || baKey || "Projekt", [
+    title,
+    baKey,
+  ]);
 
-  /** ✅ UI/History/Edit ALWAYS uses local OFFLINE store */
   const localStoreKey = useMemo(() => offlineKey(localKey), [localKey]);
 
-  /** ✅ Optional: server inbox mirror key (BA-...) */
-  const serverStoreKey = useMemo(
-    () => (baKey ? inboxFotosKey(baKey) : ""),
-    [baKey]
-  );
+  React.useEffect(() => {
+    navigation.setOptions({
+      headerStyle: {
+        backgroundColor: "#12324A",
+      },
+      headerTitleStyle: {
+        color: "#FFFFFF",
+        fontWeight: "800",
+      },
+      headerTintColor: "#FFFFFF",
+      headerRight: undefined,
+    });
+  }, [navigation, projectId, baKey, projectCodeParam, mode]);
 
   const readMode = useCallback(async () => {
     try {
@@ -723,6 +845,20 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
     return "SERVER_SYNC" as const;
   }, []);
 
+  const applyProfessionalPhotoFields = useCallback((src: any) => {
+    setOrtAbschnitt(
+      String(src?.ortAbschnitt || src?.location || src?.ort || "").trim()
+    );
+    setKategorie(String(src?.kategorie || src?.category || "").trim());
+    setGewerk(String(src?.gewerk || src?.trade || "").trim());
+    setFotoStatus(
+      String(src?.fotoStatus || src?.statusFoto || src?.status || "").trim()
+    );
+    setTags(
+      Array.isArray(src?.tags) ? src.tags.join(", ") : String(src?.tags || "").trim()
+    );
+  }, []);
+
   const loadHistory = useCallback(async (key: string) => {
     const arr = await loadArray(key);
     const next = [...arr].sort((a, b) => {
@@ -733,12 +869,51 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
     setHistory(next);
   }, []);
 
+  const applyInboxSnapshotIfAny = useCallback(
+    async (localKeyForEdit: string) => {
+      if (
+        !editId ||
+        !fromInbox ||
+        !initialSnapshot ||
+        inboxSnapshotAppliedRef.current
+      ) {
+        return false;
+      }
+
+      inboxSnapshotAppliedRef.current = true;
+
+      setDate(String(initialSnapshot?.date || ymdToday()).slice(0, 10));
+      setKostenstelle(String(initialSnapshot?.kostenstelle || ""));
+      setLvItemPos(String(initialSnapshot?.lvItemPos || ""));
+      applyProfessionalPhotoFields(initialSnapshot);
+      setNote(
+        String(
+          initialSnapshot?.note ||
+            initialSnapshot?.comment ||
+            initialSnapshot?.bemerkungen ||
+            ""
+        )
+      );
+      setImageUri(initialSnapshot?.imageUri || null);
+      setFiles(normalizeFiles(initialSnapshot?.files || []));
+      setExtras(initialSnapshot?.extras);
+      setBoxes(initialSnapshot?.boxes);
+
+      const arrL = await loadArray(localKeyForEdit);
+      await saveArray(localKeyForEdit, upsertRow(arrL, initialSnapshot));
+      return true;
+    },
+    [editId, fromInbox, initialSnapshot, applyProfessionalPhotoFields]
+  );
+
   const loadEditIfNeeded = useCallback(
     async (localKeyForEdit: string, inboxKeyForEdit: string) => {
       if (!editId) return;
       setLoading(true);
       try {
-        // ✅ 1) if opened from Inbox, try Inbox keys FIRST (this is the bug)
+        const appliedSnapshot = await applyInboxSnapshotIfAny(localKeyForEdit);
+        if (appliedSnapshot) return;
+
         if (fromInbox) {
           const k1 = inboxPhotosKey(inboxKeyForEdit);
           const k2 = inboxFotosKey(inboxKeyForEdit);
@@ -752,14 +927,13 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
             null;
 
           if (foundInbox) {
-            // ✅ also upsert into local store so Verlauf/Edit stays consistent
             const arrL = await loadArray(localKeyForEdit);
-            const nextL = upsertRow(arrL, foundInbox);
-            await saveArray(localKeyForEdit, nextL);
+            await saveArray(localKeyForEdit, upsertRow(arrL, foundInbox));
 
             setDate(String(foundInbox?.date || ymdToday()).slice(0, 10));
             setKostenstelle(String(foundInbox?.kostenstelle || ""));
             setLvItemPos(String(foundInbox?.lvItemPos || ""));
+            applyProfessionalPhotoFields(foundInbox);
             setNote(
               String(
                 foundInbox?.note ||
@@ -784,7 +958,6 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
           }
         }
 
-        // ✅ 2) fallback: local store (history/edit)
         const arr = await loadArray(localKeyForEdit);
         const found = (arr || []).find((x) => String(x?.id || "") === editId);
         if (!found) return;
@@ -792,50 +965,72 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
         setDate(String(found?.date || ymdToday()).slice(0, 10));
         setKostenstelle(String(found?.kostenstelle || ""));
         setLvItemPos(String(found?.lvItemPos || ""));
-        setNote(String(found?.note || found?.comment || found?.bemerkungen || ""));
+        applyProfessionalPhotoFields(found);
+        setNote(
+          String(found?.note || found?.comment || found?.bemerkungen || "")
+        );
 
         setImageUri(found?.imageUri || null);
-        setFiles(normalizeFiles(found?.files || found?.attachments || found?.photos || []));
+        setFiles(
+          normalizeFiles(found?.files || found?.attachments || found?.photos || [])
+        );
         setExtras(found?.extras);
         setBoxes(found?.boxes);
       } finally {
         setLoading(false);
       }
     },
-    [editId, fromInbox]
+    [editId, fromInbox, applyInboxSnapshotIfAny, applyProfessionalPhotoFields]
   );
 
   useFocusEffect(
     useCallback(() => {
       let alive = true;
 
-      // ✅ HARD: never trap user in KI modal when leaving screen
-      setKiOpen(false);
-      setKiLoading(false);
+      const runKey = [
+        localStoreKey,
+        inboxProjectKey,
+        editId || "",
+        fromInbox ? "1" : "0",
+        initialSnapshot?.id || "",
+      ].join("|");
+
+      if (focusLoadGuardRef.current === runKey) {
+        return () => {};
+      }
+      focusLoadGuardRef.current = runKey;
 
       (async () => {
         const mNow = await readMode();
         if (!alive) return;
 
-        // ✅ UI/History/Edit ALWAYS uses local store
         await loadHistory(localStoreKey);
+        if (!alive) return;
 
-        // ✅ FIX: when fromInbox -> read from inbox keys first
         await loadEditIfNeeded(localStoreKey, inboxProjectKey);
+        if (!alive) return;
 
         queueCleanupDone().catch(() => {});
-
         if (mNow === "SERVER_SYNC" && !baKey) {
-          // no blocking, just informative
+          // informative only
         }
       })();
 
       return () => {
         alive = false;
-        setKiOpen(false);
-        setKiLoading(false);
+        focusLoadGuardRef.current = "";
       };
-    }, [readMode, loadHistory, loadEditIfNeeded, localStoreKey, inboxProjectKey, baKey])
+    }, [
+      readMode,
+      loadHistory,
+      loadEditIfNeeded,
+      localStoreKey,
+      inboxProjectKey,
+      baKey,
+      editId,
+      fromInbox,
+      initialSnapshot?.id,
+    ])
   );
 
   const buildRow = useCallback(
@@ -848,12 +1043,22 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
         kind: "fotos",
         workflowStatus: workflowStatus || "DRAFT",
 
-        projectId: projectId || null, // UUID (meta)
-        projectCode: baKey || null, // BA-... (FS key)
+        projectId: projectId || null,
+        projectCode: baKey || null,
 
         date: String(date || ymdToday()).slice(0, 10),
         kostenstelle: String(kostenstelle || "").trim(),
         lvItemPos: String(lvItemPos || "").trim() || null,
+        ortAbschnitt: String(ortAbschnitt || "").trim(),
+        location: String(ortAbschnitt || "").trim(),
+        ort: String(ortAbschnitt || "").trim(),
+        kategorie: String(kategorie || "").trim(),
+        category: String(kategorie || "").trim(),
+        gewerk: String(gewerk || "").trim(),
+        trade: String(gewerk || "").trim(),
+        fotoStatus: String(fotoStatus || "").trim(),
+        statusFoto: String(fotoStatus || "").trim(),
+        tags: String(tags || "").trim(),
 
         comment: String(note || "").trim(),
         bemerkungen: String(note || "").trim(),
@@ -878,6 +1083,11 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       date,
       kostenstelle,
       lvItemPos,
+      ortAbschnitt,
+      kategorie,
+      gewerk,
+      fotoStatus,
+      tags,
       note,
       imageUri,
       files,
@@ -970,14 +1180,12 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       const a = res.assets?.[0];
       if (!a?.uri) return;
 
-      const meta = inferImageMetaFromUri(a.uri);
-
       const fsKey = (baKey || localKey).trim();
       const persisted = await persistToProjectFileUri({
         projectFsKey: fsKey,
         uri: a.uri,
-        nameHint: (a as any).fileName || `Kamera_${Date.now()}.${meta.ext}`,
-        typeHint: (a as any).mimeType || meta.mime,
+        nameHint: (a as any).fileName || `Kamera_${Date.now()}.jpg`,
+        typeHint: (a as any).mimeType || "image/jpeg",
         prefix: "att",
       });
 
@@ -987,8 +1195,8 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
           {
             id: uid("cam"),
             uri: persisted || a.uri,
-            name: (a as any).fileName || `Kamera_${Date.now()}.${meta.ext}`,
-            type: (a as any).mimeType || meta.mime,
+            name: (a as any).fileName || `Kamera_${Date.now()}.jpg`,
+            type: (a as any).mimeType || "image/jpeg",
           },
         ])
       );
@@ -1060,49 +1268,21 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
     setFiles((prev) => prev.filter((x) => x.id !== id));
   }, []);
 
-  const mirrorToServerInboxIfNeeded = useCallback(
-    async (row: any) => {
-      if (mode !== "SERVER_SYNC") return;
-      if (!serverStoreKey) return;
-      const arrS = await loadArray(serverStoreKey);
-      const nextS = upsertRow(arrS, row);
-      await saveArray(serverStoreKey, nextS);
-    },
-    [mode, serverStoreKey]
-  );
-
   const addToInboxQueueOffline = useCallback(
     async (row: any, status: "DRAFT" | "EINGEREICHT") => {
       if (mode !== "NUR_APP") return;
 
       await queueNormalizeExisting();
-
       await queueAdd({
         kind: "PHOTO_NOTE",
         projectId: localKey,
         payload: {
-          offlineOnly: true,
-          projectUuid: projectId,
-          projectCode: baKey || null,
-          docId: row.id,
-          id: row.id,
-          date: row.date,
           workflowStatus: status,
-          comment: row.comment,
-          bemerkungen: row.bemerkungen,
-          kostenstelle: row.kostenstelle,
-          lvItemPos: row.lvItemPos,
-          files: row.files,
-          attachments: row.files,
-          photos: row.files,
-          imageUri: row.imageUri,
-          extras: row.extras,
-          boxes: row.boxes,
           row,
-        },
+        } as any,
       });
     },
-    [mode, localKey, projectId, baKey]
+    [mode, localKey]
   );
 
   const onSaveOffline = useCallback(async () => {
@@ -1120,28 +1300,26 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       const mNow = await readMode();
 
       const arrL = await loadArray(localStoreKey);
-      const nextL = upsertRow(arrL, { ...row, workflowStatus: "DRAFT" });
-      await saveArray(localStoreKey, nextL);
-
-      await mirrorToServerInboxIfNeeded({ ...row, workflowStatus: "DRAFT" });
+      await saveArray(
+        localStoreKey,
+        upsertRow(arrL, { ...row, workflowStatus: "DRAFT" })
+      );
 
       if (mNow === "NUR_APP") {
-        // ✅ use SAME FS-key as Inbox screen
         const inboxKey = (inboxProjectKey || localKey).trim();
         await writePhotosToOfflineInbox(inboxKey, {
           ...row,
           workflowStatus: "DRAFT",
         });
+        await addToInboxQueueOffline(row, "DRAFT");
       }
-
-      await addToInboxQueueOffline(row, "DRAFT");
 
       await loadHistory(localStoreKey);
 
       Alert.alert(
         "Gespeichert",
         mNow === "SERVER_SYNC"
-          ? "Lokal gespeichert (wie NUR_APP) + Server-Inbox gespiegelt."
+          ? "Lokal gespeichert."
           : "Offline gespeichert (NUR_APP) + Inbox aktualisiert."
       );
     } catch (e: any) {
@@ -1154,7 +1332,6 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
     readMode,
     localStoreKey,
     loadHistory,
-    mirrorToServerInboxIfNeeded,
     addToInboxQueueOffline,
     inboxProjectKey,
     localKey,
@@ -1175,18 +1352,18 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       const mNow = await readMode();
 
       const arrL = await loadArray(localStoreKey);
-      const nextL = upsertRow(arrL, { ...row, workflowStatus: "EINGEREICHT" });
-      await saveArray(localStoreKey, nextL);
+      await saveArray(
+        localStoreKey,
+        upsertRow(arrL, { ...row, workflowStatus: "EINGEREICHT" })
+      );
       await loadHistory(localStoreKey);
 
       if (mNow === "NUR_APP") {
-        // ✅ use SAME FS-key as Inbox screen
         const inboxKey = (inboxProjectKey || localKey).trim();
         await writePhotosToOfflineInbox(inboxKey, {
           ...row,
           workflowStatus: "EINGEREICHT",
         });
-
         await addToInboxQueueOffline(row, "EINGEREICHT");
 
         Alert.alert("Einreichen", "Offline eingereicht (NUR_APP).");
@@ -1202,61 +1379,74 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
         return;
       }
 
-      await mirrorToServerInboxIfNeeded({
-        ...row,
-        workflowStatus: "EINGEREICHT",
-      });
-
       await queueNormalizeExisting();
+
       await queueAdd({
         kind: "PHOTO_NOTE",
         projectId: baKey,
         payload: {
-          projectUuid: projectId,
-          projectCode: baKey,
-          docId: row.id,
-          id: row.id,
-          date: row.date,
-          comment: row.comment,
-          bemerkungen: row.bemerkungen,
-          kostenstelle: row.kostenstelle,
-          lvItemPos: row.lvItemPos,
-          files: row.files,
-          attachments: row.files,
-          photos: row.files,
-          imageUri: row.imageUri,
-          extras: row.extras,
-          boxes: row.boxes,
-          row,
+          date: String(row?.date || ""),
+          note: String(row?.note || row?.bemerkungen || row?.comment || ""),
+          imageUri: row?.imageUri || null,
+          extras: Array.isArray(row?.extras) ? row.extras : [],
+          boxes: Array.isArray(row?.boxes) ? row.boxes : [],
+          docId: row?.id,
+          kostenstelle: row?.kostenstelle || "",
+          lvItemPos: row?.lvItemPos || null,
+          comment: row?.comment || "",
+          bemerkungen: row?.bemerkungen || "",
+          files: Array.isArray(row?.files)
+            ? row.files
+            : Array.isArray(row?.attachments)
+            ? row.attachments
+            : [],
         },
       });
 
+      try {
+        const s = await queueStats();
+        const list = await queueList();
+        console.log("QUEUE_STATS", s);
+        console.log(
+          "QUEUE_ITEMS",
+          list.slice(0, 10).map((x) => ({
+            id: x.id,
+            kind: x.kind,
+            projectId: x.projectId,
+            status: x.status,
+            tries: x.tries,
+            nextTryAt: x.nextTryAt,
+            error: x.error,
+          }))
+        );
+      } catch (e: any) {
+        console.log("QUEUE_DEBUG_FAILED", String(e?.message || e));
+      }
+
       await queueProcessPending(async (item: QueueItem) => {
-        if (item.kind !== "PHOTO_NOTE" && item.kind !== "FOTOS_NOTIZEN")
+        if (item.kind !== "PHOTO_NOTE" && item.kind !== "FOTOS_NOTIZEN") {
           return null;
+        }
 
         const payload = (item as any)?.payload || {};
         const r = payload?.row ?? payload ?? {};
-        const ba = String(item.projectId || "").trim();
 
-        if (!looksLikeProjectCode(ba))
-          throw new Error("PHOTO_NOTE push: projectId is not BA-...");
+        const ba =
+          String(payload?.projectCode || "").trim() ||
+          String(item.projectId || "").trim();
+        if (!looksLikeProjectCode(ba)) {
+          throw new Error(
+            `PHOTO_NOTE push: missing BA projectCode (got '${ba}')`
+          );
+        }
 
-        return await uploadPhotoNoteToServerInbox(ba, {
-          docId: payload?.docId || r?.id,
-          date: r?.date,
-          comment: r?.comment || r?.note || "",
-          bemerkungen: r?.bemerkungen || "",
-          kostenstelle: r?.kostenstelle || "",
-          lvItemPos: r?.lvItemPos ?? null,
-          files: Array.isArray(r?.files) ? r.files : [],
-          imageUri: r?.imageUri || null,
-          extras: r?.extras,
-          boxes: r?.boxes,
-        });
+        return await (api as any).pushPhotosToServer(ba, r);
       });
 
-      Alert.alert("Einreichen", "Eingereicht (lokal) + Server Inbox Upload OK.");
+      Alert.alert(
+        "Einreichen",
+        "Eingereicht + Server gespeichert (Eingangsprüfung)."
+      );
       if (!fromInbox) navigation.goBack();
     } catch (e: any) {
       Alert.alert("Einreichen", e?.message || "Einreichen fehlgeschlagen.");
@@ -1270,10 +1460,8 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
     loadHistory,
     addToInboxQueueOffline,
     ensureServerAllowed,
-    mirrorToServerInboxIfNeeded,
     fromInbox,
     navigation,
-    projectId,
     baKey,
     inboxProjectKey,
     localKey,
@@ -1329,18 +1517,21 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       setLastPdfUri(out.pdfUri);
       setLastPdfName(out.fileName);
 
-      const attachmentsRaw: string[] = Array.isArray(out.attachments)
-        ? out.attachments
-        : Platform.OS === "web"
-        ? []
-        : [out.pdfUri];
+      const rowAttachmentUris: string[] = Array.isArray(row?.attachments)
+        ? row.attachments
+            .map((x: any) => String(x?.uri || ""))
+            .filter(Boolean)
+        : [];
 
-      const attachments = (attachmentsRaw || [])
-        .map((x) => String(x || ""))
+      const attachmentsRaw: string[] =
+        Platform.OS === "web" ? [] : [out.pdfUri, ...rowAttachmentUris];
+
+      const attachments = attachmentsRaw
+        .map(String)
         .filter((u) => u.startsWith("file://"));
 
       await emailPdf({
-        subject: `Fotodokumentation ${baKey || localKey} – ${out.date}`,
+        subject: `Fotodokumentation ${baKey || localKey} - ${out.date}`,
         body: `Fotodokumentation ${baKey || localKey} (${out.date})`,
         attachments,
       });
@@ -1348,46 +1539,325 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       Alert.alert("E-Mail", e?.message || "E-Mail Versand fehlgeschlagen.");
     }
   }, [buildRow, baKey, localKey, projectTitle]);
-
-  const onKiSuggest = useCallback(async () => {
+const onKiSuggest = useCallback(async () => {
     setKiUi(null);
     setKiOpen(true);
     setKiLoading(true);
 
     try {
-      const mNow = await readMode();
       const row = buildRow("EINGEREICHT");
 
-      const localRes = buildLocalKiResult(row);
+      if (mode === "NUR_APP") {
+        const hasMain = !!row?.imageUri;
+        const hasFiles = Array.isArray(row?.files) && row.files.length > 0;
+        const hasText =
+          !!String(row?.comment || row?.note || "").trim() ||
+          !!String(row?.kostenstelle || "").trim() ||
+          !!String(row?.lvItemPos || "").trim();
+
+        setKiUi({
+          mode,
+          humanText:
+            "KI ist im Modus NUR_APP nicht verfügbar.\n\n" +
+            "Im lokalen Modus werden keine Dateien an den Server gesendet und keine KI-Analyse ausgeführt.\n\n" +
+            "Bitte nutze SERVER_SYNC für Fotoanalyse, OCR und automatische Vorschläge.\n\n" +
+            `Hauptfoto vorhanden: ${hasMain ? "ja" : "nein"}\n` +
+            `Anhänge vorhanden: ${hasFiles ? "ja" : "nein"}\n` +
+            `Text/Felder vorhanden: ${hasText ? "ja" : "nein"}`,
+          suggestion: null,
+          suggestions: [],
+          raw: {
+            localOnly: true,
+            mode,
+          },
+        });
+        return;
+      }
+
+      const fn =
+        (api as any)?.kiPhotosSuggest ||
+        (api as any)?.kiSuggestPhotos ||
+        null;
+
+      if (typeof fn !== "function") {
+        setKiUi({
+          mode,
+          humanText: "KI Endpoint nicht verbunden. (api.kiPhotosSuggest fehlt)",
+          suggestion: null,
+          suggestions: [],
+          raw: null,
+        });
+        return;
+      }
+
+      const mainAttachment = row?.imageUri
+        ? [
+            {
+              id: uid("main"),
+              uri: String(row.imageUri),
+              name: "main_photo.jpg",
+              type: "image/jpeg",
+            },
+          ]
+        : [];
+
+      const normalizedFiles = normalizeFiles(row?.files || []);
+
+      const payload = {
+        projectId: baKey || projectId,
+        projectCode: baKey || undefined,
+        projectFsKey: baKey || projectId,
+        date: String(row?.date || ymdToday()).slice(0, 10),
+        text: [
+          String(kiInputOverrideRef.current || kiInput || "").trim(),
+          String(row?.comment || row?.note || "").trim(),
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        row,
+        files: [...mainAttachment, ...normalizedFiles],
+        attachments: [...mainAttachment, ...normalizedFiles],
+        strict: true,
+        _client: {
+          mode,
+          hasMain: !!row?.imageUri,
+          filesCount: Array.isArray(row?.files) ? row.files.length : 0,
+        },
+      };
+
+      let res: any;
+      try {
+        res =
+          typeof fn === "function" && fn.length >= 2
+            ? await fn(baKey || projectId, payload)
+            : await fn(payload);
+      } catch {
+        res =
+          typeof fn === "function" && fn.length >= 2
+            ? await fn(baKey || projectId, { ...payload, row })
+            : await fn({ ...payload, row });
+      }
+
+      const normalized = normalizeKiPhotosResult(res);
+      const rawFieldPatches = toFlatKiObject(
+        normalized?.suggestion?.fieldPatches ||
+          normalized?.suggestion?.extractedFields ||
+          normalized?.suggestion?.patch ||
+          normalized?.suggestion?.fields ||
+          normalized?.suggestion ||
+          null
+      );
+
+      const improved = buildKiSuggestionFromFields(
+        String(row?.comment || row?.note || "").trim(),
+        rawFieldPatches
+      );
+
+      const finalSuggestion =
+        improved?.fieldPatches && Object.keys(improved.fieldPatches).length
+          ? {
+              ...(normalized.suggestion && typeof normalized.suggestion === "object"
+                ? normalized.suggestion
+                : {}),
+              fieldPatches: improved.fieldPatches,
+            }
+          : normalized.suggestion || null;
+
+      const finalNotes = String(
+        firstNonEmpty(
+          improved?.notes,
+          normalized.notes,
+          "KI Analyse abgeschlossen."
+        )
+      ).trim();
+
       setKiUi({
-        ...localRes,
-        mode: mNow,
+        mode,
+        humanText: finalNotes,
+        suggestion: finalSuggestion,
+        suggestions: finalSuggestion ? [finalSuggestion] : [],
+        raw: normalized.raw,
       });
     } catch (e: any) {
       setKiUi({
-        mode: mode === "NUR_APP" ? "NUR_APP" : "SERVER_SYNC",
+        mode,
         humanText: `KI Vorschlag fehlgeschlagen: ${String(e?.message || e)}`,
-        suggestions: [{ title: "Fehler", summary: String(e?.message || e) }],
+        suggestion: null,
+        suggestions: [],
+        raw: { error: String(e?.message || e) },
       });
     } finally {
       setKiLoading(false);
     }
-  }, [buildRow, readMode, mode]);
+  }, [buildRow, kiInput, mode, baKey, projectId]);
+  // RLC_KI_MODULE_HANDLER_PHOTOS_V2_LOCAL_FILL
+  useEffect(() => {
+    return registerRlcKiModuleHandler("PhotosNotes", async (payload: any) => {
+      const input = String(payload?.input || "").trim();
+      setKiInput(input);
 
-  const applyKiPatches = useCallback(() => {
-    const fp = kiUi?.suggestions?.[0]?.fieldPatches;
-    if (!fp) {
-      Alert.alert("Übernehmen", "Kein übernehmbarer Vorschlag vorhanden.");
-      return;
+      const parsed = parseRlcFotos(input);
+
+      const toIsoDate = (v: any) => {
+        const s = String(v || "").trim();
+        const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+        return s || ymdToday();
+      };
+
+      if (parsed.datum) setDate(toIsoDate(parsed.datum));
+      if (parsed.ort) setOrtAbschnitt(parsed.ort);
+      if (parsed.kategorie) setKategorie(parsed.kategorie);
+      if (parsed.lvPos) setLvItemPos(parsed.lvPos);
+
+      if (parsed.mangel && !parsed.kategorie) {
+        setKategorie("Mangel");
+      }
+
+      const warnings =
+        parsed.warnings?.length
+          ? `
+
+RLC KI Hinweise:
+${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
+          : "";
+
+      setNote(
+        `${parsed.beschreibung || parsed.mangel || parsed.bemerkung || ""}${warnings}`.trim()
+      );
+
+      setKiOpen(false);
+      return { ok: true, handled: true, message: "PHOTOS_FIELDS_FILLED" };
+    });
+  }, []);
+
+  const applyKiSuggestion = useCallback(() => {
+    try {
+      const sug = kiUi?.suggestion || null;
+
+      let fp: any =
+        sug?.fieldPatches ||
+        sug?.extractedFields ||
+        sug?.patch ||
+        sug?.fields ||
+        sug ||
+        null;
+
+      if (!fp) {
+        Alert.alert("KI", "Kein KI-Vorschlag vorhanden.");
+        return;
+      }
+
+      fp = toFlatKiObject(fp);
+
+      if (!fp || typeof fp !== "object" || !Object.keys(fp).length) {
+        Alert.alert("KI", "KI-Felder leer oder unbekanntes Format.");
+        return;
+      }
+
+      const noteVal = firstNonEmpty(
+        fp.note,
+        fp.comment,
+        fp.bemerkungen,
+        fp.text,
+        fp.description,
+        fp.beschreibung,
+        fp.summary,
+        fp.technicalText,
+        fp.technischerText
+      );
+
+      const ortVal = firstNonEmpty(
+        fp.ortAbschnitt,
+        fp.location,
+        fp.ort,
+        fp.baustelle,
+        fp.abschnitt,
+        fp.section
+      );
+      const kategorieVal = firstNonEmpty(
+        fp.kategorie,
+        fp.category,
+        fp.typ,
+        fp.type
+      );
+      const gewerkVal = firstNonEmpty(fp.gewerk, fp.trade, fp.discipline);
+      const statusVal = firstNonEmpty(
+        fp.fotoStatus,
+        fp.statusFoto,
+        fp.status,
+        fp.zustand
+      );
+      const tagsVal = firstNonEmpty(
+        fp.tags,
+        fp.tag,
+        fp.schlagworte,
+        fp.keywords
+      );
+
+      const kostenstelleVal = firstNonEmpty(
+        fp.kostenstelle,
+        fp.costCenter,
+        fp.ks
+      );
+
+      const lvPosVal = firstNonEmpty(
+        fp.lvItemPos,
+        fp.lvPos,
+        fp.lvPosition,
+        fp.position
+      );
+
+      const extrasVal = fp.extras ?? fp.materialien ?? fp.materials ?? null;
+      const boxesVal = fp.boxes ?? fp.detectBoxes ?? fp.detections ?? null;
+
+      const finalNote = inferTechnicalNote(
+        String(noteVal || note || "").trim(),
+        fp
+      );
+
+      if (sstr(finalNote) && !isDateLike(finalNote)) {
+        setNote(sstr(finalNote));
+      }
+
+      if (sstr(ortVal) && !isDateLike(ortVal)) {
+        setOrtAbschnitt(sstr(ortVal));
+      }
+      if (sstr(kategorieVal) && !isDateLike(kategorieVal)) {
+        setKategorie(sstr(kategorieVal));
+      }
+      if (sstr(gewerkVal) && !isDateLike(gewerkVal)) {
+        setGewerk(sstr(gewerkVal));
+      }
+      if (sstr(statusVal) && !isDateLike(statusVal)) {
+        setFotoStatus(sstr(statusVal));
+      }
+      if (sstr(tagsVal) && !isDateLike(tagsVal)) {
+        setTags(
+          Array.isArray(tagsVal) ? tagsVal.join(", ") : sstr(tagsVal)
+        );
+      }
+
+      if (sstr(kostenstelleVal) && !isDateLike(kostenstelleVal)) {
+        setKostenstelle(sstr(kostenstelleVal));
+      }
+
+      if (sstr(lvPosVal) && !isDateLike(lvPosVal)) {
+        setLvItemPos(sstr(lvPosVal));
+      }
+
+      const nextExtras = normalizeExtras(extrasVal);
+      if (nextExtras) setExtras(nextExtras);
+
+      const nextBoxes = normalizeBoxes(boxesVal);
+      if (nextBoxes) setBoxes(nextBoxes);
+
+      Alert.alert("KI", "Vorschlag übernommen.");
+      setKiOpen(false);
+    } catch (e: any) {
+      Alert.alert("KI", e?.message || "Übernahme fehlgeschlagen.");
     }
-
-    if (typeof fp.kostenstelle === "string") setKostenstelle(fp.kostenstelle);
-    if (fp.lvItemPos != null) setLvItemPos(String(fp.lvItemPos || ""));
-    const nextNote = String(fp.comment || fp.bemerkungen || "").trim();
-    if (nextNote) setNote(nextNote);
-
-    Alert.alert("Übernommen", "Vorschlag wurde in das Formular übernommen.");
-  }, [kiUi]);
+  }, [kiUi, note]);
 
   const onReset = useCallback(() => {
     Alert.alert("Formular leeren", "Wirklich alles zurücksetzen?", [
@@ -1399,6 +1869,11 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
           setDate(ymdToday());
           setKostenstelle("");
           setLvItemPos("");
+          setOrtAbschnitt("");
+          setKategorie("");
+          setGewerk("");
+          setFotoStatus("");
+          setTags("");
           setNote("");
           setImageUri(null);
           setFiles([]);
@@ -1433,7 +1908,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
   );
 
   return (
-    <View style={styles.safe}>
+    <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -1444,7 +1919,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
 
           <Pressable
             onPress={onKiSuggest}
-            style={[styles.kiPill, kiLoading ? { opacity: 0.6 } : null]}
+            style={[styles.kiPill, { display: "none" }, kiLoading ? { opacity: 0.6 } : null]}
             disabled={kiLoading}
           >
             <Text style={styles.kiTxt}>{kiLoading ? "KI..." : "KI"}</Text>
@@ -1471,7 +1946,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
                 value={date}
                 onChangeText={setDate}
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor="#B8C1CC"
                 style={styles.input}
               />
             </View>
@@ -1481,7 +1956,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
                 value={kostenstelle}
                 onChangeText={setKostenstelle}
                 placeholder="z.B. KS-01"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor="#B8C1CC"
                 style={styles.input}
               />
             </View>
@@ -1492,9 +1967,55 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
             value={lvItemPos}
             onChangeText={setLvItemPos}
             placeholder="z.B. 01.02.003"
-            placeholderTextColor="rgba(255,255,255,0.35)"
+            placeholderTextColor="#B8C1CC"
             style={styles.input}
           />
+
+          <Text style={styles.label}>Ort / Abschnitt</Text>
+          <TextInput
+            value={ortAbschnitt}
+            onChangeText={setOrtAbschnitt}
+            placeholder="z.B. Baugrube Nord / Hausanschluss 3"
+            placeholderTextColor="#B8C1CC"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Kategorie</Text>
+          <TextInput
+            value={kategorie}
+            onChangeText={setKategorie}
+            placeholder="z.B. Mangel, Fortschritt, Beweissicherung, Material"
+            placeholderTextColor="#B8C1CC"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Gewerk</Text>
+          <TextInput
+            value={gewerk}
+            onChangeText={setGewerk}
+            placeholder="z.B. Kanalbau, Kabelbau, Pflaster, Erdbau"
+            placeholderTextColor="#B8C1CC"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Status</Text>
+          <TextInput
+            value={fotoStatus}
+            onChangeText={setFotoStatus}
+            placeholder="z.B. offen, erledigt, prüfen, dokumentiert"
+            placeholderTextColor="#B8C1CC"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Tags</Text>
+          <TextInput
+            value={tags}
+            onChangeText={setTags}
+            placeholder="z.B. Rohrgraben, DN150, Bestand, Mangel"
+            placeholderTextColor="#B8C1CC"
+            style={styles.input}
+          />
+
 
           <Text style={styles.label}>Notiz</Text>
           <TextInput
@@ -1502,7 +2023,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
             onChangeText={setNote}
             placeholder="Notizen..."
             multiline
-            placeholderTextColor="rgba(255,255,255,0.35)"
+            placeholderTextColor="#B8C1CC"
             style={[styles.input, { height: 110, textAlignVertical: "top" }]}
           />
         </View>
@@ -1512,7 +2033,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
 
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Pressable style={styles.pillBtn} onPress={takeMainPhoto}>
-              <Text style={styles.pillTxt}>📷 Kamera</Text>
+              <Text style={styles.pillTxt}>Kamera</Text>
             </Pressable>
             <Pressable style={styles.pillBtn} onPress={pickMainPhoto}>
               <Text style={styles.pillTxt}>+ Foto wählen</Text>
@@ -1547,7 +2068,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
 
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             <Pressable style={styles.pillBtn} onPress={addCameraAttachment}>
-              <Text style={styles.pillTxt}>📷 Kamera</Text>
+              <Text style={styles.pillTxt}>Kamera</Text>
             </Pressable>
             <Pressable style={styles.pillBtn} onPress={addFile}>
               <Text style={styles.pillTxt}>+ Datei (PDF/Bild)</Text>
@@ -1604,7 +2125,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
           {history.length === 0 ? (
             <Text style={styles.muted}>
               {mode === "SERVER_SYNC"
-                ? "Noch keine Einträge (lokal – wie NUR_APP)."
+                ? "Noch keine Einträge (lokal - wie NUR_APP)."
                 : "Noch keine Einträge offline (NUR_APP)."}
             </Text>
           ) : (
@@ -1643,7 +2164,10 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
                           {["Fotos", t].filter(Boolean).join(" ")}
                         </Text>
                         <Text style={styles.histSub} numberOfLines={2}>
-                          {String(item?.comment || item?.note || "—").slice(0, 60)}
+                          {String(item?.comment || item?.note || "-").slice(
+                            0,
+                            60
+                          )}
                           {fCount ? ` • ${fCount} Datei(en)` : ""}
                         </Text>
                       </View>
@@ -1664,22 +2188,56 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
         animationType="slide"
         onRequestClose={() => setKiOpen(false)}
       >
-        <Pressable style={styles.modalWrap} onPress={() => setKiOpen(false)}>
+        <Pressable style={styles.modalWrap} onPress={() => {
+                  Keyboard.dismiss();
+                  setKiOpen(false);
+                }}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text style={styles.modalTitle}>KI Vorschlag</Text>
-              <View style={{ flex: 1 }} />
-              <Pressable onPress={() => setKiOpen(false)} style={styles.closeX}>
-                <Text style={{ color: "#fff", fontWeight: "900" }}>✕</Text>
+              
+            <View style={{ flex: 1 }} />
+              <Pressable onPress={() => {
+                  Keyboard.dismiss();
+                  setKiOpen(false);
+                }} style={styles.closeX}>
+                <Text style={{ color: "#fff", fontWeight: "900" }}>X</Text>
               </Pressable>
             </View>
 
+            <Text style={[styles.label, { marginTop: 12 }]}>KI Eingabe</Text>
+            <TextInput
+              value={kiInput}
+              onChangeText={setKiInput}
+              placeholder="Was soll RLC ausfüllen?"
+              placeholderTextColor="#B8C1CC"
+              multiline
+              style={[styles.input, { minHeight: 88, textAlignVertical: "top" }]}
+            />
+
+            <Pressable
+              onPress={() => Keyboard.dismiss()}
+              style={{
+                alignSelf: "flex-end",
+                marginTop: 8,
+                marginBottom: 8,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: "#EAF1FF",
+              }}
+            >
+              <Text style={{ color: "#2563EB", fontWeight: "900" }}>
+                Tastatur schließen
+              </Text>
+            </Pressable>
+
             <ScrollView style={{ marginTop: 10, maxHeight: modalMaxH }}>
               {kiLoading ? (
-                <Text style={styles.muted}>KI läuft…</Text>
+                <Text style={styles.muted}>KI läuft...</Text>
               ) : kiUi ? (
                 <Text style={styles.modalText} selectable>
-                  {kiUi.humanText}
+                  {String(kiUi.humanText || "")}
                 </Text>
               ) : (
                 <Text style={styles.muted}>Kein Ergebnis.</Text>
@@ -1689,7 +2247,10 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
             <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: "#111" }]}
-                onPress={() => setKiOpen(false)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setKiOpen(false);
+                }}
               >
                 <Text style={{ color: "#fff", fontWeight: "900" }}>
                   Schließen
@@ -1700,13 +2261,15 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
                 style={[
                   styles.modalBtn,
                   {
-                    backgroundColor: COLORS.primary,
-                    opacity:
-                      !kiLoading && kiUi?.suggestions?.[0]?.fieldPatches ? 1 : 0.5,
+                    backgroundColor: COLORS.accent,
+                    opacity: kiLoading || !kiUi?.suggestion ? 0.5 : 1,
                   },
                 ]}
-                onPress={applyKiPatches}
-                disabled={kiLoading || !kiUi?.suggestions?.[0]?.fieldPatches}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  applyKiSuggestion();
+                }}
+                disabled={kiLoading || !kiUi?.suggestion}
               >
                 <Text style={{ color: "#fff", fontWeight: "900" }}>
                   Übernehmen
@@ -1716,12 +2279,12 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0B1720" },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
 
   headerRow: {
     flexDirection: "row",
@@ -1729,84 +2292,112 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
+
+  headerKiBtn: { display: "none",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#DDF1FF",
+    borderWidth: 1,
+    borderColor: "#A8D3F5",
+  },
+  headerKiTxt: {
+    color: "#12324A",
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
   backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
-  backTxt: { color: "#fff", fontWeight: "900" },
+  backTxt: { color: COLORS.text, fontWeight: "900" },
 
   kiPill: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(122,77,255,0.18)",
+    borderColor: "#CDBEFF",
+    backgroundColor: "#F3EEFF",
   },
-  kiTxt: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  kiTxt: { color: "#5B34C4", fontWeight: "900", fontSize: 12 },
 
   modePill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
-  modeTxt: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12 },
+  modeTxt: { color: COLORS.text, fontWeight: "900", fontSize: 12 },
 
-  h1: { fontSize: 34, fontWeight: "900", color: "#fff" },
-  sub: { marginTop: 6, color: "rgba(255,255,255,0.75)", fontWeight: "800" },
+  h1: { fontSize: 32, fontWeight: "900", color: COLORS.text },
+  sub: { marginTop: 6, color: COLORS.sub, fontWeight: "800" },
 
   card: {
     marginTop: 14,
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: COLORS.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#0F172A",
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: { elevation: 2 },
+      default: {},
+    }),
   },
 
-  h2: { color: "#fff", fontWeight: "900", fontSize: 16, marginBottom: 10 },
+  h2: { color: COLORS.text, fontWeight: "900", fontSize: 16, marginBottom: 10 },
+
   label: {
-    color: "rgba(255,255,255,0.85)",
+    color: COLORS.text,
     fontWeight: "900",
     marginTop: 10,
     marginBottom: 6,
   },
+
   input: {
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.06)",
-    color: "#fff",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
+    color: COLORS.text,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontWeight: "800",
   },
-  muted: { marginTop: 10, color: "rgba(255,255,255,0.65)", fontWeight: "700" },
+
+  muted: { marginTop: 10, color: COLORS.sub, fontWeight: "700" },
 
   pillBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
-  pillTxt: { color: "#fff", fontWeight: "900" },
+  pillTxt: { color: COLORS.text, fontWeight: "900" },
 
   previewMain: {
     width: "100%",
     height: 220,
     borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: COLORS.border,
   },
 
   fileRow: {
@@ -1814,9 +2405,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -1825,19 +2416,19 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: COLORS.border,
   },
-  fileName: { flex: 1, color: "#fff", fontWeight: "800" },
-  link: { color: COLORS.primary, fontWeight: "900" },
+  fileName: { flex: 1, color: COLORS.text, fontWeight: "800" },
+  link: { color: COLORS.accent, fontWeight: "900" },
 
   histRow: {
     borderRadius: 14,
     padding: 12,
-    backgroundColor: "rgba(0,0,0,0.22)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -1846,33 +2437,33 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: COLORS.border,
   },
-  histTitle: { color: "#fff", fontWeight: "900" },
+  histTitle: { color: COLORS.text, fontWeight: "900" },
   histSub: {
     marginTop: 4,
-    color: "rgba(255,255,255,0.70)",
+    color: COLORS.sub,
     fontWeight: "700",
   },
 
   modalWrap: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(15,23,42,0.45)",
     justifyContent: "flex-end",
     padding: 16,
   },
   modalCard: {
     borderRadius: 18,
     padding: 14,
-    backgroundColor: "#0B1720",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.border,
   },
-  modalTitle: { color: "#fff", fontWeight: "900", fontSize: 18 },
+  modalTitle: { color: COLORS.text, fontWeight: "900", fontSize: 18 },
   modalText: {
-    color: "rgba(255,255,255,0.88)",
+    color: COLORS.text,
     fontWeight: "700",
     lineHeight: 20,
   },
@@ -1881,6 +2472,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   closeX: {
     width: 34,
@@ -1888,8 +2480,36 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.10)",
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.border,
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

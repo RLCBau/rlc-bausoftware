@@ -1,8 +1,18 @@
+﻿// apps/mobile/src/screens/StartScreen.tsx
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, StyleSheet, SafeAreaView, Image, Alert } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  SafeAreaView,
+  Image,
+  Alert,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
+import { COLORS } from "../ui/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Start">;
 
@@ -64,10 +74,7 @@ export default function StartScreen({ navigation }: Props) {
 
   const goNext = async () => {
     if (booting || navBusy) return;
-
-    // se non c’è mode ancora, l’utente deve scegliere qui sotto
     if (!mode) return;
-
     await goLoginWithMode(mode);
   };
 
@@ -83,28 +90,36 @@ export default function StartScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.wrap}>
-        {/* Header row */}
-        <View style={s.headerRow}>
-          <View style={s.logoWrap}>
-            <Image source={require("../../assets/icon.png")} style={s.logo} resizeMode="contain" />
+        <View style={s.heroCard}>
+          <View style={s.headerRow}>
+            <View style={s.logoWrap}>
+              <Image
+                source={require("../../assets/icon.png")}
+                style={s.logo}
+                resizeMode="contain"
+              />
+            </View>
+
+            <View style={s.headerTextWrap}>
+              <Text style={s.brand}>RLC Bausoftware</Text>
+              <Text style={s.sub}>mobile</Text>
+            </View>
+
+            <View style={s.modePill}>
+              <Text style={s.modeTxt}>
+                {booting
+                  ? "..."
+                  : mode === "NUR_APP"
+                  ? "NUR_APP"
+                  : mode === "SERVER_SYNC"
+                  ? "SERVER"
+                  : "MODE?"}
+              </Text>
+            </View>
           </View>
 
-          <View style={{ flex: 1 }}>
-            <Text style={s.brand}>RLC Bausoftware</Text>
-            <Text style={s.sub}>mobile</Text>
-          </View>
-
-          <View style={s.modePill}>
-            <Text style={s.modeTxt}>
-              {booting ? "..." : mode === "NUR_APP" ? "NUR_APP" : mode === "SERVER_SYNC" ? "SERVER" : "MODE?"}
-            </Text>
-          </View>
-        </View>
-
-        {/* Main card */}
-        <View style={s.card}>
-          <Text style={s.h1}>Start</Text>
-
+          <Text style={s.eyebrow}>Start</Text>
+          <Text style={s.h1}>Arbeitsmodus wählen</Text>
           <Text style={s.muted}>
             {booting
               ? "Initialisiere…"
@@ -112,64 +127,70 @@ export default function StartScreen({ navigation }: Props) {
               ? "Modus vorhanden. Du kannst direkt zu Login."
               : "Bitte wählen: Ohne Server oder Mit Server."}
           </Text>
+        </View>
 
-          <View style={{ height: 14 }} />
-
-          {/* ✅ Scelta diretta (Start -> Login) */}
-          <View style={{ gap: 10 }}>
+        <View style={s.card}>
+          <View style={s.buttonStack}>
             <Pressable
               onPress={() => goLoginWithMode("NUR_APP")}
               disabled={booting || navBusy}
               style={({ pressed }) => [
-                s.btn,
-                (booting || navBusy) && { opacity: 0.55 },
-                pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                s.btnPrimary,
+                (booting || navBusy) && s.btnDisabled,
+                pressed && !(booting || navBusy) ? s.btnPressed : null,
               ]}
             >
-              <Text style={s.btnTxt}>Ohne Server (NUR_APP)</Text>
+              <Text style={s.btnPrimaryTxt}>Ohne Server (NUR_APP)</Text>
             </Pressable>
 
             <Pressable
               onPress={() => goLoginWithMode("SERVER_SYNC")}
               disabled={booting || navBusy}
               style={({ pressed }) => [
-                s.btn,
-                (booting || navBusy) && { opacity: 0.55 },
-                pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                s.btnSecondary,
+                (booting || navBusy) && s.btnDisabled,
+                pressed && !(booting || navBusy) ? s.btnPressed : null,
               ]}
             >
-              <Text style={s.btnTxt}>Mit Server (SERVER_SYNC)</Text>
+              <Text style={s.btnSecondaryTxt}>Mit Server (SERVER_SYNC)</Text>
             </Pressable>
           </View>
 
-          <View style={{ height: 14 }} />
+          <View style={s.divider} />
 
-          {/* ✅ fallback: se già salvato un mode, “Weiter” porta a Login */}
           <Pressable
             onPress={goNext}
             disabled={booting || navBusy || !mode}
             style={({ pressed }) => [
               s.btnGhost,
-              (booting || navBusy || !mode) && { opacity: 0.55 },
-              pressed && mode ? { opacity: 0.9 } : null,
+              (booting || navBusy || !mode) && s.btnDisabled,
+              pressed && mode ? s.btnPressed : null,
             ]}
           >
             <Text style={s.btnGhostTxt}>{booting ? "..." : "Weiter (zu Login)"}</Text>
           </Pressable>
 
-          <View style={{ height: 10 }} />
-
-          {/* opzionale: tieni ArbeitsmodusScreen se ti serve ancora */}
           <Pressable
             onPress={goArbeitsmodus}
-            style={({ pressed }) => [s.linkBtn, pressed && { opacity: 0.9 }]}
+            style={({ pressed }) => [
+              s.linkBtn,
+              (booting || navBusy) && s.btnDisabled,
+              pressed && !(booting || navBusy) ? s.btnPressed : null,
+            ]}
             disabled={booting || navBusy}
           >
             <Text style={s.linkTxt}>Arbeitsmodus ändern (optional)</Text>
           </Pressable>
         </View>
 
-        {/* Footer */}
+        <View style={s.infoCard}>
+          <Text style={s.infoTitle}>Hinweis</Text>
+          <Text style={s.infoText}>
+            NUR_APP arbeitet lokal auf dem Gerät. SERVER_SYNC verbindet die App mit dem Server
+            und synchronisiert Projekte und Dokumente.
+          </Text>
+        </View>
+
         <View style={s.footer}>
           <Text style={s.footerTxt}>© {new Date().getFullYear()} RLC Bausoftware</Text>
         </View>
@@ -179,79 +200,235 @@ export default function StartScreen({ navigation }: Props) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0B1720" },
-  wrap: { flex: 1, padding: 16, paddingBottom: 22, gap: 12 },
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
 
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6 },
-  logoWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.08)",
+  wrap: {
+    flex: 1,
+    padding: 16,
+    paddingBottom: 22,
+  },
+
+  heroCard: {
+    borderRadius: 22,
+    padding: 18,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+
+  logoWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  logo: { width: 34, height: 34 },
 
-  brand: { color: "#fff", fontWeight: "900", fontSize: 18 },
-  sub: { color: "rgba(255,255,255,0.70)", fontWeight: "800", marginTop: 1 },
+  logo: {
+    width: 34,
+    height: 34,
+  },
+
+  headerTextWrap: {
+    flex: 1,
+  },
+
+  brand: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 18,
+  },
+
+  sub: {
+    color: COLORS.sub,
+    fontWeight: "800",
+    marginTop: 2,
+  },
 
   modePill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
-  modeTxt: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12 },
+
+  modeTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 12,
+  },
+
+  eyebrow: {
+    marginTop: 18,
+    color: COLORS.accentDark,
+    fontWeight: "900",
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
+
+  h1: {
+    marginTop: 8,
+    fontSize: 30,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  muted: {
+    marginTop: 8,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
   },
 
-  h1: { fontSize: 34, fontWeight: "900", color: "#fff" },
-  muted: { marginTop: 6, color: "rgba(255,255,255,0.70)", fontWeight: "800" },
+  buttonStack: {
+    gap: 10,
+  },
 
-  btn: {
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: "#111",
+  btnPrimary: {
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.accent,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.accent,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  btnTxt: { color: "#fff", fontWeight: "900" },
+
+  btnPrimaryTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+    fontSize: 14,
+    textAlign: "center",
+  },
+
+  btnSecondary: {
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+
+  btnSecondaryTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 14,
+    textAlign: "center",
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 14,
+  },
 
   btnGhost: {
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: "transparent",
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  btnGhostTxt: { color: "rgba(255,255,255,0.85)", fontWeight: "900" },
+
+  btnGhostTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 14,
+  },
 
   linkBtn: {
-    paddingVertical: 10,
-    alignItems: "center",
+    marginTop: 10,
+    minHeight: 44,
     borderRadius: 12,
+    backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  linkTxt: { color: "rgba(255,255,255,0.85)", fontWeight: "900", textDecorationLine: "underline" },
 
-  footer: { flex: 1, justifyContent: "flex-end", alignItems: "center" },
-  footerTxt: { color: "rgba(255,255,255,0.45)", fontWeight: "800" },
+  linkTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    textDecorationLine: "underline",
+  },
+
+  infoCard: {
+    marginTop: 14,
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  infoTitle: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 14,
+    marginBottom: 6,
+  },
+
+  infoText: {
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  btnDisabled: {
+    opacity: 0.55,
+  },
+
+  btnPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+
+  footer: {
+    flex: 1,
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+
+  footerTxt: {
+    color: COLORS.sub,
+    fontWeight: "800",
+  },
 });
+
+

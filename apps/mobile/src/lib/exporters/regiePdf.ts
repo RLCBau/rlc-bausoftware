@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/exporters/regiePdf.ts
+﻿// apps/mobile/src/lib/exporters/regiePdf.ts
 
 /**
  * ✅ Facade / Re-export stabile
@@ -147,3 +147,4 @@ export async function createAndEmailRegiePdf(
 
   return out;
 }
+

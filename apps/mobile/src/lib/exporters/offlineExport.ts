@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/exporters/offlineExport.ts
+﻿// apps/mobile/src/lib/exporters/offlineExport.ts
 import * as Print from "expo-print";
 import { moveExportFile, writeExportTextFile, type ExportKind } from "../exportStorage";
 
@@ -109,3 +109,4 @@ export async function exportOfflineDoc(opts: {
 
   return { pdf, csv };
 }
+

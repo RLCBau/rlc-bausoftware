@@ -1,64 +1,28 @@
-// apps/mobile/src/lib/exporters/projectExport.ts
-import * as FileSystem from "expo-file-system/legacy"; // ✅ FIX: legacy API (Base64 + readAsStringAsync ok)
+﻿// apps/mobile/src/lib/exporters/projectExport.ts
+import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as MailComposer from "expo-mail-composer";
 import * as ImageManipulator from "expo-image-manipulator";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Linking, Platform } from "react-native";
-
-/**
- * OFFLINE-PDF (NUR_APP) – Regie/Lieferschein/Photos
- * ✅ Supporta input "row" da:
- *   - record completo (screen)
- *   - QueueItem (offlineQueue.ts) con payload + payload.row opzionale
- * ✅ Regiebericht Layout (A4) come WEB jsPDF:
- *   - Header 3 blocchi + checkbox tipo
- *   - Tage + Zeitfelder
- *   - Tabelle 6 Zeilen per Seite
- *   - Fotodokumentation (prima immagine) + Bemerkungen
- *   - Unterschriften
- * ✅ Salva sotto projects/<FS-KEY>/<Kategorie>/
- *
- * 🔥 FIX richiesto:
- * - Usa LO STESSO “modello PDF” (layout Regiebericht) per TUTTI:
- *   Regie + Lieferschein + Photos (quindi anche Inbox che richiama questi exporter)
- *
- * ✅ EXTRA FIX:
- * - Badge nel PDF: KI / EXTRA / FOTO / LV / ANH:n
- *
- * ✅ FIX FOTO:
- * - iOS HEIC/HEIF -> convertiamo a JPEG
- * - Android content:// -> copia in cache preservando estensione
- * - iOS ph:// può non essere leggibile direttamente -> fallback robusto (manipulateAsync)
- *
- * ✅ FIX INPUT:
- * - attachments/files/photos possono essere:
- *   - oggetti { uri, name, type }
- *   - stringhe "file://...", "content://...", "ph://..."
- *
- * ✅ FIX BUG REALI:
- * - Eingang/Prüfung a volte passa wrapper {kind,payload} senza payload.row → prima risultava "non queue"
- *   e quindi PDF vuoto. Ora unwrap più robusto.
- * - Overwrite PDF: se esiste già target, prima delete, poi copy (evita fallback su Print temp).
- *
- * ✅ FIX SERVER (Eingangsprüfung):
- * - Se l’allegato è URL (http/https) o path "/projects/..." → lo scarichiamo in cache (file://)
- *   e poi facciamo base64. Questo rimette in vita le foto in Eingangsprüfung e nei doc che hanno url.
- */
+import {
+  getCompanyHeaderCached,
+  getCompanyLogoUriCached,
+} from "../companyCache";
 
 const API_URL_STORAGE_KEY = "api_base_url";
 
 type EmailPdfInput = {
   subject: string;
   body?: string;
-  attachments: string[]; // file:// uris (mobile)
+  attachments: string[];
   to?: string[];
   cc?: string[];
   bcc?: string[];
 };
 
 type ExportBaseInput = {
-  projectFsKey: string; // BA-... oppure local-...
+  projectFsKey: string;
   projectTitle?: string;
   filenameHint?: string;
 };
@@ -66,15 +30,16 @@ type ExportBaseInput = {
 type ExportRegieInput = ExportBaseInput & { row: any };
 type ExportLsInput = ExportBaseInput & { row: any };
 type ExportPhotosInput = ExportBaseInput & { row: any };
+type ExportTagesberichtInput = ExportBaseInput & { row: any };
 
 export type ExportResult = {
-  pdfUri: string; // file:// su mobile, "web:print" su web
+  pdfUri: string;
   fileName: string;
-  date: string; // YYYY-MM-DD
+  date: string;
 };
 
 /* ============================================================
- *  FS HELPERS
+ * FS HELPERS
  * ============================================================ */
 
 function normDir(d: string) {
@@ -109,6 +74,10 @@ function pad2(n: number) {
 
 function toYMD(d: Date) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function toHMS(d: Date) {
+  return `${pad2(d.getHours())}-${pad2(d.getMinutes())}-${pad2(d.getSeconds())}`;
 }
 
 function guessDateFromRow(row: any): string {
@@ -151,7 +120,6 @@ function escapeHtml(s: string) {
 function isLikelyImg(nameOrTypeOrUri?: string) {
   const v = String(nameOrTypeOrUri || "").toLowerCase();
 
-  // ✅ iOS Photos assets
   if (v.startsWith("ph://") || v.startsWith("assets-library://")) return true;
 
   return (
@@ -180,11 +148,11 @@ function isIosPhotosUri(uri?: string) {
   );
 }
 
-/** ✅ URL server support */
 function isHttpUrl(u?: string) {
   const s = String(u || "");
   return /^https?:\/\//i.test(s);
 }
+
 function isProjectsPath(u?: string) {
   const s = String(u || "");
   return s.startsWith("/projects/");
@@ -195,11 +163,31 @@ async function getApiBaseUrlFromStorage(): Promise<string> {
     const raw = String((await AsyncStorage.getItem(API_URL_STORAGE_KEY)) || "").trim();
     if (raw) return raw.replace(/\/$/, "");
   } catch {}
-  // fallback: tienilo uguale al tuo default in api.ts (se diverso, cambialo qui)
   return "https://api.rlcbausoftware.com";
 }
 
-/** Scarica http/https o /projects/... in cache -> file:// */
+async function getAuthHeadersForDownload(): Promise<Record<string, string>> {
+  try {
+    const token = String((await AsyncStorage.getItem("auth_token")) || "").trim();
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+  } catch {
+    return {};
+  }
+}
+
+async function getAuthToken(): Promise<string> {
+  try {
+    return String((await AsyncStorage.getItem("auth_token")) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+/* ============================================================
+ * REMOTE/LOCAL FILE HELPERS
+ * ============================================================ */
+
 async function ensureLocalFromRemote(
   uri: string,
   hint?: { name?: string; type?: string }
@@ -207,10 +195,7 @@ async function ensureLocalFromRemote(
   const s = String(uri || "").trim();
   if (!s) return "";
 
-  // già locale o iOS asset
   if (isFileUri(s) || isContentUri(s) || isIosPhotosUri(s)) return s;
-
-  // supportiamo SOLO http(s) o /projects/...
   if (!isHttpUrl(s) && !isProjectsPath(s)) return s;
 
   const base = await getApiBaseUrlFromStorage();
@@ -226,16 +211,18 @@ async function ensureLocalFromRemote(
   const target = `${baseNorm}tmp/${Date.now()}_${Math.floor(Math.random() * 1e9)}.${ext}`;
 
   try {
-    const dl = await FileSystem.downloadAsync(abs, target);
-    // dl.uri è file://...
+    const headers = await getAuthHeadersForDownload();
+    const dl = await FileSystem.downloadAsync(abs, target, { headers });
     return dl.uri || target;
   } catch (e: any) {
-    console.log("[PDFDBG] download remote FAILED:", { abs, err: String(e?.message || e) });
-    return abs; // fallback (potrebbe fallire poi, ma almeno logga)
+    console.log("[PDFDBG] download remote FAILED:", {
+      abs,
+      err: String(e?.message || e),
+    });
+    return abs;
   }
 }
 
-/** Estensione coerente per file copiati da content:// (evita .bin) */
 function extFromNameOrType(name?: string, type?: string) {
   const n = String(name || "").toLowerCase();
   const t = String(type || "").toLowerCase();
@@ -248,7 +235,6 @@ function extFromNameOrType(name?: string, type?: string) {
   if (t.includes("jpeg") || n.endsWith(".jpeg")) return "jpeg";
   if (t.includes("jpg") || n.endsWith(".jpg")) return "jpg";
 
-  // default: jpg
   return "jpg";
 }
 
@@ -270,10 +256,8 @@ async function ensureFileUri(
 ): Promise<string> {
   if (!inputUri) return "";
   if (Platform.OS === "web") return inputUri;
-
   if (isFileUri(inputUri)) return inputUri;
 
-  // Android DocumentPicker spesso -> content://
   if (isContentUri(inputUri)) {
     const base = (FileSystem.cacheDirectory || FileSystem.documentDirectory) ?? null;
     if (!base) return inputUri;
@@ -285,21 +269,12 @@ async function ensureFileUri(
     const target = `${baseNorm}tmp/${Date.now()}_${Math.floor(Math.random() * 1e9)}.${ext}`;
 
     await FileSystem.copyAsync({ from: inputUri, to: target });
-
-    // target è già file://... se baseNorm è file://...
     return target.startsWith("file://") ? target : `file://${target}`;
   }
 
-  // iOS ph:// resta così: lo convertiamo dopo
   return inputUri;
 }
 
-/**
- * ✅ Converte:
- * - ph:// / assets-library://  -> JPEG in cache via ImageManipulator
- * - HEIC/HEIF                  -> JPEG in cache via ImageManipulator
- * - altri                      -> invariato
- */
 async function ensurePrintableImageUri(
   uriIn: string,
   hint?: { name?: string; type?: string }
@@ -358,6 +333,7 @@ async function readAsBase64DataUrl(img: {
   type?: string;
 }): Promise<string | null> {
   const original = img?.uri;
+
   try {
     console.log("[PDFDBG] readAsBase64DataUrl start:", {
       original,
@@ -365,28 +341,23 @@ async function readAsBase64DataUrl(img: {
       type: img?.type,
     });
 
-    // 0) http/https o /projects/... -> download -> file://
     const u0 = await ensureLocalFromRemote(img.uri, { name: img.name, type: img.type });
     if (u0 !== img.uri) console.log("[PDFDBG] after ensureLocalFromRemote:", u0);
 
-    // 1) content:// -> file://
     const u1 = await ensureFileUri(u0, { name: img.name, type: img.type });
     console.log("[PDFDBG] after ensureFileUri:", u1);
 
-    // 2) ph:// / HEIC -> JPEG in cache (quando possibile)
     const { uri: u2, mime } = await ensurePrintableImageUri(u1, {
       name: img.name,
       type: img.type,
     });
     console.log("[PDFDBG] after ensurePrintableImageUri:", { u2, mime });
 
-    // ✅ se u2 è ancora ph:// (conversione fallita), non provare a leggere base64
     if (isIosPhotosUri(u2)) {
       console.log("[PDFDBG] still ph:// after conversion -> giving up:", u2);
       return null;
     }
 
-    // 3) leggere base64
     const b64 = await FileSystem.readAsStringAsync(u2, {
       encoding: FileSystem.EncodingType.Base64,
     });
@@ -395,6 +366,7 @@ async function readAsBase64DataUrl(img: {
 
     const finalMime =
       mime === "image/heic" || mime === "image/heif" ? "image/jpeg" : mime;
+
     return `data:${finalMime};base64,${b64}`;
   } catch (e: any) {
     console.log("[PDFDBG] readAsBase64DataUrl FAILED:", {
@@ -406,28 +378,74 @@ async function readAsBase64DataUrl(img: {
 }
 
 /* ============================================================
- *  QUEUE-AWARE UNWRAP (offlineQueue.ts)
+ * COMPANY PDF HEADER
+ * ============================================================ */
+
+async function buildCompanyPdfHeaderHtml(): Promise<string> {
+  try {
+    const header = await getCompanyHeaderCached();
+    const rawLogoUri = await getCompanyLogoUriCached();
+
+    const name = escapeHtml(text(header?.name || ""));
+    const address = escapeHtml(text(header?.address || ""));
+    const phone = escapeHtml(text(header?.phone || ""));
+    const email = escapeHtml(text(header?.email || ""));
+
+    let logoDataUrl = "";
+    if (rawLogoUri) {
+      const maybeDataUrl = await readAsBase64DataUrl({
+        uri: String(rawLogoUri),
+        name: "company_logo",
+        type: "image/jpeg",
+      });
+      if (maybeDataUrl) logoDataUrl = maybeDataUrl;
+    }
+
+    if (!logoDataUrl && !name && !address && !phone && !email) return "";
+
+    const logoHtml = logoDataUrl
+      ? `<img class="company-logo" src="${logoDataUrl}" />`
+      : `<div class="company-logo-placeholder"></div>`;
+
+    const infoLines = [name, address, phone, email]
+      .filter(Boolean)
+      .map((v) => `<div class="company-line">${v}</div>`)
+      .join("");
+
+    return `
+      <div class="company-header">
+        <div class="company-header-left">
+          ${logoHtml}
+        </div>
+        <div class="company-header-right">
+          ${infoLines}
+        </div>
+      </div>
+    `;
+  } catch (e: any) {
+    console.log("[PDFDBG] buildCompanyPdfHeaderHtml failed:", String(e?.message || e));
+    return "";
+  }
+}
+
+/* ============================================================
+ * QUEUE-AWARE UNWRAP
  * ============================================================ */
 
 function looksLikeQueueItem(x: any): boolean {
   if (!x || typeof x !== "object") return false;
 
   const k = String(x.kind || "").toUpperCase();
-
-  // ✅ DEVE avere payload object
   if (!x.payload || typeof x.payload !== "object") return false;
 
-  // ✅ FIX CRITICO:
-  // ingresso/pruefung a volte passa wrapper {kind,payload} dove payload è "row-like" ma
-  // NON contiene text/note/files e NON contiene payload.row -> prima risultava false.
-  // Ora basta kind valido + payload object.
-  return (
+    return (
     k === "REGIE" ||
     k === "LIEFERSCHEIN" ||
     k === "LS" ||
     k === "PHOTO_NOTE" ||
     k === "FOTOS_NOTIZEN" ||
-    k === "PHOTOS"
+    k === "PHOTOS" ||
+    k === "TAGESBERICHT"
   );
 }
 
@@ -436,8 +454,9 @@ function toAttachmentArrayFromFiles(files: any): any[] {
   return arr
     .filter(Boolean)
     .map((f) => {
-      if (typeof f === "string")
+      if (typeof f === "string") {
         return { uri: f, type: undefined, name: undefined, id: undefined };
+      }
       return {
         uri: f?.uri || f?.url || f?.path,
         type: f?.type,
@@ -448,7 +467,6 @@ function toAttachmentArrayFromFiles(files: any): any[] {
     .filter((p) => !!p.uri);
 }
 
-// ✅ riconosce payload che è già una "row" (senza payload.row)
 function isRowLikeObject(o: any): boolean {
   if (!o || typeof o !== "object") return false;
   const keys = Object.keys(o);
@@ -478,42 +496,39 @@ function isRowLikeObject(o: any): boolean {
       o.number ||
       o.nr ||
       o.date ||
-      o.datum
+      o.weather ||
+o.temperature ||
+o.issues ||
+o.reportType ||
+      o.datum 
   );
 }
 
-/** Costruisce un "row" compatibile a partire da QueueItem.payload (se payload.row manca) */
 function materializeRowFromQueueItem(q: any): any {
   const kindRaw = String(q?.kind || "");
   const kind = kindRaw.toUpperCase();
   const p = q?.payload || {};
 
-  // ✅ se payload è già "row-like" e non esiste p.row, usalo come baseRow
   const payloadAsRow =
     (!p?.row || typeof p.row !== "object") && isRowLikeObject(p) ? p : null;
 
-  // ✅ helper: merge payload fields into baseRow (così non perdi text/note/files)
   const mergePayloadIntoRow = (baseRow: any) => {
     const merged = { ...(baseRow || {}) };
 
-    // normalizza "date"
     if (!merged.date && p?.date) merged.date = p.date;
     if (!merged.datum && p?.date) merged.datum = p.date;
 
-    // porta dentro text/note se mancano
     if (!merged.leistung && p?.text) merged.leistung = p.text;
     if (!merged.text && p?.text) merged.text = p.text;
     if (!merged.bemerkungen && p?.note) merged.bemerkungen = p.note;
     if (!merged.note && p?.note) merged.note = p.note;
 
-    // porta dentro file pool
     if (!merged.files && p?.files) merged.files = p.files;
-    if (!merged.attachments && p?.files)
+    if (!merged.attachments && p?.files) {
       merged.attachments = toAttachmentArrayFromFiles(p.files);
-    if (!merged.photos && p?.files)
-      merged.photos = toAttachmentArrayFromFiles(p.files);
+    }
+    if (!merged.photos && p?.files) merged.photos = toAttachmentArrayFromFiles(p.files);
 
-    // photo main
     if (!merged.imageUri && p?.imageUri) merged.imageUri = p.imageUri;
     if (!merged.imageMeta && p?.imageMeta) merged.imageMeta = p.imageMeta;
 
@@ -525,16 +540,11 @@ function materializeRowFromQueueItem(q: any): any {
       (p?.row && typeof p.row === "object" ? p.row : null) || payloadAsRow;
 
     if (!baseRow) {
-      const date = p?.date || "";
-      const hours = p?.hours ?? "";
-      const leistung = p?.text || "";
-      const bemerkungen = p?.note || "";
-
       return mergePayloadIntoRow({
-        date,
-        stunden: hours,
-        leistung,
-        bemerkungen,
+        date: p?.date || "",
+        stunden: p?.hours ?? "",
+        leistung: p?.text || "",
+        bemerkungen: p?.note || "",
         photos: toAttachmentArrayFromFiles(p?.files),
         docType: p?.docType || "REGIE",
       });
@@ -542,7 +552,7 @@ function materializeRowFromQueueItem(q: any): any {
 
     return mergePayloadIntoRow({
       ...baseRow,
-      docType: (baseRow as any)?.docType || p?.docType || "REGIE",
+      docType: baseRow?.docType || p?.docType || "REGIE",
     });
   }
 
@@ -569,6 +579,7 @@ function materializeRowFromQueueItem(q: any): any {
         attachments: toAttachmentArrayFromFiles(p?.files),
       });
     }
+
     return mergePayloadIntoRow(baseRow);
   }
 
@@ -576,16 +587,15 @@ function materializeRowFromQueueItem(q: any): any {
     const baseRow =
       (p?.row && typeof p.row === "object" ? p.row : null) || payloadAsRow;
 
-    // se abbiamo una row base, preferiscila (ma ancora mergiamo payload)
     const imageUri =
       p?.imageUri ||
       p?.imageMeta?.uri ||
-      (baseRow as any)?.imageUri ||
-      (baseRow as any)?.imageMeta?.uri ||
+      baseRow?.imageUri ||
+      baseRow?.imageMeta?.uri ||
       null;
 
     const files = [
-      ...(p?.files ? toAttachmentArrayFromFiles(p?.files) : []),
+      ...(p?.files ? toAttachmentArrayFromFiles(p.files) : []),
       ...(imageUri
         ? [
             {
@@ -599,30 +609,54 @@ function materializeRowFromQueueItem(q: any): any {
 
     const draft = {
       ...(baseRow || {}),
-      date: (baseRow as any)?.date || p?.date || p?.createdAt || "",
-      title: (baseRow as any)?.title || "",
-      note:
-        (baseRow as any)?.note ||
-        p?.note ||
-        p?.comment ||
-        p?.bemerkungen ||
-        "",
-      bemerkungen: (baseRow as any)?.bemerkungen || p?.bemerkungen || "",
-      kostenstelle: (baseRow as any)?.kostenstelle || p?.kostenstelle || "",
-      lvItemPos: (baseRow as any)?.lvItemPos || p?.lvItemPos || null,
-      files: (baseRow as any)?.files || p?.files,
+      date: baseRow?.date || p?.date || p?.createdAt || "",
+      title: baseRow?.title || "",
+      note: baseRow?.note || p?.note || p?.comment || p?.bemerkungen || "",
+      bemerkungen: baseRow?.bemerkungen || p?.bemerkungen || "",
+      kostenstelle: baseRow?.kostenstelle || p?.kostenstelle || "",
+      lvItemPos: baseRow?.lvItemPos || p?.lvItemPos || null,
+      files: baseRow?.files || p?.files,
       attachments: files,
-      boxes: (baseRow as any)?.boxes || p?.boxes,
-      extras: (baseRow as any)?.extras || p?.extras,
-      docId: (baseRow as any)?.docId || p?.docId,
+      boxes: baseRow?.boxes || p?.boxes,
+      extras: baseRow?.extras || p?.extras,
+      docId: baseRow?.docId || p?.docId,
       imageUri: imageUri || undefined,
-      imageMeta: (baseRow as any)?.imageMeta || p?.imageMeta,
+      imageMeta: baseRow?.imageMeta || p?.imageMeta,
     };
 
     return mergePayloadIntoRow(draft);
   }
 
-  // fallback
+    if (kind === "TAGESBERICHT") {
+    const baseRow =
+      (p?.row && typeof p.row === "object" ? p.row : null) || payloadAsRow;
+
+    if (!baseRow) {
+      return mergePayloadIntoRow({
+        date: p?.date || "",
+        weather: p?.weather || "",
+        temperature: p?.temperature || "",
+        issues: p?.issues || "",
+        notes: p?.notes || p?.note || "",
+        text: p?.text || "",
+        lines: Array.isArray(p?.lines) ? p.lines : [],
+        reportType: "TAGESBERICHT",
+        docType: "TAGESBERICHT",
+      });
+    }
+
+    return mergePayloadIntoRow({
+      ...baseRow,
+      reportType: baseRow?.reportType || "TAGESBERICHT",
+      docType: baseRow?.docType || "TAGESBERICHT",
+      lines: Array.isArray(baseRow?.lines)
+        ? baseRow.lines
+        : Array.isArray(p?.lines)
+        ? p.lines
+        : [],
+    });
+  }
+
   if (p?.row && typeof p.row === "object") return { ...p.row };
   if (payloadAsRow) return { ...payloadAsRow };
   return q;
@@ -634,7 +668,7 @@ function unwrapRowMaybeQueue(rowOrQueue: any): any {
 }
 
 /* ============================================================
- *  NORMALIZATION (row -> header + lines)
+ * NORMALIZATION
  * ============================================================ */
 
 type RegieLine = {
@@ -646,7 +680,13 @@ type RegieLine = {
   material?: string;
   quantity?: number | string;
   unit?: string;
-  photos?: Array<{ uri?: string; url?: string; path?: string; type?: string; name?: string }>;
+  photos?: Array<{
+    uri?: string;
+    url?: string;
+    path?: string;
+    type?: string;
+    name?: string;
+  }>;
 };
 
 type RegieHeader = {
@@ -683,14 +723,30 @@ function pickHeader(rowAny: any): RegieHeader {
   };
 }
 
-function normalizePhotos(x: any): RegieLine["photos"] {
+function normalizePhotos(
+  x: any
+): {
+  uri?: string;
+  url?: string;
+  path?: string;
+  type?: string;
+  name?: string;
+}[] {
   const arr = Array.isArray(x) ? x : [];
+
   return arr
     .filter(Boolean)
     .map((p) => {
       if (typeof p === "string") {
-        return { uri: p, url: undefined, path: undefined, type: undefined, name: undefined };
+        return {
+          uri: p,
+          url: undefined,
+          path: undefined,
+          type: undefined,
+          name: undefined,
+        };
       }
+
       return {
         uri: p?.uri || p?.url || p?.path,
         url: p?.url,
@@ -702,26 +758,96 @@ function normalizePhotos(x: any): RegieLine["photos"] {
     .filter((p) => !!(p.uri || p.url || p.path));
 }
 
+
+function firstNonEmptyArray<T = any>(...candidates: any[]): T[] {
+  for (const c of candidates) {
+    if (Array.isArray(c) && c.length > 0) return c as T[];
+  }
+  return [];
+}
+
+function dedupeAttachmentLike(
+  arr: Array<{ uri?: string; type?: string; name?: string; url?: string; path?: string }>
+): Array<{ uri?: string; type?: string; name?: string; url?: string; path?: string }> {
+  const seen = new Set<string>();
+  const out: Array<{ uri?: string; type?: string; name?: string; url?: string; path?: string }> =
+    [];
+
+  for (const it of arr || []) {
+    const uri = String(it?.uri || it?.url || it?.path || "").trim();
+    if (!uri) continue;
+    if (seen.has(uri)) continue;
+    seen.add(uri);
+    out.push({
+      uri,
+      type: it?.type,
+      name: it?.name,
+      url: it?.url,
+      path: it?.path,
+    });
+  }
+
+  return out;
+}
+
+function collectNormalizedPhotosForRow(rowAny: any) {
+  const row = unwrapRowMaybeQueue(rowAny);
+
+ const merged = [
+  ...(normalizePhotos(Array.isArray(row?.attachments) ? row.attachments : []) || []),
+  ...(normalizePhotos(Array.isArray(row?.files) ? row.files : []) || []),
+  ...(normalizePhotos(Array.isArray(row?.photos) ? row.photos : []) || []),
+  ...(normalizePhotos([row?.imageUri, row?.imageMeta?.uri, row?.photoUri, row?.uri].filter(Boolean)) || []),
+];
+  return dedupeAttachmentLike(merged);
+}
+
 function normalizeRegieLines(rootAny: any): RegieLine[] {
   const root = unwrapRowMaybeQueue(rootAny);
 
   const candidates =
     (Array.isArray(root?.rows) && root.rows) ||
+    (Array.isArray(root?.lines) && root.lines) ||
     (Array.isArray(root?.items?.aufmass) && root.items.aufmass) ||
     (Array.isArray(root?.items) && root.items) ||
-    (Array.isArray(root?.lines) && root.lines) ||
     (Array.isArray(root?.positions) && root.positions) ||
     null;
 
   const list: any[] = candidates ? candidates : [root];
 
   return list.map((r) => ({
-    kostenstelle: r?.kostenstelle || r?.costCenter || root?.kostenstelle || root?.costCenter || "",
-    machine: r?.machine || r?.maschinen || r?.equipment || "",
-    worker: r?.worker || r?.mitarbeiter || r?.person || "",
-    hours: r?.hours ?? r?.stunden ?? "",
+    kostenstelle:
+      r?.kostenstelle ||
+      r?.ort ||
+      r?.bereich ||
+      r?.costCenter ||
+      root?.kostenstelle ||
+      root?.ort ||
+      root?.bereich ||
+      root?.costCenter ||
+      "",
+    machine:
+      r?.machine ||
+      r?.maschine ||
+      r?.maschinen ||
+      r?.equipment ||
+      "",
+    worker:
+      r?.worker ||
+      r?.mitarbeiter ||
+      r?.person ||
+      "",
+    hours:
+      r?.hours ??
+      r?.stunden ??
+      r?.stundenGesamt ??
+      "",
     comment:
       r?.comment ||
+      r?.notiz ||
+      r?.note ||
+      r?.taetigkeit ||
+      r?.tätigkeit ||
       r?.beschreibung ||
       r?.leistung ||
       r?.leistungBeschreibung ||
@@ -734,16 +860,23 @@ function normalizeRegieLines(rootAny: any): RegieLine[] {
     quantity: r?.quantity ?? r?.menge ?? "",
     unit: r?.unit || r?.einheit || "",
     photos: normalizePhotos(
-      r?.photos || r?.attachments || r?.files || root?.photos || root?.attachments || root?.files || []
+      firstNonEmptyArray(
+        r?.photos,
+        r?.attachments,
+        r?.files,
+        root?.photos,
+        root?.attachments,
+        root?.files
+      )
     ),
   }));
 }
 
 /* ============================================================
- *  UNIFIED “MODEL PDF” HELPERS
+ * MODEL PDF HELPERS
  * ============================================================ */
 
-type DocKind = "REGIE" | "LIEFERSCHEIN" | "FOTOS";
+type DocKind = "REGIE" | "LIEFERSCHEIN" | "FOTOS" | "TAGESBERICHT";
 
 function collectAllAttachmentsMaybe(rowAny: any): Array<{ uri?: string; type?: string; name?: string }> {
   const row = unwrapRowMaybeQueue(rowAny);
@@ -762,17 +895,25 @@ function collectAllAttachmentsMaybe(rowAny: any): Array<{ uri?: string; type?: s
     if (typeof u === "string" && u.length) extraUris.push(u);
   }
 
-  return [...a1, ...a2, ...a3, ...extraUris]
-    .filter(Boolean)
-    .map((p) => {
-      if (typeof p === "string") return { uri: p, type: undefined, name: undefined };
-      return {
-        uri: p?.uri || p?.url || p?.path,
-        type: p?.type,
-        name: p?.name,
-      };
-    })
-    .filter((p) => !!p.uri);
+  return dedupeAttachmentLike(
+    [...a1, ...a2, ...a3, ...extraUris]
+      .filter(Boolean)
+      .map((p) => {
+        if (typeof p === "string") return { uri: p, type: undefined, name: undefined };
+        return {
+          uri: p?.uri || p?.url || p?.path,
+          type: p?.type,
+          name: p?.name,
+          url: p?.url,
+          path: p?.path,
+        };
+      })
+      .filter((p) => !!p.uri)
+  ).map((p) => ({
+    uri: p.uri,
+    type: p.type,
+    name: p.name,
+  }));
 }
 
 async function firstPhotoDataUrlFromRowOrLines(opts: {
@@ -781,46 +922,78 @@ async function firstPhotoDataUrlFromRowOrLines(opts: {
 }): Promise<string | null> {
   try {
     const { rowAny, lines } = opts;
+    const row = unwrapRowMaybeQueue(rowAny);
 
-    const fromLines =
-      (lines || [])
-        .flatMap((l) => l.photos || [])
-        .find((p) => isLikelyImg(p?.type || p?.name || p?.uri || p?.url || p?.path)) || null;
+    const mainCandidates = dedupeAttachmentLike(
+      [
+        row?.imageUri
+          ? {
+              uri: row.imageUri,
+              type: row?.imageMeta?.type || row?.image?.type,
+              name: row?.imageMeta?.name || row?.image?.name || "main_photo.jpg",
+            }
+          : null,
+        row?.imageMeta?.uri
+          ? {
+              uri: row.imageMeta.uri,
+              type: row?.imageMeta?.type,
+              name: row?.imageMeta?.name || "main_photo.jpg",
+            }
+          : null,
+      ].filter(Boolean) as any
+    );
 
-    const fromRow =
-      collectAllAttachmentsMaybe(rowAny).find((p) => isLikelyImg(p?.type || p?.name || p?.uri)) || null;
+    const linePhotos = (lines || []).flatMap((l) => (Array.isArray(l.photos) ? l.photos : []));
+    const rowPhotos = collectAllAttachmentsMaybe(rowAny);
 
-    const uri = (fromLines?.uri || fromLines?.url || fromLines?.path || fromRow?.uri || "") as string;
+    const all = dedupeAttachmentLike([
+      ...mainCandidates,
+      ...linePhotos.map((p) => ({
+        uri: p?.uri || p?.url || p?.path,
+        type: p?.type,
+        name: p?.name,
+      })),
+      ...rowPhotos,
+    ]);
+
+    const firstImg = all.find((p) => isLikelyImg(p?.type || p?.name || p?.uri)) || null;
+    const uri = String(firstImg?.uri || "").trim();
     if (!uri) return null;
 
-    const hint = {
-      name: (fromLines?.name || fromRow?.name) as any,
-      type: (fromLines?.type || fromRow?.type) as any,
-    };
-    return await readAsBase64DataUrl({ uri, name: hint.name, type: hint.type });
-  } catch {
+    return await readAsBase64DataUrl({
+      uri,
+      name: firstImg?.name,
+      type: firstImg?.type,
+    });
+  } catch (e: any) {
+    console.log("[PDFDBG] firstPhotoDataUrlFromRowOrLines FAILED:", String(e?.message || e));
     return null;
   }
 }
 
-/** Lieferschein -> righe compatibili col layout Regiebericht */
 function synthLinesForLieferschein(rowAny: any): RegieLine[] {
   const row = unwrapRowMaybeQueue(rowAny);
 
   const supplier = text(row?.supplier || row?.lieferant || "");
   const number = text(row?.lieferscheinNummer || row?.number || row?.nr || row?.lieferscheinNr || "");
   const site = text(row?.site || row?.baustelle || "");
-  const driver = text(row?.driver || "");
+  const driver = text(row?.driver || row?.fahrer || "");
   const material = text(row?.material || "");
   const qty = row?.qty ?? row?.quantity ?? row?.menge ?? row?.mengeGesamt ?? "";
   const unit = text(row?.unit || row?.einheit || "");
 
-  const qtyStr = qty != null && String(qty) !== "0" ? `${num(qty)} ${unit}`.trim() : "";
+  const qtyStr =
+    qty != null && String(qty).trim() !== "" && String(qty) !== "0"
+      ? `${num(qty)} ${unit}`.trim()
+      : "";
+
   const commentParts = [
     supplier ? `Lieferant: ${supplier}` : "",
     number ? `LS-Nr.: ${number}` : "",
     site ? `Baustelle: ${site}` : "",
   ].filter(Boolean);
+
+  const rowPhotos = collectNormalizedPhotosForRow(row);
 
   return [
     {
@@ -830,12 +1003,11 @@ function synthLinesForLieferschein(rowAny: any): RegieLine[] {
       hours: "",
       comment: commentParts.join(" • "),
       material: qtyStr,
-      photos: normalizePhotos(row?.attachments || row?.files || []),
+      photos: rowPhotos,
     },
   ];
 }
 
-/** Photos/Notizen -> righe compatibili col layout Regiebericht */
 function synthLinesForPhotos(rowAny: any): RegieLine[] {
   const row = unwrapRowMaybeQueue(rowAny);
 
@@ -872,6 +1044,8 @@ function synthLinesForPhotos(rowAny: any): RegieLine[] {
   }
 
   const note = text(row?.note || row?.notiz || row?.text || row?.bemerkungen || "");
+  const rowPhotos = collectNormalizedPhotosForRow(row);
+
   if (!lines.length) {
     lines.push({
       kostenstelle: row?.kostenstelle || "",
@@ -880,19 +1054,11 @@ function synthLinesForPhotos(rowAny: any): RegieLine[] {
       hours: "",
       comment: note,
       material: "",
-      photos: normalizePhotos(row?.attachments || row?.files || []),
+      photos: rowPhotos,
     });
   } else {
-    lines[0].photos = normalizePhotos(row?.attachments || row?.files || []);
-  }
-
-  // ✅ ensure main photo is included for preview
-  const main = row?.imageUri || row?.imageMeta?.uri || row?.photoUri || row?.uri;
-  if (main && lines?.[0]) {
     const existing = Array.isArray(lines[0].photos) ? lines[0].photos : [];
-    if (!existing.find((x) => x?.uri === main)) {
-      lines[0].photos = [{ uri: String(main) }, ...existing];
-    }
+    lines[0].photos = dedupeAttachmentLike([...rowPhotos, ...existing]) as RegieLine["photos"];
   }
 
   return lines;
@@ -934,8 +1100,38 @@ function buildHeaderForPhotos(rowAny: any, date: string): RegieHeader {
   };
 }
 
+function buildHeaderForTagesbericht(rowAny: any, date: string): RegieHeader {
+  const row = unwrapRowMaybeQueue(rowAny);
+  const firstLine = Array.isArray(row?.lines) && row.lines.length ? row.lines[0] : null;
+
+  return {
+    reportType: "TAGESBERICHT",
+    regieNummer: row?.docId || row?.id || row?.nummer || "",
+    auftraggeber: row?.auftraggeber || row?.client || row?.customer || "",
+    arbeitsbeginn:
+      firstLine?.von ||
+      row?.arbeitsbeginn ||
+      row?.zeitVon ||
+      "",
+    arbeitsende:
+      firstLine?.bis ||
+      row?.arbeitsende ||
+      row?.zeitBis ||
+      "",
+    pause1:
+      firstLine?.pauseMin != null && String(firstLine.pauseMin).trim() !== ""
+        ? `${firstLine.pauseMin} Min`
+        : row?.pause1 || "",
+    pause2: row?.pause2 || "",
+    blattNr: row?.blattNr || "",
+    wetter: row?.weather || row?.wetter || "",
+    kostenstelle: row?.kostenstelle || "",
+    bemerkungen: row?.issues || row?.notes || row?.bemerkungen || "",
+    date,
+  };
+}
 /* ============================================================
- *  HTML (Regiebericht Layout)
+ * HTML
  * ============================================================ */
 
 function renderTypeRow(label: string, type: string, activeType: string) {
@@ -957,6 +1153,373 @@ function renderRightField(label: string, value: string) {
   `;
 }
 
+function buildPdfShell(content: string) {
+  return `
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <style>
+        @page { size: A4; margin: 10mm; }
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+          color: #111;
+          margin: 0;
+          padding: 0;
+        }
+
+        .page { width: 100%; }
+        .page-break { page-break-after: always; }
+
+        .company-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 6mm;
+          border: 0.3mm solid #111;
+          padding: 3mm 4mm;
+          margin-bottom: 3mm;
+          min-height: 22mm;
+          box-sizing: border-box;
+        }
+
+        .company-header-left {
+          width: 36mm;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+        }
+
+        .company-header-right {
+          flex: 1;
+          font-size: 10px;
+          line-height: 1.45;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          text-align: left;
+        }
+
+        .company-logo {
+          width: 30mm;
+          max-height: 18mm;
+          object-fit: contain;
+          display: block;
+        }
+
+        .company-logo-placeholder {
+          width: 30mm;
+          height: 18mm;
+          border: 0.3mm solid #999;
+          background: #f8f8f8;
+          border-radius: 2mm;
+        }
+
+        .company-line {
+          margin-bottom: 1mm;
+        }
+
+        .doc-banner {
+          width: 100%;
+          box-sizing: border-box;
+          border: 0.3mm solid #111;
+          padding: 2.5mm 4mm;
+          margin-bottom: 3mm;
+          font-size: 14px;
+          font-weight: 900;
+          letter-spacing: 0.8px;
+          text-align: center;
+          background: #f3f3f3;
+        }
+
+        .doc-banner.fotos { background: #f5f7fa; }
+        .doc-banner.ls {
+          background: #eaeaea;
+          border-left: 4mm solid #111;
+          text-align: left;
+          padding-left: 5mm;
+        }
+        .doc-banner.regie { background: #f3f3f3; }
+
+        .head {
+          display: flex;
+          border: 0.3mm solid #111;
+          height: 30mm;
+        }
+
+        .head-left {
+          width: 55mm;
+          border-right: 0.3mm solid #111;
+          padding: 3mm 4mm;
+          box-sizing: border-box;
+        }
+
+        .type-row {
+          display:flex;
+          align-items:center;
+          justify-content: space-between;
+          margin: 2mm 0;
+          font-size: 10px;
+        }
+
+        .cb {
+          width: 6mm;
+          height: 6mm;
+          border: 0.3mm solid #111;
+          display:grid;
+          place-items:center;
+          font-weight:700;
+        }
+
+        .left-title {
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          font-weight: 800;
+          letter-spacing: 0.2px;
+        }
+
+        .head-mid {
+          flex: 1;
+          border-right: 0.3mm solid #111;
+          padding: 3mm 4mm;
+          box-sizing: border-box;
+        }
+
+        .head-mid .line {
+          display:flex;
+          gap: 2mm;
+          font-size: 10px;
+          margin: 2mm 0;
+        }
+
+        .head-mid .lab {
+          width: 34mm;
+          color:#111;
+        }
+
+        .head-mid .val {
+          flex: 1;
+          border-bottom: 0.3mm solid #111;
+          padding-bottom: 1mm;
+        }
+
+        .head-right {
+          width: 55mm;
+          display:flex;
+          flex-direction: column;
+        }
+
+        .rf {
+          flex: 1;
+          border-bottom: 0.3mm solid #111;
+          display:flex;
+          flex-direction: column;
+          justify-content: space-between;
+          padding: 2mm 2mm;
+          box-sizing: border-box;
+        }
+
+        .rf:last-child { border-bottom: none; }
+        .rf .lab { font-size: 10px; text-align:center; }
+        .rf .val { font-size: 10px; text-align:center; font-weight:600; }
+
+        .days {
+          margin-top: 2mm;
+          border: 0.3mm solid #111;
+        }
+
+        .days .row { display:flex; }
+
+        .days .cell {
+          flex: 1;
+          border-right: 0.3mm solid #111;
+          padding: 1.5mm 0;
+          text-align:center;
+          font-size: 10px;
+        }
+
+        .days .cell:last-child { border-right: none; }
+        .days .days-row .day { font-weight: 700; }
+        .days .zeit-lab .zeit { background: #f3f3f3; }
+        .days .zeit-val .v { height: 7mm; }
+
+        .ls-info {
+          display: flex;
+          justify-content: space-between;
+          gap: 4mm;
+          margin-top: 2mm;
+          padding: 2mm 2.5mm;
+          border: 0.3mm solid #111;
+          background: #fafafa;
+          font-size: 10px;
+        }
+
+        table.main {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 2mm;
+          border: 0.3mm solid #111;
+        }
+
+        table.main th,
+        table.main td {
+          border: 0.3mm solid #111;
+          padding: 1.8mm 1.4mm;
+          font-size: 10px;
+          vertical-align: top;
+        }
+
+        table.main td { height: 10mm; }
+
+        table.main th {
+          background: #f3f3f3;
+          text-align: center;
+          font-weight: 700;
+        }
+
+        th.kosten, td.kosten { width: 18mm; }
+        th.geraet, td.geraet { width: 33mm; }
+        th.mitarb, td.mitarb { width: 26mm; }
+        th.std, td.std { width: 12mm; text-align: center; }
+        th.bes, td.bes { width: 62mm; }
+        th.mat, td.mat { width: 36mm; }
+
+        .badges {
+          margin-bottom: 1mm;
+          display:flex;
+          flex-wrap:wrap;
+          gap: 1mm;
+        }
+
+        .tag {
+          font-size: 9px;
+          padding: 0.3mm 1.3mm;
+          border-radius: 2mm;
+          display:inline-block;
+          font-weight: 800;
+          background: #111;
+          color: #fff;
+          border: none;
+        }
+
+        .desc {
+          margin-top: 3mm;
+          border: 0.3mm solid #111;
+          min-height: 13mm;
+        }
+
+        .desc-title {
+          background: #f3f3f3;
+          padding: 1.5mm 2mm;
+          font-weight: 700;
+          font-size: 10px;
+          border-bottom: 0.3mm solid #111;
+        }
+
+        .desc-body {
+          padding: 2mm;
+          font-size: 10px;
+          min-height: 6mm;
+          white-space: pre-wrap;
+        }
+
+        .bottom {
+          margin-top: 3mm;
+          display:flex;
+          gap: 4mm;
+          align-items: stretch;
+        }
+
+        .box {
+          border: 0.3mm solid #111;
+          min-height: 52mm;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .foto-big { flex: 2; }
+        .bemerk-small { flex: 1; }
+
+        .box-title {
+          background: #f3f3f3;
+          padding: 1.5mm 2mm;
+          font-weight: 700;
+          font-size: 10px;
+          border-bottom: 0.3mm solid #111;
+        }
+
+        .photo {
+          width: 100%;
+          flex: 1;
+          object-fit: cover;
+          display: block;
+          background: #fafafa;
+        }
+
+        .ph-muted {
+          padding: 10mm 2mm;
+          text-align:center;
+          color:#666;
+          font-size: 10px;
+        }
+
+        .bem-text {
+          padding: 2mm;
+          font-size: 10px;
+          white-space: pre-wrap;
+          flex: 1;
+        }
+
+        .sign {
+          margin-top: 3mm;
+          display:flex;
+          gap: 4mm;
+        }
+
+        .sign-col {
+          flex:1;
+          border: 0.3mm solid #111;
+        }
+
+        .sign-title {
+          background:#f3f3f3;
+          padding: 1.5mm 2mm;
+          font-weight:700;
+          font-size:10px;
+          border-bottom: 0.3mm solid #111;
+        }
+
+        .sign-line {
+          display:flex;
+          gap: 2mm;
+          padding: 3mm 2mm;
+          align-items:flex-end;
+        }
+
+        .sign-line .lab {
+          width: 18mm;
+          font-size: 10px;
+        }
+
+        .sign-line .line {
+          flex:1;
+          border-bottom: 0.3mm solid #111;
+          height: 0;
+        }
+      </style>
+    </head>
+    <body>
+      ${content}
+    </body>
+  </html>
+  `;
+}
+
 function regieReportHtml(params: {
   projectTitle: string;
   projectFsKey: string;
@@ -965,24 +1528,12 @@ function regieReportHtml(params: {
   lines: RegieLine[];
   firstPhotoDataUrl?: string | null;
   descriptionText?: string;
-  docKind?: DocKind;
-  docNumberLabel?: string;
-  leftTitle?: string;
+  companyHeaderHtml?: string;
 }) {
   const { projectTitle, projectFsKey, date, header, lines, firstPhotoDataUrl } = params;
-
-  const docKind: DocKind = (params.docKind || "REGIE") as any;
-  const leftTitle = params.leftTitle || "";
-  const docNumberLabel =
-    params.docNumberLabel ||
-    (docKind === "LIEFERSCHEIN"
-      ? "Lieferscheinnummer"
-      : docKind === "FOTOS"
-      ? "Fotonummer"
-      : "Regie-Nr.");
-
   const reportType = (header.reportType || "REGIE") as any;
   const descText = text(params.descriptionText || "");
+  const companyHeaderHtml = params.companyHeaderHtml || "";
 
   const chunkSize = 6;
   const totalPages = Math.max(1, Math.ceil(lines.length / chunkSize));
@@ -1018,26 +1569,9 @@ function regieReportHtml(params: {
               : "";
           const materialStr = [text(r.material || ""), qtyStr].filter(Boolean).join(" – ");
 
-          const machineLower = text(r.machine || "").toLowerCase();
-
-          const isFoto = machineLower === "foto";
-          const isExtra = machineLower === "extra";
-          const isKiBox = isFoto && /\(\s*\d{1,3}%\s*\)/.test(text(r.comment || ""));
-
-          const isLv =
-            /^lv\s*\d+/i.test(text(r.machine || "")) ||
-            /^lv\s*\d+/i.test(text(r.material || "")) ||
-            /^lv\s*\d+/i.test(text(r.comment || ""));
-
           const attCount = Array.isArray((r as any)?.photos) ? (r as any).photos.length : 0;
-
           const badges: string[] = [];
-          if (isKiBox) badges.push(`<span class="tag tag-ki">KI</span>`);
-          if (isExtra) badges.push(`<span class="tag tag-extra">EXTRA</span>`);
-          if (isFoto) badges.push(`<span class="tag tag-foto">FOTO</span>`);
-          if (isLv) badges.push(`<span class="tag tag-lv">LV</span>`);
-          if (attCount > 0) badges.push(`<span class="tag tag-att">ANH: ${attCount}</span>`);
-
+          if (attCount > 0) badges.push(`<span class="tag">Anhänge: ${attCount}</span>`);
           const badgeHtml = badges.length ? `<div class="badges">${badges.join("")}</div>` : "";
           const besondereStr = `${badgeHtml}${escapeHtml(text(r.comment || ""))}`;
 
@@ -1056,26 +1590,18 @@ function regieReportHtml(params: {
 
       const photoBox = firstPhotoDataUrl
         ? `<img class="photo" src="${firstPhotoDataUrl}" />`
-        : `<div class="ph-muted">—</div>`;
-
-      const headLeftHtml =
-        docKind === "REGIE"
-          ? `
-              ${renderTypeRow("Tagesbericht", "TAGESBERICHT", reportType)}
-              ${renderTypeRow("Bautagebuch", "BAUTAGEBUCH", reportType)}
-              ${renderTypeRow("Regiebericht", "REGIE", reportType)}
-            `
-          : `
-              <div class="left-title">${escapeHtml(
-                leftTitle || (docKind === "LIEFERSCHEIN" ? "Lieferschein" : "Fotos")
-              )}</div>
-            `;
+        : `<div class="ph-muted">Kein Foto vorhanden</div>`;
 
       return `
         <div class="page">
+          ${companyHeaderHtml}
+          <div class="doc-banner regie">REGIEBERICHT</div>
+
           <div class="head">
             <div class="head-left">
-              ${headLeftHtml}
+              ${renderTypeRow("Tagesbericht", "TAGESBERICHT", reportType)}
+              ${renderTypeRow("Bautagebuch", "BAUTAGEBUCH", reportType)}
+              ${renderTypeRow("Regiebericht", "REGIE", reportType)}
             </div>
 
             <div class="head-mid">
@@ -1091,7 +1617,7 @@ function regieReportHtml(params: {
 
             <div class="head-right">
               ${renderRightField("Bau-Nr.", projectFsKey || "")}
-              ${renderRightField(docNumberLabel, header.regieNummer || "")}
+              ${renderRightField("Regie-Nr.", header.regieNummer || "")}
               ${renderRightField("Datum", (header.date || date || "").slice(0, 10))}
             </div>
           </div>
@@ -1143,11 +1669,11 @@ function regieReportHtml(params: {
           </div>
 
           <div class="bottom">
-            <div class="box foto">
+            <div class="box foto-big">
               <div class="box-title">Fotodokumentation</div>
               ${photoBox}
             </div>
-            <div class="box bemerk">
+            <div class="box bemerk-small">
               <div class="box-title">Bemerkungen</div>
               <div class="bem-text">${escapeHtml(text(header.bemerkungen || ""))}</div>
             </div>
@@ -1166,101 +1692,462 @@ function regieReportHtml(params: {
             </div>
           </div>
         </div>
-
         ${isLast ? "" : `<div class="page-break"></div>`}
       `;
     })
     .join("");
 
-  return `
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <style>
-        @page { size: A4; margin: 10mm; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #111; }
-        .page { width: 100%; }
-        .page-break { page-break-after: always; }
-
-        .head { display: flex; border: 0.3mm solid #111; height: 32mm; }
-        .head-left { width: 55mm; border-right: 0.3mm solid #111; padding: 3mm 4mm; box-sizing: border-box; }
-
-        .type-row { display:flex; align-items:center; justify-content: space-between; margin: 2mm 0; font-size: 10px; }
-        .cb { width: 6mm; height: 6mm; border: 0.3mm solid #111; display:grid; place-items:center; font-weight:700; }
-
-        .left-title {
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-          font-weight: 800;
-          letter-spacing: 0.2px;
-        }
-
-        .head-mid { flex: 1; border-right: 0.3mm solid #111; padding: 3mm 4mm; box-sizing: border-box; }
-        .head-mid .line { display:flex; gap: 2mm; font-size: 10px; margin: 2mm 0; }
-        .head-mid .lab { width: 34mm; color:#111; }
-        .head-mid .val { flex: 1; border-bottom: 0.3mm solid #111; padding-bottom: 1mm; }
-
-        .head-right { width: 55mm; display:flex; flex-direction: column; }
-        .rf { flex: 1; border-bottom: 0.3mm solid #111; display:flex; flex-direction: column; justify-content: space-between; padding: 2mm 2mm; box-sizing: border-box; }
-        .rf:last-child { border-bottom: none; }
-        .rf .lab { font-size: 10px; text-align:center; }
-        .rf .val { font-size: 10px; text-align:center; font-weight:600; }
-
-        .days { margin-top: 4mm; border: 0.3mm solid #111; }
-        .days .row { display:flex; }
-        .days .cell { flex: 1; border-right: 0.3mm solid #111; padding: 1.5mm 0; text-align:center; font-size: 10px; }
-        .days .cell:last-child { border-right: none; }
-        .days .days-row .day { font-weight: 700; }
-        .days .zeit-lab .zeit { background: #f3f3f3; }
-        .days .zeit-val .v { height: 8mm; }
-
-        table.main { width: 100%; border-collapse: collapse; margin-top: 4mm; border: 0.3mm solid #111; }
-        table.main th, table.main td { border: 0.3mm solid #111; padding: 1.8mm 1.4mm; font-size: 10px; vertical-align: top; }
-        table.main th { background: #f3f3f3; text-align: center; font-weight: 700; }
-        th.kosten, td.kosten { width: 18mm; }
-        th.geraet, td.geraet { width: 33mm; }
-        th.mitarb, td.mitarb { width: 26mm; }
-        th.std, td.std { width: 12mm; text-align: center; }
-        th.bes, td.bes { width: 62mm; }
-        th.mat, td.mat { width: 36mm; }
-
-        .badges { margin-bottom: 1mm; display:flex; flex-wrap:wrap; gap: 1mm; }
-        .tag { font-size: 9px; padding: 0.3mm 1.3mm; border: 0.3mm solid #111; border-radius: 2mm; display:inline-block; }
-        .tag-ki, .tag-extra, .tag-foto, .tag-lv, .tag-att { font-weight: 800; }
-
-        .desc { margin-top: 4mm; border: 0.3mm solid #111; min-height: 18mm; }
-        .desc-title { background: #f3f3f3; padding: 1.5mm 2mm; font-weight: 700; font-size: 10px; border-bottom: 0.3mm solid #111; }
-        .desc-body { padding: 2mm; font-size: 10px; min-height: 10mm; white-space: pre-wrap; }
-
-        .bottom { margin-top: 4mm; display:flex; gap: 4mm; }
-        .box { border: 0.3mm solid #111; flex: 1; min-height: 45mm; position: relative; }
-        .box-title { background: #f3f3f3; padding: 1.5mm 2mm; font-weight: 700; font-size: 10px; border-bottom: 0.3mm solid #111; }
-        .photo { width: 100%; height: 100%; object-fit: contain; display:block; }
-        .ph-muted { padding: 8mm 2mm; text-align:center; color:#666; font-size: 10px; }
-        .bem-text { padding: 2mm; font-size: 10px; white-space: pre-wrap; }
-
-        .sign { margin-top: 4mm; display:flex; gap: 4mm; }
-        .sign-col { flex:1; border: 0.3mm solid #111; }
-        .sign-title { background:#f3f3f3; padding: 1.5mm 2mm; font-weight:700; font-size:10px; border-bottom: 0.3mm solid #111; }
-        .sign-line { display:flex; gap: 2mm; padding: 3mm 2mm; align-items:flex-end; }
-        .sign-line .lab { width: 18mm; font-size: 10px; }
-        .sign-line .line { flex:1; border-bottom: 0.3mm solid #111; height: 0; }
-      </style>
-    </head>
-    <body>
-      ${pageHtml}
-    </body>
-  </html>
-  `;
+  return buildPdfShell(pageHtml);
 }
 
+function lieferscheinReportHtml(params: {
+  projectTitle: string;
+  projectFsKey: string;
+  date: string;
+  header: RegieHeader;
+  lines: RegieLine[];
+  firstPhotoDataUrl?: string | null;
+  descriptionText?: string;
+  companyHeaderHtml?: string;
+}) {
+  const { projectTitle, projectFsKey, date, header, lines, firstPhotoDataUrl } = params;
+  const descText = text(params.descriptionText || "");
+  const companyHeaderHtml = params.companyHeaderHtml || "";
+
+  const row = (lines && lines[0]) || {};
+  const supplierText = text(header.auftraggeber || "");
+  const materialText = text(row.machine || "");
+  const driverText = text(row.worker || "");
+  const qtyText = text(row.material || "");
+  const costCenter = text(row.kostenstelle || header.kostenstelle || "");
+
+  const photoBox = firstPhotoDataUrl
+    ? `<img class="photo" src="${firstPhotoDataUrl}" />`
+    : `<div class="ph-muted">Kein Foto vorhanden</div>`;
+
+  const content = `
+    <div class="page">
+      ${companyHeaderHtml}
+      <div class="doc-banner ls">LIEFERSCHEIN</div>
+
+      <div class="head">
+        <div class="head-left">
+          <div class="left-title">Lieferschein</div>
+        </div>
+
+        <div class="head-mid">
+          <div class="line">
+            <div class="lab">Baustelle:</div>
+            <div class="val">${escapeHtml(projectTitle || projectFsKey || "-")}</div>
+          </div>
+          <div class="line">
+            <div class="lab">Lieferant:</div>
+            <div class="val">${escapeHtml(supplierText)}</div>
+          </div>
+        </div>
+
+        <div class="head-right">
+          ${renderRightField("Bau-Nr.", projectFsKey || "")}
+          ${renderRightField("Lieferscheinnummer", header.regieNummer || "")}
+          ${renderRightField("Datum", (header.date || date || "").slice(0, 10))}
+        </div>
+      </div>
+
+      <div class="ls-info">
+        <div><b>Lieferant:</b> ${escapeHtml(supplierText || "-")}</div>
+        <div><b>Baustelle:</b> ${escapeHtml(projectTitle || "-")}</div>
+        <div><b>Kostenstelle:</b> ${escapeHtml(costCenter || "-")}</div>
+      </div>
+
+      <table class="main">
+        <thead>
+          <tr>
+            <th class="kosten">Kostenstelle</th>
+            <th class="geraet">Material</th>
+            <th class="mitarb">Fahrer</th>
+            <th class="std">Zeit</th>
+            <th class="bes">Lieferdetails</th>
+            <th class="mat">Menge</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="kosten">${escapeHtml(costCenter)}</td>
+            <td class="geraet">${escapeHtml(materialText)}</td>
+            <td class="mitarb">${escapeHtml(driverText)}</td>
+            <td class="std">${escapeHtml(
+              [text(header.arbeitsbeginn || ""), text(header.arbeitsende || "")]
+                .filter(Boolean)
+                .join(" - ")
+            )}</td>
+            <td class="bes">${escapeHtml(text(row.comment || descText || ""))}</td>
+            <td class="mat">${escapeHtml(qtyText)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="desc">
+        <div class="desc-title">Zusätzliche Angaben</div>
+        <div class="desc-body">${escapeHtml(descText)}</div>
+      </div>
+
+      <div class="bottom">
+        <div class="box foto-big">
+          <div class="box-title">Foto / Beleg</div>
+          ${photoBox}
+        </div>
+        <div class="box bemerk-small">
+          <div class="box-title">Bemerkungen</div>
+          <div class="bem-text">${escapeHtml(text(header.bemerkungen || ""))}</div>
+        </div>
+      </div>
+
+      <div class="sign">
+        <div class="sign-col">
+          <div class="sign-title">Bestätigt</div>
+          <div class="sign-line"><span class="lab">Empfänger</span><span class="line"></span></div>
+          <div class="sign-line"><span class="lab">Bauleiter</span><span class="line"></span></div>
+        </div>
+        <div class="sign-col">
+          <div class="sign-title">Lieferung</div>
+          <div class="sign-line"><span class="lab">Fahrer</span><span class="line"></span></div>
+          <div class="sign-line"><span class="lab">Firma</span><span class="line"></span></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return buildPdfShell(content);
+}
+
+function photosReportHtml(params: {
+  projectTitle: string;
+  projectFsKey: string;
+  date: string;
+  header: RegieHeader;
+  lines: RegieLine[];
+  firstPhotoDataUrl?: string | null;
+  descriptionText?: string;
+  companyHeaderHtml?: string;
+}) {
+  const { projectTitle, projectFsKey, date, header, lines, firstPhotoDataUrl } = params;
+  const descText = text(params.descriptionText || "");
+  const companyHeaderHtml = params.companyHeaderHtml || "";
+
+  const photoBox = firstPhotoDataUrl
+    ? `<img class="photo" src="${firstPhotoDataUrl}" />`
+    : `<div class="ph-muted">Kein Foto vorhanden</div>`;
+
+  const rowsHtml = (lines || [])
+    .slice(0, 8)
+    .map((r) => {
+      const machineLower = text(r.machine || "").toLowerCase();
+      const isFoto = machineLower === "foto";
+      const isExtra = machineLower === "extra";
+      const isKiBox = isFoto && /\(\s*\d{1,3}%\s*\)/.test(text(r.comment || ""));
+      const isLv =
+        /^lv\s*\d+/i.test(text(r.machine || "")) ||
+        /^lv\s*\d+/i.test(text(r.comment || ""));
+
+      const attCount = Array.isArray((r as any)?.photos) ? (r as any).photos.length : 0;
+      const badges: string[] = [];
+      if (isKiBox) badges.push(`<span class="tag">KI</span>`);
+      if (isExtra) badges.push(`<span class="tag">EXTRA</span>`);
+      if (isFoto) badges.push(`<span class="tag">FOTO</span>`);
+      if (isLv) badges.push(`<span class="tag">LV</span>`);
+      if (attCount > 0) badges.push(`<span class="tag">Anhänge: ${attCount}</span>`);
+
+      return `
+        <tr>
+          <td class="kosten">${escapeHtml(text(r.kostenstelle || ""))}</td>
+          <td class="geraet">${escapeHtml(text(r.machine || ""))}</td>
+          <td class="mitarb">${escapeHtml(text(r.worker || ""))}</td>
+          <td class="std"></td>
+          <td class="bes">${badges.length ? `<div class="badges">${badges.join("")}</div>` : ""}${escapeHtml(text(r.comment || ""))}</td>
+          <td class="mat">${escapeHtml(text(r.material || ""))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const content = `
+    <div class="page">
+      ${companyHeaderHtml}
+      <div class="doc-banner fotos">FOTODOKUMENTATION</div>
+
+      <div class="head">
+        <div class="head-left">
+          <div class="left-title">Fotos</div>
+        </div>
+
+        <div class="head-mid">
+          <div class="line">
+            <div class="lab">Baustelle:</div>
+            <div class="val">${escapeHtml(projectTitle || projectFsKey || "-")}</div>
+          </div>
+          <div class="line">
+            <div class="lab">Referenz:</div>
+            <div class="val">${escapeHtml(text(header.regieNummer || ""))}</div>
+          </div>
+        </div>
+
+        <div class="head-right">
+          ${renderRightField("Bau-Nr.", projectFsKey || "")}
+          ${renderRightField("Fotonummer", header.regieNummer || "")}
+          ${renderRightField("Datum", (header.date || date || "").slice(0, 10))}
+        </div>
+      </div>
+
+      <table class="main">
+        <thead>
+          <tr>
+            <th class="kosten">Kostenstelle</th>
+            <th class="geraet">Foto / Typ</th>
+            <th class="mitarb">Mitarbeiter</th>
+            <th class="std">Std.</th>
+            <th class="bes">Hinweise / KI</th>
+            <th class="mat">Material</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            rowsHtml ||
+            `
+            <tr>
+              <td class="kosten">${escapeHtml(text(header.kostenstelle || ""))}</td>
+              <td class="geraet">Foto</td>
+              <td class="mitarb"></td>
+              <td class="std"></td>
+              <td class="bes">${escapeHtml(descText)}</td>
+              <td class="mat"></td>
+            </tr>
+          `
+          }
+        </tbody>
+      </table>
+
+      <div class="desc">
+        <div class="desc-title">Beschreibung / Notiz</div>
+        <div class="desc-body">${escapeHtml(descText)}</div>
+      </div>
+
+      <div class="bottom">
+        <div class="box foto-big">
+          <div class="box-title">Fotodokumentation</div>
+          ${photoBox}
+        </div>
+        <div class="box bemerk-small">
+          <div class="box-title">Bemerkungen</div>
+          <div class="bem-text">${escapeHtml(text(header.bemerkungen || ""))}</div>
+        </div>
+      </div>
+
+      <div class="sign">
+        <div class="sign-col">
+          <div class="sign-title">Geprüft</div>
+          <div class="sign-line"><span class="lab">Bauleiter</span><span class="line"></span></div>
+          <div class="sign-line"><span class="lab">Projekt</span><span class="line"></span></div>
+        </div>
+        <div class="sign-col">
+          <div class="sign-title">Erfasst</div>
+          <div class="sign-line"><span class="lab">Mitarbeiter</span><span class="line"></span></div>
+          <div class="sign-line"><span class="lab">Datum</span><span class="line"></span></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return buildPdfShell(content);
+}
+
+function tagesberichtReportHtml(params: {
+  projectTitle: string;
+  projectFsKey: string;
+  date: string;
+  header: RegieHeader;
+  lines: RegieLine[];
+  firstPhotoDataUrl?: string | null;
+  descriptionText?: string;
+  companyHeaderHtml?: string;
+}) {
+  const { projectTitle, projectFsKey, date, header, lines, firstPhotoDataUrl } = params;
+  const descText = text(params.descriptionText || "");
+  const companyHeaderHtml = params.companyHeaderHtml || "";
+
+  const filled = [...(lines || [])];
+  while (filled.length < 8) filled.push({});
+
+  const rowsHtml = filled
+    .slice(0, 8)
+    .map((r) => {
+      const hoursStr = r.hours != null && String(r.hours) !== "0" ? num(r.hours) : "";
+      return `
+        <tr>
+          <td class="kosten">${escapeHtml(text(r.kostenstelle || header.kostenstelle || ""))}</td>
+          <td class="geraet">${escapeHtml(text(r.machine || ""))}</td>
+          <td class="mitarb">${escapeHtml(text(r.worker || ""))}</td>
+          <td class="std">${escapeHtml(hoursStr)}</td>
+          <td class="bes">${escapeHtml(text(r.comment || ""))}</td>
+          <td class="mat">${escapeHtml(text(r.material || ""))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const photoBox = firstPhotoDataUrl
+    ? `<img class="photo" src="${firstPhotoDataUrl}" />`
+    : `<div class="ph-muted">Kein Foto vorhanden</div>`;
+
+  const content = `
+    <div class="page">
+      ${companyHeaderHtml}
+      <div class="doc-banner regie">TAGESBERICHT</div>
+
+      <div class="head">
+        <div class="head-left">
+          ${renderTypeRow("Tagesbericht", "TAGESBERICHT", "TAGESBERICHT")}
+          ${renderTypeRow("Bautagebuch", "BAUTAGEBUCH", "TAGESBERICHT")}
+          ${renderTypeRow("Regiebericht", "REGIE", "TAGESBERICHT")}
+        </div>
+
+        <div class="head-mid">
+          <div class="line">
+            <div class="lab">Baustelle:</div>
+            <div class="val">${escapeHtml(projectTitle || projectFsKey || "-")}</div>
+          </div>
+          <div class="line">
+            <div class="lab">Wetter:</div>
+            <div class="val">${escapeHtml(text(header.wetter || ""))}</div>
+          </div>
+        </div>
+
+        <div class="head-right">
+          ${renderRightField("Bau-Nr.", projectFsKey || "")}
+          ${renderRightField("Bericht-Nr.", header.regieNummer || "")}
+          ${renderRightField("Datum", (header.date || date || "").slice(0, 10))}
+        </div>
+      </div>
+
+      <div class="days">
+        <div class="row zeit-lab">
+          ${["Arbeitsbeginn", "Pause", "Arbeitsende", "Wetter", "Blatt Nr.", "Status"]
+            .map((t) => `<div class="cell zeit">${t}</div>`)
+            .join("")}
+        </div>
+
+        <div class="row zeit-val">
+          ${[
+            header.arbeitsbeginn || "",
+            header.pause1 || "",
+            header.arbeitsende || "",
+            header.wetter || "",
+            header.blattNr || "",
+            "Tagesbericht",
+          ]
+            .map((v) => `<div class="cell zeit v">${escapeHtml(text(v || ""))}</div>`)
+            .join("")}
+        </div>
+      </div>
+
+      <table class="main">
+        <thead>
+          <tr>
+            <th class="kosten">Ort / Bereich</th>
+            <th class="geraet">Maschine</th>
+            <th class="mitarb">Mitarbeiter</th>
+            <th class="std">Std.</th>
+            <th class="bes">Tätigkeit / Notiz</th>
+            <th class="mat">Material</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+
+      <div class="desc">
+        <div class="desc-title">Besondere Vorkommnisse / Tagesnotiz</div>
+        <div class="desc-body">${escapeHtml(descText)}</div>
+      </div>
+
+      <div class="bottom">
+        <div class="box foto-big">
+          <div class="box-title">Fotodokumentation</div>
+          ${photoBox}
+        </div>
+        <div class="box bemerk-small">
+          <div class="box-title">Bemerkungen</div>
+          <div class="bem-text">${escapeHtml(text(header.bemerkungen || ""))}</div>
+        </div>
+      </div>
+
+      <div class="sign">
+        <div class="sign-col">
+          <div class="sign-title">Geprüft</div>
+          <div class="sign-line"><span class="lab">Bauleiter</span><span class="line"></span></div>
+          <div class="sign-line"><span class="lab">Auftraggeber</span><span class="line"></span></div>
+        </div>
+        <div class="sign-col">
+          <div class="sign-title">Erstellt</div>
+          <div class="sign-line"><span class="lab">Vorarbeiter</span><span class="line"></span></div>
+          <div class="sign-line"><span class="lab">Datum</span><span class="line"></span></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return buildPdfShell(content);
+}
 /* ============================================================
- *  PRINT/SAVE/EMAIL HELPERS
+ * PRINT / SAVE / EMAIL / OPEN
  * ============================================================ */
+
+async function uploadProjectPdfToServer(params: {
+  projectFsKey: string;
+  kindFolder: "regie" | "lieferscheine" | "photos" | "tagesberichte";
+  fileName: string;
+  fileUri: string;
+}): Promise<any> {
+  if (Platform.OS === "web") return null;
+
+  const fileUri = String(params.fileUri || "").trim();
+  if (!fileUri.startsWith("file://")) return null;
+
+  const base = await getApiBaseUrlFromStorage();
+  const token = await getAuthToken();
+  if (!base || !token) return null;
+
+  const fd = new FormData();
+  fd.append("kindFolder", params.kindFolder);
+
+  // @ts-ignore RN file upload
+  fd.append("file", {
+    uri: fileUri,
+    name: safeFileName(params.fileName),
+    type: "application/pdf",
+  });
+
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(params.projectFsKey)}/pdfs/upload`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: fd,
+    }
+  );
+
+  const txt = await res.text().catch(() => "");
+  if (!res.ok) throw new Error(txt || `HTTP ${res.status}`);
+
+  try {
+    return txt ? JSON.parse(txt) : null;
+  } catch {
+    return null;
+  }
+}
 
 async function printToPdf(html: string): Promise<{ uri: string }> {
   const out = await Print.printToFileAsync({ html, base64: false });
@@ -1269,9 +2156,9 @@ async function printToPdf(html: string): Promise<{ uri: string }> {
 
 async function savePdfToProjectFolder(params: {
   projectFsKey: string;
-  kindFolder: "regie" | "lieferscheine" | "photos";
+  kindFolder: "regie" | "lieferscheine" | "photos" | "tagesberichte";
   fileName: string;
-  sourceUri: string; // pdf uri (file://)
+  sourceUri: string;
 }): Promise<string> {
   const base = getBaseDirOrNull();
   if (!base) return params.sourceUri;
@@ -1282,7 +2169,6 @@ async function savePdfToProjectFolder(params: {
   const target = `${projDir}${safeFileName(params.fileName)}`;
 
   try {
-    // ✅ OVERWRITE SAFE: se esiste, cancellalo prima
     const info = await FileSystem.getInfoAsync(target);
     if (info.exists) {
       try {
@@ -1309,7 +2195,6 @@ export async function emailPdf(input: EmailPdfInput) {
       return;
     }
 
-    // ✅ force file:// attachments only
     const atts = (input.attachments || [])
       .filter(Boolean)
       .map((u) => String(u))
@@ -1329,32 +2214,76 @@ export async function emailPdf(input: EmailPdfInput) {
   }
 }
 
+async function makeFreshPdfCopyForOpen(uri: string): Promise<string> {
+  if (!uri || Platform.OS === "web") return uri;
+  if (!isFileUri(uri)) return uri;
+
+  try {
+    const base = (FileSystem.cacheDirectory || FileSystem.documentDirectory) ?? null;
+    if (!base) return uri;
+
+    const baseNorm = normDir(base);
+    await ensureDir(`${baseNorm}pdf-open/`);
+
+    const fresh = `${baseNorm}pdf-open/open_${Date.now()}_${Math.floor(
+      Math.random() * 1e9
+    )}.pdf`;
+
+    try {
+      const info = await FileSystem.getInfoAsync(fresh);
+      if (info.exists) {
+        await FileSystem.deleteAsync(fresh, { idempotent: true });
+      }
+    } catch {}
+
+    await FileSystem.copyAsync({ from: uri, to: fresh });
+    return fresh.startsWith("file://") ? fresh : `file://${fresh}`;
+  } catch (e: any) {
+    console.log("[PDFDBG] makeFreshPdfCopyForOpen failed:", String(e?.message || e));
+    return uri;
+  }
+}
+
 async function openPdf(uri: string) {
   try {
     if (!uri) return;
-    await Linking.openURL(uri);
+    const freshUri = await makeFreshPdfCopyForOpen(uri);
+    await Linking.openURL(freshUri);
   } catch (e) {
     console.log("[PDFDBG] openPdf failed:", String((e as any)?.message || e));
   }
 }
 
 /* ============================================================
- *  UNIFIED EXPORT CORE
+ * UNIFIED EXPORT CORE
  * ============================================================ */
 
-function buildDescriptionText(docKind: DocKind, rowAny: any, header: RegieHeader, lines: RegieLine[]) {
+function buildDescriptionText(
+  _docKind: DocKind,
+  rowAny: any,
+  header: RegieHeader,
+  lines: RegieLine[]
+) {
   const row = unwrapRowMaybeQueue(rowAny);
 
-  const direct =
-    text(row?.leistung || row?.leistungBeschreibung || row?.beschreibung || row?.text || row?.note || "") ||
-    text(header?.bemerkungen || "");
+   const direct =
+    text(
+      row?.leistung ||
+        row?.leistungBeschreibung ||
+        row?.beschreibung ||
+        row?.text ||
+        row?.issues ||
+        row?.note ||
+        row?.notes ||
+        ""
+    ) || text(header?.bemerkungen || "");
 
   if (direct) return direct;
 
   const joined = (lines || [])
     .map((l) => text(l?.comment || "").trim())
     .filter(Boolean)
-    .slice(0, 6)
+    .slice(0, 8)
     .join("\n");
 
   return joined;
@@ -1371,16 +2300,20 @@ async function exportUnifiedRegieModelPdf(params: {
 
   const unwrapped = unwrapRowMaybeQueue(rowAny);
   const date = guessDateFromRow(unwrapped);
+  const timePart = toHMS(new Date());
 
   let header: RegieHeader;
   let lines: RegieLine[];
 
-  if (docKind === "REGIE") {
+    if (docKind === "REGIE") {
     header = pickHeader(rowAny);
     lines = normalizeRegieLines(rowAny);
   } else if (docKind === "LIEFERSCHEIN") {
     header = buildHeaderForLieferschein(rowAny, date);
     lines = synthLinesForLieferschein(rowAny);
+  } else if (docKind === "TAGESBERICHT") {
+    header = buildHeaderForTagesbericht(rowAny, date);
+    lines = normalizeRegieLines(rowAny);
   } else {
     header = buildHeaderForPhotos(rowAny, date);
     lines = synthLinesForPhotos(rowAny);
@@ -1388,22 +2321,56 @@ async function exportUnifiedRegieModelPdf(params: {
 
   const firstPhotoDataUrl = await firstPhotoDataUrlFromRowOrLines({ rowAny, lines });
   const descriptionText = buildDescriptionText(docKind, rowAny, header, lines);
+  const companyHeaderHtml = await buildCompanyPdfHeaderHtml();
 
-  const html = regieReportHtml({
-    projectTitle: projectTitle || projectFsKey,
-    projectFsKey,
-    date,
-    header,
-    lines,
-    firstPhotoDataUrl,
-    descriptionText,
-    docKind,
-    docNumberLabel:
-      docKind === "LIEFERSCHEIN" ? "Lieferscheinnummer" : docKind === "FOTOS" ? "Fotonummer" : "Regie-Nr.",
-    leftTitle: docKind === "LIEFERSCHEIN" ? "Lieferschein" : docKind === "FOTOS" ? "Fotos" : "",
-  });
+  let html = "";
 
-  // WEB: stampa browser
+    if (docKind === "REGIE") {
+    html = regieReportHtml({
+      projectTitle: projectTitle || projectFsKey,
+      projectFsKey,
+      date,
+      header,
+      lines,
+      firstPhotoDataUrl,
+      descriptionText,
+      companyHeaderHtml,
+    });
+  } else if (docKind === "LIEFERSCHEIN") {
+    html = lieferscheinReportHtml({
+      projectTitle: projectTitle || projectFsKey,
+      projectFsKey,
+      date,
+      header,
+      lines,
+      firstPhotoDataUrl,
+      descriptionText,
+      companyHeaderHtml,
+    });
+  } else if (docKind === "TAGESBERICHT") {
+    html = tagesberichtReportHtml({
+      projectTitle: projectTitle || projectFsKey,
+      projectFsKey,
+      date,
+      header,
+      lines,
+      firstPhotoDataUrl,
+      descriptionText,
+      companyHeaderHtml,
+    });
+  } else {
+    html = photosReportHtml({
+      projectTitle: projectTitle || projectFsKey,
+      projectFsKey,
+      date,
+      header,
+      lines,
+      firstPhotoDataUrl,
+      descriptionText,
+      companyHeaderHtml,
+    });
+  }
+
   if (Platform.OS === "web") {
     try {
       const w = (globalThis as any)?.window?.open?.("", "_blank");
@@ -1422,21 +2389,27 @@ async function exportUnifiedRegieModelPdf(params: {
 
   const out = await printToPdf(html);
 
-  const kindFolder =
-    docKind === "REGIE" ? "regie" : docKind === "LIEFERSCHEIN" ? "lieferscheine" : "photos";
+      const kindFolder =
+    docKind === "REGIE"
+      ? "regie"
+      : docKind === "LIEFERSCHEIN"
+      ? "lieferscheine"
+      : docKind === "TAGESBERICHT"
+      ? "tagesberichte"
+      : "photos";
 
-  const fileBase =
-    safeFileName(
-      filenameHint ||
-        (docKind === "REGIE"
-          ? "Regiebericht"
-          : docKind === "LIEFERSCHEIN"
-          ? "Lieferschein"
-          : "Fotos")
-    ) +
-    "_" +
-    date +
-    ".pdf";
+    const baseName = safeFileName(
+    filenameHint ||
+      (docKind === "REGIE"
+        ? "Regiebericht"
+        : docKind === "LIEFERSCHEIN"
+        ? "Lieferschein"
+        : docKind === "TAGESBERICHT"
+        ? "Tagesbericht"
+        : "Fotos")
+  );
+
+  const fileBase = `${baseName}_${date}_${timePart}.pdf`;
 
   const saved = await savePdfToProjectFolder({
     projectFsKey,
@@ -1444,6 +2417,17 @@ async function exportUnifiedRegieModelPdf(params: {
     fileName: fileBase,
     sourceUri: out.uri,
   });
+
+  try {
+    await uploadProjectPdfToServer({
+      projectFsKey,
+      kindFolder,
+      fileName: fileBase,
+      fileUri: saved,
+    });
+  } catch (e: any) {
+    console.log("[PDFDBG] uploadProjectPdfToServer failed:", String(e?.message || e));
+  }
 
   return {
     pdfUri: saved,
@@ -1453,7 +2437,7 @@ async function exportUnifiedRegieModelPdf(params: {
 }
 
 /* ============================================================
- *  PUBLIC EXPORTERS
+ * PUBLIC EXPORTERS
  * ============================================================ */
 
 export async function exportRegiePdfToProject(input: ExportRegieInput): Promise<ExportResult> {
@@ -1486,8 +2470,19 @@ export async function exportPhotosPdfToProject(input: ExportPhotosInput): Promis
   });
 }
 
+export async function exportTagesberichtPdfToProject(
+  input: ExportTagesberichtInput
+): Promise<ExportResult> {
+  return exportUnifiedRegieModelPdf({
+    projectFsKey: input.projectFsKey,
+    projectTitle: input.projectTitle,
+    filenameHint: input.filenameHint || "Tagesbericht",
+    rowAny: input.row,
+    docKind: "TAGESBERICHT",
+  });
+}
 /* ============================================================
- *  OPTIONAL: simple “export + open” helpers (usati dai screen)
+ * OPTIONAL OPEN HELPERS
  * ============================================================ */
 
 export async function exportAndOpenRegiePdf(input: ExportRegieInput) {
@@ -1507,3 +2502,12 @@ export async function exportAndOpenPhotosPdf(input: ExportPhotosInput) {
   if (r?.pdfUri && Platform.OS !== "web") await openPdf(r.pdfUri);
   return r;
 }
+
+export async function exportAndOpenTagesberichtPdf(
+  input: ExportTagesberichtInput
+) {
+  const r = await exportTagesberichtPdfToProject(input);
+  if (r?.pdfUri && Platform.OS !== "web") await openPdf(r.pdfUri);
+  return r;
+}
+

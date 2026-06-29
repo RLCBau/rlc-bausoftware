@@ -1,6 +1,7 @@
-// apps/mobile/src/screens/CompanyAdminScreen.tsx
+﻿// apps/mobile/src/screens/CompanyAdminScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  SafeAreaView,
   View,
   Text,
   TextInput,
@@ -31,7 +32,6 @@ export default function CompanyAdminScreen() {
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      // 1) mostra cache subito se c’è
       const cached = await api.getCompanyHeaderCached();
       if (cached) {
         setHeader(cached);
@@ -44,7 +44,6 @@ export default function CompanyAdminScreen() {
       const cachedLogo = await api.getCompanyLogoCachedUri();
       if (cachedLogo) setLogoUri(cachedLogo);
 
-      // 2) poi refresh dal server
       const fresh = await api.getCompanyHeader();
       setHeader(fresh);
       setName(String(fresh.name || ""));
@@ -110,13 +109,13 @@ export default function CompanyAdminScreen() {
       const uri = res.assets?.[0]?.uri;
       if (!uri) return;
 
-      // mime best-effort
       const u = uri.toLowerCase();
-      const mime = u.endsWith(".jpg") || u.endsWith(".jpeg")
-        ? "image/jpeg"
-        : u.endsWith(".webp")
-        ? "image/webp"
-        : "image/png";
+      const mime =
+        u.endsWith(".jpg") || u.endsWith(".jpeg")
+          ? "image/jpeg"
+          : u.endsWith(".webp")
+          ? "image/webp"
+          : "image/png";
 
       const updated = await api.uploadCompanyLogoAdmin(uri, mime);
       setHeader(updated);
@@ -159,8 +158,8 @@ export default function CompanyAdminScreen() {
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="z.B. RLC Tiefbau KG"
-          placeholderTextColor={COLORS.muted}
+          placeholder="Firmenname"
+          placeholderTextColor="#B8C1CC"
           style={styles.input}
         />
 
@@ -169,7 +168,7 @@ export default function CompanyAdminScreen() {
           value={address}
           onChangeText={setAddress}
           placeholder="Straße, PLZ Ort"
-          placeholderTextColor={COLORS.muted}
+          placeholderTextColor="#B8C1CC"
           style={styles.input}
           multiline
         />
@@ -178,8 +177,8 @@ export default function CompanyAdminScreen() {
         <TextInput
           value={phone}
           onChangeText={setPhone}
-          placeholder="+49 ..."
-          placeholderTextColor={COLORS.muted}
+          placeholder="Telefon"
+          placeholderTextColor="#B8C1CC"
           style={styles.input}
           keyboardType={
             Platform.OS === "ios" ? "numbers-and-punctuation" : "phone-pad"
@@ -190,8 +189,8 @@ export default function CompanyAdminScreen() {
         <TextInput
           value={email}
           onChangeText={setEmail}
-          placeholder="info@firma.de"
-          placeholderTextColor={COLORS.muted}
+          placeholder="E-Mail Firma"
+          placeholderTextColor="#B8C1CC"
           style={styles.input}
           autoCapitalize="none"
           keyboardType="email-address"
@@ -260,23 +259,42 @@ export default function CompanyAdminScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 16, paddingBottom: 28, backgroundColor: COLORS.bg },
-  h1: { fontSize: 20, fontWeight: "900", color: COLORS.text, marginBottom: 6 },
-  p: { color: COLORS.muted, marginBottom: 14, lineHeight: 18 },
+  wrap: {
+    padding: 16,
+    paddingBottom: 28,
+    backgroundColor: COLORS.bg,
+  },
+
+  h1: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+
+  p: {
+    color: COLORS.sub,
+    marginBottom: 14,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+
   label: {
     color: COLORS.text,
     fontWeight: "800",
     marginBottom: 6,
     marginTop: 8,
   },
+
   input: {
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -284,16 +302,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: COLORS.text,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.inputBg,
+    fontWeight: "700",
   },
+
   btnPrimary: {
     marginTop: 12,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accentDark,
+    borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: "center",
   },
-  btnPrimaryText: { color: "#fff", fontWeight: "900" },
+
+  btnPrimaryText: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+  },
+
   btn: {
     marginTop: 12,
     borderWidth: 1,
@@ -301,8 +328,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: "center",
+    backgroundColor: COLORS.card2,
   },
-  btnText: { color: COLORS.text, fontWeight: "900" },
+
+  btnText: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
+
   btnGhost: {
     marginTop: 10,
     borderWidth: 1,
@@ -310,14 +343,38 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: "center",
+    backgroundColor: COLORS.card,
   },
-  btnGhostText: { color: COLORS.text, fontWeight: "800", fontSize: 12 },
-  small: { color: COLORS.muted, fontSize: 12, lineHeight: 16 },
-  logoRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+
+  btnGhostText: {
+    color: COLORS.text,
+    fontWeight: "800",
+    fontSize: 12,
+  },
+
+  small: {
+    color: COLORS.sub,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+
+  logoRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+
   logo: {
     width: 56,
     height: 56,
     borderRadius: 12,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 });
+
+
+
+

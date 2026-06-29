@@ -1,7 +1,7 @@
-// apps/mobile/src/lib/companyBundle.ts
+﻿// apps/mobile/src/lib/companyBundle.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Crypto from "expo-crypto";
 
 import { setCompanyBrandingOffline } from "./companyCache";
@@ -278,3 +278,4 @@ export async function applyCompanyBundle(bundle: any): Promise<void> {
     } catch {}
   }
 }
+

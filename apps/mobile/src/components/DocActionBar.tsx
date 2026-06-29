@@ -1,4 +1,4 @@
-// apps/mobile/src/components/DocActionBar.tsx
+﻿// apps/mobile/src/components/DocActionBar.tsx
 import React from "react";
 import { View, Pressable, Text, StyleSheet } from "react-native";
 import { COLORS } from "../ui/theme";
@@ -12,7 +12,7 @@ type Props = {
 
   onReset?: () => void;
 
-  showPdfActions?: boolean; // true per TUTTI alla fine
+  showPdfActions?: boolean;
   submitting?: boolean;
 };
 
@@ -27,11 +27,19 @@ export function DocActionBar({
 }: Props) {
   return (
     <View style={styles.wrap}>
-      <Pressable style={[styles.btn, styles.primary]} onPress={onSaveOffline} disabled={!!submitting}>
+      <Pressable
+        style={[styles.btn, styles.primary, submitting ? styles.disabled : null]}
+        onPress={onSaveOffline}
+        disabled={!!submitting}
+      >
         <Text style={styles.primaryTxt}>Speichern (offline)</Text>
       </Pressable>
 
-      <Pressable style={[styles.btn, styles.dark]} onPress={onSubmit} disabled={!!submitting}>
+      <Pressable
+        style={[styles.btn, styles.dark, submitting ? styles.disabled : null]}
+        onPress={onSubmit}
+        disabled={!!submitting}
+      >
         <Text style={styles.darkTxt}>
           {submitting ? "Einreichen..." : "Einreichen (Inbox + Sync/Queue)"}
         </Text>
@@ -39,17 +47,41 @@ export function DocActionBar({
 
       {showPdfActions && (
         <View style={styles.row}>
-          <Pressable style={[styles.btn, styles.secondary]} onPress={onOpenPdf} disabled={!onOpenPdf}>
+          <Pressable
+            style={[
+              styles.btn,
+              styles.secondary,
+              !onOpenPdf ? styles.disabled : null,
+            ]}
+            onPress={onOpenPdf}
+            disabled={!onOpenPdf}
+          >
             <Text style={styles.secondaryTxt}>PDF öffnen</Text>
           </Pressable>
 
-          <Pressable style={[styles.btn, styles.secondary]} onPress={onEmailPdf} disabled={!onEmailPdf}>
+          <Pressable
+            style={[
+              styles.btn,
+              styles.secondary,
+              !onEmailPdf ? styles.disabled : null,
+            ]}
+            onPress={onEmailPdf}
+            disabled={!onEmailPdf}
+          >
             <Text style={styles.secondaryTxt}>E-Mail senden</Text>
           </Pressable>
         </View>
       )}
 
-      <Pressable style={[styles.btn, styles.secondary]} onPress={onReset} disabled={!onReset}>
+      <Pressable
+        style={[
+          styles.btn,
+          styles.secondary,
+          !onReset ? styles.disabled : null,
+        ]}
+        onPress={onReset}
+        disabled={!onReset}
+      >
         <Text style={styles.secondaryTxt}>Formular leeren</Text>
       </Pressable>
     </View>
@@ -57,18 +89,55 @@ export function DocActionBar({
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 10, marginTop: 10 },
-  row: { flexDirection: "row", gap: 10 },
+  wrap: {
+    gap: 10,
+    marginTop: 10,
+  },
+
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
   btn: {
     paddingVertical: 14,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
   },
-  primary: { backgroundColor: COLORS.primary },
-  primaryTxt: { color: "white", fontWeight: "800" },
-  dark: { backgroundColor: "#111" },
-  darkTxt: { color: "white", fontWeight: "800" },
-  secondary: { borderWidth: 1, borderColor: COLORS.primary, backgroundColor: "white", flex: 1 },
-  secondaryTxt: { color: COLORS.primary, fontWeight: "800" },
+
+  primary: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accentDark,
+  },
+  primaryTxt: {
+    color: COLORS.textLight,
+    fontWeight: "800",
+  },
+
+  dark: {
+    backgroundColor: "#12324A",
+    borderColor: "#1E4C6B",
+  },
+  darkTxt: {
+    color: COLORS.textLight,
+    fontWeight: "800",
+  },
+
+  secondary: {
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    flex: 1,
+  },
+  secondaryTxt: {
+    color: COLORS.text,
+    fontWeight: "800",
+  },
+
+  disabled: {
+    opacity: 0.5,
+  },
 });
+

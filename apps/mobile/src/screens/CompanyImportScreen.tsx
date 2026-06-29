@@ -1,13 +1,13 @@
-// apps/mobile/src/screens/CompanyImportScreen.tsx
+﻿// apps/mobile/src/screens/CompanyImportScreen.tsx
 import React, { useCallback, useMemo, useState } from "react";
 import {
+  SafeAreaView,
   View,
   Text,
   Pressable,
   StyleSheet,
   Alert,
   TextInput,
-  Platform,
   ScrollView,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -26,13 +26,10 @@ import {
 let CameraView: any = null;
 let useCameraPermissions: any = null;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const cam = require("expo-camera");
   CameraView = cam.CameraView;
   useCameraPermissions = cam.useCameraPermissions;
-} catch {
-  // module not installed -> scan disabled (file import + paste still work)
-}
+} catch {}
 
 type Props = NativeStackScreenProps<RootStackParamList, "CompanyImport">;
 
@@ -43,10 +40,8 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
   const [tab, setTab] = useState<Tab>(CameraView ? "SCAN" : "FILE");
   const [busy, setBusy] = useState(false);
 
-  // QR JSON paste
   const [paste, setPaste] = useState("");
 
-  // camera permission
   const camHook = useMemo(() => {
     if (!useCameraPermissions) return null;
     try {
@@ -60,15 +55,18 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
 
   const scanEnabled = !!CameraView && !!useCameraPermissions;
 
-  const onImported = useCallback(async (bundle: any) => {
-    const v = await verifyCompanyBundle(bundle);
-    if (!v.ok) throw new Error(v.error);
+  const onImported = useCallback(
+    async (bundle: any) => {
+      const v = await verifyCompanyBundle(bundle);
+      if (!v.ok) throw new Error(v.error);
 
-    await applyCompanyBundle(bundle);
+      await applyCompanyBundle(bundle);
 
-    Alert.alert("OK", "Setup importiert. Firma/Logo sind lokal gespeichert.");
-    navigation.navigate("Projects");
-  }, [navigation]);
+      Alert.alert("OK", "Setup importiert. Firma/Logo sind lokal gespeichert.");
+      navigation.navigate("Projects");
+    },
+    [navigation]
+  );
 
   const importFromFile = useCallback(async () => {
     setBusy(true);
@@ -111,19 +109,22 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
     }
   }, [paste, onImported]);
 
-  const onScanned = useCallback(async (data: string) => {
-    if (busy) return;
-    if (!data) return;
+  const onScanned = useCallback(
+    async (data: string) => {
+      if (busy) return;
+      if (!data) return;
 
-    setBusy(true);
-    try {
-      const bundle = JSON.parse(String(data));
-      await onImported(bundle);
-    } catch (e: any) {
-      Alert.alert("QR", e?.message || "QR Inhalt ist kein gültiges JSON.");
-      setBusy(false); // non bloccare
-    }
-  }, [busy, onImported]);
+      setBusy(true);
+      try {
+        const bundle = JSON.parse(String(data));
+        await onImported(bundle);
+      } catch (e: any) {
+        Alert.alert("QR", e?.message || "QR Inhalt ist kein gültiges JSON.");
+        setBusy(false);
+      }
+    },
+    [busy, onImported]
+  );
 
   const ensureCamera = useCallback(async () => {
     if (!scanEnabled) {
@@ -154,7 +155,7 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
   }, [ensureCamera]);
 
   return (
-    <View style={styles.wrap}>
+    <SafeAreaView style={styles.wrap}>
       <View style={styles.top}>
         <View style={{ flex: 1 }}>
           <Text style={styles.h1}>Setup importieren</Text>
@@ -168,7 +169,6 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
         </Pressable>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabs}>
         <Pressable
           onPress={openScan}
@@ -198,7 +198,6 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
         </Pressable>
       </View>
 
-      {/* Content */}
       {tab === "SCAN" ? (
         <View style={styles.scanWrap}>
           {!scanEnabled ? (
@@ -238,8 +237,13 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
                 <Text style={styles.scanText}>
                   QR in den Rahmen halten (Light-Bundle)
                 </Text>
-                <Pressable onPress={() => setTab("FILE")} style={styles.btnGhost}>
-                  <Text style={styles.btnGhostText}>oder Datei importieren</Text>
+                <Pressable
+                  onPress={() => setTab("FILE")}
+                  style={styles.btnGhost}
+                >
+                  <Text style={styles.btnGhostText}>
+                    oder Datei importieren
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -290,7 +294,7 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
               value={paste}
               onChangeText={setPaste}
               placeholder='{"v":1,"kind":"RLC_COMPANY_LIGHT",...}'
-              placeholderTextColor={COLORS.muted}
+              placeholderTextColor="#B8C1CC"
               style={styles.textarea}
               multiline
               autoCapitalize="none"
@@ -319,15 +323,36 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
           </View>
         </ScrollView>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: COLORS.bg, padding: 16 },
-  top: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
-  h1: { fontSize: 20, fontWeight: "900", color: COLORS.text },
-  p: { color: COLORS.muted, marginTop: 2 },
+  wrap: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+    padding: 16,
+  },
+
+  top: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 10,
+  },
+
+  h1: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  p: {
+    color: COLORS.sub,
+    marginTop: 2,
+    fontWeight: "700",
+  },
+
   btnX: {
     width: 36,
     height: 36,
@@ -336,8 +361,14 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: COLORS.card,
   },
-  btnXText: { color: COLORS.text, fontSize: 16, fontWeight: "900" },
+
+  btnXText: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: "900",
+  },
 
   tabs: {
     flexDirection: "row",
@@ -346,24 +377,60 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
     marginBottom: 12,
+    backgroundColor: COLORS.card2,
   },
-  tab: { flex: 1, paddingVertical: 10, alignItems: "center" },
-  tabOn: { backgroundColor: COLORS.card },
-  tabText: { color: COLORS.muted, fontWeight: "800" },
-  tabTextOn: { color: COLORS.text },
 
-  content: { paddingBottom: 22 },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+
+  tabOn: {
+    backgroundColor: COLORS.card,
+  },
+
+  tabText: {
+    color: COLORS.sub,
+    fontWeight: "800",
+  },
+
+  tabTextOn: {
+    color: COLORS.text,
+  },
+
+  content: {
+    paddingBottom: 22,
+  },
+
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: 12,
   },
-  label: { color: COLORS.text, fontWeight: "900", marginBottom: 6 },
-  small: { color: COLORS.muted, fontSize: 12, lineHeight: 16 },
-  smallHint: { marginTop: 10, color: COLORS.muted, fontSize: 12 },
+
+  label: {
+    color: COLORS.text,
+    fontWeight: "900",
+    marginBottom: 6,
+  },
+
+  small: {
+    color: COLORS.sub,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+
+  smallHint: {
+    marginTop: 10,
+    color: COLORS.sub,
+    fontSize: 12,
+    fontWeight: "700",
+  },
 
   btn: {
     marginTop: 12,
@@ -372,17 +439,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: "center",
+    backgroundColor: COLORS.card2,
   },
-  btnText: { color: COLORS.text, fontWeight: "900" },
+
+  btnText: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
 
   btnPrimary: {
     marginTop: 12,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accentDark,
+    borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: "center",
   },
-  btnPrimaryText: { color: "#fff", fontWeight: "900" },
+
+  btnPrimaryText: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+  },
 
   textarea: {
     marginTop: 10,
@@ -393,11 +471,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: COLORS.text,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.inputBg,
     textAlignVertical: "top",
+    fontWeight: "700",
   },
 
-  scanWrap: { flex: 1 },
+  scanWrap: {
+    flex: 1,
+  },
+
   cameraBox: {
     flex: 1,
     borderRadius: 16,
@@ -406,6 +488,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.card,
   },
+
   scanOverlay: {
     position: "absolute",
     left: 0,
@@ -415,7 +498,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
     gap: 10,
   },
-  scanText: { color: "#fff", fontWeight: "900" },
+
+  scanText: {
+    color: "#fff",
+    fontWeight: "900",
+  },
+
   btnGhost: {
     alignSelf: "flex-start",
     paddingHorizontal: 10,
@@ -424,5 +512,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
   },
-  btnGhostText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+
+  btnGhostText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
 });
+
+
+

@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/queueExecutor.ts
+﻿// apps/mobile/src/lib/queueExecutor.ts
 import type { QueueItem } from "./offlineQueue";
 import { api } from "./api";
 
@@ -26,3 +26,4 @@ export async function rlcQueueExecutor(item: QueueItem) {
       throw new Error(`Unknown queue kind: ${(item as any).kind}`);
   }
 }
+

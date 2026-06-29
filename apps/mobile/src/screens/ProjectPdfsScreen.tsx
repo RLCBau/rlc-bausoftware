@@ -1,4 +1,4 @@
-// apps/mobile/src/screens/ProjectPdfsScreen.tsx
+﻿// apps/mobile/src/screens/ProjectPdfsScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -15,27 +15,27 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { api } from "../lib/api";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system"; // ✅ NEW (non elimina niente)
+import * as FileSystem from "expo-file-system/legacy";
 import {
   downloadPdf,
-  importLocalPdf, // ✅ NEW (usa pdfStorage come source of truth)
+  importLocalPdf,
   getLocalUri,
-  isDownloaded,
   deletePdf,
   listDownloadedPdfs,
   PdfMetaItem,
 } from "../lib/pdfStorage";
+import { COLORS } from "../ui/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProjectPdfs">;
 
 type Row = {
   name: string;
-  url: string; // relative or absolute from server
+  url: string;
   folder?: string;
   mtime?: string;
-  absUrl?: string; // computed
-  offline?: boolean; // local exists
-  busy?: boolean; // downloading
+  absUrl?: string;
+  offline?: boolean;
+  busy?: boolean;
 };
 
 export default function ProjectPdfsScreen({ route, navigation }: Props) {
@@ -44,8 +44,6 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
   const [refreshTick, setRefreshTick] = useState(0);
-
-  // NEW: UI state for offline fallback / last error
   const [offlineMode, setOfflineMode] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
 
@@ -53,9 +51,6 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
     if (title) navigation.setOptions({ title });
   }, [title, navigation]);
 
-  /**
-   * ✅ Helpers
-   */
   function safeProjectKey(k: string) {
     return String(k || "")
       .trim()
@@ -69,75 +64,74 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
     return base.toLowerCase().endsWith(".pdf") ? base : `${base}.pdf`;
   }
 
-  /**
-   * ✅ Robust FS root
-   * - prefer documentDirectory (persistente)
-   * - fallback cacheDirectory
-   * - NO trim()
-   */
-  function getFsRootOrThrow(): string {
-    const doc = FileSystem.documentDirectory;
-    const cache = FileSystem.cacheDirectory;
+  function ensureTrailingSlash(v: string) {
+    return v.endsWith("/") ? v : `${v}/`;
+  }
 
-    const root = (doc && typeof doc === "string" ? doc : "") || (cache && typeof cache === "string" ? cache : "");
+  function getFsRootOrThrow(): string {
+    const doc =
+      typeof FileSystem.documentDirectory === "string"
+        ? FileSystem.documentDirectory
+        : "";
+    const cache =
+      typeof FileSystem.cacheDirectory === "string"
+        ? FileSystem.cacheDirectory
+        : "";
+
+    const root = doc || cache;
     if (!root) {
       throw new Error(
         "FileSystem directory fehlt (document/cache).\n\n" +
-          "Tipico su Expo quando:\n" +
-          "• App non ha inizializzato FS correttamente\n" +
-          "• build/dev-client incoerente\n\n" +
-          "Prova:\n" +
-          "1) Chiudi Expo Go completamente\n" +
-          "2) Riapri Expo Go\n" +
-          "3) Avvia di nuovo `npx expo start --lan`\n"
+          "Bitte Expo Go komplett schließen und neu öffnen. " +
+          "Danach `npx expo start --lan` neu starten."
       );
     }
-    return root.endsWith("/") ? root : `${root}/`;
+
+    return ensureTrailingSlash(root);
   }
 
   async function ensureDir(dirUri: string) {
-    const info = await FileSystem.getInfoAsync(dirUri);
-    if (info.exists && info.isDirectory) return;
-    if (info.exists && !info.isDirectory) {
-      await FileSystem.deleteAsync(dirUri, { idempotent: true });
+    try {
+      const info = await FileSystem.getInfoAsync(dirUri);
+      if (info.exists && (info as any).isDirectory !== false) return;
+
+      if (info.exists && (info as any).isDirectory === false) {
+        await FileSystem.deleteAsync(dirUri, { idempotent: true });
+      }
+
+      await FileSystem.makeDirectoryAsync(dirUri, { intermediates: true });
+    } catch {
+      await FileSystem.makeDirectoryAsync(dirUri, { intermediates: true });
     }
-    await FileSystem.makeDirectoryAsync(dirUri, { intermediates: true });
   }
 
-  // ✅ NEW: “vera” cartella progetto (documentDirectory/rlc/projects/<key>/pdf/)
   function projectPdfDirPreferred(projectFsKey0: string) {
     const k = safeProjectKey(projectFsKey0);
     return `${getFsRootOrThrow()}rlc/projects/${k}/pdf/`;
   }
 
-  // ✅ compat: vecchia cartella (non la tolgo)
   function projectDir(projectFsKey0: string) {
     const k = safeProjectKey(projectFsKey0);
     return `${getFsRootOrThrow()}rlc_pdfs/${k}/`;
   }
 
-  /**
-   * ✅ ensure dirs (FIX “directory fehlt”)
-   * - protegge con try/catch e mostra alert chiaro
-   */
   const ensureAllPdfDirs = useCallback(async () => {
     if (Platform.OS === "web") return;
 
     try {
+      const root = getFsRootOrThrow();
       const d1 = projectPdfDirPreferred(projectFsKey);
       const d2 = projectDir(projectFsKey);
-      await ensureDir(d1);
-      await ensureDir(d2);
 
-      // (extra) compat sicurezza
-      try {
-        const root = getFsRootOrThrow();
-        await ensureDir(`${root}projects/`);
-        await ensureDir(`${root}projects/${safeProjectKey(projectFsKey)}/`);
-        await ensureDir(`${root}projects/${safeProjectKey(projectFsKey)}/pdf/`);
-      } catch {}
+      await ensureDir(root);
+      await ensureDir(`${root}rlc/`);
+      await ensureDir(`${root}rlc/projects/`);
+      await ensureDir(`${root}rlc/projects/${safeProjectKey(projectFsKey)}/`);
+      await ensureDir(d1);
+
+      await ensureDir(`${root}rlc_pdfs/`);
+      await ensureDir(d2);
     } catch (e: any) {
-      // Qui intercettiamo il vero motivo dell'errore che vedi nello screenshot
       Alert.alert("PDF laden", String(e?.message || "FileSystem Fehler"));
       throw e;
     }
@@ -155,10 +149,10 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
       name = `${baseStem}_${i + 2}.pdf`;
       to = `${dir}${name}`;
     }
+
     return { name, uri: `${dir}${baseStem}_${Date.now()}.pdf` };
   }
 
-  // ✅ helper: robust copy from picker uris (file://, content://, ph://)
   async function copyPickedPdfToTarget(fromUri: string, toUri: string) {
     try {
       await FileSystem.copyAsync({ from: fromUri, to: toUri });
@@ -167,12 +161,14 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
 
     if (fromUri.startsWith("http://") || fromUri.startsWith("https://")) {
       const root = getFsRootOrThrow();
+      const tmp = `${root}rlc/tmp_${Date.now()}.pdf`;
       try {
         await ensureDir(`${root}rlc/`);
       } catch {}
-      const tmp = `${root}rlc/tmp_${Date.now()}.pdf`;
+
       const dl = await FileSystem.downloadAsync(fromUri, tmp);
       await FileSystem.copyAsync({ from: dl.uri, to: toUri });
+
       try {
         await FileSystem.deleteAsync(tmp, { idempotent: true });
       } catch {}
@@ -180,13 +176,10 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
     }
 
     throw new Error(
-      "PDF konnte nicht kopiert werden (URI nicht lesbar). " +
-        "Bitte wähle die Datei erneut oder teile sie zuerst in 'Dateien' (iOS Files) " +
-        "und versuche dann nochmals."
+      "PDF konnte nicht kopiert werden. Bitte Datei erneut wählen."
     );
   }
 
-  // ✅ load local PDFs (offline list)
   const loadOffline = useCallback(async () => {
     try {
       await ensureAllPdfDirs();
@@ -232,15 +225,15 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
         if (!name || !url) continue;
 
         const abs = await api.absUrl(url);
-        const off = await isDownloaded(projectFsKey, name);
+        const local = await getLocalUri(projectFsKey, name);
 
         mapped.push({
           name,
           url,
           folder: it?.folder,
           mtime: it?.mtime,
-          absUrl: abs,
-          offline: off,
+          absUrl: local || abs,
+          offline: !!local,
           busy: false,
         });
       }
@@ -284,20 +277,35 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
   const onDownload = useCallback(
     async (r: Row) => {
       if (!r?.url && offlineMode) {
-        Alert.alert("Download", "Offline-Modus: Bitte online gehen, um PDFs vom Server zu laden.");
+        Alert.alert(
+          "Download",
+          "Offline-Modus: Bitte online gehen, um PDFs vom Server zu laden."
+        );
         return;
       }
 
       const abs = r.absUrl || (await api.absUrl(r.url));
-      setRows((prev) => prev.map((x) => (x.name === r.name ? { ...x, busy: true } : x)));
+      setRows((prev) =>
+        prev.map((x) => (x.name === r.name ? { ...x, busy: true } : x))
+      );
 
       try {
         await ensureAllPdfDirs();
         await downloadPdf(projectFsKey, r.name, abs);
 
-        setRows((prev) => prev.map((x) => (x.name === r.name ? { ...x, busy: false, offline: true } : x)));
+        const local = await getLocalUri(projectFsKey, r.name);
+
+        setRows((prev) =>
+          prev.map((x) =>
+            x.name === r.name
+              ? { ...x, busy: false, offline: true, absUrl: local || x.absUrl }
+              : x
+          )
+        );
       } catch (e: any) {
-        setRows((prev) => prev.map((x) => (x.name === r.name ? { ...x, busy: false } : x)));
+        setRows((prev) =>
+          prev.map((x) => (x.name === r.name ? { ...x, busy: false } : x))
+        );
         Alert.alert("Download", e?.message || "Download fehlgeschlagen.");
       }
     },
@@ -314,7 +322,15 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
           return;
         }
 
-        setRows((prev) => prev.map((x) => (x.name === r.name ? { ...x, offline: false } : x)));
+        const remoteAbs = r.url ? await api.absUrl(r.url) : "";
+
+        setRows((prev) =>
+          prev.map((x) =>
+            x.name === r.name
+              ? { ...x, offline: false, absUrl: remoteAbs || x.absUrl }
+              : x
+          )
+        );
       } catch (e: any) {
         Alert.alert("Offline löschen", e?.message || "Löschen fehlgeschlagen.");
       }
@@ -322,35 +338,36 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
     [projectFsKey, offlineMode]
   );
 
-  /**
-   * ✅ "PDF laden (offline)" – pick a PDF already on the phone
-   */
   const onPickOfflinePdf = useCallback(async () => {
     try {
-      // ✅ ensure dirs FIRST (fix “directory fehlt”)
       await ensureAllPdfDirs();
 
       const res = await DocumentPicker.getDocumentAsync({
         type: ["application/pdf"],
         multiple: false,
-        copyToCacheDirectory: true, // ✅ important (iOS)
+        copyToCacheDirectory: true,
       });
 
       const asset: any = (res as any)?.assets?.[0] || null;
       const okLegacy = (res as any)?.type === "success";
-      const uri = String(asset?.uri || (okLegacy ? (res as any)?.uri : "") || "").trim();
-      const nameRaw = String(asset?.name || (okLegacy ? (res as any)?.name : "") || "").trim();
+      const uri = String(
+        asset?.uri || (okLegacy ? (res as any)?.uri : "") || ""
+      ).trim();
+      const nameRaw = String(
+        asset?.name || (okLegacy ? (res as any)?.name : "") || ""
+      ).trim();
 
       if (!uri) return;
 
-      const name = nameRaw || `Offline_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const name =
+        nameRaw || `Offline_${new Date().toISOString().slice(0, 10)}.pdf`;
 
-      // ✅ BEST: pdfStorage come source-of-truth
       let imported: { uri: string; name: string } | null = null;
+
       try {
-        imported = await importLocalPdf(projectFsKey, name, uri);
+        const importedRes = await importLocalPdf(projectFsKey, uri, name);
+        imported = importedRes;
       } catch {
-        // fallback: copia manuale nelle nostre due folder
         const dirPreferred = projectPdfDirPreferred(projectFsKey);
         const targetPreferred = await uniqueTargetUri(dirPreferred, name);
         await copyPickedPdfToTarget(uri, targetPreferred.uri);
@@ -365,13 +382,15 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
       }
 
       await loadOffline();
-      navigation.navigate("PdfViewer", { uri: imported.uri, title: imported.name });
+      navigation.navigate("PdfViewer", {
+        uri: imported.uri,
+        title: imported.name,
+      });
     } catch (e: any) {
       Alert.alert("PDF laden", e?.message || "PDF konnte nicht geladen werden.");
     }
   }, [projectFsKey, navigation, loadOffline, ensureAllPdfDirs]);
 
-  /** UI helpers */
   const titleTop = useMemo(() => String(title || "Projekt PDFs"), [title]);
 
   function BackButton({ navigation: nav }: any) {
@@ -384,46 +403,69 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
 
   const header = useMemo(() => {
     return (
-      <View style={s.header}>
+      <View style={s.headerCard}>
         <View style={s.headerRow}>
           <BackButton navigation={navigation} />
-          <View style={{ flex: 1 }} />
-          <View style={s.pill}>
-            <Text style={s.pillTxt}>{offlineMode ? "OFFLINE" : "SERVER"}</Text>
+          <View style={s.headerSpacer} />
+          <View style={s.modePill}>
+            <Text style={s.modePillTxt}>{offlineMode ? "OFFLINE" : "SERVER"}</Text>
           </View>
         </View>
 
+        <Text style={s.eyebrow}>RLC Bausoftware</Text>
         <Text style={s.h1}>{titleTop}</Text>
         <Text style={s.h2}>{projectFsKey}</Text>
 
         <View style={s.actionsRow}>
           <Pressable
-            style={s.actionBtn}
+            style={s.actionBtnPrimary}
             onPress={() => setRefreshTick((x) => x + 1)}
             disabled={loading}
           >
-            <Text style={s.actionTxt}>{loading ? "Lade..." : "Aktualisieren"}</Text>
+            <Text style={s.actionBtnPrimaryTxt}>
+              {loading ? "Lade..." : "Aktualisieren"}
+            </Text>
           </Pressable>
 
-          <Pressable style={s.actionBtn} onPress={onPickOfflinePdf} disabled={loading}>
-            <Text style={s.actionTxt}>PDF laden (offline)</Text>
+          <Pressable
+            style={s.actionBtnSecondary}
+            onPress={onPickOfflinePdf}
+            disabled={loading}
+          >
+            <Text style={s.actionBtnSecondaryTxt}>PDF laden (offline)</Text>
           </Pressable>
 
-          <Pressable style={s.actionBtnGhost} onPress={() => navigation.goBack()}>
-            <Text style={s.actionTxtGhost}>Schließen</Text>
+          <Pressable
+            style={s.actionBtnGhost}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={s.actionBtnGhostTxt}>Schließen</Text>
           </Pressable>
         </View>
 
         {offlineMode ? (
-          <Text style={s.hint}>
-            Hinweis: Server nicht erreichbar. Zeige lokal gespeicherte PDFs (Download zuvor nötig).
-          </Text>
+          <View style={s.infoBox}>
+            <Text style={s.infoTitle}>Offline-Modus</Text>
+            <Text style={s.infoText}>
+              Server nicht erreichbar. Zeige lokal gespeicherte PDFs.
+            </Text>
+          </View>
         ) : null}
 
-        {!!lastError ? <Text style={s.hintSmall}>Letzter Fehler: {String(lastError)}</Text> : null}
+        {!!lastError ? (
+          <Text style={s.hintSmall}>Letzter Fehler: {String(lastError)}</Text>
+        ) : null}
       </View>
     );
-  }, [navigation, projectFsKey, titleTop, offlineMode, lastError, loading, onPickOfflinePdf]);
+  }, [
+    navigation,
+    projectFsKey,
+    titleTop,
+    offlineMode,
+    lastError,
+    loading,
+    onPickOfflinePdf,
+  ]);
 
   const rowIcon = (r: Row) => {
     if (r.offline) return "Offline";
@@ -442,25 +484,39 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
             <Text style={s.centerTxt}>Lade PDFs…</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={s.list}>
+          <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
             {rows.map((r) => (
               <View key={`${r.name}:${r.url || "offline"}`} style={s.card}>
-                <Pressable onPress={() => onOpen(r)} style={{ flex: 1 }}>
+                <Pressable onPress={() => onOpen(r)} style={s.cardMain}>
                   <View style={s.cardTop}>
-                    <View style={[s.dot, { backgroundColor: r.offline ? "#1A7F37" : "#0B57D0" }]} />
+                    <View
+                      style={[
+                        s.dot,
+                        {
+                          backgroundColor: r.offline
+                            ? COLORS.accent
+                            : COLORS.accentDark,
+                        },
+                      ]}
+                    />
                     <Text style={s.title} numberOfLines={2}>
                       {r.name}
                     </Text>
 
                     <View style={[s.badge, r.offline ? s.badgeOk : s.badgeNeutral]}>
-                      <Text style={[s.badgeTxt, r.offline ? s.badgeTxtOk : s.badgeTxtNeutral]}>
+                      <Text
+                        style={[
+                          s.badgeTxt,
+                          r.offline ? s.badgeTxtOk : s.badgeTxtNeutral,
+                        ]}
+                      >
                         {rowIcon(r)}
                       </Text>
                     </View>
                   </View>
 
                   <Text style={s.sub} numberOfLines={2}>
-                    {(r.folder ? `${r.folder}` : "")}
+                    {r.folder ? `${r.folder}` : ""}
                     {r.folder && r.mtime ? " • " : ""}
                     {r.mtime ? String(r.mtime) : ""}
                   </Text>
@@ -469,26 +525,41 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
                 <View style={s.actions}>
                   {r.offline ? (
                     <>
-                      <Pressable style={[s.btn, s.btnGhost]} onPress={() => onOpen(r)}>
+                      <Pressable
+                        style={[s.btn, s.btnGhost]}
+                        onPress={() => onOpen(r)}
+                      >
                         <Text style={[s.btnTxt, s.btnGhostTxt]}>Öffnen</Text>
                       </Pressable>
 
-                      <Pressable style={[s.btn, s.btnDanger]} onPress={() => onDelete(r)}>
+                      <Pressable
+                        style={[s.btn, s.btnDanger]}
+                        onPress={() => onDelete(r)}
+                      >
                         <Text style={[s.btnTxt, s.btnTxtWhite]}>Löschen</Text>
                       </Pressable>
                     </>
                   ) : (
                     <>
-                      <Pressable style={[s.btn, s.btnGhost]} onPress={() => onOpen(r)}>
+                      <Pressable
+                        style={[s.btn, s.btnGhost]}
+                        onPress={() => onOpen(r)}
+                      >
                         <Text style={[s.btnTxt, s.btnGhostTxt]}>Öffnen</Text>
                       </Pressable>
 
                       <Pressable
-                        style={[s.btn, s.btnPrimary, r.busy ? { opacity: 0.6 } : null]}
+                        style={[
+                          s.btn,
+                          s.btnPrimary,
+                          r.busy ? s.btnDisabled : null,
+                        ]}
                         onPress={() => onDownload(r)}
                         disabled={r.busy}
                       >
-                        <Text style={[s.btnTxt, s.btnTxtWhite]}>{r.busy ? "Download…" : "Download"}</Text>
+                        <Text style={[s.btnTxt, s.btnTxtWhite]}>
+                          {r.busy ? "Download…" : "Download"}
+                        </Text>
                       </Pressable>
                     </>
                   )}
@@ -507,7 +578,7 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
               </View>
             ) : null}
 
-            <View style={{ height: 22 }} />
+            <View style={s.bottomSpace} />
           </ScrollView>
         )}
       </View>
@@ -516,124 +587,343 @@ export default function ProjectPdfsScreen({ route, navigation }: Props) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0B1720" },
-  bg: { flex: 1, backgroundColor: "#0B1720" },
-
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
   },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+
+  bg: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+
+  headerCard: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: COLORS.card,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+
+  headerSpacer: {
+    flex: 1,
+  },
 
   backBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
+  },
+
+  backTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  modePill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
-  backTxt: { color: "#fff", fontWeight: "900" },
 
-  pill: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+  modePillTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 12,
   },
-  pillTxt: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12 },
 
-  h1: { fontSize: 34, fontWeight: "900", color: "#fff" },
-  h2: { marginTop: 6, color: "rgba(255,255,255,0.70)", fontWeight: "800" },
+  eyebrow: {
+    color: COLORS.accentDark,
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
 
-  actionsRow: { marginTop: 12, flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  actionBtn: {
+  h1: {
+    marginTop: 8,
+    fontSize: 30,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  h2: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "800",
+    lineHeight: 18,
+  },
+
+  actionsRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  actionBtnPrimary: {
     alignSelf: "flex-start",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#111",
+    backgroundColor: COLORS.accent,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: COLORS.accent,
   },
-  actionTxt: { color: "#fff", fontWeight: "900" },
+
+  actionBtnPrimaryTxt: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+  },
+
+  actionBtnSecondary: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  actionBtnSecondaryTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
 
   actionBtnGhost: {
     alignSelf: "flex-start",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "transparent",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
+    borderColor: COLORS.border,
   },
-  actionTxtGhost: { color: "rgba(255,255,255,0.92)", fontWeight: "900" },
 
-  hint: { marginTop: 10, color: "rgba(255,255,255,0.65)", fontWeight: "700" },
-  hintSmall: { marginTop: 6, color: "rgba(255,255,255,0.55)", fontWeight: "700", fontSize: 12 },
+  actionBtnGhostTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
 
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  centerTxt: { marginTop: 10, fontWeight: "800", color: "rgba(255,255,255,0.70)" },
+  infoBox: {
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
 
-  list: { padding: 16, paddingBottom: 30, gap: 12 },
+  infoTitle: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  infoText: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 19,
+  },
+
+  hintSmall: {
+    marginTop: 8,
+    color: COLORS.sub,
+    fontWeight: "700",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  centerTxt: {
+    marginTop: 10,
+    fontWeight: "800",
+    color: COLORS.sub,
+  },
+
+  list: {
+    padding: 16,
+    paddingBottom: 30,
+    gap: 12,
+  },
 
   card: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
+    borderColor: COLORS.border,
     ...Platform.select({
-      ios: { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 6 } },
-      android: { elevation: 3 },
+      ios: {
+        shadowColor: COLORS.text,
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: { elevation: 2 },
       default: {},
     }),
   },
 
-  cardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  dot: { width: 10, height: 10, borderRadius: 99 },
+  cardMain: {
+    flex: 1,
+  },
 
-  title: { flex: 1, fontSize: 16, fontWeight: "900", color: "#0B1720" },
-  sub: { marginTop: 8, opacity: 0.75, fontWeight: "700", color: "#0B1720" },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+
+  title: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "900",
+    color: COLORS.text,
+    lineHeight: 20,
+  },
+
+  sub: {
+    marginTop: 8,
+    color: COLORS.sub,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
 
   badge: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.card2,
     alignSelf: "flex-start",
   },
-  badgeNeutral: { borderColor: "rgba(11,23,32,0.18)" },
-  badgeOk: { borderColor: "rgba(26,127,55,0.35)" },
-  badgeTxt: { fontSize: 11, fontWeight: "900" },
-  badgeTxtNeutral: { color: "rgba(11,23,32,0.65)" },
-  badgeTxtOk: { color: "#1A7F37" },
 
-  actions: { marginTop: 12, flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  badgeNeutral: {
+    borderColor: COLORS.border,
+  },
 
-  btn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, backgroundColor: "#111" },
-  btnTxt: { fontWeight: "900" },
+  badgeOk: {
+    borderColor: COLORS.accent,
+  },
 
-  btnGhost: { backgroundColor: "transparent", borderWidth: 1, borderColor: "rgba(11,23,32,0.20)" },
-  btnGhostTxt: { color: "#0B1720" },
+  badgeTxt: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
 
-  btnPrimary: { backgroundColor: "#111" },
-  btnDanger: { backgroundColor: "#991B1B" },
-  btnTxtWhite: { color: "#fff" },
+  badgeTxtNeutral: {
+    color: COLORS.text,
+  },
+
+  badgeTxtOk: {
+    color: COLORS.accentDark,
+  },
+
+  actions: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  btn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  btnTxt: {
+    fontWeight: "900",
+    fontSize: 13,
+  },
+
+  btnGhost: {
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  btnGhostTxt: {
+    color: COLORS.text,
+  },
+
+  btnPrimary: {
+    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+
+  btnDanger: {
+    backgroundColor: COLORS.text,
+    borderWidth: 1,
+    borderColor: COLORS.text,
+  },
+
+  btnTxtWhite: {
+    color: COLORS.textLight,
+  },
+
+  btnDisabled: {
+    opacity: 0.6,
+  },
 
   empty: {
     borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    padding: 16,
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
+    borderColor: COLORS.border,
   },
-  emptyTitle: { fontWeight: "900", fontSize: 15, color: "#0B1720" },
-  emptyText: { marginTop: 6, fontWeight: "700", opacity: 0.7, color: "#0B1720" },
+
+  emptyTitle: {
+    fontWeight: "900",
+    fontSize: 15,
+    color: COLORS.text,
+  },
+
+  emptyText: {
+    marginTop: 6,
+    fontWeight: "700",
+    color: COLORS.sub,
+    lineHeight: 20,
+  },
+
+  bottomSpace: {
+    height: 22,
+  },
 });
+
+

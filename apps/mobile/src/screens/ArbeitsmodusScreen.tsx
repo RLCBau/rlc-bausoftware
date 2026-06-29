@@ -1,9 +1,10 @@
-// apps/mobile/src/screens/ArbeitsmodusScreen.tsx
+﻿/// apps/mobile/src/screens/ArbeitsmodusScreen.tsx
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, SafeAreaView } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { getAppMode, setAppMode, type AppMode } from "../lib/appMode";
+import { COLORS } from "../ui/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Arbeitsmodus">;
 
@@ -16,7 +17,6 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
     (async () => {
       const force = !!(route as any)?.params?.force;
 
-      // ✅ se arrivo da "Modus wechseln", NON fare auto-redirect
       if (force) {
         if (alive) setLoading(false);
         return;
@@ -24,7 +24,6 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
 
       const m = await getAppMode();
       if (m) {
-        // ✅ reset stack: niente "salti" dovuti a stack vecchie
         navigation.reset({
           index: 0,
           routes: [{ name: "Login", params: { mode: m as any } }],
@@ -43,7 +42,6 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
   async function choose(mode: AppMode) {
     await setAppMode(mode);
 
-    // ✅ reset stack: Login è sempre la prima schermata dopo la scelta
     navigation.reset({
       index: 0,
       routes: [{ name: "Login", params: { mode: mode as any } }],
@@ -61,8 +59,9 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
         <Pressable
           style={({ pressed }) => [
             s.card,
-            loading && { opacity: 0.55 },
-            pressed && { opacity: 0.92, transform: [{ scale: 0.995 }] },
+            s.cardLocal,
+            loading && s.disabled,
+            pressed && s.pressed,
           ]}
           onPress={() => choose("NUR_APP")}
           disabled={loading}
@@ -73,25 +72,30 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
               <Text style={s.pillTxt}>NUR_APP</Text>
             </View>
           </View>
-          <Text style={s.desc}>Daten bleiben auf dem Handy. E-Mail & KI inklusive.</Text>
+          <Text style={s.desc}>
+            Daten bleiben auf dem Handy. E-Mail & KI inklusive.
+          </Text>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [
             s.card,
-            loading && { opacity: 0.55 },
-            pressed && { opacity: 0.92, transform: [{ scale: 0.995 }] },
+            s.cardServer,
+            loading && s.disabled,
+            pressed && s.pressed,
           ]}
           onPress={() => choose("SERVER_SYNC")}
           disabled={loading}
         >
           <View style={s.rowTop}>
             <Text style={s.title}>Mit Server / Büro-Sync</Text>
-            <View style={s.pill}>
-              <Text style={s.pillTxt}>SERVER</Text>
+            <View style={[s.pill, s.pillStrong]}>
+              <Text style={s.pillTxtStrong}>SERVER</Text>
             </View>
           </View>
-          <Text style={s.desc}>Inbox im Büro, Synchronisierung, Freigaben, Mehrgeräte.</Text>
+          <Text style={s.desc}>
+            Inbox im Büro, Synchronisierung, Freigaben, Mehrgeräte.
+          </Text>
         </Pressable>
 
         <View style={{ height: 8 }} />
@@ -99,7 +103,8 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
         <View style={s.hintCard}>
           <Text style={s.hintTitle}>Hinweis</Text>
           <Text style={s.hintTxt}>
-            Du kannst später im Menü wieder auf diese Seite kommen und den Modus ändern.
+            Du kannst später im Menü wieder auf diese Seite kommen und den Modus
+            ändern.
           </Text>
         </View>
       </View>
@@ -108,43 +113,133 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0B1720" },
-  wrap: { flex: 1, padding: 16, justifyContent: "center", gap: 12 },
-
-  header: { marginBottom: 8 },
-  h1: { fontSize: 26, fontWeight: "900", color: "#fff" },
-  sub: { marginTop: 6, color: "rgba(255,255,255,0.70)", fontWeight: "800" },
-
-  card: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    gap: 8,
+  safe: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
   },
 
-  rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  title: { fontSize: 16, fontWeight: "900", color: "#fff", flex: 1 },
-  desc: { marginTop: 2, color: "rgba(255,255,255,0.72)", fontWeight: "800", lineHeight: 20 },
+  wrap: {
+    flex: 1,
+    padding: 16,
+    justifyContent: "center",
+    gap: 12,
+  },
+
+  header: {
+    marginBottom: 10,
+  },
+
+  h1: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: COLORS.text,
+  },
+
+  sub: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "800",
+  },
+
+  card: {
+    borderRadius: 20,
+    padding: 15,
+    borderWidth: 1,
+    gap: 8,
+    ...({
+      shadowColor: COLORS.text,
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    } as any),
+  },
+
+  cardLocal: {
+    backgroundColor: COLORS.card,
+    borderColor: COLORS.border,
+  },
+
+  cardServer: {
+    backgroundColor: COLORS.accentSoft,
+    borderColor: "#BFD6FF",
+  },
+
+  rowTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  title: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: COLORS.text,
+    flex: 1,
+  },
+
+  desc: {
+    marginTop: 2,
+    color: COLORS.sub,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
 
   pill: {
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2,
   },
-  pillTxt: { color: "rgba(255,255,255,0.9)", fontWeight: "900", fontSize: 12 },
+
+  pillTxt: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 12,
+  },
+
+  pillStrong: {
+    borderColor: COLORS.accentDark,
+    backgroundColor: COLORS.accent,
+  },
+
+  pillTxtStrong: {
+    color: COLORS.textLight,
+    fontWeight: "900",
+    fontSize: 12,
+  },
 
   hintCard: {
     borderRadius: 18,
     padding: 14,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+    borderColor: COLORS.border,
   },
-  hintTitle: { color: "#fff", fontWeight: "900" },
-  hintTxt: { marginTop: 6, color: "rgba(255,255,255,0.70)", fontWeight: "800", lineHeight: 20 },
+
+  hintTitle: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
+
+  hintTxt: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+
+  disabled: {
+    opacity: 0.55,
+  },
+
+  pressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.995 }],
+  },
 });
+
+

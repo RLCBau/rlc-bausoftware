@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/sync.ts
+﻿// apps/mobile/src/lib/sync.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api } from "./api";
 import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
@@ -316,7 +316,7 @@ async function syncOne(item: QueueItem) {
       ...(item.payload || {}),
       projectId: pk, // server FS-key
     };
-    return api.postRegie(pk, payload);
+    return (api as any).pushRegieToServer(payload);
   }
 
   // =========================
@@ -352,7 +352,19 @@ async function syncOne(item: QueueItem) {
       // b) fallback vecchio: singolo imageUri
       const img = p.imageUri as string | undefined;
       if (img) {
-        const up = await api.uploadLieferschein(pk, img, p.note || p.comment);
+        const up = await (api as any).uploadLieferscheinFiles(pk, [
+  {
+  uri: typeof img === "string" ? img : String((img as any)?.uri || ""),
+  name:
+    typeof img === "string"
+      ? img.split("/").pop() || "file"
+      : String((img as any)?.name || "file"),
+  type:
+    typeof img === "string"
+      ? "application/octet-stream"
+      : String((img as any)?.type || "application/octet-stream"),
+},
+]);
         uploads.push(...normalizeLsUploadItems(up));
       }
     }
@@ -409,7 +421,7 @@ async function syncOne(item: QueueItem) {
       projectId: pk,
     };
 
-    return api.commitLieferschein(pk, commitPayload);
+    return (api as any).commitLieferscheinLegacy(pk, commitPayload);
   }
 
   // =========================
@@ -474,3 +486,4 @@ async function syncOne(item: QueueItem) {
 
   throw new Error("Unknown queue item");
 }
+

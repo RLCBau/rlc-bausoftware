@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/mailComposer.ts
+﻿// apps/mobile/src/lib/mailComposer.ts
 import * as MailComposer from "expo-mail-composer";
 
 export async function sendMailWithAttachments(opts: {
@@ -19,3 +19,4 @@ export async function sendMailWithAttachments(opts: {
     attachments: opts.attachments.filter(Boolean),
   });
 }
+

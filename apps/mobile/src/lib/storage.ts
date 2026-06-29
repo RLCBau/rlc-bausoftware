@@ -1,7 +1,7 @@
-// apps/mobile/src/lib/storage.ts
+﻿// apps/mobile/src/lib/storage.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 
 const API_URL_STORAGE_KEY = "api_base_url";
@@ -304,3 +304,4 @@ export async function persistUriToProject(params: {
     type: cached.type || mimeFromExt(ext),
   };
 }
+

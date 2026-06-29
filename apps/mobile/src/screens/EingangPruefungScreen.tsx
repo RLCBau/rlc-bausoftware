@@ -1,4 +1,4 @@
-// apps/mobile/src/screens/EingangPruefungScreen.tsx
+﻿// apps/mobile/src/screens/EingangPruefungScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -19,7 +19,7 @@ import { RootStackParamList } from "../navigation/types";
 import { useFocusEffect } from "@react-navigation/native";
 
 // ✅ NEW: cache downloads for auth-protected images/files
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 // ✅ NEW: hydrate preview (server URIs -> local file://)
 import { hydrateRowForPreview } from "../lib/hydratePreview";
@@ -33,7 +33,7 @@ import { getProjectRoles } from "../storage/projectMeta";
 // Offline Queue
 import { queueFlush, queueIsLocked, QueueItem } from "../lib/offlineQueue";
 
-// Theme (match LieferscheinScreen)
+// Theme
 import { COLORS } from "../ui/theme";
 
 // ✅ PDF Exporter + Mail
@@ -41,6 +41,7 @@ import {
   exportRegiePdfToProject,
   exportLieferscheinPdfToProject,
   exportPhotosPdfToProject,
+  exportTagesberichtPdfToProject,
   emailPdf,
 } from "../lib/exporters/projectExport";
 
@@ -97,6 +98,24 @@ type InboxFotos = InboxItemBase & {
   attachments?: any[];
   imageUri?: string;
   imageMeta?: any;
+
+  // ✅ keep both ids for server compatibility
+  docId?: string;
+  serverId?: string;
+};
+
+type InboxTagesbericht = InboxItemBase & {
+  kind?: "tagesbericht";
+  weather?: string;
+  temperature?: string;
+  workers?: string;
+  machines?: string;
+  workDone?: string;
+  issues?: string;
+  notes?: string;
+  lines?: any[];
+  reportType?: "TAGESBERICHT";
+  docType?: "TAGESBERICHT";
 };
 
 type PdfExportResult = {
@@ -115,6 +134,68 @@ const KEY_MODE = "rlc_mobile_mode";
 const INBOX_KEY_REGIE = (projectKey: string) => `rlc_mobile_inbox_regie:${projectKey}`;
 const INBOX_KEY_LS = (projectKey: string) => `rlc_mobile_inbox_lieferschein:${projectKey}`;
 const INBOX_KEY_FOTOS = (projectKey: string) => `rlc_mobile_inbox_fotos:${projectKey}`;
+const INBOX_KEY_TAGESBERICHT = (projectKey: string) =>
+  `rlc_mobile_inbox_tagesbericht:${projectKey}`;
+
+
+
+const INBOX_KEY_BAUTAGEBUCH = (projectKey: string) =>
+  `rlc_mobile_inbox_bautagebuch:${projectKey}`;
+const INBOX_KEY_ANGEBOT = (projectKey: string) =>
+  `rlc_mobile_inbox_angebot:${projectKey}`;
+const INBOX_KEY_RECHNUNG = (projectKey: string) =>
+  `rlc_mobile_inbox_rechnung:${projectKey}`;
+const INBOX_KEY_MENGEN = (projectKey: string) =>
+  `rlc_mobile_inbox_mengen:${projectKey}`;
+const INBOX_KEY_KALKULATION = (projectKey: string) =>
+  `rlc_mobile_inbox_kalkulation:${projectKey}`;
+const INBOX_KEYS_LS = (projectKey: string) => [
+  `rlc_mobile_inbox_lieferschein:${projectKey}`,
+  `rlc_mobile_inbox_ls:${projectKey}`,
+];
+
+async function loadLsCompat(projectKey: string): Promise<InboxLs[]> {
+  const parts = await Promise.all(
+    INBOX_KEYS_LS(projectKey).map((k) => loadList<InboxLs[]>(k, []))
+  );
+
+  const all = parts.flat().filter(Boolean);
+
+  return all.filter((x: any, i, arr: any[]) => {
+    const id = String(x?.id || x?.docId || x?.lieferscheinNummer || i);
+    return (
+      arr.findIndex((y: any, j) => {
+        const yid = String(y?.id || y?.docId || y?.lieferscheinNummer || j);
+        return yid === id;
+      }) === i
+    );
+  });
+}
+
+
+function mergeById<T extends any>(a: T[], b: T[]): T[] {
+  const all = [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])];
+  const seen = new Set<string>();
+  const out: T[] = [];
+
+  for (let i = 0; i < all.length; i++) {
+    const x: any = all[i];
+    const id = String(
+      x?.id ||
+        x?.docId ||
+        x?.lieferscheinNummer ||
+        x?.regieNr ||
+        x?.number ||
+        x?.date ||
+        i
+    );
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(x);
+  }
+
+  return out;
+}
 
 async function loadList<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -145,24 +226,17 @@ function toYmd(v: any) {
 /** =========================
  * Theme helpers
  * ========================= */
-const T = {
-  primary: (COLORS as any)?.primary || "#0b57d0",
-  bg: (COLORS as any)?.background || "#ffffff",
-  surface: (COLORS as any)?.surface || "#ffffff",
-  text: (COLORS as any)?.text || "#111111",
-  muted: (COLORS as any)?.muted || "#667085",
-  border: (COLORS as any)?.border || "#e7e7e7",
-  success: (COLORS as any)?.success || "#1a7f37",
-  danger: (COLORS as any)?.danger || "#c33",
-  warning: (COLORS as any)?.warning || "#b54708",
-  chipBg: (COLORS as any)?.chipBg || "#f3f4f6",
-};
-
-const HD = {
-  bg: "#0B1720",
-  text: "rgba(255,255,255,0.92)",
-  muted: "rgba(255,255,255,0.62)",
-  line: "rgba(255,255,255,0.10)",
+const UI = {
+  bg: COLORS.bg,
+  card: COLORS.card,
+  card2: COLORS.card2,
+  text: COLORS.text,
+  sub: COLORS.sub,
+  border: COLORS.border,
+  accent: COLORS.accent,
+  accentDark: COLORS.accentDark,
+  textLight: COLORS.textLight,
+  inputBg: COLORS.inputBg,
 };
 
 function alpha(hex: string, a: number) {
@@ -176,18 +250,18 @@ function alpha(hex: string, a: number) {
 }
 
 function statusColor(w: WorkflowStatus) {
-  if (w === "FREIGEGEBEN") return T.success;
-  if (w === "ABGELEHNT") return T.danger;
-  if (w === "EINGEREICHT") return T.primary;
-  return "#999";
+  if (w === "FREIGEGEBEN") return UI.accent;
+  if (w === "ABGELEHNT") return "#C33";
+  if (w === "EINGEREICHT") return UI.accentDark;
+  return UI.sub;
 }
 
 function shadowElev() {
   return Platform.select({
     ios: {
-      shadowColor: "#000",
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
+      shadowColor: COLORS.text,
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
       shadowOffset: { width: 0, height: 8 },
     },
     android: { elevation: 2 },
@@ -236,7 +310,6 @@ function normalizeFileMetaArray(input: any): Array<{ uri: string; name?: string;
     });
   }
 
-  // dedupe by uri
   const seen = new Set<string>();
   return out.filter((f) => {
     const u = String(f?.uri || "");
@@ -282,7 +355,6 @@ async function serverRequest<T>(path: string, init: RequestInit = {}): Promise<T
   }
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  // ✅ base dinamico (dev override / tunnel)
   let base = "";
   try {
     base = String(
@@ -304,7 +376,6 @@ type InboxListResponse<T> = { ok?: boolean; fsKey?: string; items?: T[] };
 
 /** =========================
  * ✅ Cache helper: download auth-protected URIs to file://
- * (fixes black previews in Regie/LS reopen)
  * ========================= */
 function safeNameLocal(name: string) {
   return String(name || "")
@@ -329,7 +400,9 @@ async function downloadToCacheIfNeeded(uriRaw: string, nameHint?: string): Promi
   if (!uri) return uri;
   if (uri.startsWith("file://")) return uri;
 
-  // Only handle remote (http(s)) or relative (/api/...)
+  let u2 = uri;
+  if (/^projects\//i.test(u2)) u2 = "/" + u2;
+
   const isHttp = /^https?:\/\//i.test(uri);
   const isRel = uri.startsWith("/");
 
@@ -367,11 +440,35 @@ async function downloadToCacheIfNeeded(uriRaw: string, nameHint?: string): Promi
       token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
     );
     if (r?.uri) return r.uri;
-  } catch {
-    // ignore -> fallback to original uri
+  } catch {}
+
+  return uri;
+}
+
+function rewriteInboxUri(uriRaw: string, projectFsKey: string): string {
+  const uri = String(uriRaw || "").trim();
+  if (!uri) return uri;
+
+  const pk = String(projectFsKey || "").trim();
+  if (!pk) return uri;
+
+  const needle = `/projects/${pk}/raw/`;
+  if (uri.includes(needle)) {
+    return uri.replace(needle, `/projects/${pk}/eingangspruefung/fotos/`);
   }
 
   return uri;
+}
+
+function mapMetasRewriteInbox(
+  metas: Array<{ uri: string; name?: string; type?: string }>,
+  projectFsKey: string
+): Array<{ uri: string; name?: string; type?: string }> {
+  return (metas || []).map((m) => {
+    const u = String(m?.uri || "").trim();
+    if (!u) return m;
+    return { ...m, uri: rewriteInboxUri(u, projectFsKey) };
+  });
 }
 
 async function localizeFileMetas(
@@ -390,40 +487,62 @@ async function localizeFileMetas(
 /** =========================
  * Helper: try multiple endpoints (approve)
  * ========================= */
-async function tryApprove(kind: "REGIE" | "LS" | "FOTOS", pk: string, docId: string) {
+async function tryApprove(
+  kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT",
+  pk: string,
+  docId: string,
+  altId?: string
+) {
+  const ids = Array.from(
+    new Set([String(docId || "").trim(), String(altId || "").trim()].filter(Boolean))
+  );
+
   const candidates: { path: string; body: any }[] =
     kind === "LS"
-      ? [
-          { path: `/api/ls/inbox/approve`, body: { projectId: pk, docId } },
-          { path: `/api/ls/commit/lieferschein`, body: { projectId: pk, docId } },
-          { path: `/api/ls/approve`, body: { projectId: pk, docId } },
-        ]
+      ? ids.flatMap((id) => [
+          { path: `/api/ls/inbox/approve`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/ls/commit/lieferschein`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/ls/approve`, body: { projectId: pk, docId: id, id } },
+        ])
       : kind === "REGIE"
-      ? [
-          { path: `/api/regie/inbox/approve`, body: { projectId: pk, docId } },
-          { path: `/api/regie/commit/regiebericht`, body: { projectId: pk, docId } },
-          { path: `/api/regie/approve`, body: { projectId: pk, docId } },
-        ]
-      : [
-          // ✅ prefer common naming first
-          { path: `/api/photos/commit`, body: { projectId: pk, docId } },
-          { path: `/api/photos/inbox/approve`, body: { projectId: pk, docId } },
-
-          // compat
-          { path: `/api/fotos/commit`, body: { projectId: pk, docId } },
-          { path: `/api/fotos/inbox/approve`, body: { projectId: pk, docId } },
-
-          // legacy fallback
+      ? ids.flatMap((id) => [
+          { path: `/api/regie/inbox/approve`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/regie/commit/regiebericht`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/regie/approve`, body: { projectId: pk, docId: id, id } },
+        ])
+      : kind === "TAGESBERICHT"
+      ? ids.flatMap((id) => [
+          { path: `/api/tagesbericht/inbox/approve`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/tagesberichte/inbox/approve`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/tagesbericht/approve`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/tagesberichte/approve`, body: { projectId: pk, docId: id, id } },
           {
-            path: `/api/inbox/${encodeURIComponent(pk)}/fotos/${encodeURIComponent(docId)}/approve`,
-            body: { approvedBy: "" },
+            path: `/api/inbox/${encodeURIComponent(pk)}/tagesbericht/${encodeURIComponent(id)}/approve`,
+            body: { approvedBy: "", docId: id, id },
           },
-        ];
+        ])
+      : ids.flatMap((id) => [
+          { path: `/api/photos/commit`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/photos/inbox/approve`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/photos/approve`, body: { projectId: pk, docId: id, id } },
+
+          { path: `/api/fotos/commit`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/fotos/inbox/approve`, body: { projectId: pk, docId: id, id } },
+          { path: `/api/fotos/approve`, body: { projectId: pk, docId: id, id } },
+
+          {
+            path: `/api/inbox/${encodeURIComponent(pk)}/fotos/${encodeURIComponent(id)}/approve`,
+            body: { approvedBy: "", docId: id, id },
+          },
+        ]);
 
   let lastErr: any = null;
   for (const c of candidates) {
     try {
-      return await serverRequest(c.path, { method: "POST", body: JSON.stringify(c.body) });
+      return await serverRequest(c.path, {
+        method: "POST",
+        body: JSON.stringify(c.body),
+      });
     } catch (e: any) {
       lastErr = e;
     }
@@ -433,10 +552,12 @@ async function tryApprove(kind: "REGIE" | "LS" | "FOTOS", pk: string, docId: str
 
 /** =========================
  * ✅ Helper: fetch full snapshot BEFORE PDF export
- * - REGIE: server regie.ts has /api/regie/inbox/read -> { snapshot }
- * - LS/FOTOS: try candidates if available (safe no-op fallback)
  * ========================= */
-async function tryFetchFullDoc(kind: "REGIE" | "LS" | "FOTOS", pk: string, docId: string) {
+async function tryFetchFullDoc(
+  kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT",
+  pk: string,
+  docId: string
+) {
   const candidates: string[] =
     kind === "REGIE"
       ? [
@@ -448,6 +569,13 @@ async function tryFetchFullDoc(kind: "REGIE" | "LS" | "FOTOS", pk: string, docId
           `/api/ls/inbox/read?projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
           `/api/ls/read?stage=inbox&projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
         ]
+      : kind === "TAGESBERICHT"
+      ? [
+          `/api/tagesbericht/inbox/read?projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
+          `/api/tagesberichte/inbox/read?projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
+          `/api/tagesbericht/read?stage=inbox&projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
+          `/api/tagesberichte/read?stage=inbox&projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
+        ]
       : [
           `/api/photos/inbox/read?projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
           `/api/photos/read?stage=inbox&projectId=${encodeURIComponent(pk)}&docId=${encodeURIComponent(docId)}`,
@@ -458,9 +586,7 @@ async function tryFetchFullDoc(kind: "REGIE" | "LS" | "FOTOS", pk: string, docId
   for (const url of candidates) {
     try {
       const r = await serverRequest<any>(url, { method: "GET" });
-      // expected shape: { ok, fsKey, snapshot }
       if (r?.snapshot) return r.snapshot;
-      // alternative shape: direct object
       if (r && typeof r === "object" && !Array.isArray(r) && r?.ok !== false) return r;
     } catch (e: any) {
       lastErr = e;
@@ -499,16 +625,14 @@ async function enforceServerSync(navigation: any) {
 export default function EingangPruefungScreen({ route, navigation }: Props) {
   const { projectId, projectCode, title } = route.params;
 
-  // pk deve essere BA-... (FS key). Fallback su projectId se già BA-...
   const pk = useMemo(() => {
     const a = String(projectCode || "").trim();
     if (looksLikeProjectCode(a)) return a;
     const b = String(projectId || "").trim();
     if (looksLikeProjectCode(b)) return b;
-    return a || b; // ultimo fallback (può essere UUID)
+    return a || b;
   }, [projectCode, projectId]);
 
-  // ✅ DISPLAY: sempre mostrare BA-... se possibile
   const displayProjectCode = useMemo(() => {
     const a = String(projectCode || "").trim();
     if (looksLikeProjectCode(a)) return a;
@@ -519,18 +643,34 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
     return a || b || c || "—";
   }, [pk, projectCode, projectId]);
 
-  const [tab, setTab] = useState<"REGIE" | "LS" | "FOTOS">("REGIE");
+  type InboxTab =
+    | "REGIE"
+    | "LS"
+    | "FOTOS"
+    | "TAGESBERICHT"
+    | "BAUTAGEBUCH"
+    | "ANGEBOT"
+    | "RECHNUNG"
+    | "MENGEN"
+    | "KALKULATION";
+
+  const [tab, setTab] = useState<InboxTab>("REGIE");
   const [busy, setBusy] = useState(false);
 
   const [regie, setRegie] = useState<InboxRegie[]>([]);
   const [ls, setLs] = useState<InboxLs[]>([]);
   const [fotos, setFotos] = useState<InboxFotos[]>([]);
+  const [tagesberichte, setTagesberichte] = useState<InboxTagesbericht[]>([]);
+  const [bautagebuch, setBautagebuch] = useState<any[]>([]);
+  const [angebote, setAngebote] = useState<any[]>([]);
+  const [rechnungen, setRechnungen] = useState<any[]>([]);
+  const [mengen, setMengen] = useState<any[]>([]);
+  const [kalkulationen, setKalkulationen] = useState<any[]>([]);
 
-  // reject modal
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectTarget, setRejectTarget] = useState<{
-    kind: "REGIE" | "LS" | "FOTOS";
+    kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT";
     id: string;
   } | null>(null);
 
@@ -543,16 +683,13 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   const canWork = useMemo(() => looksLikeProjectCode(pk), [pk]);
 
   /** =========================
-   * ✅ Prepare snapshot for reopening (fix empty lines + black previews)
+   * ✅ Prepare snapshot for reopening
    * ========================= */
   const prepareSnapshotForOpen = useCallback(
-    async (kind: "REGIE" | "LS" | "FOTOS", id: string, fallbackItem: any) => {
+    async (kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT", id: string, fallbackItem: any) => {
       const full = await tryFetchFullDoc(kind, pk, id);
       const source = full || fallbackItem || {};
 
-      // ✅ KEY FIX: hydrate BEFORE we compute preview fields
-      // - turns auth-protected / server paths into local file://
-      // - normalizes attachments/files where possible
       let hydratedSource: any = source;
       try {
         const hydrated = await hydrateRowForPreview(source, pk);
@@ -561,53 +698,113 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
         hydratedSource = source;
       }
 
-      // collect metas
-      const poolA = normalizeFileMetaArray(hydratedSource?.files);
-      const poolB = normalizeFileMetaArray(hydratedSource?.attachments);
-      const poolC = normalizeFileMetaArray(hydratedSource?.photos);
+      const poolA0 = normalizeFileMetaArray(hydratedSource?.files);
+      const poolB0 = normalizeFileMetaArray(hydratedSource?.attachments);
+      const poolC0 = normalizeFileMetaArray(hydratedSource?.photos);
 
-      const fromRows = Array.isArray(hydratedSource?.rows)
+      const poolA = mapMetasRewriteInbox(poolA0, pk);
+      const poolB = mapMetasRewriteInbox(poolB0, pk);
+      const poolC = mapMetasRewriteInbox(poolC0, pk);
+
+      const fromRows0 = Array.isArray(hydratedSource?.rows)
         ? normalizeFileMetaArray(
             (hydratedSource.rows || []).flatMap(
               (x: any) => x?.photos || x?.attachments || x?.files || []
             )
           )
         : [];
+      const fromRows = mapMetasRewriteInbox(fromRows0, pk);
 
-      const mainUri = String(
+      const fromLines0 = Array.isArray(hydratedSource?.lines)
+        ? normalizeFileMetaArray(
+            (hydratedSource.lines || []).flatMap(
+              (x: any) => x?.photos || x?.attachments || x?.files || []
+            )
+          )
+        : [];
+      const fromLines = mapMetasRewriteInbox(fromLines0, pk);
+
+      const mainUriRaw = String(
         hydratedSource?.imageUri ||
           hydratedSource?.imageMeta?.uri ||
           hydratedSource?.image?.uri ||
           ""
       ).trim();
 
-      const mainArr = mainUri
+      const mainUri = rewriteInboxUri(mainUriRaw, pk);
+
+      const mainArr0 = mainUri
         ? normalizeFileMetaArray([
             { uri: mainUri, name: "photo_main.jpg", type: inferMimeFromUri(mainUri) },
           ])
         : [];
+      const mainArr = mapMetasRewriteInbox(mainArr0, pk);
 
-      const merged = normalizeFileMetaArray([...poolA, ...poolB, ...poolC, ...fromRows]);
-      const forFotos = normalizeFileMetaArray([...mainArr, ...merged]);
+      const merged0 = normalizeFileMetaArray([
+        ...poolA,
+        ...poolB,
+        ...poolC,
+        ...fromRows,
+        ...fromLines,
+      ]);
+      const merged = mapMetasRewriteInbox(merged0, pk);
 
-      // ✅ localize URIs to file:// (extra safety; hydrate already does most of it)
+      const forFotos0 = normalizeFileMetaArray([...mainArr, ...merged]);
+      const forFotos = mapMetasRewriteInbox(forFotos0, pk);
+
       const localizedMerged = await localizeFileMetas(merged);
       const localizedFotos = await localizeFileMetas(forFotos);
+
+      let patchedRows = hydratedSource?.rows;
+      if (Array.isArray(patchedRows)) {
+        patchedRows = await Promise.all(
+          patchedRows.map(async (r: any) => {
+            const rp0 = normalizeFileMetaArray(r?.photos || r?.attachments || r?.files || []);
+            const rp1 = mapMetasRewriteInbox(rp0, pk);
+            const rp2 = await localizeFileMetas(rp1);
+            return {
+              ...r,
+              photos: rp2,
+              attachments: rp2,
+              files: rp2,
+            };
+          })
+        );
+      }
+
+      let patchedLines = hydratedSource?.lines;
+      if (Array.isArray(patchedLines)) {
+        patchedLines = await Promise.all(
+          patchedLines.map(async (r: any) => {
+            const rp0 = normalizeFileMetaArray(r?.photos || r?.attachments || r?.files || []);
+            const rp1 = mapMetasRewriteInbox(rp0, pk);
+            const rp2 = await localizeFileMetas(rp1);
+            return {
+              ...r,
+              photos: rp2,
+              attachments: rp2,
+              files: rp2,
+            };
+          })
+        );
+      }
 
       const patched = {
         ...hydratedSource,
         projectId: hydratedSource?.projectId || pk,
         projectCode: hydratedSource?.projectCode || pk,
         id: hydratedSource?.id || hydratedSource?.docId || id,
-        // keep arrays in common fields
+
+        rows: patchedRows,
+        lines: patchedLines,
+
         files: kind === "FOTOS" ? localizedFotos : localizedMerged,
         attachments: kind === "FOTOS" ? localizedFotos : localizedMerged,
-        photos:
-          Array.isArray(hydratedSource?.photos)
-            ? await localizeFileMetas(normalizeFileMetaArray(hydratedSource.photos))
-            : kind === "FOTOS"
-            ? localizedFotos
-            : localizedMerged,
+        photos: Array.isArray(hydratedSource?.photos)
+          ? await localizeFileMetas(normalizeFileMetaArray(hydratedSource.photos))
+          : kind === "FOTOS"
+          ? localizedFotos
+          : localizedMerged,
         imageUri:
           kind === "FOTOS"
             ? localizedFotos?.[0]?.uri || mainUri || hydratedSource?.imageUri
@@ -620,44 +817,46 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   );
 
   /** =========================
-   * PDF helpers (Exporter)
+   * PDF helpers
    * ========================= */
-
-  /**
-   * ✅ IMPORTANT FIX:
-   * exporter expects QueueItem-like wrapper:
-   * { kind: "...", payload: { date,text,note,files,row:{...} } }
-   */
   const buildRowForExporter = useCallback(
-    (kind: "REGIE" | "LS" | "FOTOS", item: any) => {
+    (kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT", item: any) => {
       const r = item || {};
       const dateYmd = toYmd(r?.date || r?.datum || r?.createdAt || r?.submittedAt || r?.timestamp);
 
-      // files pool
-      const poolA = normalizeFileMetaArray(r?.files);
-      const poolB = normalizeFileMetaArray(r?.attachments);
-      const poolC = normalizeFileMetaArray(r?.photos);
+      const poolA = mapMetasRewriteInbox(normalizeFileMetaArray(r?.files), pk);
+      const poolB = mapMetasRewriteInbox(normalizeFileMetaArray(r?.attachments), pk);
+      const poolC = mapMetasRewriteInbox(normalizeFileMetaArray(r?.photos), pk);
 
       const fromLines = Array.isArray(r?.rows)
         ? normalizeFileMetaArray((r.rows || []).flatMap((x: any) => x?.photos || []))
+        : Array.isArray(r?.lines)
+        ? normalizeFileMetaArray((r.lines || []).flatMap((x: any) => x?.photos || []))
         : [];
 
-      // fotos main imageUri if present
-      const mainUri = String(r?.imageUri || r?.imageMeta?.uri || "").trim();
+      const mainUri = rewriteInboxUri(String(r?.imageUri || r?.imageMeta?.uri || "").trim(), pk);
       const mainArr = mainUri
-        ? normalizeFileMetaArray([{ uri: mainUri, name: "photo_main.jpg", type: inferMimeFromUri(mainUri) }])
+        ? normalizeFileMetaArray([
+            { uri: mainUri, name: "photo_main.jpg", type: inferMimeFromUri(mainUri) },
+          ])
         : [];
 
       const mergedPool = normalizeFileMetaArray([...poolA, ...poolB, ...poolC, ...fromLines]);
       const filesForPhotos = normalizeFileMetaArray([...mainArr, ...mergedPool]);
 
-      // text fields
       const text =
-        String(r?.text || r?.comment || r?.leistung || r?.rows?.[0]?.comment || "").trim() ||
-        String(r?.bemerkungen || r?.notes || r?.note || "").trim();
+        String(
+          r?.text ||
+            r?.comment ||
+            r?.leistung ||
+            r?.rows?.[0]?.comment ||
+            r?.workDone ||
+            r?.lines?.[0]?.taetigkeit ||
+            ""
+        ).trim() || String(r?.bemerkungen || r?.notes || r?.note || r?.issues || "").trim();
 
-      const note = String(r?.bemerkungen || r?.notes || r?.note || "").trim();
-      const hours = (r?.hours ?? r?.rows?.[0]?.hours ?? undefined) as any;
+      const note = String(r?.bemerkungen || r?.notes || r?.note || r?.issues || "").trim();
+      const hours = (r?.hours ?? r?.rows?.[0]?.hours ?? r?.lines?.[0]?.stunden ?? undefined) as any;
 
       if (kind === "REGIE") {
         return {
@@ -706,7 +905,32 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
         };
       }
 
-      // FOTOS
+      if (kind === "TAGESBERICHT") {
+        return {
+          kind: "TAGESBERICHT",
+          payload: {
+            date: dateYmd,
+            text,
+            note,
+            files: mergedPool,
+            row: {
+              ...r,
+              projectId: pk,
+              projectCode: pk,
+              date: dateYmd,
+              text,
+              note,
+              reportType: "TAGESBERICHT",
+              docType: "TAGESBERICHT",
+              files: mergedPool,
+              attachments: mergedPool,
+              photos: Array.isArray(r?.photos) ? normalizeFileMetaArray(r.photos) : mergedPool,
+              lines: Array.isArray(r?.lines) ? r.lines : [],
+            },
+          },
+        };
+      }
+
       return {
         kind: "PHOTOS",
         payload: {
@@ -733,22 +957,18 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   );
 
   const ensurePdf = useCallback(
-    async (kind: "REGIE" | "LS" | "FOTOS", item: any): Promise<PdfExportResult> => {
+    async (kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT", item: any): Promise<PdfExportResult> => {
       if (!canWork) throw new Error("Projekt-Code (BA-...) fehlt.");
 
       const docId = String(item?.id || "").trim();
       if (!docId) throw new Error("Dokument-ID fehlt.");
 
-      // ✅ NEW: fetch full snapshot before exporting (prevents empty PDFs)
       const full = await tryFetchFullDoc(kind, pk, docId);
       const source = full || item;
 
       const projectTitle = String(title || "").trim();
       const rowForExporter: any = buildRowForExporter(kind, source);
 
-      // ✅ FIX (ONLY FOR FOTOS):
-      // In SERVER_SYNC, fotos files are often remote URLs; the PDF exporter expects file://
-      // So we download attachments + main imageUri to cache BEFORE export.
       if (kind === "FOTOS") {
         try {
           if (Array.isArray(rowForExporter?.payload?.files)) {
@@ -758,10 +978,14 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
             rowForExporter.payload.row.files = await localizeFileMetas(rowForExporter.payload.row.files);
           }
           if (Array.isArray(rowForExporter?.payload?.row?.attachments)) {
-            rowForExporter.payload.row.attachments = await localizeFileMetas(rowForExporter.payload.row.attachments);
+            rowForExporter.payload.row.attachments = await localizeFileMetas(
+              rowForExporter.payload.row.attachments
+            );
           }
           if (Array.isArray(rowForExporter?.payload?.row?.photos)) {
-            rowForExporter.payload.row.photos = await localizeFileMetas(rowForExporter.payload.row.photos);
+            rowForExporter.payload.row.photos = await localizeFileMetas(
+              rowForExporter.payload.row.photos
+            );
           }
 
           const img = String(rowForExporter?.payload?.row?.imageUri || "").trim();
@@ -769,7 +993,6 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
             rowForExporter.payload.row.imageUri = await downloadToCacheIfNeeded(img, "photo_main.jpg");
           }
         } catch (e) {
-          // best-effort: if cache download fails, exporter still runs (may produce blank images, but not crash)
           if (__DEV__) console.warn("FOTOS pdf localize failed (best-effort)", e);
         }
       }
@@ -792,6 +1015,13 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
           row: rowForExporter,
           filenameHint: `Lieferschein_${ymd}_${pk}_${short}`,
         } as any)) as any;
+      } else if (kind === "TAGESBERICHT") {
+        out = (await exportTagesberichtPdfToProject({
+          projectFsKey: pk,
+          projectTitle,
+          row: rowForExporter,
+          filenameHint: `Tagesbericht_${ymd}_${pk}_${short}`,
+        } as any)) as any;
       } else {
         out = (await exportPhotosPdfToProject({
           projectFsKey: pk,
@@ -808,7 +1038,7 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   );
 
   const onCreatePdf = useCallback(
-    async (kind: "REGIE" | "LS" | "FOTOS", item: any) => {
+    async (kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT", item: any) => {
       try {
         setBusy(true);
         const out = await ensurePdf(kind, item);
@@ -823,11 +1053,10 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   );
 
   const onEmailPdf = useCallback(
-    async (kind: "REGIE" | "LS" | "FOTOS", item: any) => {
+    async (kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT", item: any) => {
       try {
         setBusy(true);
 
-        // ✅ recipients from TeamRolesScreen / Projekt-Meta
         const roles =
           (await getProjectRoles(pk)) || (await getProjectRoles(String(projectId || "").trim())) || null;
 
@@ -837,10 +1066,16 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
 
         const out = await ensurePdf(kind, item);
 
-        const subjectBase = kind === "REGIE" ? "Regiebericht" : kind === "LS" ? "Lieferschein" : "Fotodokumentation";
+        const subjectBase =
+          kind === "REGIE"
+            ? "Regiebericht"
+            : kind === "LS"
+            ? "Lieferschein"
+            : kind === "TAGESBERICHT"
+            ? "Tagesbericht"
+            : "Fotodokumentation";
         const subject = `${subjectBase} ${pk} – ${out.date}`;
 
-        // ✅ iOS: allegare SOLO file:// pdf
         const att = [out.pdfUri].filter((u) => typeof u === "string" && u.startsWith("file://"));
         if (!att.length) throw new Error("Kein gültiger PDF-Anhang (file://).");
 
@@ -862,7 +1097,7 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   );
 
   /** =========================
-   * Queue executor (REAL sync)
+   * Queue executor
    * ========================= */
   const queueExecutor = useCallback(async (item: QueueItem) => {
     if (!looksLikeProjectCode(item.projectId)) {
@@ -885,13 +1120,24 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       return (api as any).pushLieferscheinToServer(item.projectId, row);
     }
 
+    if (item.kind === "TAGESBERICHT") {
+      const row = (item as any)?.payload?.row || (item as any)?.payload || {};
+      if (typeof (api as any).pushTagesberichtToServer !== "function") {
+        throw new Error("pushTagesberichtToServer fehlt");
+      }
+      return (api as any).pushTagesberichtToServer(item.projectId, row);
+    }
+
     if (item.kind === "PHOTO_NOTE" || item.kind === "FOTOS_NOTIZEN") {
       const p = (item as any)?.payload || {};
 
       const filesFromPayload = Array.isArray(p?.files) ? p.files : [];
-      const imageUri = p?.imageUri ? [{ uri: p.imageUri, name: "photo.jpg", type: "image/jpeg" }] : [];
+      const imageUri = p?.imageUri
+        ? [{ uri: p.imageUri, name: "photo.jpg", type: "image/jpeg" }]
+        : [];
 
-      const date = String(p?.date || p?.createdAt || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+      const date =
+        String(p?.date || p?.createdAt || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
 
       const docId = String(p?.docId || p?.id || item.id || "").trim() || undefined;
 
@@ -944,15 +1190,19 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
    * Server sync: inbox list
    * ========================= */
   const pullServerInbox = useCallback(async () => {
-    if (!canWork) return { okLs: false, okRegie: false, okFotos: false };
+    if (!canWork) {
+      return { okLs: false, okRegie: false, okFotos: false, okTagesbericht: false };
+    }
 
     let okLs = false;
     let okRegie = false;
     let okFotos = false;
+    let okTagesbericht = false;
 
-    // LS inbox
     try {
-      const r = await serverRequest<InboxListResponse<any>>(`/api/ls/inbox/list?projectId=${encodeURIComponent(pk)}`);
+      const r = await serverRequest<InboxListResponse<any>>(
+        `/api/ls/inbox/list?projectId=${encodeURIComponent(pk)}`
+      );
       const items = Array.isArray(r?.items) ? r.items : [];
       const normalized: InboxLs[] = items
         .map((x: any) => {
@@ -968,23 +1218,28 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
             projectId: String(x?.projectId || pk),
             projectCode: pc,
             workflowStatus: (x?.workflowStatus || "EINGEREICHT") as WorkflowStatus,
-            attachments: Array.isArray(x?.attachments) ? x.attachments : Array.isArray(x?.photos) ? x.photos : [],
+            attachments: Array.isArray(x?.attachments)
+              ? x.attachments
+              : Array.isArray(x?.photos)
+              ? x.photos
+              : [],
           };
         })
         .filter((x: any) => !!x.id);
 
-      normalized.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+      normalized.sort(
+        (a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0)
+      );
 
       setLs(normalized);
       await saveList(INBOX_KEY_LS(pk), normalized);
       okLs = true;
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // REGIE inbox
     try {
-      const r = await serverRequest<InboxListResponse<any>>(`/api/regie/inbox/list?projectId=${encodeURIComponent(pk)}`);
+      const r = await serverRequest<InboxListResponse<any>>(
+        `/api/regie/inbox/list?projectId=${encodeURIComponent(pk)}`
+      );
       const items = Array.isArray(r?.items) ? r.items : [];
       const normalized: InboxRegie[] = items
         .map((x: any) => {
@@ -1001,22 +1256,25 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
             projectCode: pc,
             workflowStatus: (x?.workflowStatus || "EINGEREICHT") as WorkflowStatus,
             text: x?.text ?? x?.comment ?? "",
-            attachments: Array.isArray(x?.attachments) ? x.attachments : Array.isArray(x?.photos) ? x.photos : [],
+            attachments: Array.isArray(x?.attachments)
+              ? x.attachments
+              : Array.isArray(x?.photos)
+              ? x.photos
+              : [],
             photos: Array.isArray(x?.photos) ? x.photos : undefined,
           };
         })
         .filter((x: any) => !!x.id);
 
-      normalized.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+      normalized.sort(
+        (a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0)
+      );
 
       setRegie(normalized);
       await saveList(INBOX_KEY_REGIE(pk), normalized);
       okRegie = true;
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    // ✅ FOTOS inbox (try multiple endpoints)
     try {
       const paths = [
         `/api/photos/inbox/list?projectId=${encodeURIComponent(pk)}`,
@@ -1049,7 +1307,9 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
           return {
             ...x,
             kind: "fotos",
-            id: String(x?.docId || x?.id || "").trim(),
+            id: String(x?.id || x?.docId || "").trim(),
+            docId: String(x?.docId || x?.id || "").trim(),
+            serverId: String(x?.id || x?.docId || "").trim(),
             projectId: String(x?.projectId || pk),
             projectCode: pc,
             workflowStatus: (x?.workflowStatus || "EINGEREICHT") as WorkflowStatus,
@@ -1058,7 +1318,11 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
             bemerkungen: x?.bemerkungen ?? "",
             kostenstelle: x?.kostenstelle ?? "",
             lvItemPos: x?.lvItemPos ?? null,
-            attachments: Array.isArray(x?.attachments) ? x.attachments : Array.isArray(x?.photos) ? x.photos : [],
+            attachments: Array.isArray(x?.attachments)
+              ? x.attachments
+              : Array.isArray(x?.photos)
+              ? x.photos
+              : [],
             photos: Array.isArray(x?.photos) ? x.photos : undefined,
             imageUri: x?.imageUri || x?.image?.uri || undefined,
             imageMeta: x?.imageMeta || x?.image || undefined,
@@ -1066,16 +1330,84 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
         })
         .filter((x: any) => !!x.id);
 
-      normalized.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+      normalized.sort(
+        (a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0)
+      );
 
       setFotos(normalized);
       await saveList(INBOX_KEY_FOTOS(pk), normalized);
       okFotos = true;
-    } catch {
-      // ignore
-    }
+    } catch {}
 
-    return { okLs, okRegie, okFotos };
+    try {
+      const paths = [
+        `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(pk)}`,
+        `/api/tagesberichte/inbox/list?projectId=${encodeURIComponent(pk)}`,
+        `/api/inbox/${encodeURIComponent(pk)}/tagesbericht/list`,
+      ];
+
+      let r: any = null;
+      let lastErr: any = null;
+
+      for (const p of paths) {
+        try {
+          r = await serverRequest<InboxListResponse<any>>(p);
+          if (r) break;
+        } catch (e: any) {
+          lastErr = e;
+        }
+      }
+      if (!r) throw lastErr || new Error("TAGESBERICHT list failed");
+
+      const items = Array.isArray(r?.items) ? r.items : [];
+      const normalized: InboxTagesbericht[] = items
+        .map((x: any) => {
+          const pc =
+            String(x?.projectCode || "").trim() ||
+            (looksLikeProjectCode(String(x?.projectId || "").trim()) ? String(x?.projectId || "").trim() : "") ||
+            pk;
+
+          return {
+            ...x,
+            kind: "tagesbericht",
+            id: String(x?.id || x?.docId || "").trim(),
+            projectId: String(x?.projectId || pk),
+            projectCode: pc,
+            workflowStatus: (x?.workflowStatus || "EINGEREICHT") as WorkflowStatus,
+            date: String(x?.date || "").slice(0, 10) || undefined,
+            weather: String(x?.weather || ""),
+            temperature: String(x?.temperature || ""),
+            workers: String(x?.workers || ""),
+            machines: String(x?.machines || ""),
+            workDone: String(x?.workDone || ""),
+            issues: String(x?.issues || ""),
+            notes: String(x?.notes || ""),
+            lines: Array.isArray(x?.lines) ? x.lines : [],
+            reportType: "TAGESBERICHT",
+            docType: "TAGESBERICHT",
+            attachments: Array.isArray(x?.attachments)
+              ? x.attachments
+              : Array.isArray(x?.photos)
+              ? x.photos
+              : Array.isArray(x?.files)
+              ? x.files
+              : [],
+            photos: Array.isArray(x?.photos) ? x.photos : undefined,
+            files: Array.isArray(x?.files) ? x.files : undefined,
+          };
+        })
+        .filter((x: any) => !!x.id);
+
+      normalized.sort(
+        (a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0)
+      );
+
+      setTagesberichte(normalized);
+      await saveList(INBOX_KEY_TAGESBERICHT(pk), normalized);
+      okTagesbericht = true;
+    } catch {}
+
+    return { okLs, okRegie, okFotos, okTagesbericht };
   }, [canWork, pk]);
 
   const reload = useCallback(async () => {
@@ -1083,30 +1415,56 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       setRegie([]);
       setLs([]);
       setFotos([]);
+      setTagesberichte([]);
       return;
     }
 
-    // 1) server
     const res = await pullServerInbox();
 
-    // 2) fallback local if not updated
-    const [rLocal, lLocal, fLocal] = await Promise.all([
-      loadList<InboxRegie[]>(INBOX_KEY_REGIE(pk), []),
-      loadList<InboxLs[]>(INBOX_KEY_LS(pk), []),
-      loadList<InboxFotos[]>(INBOX_KEY_FOTOS(pk), []),
-    ]);
+    const [rLocal, lLocal, fLocal, tLocal, bLocal, aLocal, reLocal, mLocal, kLocal] =
+      await Promise.all([
+        loadList<InboxRegie[]>(INBOX_KEY_REGIE(pk), []),
+        loadLsCompat(pk),
+        loadList<InboxFotos[]>(INBOX_KEY_FOTOS(pk), []),
+        loadList<InboxTagesbericht[]>(INBOX_KEY_TAGESBERICHT(pk), []),
+        loadList<any[]>(INBOX_KEY_BAUTAGEBUCH(pk), []),
+        loadList<any[]>(INBOX_KEY_ANGEBOT(pk), []),
+        loadList<any[]>(INBOX_KEY_RECHNUNG(pk), []),
+        loadList<any[]>(INBOX_KEY_MENGEN(pk), []),
+        loadList<any[]>(INBOX_KEY_KALKULATION(pk), []),
+      ]);
 
     const rr = Array.isArray(rLocal) ? rLocal : [];
     const ll = Array.isArray(lLocal) ? lLocal : [];
     const ff = Array.isArray(fLocal) ? fLocal : [];
+    const tt = Array.isArray(tLocal) ? tLocal : [];
 
-    rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+    
+    const bb = Array.isArray(bLocal) ? bLocal : [];
+    const aa = Array.isArray(aLocal) ? aLocal : [];
+    const re = Array.isArray(reLocal) ? reLocal : [];
+    const mm = Array.isArray(mLocal) ? mLocal : [];
+    const kk = Array.isArray(kLocal) ? kLocal : [];
+rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
     ll.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
     ff.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+    tt.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+    bb.sort((a: any, b: any) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+    aa.sort((a: any, b: any) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+    re.sort((a: any, b: any) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+    mm.sort((a: any, b: any) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
+    kk.sort((a: any, b: any) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0));
 
     if (!res.okRegie && rr.length) setRegie(rr);
-    if (!res.okLs && ll.length) setLs(ll);
+    setLs(mergeById(ls, ll));
     if (!res.okFotos && ff.length) setFotos(ff);
+    if (!res.okTagesbericht && tt.length) setTagesberichte(tt);
+
+    setBautagebuch(bb);
+    setAngebote(aa);
+    setRechnungen(re);
+    setMengen(mm);
+    setKalkulationen(kk);
   }, [canWork, pk, pullServerInbox]);
 
   useEffect(() => {
@@ -1117,7 +1475,6 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
     })();
   }, [navigation, reload]);
 
-  // ✅ onFocus: enforce SERVER_SYNC, try silent queue flush, then reload inbox
   useFocusEffect(
     useCallback(() => {
       let alive = true;
@@ -1154,6 +1511,7 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       const next = ls.map((x) => (x.id === id ? { ...x, ...patch } : x));
       setLs(next);
       await saveList(INBOX_KEY_LS(pk), next);
+      await saveList(`rlc_mobile_inbox_ls:${pk}`, next);
     },
     [ls, pk]
   );
@@ -1165,6 +1523,15 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       await saveList(INBOX_KEY_FOTOS(pk), next);
     },
     [fotos, pk]
+  );
+
+  const updateTagesberichtItem = useCallback(
+    async (id: string, patch: Partial<InboxTagesbericht>) => {
+      const next = tagesberichte.map((x) => (x.id === id ? { ...x, ...patch } : x));
+      setTagesberichte(next);
+      await saveList(INBOX_KEY_TAGESBERICHT(pk), next);
+    },
+    [tagesberichte, pk]
   );
 
   const removeRegieItem = useCallback(
@@ -1181,6 +1548,7 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       const next = ls.filter((x) => x.id !== id);
       setLs(next);
       await saveList(INBOX_KEY_LS(pk), next);
+      await saveList(`rlc_mobile_inbox_ls:${pk}`, next);
     },
     [ls, pk]
   );
@@ -1192,6 +1560,15 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       await saveList(INBOX_KEY_FOTOS(pk), next);
     },
     [fotos, pk]
+  );
+
+  const removeTagesberichtItem = useCallback(
+    async (id: string) => {
+      const next = tagesberichte.filter((x) => x.id !== id);
+      setTagesberichte(next);
+      await saveList(INBOX_KEY_TAGESBERICHT(pk), next);
+    },
+    [tagesberichte, pk]
   );
 
   /** =========================
@@ -1249,7 +1626,7 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       try {
         setBusy(true);
 
-        await tryApprove("FOTOS", pk, id);
+        await tryApprove("FOTOS", pk, id, String((item as any)?.docId || (item as any)?.serverId || ""));
 
         await removeFotosItem(id);
         Alert.alert("Freigabe", "Foto/Notiz wurde freigegeben (Inbox → Final).");
@@ -1265,7 +1642,29 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
     [fotos, pk, pullServerInbox, removeFotosItem, updateFotosItem]
   );
 
-  const openReject = useCallback((kind: "REGIE" | "LS" | "FOTOS", id: string) => {
+  const approveTagesbericht = useCallback(
+    async (id: string) => {
+      const item = tagesberichte.find((x) => x.id === id);
+      if (!item) return;
+
+      try {
+        setBusy(true);
+        await tryApprove("TAGESBERICHT", pk, id);
+        await removeTagesberichtItem(id);
+        Alert.alert("Freigabe", "Tagesbericht wurde freigegeben.");
+        await pullServerInbox();
+      } catch (e: any) {
+        const msg = String(e?.message || "Approve failed");
+        await updateTagesberichtItem(id, { syncStatus: "ERROR", syncError: msg });
+        Alert.alert("Freigabe fehlgeschlagen", msg);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [pk, tagesberichte, pullServerInbox, removeTagesberichtItem, updateTagesberichtItem]
+  );
+
+  const openReject = useCallback((kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT", id: string) => {
     setRejectTarget({ kind, id });
     setRejectReason("");
     setRejectOpen(true);
@@ -1391,10 +1790,64 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
         Alert.alert("Ablehnen fehlgeschlagen", "Server Fehler: " + String(msg));
         return;
       }
+
+      if (t.kind === "TAGESBERICHT") {
+        const candidates = [
+          { path: `/api/tagesbericht/inbox/reject`, body: { projectId: pk, docId: t.id, reason } },
+          { path: `/api/tagesberichte/inbox/reject`, body: { projectId: pk, docId: t.id, reason } },
+          { path: `/api/tagesbericht/reject`, body: { projectId: pk, docId: t.id, reason } },
+          { path: `/api/tagesberichte/reject`, body: { projectId: pk, docId: t.id, reason } },
+          {
+            path: `/api/inbox/${encodeURIComponent(pk)}/tagesbericht/${encodeURIComponent(t.id)}/reject`,
+            body: { reason },
+          },
+        ];
+
+        let lastErr: any = null;
+        for (const c of candidates) {
+          try {
+            await serverRequest(c.path, { method: "POST", body: JSON.stringify(c.body) });
+
+            await updateTagesberichtItem(t.id, {
+              workflowStatus: "ABGELEHNT",
+              rejectionReason: reason,
+              syncStatus: "SENT",
+              syncError: null,
+            });
+
+            setRejectOpen(false);
+            setRejectTarget(null);
+
+            Alert.alert("Ablehnen", "Tagesbericht wurde abgelehnt.");
+            await pullServerInbox();
+            return;
+          } catch (e: any) {
+            lastErr = e;
+          }
+        }
+
+        const msg = lastErr?.message || "Reject failed";
+        await updateTagesberichtItem(t.id, {
+          workflowStatus: "EINGEREICHT",
+          syncStatus: "ERROR",
+          syncError: msg,
+        });
+        Alert.alert("Ablehnen fehlgeschlagen", "Server Fehler: " + String(msg));
+        return;
+      }
     } finally {
       setBusy(false);
     }
-  }, [pk, pullServerInbox, rejectReason, rejectTarget, updateLsItem, updateRegieItem, updateFotosItem]);
+  }, [
+    pk,
+    pullServerInbox,
+    rejectReason,
+    rejectTarget,
+    updateLsItem,
+    updateRegieItem,
+    updateFotosItem,
+    updateTagesberichtItem,
+  ]);
 
   /** =========================
    * Navigation: open/edit items
@@ -1411,7 +1864,6 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
           fromInbox: true,
           editId: id,
           title: "Regie (Eingang)",
-          // ✅ NEW: pass full data (lines + local file:// attachments)
           inboxSnapshot,
         } as any);
       } finally {
@@ -1466,6 +1918,30 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
     [navigation, pk, projectId, fotos, prepareSnapshotForOpen]
   );
 
+  const openTagesbericht = useCallback(
+    async (id: string) => {
+      const item = tagesberichte.find((x) => x.id === id);
+      try {
+        setBusy(true);
+        const inboxSnapshot = await prepareSnapshotForOpen("TAGESBERICHT", id, item);
+        navigation.navigate(
+          "TagesberichtEditor" as any,
+          {
+            projectId,
+            projectCode: pk,
+            fromInbox: true,
+            tagesberichtId: id,
+            title: "Tagesbericht (Eingang)",
+            inboxSnapshot,
+          } as any
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [navigation, pk, projectId, tagesberichte, prepareSnapshotForOpen]
+  );
+
   /** =========================
    * Render cards
    * ========================= */
@@ -1488,53 +1964,33 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        {item.rejectionReason ? <Text style={[s.err, { color: T.danger }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
         {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
 
         <View style={s.actions}>
-          <Pressable
-            style={[s.chipBtn, { borderColor: alpha(T.primary, 0.4) }]}
-            onPress={() => openRegie(item.id)}
-            disabled={busy}
-          >
-            <Text style={[s.chipTxt, { color: T.primary }]}>Öffnen</Text>
+          <Pressable style={s.chipBtn} onPress={() => openRegie(item.id)} disabled={busy}>
+            <Text style={[s.chipTxt, s.chipAccentTxt]}>Öffnen</Text>
           </Pressable>
 
-          <Pressable
-            style={[s.chipBtn, { borderColor: alpha(T.text, 0.25) }]}
-            onPress={() => onCreatePdf("REGIE", item)}
-            disabled={busy || !canWork}
-          >
-            <Text style={[s.chipTxt, { color: T.text }]}>PDF</Text>
+          <Pressable style={s.chipBtn} onPress={() => onCreatePdf("REGIE", item)} disabled={busy || !canWork}>
+            <Text style={s.chipTxt}>PDF</Text>
           </Pressable>
 
-          <Pressable
-            style={[s.chipFill, { backgroundColor: T.text, borderColor: T.text }]}
-            onPress={() => onEmailPdf("REGIE", item)}
-            disabled={busy || !canWork}
-          >
-            <Text style={[s.chipTxt, { color: "#fff" }]}>E-Mail</Text>
+          <Pressable style={s.chipDark} onPress={() => onEmailPdf("REGIE", item)} disabled={busy || !canWork}>
+            <Text style={[s.chipTxt, s.chipDarkTxt]}>E-Mail</Text>
           </Pressable>
 
-          {item.workflowStatus === "EINGEREICHT" || item.workflowStatus === "ABGELEHNT" ? (
+          {(item.workflowStatus === "EINGEREICHT" || item.workflowStatus === "ABGELEHNT") && (
             <>
-              <Pressable
-                style={[s.chipFill, { backgroundColor: T.primary, borderColor: T.primary }, busy && { opacity: 0.65 }]}
-                onPress={() => approveRegie(item.id)}
-                disabled={busy}
-              >
-                <Text style={[s.chipTxt, { color: "#fff" }]}>Freigeben</Text>
+              <Pressable style={[s.chipAccent, busy && s.disabledBtn]} onPress={() => approveRegie(item.id)} disabled={busy}>
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Freigeben</Text>
               </Pressable>
 
-              <Pressable
-                style={[s.chipFill, { backgroundColor: T.danger, borderColor: T.danger }, busy && { opacity: 0.65 }]}
-                onPress={() => openReject("REGIE", item.id)}
-                disabled={busy}
-              >
-                <Text style={[s.chipTxt, { color: "#fff" }]}>Ablehnen</Text>
+              <Pressable style={[s.chipDanger, busy && s.disabledBtn]} onPress={() => openReject("REGIE", item.id)} disabled={busy}>
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Ablehnen</Text>
               </Pressable>
             </>
-          ) : null}
+          )}
         </View>
       </View>
     );
@@ -1561,53 +2017,33 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
 
         {!!item.comment ? <Text style={s.cardBody}>{item.comment}</Text> : null}
 
-        {item.rejectionReason ? <Text style={[s.err, { color: T.danger }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
         {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
 
         <View style={s.actions}>
-          <Pressable
-            style={[s.chipBtn, { borderColor: alpha(T.primary, 0.4) }]}
-            onPress={() => openLs(item.id)}
-            disabled={busy}
-          >
-            <Text style={[s.chipTxt, { color: T.primary }]}>Öffnen</Text>
+          <Pressable style={s.chipBtn} onPress={() => openLs(item.id)} disabled={busy}>
+            <Text style={[s.chipTxt, s.chipAccentTxt]}>Öffnen</Text>
           </Pressable>
 
-          <Pressable
-            style={[s.chipBtn, { borderColor: alpha(T.text, 0.25) }]}
-            onPress={() => onCreatePdf("LS", item)}
-            disabled={busy || !canWork}
-          >
-            <Text style={[s.chipTxt, { color: T.text }]}>PDF</Text>
+          <Pressable style={s.chipBtn} onPress={() => onCreatePdf("LS", item)} disabled={busy || !canWork}>
+            <Text style={s.chipTxt}>PDF</Text>
           </Pressable>
 
-          <Pressable
-            style={[s.chipFill, { backgroundColor: T.text, borderColor: T.text }]}
-            onPress={() => onEmailPdf("LS", item)}
-            disabled={busy || !canWork}
-          >
-            <Text style={[s.chipTxt, { color: "#fff" }]}>E-Mail</Text>
+          <Pressable style={s.chipDark} onPress={() => onEmailPdf("LS", item)} disabled={busy || !canWork}>
+            <Text style={[s.chipTxt, s.chipDarkTxt]}>E-Mail</Text>
           </Pressable>
 
-          {item.workflowStatus === "EINGEREICHT" || item.workflowStatus === "ABGELEHNT" ? (
+          {(item.workflowStatus === "EINGEREICHT" || item.workflowStatus === "ABGELEHNT") && (
             <>
-              <Pressable
-                style={[s.chipFill, { backgroundColor: T.primary, borderColor: T.primary }, busy && { opacity: 0.65 }]}
-                onPress={() => approveLs(item.id)}
-                disabled={busy}
-              >
-                <Text style={[s.chipTxt, { color: "#fff" }]}>Freigeben</Text>
+              <Pressable style={[s.chipAccent, busy && s.disabledBtn]} onPress={() => approveLs(item.id)} disabled={busy}>
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Freigeben</Text>
               </Pressable>
 
-              <Pressable
-                style={[s.chipFill, { backgroundColor: T.danger, borderColor: T.danger }, busy && { opacity: 0.65 }]}
-                onPress={() => openReject("LS", item.id)}
-                disabled={busy}
-              >
-                <Text style={[s.chipTxt, { color: "#fff" }]}>Ablehnen</Text>
+              <Pressable style={[s.chipDanger, busy && s.disabledBtn]} onPress={() => openReject("LS", item.id)} disabled={busy}>
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Ablehnen</Text>
               </Pressable>
             </>
-          ) : null}
+          )}
         </View>
       </View>
     );
@@ -1638,121 +2074,499 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        {item.rejectionReason ? <Text style={[s.err, { color: T.danger }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
         {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
 
         <View style={s.actions}>
-          <Pressable
-            style={[s.chipBtn, { borderColor: alpha(T.primary, 0.4) }]}
-            onPress={() => openFotos(item.id)}
-            disabled={busy}
-          >
-            <Text style={[s.chipTxt, { color: T.primary }]}>Öffnen</Text>
+          <Pressable style={s.chipBtn} onPress={() => openFotos(item.id)} disabled={busy}>
+            <Text style={[s.chipTxt, s.chipAccentTxt]}>Öffnen</Text>
           </Pressable>
 
-          <Pressable
-            style={[s.chipBtn, { borderColor: alpha(T.text, 0.25) }]}
-            onPress={() => onCreatePdf("FOTOS", item)}
-            disabled={busy || !canWork}
-          >
-            <Text style={[s.chipTxt, { color: T.text }]}>PDF</Text>
+          <Pressable style={s.chipBtn} onPress={() => onCreatePdf("FOTOS", item)} disabled={busy || !canWork}>
+            <Text style={s.chipTxt}>PDF</Text>
           </Pressable>
 
-          <Pressable
-            style={[s.chipFill, { backgroundColor: T.text, borderColor: T.text }]}
-            onPress={() => onEmailPdf("FOTOS", item)}
-            disabled={busy || !canWork}
-          >
-            <Text style={[s.chipTxt, { color: "#fff" }]}>E-Mail</Text>
+          <Pressable style={s.chipDark} onPress={() => onEmailPdf("FOTOS", item)} disabled={busy || !canWork}>
+            <Text style={[s.chipTxt, s.chipDarkTxt]}>E-Mail</Text>
           </Pressable>
 
-          {item.workflowStatus === "EINGEREICHT" || item.workflowStatus === "ABGELEHNT" ? (
+          {(item.workflowStatus === "EINGEREICHT" || item.workflowStatus === "ABGELEHNT") && (
             <>
-              <Pressable
-                style={[s.chipFill, { backgroundColor: T.primary, borderColor: T.primary }, busy && { opacity: 0.65 }]}
-                onPress={() => approveFotos(item.id)}
-                disabled={busy}
-              >
-                <Text style={[s.chipTxt, { color: "#fff" }]}>Freigeben</Text>
+              <Pressable style={[s.chipAccent, busy && s.disabledBtn]} onPress={() => approveFotos(item.id)} disabled={busy}>
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Freigeben</Text>
               </Pressable>
 
-              <Pressable
-                style={[s.chipFill, { backgroundColor: T.danger, borderColor: T.danger }, busy && { opacity: 0.65 }]}
-                onPress={() => openReject("FOTOS", item.id)}
-                disabled={busy}
-              >
-                <Text style={[s.chipTxt, { color: "#fff" }]}>Ablehnen</Text>
+              <Pressable style={[s.chipDanger, busy && s.disabledBtn]} onPress={() => openReject("FOTOS", item.id)} disabled={busy}>
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Ablehnen</Text>
               </Pressable>
             </>
-          ) : null}
+          )}
         </View>
       </View>
     );
   }
 
-  const shown = tab === "REGIE" ? regie : tab === "LS" ? ls : fotos;
+  function TagesberichtCard({ item }: { item: InboxTagesbericht }) {
+    const wCol = statusColor(item.workflowStatus);
+    const work = String(item.workDone || "").trim();
+    const issues = String(item.issues || "").trim();
+    const workers = String(item.workers || "").trim();
+    const machines = String(item.machines || "").trim();
+    const line1 =
+      work || issues
+        ? `${(work || issues).slice(0, 160)}`
+        : "Tagesbericht";
+
+    return (
+      <View style={s.card}>
+        <View style={s.cardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.cardDate}>{safeDate(item.date)}</Text>
+            <Text style={s.cardSub} numberOfLines={3}>
+              {line1}
+              {item.weather ? ` • Wetter: ${item.weather}` : ""}
+              {workers ? ` • Mitarbeiter: ${workers}` : ""}
+              {machines ? ` • Maschinen: ${machines}` : ""}
+            </Text>
+          </View>
+
+          <View style={[s.pill, { borderColor: wCol, backgroundColor: alpha(wCol, 0.12) }]}>
+            <Text style={[s.pillTxt, { color: wCol }]}>{item.workflowStatus}</Text>
+          </View>
+        </View>
+
+        {issues ? <Text style={s.cardBody}>Vorkommnisse: {issues}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
+
+        <View style={s.actions}>
+          <Pressable style={s.chipBtn} onPress={() => openTagesbericht(item.id)} disabled={busy}>
+            <Text style={[s.chipTxt, s.chipAccentTxt]}>Öffnen</Text>
+          </Pressable>
+
+          <Pressable
+            style={s.chipBtn}
+            onPress={() => onCreatePdf("TAGESBERICHT", item)}
+            disabled={busy || !canWork}
+          >
+            <Text style={s.chipTxt}>PDF</Text>
+          </Pressable>
+
+          <Pressable
+            style={s.chipDark}
+            onPress={() => onEmailPdf("TAGESBERICHT", item)}
+            disabled={busy || !canWork}
+          >
+            <Text style={[s.chipTxt, s.chipDarkTxt]}>E-Mail</Text>
+          </Pressable>
+
+          {(item.workflowStatus === "EINGEREICHT" || item.workflowStatus === "ABGELEHNT") && (
+            <>
+              <Pressable
+                style={[s.chipAccent, busy && s.disabledBtn]}
+                onPress={() => approveTagesbericht(item.id)}
+                disabled={busy}
+              >
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Freigeben</Text>
+              </Pressable>
+
+              <Pressable
+                style={[s.chipDanger, busy && s.disabledBtn]}
+                onPress={() => openReject("TAGESBERICHT", item.id)}
+                disabled={busy}
+              >
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Ablehnen</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  function genericStorageKey(t: InboxTab) {
+    switch (t) {
+      case "BAUTAGEBUCH":
+        return INBOX_KEY_BAUTAGEBUCH(pk);
+      case "ANGEBOT":
+        return INBOX_KEY_ANGEBOT(pk);
+      case "RECHNUNG":
+        return INBOX_KEY_RECHNUNG(pk);
+      case "MENGEN":
+        return INBOX_KEY_MENGEN(pk);
+      case "KALKULATION":
+        return INBOX_KEY_KALKULATION(pk);
+      default:
+        return "";
+    }
+  }
+
+  function setGenericList(t: InboxTab, list: any[]) {
+    switch (t) {
+      case "BAUTAGEBUCH":
+        setBautagebuch(list);
+        return;
+      case "ANGEBOT":
+        setAngebote(list);
+        return;
+      case "RECHNUNG":
+        setRechnungen(list);
+        return;
+      case "MENGEN":
+        setMengen(list);
+        return;
+      case "KALKULATION":
+        setKalkulationen(list);
+        return;
+    }
+  }
+
+  function getGenericList(t: InboxTab) {
+    switch (t) {
+      case "BAUTAGEBUCH":
+        return bautagebuch;
+      case "ANGEBOT":
+        return angebote;
+      case "RECHNUNG":
+        return rechnungen;
+      case "MENGEN":
+        return mengen;
+      case "KALKULATION":
+        return kalkulationen;
+      default:
+        return [];
+    }
+  }
+
+  async function tryGenericServerAction(action: "approve" | "reject", t: InboxTab, item: any, reason?: string) {
+    const id = String(item?.id || item?.docId || "").trim();
+    if (!id) return false;
+
+    const typeLower =
+      t === "ANGEBOT"
+        ? "angebot"
+        : t === "RECHNUNG"
+        ? "rechnung"
+        : t === "MENGEN"
+        ? "mengen"
+        : t === "BAUTAGEBUCH"
+        ? "bautagebuch"
+        : t === "KALKULATION"
+        ? "kalkulation"
+        : String(t).toLowerCase();
+
+    const bodies = [
+      { projectId: pk, projectCode: pk, docId: id, id, reason },
+      { projectId, projectCode: pk, docId: id, id, reason },
+    ];
+
+    const paths = [
+      `/api/inbox/${encodeURIComponent(pk)}/${encodeURIComponent(typeLower)}/${encodeURIComponent(id)}/${action}`,
+      `/api/${typeLower}/inbox/${action}`,
+      `/api/${typeLower}/${action}`,
+    ];
+
+    for (const p of paths) {
+      for (const body of bodies) {
+        try {
+          await serverRequest(p, {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
+          return true;
+        } catch {}
+      }
+    }
+
+    return false;
+  }
+
+  async function removeGenericItem(t: InboxTab, id: string) {
+    const list = getGenericList(t);
+    const next = list.filter((x: any) => String(x?.id || x?.docId || "") !== String(id));
+    setGenericList(t, next);
+
+    const key = genericStorageKey(t);
+    if (key) await saveList(key, next);
+  }
+
+  async function updateGenericItem(t: InboxTab, id: string, patch: any) {
+    const list = getGenericList(t);
+    const next = list.map((x: any) =>
+      String(x?.id || x?.docId || "") === String(id) ? { ...x, ...patch, updatedAt: Date.now() } : x
+    );
+    setGenericList(t, next);
+
+    const key = genericStorageKey(t);
+    if (key) await saveList(key, next);
+  }
+
+  async function approveGeneric(t: InboxTab, item: any) {
+    const id = String(item?.id || item?.docId || "").trim();
+    if (!id) return;
+
+    try {
+      setBusy(true);
+      await tryGenericServerAction("approve", t, item);
+      await removeGenericItem(t, id);
+      Alert.alert("Freigabe", "Dokument wurde freigegeben.");
+    } catch (e: any) {
+      Alert.alert("Freigabe fehlgeschlagen", String(e?.message || e || "unbekannt"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rejectGeneric(t: InboxTab, item: any) {
+    const id = String(item?.id || item?.docId || "").trim();
+    if (!id) return;
+
+    Alert.alert("Ablehnen", "Dokument ablehnen?", [
+      { text: "Abbrechen", style: "cancel" },
+      {
+        text: "Ablehnen",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setBusy(true);
+            await tryGenericServerAction("reject", t, item, "Abgelehnt");
+            await updateGenericItem(t, id, {
+              workflowStatus: "ABGELEHNT",
+              rejectionReason: "Abgelehnt",
+            });
+          } finally {
+            setBusy(false);
+          }
+        },
+      },
+    ]);
+  }
+
+  function openGeneric(t: InboxTab, item: any) {
+    const id = String(item?.id || item?.docId || "").trim();
+
+    if (t === "BAUTAGEBUCH") {
+      navigation.navigate("Bautagebuch" as any, {
+        projectId,
+        projectCode: pk,
+        title: "Bautagebuch",
+      });
+      return;
+    }
+
+    if (t === "ANGEBOT") {
+      navigation.navigate("AngebotEditor" as any, {
+        projectId,
+        projectCode: pk,
+        title: "Angebot",
+        docId: id,
+        editId: id,
+        inboxSnapshot: item,
+        fromInbox: true,
+      });
+      return;
+    }
+
+    if (t === "RECHNUNG") {
+      navigation.navigate("RechnungEditor" as any, {
+        projectId,
+        projectCode: pk,
+        title: "Rechnung",
+        docId: id,
+        editId: id,
+        inboxSnapshot: item,
+        fromInbox: true,
+      });
+      return;
+    }
+
+    if (t === "MENGEN") {
+      navigation.navigate("MengenEditor" as any, {
+        projectId,
+        projectCode: pk,
+        title: "Mengenermittlung",
+        docId: id,
+        editId: id,
+        inboxSnapshot: item,
+        fromInbox: true,
+      });
+      return;
+    }
+
+    if (t === "KALKULATION") {
+      navigation.navigate("KiCalculation" as any, {
+        projectId,
+        projectCode: pk,
+        title: "Kalkulation",
+        docId: id,
+        editId: id,
+        inboxSnapshot: item,
+        fromInbox: true,
+      });
+    }
+  }
+
+  function GenericInboxCard({ item }: { item: any }) {
+    const wCol = statusColor(item.workflowStatus || "EINGEREICHT");
+    const type = String(item.docType || item.type || item.kind || tab || "Dokument").toUpperCase();
+    const title = String(
+      item.title ||
+        item.angebotTitle ||
+        item.rechnungNr ||
+        item.angebotNr ||
+        item.projectCode ||
+        type
+    );
+
+    const date = safeDate(item.date || item.datum || item.submittedAt || item.createdAt);
+    const sub = String(
+      item.customerName ||
+        item.kunde ||
+        item.bemerkungen ||
+        item.comment ||
+        item.notes ||
+        item.sourceScreen ||
+        ""
+    ).slice(0, 160);
+
+    const id = String(item?.id || item?.docId || "").trim();
+
+    return (
+      <View style={s.card}>
+        <View style={s.cardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.cardDate}>{date}</Text>
+            <Text style={s.cardSub} numberOfLines={2}>
+              {type}: {title}
+              {sub ? ` • ${sub}` : ""}
+            </Text>
+          </View>
+
+          <View style={[s.pill, { borderColor: wCol, backgroundColor: alpha(wCol, 0.12) }]}>
+            <Text style={[s.pillTxt, { color: wCol }]}>
+              {String(item.workflowStatus || "EINGEREICHT")}
+            </Text>
+          </View>
+        </View>
+
+        <View style={s.actions}>
+          <Pressable style={s.chipBtn} onPress={() => openGeneric(tab, item)} disabled={busy}>
+            <Text style={[s.chipTxt, s.chipAccentTxt]}>Öffnen</Text>
+          </Pressable>
+
+          {(item.workflowStatus === "EINGEREICHT" || !item.workflowStatus || item.workflowStatus === "ABGELEHNT") && (
+            <>
+              <Pressable
+                style={[s.chipAccent, busy && s.disabledBtn]}
+                onPress={() => approveGeneric(tab, item)}
+                disabled={busy || !id}
+              >
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Freigeben</Text>
+              </Pressable>
+
+              <Pressable
+                style={[s.chipDanger, busy && s.disabledBtn]}
+                onPress={() => rejectGeneric(tab, item)}
+                disabled={busy || !id}
+              >
+                <Text style={[s.chipTxt, s.chipDarkTxt]}>Ablehnen</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  const shown =
+    tab === "REGIE"
+      ? regie
+      : tab === "LS"
+      ? ls
+      : tab === "FOTOS"
+      ? fotos
+      : tab === "TAGESBERICHT"
+      ? tagesberichte
+      : tab === "BAUTAGEBUCH"
+      ? bautagebuch
+      : tab === "ANGEBOT"
+      ? angebote
+      : tab === "RECHNUNG"
+      ? rechnungen
+      : tab === "MENGEN"
+      ? mengen
+      : kalkulationen;
 
   return (
     <SafeAreaView style={s.safe}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={s.page}>
-          {/* ===== DARK HEADER ===== */}
-          <View style={s.darkHeader}>
-            <View style={s.darkHeadRow}>
-              <View style={s.darkAccent} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.brandTop}>RLC Bausoftware</Text>
-                <Text style={s.brandSub}>Eingang / Prüfung</Text>
+          <View style={s.header}>
+            <View style={s.headerRow}>
+              <View style={s.headerAccent} />
+              <View style={s.headerTextWrap}>
+                <Text style={s.headerEyebrow}>RLC Bausoftware</Text>
+                <Text style={s.headerSection}>Eingang / Prüfung</Text>
                 <Text style={s.h1}>Eingang</Text>
-                <Text style={s.hSub}>
-                  Projekt: <Text style={{ fontWeight: "900" }}>{displayProjectCode}</Text>
-                  {projectId && !looksLikeProjectCode(String(projectId)) && __DEV__ ? ` • DB: ${String(projectId)}` : ""}
+                <Text style={s.headerSub}>
+                  Projekt: <Text style={s.headerSubStrong}>{displayProjectCode}</Text>
+                  {projectId && !looksLikeProjectCode(String(projectId)) && __DEV__
+                    ? ` • DB: ${String(projectId)}`
+                    : ""}
                 </Text>
               </View>
             </View>
 
             {!canWork ? (
-              <View style={s.warnBoxDark}>
-                <Text style={s.warnTitleDark}>Projekt-Code fehlt</Text>
-                <Text style={s.warnTextDark}>
+              <View style={s.warnBox}>
+                <Text style={s.warnTitle}>Projekt-Code fehlt</Text>
+                <Text style={s.warnText}>
                   Projekt-Code (BA-...) fehlt oder ungültig. Navigation muss projectCode korrekt übergeben.
                 </Text>
               </View>
             ) : null}
 
-            {/* Tabs */}
-            <View style={s.tabsDark}>
-              <Pressable style={[s.tabDark, tab === "REGIE" && s.tabDarkActive]} onPress={() => setTab("REGIE")}>
-                <Text style={[s.tabDarkTxt, tab === "REGIE" && s.tabDarkTxtActive]}>Regie ({regie.length})</Text>
-              </Pressable>
-              <Pressable style={[s.tabDark, tab === "LS" && s.tabDarkActive]} onPress={() => setTab("LS")}>
-                <Text style={[s.tabDarkTxt, tab === "LS" && s.tabDarkTxtActive]}>Lieferscheine ({ls.length})</Text>
-              </Pressable>
-              <Pressable style={[s.tabDark, tab === "FOTOS" && s.tabDarkActive]} onPress={() => setTab("FOTOS")}>
-                <Text style={[s.tabDarkTxt, tab === "FOTOS" && s.tabDarkTxtActive]}>Fotos ({fotos.length})</Text>
-              </Pressable>
+            <View style={s.tabs}>
+              {[
+                ["REGIE", `Regie (${regie.length})`],
+                ["LS", `Lieferscheine (${ls.length})`],
+                ["FOTOS", `Fotos (${fotos.length})`],
+                ["TAGESBERICHT", `Tagesberichte (${tagesberichte.length})`],
+                ["BAUTAGEBUCH", `Bautagebuch (${bautagebuch.length})`],
+                ["ANGEBOT", `Angebote (${angebote.length})`],
+                ["RECHNUNG", `Rechnungen (${rechnungen.length})`],
+                ["MENGEN", `Mengen (${mengen.length})`],
+                ["KALKULATION", `Kalkulation (${kalkulationen.length})`],
+              ].map(([k, label]) => (
+                <Pressable
+                  key={String(k)}
+                  style={[s.tabBtn, tab === k && s.tabBtnActive]}
+                  onPress={() => setTab(k as InboxTab)}
+                >
+                  <Text style={[s.tabTxt, tab === k && s.tabTxtActive]}>
+                    {String(label)}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
 
-            {/* actions */}
             <View style={s.headerActions}>
-              <Pressable style={[s.btnOutline, busy && { opacity: 0.65 }]} onPress={reload} disabled={busy}>
-                <Text style={s.btnOutlineTxt}>{busy ? "…" : "Aktualisieren"}</Text>
+              <Pressable style={[s.headerBtn, busy && s.disabledBtn]} onPress={reload} disabled={busy}>
+                <Text style={s.headerBtnTxt}>{busy ? "…" : "Aktualisieren"}</Text>
               </Pressable>
 
               <Pressable
-                style={[s.btnOutline2, busy && { opacity: 0.65 }]}
+                style={[s.headerBtnAccent, busy && s.disabledBtn]}
                 onPress={() => syncQueueNow({ silent: false })}
                 disabled={busy || !canWork}
               >
-                <Text style={s.btnOutline2Txt}>Sync Queue</Text>
+                <Text style={s.headerBtnAccentTxt}>Sync Queue</Text>
               </Pressable>
             </View>
           </View>
 
-          {/* ===== LIST ===== */}
           <FlatList
             data={shown}
-            // ✅ FIX: avoid duplicate keys (server may return same id twice)
             keyExtractor={(x: any, i: number) => {
               const id = String(x?.id || "").trim();
               const ts = String(x?.submittedAt || x?.createdAt || x?.date || "");
@@ -1765,49 +2579,54 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
                 <RegieCard item={item as InboxRegie} />
               ) : tab === "LS" ? (
                 <LsCard item={item as InboxLs} />
-              ) : (
+              ) : tab === "FOTOS" ? (
                 <FotosCard item={item as InboxFotos} />
+              ) : (
+                <TagesberichtCard item={item as InboxTagesbericht} />
               )
             }
             ListEmptyComponent={
-              <View style={{ paddingTop: 6, paddingHorizontal: 16 }}>
-                <Text style={{ opacity: 0.72, color: T.muted, fontWeight: "800" }}>
-                  Kein Eingang vorhanden. Einreichen muss zuerst aus dem jeweiligen Screen erfolgen.
-                </Text>
+              <View style={s.emptyWrap}>
+                <View style={s.emptyCard}>
+                  <Text style={s.emptyTitle}>Kein Eingang vorhanden</Text>
+                  <Text style={s.emptyText}>
+                    Einreichen muss zuerst aus dem jeweiligen Screen erfolgen.
+                  </Text>
+                </View>
               </View>
             }
+            showsVerticalScrollIndicator={false}
           />
 
-          {/* Reject Modal */}
           <Modal visible={rejectOpen} transparent animationType="fade" onRequestClose={() => setRejectOpen(false)}>
-            <View style={s.modalBackdrop}>
+            <View style={s.modalWrap}>
               <View style={s.modalCard}>
                 <Text style={s.modalTitle}>Ablehnen</Text>
-                <Text style={s.modalSub}>Bitte Ablehnungsgrund eingeben:</Text>
+                <Text style={s.modalText}>Bitte Ablehnungsgrund eingeben:</Text>
 
                 <TextInput
                   style={s.modalInput}
                   value={rejectReason}
                   onChangeText={setRejectReason}
                   placeholder="z. B. Unleserlich / falsche Kostenstelle / fehlt Foto…"
-                  placeholderTextColor="rgba(11,23,32,0.45)"
+                  placeholderTextColor={UI.sub}
                   multiline
                 />
 
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                <View style={s.modalActions}>
                   <Pressable
-                    style={[s.btnOutlineModal, { flex: 1 }]}
+                    style={[s.modalBtnSecondary, busy && s.disabledBtn]}
                     onPress={() => {
                       setRejectOpen(false);
                       setRejectTarget(null);
                     }}
                     disabled={busy}
                   >
-                    <Text style={s.btnTxtOutlineModal}>Abbrechen</Text>
+                    <Text style={s.modalBtnSecondaryTxt}>Abbrechen</Text>
                   </Pressable>
 
-                  <Pressable style={[s.btnDangerModal, { flex: 1 }]} onPress={confirmReject} disabled={busy}>
-                    <Text style={s.btnTxtWhite}>Ablehnen</Text>
+                  <Pressable style={[s.modalBtnDanger, busy && s.disabledBtn]} onPress={confirmReject} disabled={busy}>
+                    <Text style={s.modalBtnDangerTxt}>Ablehnen</Text>
                   </Pressable>
                 </View>
               </View>
@@ -1819,183 +2638,458 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   );
 }
 
-/** =========================
- * Styles (DARK header + white cards)
- * ========================= */
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: HD.bg },
-  page: { flex: 1, backgroundColor: T.bg },
+  flex: { flex: 1 },
 
-  // dark header
-  darkHeader: {
-    backgroundColor: HD.bg,
+  safe: {
+    flex: 1,
+    backgroundColor: UI.bg,
+  },
+
+  page: {
+    flex: 1,
+    backgroundColor: UI.bg,
+  },
+
+  header: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 14,
+    backgroundColor: UI.bg,
     borderBottomWidth: 1,
-    borderBottomColor: HD.line,
+    borderBottomColor: UI.border,
   },
-  darkHeadRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  darkAccent: { width: 8, height: 44, borderRadius: 8, backgroundColor: T.primary },
 
-  brandTop: { color: HD.text, fontSize: 14, fontWeight: "800" },
-  brandSub: { color: HD.muted, marginTop: 2, fontSize: 12, fontWeight: "800" },
-
-  h1: { marginTop: 8, fontSize: 30, fontWeight: "900", color: "#fff" },
-  hSub: { marginTop: 4, fontWeight: "800", color: HD.muted, fontSize: 12 },
-
-  warnBoxDark: {
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: "rgba(234,88,12,0.35)",
-    backgroundColor: "rgba(234,88,12,0.14)",
-    borderRadius: 16,
-    padding: 12,
-  },
-  warnTitleDark: { fontWeight: "900", color: "#FDBA74" },
-  warnTextDark: { marginTop: 6, color: "rgba(255,255,255,0.80)", fontWeight: "800" },
-
-  tabsDark: { flexDirection: "row", gap: 10, marginTop: 12 },
-  tabDark: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-    borderRadius: 999,
-    paddingVertical: 10,
+  headerRow: {
+    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    gap: 12,
   },
-  tabDarkActive: { backgroundColor: T.primary, borderColor: T.primary },
-  tabDarkTxt: { fontWeight: "900", color: "rgba(255,255,255,0.82)", fontSize: 12 },
-  tabDarkTxtActive: { color: "#fff" },
 
-  headerActions: { flexDirection: "row", gap: 10, marginTop: 12 },
-
-  btnOutline: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  btnOutlineTxt: { fontWeight: "900", fontSize: 12, color: "rgba(255,255,255,0.92)" },
-
-  btnOutline2: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: alpha(T.primary, 0.45),
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    backgroundColor: alpha(T.primary, 0.12),
-  },
-  btnOutline2Txt: { fontWeight: "900", fontSize: 12, color: "#fff" },
-
-  // list
-  listPad: { padding: 16, paddingBottom: 26, gap: 10 },
-
-  // cards
-  card: {
-    borderWidth: 1,
-    borderColor: alpha("#000000", 0.06),
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 14,
-    ...shadowElev(),
-  },
-  cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  cardDate: { fontWeight: "900", fontSize: 14, color: T.text },
-  cardSub: { marginTop: 6, fontSize: 12, color: T.muted, fontWeight: "800", opacity: 0.95 },
-  cardBody: { marginTop: 8, fontSize: 13, color: T.text, fontWeight: "700" },
-
-  pill: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  headerAccent: {
+    width: 8,
+    height: 48,
     borderRadius: 999,
+    backgroundColor: UI.accent,
   },
-  pillTxt: { fontSize: 11, fontWeight: "900" },
 
-  err: { marginTop: 8, color: T.muted, fontSize: 12, fontWeight: "800" },
-
-  actions: { flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" },
-
-  chipBtn: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#fff",
-  },
-  chipFill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  chipTxt: { fontSize: 12, fontWeight: "900" },
-
-  // modal
-  modalBackdrop: {
+  headerTextWrap: {
     flex: 1,
-    backgroundColor: "rgba(2,6,23,0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 18,
   },
-  modalCard: {
-    width: "100%",
-    maxWidth: 520,
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: alpha("#000000", 0.08),
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 3,
-  },
-  modalTitle: { fontSize: 18, fontWeight: "900", color: T.text },
-  modalSub: { marginTop: 6, color: T.muted, fontWeight: "800" },
-  modalInput: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: alpha(T.primary, 0.22),
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }) as any,
-    minHeight: 96,
-    textAlignVertical: "top",
-    backgroundColor: alpha(T.primary, 0.06),
-    color: T.text,
+
+  headerEyebrow: {
+    color: UI.sub,
+    fontSize: 13,
     fontWeight: "800",
   },
 
-  btnOutlineModal: {
-    borderWidth: 1,
-    borderColor: alpha(T.primary, 0.35),
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    backgroundColor: alpha(T.primary, 0.08),
+  headerSection: {
+    marginTop: 2,
+    color: UI.sub,
+    fontSize: 12,
+    fontWeight: "800",
   },
-  btnTxtOutlineModal: { fontWeight: "900", fontSize: 12, color: T.primary },
 
-  btnDangerModal: {
-    borderWidth: 1,
-    borderColor: T.danger,
-    backgroundColor: T.danger,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    alignItems: "center",
+  h1: {
+    marginTop: 8,
+    fontSize: 30,
+    fontWeight: "900",
+    color: UI.text,
   },
-  btnTxtWhite: { color: "#fff", fontWeight: "900", fontSize: 12 },
+
+  headerSub: {
+    marginTop: 6,
+    color: UI.sub,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18,
+  },
+
+  headerSubStrong: {
+    color: UI.text,
+    fontWeight: "900",
+  },
+
+  warnBox: {
+    marginTop: 14,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: UI.card2,
+    borderWidth: 1,
+    borderColor: UI.border,
+  },
+
+  warnTitle: {
+    color: UI.text,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  warnText: {
+    marginTop: 6,
+    color: UI.sub,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  tabs: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+    flexWrap: "wrap",
+  },
+
+  tabBtn: {
+    minHeight: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.card,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+
+  tabBtnActive: {
+    backgroundColor: UI.accent,
+    borderColor: UI.accent,
+  },
+
+  tabTxt: {
+    color: UI.text,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+
+  tabTxtActive: {
+    color: UI.textLight,
+  },
+
+  headerActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  headerBtn: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.card,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+
+  headerBtnTxt: {
+    color: UI.text,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  headerBtnAccent: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: UI.accentDark,
+    backgroundColor: UI.accentDark,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+
+  headerBtnAccentTxt: {
+    color: UI.textLight,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  listPad: {
+    padding: 16,
+    paddingBottom: 28,
+    gap: 12,
+  },
+
+  card: {
+    borderRadius: 20,
+    padding: 15,
+    backgroundColor: UI.card,
+    borderWidth: 1,
+    borderColor: UI.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.text,
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: { elevation: 2 },
+      default: shadowElev(),
+    }),
+  },
+
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+
+  cardDate: {
+    color: UI.text,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  cardSub: {
+    marginTop: 6,
+    color: UI.sub,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18,
+  },
+
+  cardBody: {
+    marginTop: 10,
+    color: UI.text,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  pill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+
+  pillTxt: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+
+  err: {
+    marginTop: 10,
+    color: UI.sub,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
+
+  chipBtn: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.card2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  chipDark: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: UI.text,
+    backgroundColor: UI.text,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  chipAccent: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: UI.accent,
+    backgroundColor: UI.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  chipDanger: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#C33",
+    backgroundColor: "#C33",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  chipTxt: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: UI.text,
+  },
+
+  chipAccentTxt: {
+    color: UI.accentDark,
+  },
+
+  chipDarkTxt: {
+    color: UI.textLight,
+  },
+
+  disabledBtn: {
+    opacity: 0.6,
+  },
+
+  emptyWrap: {
+    paddingTop: 4,
+  },
+
+  emptyCard: {
+    borderRadius: 18,
+    padding: 16,
+    backgroundColor: UI.card,
+    borderWidth: 1,
+    borderColor: UI.border,
+  },
+
+  emptyTitle: {
+    color: UI.text,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  emptyText: {
+    marginTop: 6,
+    color: UI.sub,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  modalWrap: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.45)",
+    justifyContent: "center",
+    padding: 16,
+  },
+
+  modalCard: {
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: UI.card,
+    borderWidth: 1,
+    borderColor: UI.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.text,
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+      },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
+
+  modalTitle: {
+    color: UI.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  modalText: {
+    marginTop: 6,
+    color: UI.sub,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  modalInput: {
+    marginTop: 12,
+    minHeight: 104,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.inputBg,
+    color: UI.text,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }) as any,
+    textAlignVertical: "top",
+    fontWeight: "800",
+  },
+
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  modalBtnSecondary: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.card2,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+
+  modalBtnSecondaryTxt: {
+    color: UI.text,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  modalBtnDanger: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#C33",
+    backgroundColor: "#C33",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+
+  modalBtnDangerTxt: {
+    color: UI.textLight,
+    fontSize: 13,
+    fontWeight: "900",
+  },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

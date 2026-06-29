@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const KEY_EMAIL = "rlc_local_email_v1";
 const KEY_PWHASH = "rlc_local_pwhash_v1";
@@ -58,3 +58,4 @@ export async function localIsLoggedIn() {
 export async function localUserEmail() {
   return (await AsyncStorage.getItem(KEY_EMAIL)) || "";
 }
+
