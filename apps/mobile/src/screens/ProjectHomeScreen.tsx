@@ -20,7 +20,7 @@ import {
   Platform,
   Image,
 } from "react-native";
-import { COLORS } from "../ui/theme";
+import { COLORS, RLC_SPACING } from "../ui/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -1493,11 +1493,11 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#EEF4F8" },
-  bg: { flex: 1, backgroundColor: "#EEF4F8" },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
+  bg: { flex: 1, backgroundColor: COLORS.bg },
 
-  wrap: { flex: 1, backgroundColor: "#EEF4F8" },
-  content: { paddingBottom: 28 },
+  wrap: { flex: 1, backgroundColor: COLORS.bg },
+  content: { padding: RLC_SPACING.page, paddingBottom: RLC_SPACING.bottomKi },
 
   header: {
     paddingHorizontal: 16,
@@ -1910,6 +1910,8 @@ const s = StyleSheet.create({
   },
 
 });
+
+
 
 
 
