@@ -7,15 +7,19 @@ import { requireCompany } from "../middleware/guards";
 
 const r = Router();
 
-function sha256(s: string) {
-  return crypto.createHash("sha256").update(s).digest("hex");
+function normalizeEmail(x: string | null | undefined) {
+  return String(x || "")
+    .trim()
+    .toLowerCase();
 }
 
-function normalizeEmail(x: string) {
-  return String(x || "").trim().toLowerCase();
+function makeInviteCode() {
+  const a = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const b = crypto.randomBytes(2).toString("hex").toUpperCase();
+  const c = crypto.randomBytes(2).toString("hex").toUpperCase();
+  return `RLC-${a}-${b}-${c}`;
 }
 
-// ProjectRole (CompanyMember.role) – nel tuo DB sembra essere UPPERCASE (ADMIN/...)
 const ALLOWED_PROJECT_ROLES = new Set([
   "ADMIN",
   "BAULEITER",
@@ -29,40 +33,69 @@ const ALLOWED_PROJECT_ROLES = new Set([
 async function getSeatInfo(companyId: string) {
   const sub = await prisma.companySubscription.findUnique({
     where: { companyId },
-    select: { status: true, seatsLimit: true, currentPeriodEnd: true },
+    select: {
+      status: true,
+      plan: true,
+      webSeatsPurchased: true,
+      mobileSeatsPurchased: true,
+      currentPeriodEnd: true,
+      currentPeriodStart: true,
+    },
   });
 
   const now = new Date();
   const statusOk = sub?.status === "ACTIVE" || sub?.status === "GRACE";
   const periodOk = !sub?.currentPeriodEnd || sub.currentPeriodEnd >= now;
-
   const active = !!sub && statusOk && periodOk;
-  const seatsLimit = sub?.seatsLimit ?? null;
 
-  // ✅ seats = membri attivi
   const usedSeats = await prisma.companyMember.count({
     where: { companyId, active: true },
   });
 
-  return { active, seatsLimit, usedSeats };
+  const webSeatsPurchased = sub?.webSeatsPurchased ?? 0;
+
+  return {
+    active,
+    subscription: sub
+      ? {
+          status: sub.status,
+          plan: sub.plan,
+          webSeatsPurchased,
+          mobileSeatsPurchased: sub.mobileSeatsPurchased ?? 0,
+          currentPeriodStart: sub.currentPeriodStart
+            ? sub.currentPeriodStart.toISOString()
+            : null,
+          currentPeriodEnd: sub.currentPeriodEnd
+            ? sub.currentPeriodEnd.toISOString()
+            : null,
+        }
+      : null,
+    seats: {
+      used: usedSeats,
+      limit: webSeatsPurchased,
+      available: Math.max(0, webSeatsPurchased - usedSeats),
+    },
+  };
 }
 
 function requireCompanyAdmin(req: any, res: any, next: any) {
-  // DEV bypass
   if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
 
-  const roleRaw = String(req?.auth?.role || req?.auth?.companyRole || "").trim();
+  const roleRaw = String(
+    req?.auth?.role || req?.auth?.companyRole || req?.auth?.appRole || ""
+  ).trim();
   const role = roleRaw.toUpperCase();
-  if (role !== "ADMIN") return res.status(403).json({ ok: false, error: "Nur ADMIN" });
 
-  next();
+  if (role !== "ADMIN") {
+    return res.status(403).json({ ok: false, error: "Nur ADMIN" });
+  }
+
+  return next();
 }
 
 /**
- * ✅ Create Invite (ADMIN only)
  * POST /api/company/invites
- * body: { email: string, role?: ProjectRole, ttlHours?: number }
- * returns: { token }  (token viene mostrato UNA sola volta)
+ * body: { email?: string, role?: ProjectRole, ttlHours?: number, maxUses?: number }
  */
 r.post(
   "/invites",
@@ -72,60 +105,68 @@ r.post(
   requireCompanyAdmin,
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
-      if (!companyId) return res.status(400).json({ ok: false, error: "company missing" });
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) {
+        return res.status(400).json({ ok: false, error: "company missing" });
+      }
 
-      // ✅ Abo attivo richiesto per invitare
-      const seat = await getSeatInfo(companyId);
-      if (!seat.active) {
+      const seatInfo = await getSeatInfo(companyId);
+      if (!seatInfo.active) {
         return res.status(402).json({ ok: false, error: "Subscription inactive" });
       }
 
-      const email = normalizeEmail(req.body?.email);
-      if (!email || !email.includes("@")) {
-        return res.status(400).json({ ok: false, error: "invalid email" });
-      }
+      const email = req.body?.email ? normalizeEmail(req.body.email) : null;
 
       const role = String(req.body?.role || "MITARBEITER").toUpperCase();
       if (!ALLOWED_PROJECT_ROLES.has(role)) {
         return res.status(400).json({ ok: false, error: "invalid role" });
       }
 
-      // seat limit
-      if (seat.seatsLimit != null && seat.usedSeats >= seat.seatsLimit) {
+      if (seatInfo.seats.limit > 0 && seatInfo.seats.used >= seatInfo.seats.limit) {
         return res.status(409).json({
           ok: false,
-          error: "Seats limit reached",
-          seats: { used: seat.usedSeats, limit: seat.seatsLimit },
+          error: "WEB_SEAT_LIMIT_REACHED",
+          seats: seatInfo.seats,
         });
       }
 
-      const ttlHours = Number(req.body?.ttlHours || 72);
-      const ttlMs = Math.max(1, Math.min(ttlHours, 24 * 30)) * 3600 * 1000; // max 30 giorni
-      const expiresAt = new Date(Date.now() + ttlMs);
+      const ttlHoursRaw = Number(req.body?.ttlHours || 72);
+      const ttlHours = Math.max(1, Math.min(ttlHoursRaw, 24 * 30));
+      const expiresAt = new Date(Date.now() + ttlHours * 3600 * 1000);
 
-      // token plain + hash
-      const tokenPlain = crypto.randomBytes(32).toString("hex");
-      const tokenHash = sha256(tokenPlain);
+      const maxUsesRaw = Number(req.body?.maxUses || 1);
+      const maxUses = Math.max(1, Math.min(maxUsesRaw, 100));
 
-      // se esiste invito pendente per stessa mail, lo sovrascriviamo
-      await prisma.companyInvite.deleteMany({
-        where: { companyId, email, acceptedAt: null },
-      });
+      let code = makeInviteCode();
+      for (let i = 0; i < 10; i++) {
+        const exists = await prisma.companyInvite.findUnique({
+          where: { code },
+          select: { id: true },
+        });
+        if (!exists) break;
+        code = makeInviteCode();
+      }
 
       const invite = await prisma.companyInvite.create({
         data: {
           companyId,
           email,
           role: role as any,
-          tokenHash,
+          code,
+          maxUses,
+          usedCount: 0,
+          isActive: true,
           expiresAt,
-          createdByUserId: String(req.auth.sub || null),
-        } as any,
+          createdByUserId: String(req.auth.sub || ""),
+        },
         select: {
           id: true,
           email: true,
           role: true,
+          code: true,
+          maxUses: true,
+          usedCount: true,
+          isActive: true,
           expiresAt: true,
           createdAt: true,
         },
@@ -133,18 +174,23 @@ r.post(
 
       return res.json({
         ok: true,
-        invite,
-        token: tokenPlain, // ⚠️ mostra SOLO qui
+        invite: {
+          ...invite,
+          expiresAt: invite.expiresAt.toISOString(),
+          createdAt: invite.createdAt.toISOString(),
+        },
       });
     } catch (e: any) {
       console.error("POST /api/company/invites failed:", e);
-      return res.status(500).json({ ok: false, error: e?.message || "invite create failed" });
+      return res.status(500).json({
+        ok: false,
+        error: e?.message || "invite create failed",
+      });
     }
   }
 );
 
 /**
- * ✅ List Invites (ADMIN only)
  * GET /api/company/invites
  */
 r.get(
@@ -155,130 +201,85 @@ r.get(
   requireCompanyAdmin,
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) {
+        return res.status(400).json({ ok: false, error: "company missing" });
+      }
 
       const rows = await prisma.companyInvite.findMany({
-        where: { companyId, acceptedAt: null, expiresAt: { gt: new Date() } },
+        where: { companyId },
         orderBy: { createdAt: "desc" },
         take: 200,
         select: {
           id: true,
           email: true,
           role: true,
+          code: true,
+          maxUses: true,
+          usedCount: true,
+          isActive: true,
           expiresAt: true,
           createdAt: true,
           acceptedAt: true,
         },
       });
 
-      return res.json({ ok: true, invites: rows });
+      return res.json({
+        ok: true,
+        invites: rows.map((x) => ({
+          ...x,
+          expiresAt: x.expiresAt.toISOString(),
+          createdAt: x.createdAt.toISOString(),
+          acceptedAt: x.acceptedAt ? x.acceptedAt.toISOString() : null,
+          status: !x.isActive
+            ? "INACTIVE"
+            : x.expiresAt.getTime() < Date.now()
+            ? "EXPIRED"
+            : x.usedCount >= x.maxUses
+            ? "USED_UP"
+            : "PENDING",
+        })),
+      });
     } catch (e: any) {
-      return res.status(500).json({ ok: false, error: e?.message || "list failed" });
+      return res.status(500).json({
+        ok: false,
+        error: e?.message || "list failed",
+      });
     }
   }
 );
 
 /**
- * ✅ Accept Invite (utente loggato)
- * POST /api/company/invites/accept
- * body: { token: string }
- *
- * NOTE: qui NON richiediamo requireCompany perché l’utente ancora non ce l’ha nel token.
- * Dopo accept: l’utente deve fare re-login per ottenere un JWT con company nel payload.
+ * POST /api/company/invites/deactivate/:id
  */
-r.post("/invites/accept", requireAuth, requireVerifiedEmail, async (req: any, res) => {
-  try {
-    const tokenPlain = String(req.body?.token || "").trim();
-    if (!tokenPlain || tokenPlain.length < 20) {
-      return res.status(400).json({ ok: false, error: "invalid token" });
-    }
+r.post(
+  "/invites/deactivate/:id",
+  requireAuth,
+  requireVerifiedEmail,
+  requireCompany,
+  requireCompanyAdmin,
+  async (req: any, res) => {
+    try {
+      const companyId = String(req.auth.companyId || "").trim();
+      const id = String(req.params.id || "").trim();
 
-    const tokenHash = sha256(tokenPlain);
+      if (!companyId || !id) {
+        return res.status(400).json({ ok: false, error: "bad params" });
+      }
 
-    const invite = await prisma.companyInvite.findFirst({
-      where: {
-        tokenHash,
-        acceptedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      select: {
-        id: true,
-        companyId: true,
-        email: true,
-        role: true,
-        expiresAt: true,
-      },
-    });
+      const updated = await prisma.companyInvite.updateMany({
+        where: { id, companyId },
+        data: { isActive: false },
+      });
 
-    if (!invite) {
-      return res.status(404).json({ ok: false, error: "invite not found or expired" });
-    }
-
-    // email deve combaciare con account (anti-share)
-    const userEmail = normalizeEmail(req.user?.email || "");
-    if (normalizeEmail(invite.email) !== userEmail) {
-      return res.status(403).json({ ok: false, error: "invite email mismatch" });
-    }
-
-    // subscription + seats check
-    const seat = await getSeatInfo(invite.companyId);
-    if (!seat.active) return res.status(402).json({ ok: false, error: "Subscription inactive" });
-    if (seat.seatsLimit != null && seat.usedSeats >= seat.seatsLimit) {
-      return res.status(409).json({
+      return res.json({ ok: true, updated });
+    } catch (e: any) {
+      return res.status(500).json({
         ok: false,
-        error: "Seats limit reached",
-        seats: { used: seat.usedSeats, limit: seat.seatsLimit },
+        error: e?.message || "deactivate failed",
       });
     }
-
-    const userId = String(req.user?.id || req.auth?.sub || "");
-    if (!userId) return res.status(401).json({ ok: false, error: "auth missing" });
-
-    // map ProjectRole -> UserRole (app-level)
-    // UserRole nel tuo schema sembra: "admin" | "user"
-    const invitedCompanyRole = String(invite.role || "MITARBEITER").toUpperCase();
-    const userRole =
-      invitedCompanyRole === "ADMIN" ? ("admin" as any) : ("user" as any);
-
-    await prisma.$transaction(async (tx) => {
-      await tx.companyInvite.update({
-        where: { id: invite.id },
-        data: { acceptedAt: new Date() },
-      });
-
-      // collega user alla company
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          companyId: invite.companyId,
-          role: userRole,
-        } as any,
-      });
-
-      // crea/aggiorna CompanyMember (seat)
-      await tx.companyMember.upsert({
-        where: { companyId_userId: { companyId: invite.companyId, userId } } as any,
-        update: { role: invitedCompanyRole as any, active: true } as any,
-        create: {
-          companyId: invite.companyId,
-          userId,
-          role: invitedCompanyRole as any,
-          active: true,
-        } as any,
-      });
-    });
-
-    return res.json({
-      ok: true,
-      accepted: true,
-      companyId: invite.companyId,
-      role: invite.role,
-      message: "Invite accepted. Please log out and log in again to refresh token/company.",
-    });
-  } catch (e: any) {
-    console.error("POST /api/company/invites/accept failed:", e);
-    return res.status(500).json({ ok: false, error: e?.message || "accept failed" });
   }
-});
+);
 
 export default r;

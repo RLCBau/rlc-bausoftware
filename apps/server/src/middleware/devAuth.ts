@@ -12,7 +12,7 @@ export async function devAuth(req: Request, _res: Response, next: NextFunction) 
   if (!process.env.DEV_COMPANY_ID) {
     const existing = await prisma.company.findFirst();
     const c = existing ?? (await prisma.company.create({
-      data: { name: process.env.COMPANY_NAME || "RLC Tiefbau KG", slug: "rlc-tiefbau-kg" }
+      data: { name: process.env.COMPANY_NAME || "RLC Tiefbau KG", code: process.env.COMPANY_CODE || "RLC-TIEFBAU-KG" }
     }));
     process.env.DEV_COMPANY_ID = c.id;
     console.log("🏢 DEV company:", c.name, c.id);

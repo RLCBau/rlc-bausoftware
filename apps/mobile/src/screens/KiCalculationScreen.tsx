@@ -460,10 +460,10 @@ const styles = StyleSheet.create({
   heroText: { color: COLORS.sub, marginTop: 10, lineHeight: 20, fontWeight: "800" },
   runButton: { backgroundColor: COLORS.accent, borderRadius: 12, padding: 14, alignItems: "center", marginBottom: 10 },
   disabled: { opacity: 0.6 },
-  runText: { color: "#fff", fontWeight: "900", fontSize: 16 },
+  runText: { color: COLORS.textLight, fontWeight: "900", fontSize: 16 },
   secondaryButton: { backgroundColor: COLORS.card, borderRadius: 12, padding: 14, alignItems: "center", borderWidth: 1, borderColor: COLORS.border },
   secondaryText: { color: COLORS.text, fontWeight: "900" },
-  error: { color: "#991b1b", backgroundColor: "#fee2e2", padding: 12, borderRadius: 12, marginTop: 12, fontWeight: "900" },
+  error: { color: COLORS.danger, backgroundColor: COLORS.dangerBg, padding: 12, borderRadius: 12, marginTop: 12, fontWeight: "900" },
   resultBox: { backgroundColor: COLORS.card, borderRadius: 16, padding: 14, marginTop: 14, borderWidth: 1, borderColor: COLORS.border },
   resultTitle: { fontWeight: "900", fontSize: 20, marginBottom: 12, color: COLORS.text },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
@@ -476,6 +476,8 @@ const styles = StyleSheet.create({
   action: { backgroundColor: COLORS.card2, borderRadius: 12, padding: 14, alignItems: "center" },
   actionText: { color: COLORS.text, fontWeight: "900" },
 });
+
+
 
 
 

@@ -1,5 +1,5 @@
-// utils/cadImport.ts
-// Semplice bridge CAD → (Aufmaß/Kalkulation) via localStorage
+// apps/web/src/utils/cadImport.ts
+// Bridge CAD → (Aufmaß/Kalkulation) via localStorage (queue-based)
 
 export type CadExportPayload = {
   target: "aufmasseditor" | "kalkulation";
@@ -12,29 +12,100 @@ export type CadExportPayload = {
   ts?: number;
 };
 
-const KEY = "rlc.cad.export.v1";
+const KEY = "rlc.cad.export.queue.v1";
+const TTL = 2 * 60 * 1000; // 2 minuti
 
-export function saveCadExport(p: CadExportPayload) {
-  const pack = { ...p, ts: Date.now() };
+function safeParse(raw: string | null): CadExportPayload[] {
+  if (!raw) return [];
   try {
-    localStorage.setItem(KEY, JSON.stringify(pack));
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function validatePayload(p: CadExportPayload): boolean {
+  if (!p.target || !p.kind || !p.layer) return false;
+
+  if (p.kind === "AREA" && typeof p.area_m2 !== "number") return false;
+  if (p.kind === "LINE" && typeof p.length_m !== "number") return false;
+
+  return true;
+}
+
+/* =========================
+   SAVE (queue)
+   ========================= */
+
+export function saveCadExport(payload: CadExportPayload) {
+  const pack: CadExportPayload = {
+    ...payload,
+    ts: Date.now(),
+  };
+
+  if (!validatePayload(pack)) {
+    console.warn("[CAD] invalid payload", pack);
+    return;
+  }
+
+  try {
+    const current = safeParse(localStorage.getItem(KEY));
+    const next = [...current, pack];
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch (e) {
+    console.error("[CAD] save error", e);
+  }
+}
+
+/* =========================
+   CONSUME (per target)
+   ========================= */
+
+export function consumeCadExport(
+  expectedTarget: "aufmasseditor" | "kalkulation"
+): CadExportPayload[] {
+  try {
+    const current = safeParse(localStorage.getItem(KEY));
+
+    if (!current.length) return [];
+
+    const now = Date.now();
+
+    const valid = current.filter(
+      (p) =>
+        p.target === expectedTarget &&
+        typeof p.ts === "number" &&
+        now - p.ts < TTL
+    );
+
+    const remaining = current.filter(
+      (p) =>
+        !p.ts ||
+        now - p.ts >= TTL ||
+        p.target !== expectedTarget
+    );
+
+    localStorage.setItem(KEY, JSON.stringify(remaining));
+
+    return valid;
+  } catch (e) {
+    console.error("[CAD] consume error", e);
+    return [];
+  }
+}
+
+/* =========================
+   CLEAR (manual debug)
+   ========================= */
+
+export function clearCadExport() {
+  try {
+    localStorage.removeItem(KEY);
   } catch {}
 }
 
-export function consumeCadExport(expectedTarget: "aufmasseditor" | "kalkulation"): CadExportPayload | null {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const obj = JSON.parse(raw) as CadExportPayload | null;
-    if (!obj || obj.target !== expectedTarget) return null;
-    // opzionale: scadenza 2 min per evitare vecchi residui
-    if (typeof obj.ts === "number" && Date.now() - obj.ts > 120_000) {
-      localStorage.removeItem(KEY);
-      return null;
-    }
-    localStorage.removeItem(KEY);
-    return obj;
-  } catch {
-    return null;
-  }
-}
+
+
+
+

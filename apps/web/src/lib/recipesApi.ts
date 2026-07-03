@@ -1,42 +1,99 @@
+import { API_BASE } from "./apiBase";
 // apps/web/src/lib/recipesApi.ts
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
-
-function joinUrl(base: string, path: string) {
-  return `${String(base).replace(/\/$/, "")}${path.startsWith("/") ? "" : "/"}${path}`;
+function apiUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${p}` : p;
 }
 
-async function http<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = joinUrl(API_BASE, path);
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-  });
+function withQuery(
+  path: string,
+  params?: Record<string, string | number | boolean | null | undefined>
+) {
+  if (!params) return path;
 
-  const text = await res.text();
-  let data: any = null;
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    qs.set(key, String(value));
+  }
+
+  const s = qs.toString();
+  return s ? `${path}?${s}` : path;
+}
+
+async function http<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text;
-  }
+    const isFormData =
+      typeof FormData !== "undefined" && init.body instanceof FormData;
 
-  if (!res.ok) {
-    const msg =
-      (data && (data.error || data.message)) ||
-      `HTTP ${res.status} ${res.statusText}`;
-    throw new Error(msg);
+    const res = await fetch(apiUrl(path), {
+      credentials: "include",
+      signal: controller.signal,
+      ...init,
+      headers: {
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...(init.headers || {}),
+      },
+    });
+
+    const text = await res.text();
+
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+
+    if (!res.ok) {
+      const obj =
+        typeof data === "object" && data !== null
+          ? (data as Record<string, unknown>)
+          : null;
+
+      const msg =
+        (obj?.error as string) ||
+        (obj?.message as string) ||
+        text ||
+        `HTTP ${res.status} ${res.statusText}`;
+
+      throw new Error(msg);
+    }
+
+    const obj =
+      typeof data === "object" && data !== null
+        ? (data as Record<string, unknown>)
+        : null;
+
+    if (obj?.ok === false) {
+      throw new Error(
+        (obj?.error as string) ||
+          (obj?.message as string) ||
+          "Backend Fehler"
+      );
+    }
+
+    return data as T;
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error("Timeout API");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-  return data as T;
 }
 
-/** ===== Types (minimal, tolerant) ===== */
+/* =========================================================
+   TYPES
+   ========================================================= */
+
+export type JsonMap = Record<string, unknown>;
+
 export type RecipeTemplate = {
   id: string;
   key: string;
@@ -44,8 +101,15 @@ export type RecipeTemplate = {
   category?: string | null;
   unit?: string | null;
   description?: string | null;
-  defaultParams?: Record<string, any> | null;
-  tags?: any[] | null;
+  defaultParams?: JsonMap | null;
+  tags?: string[] | null;
+};
+
+export type RecipeVariantDetail = {
+  key?: string;
+  label?: string;
+  value?: unknown;
+  unit?: string;
 };
 
 export type RecipeVariant = {
@@ -53,106 +117,133 @@ export type RecipeVariant = {
   key: string;
   unit?: string | null;
   enabled?: boolean;
-  params?: Record<string, any>;
+  params?: JsonMap;
   label?: string;
   family?: string;
   scoreHint?: number;
   score?: number;
-  details?: any[];
+  details?: RecipeVariantDetail[];
   changedKeys?: string[];
   isDefault?: boolean;
   virtual?: boolean;
 };
 
-export type TemplatesResp = { ok: true; templates: RecipeTemplate[] };
-export type TemplateResp = { ok: true; template: RecipeTemplate };
-export type VariantsResp = { ok: true; template: RecipeTemplate; variants: RecipeVariant[] };
+export type TemplatesResp = {
+  ok: true;
+  templates: RecipeTemplate[];
+};
 
-export type SuggestReq = {
-  context: Record<string, any>;
-  take?: number;
+export type TemplateResp = {
+  ok: true;
+  template: RecipeTemplate;
+};
 
-  /**
-   * Optional pricing controls (non-breaking):
-   * - companyId: forza la company per lookup prezzi
-   * - pricingDate / validFrom: data per determinare "validFrom<=date<validTo"
-   */
+export type VariantsResp = {
+  ok: true;
+  template: RecipeTemplate;
+  variants: RecipeVariant[];
+};
+
+export type PricingControls = {
   companyId?: string;
-  pricingDate?: string; // ISO string
-  validFrom?: string; // alias ISO string
+  pricingDate?: string;
+  validFrom?: string;
+};
+
+export type SuggestReq = PricingControls & {
+  context: JsonMap;
+  take?: number;
 };
 
 export type SuggestResp = {
   ok?: boolean;
   best?: RecipeVariant & { score?: number };
-  alternatives?: (RecipeVariant & { score?: number })[];
+  alternatives?: Array<RecipeVariant & { score?: number }>;
 };
 
-export type CalcReq = {
+export type CalcReq = PricingControls & {
   templateKey: string;
   qty: number;
-  params?: Record<string, any>;
-
-  /**
-   * Optional pricing controls (non-breaking):
-   * - companyId: forza la company per lookup prezzi
-   * - pricingDate / validFrom: data per determinare "validFrom<=date<validTo"
-   */
-  companyId?: string;
-  pricingDate?: string; // ISO string
-  validFrom?: string; // alias ISO string
+  params?: JsonMap;
 };
 
-export type CalcResp = any;
+export type CalcResp = {
+  ok?: boolean;
+  result?: unknown;
+  recipe?: RecipeVariant;
+  price?: number;
+  total?: number;
+  [key: string]: unknown;
+};
 
-export type CalcSuggestReq = {
+export type CalcSuggestReq = PricingControls & {
   templateKey: string;
   qty: number;
-  context: Record<string, any>;
+  context: JsonMap;
   take?: number;
-
-  /**
-   * Optional pricing controls (non-breaking):
-   * - companyId: forza la company per lookup prezzi
-   * - pricingDate / validFrom: data per determinare "validFrom<=date<validTo"
-   */
-  companyId?: string;
-  pricingDate?: string; // ISO string
-  validFrom?: string; // alias ISO string
 };
 
-export type CalcSuggestResp = any;
+export type CalcSuggestResp = {
+  ok?: boolean;
+  best?: RecipeVariant & { score?: number };
+  alternatives?: Array<RecipeVariant & { score?: number }>;
+  calculation?: CalcResp;
+  [key: string]: unknown;
+};
 
-/** ===== API ===== */
+/* =========================================================
+   API
+   ========================================================= */
+
 export function fetchTemplates(take = 50) {
-  return http<TemplatesResp>(`/api/kalkulation/recipes/templates?take=${take}`);
+  return http<TemplatesResp>(
+    withQuery("/api/kalkulation/recipes/templates", { take })
+  );
 }
 
 export function fetchTemplate(templateKey: string) {
-  return http<TemplateResp>(`/api/kalkulation/recipes/templates/${encodeURIComponent(templateKey)}`);
+  return http<TemplateResp>(
+    `/api/kalkulation/recipes/templates/${encodeURIComponent(templateKey)}`
+  );
 }
 
 export function fetchVariants(templateKey: string) {
-  return http<VariantsResp>(`/api/kalkulation/recipes/templates/${encodeURIComponent(templateKey)}/variants`);
+  return http<VariantsResp>(
+    `/api/kalkulation/recipes/templates/${encodeURIComponent(templateKey)}/variants`
+  );
 }
 
 export function suggestTemplate(templateKey: string, req: SuggestReq) {
-  return http<SuggestResp>(`/api/kalkulation/recipes/templates/${encodeURIComponent(templateKey)}/suggest`, {
-    method: "POST",
-    body: JSON.stringify(req),
-  });
+  return http<SuggestResp>(
+    `/api/kalkulation/recipes/templates/${encodeURIComponent(templateKey)}/suggest`,
+    {
+      method: "POST",
+      body: JSON.stringify(req),
+    }
+  );
 }
 
 export function calcTemplate(req: CalcReq) {
-  return http<CalcResp>(`/api/kalkulation/recipes/calc`, {
+  return http<CalcResp>("/api/kalkulation/recipes/calc", {
     method: "POST",
     body: JSON.stringify(req),
   });
 }
 
 export function calcSuggestTemplate(req: CalcSuggestReq) {
-  return http<CalcSuggestResp>(`/api/kalkulation/recipes/calc-suggest`, {
+  return http<CalcSuggestResp>("/api/kalkulation/recipes/calc-suggest", {
     method: "POST",
     body: JSON.stringify(req),
   });
 }
+
+
+
+
+
+
+
+
+
+
+

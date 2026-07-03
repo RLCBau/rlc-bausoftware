@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   TextInput,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -167,11 +168,11 @@ function getStatusBadgeStyle(status: AngebotStatus) {
     case "Entwurf":
       return { bg: COLORS.card2, border: COLORS.border, text: COLORS.text };
     case "Gesendet":
-      return { bg: "#EEF5FF", border: "#BFDBFE", text: "#1D4ED8" };
+      return { bg: COLORS.accentSoft, border: COLORS.border, text: COLORS.accent };
     case "Angenommen":
-      return { bg: "#ECFDF5", border: "#A7F3D0", text: "#047857" };
+      return { bg: COLORS.successBg, border: COLORS.successSoft, text: COLORS.success };
     case "Abgelehnt":
-      return { bg: "#FEF2F2", border: "#FECACA", text: "#B91C1C" };
+      return { bg: COLORS.dangerBg, border: COLORS.danger, text: COLORS.danger };
     default:
       return { bg: COLORS.card2, border: COLORS.border, text: COLORS.text };
   }
@@ -200,7 +201,7 @@ async function exportOfferPdf(item: AngebotDoc) {
 
   const fileBase = sanitizeFileName(item.angebotNr || item.angebotTitle || "angebot");
 
-  await buildDocumentPdf({
+  const out = await buildDocumentPdf({
     type: "ANGEBOT",
     projectCode: item.projectCode,
     fileName: `${fileBase}.pdf`,
@@ -247,8 +248,10 @@ async function exportOfferPdf(item: AngebotDoc) {
       },
     ],
     note: item.note || "",
-    shareAfterCreate: true,
+    shareAfterCreate: false,
   });
+
+  return out;
 }
 
 async function exportOfferExcel(item: AngebotDoc) {
@@ -329,7 +332,8 @@ async function exportOfferExcel(item: AngebotDoc) {
 }
 
 export default function AngebotListScreen({ route, navigation }: Props) {
-  const { projectId, projectCode, title } = route.params;
+  const { projectId, projectCode: routeProjectCode, title } = route.params;
+  const projectCode = String(routeProjectCode || projectId || "").trim();
 
   const [items, setItems] = useState<AngebotDoc[]>([]);
   const [busy, setBusy] = useState(false);
@@ -401,7 +405,26 @@ export default function AngebotListScreen({ route, navigation }: Props) {
   async function onPdf(item: AngebotDoc) {
     try {
       setBusy(true);
-      await exportOfferPdf(item);
+      const out: any = await exportOfferPdf(item);
+      const pdfUri = String(out?.pdfUri || out?.uri || "").trim();
+
+      if (!pdfUri) {
+        throw new Error("PDF wurde erstellt, aber kein pdfUri zurückgegeben.");
+      }
+
+      const raw = await AsyncStorage.getItem(offerListKey(projectCode));
+      const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
+      const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc);
+      const next = list.map((x) =>
+        String(x.id) === String(item.id)
+          ? ({ ...x, pdfUri, updatedAt: new Date().toISOString() } as any)
+          : x
+      );
+
+      await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(next));
+      setItems(next);
+
+      await Linking.openURL(pdfUri);
     } catch (e: any) {
       Alert.alert("PDF Export", String(e?.message || "PDF Export fehlgeschlagen"));
     } finally {
@@ -536,7 +559,7 @@ export default function AngebotListScreen({ route, navigation }: Props) {
                 value={q}
                 onChangeText={setQ}
                 placeholder="Suchen (Nr., Titel, Status, Kunde, Baustelle)…"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 style={s.search}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -1076,8 +1099,8 @@ const s = StyleSheet.create({
   },
 
   mengenBtn: {
-    backgroundColor: "#F97316",
-    borderColor: "#F97316",
+    backgroundColor: COLORS.warning,
+    borderColor: COLORS.warning,
   },
 
   invoiceBtn: {
@@ -1116,6 +1139,15 @@ const s = StyleSheet.create({
     opacity: 0.6,
   },
 });
+
+
+
+
+
+
+
+
+
 
 
 

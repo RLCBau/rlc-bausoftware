@@ -1,4 +1,5 @@
 // apps/web/src/pages/ki/ManuellFoto.tsx
+import { apiUrl } from "../../lib/apiBase";
 import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useProject } from "../../store/useProject";
@@ -6,10 +7,6 @@ import { useProject } from "../../store/useProject";
 import jsPDF from "jspdf";
 // @ts-ignore
 import autoTable from "jspdf-autotable";
-
-// ⚙️ API-Basis (am besten in .env: VITE_API_URL="http://localhost:4000/api")
-const API =
-  (import.meta as any)?.env?.VITE_API_URL || "http://localhost:4000/api";
 
 const KI_REGIE_BUFFER_KEY = "ki-regie-buffer";
 
@@ -57,6 +54,17 @@ const prettyScore = (s: number) => (s * 100).toFixed(1) + "%";
 const STATE_STORAGE_KEY = "rlc-manuell-foto-v1";
 const HISTORY_KEY_BASE = "rlc-foto-history";
 
+/* ===== Helper ==================================== */
+
+function normalizeExtras(extras: ExtraRow[]): ExtraRow[] {
+  return (Array.isArray(extras) ? extras : []).map((ex, idx) => ({
+    ...ex,
+    lvPos:
+      String(ex.lvPos ?? "").trim() ||
+      `${ex.typ === "KI" ? "AUTO" : "FOTO"}.${String(idx + 1).padStart(3, "0")}`,
+  }));
+}
+
 /* ===== Backend-Helfer ==================================== */
 
 async function uploadFotoToBackend(
@@ -72,10 +80,13 @@ async function uploadFotoToBackend(
   form.append("extras", JSON.stringify(extras));
   form.append("boxes", JSON.stringify(boxes));
 
-  const res = await fetch(`${API}/projects/${projectId}/fotos`, {
-    method: "POST",
-    body: form,
-  });
+  const res = await fetch(
+    apiUrl(`/projects/${encodeURIComponent(projectId)}/fotos`),
+    {
+      method: "POST",
+      body: form,
+    }
+  );
 
   if (!res.ok) {
     console.error("Fehler beim Speichern Foto:", await res.text());
@@ -92,7 +103,11 @@ async function uploadFotoToBackend(
     note: String(entry.note ?? ""),
     extras: Array.isArray(entry.extras) ? entry.extras : [],
     boxes: Array.isArray(entry.boxes) ? entry.boxes : [],
-    imgUrl: `${API}/projects/${projectId}/fotos/${backendFile}`,
+    imgUrl: apiUrl(
+      `/projects/${encodeURIComponent(projectId)}/fotos/${encodeURIComponent(
+        backendFile
+      )}`
+    ),
     savedToBackend: true,
     backendId: String(entry.id),
     backendFile,
@@ -103,9 +118,16 @@ async function deleteFotoFromBackend(
   projectId: string,
   backendId: string
 ): Promise<boolean> {
-  const res = await fetch(`${API}/projects/${projectId}/fotos/${backendId}`, {
-    method: "DELETE",
-  });
+  const res = await fetch(
+    apiUrl(
+      `/projects/${encodeURIComponent(projectId)}/fotos/${encodeURIComponent(
+        backendId
+      )}`
+    ),
+    {
+      method: "DELETE",
+    }
+  );
   if (!res.ok) {
     console.error("Fehler beim Löschen im Backend:", await res.text());
     return false;
@@ -316,7 +338,7 @@ export default function ManuellFoto() {
       if (note) form.append("note", note);
       if (effectiveProjectId) form.append("projectId", effectiveProjectId);
 
-      const res = await fetch(`${API}/ki/photo-analyze`, {
+      const res = await fetch(apiUrl("/ki/photo-analyze"), {
         method: "POST",
         body: form,
       });
@@ -327,7 +349,7 @@ export default function ManuellFoto() {
 
       const data = (await res.json()) as {
         positions: {
-          id?: string; // hier kann z. B. 001.001 stehen
+          id?: string;
           kurztext: string;
           einheit?: string;
           typ?: "sichtbar" | "implizit";
@@ -338,7 +360,6 @@ export default function ManuellFoto() {
 
       const positions = data.positions || [];
 
-      // Rechte Tabelle (Bauteile)
       const boxes: DetectBox[] = positions.map((p, idx) => ({
         id: p.id || String(idx + 1),
         label: p.kurztext,
@@ -353,11 +374,10 @@ export default function ManuellFoto() {
         summary: data.summary || "Fotoanalyse mit KI durchgeführt.",
       });
 
-      // Zusätzliche Positionen für das Aufmaß + LV-Position speichern
-      const extraRows: ExtraRow[] = positions.map((p) => ({
+      const extraRows: ExtraRow[] = positions.map((p, idx) => ({
         id: crypto.randomUUID(),
         typ: "KI",
-        lvPos: p.id || "", // ⬅️ LV-Positionsnummer für PDF / Regie
+        lvPos: p.id || `AUTO.${String(idx + 1).padStart(3, "0")}`,
         beschreibung: p.kurztext,
         einheit: p.einheit || "",
         menge: 0,
@@ -379,7 +399,7 @@ export default function ManuellFoto() {
       {
         id: crypto.randomUUID(),
         typ: "Manuell",
-        lvPos: "", // manuell noch keine LV-Pos
+        lvPos: `FOTO.${String(prev.length + 1).padStart(3, "0")}`,
         beschreibung: "",
         einheit: "m",
         menge: 0,
@@ -395,7 +415,7 @@ export default function ManuellFoto() {
     setExtras((prev) => prev.filter((r) => r.id !== id));
   };
 
-  /* ---- NEU: Speichern (gleiche Logik wie Ins Aufmaß übernehmen, ohne Navigation) ---- */
+  /* ---- NEU: Speichern ---- */
   const handleSpeichern = async () => {
     if (!effectiveProjectId) {
       alert("Bitte zuerst ein Projekt wählen.");
@@ -406,8 +426,8 @@ export default function ManuellFoto() {
     setSaveBusy(true);
     try {
       const boxes = result?.boxes ?? [];
+      const normalizedExtras = normalizeExtras(extras);
 
-      // 1) Verlaufseintrag anlegen (lokal)
       const entryId = crypto.randomUUID();
       const entry: FotoHistoryEntry = {
         id: entryId,
@@ -415,7 +435,7 @@ export default function ManuellFoto() {
         createdAt: new Date().toISOString(),
         imgUrl,
         note,
-        extras,
+        extras: normalizedExtras,
         boxes,
         savedToBackend: false,
       };
@@ -430,7 +450,6 @@ export default function ManuellFoto() {
         return updated;
       });
 
-      // 2) Foto + Metadaten ins Projekt speichern (FS/DB je nach Backend)
       const saved = await saveFotoEntryToBackend(effectiveProjectId, entry);
       if (saved) {
         setHistory((prev) => {
@@ -446,33 +465,33 @@ export default function ManuellFoto() {
         alert("Foto konnte nicht im Projekt gespeichert werden.");
       }
 
-      // 3) Aufmaß-Übernahme-Endpoint triggern (schreibt ins Projekt-Root wie bei Übernehmen)
       try {
-        await fetch(`${API}/aufmass/from-foto`, {
+        await fetch(apiUrl("/aufmass/from-foto"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             projectId: effectiveProjectId,
             from,
             note,
-            extras,
+            extras: normalizedExtras,
             boxes,
           }),
         });
       } catch (e) {
         console.error("Fehler beim Speichern (from-foto)", e);
-        // nicht abbrechen: Foto ist ggf. schon gespeichert
       }
 
+      setExtras(normalizedExtras);
       alert("Gespeichert (Projekt).");
     } finally {
       setSaveBusy(false);
     }
   };
 
-  /* ---- Ins Aufmaß übernehmen (inkl. automatischem Projekt-Save) ---- */
+  /* ---- Ins Aufmaß übernehmen ---- */
   const goToAufmass = async () => {
     const boxes = result?.boxes ?? [];
+    const normalizedExtras = normalizeExtras(extras);
 
     if (imgUrl) {
       const entryId = crypto.randomUUID();
@@ -483,7 +502,7 @@ export default function ManuellFoto() {
         createdAt: new Date().toISOString(),
         imgUrl,
         note,
-        extras,
+        extras: normalizedExtras,
         boxes,
         savedToBackend: false,
       };
@@ -498,7 +517,6 @@ export default function ManuellFoto() {
         return updated;
       });
 
-      // gleich beim Übergang ins Aufmaß im Projekt speichern
       if (effectiveProjectId) {
         const saved = await saveFotoEntryToBackend(effectiveProjectId, entry);
         if (saved) {
@@ -516,14 +534,14 @@ export default function ManuellFoto() {
     }
 
     try {
-      await fetch("/api/aufmass/from-foto", {
+      await fetch(apiUrl("/aufmass/from-foto"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId: effectiveProjectId,
           from,
           note,
-          extras,
+          extras: normalizedExtras,
           boxes,
         }),
       });
@@ -531,10 +549,11 @@ export default function ManuellFoto() {
       console.error("Fehler beim Übergeben ins Aufmaß", e);
     }
 
+    setExtras(normalizedExtras);
     navigate("/mengenermittlung/aufmasseditor");
   };
 
-  /* ---- Zu Regieberichten (alles aus extras + Foto) ---- */
+  /* ---- Zu Regieberichten ---- */
   const goToRegieberichte = () => {
     if (!effectiveProjectId) {
       alert("Bitte zuerst ein Projekt wählen.");
@@ -542,14 +561,15 @@ export default function ManuellFoto() {
     }
 
     const dateStr = new Date().toISOString().slice(0, 10);
+    const normalizedExtras = normalizeExtras(extras);
 
     const baseItems =
-      extras.length > 0
-        ? extras
-        : (result?.boxes ?? []).map((b) => ({
+      normalizedExtras.length > 0
+        ? normalizedExtras
+        : (result?.boxes ?? []).map((b, idx) => ({
             id: crypto.randomUUID(),
             typ: "KI" as const,
-            lvPos: "",
+            lvPos: `AUTO.${String(idx + 1).padStart(3, "0")}`,
             beschreibung: b.label,
             einheit: b.unit || "",
             menge: b.qty ?? 0,
@@ -572,7 +592,6 @@ export default function ManuellFoto() {
       einheit: ex.einheit ?? "",
       kurztext: ex.beschreibung || "Regieposition aus Foto",
       lvItemPos: ex.lvPos || "",
-      // einfache Foto-Weitergabe (objectURL reicht, da wir direkt weiterleiten)
       photoUrl: imgUrl || null,
     }));
 
@@ -624,7 +643,6 @@ export default function ManuellFoto() {
       y += 6;
     }
 
-    // Tabelle: Typ | LV-Positionen | Beschreibung | Mengen
     const head = [["Typ", "LV-Positionen", "Beschreibung", "Mengen"]];
 
     const body = h.extras.map((ex) => {
@@ -634,15 +652,9 @@ export default function ManuellFoto() {
           maximumFractionDigits: 2,
         }) + (ex.einheit ? ` ${ex.einheit}` : "");
 
-      return [
-        ex.typ,
-        ex.lvPos || "", // ⬅️ Nummer wie 001.001 / FOTO.004
-        ex.beschreibung || "", // ⬅️ Text direkt unter "Beschreibung"
-        mengeStr,
-      ];
+      return [ex.typ, ex.lvPos || "", ex.beschreibung || "", mengeStr];
     });
 
-    // Platz für Bild rechts freilassen
     const imgWidth = 90;
     const reservedRight = 15 + imgWidth + 5;
 
@@ -654,10 +666,10 @@ export default function ManuellFoto() {
       headStyles: { fillColor: [37, 99, 235] },
       margin: { left, right: reservedRight },
       columnStyles: {
-        0: { cellWidth: 16 }, // Typ
-        1: { cellWidth: 24 }, // LV-Pos
-        2: { cellWidth: "auto" }, // Beschreibung
-        3: { cellWidth: 25, halign: "right" }, // Mengen
+        0: { cellWidth: 16 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: "auto" },
+        3: { cellWidth: 25, halign: "right" },
       },
     });
 
@@ -736,7 +748,12 @@ export default function ManuellFoto() {
       return;
     }
 
-    const saved = await saveFotoEntryToBackend(effectiveProjectId, h);
+    const normalizedEntry: FotoHistoryEntry = {
+      ...h,
+      extras: normalizeExtras(h.extras || []),
+    };
+
+    const saved = await saveFotoEntryToBackend(effectiveProjectId, normalizedEntry);
     if (!saved) {
       alert("Foto konnte nicht im Projekt gespeichert werden.");
       return;
@@ -749,11 +766,8 @@ export default function ManuellFoto() {
     });
   };
 
-  /* ==================== RENDER ===================== */
-
   return (
     <div className="card" style={{ padding: 0 }}>
-      {/* Toolbar */}
       <div
         style={{
           display: "flex",
@@ -771,7 +785,6 @@ export default function ManuellFoto() {
           {busy ? "Analysiere …" : "KI analysieren"}
         </button>
 
-        {/* ✅ NEU: Speichern neben Übernehmen */}
         <button
           className="btn"
           type="button"
@@ -802,7 +815,6 @@ export default function ManuellFoto() {
         </button>
       </div>
 
-      {/* Hauptbereich */}
       <div
         style={{
           display: "grid",
@@ -811,7 +823,6 @@ export default function ManuellFoto() {
           padding: 10,
         }}
       >
-        {/* LINKER BLOCK */}
         <div className="card" style={{ padding: 12 }}>
           {!imgUrl ? (
             <div
@@ -921,9 +932,7 @@ export default function ManuellFoto() {
           </div>
         </div>
 
-        {/* RECHTER BLOCK */}
         <div className="card" style={{ padding: 12 }}>
-          {/* KI-Ergebnisse */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>
               Vorschau (Ergebnisse der KI)
@@ -981,7 +990,6 @@ export default function ManuellFoto() {
             )}
           </div>
 
-          {/* Zusätzliche Positionen */}
           <div>
             <div
               style={{
@@ -1007,7 +1015,7 @@ export default function ManuellFoto() {
             {extras.length === 0 ? (
               <div style={{ opacity: 0.7, fontSize: 13 }}>
                 Noch keine zusätzlichen Positionen. Mit <b>„+ Zeile“</b>{" "}
-                kannst du manuelle Positionen ergänzen (z. B. „Pflaster verlegen“).
+                kannst du manuelle Positionen ergänzen.
               </div>
             ) : (
               <table
@@ -1084,7 +1092,6 @@ export default function ManuellFoto() {
         </div>
       </div>
 
-      {/* FOTO-VERLAUF */}
       {history.length > 0 && (
         <div style={{ padding: "0 10px 10px" }}>
           <div

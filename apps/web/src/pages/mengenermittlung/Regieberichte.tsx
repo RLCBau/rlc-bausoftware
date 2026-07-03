@@ -1,7 +1,7 @@
+import { API_BASE, apiUrl } from "../../lib/apiBase";
 // apps/web/src/pages/mengenermittlung/Regieberichte.tsx
 import React from "react";
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { useProject } from "../../store/useProject";
 
@@ -13,19 +13,18 @@ type ReportType = "REGIE" | "TAGESBERICHT" | "BAUTAGEBUCH";
 type RegieRow = {
   id?: string;
   projectId: string;
-  date?: string; // yyyy-mm-dd
+  date?: string;
   worker?: string;
   hours?: number;
   machine?: string;
   material?: string;
   quantity?: number;
   unit?: string;
-  comment?: string; // Beschreibung
+  comment?: string;
   lvItemId?: string | null;
   lvItemPos?: string | null;
-  photos?: Datei[]; // immagini/pdf per UI
+  photos?: Datei[];
 
-  // PDF Header / Meta
   reportType?: ReportType;
   regieNummer?: string;
   auftraggeber?: string;
@@ -36,7 +35,7 @@ type RegieRow = {
   blattNr?: string;
   wetter?: string;
   kostenstelle?: string;
-  bemerkungen?: string; // per box "Bemerkungen"
+  bemerkungen?: string;
 };
 
 type RegieHistoryItem = {
@@ -48,29 +47,27 @@ type RegieHistoryItem = {
   fsKey?: string;
 };
 
-/** Workflow items (Inbox / Approved) */
 type WorkflowStatus = "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT" | "REGISTRIERT";
 
 type RegieWorkflowItem = {
-  id: string; // docId
+  id: string;
   projectId: string;
   projectCode?: string;
   date?: string;
   createdAt?: number;
   submittedAt?: number | null;
   workflowStatus: WorkflowStatus;
-  title?: string; // optional
-  note?: string; // optional
-  rowsCount?: number; // optional
+  title?: string;
+  note?: string;
+  rowsCount?: number;
 };
 
-/* ===== Nachtrag Draft (client buffer) ===== */
 type NachtragDraft = {
   projectId: string;
   createdAt: number;
   source: "REGIE";
   rows: Array<{
-    pos: string; // REGIE.001
+    pos: string;
     kurztext: string;
     langtext?: string;
     einheit: string;
@@ -88,15 +85,10 @@ const rid = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${M
 
 const STATE_STORAGE_KEY = "rlc-regieberichte-state-v2";
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+
 
 function withApiBase(url: string) {
-  // already absolute
   if (/^https?:\/\//i.test(url)) return url;
-  // ensure leading slash
   const u = url.startsWith("/") ? url : `/${url}`;
   return `${API_BASE}${u}`;
 }
@@ -110,7 +102,6 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** Safe JSON fetch: returns null if endpoint not present / fails. */
 async function apiTry<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
     const res = await fetch(withApiBase(url), {
@@ -154,32 +145,21 @@ function guessType(name: string) {
   return "application/octet-stream";
 }
 
-/**
- * FINAL must show ONLY files that are actually in "Regieberichte" (Final).
- * We keep this filter as a safety net, even though the correct endpoint
- * should already return only final/history items.
- */
 function isFinalRegieberichtFilename(filename?: string) {
   const f = String(filename || "").trim();
   if (!f) return false;
 
-  // normalize just the basename
   const base = f.split("/").pop() || f;
-
-  // accept typical Final naming
   const low = base.toLowerCase();
+
   if (low.startsWith("regiebericht_")) return true;
   if (low.startsWith("regieberichte_")) return true;
-
-  // reject typical "regie" prefix
   if (low.startsWith("regie_")) return false;
-
   if (low.includes("regiebericht")) return true;
 
   return false;
 }
 
-/** Converte URL (anche objectURL) in dataURL (JPEG). Se non decodificabile → null. */
 async function urlToDataURL(url: string, preferType = "image/jpeg"): Promise<string | null> {
   try {
     const res = await fetch(withApiBase(url));
@@ -207,7 +187,6 @@ async function urlToDataURL(url: string, preferType = "image/jpeg"): Promise<str
   }
 }
 
-/* ===== PDF Reader compatibile Vite ===== */
 async function readPdfText(file: File): Promise<string> {
   const pdfjsLib: any = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -225,7 +204,6 @@ async function readPdfText(file: File): Promise<string> {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/* ===== Parser semplice Regie dal testo ===== */
 function parseRegieFromText(txt: string, defaults: { projectId: string }): RegieRow[] {
   const date = (
     txt.match(/Datum[:\s]*([0-9]{2}\.[0-9]{2}\.[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i)?.[1] ??
@@ -258,7 +236,6 @@ function parseRegieFromText(txt: string, defaults: { projectId: string }): Regie
   ];
 }
 
-/* ===== Buffer KI locale ===== */
 const KI_BUFFER_KEY = "ki-regie-buffer";
 function consumeKiBuffer(projectId: string, date: string): RegieRow[] {
   try {
@@ -290,7 +267,6 @@ function consumeKiBuffer(projectId: string, date: string): RegieRow[] {
   }
 }
 
-/* ===== Helper: rigenera URL per foto da dataUrl (quando ricarichi JSON) ===== */
 function reviveRows(list: any[]): RegieRow[] {
   return (list || []).map((r: any) => ({
     ...r,
@@ -303,7 +279,6 @@ function reviveRows(list: any[]): RegieRow[] {
   }));
 }
 
-/* helper per convertire URL → base64 */
 async function toDataUrl(objUrl: string): Promise<string> {
   const res = await fetch(objUrl);
   const blob = await res.blob();
@@ -314,7 +289,6 @@ async function toDataUrl(objUrl: string): Promise<string> {
   });
 }
 
-/* ===== REGIE POS Generator (per Projekt) ===== */
 function regieCounterKey(projectId: string) {
   return `rlc:regiePosCounter:${projectId}`;
 }
@@ -331,7 +305,6 @@ function hasPos(v?: string | null) {
   return !!v && String(v).trim().length > 0;
 }
 
-/* ===== Nachtrag Draft builder ===== */
 function buildNachtragDraft(projectId: string, rows: RegieRow[]): NachtragDraft {
   return {
     projectId,
@@ -367,7 +340,6 @@ function buildNachtragDraft(projectId: string, rows: RegieRow[]): NachtragDraft 
   };
 }
 
-/* ===== Component ===== */
 type TabKey = "INBOX" | "FREIGEGEBEN" | "FINAL";
 
 export default function Regieberichte() {
@@ -407,10 +379,7 @@ export default function Regieberichte() {
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [kiImported, setKiImported] = React.useState<{ count: number; date: string } | null>(null);
 
-  // FINAL store (legacy)
   const [history, setHistory] = React.useState<RegieHistoryItem[]>([]);
-
-  // Workflow lists
   const [inboxItems, setInboxItems] = React.useState<RegieWorkflowItem[]>([]);
   const [approvedItems, setApprovedItems] = React.useState<RegieWorkflowItem[]>([]);
 
@@ -419,9 +388,6 @@ export default function Regieberichte() {
 
   const formDate = form.date;
 
-  // ==========================
-  // FIX: sempre usare FS-Key (projectCode) per filesystem routes
-  // ==========================
   function looksLikeUuid(v?: string) {
     return (
       !!v &&
@@ -429,11 +395,6 @@ export default function Regieberichte() {
     );
   }
 
-  /**
-   * projectKey = sempre FS key (BA-2025-DEMO)
-   * - preferisci selectedProject.code
-   * - altrimenti, se projectId non è UUID, usalo come chiave FS
-   */
   const projectKey =
     (selectedProject?.code as string | undefined) || (!looksLikeUuid(projectId) ? projectId : "") || "";
 
@@ -441,7 +402,6 @@ export default function Regieberichte() {
     if (projectId) sessionStorage.setItem("regie:openProjectId", projectId);
   }, [projectId]);
 
-  /* ===== local state persist ===== */
   React.useEffect(() => {
     if (qFromKi) return;
     try {
@@ -476,18 +436,16 @@ export default function Regieberichte() {
     try {
       localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify({ projectId, rows, form, tab }));
     } catch {
-      // ignore
+      /* ignore */
     }
   }, [projectId, rows, form, tab]);
 
-  /* ===== FINAL: Verlauf laden ===== */
   const loadHistory = React.useCallback(async () => {
     if (!projectKey) {
       setHistory([]);
       return;
     }
 
-    // 1) Prefer correct endpoint
     const primary = await apiTry<{ ok: boolean; items: RegieHistoryItem[] }>(
       `/api/regie/list?projectId=${encodeURIComponent(projectKey)}`
     );
@@ -498,7 +456,6 @@ export default function Regieberichte() {
       return;
     }
 
-    // 2) Fallback legacy endpoint (older builds)
     const legacy = await apiTry<{ ok: boolean; items: RegieHistoryItem[] }>(
       `/api/ki/regie/list?projectId=${encodeURIComponent(projectKey)}`
     );
@@ -512,7 +469,6 @@ export default function Regieberichte() {
     setHistory([]);
   }, [projectKey]);
 
-  /* ===== WORKFLOW: lists ===== */
   const loadInbox = React.useCallback(async () => {
     if (!projectKey) {
       setInboxItems([]);
@@ -530,7 +486,6 @@ export default function Regieberichte() {
       return;
     }
 
-    // Prefer "freigegeben/final list" (server dependent)
     const primary = await apiTry<{ ok: boolean; items: RegieWorkflowItem[] }>(
       `/api/regie/final/list?projectId=${encodeURIComponent(projectKey)}`
     );
@@ -568,10 +523,9 @@ export default function Regieberichte() {
 
   React.useEffect(() => {
     if (!projectKey) return;
-    reloadActiveTab();
+    void reloadActiveTab();
   }, [projectKey, tab, reloadActiveTab]);
 
-  /* ===== helper snapshot commit (legacy) ===== */
   async function commitSnapshot(proj: string, dateStr: string, rowsSnapshot: RegieRow[]) {
     if (!proj) return;
     const snapshot = { projectId: proj, date: dateStr, note: form.comment ?? "", rows: rowsSnapshot };
@@ -581,7 +535,6 @@ export default function Regieberichte() {
     });
   }
 
-  /* ===== load by date (legacy editor) ===== */
   const loadByDate = React.useCallback(async () => {
     setError(null);
     if (!projectKey) return;
@@ -613,7 +566,6 @@ export default function Regieberichte() {
     }
   }, [projectKey, qDate, formDate]);
 
-  /* ===== KI import ===== */
   React.useEffect(() => {
     if (!qFromKi || !projectKey) return;
 
@@ -629,7 +581,6 @@ export default function Regieberichte() {
     sessionStorage.removeItem("regie:openProjectId");
   }, [qFromKi, projectKey, q]);
 
-  /* ===== focus row ===== */
   React.useEffect(() => {
     if (!rows.length) return;
 
@@ -685,7 +636,6 @@ export default function Regieberichte() {
     });
   }
 
-  /** Vollständig leeren (wie bisher) */
   function clearForm(keepProject = true) {
     setSelIdx(null);
     setForm({
@@ -710,7 +660,6 @@ export default function Regieberichte() {
     });
   }
 
-  /** Nur Zeilen-Felder leeren, Header bleibt. */
   function clearLineKeepHeader() {
     setSelIdx(null);
     setForm((prev) => ({
@@ -733,7 +682,6 @@ export default function Regieberichte() {
     setForm((prev) => ({ ...prev, [k]: v }));
   }
 
-  /* ===== JSON-Import (manual) ===== */
   function handleJsonFileChange(files: FileList | null) {
     if (!files || !files[0]) return;
     const file = files[0];
@@ -808,7 +756,6 @@ export default function Regieberichte() {
     }
   }
 
-  /* ===== FINAL: load history item ===== */
   async function loadSavedReportItem(item: RegieHistoryItem) {
     if (!projectKey) return alert("Bitte zuerst eine Projekt-ID eingeben.");
 
@@ -871,12 +818,6 @@ export default function Regieberichte() {
     }
   }
 
-  /* ============================================================
-     WORKFLOW: READ (Inbox / Freigegeben)
-     FIX #1: Endpoints unterscheiden sich je Build -> mehrere Kandidaten probieren
-     FIX #2: Freigegeben JSON ist oft "flat" (kein snapshot.rows), deshalb robust normalisieren
-     ============================================================ */
-
   function normalizeFileArray(arr: any[]): Datei[] {
     return (arr || [])
       .filter(Boolean)
@@ -890,11 +831,9 @@ export default function Regieberichte() {
   }
 
   function normalizeWorkflowDocToLoaded(snap: any): { loadedRows: RegieRow[]; d: string; note: string; pdfUrl?: string | null } {
-    // 1) modern: snapshot.rows
     const rowsIn = (snap?.rows || snap?.items?.aufmass || []) as any[];
     const d = String(snap?.date || today()).slice(0, 10);
 
-    // 2) flat JSON (come il tuo esempio): contiene direttamente i campi
     const isFlatRegie =
       !Array.isArray(rowsIn) || rowsIn.length === 0
         ? !!snap && typeof snap === "object" && (snap.kind === "regie" || snap.reportType || snap.workflowStatus)
@@ -914,7 +853,6 @@ export default function Regieberichte() {
     }
 
     if (isFlatRegie) {
-      // mapping dei campi "mitarbeiter/maschinen/materialien" -> worker/machine/material
       const photos = normalizeFileArray(snap.photos || snap.attachments || []);
       const row: RegieRow = {
         id: String(snap.id || rid()),
@@ -952,25 +890,19 @@ export default function Regieberichte() {
   async function loadWorkflowDoc(stage: "inbox" | "freigegeben" | "approved", docId: string) {
     if (!projectKey) return;
 
-    // stage mapping: in alcuni build si chiama "freigegeben", in altri "approved", in altri "final"
     const stageKey = stage === "approved" ? "freigegeben" : stage;
 
     const candidates: string[] = [
-      // più comune: /api/regie/<stage>/read
       `/api/regie/${stageKey}/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
-      // compat: /api/regie/approved/read
       stageKey === "freigegeben"
         ? `/api/regie/approved/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`
         : "",
-      // compat: /api/regie/final/read (alcuni server salvano i FREIGEGEBEN sotto "final")
       stageKey === "freigegeben"
         ? `/api/regie/final/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`
         : "",
-      // generic: /api/regie/read?stage=...
       `/api/regie/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}&stage=${encodeURIComponent(
         stageKey
       )}`,
-      // alt generic
       `/api/regie/workflow/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(
         docId
       )}&stage=${encodeURIComponent(stageKey)}`,
@@ -997,7 +929,6 @@ export default function Regieberichte() {
         throw new Error(`Not Found (keine passende Route).`);
       }
 
-      // server responses often wrap into { ok, snapshot } or { data: { snapshot } }
       const snap = data?.snapshot || data?.data?.snapshot || data;
 
       const norm = normalizeWorkflowDocToLoaded(snap);
@@ -1016,7 +947,6 @@ export default function Regieberichte() {
       setRows(revived);
       setSelIdx(null);
 
-      // Header/Form: usa la prima riga come “header carrier”
       const head = revived[0];
 
       setForm((prev) => ({
@@ -1094,7 +1024,7 @@ export default function Regieberichte() {
         body: JSON.stringify({ projectId: projectKey, docId }),
       });
       await loadApproved();
-      await loadHistory(); // FINAL history
+      await loadHistory();
       alert("Registriert.");
     } catch (e: any) {
       alert(msg(e));
@@ -1103,7 +1033,6 @@ export default function Regieberichte() {
     }
   }
 
-  /* ========= PDF EXPORT (Refactor: rows param, no state mutation) ========= */
   async function exportPdfRows(rowsToExport: RegieRow[], opts: { preview: boolean; single?: boolean }) {
     if (!rowsToExport.length) {
       alert("Keine Einträge zum Exportieren.");
@@ -1126,7 +1055,7 @@ export default function Regieberichte() {
     const baustelleName = selectedProject?.name || selectedProject?.code || projectIdForBauNr;
     const exportDate = (form.date || rowsToExport[0]?.date || today()).slice(0, 10);
 
-    const chunkSize = 6; // max 6 Zeilen pro Seite
+    const chunkSize = 6;
     const totalPages = Math.ceil(rowsToExport.length / chunkSize);
 
     for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
@@ -1147,7 +1076,6 @@ export default function Regieberichte() {
 
       const headerType: ReportType = headerRow.reportType || "REGIE";
 
-      // Rahmen
       doc.rect(leftX, headTop, leftW + midW + rightW, headH);
       doc.rect(leftX, headTop, leftW, headH);
 
@@ -1176,7 +1104,6 @@ export default function Regieberichte() {
       drawTypeRow("Bautagebuch", "BAUTAGEBUCH");
       drawTypeRow("Regiebericht", "REGIE");
 
-      // Mittelblock
       doc.rect(midX, headTop, midW, headH);
       const midInnerX = midX + 6;
       let lineY = headTop + 10;
@@ -1196,7 +1123,6 @@ export default function Regieberichte() {
       doc.setFontSize(labelFont);
       doc.line(midInnerX + 38, lineY + 1.5, midX + midW - 6, lineY + 1.5);
 
-      // Rechter Block
       doc.rect(rightX, headTop, rightW, headH);
 
       const fieldH = headH / 3;
@@ -1217,7 +1143,6 @@ export default function Regieberichte() {
       drawRightField("Regie-Nr.", headerRow.regieNummer || "");
       drawRightField("Datum", (headerRow.date || exportDate || today()).slice(0, 10));
 
-      // Wochentage + Zeiten
       let curY = headTop + headH + 8;
 
       const dayRowH = 10;
@@ -1267,7 +1192,6 @@ export default function Regieberichte() {
 
       curY += timeRowH + 6;
 
-      // Tabelle
       const tableTop = curY;
       const tableW = pageW - margin * 2;
       const tableH = 6 * 9;
@@ -1352,7 +1276,6 @@ export default function Regieberichte() {
 
       curY = tableTop + headerH + tableH + 8;
 
-      // Beschreibung
       const beschH = 30;
       doc.rect(margin, curY, tableW, beschH);
       doc.setFontSize(labelFont);
@@ -1360,7 +1283,6 @@ export default function Regieberichte() {
 
       curY += beschH + 6;
 
-      // Foto + Bemerkungen
       const fotoBoxH = 55;
       const fotoBoxW = tableW * 0.58;
       const bemerkW = tableW - fotoBoxW;
@@ -1394,7 +1316,6 @@ export default function Regieberichte() {
 
       curY += fotoBoxH + 8;
 
-      // Unterschriften
       const signH = 16;
       doc.rect(margin, curY, tableW, signH * 2);
 
@@ -1441,7 +1362,6 @@ export default function Regieberichte() {
     await exportPdfRows([row], { preview, single: true });
   }
 
-  /* ===== Save (legacy snapshot/day editing) ===== */
   async function save() {
     const proj =
       projectKey || form.projectId || (selectedProject?.code as string | undefined) || (selectedProject?.id as string | undefined) || "";
@@ -1492,7 +1412,6 @@ export default function Regieberichte() {
     }
   }
 
-  /* ===== Salva report (JSON + FOTO) legacy ===== */
   async function saveReportToServer() {
     const proj =
       projectKey || form.projectId || (selectedProject?.code as string | undefined) || (selectedProject?.id as string | undefined) || "";
@@ -1632,7 +1551,6 @@ export default function Regieberichte() {
     }
   }
 
-  /* ===== Foto/Allegati ===== */
   function addPhotos(files: FileList | null) {
     if (!files) return;
     const arr: Datei[] = Array.from(files).map((f) => ({
@@ -1718,10 +1636,6 @@ export default function Regieberichte() {
     return { updated, created };
   }
 
-  /* ============================================================
-     NEU: REAL AUFMASS EXPORT
-     ============================================================ */
-
   type AufmassAppendRow = {
     pos: string;
     text: string;
@@ -1768,11 +1682,11 @@ export default function Regieberichte() {
     };
   }
 
-  async function appendRowsToAufmassServer(projectKey: string, aufmassRows: AufmassAppendRow[]) {
-    if (!projectKey) throw new Error("Kein Projekt.");
+  async function appendRowsToAufmassServer(projectKeyValue: string, aufmassRows: AufmassAppendRow[]) {
+    if (!projectKeyValue) throw new Error("Kein Projekt.");
     if (!aufmassRows.length) return { ok: true as const, appended: 0 };
 
-    const url = `/api/aufmass/soll-ist/${encodeURIComponent(projectKey)}/append`;
+    const url = `/api/aufmass/soll-ist/${encodeURIComponent(projectKeyValue)}/append`;
     const res = await api<any>(url, { method: "POST", body: JSON.stringify({ rows: aufmassRows }) });
 
     const appended =
@@ -1891,10 +1805,8 @@ export default function Regieberichte() {
     XLSX.writeFile(wb, `Regieberichte_${projectKey || "ohneProjekt"}.xlsx`);
   }
 
-  /* ===== Render ===== */
   return (
     <div className="page">
-      {/* HEADER */}
       <div className="page-header">
         <div>
           <h2 className="page-title" style={{ marginBottom: 4 }}>
@@ -1931,13 +1843,12 @@ export default function Regieberichte() {
             Ins Aufmaßeditor übertragen
           </button>
 
-          <button className="btn" onClick={reloadActiveTab} disabled={loading || !projectKey}>
+          <button className="btn" onClick={() => void reloadActiveTab()} disabled={loading || !projectKey}>
             Aktualisieren
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         <TabButton active={tab === "INBOX"} onClick={() => setTab("INBOX")}>
           Inbox (Eingereicht) {inboxItems.length ? `• ${inboxItems.length}` : ""}
@@ -1957,7 +1868,6 @@ export default function Regieberichte() {
         </div>
       </div>
 
-      {/* BODY */}
       <div
         className="page-body"
         style={{
@@ -1967,7 +1877,6 @@ export default function Regieberichte() {
           alignItems: "flex-start",
         }}
       >
-        {/* LINKER BLOCK – Form (Büro-Bearbeitung) */}
         <div className="card" style={{ padding: 10 }}>
           <h3 style={{ marginTop: 0, marginBottom: 6 }}>Büro-Bearbeitung</h3>
 
@@ -2190,13 +2099,13 @@ export default function Regieberichte() {
             </L>
 
             <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
-              <button className="btn" onClick={save} disabled={loading}>
+              <button className="btn" onClick={() => void save()} disabled={loading}>
                 {form.id ? "Änderungen speichern" : "Eintrag anlegen (Snapshot)"}
               </button>
               <button className="btn" onClick={() => clearForm(true)} disabled={loading}>
                 Formular leeren
               </button>
-              <button className="btn" onClick={loadByDate} disabled={loading}>
+              <button className="btn" onClick={() => void loadByDate()} disabled={loading}>
                 Neu laden (Datum)
               </button>
             </div>
@@ -2235,9 +2144,7 @@ export default function Regieberichte() {
           </div>
         </div>
 
-        {/* RECHTER BLOCK */}
         <div style={{ display: "grid", gap: 10 }}>
-          {/* PDF + Liste */}
           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, alignItems: "stretch" }}>
             <div className="card" style={{ padding: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -2363,7 +2270,6 @@ export default function Regieberichte() {
             </div>
           </div>
 
-          {/* Tabelle Übersicht */}
           <div className="card" style={{ padding: 0 }}>
             <div
               style={{
@@ -2495,7 +2401,6 @@ export default function Regieberichte() {
         </div>
       </div>
 
-      {/* LIGHTBOX */}
       {previewUrl && (
         <div
           onClick={() => setPreviewUrl(null)}
@@ -2524,7 +2429,7 @@ export default function Regieberichte() {
 }
 
 /* ===== UI helpers ===== */
-function TabButton(props: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton(props: { active: boolean; onClick: () => void; children?: React.ReactNode }) {
   return (
     <button
       className="btn"
@@ -2559,7 +2464,7 @@ function L(props: React.PropsWithChildren<{ label: string; full?: boolean; style
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children }: { children?: React.ReactNode }) {
   return (
     <th
       style={{
@@ -2575,7 +2480,11 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Td(props: React.HTMLAttributes<HTMLTableCellElement> & { children?: React.ReactNode }) {
+function Td(
+  props: React.TdHTMLAttributes<HTMLTableCellElement> & {
+    children?: React.ReactNode;
+  }
+) {
   const { children, style, ...rest } = props;
   return (
     <td
@@ -2592,3 +2501,9 @@ function Td(props: React.HTMLAttributes<HTMLTableCellElement> & { children?: Rea
     </td>
   );
 }
+
+
+
+
+
+

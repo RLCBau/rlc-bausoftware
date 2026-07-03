@@ -2,12 +2,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import OpenAI from "openai";
+import { PrismaClient } from "@prisma/client";
 
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireCompany, requireActiveSubscription } from "../middleware/guards";
 import { requireServerLicense } from "../middleware/license";
 
 const r = Router();
+const prisma = new PrismaClient();
 
 /**
  * =========================================================
@@ -68,6 +70,129 @@ function normalize(s: any) {
   return String(s || "").trim();
 }
 
+function n(v: any): number {
+  if (v === null || v === undefined) return 0;
+  const num = Number(v);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+async function loadProjectLvContext(input: z.infer<typeof ChatSchema>) {
+  const key = normalize(input.projectCode || input.projectId);
+  if (!key) return null;
+
+  const project = await prisma.project.findFirst({
+    where: {
+      OR: [
+        { id: key },
+        { code: key },
+        { number: key },
+      ],
+    },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      number: true,
+    },
+  });
+
+  if (!project) return null;
+
+  const headers = await prisma.lVHeader.findMany({
+    where: { projectId: project.id },
+    orderBy: [{ version: "asc" }],
+    select: {
+      id: true,
+      title: true,
+      version: true,
+      currency: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  const summaries = [];
+
+  for (const h of headers) {
+    const rows = await prisma.lVPosition.findMany({
+      where: { lvId: h.id },
+      orderBy: [{ position: "asc" }],
+      select: {
+        position: true,
+        kurztext: true,
+        langtext: true,
+        einheit: true,
+        menge: true,
+        einzelpreis: true,
+        gesamt: true,
+      },
+    });
+
+    const total = rows.reduce((s, r) => {
+      const qty = n(r.menge);
+      const ep = n(r.einzelpreis);
+      const gp = n(r.gesamt);
+      return s + (gp > 0 ? gp : qty * ep);
+    }, 0);
+
+    summaries.push({
+      headerId: h.id,
+      version: h.version,
+      title: h.title,
+      currency: h.currency,
+      count: rows.length,
+      total: round2(total),
+      first: rows[0]?.position || "",
+      last: rows[rows.length - 1]?.position || "",
+      sample: rows[0]?.kurztext || "",
+      createdAt: h.createdAt,
+      updatedAt: h.updatedAt,
+    });
+  }
+
+  const positive = summaries.filter((s) => s.count > 0 && s.total > 0 && normalize(s.sample));
+  const x84Original = positive[0] || null;
+  const kiLatest = positive.length > 0 ? positive[positive.length - 1] : null;
+
+  const expectedCount = x84Original?.count || kiLatest?.count || 0;
+  const dirtyHeaders = summaries.filter((s) => {
+    if (!normalize(s.sample)) return true;
+    if (expectedCount > 0 && s.count !== expectedCount) return true;
+    return false;
+  });
+
+  return {
+    project,
+    headers: summaries,
+    x84Original,
+    kiLatest,
+    dirtyHeaders,
+  };
+}
+
+function formatProjectLvContext(ctx: any): string {
+  if (!ctx) return "- projectLvContext: not loaded\n";
+
+  return [
+    "- projectLvContext: loaded",
+    `- project: ${ctx.project?.code || ctx.project?.number || ctx.project?.id || ""} / ${ctx.project?.name || ""}`,
+    `- lvHeadersCount: ${ctx.headers?.length || 0}`,
+    `- x84OriginalTotal: ${ctx.x84Original?.total ?? "unknown"}`,
+    `- x84OriginalVersion: ${ctx.x84Original?.version ?? "unknown"}`,
+    `- x84OriginalCount: ${ctx.x84Original?.count ?? "unknown"}`,
+    `- kiLatestTotal: ${ctx.kiLatest?.total ?? "unknown"}`,
+    `- kiLatestVersion: ${ctx.kiLatest?.version ?? "unknown"}`,
+    `- kiLatestCount: ${ctx.kiLatest?.count ?? "unknown"}`,
+    `- dirtyHeaders: ${(ctx.dirtyHeaders || []).map((h: any) => `v${h.version}:count=${h.count}:total=${h.total}`).join(", ") || "none"}`,
+    "- rule: Never invent totals. Use only x84OriginalTotal and kiLatestTotal from this context. In dirtyHeaders, count means number of rows/positions, not number of headers. If unknown, say unknown.",
+  ].join("\n") + "\n";
+}
+
+
 function langOf(input: z.infer<typeof ChatSchema>) {
   const l = String((input as any)?.language || "de").toLowerCase().trim();
   if (l === "it" || l === "en" || l === "de") return l as "de" | "it" | "en";
@@ -80,7 +205,7 @@ function makeSystemPrompt(language: "de" | "it" | "en") {
       "Sei l'assistente di supporto di RLC Bausoftware.\n" +
       "Rispondi esclusivamente in italiano.\n" +
       "Sii pratico, operativo, conciso.\n" +
-      "Non inventare dati: se manca informazione, chiedi una sola cosa (minima), ma includi comunque una prima diagnosi."
+      "Non inventare dati: se manca informazione, chiedi una sola cosa (minima), ma includi comunque una prima diagnosi. Se è presente il contesto Project-LV, usa esclusivamente quei totali."
     );
   }
   if (language === "en") {
@@ -88,7 +213,7 @@ function makeSystemPrompt(language: "de" | "it" | "en") {
       "You are the support assistant for RLC Bausoftware.\n" +
       "Answer only in English.\n" +
       "Be practical, operational, concise.\n" +
-      "Do not invent data: if something is missing, ask only one minimal question, but still include a first diagnosis."
+      "Do not invent data: if something is missing, ask only one minimal question, but still include a first diagnosis. If Project-LV context is present, use only those totals."
     );
   }
   // ✅ default: DE
@@ -97,7 +222,7 @@ function makeSystemPrompt(language: "de" | "it" | "en") {
     "Antworte ausschließlich auf Deutsch.\n" +
     "Sei praktisch, operativ und präzise.\n" +
     "Auch wenn der Nutzer auf Italienisch schreibt, antworte trotzdem auf Deutsch.\n" +
-    "Erfinde keine Daten: wenn Information fehlt, stelle genau eine minimale Rückfrage, aber gib trotzdem eine erste Diagnose."
+    "Erfinde keine Daten: wenn Information fehlt, stelle genau eine minimale Rückfrage, aber gib trotzdem eine erste Diagnose. Wenn Projekt-LV-Kontext vorhanden ist, nutze ausschließlich die dort angegebenen Summen."
   );
 }
 
@@ -325,10 +450,13 @@ async function aiFallbackAnswer(input: z.infer<typeof ChatSchema>) {
   const client = new OpenAI({ apiKey });
   const ctx = input.context || {};
   const sys = makeSystemPrompt(language);
+  const projectLvContext = await loadProjectLvContext(input);
+  const projectLvContextText = formatProjectLvContext(projectLvContext);
 
   const user =
     `User message: ${input.message}\n\n` +
     `Context:\n` +
+    projectLvContextText +
     `- language: ${language}\n` +
     `- mode: ${input.mode || "SERVER_SYNC"}\n` +
     `- projectId: ${input.projectId || ""}\n` +

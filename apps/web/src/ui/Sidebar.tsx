@@ -1,20 +1,47 @@
 import { NavLink } from "react-router-dom";
 
+export type SidebarSection = {
+  id: string;
+  title: string;
+  emoji?: string;
+  subs: {
+    id: string;
+    title: string;
+  }[];
+};
 
-export default function Sidebar() {
+type Props = {
+  sections: SidebarSection[];
+};
+
+export default function Sidebar({ sections }: Props) {
   return (
-    <aside style={{width: 300, padding: 12, borderRight: '1px solid var(--border)', height: '100vh', overflowY:'auto'}}>
-      {SECTIONS.map(m => (
-        <div key={m.id} style={{marginBottom: 16}}>
-          <div style={{fontWeight:700, marginBottom: 8}}>{m.emoji} {m.title}</div>
-          <ul style={{listStyle:'none', padding:0, margin:0}}>
-            {m.subs.map(s => (
-              <li key={s.id} style={{marginBottom: 6}}>
+    <aside
+      style={{
+        width: 300,
+        padding: 12,
+        borderRight: "1px solid var(--border)",
+        height: "100vh",
+        overflowY: "auto",
+      }}
+    >
+      {sections.map((section) => (
+        <div key={section.id} style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>
+            {section.emoji ? `${section.emoji} ` : ""}
+            {section.title}
+          </div>
+
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {section.subs.map((sub) => (
+              <li key={sub.id} style={{ marginBottom: 6 }}>
                 <NavLink
-                  to={`/${m.id}/${s.id}`}
-                  className={({isActive}) => `link ${isActive ? 'active' : ''}`}
+                  to={`/${section.id}/${sub.id}`}
+                  className={({ isActive }) =>
+                    `link ${isActive ? "active" : ""}`
+                  }
                 >
-                  {s.title}
+                  {sub.title}
                 </NavLink>
               </li>
             ))}
@@ -24,3 +51,8 @@ export default function Sidebar() {
     </aside>
   );
 }
+
+
+
+
+

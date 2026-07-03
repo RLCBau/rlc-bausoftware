@@ -11,12 +11,15 @@ import { useRechnungen, useZahlungen, useLieferscheine } from "./stores";
 type RechnungUI = {
   id: string;
   nr: string;
-  datum: string; // ISO o dd.mm.yyyy ok
+  datum: string;
   faellig?: string;
   kunde: string;
   netto: number;
   mwstPct: number;
-  gezahlt: number; // incassato su questa fattura (se non hai dettaglio pagamenti -> 0)
+  gezahlt: number;
+  projekt?: string;
+  projectId?: string;
+  projectCode?: string;
 };
 
 type ZahlungUI = {
@@ -25,6 +28,9 @@ type ZahlungUI = {
   kunde?: string;
   betrag: number;
   referenz?: string;
+  projekt?: string;
+  projectId?: string;
+  projectCode?: string;
 };
 
 type LieferscheinKostenUI = {
@@ -33,25 +39,43 @@ type LieferscheinKostenUI = {
   kostenstelle?: string;
   lieferant?: string;
   betrag: number;
-  projekt?: string; // opzionale (fallback)
+  projekt?: string;
+  projectId?: string;
+  projectCode?: string;
 };
 
 type Zeitraum = "ALL" | "30" | "60" | "90" | "YTD" | "THIS_MONTH";
+type RechnungsStatus = "ALL" | "OPEN" | "PART" | "PAID";
 
 /** =========================
- *  HELPER
+ *  HELPERS
  *  ========================= */
+const safeTrim = (v: unknown) => String(v ?? "").trim();
+
+const safeNumber = (v: unknown, fallback = 0) => {
+  if (v === null || v === undefined || v === "") return fallback;
+  const normalized =
+    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 const parseDate = (s: string) => {
-  // supporta dd.mm.yyyy o ISO
-  if (/\d{2}\.\d{2}\.\d{4}/.test(s)) {
-    const [d, m, y] = s.split(".").map(Number);
+  const value = safeTrim(s);
+  if (!value) return new Date("1970-01-01");
+
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(value)) {
+    const [d, m, y] = value.split(".").map(Number);
     return new Date(y, (m || 1) - 1, d || 1);
   }
-  return new Date(s);
+
+  const dt = new Date(value);
+  return Number.isNaN(dt.getTime()) ? new Date("1970-01-01") : dt;
 };
 
 const withinDays = (d: Date, days: number) => {
   const from = new Date();
+  from.setHours(0, 0, 0, 0);
   from.setDate(from.getDate() - days);
   return d >= from;
 };
@@ -60,9 +84,87 @@ const isSameMonth = (d: Date, ref: Date) =>
   d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 const eur = (n: number) =>
-  n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  safeNumber(n).toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
-const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+const sum = (arr: number[]) => arr.reduce((a, b) => a + safeNumber(b), 0);
+
+const bruttoOf = (r: RechnungUI) => safeNumber(r.netto) * (1 + safeNumber(r.mwstPct) / 100);
+
+const projectKeysOf = (row: {
+  projekt?: string;
+  projectId?: string;
+  projectCode?: string;
+}) =>
+  [row.projectCode, row.projectId, row.projekt]
+    .map((v) => safeTrim(v))
+    .filter(Boolean);
+
+const matchesZeitraum = (datum: string, zeitraum: Zeitraum) => {
+  const d = parseDate(datum);
+
+  switch (zeitraum) {
+    case "30":
+      return withinDays(d, 30);
+    case "60":
+      return withinDays(d, 60);
+    case "90":
+      return withinDays(d, 90);
+    case "YTD":
+      return d.getFullYear() === new Date().getFullYear();
+    case "THIS_MONTH":
+      return isSameMonth(d, new Date());
+    default:
+      return true;
+  }
+};
+
+const invoiceStatusOf = (r: RechnungUI): Exclude<RechnungsStatus, "ALL"> => {
+  const brutto = bruttoOf(r);
+  const gezahlt = safeNumber(r.gezahlt);
+
+  if (gezahlt >= brutto - 0.01) return "PAID";
+  if (gezahlt <= 0.01) return "OPEN";
+  return "PART";
+};
+
+const csvEscape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+const downloadCSV = (rows: Record<string, unknown>[], filename: string) => {
+  if (!rows.length) {
+    alert("Keine Daten für den Export vorhanden.");
+    return;
+  }
+
+  const headers = Object.keys(rows[0] || {});
+  const csv = [
+    headers.join(";"),
+    ...rows.map((r) => headers.map((h) => csvEscape(r[h])).join(";")),
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  const href = URL.createObjectURL(blob);
+  a.href = href;
+  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(href);
+};
+
+const spark = (series: number[]) => {
+  if (!series.length) return "—";
+  const max = Math.max(...series, 0);
+  const glyphs = "▁▂▃▄▅▆▇█";
+
+  return series
+    .map((n) => {
+      const idx = max === 0 ? 0 : Math.round((safeNumber(n) / max) * (glyphs.length - 1));
+      return glyphs.charAt(idx);
+    })
+    .join("");
+};
 
 /** =========================
  *  COMPONENT
@@ -70,141 +172,105 @@ const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
 export default function Kostenuebersicht() {
   const nav = useNavigate();
 
-  // Project context (per filtro)
   const ctx: any = useProject();
-  const cur = ctx?.currentProject || ctx?.selectedProject || null;
-  const currentProjectCode: string | null = cur?.code ?? null;
-  const currentProjectId: string | null = cur?.id ?? ctx?.projectId ?? null;
+  const cur = ctx?.currentProject || ctx?.selectedProject || ctx?.getSelectedProject?.() || null;
 
-  // Store data
+  const currentProjectCode: string = safeTrim(cur?.code);
+  const currentProjectId: string = safeTrim(cur?.id);
+  const activeProjectKey = currentProjectCode || currentProjectId || "";
+
   const [rechnungen] = useRechnungen();
   const [zahlungen] = useZahlungen();
   const [lieferscheine] = useLieferscheine();
 
-  // Filtri UI
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
   const [kunde, setKunde] = useState<string>("ALL");
-  const [status, setStatus] = useState<"ALL" | "OPEN" | "PART" | "PAID">("ALL");
-
-  /**
-   * =========================================================
-   * Mapping DALLO STORE -> UI-Model
-   * Nota: i tuoi types in ./types non includono sempre project/kunde.
-   * Qui facciamo mapping "robusto":
-   * - Rechnung: progetto (se presente) o fallback: currentProjectCode
-   * - Zahlung: se manca kunde, la lasciamo vuota
-   * - Lieferschein: costo = field "kosten" (dal tuo type Lieferschein)
-   * =========================================================
-   */
+  const [status, setStatus] = useState<RechnungsStatus>("ALL");
 
   const rechnungenUI: RechnungUI[] = useMemo(() => {
     return (rechnungen || []).map((r: any) => ({
-      id: String(r.id),
-      nr: String(r.nummer ?? r.nr ?? r.id),
+      id: String(r.id ?? ""),
+      nr: String(r.nummer ?? r.nr ?? r.id ?? "—"),
       datum: String(r.datum || ""),
       faellig: r.faellig ? String(r.faellig) : undefined,
       kunde: String(r.kunde ?? r.client ?? r.auftraggeber ?? "—"),
-      netto: Number(r.betragNetto ?? r.netto ?? 0),
-      mwstPct: Number(r.mwst ?? r.mwstPct ?? 19),
-      // se non hai il dettaglio "gezahlt" sul type Rechnung, resta 0;
-      // se lo aggiungi in futuro, qui lo prende automaticamente.
-      gezahlt: Number(r.gezahlt ?? 0),
+      netto: safeNumber(r.betragNetto ?? r.netto ?? 0),
+      mwstPct: safeNumber(r.mwstPct ?? r.mwst ?? 19),
+      gezahlt: safeNumber(r.gezahlt ?? 0),
+      projekt: r.projekt ? String(r.projekt) : undefined,
+      projectId: r.projectId ? String(r.projectId) : undefined,
+      projectCode: r.projectCode ? String(r.projectCode) : undefined,
     }));
   }, [rechnungen]);
 
   const zahlungenUI: ZahlungUI[] = useMemo(() => {
     return (zahlungen || []).map((z: any) => ({
-      id: String(z.id),
+      id: String(z.id ?? ""),
       datum: String(z.datum || ""),
       kunde: z.kunde ? String(z.kunde) : undefined,
-      betrag: Number(z.betrag ?? 0),
+      betrag: safeNumber(z.betrag ?? 0),
       referenz: z.referenz ? String(z.referenz) : undefined,
+      projekt: z.projekt ? String(z.projekt) : undefined,
+      projectId: z.projectId ? String(z.projectId) : undefined,
+      projectCode: z.projectCode ? String(z.projectCode) : undefined,
     }));
   }, [zahlungen]);
 
   const kostenUI: LieferscheinKostenUI[] = useMemo(() => {
     return (lieferscheine || []).map((ls: any) => ({
-      id: String(ls.id),
+      id: String(ls.id ?? ""),
       datum: String(ls.datum || ""),
       kostenstelle: ls.kostenstelle ? String(ls.kostenstelle) : undefined,
       lieferant: ls.lieferant ? String(ls.lieferant) : undefined,
-      betrag: Number(ls.kosten ?? ls.betrag ?? 0),
-      projekt: ls.projekt ? String(ls.projekt) : undefined, // opzionale (se lo aggiungi in futuro)
+      betrag: safeNumber(ls.kosten ?? ls.betrag ?? 0),
+      projekt: ls.projekt ? String(ls.projekt) : undefined,
+      projectId: ls.projectId ? String(ls.projectId) : undefined,
+      projectCode: ls.projectCode ? String(ls.projectCode) : undefined,
     }));
   }, [lieferscheine]);
 
-  // Filtro per progetto (best-effort)
-  // - Se nelle righe esiste "projekt"/"projectId"/"projectCode", usalo.
-  // - Altrimenti: non filtrare (per non perdere dati).
-  const filterByProject = <T extends any>(rows: T[], getter: (x: T) => any) => {
-    const key = currentProjectCode || currentProjectId;
-    if (!key) return rows;
+  const filterByProject = <T extends { projekt?: string; projectId?: string; projectCode?: string }>(
+    rows: T[]
+  ): T[] => {
+    if (!activeProjectKey) return rows;
 
-    // se nessuna riga ha info progetto -> non filtrare
-    const hasAnyProjectInfo = rows.some((x) => {
-      const v = getter(x);
-      return v !== undefined && v !== null && String(v).trim() !== "";
-    });
+    const hasAnyProjectInfo = rows.some((row) => projectKeysOf(row).length > 0);
     if (!hasAnyProjectInfo) return rows;
 
-    return rows.filter((x) => String(getter(x) ?? "") === String(key));
+    return rows.filter((row) => projectKeysOf(row).includes(activeProjectKey));
   };
 
-  // Qui puoi personalizzare quale field usare quando in futuro aggiungi project linkage nei types
-  const rechnungenProjectFiltered = useMemo(() => {
-    return filterByProject(rechnungenUI, (r) => (r as any).projekt ?? (r as any).projectId ?? (r as any).projectCode);
-  }, [rechnungenUI, currentProjectCode, currentProjectId]);
+  const rechnungenProjectFiltered = useMemo(
+    () => filterByProject(rechnungenUI),
+    [rechnungenUI, activeProjectKey]
+  );
 
-  const zahlungenProjectFiltered = useMemo(() => {
-    return filterByProject(zahlungenUI as any, (z) => (z as any).projekt ?? (z as any).projectId ?? (z as any).projectCode);
-  }, [zahlungenUI, currentProjectCode, currentProjectId]);
+  const zahlungenProjectFiltered = useMemo(
+    () => filterByProject(zahlungenUI),
+    [zahlungenUI, activeProjectKey]
+  );
 
-  const kostenProjectFiltered = useMemo(() => {
-    // nel tuo Lieferschein type attuale NON c’è progetto: quindi (oggi) non filtra,
-    // ma è pronto appena aggiungi projekt/projectId/projectCode.
-    return filterByProject(kostenUI as any, (k) => (k as any).projekt ?? (k as any).projectId ?? (k as any).projectCode);
-  }, [kostenUI, currentProjectCode, currentProjectId]);
+  const kostenProjectFiltered = useMemo(
+    () => filterByProject(kostenUI),
+    [kostenUI, activeProjectKey]
+  );
 
-  // Derivati per i filtri (Kunde)
   const kundenListe = useMemo(() => {
-    const ks = Array.from(new Set(rechnungenProjectFiltered.map((r) => r.kunde).filter(Boolean)));
+    const ks = Array.from(
+      new Set(rechnungenProjectFiltered.map((r) => safeTrim(r.kunde)).filter(Boolean))
+    );
     return ["ALL", ...ks];
   }, [rechnungenProjectFiltered]);
 
   const rechnungenGefiltert = useMemo(() => {
-    let arr = rechnungenProjectFiltered.slice();
+    let arr = rechnungenProjectFiltered.filter((r) => matchesZeitraum(r.datum, zeitraum));
 
-    // Zeitraum
-    arr = arr.filter((r) => {
-      const d = parseDate(r.datum);
-      switch (zeitraum) {
-        case "30":
-          return withinDays(d, 30);
-        case "60":
-          return withinDays(d, 60);
-        case "90":
-          return withinDays(d, 90);
-        case "YTD":
-          return d.getFullYear() === new Date().getFullYear();
-        case "THIS_MONTH":
-          return isSameMonth(d, new Date());
-        default:
-          return true;
-      }
-    });
+    if (kunde !== "ALL") {
+      arr = arr.filter((r) => safeTrim(r.kunde) === kunde);
+    }
 
-    // Kunde
-    if (kunde !== "ALL") arr = arr.filter((r) => r.kunde === kunde);
-
-    // Status
     if (status !== "ALL") {
-      arr = arr.filter((r) => {
-        const brutto = r.netto * (1 + r.mwstPct / 100);
-        if (status === "PAID") return r.gezahlt >= brutto - 0.01;
-        if (status === "OPEN") return r.gezahlt <= 0.01;
-        if (status === "PART") return r.gezahlt > 0.01 && r.gezahlt < brutto - 0.01;
-        return true;
-      });
+      arr = arr.filter((r) => invoiceStatusOf(r) === status);
     }
 
     return arr;
@@ -212,111 +278,63 @@ export default function Kostenuebersicht() {
 
   const zahlungenGefiltert = useMemo(() => {
     return zahlungenProjectFiltered.filter((z) => {
-      const d = parseDate(z.datum);
-      const okZeit =
-        zeitraum === "30"
-          ? withinDays(d, 30)
-          : zeitraum === "60"
-          ? withinDays(d, 60)
-          : zeitraum === "90"
-          ? withinDays(d, 90)
-          : zeitraum === "YTD"
-          ? d.getFullYear() === new Date().getFullYear()
-          : zeitraum === "THIS_MONTH"
-          ? isSameMonth(d, new Date())
-          : true;
-
-      const okKunde = kunde === "ALL" ? true : z.kunde === kunde;
+      const okZeit = matchesZeitraum(z.datum, zeitraum);
+      const okKunde = kunde === "ALL" ? true : safeTrim(z.kunde) === kunde;
       return okZeit && okKunde;
     });
   }, [zahlungenProjectFiltered, zeitraum, kunde]);
 
   const kostenGefiltert = useMemo(() => {
-    return kostenProjectFiltered.filter((k) => {
-      const d = parseDate(k.datum);
-      const okZeit =
-        zeitraum === "30"
-          ? withinDays(d, 30)
-          : zeitraum === "60"
-          ? withinDays(d, 60)
-          : zeitraum === "90"
-          ? withinDays(d, 90)
-          : zeitraum === "YTD"
-          ? d.getFullYear() === new Date().getFullYear()
-          : zeitraum === "THIS_MONTH"
-          ? isSameMonth(d, new Date())
-          : true;
-      return okZeit;
-    });
+    return kostenProjectFiltered.filter((k) => matchesZeitraum(k.datum, zeitraum));
   }, [kostenProjectFiltered, zeitraum]);
 
-  // KPI calcoli
   const reBrutto = useMemo(
-    () => sum(rechnungenGefiltert.map((r) => r.netto * (1 + r.mwstPct / 100))),
+    () => sum(rechnungenGefiltert.map((r) => bruttoOf(r))),
     [rechnungenGefiltert]
   );
 
-  /**
-   * IMPORTANT:
-   * - Se il tuo modello "Zahlung" rappresenta pagamenti reali, qui usiamo SOMMA pagamenti come KPI "Zahlungseingänge".
-   * - Il campo r.gezahlt sulle rechnungen resta utile per lo status OPEN/PART/PAID se lo compili.
-   */
-  const zahlungenSum = useMemo(() => sum(zahlungenGefiltert.map((z) => z.betrag)), [zahlungenGefiltert]);
+  const zahlungenSum = useMemo(
+    () => sum(zahlungenGefiltert.map((z) => safeNumber(z.betrag))),
+    [zahlungenGefiltert]
+  );
 
-  const reGezahlt = zahlungenSum; // KPI (live) = pagamenti registrati
+  const reGezahlt = zahlungenSum;
   const offenePosten = Math.max(0, reBrutto - reGezahlt);
 
-  const kosten = useMemo(() => sum(kostenGefiltert.map((k) => k.betrag)), [kostenGefiltert]);
+  const kosten = useMemo(
+    () => sum(kostenGefiltert.map((k) => safeNumber(k.betrag))),
+    [kostenGefiltert]
+  );
+
   const deckungsbeitrag = reGezahlt - kosten;
 
-  // Tabelle Offene Posten (Top 10)
   const offeneListe = useMemo(() => {
     return rechnungenGefiltert
       .map((r) => {
-        const brutto = r.netto * (1 + r.mwstPct / 100);
-        // “gezahlt” pro Rechnung è opzionale; se non lo gestisci ancora, la riga resta "offen".
-        const bezahlt = Number(r.gezahlt ?? 0);
-        return { ...r, offen: Math.max(0, brutto - bezahlt), brutto, bezahlt };
+        const brutto = bruttoOf(r);
+        const bezahlt = safeNumber(r.gezahlt);
+        return {
+          ...r,
+          offen: Math.max(0, brutto - bezahlt),
+          brutto,
+          bezahlt,
+        };
       })
       .filter((r) => r.offen > 0.01)
       .sort((a, b) => b.offen - a.offen)
       .slice(0, 10);
   }, [rechnungenGefiltert]);
 
-  // Aggregazione costi per Kostenstelle
-  const kostenByKs = useMemo(() => {
+  const kostenByKs = useMemo<[string, number][]>(() => {
     const map = new Map<string, number>();
+
     for (const k of kostenGefiltert) {
-      const key = k.kostenstelle || "—";
-      map.set(key, (map.get(key) || 0) + k.betrag);
+      const key = safeTrim(k.kostenstelle) || "—";
+      map.set(key, (map.get(key) || 0) + safeNumber(k.betrag));
     }
+
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [kostenGefiltert]);
-
-  // mini sparkline ascii (0..7)
-  const spark = (series: number[]) => {
-    if (!series.length) return "—";
-    const max = Math.max(...series);
-    const glyphs = "▁▂▃▄▅▆▇█";
-    return series
-      .map((n) => {
-        const idx = max === 0 ? 0 : Math.round((n / max) * (glyphs.length - 1));
-        return glyphs[idx];
-      })
-      .join("");
-  };
-
-  // CSV export
-  const downloadCSV = (rows: Record<string, any>[], filename: string) => {
-    const headers = Object.keys(rows[0] || {});
-    const csv = [headers.join(";"), ...rows.map((r) => headers.map((h) => String(r[h] ?? "")).join(";"))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
 
   const exportKPIs = () => {
     downloadCSV(
@@ -338,7 +356,7 @@ export default function Kostenuebersicht() {
         Kunde: o.kunde,
         Datum: o.datum,
         Brutto: o.brutto.toFixed(2),
-        Gezahlt: Number(o.bezahlt ?? 0).toFixed(2),
+        Gezahlt: safeNumber(o.bezahlt).toFixed(2),
         Offen: o.offen.toFixed(2),
         Faellig: o.faellig || "",
       })),
@@ -356,19 +374,24 @@ export default function Kostenuebersicht() {
     );
   };
 
-  // Serie: ultimi 7 step (Zahlungen)
   const serieZahlungen = useMemo(() => {
-    const days = [7, 6, 5, 4, 3, 2, 1].reverse();
-    return days.map((d) => {
-      const since = new Date();
-      since.setDate(since.getDate() - d);
-      const till = new Date();
-      till.setDate(till.getDate() - (d - 1));
+    const days = [6, 5, 4, 3, 2, 1, 0];
+
+    return days.map((daysAgo) => {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - daysAgo);
+
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+
       return sum(
-        zahlungenProjectFiltered.filter((z) => {
-          const dt = parseDate(z.datum);
-          return dt >= since && dt < till;
-        }).map((z) => z.betrag)
+        zahlungenProjectFiltered
+          .filter((z) => {
+            const dt = parseDate(z.datum);
+            return dt >= start && dt < end;
+          })
+          .map((z) => safeNumber(z.betrag))
       );
     });
   }, [zahlungenProjectFiltered]);
@@ -378,7 +401,6 @@ export default function Kostenuebersicht() {
       <div className="bh-header-row">
         <h2>Kostenübersicht pro Projekt (live)</h2>
         <div className="bh-actions">
-          {/* ✅ route esistenti */}
           <button className="bh-btn ghost" onClick={() => nav("/buchhaltung/rechnungen")}>
             → Zu Rechnungen
           </button>
@@ -388,15 +410,15 @@ export default function Kostenuebersicht() {
           <button className="bh-btn ghost" onClick={() => nav("/buchhaltung/reports")}>
             → Zu Belegen
           </button>
-
-          {/* ✅ Lieferscheine esistono già in Mengenermittlung */}
-          <button className="bh-btn ghost" onClick={() => nav("/mengenermittlung/lieferscheine")}>
+          <button
+            className="bh-btn ghost"
+            onClick={() => nav("/mengenermittlung/lieferscheine")}
+          >
             → Zu Lieferscheinen
           </button>
         </div>
       </div>
 
-      {/* FILTRI */}
       <div className="bh-filters">
         <div>
           <label>Zeitraum</label>
@@ -409,25 +431,31 @@ export default function Kostenuebersicht() {
             <option value="ALL">Alle</option>
           </select>
         </div>
+
         <div>
           <label>Kunde</label>
           <select value={kunde} onChange={(e) => setKunde(e.target.value)}>
             {kundenListe.map((k) => (
               <option key={k} value={k}>
-                {k}
+                {k === "ALL" ? "Alle" : k}
               </option>
             ))}
           </select>
         </div>
+
         <div>
           <label>Status</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value as any)}>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as RechnungsStatus)}
+          >
             <option value="ALL">Alle</option>
             <option value="OPEN">Offen</option>
             <option value="PART">Teilbezahlt</option>
             <option value="PAID">Bezahlt</option>
           </select>
         </div>
+
         <div className="bh-filters-right">
           <button className="bh-btn" onClick={exportKPIs}>
             Export KPI (CSV)
@@ -435,21 +463,23 @@ export default function Kostenuebersicht() {
         </div>
       </div>
 
-      {/* KPI CARDS */}
       <div className="bh-cards">
         <div className="bh-card">
           <div className="k">Rechnungen (Brutto)</div>
           <div className="v">{eur(reBrutto)} €</div>
           <div className="s">Zahlungsserie: {spark(serieZahlungen)}</div>
         </div>
+
         <div className="bh-card">
           <div className="k">Zahlungseingänge</div>
           <div className="v">{eur(reGezahlt)} €</div>
         </div>
+
         <div className="bh-card">
           <div className="k">Offene Posten</div>
           <div className="v">{eur(offenePosten)} €</div>
         </div>
+
         <div className="bh-card">
           <div className="k">Kosten (Belege/Lieferscheine)</div>
           <div className="v">{eur(kosten)} €</div>
@@ -459,13 +489,13 @@ export default function Kostenuebersicht() {
             </span>
           </div>
         </div>
+
         <div className="bh-card">
           <div className="k">Deckungsbeitrag (Zahlungen − Kosten)</div>
           <div className="v">{eur(deckungsbeitrag)} €</div>
         </div>
       </div>
 
-      {/* TABELLE */}
       <div className="bh-grid-2">
         <div className="bh-panel">
           <div className="bh-panel-head">
@@ -474,6 +504,7 @@ export default function Kostenuebersicht() {
               Export CSV
             </button>
           </div>
+
           <table className="bh-table">
             <thead>
               <tr>
@@ -495,7 +526,7 @@ export default function Kostenuebersicht() {
                   <td>{o.datum}</td>
                   <td>{o.faellig || "—"}</td>
                   <td>{eur(o.brutto)}</td>
-                  <td>{eur(Number(o.bezahlt ?? 0))}</td>
+                  <td>{eur(safeNumber(o.bezahlt))}</td>
                   <td style={{ fontWeight: 600 }}>{eur(o.offen)}</td>
                   <td>
                     <Link to="/buchhaltung/zahlungen" className="bh-link">
@@ -504,6 +535,7 @@ export default function Kostenuebersicht() {
                   </td>
                 </tr>
               ))}
+
               {offeneListe.length === 0 && (
                 <tr>
                   <td colSpan={8} style={{ textAlign: "center", color: "#777" }}>
@@ -522,6 +554,7 @@ export default function Kostenuebersicht() {
               Export CSV
             </button>
           </div>
+
           <table className="bh-table">
             <thead>
               <tr>
@@ -536,6 +569,7 @@ export default function Kostenuebersicht() {
                   <td>{eur(betrag)}</td>
                 </tr>
               ))}
+
               {kostenByKs.length === 0 && (
                 <tr>
                   <td colSpan={2} style={{ textAlign: "center", color: "#777" }}>
@@ -550,9 +584,9 @@ export default function Kostenuebersicht() {
 
       <div className="bh-note" style={{ marginTop: 8 }}>
         *Live-Daten aus <code>stores.ts</code> (Rechnungen/Zahlungen/Lieferscheine).{" "}
-        {currentProjectCode || currentProjectId ? (
+        {activeProjectKey ? (
           <>
-            Aktuelles Projekt: <b>{currentProjectCode || currentProjectId}</b>
+            Aktuelles Projekt: <b>{activeProjectKey}</b>
           </>
         ) : (
           <>Kein Projekt gewählt: Projektfilter wird nicht angewendet.</>
@@ -561,3 +595,8 @@ export default function Kostenuebersicht() {
     </div>
   );
 }
+
+
+
+
+

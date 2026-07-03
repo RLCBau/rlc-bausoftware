@@ -1,17 +1,13 @@
-// apps/web/src/pages/mengenermittlung/GPSZuweisung.tsx
+import { apiUrl } from "../../lib/apiBase";
 import React from "react";
 import L from "leaflet";
-import Papa from "papaparse";
 import proj4 from "proj4";
 // @ts-ignore
 import "leaflet.gridlayer.googlemutant";
 import { gpx, kml } from "@tmcw/togeojson";
-
 import html2canvas from "html2canvas";
-
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-
 import "leaflet/dist/leaflet.css";
 import { useProject } from "../../store/useProject";
 
@@ -41,11 +37,11 @@ proj4.defs(
 );
 
 function toWGS84(e: number, n: number, crs: string) {
-  const [lng, lat] = proj4(proj4(crs), proj4("EPSG:4326"), [e, n]);
+  const [lng, lat] = proj4(crs, "EPSG:4326", [e, n]) as [number, number];
   return { lat, lng };
 }
 
-function normKey(s: any) {
+function normKey(s: unknown) {
   return String(s || "")
     .trim()
     .toLowerCase()
@@ -53,7 +49,7 @@ function normKey(s: any) {
     .replace(/[-_]/g, "");
 }
 
-function toNum(v: any): number {
+function toNum(v: unknown): number {
   if (v === null || v === undefined) return NaN;
   const s = String(v).trim().replace(",", ".");
   const n = parseFloat(s);
@@ -69,13 +65,13 @@ function clampPts(pts: GpsPoint[]) {
 }
 
 function isPlausibleWGS84(p: { lat: number; lng: number }) {
-  // grob: DACH / Mitteleuropa
   return p.lat >= 35 && p.lat <= 65 && p.lng >= -10 && p.lng <= 30;
 }
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
+
 function tsForFilename(t = Date.now()) {
   const d = new Date(t);
   return (
@@ -93,12 +89,6 @@ function tsForFilename(t = Date.now()) {
   );
 }
 
-/**
- * jsPDF può produrre:
- *  - data:application/pdf;base64,....
- *  - data:application/pdf;filename=generated.pdf;base64,....
- * Il backend spesso valida solo la prima.
- */
 function normalizePdfDataUrl(u: string) {
   const s = String(u || "");
   if (!s) return s;
@@ -131,14 +121,84 @@ function polylineLengthMeters(pts: GpsPoint[]) {
   return sum;
 }
 
+/* ------------------ SIMPLE CSV PARSER (no papaparse) ------------------ */
+function splitCsvLine(line: string, delimiter: string) {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    const next = line[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (ch === delimiter && !inQuotes) {
+      out.push(cur);
+      cur = "";
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+function detectDelimiter(lines: string[]) {
+  const sample = lines.find((l) => l.trim().length > 0) || "";
+  const candidates = [",", ";", "\t"];
+  let best = ",";
+  let bestCount = -1;
+
+  for (const d of candidates) {
+    const count = (sample.match(new RegExp(`\\${d}`, "g")) || []).length;
+    if (count > bestCount) {
+      best = d;
+      bestCount = count;
+    }
+  }
+
+  return best;
+}
+
+function parseCsvText(fileText: string, withHeader: boolean): Array<Record<string, string> | string[]> {
+  const lines = fileText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (!lines.length) return [];
+
+  const delimiter = detectDelimiter(lines);
+  const rows = lines.map((line) => splitCsvLine(line, delimiter));
+
+  if (!withHeader) return rows;
+
+  const header = rows[0] || [];
+  return rows.slice(1).map((row) => {
+    const obj: Record<string, string> = {};
+    header.forEach((h, i) => {
+      obj[h] = row[i] ?? "";
+    });
+    return obj;
+  });
+}
+
 /* ------------------ API ------------------ */
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const base =
-    (import.meta as any)?.env?.VITE_API_URL ||
-    (import.meta as any)?.env?.VITE_BACKEND_URL ||
-    "http://localhost:4000";
+  
 
-  const res = await fetch(base + url, {
+  const res = await fetch(apiUrl(url), {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
@@ -157,8 +217,8 @@ type LVPos = {
 
 type Assignment = {
   id: string;
-  projectId: string; // FS key (BA-2025-DEMO)
-  lvPosId: string; // DB LVPosition.id
+  projectId: string;
+  lvPosId: string;
   lvPos?: { position: string; kurztext?: string; langtext?: string | null };
   points: GpsPoint[];
   createdAt: number;
@@ -168,7 +228,7 @@ type Assignment = {
    CSV PARSING (ESTESO)
 ======================================================================== */
 
-function tryParseRowObject(row: any): { lat: number; lng: number } | null {
+function tryParseRowObject(row: Record<string, unknown>): { lat: number; lng: number } | null {
   const keys = Object.keys(row || {});
   const get = (variants: string[]) => {
     for (const k of keys) {
@@ -184,24 +244,24 @@ function tryParseRowObject(row: any): { lat: number; lng: number } | null {
   const lng = toNum(
     get(["lng", "lon", "long", "longitude", "laenge", "longitudedeg", "x_wgs", "x_wgs84"])
   );
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
 
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
   return null;
 }
 
-function pickENFromArray(arr: any[]): { e: number; n: number } | null {
-  // Caso rilievo: [id, RW, HW, z, ...]
+function pickENFromArray(arr: unknown[]): { e: number; n: number } | null {
   if (arr.length >= 3) {
     const e = toNum(arr[1]);
     const n = toNum(arr[2]);
     if (Number.isFinite(e) && Number.isFinite(n)) return { e, n };
   }
-  // fallback: [RW, HW]
+
   if (arr.length >= 2) {
     const a0 = toNum(arr[0]);
     const a1 = toNum(arr[1]);
     if (Number.isFinite(a0) && Number.isFinite(a1)) return { e: a0, n: a1 };
   }
+
   return null;
 }
 
@@ -215,7 +275,9 @@ function detectCrsForEN(sample: { e: number; n: number }[]): string[] {
       try {
         const p = toWGS84(s.e, s.n, crs);
         if (isPlausibleWGS84(p)) ok++;
-      } catch {}
+      } catch {
+        // ignore
+      }
     }
     scored.push({ crs, ok });
   }
@@ -225,11 +287,11 @@ function detectCrsForEN(sample: { e: number; n: number }[]): string[] {
 }
 
 function parseCsvToPointsAuto(
-  rawRows: any[],
+  rawRows: Array<Record<string, unknown> | string[]>,
   preferredCrs: string
 ): { pts: GpsPoint[]; usedCrs: string; debug: string } {
-  // WGS84 diretti (solo se header vero e colonne lat/lng)
   const directWgs: GpsPoint[] = [];
+
   for (const row of rawRows) {
     if (row && !Array.isArray(row) && typeof row === "object") {
       const p = tryParseRowObject(row);
@@ -238,6 +300,7 @@ function parseCsvToPointsAuto(
       }
     }
   }
+
   if (directWgs.length > 0) {
     return {
       pts: directWgs,
@@ -246,7 +309,6 @@ function parseCsvToPointsAuto(
     };
   }
 
-  // EN estrazione (NO-HEADER / array)
   const enRows: { e: number; n: number }[] = [];
   const sampleEN: { e: number; n: number }[] = [];
 
@@ -280,7 +342,6 @@ function parseCsvToPointsAuto(
     "EPSG:32632",
   ].filter((v, i, a) => a.indexOf(v) === i);
 
-  // Accetta se almeno 60% plausibili
   for (const crs of order) {
     const pts: GpsPoint[] = [];
     let ok = 0;
@@ -292,7 +353,9 @@ function parseCsvToPointsAuto(
           pts.push({ lat: p.lat, lng: p.lng });
           ok++;
         }
-      } catch {}
+      } catch {
+        // ignore
+      }
     }
 
     if (ok > 0 && ok >= Math.max(1, Math.floor(enRows.length * 0.6))) {
@@ -304,10 +367,10 @@ function parseCsvToPointsAuto(
     }
   }
 
-  // fallback: anche parziale
   for (const crs of order) {
     const pts: GpsPoint[] = [];
     let ok = 0;
+
     for (const en of enRows) {
       try {
         const p = toWGS84(en.e, en.n, crs);
@@ -315,8 +378,11 @@ function parseCsvToPointsAuto(
           pts.push({ lat: p.lat, lng: p.lng });
           ok++;
         }
-      } catch {}
+      } catch {
+        // ignore
+      }
     }
+
     if (ok > 0) {
       return {
         pts,
@@ -359,11 +425,10 @@ export default function GPSZuweisung() {
   const [selectedLV, setSelectedLV] = React.useState<LVPos | null>(null);
   const [lvList, setLvList] = React.useState<LVPos[]>([]);
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
-  const [csvCrs, setCsvCrs] = React.useState("EPSG:31468"); // Bayern GK4 default
+  const [csvCrs, setCsvCrs] = React.useState("EPSG:31468");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
-  // Draft-Persistenz (damit beim Seitenwechsel nichts verloren geht)
   const DRAFT_KEY = React.useMemo(() => {
     const key = (projectId || "no-project").replace(/[^\w.-]/g, "_");
     return `rlc_gpszuweisung_draft_v1_${key}`;
@@ -379,7 +444,9 @@ export default function GPSZuweisung() {
         savedAt: Date.now(),
       };
       localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
-    } catch {}
+    } catch {
+      // ignore
+    }
   }
 
   function loadDraft() {
@@ -395,7 +462,9 @@ export default function GPSZuweisung() {
   function clearDraft() {
     try {
       localStorage.removeItem(DRAFT_KEY);
-    } catch {}
+    } catch {
+      // ignore
+    }
   }
 
   /* ------------------ MAP INIT ------------------ */
@@ -408,14 +477,12 @@ export default function GPSZuweisung() {
       maxZoom: 22,
     }).setView([48.14, 11.58], 12);
 
-    // Base: OSM
     const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: "© OpenStreetMap",
-      crossOrigin: true, // ✅ per html2canvas
+      crossOrigin: true,
     }).addTo(m);
 
-    // Base: Bayern Luftbild (WMS)
     const bayernLuftbild = (L as any).tileLayer.wms(
       "https://geoservices.bayern.de/od/wms/dop/v1/dop20?",
       {
@@ -426,16 +493,15 @@ export default function GPSZuweisung() {
         tiled: true,
         maxZoom: 21,
         attribution: "© Bayerische Vermessungsverwaltung",
-        crossOrigin: true, // ✅
+        crossOrigin: true,
       }
     );
 
-    const base: any = {
+    const base: Record<string, any> = {
       OSM: osm,
       "Bayern Luftbild (WMS)": bayernLuftbild,
     };
 
-    // Optional: Google (ATTENZIONE: spesso blocca lo screenshot per CORS/licenza)
     try {
       const key = (import.meta as any)?.env?.VITE_GOOGLE_MAPS_KEY;
       if (key && (L as any).gridLayer?.googleMutant) {
@@ -456,7 +522,6 @@ export default function GPSZuweisung() {
       console.warn("Google layers disabled:", e);
     }
 
-    // OVERLAYS (Parzellen + Grenzen)
     const overlayParzellen = (L as any).tileLayer.wms(
       "https://geoservices.bayern.de/od/wms/alkis/v1/parzellarkarte?",
       {
@@ -467,7 +532,7 @@ export default function GPSZuweisung() {
         tiled: true,
         maxZoom: 21,
         attribution: "© Bayerische Vermessungsverwaltung (ALKIS® OpenData)",
-        crossOrigin: true, // ✅
+        crossOrigin: true,
       }
     );
 
@@ -481,25 +546,24 @@ export default function GPSZuweisung() {
         tiled: true,
         maxZoom: 21,
         attribution: "© Bayerische Vermessungsverwaltung (ALKIS® OpenData)",
-        crossOrigin: true, // ✅
+        crossOrigin: true,
       }
     );
 
-    const overlays: any = {
+    const overlays: Record<string, any> = {
       "Flurkarte / Parzellen (WMS)": overlayParzellen,
       "Grenzen (WMS)": overlayGrenzen,
     };
 
     L.control.layers(base, overlays).addTo(m);
 
-    // Default ON
     overlayParzellen.addTo(m);
     overlayGrenzen.addTo(m);
 
     pointsLayerRef.current = L.layerGroup().addTo(m);
     lineLayerRef.current = L.layerGroup().addTo(m);
 
-    m.on("click", (e: any) => {
+    m.on("click", (e: L.LeafletMouseEvent) => {
       const p: GpsPoint = { lat: e.latlng.lat, lng: e.latlng.lng, ts: Date.now() };
       setPoints((prev) => {
         const next = [...prev, p];
@@ -511,7 +575,7 @@ export default function GPSZuweisung() {
 
     mapRef.current = m;
     setTimeout(() => m.invalidateSize(), 200);
-  }, []);
+  }, [csvCrs, selectedLV, DRAFT_KEY, projectId]);
 
   function clearLayers() {
     pointsLayerRef.current?.clearLayers();
@@ -524,19 +588,23 @@ export default function GPSZuweisung() {
 
     clearLayers();
 
-    const lgPts = pointsLayerRef.current!;
-    const lgLine = lineLayerRef.current!;
+    const lgPts = pointsLayerRef.current;
+    const lgLine = lineLayerRef.current;
+    if (!lgPts || !lgLine) return;
 
     if (pts.length) {
       for (const p of pts) L.circleMarker([p.lat, p.lng], { radius: 4 }).addTo(lgPts);
+
       if (pts.length >= 2) {
         L.polyline(
-          pts.map((p) => [p.lat, p.lng]) as any,
+          pts.map((p) => [p.lat, p.lng]) as [number, number][],
           { weight: 3 }
         ).addTo(lgLine);
       }
 
-      m.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng]) as any), { padding: [30, 30] });
+      m.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng]) as [number, number][]), {
+        padding: [30, 30],
+      });
     }
   }
 
@@ -546,20 +614,25 @@ export default function GPSZuweisung() {
 
     clearLayers();
 
-    const lgPts = pointsLayerRef.current!;
-    const lgLine = lineLayerRef.current!;
+    const lgPts = pointsLayerRef.current;
+    const lgLine = lineLayerRef.current;
+    if (!lgPts || !lgLine) return;
+
     const pts = ass.points || [];
 
     for (const p of pts) L.circleMarker([p.lat, p.lng], { radius: 4 }).addTo(lgPts);
+
     if (pts.length >= 2) {
       L.polyline(
-        pts.map((p) => [p.lat, p.lng]) as any,
+        pts.map((p) => [p.lat, p.lng]) as [number, number][],
         { weight: 3 }
       ).addTo(lgLine);
     }
 
     if (pts.length) {
-      m.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng]) as any), { padding: [30, 30] });
+      m.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng]) as [number, number][]), {
+        padding: [30, 30],
+      });
     }
   }
 
@@ -596,12 +669,12 @@ export default function GPSZuweisung() {
       }>(`/api/projects/${encodeURIComponent(projectDbId)}/lv?page=1&pageSize=20`);
 
       const latest = (res.rows || [])[0];
-      setLvList((latest?.positions || []) as any);
+      const positions = (latest?.positions || []) as LVPos[];
+      setLvList(positions);
 
-      // Draft restore selectedLV
       const d = loadDraft();
       if (d?.selectedLvId) {
-        const found = (latest?.positions || []).find((p: any) => p.id === d.selectedLvId) || null;
+        const found = positions.find((p) => p.id === d.selectedLvId) || null;
         if (found) setSelectedLV(found);
       }
     } catch (e: any) {
@@ -621,7 +694,6 @@ export default function GPSZuweisung() {
         `/api/gps/list?projectId=${encodeURIComponent(projectId)}`
       );
 
-      // se backend non include lvPos, proviamo ad arricchirlo con lvList
       const enriched = (res.items || []).map((a) => {
         if (a.lvPos) return a;
         const f = lvList.find((x) => x.id === a.lvPosId);
@@ -644,7 +716,6 @@ export default function GPSZuweisung() {
     }
   }
 
-  // Initial restore bozza + load server
   React.useEffect(() => {
     setPoints([]);
     setSelectedLV(null);
@@ -660,8 +731,8 @@ export default function GPSZuweisung() {
       setTimeout(() => redrawCurrent(restored), 200);
     }
 
-    if (projectDbId) loadLV();
-    if (projectId) loadAssignments();
+    if (projectDbId) void loadLV();
+    if (projectId) void loadAssignments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, projectDbId]);
 
@@ -711,7 +782,7 @@ export default function GPSZuweisung() {
 
   async function deleteAssignment(id: string) {
     if (!projectId) return;
-    if (!confirm("Wirklich löschen?")) return;
+    if (!window.confirm("Wirklich löschen?")) return;
 
     setBusy(true);
     setErr(null);
@@ -737,52 +808,44 @@ export default function GPSZuweisung() {
   }
 
   /* ------------------ IMPORTS ------------------ */
-  function importCSV(file: File, preferredCrs: string) {
+  async function importCSV(file: File, preferredCrs: string) {
     setErr(null);
 
-    const parseNoHeader = () => {
-      Papa.parse(file, {
-        header: false,
-        skipEmptyLines: true,
-        delimiter: "",
-        complete: (r2) => {
-          const rawRows = (r2.data as any[]) || [];
-          const out2 = parseCsvToPointsAuto(rawRows, preferredCrs);
-          const clean2 = clampPts(out2.pts);
+    const text = await file.text();
 
-          setPoints((prev) => {
-            const next = [...prev, ...clean2];
-            redrawCurrent(next);
-            saveDraft(next, selectedLV?.id ?? null, csvCrs);
-            return next;
-          });
+    const withHeader = parseCsvText(text, true);
+    const out = parseCsvToPointsAuto(
+      withHeader as Array<Record<string, unknown> | string[]>,
+      preferredCrs
+    );
 
-          setErr(out2.debug);
-        },
-        error: (e) => setErr(String(e)),
+    if ((out.pts || []).length > 0) {
+      const clean = clampPts(out.pts);
+      setPoints((prev) => {
+        const next = [...prev, ...clean];
+        redrawCurrent(next);
+        saveDraft(next, selectedLV?.id ?? null, csvCrs);
+        return next;
       });
-    };
+      setErr(out.debug);
+      return;
+    }
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      delimiter: "",
-      complete: (r) => {
-        const rawRows = (r.data as any[]) || [];
-        const out = parseCsvToPointsAuto(rawRows, preferredCrs);
-        if ((out.pts || []).length === 0) return parseNoHeader();
+    const noHeader = parseCsvText(text, false);
+    const out2 = parseCsvToPointsAuto(
+      noHeader as Array<Record<string, unknown> | string[]>,
+      preferredCrs
+    );
+    const clean2 = clampPts(out2.pts);
 
-        const clean = clampPts(out.pts);
-        setPoints((prev) => {
-          const next = [...prev, ...clean];
-          redrawCurrent(next);
-          saveDraft(next, selectedLV?.id ?? null, csvCrs);
-          return next;
-        });
-        setErr(out.debug);
-      },
-      error: (e) => setErr(String(e)),
+    setPoints((prev) => {
+      const next = [...prev, ...clean2];
+      redrawCurrent(next);
+      saveDraft(next, selectedLV?.id ?? null, csvCrs);
+      return next;
     });
+
+    setErr(out2.debug);
   }
 
   async function importXML(file: File) {
@@ -833,9 +896,9 @@ export default function GPSZuweisung() {
 
   function onFileImport(file: File) {
     const ext = file.name.toLowerCase().split(".").pop();
-    if (ext === "csv") return importCSV(file, csvCrs);
-    if (ext === "gpx" || ext === "kml") return importXML(file);
-    if (ext === "geojson" || ext === "json") return importGeoJSON(file);
+    if (ext === "csv") return void importCSV(file, csvCrs);
+    if (ext === "gpx" || ext === "kml") return void importXML(file);
+    if (ext === "geojson" || ext === "json") return void importGeoJSON(file);
     alert("Format nicht unterstützt");
   }
 
@@ -846,7 +909,6 @@ export default function GPSZuweisung() {
     if (!el || !m) return null;
 
     try {
-      // forza redraw prima dello screenshot
       m.invalidateSize();
       await new Promise((r) => setTimeout(r, 300));
 
@@ -865,7 +927,7 @@ export default function GPSZuweisung() {
     }
   }
 
-  /* ------------------ PDF EXPORT (Print + Save Server) ------------------ */
+  /* ------------------ PDF EXPORT ------------------ */
   function buildPdfDoc(opts: {
     projectTitle: string;
     projectId: string;
@@ -917,7 +979,6 @@ export default function GPSZuweisung() {
     // @ts-ignore
     y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : y + 40;
 
-    // ✅ Mappa screenshot nel PDF
     if (opts.mapPngDataUrl) {
       try {
         // @ts-ignore
@@ -984,14 +1045,16 @@ export default function GPSZuweisung() {
     setTimeout(() => {
       try {
         w.focus();
-      } catch {}
+      } catch {
+        // ignore
+      }
     }, 250);
   }
 
   async function savePdfToServer(doc: jsPDF, filenameHint: string) {
     if (!projectId) throw new Error("Kein projectId");
 
-    let dataUrl = normalizePdfDataUrl(doc.output("datauristring"));
+    const dataUrl = normalizePdfDataUrl(doc.output("datauristring"));
     if (!dataUrl.startsWith("data:application/pdf;base64,")) {
       throw new Error("PDF DataURL ist ungültig (kein data:application/pdf;base64, ...).");
     }
@@ -1015,8 +1078,6 @@ export default function GPSZuweisung() {
     setErr(null);
     try {
       const pts = clampPts(points);
-
-      // ✅ ensure map view is on the points before snapshot
       redrawCurrent(pts);
 
       const mapSnap = await captureMapSnapshotPngDataUrl();
@@ -1058,12 +1119,11 @@ export default function GPSZuweisung() {
     setBusy(true);
     setErr(null);
     try {
-      // ✅ ensure map view is on the assignment before snapshot
       drawAssignment(a);
 
       const mapSnap = await captureMapSnapshotPngDataUrl();
 
-      const lvPos = (a as any)?.lvPos || null;
+      const lvPos = a?.lvPos || null;
       const doc = buildPdfDoc({
         projectTitle: (project as any)?.name || (project as any)?.title || projectCode || "—",
         projectId,
@@ -1110,14 +1170,16 @@ export default function GPSZuweisung() {
             Projekt-Code (FS): <b>{projectCode || "—"}</b>
           </div>
 
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Projekt-ID (DB): {projectDbId || "—"}</div>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            Projekt-ID (DB): {projectDbId || "—"}
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" onClick={loadLV} disabled={!projectDbId || busy}>
+          <button className="btn" onClick={() => void loadLV()} disabled={!projectDbId || busy}>
             LV laden
           </button>
-          <button className="btn" onClick={loadAssignments} disabled={!projectId || busy}>
+          <button className="btn" onClick={() => void loadAssignments()} disabled={!projectId || busy}>
             Zuweisungen laden
           </button>
           <button className="btn" onClick={clearCurrent} disabled={busy}>
@@ -1154,7 +1216,9 @@ export default function GPSZuweisung() {
                   }}
                 >
                   <div style={{ fontWeight: 700 }}>{l.position}</div>
-                  <div style={{ fontSize: 12, opacity: 0.85 }}>{l.kurztext || l.langtext || ""}</div>
+                  <div style={{ fontSize: 12, opacity: 0.85 }}>
+                    {l.kurztext || l.langtext || ""}
+                  </div>
                 </div>
               ))
             )}
@@ -1183,17 +1247,21 @@ export default function GPSZuweisung() {
             <input
               type="file"
               accept=".csv,.gpx,.kml,.geojson,.json"
-              onChange={(e) => e.target.files?.[0] && onFileImport(e.target.files[0])}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onFileImport(f);
+                e.currentTarget.value = "";
+              }}
             />
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="btn" onClick={saveAssignment} disabled={busy}>
+              <button className="btn" onClick={() => void saveAssignment()} disabled={busy}>
                 Zuweisen & Speichern
               </button>
 
               <button
                 className="btn"
-                onClick={() => exportCurrentPdf(true)}
+                onClick={() => void exportCurrentPdf(true)}
                 disabled={busy || !selectedLV || points.length === 0}
               >
                 PDF Export & Stampa
@@ -1222,18 +1290,38 @@ export default function GPSZuweisung() {
           {assignments.length === 0 ? (
             <div style={{ opacity: 0.8, fontSize: 12 }}>Keine gespeicherten Zuweisungen.</div>
           ) : (
-            <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid #ddd", borderRadius: 8 }}>
+            <div
+              style={{
+                maxHeight: 220,
+                overflow: "auto",
+                border: "1px solid #ddd",
+                borderRadius: 8,
+              }}
+            >
               {assignments.map((a) => {
                 const lvFromList = resolveLvFromLists(a.lvPosId);
-                const posLabel = (a as any)?.lvPos?.position || lvFromList?.position || a.lvPosId;
+                const posLabel = a?.lvPos?.position || lvFromList?.position || a.lvPosId;
                 const kurz =
-                  (a as any)?.lvPos?.kurztext || lvFromList?.kurztext || (a as any)?.lvPos?.langtext || "";
+                  a?.lvPos?.kurztext ||
+                  lvFromList?.kurztext ||
+                  a?.lvPos?.langtext ||
+                  "";
 
                 return (
-                  <div key={a.id} style={{ padding: 10, borderBottom: "1px solid #eee", display: "grid", gap: 6 }}>
+                  <div
+                    key={a.id}
+                    style={{
+                      padding: 10,
+                      borderBottom: "1px solid #eee",
+                      display: "grid",
+                      gap: 6,
+                    }}
+                  >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{posLabel}</div>
-                      <div style={{ fontSize: 12, opacity: 0.8 }}>{new Date(a.createdAt).toLocaleString()}</div>
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>
+                        {new Date(a.createdAt).toLocaleString()}
+                      </div>
                     </div>
 
                     {kurz ? <div style={{ fontSize: 12, opacity: 0.85 }}>{kurz}</div> : null}
@@ -1243,15 +1331,27 @@ export default function GPSZuweisung() {
                         Anzeigen
                       </button>
 
-                      <button className="btn" onClick={() => loadAssignmentIntoCurrent(a)} disabled={busy}>
+                      <button
+                        className="btn"
+                        onClick={() => loadAssignmentIntoCurrent(a)}
+                        disabled={busy}
+                      >
                         Laden
                       </button>
 
-                      <button className="btn" onClick={() => exportAssignmentPdf(a)} disabled={busy}>
+                      <button
+                        className="btn"
+                        onClick={() => void exportAssignmentPdf(a)}
+                        disabled={busy}
+                      >
                         PDF
                       </button>
 
-                      <button className="btn" onClick={() => deleteAssignment(a.id)} disabled={busy}>
+                      <button
+                        className="btn"
+                        onClick={() => void deleteAssignment(a.id)}
+                        disabled={busy}
+                      >
                         Löschen
                       </button>
 
@@ -1267,15 +1367,13 @@ export default function GPSZuweisung() {
         </div>
 
         <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-          Tipp: Klick auf die Karte fügt Punkte hinzu. Import ergänzt Punkte. “Punkte löschen” löscht nur die aktuelle
-          Auswahl (nicht gespeicherte Zuweisungen). Beim Seitenwechsel bleiben ungespeicherte Punkte als Entwurf
-          erhalten.
+          Tipp: Klick auf die Karte fügt Punkte hinzu. Import ergänzt Punkte. “Punkte löschen”
+          löscht nur die aktuelle Auswahl.
           <br />
-          Hinweis: Die ALKIS®-Parzellarkarte enthält laut Dienstbeschreibung keine Flurstücksnummern – daher sieht man
-          nur Grenzen, nicht die Nummern.
+          Hinweis: Die ALKIS®-Parzellarkarte enthält laut Dienstbeschreibung keine Flurstücksnummern.
           <br />
-          Snapshot-Hinweis: Wenn Google-Layer aktiv sind, kann der Screenshot im PDF leer/schwarz sein (CORS). Für
-          sicheren Snapshot: OSM/WMS nutzen.
+          Snapshot-Hinweis: Wenn Google-Layer aktiv sind, kann der Screenshot im PDF leer/schwarz
+          sein. Für sicheren Snapshot: OSM/WMS nutzen.
         </div>
       </div>
 
@@ -1285,3 +1383,10 @@ export default function GPSZuweisung() {
     </div>
   );
 }
+
+
+
+
+
+
+

@@ -39,26 +39,89 @@ const item: React.CSSProperties = {
 
 export default function MengenermittlungIndex() {
   const loc = useLocation();
-  const is = (p: string) => (loc.pathname === p ? { background: "#f1f5f9", fontWeight: 600 } : {});
+
+  const is = (p: string) =>
+    loc.pathname === p ? { background: "#f1f5f9", fontWeight: 600 } : {};
+
   return (
     <div style={shell}>
       <aside style={aside}>
         <div style={groupTitle}>Aufmaß</div>
-        <Link style={{ ...item, ...is("/mengenermittlung/auftragsliste") }} to="/mengenermittlung/auftragsliste">Auftragsliste</Link>
-        <Link style={{ ...item, ...is("/mengenermittlung/aufmaseditor") }} to="/mengenermittlung/aufmaseditor">Aufmaßeditor</Link>
-        <Link style={{ ...item, ...is("/mengenermittlung/raumbuch") }} to="/mengenermittlung/raumbuch">Raumbuch / Raumaufmaße</Link>
-        <Link style={{ ...item, ...is("/mengenermittlung/abrechnungskreise") }} to="/mengenermittlung/abrechnungskreise">Abrechnungskreise</Link>
-        <Link style={{ ...item, ...is("/mengenermittlung/bilder") }} to="/mengenermittlung/bilder">Bilder zum Aufmaß</Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/auftragsliste") }}
+          to="/mengenermittlung/auftragsliste"
+        >
+          Auftragsliste
+        </Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/aufmasseditor") }}
+          to="/mengenermittlung/aufmasseditor"
+        >
+          Aufmaßeditor
+        </Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/raumbuch") }}
+          to="/mengenermittlung/raumbuch"
+        >
+          Raumbuch / Raumaufmaße
+        </Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/abrechnungskreise") }}
+          to="/mengenermittlung/abrechnungskreise"
+        >
+          Abrechnungskreise
+        </Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/bilder") }}
+          to="/mengenermittlung/bilder"
+        >
+          Bilder zum Aufmaß
+        </Link>
 
         <div style={groupTitle}>Funktionen</div>
-        <Link style={{ ...item, ...is("/mengenermittlung/neuberechnung") }} to="/mengenermittlung/neuberechnung">Neuberechnung</Link>
-        <Link style={{ ...item, ...is("/mengenermittlung/ausdrucke") }} to="/mengenermittlung/ausdrucke">Ausdrucke</Link>
-        <Link style={{ ...item, ...is("/mengenermittlung/datenaustausch") }} to="/mengenermittlung/datenaustausch">Datenaustausch</Link>
-        <Link style={{ ...item, ...is("/mengenermittlung/stammdaten") }} to="/mengenermittlung/stammdaten">Stammdaten</Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/neuberechnung") }}
+          to="/mengenermittlung/neuberechnung"
+        >
+          Neuberechnung
+        </Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/ausdrucke") }}
+          to="/mengenermittlung/ausdrucke"
+        >
+          Ausdrucke
+        </Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/datenaustausch") }}
+          to="/mengenermittlung/datenaustausch"
+        >
+          Datenaustausch
+        </Link>
+
+        <Link
+          style={{ ...item, ...is("/mengenermittlung/stammdaten") }}
+          to="/mengenermittlung/stammdaten"
+        >
+          Stammdaten
+        </Link>
       </aside>
+
       <main style={main}>
         <Outlet />
       </main>
     </div>
   );
 }
+
+
+
+
+

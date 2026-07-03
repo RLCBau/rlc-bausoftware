@@ -212,6 +212,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [name, setName] = useState("");
   const [role, setRole] = useState<SessionRole>("BAULEITER");
@@ -1259,10 +1260,27 @@ export default function LoginScreen({ navigation, route }: Props) {
           <Pressable style={s.flex} onPress={Keyboard.dismiss} accessible={false}>
             <View style={s.page} pointerEvents="box-none">
               <View style={s.heroCard}>
-                <Text style={s.eyebrow}>RLC Bausoftware</Text>
-                <Text style={s.title}>RLC Mobile</Text>
-                <Text style={s.sub}>{title}</Text>
-                {!isStandalone ? <Text style={s.sub2}>API: {effectiveApiUrl}</Text> : null}
+                <View style={s.loginBlueprintA} />
+                <View style={s.loginBlueprintB} />
+
+                <View style={s.heroContentRow}>
+                  <View style={s.heroCopy}>
+                    <Text style={s.eyebrow}>RLC Bausoftware</Text>
+                    <Text style={s.title}>RLC Mobile</Text>
+                    <View style={s.heroAccentLine} />
+                    <Text style={s.sub}>{title}</Text>
+                    {!isStandalone ? <Text style={s.sub2}>API: {effectiveApiUrl}</Text> : null}
+                    {isStandalone ? <Text style={s.sub2}>Lokaler Modus ohne Server-Sync</Text> : null}
+                  </View>
+
+                  <View style={s.heroBuilding}>
+                    <View style={s.buildingTowerTall} />
+                    <View style={s.buildingTower} />
+                    <View style={s.buildingBase} />
+                    <View style={s.buildingGrid1} />
+                    <View style={s.buildingGrid2} />
+                  </View>
+                </View>
               </View>
 
               <View style={s.sectionCard}>
@@ -1271,7 +1289,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                     <TextInput
                       style={[s.input, isEmailVerified ? s.inputLocked : null]}
                       placeholder="E-Mail"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="none"
                       editable={!loading && !isEmailVerified}
                       value={email}
@@ -1289,7 +1307,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                     <TextInput
                       style={s.input}
                       placeholder="Name"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="words"
                       editable={!loading}
                       value={name}
@@ -1355,7 +1373,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                       value={companyName}
                       onChangeText={setCompanyName}
                       placeholder="Firmenname"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="words"
                       style={s.input}
                       editable={!adminBusy && !loading}
@@ -1366,7 +1384,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                       value={companyStreet}
                       onChangeText={setCompanyStreet}
                       placeholder="Straße und Hausnummer"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="words"
                       style={s.input}
                       editable={!adminBusy && !loading}
@@ -1377,7 +1395,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                       value={companyZipCity}
                       onChangeText={setCompanyZipCity}
                       placeholder="PLZ Ort"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="words"
                       style={s.input}
                       editable={!adminBusy && !loading}
@@ -1388,7 +1406,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                       value={companyPhone}
                       onChangeText={setCompanyPhone}
                       placeholder="Telefon"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="none"
                       keyboardType="phone-pad"
                       style={s.input}
@@ -1400,7 +1418,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                       value={companyMail}
                       onChangeText={setCompanyMail}
                       placeholder="E-Mail Firma"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="none"
                       keyboardType="email-address"
                       style={s.input}
@@ -1435,7 +1453,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                       value={adminCode}
                       onChangeText={setAdminCode}
                       placeholder="Admin-Code"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       autoCapitalize="characters"
                       style={s.input}
                       editable={!adminBusy && !loading}
@@ -1471,15 +1489,20 @@ export default function LoginScreen({ navigation, route }: Props) {
                   </View>
                 ) : null}
 
-                <TextInput
-                  style={s.input}
-                  placeholder="Passwort"
-                  placeholderTextColor="#B8C1CC"
-                  secureTextEntry
-                  editable={!loading}
-                  value={password}
-                  onChangeText={setPassword}
-                />
+                <View style={s.passwordRow}>
+                  <TextInput
+                    style={s.passwordInput}
+                    placeholder="Passwort"
+                    placeholderTextColor={COLORS.sub}
+                    secureTextEntry={!showPassword}
+                    editable={!loading}
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                  <Pressable style={s.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
+                    <Text style={s.eyeTxt}>{showPassword ? "🙈" : "👁"}</Text>
+                  </Pressable>
+                </View>
 
                 <Text style={s.hint}>
                   {isStandalone
@@ -1674,7 +1697,7 @@ export default function LoginScreen({ navigation, route }: Props) {
               <TextInput
                 style={s.modalInput}
                 placeholder={isStandalone ? "6-stelliger Code" : "Verify-Token"}
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 autoCapitalize="none"
                 editable={!loading}
                 value={verifyToken}
@@ -1732,7 +1755,7 @@ export default function LoginScreen({ navigation, route }: Props) {
               <TextInput
                 style={s.modalInput}
                 placeholder="Reset-Code"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 autoCapitalize="none"
                 editable={!resetBusy}
                 value={resetToken}
@@ -1742,7 +1765,7 @@ export default function LoginScreen({ navigation, route }: Props) {
               <TextInput
                 style={s.modalInput}
                 placeholder="Neues Passwort"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 secureTextEntry
                 editable={!resetBusy}
                 value={resetNewPassword}
@@ -1812,7 +1835,7 @@ export default function LoginScreen({ navigation, route }: Props) {
               <TextInput
                 style={s.modalInput}
                 placeholder="Upgrade-Code"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 autoCapitalize="none"
                 editable={!licenseLoading}
                 value={licenseCode}
@@ -1894,65 +1917,114 @@ const s = StyleSheet.create({
   },
 
   heroCard: {
-    borderRadius: 22,
-    padding: 18,
-    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    padding: 16,
+    minHeight: 176,
+    backgroundColor: "#061A33",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#123B67",
     marginBottom: 14,
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
 
   eyebrow: {
-    color: COLORS.accentDark,
-    fontSize: 12,
+    color: "#38BDF8",
+    fontSize: 14,
     fontWeight: "900",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 
   title: {
     marginTop: 8,
-    fontSize: 30,
+    color: "#FFFFFF",
+    fontSize: 34,
+    lineHeight: 39,
     fontWeight: "900",
-    color: COLORS.text,
+    letterSpacing: -0.8,
   },
 
   sub: {
-    marginTop: 8,
-    color: COLORS.sub,
-    fontWeight: "800",
+    marginTop: 10,
+    color: "#FFFFFF",
+    fontSize: 15,
     lineHeight: 20,
+    fontWeight: "900",
   },
 
   sub2: {
     marginTop: 6,
-    color: COLORS.sub,
-    fontWeight: "700",
-    lineHeight: 18,
-    fontSize: 12,
+    color: "rgba(255,255,255,0.86)",
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "800",
   },
 
   sectionCard: {
-    borderRadius: 20,
-    padding: 14,
-    backgroundColor: COLORS.card,
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 14,
+    borderColor: "#D9E4F2",
+    marginBottom: 12,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
 
   sectionTitle: {
-    color: COLORS.text,
-    fontSize: 16,
+    marginTop: 8,
+    color: "#FFFFFF",
+    fontSize: 34,
+    lineHeight: 39,
     fontWeight: "900",
+    letterSpacing: -0.8,
+  },
+
+  passwordRow: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#D9E4F2",
+    backgroundColor: "#FFFFFF",
     marginBottom: 10,
+    paddingHorizontal: 10,
+  },
+  passwordInput: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: "#D9E4F2",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: COLORS.text,
+    fontWeight: "800",
+    marginBottom: 10,
+  },
+  eyeBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  eyeTxt: {
+    fontSize: 20,
   },
 
   input: {
+    minHeight: 50,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderColor: "#D9E4F2",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     color: COLORS.text,
     fontWeight: "800",
@@ -1966,12 +2038,11 @@ const s = StyleSheet.create({
 
   infoCard: {
     borderRadius: 14,
-    padding: 10,
-    marginTop: -2,
+    padding: 12,
     marginBottom: 10,
-    backgroundColor: COLORS.card2,
+    backgroundColor: "#F7FAFD",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#D9E4F2",
   },
 
   infoText: {
@@ -1982,10 +2053,16 @@ const s = StyleSheet.create({
   },
 
   roleInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }),
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: "#D9E4F2",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: COLORS.text,
+    fontWeight: "800",
+    marginBottom: 10,
   },
 
   roleText: {
@@ -2044,47 +2121,59 @@ const s = StyleSheet.create({
   },
 
   err: {
-    color: "#B00020",
+    color: COLORS.danger,
     marginBottom: 10,
     fontWeight: "900",
     lineHeight: 18,
   },
 
   btnPrimary: {
-    backgroundColor: COLORS.accent,
-    paddingVertical: 14,
+    minHeight: 52,
     borderRadius: 14,
-    alignItems: "center",
-    marginTop: 6,
+    backgroundColor: "#082C55",
     borderWidth: 1,
-    borderColor: COLORS.accent,
+    borderColor: "#0B4F8A",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: "#082C55",
+    shadowOpacity: 0.20,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
   },
 
   btnPrimaryTxt: {
-    color: COLORS.textLight,
+    color: "#FFFFFF",
     fontWeight: "900",
-    fontSize: 14,
+    fontSize: 16,
+    textAlign: "center",
   },
 
   btnSecondary: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 14,
+    minHeight: 48,
     borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D9E4F2",
     alignItems: "center",
-    marginTop: 10,
-    backgroundColor: COLORS.card2,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginTop: 9,
   },
 
   btnSecondaryTxt: {
-    color: COLORS.text,
+    color: "#061A33",
     fontWeight: "900",
-    fontSize: 14,
+    fontSize: 15,
+    textAlign: "center",
   },
 
   btnDangerOutline: {
     borderWidth: 1,
-    borderColor: "#B00020",
+    borderColor: COLORS.danger,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: "center",
@@ -2093,7 +2182,7 @@ const s = StyleSheet.create({
   },
 
   btnDangerOutlineTxt: {
-    color: "#B00020",
+    color: COLORS.danger,
     fontWeight: "900",
     fontSize: 14,
   },
@@ -2107,12 +2196,15 @@ const s = StyleSheet.create({
   },
 
   linkBtn: {
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 12,
+    minHeight: 44,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
+    borderColor: "#D9E4F2",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
 
   linkTxt: {
@@ -2161,10 +2253,12 @@ const s = StyleSheet.create({
   },
 
   modalTitle: {
-    fontSize: 18,
+    marginTop: 8,
+    color: "#FFFFFF",
+    fontSize: 34,
+    lineHeight: 39,
     fontWeight: "900",
-    marginBottom: 6,
-    color: COLORS.text,
+    letterSpacing: -0.8,
   },
 
   modalHint: {
@@ -2176,11 +2270,12 @@ const s = StyleSheet.create({
   },
 
   modalInput: {
+    minHeight: 50,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderColor: "#D9E4F2",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     color: COLORS.text,
     fontWeight: "800",
@@ -2194,37 +2289,47 @@ const s = StyleSheet.create({
   },
 
   modalBtnPrimary: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
+    minHeight: 52,
+    borderRadius: 14,
+    backgroundColor: "#082C55",
+    borderWidth: 1,
+    borderColor: "#0B4F8A",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.accent,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: "#082C55",
+    shadowOpacity: 0.20,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
   },
 
   modalBtnPrimaryTxt: {
-    color: COLORS.textLight,
+    color: "#FFFFFF",
     fontWeight: "900",
-    fontSize: 12,
+    fontSize: 16,
+    textAlign: "center",
   },
 
   modalBtnSecondary: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D9E4F2",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.card2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginTop: 9,
   },
 
   modalBtnSecondaryTxt: {
-    color: COLORS.text,
+    color: "#061A33",
     fontWeight: "900",
-    fontSize: 12,
+    fontSize: 15,
+    textAlign: "center",
   },
 
   licenseBox: {
@@ -2307,11 +2412,124 @@ const s = StyleSheet.create({
     fontWeight: "800",
     fontSize: 12,
   },
+  // RLC_LOGIN_HERO_EXTRA_STYLES_V1
+  loginBlueprintA: {
+    position: "absolute",
+    right: -20,
+    top: 24,
+    width: 170,
+    height: 95,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    transform: [{ rotate: "-7deg" }],
+  },
 
+  loginBlueprintB: {
+    position: "absolute",
+    right: 38,
+    bottom: -22,
+    width: 135,
+    height: 105,
+    borderWidth: 1,
+    borderColor: "rgba(56,189,248,0.18)",
+    transform: [{ rotate: "6deg" }],
+  },
+
+  heroContentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 138,
+    gap: 10,
+  },
+
+  heroCopy: {
+    flex: 1,
+    zIndex: 2,
+  },
+
+  heroAccentLine: {
+    width: 34,
+    height: 4,
+    borderRadius: 99,
+    backgroundColor: "#0A84FF",
+    marginTop: 10,
+    marginBottom: 8,
+  },
+
+  heroBuilding: {
+    width: 105,
+    height: 120,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    opacity: 0.98,
+  },
+
+  buildingTowerTall: {
+    position: "absolute",
+    right: 30,
+    bottom: 24,
+    width: 36,
+    height: 86,
+    borderRadius: 5,
+    backgroundColor: "rgba(56,189,248,0.42)",
+    borderWidth: 1,
+    borderColor: "rgba(191,234,255,0.72)",
+  },
+
+  buildingTower: {
+    position: "absolute",
+    right: 4,
+    bottom: 24,
+    width: 34,
+    height: 66,
+    borderRadius: 5,
+    backgroundColor: "rgba(10,132,255,0.34)",
+    borderWidth: 1,
+    borderColor: "rgba(191,234,255,0.56)",
+  },
+
+  buildingBase: {
+    position: "absolute",
+    right: 8,
+    bottom: 8,
+    width: 76,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: "rgba(125,211,252,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(191,234,255,0.35)",
+  },
+
+  buildingGrid1: {
+    position: "absolute",
+    right: 0,
+    bottom: 44,
+    width: 88,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+
+  buildingGrid2: {
+    position: "absolute",
+    right: 0,
+    bottom: 64,
+    width: 88,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
   bottomSpace: {
     height: 24,
   },
 });
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { BuroAPI } from "../../lib/buro/store";
 
+/* ================= STYLES ================= */
+
 const shell: React.CSSProperties = {
   maxWidth: 1000,
   margin: "0 auto",
@@ -49,31 +51,63 @@ const badge: React.CSSProperties = {
   border: "1px solid #dbe1ff",
 };
 
+/* ================= COMPONENT ================= */
+
 export default function TasksPage() {
   const [query, setQuery] = useState("");
   const [openOnly, setOpenOnly] = useState(false);
 
   const tasks = BuroAPI.use((s) => s.tasks);
+
+  /* ================= FILTER ================= */
+
   const filtered = useMemo(() => {
-    let list = tasks;
-    if (openOnly) list = list.filter((t) => !t.done);
+    let list = [...tasks];
+
+    if (openOnly) {
+      list = list.filter((t) => !t.done);
+    }
+
     if (query.trim()) {
       const q = query.toLowerCase();
-      list = list.filter(
-        (t) =>
-          t.title.toLowerCase().includes(q) ||
-          (t.assignee || "").toLowerCase().includes(q) ||
-          (t.projectId || "").toLowerCase().includes(q)
+
+      list = list.filter((t) =>
+        [
+          t.title,
+          t.assignee || "",
+          t.projectId || "",
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
       );
     }
+
     return list;
   }, [tasks, query, openOnly]);
 
+  /* ================= ACTIONS ================= */
+
   const addQuick = () => {
     const title = prompt("Neue Aufgabe:");
-    if (!title) return;
-    BuroAPI.addTask({ title });
+    if (!title?.trim()) return;
+
+    BuroAPI.addTask({
+      title: title.trim(),
+      done: false,
+    });
   };
+
+  const editTask = (t: any) => {
+    const title = prompt("Titel ändern:", t.title);
+    if (!title) return;
+
+    BuroAPI.updateTask(t.id, { title: title.trim() });
+  };
+
+  const openCount = tasks.filter((t) => !t.done).length;
+
+  /* ================= UI ================= */
 
   return (
     <div style={shell}>
@@ -86,6 +120,7 @@ export default function TasksPage() {
           placeholder="Suche: Titel / Verantwortlich / Projekt …"
           style={{ padding: "6px 8px", fontSize: 13, minWidth: 280 }}
         />
+
         <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
           <input
             type="checkbox"
@@ -94,11 +129,13 @@ export default function TasksPage() {
           />
           Nur offene
         </label>
+
         <button onClick={addQuick} style={{ padding: "6px 10px" }}>
           + Neue Aufgabe
         </button>
+
         <div style={{ marginLeft: "auto", ...badge }}>
-          Offen: {tasks.filter((t) => !t.done).length}
+          Offen: {openCount}
         </div>
       </div>
 
@@ -114,34 +151,36 @@ export default function TasksPage() {
             <th style={head}>Aktion</th>
           </tr>
         </thead>
+
         <tbody>
           {filtered.map((t) => (
             <tr key={t.id}>
-              <td style={cell}>{t.title}</td>
+              <td style={cell}>{t.title || "—"}</td>
               <td style={cell}>{t.due || "—"}</td>
               <td style={cell}>{t.projectId || "—"}</td>
               <td style={cell}>{t.assignee || "—"}</td>
               <td style={cell}>{t.priority || "—"}</td>
+
               <td style={cell}>
                 <input
                   type="checkbox"
-                  checked={t.done}
+                  checked={!!t.done}
                   onChange={() => BuroAPI.toggleTask(t.id)}
                 />
               </td>
+
               <td style={cell}>
                 <button
-                  onClick={() =>
-                    BuroAPI.updateTask(t.id, {
-                      title: prompt("Titel ändern:", t.title) || t.title,
-                    })
-                  }
+                  onClick={() => editTask(t)}
                   style={{ marginRight: 6 }}
                 >
                   Bearbeiten
                 </button>
+
                 <button
-                  onClick={() => BuroAPI.updateTask(t.id, { done: true })}
+                  onClick={() =>
+                    BuroAPI.updateTask(t.id, { done: true })
+                  }
                   disabled={t.done}
                   style={{ marginRight: 6 }}
                 >
@@ -150,6 +189,7 @@ export default function TasksPage() {
               </td>
             </tr>
           ))}
+
           {filtered.length === 0 && (
             <tr>
               <td style={cell} colSpan={7}>
@@ -162,3 +202,8 @@ export default function TasksPage() {
     </div>
   );
 }
+
+
+
+
+

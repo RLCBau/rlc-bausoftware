@@ -602,6 +602,79 @@ function entryKey(row: Partial<KalkulationsErfahrung>): string {
 }
 
 
+
+function normBusinessKey(v: any): string {
+  return String(v ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function businessOverwriteKey(row: Partial<KalkulationsErfahrung>): string {
+  const projekt = normBusinessKey(row.projektCode || row.projektId || "GLOBAL");
+  const pos = normBusinessKey(row.posNr);
+  const unit = normBusinessKey(row.einheit);
+
+  if (projekt && pos && unit) {
+    return `projekt-pos-unit|${projekt}|${pos}|${unit}`;
+  }
+
+  return entryKey(row);
+}
+
+function epOf(row: Partial<KalkulationsErfahrung>): number {
+  const v = Number((row as any)?.kosten?.epNetto ?? 0);
+  return Number.isFinite(v) ? Math.round(v * 100) / 100 : 0;
+}
+
+function gpOf(row: Partial<KalkulationsErfahrung>): number {
+  const v = Number((row as any)?.kosten?.gpNetto ?? 0);
+  return Number.isFinite(v) ? Math.round(v * 100) / 100 : 0;
+}
+
+function mergeWithPriceHistory(
+  oldRow: KalkulationsErfahrung,
+  nextRow: KalkulationsErfahrung
+): KalkulationsErfahrung {
+  const oldEp = epOf(oldRow);
+  const newEp = epOf(nextRow);
+  const oldGp = gpOf(oldRow);
+  const newGp = gpOf(nextRow);
+
+  const changed =
+    oldEp !== newEp ||
+    oldGp !== newGp ||
+    String(oldRow.quelle || "") !== String(nextRow.quelle || "");
+
+  const history = Array.isArray((oldRow as any).priceHistory)
+    ? [...((oldRow as any).priceHistory as any[])]
+    : [];
+
+  if (changed) {
+    history.unshift({
+      at: new Date().toISOString(),
+      oldEpNetto: oldEp,
+      newEpNetto: newEp,
+      oldGpNetto: oldGp,
+      newGpNetto: newGp,
+      quelle: String(nextRow.quelle || ""),
+      projektCode: String(nextRow.projektCode || oldRow.projektCode || ""),
+      note: "Automatische Überschreibung: gleicher Projektcode + PosNr + Einheit.",
+    });
+  }
+
+  return normalizeEntry({
+    ...oldRow,
+    ...nextRow,
+    id: oldRow.id,
+    createdAt: oldRow.createdAt,
+    verwendungen: Math.max(oldRow.verwendungen, nextRow.verwendungen),
+    priceHistory: history.slice(0, 25),
+    updatedAt: nextRow.updatedAt,
+  } as any);
+}
 function dbIdentityKey(row: Partial<KalkulationsErfahrung>): string {
   const posNr = norm(row.posNr);
   if (posNr) return posNr;
@@ -806,19 +879,16 @@ function localUpsert(row: Partial<KalkulationsErfahrung>): KalkulationsErfahrung
   const rows = readDb();
 
   const idxById = rows.findIndex((x) => x.id === nextRow.id);
+  const idxByBusiness = rows.findIndex(
+    (x) => businessOverwriteKey(x) === businessOverwriteKey(nextRow)
+  );
   const idxByKey = rows.findIndex((x) => entryKey(x) === entryKey(nextRow));
-  const idx = idxById >= 0 ? idxById : idxByKey;
+  const idx = idxById >= 0 ? idxById : idxByBusiness >= 0 ? idxByBusiness : idxByKey;
 
   if (idx >= 0) {
     const old = rows[idx];
 
-    rows[idx] = normalizeEntry({
-      ...old,
-      ...nextRow,
-      id: old.id,
-      createdAt: old.createdAt,
-      verwendungen: Math.max(old.verwendungen, nextRow.verwendungen),
-    });
+    rows[idx] = mergeWithPriceHistory(old, nextRow);
 
     writeDb(rows);
     return rows[idx];
@@ -833,6 +903,7 @@ async function serverBulkUpsert(
   items: Partial<KalkulationsErfahrung>[]
 ): Promise<boolean> {
   const clean = items.map(normalizeEntry);
+
 
   const json = await fetchJson<{ ok?: boolean }>(
     `${API_PATH}/datenbank/bulk-upsert`,
@@ -878,13 +949,32 @@ export const KalkulationsDatenbank = {
     return typeof json?.count === "number" ? json.count : this.count();
   },
 
-  async listServer(): Promise<KalkulationsErfahrung[]> {
+  async listServerPage(
+    limit = 200,
+    offset = 0
+  ): Promise<{
+    rows: KalkulationsErfahrung[];
+    total: number;
+    limit: number;
+    offset: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  }> {
+    const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
+
     const json = await fetchJson<{
       ok?: boolean;
+      count?: number;
+      total?: number;
+      limit?: number;
+      offset?: number;
+      hasNext?: boolean;
+      hasPrev?: boolean;
       rows?: Partial<KalkulationsErfahrung>[];
       items?: Partial<KalkulationsErfahrung>[];
       data?: Partial<KalkulationsErfahrung>[];
-    }>(`${API_PATH}/datenbank`, {
+    }>(`${API_PATH}/datenbank?limit=${safeLimit}&offset=${safeOffset}`, {
       method: "GET",
       headers: authJsonHeaders(),
     });
@@ -892,21 +982,50 @@ export const KalkulationsDatenbank = {
     const raw = json?.rows || json?.items || json?.data || null;
 
     if (!Array.isArray(raw)) {
-      return this.list();
+      const fallback = this.list().slice(0, safeLimit);
+      return {
+        rows: fallback,
+        total: fallback.length,
+        limit: safeLimit,
+        offset: safeOffset,
+        hasNext: false,
+        hasPrev: safeOffset > 0,
+      };
     }
 
-    const clean = raw.map(normalizeEntry);
-    writeDb(clean);
+    const clean = raw
+      .map(normalizeEntry)
+      .sort((a, b) =>
+        String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+      );
 
-    /*
-     * Schreibt reparierte Server-Daten direkt zurÃ¼ck, damit alte falsche EP-Werte
-     * nicht immer wieder vom Server zurÃ¼ckkommen.
-     */
-    void serverBulkUpsert(clean).catch(() => {
-      //
-    });
+    try {
+      writeDb(clean.slice(0, 200));
+    } catch {
+      // localStorage voll: Serverdaten trotzdem verwenden
+    }
 
-    return this.list();
+    const total = Number(json?.total ?? json?.count ?? clean.length);
+    const responseOffset = Number(json?.offset ?? safeOffset);
+    const responseLimit = Number(json?.limit ?? safeLimit);
+
+    return {
+      rows: clean,
+      total,
+      limit: responseLimit,
+      offset: responseOffset,
+      hasNext:
+        typeof json?.hasNext === "boolean"
+          ? json.hasNext
+          : responseOffset + clean.length < total,
+      hasPrev:
+        typeof json?.hasPrev === "boolean" ? json.hasPrev : responseOffset > 0,
+    };
+  },
+
+  async listServer(): Promise<KalkulationsErfahrung[]> {
+    const page = await this.listServerPage(200, 0);
+    return page.rows;
   },
 
   get(id: string): KalkulationsErfahrung | null {
@@ -986,6 +1105,7 @@ export const KalkulationsDatenbank = {
       rows?: any[];
       items?: any[];
       data?: any[];
+
     }>(`${API_PATH}/datenbank?${params.toString()}`, {
       method: "GET",
       headers: authJsonHeaders(),
@@ -1308,6 +1428,19 @@ export const KalkulationsDatenbank = {
     });
   },
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

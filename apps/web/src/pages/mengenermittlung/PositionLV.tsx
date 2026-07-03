@@ -1,12 +1,10 @@
+import { apiUrl } from "../../lib/apiBase";
 // apps/web/src/pages/mengenermittlung/PositionLV.tsx
 import React from "react";
 import { useProject } from "../../store/useProject";
 import { useNavigate } from "react-router-dom";
 
-const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+
 
 /** Riga LV (dati di listino) + stato di misurazione (ist) */
 type LVPos = {
@@ -240,14 +238,14 @@ async function loadProjectLvAny(
   projectKey: string
 ): Promise<any[]> {
   const tries = [
-    `${apiBase}/api/project-lv/${encodeURIComponent(projectId)}`, // atteso
-    `${apiBase}/api/lv/project-lv/${encodeURIComponent(projectId)}`, // fallback 1
-    `${apiBase}/api/lv/project/${encodeURIComponent(projectId)}`, // fallback 2
-    `${apiBase}/api/lv/${encodeURIComponent(projectId)}`, // fallback 3
-    `${apiBase}/api/project-lv?projectId=${encodeURIComponent(projectId)}`, // fallback 4
+    `${apiBase}/api/project-lv/${encodeURIComponent(projectId)}`,
+    `${apiBase}/api/lv/project-lv/${encodeURIComponent(projectId)}`,
+    `${apiBase}/api/lv/project/${encodeURIComponent(projectId)}`,
+    `${apiBase}/api/lv/${encodeURIComponent(projectId)}`,
+    `${apiBase}/api/project-lv?projectId=${encodeURIComponent(projectId)}`,
     projectKey
       ? `${apiBase}/api/project-lv/${encodeURIComponent(projectKey)}`
-      : "", // fallback 5 (se backend usa code)
+      : "",
   ].filter(Boolean);
 
   let lastErr: any = null;
@@ -268,11 +266,9 @@ async function loadProjectLvAny(
         ? data
         : [];
 
-      // se endpoint risponde ma lista è vuota, lo accettiamo comunque
       return list;
     } catch (e) {
       lastErr = e;
-      // prova prossimo
     }
   }
 
@@ -287,10 +283,7 @@ export default function PositionLV() {
   const { getSelectedProject } = useProject();
   const project = getSelectedProject();
 
-  // DB-ID (per /api/project-lv/:id)
   const projectId = project?.id ?? null;
-
-  // FS-Key (stessa logica degli altri): preferisci code, fallback id
   const projectKey = (project?.code || project?.id || "").trim();
 
   const navigate = useNavigate();
@@ -301,19 +294,15 @@ export default function PositionLV() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // modal formula
   const [fOpen, setFOpen] = React.useState(false);
   const [fBuffer, setFBuffer] = React.useState("");
 
-  // modal beschreibung
   const [nOpen, setNOpen] = React.useState(false);
   const [nBuffer, setNBuffer] = React.useState("");
 
-  // Modal KI-Analyse (reale logica: filtra posizioni "auffällig")
   const [analysisOpen, setAnalysisOpen] = React.useState(false);
   const [analysisList, setAnalysisList] = React.useState<LVPos[]>([]);
 
-  // Busy per salvataggio/caricamento server (aufmass.json)
   const [syncBusy, setSyncBusy] = React.useState(false);
 
   const selected = rows.find((r) => r.id === selId) ?? null;
@@ -321,10 +310,9 @@ export default function PositionLV() {
   const patch = (id: string, p: Partial<LVPos>) =>
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...p } : r)));
 
-  /* ===== Server: aufmass.json (project root) ===== */
   async function serverLoadAufmass(): Promise<AufmassJsonRow[]> {
     if (!projectKey) return [];
-    const url = `${API}/api/aufmass/aufmass/${encodeURIComponent(projectKey)}`;
+    const url = apiUrl(`/api/aufmass/aufmass/${encodeURIComponent(projectKey)}`);
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json().catch(() => ({}));
@@ -333,7 +321,7 @@ export default function PositionLV() {
 
   async function serverSaveAufmass(rowsToSave: AufmassJsonRow[]) {
     if (!projectKey) throw new Error("project mancante");
-    const url = `${API}/api/aufmass/aufmass/${encodeURIComponent(projectKey)}`;
+    const url = apiUrl(`/api/aufmass/aufmass/${encodeURIComponent(projectKey)}`);
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -345,7 +333,6 @@ export default function PositionLV() {
     }
   }
 
-  /* ===== helper: build rows = LV (DB) + aufmass.json extras + persist (formula/note) ===== */
   const buildMergedRows = React.useCallback(
     (lvItems: any[], aufmassServer: AufmassJsonRow[]) => {
       const persist = projectKey ? loadPosLvPersist(projectKey) : [];
@@ -361,7 +348,6 @@ export default function PositionLV() {
         if (k) srvMap.set(k, r);
       });
 
-      // 1) LV items (DB) come base
       const mapped: LVPos[] = lvItems.map((p: any, idx: number) => {
         const pos = String(
           p.pos ?? p.position ?? p.posNr ?? p.nr ?? p.positionsnummer ?? idx
@@ -399,7 +385,6 @@ export default function PositionLV() {
 
       const seen = new Set<string>(mapped.map((r) => String(r.pos || "").trim()));
 
-      // 2) EXTRA: posizioni presenti in aufmass.json ma NON nel LV DB
       const extras: LVPos[] = [];
       for (const r of aufmassServer) {
         const pos = String(r.pos || "").trim();
@@ -421,7 +406,6 @@ export default function PositionLV() {
         });
       }
 
-      // 3) Fallback legacy localStorage
       if (!aufmassServer.length && projectId) {
         const aufmassLocal = AUFMASS.load(projectId);
         if (aufmassLocal.length) {
@@ -465,7 +449,6 @@ export default function PositionLV() {
     [projectId, projectKey]
   );
 
-  /* ===== LV + Aufmaß laden und verknüpfen ===== */
   const reloadAll = React.useCallback(async () => {
     if (!projectId) {
       setRows([]);
@@ -477,10 +460,8 @@ export default function PositionLV() {
     setError(null);
 
     try {
-      // 1) LV vom Server (DB) - robust (multi endpoint + multi response shape)
-      const items = await loadProjectLvAny(API, projectId, projectKey);
+      const items = await loadProjectLvAny("", projectId, projectKey);
 
-      // 2) Aufmaß: server project root
       let aufmassServer: AufmassJsonRow[] = [];
       try {
         aufmassServer = await serverLoadAufmass();
@@ -509,7 +490,6 @@ export default function PositionLV() {
     void reloadAll();
   }, [reloadAll]);
 
-  /* ===== persist locale formula/note quando rows cambiano ===== */
   React.useEffect(() => {
     if (!projectKey) return;
     try {
@@ -524,19 +504,16 @@ export default function PositionLV() {
     }
   }, [rows, projectKey]);
 
-  // calcolo ist a partire dalla formula (solo UI, non sostituisce server finché non salvi)
   const applyFormula = (id: string, formula: string) => {
     const ist = calc(formula);
     patch(id, { formula, ist });
   };
 
-  // EP/Soll edit
   const onEP = (id: string, v: string) =>
     patch(id, { ep: Number(v.replace(",", ".")) || 0 });
   const onSoll = (id: string, v: string) =>
     patch(id, { soll: Number(v.replace(",", ".")) || 0 });
 
-  // export CSV
   const exportCsv = () => {
     const head = [
       "Pos",
@@ -554,14 +531,14 @@ export default function PositionLV() {
       const total = r.ist * r.ep;
       return [
         r.pos,
-        r.text.replaceAll('"', '""'),
+        r.text.replace(/"/g, '""'),
         r.unit,
         String(r.soll).replace(".", ","),
         String(r.ist).replace(".", ","),
         String(diff).replace(".", ","),
         String(r.ep).replace(".", ","),
         String(total.toFixed(2)).replace(".", ","),
-        (r.note ?? "").replaceAll('"', '""'),
+        String(r.note ?? "").replace(/"/g, '""'),
       ];
     });
     const csv = [head, ...lines]
@@ -575,11 +552,9 @@ export default function PositionLV() {
     URL.revokeObjectURL(a.href);
   };
 
-  // totali
   const totalAbgerechnet = rows.reduce((s, r) => s + r.ist * r.ep, 0);
   const lvSumme = rows.reduce((s, r) => s + r.soll * r.ep, 0);
 
-  // colori riga in base alla differenza
   const tint = (r: LVPos, active: boolean): React.CSSProperties => {
     const diff = r.soll - r.ist;
     let bg = diff === 0 ? "#ECFDF3" : diff > 0 ? "#FEF3C7" : "#FEE2E2";
@@ -587,7 +562,6 @@ export default function PositionLV() {
     return { background: bg };
   };
 
-  // KI-Analyse "reale": filtra posizioni con Auffälligkeiten
   const handleKiAnalyse = () => {
     const auffaellig: LVPos[] = rows.filter((r) => {
       if (r.ist === 0 && r.soll > 0) return true;
@@ -599,7 +573,6 @@ export default function PositionLV() {
     setAnalysisOpen(true);
   };
 
-  /* ===== Server Save/Load (scrive un file JSON in data/projects/<projectKey>/aufmass.json) ===== */
   const handleServerSave = async () => {
     if (!projectKey) {
       alert("Kein Projekt gewählt.");
@@ -638,7 +611,6 @@ export default function PositionLV() {
     }
   };
 
-  // scorciatoie tastiera nei modal
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (
@@ -672,7 +644,6 @@ export default function PositionLV() {
 
   return (
     <div style={pageContainer}>
-      {/* Kopfzeile mit Projektinfo */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>
           RLC / 2. Mengenermittlung / Nach Position
@@ -690,7 +661,6 @@ export default function PositionLV() {
       </div>
 
       <section style={card}>
-        {/* toolbar */}
         <div style={toolbar}>
           <div style={{ fontWeight: 600, fontSize: 13 }}>
             LV-gestützte Mengenermittlung (Soll–Ist Vergleich)
@@ -742,7 +712,6 @@ export default function PositionLV() {
           </button>
         </div>
 
-        {/* 2 righe: Tabelle + Detail-Editor */}
         <div
           style={{
             display: "grid",
@@ -751,7 +720,6 @@ export default function PositionLV() {
             paddingTop: 10,
           }}
         >
-          {/* TOP: elenco posizioni LV + sintesi Soll/Ist/Diff + totale */}
           <div
             style={{
               borderRadius: 10,
@@ -858,7 +826,6 @@ export default function PositionLV() {
                   })}
                 </tbody>
 
-                {/* footer con somme */}
                 <tfoot>
                   <tr>
                     <td style={{ ...td, fontWeight: 700 }} colSpan={4}>
@@ -873,7 +840,6 @@ export default function PositionLV() {
             )}
           </div>
 
-          {/* BOTTOM: editor per la posizione selezionata */}
           <div
             style={{
               borderRadius: 10,
@@ -1026,7 +992,6 @@ export default function PositionLV() {
         </div>
       </section>
 
-      {/* Modal Formel */}
       {fOpen && selected && (
         <div
           style={modalWrap}
@@ -1073,7 +1038,6 @@ export default function PositionLV() {
         </div>
       )}
 
-      {/* Modal Beschreibung */}
       {nOpen && selected && (
         <div
           style={modalWrap}
@@ -1122,7 +1086,6 @@ export default function PositionLV() {
         </div>
       )}
 
-      {/* Modal KI-Analyse */}
       {analysisOpen && (
         <div
           style={modalWrap}
@@ -1176,3 +1139,10 @@ export default function PositionLV() {
     </div>
   );
 }
+
+
+
+
+
+
+

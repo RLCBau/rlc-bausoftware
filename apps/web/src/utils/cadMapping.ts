@@ -1,31 +1,39 @@
 // ============================================================
-// 🔹 CAD → LV MAPPING ENGINE
+// CAD → LV MAPPING ENGINE
 // ============================================================
 
 export type CadItem = {
   kind: "AREA" | "LINE" | "POINT" | "VOLUME";
   layer?: string;
-  label?: string;         // testo letto nel DXF (es. "Asphaltdeckschicht Pos1.00.14")
+  label?: string; // es. "Asphaltdeckschicht Pos1.00.14"
   area_m2?: number;
   length_m?: number;
   volume_m3?: number;
+  count?: number;
 };
 
+export type LVUnit = "m" | "m2" | "m3" | "stk";
+
 export type LVTarget = {
-  pos: string;            // es. "001.002"
-  kurztext: string;       // descrizione LV
-  einheit: "m" | "m2" | "m3" | "stk";
-  ep?: number;            // prezzo unitario
+  pos: string;
+  kurztext: string;
+  einheit: LVUnit;
+  ep?: number;
 };
 
 type CadRule = {
-  match: { layer?: RegExp; text?: RegExp; kind?: CadItem["kind"] };
+  match: {
+    layer?: RegExp;
+    text?: RegExp;
+    kind?: CadItem["kind"];
+  };
   target: LVTarget;
 };
 
 // ============================================================
-// 🔧 REGOLE BASE (puoi estenderle liberamente)
+// REGOLE BASE
 // ============================================================
+
 const RULES: CadRule[] = [
   {
     match: { layer: /asphalt/i, text: /asphaltdeckschicht/i, kind: "AREA" },
@@ -66,8 +74,69 @@ const RULES: CadRule[] = [
 ];
 
 // ============================================================
-// 🔍 Utility: estrae "Pos1.00.14" → "1.00.14"
+// HELPERS
 // ============================================================
+
+function norm(v?: string): string {
+  return (v || "").trim().toLowerCase();
+}
+
+function safeNumber(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+function unitTextFromEinheit(e: LVUnit): string {
+  switch (e) {
+    case "m2":
+      return "m²";
+    case "m3":
+      return "m³";
+    case "stk":
+      return "Stk";
+    default:
+      return "m";
+  }
+}
+
+function calcMenge(item: CadItem, einheit: LVUnit): number {
+  switch (einheit) {
+    case "m2":
+      return safeNumber(item.area_m2);
+    case "m3":
+      return safeNumber(item.volume_m3);
+    case "stk":
+      return safeNumber(item.count) || 1;
+    case "m":
+    default:
+      return safeNumber(item.length_m);
+  }
+}
+
+function ruleScore(rule: CadRule, item: CadItem): number {
+  let score = 0;
+
+  if (rule.match.kind) {
+    if (rule.match.kind !== item.kind) return -1;
+    score += 3;
+  }
+
+  if (rule.match.layer) {
+    if (!rule.match.layer.test(item.layer || "")) return -1;
+    score += 2;
+  }
+
+  if (rule.match.text) {
+    if (!rule.match.text.test(item.label || "")) return -1;
+    score += 2;
+  }
+
+  return score;
+}
+
+// ============================================================
+// Utility: "Pos1.00.14" -> "1.00.14"
+// ============================================================
+
 export function extractPosFromText(t?: string): string | null {
   if (!t) return null;
   const m = t.match(/pos\.?\s*([\d.]+)/i);
@@ -75,55 +144,78 @@ export function extractPosFromText(t?: string): string | null {
 }
 
 // ============================================================
-// 🤖 Euristica KI fallback (keyword scoring)
+// Euristica fallback
 // ============================================================
-function heuristic(item: CadItem): LVTarget | null {
-  const L = (item.layer || "").toLowerCase() + " " + (item.label || "").toLowerCase();
 
-  if (/(asphalt|deck|pflaster|fläche)/.test(L) && item.kind === "AREA") {
-    return { pos: "001.002", kurztext: "Asphalt / Fläche", einheit: "m2" };
+function heuristic(item: CadItem): LVTarget | null {
+  const text = `${norm(item.layer)} ${norm(item.label)}`;
+
+  if (/(asphalt|deck|pflaster|fläche)/.test(text) && item.kind === "AREA") {
+    return {
+      pos: "001.002",
+      kurztext: "Asphalt / Fläche",
+      einheit: "m2",
+    };
   }
-  if (/(leitung|trasse|kanal|rohr|kabel)/.test(L) && item.kind === "LINE") {
-    return { pos: "001.001", kurztext: "Leitungstrasse", einheit: "m" };
+
+  if (/(leitung|trasse|kanal|rohr|kabel|speedpipe)/.test(text) && item.kind === "LINE") {
+    return {
+      pos: "001.001",
+      kurztext: "Leitungstrasse",
+      einheit: "m",
+    };
   }
-  if (/(schacht|punkt|anschluss)/.test(L) && item.kind === "POINT") {
-    return { pos: "009.001", kurztext: "Punkt / Anschluss", einheit: "stk" };
+
+  if (/(schacht|punkt|anschluss)/.test(text) && item.kind === "POINT") {
+    return {
+      pos: "009.001",
+      kurztext: "Punkt / Anschluss",
+      einheit: "stk",
+    };
   }
+
+  if (/(aushub|graben|boden)/.test(text) && item.kind === "VOLUME") {
+    return {
+      pos: "004.001",
+      kurztext: "Aushub / Bodenbewegung",
+      einheit: "m3",
+    };
+  }
+
   return null;
 }
 
 // ============================================================
-// 🎯 Resolver principale
-// Torna: LVTarget + {menge, unitText}
+// Resolver principale
 // ============================================================
+
 export function resolveCadToLV(
   item: CadItem
 ): (LVTarget & { menge: number; unitText: string }) | null {
-  // 1️⃣ Match regole esplicite
-  const rule = RULES.find(r =>
-    (!r.match.kind || r.match.kind === item.kind) &&
-    (!r.match.layer || r.match.layer.test(item.layer || "")) &&
-    (!r.match.text || r.match.text.test(item.label || ""))
-  );
+  const bestRule = RULES
+    .map((rule) => ({ rule, score: ruleScore(rule, item) }))
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => b.score - a.score)[0]?.rule;
 
-  let base: LVTarget | null = rule ? rule.target : heuristic(item);
+  let base: LVTarget | null = bestRule ? bestRule.target : heuristic(item);
   if (!base) return null;
 
-  // 2️⃣ Posizione da testo (es. "Pos1.00.14")
-  const p = extractPosFromText(item.label);
-  if (p) base = { ...base, pos: p };
+  const posFromLabel = extractPosFromText(item.label);
+  if (posFromLabel) {
+    base = { ...base, pos: posFromLabel };
+  }
 
-  // 3️⃣ Quantità numerica e unità leggibile
-  const menge =
-    base.einheit === "m2" ? (item.area_m2 ?? 0) :
-    base.einheit === "m3" ? (item.volume_m3 ?? 0) :
-    base.einheit === "stk" ? 1 :
-    (item.length_m ?? 0);
+  const menge = calcMenge(item, base.einheit);
+  const unitText = unitTextFromEinheit(base.einheit);
 
-  const unitText =
-    base.einheit === "m2" ? "m²" :
-    base.einheit === "m3" ? "m³" :
-    base.einheit === "stk" ? "Stk" : "m";
-
-  return { ...base, menge, unitText };
+  return {
+    ...base,
+    menge,
+    unitText,
+  };
 }
+
+
+
+
+

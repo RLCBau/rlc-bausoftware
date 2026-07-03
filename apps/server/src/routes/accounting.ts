@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { prisma } from "../lib/prisma.ts";
-import { requirePermission } from "../middleware/rbac.ts";
-import { requireProjectMember } from "../middleware/guards.ts";
+import { prisma } from "../lib/prisma";
+import { requirePermission } from "../middleware/rbac";
+import { requireProjectMember } from "../middleware/guards";
 import { z } from "zod";
-import { validate, qList } from "../middleware/validation.ts";
+import { validate, qList } from "../middleware/validation";
 
 const router = Router({ mergeParams: true });
 

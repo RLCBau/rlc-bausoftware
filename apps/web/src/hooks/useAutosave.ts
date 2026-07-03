@@ -1,29 +1,15 @@
-// src/hooks/useAutosave.ts
 import React from "react";
 import { useProject } from "../store/useProject";
 
-/**
- * Autosave universale con:
- * - debounce su change (default 800 ms)
- * - ticker periodico (default 30 s)
- * - scope per progetto (riesegue quando cambia projectId)
- *
- * Esempio:
- * const dirtyRef = React.useRef(false);
- * useAutosave({
- *   id: "aufmass.table",
- *   data,                                   // oggetto o snapshot serializzabile
- *   isDirty: () => dirtyRef.current,
- *   save: async (payload) => fetch("/api/.../save", {method:"POST", body: JSON.stringify(payload)}),
- *   debounceMs: 800,
- *   intervalMs: 30000
- * });
- */
 type Options<T> = {
   id: string;
   data: T;
   isDirty: () => boolean;
-  save: (payload: { projectId: string | null; id: string; data: T }) => Promise<any> | any;
+  save: (payload: {
+    projectId: string | null;
+    id: string;
+    data: T;
+  }) => Promise<any> | any;
   debounceMs?: number;
   intervalMs?: number;
 };
@@ -36,34 +22,67 @@ export function useAutosave<T>({
   debounceMs = 800,
   intervalMs = 30_000,
 }: Options<T>) {
-  const { projectId } = useProject();
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id ?? null;
+
   const timerRef = React.useRef<number | null>(null);
-  const lastJsonRef = React.useRef<string>("");
+  const lastDataRef = React.useRef<T | null>(null);
 
-  // Debounce su change di "data"
+  const isDirtyRef = React.useRef(isDirty);
+  const saveRef = React.useRef(save);
+
+  // sempre aggiornati ma senza rompere deps
   React.useEffect(() => {
-    const json = JSON.stringify(data);
-    if (json === lastJsonRef.current) return;
-    lastJsonRef.current = json;
+    isDirtyRef.current = isDirty;
+    saveRef.current = save;
+  }, [isDirty, save]);
 
-    if (timerRef.current) window.clearTimeout(timerRef.current);
+  // 🔹 DEBOUNCE SAVE
+  React.useEffect(() => {
+    if (lastDataRef.current === data) return;
+    lastDataRef.current = data;
+
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+    }
+
     timerRef.current = window.setTimeout(async () => {
-      if (isDirty()) {
-        try { await save({ projectId, id, data }); } catch {}
-      }
-    }, debounceMs) as unknown as number;
+      if (!isDirtyRef.current()) return;
 
-    return () => { if (timerRef.current) window.clearTimeout(timerRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      try {
+        await saveRef.current({ projectId, id, data });
+      } catch {
+        // silent
+      }
+    }, debounceMs);
+
+    return () => {
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+      }
+    };
   }, [data, projectId, id, debounceMs]);
 
-  // Ticker periodico
+  // 🔹 INTERVAL SAVE
   React.useEffect(() => {
     const iv = window.setInterval(async () => {
-      if (isDirty()) {
-        try { await save({ projectId, id, data }); } catch {}
+      if (!isDirtyRef.current()) return;
+
+      try {
+        await saveRef.current({ projectId, id, data });
+      } catch {
+        // silent
       }
     }, intervalMs);
-    return () => window.clearInterval(iv);
-  }, [projectId, id, data, isDirty, save, intervalMs]);
+
+    return () => {
+      window.clearInterval(iv);
+    };
+  }, [projectId, id, data, intervalMs]);
 }
+
+
+
+
+
+

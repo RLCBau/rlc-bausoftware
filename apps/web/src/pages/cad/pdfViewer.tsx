@@ -1,4 +1,5 @@
-// src/pages/pdf/PDFViewer.tsx
+import { API_BASE } from "../../lib/apiBase";
+// apps/web/src/pages/cad/pdfViewer.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../../store/useProject";
@@ -17,15 +18,6 @@ import "pdfjs-dist/build/pdf.worker.mjs";
        POST /api/auto-ki/:projectKey/export-to-aufmass
        GET  /api/auto-ki/:projectKey/aufmass-history
        POST /api/auto-ki/:projectKey/aufmass-history/snapshot
-
-   - zusätzlich: lokale Exporte für Kalkulation/Nachtrag (LocalStorage),
-     damit wir nichts am Backend brechen.
-
-   FIXES:
-   1) PDFViewer größer (Layout + Viewport)
-   2) Beim Seitenwechsel/Route-Wechsel geht nichts verloren:
-      - Takeoff-State (rows/preview/summary/etc.) ist jetzt projectScoped persisted
-      - PDF wählen löscht Takeoff NICHT mehr automatisch (Reset-Button hinzugefügt)
    ============================================================ */
 
 /** ===================== Types ===================== */
@@ -39,7 +31,7 @@ type Det = {
   layer?: string;
   source?: string;
   poly?: { x: number; y: number }[];
-  box?: { x: number; y: number; w: number; h: number }; // legacy pixel box
+  box?: { x: number; y: number; w: number; h: number };
 };
 
 type DetectBox = {
@@ -48,11 +40,11 @@ type DetectBox = {
   score: number;
   qty?: number;
   unit?: string;
-  box?: [number, number, number, number]; // normalized 0..1
+  box?: [number, number, number, number];
 };
 
 type PhotoPosition = {
-  id?: string; // LV-Pos (001.001 / FOTO.001)
+  id?: string;
   kurztext: string;
   einheit?: string;
   qty?: number | null;
@@ -76,7 +68,7 @@ type AutoKiFile = {
   note?: string;
   scale?: string;
   sourceFile?: { name?: string; type?: string; size?: number } | null;
-  preview?: string | null; // dataURL
+  preview?: string | null;
   boxes?: DetectBox[];
   extras?: ExtraRow[];
   summary?: string;
@@ -84,7 +76,12 @@ type AutoKiFile = {
   items: Det[];
 };
 
-type HistorySnap = { ts: number; count: number; note?: string; source?: string };
+type HistorySnap = {
+  ts: number;
+  count: number;
+  note?: string;
+  source?: string;
+};
 
 type Targets = {
   aufmass: boolean;
@@ -103,21 +100,11 @@ type TakeoffRow = {
   targets: Targets;
 };
 
-/* ===================== API RESOLUTION (robust, no double /api) ===================== */
-const RAW_API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
-
-function normalizeApiBase(v: string) {
-  let s = String(v || "").trim();
-  if (!s) s = "http://localhost:4000";
-  s = s.replace(/\/+$/, "");
-  if (s.endsWith("/api")) s = s.slice(0, -4);
-  return s;
+/* ===================== API ===================== */
+function apiUrl(path: string) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${p}` : p;
 }
-const API_BASE = normalizeApiBase(RAW_API_BASE);
-const API = `${API_BASE}/api`;
 
 /* ===================== Local persistence keys ===================== */
 const LS_KEY = (k: string) => `RLC_PDF_TAKEOFF_${k}`;
@@ -127,7 +114,7 @@ const AUFMASS_LAST_KEY = "RLC_AUFMASS_LAST_KEY";
 const KALK_IMPORT_KEY = (k: string) => `RLC_KALKULATION_IMPORT_${k}`;
 const NACHTRAG_IMPORT_KEY = (k: string) => `RLC_NACHTRAG_IMPORT_${k}`;
 
-/** AufmaßEditor local bridge (wie bei AutoKI) */
+/* ===================== Aufmaß local bridge ===================== */
 type AufmassLVRowLocal = {
   id: string;
   pos: string;
@@ -140,12 +127,14 @@ type AufmassLVRowLocal = {
   note?: string;
   factor?: number;
 };
-function aufmassLocalKey(projectUuid: string) {
-  return `RLC_AUFMASS_${projectUuid}`;
+
+function aufmassLocalKey(projectKey: string) {
+  return `RLC_AUFMASS_${projectKey}`;
 }
-function loadAufmassLocal(projectUuid: string): AufmassLVRowLocal[] {
+
+function loadAufmassLocal(projectKey: string): AufmassLVRowLocal[] {
   try {
-    const raw = localStorage.getItem(aufmassLocalKey(projectUuid));
+    const raw = localStorage.getItem(aufmassLocalKey(projectKey));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as AufmassLVRowLocal[]) : [];
@@ -153,9 +142,10 @@ function loadAufmassLocal(projectUuid: string): AufmassLVRowLocal[] {
     return [];
   }
 }
-function saveAufmassLocal(projectUuid: string, rows: AufmassLVRowLocal[]) {
+
+function saveAufmassLocal(projectKey: string, rows: AufmassLVRowLocal[]) {
   try {
-    localStorage.setItem(aufmassLocalKey(projectUuid), JSON.stringify(rows));
+    localStorage.setItem(aufmassLocalKey(projectKey), JSON.stringify(rows));
   } catch {}
 }
 
@@ -164,6 +154,7 @@ function setLastKey(k: string) {
     localStorage.setItem(LS_LAST, k);
   } catch {}
 }
+
 function getLastKey(): string | null {
   try {
     return localStorage.getItem(LS_LAST);
@@ -171,16 +162,19 @@ function getLastKey(): string | null {
     return null;
   }
 }
+
 function setAufmassLastKey(k: string) {
   try {
     localStorage.setItem(AUFMASS_LAST_KEY, k);
   } catch {}
 }
+
 function lsSave(key: string, payload: any) {
   try {
     localStorage.setItem(LS_KEY(key), JSON.stringify(payload));
   } catch {}
 }
+
 function lsLoad<T = any>(key: string): T | null {
   try {
     const raw = localStorage.getItem(LS_KEY(key));
@@ -192,6 +186,18 @@ function lsLoad<T = any>(key: string): T | null {
   }
 }
 
+/* ===================== Project resolve ===================== */
+function getCurrentProject(ctx: any) {
+  return (
+    ctx?.getSelectedProject?.() ??
+    ctx?.currentProject ??
+    ctx?.selectedProject ??
+    ctx?.current ??
+    ctx?.project ??
+    null
+  );
+}
+
 /* ===================== helper: fetch with better errors ===================== */
 async function fetchTextSafe(res: Response) {
   try {
@@ -201,11 +207,18 @@ async function fetchTextSafe(res: Response) {
   }
 }
 
-async function fetchFirstOk(urls: string[], init?: RequestInit): Promise<{ url: string; res: Response }> {
+async function fetchFirstOk(
+  urls: string[],
+  init?: RequestInit
+): Promise<{ url: string; res: Response }> {
   let lastErr: any = null;
+
   for (const u of urls) {
     try {
-      const r = await fetch(u, init);
+      const r = await fetch(u, {
+        credentials: "include",
+        ...init,
+      });
       if (r.ok) return { url: u, res: r };
       const t = await fetchTextSafe(r);
       lastErr = new Error(t || `HTTP ${r.status} (${u})`);
@@ -213,6 +226,7 @@ async function fetchFirstOk(urls: string[], init?: RequestInit): Promise<{ url: 
       lastErr = e;
     }
   }
+
   throw lastErr || new Error("Failed to fetch");
 }
 
@@ -223,71 +237,61 @@ function safeBaseName(name: string) {
 
 function parseQuality(scaleStr: string) {
   const s = String(scaleStr || "").trim();
-  const num = Number(
-    s
-      .replace(",", ".")
-      .replace(/[^0-9.]/g, "")
-  );
+  const num = Number(s.replace(",", ".").replace(/[^0-9.]/g, ""));
   if (!Number.isFinite(num) || num <= 0) return 2.5;
   if (num > 20) return 2.5;
   return Math.max(1, Math.min(6, num));
 }
 
-/* ===================== PDF -> PNG (Frontend) ===================== */
+/* ===================== PDF -> PNG ===================== */
 async function pdfFirstPageToPng(
   file: File,
   desiredScale = 3.5,
   maxPixels = 18_000_000
 ): Promise<{ blob: Blob; dataUrl: string }> {
   const buf = await file.arrayBuffer();
-  const pdfjsLegacy: any = await import("pdfjs-dist/legacy/build/pdf");
 
-  const loadingTask = pdfjsLegacy.getDocument({
+  const pdfjs: any = await import("pdfjs-dist");
+
+  const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buf),
     disableWorker: true,
   });
 
-  const pdf = await loadingTask.promise;
-  const page = await pdf.getPage(1);
+  const doc = await loadingTask.promise;
+  const page = await doc.getPage(1);
 
-  const v1 = page.getViewport({ scale: 1 });
-  let scale = Math.max(1.5, Math.min(10, Number(desiredScale) || 3.5));
+  let vp = page.getViewport({ scale: desiredScale });
 
-  const targetPixels = v1.width * v1.height * scale * scale;
-  if (targetPixels > maxPixels) {
-    const factor = Math.sqrt(maxPixels / (v1.width * v1.height));
-    scale = Math.max(1.5, Math.min(scale, factor));
+  const pixels = vp.width * vp.height;
+  if (pixels > maxPixels) {
+    const scale = Math.sqrt(maxPixels / pixels);
+    vp = page.getViewport({ scale });
   }
-
-  const viewport = page.getViewport({ scale });
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas context not available");
+  if (!ctx) throw new Error("Canvas context error");
 
-  canvas.width = Math.ceil(viewport.width);
-  canvas.height = Math.ceil(viewport.height);
+  canvas.width = Math.ceil(vp.width);
+  canvas.height = Math.ceil(vp.height);
 
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  await page.render({
+    canvasContext: ctx,
+    canvas,
+    viewport: vp,
+  } as any).promise;
 
-  const blob: Blob = await new Promise((resolve, reject) => {
-    canvas.toBlob((b) => {
-      if (!b) return reject(new Error("canvas.toBlob failed"));
-      resolve(b);
-    }, "image/png");
-  });
+  const blob: Blob = await new Promise((res) =>
+    canvas.toBlob((b) => res(b as Blob), "image/png")
+  );
 
-  const dataUrl: string = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result || ""));
-    fr.onerror = () => reject(new Error("FileReader failed (blob->dataURL)"));
-    fr.readAsDataURL(blob);
-  });
+  const dataUrl = canvas.toDataURL("image/png");
 
   return { blob, dataUrl };
 }
 
-/* ===================== NEW: Image tiling (PDF big plans) ===================== */
+/* ===================== Tile helpers ===================== */
 async function dataUrlToImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -318,7 +322,14 @@ async function makeTilesFromDataUrl(args: {
   const cols = Math.ceil((W - overlap) / step);
   const rows = Math.ceil((H - overlap) / step);
 
-  const out: Array<{ blob: Blob; name: string; ix: number; iy: number; cols: number; rows: number }> = [];
+  const out: Array<{
+    blob: Blob;
+    name: string;
+    ix: number;
+    iy: number;
+    cols: number;
+    rows: number;
+  }> = [];
 
   for (let iy = 0; iy < rows; iy++) {
     for (let ix = 0; ix < cols; ix++) {
@@ -360,6 +371,7 @@ function normalizeAndReindexAutoPositions(rows: TakeoffRow[]): TakeoffRow[] {
   for (const it of rows || []) {
     const rawPos = String(it?.pos || "").trim();
     const isAuto = !rawPos || /^AUTO\.\d+$/i.test(rawPos);
+
     if (isAuto) {
       autoCounter += 1;
       const n = String(autoCounter).padStart(3, "0");
@@ -368,6 +380,7 @@ function normalizeAndReindexAutoPositions(rows: TakeoffRow[]): TakeoffRow[] {
       out.push({ ...it, pos: rawPos });
     }
   }
+
   return out;
 }
 
@@ -436,7 +449,11 @@ function buildAutoKiPayload(args: {
     note: args.note,
     scale: args.scale,
     sourceFile: args.file
-      ? { name: args.file.name, type: args.file.type || undefined, size: args.file.size || undefined }
+      ? {
+          name: args.file.name,
+          type: args.file.type || undefined,
+          size: args.file.size || undefined,
+        }
       : null,
     preview: args.preview ?? null,
     boxes: args.boxes ?? [],
@@ -451,7 +468,7 @@ function defaultTargets(): Targets {
   return { aufmass: true, kalkulation: false, nachtrag: false };
 }
 
-/* ===================== UI: Beschreibung Editor Modal ===================== */
+/* ===================== Modal ===================== */
 function DescrModal(props: {
   open: boolean;
   title: string;
@@ -548,23 +565,27 @@ export default function PDFViewer() {
   const nav = useNavigate();
   const projStore = useProject() as any;
 
-  // robust project resolve (neue + alte Store-Formen)
-  const project = projStore?.getSelectedProject?.() ?? null;
-  const projectCode: string = String(project?.code || "").trim();
-  const projectUuid: string = String(project?.id || projStore?.projectId || "").trim();
+  const project = getCurrentProject(projStore);
+  const projectCode = String(project?.code || "").trim();
+  const projectUuid = String(project?.id || projStore?.projectId || "").trim();
 
   const keyCandidates = React.useMemo(() => {
-    const arr = [projectCode, projectUuid].filter((x) => !!x);
+    const arr = [projectCode, projectUuid].filter(Boolean);
     return Array.from(new Set(arr));
   }, [projectCode, projectUuid]);
 
   const projectKey: string | null = keyCandidates[0] ?? null;
-  const effectiveKey = React.useMemo(() => projectKey || getLastKey() || null, [projectKey]);
+  const effectiveKey = React.useMemo(
+    () => projectKey || getLastKey() || null,
+    [projectKey]
+  );
 
-  // PDF viewer state (doc/canvas ist runtime, nicht persist)
   const [pdf, setPdf] = React.useState<pdfjs.PDFDocumentProxy | null>(null);
-  const [pages, setPages] = React.useState<number>(0);
-  const [pageNum, setPageNum] = usePersistedState<number>(1, { key: "pdf.takeoff.pageNum", projectScoped: true });
+  const [pages, setPages] = React.useState(0);
+  const [pageNum, setPageNum] = usePersistedState<number>(1, {
+    key: "pdf.takeoff.pageNum",
+    projectScoped: true,
+  });
   const [scaleView, setScaleView] = usePersistedState<number>(1.1, {
     key: "pdf.takeoff.scaleView",
     projectScoped: true,
@@ -577,49 +598,69 @@ export default function PDFViewer() {
 
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
-  // Takeoff / KI state (persisted -> verliert sich nicht beim Seiten-/Routewechsel)
-  const [note, setNote] = usePersistedState<string>("", { key: "pdf.takeoff.note", projectScoped: true });
-  const [quality, setQuality] = usePersistedState<string>("2.5", { key: "pdf.takeoff.quality", projectScoped: true });
+  const [note, setNote] = usePersistedState<string>("", {
+    key: "pdf.takeoff.note",
+    projectScoped: true,
+  });
+  const [quality, setQuality] = usePersistedState<string>("2.5", {
+    key: "pdf.takeoff.quality",
+    projectScoped: true,
+  });
 
   const [preview, setPreview] = usePersistedState<string | null>(null, {
     key: "pdf.takeoff.preview",
     projectScoped: true,
   });
-  const [summary, setSummary] = usePersistedState<string>("", { key: "pdf.takeoff.summary", projectScoped: true });
-  const [boxes, setBoxes] = usePersistedState<DetectBox[]>([], { key: "pdf.takeoff.boxes", projectScoped: true });
+  const [summary, setSummary] = usePersistedState<string>("", {
+    key: "pdf.takeoff.summary",
+    projectScoped: true,
+  });
+  const [boxes, setBoxes] = usePersistedState<DetectBox[]>([], {
+    key: "pdf.takeoff.boxes",
+    projectScoped: true,
+  });
   const [positions, setPositions] = usePersistedState<PhotoPosition[]>([], {
     key: "pdf.takeoff.positions",
     projectScoped: true,
   });
-  const [items, setItems] = usePersistedState<Det[]>([], { key: "pdf.takeoff.items", projectScoped: true });
-  const [rows, setRows] = usePersistedState<TakeoffRow[]>([], { key: "pdf.takeoff.rows", projectScoped: true });
+  const [items, setItems] = usePersistedState<Det[]>([], {
+    key: "pdf.takeoff.items",
+    projectScoped: true,
+  });
+  const [rows, setRows] = usePersistedState<TakeoffRow[]>([], {
+    key: "pdf.takeoff.rows",
+    projectScoped: true,
+  });
+  const [history, setHistory] = usePersistedState<HistorySnap[]>([], {
+    key: "pdf.takeoff.history",
+    projectScoped: true,
+  });
 
-  const [history, setHistory] = usePersistedState<HistorySnap[]>([], { key: "pdf.takeoff.history", projectScoped: true });
-
-  // Non-persisted runtime
   const [file, setFile] = React.useState<File | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [serverBusy, setServerBusy] = React.useState(false);
 
-  // UI toggles
-  const [editOn, setEditOn] = usePersistedState<boolean>(true, { key: "pdf.takeoff.editOn", projectScoped: true });
+  const [editOn, setEditOn] = usePersistedState<boolean>(true, {
+    key: "pdf.takeoff.editOn",
+    projectScoped: true,
+  });
   const [zoomOpen, setZoomOpen] = React.useState(false);
   const [zoomScale, setZoomScale] = usePersistedState<number>(1.35, {
     key: "pdf.takeoff.zoomScale",
     projectScoped: true,
   });
 
-  // Beschreibung modal
   const [descrModalOpen, setDescrModalOpen] = React.useState(false);
   const [descrModalRowId, setDescrModalRowId] = React.useState<string | null>(null);
 
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  /* ===================== local draft save/restore (legacy compatibility) ===================== */
   const draftSave = React.useCallback(
     (partial?: any) => {
       if (!effectiveKey) return;
+
       setLastKey(effectiveKey);
+
       const payload = {
         savedAt: new Date().toISOString(),
         note,
@@ -634,25 +675,25 @@ export default function PDFViewer() {
         scaleView,
         ...(partial || {}),
       };
+
       lsSave(effectiveKey, payload);
     },
     [effectiveKey, note, quality, preview, summary, boxes, positions, items, rows, pageNum, scaleView]
   );
 
-  // restore legacy draft if exists (one-time per effectiveKey)
   React.useEffect(() => {
     if (!effectiveKey) return;
+
     const local = lsLoad<any>(effectiveKey);
     if (!local) return;
 
-    // nur setzen, wenn der persisted state noch "leer" ist, damit wir nicht überschreiben
     const hasAny =
-      (Array.isArray(rows) && rows.length > 0) ||
+      rows.length > 0 ||
       !!preview ||
       !!summary ||
-      (Array.isArray(boxes) && boxes.length > 0) ||
-      (Array.isArray(positions) && positions.length > 0) ||
-      (Array.isArray(items) && items.length > 0);
+      boxes.length > 0 ||
+      positions.length > 0 ||
+      items.length > 0;
 
     if (!hasAny) {
       setNote(String(local.note ?? ""));
@@ -668,17 +709,65 @@ export default function PDFViewer() {
     }
 
     setLastKey(effectiveKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveKey]);
+  }, [
+    effectiveKey,
+    rows.length,
+    preview,
+    summary,
+    boxes.length,
+    positions.length,
+    items.length,
+    setNote,
+    setQuality,
+    setPreview,
+    setSummary,
+    setBoxes,
+    setPositions,
+    setItems,
+    setRows,
+    setPageNum,
+    setScaleView,
+  ]);
 
-  // keep legacy draft updated (harmless, but does not control UI anymore)
   React.useEffect(() => {
     if (!effectiveKey) return;
     const t = window.setTimeout(() => draftSave(), 250);
     return () => window.clearTimeout(t);
-  }, [effectiveKey, note, quality, preview, summary, boxes, positions, items, rows, pageNum, scaleView, draftSave]);
+  }, [
+    effectiveKey,
+    note,
+    quality,
+    preview,
+    summary,
+    boxes,
+    positions,
+    items,
+    rows,
+    pageNum,
+    scaleView,
+    draftSave,
+  ]);
 
-  /* ===================== PDF load/render ===================== */
+  async function renderPage(doc: pdfjs.PDFDocumentProxy, n: number, sc: number) {
+    const c = canvasRef.current;
+    if (!c) return;
+
+    const nn = Math.max(1, Math.min(doc.numPages, n));
+    const p = await doc.getPage(nn);
+    const vp = p.getViewport({ scale: sc });
+
+    c.width = Math.ceil(vp.width);
+    c.height = Math.ceil(vp.height);
+
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, c.width, c.height);
+
+    await p.render({ canvasContext: ctx, canvas: c, viewport: vp } as any).promise;
+  }
+
   async function openFromFile(f: File) {
     try {
       setStatus("Lade PDF aus Datei …");
@@ -694,7 +783,6 @@ export default function PDFViewer() {
       setStatus(`Geladen: ${f.name} (${doc.numPages} Seiten)`);
       setFile(f);
 
-      // render current page on canvas
       const nn = Math.max(1, Math.min(doc.numPages, pageNum || 1));
       await renderPage(doc, nn, scaleView);
     } catch (e) {
@@ -703,36 +791,18 @@ export default function PDFViewer() {
     }
   }
 
-  async function renderPage(doc: pdfjs.PDFDocumentProxy, n: number, sc: number) {
-    const c = canvasRef.current;
-    if (!c) return;
-
-    const nn = Math.max(1, Math.min(doc.numPages, n));
-    const p = await doc.getPage(nn);
-    const vp = p.getViewport({ scale: sc });
-
-    c.width = Math.ceil(vp.width);
-    c.height = Math.ceil(vp.height);
-
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, c.width, c.height);
-
-    await p.render({ canvasContext: ctx, viewport: vp }).promise;
-  }
-
   React.useEffect(() => {
     (async () => {
       if (!pdf) return;
       await renderPage(pdf, pageNum, scaleView);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdf, pageNum, scaleView]);
 
-  /* ===================== Server helpers ===================== */
   const makeUrls = React.useCallback(
-    (suffix: string) => keyCandidates.map((k) => `${API}/auto-ki${suffix.replace("{key}", encodeURIComponent(k))}`),
+    (suffix: string) =>
+      keyCandidates.map((k) =>
+        apiUrl(`/api/auto-ki${suffix.replace("{key}", encodeURIComponent(k))}`)
+      ),
     [keyCandidates]
   );
 
@@ -742,11 +812,15 @@ export default function PDFViewer() {
       if (!p) return null;
       return p as AutoKiFile;
     }
+
     if (json && typeof json === "object" && json.ok) {
       const itemsArr = Array.isArray(json.items) ? (json.items as Det[]) : [];
       const boxesArr = Array.isArray(json.boxes) ? (json.boxes as DetectBox[]) : [];
       const extrasArr = Array.isArray(json.extras) ? (json.extras as ExtraRow[]) : [];
-      const positionsArr = Array.isArray(json.positions) ? (json.positions as PhotoPosition[]) : [];
+      const positionsArr = Array.isArray(json.positions)
+        ? (json.positions as PhotoPosition[])
+        : [];
+
       const payload: AutoKiFile = {
         savedAt: String(json.savedAt || new Date().toISOString()),
         projectIdOrCode: String(json.projectIdOrCode || json.projectKey || projectKeyFallback),
@@ -761,11 +835,19 @@ export default function PDFViewer() {
         positions: positionsArr,
         items: itemsArr,
       };
-      if (!payload.preview && !payload.items?.length && !payload.boxes?.length && !payload.positions?.length) {
+
+      if (
+        !payload.preview &&
+        !payload.items?.length &&
+        !payload.boxes?.length &&
+        !payload.positions?.length
+      ) {
         return null;
       }
+
       return payload;
     }
+
     return null;
   }
 
@@ -774,7 +856,9 @@ export default function PDFViewer() {
       alert("Kein Projekt gewählt.");
       return;
     }
+
     setServerBusy(true);
+
     try {
       const urls = makeUrls("/{key}");
       const { res } = await fetchFirstOk(urls);
@@ -812,23 +896,50 @@ export default function PDFViewer() {
     } finally {
       setServerBusy(false);
     }
-  }, [keyCandidates, makeUrls, effectiveKey, projectKey, setBoxes, setItems, setNote, setPositions, setPreview, setQuality, setRows, setSummary]);
+  }, [
+    keyCandidates,
+    makeUrls,
+    effectiveKey,
+    projectKey,
+    setNote,
+    setQuality,
+    setPreview,
+    setSummary,
+    setBoxes,
+    setPositions,
+    setItems,
+    setRows,
+  ]);
 
   const serverSave = React.useCallback(
-    async (override?: Partial<{ preview: string | null; summary: string; boxes: DetectBox[]; positions: PhotoPosition[]; items: Det[] }>) => {
+    async (
+      override?: Partial<{
+        preview: string | null;
+        summary: string;
+        boxes: DetectBox[];
+        positions: PhotoPosition[];
+        items: Det[];
+      }>
+    ) => {
       if (!keyCandidates.length) {
         draftSave();
         alert("Kein Projekt gewählt. (Lokal gespeichert)");
         return;
       }
+
       setServerBusy(true);
+
       try {
         const payload = {
           note,
           scale: quality,
-          preview: override && "preview" in override ? (override.preview ?? null) : preview ?? null,
+          preview: override && "preview" in override ? override.preview ?? null : preview ?? null,
           sourceFile: file
-            ? { name: file.name, type: file.type || undefined, size: file.size || undefined }
+            ? {
+                name: file.name,
+                type: file.type || undefined,
+                size: file.size || undefined,
+              }
             : null,
           items: override?.items ?? items ?? [],
           boxes: override?.boxes ?? boxes ?? [],
@@ -843,6 +954,7 @@ export default function PDFViewer() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+
         await res.json().catch(() => ({}));
 
         if (effectiveKey) {
@@ -858,26 +970,45 @@ export default function PDFViewer() {
             positions: payload.positions ?? [],
             items: payload.items ?? [],
           });
+
           lsSave(effectiveKey, { ...localPayload, rows, quality });
         }
       } catch (e: any) {
         console.error(e);
         draftSave();
-        alert(`Server speichern fehlgeschlagen: ${e?.message || "Failed to fetch"}\nFallback: lokal gespeichert.`);
+        alert(
+          `Server speichern fehlgeschlagen: ${e?.message || "Failed to fetch"}\nFallback: lokal gespeichert.`
+        );
       } finally {
         setServerBusy(false);
       }
     },
-    [keyCandidates, makeUrls, note, quality, preview, file, items, boxes, summary, positions, effectiveKey, rows, draftSave]
+    [
+      keyCandidates,
+      makeUrls,
+      note,
+      quality,
+      preview,
+      file,
+      items,
+      boxes,
+      summary,
+      positions,
+      effectiveKey,
+      rows,
+      draftSave,
+    ]
   );
 
   const loadHistory = React.useCallback(async () => {
     if (!keyCandidates.length) return;
+
     try {
       const urls = makeUrls("/{key}/aufmass-history");
       const { res } = await fetchFirstOk(urls);
       const data = await res.json().catch(() => ({}));
       const hist = data?.data?.history;
+
       if (Array.isArray(hist)) {
         setHistory(
           hist.map((h: any) => ({
@@ -901,8 +1032,10 @@ export default function PDFViewer() {
         alert("Kein Projekt gewählt.");
         return;
       }
+
       try {
         const urls = makeUrls("/{key}/aufmass-history/snapshot");
+
         const rowsForHistory = rows.map((r) => ({
           pos: r.pos,
           text: r.descr,
@@ -937,18 +1070,19 @@ export default function PDFViewer() {
     [keyCandidates, makeUrls, rows, note, setHistory]
   );
 
-  /* ===================== Row editing helpers ===================== */
   function updateRow(id: string, patch: Partial<TakeoffRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
 
   function updateRowTargets(id: string, patch: Partial<Targets>) {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, targets: { ...r.targets, ...patch } } : r)));
+    setRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, targets: { ...r.targets, ...patch } } : r))
+    );
   }
 
   function addRow() {
-    setRows((prev) => {
-      const next: TakeoffRow[] = [
+    setRows((prev) =>
+      normalizeAndReindexAutoPositions([
         ...prev,
         {
           id: crypto.randomUUID(),
@@ -960,9 +1094,8 @@ export default function PDFViewer() {
           source: "manuell",
           targets: defaultTargets(),
         },
-      ];
-      return normalizeAndReindexAutoPositions(next);
-    });
+      ])
+    );
   }
 
   function deleteRow(id: string) {
@@ -979,35 +1112,44 @@ export default function PDFViewer() {
 
   function resetTakeoffOnly() {
     if (!confirm("Takeoff-Daten wirklich zurücksetzen? (PDF bleibt geladen)")) return;
+
     setSummary("");
     setBoxes([]);
     setPositions([]);
     setItems([]);
     setRows([]);
     setPreview(null);
-    draftSave({ preview: null, summary: "", boxes: [], positions: [], items: [], rows: [] });
+
+    draftSave({
+      preview: null,
+      summary: "",
+      boxes: [],
+      positions: [],
+      items: [],
+      rows: [],
+    });
   }
 
-  /* ===================== Analyze (KI) ===================== */
   async function analyze() {
     if (!file) {
       alert("Bitte zuerst ein PDF wählen.");
       return;
     }
+
     if (!keyCandidates.length) {
       alert("Kein Projekt gewählt. (Server-KI braucht ein Projekt)");
       return;
     }
 
     setBusy(true);
+
     try {
-      // 1) PDF -> PNG (Seite 1), tiling
       const q = parseQuality(quality);
       const desired = 3.2 + q * 0.9;
 
       const out = await pdfFirstPageToPng(file, desired, 18_000_000);
       const uploadName = `${safeBaseName(file.name)}.page1.png`;
-      void uploadName; // behalten (Debug/Meta)
+      void uploadName;
 
       setPreview(out.dataUrl);
 
@@ -1019,7 +1161,6 @@ export default function PDFViewer() {
 
       const urls = makeUrls("/{key}/analyze");
 
-      // 2) Tile-Analyse auf dem Server (wie AutoKI)
       const allPositions: PhotoPosition[] = [];
       const allItems: Det[] = [];
       const allBoxes: DetectBox[] = [];
@@ -1028,13 +1169,16 @@ export default function PDFViewer() {
       for (const t of tiles) {
         const fd = new FormData();
         fd.append("file", t.blob, t.name);
-        fd.append("note", `${note}\n[PDFVIEWER TILE ${t.iy + 1}/${t.rows} x ${t.ix + 1}/${t.cols}]`);
+        fd.append(
+          "note",
+          `${note}\n[PDFVIEWER TILE ${t.iy + 1}/${t.rows} x ${t.ix + 1}/${t.cols}]`
+        );
         fd.append("scale", quality);
 
         const { res } = await fetchFirstOk(urls, { method: "POST", body: fd });
         const data = await res.json().catch(() => ({}));
 
-        const summaryChunk: string = String(data?.summary ?? "");
+        const summaryChunk = String(data?.summary ?? "");
         if (summaryChunk) summaries.push(summaryChunk);
 
         const pos: PhotoPosition[] = Array.isArray(data?.positions) ? data.positions : [];
@@ -1046,7 +1190,6 @@ export default function PDFViewer() {
         allBoxes.push(...boxesChunk);
       }
 
-      // 3) Dedupe
       const seenPos = new Set<string>();
       const positionsDedup = allPositions.filter((p) => {
         const k = `${(p.id || "").trim()}|${(p.kurztext || "").trim()}|${(p.einheit || "").trim()}|${Number(p.qty ?? 0)}`;
@@ -1072,7 +1215,6 @@ export default function PDFViewer() {
       setItems(itemsDedup);
       setBoxes(allBoxes);
 
-      // 4) Rows für UI
       const nextRows = takeoffFromBackend({
         positions: positionsDedup,
         items: itemsDedup,
@@ -1080,7 +1222,6 @@ export default function PDFViewer() {
       });
       setRows(nextRows);
 
-      // 5) Save local + server (auto-ki store)
       draftSave({
         preview: out.dataUrl,
         summary: newSummary,
@@ -1098,7 +1239,6 @@ export default function PDFViewer() {
         items: itemsDedup.length ? itemsDedup : [],
       });
 
-      // optional: snapshot history
       try {
         await snapshotHistory(file.name || "pdfviewer");
       } catch {}
@@ -1110,7 +1250,6 @@ export default function PDFViewer() {
     }
   }
 
-  /* ===================== Export: Aufmaß ===================== */
   const exportToAufmass = React.useCallback(async () => {
     if (!projectKey) {
       alert("Kein Projekt gewählt.");
@@ -1135,6 +1274,7 @@ export default function PDFViewer() {
     }
 
     setServerBusy(true);
+
     try {
       const targets = Array.from(new Set([projectUuid, projectKey].filter(Boolean))) as string[];
       if (targets.length) setAufmassLastKey(targets[0]);
@@ -1174,14 +1314,15 @@ export default function PDFViewer() {
     }
   }, [projectKey, projectUuid, rows, makeUrls, nav]);
 
-  /* ===================== Export: Kalkulation / Nachtrag (lokal) ===================== */
   function exportToKalkulationLocal() {
     if (!projectKey) {
       alert("Kein Projekt gewählt.");
       return;
     }
+
     const selected = rows.filter((r) => r.targets?.kalkulation);
     const useRows = selected.length ? selected : rows;
+
     const payload = {
       ts: Date.now(),
       source: "pdfviewer",
@@ -1194,6 +1335,7 @@ export default function PDFViewer() {
         menge: r.qty,
       })),
     };
+
     try {
       localStorage.setItem(KALK_IMPORT_KEY(projectKey), JSON.stringify(payload));
     } catch {}
@@ -1206,8 +1348,10 @@ export default function PDFViewer() {
       alert("Kein Projekt gewählt.");
       return;
     }
+
     const selected = rows.filter((r) => r.targets?.nachtrag);
     const useRows = selected.length ? selected : rows;
+
     const payload = {
       ts: Date.now(),
       source: "pdfviewer",
@@ -1220,6 +1364,7 @@ export default function PDFViewer() {
         menge: r.qty,
       })),
     };
+
     try {
       localStorage.setItem(NACHTRAG_IMPORT_KEY(projectKey), JSON.stringify(payload));
     } catch {}
@@ -1227,7 +1372,6 @@ export default function PDFViewer() {
     alert("Export für Nachträge wurde lokal vorbereitet. (Import-Key gesetzt)");
   }
 
-  /* ===================== Overlay drawing (preview + boxes) ===================== */
   React.useEffect(() => {
     if (!preview) return;
     if (!String(preview).startsWith("data:image/")) return;
@@ -1263,8 +1407,8 @@ export default function PDFViewer() {
 
         bxs.forEach((b) => {
           if (!b.box) return;
-          const [nx, ny, nw, nh] = b.box;
 
+          const [nx, ny, nw, nh] = b.box;
           const x = nx * img.width * ratio;
           const y = ny * img.height * ratio;
           const w = nw * img.width * ratio;
@@ -1275,7 +1419,10 @@ export default function PDFViewer() {
           g.fillRect(x, y, w, h);
           g.strokeRect(x, y, w, h);
 
-          const tag = `${b.label}${b.qty != null ? ` (${b.qty} ${b.unit ?? ""})` : ""} ${prettyScore(b.score)}`;
+          const tag = `${b.label}${
+            b.qty != null ? ` (${b.qty} ${b.unit ?? ""})` : ""
+          } ${prettyScore(b.score)}`;
+
           const tw = g.measureText(tag).width + 10;
           const ty = Math.max(0, y - 18);
 
@@ -1288,10 +1435,11 @@ export default function PDFViewer() {
     };
   }, [preview, boxes]);
 
-  /* ===================== UI helpers ===================== */
   const sumQty = rows.reduce((a, r) => a + (Number(r.qty) || 0), 0);
 
-  const descrModalRow = descrModalRowId ? rows.find((r) => r.id === descrModalRowId) : null;
+  const descrModalRow = descrModalRowId
+    ? rows.find((r) => r.id === descrModalRowId)
+    : null;
 
   const openDescrEditor = (rowId: string) => {
     setDescrModalRowId(rowId);
@@ -1307,7 +1455,6 @@ export default function PDFViewer() {
     const f = e.target.files?.[0] || null;
     if (!f) return;
 
-    // WICHTIG: PDF laden, Takeoff NICHT löschen (sonst "beim Seitenwechsel alles weg")
     await openFromFile(f);
 
     if (effectiveKey) {
@@ -1327,7 +1474,6 @@ export default function PDFViewer() {
 
   return (
     <div className="card" style={{ padding: 12 }}>
-      {/* Description modal */}
       <DescrModal
         open={descrModalOpen}
         title={`Beschreibung bearbeiten ${descrModalRow ? `(${descrModalRow.pos})` : ""}`}
@@ -1340,7 +1486,6 @@ export default function PDFViewer() {
         }}
       />
 
-      {/* Zoom Modal */}
       {zoomOpen && preview && String(preview).startsWith("data:image/") ? (
         <div
           onClick={() => setZoomOpen(false)}
@@ -1409,15 +1554,20 @@ export default function PDFViewer() {
         </div>
       ) : null}
 
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h2 style={{ margin: 0, flex: 1 }}>PDF Viewer – Takeoff / KI Mengenermittlung</h2>
+        <h2 style={{ margin: 0, flex: 1 }}>
+          PDF Viewer – Takeoff / KI Mengenermittlung
+        </h2>
 
         <button
           className="btn"
           onClick={() => void serverLoad()}
           disabled={!projectKey || serverBusy}
-          title={!projectKey ? "Kein Projekt (Server braucht Projekt)" : "Server laden (auto-ki.json)"}
+          title={
+            !projectKey
+              ? "Kein Projekt (Server braucht Projekt)"
+              : "Server laden (auto-ki.json)"
+          }
         >
           {serverBusy ? "…" : "Vom Server laden"}
         </button>
@@ -1426,7 +1576,11 @@ export default function PDFViewer() {
           className="btn"
           onClick={() => void serverSave()}
           disabled={!projectKey || serverBusy}
-          title={!projectKey ? "Kein Projekt (Server braucht Projekt)" : "Server speichern (auto-ki.json)"}
+          title={
+            !projectKey
+              ? "Kein Projekt (Server braucht Projekt)"
+              : "Server speichern (auto-ki.json)"
+          }
         >
           {serverBusy ? "…" : "Speichern"}
         </button>
@@ -1445,13 +1599,19 @@ export default function PDFViewer() {
       </div>
 
       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        API: <code>{API}</code> • Keys: <code>{keyCandidates.join(" | ") || "—"}</code> • LocalKey:{" "}
-        <code>{effectiveKey || "—"}</code>
+        API: <code>{API_BASE || "(relative)"}</code> • Keys: <code>{keyCandidates.join(" | ") || "—"}</code> •
+        LocalKey: <code>{effectiveKey || "—"}</code>
       </div>
 
-      {/* Top controls */}
       <div className="card" style={{ marginTop: 10, padding: 10 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: 10, alignItems: "center" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr auto auto auto",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <input
               ref={fileInputRef}
@@ -1490,7 +1650,12 @@ export default function PDFViewer() {
             />
           </div>
 
-          <button className="btn" type="button" onClick={() => void analyze()} disabled={!file || busy || !projectKey}>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => void analyze()}
+            disabled={!file || busy || !projectKey}
+          >
             {busy ? "Analysiere…" : "KI analysieren"}
           </button>
 
@@ -1519,10 +1684,8 @@ export default function PDFViewer() {
         <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>{status}</div>
       </div>
 
-      {/* Viewer area (BIGGER PDF) */}
       <div className="card" style={{ marginTop: 10, padding: 10 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1.65fr 1fr", gap: 10 }}>
-          {/* Left: PDF canvas preview */}
           <div
             style={{
               border: "1px solid var(--line)",
@@ -1535,13 +1698,26 @@ export default function PDFViewer() {
           >
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <div style={{ fontWeight: 700, flex: 1 }}>PDF Seite</div>
-              <button className="btn" onClick={() => setScaleView((s) => Math.min(6, s * 1.15))} type="button">
+              <button
+                className="btn"
+                onClick={() => setScaleView((s) => Math.min(6, s * 1.15))}
+                type="button"
+              >
                 Zoom +
               </button>
-              <button className="btn" onClick={() => setScaleView((s) => Math.max(0.25, s / 1.15))} type="button">
+              <button
+                className="btn"
+                onClick={() => setScaleView((s) => Math.max(0.25, s / 1.15))}
+                type="button"
+              >
                 Zoom −
               </button>
-              <button className="btn" onClick={() => void goto(pageNum - 1)} disabled={!pdf || pageNum <= 1} type="button">
+              <button
+                className="btn"
+                onClick={() => void goto(pageNum - 1)}
+                disabled={!pdf || pageNum <= 1}
+                type="button"
+              >
                 ‹
               </button>
               <div className="btn" style={{ cursor: "default" }}>
@@ -1568,7 +1744,6 @@ export default function PDFViewer() {
             />
           </div>
 
-          {/* Right: KI PNG preview */}
           <div
             style={{
               border: "1px solid var(--line)",
@@ -1598,7 +1773,6 @@ export default function PDFViewer() {
           </div>
         </div>
 
-        {/* Summary */}
         {summary ? (
           <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85 }}>
             <b>KI:</b> {summary}
@@ -1606,12 +1780,20 @@ export default function PDFViewer() {
         ) : null}
       </div>
 
-      {/* Rows table */}
       <div className="card" style={{ marginTop: 12, padding: 0, overflow: "auto" }}>
-        <div style={{ padding: 12, borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            padding: 12,
+            borderBottom: "1px solid var(--line)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
           <div style={{ fontWeight: 700, flex: 1 }}>Takeoff Positionen</div>
           <div style={{ fontSize: 12, opacity: 0.75 }}>
-            Summe Menge: <b>{Number(sumQty || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })}</b>
+            Summe Menge:{" "}
+            <b>{Number(sumQty || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })}</b>
           </div>
 
           <button className="btn" onClick={() => void exportToAufmass()} disabled={!projectKey || serverBusy}>
@@ -1795,7 +1977,6 @@ export default function PDFViewer() {
         )}
       </div>
 
-      {/* Boxes preview table (optional) */}
       <div className="card" style={{ marginTop: 12, padding: 0, overflow: "auto" }}>
         <div style={{ padding: 12, borderBottom: "1px solid var(--line)" }}>
           <div style={{ fontWeight: 700 }}>KI Bauteile (Boxes)</div>
@@ -1830,11 +2011,12 @@ export default function PDFViewer() {
         )}
       </div>
 
-      {/* History */}
       <div className="card" style={{ marginTop: 12, padding: 10 }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>Verlauf (Snapshots)</div>
         {!projectKey ? (
-          <div style={{ fontSize: 13, opacity: 0.75 }}>Kein Projekt gewählt (Server-Funktionen deaktiviert).</div>
+          <div style={{ fontSize: 13, opacity: 0.75 }}>
+            Kein Projekt gewählt (Server-Funktionen deaktiviert).
+          </div>
         ) : history.length === 0 ? (
           <div style={{ fontSize: 13, opacity: 0.75 }}>Noch keine Stände.</div>
         ) : (
@@ -1890,3 +2072,13 @@ const miniLabel: React.CSSProperties = {
   fontSize: 12,
   opacity: 0.9,
 };
+
+
+
+
+
+
+
+
+
+

@@ -9,6 +9,7 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Sharing from "expo-sharing";
@@ -1290,12 +1291,16 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
         },
         note: saved.note || "",
         extraBlocks,
-        shareAfterCreate: true,
+        shareAfterCreate: false,
       });
 
       const nextDoc = { ...saved, pdfUri };
       setDoc(nextDoc);
       await persistDoc(nextDoc);
+
+      if (pdfUri) {
+        await Linking.openURL(pdfUri);
+      }
     } catch (e) {
       console.log("PDF RECHNUNG ERROR", e);
       Alert.alert("Fehler", "PDF konnte nicht erstellt werden.");
@@ -1312,7 +1317,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
       const fileNameBase = sanitizeFileBase(saved.rechnungNr || "schlussrechnung");
       const finalRest = Math.max(0, Number(saved?.brutto || 0) - bezahlt);
 
-      await buildDocumentPdf({
+      const { pdfUri } = await buildDocumentPdf({
         type: "SCHLUSSRECHNUNG",
         projectCode: saved.projectCode || projectCode,
         fileName: `${fileNameBase}_schlussrechnung.pdf`,
@@ -1366,8 +1371,13 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
           },
         ],
         note: saved.note || "",
-        shareAfterCreate: true,
+        shareAfterCreate: false,
       });
+
+      if (pdfUri) {
+        await Linking.openURL(pdfUri);
+      }
+    
     } catch (e) {
       console.log("PDF SCHLUSSRECHNUNG ERROR", e);
       Alert.alert("Fehler", "Schlussrechnung-PDF konnte nicht erstellt werden.");
@@ -1491,7 +1501,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
           },
         ],
         note: item.note || saved.note || "",
-        shareAfterCreate: true,
+        shareAfterCreate: false,
       });
 
       const updatedAbschlaege = (saved.abschlaege || []).map((a: AbschlagItem) =>
@@ -1505,6 +1515,10 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
 
       setDoc(nextDoc);
       await persistDoc(nextDoc);
+
+      if (pdfUri) {
+        await Linking.openURL(pdfUri);
+      }
     } catch (e) {
       console.log("PDF ABSCHLAG ERROR", e);
       Alert.alert("Fehler", "Abschlag-PDF konnte nicht erstellt werden.");
@@ -1666,7 +1680,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             style={s.linkedPdfBtn}
             onPress={() => void shareLinkedMengenPdf()}
           >
-            <Text style={s.btnTxt}>Mengenermittlung PDF teilen</Text>
+            <Text style={s.btnTxt}>Mengenermittlung PDF</Text>
           </Pressable>
         ) : null}
 
@@ -1783,7 +1797,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
           style={[s.input, s.textArea]}
           multiline
           placeholder="Notiz / Hinweis"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
         />
 
         <View style={s.sumBox}>
@@ -1830,7 +1844,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             onChangeText={setAbschlagNoteInput}
             style={[s.input, { marginTop: 8, marginBottom: 0 }]}
             placeholder="Hinweis zum Abschlag"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <Pressable style={s.addAbschlagBtn} onPress={() => void addAbschlag()}>
@@ -1867,7 +1881,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   onPress={() => void createAbschlagPdf(a)}
                 >
                   <Text style={s.abschlagBtnTxt}>
-                    {a.pdfUri ? "PDF teilen" : "PDF erstellen"}
+                    {a.pdfUri ? "PDF" : "PDF erstellen"}
                   </Text>
                 </Pressable>
 
@@ -1886,7 +1900,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
 
         <Pressable style={s.btn} onPress={exportPdf} disabled={busy}>
           <Text style={s.btnTxt}>
-            {busy ? "Bitte warten..." : "Rechnung PDF exportieren"}
+            {busy ? "Bitte warten..." : "Rechnung PDF"}
           </Text>
         </Pressable>
 
@@ -1896,7 +1910,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
           disabled={busy}
         >
           <Text style={s.btnTxt}>
-            {busy ? "Bitte warten..." : "Schlussrechnung PDF exportieren"}
+            {busy ? "Bitte warten..." : "Schlussrechnung PDF"}
           </Text>
         </Pressable>
 
@@ -1917,7 +1931,7 @@ function Input({ label, v, k, set }: any) {
         onChangeText={(t) => set((p: any) => ({ ...p, [k]: t }))}
         style={s.input}
         placeholder={label}
-        placeholderTextColor="#B8C1CC"
+        placeholderTextColor={COLORS.sub}
       />
     </>
   );
@@ -1938,7 +1952,7 @@ function InputSmall({
       onChangeText={onChange}
       style={s.inputSmall}
       placeholder={placeholder}
-      placeholderTextColor="#B8C1CC"
+      placeholderTextColor={COLORS.sub}
     />
   );
 }
@@ -2011,7 +2025,7 @@ const s = StyleSheet.create({
   },
 
   linkedPdfBtn: {
-    backgroundColor: "#0f766e",
+    backgroundColor: COLORS.success,
     padding: 12,
     borderRadius: 10,
     marginBottom: 12,
@@ -2051,7 +2065,7 @@ const s = StyleSheet.create({
   },
 
   importBtnAlt: {
-    backgroundColor: "#0F766E",
+    backgroundColor: COLORS.success,
   },
 
   importBtnTxt: {
@@ -2127,14 +2141,14 @@ const s = StyleSheet.create({
   },
 
   removeBtn: {
-    backgroundColor: "#fee2e2",
+    backgroundColor: COLORS.dangerBg,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
 
   removeBtnTxt: {
-    color: "#b91c1c",
+    color: COLORS.danger,
     fontWeight: "900",
     fontSize: 12,
   },
@@ -2146,14 +2160,14 @@ const s = StyleSheet.create({
   },
 
   addBtn: {
-    backgroundColor: "#1d4ed8",
+    backgroundColor: COLORS.accent,
     padding: 12,
     borderRadius: 10,
     marginTop: 4,
   },
 
   addBtnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     textAlign: "center",
     fontWeight: "900",
   },
@@ -2219,7 +2233,7 @@ const s = StyleSheet.create({
   },
 
   addAbschlagBtn: {
-    backgroundColor: "#2563eb",
+    backgroundColor: COLORS.accent,
     padding: 12,
     borderRadius: 10,
     marginTop: 10,
@@ -2274,7 +2288,7 @@ const s = StyleSheet.create({
 
   abschlagBtnPrimary: {
     flex: 1,
-    backgroundColor: "#0f4c81",
+    backgroundColor: COLORS.accentDark,
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 10,
@@ -2282,27 +2296,27 @@ const s = StyleSheet.create({
 
   abschlagBtnDanger: {
     flex: 1,
-    backgroundColor: "#dc2626",
+    backgroundColor: COLORS.danger,
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 10,
   },
 
   abschlagBtnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     textAlign: "center",
     fontWeight: "900",
   },
 
   btn: {
-    backgroundColor: "#0ea5e9",
+    backgroundColor: COLORS.accent,
     padding: 12,
     borderRadius: 10,
     marginTop: 14,
   },
 
   btnSecondary: {
-    backgroundColor: "#334155",
+    backgroundColor: COLORS.sub,
     padding: 12,
     borderRadius: 10,
     marginTop: 10,
@@ -2316,11 +2330,29 @@ const s = StyleSheet.create({
   },
 
   btnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     textAlign: "center",
     fontWeight: "900",
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

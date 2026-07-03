@@ -1,7 +1,7 @@
 ﻿// apps/mobile/App.tsx
 import "react-native-gesture-handler";
 import React, { useEffect } from "react";
-import { View, StatusBar } from "react-native";
+import { View, StatusBar, Pressable, Text } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -167,6 +167,8 @@ function withGlobalKi(ScreenComponent: any, screenName: string) {
       params.title || params.projectTitle || params.name || screenName || "RLC Mobile"
     ).trim();
 
+    const autoOpenKi = screenName !== "Inbox" && screenName !== "EingangPruefung";
+
     const kiContext =
       KI_MODULE_CONTEXTS[screenName] || {
         module: screenName,
@@ -183,7 +185,7 @@ function withGlobalKi(ScreenComponent: any, screenName: string) {
           projectCode={projectCode || undefined}
           title={title}
           screen={screenName}
-          autoOpen={true}
+          autoOpen={autoOpenKi}
           autoOpenDelayMs={700}
           {...({ kiContext } as any)}
         />
@@ -251,7 +253,7 @@ export default function App() {
       <StatusBar barStyle="dark-content" backgroundColor="#F4F7FB" />
       <Stack.Navigator
         initialRouteName="Start"
-        screenOptions={{
+        screenOptions={{ headerBackTitle: "Zurück",
           headerStyle: { backgroundColor: "#F4F7FB" },
           headerTintColor: "#0F172A",
           headerTitleStyle: { fontWeight: "900" },
@@ -288,7 +290,18 @@ export default function App() {
         <Stack.Screen name="CompanyImport" component={CompanyImportWithKi} />
 
         {/* PROJECTS */}
-        <Stack.Screen name="Projects" component={ProjectsWithKi} />
+        <Stack.Screen
+          name="Projects"
+          component={ProjectsWithKi}
+          options={({ navigation }) => ({
+            title: "Projekte",
+            headerLeft: () => (
+              <Pressable onPress={() => navigation.navigate("Start" as never)} style={{ paddingRight: 12 }}>
+                <Text style={{ fontWeight: "900", color: "#0F172A" }}>‹ Zurück</Text>
+              </Pressable>
+            ),
+          })}
+        />
         <Stack.Screen name="ProjectHome" component={ProjectHomeScreen} />
 
         {/* AUTH */}
@@ -437,6 +450,13 @@ export default function App() {
     </NavigationContainer>
   );
 }
+
+
+
+
+
+
+
 
 
 

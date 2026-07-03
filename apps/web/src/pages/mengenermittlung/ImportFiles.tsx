@@ -1,11 +1,11 @@
+import { API_BASE, apiUrl } from "../../lib/apiBase";
 // apps/web/src/pages/mengenermittlung/ImportFiles.tsx
 import React from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min?url";
 
 // ⚙️ API-Basis wie in ManuellFoto.tsx
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL || "http://localhost:4000/api";
+
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -52,17 +52,25 @@ function PdfPreview({ file, zoom }: { file: File; zoom: number }) {
         const canvas = canvasRef.current;
         if (!canvas || cancelled) return;
 
-        const ctx = canvas.getContext("2d")!;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
         canvas.width = Math.ceil(viewport.width);
         canvas.height = Math.ceil(viewport.height);
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page
+          .render({
+            canvas,
+            canvasContext: ctx,
+            viewport,
+          } as any)
+          .promise;
       } catch (err) {
         console.error("PDF preview error:", err);
       }
     }
 
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
@@ -93,7 +101,9 @@ function DxfPreview({
 
     const { bbox, lines = [], lwpolylines = [], circles = [], arcs = [] } = overlays;
     const canvas = ref.current;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
     const pad = 10;
 
     // Arbeitsfläche
@@ -114,7 +124,6 @@ function DxfPreview({
     const X = (x: number) => (x + tx) * s + pad;
     const Y = (y: number) => H - ((y + ty) * s + pad);
 
-    // render
     ctx.clearRect(0, 0, W, H);
     ctx.lineWidth = 1;
 
@@ -130,9 +139,10 @@ function DxfPreview({
     lwpolylines.forEach((p) => {
       ctx.beginPath();
       p.pts.forEach((pt, i) => {
-        const xx = X(pt.x),
-          yy = Y(pt.y);
-        i ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy);
+        const xx = X(pt.x);
+        const yy = Y(pt.y);
+        if (i) ctx.lineTo(xx, yy);
+        else ctx.moveTo(xx, yy);
       });
       if (p.closed) ctx.closePath();
       ctx.stroke();
@@ -145,12 +155,12 @@ function DxfPreview({
       ctx.stroke();
     });
 
-    // Bögen (einfach, ohne Bulges)
+    // Bögen
     arcs.forEach((a) => {
       const sa = (a.start * Math.PI) / 180;
       const ea = (a.end * Math.PI) / 180;
       ctx.beginPath();
-      ctx.arc(X(a.c.x), Y(a.c.y), a.r * s, -ea, -sa, true); // invertierte Y-Achse
+      ctx.arc(X(a.c.x), Y(a.c.y), a.r * s, -ea, -sa, true);
       ctx.stroke();
     });
   }, [overlays, visible, zoom]);
@@ -174,40 +184,39 @@ export default function ImportFiles() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
- async function analyze() {
-  try {
-    setLoading(true);
-    setError(null);
-    setItems([]);
-    setDxfOverlay(null);
+  async function analyze() {
+    try {
+      setLoading(true);
+      setError(null);
+      setItems([]);
+      setDxfOverlay(null);
 
-    if (!file) return;
+      if (!file) return;
 
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("note", note);
-    fd.append("scale", String(scale));
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("note", note);
+      fd.append("scale", String(scale));
 
-    const res = await fetch(`${API_BASE}/import/parse`, {
-      method: "POST",
-      body: fd,
-    });
+      const res = await fetch(`${API_BASE}/import/parse`, {
+        method: "POST",
+        body: fd,
+      });
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.ok === false) {
-      throw new Error(data.error || `HTTP ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      setItems((data.items || []) as PreviewItem[]);
+      if (data.dxfoverlay) setDxfOverlay(data.dxfoverlay as DxfOverlays);
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message ?? "Analyse fehlgeschlagen");
+    } finally {
+      setLoading(false);
     }
-
-    setItems((data.items || []) as PreviewItem[]);
-    if (data.dxfoverlay) setDxfOverlay(data.dxfoverlay as DxfOverlays);
-  } catch (e: any) {
-    console.error(e);
-    setError(e?.message ?? "Analyse fehlgeschlagen");
-  } finally {
-    setLoading(false);
   }
-}
-
 
   // ====== Styles für Tabelle ======
   const th: React.CSSProperties = {
@@ -217,6 +226,7 @@ export default function ImportFiles() {
     fontSize: 13,
     whiteSpace: "nowrap",
   };
+
   const tdStyle: React.CSSProperties = {
     padding: "6px 10px",
     borderBottom: "1px solid var(--line)",
@@ -354,3 +364,9 @@ export default function ImportFiles() {
     </div>
   );
 }
+
+
+
+
+
+

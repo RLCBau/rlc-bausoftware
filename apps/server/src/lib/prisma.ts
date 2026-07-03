@@ -9,7 +9,7 @@ declare global {
 /* Deutsch: Log-Level aus ENV ableiten (Fallback auf bestehende Liste) */
 function resolvePrismaLog(): any {
   const env = process.env.PRISMA_LOG?.trim();
-  if (!env) return ["query", "info", "warn", "error"];
+  if (!env) return ["warn", "error"];
   return env.split(",").map((s) => s.trim());
 }
 

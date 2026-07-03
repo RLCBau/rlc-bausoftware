@@ -1,13 +1,15 @@
+import { API_BASE } from "../../lib/apiBase";
 // apps/web/src/pages/cad/CADViewer.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useProject } from "../../store/useProject";
 
-const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+/* ================== API ================== */
+function apiUrl(path: string) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${p}` : p;
+}
 
-/** ================== Types ================== */
+/* ================== Types ================== */
 type V2 = { x: number; y: number };
 
 type TakeoffFeature = {
@@ -37,12 +39,17 @@ type PathsResponse = {
     bricscadDir: string;
     utmCsvPath: string;
     takeoffJsonPath: string;
-    snapshotPngPath?: string; // ✅ NEW (server paths endpoint may include it)
+    snapshotPngPath?: string;
   };
   message?: string;
 };
 
-type UTMPoint = { id: string; x: number; y: number; label?: string };
+type UTMPoint = {
+  id: string;
+  x: number;
+  y: number;
+  label?: string;
+};
 
 type LvPosition = {
   id: string;
@@ -68,10 +75,10 @@ type LvSuggestion = {
   pos: string;
   text: string;
   unit: string;
-  score: number; // 0..1
+  score: number;
 };
 
-/** ================== Small UI ================== */
+/* ================== UI ================== */
 const ui = {
   bg: "#f3f4f6",
   panel: "#ffffff",
@@ -79,7 +86,6 @@ const ui = {
   text: "#111827",
   sub: "#6b7280",
   shadow: "0 10px 24px rgba(17,24,39,0.08)",
-  radius: 14,
   accent: "#111827",
   warn: "#b91c1c",
 };
@@ -210,6 +216,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   );
 }
 
+/* ================== Utils ================== */
 function clamp(n: number, a: number, b: number) {
   return Math.max(a, Math.min(b, n));
 }
@@ -237,12 +244,23 @@ function polyArea(pts: V2[]) {
   return Math.abs(s) / 2;
 }
 
-/** CSV parser minimal (server already provides utm.csv) */
+function getCurrentProject(ctx: any) {
+  return (
+    ctx?.currentProject ??
+    ctx?.selectedProject ??
+    ctx?.current ??
+    ctx?.project ??
+    (typeof ctx?.getCurrentProject === "function" ? ctx.getCurrentProject() : null)
+  );
+}
+
+/* ================== CSV / UTM ================== */
 function parseUtmCsvFlexible(text: string): UTMPoint[] {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith("#"));
+
   if (!lines.length) return [];
 
   const first = lines[0];
@@ -261,14 +279,13 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
 
   if (hasHeader) {
     const header = first.split(delimiter).map((x) => x.trim().toLowerCase());
-    const eIdx =
-      header.findIndex((h) =>
-        ["e", "east", "easting", "rechtswert", "x"].includes(h)
-      ) ?? -1;
-    const nIdx =
-      header.findIndex((h) =>
-        ["n", "north", "northing", "hochwert", "y"].includes(h)
-      ) ?? -1;
+
+    const eIdx = header.findIndex((h) =>
+      ["e", "east", "easting", "rechtswert", "x"].includes(h)
+    );
+    const nIdx = header.findIndex((h) =>
+      ["n", "north", "northing", "hochwert", "y"].includes(h)
+    );
     const idIdx = header.findIndex((h) =>
       ["id", "name", "punkt", "label"].includes(h)
     );
@@ -278,8 +295,10 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
       const E = Number(String(c[eIdx] ?? "").replace(",", "."));
       const N = Number(String(c[nIdx] ?? "").replace(",", "."));
       if (!Number.isFinite(E) || !Number.isFinite(N)) continue;
+
       const id =
         idIdx >= 0 ? String(c[idIdx] ?? "").trim() : `P_${pts.length + 1}`;
+
       pts.push({
         id: id || `P_${pts.length + 1}`,
         x: E,
@@ -287,6 +306,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
         label: id || undefined,
       });
     }
+
     return pts;
   }
 
@@ -315,6 +335,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
     }
 
     if (E === null || N === null) continue;
+
     pts.push({
       id: id || `P_${pts.length + 1}`,
       x: E,
@@ -326,7 +347,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
   return pts;
 }
 
-/** ===== LV helper ===== */
+/* ================== Fetch / LV helpers ================== */
 async function fetchJson(url: string) {
   const res = await fetch(url);
   const txt = await res.text().catch(() => "");
@@ -361,8 +382,7 @@ function mapAnyToLvPositions(list: any[]): LvPosition[] {
 function extractLvListFromNewEndpoint(data: any): any[] {
   const rows = Array.isArray(data?.rows) ? data.rows : [];
   const latest = rows[0];
-  const positions = Array.isArray(latest?.positions) ? latest.positions : [];
-  return positions;
+  return Array.isArray(latest?.positions) ? latest.positions : [];
 }
 
 function extractLvListFromOldEndpoint(data: any): any[] {
@@ -372,7 +392,7 @@ function extractLvListFromOldEndpoint(data: any): any[] {
   return [];
 }
 
-/** ===== KI helpers ===== */
+/* ================== KI helpers ================== */
 function normText(s: string) {
   return String(s || "")
     .toLowerCase()
@@ -394,11 +414,15 @@ function scoreMatch(query: string, text: string) {
 
   const tset = new Set(t);
   let hit = 0;
-  for (const w of q) if (tset.has(w)) hit++;
+  for (const w of q) {
+    if (tset.has(w)) hit++;
+  }
 
   const nt = normText(text);
   let substr = 0;
-  for (const w of q) if (nt.includes(w)) substr++;
+  for (const w of q) {
+    if (nt.includes(w)) substr++;
+  }
 
   const base = hit / q.length;
   const bonus = Math.min(0.25, substr * 0.05);
@@ -418,72 +442,68 @@ function uiUnitLabel(u: string) {
   return u === "m2" ? "m²" : u;
 }
 
-/** ================== Component ================== */
+/* ================== Component ================== */
 export default function CADViewer() {
-  const ctx: any = useProject();
-  const current = ctx?.currentProject || null;
+  const projectCtx: any = useProject();
+  const current = getCurrentProject(projectCtx);
 
-  const autoProjectId = (current?.code || "").trim();
+  const autoProjectId = String(current?.code || "").trim();
 
   const [projectId, setProjectId] = useState<string>(() => {
     const urlPid =
       new URLSearchParams(window.location.search).get("projectId") || "";
+
     const lsPid =
       localStorage.getItem("rlc_projectId") ||
       localStorage.getItem("rlc_active_project") ||
       localStorage.getItem("projectId") ||
       "";
+
     return (autoProjectId || urlPid || lsPid || "").trim();
   });
 
   useEffect(() => {
-    if (autoProjectId && autoProjectId !== projectId) setProjectId(autoProjectId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoProjectId]);
+    if (autoProjectId && autoProjectId !== projectId) {
+      setProjectId(autoProjectId);
+    }
+  }, [autoProjectId, projectId]);
 
-  const [status, setStatus] = useState<string>("Bereit");
+  const [status, setStatus] = useState("Bereit");
   const [paths, setPaths] = useState<PathsResponse["paths"] | null>(null);
 
-  const [utmCsv, setUtmCsv] = useState<string>("");
+  const [utmCsv, setUtmCsv] = useState("");
   const [utmPoints, setUtmPoints] = useState<UTMPoint[]>([]);
 
   const [takeoff, setTakeoff] = useState<TakeoffPayload | null>(null);
   const [features, setFeatures] = useState<TakeoffFeature[]>([]);
-  const [selectedFeatureId, setSelectedFeatureId] = useState<string>("");
+  const [selectedFeatureId, setSelectedFeatureId] = useState("");
 
-  // Snapshot
-  const [snapshotTick, setSnapshotTick] = useState<number>(0);
-  const [snapshotErr, setSnapshotErr] = useState<string>(""); // show friendly message
+  const [snapshotTick, setSnapshotTick] = useState(0);
+  const [snapshotErr, setSnapshotErr] = useState("");
 
   const selectedFeature = useMemo(
     () => features.find((f) => (f.id || "") === selectedFeatureId) || null,
     [features, selectedFeatureId]
   );
 
-  // Aufmaß mapping manual
-  const [pos, setPos] = useState<string>("001");
-  const [kurz, setKurz] = useState<string>("BricsCAD Takeoff");
+  const [pos, setPos] = useState("001");
+  const [kurz, setKurz] = useState("BricsCAD Takeoff");
   const [unit, setUnit] = useState<"m" | "m2" | "Stk">("m");
-  const [factor, setFactor] = useState<number>(1);
+  const [factor, setFactor] = useState(1);
 
-  // LV for KI Step B
   const [lvPositions, setLvPositions] = useState<LvPosition[]>([]);
-  const [lvState, setLvState] = useState<"idle" | "loading" | "ok" | "error">(
-    "idle"
-  );
+  const [lvState, setLvState] = useState<"idle" | "loading" | "ok" | "error">("idle");
 
-  // KI UI
-  const [kiSelectedKey, setKiSelectedKey] = useState<string>("");
-  const [chosenLvPos, setChosenLvPos] = useState<string>("");
+  const [kiSelectedKey, setKiSelectedKey] = useState("");
+  const [chosenLvPos, setChosenLvPos] = useState("");
 
-  // KI overrides
-  const [kiPos, setKiPos] = useState<string>("001");
-  const [kiText, setKiText] = useState<string>("KI: —");
+  const [kiPos, setKiPos] = useState("001");
+  const [kiText, setKiText] = useState("KI: —");
   const [kiUnit, setKiUnit] = useState<"m" | "m2" | "Stk">("m");
-  const [kiFactor, setKiFactor] = useState<number>(1);
+  const [kiFactor, setKiFactor] = useState(1);
 
   const TAKEOFF_CACHE_KEY = useMemo(() => {
-    const pid = (projectId || "").trim();
+    const pid = String(projectId || "").trim();
     return pid ? `RLC_TAKEOFF_CACHE_${pid}` : "";
   }, [projectId]);
 
@@ -491,7 +511,7 @@ export default function CADViewer() {
     const v = projectId.trim();
     localStorage.setItem("rlc_projectId", v);
     setStatus("Projekt gesetzt");
-    alert("Projekt gesetzt: " + (v || "-"));
+    alert(`Projekt gesetzt: ${v || "-"}`);
   };
 
   const normalizeFeatures = (payload: TakeoffPayload): TakeoffFeature[] => {
@@ -504,14 +524,16 @@ export default function CADViewer() {
       : [];
 
     return feats.map((f, idx) => {
-      const id = (f.id || f.name || `F_${idx + 1}`).toString();
+      const id = String(f.id || f.name || `F_${idx + 1}`);
       const pts = Array.isArray(f.pts) ? f.pts : [];
+
       const length =
         typeof f.length === "number"
           ? f.length
           : pts.length >= 2
           ? polylineLength(pts)
           : 0;
+
       const area =
         typeof f.area === "number"
           ? f.area
@@ -523,7 +545,6 @@ export default function CADViewer() {
     });
   };
 
-  /** ===== Restore Takeoff cache on mount / project change ===== */
   useEffect(() => {
     if (!TAKEOFF_CACHE_KEY) return;
 
@@ -546,10 +567,8 @@ export default function CADViewer() {
     } catch {
       // ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [TAKEOFF_CACHE_KEY]);
 
-  /** ===== Load LV list for Step B ===== */
   useEffect(() => {
     const projectDbId = current?.id ? String(current.id) : "";
     if (!projectDbId) {
@@ -559,17 +578,18 @@ export default function CADViewer() {
     }
 
     let cancelled = false;
+
     const load = async () => {
       setLvState("loading");
+
       try {
         try {
           const data = await fetchJson(
-            `${API}/api/projects/${encodeURIComponent(
-              projectDbId
-            )}/lv?page=1&pageSize=200`
+            apiUrl(`/api/projects/${encodeURIComponent(projectDbId)}/lv?page=1&pageSize=200`)
           );
           const list = extractLvListFromNewEndpoint(data);
           const mapped = mapAnyToLvPositions(list);
+
           if (!cancelled) {
             setLvPositions(mapped);
             setLvState("ok");
@@ -580,10 +600,11 @@ export default function CADViewer() {
         }
 
         const legacy = await fetchJson(
-          `${API}/api/project-lv/${encodeURIComponent(projectDbId)}`
+          apiUrl(`/api/project-lv/${encodeURIComponent(projectDbId)}`)
         );
         const listLegacy = extractLvListFromOldEndpoint(legacy);
         const mappedLegacy = mapAnyToLvPositions(listLegacy);
+
         if (!cancelled) {
           setLvPositions(mappedLegacy);
           setLvState("ok");
@@ -596,24 +617,33 @@ export default function CADViewer() {
       }
     };
 
-    load();
+    void load();
+
     return () => {
       cancelled = true;
     };
   }, [current?.id]);
 
   const loadPaths = async () => {
-    if (!projectId) return alert("Kein Projekt gewählt (projectId).");
+    if (!projectId) {
+      alert("Kein Projekt gewählt (projectId).");
+      return;
+    }
+
     setStatus("Paths laden...");
+
     try {
       const res = await fetch(
-        `${API}/api/bricscad/paths?projectId=${encodeURIComponent(projectId)}`
+        apiUrl(`/api/bricscad/paths?projectId=${encodeURIComponent(projectId)}`)
       );
       const j = (await res.json().catch(() => null)) as PathsResponse | null;
+
       if (!res.ok || !j?.ok) {
         setStatus("Paths Fehler");
-        return alert(j?.message || "Paths laden fehlgeschlagen.");
+        alert(j?.message || "Paths laden fehlgeschlagen.");
+        return;
       }
+
       setPaths(j.paths || null);
       setStatus("Paths geladen");
     } catch (e: any) {
@@ -623,17 +653,25 @@ export default function CADViewer() {
   };
 
   const loadUtm = async () => {
-    if (!projectId) return alert("Kein Projekt gewählt (projectId).");
+    if (!projectId) {
+      alert("Kein Projekt gewählt (projectId).");
+      return;
+    }
+
     setStatus("UTM laden...");
+
     try {
       const res = await fetch(
-        `${API}/api/bricscad/utm?projectId=${encodeURIComponent(projectId)}`
+        apiUrl(`/api/bricscad/utm?projectId=${encodeURIComponent(projectId)}`)
       );
       const j = (await res.json().catch(() => null)) as any;
+
       if (!res.ok || !j?.ok) {
         setStatus("UTM Fehler");
-        return alert(j?.message || "UTM laden fehlgeschlagen.");
+        alert(j?.message || "UTM laden fehlgeschlagen.");
+        return;
       }
+
       const csv = String(j.csv || "");
       setUtmCsv(csv);
       const pts = parseUtmCsvFlexible(csv);
@@ -647,21 +685,28 @@ export default function CADViewer() {
 
   const reloadSnapshot = () => {
     setSnapshotErr("");
-    setSnapshotTick(Date.now()); // ✅ real cache buster
+    setSnapshotTick(Date.now());
     setStatus("Snapshot reload");
   };
 
   const loadTakeoff = async () => {
-    if (!projectId) return alert("Kein Projekt gewählt (projectId).");
+    if (!projectId) {
+      alert("Kein Projekt gewählt (projectId).");
+      return;
+    }
+
     setStatus("Takeoff laden...");
+
     try {
       const res = await fetch(
-        `${API}/api/bricscad/takeoff?projectId=${encodeURIComponent(projectId)}`
+        apiUrl(`/api/bricscad/takeoff?projectId=${encodeURIComponent(projectId)}`)
       );
       const j = (await res.json().catch(() => null)) as any;
+
       if (!res.ok || !j?.ok) {
         setStatus("Takeoff Fehler");
-        return alert(j?.message || "Takeoff laden fehlgeschlagen.");
+        alert(j?.message || "Takeoff laden fehlgeschlagen.");
+        return;
       }
 
       const payload = (j.data || j) as TakeoffPayload;
@@ -679,7 +724,6 @@ export default function CADViewer() {
         );
       }
 
-      // ✅ convenience: after takeoff load, refresh snapshot too
       reloadSnapshot();
     } catch (e: any) {
       setStatus("Takeoff Fehler");
@@ -688,13 +732,19 @@ export default function CADViewer() {
   };
 
   const openBricsCAD = async () => {
-    if (!projectId) return alert("Kein Projekt gewählt (projectId).");
+    if (!projectId) {
+      alert("Kein Projekt gewählt (projectId).");
+      return;
+    }
+
     setStatus("BricsCAD öffnen...");
+
     try {
       const res = await fetch(
-        `${API}/api/bricscad/open?projectId=${encodeURIComponent(projectId)}`
+        apiUrl(`/api/bricscad/open?projectId=${encodeURIComponent(projectId)}`)
       );
       const txt = await res.text().catch(() => "");
+
       let j: any = null;
       try {
         j = txt ? JSON.parse(txt) : null;
@@ -705,8 +755,8 @@ export default function CADViewer() {
       if (!res.ok || (j && j.ok === false)) {
         setStatus("BricsCAD open nicht verfügbar");
         alert(
-          (j?.message ||
-            "Server-Endpoint /api/bricscad/open ist nicht verfügbar.") as string
+          j?.message ||
+            "Server-Endpoint /api/bricscad/open ist nicht verfügbar."
         );
         return;
       }
@@ -721,10 +771,11 @@ export default function CADViewer() {
 
   const qtyPreview = useMemo(() => {
     if (!selectedFeature) return 0;
+
     const pts = Array.isArray(selectedFeature.pts) ? selectedFeature.pts : [];
     const length =
-      selectedFeature.length ??
-      (pts.length >= 2 ? polylineLength(pts) : 0);
+      selectedFeature.length ?? (pts.length >= 2 ? polylineLength(pts) : 0);
+
     const area =
       selectedFeature.area ??
       ((selectedFeature.kind === "polygon" || selectedFeature.closed) &&
@@ -743,18 +794,22 @@ export default function CADViewer() {
     unit?: any;
     qty?: number;
   }) => {
-    // ✅ usa sempre il filesystem key coerente: prima code, poi fallback
-    const fsProjectKey = String(
-      (current?.code || projectId || "").trim()
-    );
+    const fsProjectKey = String((current?.code || projectId || "").trim());
 
-    if (!fsProjectKey) return alert("Kein Projekt gewählt (projectId).");
+    if (!fsProjectKey) {
+      alert("Kein Projekt gewählt (projectId).");
+      return;
+    }
 
     const finalPos = String(override?.pos ?? pos).trim();
-    if (!finalPos) return alert("Positionsnummer fehlt.");
+    if (!finalPos) {
+      alert("Positionsnummer fehlt.");
+      return;
+    }
 
     if (!selectedFeature && typeof override?.qty !== "number") {
-      return alert("Keine Takeoff-Feature ausgewählt.");
+      alert("Keine Takeoff-Feature ausgewählt.");
+      return;
     }
 
     const length = selectedFeature?.length ?? 0;
@@ -771,10 +826,7 @@ export default function CADViewer() {
 
     const f = Number.isFinite(factor) ? factor : 1;
     const finalUnit = (override?.unit ?? unit) as "m" | "m2" | "Stk";
-    const finalText = String(
-      override?.text ?? kurz ?? "BricsCAD Takeoff"
-    ).trim();
-
+    const finalText = String(override?.text ?? kurz ?? "BricsCAD Takeoff").trim();
     const qtyFinal = qtyBase * (typeof override?.qty === "number" ? 1 : f);
 
     const row = {
@@ -808,13 +860,13 @@ export default function CADViewer() {
 
       const txt = await res.text().catch(() => "");
       let j: any = null;
+
       try {
         j = txt ? JSON.parse(txt) : null;
       } catch {
         j = null;
       }
 
-      // ✅ criterio "ok" più tollerante
       const ok =
         res.ok &&
         (j?.ok === true ||
@@ -829,17 +881,18 @@ export default function CADViewer() {
       const res = await fetch(url);
       const txt = await res.text().catch(() => "");
       let j: any = null;
+
       try {
         j = txt ? JSON.parse(txt) : null;
       } catch {
         j = null;
       }
+
       return { ok: res.ok, res, j, txt };
     };
 
     setStatus("Übernahme → Aufmaß...");
 
-    // ✅ 1) tentativi POST (coprono montaggi diversi)
     const appendPayload = {
       rows: [
         {
@@ -852,42 +905,35 @@ export default function CADViewer() {
     };
 
     const postAttempts: Array<() => Promise<any>> = [
-      // (a) se hai ancora questa route sul server
-      () => tryPost(`${API}/api/aufmass/add-from-cad`, { projectId: fsProjectKey, row }),
-      () => tryPost(`${API}/api/add-from-cad`, { projectId: fsProjectKey, row }),
-
-      // (b) soll-ist append: mount su /api/aufmass
+      () => tryPost(apiUrl(`/api/aufmass/add-from-cad`), { projectId: fsProjectKey, row }),
+      () => tryPost(apiUrl(`/api/add-from-cad`), { projectId: fsProjectKey, row }),
       () =>
         tryPost(
-          `${API}/api/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}/append`,
+          apiUrl(`/api/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}/append`),
           appendPayload
         ),
-
-      // (c) soll-ist append: mount su /api
       () =>
         tryPost(
-          `${API}/api/soll-ist/${encodeURIComponent(fsProjectKey)}/append`,
+          apiUrl(`/api/soll-ist/${encodeURIComponent(fsProjectKey)}/append`),
           appendPayload
         ),
-
-      // (d) fallback alias “doppio aufmass” (se qualcuno chiama /aufmass/aufmass/..)
       () =>
         tryPost(
-          `${API}/api/aufmass/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}/append`,
+          apiUrl(`/api/aufmass/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}/append`),
           appendPayload
         ),
     ];
 
     let lastErr: any = null;
+
     for (const run of postAttempts) {
       try {
         const r = await run();
         if (r.ok) {
-          // ✅ 2) verifica immediata: leggo il soll-ist
           const getAttempts = [
-            `${API}/api/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}`,
-            `${API}/api/soll-ist/${encodeURIComponent(fsProjectKey)}`,
-            `${API}/api/aufmass/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}`,
+            apiUrl(`/api/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}`),
+            apiUrl(`/api/soll-ist/${encodeURIComponent(fsProjectKey)}`),
+            apiUrl(`/api/aufmass/aufmass/soll-ist/${encodeURIComponent(fsProjectKey)}`),
           ];
 
           for (const u of getAttempts) {
@@ -900,7 +946,6 @@ export default function CADViewer() {
             }
           }
 
-          // se POST ok ma GET non trova, almeno segnalo che il POST è riuscito
           setStatus("In Aufmaß übernommen (POST ok, GET nicht erreichbar)");
           alert("Takeoff in Aufmaß übernommen (POST ok). Bitte AufmaßEditor neu laden.");
           return;
@@ -924,13 +969,13 @@ export default function CADViewer() {
     );
   };
 
-  /** Snapshot URL (✅ stable, refreshable) */
   const snapshotUrl = useMemo(() => {
     if (!projectId) return "";
-    const tick = snapshotTick || 0;
-    return `${API}/api/bricscad/snapshot?projectId=${encodeURIComponent(
-      projectId
-    )}&t=${tick}`;
+    return apiUrl(
+      `/api/bricscad/snapshot?projectId=${encodeURIComponent(
+        projectId
+      )}&t=${snapshotTick || 0}`
+    );
   }, [projectId, snapshotTick]);
 
   const featureOptions = useMemo(() => {
@@ -946,11 +991,14 @@ export default function CADViewer() {
           ? `• A ${f.area.toFixed(2)} m²`
           : "",
       ].filter(Boolean);
-      return { id: (f.id || "").toString(), label: labelParts.join(" ") };
+
+      return {
+        id: String(f.id || ""),
+        label: labelParts.join(" "),
+      };
     });
   }, [features]);
 
-  /** ================== KI Step A (group) ================== */
   const kiRows: KiRow[] = useMemo(() => {
     if (!features.length) return [];
 
@@ -960,7 +1008,7 @@ export default function CADViewer() {
     for (const f of features) {
       const lg = pickLayerGroup(f.layer);
       const lvPosGuess =
-        String((f as any)?.meta?.lvPos ?? pos ?? "001").trim().toString() || "001";
+        String((f as any)?.meta?.lvPos ?? pos ?? "001").trim() || "001";
 
       const inferredUnit: "m" | "m2" | "Stk" =
         typeof f.area === "number" && f.area > 0 ? "m2" : "m";
@@ -969,8 +1017,8 @@ export default function CADViewer() {
         inferredUnit === "m2" ? Number(f.area || 0) : Number(f.length || 0);
 
       const key = `${lvPosGuess}__${lg}__${inferredUnit}`;
-
       const existing = map.get(key);
+
       if (!existing) {
         map.set(key, {
           key,
@@ -992,30 +1040,26 @@ export default function CADViewer() {
     list.sort((a, b) => b.qty - a.qty);
 
     return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [features]);
+  }, [features, pos]);
 
   useEffect(() => {
     if (!kiRows.length) return;
     if (!kiSelectedKey) setKiSelectedKey(kiRows[0].key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kiRows.length]);
+  }, [kiRows, kiSelectedKey]);
 
   const kiSelected = useMemo(
     () => kiRows.find((r) => r.key === kiSelectedKey) || null,
     [kiRows, kiSelectedKey]
   );
 
-  /** ================== KI Step B (LV mapping suggestions) ================== */
   const lvSuggestions: LvSuggestion[] = useMemo(() => {
-    if (!kiSelected) return [];
-    if (!lvPositions.length) return [];
+    if (!kiSelected || !lvPositions.length) return [];
 
-    const query = `${kiSelected.layerGroup} ${
-      kiSelected.exampleLayer || ""
-    } ${kiSelected.exampleName || ""}`;
+    const query = `${kiSelected.layerGroup} ${kiSelected.exampleLayer || ""} ${
+      kiSelected.exampleName || ""
+    }`;
 
-    const scored = lvPositions
+    return lvPositions
       .map((p) => {
         const s = Math.max(
           scoreMatch(query, `${p.pos} ${p.text}`),
@@ -1027,8 +1071,6 @@ export default function CADViewer() {
       .filter((x) => x.score > 0.18)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5);
-
-    return scored;
   }, [kiSelected, lvPositions]);
 
   useEffect(() => {
@@ -1050,6 +1092,7 @@ export default function CADViewer() {
       finalPos = chosen.pos;
       finalText = chosen.text;
       const u = String(chosen.unit || "").toLowerCase();
+
       if (u.includes("m2") || u.includes("m²")) finalUnit = "m2";
       else if (u.includes("stk") || u.includes("st")) finalUnit = "Stk";
       else finalUnit = "m";
@@ -1059,7 +1102,7 @@ export default function CADViewer() {
     setKiText(finalText || "KI: —");
     setKiUnit(finalUnit);
     setKiFactor(1);
-  }, [kiSelectedKey, chosenLvPos, lvSuggestions, kiSelected]);
+  }, [kiSelected, chosenLvPos, lvSuggestions]);
 
   const kiQtyPreview = useMemo(() => {
     if (!kiSelected) return 0;
@@ -1073,7 +1116,6 @@ export default function CADViewer() {
     const finalPos = String(kiPos || kiSelected.lvPos || "001").trim() || "001";
     const finalText = String(kiText || `KI: ${kiSelected.layerGroup}`).trim();
     const finalUnit: any = kiUnit || kiSelected.unit;
-
     const qty = kiQtyPreview;
 
     await pushToAufmass({
@@ -1085,31 +1127,28 @@ export default function CADViewer() {
   };
 
   const hints = useMemo(() => {
-    const lines: string[] = [];
-    lines.push("Takeoff bleibt im Cache (auch nach Seitenwechsel).");
-    lines.push("KI Step A: Gruppierung nach Pos + Layer-Gruppe + Einheit.");
-    lines.push("KI Step B: Vorschläge aus Projekt-LV (falls LV geladen werden kann).");
-    lines.push("projectId = Ordnername unter data/projects/ (z.B. BA-2025-DEMO).");
-    return lines;
+    return [
+      "Takeoff bleibt im Cache (auch nach Seitenwechsel).",
+      "KI Step A: Gruppierung nach Pos + Layer-Gruppe + Einheit.",
+      "KI Step B: Vorschläge aus Projekt-LV (falls LV geladen werden kann).",
+      "projectId = Ordnername unter data/projects/ (z.B. BA-2025-DEMO).",
+    ];
   }, []);
 
-  // Ensure we have a first snapshot attempt when project is set
   useEffect(() => {
     if (!projectId) return;
     reloadSnapshot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   return (
     <div style={{ padding: 14, background: ui.bg, minHeight: "calc(100vh - 120px)" }}>
       <div style={{ display: "grid", gap: 14, alignItems: "start" }}>
-        {/* ROW 1: Projekt + Snapshot (same height) */}
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: 14,
-            alignItems: "stretch", // ✅ equal height
+            alignItems: "stretch",
           }}
         >
           <Card
@@ -1165,7 +1204,8 @@ export default function CADViewer() {
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: ui.sub, lineHeight: 1.45 }}>
-                  Tipp: zuerst <b>Paths / Debug</b> klicken → dann siehst du sofort, ob projectId stimmt.
+                  Tipp: zuerst <b>Paths / Debug</b> klicken → dann siehst du sofort, ob
+                  projectId stimmt.
                 </div>
               )}
 
@@ -1173,7 +1213,15 @@ export default function CADViewer() {
                 <div style={{ fontSize: 12, color: ui.sub, fontWeight: 900, marginBottom: 6 }}>
                   Hinweise
                 </div>
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: ui.sub, lineHeight: 1.5 }}>
+                <ul
+                  style={{
+                    margin: 0,
+                    paddingLeft: 18,
+                    fontSize: 12,
+                    color: ui.sub,
+                    lineHeight: 1.5,
+                  }}
+                >
                   {hints.map((h) => (
                     <li key={h}>{h}</li>
                   ))}
@@ -1201,11 +1249,22 @@ export default function CADViewer() {
             big
             style={{ height: "100%", display: "flex", flexDirection: "column" }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+                flexWrap: "wrap",
+              }}
+            >
               <div style={{ fontSize: 12, color: ui.sub, lineHeight: 1.45 }}>
                 Vorschau von <b>snapshot.png</b> (aus BricsCAD exportiert).
               </div>
-              <Btn onClick={reloadSnapshot} disabled={!projectId} title="Cache-Busting Reload">
+              <Btn
+                onClick={reloadSnapshot}
+                disabled={!projectId}
+                title="Cache-Busting Reload"
+              >
                 Reload
               </Btn>
             </div>
@@ -1217,7 +1276,7 @@ export default function CADViewer() {
                 border: `1px solid ${ui.border}`,
                 overflow: "hidden",
                 background: "#f9fafb",
-                flex: 1, // ✅ fill card
+                flex: 1,
                 minHeight: 260,
                 display: "flex",
                 alignItems: "center",
@@ -1247,7 +1306,7 @@ export default function CADViewer() {
                   style={{
                     width: "100%",
                     height: "100%",
-                    objectFit: "contain", // ✅ key
+                    objectFit: "contain",
                     display: "block",
                   }}
                   onLoad={() => setSnapshotErr("")}
@@ -1265,11 +1324,16 @@ export default function CADViewer() {
           </Card>
         </div>
 
-        {/* ROW 2: Takeoff full width */}
         <Card title="Takeoff" subtitle={features.length ? `${features.length} Features` : "—"} big>
           <div style={{ display: "grid", gap: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 14, alignItems: "start" }}>
-              {/* Feature select */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 420px",
+                gap: 14,
+                alignItems: "start",
+              }}
+            >
               <div>
                 <div style={{ fontSize: 12, color: ui.sub, fontWeight: 900, marginBottom: 6 }}>
                   Feature auswählen
@@ -1316,7 +1380,6 @@ export default function CADViewer() {
                 )}
               </div>
 
-              {/* Manual push */}
               <div
                 style={{
                   border: `1px solid ${ui.border}`,
@@ -1330,8 +1393,16 @@ export default function CADViewer() {
                 </div>
 
                 <div style={{ display: "grid", gap: 10 }}>
-                  <Input value={pos} onChange={(e) => setPos(e.target.value)} placeholder="Position (LV)" />
-                  <Input value={kurz} onChange={(e) => setKurz(e.target.value)} placeholder="Kurztext" />
+                  <Input
+                    value={pos}
+                    onChange={(e) => setPos(e.target.value)}
+                    placeholder="Position (LV)"
+                  />
+                  <Input
+                    value={kurz}
+                    onChange={(e) => setKurz(e.target.value)}
+                    placeholder="Kurztext"
+                  />
 
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <Select value={unit} onChange={(e) => setUnit(e.target.value as any)}>
@@ -1372,7 +1443,6 @@ export default function CADViewer() {
           </div>
         </Card>
 
-        {/* ROW 3: KI full width — same “size language” as Takeoff + Step B moved BELOW full width */}
         <Card title="KI Vorschläge" subtitle="Step A = Gruppierung • Step B = LV-Mapping" big>
           {!features.length ? (
             <div style={{ marginTop: 6, fontSize: 12, color: ui.sub }}>
@@ -1380,11 +1450,23 @@ export default function CADViewer() {
             </div>
           ) : (
             <div style={{ display: "grid", gap: 14 }}>
-              {/* === Top row: Step A summary (left) + Aufmaß KI (right) — same grid as Takeoff === */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", gap: 14, alignItems: "start" }}>
-                {/* Left: Selected info */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 420px",
+                  gap: 14,
+                  alignItems: "start",
+                }}
+              >
                 <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <div style={{ fontWeight: 950, color: ui.text }}>
                       Ausgewählt:{" "}
                       <span style={{ color: ui.sub }}>
@@ -1421,13 +1503,12 @@ export default function CADViewer() {
                     </div>
 
                     <div style={{ marginTop: 10, fontSize: 12, color: ui.sub, lineHeight: 1.55 }}>
-                      Tipp: Step A ist die Gruppierung. Danach übernimmst du direkt in Aufmaß oder nutzt Step B
-                      (unten) für LV-Matching.
+                      Tipp: Step A ist die Gruppierung. Danach übernimmst du direkt in
+                      Aufmaß oder nutzt Step B (unten) für LV-Matching.
                     </div>
                   </div>
                 </div>
 
-                {/* Right: KI adjust + Action (stacked, professional spacing) */}
                 <div style={{ display: "grid", gap: 12 }}>
                   <div
                     style={{
@@ -1447,7 +1528,11 @@ export default function CADViewer() {
                         onChange={(e) => setKiPos(e.target.value)}
                         placeholder="Position (LV)"
                       />
-                      <Input value={kiText} onChange={(e) => setKiText(e.target.value)} placeholder="Text" />
+                      <Input
+                        value={kiText}
+                        onChange={(e) => setKiText(e.target.value)}
+                        placeholder="Text"
+                      />
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                         <Select value={kiUnit} onChange={(e) => setKiUnit(e.target.value as any)}>
@@ -1493,7 +1578,8 @@ export default function CADViewer() {
                         Aktion
                       </div>
                       <div style={{ fontSize: 12, color: ui.sub, lineHeight: 1.5 }}>
-                        Wenn Step B gewählt ist, werden Pos/Text/Einheit automatisch aus dem LV übernommen.
+                        Wenn Step B gewählt ist, werden Pos/Text/Einheit automatisch aus
+                        dem LV übernommen.
                       </div>
                     </div>
 
@@ -1509,7 +1595,6 @@ export default function CADViewer() {
                 </div>
               </div>
 
-              {/* === Step B FULL WIDTH (moved below, no empty space) === */}
               <div
                 style={{
                   border: `1px solid ${ui.border}`,
@@ -1518,7 +1603,14 @@ export default function CADViewer() {
                   background: "#f9fafb",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
                   <div style={{ fontSize: 12, fontWeight: 950, color: ui.sub }}>
                     Step B — LV Mapping (Top Vorschläge)
                   </div>
@@ -1566,7 +1658,13 @@ export default function CADViewer() {
                               gap: 8,
                             }}
                           >
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: 10,
+                              }}
+                            >
                               <div style={{ fontWeight: 950, color: ui.text }}>{s.pos}</div>
                               <div style={{ fontSize: 12, color: ui.sub }}>
                                 Score: <b style={{ color: ui.text }}>{Math.round(s.score * 100)}%</b>
@@ -1586,7 +1684,6 @@ export default function CADViewer() {
                 </div>
               </div>
 
-              {/* === Step A list (full width) === */}
               <div
                 style={{
                   border: `1px solid ${ui.border}`,
@@ -1650,7 +1747,6 @@ export default function CADViewer() {
           )}
         </Card>
 
-        {/* ROW 4: UTM (optional) */}
         <Card title="UTM Punkte" subtitle={utmPoints.length ? `${utmPoints.length} Punkte` : "—"} big>
           {!utmPoints.length ? (
             <div style={{ fontSize: 12, color: ui.sub }}>
@@ -1708,7 +1804,6 @@ export default function CADViewer() {
           ) : null}
         </Card>
 
-        {/* Statusbar */}
         <div
           style={{
             height: 44,
@@ -1736,3 +1831,13 @@ export default function CADViewer() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+

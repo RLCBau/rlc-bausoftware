@@ -1,13 +1,65 @@
-export function getCurrentProjectId(): number {
-  const q = new URLSearchParams(window.location.search).get("projectId");
-  if (q && !isNaN(Number(q))) return Number(q);
-  const ls = localStorage.getItem("rlc.currentProjectId");
-  return ls ? Number(ls) : 0;
+// apps/web/src/utils/project.ts
+
+const KEY = "rlc.currentProjectId";
+
+export function getCurrentProjectId(): number | null {
+  try {
+    const q = new URLSearchParams(window.location.search).get("projectId");
+
+    if (q && !isNaN(Number(q))) {
+      const id = Number(q);
+      localStorage.setItem(KEY, String(id)); // sync
+      return id;
+    }
+
+    const ls = localStorage.getItem(KEY);
+    if (!ls) return null;
+
+    const id = Number(ls);
+    return Number.isFinite(id) ? id : null;
+  } catch {
+    return null;
+  }
 }
-export function setCurrentProjectId(id: number) {
-  localStorage.setItem("rlc.currentProjectId", String(id));
+
+export function setCurrentProjectId(id: number | null) {
+  try {
+    if (id == null) {
+      localStorage.removeItem(KEY);
+      return;
+    }
+
+    localStorage.setItem(KEY, String(id));
+  } catch {}
 }
+
 export function withProject(path: string): string {
   const id = getCurrentProjectId();
-  return id ? `${path}?projectId=${id}` : path;
+  if (!id) return path;
+
+  try {
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set("projectId", String(id));
+    return url.pathname + url.search;
+  } catch {
+    // fallback per path relativi senza base valida
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}projectId=${id}`;
+  }
 }
+
+/**
+ * Utility: aggiorna URL corrente senza reload
+ */
+export function syncProjectToUrl(id: number) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("projectId", String(id));
+    window.history.replaceState({}, "", url.toString());
+  } catch {}
+}
+
+
+
+
+

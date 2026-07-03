@@ -1,9 +1,9 @@
+import { API_BASE, apiUrl } from "../../lib/apiBase";
 // apps/web/src/pages/mengenermittlung/SollIst.tsx
 import React from "react";
 import { useProject } from "../../store/useProject";
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL || "http://localhost:4000/api";
+
 
 /** Tipi di riga normalizzati */
 type Row = {
@@ -507,3 +507,9 @@ const ta: React.CSSProperties = {
   borderRadius: 6,
   padding: "8px 10px",
 };
+
+
+
+
+
+

@@ -159,3 +159,8 @@ export const SHEETS: Record<string, { title: string; columns: Col<any>[]; sum?: 
 
   // --- (le altre macro rimangono come già definite – puoi estenderle allo stesso modo) ---
 };
+
+
+
+
+

@@ -285,9 +285,9 @@ export default function TagesberichtEditorScreen({
   useLayoutEffect(() => {
     navigation.setOptions({
       title: isEdit ? "Tagesbericht bearbeiten" : "Tagesbericht",
-      headerStyle: { backgroundColor: "#12324A" },
-      headerTitleStyle: { color: "#fff", fontWeight: "800" },
-      headerTintColor: "#fff",
+      headerStyle: { backgroundColor: COLORS.accentDark },
+      headerTitleStyle: { color: COLORS.textLight, fontWeight: "800" },
+      headerTintColor: COLORS.textLight,
       headerRight: () => (
         <Pressable
           onPress={() => {
@@ -304,7 +304,7 @@ export default function TagesberichtEditorScreen({
           <Ionicons
             name="chatbubble-ellipses-outline"
             size={18}
-            color="#12324A"
+            color={COLORS.accentDark}
           />
           <Text style={s.headerKiTxt}>RLC KI</Text>
         </Pressable>
@@ -770,7 +770,7 @@ export default function TagesberichtEditorScreen({
             onChangeText={(v) => update("date", v)}
             style={s.input}
             placeholder="YYYY-MM-DD"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
 
@@ -783,7 +783,7 @@ export default function TagesberichtEditorScreen({
             onChangeText={(v) => update("weather", v)}
             style={s.input}
             placeholder="z.B. sonnig, bewölkt, Regen"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <Text style={s.label}>Temperatur</Text>
@@ -792,7 +792,7 @@ export default function TagesberichtEditorScreen({
             onChangeText={(v) => update("temperature", v)}
             style={s.input}
             placeholder="z.B. 18"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             keyboardType="number-pad"
           />
         </View>
@@ -821,7 +821,7 @@ export default function TagesberichtEditorScreen({
                   style={s.removeLineBtn}
                   onPress={() => removeLine(line.id)}
                 >
-                  <Ionicons name="trash-outline" size={15} color="#C33" />
+                  <Ionicons name="trash-outline" size={15} color={COLORS.danger} />
                   <Text style={s.removeLineTxt}>Entfernen</Text>
                 </Pressable>
               </View>
@@ -834,7 +834,7 @@ export default function TagesberichtEditorScreen({
                     onChangeText={(v) => updateLine(line.id, "von", v)}
                     style={s.input}
                     placeholder="07:00"
-                    placeholderTextColor="#B8C1CC"
+                    placeholderTextColor={COLORS.sub}
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType={
@@ -852,7 +852,7 @@ export default function TagesberichtEditorScreen({
                     onChangeText={(v) => updateLine(line.id, "bis", v)}
                     style={s.input}
                     placeholder="16:30"
-                    placeholderTextColor="#B8C1CC"
+                    placeholderTextColor={COLORS.sub}
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType={
@@ -876,7 +876,7 @@ export default function TagesberichtEditorScreen({
                     onChangeText={(v) => updateLine(line.id, "pauseMin", v)}
                     style={s.input}
                     placeholder="30"
-                    placeholderTextColor="#B8C1CC"
+                    placeholderTextColor={COLORS.sub}
                     keyboardType="number-pad"
                   />
                 </View>
@@ -888,7 +888,7 @@ export default function TagesberichtEditorScreen({
                     onChangeText={(v) => updateLine(line.id, "stunden", v)}
                     style={s.input}
                     placeholder="8"
-                    placeholderTextColor="#B8C1CC"
+                    placeholderTextColor={COLORS.sub}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -900,7 +900,7 @@ export default function TagesberichtEditorScreen({
                 onChangeText={(v) => updateLine(line.id, "mitarbeiter", v)}
                 style={s.input}
                 placeholder="z.B. Roberto, Marco"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
 
               <Text style={s.label}>Maschine / Gerät</Text>
@@ -909,7 +909,7 @@ export default function TagesberichtEditorScreen({
                 onChangeText={(v) => updateLine(line.id, "maschine", v)}
                 style={s.input}
                 placeholder="z.B. Bagger, Walze, LKW"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
 
               <Text style={s.label}>Ort</Text>
@@ -918,7 +918,7 @@ export default function TagesberichtEditorScreen({
                 onChangeText={(v) => updateLine(line.id, "ort", v)}
                 style={s.input}
                 placeholder="z.B. Straße, Hausnr., Abschnitt"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
 
               <Text style={s.label}>Tätigkeit</Text>
@@ -928,7 +928,7 @@ export default function TagesberichtEditorScreen({
                 style={[s.input, s.textarea]}
                 multiline
                 placeholder="Beschreibe die ausgeführte Tätigkeit"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
 
               <Text style={s.label}>Notiz zur Zeile</Text>
@@ -938,7 +938,7 @@ export default function TagesberichtEditorScreen({
                 style={[s.input, s.textareaSmall]}
                 multiline
                 placeholder="Zusätzliche Bemerkung zu dieser Zeile"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           ))}
@@ -953,7 +953,7 @@ export default function TagesberichtEditorScreen({
             style={[s.input, s.textarea]}
             multiline
             placeholder="Probleme, Behinderungen, Lieferverzug, Wetterunterbrechung, Besonderheiten..."
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
 
@@ -966,7 +966,7 @@ export default function TagesberichtEditorScreen({
             style={[s.input, s.textarea]}
             multiline
             placeholder="Weitere Hinweise, Besuch, Absprachen, interne Bemerkungen..."
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
 
@@ -1030,13 +1030,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DDF1FF",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "#A8D3F5",
+    borderColor: COLORS.border,
   },
 
   headerKiTxt: {
-    color: "#12324A",
+    color: COLORS.accentDark,
     fontWeight: "900",
     fontSize: 13,
   },
@@ -1233,13 +1233,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "#FFF1F3",
+    backgroundColor: COLORS.dangerBg,
     borderWidth: 1,
-    borderColor: "#F3C7CF",
+    borderColor: COLORS.danger,
   },
 
   removeLineTxt: {
-    color: "#C33",
+    color: COLORS.danger,
     fontWeight: "900",
     fontSize: 12,
   },
@@ -1328,6 +1328,8 @@ const s = StyleSheet.create({
     opacity: 0.6,
   },
 });
+
+
 
 
 

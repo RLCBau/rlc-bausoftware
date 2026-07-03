@@ -7,11 +7,13 @@ import { prisma } from "../lib/prisma";
 
 // ✅ FIX: usa il requireAuth “vero” (con DEV_AUTH bypass) dal middleware/auth.ts
 import { requireAuth } from "../middleware/auth";
+import { ensureProjectStructure } from "../lib/ensureProjectStructure";
 
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const pdfUpload = multer({ storage: multer.memoryStorage() });
 
 /* =========================================================
  * helpers
@@ -288,15 +290,27 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
         companyId,
       },
     });
+    
+  const fsKey = safeFsName(project.code || "");
+if (!fsKey) throw new Error("Project code missing - cannot create FS folder.");
 
-    const fsKey = safeFsName(project.code || "");
-    if (!fsKey) throw new Error("Project code missing - cannot create FS folder.");
+const folderByCode = ensureProjectStructure(fsKey);
 
-    const folderByCode = path.join(PROJECTS_ROOT, fsKey);
-    ensureDir(folderByCode);
-    writeProjectJson(folderByCode, project);
+console.log("[PROJECT CREATE] code=", project.code);
+console.log("[PROJECT CREATE] fsKey=", fsKey);
+console.log("[PROJECT CREATE] PROJECTS_ROOT=", PROJECTS_ROOT);
+console.log("[PROJECT CREATE] folderByCode=", folderByCode);
+console.log("[PROJECT CREATE] exists after ensure=", fs.existsSync(folderByCode));
 
-    res.json({ ok: true, project, fsKey });
+writeProjectJson(folderByCode, project);
+
+console.log(
+  "[PROJECT CREATE] project.json exists=",
+  fs.existsSync(path.join(folderByCode, "project.json"))
+);
+
+res.json({ ok: true, project, fsKey, folderByCode });
+
   } catch (err: any) {
     console.error("POST /api/projects error:", err);
     res.status(500).json({ ok: false, error: err?.message || "Fehler beim Erstellen des Projekts" });
@@ -417,6 +431,139 @@ router.post(
 /* =========================================================
  * GET /api/projects/:idOrCode
  * =======================================================*/
+/* =========================================================
+ * GET /api/projects/:fsKey/pdfs
+ * =======================================================*/
+function collectProjectPdfFiles(rootAbs: string) {
+  const items: Array<{
+    name: string;
+    rel: string;
+    folder: string;
+    mtime: string;
+    url: string;
+  }> = [];
+
+  function walk(dirAbs: string, depth: number) {
+    if (depth > 6) return;
+    if (!fs.existsSync(dirAbs)) return;
+
+    const entries = fs.readdirSync(dirAbs, { withFileTypes: true });
+    for (const e of entries) {
+      const abs = path.join(dirAbs, e.name);
+
+      if (e.isDirectory()) {
+        walk(abs, depth + 1);
+        continue;
+      }
+
+      if (!e.isFile()) continue;
+      if (!e.name.toLowerCase().endsWith(".pdf")) continue;
+
+      const st = fs.statSync(abs);
+      const rel = path.relative(rootAbs, abs).replace(/\\/g, "/");
+      const folder = rel.includes("/") ? rel.split("/")[0] : "";
+
+      items.push({
+        name: e.name,
+        rel,
+        folder,
+        mtime: st.mtime.toISOString(),
+        url: `/projects/${path.basename(rootAbs)}/${rel}`.replace(/\\/g, "/"),
+      });
+    }
+  }
+
+  walk(rootAbs, 0);
+  items.sort((a, b) => (a.mtime < b.mtime ? 1 : -1));
+  return items;
+}
+
+router.get("/:fsKey/pdfs", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const fsKey = safeFsName(String(req.params.fsKey || "").trim());
+    if (!fsKey) {
+      return res.status(400).json({ ok: false, error: "Missing fsKey" });
+    }
+
+    const projectDir = path.join(PROJECTS_ROOT, fsKey);
+    if (!fs.existsSync(projectDir)) {
+      return res.json({ ok: true, fsKey, items: [] });
+    }
+
+    const items = collectProjectPdfFiles(projectDir);
+    return res.json({ ok: true, fsKey, items });
+  } catch (err: any) {
+    console.error("GET /api/projects/:fsKey/pdfs error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || "Fehler beim Laden der PDFs",
+    });
+  }
+});
+
+/* =========================================================
+ * POST /api/projects/:fsKey/pdfs/upload
+ * =======================================================*/
+router.post(
+  "/:fsKey/pdfs/upload",
+  requireAuth,
+  pdfUpload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const fsKey = safeFsName(String(req.params.fsKey || "").trim());
+      if (!fsKey) {
+        return res.status(400).json({ ok: false, error: "Missing fsKey" });
+      }
+
+      if (!req.file?.buffer) {
+        return res.status(400).json({ ok: false, error: "Missing PDF file" });
+      }
+
+      const kindFolderRaw = String(req.body?.kindFolder || "").trim().toLowerCase();
+      const kindFolder =
+        kindFolderRaw === "regie" ||
+        kindFolderRaw === "lieferscheine" ||
+        kindFolderRaw === "photos"
+          ? kindFolderRaw
+          : "regie";
+
+      const projectDir = path.join(PROJECTS_ROOT, fsKey);
+      ensureDir(projectDir);
+
+      const targetDir = path.join(projectDir, kindFolder);
+      ensureDir(targetDir);
+
+      const fileName = safeFsName(
+        String((req.file.originalname || "export.pdf").replace(/\.pdf$/i, ""))
+      ) + ".pdf";
+
+      const target = path.join(targetDir, fileName);
+      fs.writeFileSync(target, req.file.buffer);
+
+      const st = fs.statSync(target);
+      const rel = path.relative(projectDir, target).replace(/\\/g, "/");
+
+      return res.json({
+        ok: true,
+        fsKey,
+        item: {
+          name: fileName,
+          rel,
+          folder: kindFolder,
+          mtime: st.mtime.toISOString(),
+          url: `/projects/${fsKey}/${rel}`.replace(/\\/g, "/"),
+        },
+      });
+    } catch (err: any) {
+      console.error("POST /api/projects/:fsKey/pdfs/upload error:", err);
+      return res.status(500).json({
+        ok: false,
+        error: err?.message || "Fehler beim Upload der PDF",
+      });
+    }
+  }
+);
+
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const companyId = await ensureCompanyId(req);

@@ -157,7 +157,7 @@ export default function TagesberichtListScreen({
   useLayoutEffect(() => {
     navigation.setOptions({
       title: "Tagesberichte",
-      headerStyle: { backgroundColor: "#12324A" },
+      headerStyle: { backgroundColor: COLORS.accentDark },
       headerTitleStyle: { color: COLORS.card, fontWeight: "800" },
       headerTintColor: COLORS.card,
       headerRight: () => (
@@ -176,7 +176,7 @@ export default function TagesberichtListScreen({
           <Ionicons
             name="chatbubble-ellipses-outline"
             size={18}
-            color="#12324A"
+            color={COLORS.accentDark}
           />
           <Text style={s.headerKiTxt}>RLC KI</Text>
         </Pressable>
@@ -433,7 +433,7 @@ export default function TagesberichtListScreen({
             onChangeText={setMonthFilter}
             style={s.input}
             placeholder="YYYY-MM"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
 
@@ -444,7 +444,7 @@ export default function TagesberichtListScreen({
             onChangeText={setSearch}
             style={s.input}
             placeholder="Wetter, Tätigkeit, Mitarbeiter..."
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
       </View>
@@ -511,13 +511,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DDF1FF",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "#A8D3F5",
+    borderColor: COLORS.border,
   },
 
   headerKiTxt: {
-    color: "#12324A",
+    color: COLORS.accentDark,
     fontWeight: "900",
     fontSize: 13,
   },
@@ -831,12 +831,12 @@ const s = StyleSheet.create({
   },
 
   rowDangerBtn: {
-    backgroundColor: "#FFF1F3",
-    borderColor: "#F3C7CF",
+    backgroundColor: COLORS.dangerBg,
+    borderColor: COLORS.danger,
   },
 
   rowDangerBtnTxt: {
-    color: "#C33",
+    color: COLORS.danger,
   },
 
   emptyCard: {
@@ -878,6 +878,8 @@ const s = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
+
 
 
 

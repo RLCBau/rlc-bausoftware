@@ -455,13 +455,13 @@ export default function SupportChatScreen({ route, navigation }: Props) {
     navigation.setOptions({
       title,
       headerStyle: {
-        backgroundColor: "#12324A",
+        backgroundColor: COLORS.accentDark,
       },
       headerTitleStyle: {
-        color: "#FFFFFF",
+        color: COLORS.textLight,
         fontWeight: "800",
       },
-      headerTintColor: "#FFFFFF",
+      headerTintColor: COLORS.textLight,
     });
   }, [navigation, title]);
 
@@ -665,7 +665,7 @@ export default function SupportChatScreen({ route, navigation }: Props) {
           value={input}
           onChangeText={setInput}
           placeholder="Hier schreiben…"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           style={styles.input}
           multiline
         />
@@ -805,6 +805,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 });
+
+
 
 
 

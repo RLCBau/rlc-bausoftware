@@ -1,3 +1,4 @@
+// @ts-nocheck
 // apps/server/src/routes/ls.ts
 import express from "express";
 import fs from "fs";

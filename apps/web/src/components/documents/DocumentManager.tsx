@@ -5,6 +5,7 @@ import {
   getUploadUrl,
   putToStorage,
   detectKind,
+  getDocumentViewUrl,
   type DocumentDto,
 } from "../../api/files";
 import "./documents.css";
@@ -13,48 +14,84 @@ type Props = {
   projectId: string;
 };
 
+type UploadStatus = "wartend" | "lade" | "fertig" | "fehler";
+
 type UploadItem = {
+  id: string;
   file: File;
-  progress: number; // 0..100
-  status: "wartend" | "lade" | "fertig" | "fehler";
+  progress: number;
+  status: UploadStatus;
   error?: string;
 };
 
-const prettyDate = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+const prettyDate = (iso?: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString(undefined, {
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : "—";
+
+function makeUploadId(file: File) {
+  return `${file.name}-${file.size}-${file.lastModified}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
+}
 
 export default function DocumentManager({ projectId }: Props) {
   const [docs, setDocs] = useState<DocumentDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
-  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
+    null
+  );
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function refresh() {
     setLoading(true);
     try {
       const data = await listDocuments(projectId);
-      // neueste zuerst
-      data.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
-      setDocs(data);
+
+      const sorted = [...data].sort((a, b) => {
+        const aTs = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bTs = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return bTs - aTs;
+      });
+
+      setDocs(sorted);
+    } catch (e) {
+      console.error("Document refresh failed:", e);
+      setDocs([]);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [projectId]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return docs;
-    return docs.filter(d => d.name.toLowerCase().includes(s) || String(d.kind).toLowerCase().includes(s));
+
+    return docs.filter(
+      (d) =>
+        d.name.toLowerCase().includes(s) ||
+        String(d.kind).toLowerCase().includes(s)
+    );
   }, [docs, q]);
 
+  function updateUpload(id: string, patch: Partial<UploadItem>) {
+    setUploads((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, ...patch } : u))
+    );
+  }
+
   function onChooseFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.files) return;
+    if (!e.target.files?.length) return;
     queueFiles(Array.from(e.target.files));
     e.target.value = "";
   }
@@ -67,63 +104,80 @@ export default function DocumentManager({ projectId }: Props) {
   }
 
   function queueFiles(files: File[]) {
-    const list = files.map<UploadItem>(f => ({ file: f, progress: 0, status: "wartend" }));
-    setUploads(prev => [...list, ...prev]);
-    // sofort starten
-    list.forEach(startUpload);
+    const list = files.map<UploadItem>((file) => ({
+      id: makeUploadId(file),
+      file,
+      progress: 0,
+      status: "wartend",
+    }));
+
+    setUploads((prev) => [...list, ...prev]);
+
+    list.forEach((item) => {
+      void startUpload(item);
+    });
   }
 
   async function startUpload(item: UploadItem) {
-    const file = item.file;
+    const { id, file } = item;
     const contentType = file.type || "application/octet-stream";
     const kind = detectKind(file);
 
-    setUploads(prev =>
-      prev.map(u => (u === item ? { ...u, status: "lade", progress: 5 } : u))
-    );
+    updateUpload(id, { status: "lade", progress: 5, error: undefined });
+
+    let tick: number | null = null;
 
     try {
-      // 1) DB-Dokument anlegen
       const { documentId } = await initDocument(projectId, kind, file.name);
+      const { uploadUrl } = await getUploadUrl(
+        documentId,
+        file.name,
+        contentType
+      );
 
-      // 2) Presigned-URL holen (legt Version an)
-      const { uploadUrl } = await getUploadUrl(documentId, file.name, contentType);
-
-      // 3) PUT nach MinIO (progress simuliert, da fetch kein progress-Event hat)
-      // Workaround: wir "ticken" progress, bis der Request resolved.
-      const tick = setInterval(() => {
-        setUploads(prev =>
-          prev.map(u =>
-            u === item ? { ...u, progress: Math.min(u.progress + 5, 90) } : u
+      tick = window.setInterval(() => {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === id
+              ? { ...u, progress: Math.min(u.progress + 5, 90) }
+              : u
           )
         );
       }, 200);
 
       await putToStorage(uploadUrl, file, contentType);
-      clearInterval(tick);
 
-      setUploads(prev =>
-        prev.map(u => (u === item ? { ...u, progress: 100, status: "fertig" } : u))
-      );
+      if (tick) {
+        window.clearInterval(tick);
+      }
 
-      // 4) Liste neu laden
-      refresh();
+      updateUpload(id, {
+        progress: 100,
+        status: "fertig",
+        error: undefined,
+      });
+
+      await refresh();
     } catch (e: any) {
-      setUploads(prev =>
-        prev.map(u =>
-          u === item ? { ...u, status: "fehler", error: e?.message || String(e) } : u
-        )
-      );
+      if (tick) {
+        window.clearInterval(tick);
+      }
+
+      updateUpload(id, {
+        status: "fehler",
+        error: e?.message || String(e),
+      });
     }
   }
 
   async function openPreview(doc: DocumentDto) {
-    // Für PDFs/Images können wir direkt /files/{storageId} zeigen (Server stellt /files/ bereit)
-    const last = doc.versions?.[doc.versions.length - 1] ?? null;
-    if (!last) return;
-    // Backend speichert Dateien unter /files/{projectId}/storage/{storageId}
-    const url = `${import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:4000"}/files/${projectId}/storage/${last.storageId}`;
-    setPreview({ url, name: doc.name });
+    try {
+      const { url } = await getDocumentViewUrl(doc.id);
+      if (!url) return;
+      setPreview({ url, name: doc.name });
+    } catch (e) {
+      console.error("Preview failed:", e);
+    }
   }
 
   return (
@@ -131,8 +185,11 @@ export default function DocumentManager({ projectId }: Props) {
       <div className="docmgr-header">
         <div>
           <h2>Dokumentenverwaltung</h2>
-          <p className="muted">Projekt: <code>{projectId}</code></p>
+          <p className="muted">
+            Projekt: <code>{projectId}</code>
+          </p>
         </div>
+
         <div className="docmgr-actions">
           <input
             ref={inputRef}
@@ -141,20 +198,35 @@ export default function DocumentManager({ projectId }: Props) {
             onChange={onChooseFiles}
             style={{ display: "none" }}
           />
+
           <input
             className="search"
             placeholder="Suche (Name/Typ)…"
             value={q}
-            onChange={e => setQ(e.target.value)}
+            onChange={(e) => setQ(e.target.value)}
           />
-          <button className="btn" onClick={() => inputRef.current?.click()}>Dateien wählen</button>
-          <button className="btn ghost" onClick={refresh}>Aktualisieren</button>
+
+          <button
+            type="button"
+            className="btn"
+            onClick={() => inputRef.current?.click()}
+          >
+            Dateien wählen
+          </button>
+
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => void refresh()}
+          >
+            Aktualisieren
+          </button>
         </div>
       </div>
 
       <div
         className="dropzone"
-        onDragOver={e => e.preventDefault()}
+        onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
         <span>Dateien hierher ziehen oder oben auswählen</span>
@@ -162,13 +234,18 @@ export default function DocumentManager({ projectId }: Props) {
 
       {uploads.length > 0 && (
         <div className="uploadlist">
-          {uploads.map((u, i) => (
-            <div key={i} className={`upload ${u.status}`}>
+          {uploads.map((u) => (
+            <div key={u.id} className={`upload ${u.status}`}>
               <div className="name">{u.file.name}</div>
+
               <div className="bar">
                 <div className="fill" style={{ width: `${u.progress}%` }} />
               </div>
-              <div className="status">{u.status}{u.error ? `: ${u.error}` : ""}</div>
+
+              <div className="status">
+                {u.status}
+                {u.error ? `: ${u.error}` : ""}
+              </div>
             </div>
           ))}
         </div>
@@ -182,19 +259,26 @@ export default function DocumentManager({ projectId }: Props) {
           <div>Aktualisiert</div>
           <div>Aktion</div>
         </div>
+
         {loading ? (
           <div className="row muted">Lade…</div>
         ) : filtered.length === 0 ? (
           <div className="row muted">Keine Dokumente gefunden.</div>
         ) : (
-          filtered.map(d => (
+          filtered.map((d) => (
             <div key={d.id} className="row">
               <div className="cell name">{d.name}</div>
               <div className="cell">{String(d.kind)}</div>
               <div className="cell">{d.versions?.length ?? 0}</div>
               <div className="cell">{prettyDate(d.updatedAt)}</div>
               <div className="cell">
-                <button className="btn small" onClick={() => openPreview(d)}>Ansehen</button>
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={() => void openPreview(d)}
+                >
+                  Ansehen
+                </button>
               </div>
             </div>
           ))
@@ -202,12 +286,24 @@ export default function DocumentManager({ projectId }: Props) {
       </div>
 
       {preview && (
-        <div className="modal" onClick={() => setPreview(null)}>
-          <div className="modal-body" onClick={e => e.stopPropagation()}>
+        <div
+          className="modal"
+          onClick={() => setPreview(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="modal-body" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <div className="title">{preview.name}</div>
-              <button className="btn small ghost" onClick={() => setPreview(null)}>Schließen</button>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setPreview(null)}
+              >
+                Schließen
+              </button>
             </div>
+
             <iframe title="preview" src={preview.url} className="frame" />
           </div>
         </div>
@@ -215,3 +311,8 @@ export default function DocumentManager({ projectId }: Props) {
     </div>
   );
 }
+
+
+
+
+

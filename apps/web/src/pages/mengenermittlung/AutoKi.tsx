@@ -1,4 +1,5 @@
 // apps/web/src/pages/mengenermittlung/AutoKI.tsx
+import { API_BASE, apiUrl } from "../../lib/apiBase";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../../store/useProject";
@@ -14,7 +15,7 @@ type Det = {
   layer?: string;
   source?: string;
   poly?: { x: number; y: number }[];
-  box?: { x: number; y: number; w: number; h: number }; // legacy pixel box
+  box?: { x: number; y: number; w: number; h: number };
 };
 
 type DetectBox = {
@@ -23,14 +24,14 @@ type DetectBox = {
   score: number;
   qty?: number;
   unit?: string;
-  box?: [number, number, number, number]; // normalized 0..1 (ManuellFoto)
+  box?: [number, number, number, number];
 };
 
 type PhotoPosition = {
-  id?: string; // LV-Pos (001.001 / FOTO.001)
+  id?: string;
   kurztext: string;
   einheit?: string;
-  qty?: number | null; // quantità se visibile nel plan
+  qty?: number | null;
   typ?: "sichtbar" | "implizit";
   status?: "bestehend" | "nachtrag";
 };
@@ -51,7 +52,7 @@ type AutoKiFile = {
   note?: string;
   scale?: string;
   sourceFile?: { name?: string; type?: string; size?: number } | null;
-  preview?: string | null; // dataURL immagine (per overlay)
+  preview?: string | null;
   boxes?: DetectBox[];
   extras?: ExtraRow[];
   summary?: string;
@@ -61,22 +62,9 @@ type AutoKiFile = {
 
 type HistorySnap = { ts: number; count: number; note?: string; source?: string };
 
-/* ===================== API RESOLUTION (robust, no double /api) ===================== */
+/* ===================== API ===================== */
 
-const RAW_API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
-
-function normalizeApiBase(v: string) {
-  let s = String(v || "").trim();
-  if (!s) s = "http://localhost:4000";
-  s = s.replace(/\/+$/, "");
-  if (s.endsWith("/api")) s = s.slice(0, -4);
-  return s;
-}
-const API_BASE = normalizeApiBase(RAW_API_BASE);
-const API = `${API_BASE}/api`;
+const AUTO_KI_BASE = apiUrl("/api/auto-ki");
 
 /* ===================== local fallback ===================== */
 const LS_KEY = (k: string) => `RLC_AUTO_KI_${k}`;
@@ -212,7 +200,7 @@ async function pdfFirstPageToPng(
   maxPixels = 18_000_000
 ): Promise<{ blob: Blob; dataUrl: string }> {
   const buf = await file.arrayBuffer();
-  const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf");
+  const pdfjs: any = await import("pdfjs-dist");
 
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buf),
@@ -240,7 +228,13 @@ async function pdfFirstPageToPng(
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
 
-  await page.render({ canvasContext: ctx, viewport }).promise;
+  await page
+    .render({
+      canvas,
+      canvasContext: ctx,
+      viewport,
+    } as any)
+    .promise;
 
   const blob: Blob = await new Promise((resolve, reject) => {
     canvas.toBlob((b) => {
@@ -442,16 +436,16 @@ function uniqUnitsFromItems(items: Det[]) {
   return Array.from(s);
 }
 
-/* ===================== VALIDATION (LV / AUTO / FOTO + required fields) ===================== */
+/* ===================== VALIDATION ===================== */
 
 type PosKind = "LV" | "AUTO" | "FOTO" | "EMPTY" | "OTHER";
 
 function posKind(posRaw: string): PosKind {
   const pos = String(posRaw || "").trim();
   if (!pos) return "EMPTY";
-  if (/^\d{3}\.\d{3}$/i.test(pos)) return "LV"; // 001.001
-  if (/^AUTO\.\d{3}$/i.test(pos)) return "AUTO"; // AUTO.001
-  if (/^FOTO\.\d{3}$/i.test(pos)) return "FOTO"; // FOTO.001
+  if (/^\d{3}\.\d{3}$/i.test(pos)) return "LV";
+  if (/^AUTO\.\d{3}$/i.test(pos)) return "AUTO";
+  if (/^FOTO\.\d{3}$/i.test(pos)) return "FOTO";
   return "OTHER";
 }
 
@@ -570,11 +564,9 @@ export default function AutoKI() {
   const [zoomOpen, setZoomOpen] = React.useState(false);
   const [zoomScale, setZoomScale] = React.useState(1.3);
 
-  // ✅ Bearbeiten toggle + touch tracking
   const [editMode, setEditMode] = React.useState(false);
   const [itemsTouched, setItemsTouched] = React.useState(false);
 
-  // ✅ NEW: Modal Editor for Beschreibung (large, readable)
   const [descrModalOpen, setDescrModalOpen] = React.useState(false);
   const [descrModalRowId, setDescrModalRowId] = React.useState<string | null>(null);
   const [descrModalValue, setDescrModalValue] = React.useState<string>("");
@@ -693,7 +685,6 @@ export default function AutoKI() {
     }
   };
 
-  /* helpers: positions -> boxes/extras/items */
   const positionsToBoxes = React.useCallback((positions: PhotoPosition[]) => {
     return (positions || []).map((p, idx) => ({
       id: p.id || String(idx + 1),
@@ -732,14 +723,12 @@ export default function AutoKI() {
     })) as Det[];
   }, []);
 
-  /* URL builders */
   const makeUrls = React.useCallback(
     (suffix: string) =>
-      keyCandidates.map((k) => `${API}/auto-ki${suffix.replace("{key}", encodeURIComponent(k))}`),
+      keyCandidates.map((k) => `${AUTO_KI_BASE}${suffix.replace("{key}", encodeURIComponent(k))}`),
     [keyCandidates]
   );
 
-  /* SERVER: auto-ki.json */
   const serverLoadAutoKi = React.useCallback(async () => {
     if (!keyCandidates.length) {
       alert("Kein Projekt gewählt.");
@@ -977,7 +966,6 @@ export default function AutoKI() {
     [keyCandidates, makeUrls, note, scale, file, projectKey, effectiveKey, draftSave, result]
   );
 
-  /* AUTO-RESTORE */
   React.useEffect(() => {
     if (!effectiveKey) return;
 
@@ -1007,7 +995,6 @@ export default function AutoKI() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveKey]);
 
-  /** Autosave su note/scale/result */
   React.useEffect(() => {
     if (!effectiveKey) return;
     const t = window.setTimeout(() => {
@@ -1018,7 +1005,6 @@ export default function AutoKI() {
     return () => window.clearTimeout(t);
   }, [effectiveKey, note, scale, result, draftSave]);
 
-  /* SERVER: aufmass-history.json */
   const loadAufmassHistory = React.useCallback(async () => {
     if (!keyCandidates.length) return;
     try {
@@ -1085,8 +1071,6 @@ export default function AutoKI() {
     void loadAufmassHistory();
   }, [loadAufmassHistory]);
 
-  /* ===================== EDITING HELPERS ===================== */
-
   const applyItems = React.useCallback(
     (nextItems: Det[], touch = true) => {
       const reindexed = normalizeAndReindexAutoPositions(nextItems);
@@ -1103,7 +1087,7 @@ export default function AutoKI() {
       ...current,
       {
         id: crypto.randomUUID(),
-        pos: "AUTO.000", // reindex
+        pos: "AUTO.000",
         type: "COUNT",
         descr: "",
         unit: "m",
@@ -1139,7 +1123,6 @@ export default function AutoKI() {
     return Array.from(new Set([...base, ...fromItems])).filter(Boolean);
   }, [result.items]);
 
-  /* ✅ VALIDATION SUMMARY */
   const validation = React.useMemo(() => {
     const rows = result.items || [];
     let invalid = 0;
@@ -1165,7 +1148,6 @@ export default function AutoKI() {
     return { ok, warnings, invalid, total: rows.length };
   }, [result.items]);
 
-  /* EXPORT -> AUFMASS EDITOR */
   const exportToAufmassEditor = React.useCallback(async () => {
     if (!projectKey) {
       alert("Kein Projekt gewählt.");
@@ -1244,7 +1226,6 @@ export default function AutoKI() {
     }
   }, [projectKey, projectId, result.items, result.positions, makeUrls, nav, draftSave]);
 
-  /* ANALYZE (KI Button) */
   const analyze = async () => {
     if (!file) {
       alert("Bitte zuerst eine Datei wählen.");
@@ -1312,9 +1293,6 @@ export default function AutoKI() {
 
       const urls = makeUrls("/{key}/analyze");
 
-      // =========================
-      // ✅ PDF TILE ANALYSE
-      // =========================
       if (pdf && tiles.length) {
         const allPositions: PhotoPosition[] = [];
         const allItems: Det[] = [];
@@ -1411,9 +1389,6 @@ export default function AutoKI() {
         return;
       }
 
-      // =========================
-      // ✅ DEFAULT (single image)
-      // =========================
       const fd = new FormData();
       fd.append("file", uploadBlob, uploadName);
       fd.append("note", note);
@@ -1487,7 +1462,6 @@ export default function AutoKI() {
     }
   };
 
-  /* OVERLAY (only if preview is image) */
   React.useEffect(() => {
     if (!result.preview) return;
     if (String(result.preview).startsWith("data:application/pdf")) return;
@@ -1578,7 +1552,6 @@ export default function AutoKI() {
     if (w) w.document.write(`<img src="${result.preview}" style="max-width:100%;height:auto" />`);
   };
 
-  // ✅ Beschreibung modal open
   const openDescrModal = React.useCallback(
     (rowId: string) => {
       const row = (result.items || []).find((x) => x.id === rowId);
@@ -1601,7 +1574,6 @@ export default function AutoKI() {
     closeDescrModal();
   }, [descrModalRowId, descrModalValue, updateRow, closeDescrModal]);
 
-  // Esc to close
   React.useEffect(() => {
     if (!descrModalOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -1614,7 +1586,6 @@ export default function AutoKI() {
 
   return (
     <div className="card" style={{ padding: 16 }}>
-      {/* ✅ Beschreibung Modal (large editor) */}
       {descrModalOpen ? (
         <div
           onClick={closeDescrModal}
@@ -1680,7 +1651,6 @@ export default function AutoKI() {
         </div>
       ) : null}
 
-      {/* Zoom Modal */}
       {zoomOpen && result.preview && String(result.preview).startsWith("data:image/") ? (
         <div
           onClick={() => setZoomOpen(false)}
@@ -1783,7 +1753,7 @@ export default function AutoKI() {
       </div>
 
       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        API: <code>{API}</code> • Keys: <code>{keyCandidates.join(" | ") || "—"}</code> • LocalKey:{" "}
+        API: <code>{API_BASE || "(relative)"}</code> • Keys: <code>{keyCandidates.join(" | ") || "—"}</code> • LocalKey:{" "}
         <code>{effectiveKey || "—"}</code>
       </div>
 
@@ -1899,7 +1869,6 @@ export default function AutoKI() {
         </div>
       </div>
 
-      {/* KI Ergebnisse */}
       <div className="card" style={{ marginTop: 12, padding: 0, overflow: "auto" }}>
         <div style={{ padding: 12, borderBottom: "1px solid var(--line)" }}>
           <div style={{ fontWeight: 700 }}>Vorschau (Ergebnisse der KI)</div>
@@ -1943,7 +1912,6 @@ export default function AutoKI() {
         )}
       </div>
 
-      {/* Items table */}
       <div className="card" style={{ marginTop: 12, padding: 0, overflow: "auto" }}>
         <div
           style={{
@@ -1956,7 +1924,6 @@ export default function AutoKI() {
         >
           <div style={{ fontWeight: 700, flex: 1 }}>Ergebnisse</div>
 
-          {/* ✅ Validation summary */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.85 }}>
             <span title="OK (LV oder vollständig/valide)">OK: <b>{validation.ok}</b></span>
             <span title="Warnung (AUTO/FOTO Positionen)">Warn: <b>{validation.warnings}</b></span>
@@ -2080,10 +2047,6 @@ export default function AutoKI() {
                     </td>
 
                     <td style={td} title={issues.filter((x) => x.includes("Beschreibung")).join(" • ") || undefined}>
-                      {/* ✅ NEW: readable editor
-                          - inline textarea (auto-grow) in edit mode
-                          - always a "✎" button to open large modal editor
-                      */}
                       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <div style={{ flex: 1, minWidth: 380 }}>
                           {editMode ? (
@@ -2180,7 +2143,6 @@ export default function AutoKI() {
           </table>
         )}
 
-        {/* ✅ Legend */}
         <div style={{ padding: 12, borderTop: "1px solid var(--line)", fontSize: 12, opacity: 0.75 }}>
           <b>Validierung:</b> Pos.-Format akzeptiert: <code>001.001</code> (LV), <code>AUTO.001</code>,{" "}
           <code>FOTO.001</code>. Fehlende Felder werden rot markiert. <code>AUTO/FOTO</code> sind Warnung (gelb),
@@ -2189,7 +2151,6 @@ export default function AutoKI() {
         </div>
       </div>
 
-      {/* History */}
       <div className="card" style={{ marginTop: 12, padding: 10 }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>Verlauf</div>
         {!projectKey ? (
@@ -2273,7 +2234,6 @@ const selCell: React.CSSProperties = {
   fontSize: 13,
 };
 
-/* ✅ NEW: Beschreibung area */
 const descrArea: React.CSSProperties = {
   padding: "6px 8px",
   border: "1px solid rgba(0,0,0,0.12)",

@@ -314,6 +314,22 @@ async function writePhotosToOfflineInbox(projectKey: string, row: any) {
   await saveArray(k2, upsertRow(arr2, row));
 }
 
+// RLC_FOTOS_WRITE_ALL_INBOX_KEYS_V1
+async function writePhotosToAllInboxKeys(keys: any[], row: any) {
+  const unique = Array.from(
+    new Set(
+      (keys || [])
+        .map((x) => String(x || "").trim())
+        .filter(Boolean)
+    )
+  );
+
+  for (const key of unique) {
+    try {
+      await writePhotosToOfflineInbox(key, row);
+    } catch {}
+  }
+}
 function normalizeInboxSnapshotPhoto(snapRaw: any, editId: string) {
   if (!snapRaw || typeof snapRaw !== "object") return null;
 
@@ -822,7 +838,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
   React.useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#12324A",
+        backgroundColor: COLORS.accentDark,
       },
       headerTitleStyle: {
         color: COLORS.card,
@@ -1358,6 +1374,21 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       );
       await loadHistory(localStoreKey);
 
+      // RLC_FOTOS_WRITE_FULL_INBOX_AFTER_SAVE_SUBMIT_V1
+      const fullFotosRowForInbox = {
+        ...row,
+        workflowStatus: row?.workflowStatus || "EINGEREICHT",
+        payload: {
+          row,
+          ...(((row as any)?.payload) || {}),
+        },
+      };
+
+      await writePhotosToAllInboxKeys(
+        [inboxProjectKey, baKey, localKey, projectId],
+        fullFotosRowForInbox
+      );
+
       if (mNow === "NUR_APP") {
         const inboxKey = (inboxProjectKey || localKey).trim();
         await writePhotosToOfflineInbox(inboxKey, {
@@ -1696,7 +1727,7 @@ const onKiSuggest = useCallback(async () => {
       const input = String(payload?.input || "").trim();
       setKiInput(input);
 
-      const parsed = parseRlcFotos(input);
+      const parsed = payload?.fieldPatches || payload?.extractedFields || parseRlcFotos(input);
 
       const toIsoDate = (v: any) => {
         const s = String(v || "").trim();
@@ -1946,7 +1977,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 value={date}
                 onChangeText={setDate}
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 style={styles.input}
               />
             </View>
@@ -1956,7 +1987,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 value={kostenstelle}
                 onChangeText={setKostenstelle}
                 placeholder="z.B. KS-01"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 style={styles.input}
               />
             </View>
@@ -1967,7 +1998,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             value={lvItemPos}
             onChangeText={setLvItemPos}
             placeholder="z.B. 01.02.003"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={styles.input}
           />
 
@@ -1976,7 +2007,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             value={ortAbschnitt}
             onChangeText={setOrtAbschnitt}
             placeholder="z.B. Baugrube Nord / Hausanschluss 3"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={styles.input}
           />
 
@@ -1985,7 +2016,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             value={kategorie}
             onChangeText={setKategorie}
             placeholder="z.B. Mangel, Fortschritt, Beweissicherung, Material"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={styles.input}
           />
 
@@ -1994,7 +2025,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             value={gewerk}
             onChangeText={setGewerk}
             placeholder="z.B. Kanalbau, Kabelbau, Pflaster, Erdbau"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={styles.input}
           />
 
@@ -2003,7 +2034,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             value={fotoStatus}
             onChangeText={setFotoStatus}
             placeholder="z.B. offen, erledigt, prüfen, dokumentiert"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={styles.input}
           />
 
@@ -2012,7 +2043,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             value={tags}
             onChangeText={setTags}
             placeholder="z.B. Rohrgraben, DN150, Bestand, Mangel"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={styles.input}
           />
 
@@ -2023,7 +2054,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             onChangeText={setNote}
             placeholder="Notizen..."
             multiline
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={[styles.input, { height: 110, textAlignVertical: "top" }]}
           />
         </View>
@@ -2099,7 +2130,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                       <Text style={styles.link}>Öffnen</Text>
                     </Pressable>
                     <Pressable onPress={() => removeAttachment(f.id)}>
-                      <Text style={[styles.link, { color: "#C33" }]}>
+                      <Text style={[styles.link, { color: COLORS.danger }]}>
                         Entfernen
                       </Text>
                     </Pressable>
@@ -2201,7 +2232,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   Keyboard.dismiss();
                   setKiOpen(false);
                 }} style={styles.closeX}>
-                <Text style={{ color: "#fff", fontWeight: "900" }}>X</Text>
+                <Text style={{ color: COLORS.textLight, fontWeight: "900" }}>X</Text>
               </Pressable>
             </View>
 
@@ -2210,7 +2241,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               value={kiInput}
               onChangeText={setKiInput}
               placeholder="Was soll RLC ausfüllen?"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               multiline
               style={[styles.input, { minHeight: 88, textAlignVertical: "top" }]}
             />
@@ -2224,10 +2255,10 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 paddingHorizontal: 14,
                 paddingVertical: 8,
                 borderRadius: 999,
-                backgroundColor: "#EAF1FF",
+                backgroundColor: COLORS.accentSoft,
               }}
             >
-              <Text style={{ color: "#2563EB", fontWeight: "900" }}>
+              <Text style={{ color: COLORS.accent, fontWeight: "900" }}>
                 Tastatur schließen
               </Text>
             </Pressable>
@@ -2246,13 +2277,13 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
 
             <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
               <Pressable
-                style={[styles.modalBtn, { backgroundColor: "#111" }]}
+                style={[styles.modalBtn, { backgroundColor: COLORS.text }]}
                 onPress={() => {
                   Keyboard.dismiss();
                   setKiOpen(false);
                 }}
               >
-                <Text style={{ color: "#fff", fontWeight: "900" }}>
+                <Text style={{ color: COLORS.textLight, fontWeight: "900" }}>
                   Schließen
                 </Text>
               </Pressable>
@@ -2271,7 +2302,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 }}
                 disabled={kiLoading || !kiUi?.suggestion}
               >
-                <Text style={{ color: "#fff", fontWeight: "900" }}>
+                <Text style={{ color: COLORS.textLight, fontWeight: "900" }}>
                   Übernehmen
                 </Text>
               </Pressable>
@@ -2297,12 +2328,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DDF1FF",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "#A8D3F5",
+    borderColor: COLORS.border,
   },
   headerKiTxt: {
-    color: "#12324A",
+    color: COLORS.accentDark,
     fontWeight: "900",
     fontSize: 13,
   },
@@ -2322,10 +2353,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#CDBEFF",
-    backgroundColor: "#F3EEFF",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.accentSoft,
   },
-  kiTxt: { color: "#5B34C4", fontWeight: "900", fontSize: 12 },
+  kiTxt: { color: COLORS.accentDark, fontWeight: "900", fontSize: 12 },
 
   modePill: {
     paddingVertical: 6,
@@ -2485,6 +2516,16 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
 });
+
+
+
+
+
+
+
+
+
+
 
 
 

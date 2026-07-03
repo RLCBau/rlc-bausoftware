@@ -1,3 +1,4 @@
+import { API_BASE, apiUrl } from "../../lib/apiBase";
 // apps/web/src/pages/mengenermittlung/Lieferscheine.tsx
 import React from "react";
 import { jsPDF } from "jspdf";
@@ -11,15 +12,15 @@ type Datei = { id: string; name: string; url: string; type: string };
 type WorkflowStatus = "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT";
 
 type LsRow = {
-  id?: string; // docId
+  id?: string;
   projectId: string;
 
-  date?: string; // yyyy-mm-dd
+  date?: string;
   lieferscheinNummer?: string;
 
-  supplier?: string; // Lieferant
-  site?: string; // Baustelle
-  driver?: string; // Fahrer
+  supplier?: string;
+  site?: string;
+  driver?: string;
   material?: string;
   quantity?: number;
   unit?: string;
@@ -27,11 +28,11 @@ type LsRow = {
   kostenstelle?: string;
   lvItemPos?: string | null;
 
-  comment?: string; // Beschreibung / Text
-  bemerkungen?: string; // Feld "Bemerkungen" im PDF
+  comment?: string;
+  bemerkungen?: string;
 
-  photos?: Datei[]; // UI field
-  attachments?: Datei[]; // server field (compat)
+  photos?: Datei[];
+  attachments?: Datei[];
 
   workflowStatus?: WorkflowStatus;
   submittedAt?: number | null;
@@ -58,13 +59,8 @@ const rid = () =>
 
 const STATE_STORAGE_KEY = "rlc-lieferscheine-state-v3";
 
-const API_ORIGIN =
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  (import.meta as any)?.env?.VITE_API_ORIGIN ||
-  "http://localhost:4000";
 
-const API_BASE = `${String(API_ORIGIN).replace(/\/$/, "")}/api`;
-const PROJECTS_BASE = `${String(API_ORIGIN).replace(/\/$/, "")}/projects`;
+const PROJECTS_BASE = `${String(API_BASE).replace(/\/$/, "")}/projects`;
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -121,7 +117,6 @@ function guessType(name: string) {
   return "application/octet-stream";
 }
 
-/** URL → dataURL (JPEG), se possibile */
 async function urlToDataURL(
   url: string,
   preferType = "image/jpeg"
@@ -271,27 +266,22 @@ export default function Lieferscheine() {
   const selectedProject = getSelectedProject();
   const navigate = useNavigate();
 
-  // IMPORTANT: use FS-key if available (BA-....)
   const [projectId, setProjectId] = React.useState<string>(
     selectedProject?.code || (selectedProject?.id as string | undefined) || ""
   );
 
-    // ✅ Routes laut App.tsx
   const PATH_BUERO = "/buro/projekte";
   const PATH_BUCHHALTUNG = "/buchhaltung/kostenuebersicht";
-
 
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = React.useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
 
-  // server-driven lists
   const [inboxRows, setInboxRows] = React.useState<LsRow[]>([]);
   const [freigegebenRows, setFreigegebenRows] = React.useState<LsRow[]>([]);
   const [history, setHistory] = React.useState<LsHistoryItem[]>([]);
 
-  // selection/edit form
   const [tab, setTab] = React.useState<Tab>("INBOX");
   const [selKey, setSelKey] = React.useState<string | null>(null);
 
@@ -302,26 +292,21 @@ export default function Lieferscheine() {
     workflowStatus: "DRAFT",
   });
 
-  // reject modal
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [rejectText, setRejectText] = React.useState("");
 
-  // upload staging (browser)
   const [pendingUploadFiles, setPendingUploadFiles] = React.useState<FileList | null>(null);
 
-  // FINAL preview (single loaded history file)
   const [finalPreview, setFinalPreview] = React.useState<{
     date: string;
     filename: string;
     rows: LsRow[];
   } | null>(null);
 
-  // keep form.projectId coherent
   React.useEffect(() => {
     setForm((p) => ({ ...p, projectId }));
   }, [projectId]);
 
-  /* ===== persist small UI state only ===== */
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem(STATE_STORAGE_KEY);
@@ -342,13 +327,6 @@ export default function Lieferscheine() {
     }
   }, [projectId, tab]);
 
-  /* ============================================================
-     LOADERS
-     - Inbox:     /ls/inbox/list
-     - Freig.:    /ls/freigegeben/list  (fallback se non esiste)
-     - History:   /ls/list
-     ============================================================ */
-
   const loadInbox = React.useCallback(async () => {
     if (!projectId) {
       setInboxRows([]);
@@ -365,7 +343,7 @@ export default function Lieferscheine() {
       return st === "DRAFT" || st === "EINGEREICHT" || st === "ABGELEHNT";
     });
 
-    inbox.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    inbox.sort((a: LsRow, b: LsRow) => String(b.date || "").localeCompare(String(a.date || "")));
     setInboxRows(inbox);
   }, [projectId]);
 
@@ -375,7 +353,6 @@ export default function Lieferscheine() {
       return;
     }
 
-    // 1) Try dedicated endpoint (recommended)
     try {
       const res = await api<any>(`/ls/freigegeben/list?projectId=${encodeURIComponent(projectId)}`);
       const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
@@ -384,14 +361,13 @@ export default function Lieferscheine() {
         .filter((r: LsRow) => !!r.id)
         .map((r: LsRow) => ({ ...r, workflowStatus: "FREIGEGEBEN" as WorkflowStatus }));
 
-      normalized.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+      normalized.sort((a: LsRow, b: LsRow) => String(b.date || "").localeCompare(String(a.date || "")));
       setFreigegebenRows(normalized);
       return;
     } catch (e) {
-      // fallthrough to fallback
+      /* fallback */
     }
 
-    // 2) Fallback: if server keeps approved items inside inbox/list
     try {
       const res = await api<any>(`/ls/inbox/list?projectId=${encodeURIComponent(projectId)}`);
       const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
@@ -400,7 +376,7 @@ export default function Lieferscheine() {
         .filter((r: LsRow) => !!r.id);
 
       const freig = normalized.filter((r: LsRow) => normalizeStatus(r.workflowStatus) === "FREIGEGEBEN");
-      freig.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+      freig.sort((a: LsRow, b: LsRow) => String(b.date || "").localeCompare(String(a.date || "")));
       setFreigegebenRows(freig);
     } catch {
       setFreigegebenRows([]);
@@ -427,7 +403,7 @@ export default function Lieferscheine() {
   }, [loadInbox, loadFreigegeben, loadHistory]);
 
   React.useEffect(() => {
-    loadAll();
+    void loadAll();
   }, [loadAll]);
 
   function setField<K extends keyof LsRow>(k: K, v: LsRow[K]) {
@@ -488,8 +464,6 @@ export default function Lieferscheine() {
     });
     setPendingUploadFiles(null);
   }
-
-  /* ===== API: server workflow ===== */
 
   async function submitInboxCreate(base: LsRow): Promise<{ docId: string }> {
     const payload = {
@@ -611,7 +585,6 @@ export default function Lieferscheine() {
         workflowStatus: normalizeStatus(form.workflowStatus) || "DRAFT",
       };
 
-      // create new doc
       if (!base.id) {
         const { docId } = await submitInboxCreate(base);
 
@@ -637,7 +610,6 @@ export default function Lieferscheine() {
         return;
       }
 
-      // update existing doc
       const docId = String(base.id);
       const meta = {
         ...base,
@@ -660,18 +632,12 @@ export default function Lieferscheine() {
     }
   }
 
-  /* ===== Freigegeben -> Final (Historie) =====
-     Expect server endpoint: POST /api/ls/save
-     Suggested payload: { projectId }
-     Optionally: { projectId, rows } if your server needs it
-  */
   async function saveFreigegebenToFinal() {
     if (!projectId) return alert("Bitte Projekt-ID eingeben.");
     try {
       setError(null);
       setLoading(true);
 
-      // try with rows (more robust)
       await api<any>(`/ls/save`, {
         method: "POST",
         body: JSON.stringify({
@@ -683,7 +649,6 @@ export default function Lieferscheine() {
       await loadHistory();
       alert("Freigegeben gespeichert (Final/Historie aktualisiert).");
     } catch (e1: any) {
-      // fallback without rows if server expects only projectId
       try {
         await api<any>(`/ls/save`, {
           method: "POST",
@@ -699,7 +664,6 @@ export default function Lieferscheine() {
     }
   }
 
-  /* ===== Commit ONE Freigegeben -> Final (move single doc) ===== */
   async function commitOneFreigegebenToFinal(row: LsRow) {
     if (!projectId) return alert("Bitte Projekt-ID eingeben.");
     const docId = String(row.id || form.id || "");
@@ -709,7 +673,6 @@ export default function Lieferscheine() {
       setError(null);
       setLoading(true);
 
-      // 1) Save meta (use FORM as "latest edits" if currently editing same doc)
       const meta = {
         ...form,
         id: docId,
@@ -723,24 +686,19 @@ export default function Lieferscheine() {
       await updateInboxMeta(docId, meta, pendingUploadFiles);
       setPendingUploadFiles(null);
 
-      // 2) Commit/move single file if endpoint exists
       try {
         await api(`/ls/freigegeben/commit`, {
           method: "POST",
           body: JSON.stringify({ projectId, docId }),
         });
       } catch {
-        // fallback: save with rows (server might only implement /ls/save)
         await api<any>(`/ls/save`, {
           method: "POST",
           body: JSON.stringify({ projectId, rows: [normalizeServerRow(meta, projectId)] }),
         });
       }
 
-      // 3) Reload lists + history
       await loadAll();
-
-      // 4) Go to Final
       setTab("FINAL");
       alert("Gespeichert und nach Final verschoben.");
     } catch (e: any) {
@@ -1171,7 +1129,7 @@ export default function Lieferscheine() {
   const rightCount =
     tab === "INBOX" ? inboxRows.length : tab === "FREIGEGEBEN" ? freigegebenRows.length : history.length;
 
-  const canEditFinal = (r: LsRow) => true;
+  const canEditFinal = (_r: LsRow) => true;
 
   function openAndEditFromFinal(r: LsRow) {
     selectRow(r);
@@ -1194,15 +1152,13 @@ export default function Lieferscheine() {
           className="page-header-actions"
           style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
         >
-          {/* ✅ Shortcuts to macro sections */}
-           <button className="btn" onClick={() => navigate(PATH_BUERO)} disabled={!projectId}>
-    Büro / Verwaltung
-  </button>
+          <button className="btn" onClick={() => navigate(PATH_BUERO)} disabled={!projectId}>
+            Büro / Verwaltung
+          </button>
 
-  <button className="btn" onClick={() => navigate(PATH_BUCHHALTUNG)} disabled={!projectId}>
-    Buchhaltung
-  </button>
-
+          <button className="btn" onClick={() => navigate(PATH_BUCHHALTUNG)} disabled={!projectId}>
+            Buchhaltung
+          </button>
 
           <button className="btn" onClick={transferToAufmassEditor} disabled={!activeList.length || !projectId}>
             Ins Aufmaßeditor übertragen
@@ -1228,7 +1184,6 @@ export default function Lieferscheine() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div
         className="card"
         style={{
@@ -1263,7 +1218,6 @@ export default function Lieferscheine() {
           alignItems: "flex-start",
         }}
       >
-        {/* LEFT */}
         <div className="card" style={{ padding: 10 }}>
           <h3 style={{ marginTop: 0, marginBottom: 6 }}>Lieferschein erfassen</h3>
 
@@ -1477,10 +1431,8 @@ export default function Lieferscheine() {
           </div>
         </div>
 
-        {/* RIGHT */}
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, alignItems: "stretch" }}>
-            {/* PDF preview */}
             <div className="card" style={{ padding: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <strong>PDF Vorschau</strong>
@@ -1514,7 +1466,6 @@ export default function Lieferscheine() {
               )}
             </div>
 
-            {/* right list */}
             <div className="card" style={{ padding: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                 <strong>{rightTitle}</strong>
@@ -1605,7 +1556,6 @@ export default function Lieferscheine() {
             </div>
           </div>
 
-          {/* Table */}
           <div className="card" style={{ padding: 0 }}>
             <div
               style={{
@@ -1713,7 +1663,9 @@ export default function Lieferscheine() {
                                     className="btn"
                                     onClick={() => {
                                       selectRow(r);
-                                      setTimeout(() => submitRowServer(), 0);
+                                      setTimeout(() => {
+                                        void submitRowServer();
+                                      }, 0);
                                     }}
                                     style={{ fontSize: 11, padding: "2px 6px" }}
                                     disabled={loading}
@@ -1726,7 +1678,9 @@ export default function Lieferscheine() {
                                   <>
                                     <button
                                       className="btn"
-                                      onClick={() => approveRowServer(r)}
+                                      onClick={() => {
+                                        void approveRowServer(r);
+                                      }}
                                       style={{ fontSize: 11, padding: "2px 6px" }}
                                       disabled={loading}
                                     >
@@ -1748,7 +1702,9 @@ export default function Lieferscheine() {
                                     className="btn"
                                     onClick={() => {
                                       selectRow(r);
-                                      setTimeout(() => submitRowServer(), 0);
+                                      setTimeout(() => {
+                                        void submitRowServer();
+                                      }, 0);
                                     }}
                                     style={{ fontSize: 11, padding: "2px 6px" }}
                                     disabled={loading}
@@ -1770,7 +1726,9 @@ export default function Lieferscheine() {
 
                                     <button
                                       className="btn"
-                                      onClick={() => commitOneFreigegebenToFinal(r)}
+                                      onClick={() => {
+                                        void commitOneFreigegebenToFinal(r);
+                                      }}
                                       style={{ fontSize: 11, padding: "2px 6px" }}
                                       disabled={loading}
                                     >
@@ -1792,7 +1750,6 @@ export default function Lieferscheine() {
         </div>
       </div>
 
-      {/* Reject Modal */}
       {rejectOpen && (
         <div
           onClick={() => setRejectOpen(false)}
@@ -1818,7 +1775,7 @@ export default function Lieferscheine() {
               <button className="btn" onClick={() => setRejectOpen(false)} disabled={loading}>
                 Abbrechen
               </button>
-              <button className="btn" onClick={confirmReject} disabled={loading}>
+              <button className="btn" onClick={() => void confirmReject()} disabled={loading}>
                 Ablehnen
               </button>
             </div>
@@ -1826,7 +1783,6 @@ export default function Lieferscheine() {
         </div>
       )}
 
-      {/* Image Preview */}
       {previewUrl && (
         <div
           onClick={() => setPreviewUrl(null)}
@@ -1896,7 +1852,7 @@ function L(
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children }: { children?: React.ReactNode }) {
   return (
     <th
       style={{
@@ -1913,7 +1869,7 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 
 function Td(
-  props: React.HTMLAttributes<HTMLTableCellElement> & {
+  props: React.TdHTMLAttributes<HTMLTableCellElement> & {
     children?: React.ReactNode;
   }
 ) {
@@ -1933,3 +1889,10 @@ function Td(
     </td>
   );
 }
+
+
+
+
+
+
+

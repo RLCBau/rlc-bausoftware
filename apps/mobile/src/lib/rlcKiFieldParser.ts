@@ -129,72 +129,182 @@ function parsePeopleHours(input: string, keys: string[]) {
   return out;
 }
 
-export function parseRlcRegie(inputRaw: any): RlcRegieParsed {
-  const input = clean(inputRaw);
+function rlcS(v: any): string {
+  return String(v ?? "").replace(/\s+/g, " ").trim();
+}
 
-  const doc: RlcRegieParsed = {
-    datum: parseDate(input),
-    baustelle: pick(input, ["baustelle", "projekt", "bauvorhaben"]),
-    wetter: pick(input, ["wetter"]),
-    taetigkeit: pick(input, ["tätigkeit", "taetigkeit", "leistung", "arbeit", "beschreibung"]),
-    mitarbeiter: parsePeopleHours(input, ["mitarbeiter", "personal", "arbeiter"]),
-    geraete: parsePeopleHours(input, ["gerät", "geraet", "geräte", "geraete", "maschine", "bagger"]),
-    material: parseMaterials(input),
-    bemerkung: pick(input, ["bemerkung", "notiz", "hinweis"]) || input,
+function rlcLower(v: any): string {
+  return rlcS(v).toLowerCase();
+}
+
+function rlcDate(input: string): string {
+  const s = rlcS(input);
+  const m = s.match(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/);
+  if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  const iso = s.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+  return iso ? iso[1] : "";
+}
+
+function rlcTime(v: any): string {
+  const s = rlcS(v);
+  const m = s.match(/\b(\d{1,2})(?::|\.| Uhr)?(\d{2})?\b/);
+  if (!m) return "";
+  const h = Math.max(0, Math.min(23, Number(m[1] || 0)));
+  const min = Math.max(0, Math.min(59, Number(m[2] || 0)));
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+function rlcNum(v: any): string {
+  const s = rlcS(v).replace(",", ".");
+  const m = s.match(/-?\d+(?:\.\d+)?/);
+  return m ? m[0] : "";
+}
+
+function rlcPick(text: string, re: RegExp): string {
+  const m = text.match(re);
+  return rlcS(m?.[1] || "");
+}
+
+export function parseRlcRegie(inputRaw: any): RlcRegieParsed {
+  const text = rlcS(inputRaw);
+  const low = rlcLower(text);
+
+  const vonBis =
+    text.match(/\b(?:heute\s*)?(?:von\s*)?(\d{1,2})(?::(\d{2}))?\s*(?:uhr)?\s*(?:bis|-)\s*(\d{1,2})(?::(\d{2}))?\s*(?:uhr)?/i) ||
+    text.match(/\barbeitsbeginn\s*[:=]?\s*(\d{1,2})(?::(\d{2}))?.*?\barbeitsende\s*[:=]?\s*(\d{1,2})(?::(\d{2}))?/i);
+
+  const pauseRaw = rlcPick(
+    text,
+    /\bpause\s*(?:1)?\s*(?:\:|=)?\s*(eine|einer|\d+(?:[,.]\d+)?|\d{1,2}:\d{2})\s*(?:stunde|stunden|std|h|minuten|min)?/i
+  );
+
+  const pause1 =
+    pauseRaw.includes(":")
+      ? pauseRaw
+      : `${String(Math.round(Number(String(pauseRaw || "1").replace(",", ".").replace(/eine|einer/i, "1")) || 1)).padStart(2, "0")}:00`;
+
+  const baustelle = rlcPick(
+    text,
+    /\b(?:baustelle|kostenstelle|projekt)\s*[:=]?\s*(BA[- ]?\d{4}[- ]?\d{3}|BA\s*Test|[A-ZÄÖÜ]{1,5}[- ]?\d{2,6}(?:[- ]?\d{1,6})?)\b/i
+  );
+  const taetigkeit = rlcPick(text, /\b(?:tätigkeit|taetigkeit|leistung|arbeit)\s*[:=]?\s*(.+?)(?=\b(?:mitarbeiter|arbeiter|bagger|maschine|gerät|geraet|material|$))/i);
+
+  const mitarbeiterCount = rlcPick(text, /\b(\d+)\s*(?:mitarbeiter|arbeiter|personen|mann)\b/i);
+  const mitarbeiterName = rlcPick(text, /\bmitarbeiter\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß\- ]+?)\s+\d+(?:[,.]\d+)?\s*(?:stunden|std|h)\b/i);
+  const mitarbeiterStd =
+    rlcPick(text, /\bmitarbeiter\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß\- ]+?\s+(\d+(?:[,.]\d+)?)\s*(?:stunden|std|h)\b/i) ||
+    rlcPick(text, /\b(\d+(?:[,.]\d+)?)\s*(?:stunden|std|h)\b/i);
+
+  const machineName =
+    rlcPick(text, /\b((?:bagger|radlader|lkw|walze|rüttelplatte|ruettelplatte|kompressor|dumper)(?:\s+\d+(?:[,.]\d+)?\s*(?:t|tonnen))?)\s+\d+(?:[,.]\d+)?\s*(?:stunden|std|h)\b/i) ||
+    rlcPick(text, /\b(?:maschine|gerät|geraet)\s*[:=]?\s*([A-Za-zÄÖÜäöüß0-9 ,.\-\/]+?)(?=\s+\d+(?:[,.]\d+)?\s*(?:stunden|std|h)|$)/i);
+
+  const machineStd = rlcPick(text, /\b(?:bagger|radlader|lkw|walze|rüttelplatte|ruettelplatte|kompressor|dumper|maschine|gerät|geraet)[A-Za-zÄÖÜäöüß0-9 ,.\-\/]*?\s+(\d+(?:[,.]\d+)?)\s*(?:stunden|std|h)\b/i);
+
+  const doc: any = {
+    datum: rlcDate(text),
+    arbeitsbeginn: vonBis ? `${String(vonBis[1]).padStart(2, "0")}:${String(vonBis[2] || "00").padStart(2, "0")}` : "",
+    arbeitsende: vonBis ? `${String(vonBis[3]).padStart(2, "0")}:${String(vonBis[4] || "00").padStart(2, "0")}` : "",
+    pause1: pauseRaw ? pause1 : "",
+    pause2: "",
+    wetter: rlcPick(text, /\bwetter\s*[:=]?\s*([A-Za-zÄÖÜäöüß ]+?)(?=\.|,|;|$)/i),
+    kostenstelle: baustelle,
+    ort: baustelle,
+    taetigkeit: taetigkeit || text,
+    bemerkung: taetigkeit || text,
+    mitarbeiter: mitarbeiterName
+      ? [{ name: mitarbeiterName, stunden: mitarbeiterStd || "", hours: mitarbeiterStd || "" }]
+      : mitarbeiterCount
+      ? [{ name: `${mitarbeiterCount} Mitarbeiter`, anzahl: mitarbeiterCount, stunden: mitarbeiterStd || "", hours: mitarbeiterStd || "" }]
+      : [],
+    geraete: machineName
+      ? [{ name: machineName, stunden: machineStd || mitarbeiterStd || "", hours: machineStd || mitarbeiterStd || "" }]
+      : /\bbagger\b/i.test(text)
+      ? [{ name: "Bagger", stunden: machineStd || mitarbeiterStd || "", hours: machineStd || mitarbeiterStd || "" }]
+      : [],
+    material: [],
+    warnings: [],
   };
 
-  const warnings: string[] = [];
-  if (!doc.datum) warnings.push("Datum fehlt.");
-  if (!doc.taetigkeit && !doc.bemerkung) warnings.push("Tätigkeit/Beschreibung fehlt.");
-  if (!doc.mitarbeiter?.length && !doc.geraete?.length && !doc.material?.length) {
-    warnings.push("Keine Mitarbeiter/Geräte/Material erkannt.");
-  }
+  if (!doc.datum) doc.warnings.push("Datum fehlt.");
+  if (!doc.arbeitsbeginn) doc.warnings.push("Arbeitsbeginn fehlt.");
+  if (!doc.arbeitsende) doc.warnings.push("Arbeitsende fehlt.");
+  if (!doc.mitarbeiter?.length && !doc.geraete?.length) doc.warnings.push("Keine Mitarbeiter/Geräte/Material erkannt.");
 
-  doc.warnings = warnings;
   return doc;
 }
 
 export function parseRlcLieferschein(inputRaw: any): RlcLieferscheinParsed {
-  const input = clean(inputRaw);
+  const text = rlcS(inputRaw);
 
-  const doc: RlcLieferscheinParsed = {
-    datum: parseDate(input),
-    lieferscheinNr: pick(input, ["lieferschein", "lieferscheinnummer", "lieferschein-nr", "ls-nr", "nummer"]),
-    lieferant: pick(input, ["lieferant", "firma"]),
-    baustelle: pick(input, ["baustelle", "projekt", "bauvorhaben"]),
-    fahrer: pick(input, ["fahrer"]),
-    kennzeichen: pick(input, ["kennzeichen", "kfz", "lkw"]),
-    material: parseMaterials(input),
-    bemerkung: pick(input, ["bemerkung", "notiz", "hinweis"]) || input,
+  const lieferant = rlcPick(text, /\blieferant\s*[:=]?\s*([A-Za-zÄÖÜäöüß0-9 .&\-]+?)(?=,|\.|;|\s+material\b|\s+menge\b|\s+fahrer\b|\s+kennzeichen\b|$)/i);
+  const material = rlcPick(text, /\bmaterial\s*[:=]?\s*([A-Za-zÄÖÜäöüß0-9\/ .\-]+?)(?=,|\.|;|\s+menge\b|\s+fahrer\b|\s+kennzeichen\b|$)/i);
+  const menge = rlcPick(text, /\bmenge\s*[:=]?\s*(\d+(?:[,.]\d+)?)\s*(tonnen|t|kg|m3|m³|m2|m²|m|stk|st)?/i);
+  const einheit = rlcPick(text, /\bmenge\s*[:=]?\s*\d+(?:[,.]\d+)?\s*(tonnen|t|kg|m3|m³|m2|m²|m|stk|st)\b/i);
+  const fahrer = rlcPick(text, /\bfahrer\s*[:=]?\s*([A-Za-zÄÖÜäöüß\- ]+?)(?=,|\.|;|\s+kennzeichen\b|$)/i);
+  const kennzeichen = rlcPick(text, /\bkennzeichen\s*[:=]?\s*([A-ZÄÖÜ]{1,3}[- ]?[A-ZÄÖÜ]{1,3}[- ]?\d{1,5})\b/i);
+  const baustelle = rlcPick(text, /\b(?:baustelle|kostenstelle|projekt)\s*[:=]?\s*([A-ZÄÖÜ]{1,5}[- ]?\d{2,6}(?:[- ]?\d{1,6})?|BA\s*Test)\b/i);
+
+  const doc: any = {
+    datum: rlcDate(text),
+    lieferscheinNr: rlcPick(text, /\b(?:lieferschein(?:nummer)?|ls)\s*(?:nr\.?|nummer)?\s*[:=]?\s*([A-Za-z0-9\-\/]+)/i),
+    lieferant,
+    baustelle,
+    fahrer,
+    kennzeichen,
+    bemerkung: text,
+    material: material ? [{ name: material, quantity: menge, unit: einheit === "tonnen" ? "t" : einheit }] : [],
+    warnings: [],
   };
 
-  const warnings: string[] = [];
-  if (!doc.lieferant) warnings.push("Lieferant fehlt.");
-  if (!doc.datum) warnings.push("Datum fehlt.");
-  if (!doc.material?.length) warnings.push("Kein Material erkannt.");
+  if (!doc.lieferant) doc.warnings.push("Lieferant fehlt.");
+  if (!doc.datum) doc.warnings.push("Datum fehlt.");
+  if (!doc.material?.length) doc.warnings.push("Kein Material erkannt.");
 
-  doc.warnings = warnings;
   return doc;
 }
 
 export function parseRlcFotos(inputRaw: any): RlcFotosParsed {
-  const input = clean(inputRaw);
+  const text = rlcS(inputRaw);
 
-  const doc: RlcFotosParsed = {
-    datum: parseDate(input),
-    baustelle: pick(input, ["baustelle", "projekt", "bauvorhaben"]),
-    ort: pick(input, ["ort", "station", "bereich"]),
-    kategorie: pick(input, ["kategorie", "typ"]),
-    beschreibung: pick(input, ["beschreibung", "foto", "text"]),
-    mangel: pick(input, ["mangel", "schaden", "problem"]),
-    lvPos: pick(input, ["lv", "position", "pos"]),
-    bemerkung: pick(input, ["bemerkung", "notiz", "hinweis"]) || input,
+  const kostenstelle = rlcPick(text, /\b(?:kostenstelle|baustelle|projekt)\s*[:=]?\s*([A-ZÄÖÜ]{1,5}[- ]?\d{2,6}(?:[- ]?\d{1,6})?|BA\s*Test)\b/i);
+  const gewerk =
+    rlcPick(text, /\b(kanalbau|kabelbau|tiefbau|pflaster|asphalt|rohrgraben|wasserleitung|glasfaser|strom|gas)\b/i) ||
+    (/(rohrgraben|leitung|verfüll|verfuell)/i.test(text) ? "Tiefbau" : "");
+
+  const kategorie =
+    /(mangel|schaden|defekt)/i.test(text) ? "Mangel" :
+    /(beweissicherung|dokumentiert|dokumentation|foto)/i.test(text) ? "Beweissicherung" :
+    /(fortschritt|baufortschritt)/i.test(text) ? "Fortschritt" : "Notiz";
+
+  const status =
+    /(offen|nicht verfüllt|nicht verfuellt|prüfen|pruefen)/i.test(text) ? "prüfen" :
+    /(erledigt|fertig|abgeschlossen)/i.test(text) ? "erledigt" : "offen";
+
+  const tags: string[] = [];
+  if (/rohrgraben/i.test(text)) tags.push("Rohrgraben");
+  if (/leitung/i.test(text)) tags.push("Leitung");
+  if (/verfüll|verfuell/i.test(text)) tags.push("Verfüllung");
+  if (/beweissicherung|dokumentiert/i.test(text)) tags.push("Beweissicherung");
+
+  const doc: any = {
+    datum: rlcDate(text),
+    kostenstelle,
+    ortAbschnitt: kostenstelle,
+    kategorie,
+    gewerk,
+    status,
+    tags,
+    beschreibung: text,
+    bemerkung: text,
+    warnings: [],
   };
 
-  const warnings: string[] = [];
-  if (!doc.beschreibung && !doc.bemerkung) warnings.push("Beschreibung fehlt.");
-  if (!doc.ort && !doc.baustelle) warnings.push("Ort/Baustelle fehlt.");
+  if (!doc.kostenstelle) doc.warnings.push("Kostenstelle fehlt.");
+  if (!doc.gewerk) doc.warnings.push("Gewerk nicht erkannt.");
 
-  doc.warnings = warnings;
   return doc;
 }
+
+
+

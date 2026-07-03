@@ -259,10 +259,10 @@ const styles = StyleSheet.create({
   statLabel: { color: COLORS.sub, marginTop: 4, fontSize: 12, fontWeight: "800" },
   actions: { flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, backgroundColor: COLORS.bg },
   primary: { flex: 1.25, backgroundColor: COLORS.accent, borderRadius: 12, padding: 13, alignItems: "center" },
-  primaryText: { color: "#fff", fontWeight: "900" },
+  primaryText: { color: COLORS.textLight, fontWeight: "900" },
   secondary: { flex: 1, backgroundColor: COLORS.card2, borderRadius: 12, padding: 13, alignItems: "center" },
   secondaryText: { color: COLORS.text, fontWeight: "900" },
-  error: { margin: 16, color: "#991b1b", backgroundColor: "#fee2e2", borderRadius: 12, padding: 12, fontWeight: "900" },
+  error: { margin: 16, color: COLORS.danger, backgroundColor: COLORS.dangerBg, borderRadius: 12, padding: 12, fontWeight: "900" },
   list: { paddingHorizontal: 16, paddingTop: 2, paddingBottom: 28 },
   emptyList: { flexGrow: 1, alignItems: "center", justifyContent: "center" },
   empty: { color: COLORS.sub, fontWeight: "900" },
@@ -273,7 +273,9 @@ const styles = StyleSheet.create({
   cardTitle: { marginTop: 8, color: COLORS.text, fontWeight: "900", lineHeight: 20 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   meta: { backgroundColor: COLORS.card2, color: COLORS.sub, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 8, fontWeight: "800", fontSize: 12 },
-  warning: { color: "#92400e", marginTop: 10, fontWeight: "800", lineHeight: 18 },
+  warning: { color: COLORS.warning, marginTop: 10, fontWeight: "800", lineHeight: 18 },
 });
+
+
 
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // apps/server/src/routes/regie.ts
 import { Router } from "express";
 import multer from "multer";
@@ -7,7 +8,6 @@ import mime from "mime-types";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
-
 import { recognizeFromFiles } from "../services/photoRecognition";
 import { parseLieferschein } from "../services/lieferscheinParser";
 import { matchLVPositions } from "../services/lvMatching";
@@ -207,17 +207,26 @@ function latestJsonForDate(dir: string, date: string): string | null {
   return path.join(dir, all[all.length - 1]);
 }
 
-/* ================== S3 / MinIO ================== */
-const S3_ENABLED = !!process.env.S3_ENDPOINT;
+/* =================== S3 / MinIO =================== */
+const S3_ENABLED = (process.env.FEATURE_MINIO === "on") || !!process.env.S3_ENDPOINT;
+
+const S3_ENDPOINT = process.env.S3_ENDPOINT || "http://minio:9000";
 const S3_BUCKET = process.env.S3_BUCKET || "rlc-storage";
+const S3_REGION = process.env.S3_REGION || process.env.AWS_REGION || "us-east-1";
+
+const S3_ACCESS_KEY =
+  process.env.S3_ACCESS_KEY || process.env.AWS_ACCESS_KEY_ID || "";
+const S3_SECRET_KEY =
+  process.env.S3_SECRET_KEY || process.env.AWS_SECRET_ACCESS_KEY || "";
+
 const s3 = S3_ENABLED
   ? new S3Client({
-      region: process.env.S3_REGION || "eu-central-1",
-      endpoint: process.env.S3_ENDPOINT,
-      forcePathStyle: true,
+      region: S3_REGION,
+      endpoint: S3_ENDPOINT,
+      forcePathStyle: true, // CRITICO per MinIO
       credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY || "minioadmin",
-        secretAccessKey: process.env.S3_SECRET_KEY || "minioadmin",
+        accessKeyId: S3_ACCESS_KEY,
+        secretAccessKey: S3_SECRET_KEY,
       },
     })
   : null;
@@ -312,7 +321,7 @@ async function createDocumentVersion(opts: {
 const STAGING_RAW = path.join(PROJECTS_ROOT, "_staging", "regie", "raw");
 ensureDir(STAGING_RAW);
 
-const upload = multer({
+    const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, STAGING_RAW),
     filename: (_req, file, cb) => {
@@ -321,6 +330,9 @@ const upload = multer({
       cb(null, `${ts}__${safe}`);
     },
   }),
+  limits: {
+    fileSize: 100 * 1024 * 1024, // 100 MB pro Datei
+  },
 });
 
 /* =========================================================
@@ -470,6 +482,7 @@ router.post(
 
       const out = path.join(dir, `${docId}.json`);
       writeJson(out, payload);
+      console.log("[regie submit] out =", out, "exists =", fs.existsSync(out));
 
       return res.json({ ok: true, fsKey, docId, inboxPath: out });
     } catch (e: any) {
@@ -608,6 +621,9 @@ router.post(
 
       const fsKey = await resolveProjectFsKey(body.projectId);
       const p = path.join(regieInboxDir(fsKey), `${body.docId}.json`);
+      console.log("[regie submit] body.projectId =", body.projectId);
+      console.log("[regie submit] fsKey =", fsKey);
+      console.log("[regie submit] inboxPath =", p);
       if (!fs.existsSync(p)) {
         return res.status(404).json({ ok: false, error: "doc not found in inbox" });
       }

@@ -3,10 +3,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../../store/useProject";
 
-const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+
 
 /* ================= TYPES ================= */
 
@@ -152,30 +149,91 @@ const num = (v: any, d = 3) => {
     : "0";
 };
 
-/* ================= LOCAL STORAGE HELPERS ================= */
-
-function loadAufmassLocal(projectKey: string): AufmassRow[] {
-  if (!projectKey) return [];
-  try {
-    const key = `RLC_AUFMASS_${projectKey}`;
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as AufmassRow[]) : [];
-  } catch {
-    return [];
-  }
+function safeTrim(v: any) {
+  return String(v ?? "").trim();
 }
 
-function loadNachtraegeLocal(projectId: string): Nachtrag[] {
-  if (!projectId) return [];
-  try {
-    const raw = localStorage.getItem(`nt:${projectId}`);
-    const parsed = JSON.parse(raw || "[]");
-    return Array.isArray(parsed) ? (parsed as Nachtrag[]) : [];
-  } catch {
-    return [];
+function byPosAsc(a: { lvPos?: string; pos?: string }, b: { lvPos?: string; pos?: string }) {
+  const pa = String(a.lvPos ?? a.pos ?? "");
+  const pb = String(b.lvPos ?? b.pos ?? "");
+  return pa.localeCompare(pb, "de-DE", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+/* ================= LOCAL STORAGE HELPERS ================= */
+
+function loadAufmassLocal(projectCode?: string, projectId?: string): AufmassRow[] {
+  const keys = [projectCode, projectId]
+    .map((k) => safeTrim(k))
+    .filter((k, i, arr) => !!k && arr.indexOf(k) === i);
+
+  const byPos = new Map<string, AufmassRow>();
+
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(`RLC_AUFMASS_${key}`);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const arr = Array.isArray(parsed) ? (parsed as AufmassRow[]) : [];
+
+      for (const r of arr) {
+        const pos = safeTrim(r?.pos);
+        if (!pos) continue;
+
+        const prev = byPos.get(pos);
+        if (!prev) {
+          byPos.set(pos, {
+            ...r,
+            id: safeTrim(r?.id) || `${pos}-${key}`,
+            pos,
+          });
+          continue;
+        }
+
+        byPos.set(pos, {
+          ...prev,
+          id: safeTrim(prev.id) || safeTrim(r?.id) || `${pos}-${key}`,
+          text: safeTrim(prev.text) ? prev.text : String(r?.text ?? ""),
+          unit: safeTrim(prev.unit) ? prev.unit : String(r?.unit ?? ""),
+          ep: Number(prev.ep || 0) || Number(r?.ep || 0),
+          soll: Number(prev.soll || 0) || Number(r?.soll || 0),
+          ist: Math.max(Number(prev.ist || 0), Number(r?.ist || 0)),
+          factor: prev.factor ?? r?.factor ?? 1,
+          formula: safeTrim(prev.formula) ? prev.formula : String(r?.formula ?? ""),
+          note: safeTrim(prev.note) ? prev.note : String(r?.note ?? ""),
+        });
+      }
+    } catch {
+      // ignore singolo key
+    }
   }
+
+  return Array.from(byPos.values()).sort((a, b) => byPosAsc(a, b));
+}
+
+function loadNachtraegeLocal(projectId: string, projectKey?: string): Nachtrag[] {
+  const keys = [projectId, projectKey]
+    .map((k) => safeTrim(k))
+    .filter((k, i, arr) => !!k && arr.indexOf(k) === i);
+
+  const out: Nachtrag[] = [];
+
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(`nt:${key}`);
+      const parsed = JSON.parse(raw || "[]");
+      if (Array.isArray(parsed)) {
+        out.push(...(parsed as Nachtrag[]));
+      }
+    } catch {
+      // ignore singolo key
+    }
+  }
+
+  return out;
 }
 
 /* ================= OPTIONAL API (non rompe se assente) ================= */
@@ -194,11 +252,18 @@ async function tryApi<T>(path: string): Promise<T | null> {
 
 export default function VerknuepfungNachtraegeAbrechnung() {
   const navigate = useNavigate();
-  const { getSelectedProject } = useProject();
-  const project = getSelectedProject();
+  const projectStore = useProject() as any;
+  const currentProject = projectStore?.currentProject;
+  const getSelectedProject = projectStore?.getSelectedProject;
 
-  const projectKey = (project?.code || project?.id || "").trim();
-  const projectId = project?.id || "";
+  const selectedProject =
+    typeof getSelectedProject === "function" ? getSelectedProject() : null;
+
+  const project = currentProject || selectedProject || null;
+
+  const projectKey = safeTrim(project?.code || project?.id || "");
+  const projectCode = safeTrim(project?.code || "");
+  const projectId = safeTrim(project?.id || "");
 
   const [rows, setRows] = React.useState<LinkRow[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -223,39 +288,49 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
   function buildRows(aufmass: AufmassRow[], nts: Nachtrag[]): LinkRow[] {
     const ntByLvPos = new Map<string, Nachtrag[]>();
+
     for (const n of nts) {
-      const k = String(n.lvPos || "").trim();
+      const k = safeTrim(n.lvPos);
       if (!k) continue;
+
       const arr = ntByLvPos.get(k) || [];
-      arr.push({ ...n, total: (n.qty || 0) * (n.ep || 0) });
+      arr.push({
+        ...n,
+        total:
+          Number.isFinite(Number(n.total))
+            ? Number(n.total)
+            : Number(n.qty || 0) * Number(n.ep || 0),
+      });
       ntByLvPos.set(k, arr);
     }
 
-    return (aufmass || []).map((r) => {
-      const diff = Number(r.ist || 0) - Number(r.soll || 0);
-      const status: LinkRow["status"] =
-        diff === 0 ? "OK" : diff > 0 ? "UEBERMASS" : "FEHLMENGE";
+    return (aufmass || [])
+      .map((r, idx) => {
+        const diff = Number(r.ist || 0) - Number(r.soll || 0);
+        const status: LinkRow["status"] =
+          diff === 0 ? "OK" : diff > 0 ? "UEBERMASS" : "FEHLMENGE";
 
-      const lvPos = String(r.pos || "").trim();
-      const matches = ntByLvPos.get(lvPos) || [];
-      const best = matches[0]; // semplice: primo
+        const lvPos = safeTrim(r.pos);
+        const matches = ntByLvPos.get(lvPos) || [];
+        const best = matches[0];
 
-      return {
-        id: r.id || `${lvPos}-${Math.random()}`,
-        lvPos,
-        text: String(r.text || ""),
-        unit: String(r.unit || ""),
-        soll: Number(r.soll || 0),
-        ist: Number(r.ist || 0),
-        ep: Number(r.ep || 0),
-        diff,
-        status,
-        nachtragNr: best?.number || undefined,
-        nachtragStatus: best?.status || undefined,
-        nachtragTotal: best?.total || undefined,
-        abschlagNr: null,
-      };
-    });
+        return {
+          id: safeTrim(r.id) || `${lvPos || "row"}-${idx}`,
+          lvPos,
+          text: String(r.text || ""),
+          unit: String(r.unit || ""),
+          soll: Number(r.soll || 0),
+          ist: Number(r.ist || 0),
+          ep: Number(r.ep || 0),
+          diff,
+          status,
+          nachtragNr: best?.number || undefined,
+          nachtragStatus: best?.status || undefined,
+          nachtragTotal: best?.total || undefined,
+          abschlagNr: null,
+        };
+      })
+      .sort(byPosAsc);
   }
 
   async function load() {
@@ -271,12 +346,11 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
     try {
       // 1) optional server (se esiste, non obbligatorio)
-      // TODO: se implementi endpoint, qui puoi usarli senza cambiare UI.
       // const server = await tryApi<{ ok: boolean; items: LinkRow[] }>(`/api/linking/list?projectId=${encodeURIComponent(projectId)}`);
 
       // 2) local fallback: Aufmaß + Nachträge LS
-      const aufmass = loadAufmassLocal(projectKey);
-      const nachtraege = projectId ? loadNachtraegeLocal(projectId) : [];
+      const aufmass = loadAufmassLocal(projectCode, projectId);
+      const nachtraege = loadNachtraegeLocal(projectId, projectKey);
 
       const built = buildRows(aufmass, nachtraege);
       setRows(built);
@@ -293,7 +367,7 @@ export default function VerknuepfungNachtraegeAbrechnung() {
   React.useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectKey, projectId]);
+  }, [projectKey, projectId, projectCode]);
 
   const kpi = React.useMemo(() => {
     let sollSum = 0;
@@ -330,18 +404,39 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
     if (st === "OK")
       return (
-        <span style={{ ...base, background: "#ECFDF3", borderColor: "#BBF7D0", color: "#166534" }}>
+        <span
+          style={{
+            ...base,
+            background: "#ECFDF3",
+            borderColor: "#BBF7D0",
+            color: "#166534",
+          }}
+        >
           OK
         </span>
       );
     if (st === "UEBERMASS")
       return (
-        <span style={{ ...base, background: "#FEF3C7", borderColor: "#FDE68A", color: "#92400E" }}>
+        <span
+          style={{
+            ...base,
+            background: "#FEF3C7",
+            borderColor: "#FDE68A",
+            color: "#92400E",
+          }}
+        >
           Übermaß
         </span>
       );
     return (
-      <span style={{ ...base, background: "#FEE2E2", borderColor: "#FECACA", color: "#991B1B" }}>
+      <span
+        style={{
+          ...base,
+          background: "#FEE2E2",
+          borderColor: "#FECACA",
+          color: "#991B1B",
+        }}
+      >
         Fehlmenge
       </span>
     );
@@ -589,3 +684,8 @@ function Kpi({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+
+
+
+

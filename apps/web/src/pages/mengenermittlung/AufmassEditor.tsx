@@ -1,13 +1,10 @@
+import { apiUrl } from "../../lib/apiBase";
 // apps/web/src/pages/aufmass/AufmassEditor.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../../store/useProject";
 import { consumeCadExport } from "../../utils/cadImport";
-
-const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+import { getStandardFormel } from "../../lib/stammdaten";
 
 /* ============================================================
    Typen
@@ -20,10 +17,10 @@ type LVRow = {
   unit: string;
   ep: number;
   soll: number;
-  formula: string; // wenn leer, kann IST manuell gesetzt werden
+  formula: string;
   ist: number;
   note?: string;
-  factor?: number; // default 1
+  factor?: number;
 };
 
 type LvPosition = {
@@ -46,9 +43,91 @@ type FotoExtra = {
 
 const FOTO_STORAGE_KEY = "rlc-manuell-foto-v1";
 
-/** ✅ Bridge-Keys */
+/** Bridge-Keys */
 const AUFMASS_LAST_CODE = "RLC_AUFMASS_LAST_CODE";
 const AUFMASS_LAST_ID = "RLC_AUFMASS_LAST_ID";
+
+/* ============================================================
+   Angebot Snapshot Bridge
+   ============================================================ */
+
+type AngebotSnapshotRow = {
+  id?: string;
+  posNr?: string;
+  kurztext?: string;
+  einheit?: string;
+  menge?: number;
+  preis?: number;
+};
+
+type AngebotSnapshot = {
+  projectKey: string;
+  createdAt: string;
+  rows: AngebotSnapshotRow[];
+  options?: any;
+};
+
+function loadOfferSnapshot(
+  project: any,
+  stickyCode?: string,
+  stickyId?: string
+): AngebotSnapshot | null {
+  try {
+    const candidates = [
+      project?.id,
+      project?.number,
+      project?.name,
+      project?.code,
+      stickyId,
+      stickyCode,
+    ]
+      .map((v) => String(v ?? "").trim())
+      .filter(Boolean);
+
+    for (const c of candidates) {
+      const raw = localStorage.getItem(`rlc_angebot_snapshot:${c}`);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as AngebotSnapshot;
+      if (parsed && Array.isArray(parsed.rows)) return parsed;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function safeUUID() {
+  try {
+    // @ts-ignore
+    if (typeof crypto !== "undefined" && crypto?.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+  return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function buildLvRowFromOfferRow(r: AngebotSnapshotRow, idx: number): LVRow {
+  const unit = String(r.einheit ?? "m");
+  return {
+    id: safeUUID(),
+    pos: String(r.posNr ?? `ANG.${String(idx + 1).padStart(3, "0")}`),
+    text: String(r.kurztext ?? ""),
+    unit,
+    ep: Number(r.preis ?? 0),
+    soll: Number(r.menge ?? 0),
+    formula: getStandardFormel(unit),
+    ist: 0,
+    note: "Aus Angebot übernommen",
+    factor: 1,
+  };
+}
+
+function angebotRowsToAufmassRows(rows: AngebotSnapshotRow[]): LVRow[] {
+  return (Array.isArray(rows) ? rows : []).map(buildLvRowFromOfferRow);
+}
 
 /* ============================================================
    Helper
@@ -66,6 +145,7 @@ function calc(formula: string): number {
     .replace(/,/g, ".")
     .replace(/[^\d+\-*/().\s]/g, "");
   if (!cleaned.trim()) return 0;
+
   try {
     // eslint-disable-next-line no-new-func
     const f = new Function(`return (${cleaned});`);
@@ -87,18 +167,8 @@ function byPosAsc(a: LVRow, b: LVRow) {
   });
 }
 
-function safeUUID() {
-  try {
-    // @ts-ignore
-    if (typeof crypto !== "undefined" && crypto?.randomUUID) return crypto.randomUUID();
-  } catch {
-    // ignore
-  }
-  return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
 /* ============================================================
-   ✅ UUID helper (NEW)
+   UUID helper
    ============================================================ */
 
 const UUID_RE =
@@ -115,6 +185,7 @@ function getLastCode(): string | null {
     return null;
   }
 }
+
 function setLastCode(k: string) {
   try {
     localStorage.setItem(AUFMASS_LAST_CODE, k);
@@ -130,6 +201,7 @@ function getLastId(): string | null {
     return null;
   }
 }
+
 function setLastId(k: string) {
   try {
     localStorage.setItem(AUFMASS_LAST_ID, k);
@@ -157,6 +229,7 @@ const AUFMASS = {
       return [];
     }
   },
+
   save(projectId: string | null | undefined, rows: LVRow[]) {
     if (!projectId) return;
     try {
@@ -166,6 +239,7 @@ const AUFMASS = {
       // ignore
     }
   },
+
   clear(projectId: string | null | undefined) {
     if (!projectId) return;
     try {
@@ -175,9 +249,11 @@ const AUFMASS = {
       // ignore
     }
   },
+
   selKey(projectId: string) {
     return `RLC_AUFMASS_SEL_${projectId}`;
   },
+
   loadSel(projectId: string | null | undefined): string | null {
     if (!projectId) return null;
     try {
@@ -186,6 +262,7 @@ const AUFMASS = {
       return null;
     }
   },
+
   saveSel(projectId: string | null | undefined, selId: string | null) {
     if (!projectId) return;
     try {
@@ -198,7 +275,7 @@ const AUFMASS = {
 };
 
 /* ============================================================
-   Layout Styles (Start-Seite Look)
+   Layout Styles
    ============================================================ */
 
 const pageContainer: React.CSSProperties = {
@@ -354,8 +431,6 @@ function rowTint(diff: number, active: boolean): React.CSSProperties {
 
 /* ============================================================
    Server mapping
-   - Standard: /aufmass/aufmass/:projectKey  (aufmass.json)
-   - Legacy:   /aufmass/soll-ist/:projectKey (soll-ist.json)
    ============================================================ */
 
 type AufmassJsonRow = {
@@ -398,12 +473,13 @@ function fromAufmassJson(rows: AufmassJsonRow[]): LVRow[] {
 function toSollIst(rows: LVRow[]): SollIstRow[] {
   return toAufmassJson(rows);
 }
+
 function fromSollIst(rows: SollIstRow[]): LVRow[] {
   return fromAufmassJson(rows);
 }
 
 /* ============================================================
-   MERGE helper: aufmass.json + soll-ist.json
+   MERGE helper
    ============================================================ */
 
 function mergeByPos(primary: LVRow[], legacy: LVRow[]): LVRow[] {
@@ -445,37 +521,49 @@ function mergeByPos(primary: LVRow[], legacy: LVRow[]): LVRow[] {
 }
 
 /* ============================================================
-   ✅ NEW: robust server fetch (code + uuid) + merge by pos
+   robust server fetch
    ============================================================ */
 
-function mergeServerRowsByPos<T extends { pos: string; text?: string; unit?: string; soll?: any; ist?: any; ep?: any }>(
-  a: T[],
-  b: T[]
-): T[] {
+function mergeServerRowsByPos<
+  T extends {
+    pos: string;
+    text?: string;
+    unit?: string;
+    soll?: any;
+    ist?: any;
+    ep?: any;
+  }
+>(a: T[], b: T[]): T[] {
   const map = new Map<string, T>();
   const norm = (p: any) => String(p ?? "").trim();
 
   const put = (r: any) => {
     const k = norm(r?.pos);
     if (!k) return;
+
     const prev = map.get(k);
     if (!prev) {
-      map.set(k, {
-        pos: k,
-        text: String(r?.text ?? ""),
-        unit: String(r?.unit ?? "m"),
-        soll: Number(r?.soll ?? 0),
-        ist: Number(r?.ist ?? 0),
-        ep: Number(r?.ep ?? 0),
-      } as any);
+      map.set(
+        k,
+        {
+          pos: k,
+          text: String(r?.text ?? ""),
+          unit: String(r?.unit ?? "m"),
+          soll: Number(r?.soll ?? 0),
+          ist: Number(r?.ist ?? 0),
+          ep: Number(r?.ep ?? 0),
+        } as any
+      );
       return;
     }
+
     const next: any = { ...prev };
     next.ist = Math.max(Number(prev?.ist ?? 0), Number(r?.ist ?? 0));
     if (!safeTrim(next.text) && safeTrim(r?.text)) next.text = String(r.text);
     if (!safeTrim(next.unit) && safeTrim(r?.unit)) next.unit = String(r.unit);
     if (!Number(next.ep) && Number(r?.ep)) next.ep = Number(r.ep);
     if (!Number(next.soll) && Number(r?.soll)) next.soll = Number(r.soll);
+
     map.set(k, next);
   };
 
@@ -487,7 +575,7 @@ function mergeServerRowsByPos<T extends { pos: string; text?: string; unit?: str
 
 async function fetchRowsForKey<T>(urlBase: string, key: string): Promise<T[]> {
   if (!safeTrim(key)) return [];
-  const url = `${API}${urlBase}/${encodeURIComponent(key)}`;
+  const url = apiUrl(`${urlBase}/${encodeURIComponent(key)}`);
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json().catch(() => ({}));
@@ -495,7 +583,7 @@ async function fetchRowsForKey<T>(urlBase: string, key: string): Promise<T[]> {
 }
 
 /* ============================================================
-   AutoKI (server file) mapping
+   AutoKI
    ============================================================ */
 
 type AutoKiBox = {
@@ -517,10 +605,13 @@ type AutoKiPayload = {
   boxes?: AutoKiBox[];
 };
 
-function fromAutoKiBoxesToRows(boxes: AutoKiBox[], noteFallback = "AutoKI Import"): LVRow[] {
+function fromAutoKiBoxesToRows(
+  boxes: AutoKiBox[],
+  noteFallback = "AutoKI Import"
+): LVRow[] {
   const arr = Array.isArray(boxes) ? boxes : [];
   return arr.map((b, idx) => {
-    const pos = `AUTO.${String(idx + 1).padStart(3, "0")}`; // AUTO.001 … AUTO.104
+    const pos = `AUTO.${String(idx + 1).padStart(3, "0")}`;
     const qty = Number(b?.qty ?? 0);
     const unit = String(b?.unit ?? "m");
 
@@ -540,11 +631,47 @@ function fromAutoKiBoxesToRows(boxes: AutoKiBox[], noteFallback = "AutoKI Import
 }
 
 /* ============================================================
+   Builders
+   ============================================================ */
+
+function buildRowFromLv(lv: LvPosition): LVRow {
+  const unit = String(lv.unit || "m");
+  return {
+    id: safeUUID(),
+    pos: lv.pos,
+    text: lv.text,
+    unit,
+    ep: lv.ep,
+    soll: lv.quantity,
+    formula: getStandardFormel(unit),
+    ist: 0,
+    note: "",
+    factor: 1,
+  };
+}
+
+function buildFallbackRow(): LVRow {
+  return {
+    id: safeUUID(),
+    pos: "001.001",
+    text: "Neue Position",
+    unit: "m",
+    ep: 0,
+    soll: 0,
+    formula: getStandardFormel("m"),
+    ist: 0,
+    note: "",
+    factor: 1,
+  };
+}
+
+/* ============================================================
    Component
    ============================================================ */
 
 type InitSource =
   | "none"
+  | "angebot"
   | "server"
   | "server-legacy"
   | "server+legacy"
@@ -558,12 +685,12 @@ export default function AufmassEditor() {
   const { getSelectedProject } = useProject();
   const project = getSelectedProject();
 
-  /**
-   * Sticky (se useProject() beim Seitenwechsel kurz null ist)
-   * - code und id getrennt, damit wir NIE code/id vermischen
-   */
-  const [stickyCode, setStickyCode] = React.useState<string>(() => safeTrim(getLastCode() || ""));
-  const [stickyId, setStickyId] = React.useState<string>(() => safeTrim(getLastId() || ""));
+  const [stickyCode, setStickyCode] = React.useState<string>(() =>
+    safeTrim(getLastCode() || "")
+  );
+  const [stickyId, setStickyId] = React.useState<string>(() =>
+    safeTrim(getLastId() || "")
+  );
 
   React.useEffect(() => {
     const c = safeTrim(project?.code || "");
@@ -578,31 +705,26 @@ export default function AufmassEditor() {
     }
   }, [project?.id, project?.code]);
 
-  // ✅ projectFsKey: für server/filesystem IMMER code bevorzugt
+  const angebotSnapshot = React.useMemo(
+    () => loadOfferSnapshot(project, stickyCode, stickyId),
+    [project, stickyCode, stickyId]
+  );
+
   const projectFsKey = safeTrim(project?.code || stickyCode || "");
-  // ✅ projectId: für localStorage IMMER uuid bevorzugt
   const projectId = safeTrim(project?.id || stickyId) || null;
 
-  /* ============================================================
-     ✅ LV keys (robust) (NEW)
-     - NEW endpoint needs UUID
-     - Legacy endpoint can accept UUID OR project.code (BA-...)
-   ============================================================ */
   const lvProjectUuid = safeTrim(project?.id || stickyId || "");
   const lvProjectCode = safeTrim(project?.code || stickyCode || "");
-  const lvProjectId = isUuid(lvProjectUuid) ? lvProjectUuid : null; // UUID-only
-  const lvLegacyKey = lvProjectCode || lvProjectUuid || null; // prefer code
+  const lvProjectId = isUuid(lvProjectUuid) ? lvProjectUuid : null;
+  const lvLegacyKey = lvProjectCode || lvProjectUuid || null;
 
-  // LV
   const [lvRows, setLvRows] = React.useState<LvPosition[]>([]);
   const [lvLoading, setLvLoading] = React.useState(false);
   const [lvError, setLvError] = React.useState<string | null>(null);
 
-  // Aufmaß
   const [rows, setRows] = React.useState<LVRow[]>([]);
   const [selId, setSelId] = React.useState<string | null>(null);
 
-  // UI states
   const [editOpen, setEditOpen] = React.useState(false);
   const [editBuffer, setEditBuffer] = React.useState("");
   const [noteOpen, setNoteOpen] = React.useState(false);
@@ -611,18 +733,15 @@ export default function AufmassEditor() {
   const [loadBusy, setLoadBusy] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
-  // Filters
   const [lvFilter, setLvFilter] = React.useState("");
   const [rowFilter, setRowFilter] = React.useState("");
   const [onlyDiff, setOnlyDiff] = React.useState(false);
 
-  // refs
   const didInitRef = React.useRef(false);
   const initSourceRef = React.useRef<InitSource>("none");
   const fotoImportedRef = React.useRef(false);
   const cadImportedRef = React.useRef(false);
 
-  // debounce ref
   const saveTimerRef = React.useRef<number | null>(null);
 
   const selected = rows.find((r) => r.id === selId) || null;
@@ -631,9 +750,6 @@ export default function AufmassEditor() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }, []);
 
-  /* ---------------------------
-     Reset init on project change
-     --------------------------- */
   React.useEffect(() => {
     if (!projectId) return;
 
@@ -643,27 +759,19 @@ export default function AufmassEditor() {
     cadImportedRef.current = false;
 
     setRows([]);
-    const storedSel = AUFMASS.loadSel(projectId);
-    setSelId(storedSel);
+    setSelId(AUFMASS.loadSel(projectId));
 
     if (saveTimerRef.current) {
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  /* ---------------------------
-     Persist selection
-     --------------------------- */
   React.useEffect(() => {
     if (!projectId) return;
     AUFMASS.saveSel(projectId, selId);
   }, [projectId, selId]);
 
-  /* ---------------------------
-     Autosave local on change (debounced)
-     --------------------------- */
   React.useEffect(() => {
     if (!projectId) return;
     if (!didInitRef.current) return;
@@ -683,9 +791,6 @@ export default function AufmassEditor() {
     };
   }, [rows, projectId]);
 
-  /* ---------------------------
-     Flush autosave on unload
-     --------------------------- */
   React.useEffect(() => {
     if (!projectId) return;
     const onUnload = () => {
@@ -699,40 +804,41 @@ export default function AufmassEditor() {
     return () => window.removeEventListener("beforeunload", onUnload);
   }, [projectId, rows]);
 
-  /* ---------------------------
-     Server load/save
-     --------------------------- */
-
-  // ✅ robust: loads BOTH keys (code + uuid) and merges by pos
   const serverLoadAufmass = React.useCallback(async (): Promise<AufmassJsonRow[]> => {
-    const byCode = projectFsKey ? await fetchRowsForKey<AufmassJsonRow>("/api/aufmass/aufmass", projectFsKey) : [];
+    const byCode = projectFsKey
+      ? await fetchRowsForKey<AufmassJsonRow>("/api/aufmass/aufmass", projectFsKey)
+      : [];
     const byId =
       projectId && projectId !== projectFsKey
         ? await fetchRowsForKey<AufmassJsonRow>("/api/aufmass/aufmass", projectId)
         : [];
+
     if (byCode.length && !byId.length) return byCode;
     if (!byCode.length && byId.length) return byId;
     return mergeServerRowsByPos(byCode, byId);
   }, [projectFsKey, projectId]);
 
-  // ✅ best effort save to BOTH keys (primary=code)
   const serverSaveAufmass = React.useCallback(
     async (payloadRows: AufmassJsonRow[]): Promise<void> => {
-      if (!projectFsKey && !projectId) throw new Error("Kein Projekt gewählt");
+      if (!projectFsKey && !projectId) {
+        throw new Error("Kein Projekt gewählt");
+      }
 
       const post = async (key: string) => {
-        const res = await fetch(`${API}/api/aufmass/aufmass/${encodeURIComponent(key)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rows: payloadRows }),
-        });
+        const res = await fetch(
+          apiUrl(`/api/aufmass/aufmass/${encodeURIComponent(key)}`),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rows: payloadRows }),
+          }
+        );
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
           throw new Error(txt || `Server-Fehler (${res.status})`);
         }
       };
 
-      // primary: code
       if (projectFsKey) {
         await post(projectFsKey);
       } else if (projectId) {
@@ -740,7 +846,6 @@ export default function AufmassEditor() {
         return;
       }
 
-      // secondary: uuid (fire & forget)
       if (projectId && projectId !== projectFsKey) {
         post(projectId).catch(() => void 0);
       }
@@ -748,48 +853,49 @@ export default function AufmassEditor() {
     [projectFsKey, projectId]
   );
 
-  // ✅ robust: loads BOTH keys (code + uuid) and merges by pos
   const serverLoadSollIst = React.useCallback(async (): Promise<SollIstRow[]> => {
-    const byCode = projectFsKey ? await fetchRowsForKey<SollIstRow>("/api/aufmass/soll-ist", projectFsKey) : [];
+    const byCode = projectFsKey
+      ? await fetchRowsForKey<SollIstRow>("/api/aufmass/soll-ist", projectFsKey)
+      : [];
     const byId =
       projectId && projectId !== projectFsKey
         ? await fetchRowsForKey<SollIstRow>("/api/aufmass/soll-ist", projectId)
         : [];
+
     if (byCode.length && !byId.length) return byCode;
     if (!byCode.length && byId.length) return byId;
     return mergeServerRowsByPos(byCode, byId);
   }, [projectFsKey, projectId]);
 
-  // ✅ best effort save to BOTH keys (primary=code)
   const serverSaveSollIst = React.useCallback(
     async (payloadRows: SollIstRow[]): Promise<void> => {
       const post = async (key: string) => {
-        await fetch(`${API}/api/aufmass/soll-ist/${encodeURIComponent(key)}`, {
+        await fetch(apiUrl(`/api/aufmass/soll-ist/${encodeURIComponent(key)}`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rows: payloadRows }),
         }).catch(() => void 0);
       };
 
-      if (projectFsKey) await post(projectFsKey);
-      else if (projectId) await post(projectId);
+      if (projectFsKey) {
+        await post(projectFsKey);
+      } else if (projectId) {
+        await post(projectId);
+      }
 
-      if (projectId && projectId !== projectFsKey) post(projectId);
+      if (projectId && projectId !== projectFsKey) {
+        post(projectId);
+      }
     },
     [projectFsKey, projectId]
   );
 
-  /* ---------------------------
-     AutoKI load (server file)
-     --------------------------- */
   const serverLoadAutoKi = React.useCallback(async (): Promise<AutoKiPayload | null> => {
-    // AutoKI è per FS-key (code). Se non c’è, prova anche UUID.
     const tryKey = async (key: string) => {
-      const url = `${API}/api/auto-ki/${encodeURIComponent(key)}`;
+      const url = apiUrl(`/api/auto-ki/${encodeURIComponent(key)}`);
       const res = await fetch(url);
       if (!res.ok) return null;
-      const data = await res.json().catch(() => null);
-      return data;
+      return await res.json().catch(() => null);
     };
 
     if (projectFsKey) {
@@ -802,10 +908,6 @@ export default function AufmassEditor() {
     }
     return null;
   }, [projectFsKey, projectId]);
-
-  /* ---------------------------
-     LV load
-     --------------------------- */
 
   const fetchJson = React.useCallback(async (url: string) => {
     const res = await fetch(url);
@@ -860,9 +962,12 @@ export default function AufmassEditor() {
 
       for (let page = 1; page <= maxPages; page++) {
         const data = await fetchJson(
-          `${API}/api/projects/${encodeURIComponent(pid)}/lv?page=${page}&pageSize=${pageSize}`
+          apiUrl(
+            `/api/projects/${encodeURIComponent(pid)}/lv?page=${page}&pageSize=${pageSize}`
+          )
         );
         const list = extractLvListFromNewEndpoint(data);
+
         if (Array.isArray(list) && list.length) {
           all.push(...list);
           if (list.length < pageSize) break;
@@ -877,7 +982,6 @@ export default function AufmassEditor() {
   );
 
   React.useEffect(() => {
-    // ✅ robust: allow LV load via UUID (new) OR code/uuid (legacy)
     if (!lvProjectId && !lvLegacyKey) {
       setLvRows([]);
       return;
@@ -890,7 +994,6 @@ export default function AufmassEditor() {
       setLvError(null);
 
       try {
-        // 1) NEW endpoint (UUID only)
         if (lvProjectId) {
           try {
             const listAll = await loadLvPagedNew(lvProjectId);
@@ -902,12 +1005,16 @@ export default function AufmassEditor() {
           }
         }
 
-        // 2) LEGACY endpoint (code OR uuid)
-        if (!lvLegacyKey) throw new Error("Projekt nicht gefunden (keine project key vorhanden)");
+        if (!lvLegacyKey) {
+          throw new Error("Projekt nicht gefunden (keine project key vorhanden)");
+        }
 
-        const dataLegacy = await fetchJson(`${API}/api/project-lv/${encodeURIComponent(lvLegacyKey)}`);
+        const dataLegacy = await fetchJson(
+          apiUrl(`/api/project-lv/${encodeURIComponent(lvLegacyKey)}`)
+        );
         const listLegacy = extractLvListFromOldEndpoint(dataLegacy);
         const mappedLegacy = mapAnyToLvPositions(listLegacy);
+
         if (!cancelled) setLvRows(mappedLegacy);
       } catch (e: any) {
         console.error(e);
@@ -933,11 +1040,6 @@ export default function AufmassEditor() {
     loadLvPagedNew,
   ]);
 
-  /* ============================================================
-     Initiales Aufmaß:
-     server(aufmass) -> server(legacy) -> auto-ki -> local(uuid) -> LV -> fallback
-   ============================================================ */
-
   const isPristineFallback = React.useCallback((arr: LVRow[]) => {
     if (!Array.isArray(arr) || arr.length !== 1) return false;
     const r = arr[0];
@@ -946,7 +1048,7 @@ export default function AufmassEditor() {
       safeTrim(r.text) === "Neue Position" &&
       nrmNumber(r.ep) === 0 &&
       nrmNumber(r.soll) === 0 &&
-      safeTrim(r.formula) === "" &&
+      safeTrim(r.formula) === getStandardFormel("m") &&
       nrmNumber(r.ist) === 0
     );
   }, []);
@@ -958,7 +1060,34 @@ export default function AufmassEditor() {
     let cancelled = false;
 
     const init = async () => {
-      // 1) server standard (+ merge legacy)
+      if (projectId) {
+        const stored = AUFMASS.load(projectId);
+        if (!cancelled && stored.length) {
+          const storedSel = AUFMASS.loadSel(projectId);
+          setRows(stored);
+          setSelId(
+            storedSel && stored.some((x) => x.id === storedSel)
+              ? storedSel
+              : stored[0]?.id ?? null
+          );
+          didInitRef.current = true;
+          initSourceRef.current = "local";
+          return;
+        }
+      }
+
+      if (projectId) {
+        const angebotRows = angebotRowsToAufmassRows(angebotSnapshot?.rows || []);
+        if (!cancelled && angebotRows.length) {
+          setRows(angebotRows);
+          setSelId(angebotRows[0]?.id ?? null);
+          AUFMASS.save(projectId, angebotRows);
+          didInitRef.current = true;
+          initSourceRef.current = "angebot";
+          return;
+        }
+      }
+
       if (projectFsKey || projectId) {
         try {
           const srv = await serverLoadAufmass();
@@ -973,11 +1102,12 @@ export default function AufmassEditor() {
 
             if (projectId) {
               const storedSel = AUFMASS.loadSel(projectId);
-              setSelId(
+              const nextSel =
                 storedSel && merged.some((x) => x.id === storedSel)
                   ? storedSel
-                  : merged[0]?.id ?? null
-              );
+                  : merged[0]?.id ?? null;
+
+              setSelId(nextSel);
               AUFMASS.save(projectId, merged);
             } else {
               setSelId(merged[0]?.id ?? null);
@@ -996,20 +1126,21 @@ export default function AufmassEditor() {
           // ignore
         }
 
-        // 2) server legacy
         try {
           const srvLegacy = await serverLoadSollIst();
           if (!cancelled && srvLegacy.length) {
             const mapped = fromSollIst(srvLegacy);
+
             setRows(mapped);
 
             if (projectId) {
               const storedSel = AUFMASS.loadSel(projectId);
-              setSelId(
+              const nextSel =
                 storedSel && mapped.some((x) => x.id === storedSel)
                   ? storedSel
-                  : mapped[0]?.id ?? null
-              );
+                  : mapped[0]?.id ?? null;
+
+              setSelId(nextSel);
               AUFMASS.save(projectId, mapped);
             } else {
               setSelId(mapped[0]?.id ?? null);
@@ -1024,11 +1155,11 @@ export default function AufmassEditor() {
         }
       }
 
-      // 2b) AutoKI (server file) — prima del local/LV
       if ((projectFsKey || projectId) && projectId) {
         try {
           const auto = await serverLoadAutoKi();
-          const boxes = Array.isArray(auto?.boxes) ? auto!.boxes! : [];
+          const boxes = Array.isArray(auto?.boxes) ? auto.boxes : [];
+
           if (!cancelled && boxes.length) {
             const note = safeTrim(auto?.note) || "AutoKI Import";
             const autoRows = fromAutoKiBoxesToRows(boxes, note);
@@ -1046,37 +1177,8 @@ export default function AufmassEditor() {
         }
       }
 
-      // 3) local (uuid)
-      if (projectId) {
-        const stored = AUFMASS.load(projectId);
-        if (!cancelled && stored.length) {
-          setRows(stored);
-          const storedSel = AUFMASS.loadSel(projectId);
-          setSelId(
-            storedSel && stored.some((x) => x.id === storedSel)
-              ? storedSel
-              : stored[0]?.id ?? null
-          );
-          didInitRef.current = true;
-          initSourceRef.current = "local";
-          return;
-        }
-      }
-
-      // 4) LV
       if (!cancelled && lvRows.length && projectId) {
-        const mapped: LVRow[] = lvRows.map((lv) => ({
-          id: safeUUID(),
-          pos: lv.pos,
-          text: lv.text,
-          unit: lv.unit,
-          ep: lv.ep,
-          soll: lv.quantity,
-          formula: "",
-          ist: 0,
-          note: "",
-          factor: 1,
-        }));
+        const mapped = lvRows.map(buildRowFromLv);
         setRows(mapped);
         setSelId(mapped[0]?.id ?? null);
         AUFMASS.save(projectId, mapped);
@@ -1085,22 +1187,8 @@ export default function AufmassEditor() {
         return;
       }
 
-      // 5) fallback
       if (!cancelled && projectId) {
-        const fallback: LVRow[] = [
-          {
-            id: safeUUID(),
-            pos: "001.001",
-            text: "Neue Position",
-            unit: "m",
-            ep: 0,
-            soll: 0,
-            formula: "",
-            ist: 0,
-            note: "",
-            factor: 1,
-          },
-        ];
+        const fallback = [buildFallbackRow()];
         setRows(fallback);
         setSelId(fallback[0].id);
         AUFMASS.save(projectId, fallback);
@@ -1120,10 +1208,9 @@ export default function AufmassEditor() {
     serverLoadAufmass,
     serverLoadSollIst,
     serverLoadAutoKi,
-    isPristineFallback,
+    angebotSnapshot,
   ]);
 
-  // Wenn initial fallback war und LV später geladen wird → automatisch LV übernehmen
   React.useEffect(() => {
     if (!didInitRef.current) return;
     if (initSourceRef.current !== "fallback") return;
@@ -1133,29 +1220,13 @@ export default function AufmassEditor() {
     setRows((prev) => {
       if (!isPristineFallback(prev)) return prev;
 
-      const mapped: LVRow[] = lvRows.map((lv) => ({
-        id: safeUUID(),
-        pos: lv.pos,
-        text: lv.text,
-        unit: lv.unit,
-        ep: lv.ep,
-        soll: lv.quantity,
-        formula: "",
-        ist: 0,
-        note: "",
-        factor: 1,
-      }));
-
+      const mapped = lvRows.map(buildRowFromLv);
       setSelId(mapped[0]?.id ?? null);
       initSourceRef.current = "lv";
       AUFMASS.save(projectId, mapped);
       return mapped;
     });
   }, [lvRows, isPristineFallback, projectId]);
-
-  /* ============================================================
-     Import da ManuellFoto (einmalig)
-   ============================================================ */
 
   React.useEffect(() => {
     if (!didInitRef.current) return;
@@ -1205,10 +1276,6 @@ export default function AufmassEditor() {
     }
   }, [projectId]);
 
-  /* ============================================================
-     CAD Import (einmalig) über URL flag ?import=cad
-   ============================================================ */
-
   React.useEffect(() => {
     if (cadImportedRef.current) return;
     if (!projectId) return;
@@ -1217,52 +1284,51 @@ export default function AufmassEditor() {
       new URLSearchParams(window.location.search).get("import") === "cad";
     if (!hasFlag) return;
 
-    const item = consumeCadExport("aufmasseditor");
-    if (!item) return;
-
-    const unit = item.kind === "AREA" ? "m²" : "m";
-    const ist = item.kind === "AREA" ? item.area_m2 ?? 0 : item.length_m ?? 0;
+    const items = consumeCadExport("aufmasseditor");
+    if (!items || !Array.isArray(items) || items.length === 0) return;
 
     setRows((prev) => {
-      const idx = prev.filter((x) => String(x.pos || "").startsWith("CAD.")).length + 1;
+      let idx =
+        prev.filter((x) => String(x.pos || "").startsWith("CAD.")).length + 1;
 
-      const r: LVRow = {
-        id: safeUUID(),
-        pos: "CAD." + String(idx).padStart(3, "0"),
-        text:
-          (item.label ?? item.layer ?? "CAD-Element") +
-          (item.kind === "AREA" ? " (CAD-Fläche)" : " (CAD-Länge)"),
-        unit,
-        ep: 0,
-        soll: 0,
-        formula: "",
-        ist,
-        note: "Import aus CAD",
-        factor: 1,
-      };
+      const importedRows: LVRow[] = items.map((item) => {
+        const unit = item.kind === "AREA" ? "m²" : "m";
+        const ist =
+          item.kind === "AREA" ? (item.area_m2 ?? 0) : (item.length_m ?? 0);
 
-      const next = [r, ...prev];
-      AUFMASS.save(projectId, next);
+        return {
+          id: safeUUID(),
+          pos: "CAD." + String(idx++).padStart(3, "0"),
+          text:
+            (item.label ?? item.layer ?? "CAD-Element") +
+            (item.kind === "AREA" ? " (CAD-Fläche)" : " (CAD-Länge)"),
+          unit,
+          ep: 0,
+          soll: 0,
+          formula: "",
+          ist,
+          note: "Import aus CAD",
+          factor: 1,
+        };
+      });
 
-      setSelId(r.id);
-      return next;
+      return [...importedRows, ...prev];
     });
 
     cadImportedRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
 
-  /* ============================================================
-     Save / Load / Clear
-   ============================================================ */
+    const url = new URL(window.location.href);
+    url.searchParams.delete("import");
+    window.history.replaceState({}, "", url.toString());
+  }, [projectId]);
 
   const handleSaveAufmass = React.useCallback(async () => {
     if ((!projectFsKey && !projectId) || !projectId) {
       alert("Kein Projekt gewählt.");
       return;
     }
-    setSaving(true);
 
+    setSaving(true);
     AUFMASS.save(projectId, rows);
 
     try {
@@ -1289,6 +1355,7 @@ export default function AufmassEditor() {
     if (loadBusy) return;
 
     setLoadBusy(true);
+
     try {
       const srv = await serverLoadAufmass().catch(() => []);
       const srvLegacy = await serverLoadSollIst().catch(() => []);
@@ -1298,8 +1365,14 @@ export default function AufmassEditor() {
         const legacy = srvLegacy.length ? fromSollIst(srvLegacy) : [];
         const merged = mergeByPos(primary, legacy);
 
+        const storedSel = AUFMASS.loadSel(projectId);
+        const nextSel =
+          storedSel && merged.some((x) => x.id === storedSel)
+            ? storedSel
+            : merged[0]?.id ?? null;
+
         setRows(merged);
-        setSelId(merged[0]?.id ?? null);
+        setSelId(nextSel);
         AUFMASS.save(projectId, merged);
 
         alert(`Aufmaß geladen (Server merge) • ${merged.length} Zeile(n)`);
@@ -1308,8 +1381,14 @@ export default function AufmassEditor() {
 
       const stored = AUFMASS.load(projectId);
       if (stored.length) {
+        const storedSel = AUFMASS.loadSel(projectId);
+        const nextSel =
+          storedSel && stored.some((x) => x.id === storedSel)
+            ? storedSel
+            : stored[0]?.id ?? null;
+
         setRows(stored);
-        setSelId(stored[0]?.id ?? null);
+        setSelId(nextSel);
         alert(`Aufmaß geladen (lokal) • ${stored.length} Zeile(n)`);
         return;
       }
@@ -1320,8 +1399,14 @@ export default function AufmassEditor() {
 
       const stored = AUFMASS.load(projectId);
       if (stored.length) {
+        const storedSel = AUFMASS.loadSel(projectId);
+        const nextSel =
+          storedSel && stored.some((x) => x.id === storedSel)
+            ? storedSel
+            : stored[0]?.id ?? null;
+
         setRows(stored);
-        setSelId(stored[0]?.id ?? null);
+        setSelId(nextSel);
         alert(
           `Server-Fehler beim Laden.\nFallback: lokal geladen • ${
             stored.length
@@ -1338,39 +1423,24 @@ export default function AufmassEditor() {
 
   const handleClearAufmass = React.useCallback(() => {
     if (!projectId) return;
+
     if (
       !window.confirm(
         "Gesamtes Aufmaß für dieses Projekt wirklich löschen?\n\nHinweis: Das entfernt nur den lokalen Speicher."
       )
-    )
+    ) {
       return;
+    }
 
     AUFMASS.clear(projectId);
 
-    const fallback: LVRow[] = [
-      {
-        id: safeUUID(),
-        pos: "001.001",
-        text: "Neue Position",
-        unit: "m",
-        ep: 0,
-        soll: 0,
-        formula: "",
-        ist: 0,
-        note: "",
-        factor: 1,
-      },
-    ];
+    const fallback = [buildFallbackRow()];
     setRows(fallback);
     setSelId(fallback[0].id);
     AUFMASS.save(projectId, fallback);
     initSourceRef.current = "fallback";
     didInitRef.current = true;
   }, [projectId]);
-
-  /* ============================================================
-     CSV Export
-   ============================================================ */
 
   const exportCsv = React.useCallback(() => {
     const header = [
@@ -1396,7 +1466,7 @@ export default function AufmassEditor() {
 
       return [
         r.pos,
-        String(r.text ?? "").replaceAll('"', '""'),
+        String(r.text ?? "").replace(/"/g, '""'),
         r.unit,
         String(r.soll).replace(".", ","),
         String(r.ist).replace(".", ","),
@@ -1405,8 +1475,8 @@ export default function AufmassEditor() {
         String(factor).replace(".", ","),
         String(effEP.toFixed(2)).replace(".", ","),
         String(total.toFixed(2)).replace(".", ","),
-        (r.note ?? "").replaceAll('"', '""'),
-        (r.formula ?? "").replaceAll('"', '""'),
+        String(r.note ?? "").replace(/"/g, '""'),
+        String(r.formula ?? "").replace(/"/g, '""'),
       ];
     });
 
@@ -1421,10 +1491,6 @@ export default function AufmassEditor() {
     a.click();
     URL.revokeObjectURL(a.href);
   }, [rows]);
-
-  /* ============================================================
-     Handlers
-   ============================================================ */
 
   const onFormulaChange = React.useCallback(
     (id: string, formula: string) => {
@@ -1465,10 +1531,6 @@ export default function AufmassEditor() {
     [setRow]
   );
 
-  /* ============================================================
-     Row operations
-   ============================================================ */
-
   const addRow = React.useCallback(() => {
     setRows((prev) => {
       const n = prev.length + 1;
@@ -1479,7 +1541,7 @@ export default function AufmassEditor() {
         unit: "m",
         ep: 0,
         soll: 0,
-        formula: "",
+        formula: getStandardFormel("m"),
         ist: 0,
         note: "",
         factor: 1,
@@ -1491,30 +1553,21 @@ export default function AufmassEditor() {
   }, []);
 
   const addRowFromLv = React.useCallback((lv: LvPosition) => {
-    const r: LVRow = {
-      id: safeUUID(),
-      pos: lv.pos,
-      text: lv.text,
-      unit: lv.unit,
-      ep: lv.ep,
-      soll: lv.quantity,
-      formula: "",
-      ist: 0,
-      note: "",
-      factor: 1,
-    };
-    setRows((p) => [...p, r]);
+    const r = buildRowFromLv(lv);
+    setRows((prev) => [...prev, r]);
     setSelId(r.id);
   }, []);
 
   const dupRow = React.useCallback(() => {
     if (!selected) return;
+
     const copy: LVRow = {
       ...selected,
       id: safeUUID(),
       pos: selected.pos + "a",
     };
-    setRows((p) => [...p, copy]);
+
+    setRows((prev) => [...prev, copy]);
     setSelId(copy.id);
   }, [selected]);
 
@@ -1530,10 +1583,6 @@ export default function AufmassEditor() {
   const sortByPos = React.useCallback(() => {
     setRows((prev) => [...prev].sort(byPosAsc));
   }, []);
-
-  /* ============================================================
-     Totals + filtered lists
-   ============================================================ */
 
   const totals = React.useMemo(() => {
     const totalAbgerechnet = rows.reduce(
@@ -1564,15 +1613,13 @@ export default function AufmassEditor() {
         return a.includes(q);
       });
     }
+
     if (onlyDiff) {
       out = out.filter((r) => Math.abs((r.soll ?? 0) - (r.ist ?? 0)) > 0);
     }
+
     return out;
   }, [rows, rowFilter, onlyDiff]);
-
-  /* ============================================================
-     Modals
-   ============================================================ */
 
   const openFormulaEditor = React.useCallback(() => {
     if (!selected) return;
@@ -1585,10 +1632,6 @@ export default function AufmassEditor() {
     setNoteBuffer(selected.note ?? "");
     setNoteOpen(true);
   }, [selected]);
-
-  /* ============================================================
-     Keyboard shortcuts (Ctrl/Cmd+S)
-   ============================================================ */
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1637,13 +1680,8 @@ export default function AufmassEditor() {
     handleSaveAufmass,
   ]);
 
-  /* ============================================================
-     Render
-   ============================================================ */
-
   return (
     <div style={pageContainer}>
-      {/* Header */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 4 }}>
           RLC / 2. Mengenermittlung / Aufmaß-Editor
@@ -1662,8 +1700,7 @@ export default function AufmassEditor() {
 
         <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
           <div style={pill}>
-            <span style={{ opacity: 0.7 }}>LV-Summe:</span>{" "}
-            <b>{fmtEUR(totals.lvSumme)}</b>
+            <span style={{ opacity: 0.7 }}>LV-Summe:</span> <b>{fmtEUR(totals.lvSumme)}</b>
           </div>
           <div style={pill}>
             <span style={{ opacity: 0.7 }}>Abgerechnet:</span>{" "}
@@ -1674,31 +1711,25 @@ export default function AufmassEditor() {
             <b>{fmtEUR(totals.diffSum)}</b>
           </div>
           <div style={pill}>
-            <span style={{ opacity: 0.7 }}>Init:</span>{" "}
-            <b>{initSourceRef.current}</b>
+            <span style={{ opacity: 0.7 }}>Init:</span> <b>{initSourceRef.current}</b>
           </div>
           <div style={pill}>
-            <span style={{ opacity: 0.7 }}>Shortcut:</span>{" "}
-            <b>Ctrl/⌘+S</b>
+            <span style={{ opacity: 0.7 }}>Shortcut:</span> <b>Ctrl/⌘+S</b>
           </div>
           <div style={pill}>
-            <span style={{ opacity: 0.7 }}>Auto-Save:</span>{" "}
-            <b>lokal (debounced)</b>
+            <span style={{ opacity: 0.7 }}>Auto-Save:</span> <b>lokal (debounced)</b>
           </div>
           <div style={pill} title="Fallback, falls Projekt beim Seitenwechsel kurz null ist">
             <span style={{ opacity: 0.7 }}>Sticky:</span>{" "}
             <b>{stickyCode || stickyId || "—"}</b>
           </div>
           <div style={pill} title="Keys used for server fetch">
-            <span style={{ opacity: 0.7 }}>Server keys:</span>{" "}
-            <b>{projectFsKey || "—"}</b>{" "}
-            <span style={{ opacity: 0.6 }}>/</span>{" "}
-            <b>{projectId || "—"}</b>
+            <span style={{ opacity: 0.7 }}>Server keys:</span> <b>{projectFsKey || "—"}</b>{" "}
+            <span style={{ opacity: 0.6 }}>/</span> <b>{projectId || "—"}</b>
           </div>
         </div>
       </div>
 
-      {/* Main Grid */}
       <div
         style={{
           display: "grid",
@@ -1706,7 +1737,6 @@ export default function AufmassEditor() {
           gap: 16,
         }}
       >
-        {/* LV CARD */}
         <section style={card}>
           <div style={cardTitleRow}>
             <div style={{ minWidth: 260 }}>
@@ -1815,7 +1845,6 @@ export default function AufmassEditor() {
           </div>
         </section>
 
-        {/* AUFMASS CARD */}
         <section style={card}>
           <div style={toolbar}>
             <button style={btn} onClick={addRow} type="button">
@@ -1870,13 +1899,15 @@ export default function AufmassEditor() {
                   alert("Kein Projekt gewählt.");
                   return;
                 }
+
                 try {
                   const data = await serverLoadAutoKi();
-                  const boxes = Array.isArray(data?.boxes) ? data!.boxes! : [];
+                  const boxes = Array.isArray(data?.boxes) ? data.boxes : [];
                   if (!boxes.length) {
                     alert("AutoKI: keine Boxen gefunden.");
                     return;
                   }
+
                   const note = safeTrim(data?.note) || "AutoKI Import";
                   const autoRows = fromAutoKiBoxesToRows(boxes, note);
 
@@ -1902,18 +1933,22 @@ export default function AufmassEditor() {
                   alert("Kein Projekt gewählt.");
                   return;
                 }
-                // ✅ Wichtig: beide Keys mitgeben (uuid + code)
+
                 navigate(
-                  `/ki/fotoerkennung?projectId=${encodeURIComponent(projectId || "")}&projectKey=${encodeURIComponent(
-                    projectFsKey
-                  )}&from=aufmasseditor`
+                  `/ki/fotoerkennung?projectId=${encodeURIComponent(
+                    projectId || ""
+                  )}&projectKey=${encodeURIComponent(projectFsKey)}&from=aufmasseditor`
                 );
               }}
             >
               KI Foto-Aufmaß
             </button>
 
-            <button style={btn} type="button" onClick={() => navigate("/mengenermittlung/position")}>
+            <button
+              style={btn}
+              type="button"
+              onClick={() => navigate("/mengenermittlung/position")}
+            >
               Zur Mengenermittlung (LV)
             </button>
 
@@ -1954,7 +1989,6 @@ export default function AufmassEditor() {
               paddingTop: 10,
             }}
           >
-            {/* Table */}
             <div style={{ borderRadius: 10, border: "1px solid #E5E7EB", overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
@@ -2002,7 +2036,13 @@ export default function AufmassEditor() {
                           <input
                             type="text"
                             value={r.unit}
-                            onChange={(e) => setRow(r.id, { unit: e.target.value })}
+                            onChange={(e) => {
+                              const unit = e.target.value;
+                              setRow(r.id, {
+                                unit,
+                                formula: getStandardFormel(unit),
+                              });
+                            }}
                             style={inpMini}
                           />
                         </td>
@@ -2111,7 +2151,6 @@ export default function AufmassEditor() {
               </table>
             </div>
 
-            {/* Details */}
             <div style={{ borderRadius: 10, border: "1px solid #E5E7EB", padding: 12 }}>
               {!selected ? (
                 <div style={{ opacity: 0.7 }}>Wähle oben eine Position aus.</div>
@@ -2136,7 +2175,13 @@ export default function AufmassEditor() {
                   <input
                     type="text"
                     value={selected.unit}
-                    onChange={(e) => setRow(selected.id, { unit: e.target.value })}
+                    onChange={(e) => {
+                      const unit = e.target.value;
+                      setRow(selected.id, {
+                        unit,
+                        formula: getStandardFormel(unit),
+                      });
+                    }}
                     style={inpNarrow}
                   />
 
@@ -2175,7 +2220,9 @@ export default function AufmassEditor() {
                   <label style={lbl}>Ist</label>
                   {safeTrim(selected.formula) ? (
                     <div style={{ fontWeight: 700, paddingTop: 6 }}>
-                      {selected.ist.toLocaleString("de-DE", { maximumFractionDigits: 3 })}
+                      {selected.ist.toLocaleString("de-DE", {
+                        maximumFractionDigits: 3,
+                      })}
                       <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
                         (berechnet aus Formel)
                       </div>
@@ -2272,7 +2319,6 @@ export default function AufmassEditor() {
         </section>
       </div>
 
-      {/* Formel Modal */}
       {editOpen && (
         <div
           style={modalWrap}
@@ -2337,7 +2383,6 @@ export default function AufmassEditor() {
         </div>
       )}
 
-      {/* Note Modal */}
       {noteOpen && (
         <div
           style={modalWrap}

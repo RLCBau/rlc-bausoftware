@@ -21,6 +21,7 @@ import {
   Project,
 } from "../lib/api";
 import { COLORS } from "../ui/theme";
+import RlcCategoryGrid, { RlcCategoryItem } from "../components/RlcCategoryGrid";
 
 // ✅ Team / Rollen (per prefill Email Versand Ansprechpartner)
 import { getProjectRoles } from "../storage/projectMeta";
@@ -42,7 +43,16 @@ const KEY_LOCAL_PROJECTS = "rlc_mobile_local_projects_v1";
 const CODEMAP_KEY = "rlc_project_code_map_v1";
 
 type WorkflowStatus = "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT";
-type Kind = "REGIE" | "LS" | "PHOTOS" | "TAGESBERICHT";
+type Kind =
+  | "REGIE"
+  | "LS"
+  | "PHOTOS"
+  | "TAGESBERICHT"
+  | "BAUTAGEBUCH"
+  | "ANGEBOT"
+  | "RECHNUNG"
+  | "MENGEN"
+  | "KALKULATION";
 
 type InboxItem = {
   kind: Kind;
@@ -203,7 +213,7 @@ function badgeText(st: WorkflowStatus) {
 function badgeColor(st: WorkflowStatus) {
   if (st === "EINGEREICHT") return COLORS.accentDark;
   if (st === "FREIGEGEBEN") return COLORS.accent;
-  if (st === "ABGELEHNT") return "#B00020";
+  if (st === "ABGELEHNT") return COLORS.danger;
   return COLORS.sub;
 }
 
@@ -353,6 +363,26 @@ function toYmd(v: any) {
   return s || new Date().toISOString().slice(0, 10);
 }
 
+
+function bautagebuchInboxKeys(projectKey: string) {
+  return [`rlc_mobile_inbox_bautagebuch:${projectKey}`];
+}
+
+function angebotInboxKeys(projectKey: string) {
+  return [`rlc_mobile_inbox_angebot:${projectKey}`];
+}
+
+function rechnungInboxKeys(projectKey: string) {
+  return [`rlc_mobile_inbox_rechnung:${projectKey}`];
+}
+
+function mengenInboxKeys(projectKey: string) {
+  return [`rlc_mobile_inbox_mengen:${projectKey}`];
+}
+
+function kalkulationInboxKeys(projectKey: string) {
+  return [`rlc_mobile_inbox_kalkulation:${projectKey}`];
+}
 export default function InboxScreen({ navigation }: Props) {
   const [mode, setMode] = useState<"SERVER_SYNC" | "NUR_APP">("SERVER_SYNC");
   const [loading, setLoading] = useState(false);
@@ -431,11 +461,26 @@ export default function InboxScreen({ navigation }: Props) {
         const projectKey = fsKey;
         const projectTitle = titleOf(p);
 
-        const [regieInbox, lsInbox, photosInbox, tagesberichtInbox] = await Promise.all([
+                const [
+          regieInbox,
+          lsInbox,
+          photosInbox,
+          tagesberichtInbox,
+          bautagebuchInbox,
+          angebotInbox,
+          rechnungInbox,
+          mengenInbox,
+          kalkulationInbox,
+        ] = await Promise.all([
           loadArrayFromFirstKey(regieInboxKeys(projectKey)),
           loadArrayFromFirstKey(lsInboxKeys(projectKey)),
           loadArrayFromFirstKey(photosInboxKeys(projectKey)),
           loadArrayFromFirstKey(tagesberichtInboxKeys(projectKey)),
+          loadArrayFromFirstKey(bautagebuchInboxKeys(projectKey)),
+          loadArrayFromFirstKey(angebotInboxKeys(projectKey)),
+          loadArrayFromFirstKey(rechnungInboxKeys(projectKey)),
+          loadArrayFromFirstKey(mengenInboxKeys(projectKey)),
+          loadArrayFromFirstKey(kalkulationInboxKeys(projectKey)),
         ]);
 
         for (const r of regieInbox || []) {
@@ -504,6 +549,36 @@ export default function InboxScreen({ navigation }: Props) {
           });
         }
 
+        const pushGeneric = (kind: Kind, arr: any[]) => {
+          for (const r of arr || []) {
+            const st = inferStatus(r);
+            const ts = pickTs(r);
+            const id = inferIdStable(kind, projectKey, r);
+            const dedupeKey = `${kind}:${projectKey}:${id}`;
+            if (seen.has(dedupeKey)) continue;
+            seen.add(dedupeKey);
+            out.push({
+              kind,
+              projectId,
+              projectTitle,
+              projectCode: ba,
+              projectKey,
+              id,
+              title: inferRowTitle(kind, r),
+              status: st,
+              createdAt: ts.createdAt,
+              updatedAt: ts.updatedAt,
+              raw: r,
+            });
+          }
+        };
+
+        pushGeneric("BAUTAGEBUCH", bautagebuchInbox);
+        pushGeneric("ANGEBOT", angebotInbox);
+        pushGeneric("RECHNUNG", rechnungInbox);
+        pushGeneric("MENGEN", mengenInbox);
+        pushGeneric("KALKULATION", kalkulationInbox);
+
         for (const r of tagesberichtInbox || []) {
           const st = inferStatus(r);
           const ts = pickTs(r);
@@ -555,14 +630,36 @@ export default function InboxScreen({ navigation }: Props) {
     const ls = items.filter((x) => x.kind === "LS").length;
     const photos = items.filter((x) => x.kind === "PHOTOS").length;
     const tagesbericht = items.filter((x) => x.kind === "TAGESBERICHT").length;
-    return { regie, ls, photos, tagesbericht };
+    const bautagebuch = items.filter((x) => x.kind === "BAUTAGEBUCH").length;
+    const angebot = items.filter((x) => x.kind === "ANGEBOT").length;
+    const rechnung = items.filter((x) => x.kind === "RECHNUNG").length;
+    const mengen = items.filter((x) => x.kind === "MENGEN").length;
+    const kalkulation = items.filter((x) => x.kind === "KALKULATION").length;
+    return { regie, ls, photos, tagesbericht, bautagebuch, angebot, rechnung, mengen, kalkulation };
   }, [items]);
 
-  const filteredItems = useMemo(() => {
+  const categoryItems: RlcCategoryItem[] = [
+    { key: "REGIE", label: "Regie", count: counts.regie, icon: "clipboard-outline" },
+    { key: "LS", label: "Lieferscheine", count: counts.ls, icon: "cube-outline" },
+    { key: "PHOTOS", label: "Fotos", count: counts.photos, icon: "camera-outline" },
+    { key: "TAGESBERICHT", label: "Tagesberichte", count: counts.tagesbericht, icon: "newspaper-outline" },
+    { key: "BAUTAGEBUCH", label: "Bautagebuch", count: counts.bautagebuch, icon: "book-outline" },
+    { key: "ANGEBOT", label: "Angebote", count: counts.angebot, icon: "pricetag-outline" },
+    { key: "RECHNUNG", label: "Rechnungen", count: counts.rechnung, icon: "receipt-outline" },
+    { key: "MENGEN", label: "Mengen", count: counts.mengen, icon: "resize-outline" },
+    { key: "KALKULATION", label: "Kalkulation", count: counts.kalkulation, icon: "calculator-outline" },
+  ];
+
+    const filteredItems = useMemo(() => {
     if (tab === "REGIE") return items.filter((x) => x.kind === "REGIE");
     if (tab === "LS") return items.filter((x) => x.kind === "LS");
     if (tab === "PHOTOS") return items.filter((x) => x.kind === "PHOTOS");
-    return items.filter((x) => x.kind === "TAGESBERICHT");
+    if (tab === "TAGESBERICHT") return items.filter((x) => x.kind === "TAGESBERICHT");
+    if (tab === "BAUTAGEBUCH") return items.filter((x) => x.kind === "BAUTAGEBUCH");
+    if (tab === "ANGEBOT") return items.filter((x) => x.kind === "ANGEBOT");
+    if (tab === "RECHNUNG") return items.filter((x) => x.kind === "RECHNUNG");
+    if (tab === "MENGEN") return items.filter((x) => x.kind === "MENGEN");
+    return items.filter((x) => x.kind === "KALKULATION");
   }, [items, tab]);
 
   const openProjectHome = useCallback(
@@ -632,32 +729,7 @@ export default function InboxScreen({ navigation }: Props) {
         fromInbox: true,
       } as any
     );
-  }
-
-  function TabButton({
-    k,
-    label,
-    count,
-  }: {
-    k: Kind;
-    label: string;
-    count: number;
-  }) {
-    const active = tab === k;
-    return (
-      <Pressable
-        onPress={() => setTab(k)}
-        style={[s.tabBtn, active && s.tabBtnActive]}
-      >
-        <Text style={[s.tabTxt, active && s.tabTxtActive]}>{label}</Text>
-        <View style={[s.tabCountPill, active && s.tabCountPillActive]}>
-          <Text style={[s.tabCountTxt, active && s.tabCountTxtActive]}>
-            {count}
-          </Text>
-        </View>
-      </Pressable>
-    );
-  }
+  }
 
   const onPdfEmail = useCallback(async (it: InboxItem) => {
     try {
@@ -935,7 +1007,7 @@ export default function InboxScreen({ navigation }: Props) {
         : item.kind === "LS"
         ? COLORS.accentDark
         : item.kind === "TAGESBERICHT"
-        ? "#12324A"
+        ? COLORS.accentDark
         : COLORS.text;
 
     const stColor = badgeColor(item.status);
@@ -982,7 +1054,11 @@ export default function InboxScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.bg}>
-        <View style={s.headerCard}>
+        <FlatList
+          style={{ flex: 1 }}
+          ListHeaderComponent={
+            (
+              <View style={s.headerCard}>
           <View style={s.headerRow}>
             <Pressable onPress={() => navigation.goBack()} style={s.backBtn}>
               <Text style={s.backTxt}>Zurück</Text>
@@ -1000,23 +1076,13 @@ export default function InboxScreen({ navigation }: Props) {
           <Text style={s.sub}>
             Lokale Entwürfe und Offline-Dokumente ohne Server-Synchronisierung.
           </Text>
-
-          <View style={s.tabsRow}>
-            <TabButton k="REGIE" label="Regie" count={counts.regie} />
-            <TabButton k="LS" label="Lieferscheine" count={counts.ls} />
-            <TabButton k="PHOTOS" label="Fotos" count={counts.photos} />
-            <TabButton
-              k="TAGESBERICHT"
-              label="Tagesberichte"
-              count={counts.tagesbericht}
-            />
-          </View>
-
-          <View style={s.actionsRow}>
-            <Pressable style={s.actionBtn} onPress={loadInbox} disabled={loading || syncing}>
-              <Text style={s.actionTxt}>{loading ? "Lade..." : "Aktualisieren"}</Text>
-            </Pressable>
-          </View>
+          <RlcCategoryGrid
+            title="Übersicht"
+            items={categoryItems}
+            activeKey={tab}
+            onPress={(key) => setTab(key as Kind)}
+            onRefresh={loadInbox}
+          />
 
           <View style={s.infoBox}>
             <Text style={s.infoTitle}>Hinweis</Text>
@@ -1024,9 +1090,9 @@ export default function InboxScreen({ navigation }: Props) {
               Diese Inbox ist nur für NUR_APP (offline). Keine Server-Synchronisierung.
             </Text>
           </View>
-        </View>
-
-        <FlatList
+              </View>
+            )
+          }
           data={filteredItems}
           keyExtractor={(x) => `${x.kind}:${x.projectKey}:${x.id}`}
           renderItem={renderRow}
@@ -1038,7 +1104,11 @@ export default function InboxScreen({ navigation }: Props) {
               tintColor={COLORS.accent}
             />
           }
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
+          nestedScrollEnabled={true}
+          scrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
           ListEmptyComponent={
             <View style={s.emptyWrap}>
               <View style={s.emptyCard}>
@@ -1248,7 +1318,7 @@ const s = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 4,
-    paddingBottom: 30,
+    paddingBottom: 160,
     gap: 12,
   },
 
@@ -1383,5 +1453,28 @@ const s = StyleSheet.create({
     fontSize: 13,
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

@@ -1,14 +1,16 @@
+import { API_BASE } from "../../lib/apiBase";
 // apps/web/src/pages/buchhaltung/AbschlagsrechnungDetail.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProject } from "../../store/useProject";
+import "./styles.css";
 
-const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+function apiUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${p}` : p;
+}
 
 type AbschlagStatus = "Entwurf" | "Freigegeben" | "Gebucht";
 
@@ -35,34 +37,75 @@ type AbschlagItem = {
 };
 
 const fmtEUR = (v: number) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(
-    v || 0
-  );
+  new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+  }).format(safeNum(v));
 
-function safeNum(x: any) {
-  const n = Number(x);
-  return Number.isFinite(n) ? n : 0;
+function safeTrim(v: unknown) {
+  return String(v ?? "").trim();
+}
+
+function safeNum(x: unknown, fallback = 0) {
+  if (x === null || x === undefined || x === "") return fallback;
+  const normalized =
+    typeof x === "string" ? x.replace(/\s/g, "").replace(",", ".") : x;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = String(API || "").replace(/\/+$/, "");
-  const res = await fetch(`${base}${path}`, {
-    headers: { "Content-Type": "application/json" },
+  const headers = {
+    "Content-Type": "application/json",
+    ...(init?.headers || {}),
+  };
+
+  const res = await fetch(apiUrl(path), {
     ...init,
+    headers,
+    credentials: "include",
   });
+
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(txt || `Server-Fehler (${res.status})`);
   }
+
   return (await res.json()) as T;
 }
 
 function recalc(a: AbschlagItem): AbschlagItem {
-  const mwst = safeNum(a.mwst) || 19;
+  const mwst = safeNum(a.mwst, 19);
   const rows = Array.isArray(a.rows) ? a.rows : [];
-  const netto = rows.reduce((sum, r) => sum + safeNum(r.total), 0);
+
+  const normalizedRows: AbschlagRow[] = rows.map((r) => {
+    const qty = safeNum(r.qty);
+    const ep = safeNum(r.ep);
+    return {
+      lvPos: safeTrim(r.lvPos),
+      kurztext: safeTrim(r.kurztext),
+      einheit: safeTrim(r.einheit) || "m",
+      qty,
+      ep,
+      total: qty * ep,
+    };
+  });
+
+  const netto = normalizedRows.reduce((sum, r) => sum + safeNum(r.total), 0);
   const brutto = netto * (1 + mwst / 100);
-  return { ...a, mwst, rows, netto, brutto };
+
+  return {
+    ...a,
+    id: safeTrim(a.id),
+    projectId: safeTrim(a.projectId),
+    nr: safeNum(a.nr),
+    date: safeTrim(a.date),
+    title: safeTrim(a.title),
+    mwst,
+    rows: normalizedRows,
+    netto,
+    brutto,
+  };
 }
 
 /* =================== PDF HELPERS =================== */
@@ -77,36 +120,6 @@ function drawBox(
 ) {
   doc.setLineWidth(lw);
   doc.rect(x, y, w, h);
-}
-
-function textCenterX(doc: jsPDF, txt: string, x: number, y: number, w: number) {
-  const tw = doc.getTextWidth(txt);
-  doc.text(txt, x + (w - tw) / 2, y);
-}
-
-/**
- * CENTRATURA SICURA:
- * - usa baseline "middle" per evitare che il testo esca dai riquadri
- * - niente baselineFix che spinge verso il basso
- */
-function textCenterXY(
-  doc: jsPDF,
-  txt: string,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  fontSize: number,
-  style: "normal" | "bold" = "normal"
-) {
-  doc.setFont("helvetica", style);
-  doc.setFontSize(fontSize);
-
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-
-  // jsPDF supporta baseline/align nella options
-  doc.text(String(txt ?? ""), cx, cy, { align: "center", baseline: "middle" } as any);
 }
 
 async function printJsPdf(doc: jsPDF) {
@@ -128,7 +141,9 @@ async function printJsPdf(doc: jsPDF) {
         w.print();
         setTimeout(() => URL.revokeObjectURL(url), 10_000);
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
   }, 200);
 }
 
@@ -143,7 +158,6 @@ function buildAbschlagPdf(args: {
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 10;
 
-  // --- GRID PARAMS ---
   const headerY = 10;
   const headerH = 34;
   const outerX = margin;
@@ -157,15 +171,11 @@ function buildAbschlagPdf(args: {
   const midX = outerX + leftW;
   const rightX = outerX + leftW + midW;
 
-  // contenitore esterno
   drawBox(doc, outerX, headerY, outerW, headerH, 0.9);
-
-  // colonne
   drawBox(doc, leftX, headerY, leftW, headerH, 0.6);
   drawBox(doc, midX, headerY, midW, headerH, 0.6);
   drawBox(doc, rightX, headerY, rightW, headerH, 0.6);
 
-  // LEFT (font leggermente più piccolo per “stare” meglio)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.text("Abschlagsrechnung", leftX + 10, headerY + 12);
@@ -175,7 +185,6 @@ function buildAbschlagPdf(args: {
   doc.text(`Projekt: ${projectCode}`, leftX + 10, headerY + 22);
   doc.text(`${projectName}`, leftX + 10, headerY + 28);
 
-  // MID (padding costante)
   const pad = 10;
   const line1Y = headerY + 14;
   const line2Y = headerY + 26;
@@ -193,7 +202,6 @@ function buildAbschlagPdf(args: {
   );
   doc.text(String(item.status), midX + pad + 14, line2Y);
 
-   // RIGHT: 3 righe, label sopra + valore sotto (NO sovrapposizione)
   const rowH = headerH / 3;
 
   doc.setLineWidth(0.6);
@@ -201,8 +209,8 @@ function buildAbschlagPdf(args: {
   doc.line(rightX, headerY + rowH * 2, rightX + rightW, headerY + rowH * 2);
 
   function rightCell(label: string, value: string, topY: number) {
-    const labelY = topY + 4.2;      // riga alta
-    const valueY = topY + rowH - 4; // riga bassa
+    const labelY = topY + 4.2;
+    const valueY = topY + rowH - 4;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.2);
@@ -217,14 +225,13 @@ function buildAbschlagPdf(args: {
   rightCell("Datum", String(item.date || ""), headerY + rowH);
   rightCell("MwSt", `${safeNum(item.mwst)} %`, headerY + rowH * 2);
 
-  // spazio sotto header
   let y = headerY + headerH + 10;
 
   const body = (item.rows || []).map((r) => [
     r.lvPos || "",
     r.kurztext || "",
     r.einheit || "",
-    (safeNum(r.qty) || 0).toString(),
+    safeNum(r.qty).toString(),
     fmtEUR(safeNum(r.ep)),
     fmtEUR(safeNum(r.total)),
   ]);
@@ -261,7 +268,6 @@ function buildAbschlagPdf(args: {
     ? (doc as any).lastAutoTable.finalY
     : y + 60;
 
-  // Totali box
   const totalsW = 86;
   const totalsH = 26;
   const totalsX = pageW - margin - totalsW;
@@ -291,7 +297,6 @@ function buildAbschlagPdf(args: {
     align: "right",
   });
 
-  // Footer
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.text("RLC Bausoftware", margin, 290);
@@ -307,7 +312,7 @@ export default function AbschlagsrechnungDetail() {
   const { currentProject, getSelectedProject } = useProject() as any;
 
   const p = currentProject || getSelectedProject?.() || null;
-  const projectKey = (p?.code || "").trim();
+  const projectKey = safeTrim(p?.code);
 
   const [items, setItems] = useState<AbschlagItem[]>([]);
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -325,14 +330,20 @@ export default function AbschlagsrechnungDetail() {
       setItems([]);
       return;
     }
+
     setLoading(true);
     setInfo(null);
+
     try {
-      const data: any = await apiJson(`/api/abschlag/list/${encodeURIComponent(projectKey)}`);
-      setItems((Array.isArray(data?.items) ? data.items : []).map(recalc));
+      const data: any = await apiJson(
+        `/api/abschlag/list/${encodeURIComponent(projectKey)}`
+      );
+
+      const nextItems = (Array.isArray(data?.items) ? data.items : []).map(recalc);
+      setItems(nextItems);
       setFilePath(data?.file || null);
     } catch (e: any) {
-      setInfo((e?.message || "Fehler beim Laden") + `\n\nAPI: ${String(API)}`);
+      setInfo((e?.message || "Fehler beim Laden") + `\n\nAPI: ${API_BASE || "(relative)"}`);
       setItems([]);
     } finally {
       setLoading(false);
@@ -341,19 +352,27 @@ export default function AbschlagsrechnungDetail() {
 
   async function save(nextItems?: AbschlagItem[]) {
     if (!projectKey) return;
+
     setLoading(true);
     setInfo(null);
+
     try {
       const payload = { items: (nextItems ?? items).map(recalc) };
-      const data: any = await apiJson(`/api/abschlag/save/${encodeURIComponent(projectKey)}`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+
+      const data: any = await apiJson(
+        `/api/abschlag/save/${encodeURIComponent(projectKey)}`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      );
+
       setFilePath(data?.file || null);
       setInfo(`Gespeichert (${data?.saved ?? (nextItems ?? items).length}).`);
       await load();
     } catch (e: any) {
-      setInfo((e?.message || "Fehler beim Speichern") + `\n\nAPI: ${String(API)}`);
+      setInfo((e?.message || "Fehler beim Speichern") + `\n\nAPI: ${API_BASE || "(relative)"}`);
+    } finally {
       setLoading(false);
     }
   }
@@ -365,30 +384,49 @@ export default function AbschlagsrechnungDetail() {
 
   function patchCurrent(patch: Partial<AbschlagItem>) {
     if (!current) return;
+
     const next = items.map((x) =>
-      x.id === current.id ? recalc({ ...x, ...patch } as any) : x
+      x.id === current.id ? recalc({ ...x, ...patch } as AbschlagItem) : x
     );
+
     setItems(next);
   }
 
   function patchRow(idx: number, patch: Partial<AbschlagRow>) {
     if (!current) return;
+
     const rows = (current.rows || []).map((r, i) => {
       if (i !== idx) return r;
+
       const qty = patch.qty !== undefined ? safeNum(patch.qty) : safeNum(r.qty);
       const ep = patch.ep !== undefined ? safeNum(patch.ep) : safeNum(r.ep);
-      const total = qty * ep;
-      return { ...r, ...patch, qty, ep, total };
+
+      return {
+        ...r,
+        ...patch,
+        qty,
+        ep,
+        total: qty * ep,
+      };
     });
+
     patchCurrent({ rows });
   }
 
   function addRow() {
     if (!current) return;
+
     patchCurrent({
       rows: [
         ...(current.rows || []),
-        { lvPos: "", kurztext: "", einheit: "m", qty: 0, ep: 0, total: 0 },
+        {
+          lvPos: "",
+          kurztext: "",
+          einheit: "m",
+          qty: 0,
+          ep: 0,
+          total: 0,
+        },
       ],
     });
   }
@@ -400,21 +438,25 @@ export default function AbschlagsrechnungDetail() {
 
   async function printNow() {
     if (!current) return;
+
     const doc = buildAbschlagPdf({
       projectCode: String(p?.code || ""),
       projectName: String(p?.name || ""),
       item: current,
     });
+
     await printJsPdf(doc);
   }
 
   function exportPdf() {
     if (!current) return;
+
     const doc = buildAbschlagPdf({
       projectCode: String(p?.code || ""),
       projectName: String(p?.name || ""),
       item: current,
     });
+
     doc.save(`${p?.code || "Projekt"}_Abschlag_${current.nr}.pdf`);
   }
 
@@ -448,12 +490,21 @@ export default function AbschlagsrechnungDetail() {
             Laden
           </button>
         </div>
+
         {info ? (
-          <div style={{ marginTop: 12, color: "#991B1B", whiteSpace: "pre-wrap" }}>
+          <div
+            style={{
+              marginTop: 12,
+              color: "#991B1B",
+              whiteSpace: "pre-wrap",
+            }}
+          >
             {info}
           </div>
         ) : (
-          <div style={{ marginTop: 12, color: "#666" }}>Lädt…</div>
+          <div style={{ marginTop: 12, color: "#666" }}>
+            {loading ? "Lädt…" : "Kein Eintrag gefunden."}
+          </div>
         )}
       </div>
     );
@@ -461,7 +512,14 @@ export default function AbschlagsrechnungDetail() {
 
   return (
     <div style={{ padding: 16, maxWidth: 1180, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
           <nav style={{ color: "#888", fontSize: 13 }}>
             RLC / 7. Buchhaltung / Abrechnung / Abschlagsrechnungen / Detail
@@ -473,12 +531,22 @@ export default function AbschlagsrechnungDetail() {
             <b>{p.code}</b> — {p.name}
           </div>
           <div style={{ color: "#888", marginTop: 6, fontSize: 12 }}>
-            Datei: <span style={{ fontFamily: "monospace" }}>{filePath || ""}</span>
+            Datei:{" "}
+            <span style={{ fontFamily: "monospace" }}>{filePath || ""}</span>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button onClick={() => navigate("/buchhaltung/abschlagsrechnungen")}>← Zurück</button>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <button onClick={() => navigate("/buchhaltung/abschlagsrechnungen")}>
+            ← Zurück
+          </button>
           <button onClick={() => void load()} disabled={loading}>
             Laden
           </button>
@@ -512,46 +580,108 @@ export default function AbschlagsrechnungDetail() {
       )}
 
       <div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12, minWidth: 220, background: "#fff" }}>
+        <div
+          style={{
+            border: "1px solid #eee",
+            borderRadius: 12,
+            padding: 12,
+            minWidth: 220,
+            background: "#fff",
+          }}
+        >
           <div style={{ color: "#666" }}>Netto</div>
           <div style={{ fontWeight: 800, fontSize: 18 }}>{fmtEUR(current.netto)}</div>
         </div>
-        <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12, minWidth: 220, background: "#fff" }}>
+
+        <div
+          style={{
+            border: "1px solid #eee",
+            borderRadius: 12,
+            padding: 12,
+            minWidth: 220,
+            background: "#fff",
+          }}
+        >
           <div style={{ color: "#666" }}>Brutto</div>
           <div style={{ fontWeight: 800, fontSize: 18 }}>{fmtEUR(current.brutto)}</div>
         </div>
-        <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12, minWidth: 220, background: "#fff" }}>
+
+        <div
+          style={{
+            border: "1px solid #eee",
+            borderRadius: 12,
+            padding: 12,
+            minWidth: 220,
+            background: "#fff",
+          }}
+        >
           <div style={{ color: "#666" }}>MwSt</div>
           <div style={{ fontWeight: 800, fontSize: 18 }}>{safeNum(current.mwst)} %</div>
         </div>
       </div>
 
-      <div style={{ marginTop: 14, border: "1px solid #eee", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
-        <div style={{ padding: 12, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+      <div
+        style={{
+          marginTop: 14,
+          border: "1px solid #eee",
+          borderRadius: 12,
+          overflow: "hidden",
+          background: "#fff",
+        }}
+      >
+        <div
+          style={{
+            padding: 12,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <label style={{ fontSize: 13, color: "#555" }}>
               Titel{" "}
               <input
                 value={current.title || ""}
                 onChange={(e) => patchCurrent({ title: e.target.value })}
-                style={{ marginLeft: 6, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, width: 280 }}
+                style={{
+                  marginLeft: 6,
+                  padding: "6px 10px",
+                  border: "1px solid #ddd",
+                  borderRadius: 8,
+                  width: 280,
+                }}
               />
             </label>
+
             <label style={{ fontSize: 13, color: "#555" }}>
               Datum{" "}
               <input
                 type="date"
                 value={current.date}
                 onChange={(e) => patchCurrent({ date: e.target.value })}
-                style={{ marginLeft: 6, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8 }}
+                style={{
+                  marginLeft: 6,
+                  padding: "6px 10px",
+                  border: "1px solid #ddd",
+                  borderRadius: 8,
+                }}
               />
             </label>
+
             <label style={{ fontSize: 13, color: "#555" }}>
               Status{" "}
               <select
                 value={current.status}
-                onChange={(e) => patchCurrent({ status: e.target.value as any })}
-                style={{ marginLeft: 6, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8 }}
+                onChange={(e) =>
+                  patchCurrent({ status: e.target.value as AbschlagStatus })
+                }
+                style={{
+                  marginLeft: 6,
+                  padding: "6px 10px",
+                  border: "1px solid #ddd",
+                  borderRadius: 8,
+                }}
               >
                 <option value="Entwurf">Entwurf</option>
                 <option value="Freigegeben">Freigegeben</option>
@@ -568,15 +698,72 @@ export default function AbschlagsrechnungDetail() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead style={{ background: "#fafafa" }}>
             <tr>
-              <th style={{ textAlign: "left", padding: 12, borderBottom: "1px solid #eee" }}>LV-Pos</th>
-              <th style={{ textAlign: "left", padding: 12, borderBottom: "1px solid #eee" }}>Kurztext</th>
-              <th style={{ textAlign: "left", padding: 12, borderBottom: "1px solid #eee" }}>Einheit</th>
-              <th style={{ textAlign: "right", padding: 12, borderBottom: "1px solid #eee" }}>Menge</th>
-              <th style={{ textAlign: "right", padding: 12, borderBottom: "1px solid #eee" }}>EP</th>
-              <th style={{ textAlign: "right", padding: 12, borderBottom: "1px solid #eee" }}>Gesamt</th>
-              <th style={{ textAlign: "right", padding: 12, borderBottom: "1px solid #eee" }}>Aktion</th>
+              <th
+                style={{
+                  textAlign: "left",
+                  padding: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                LV-Pos
+              </th>
+              <th
+                style={{
+                  textAlign: "left",
+                  padding: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                Kurztext
+              </th>
+              <th
+                style={{
+                  textAlign: "left",
+                  padding: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                Einheit
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                Menge
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                EP
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                Gesamt
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  padding: 12,
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                Aktion
+              </th>
             </tr>
           </thead>
+
           <tbody>
             {(current.rows || []).map((r, idx) => (
               <tr key={idx}>
@@ -584,43 +771,101 @@ export default function AbschlagsrechnungDetail() {
                   <input
                     value={r.lvPos || ""}
                     onChange={(e) => patchRow(idx, { lvPos: e.target.value })}
-                    style={{ width: 120, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8 }}
+                    style={{
+                      width: 120,
+                      padding: "6px 10px",
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                    }}
                   />
                 </td>
+
                 <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3" }}>
                   <input
                     value={r.kurztext || ""}
                     onChange={(e) => patchRow(idx, { kurztext: e.target.value })}
-                    style={{ width: "100%", padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8 }}
+                    style={{
+                      width: "100%",
+                      padding: "6px 10px",
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                    }}
                   />
                 </td>
+
                 <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3" }}>
                   <input
                     value={r.einheit || ""}
                     onChange={(e) => patchRow(idx, { einheit: e.target.value })}
-                    style={{ width: 90, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8 }}
+                    style={{
+                      width: 90,
+                      padding: "6px 10px",
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                    }}
                   />
                 </td>
-                <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3", textAlign: "right" }}>
+
+                <td
+                  style={{
+                    padding: 12,
+                    borderBottom: "1px solid #f3f3f3",
+                    textAlign: "right",
+                  }}
+                >
                   <input
                     type="number"
                     value={safeNum(r.qty)}
-                    onChange={(e) => patchRow(idx, { qty: Number(e.target.value) })}
-                    style={{ width: 110, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, textAlign: "right" }}
+                    onChange={(e) => patchRow(idx, { qty: safeNum(e.target.value) })}
+                    style={{
+                      width: 110,
+                      padding: "6px 10px",
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                      textAlign: "right",
+                    }}
                   />
                 </td>
-                <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3", textAlign: "right" }}>
+
+                <td
+                  style={{
+                    padding: 12,
+                    borderBottom: "1px solid #f3f3f3",
+                    textAlign: "right",
+                  }}
+                >
                   <input
                     type="number"
                     value={safeNum(r.ep)}
-                    onChange={(e) => patchRow(idx, { ep: Number(e.target.value) })}
-                    style={{ width: 110, padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, textAlign: "right" }}
+                    onChange={(e) => patchRow(idx, { ep: safeNum(e.target.value) })}
+                    style={{
+                      width: 110,
+                      padding: "6px 10px",
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                      textAlign: "right",
+                    }}
                   />
                 </td>
-                <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3", textAlign: "right", fontWeight: 800 }}>
+
+                <td
+                  style={{
+                    padding: 12,
+                    borderBottom: "1px solid #f3f3f3",
+                    textAlign: "right",
+                    fontWeight: 800,
+                  }}
+                >
                   {fmtEUR(safeNum(r.total))}
                 </td>
-                <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3", textAlign: "right" }}>
+
+                <td
+                  style={{
+                    padding: 12,
+                    borderBottom: "1px solid #f3f3f3",
+                    textAlign: "right",
+                  }}
+                >
                   <button onClick={() => removeRow(idx)} disabled={loading}>
                     Löschen
                   </button>
@@ -631,7 +876,8 @@ export default function AbschlagsrechnungDetail() {
             {(current.rows || []).length === 0 && (
               <tr>
                 <td colSpan={7} style={{ padding: 14, color: "#777" }}>
-                  Keine Positionen. Wenn du aus „Verknüpfung“ übernommen hast, werden sie hier sichtbar.
+                  Keine Positionen. Wenn du aus „Verknüpfung“ übernommen hast,
+                  werden sie hier sichtbar.
                 </td>
               </tr>
             )}
@@ -641,3 +887,13 @@ export default function AbschlagsrechnungDetail() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+

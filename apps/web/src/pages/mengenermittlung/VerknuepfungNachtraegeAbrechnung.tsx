@@ -1,11 +1,9 @@
+import { API_BASE, apiUrl } from "../../lib/apiBase";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../../store/useProject";
 
-const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "http://localhost:4000";
+
 
 /* ================= TYPES ================= */
 
@@ -148,20 +146,38 @@ const num = (v: any, d = 3) => {
     : "0";
 };
 
-async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = String(API || "").replace(/\/+$/, "");
-  const res = await fetch(`${base}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
+function safeTrim(v: any) {
+  return String(v ?? "").trim();
+}
+
+function sortByLvPos(a: LinkRow, b: LinkRow) {
+  return String(a.lvPos ?? "").localeCompare(String(b.lvPos ?? ""), "de-DE", {
+    numeric: true,
+    sensitivity: "base",
   });
+}
+
+async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const base = String(API_BASE || "").replace(/\/+$/, "");
+  const headers = new Headers(init?.headers || {});
+
+  if (!headers.has("Content-Type") && init?.body && typeof init.body === "string") {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const res = await fetch(`${base}${path}`, {
+    ...init,
+    headers,
+  });
+
   const text = await res.text().catch(() => "");
   if (!res.ok) {
     throw new Error(text || `Server-Fehler (${res.status})`);
   }
+
   try {
     return JSON.parse(text) as T;
   } catch {
-    // se server risponde plain text
     return text as any as T;
   }
 }
@@ -170,11 +186,18 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export default function VerknuepfungNachtraegeAbrechnung() {
   const navigate = useNavigate();
-  const { getSelectedProject } = useProject();
-  const project = getSelectedProject();
 
-  // IMPORTANT: per la Verknüpfung usiamo il project CODE come folder key (data/projects/<code>)
-  const projectKey = (project?.code || "").trim();
+  const projectStore = useProject() as any;
+  const currentProject = projectStore?.currentProject;
+  const getSelectedProject = projectStore?.getSelectedProject;
+
+  const selectedProject =
+    typeof getSelectedProject === "function" ? getSelectedProject() : null;
+
+  const project = currentProject || selectedProject || null;
+
+  // primär code, fallback id
+  const projectKey = safeTrim(project?.code || project?.id || "");
 
   const [rows, setRows] = React.useState<LinkRow[]>([]);
   const [kpi, setKpi] = React.useState<KPI>({
@@ -192,8 +215,16 @@ export default function VerknuepfungNachtraegeAbrechnung() {
   // selection by lvPos
   const [sel, setSel] = React.useState<Record<string, boolean>>({});
 
+  const validSelectableLvPos = React.useMemo(
+    () =>
+      rows
+        .map((r) => safeTrim(r.lvPos))
+        .filter((v, i, arr) => !!v && arr.indexOf(v) === i),
+    [rows]
+  );
+
   const selectedLvPos = React.useMemo(
-    () => Object.keys(sel).filter((k) => sel[k]),
+    () => Object.keys(sel).filter((k) => sel[k] && safeTrim(k)),
     [sel]
   );
 
@@ -201,12 +232,14 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
   function toggleAll(v: boolean) {
     const next: Record<string, boolean> = {};
-    if (v) rows.forEach((r) => (next[r.lvPos] = true));
+    if (v) validSelectableLvPos.forEach((lvPos) => (next[lvPos] = true));
     setSel(next);
   }
 
   function toggleOne(lvPos: string, v: boolean) {
-    setSel((s0) => ({ ...s0, [lvPos]: v }));
+    const k = safeTrim(lvPos);
+    if (!k) return;
+    setSel((s0) => ({ ...s0, [k]: v }));
   }
 
   async function load() {
@@ -229,11 +262,11 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
       try {
         data = await apiJson<ListResponse>(
-          `/api/verknuepfung/list/${encodeURIComponent(projectKey)}`
+          `/API_BASE/verknuepfung/list/${encodeURIComponent(projectKey)}`
         );
       } catch {
         data = await apiJson<ListResponse>(
-          `/api/verknuepfung/list?projectKey=${encodeURIComponent(projectKey)}`
+          `/API_BASE/verknuepfung/list?projectKey=${encodeURIComponent(projectKey)}`
         );
       }
 
@@ -241,32 +274,54 @@ export default function VerknuepfungNachtraegeAbrechnung() {
         throw new Error(data?.error || "Fehler beim Laden (ok=false)");
       }
 
-      const items = Array.isArray(data.items) ? data.items : [];
+      const items = (Array.isArray(data.items) ? data.items : [])
+        .map((r, idx) => ({
+          ...r,
+          id: safeTrim(r.id) || `${safeTrim(r.lvPos) || "row"}-${idx}`,
+          lvPos: safeTrim(r.lvPos),
+          text: String(r.text ?? ""),
+          unit: String(r.unit ?? ""),
+          soll: Number(r.soll ?? 0),
+          ist: Number(r.ist ?? 0),
+          ep: Number(r.ep ?? 0),
+          diff: Number(r.diff ?? 0),
+          status: String(r.status ?? ""),
+        }))
+        .sort(sortByLvPos);
+
       setRows(items);
       setSel({});
       setSourceFile(data.sourceSollIstFile || null);
 
       if (data.kpi) {
-        setKpi(data.kpi);
+        setKpi({
+          sollSum: Number(data.kpi.sollSum ?? 0),
+          istSum: Number(data.kpi.istSum ?? 0),
+          offenNachtragEUR: Number(data.kpi.offenNachtragEUR ?? 0),
+          abrechenbarEUR: Number(data.kpi.abrechenbarEUR ?? 0),
+        });
       } else {
-        let sollSum = 0,
-          istSum = 0,
-          offenNachtragEUR = 0,
-          abrechenbarEUR = 0;
+        let sollSum = 0;
+        let istSum = 0;
+        let offenNachtragEUR = 0;
+        let abrechenbarEUR = 0;
 
         for (const r of items) {
           sollSum += Number(r.soll || 0);
           istSum += Number(r.ist || 0);
+
           if (Number(r.diff || 0) > 0 && !r.nachtragNr) {
             offenNachtragEUR += Number(r.diff || 0) * Number(r.ep || 0);
           }
+
           abrechenbarEUR += Number(r.ist || 0) * Number(r.ep || 0);
         }
+
         setKpi({ sollSum, istSum, offenNachtragEUR, abrechenbarEUR });
       }
     } catch (e: any) {
       const msg = e?.message || "Fehler beim Laden";
-      setErr(`${msg}\n\nAPI: ${String(API)}`);
+      setErr(`${msg}\n\nAPI: ${String(API_BASE)}`);
       setRows([]);
       setSel({});
       setSourceFile(null);
@@ -283,18 +338,20 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
   async function freigeben() {
     if (!canAct) return;
+
     setLoading(true);
     setErr(null);
     setInfo(null);
+
     try {
-      await apiJson(`/api/verknuepfung/freigeben/${encodeURIComponent(projectKey)}`, {
+      await apiJson(`/API_BASE/verknuepfung/freigeben/${encodeURIComponent(projectKey)}`, {
         method: "POST",
         body: JSON.stringify({ lvPos: selectedLvPos }),
       });
       await load();
       setInfo(`Freigabe gesetzt für ${selectedLvPos.length} Position(en).`);
     } catch (e: any) {
-      setErr((e?.message || "Fehler beim Freigeben") + `\n\nAPI: ${String(API)}`);
+      setErr((e?.message || "Fehler beim Freigeben") + `\n\nAPI: ${String(API_BASE)}`);
     } finally {
       setLoading(false);
     }
@@ -302,11 +359,13 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
   async function alsNachtragAnlegen() {
     if (!canAct) return;
+
     setLoading(true);
     setErr(null);
     setInfo(null);
+
     try {
-      await apiJson(`/api/verknuepfung/nachtrag/${encodeURIComponent(projectKey)}`, {
+      await apiJson(`/API_BASE/verknuepfung/nachtrag/${encodeURIComponent(projectKey)}`, {
         method: "POST",
         body: JSON.stringify({ lvPos: selectedLvPos }),
       });
@@ -315,7 +374,7 @@ export default function VerknuepfungNachtraegeAbrechnung() {
       navigate("/kalkulation/nachtraege");
     } catch (e: any) {
       setErr(
-        (e?.message || "Fehler beim Erstellen der Nachträge") + `\n\nAPI: ${String(API)}`
+        (e?.message || "Fehler beim Erstellen der Nachträge") + `\n\nAPI: ${String(API_BASE)}`
       );
     } finally {
       setLoading(false);
@@ -335,7 +394,7 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
     try {
       const resp = await apiJson<AbschlagResponse>(
-        `/api/verknuepfung/abschlag/${encodeURIComponent(projectKey)}`,
+        `/API_BASE/verknuepfung/abschlag/${encodeURIComponent(projectKey)}`,
         {
           method: "POST",
           body: JSON.stringify({ lvPos: selectedLvPos, nr }),
@@ -348,13 +407,14 @@ export default function VerknuepfungNachtraegeAbrechnung() {
 
       const usedNr = typeof resp.nr === "number" ? resp.nr : nr ?? undefined;
 
-      // Flag per la pagina Abschlagsrechnungen (auto-load / focus)
       try {
         localStorage.setItem(
           `rlc_abschlaege_focus_${projectKey}`,
           JSON.stringify({ nr: usedNr ?? null, ts: Date.now() })
         );
-      } catch {}
+      } catch {
+        // ignore
+      }
 
       await load();
 
@@ -363,11 +423,10 @@ export default function VerknuepfungNachtraegeAbrechnung() {
           (usedNr ? ` → Abschlagsrechnung #${usedNr}` : "")
       );
 
-      // Vai alla lista Buchhaltung
       navigate("/buchhaltung/abschlagsrechnungen");
     } catch (e: any) {
       setErr(
-        (e?.message || "Fehler beim Übernehmen in Abschlag") + `\n\nAPI: ${String(API)}`
+        (e?.message || "Fehler beim Übernehmen in Abschlag") + `\n\nAPI: ${String(API_BASE)}`
       );
     } finally {
       setLoading(false);
@@ -437,7 +496,9 @@ export default function VerknuepfungNachtraegeAbrechnung() {
     );
   };
 
-  const allChecked = rows.length > 0 && selectedLvPos.length === rows.length;
+  const allChecked =
+    validSelectableLvPos.length > 0 &&
+    selectedLvPos.length === validSelectableLvPos.length;
 
   return (
     <div style={pageContainer}>
@@ -453,7 +514,7 @@ export default function VerknuepfungNachtraegeAbrechnung() {
         </div>
         {project && (
           <div style={{ marginTop: 6, fontSize: 13, color: "#4B5563" }}>
-            <b>{project.code}</b> — {project.name}
+            <b>{project.code || project.id}</b> — {project.name}
             {project.client ? ` • ${project.client}` : ""}
             {project.place ? ` • ${project.place}` : ""}
           </div>
@@ -618,6 +679,7 @@ export default function VerknuepfungNachtraegeAbrechnung() {
                         type="checkbox"
                         checked={!!sel[r0.lvPos]}
                         onChange={(e) => toggleOne(r0.lvPos, e.target.checked)}
+                        disabled={!safeTrim(r0.lvPos)}
                       />
                     </td>
 
@@ -678,3 +740,9 @@ function Kpi({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+
+
+
+
+

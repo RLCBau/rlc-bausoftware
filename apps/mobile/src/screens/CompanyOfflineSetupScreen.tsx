@@ -164,7 +164,7 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
               value={name}
               onChangeText={setName}
               placeholder="Firmenname"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               style={styles.input}
             />
 
@@ -173,7 +173,7 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
               value={address}
               onChangeText={setAddress}
               placeholder="Straße, PLZ Ort"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               style={[styles.input, styles.inputMultiline]}
               multiline
               textAlignVertical="top"
@@ -184,7 +184,7 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
               value={phone}
               onChangeText={setPhone}
               placeholder="Telefon"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               style={styles.input}
               keyboardType={
                 Platform.OS === "ios" ? "numbers-and-punctuation" : "phone-pad"
@@ -196,7 +196,7 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
               value={email}
               onChangeText={setEmail}
               placeholder="E-Mail Firma"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               style={styles.input}
               autoCapitalize="none"
               keyboardType="email-address"
@@ -471,6 +471,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
+
 
 
 

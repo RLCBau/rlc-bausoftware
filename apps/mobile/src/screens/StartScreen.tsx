@@ -1,5 +1,4 @@
-﻿// apps/mobile/src/screens/StartScreen.tsx
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +9,7 @@ import {
   Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
 import { COLORS } from "../ui/theme";
@@ -17,14 +17,11 @@ import { COLORS } from "../ui/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "Start">;
 
 const KEY_MODE = "rlc_mobile_mode";
-
 type Mode = "NUR_APP" | "SERVER_SYNC";
 
 export default function StartScreen({ navigation }: Props) {
   const [mode, setMode] = useState<Mode | null>(null);
   const [booting, setBooting] = useState(true);
-
-  // ✅ prevent double tap / double navigation
   const [navBusy, setNavBusy] = useState(false);
 
   useEffect(() => {
@@ -34,17 +31,13 @@ export default function StartScreen({ navigation }: Props) {
       try {
         const m = String((await AsyncStorage.getItem(KEY_MODE)) || "");
         const next = m === "NUR_APP" || m === "SERVER_SYNC" ? (m as Mode) : null;
-
         if (!alive) return;
-
         setMode(next);
-        setBooting(false);
-
-        // POLICY: Start resta sempre prima pagina, nessun redirect automatico.
       } catch {
         if (!alive) return;
         setMode(null);
-        setBooting(false);
+      } finally {
+        if (alive) setBooting(false);
       }
     })();
 
@@ -73,131 +66,149 @@ export default function StartScreen({ navigation }: Props) {
   };
 
   const goNext = async () => {
-    if (booting || navBusy) return;
     if (!mode) return;
     await goLoginWithMode(mode);
   };
 
   const goArbeitsmodus = () => {
-    if (booting || navBusy) return;
-
     navigation.reset({
       index: 0,
       routes: [{ name: "Arbeitsmodus" as any, params: { force: true } as any }],
     });
   };
 
+  const modeLabel =
+    mode === "SERVER_SYNC" ? "SERVER" : mode === "NUR_APP" ? "APP" : "MODE";
+
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.wrap}>
-        <View style={s.heroCard}>
-          <View style={s.headerRow}>
-            <View style={s.logoWrap}>
-              <Image
-                source={require("../../assets/icon.png")}
-                style={s.logo}
-                resizeMode="contain"
-              />
-            </View>
+        <View style={s.mainCard}>
+          <View style={s.heroTop}>
+            <View style={s.planLineA} />
+            <View style={s.planLineB} />
 
-            <View style={s.headerTextWrap}>
-              <Text style={s.brand}>RLC Bausoftware</Text>
-              <Text style={s.sub}>mobile</Text>
-            </View>
+            <View style={s.headerRow}>
+              <View style={s.logoBox}>
+                <Image
+                  source={require("../../assets/icon.png")}
+                  style={s.logo}
+                  resizeMode="contain"
+                />
+              </View>
 
-            <View style={s.modePill}>
-              <Text style={s.modeTxt}>
-                {booting
-                  ? "..."
-                  : mode === "NUR_APP"
-                  ? "NUR_APP"
-                  : mode === "SERVER_SYNC"
-                  ? "SERVER"
-                  : "MODE?"}
-              </Text>
+              <View style={s.brandBox}>
+                <Text style={s.brandRlc}>RLC</Text>
+                <Text style={s.brandName}>Bausoftware</Text>
+                <Text style={s.brandMobile}>mobile</Text>
+              </View>
+
+              <View style={s.serverPill}>
+                <Text style={s.serverTxt}>{modeLabel}</Text>
+              </View>
             </View>
           </View>
 
-          <Text style={s.eyebrow}>Start</Text>
-          <Text style={s.h1}>Arbeitsmodus wählen</Text>
-          <Text style={s.muted}>
-            {booting
-              ? "Initialisiere…"
-              : mode
-              ? "Modus vorhanden. Du kannst direkt zu Login."
-              : "Bitte wählen: Ohne Server oder Mit Server."}
-          </Text>
-        </View>
+          <View style={s.bodyCard}>
+            <Text style={s.eyebrow}>Start</Text>
 
-        <View style={s.card}>
-          <View style={s.buttonStack}>
+            <Text style={s.title}>{"Arbeitsmodus\nw\u00e4hlen"}</Text>
+
+            <Text style={s.subtitle}>
+              {booting
+                ? "Initialisiere..."
+                : mode
+                ? "Modus vorhanden. Du kannst direkt zu Login."
+                : "Bitte Arbeitsmodus ausw\u00e4hlen."}
+            </Text>
+
+            <View style={s.stack}>
+              <Pressable
+                onPress={() => goLoginWithMode("NUR_APP")}
+                disabled={booting || navBusy}
+                style={({ pressed }) => [
+                  s.primaryBtn,
+                  pressed ? s.pressed : null,
+                  booting || navBusy ? s.disabled : null,
+                ]}
+              >
+                <Ionicons name="cloud-outline" size={22} color="#FFFFFF" />
+                <Text style={s.primaryTxt}>Ohne Server (NUR_APP)</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => goLoginWithMode("SERVER_SYNC")}
+                disabled={booting || navBusy}
+                style={({ pressed }) => [
+                  s.secondaryBtn,
+                  pressed ? s.pressed : null,
+                  booting || navBusy ? s.disabled : null,
+                ]}
+              >
+                <Ionicons name="sync-outline" size={23} color={NAVY} />
+                <Text style={s.secondaryTxt}>Mit Server (SERVER_SYNC)</Text>
+              </Pressable>
+            </View>
+
+            <View style={s.orRow}>
+              <View style={s.orLine} />
+              <Text style={s.orTxt}>oder</Text>
+              <View style={s.orLine} />
+            </View>
+
             <Pressable
-              onPress={() => goLoginWithMode("NUR_APP")}
-              disabled={booting || navBusy}
+              onPress={goNext}
+              disabled={booting || navBusy || !mode}
               style={({ pressed }) => [
-                s.btnPrimary,
-                (booting || navBusy) && s.btnDisabled,
-                pressed && !(booting || navBusy) ? s.btnPressed : null,
+                s.actionBtn,
+                pressed ? s.pressed : null,
+                booting || navBusy || !mode ? s.disabled : null,
               ]}
             >
-              <Text style={s.btnPrimaryTxt}>Ohne Server (NUR_APP)</Text>
+              <Ionicons name="log-in-outline" size={23} color={NAVY} />
+              <Text style={s.actionTxt}>Weiter (zu Login)</Text>
             </Pressable>
 
             <Pressable
-              onPress={() => goLoginWithMode("SERVER_SYNC")}
+              onPress={goArbeitsmodus}
               disabled={booting || navBusy}
               style={({ pressed }) => [
-                s.btnSecondary,
-                (booting || navBusy) && s.btnDisabled,
-                pressed && !(booting || navBusy) ? s.btnPressed : null,
+                s.actionBtn,
+                s.actionBtnSoft,
+                pressed ? s.pressed : null,
+                booting || navBusy ? s.disabled : null,
               ]}
             >
-              <Text style={s.btnSecondaryTxt}>Mit Server (SERVER_SYNC)</Text>
+              <Ionicons name="settings-outline" size={23} color={NAVY} />
+              <Text style={s.linkTxt}>{"Arbeitsmodus \u00e4ndern (optional)"}</Text>
             </Pressable>
           </View>
-
-          <View style={s.divider} />
-
-          <Pressable
-            onPress={goNext}
-            disabled={booting || navBusy || !mode}
-            style={({ pressed }) => [
-              s.btnGhost,
-              (booting || navBusy || !mode) && s.btnDisabled,
-              pressed && mode ? s.btnPressed : null,
-            ]}
-          >
-            <Text style={s.btnGhostTxt}>{booting ? "..." : "Weiter (zu Login)"}</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={goArbeitsmodus}
-            style={({ pressed }) => [
-              s.linkBtn,
-              (booting || navBusy) && s.btnDisabled,
-              pressed && !(booting || navBusy) ? s.btnPressed : null,
-            ]}
-            disabled={booting || navBusy}
-          >
-            <Text style={s.linkTxt}>Arbeitsmodus ändern (optional)</Text>
-          </Pressable>
         </View>
 
         <View style={s.infoCard}>
-          <Text style={s.infoTitle}>Hinweis</Text>
-          <Text style={s.infoText}>
-            NUR_APP arbeitet lokal auf dem Gerät. SERVER_SYNC verbindet die App mit dem Server
-            und synchronisiert Projekte und Dokumente.
-          </Text>
+          <View style={s.infoIcon}>
+            <Ionicons name="information" size={18} color="#FFFFFF" />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={s.infoTitle}>Hinweis</Text>
+            <Text style={s.infoText}>
+              {"NUR_APP arbeitet lokal auf dem Ger\u00e4t.\nSERVER_SYNC verbindet die App mit dem Server und synchronisiert Projekte und Dokumente."}
+            </Text>
+          </View>
         </View>
 
-        <View style={s.footer}>
-          <Text style={s.footerTxt}>© {new Date().getFullYear()} RLC Bausoftware</Text>
-        </View>
+        <Text style={s.footer}>© 2026 RLC Bausoftware</Text>
       </View>
     </SafeAreaView>
   );
 }
+
+const NAVY = "#061A33";
+const NAVY2 = "#082C55";
+const BLUE = "#0A84FF";
+const CYAN = "#38BDF8";
+const BORDER = "#D9E4F2";
 
 const s = StyleSheet.create({
   safe: {
@@ -208,15 +219,49 @@ const s = StyleSheet.create({
   wrap: {
     flex: 1,
     padding: 16,
-    paddingBottom: 22,
+    paddingBottom: 18,
   },
 
-  heroCard: {
-    borderRadius: 22,
-    padding: 18,
+  mainCard: {
+    borderRadius: 24,
     backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: BORDER,
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.13,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 5,
+  },
+
+  heroTop: {
+    minHeight: 128,
+    backgroundColor: NAVY,
+    padding: 16,
+    overflow: "hidden",
+  },
+
+  planLineA: {
+    position: "absolute",
+    right: 18,
+    top: 20,
+    width: 180,
+    height: 110,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    transform: [{ rotate: "-8deg" }],
+  },
+
+  planLineB: {
+    position: "absolute",
+    right: 54,
+    bottom: -18,
+    width: 150,
+    height: 110,
+    borderWidth: 1,
+    borderColor: "rgba(10,132,255,0.22)",
+    transform: [{ rotate: "6deg" }],
   },
 
   headerRow: {
@@ -225,210 +270,236 @@ const s = StyleSheet.create({
     gap: 12,
   },
 
-  logoWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: COLORS.card2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  logoBox: {
+    width: 62,
+    height: 62,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.70)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
 
   logo: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
   },
 
-  headerTextWrap: {
+  brandBox: {
     flex: 1,
+    minWidth: 0,
   },
 
-  brand: {
-    color: COLORS.text,
+  brandRlc: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    lineHeight: 23,
     fontWeight: "900",
-    fontSize: 18,
   },
 
-  sub: {
-    color: COLORS.sub,
-    fontWeight: "800",
-    marginTop: 2,
+  brandName: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    lineHeight: 22,
+    fontWeight: "900",
   },
 
-  modePill: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+  brandMobile: {
+    marginTop: 1,
+    color: CYAN,
+    fontSize: 16,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+
+  serverPill: {
+    paddingHorizontal: 13,
+    paddingVertical: 8,
     borderRadius: 999,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
+    borderColor: "rgba(255,255,255,0.80)",
   },
 
-  modeTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
+  serverTxt: {
+    color: NAVY2,
     fontSize: 12,
+    fontWeight: "900",
+  },
+
+  bodyCard: {
+    marginTop: -18,
+    padding: 17,
+    paddingTop: 19,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
   },
 
   eyebrow: {
-    marginTop: 18,
-    color: COLORS.accentDark,
+    color: BLUE,
+    fontSize: 15,
     fontWeight: "900",
-    fontSize: 12,
-    letterSpacing: 0.3,
   },
 
-  h1: {
+  title: {
     marginTop: 8,
-    fontSize: 30,
-    fontWeight: "900",
     color: COLORS.text,
+    fontSize: 31,
+    lineHeight: 36,
+    fontWeight: "900",
+    letterSpacing: -0.7,
   },
 
-  muted: {
-    marginTop: 8,
+  subtitle: {
+    marginTop: 10,
     color: COLORS.sub,
-    fontWeight: "700",
+    fontSize: 15,
     lineHeight: 20,
+    fontWeight: "800",
   },
 
-  card: {
-    marginTop: 14,
-    borderRadius: 20,
-    padding: 15,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-
-  buttonStack: {
+  stack: {
+    marginTop: 20,
     gap: 10,
   },
 
-  btnPrimary: {
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: COLORS.accent,
+  primaryBtn: {
+    minHeight: 50,
+    borderRadius: 15,
+    backgroundColor: NAVY2,
     borderWidth: 1,
-    borderColor: COLORS.accent,
+    borderColor: "#0B4F8A",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: 10,
   },
 
-  btnPrimaryTxt: {
-    color: COLORS.textLight,
+  primaryTxt: {
+    color: "#FFFFFF",
+    fontSize: 15,
     fontWeight: "900",
-    fontSize: 14,
-    textAlign: "center",
   },
 
-  btnSecondary: {
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: COLORS.card2,
+  secondaryBtn: {
+    minHeight: 49,
+    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: BORDER,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: 10,
   },
 
-  btnSecondaryTxt: {
-    color: COLORS.text,
+  secondaryTxt: {
+    color: NAVY,
+    fontSize: 15,
     fontWeight: "900",
-    fontSize: 14,
-    textAlign: "center",
   },
 
-  divider: {
+  orRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginVertical: 13,
+  },
+
+  orLine: {
+    flex: 1,
     height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 14,
+    backgroundColor: BORDER,
   },
 
-  btnGhost: {
-    minHeight: 46,
-    borderRadius: 14,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-
-  btnGhostTxt: {
-    color: COLORS.text,
+  orTxt: {
+    color: COLORS.sub,
+    fontSize: 13,
     fontWeight: "900",
-    fontSize: 14,
   },
 
-  linkBtn: {
-    marginTop: 10,
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: COLORS.card2,
+  actionBtn: {
+    minHeight: 46,
+    borderRadius: 15,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: BORDER,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 10,
+    marginBottom: 9,
+  },
+
+  actionBtnSoft: {
+    backgroundColor: COLORS.card2,
+  },
+
+  actionTxt: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "900",
   },
 
   linkTxt: {
     color: COLORS.text,
+    fontSize: 15,
     fontWeight: "900",
     textDecorationLine: "underline",
   },
 
   infoCard: {
     marginTop: 14,
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: COLORS.card2,
+    borderRadius: 16,
+    padding: 13,
+    backgroundColor: "#EEF7FF",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#B9DBFF",
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  infoIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: BLUE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
   },
 
   infoTitle: {
-    color: COLORS.text,
+    color: NAVY2,
+    fontSize: 15,
     fontWeight: "900",
-    fontSize: 14,
-    marginBottom: 6,
+    marginBottom: 4,
   },
 
   infoText: {
     color: COLORS.sub,
-    fontWeight: "700",
-    lineHeight: 20,
-  },
-
-  btnDisabled: {
-    opacity: 0.55,
-  },
-
-  btnPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: "800",
   },
 
   footer: {
-    flex: 1,
-    justifyContent: "flex-end",
-    alignItems: "center",
+    marginTop: 12,
+    textAlign: "center",
+    color: COLORS.sub,
+    fontWeight: "900",
+    fontSize: 12,
   },
 
-  footerTxt: {
-    color: COLORS.sub,
-    fontWeight: "800",
+  disabled: {
+    opacity: 0.55,
+  },
+
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
   },
 });
-
 

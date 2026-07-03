@@ -8,6 +8,7 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -603,12 +604,16 @@ export default function MengenEditorScreen({ route, navigation }: Props) {
           },
         ],
         showFormulaColumn: true,
-        shareAfterCreate: true,
+        shareAfterCreate: false,
       });
 
       const nextDoc = { ...saved, pdfUri };
       setDoc(nextDoc);
       await persistDoc(nextDoc);
+
+      if (pdfUri) {
+        await Linking.openURL(pdfUri);
+      }
     } catch (e) {
       console.log("PDF MENGEN ERROR", e);
       Alert.alert("Fehler", "PDF konnte nicht erstellt werden.");
@@ -723,7 +728,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
           }
           style={s.input}
           placeholder="Titel"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
         />
 
         <Text style={s.label}>Datum</Text>
@@ -734,7 +739,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
           }
           style={s.input}
           placeholder="YYYY-MM-DD"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
         />
 
         <Pressable style={s.addBtn} onPress={addRow}>
@@ -758,7 +763,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 value={String(r.text || "")}
                 onChangeText={(v) => updateRow(i, "text", v)}
                 style={s.input}
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
 
               <View style={s.row}>
@@ -767,7 +772,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   value={String(r.unit || "")}
                   onChangeText={(v) => updateRow(i, "unit", v)}
                   style={s.inputSmall}
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                 />
 
                 <TextInput
@@ -775,7 +780,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   value={String(r.qty || "")}
                   onChangeText={(v) => updateRow(i, "qty", v)}
                   style={s.inputSmall}
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   keyboardType="decimal-pad"
                 />
 
@@ -784,7 +789,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   value={String(r.ep || "")}
                   onChangeText={(v) => updateRow(i, "ep", v)}
                   style={s.inputSmall}
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   keyboardType="decimal-pad"
                 />
               </View>
@@ -794,7 +799,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 value={String(r.formula || "")}
                 onChangeText={(v) => updateFormula(i, v)}
                 style={s.input}
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
 
               <View style={s.resultRow}>
@@ -820,8 +825,8 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             {busy
               ? "Bitte warten..."
               : doc.pdfUri
-              ? "PDF erneut teilen"
-              : "PDF exportieren"}
+              ? "PDF"
+              : "PDF"}
           </Text>
         </Pressable>
 
@@ -935,7 +940,7 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
 
-  addTxt: { color: "#fff", textAlign: "center", fontWeight: "900" },
+  addTxt: { color: COLORS.textLight, textAlign: "center", fontWeight: "900" },
 
   rowCard: {
     borderWidth: 1,
@@ -964,7 +969,7 @@ const s = StyleSheet.create({
   },
 
   delete: {
-    color: "#dc2626",
+    color: COLORS.danger,
     fontWeight: "900",
     fontSize: 20,
   },
@@ -1016,14 +1021,14 @@ const s = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#ecfdf5",
+    backgroundColor: COLORS.successBg,
     borderRadius: 10,
     minHeight: 48,
   },
 
   resultTxt: {
     fontWeight: "900",
-    color: "#065f46",
+    color: COLORS.success,
     fontSize: 16,
   },
 
@@ -1049,7 +1054,7 @@ const s = StyleSheet.create({
   },
 
   pdfBtn: {
-    backgroundColor: "#0ea5e9",
+    backgroundColor: COLORS.accent,
     padding: 14,
     borderRadius: 12,
     marginTop: 10,
@@ -1063,18 +1068,28 @@ const s = StyleSheet.create({
   },
 
   rechnung: {
-    backgroundColor: "#16a34a",
+    backgroundColor: COLORS.success,
     padding: 14,
     borderRadius: 12,
     marginTop: 10,
   },
 
   btnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     textAlign: "center",
     fontWeight: "900",
   },
 });
+
+
+
+
+
+
+
+
+
+
 
 
 

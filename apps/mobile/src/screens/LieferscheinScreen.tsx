@@ -411,9 +411,9 @@ function badgeText(st?: LieferscheinRow["workflowStatus"]) {
   return "D";
 }
 function badgeColor(st?: LieferscheinRow["workflowStatus"]) {
-  if (st === "EINGEREICHT") return "#0B57D0";
-  if (st === "FREIGEGEBEN") return "#1A7F37";
-  if (st === "ABGELEHNT") return "#C33";
+  if (st === "EINGEREICHT") return COLORS.accent;
+  if (st === "FREIGEGEBEN") return COLORS.success;
+  if (st === "ABGELEHNT") return COLORS.danger;
   return "rgba(255,255,255,0.55)";
 }
 
@@ -747,7 +747,7 @@ export default function LieferscheinScreen({ route, navigation }: Props) {
    useEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#12324A",
+        backgroundColor: COLORS.accentDark,
       },
       headerTitleStyle: {
         color: COLORS.card,
@@ -1437,7 +1437,7 @@ const onKiSuggest = useCallback(async () => {
       const input = String(payload?.input || "").trim();
       setKiInput(input);
 
-      const parsed = parseRlcLieferschein(input);
+      const parsed = payload?.fieldPatches || payload?.extractedFields || parseRlcLieferschein(input);
       const firstMat = Array.isArray(parsed.material) ? parsed.material[0] : null;
 
       const toIsoDate = (v: any) => {
@@ -1881,7 +1881,7 @@ ${materialText}` : ""}${warnings}`,
             onChangeText={(v) => updatePflichtfeld({ baustellenNummer: v })}
             style={s.input}
             placeholder="z.B. BA-12345"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <Text style={s.label}>Bauleiter (E-Mail)</Text>
@@ -1892,7 +1892,7 @@ ${materialText}` : ""}${warnings}`,
             autoCapitalize="none"
             keyboardType="email-address"
             placeholder="bauleiter@firma.de"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <Text style={s.mutedSmall}>
@@ -1909,7 +1909,7 @@ ${materialText}` : ""}${warnings}`,
             onChangeText={(v) => updateRow({ date: v })}
             style={s.input}
             placeholder="YYYY-MM-DD"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <View style={s.grid2}>
@@ -1920,7 +1920,7 @@ ${materialText}` : ""}${warnings}`,
                 onChangeText={(v) => updateRow({ lieferscheinNummer: v })}
                 style={s.input}
                 placeholder="z.B. LS-123"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1930,7 +1930,7 @@ ${materialText}` : ""}${warnings}`,
                 onChangeText={(v) => updateRow({ kostenstelle: v })}
                 style={s.input}
                 placeholder="z.B. KS-01"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -1943,7 +1943,7 @@ ${materialText}` : ""}${warnings}`,
                 onChangeText={(v) => updateRow({ lieferant: v })}
                 style={s.input}
                 placeholder="Firma"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -1953,7 +1953,7 @@ ${materialText}` : ""}${warnings}`,
                 onChangeText={(v) => updateRow({ fahrer: v })}
                 style={s.input}
                 placeholder="Name"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -1964,7 +1964,7 @@ ${materialText}` : ""}${warnings}`,
             onChangeText={(v) => updateRow({ baustelle: v })}
             style={s.input}
             placeholder="Ort / Abschnitt"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <Text style={s.label}>LV Position</Text>
@@ -1973,7 +1973,7 @@ ${materialText}` : ""}${warnings}`,
             onChangeText={(v) => updateRow({ lvItemPos: v })}
             style={s.input}
             placeholder="z.B. 01.02.0001"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <View style={s.grid2}>
@@ -1984,7 +1984,7 @@ ${materialText}` : ""}${warnings}`,
                 onChangeText={(v) => updateRow({ material: v })}
                 style={s.input}
                 placeholder="z.B. Rohr DN150"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 
               />
             </View>
@@ -1995,7 +1995,7 @@ ${materialText}` : ""}${warnings}`,
                 onChangeText={(v) => updateRow({ unit: v })}
                 style={s.input}
                 placeholder="m / Stk"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -2007,7 +2007,7 @@ ${materialText}` : ""}${warnings}`,
             style={s.input}
             keyboardType="decimal-pad"
             placeholder="z.B. 12"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <Text style={s.label}>Bemerkungen</Text>
@@ -2017,7 +2017,7 @@ ${materialText}` : ""}${warnings}`,
             style={[s.input, { minHeight: 80, textAlignVertical: "top" }]}
             multiline
             placeholder="Notizen..."
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
 
@@ -2094,7 +2094,7 @@ ${materialText}` : ""}${warnings}`,
               value={kiInput}
               onChangeText={setKiInput}
               placeholder="Was soll RLC ausfüllen?"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               multiline
               style={[s.input, { minHeight: 88, textAlignVertical: "top" }]}
             />
@@ -2107,10 +2107,10 @@ ${materialText}` : ""}${warnings}`,
                 paddingHorizontal: 14,
                 paddingVertical: 8,
                 borderRadius: 999,
-                backgroundColor: "#EAF1FF",
+                backgroundColor: COLORS.accentSoft,
               }}
             >
-              <Text style={{ color: "#2563EB", fontWeight: "900" }}>
+              <Text style={{ color: COLORS.accent, fontWeight: "900" }}>
                 Tastatur schließen
               </Text>
             </Pressable>
@@ -2241,12 +2241,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DDF1FF",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "#A8D3F5",
+    borderColor: COLORS.border,
   },
   headerKiTxt: {
-    color: "#12324A",
+    color: COLORS.accentDark,
     fontWeight: "900",
     fontSize: 13,
   },
@@ -2422,9 +2422,9 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 999,
-    backgroundColor: "#FFF1F3",
+    backgroundColor: COLORS.dangerBg,
     borderWidth: 1,
-    borderColor: "#F3C7CF",
+    borderColor: COLORS.danger,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2501,6 +2501,9 @@ const s = StyleSheet.create({
   },
   modalBtnTxt: { color: COLORS.textLight, fontWeight: "900" },
 });
+
+
+
 
 
 

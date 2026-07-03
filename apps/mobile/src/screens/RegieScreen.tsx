@@ -405,9 +405,9 @@ function badgeText(st?: RegieRow["workflowStatus"]) {
   return "D";
 }
 function badgeColor(st?: RegieRow["workflowStatus"]) {
-  if (st === "EINGEREICHT") return "#0B57D0";
-  if (st === "FREIGEGEBEN") return "#1A7F37";
-  if (st === "ABGELEHNT") return "#C33";
+  if (st === "EINGEREICHT") return COLORS.accent;
+  if (st === "FREIGEGEBEN") return COLORS.success;
+  if (st === "ABGELEHNT") return COLORS.danger;
   return "rgba(255,255,255,0.55)";
 }
 
@@ -682,7 +682,7 @@ export default function RegieScreen({ route, navigation }: Props) {
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerStyle: {
-        backgroundColor: "#12324A",
+        backgroundColor: COLORS.accentDark,
       },
       headerTitleStyle: {
         color: COLORS.card,
@@ -781,10 +781,60 @@ export default function RegieScreen({ route, navigation }: Props) {
     else nextList.unshift(nextRow);
 
     nextList.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    await setJson(primaryKey, nextList);
+    for (const k of keys) {
+      await setJson(k, nextList);
+    }
     setList(nextList);
   }
 
+  // RLC_REGIE_AUTOSAVE_INBOX_VIEW_ROWS_V1
+  const hasUsefulRegieRowsForAutosave = useCallback((rows: any) => {
+    if (!Array.isArray(rows) || !rows.length) return false;
+
+    return rows.some((r: any) => {
+      const s = String(
+        r?.kostenstelle ||
+          r?.machine ||
+          r?.worker ||
+          r?.hours ||
+          r?.comment ||
+          r?.material ||
+          r?.quantity ||
+          r?.unit ||
+          ""
+      ).trim();
+
+      return s.length > 0 || (Array.isArray(r?.photos) && r.photos.length > 0);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!fromInbox || !editId) return;
+    if (!hasUsefulRegieRowsForAutosave(row?.rows)) return;
+
+    const timer = setTimeout(() => {
+      const snapshot: RegieRow = {
+        ...row,
+        id: String(row.id || editId),
+        docType: "REGIE",
+        workflowStatus: (row.workflowStatus as any) || "EINGEREICHT",
+        updatedAt: Date.now(),
+        createdAt: row.createdAt || Date.now(),
+        attachments: normalizeFiles(row.attachments || []),
+        rows: Array.isArray(row.rows) && row.rows.length
+          ? row.rows.map((r: any) => ({
+              ...emptyLine(),
+              ...r,
+              photos: normalizeFiles(r?.photos || r?.attachments || r?.files || []),
+            }))
+          : [emptyLine()],
+      };
+
+      persistToInbox(snapshot).catch(() => {});
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [fromInbox, editId, row, hasUsefulRegieRowsForAutosave]);
   const applyInboxSnapshotIfAny = useCallback(async () => {
     if (!fromInbox || !inboxSnapshot || inboxSnapshotAppliedRef.current) return false;
 
@@ -1384,7 +1434,7 @@ const onKiSuggest = useCallback(async () => {
       const input = String(payload?.input || "").trim();
       setKiInput(input);
 
-      const parsed = parseRlcRegie(input);
+      const parsed = payload?.fieldPatches || payload?.extractedFields || parseRlcRegie(input);
 
       const toIsoDate = (v: any) => {
         const s = String(v || "").trim();
@@ -1400,6 +1450,19 @@ const onKiSuggest = useCallback(async () => {
 
         const n = Math.max(1, mitarbeiter.length, geraete.length, material.length);
 
+        const cleanTaetigkeit =
+          String(parsed.taetigkeit || parsed.bemerkung || "")
+            .replace(/^Heute\s+von\s+.*?(?:,\s*)?/i, "")
+            .replace(/\b\d+\s*Minuten\s*Pause\b/gi, "")
+            .replace(/\bBaustelle\s+[A-Z0-9ÄÖÜäöüß\- ]+\b/gi, "")
+            .replace(/\b\d+\s*Mitarbeiter\b/gi, "")
+            .replace(/\b\d+(?:[,.]\d+)?\s*Stunden\b/gi, "")
+            .replace(/\bBagger\b/gi, "")
+            .replace(/\bWetter\s+[A-Za-zÄÖÜäöüß ]+\b/gi, "")
+            .replace(/\s*,\s*/g, ", ")
+            .replace(/^[,\s]+|[,\s]+$/g, "")
+            .trim() || "Regiearbeiten";
+
         const lines = Array.from({ length: n }).map((_, i) => {
           const p = mitarbeiter[i];
           const g = geraete[i];
@@ -1413,23 +1476,32 @@ const onKiSuggest = useCallback(async () => {
             material: m?.name || "",
             quantity: m?.quantity || "",
             unit: m?.unit || "",
-            comment: parsed.taetigkeit || "",
+            comment: cleanTaetigkeit,
           };
         });
 
+        const filteredWarnings = Array.isArray(parsed.warnings)
+          ? parsed.warnings.filter((w: string) => {
+              const s = String(w || "").toLowerCase();
+              if (s.includes("datum fehlt")) return false;
+              if (s.includes("keine mitarbeiter") && lines.some((x: any) => x.worker || x.machine || x.material)) return false;
+              return true;
+            })
+          : [];
+
         const warnings =
-          parsed.warnings?.length
+          filteredWarnings.length
             ? `
 
 RLC KI Hinweise:
-${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
+${filteredWarnings.map((w: string) => `- ${w}`).join("\n")}`
             : "";
 
         return {
           ...r,
           date: toIsoDate(parsed.datum || r.date),
           wetter: parsed.wetter || r.wetter || "",
-          bemerkungen: `${parsed.taetigkeit || parsed.bemerkung || r.bemerkungen || ""}${warnings}`,
+          bemerkungen: `${cleanTaetigkeit}${warnings}`,
           rows: lines,
           updatedAt: Date.now(),
         };
@@ -1451,6 +1523,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
         sug?.fields ||
         sug ||
         null;
+      console.log("RLC_REGIE_FP_DEBUG", JSON.stringify(fp, null, 2));
 
       if (!fp) {
         Alert.alert("KI", "Kein KI-Vorschlag vorhanden.");
@@ -1512,18 +1585,16 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
       };
 
       const isTimeLike = (v: any) => {
-        const s = sstr(v);
-        return /^\d{1,2}:\d{2}$/.test(s);
+        const s = sstr(v).replace(/\s*uhr$/i, "").trim();
+        return /^([01]?\d|2[0-3])(:[0-5]\d)?$/.test(s);
       };
 
       const normalizeTime = (v: any) => {
-        const s = sstr(v);
+        const s = sstr(v).replace(/\s*uhr$/i, "").trim();
         if (!s) return "";
-        if (/^\d{1,2}:\d{2}$/.test(s)) {
-          const [h, m] = s.split(":");
-          return `${String(h).padStart(2, "0")}:${m}`;
-        }
-        return s;
+        const m = s.match(/^([01]?\d|2[0-3])(?::([0-5]\d))?$/);
+        if (!m) return s;
+        return `${String(Number(m[1])).padStart(2, "0")}:${m[2] || "00"}`;
       };
 
       const normalizePause = (v: any) => {
@@ -2018,7 +2089,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             onChangeText={(v) => updateLine(index, { kostenstelle: v })}
             style={s.input}
             placeholder="z.B. KS-01"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <View style={s.grid2}>
@@ -2029,7 +2100,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateLine(index, { machine: v })}
                 style={s.input}
                 placeholder="z.B. Bagger"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -2039,7 +2110,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateLine(index, { worker: v })}
                 style={s.input}
                 placeholder="Name"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -2053,7 +2124,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 style={s.input}
                 keyboardType="decimal-pad"
                 placeholder="z.B. 7.5"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -2063,7 +2134,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateLine(index, { material: v })}
                 style={s.input}
                 placeholder="z.B. Rohr DN150"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -2077,7 +2148,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 style={s.input}
                 keyboardType="decimal-pad"
                 placeholder="z.B. 12"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -2087,7 +2158,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateLine(index, { unit: v })}
                 style={s.input}
                 placeholder="m / Stk"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -2099,7 +2170,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             style={[s.input, { minHeight: 70, textAlignVertical: "top" }]}
             multiline
             placeholder="Beschreibung..."
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
       );
@@ -2169,7 +2240,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             onChangeText={(v) => updateRow({ date: v })}
             style={s.input}
             placeholder="YYYY-MM-DD"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
 
           <View style={s.grid2}>
@@ -2180,7 +2251,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateRow({ arbeitsbeginn: v })}
                 style={s.input}
                 placeholder="07:00"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -2190,7 +2261,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateRow({ arbeitsende: v })}
                 style={s.input}
                 placeholder="16:00"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -2203,7 +2274,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateRow({ pause1: v })}
                 style={s.input}
                 placeholder="00:30"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -2213,7 +2284,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateRow({ pause2: v })}
                 style={s.input}
                 placeholder="00:00"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -2226,17 +2297,17 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 onChangeText={(v) => updateRow({ wetter: v })}
                 style={s.input}
                 placeholder="z.B. sonnig"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.label}>Kostenstelle (Header)</Text>
+              <Text style={s.label}>Kostenstelle</Text>
               <TextInput
                 value={String(row.kostenstelle || "")}
                 onChangeText={(v) => updateRow({ kostenstelle: v })}
                 style={s.input}
                 placeholder="z.B. KS-01"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
               />
             </View>
           </View>
@@ -2248,7 +2319,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
             style={[s.input, { minHeight: 80, textAlignVertical: "top" }]}
             multiline
             placeholder="Notizen..."
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
           />
         </View>
 
@@ -2341,7 +2412,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               value={kiInput}
               onChangeText={setKiInput}
               placeholder="Was soll RLC ausfüllen?"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               multiline
               style={[s.input, { minHeight: 88, textAlignVertical: "top" }]}
             />
@@ -2354,10 +2425,10 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                 paddingHorizontal: 14,
                 paddingVertical: 8,
                 borderRadius: 999,
-                backgroundColor: "#EAF1FF",
+                backgroundColor: COLORS.accentSoft,
               }}
             >
-              <Text style={{ color: "#2563EB", fontWeight: "900" }}>
+              <Text style={{ color: COLORS.accent, fontWeight: "900" }}>
                 Tastatur schließen
               </Text>
             </Pressable>
@@ -2466,12 +2537,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DDF1FF",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "#A8D3F5",
+    borderColor: COLORS.border,
   },
   headerKiTxt: {
-    color: "#12324A",
+    color: COLORS.accentDark,
     fontWeight: "900",
     fontSize: 13,
   },
@@ -2647,7 +2718,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  thumbDelTxt: { color: "#fff", fontWeight: "900" },
+  thumbDelTxt: { color: COLORS.textLight, fontWeight: "900" },
 
   attCard: {
     borderRadius: RLC_RADIUS.button,
@@ -2680,13 +2751,13 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 999,
-    backgroundColor: "#FFF1F3",
+    backgroundColor: COLORS.dangerBg,
     borderWidth: 1,
-    borderColor: "#F3C7CF",
+    borderColor: COLORS.danger,
     alignItems: "center",
     justifyContent: "center",
   },
-  attDelTxt: { color: "#C33", fontWeight: "900" },
+  attDelTxt: { color: COLORS.danger, fontWeight: "900" },
 
   histCard: {
     borderRadius: 16,
@@ -2759,6 +2830,17 @@ const s = StyleSheet.create({
   },
   modalBtnTxt: { color: COLORS.textLight, fontWeight: "900" },
 });
+
+
+
+
+
+
+
+
+
+
+
 
 
 

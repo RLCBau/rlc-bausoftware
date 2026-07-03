@@ -105,3 +105,29 @@ projects/**/*.pdf
 ############################################################
 # END
 ############################################################
+
+# RLC private server files
+apps/server/data/
+apps/server/auth_token.txt
+apps/server/test-context-sensitive-ki-token.js
+
+# RLC local backups / temporary files
+.rlc-backups/
+backup/
+apps/_backup*/
+*.bak_*
+*.backup*
+*.broken_*
+*.save.*
+* - Kopie.*
+*2.tsx
+*.tsbuildinfo
+*.csv
+how --stat --oneline HEAD
+rlc-bausoftware/
+apps/mobile/assets/icon.original-bad-png.jpg
+apps/web/clear-rlc-ki-cache.txt
+apps/web/patch-recipes-ki.py
+apps/web/kalkulation.ki.ts
+*.bak-*
+apps/server/src/routes/projectLv.ts.before_*

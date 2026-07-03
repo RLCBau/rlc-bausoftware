@@ -1,50 +1,128 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
+import { API_BASE } from "../lib/apiBase";
+// apps/web/src/api/pdf.ts
+
+function apiUrl(path: string) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${p}` : p;
+}
+
+async function readTextSafe(resp: Response) {
+  return resp.text().catch(() => "");
+}
+
+async function readJsonSafe<T>(resp: Response): Promise<T | null> {
+  return resp.json().catch(() => null);
+}
+
+function safeFilePart(value: unknown, fallback: string) {
+  const s = String(value ?? fallback).trim();
+  return s.replace(/[\\/:*?"<>|]+/g, "_") || fallback;
+}
 
 async function download(resp: Response, name: string) {
   if (!resp.ok) {
-    // prova a leggere il testo errore dal server
-    const txt = await resp.text().catch(() => "");
+    const txt = await readTextSafe(resp);
     throw new Error(`PDF export failed (${resp.status}). ${txt}`);
   }
+
   const blob = await resp.blob();
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = name; a.click();
-  URL.revokeObjectURL(url);
+
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
-// 🔹 Regiebericht als fertiges PDF zum Server schicken
+/* ---------------- REGIEBERICHT PDF zum Server schicken ---------------- */
 export async function exportRegieberichtPdf(args: {
   projectId: string;
   fileName: string;
-  pdfBase64: string; // NUR der Base64-Teil, ohne "data:application/pdf;base64,"
+  pdfBase64: string; // nur Base64-Teil ohne data:application/pdf;base64,
 }) {
-  const res = await fetch("/api/regie/export-pdf", {
+  const res = await fetch(apiUrl("/api/regie/export-pdf"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
     body: JSON.stringify(args),
   });
 
+  const data = await readJsonSafe<any>(res);
+
   if (!res.ok) {
-    throw new Error(await res.text());
+    throw new Error(
+      data?.error ||
+        (await readTextSafe(res)) ||
+        "Regiebericht-Export fehlgeschlagen"
+    );
   }
-  return res.json();
+
+  if (data?.ok === false) {
+    throw new Error(data?.error || "Regiebericht-Export fehlgeschlagen");
+  }
+
+  return data;
 }
 
+/* ---------------- NACHTRAG PDF ---------------- */
 export async function exportNachtragPdf(payload: any) {
   console.log("[WEB] POST /pdf/nachtrag", payload);
-  const r = await fetch(`${API_BASE}/pdf/nachtrag`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+
+  const r = await fetch(apiUrl("/pdf/nachtrag"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/pdf",
+    },
     body: JSON.stringify(payload),
   });
-  await download(r, `Nachtraege_${payload?.projekt?.projektId ?? "Projekt"}.pdf`);
+
+  const projectPart = safeFilePart(
+    payload?.projekt?.projektId ||
+      payload?.projekt?.code ||
+      payload?.projekt?.name,
+    "Projekt"
+  );
+
+  await download(r, `Nachtraege_${projectPart}.pdf`);
 }
 
+/* ---------------- LIEFERSCHEIN PDF ---------------- */
 export async function exportLieferscheinPdf(payload: any) {
   console.log("[WEB] POST /pdf/lieferschein", payload);
-  const r = await fetch(`${API_BASE}/pdf/lieferschein`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+
+  const r = await fetch(apiUrl("/pdf/lieferschein"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/pdf",
+    },
     body: JSON.stringify(payload),
   });
-  await download(r, `Lieferschein_${payload?.ls?.nr ?? "LS"}.pdf`);
+
+  const lsPart = safeFilePart(payload?.ls?.nr || payload?.ls?.id, "LS");
+
+  await download(r, `Lieferschein_${lsPart}.pdf`);
 }
+
+
+
+
+
+
+
+
+
+
+

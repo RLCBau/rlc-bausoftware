@@ -1,102 +1,190 @@
-import React, { useState, useEffect } from "react";
+import { API_BASE } from "../../lib/apiBase";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
+function apiUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${p}` : p;
+}
+
+type DocumentVersion = {
+  id?: string;
+  versionId?: string;
+  createdAt?: string;
+};
+
+type ProjectDocument = {
+  id: string;
+  name: string;
+  kind?: string;
+  createdAt?: string;
+  versions?: DocumentVersion[];
+};
+
+type InitFileResponse = {
+  id: string;
+};
+
+type UploadUrlResponse = {
+  uploadUrl: string;
+  versionId?: string;
+};
 
 export default function DocumentManager() {
   const [projectId, setProjectId] = useState<string>("");
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingList, setLoadingList] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
-  // === Carica lista documenti ===
-  const fetchDocuments = async () => {
-    if (!projectId) return;
-    try {
-      const res = await axios.get(`${API_BASE}/api/files/project/${projectId}/list`);
-      setDocuments(res.data || []);
-    } catch (err) {
-      console.error("Errore caricando lista:", err);
-      setMessage("❌ Errore durante il caricamento dei documenti");
-    }
-  };
+  const canUpload = useMemo(() => {
+    return !!projectId.trim() && !!selectedFile && !uploading;
+  }, [projectId, selectedFile, uploading]);
 
-  // === Upload ===
-  const handleUpload = async () => {
-    if (!selectedFile || !projectId) {
-      setMessage("⚠️ Seleziona un file e un Project-ID prima di continuare.");
+  const fetchDocuments = useCallback(async () => {
+    const trimmedProjectId = projectId.trim();
+    if (!trimmedProjectId) {
+      setDocuments([]);
       return;
     }
 
-    setLoading(true);
-    setMessage("⏳ Upload in corso...");
+    setLoadingList(true);
+    setMessage("");
 
     try {
-      // 1. Crea record nel DB
-      const initRes = await axios.post(`${API_BASE}/api/files/init`, {
-        projectId,
-        kind: "PDF",
-        name: selectedFile.name,
-      });
+      const res = await axios.get<ProjectDocument[]>(
+        apiUrl(`/api/files/project/${encodeURIComponent(trimmedProjectId)}/list`),
+        { withCredentials: true }
+      );
+      setDocuments(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Errore caricando lista documenti:", err);
+      setDocuments([]);
+      setMessage("❌ Fehler beim Laden der Dokumentenliste.");
+    } finally {
+      setLoadingList(false);
+    }
+  }, [projectId]);
 
-      const docId = initRes.data.id;
+  useEffect(() => {
+    if (!projectId.trim()) {
+      setDocuments([]);
+      return;
+    }
+    void fetchDocuments();
+  }, [projectId, fetchDocuments]);
 
-      // 2. Ottieni URL firmata da MinIO
-      const upRes = await axios.post(`${API_BASE}/api/files/upload-url`, {
-        documentId: docId,
-        filename: selectedFile.name,
-        contentType: selectedFile.type || "application/octet-stream",
-      });
+  const handleUpload = useCallback(async () => {
+    const trimmedProjectId = projectId.trim();
 
-      const { uploadUrl, versionId } = upRes.data;
+    if (!selectedFile || !trimmedProjectId) {
+      setMessage("⚠️ Bitte zuerst Projekt-ID und Datei auswählen.");
+      return;
+    }
 
-      // 3. Carica il file fisico
+    setUploading(true);
+    setMessage("⏳ Upload läuft...");
+
+    try {
+      const initRes = await axios.post<InitFileResponse>(
+        apiUrl(`/api/files/init`),
+        {
+          projectId: trimmedProjectId,
+          kind: guessKind(selectedFile),
+          name: selectedFile.name,
+        },
+        { withCredentials: true }
+      );
+
+      const docId = initRes.data?.id;
+      if (!docId) {
+        throw new Error("Dokument-ID fehlt.");
+      }
+
+      const upRes = await axios.post<UploadUrlResponse>(
+        apiUrl(`/api/files/upload-url`),
+        {
+          documentId: docId,
+          filename: selectedFile.name,
+          contentType: selectedFile.type || "application/octet-stream",
+        },
+        { withCredentials: true }
+      );
+
+      const uploadUrl = upRes.data?.uploadUrl;
+      if (!uploadUrl) {
+        throw new Error("Upload-URL fehlt.");
+      }
+
       await axios.put(uploadUrl, selectedFile, {
-        headers: { "Content-Type": selectedFile.type },
+        headers: {
+          "Content-Type": selectedFile.type || "application/octet-stream",
+        },
       });
 
-      setMessage("✅ Upload completato con successo!");
+      setMessage("✅ Datei erfolgreich hochgeladen.");
       setSelectedFile(null);
 
-      // 4. Ricarica lista documenti
-      fetchDocuments();
+      const fileInput = document.getElementById(
+        "document-upload-input"
+      ) as HTMLInputElement | null;
+      if (fileInput) fileInput.value = "";
+
+      await fetchDocuments();
     } catch (err) {
-      console.error("Errore upload:", err);
-      setMessage("❌ Errore durante l'upload del file.");
+      console.error("Errore upload documento:", err);
+      setMessage("❌ Fehler beim Hochladen der Datei.");
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
-  };
+  }, [projectId, selectedFile, fetchDocuments]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto text-gray-800">
       <h1 className="text-2xl font-semibold mb-4">📁 Dokumentenverwaltung</h1>
 
       <div className="bg-gray-50 border border-gray-300 rounded-md p-4 mb-4">
-        <label className="block mb-2 font-medium">Projekt-ID:</label>
+        <label className="block mb-2 font-medium">Projekt-ID</label>
         <input
           type="text"
           className="border p-2 w-full rounded-md"
-          placeholder="z. B. 9c223e31-e014-4ed8-926d-8c5ba06bf3ae"
+          placeholder="z. B. BA-2026-001 oder UUID"
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
         />
 
-        <label className="block mt-4 mb-2 font-medium">Datei auswählen:</label>
+        <label className="block mt-4 mb-2 font-medium">Datei auswählen</label>
         <input
+          id="document-upload-input"
           type="file"
           onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
           className="block w-full"
         />
 
-        <button
-          onClick={handleUpload}
-          disabled={loading}
-          className="mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md"
-        >
-          {loading ? "Lade hoch..." : "📤 Datei hochladen"}
-        </button>
+        {selectedFile && (
+          <div className="mt-2 text-sm text-gray-600">
+            Ausgewählt: <strong>{selectedFile.name}</strong>
+          </div>
+        )}
+
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={handleUpload}
+            disabled={!canUpload}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-2 px-4 rounded-md"
+          >
+            {uploading ? "Lade hoch..." : "📤 Datei hochladen"}
+          </button>
+
+          <button
+            onClick={() => void fetchDocuments()}
+            disabled={!projectId.trim() || loadingList}
+            className="bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 py-2 px-4 rounded-md"
+          >
+            {loadingList ? "Lade..." : "🔄 Aktualisieren"}
+          </button>
+        </div>
 
         {message && <p className="mt-3 text-sm">{message}</p>}
       </div>
@@ -104,14 +192,9 @@ export default function DocumentManager() {
       <div className="bg-white shadow rounded-md p-4">
         <h2 className="text-lg font-semibold mb-3">📑 Dokumente im Projekt</h2>
 
-        <button
-          onClick={fetchDocuments}
-          className="mb-3 bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-md"
-        >
-          🔄 Aktualisieren
-        </button>
-
-        {documents.length === 0 ? (
+        {loadingList ? (
+          <p>Dokumente werden geladen...</p>
+        ) : documents.length === 0 ? (
           <p>Keine Dokumente vorhanden.</p>
         ) : (
           <table className="w-full border-collapse">
@@ -119,7 +202,7 @@ export default function DocumentManager() {
               <tr className="bg-gray-100 text-left border-b">
                 <th className="p-2">Name</th>
                 <th className="p-2">Typ</th>
-                <th className="p-2">Version</th>
+                <th className="p-2">Versionen</th>
                 <th className="p-2">Erstellt am</th>
               </tr>
             </thead>
@@ -127,10 +210,12 @@ export default function DocumentManager() {
               {documents.map((doc) => (
                 <tr key={doc.id} className="border-b hover:bg-gray-50">
                   <td className="p-2">{doc.name}</td>
-                  <td className="p-2">{doc.kind}</td>
-                  <td className="p-2">{doc.versions?.length || 1}</td>
+                  <td className="p-2">{doc.kind || "—"}</td>
+                  <td className="p-2">{doc.versions?.length ?? 1}</td>
                   <td className="p-2">
-                    {new Date(doc.createdAt).toLocaleString("de-DE")}
+                    {doc.createdAt
+                      ? new Date(doc.createdAt).toLocaleString("de-DE")
+                      : "—"}
                   </td>
                 </tr>
               ))}
@@ -141,3 +226,37 @@ export default function DocumentManager() {
     </div>
   );
 }
+
+function guessKind(file: File): string {
+  const type = (file.type || "").toLowerCase();
+  const name = file.name.toLowerCase();
+
+  if (type.includes("pdf") || name.endsWith(".pdf")) return "PDF";
+  if (
+    type.includes("image/") ||
+    [".jpg", ".jpeg", ".png", ".webp", ".heic"].some((ext) =>
+      name.endsWith(ext)
+    )
+  ) {
+    return "IMAGE";
+  }
+  if (
+    type.includes("sheet") ||
+    type.includes("excel") ||
+    [".xlsx", ".xls", ".csv"].some((ext) => name.endsWith(ext))
+  ) {
+    return "XLSX";
+  }
+  if (name.endsWith(".doc") || name.endsWith(".docx")) return "DOC";
+  return "FILE";
+}
+
+
+
+
+
+
+
+
+
+

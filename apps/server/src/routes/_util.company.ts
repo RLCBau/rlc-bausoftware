@@ -1,5 +1,5 @@
 // apps/server/src/routes/_util.company.ts
-import { prisma } from "../lib/prisma.ts";
+import { prisma } from "../lib/prisma";
 
 export async function ensureCompanyId(req: any): Promise<string> {
   const cid =
@@ -9,7 +9,7 @@ export async function ensureCompanyId(req: any): Promise<string> {
   await prisma.company.upsert({
     where: { id: cid },
     update: {},
-    create: { id: cid, name: "DEV COMPANY" },
+    create: { id: cid, name: "DEV COMPANY", code: "DEV" },
   });
   return cid;
 }

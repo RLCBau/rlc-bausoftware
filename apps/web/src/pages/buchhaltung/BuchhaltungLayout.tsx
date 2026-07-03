@@ -20,14 +20,22 @@ const navItems: NavItem[] = [
   { to: "/buchhaltung/reports", label: "Belege / Reports" },
   { to: "/buchhaltung/datev", label: "DATEV Export" },
   { to: "/buchhaltung/ust", label: "USt.-Übersicht" },
-
-  // ✅ ora è una pagina BUCHHALTUNG vera
   { to: "/buchhaltung/lieferscheine", label: "Lieferscheine (Kosten)" },
 ];
 
+function normalizePath(path: string) {
+  return String(path || "").replace(/\/+$/, "") || "/";
+}
+
 function isActivePath(pathname: string, to: string) {
-  if (to === "/buchhaltung") return pathname === "/buchhaltung";
-  return pathname.startsWith(to);
+  const current = normalizePath(pathname);
+  const target = normalizePath(to);
+
+  if (target === "/buchhaltung") {
+    return current === "/buchhaltung";
+  }
+
+  return current === target || current.startsWith(`${target}/`);
 }
 
 export default function BuchhaltungLayout() {
@@ -35,7 +43,14 @@ export default function BuchhaltungLayout() {
 
   return (
     <div className="bh-page">
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <h1 style={{ margin: 0 }}>7. Buchhaltung</h1>
         <div style={{ opacity: 0.7, fontSize: 13 }}>
           Übersicht, Rechnungen, Zahlungen, Kostenstellen, Belege und Exporte
@@ -67,7 +82,7 @@ export default function BuchhaltungLayout() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
-                border: active ? "1px solid var(--line)" : undefined,
+                border: active ? "1px solid var(--line, #d0d7de)" : undefined,
                 background: active ? "rgba(59,130,246,0.08)" : undefined,
                 fontWeight: active ? 700 : 600,
               }}
@@ -82,3 +97,8 @@ export default function BuchhaltungLayout() {
     </div>
   );
 }
+
+
+
+
+

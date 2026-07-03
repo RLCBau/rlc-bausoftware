@@ -377,6 +377,18 @@ function mergeRows(primary: RlcSmartRow[], secondary: RlcSmartRow[]) {
   return out;
 }
 
+function sortRowsByPos(rows: RlcSmartRow[]) {
+  const allHaveNumericPos = rows.every((r) => /^\d+([.,]\d+)?$/i.test(clean(r.pos)));
+  if (!allHaveNumericPos) return rows;
+
+  return [...rows].sort((a, b) => {
+    const na = Number(String(a.pos).replace(",", "."));
+    const nb = Number(String(b.pos).replace(",", "."));
+    if (!Number.isFinite(na) || !Number.isFinite(nb)) return 0;
+    return na - nb;
+  });
+}
+
 function parseRows(input: string): RlcSmartRow[] {
   const lines = input
     .split(/\r?\n/)
@@ -396,7 +408,7 @@ function parseRows(input: string): RlcSmartRow[] {
   }
 
   const ocrRows = parseOcrBlockRows(input);
-  return normalizeRowPositions(mergeRows(rows, ocrRows));
+  return normalizeRowPositions(sortRowsByPos(mergeRows(rows, ocrRows)));
 }
 
 function validateSmartDoc(doc: RlcSmartDoc) {
@@ -438,6 +450,7 @@ export function parseRlcKiSmartDoc(inputRaw: any): RlcSmartDoc {
   doc.warnings = validateSmartDoc(doc);
   return doc;
 }
+
 
 
 

@@ -2,21 +2,37 @@
 import type { Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 
-/**
- * ⚠️ IMPORTANTE
- * - NON importiamo Request da express
- * - usiamo Express.Request globale (augmentato da express.d.ts)
- */
-
 type Auth = {
   sub: string;
-  role?: string;
-  company?: string;
+  role: string;
+  companyId: string | null;
+  companyRole: string | null;
+  mode?: string | null;
+  device?: string | null;
+  emailVerified?: boolean | null;
+  company?: string | null;
 };
 
 function getCompanyIdFromReq(req: Express.Request) {
-  const cid = req.auth?.company;
+  const cid =
+    (req.auth as any)?.companyId ??
+    (req.auth as any)?.company ??
+    null;
+
   return cid ? String(cid) : "";
+}
+
+function isDevAuth() {
+  return (process.env.DEV_AUTH || "").toLowerCase() === "on";
+}
+
+function withTimeout<T>(promise: Promise<T>, ms = 2000, label = "DB_TIMEOUT"): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(label)), ms)
+    ),
+  ]);
 }
 
 export async function requireCompany(
@@ -24,42 +40,53 @@ export async function requireCompany(
   res: Response,
   next: NextFunction
 ) {
-  // 🔓 DEV BYPASS
-  if ((process.env.DEV_AUTH || "").toLowerCase() === "on") {
+  if (isDevAuth()) {
     const companyId = String(process.env.DEV_COMPANY_ID || "").trim();
     if (!companyId) {
       return res.status(500).json({ error: "DEV_COMPANY_ID fehlt (.env)" });
     }
 
+    const role = String(process.env.DEV_ROLE || "ADMIN");
+
     const a: Auth = {
       sub: String(process.env.DEV_USER_ID || "dev-user"),
-      role: String(process.env.DEV_ROLE || "ADMIN"),
+      role,
+      companyId,
       company: companyId,
+      companyRole: role,
     };
 
-    req.auth = a; // ✅ sub garantito
+    req.auth = a;
     return next();
   }
 
-  if (!req.auth?.company) {
+  const companyId = getCompanyIdFromReq(req);
+  if (!companyId) {
     return res.status(403).json({ error: "Keine Firma im Token" });
   }
 
-  // 🔍 Verifica reale DB
   try {
-    const exists = await prisma.company.findUnique({
-      where: { id: String(req.auth.company) },
-      select: { id: true },
-    });
+    const exists = await withTimeout(
+      prisma.company.findUnique({
+        where: { id: String(companyId) },
+        select: { id: true },
+      }),
+      2000,
+      "DB_TIMEOUT_COMPANY"
+    );
 
     if (!exists) {
       return res.status(403).json({ error: "Firma nicht gefunden" });
     }
-  } catch {
-    return res.status(500).json({ error: "DB Fehler (Company Check)" });
-  }
 
-  next();
+    return next();
+  } catch (e: any) {
+    console.error("[guard:requireCompany]", e?.message || e);
+    return res.status(503).json({
+      error: "DB Fehler oder Timeout (Company Check)",
+      code: e?.message || "COMPANY_CHECK_FAILED",
+    });
+  }
 }
 
 export function requireProjectMember(param: string = "id") {
@@ -68,8 +95,7 @@ export function requireProjectMember(param: string = "id") {
     res: Response,
     next: NextFunction
   ) => {
-    // 🔓 DEV bypass
-    if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
+    if (isDevAuth()) return next();
 
     const projectId = String((req as any).params?.[param] || "");
     if (!projectId) {
@@ -81,54 +107,68 @@ export function requireProjectMember(param: string = "id") {
       return res.status(401).json({ error: "Auth fehlt" });
     }
 
-    const member = await prisma.projectMember.findFirst({
-      where: { projectId, userId },
-      select: { id: true },
-    });
+    try {
+      const member = await withTimeout(
+        prisma.projectMember.findFirst({
+          where: { projectId, userId },
+          select: { id: true },
+        }),
+        2000,
+        "DB_TIMEOUT_PROJECT_MEMBER"
+      );
 
-    // 👑 ADMIN bypass
-    if (!member && String(req.auth?.role || "").toUpperCase() !== "ADMIN") {
-      return res.status(403).json({ error: "Nicht im Projekt" });
+      if (!member && String(req.auth?.role || "").toUpperCase() !== "ADMIN") {
+        return res.status(403).json({ error: "Nicht im Projekt" });
+      }
+
+      return next();
+    } catch (e: any) {
+      console.error("[guard:requireProjectMember]", e?.message || e);
+      return res.status(503).json({
+        error: "DB Fehler oder Timeout (Project Member Check)",
+        code: e?.message || "PROJECT_MEMBER_CHECK_FAILED",
+      });
     }
-
-    next();
   };
 }
 
-/**
- * ✅ BLOCCO TOTALE:
- * Richiede che la company abbia una subscription ACTIVE (o GRACE) valida.
- * Se non valida -> 402 (Payment Required) e l'app deve mostrare Paywall.
- */
 export async function requireActiveSubscription(
   req: Express.Request,
   res: Response,
   next: NextFunction
 ) {
-  // 🔓 DEV BYPASS
-  if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
+  if (isDevAuth()) return next();
 
   const companyId = getCompanyIdFromReq(req);
-  if (!companyId) return res.status(403).json({ error: "Keine Firma im Token" });
+  if (!companyId) {
+    return res.status(403).json({ error: "Keine Firma im Token" });
+  }
 
   try {
-    const sub = await prisma.companySubscription.findUnique({
-      where: { companyId },
-      select: {
-        status: true,
-        currentPeriodEnd: true,
-        plan: true,
-        seatsLimit: true,
-      },
-    });
+    const sub = await withTimeout(
+      prisma.companySubscription.findUnique({
+        where: { companyId },
+        select: {
+          status: true,
+          currentPeriodEnd: true,
+          plan: true,
+          seatsLimit: true,
+        },
+      }),
+      2000,
+      "DB_TIMEOUT_SUBSCRIPTION"
+    );
 
-    // Nessuna subscription => bloccato
     if (!sub) {
-      return res.status(402).json({ error: "Abo erforderlich", code: "SUB_REQUIRED" });
+      return res
+        .status(402)
+        .json({ error: "Abo erforderlich", code: "SUB_REQUIRED" });
     }
 
     const now = new Date();
-    const statusOk = sub.status === ("ACTIVE" as any) || sub.status === ("GRACE" as any);
+    const statusOk =
+      sub.status === ("ACTIVE" as any) || sub.status === ("GRACE" as any);
+
     const periodOk =
       !sub.currentPeriodEnd || sub.currentPeriodEnd.getTime() >= now.getTime();
 
@@ -137,63 +177,73 @@ export async function requireActiveSubscription(
         error: "Abo abgelaufen",
         code: "SUB_INACTIVE",
         status: sub.status,
-        currentPeriodEnd: sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
+        currentPeriodEnd: sub.currentPeriodEnd
+          ? sub.currentPeriodEnd.toISOString()
+          : null,
       });
     }
 
-    // opzionale: attach info al req per uso successivo
     (req as any).subscription = sub;
-
     return next();
-  } catch {
-    return res.status(500).json({ error: "DB Fehler (Subscription Check)" });
+  } catch (e: any) {
+    console.error("[guard:requireActiveSubscription]", e?.message || e);
+    return res.status(503).json({
+      error: "DB Fehler oder Timeout (Subscription Check)",
+      code: e?.message || "SUBSCRIPTION_CHECK_FAILED",
+    });
   }
 }
 
-/**
- * ✅ Seat-limit:
- * Da usare SOLO su endpoint che aggiungono utenti (invite/join).
- * Se piano è unlimited (seatsLimit null) => sempre ok.
- * Se limite raggiunto => 409 e l'app propone upgrade o rimozione utente.
- */
 export async function requireCompanySeatAvailable(
   req: Express.Request,
   res: Response,
   next: NextFunction
 ) {
-  // 🔓 DEV BYPASS
-  if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
+  if (isDevAuth()) return next();
 
   const companyId = getCompanyIdFromReq(req);
-  if (!companyId) return res.status(403).json({ error: "Keine Firma im Token" });
+  if (!companyId) {
+    return res.status(403).json({ error: "Keine Firma im Token" });
+  }
 
   try {
-    const sub = await prisma.companySubscription.findUnique({
-      where: { companyId },
-      select: { seatsLimit: true, status: true, currentPeriodEnd: true },
-    });
+    const sub = await withTimeout(
+      prisma.companySubscription.findUnique({
+        where: { companyId },
+        select: { seatsLimit: true, status: true, currentPeriodEnd: true },
+      }),
+      2000,
+      "DB_TIMEOUT_SEAT_SUBSCRIPTION"
+    );
 
     if (!sub) {
-      return res.status(402).json({ error: "Abo erforderlich", code: "SUB_REQUIRED" });
+      return res
+        .status(402)
+        .json({ error: "Abo erforderlich", code: "SUB_REQUIRED" });
     }
 
     const now = new Date();
-    const statusOk = sub.status === ("ACTIVE" as any) || sub.status === ("GRACE" as any);
+    const statusOk =
+      sub.status === ("ACTIVE" as any) || sub.status === ("GRACE" as any);
+
     const periodOk =
       !sub.currentPeriodEnd || sub.currentPeriodEnd.getTime() >= now.getTime();
 
     if (!statusOk || !periodOk) {
-      return res.status(402).json({ error: "Abo abgelaufen", code: "SUB_INACTIVE" });
+      return res
+        .status(402)
+        .json({ error: "Abo abgelaufen", code: "SUB_INACTIVE" });
     }
 
-    // Unlimited
     if (sub.seatsLimit == null) return next();
 
-    // ✅ FIX: nel tuo schema non esiste CompanyMember → contiamo User collegati alla company
-    // Se non hai "active" su User, togli quel filtro.
-    const used = await prisma.user.count({
-      where: { companyId },
-    });
+    const used = await withTimeout(
+      prisma.user.count({
+        where: { companyId },
+      }),
+      2000,
+      "DB_TIMEOUT_SEAT_COUNT"
+    );
 
     if (used >= sub.seatsLimit) {
       return res.status(409).json({
@@ -205,7 +255,11 @@ export async function requireCompanySeatAvailable(
     }
 
     return next();
-  } catch {
-    return res.status(500).json({ error: "DB Fehler (Seat Check)" });
+  } catch (e: any) {
+    console.error("[guard:requireCompanySeatAvailable]", e?.message || e);
+    return res.status(503).json({
+      error: "DB Fehler oder Timeout (Seat Check)",
+      code: e?.message || "SEAT_CHECK_FAILED",
+    });
   }
 }

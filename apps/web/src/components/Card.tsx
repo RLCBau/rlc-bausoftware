@@ -1,4 +1,42 @@
+// src/components/Card.tsx
 import React from "react";
-export default function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">{children}</div>;
+
+type Props = React.HTMLAttributes<HTMLDivElement> & {
+  children: React.ReactNode;
+  hover?: boolean;
+  clickable?: boolean;
+};
+
+export default function Card({
+  children,
+  style,
+  className = "",
+  hover = false,
+  clickable = false,
+  ...rest
+}: Props) {
+  return (
+    <div
+      {...rest}
+      className={`rlc-card ${hover ? "rlc-card-hover" : ""} ${
+        clickable ? "rlc-card-clickable" : ""
+      } ${className}`}
+      style={{
+        border: "1px solid var(--line)",
+        borderRadius: 10,
+        padding: 16,
+        background: "var(--card-bg, #fff)",
+        transition: "all 0.2s ease",
+        cursor: clickable ? "pointer" : "default",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
 }
+
+
+
+
+

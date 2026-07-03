@@ -389,7 +389,7 @@ export default function AbschlagEditorScreen({ route, navigation }: Props) {
           value={doc.abschlagNr}
           onChangeText={(v) => setDoc((p: any) => ({ ...p, abschlagNr: v }))}
           style={s.input}
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
         />
 
         <Text style={s.label}>Datum</Text>
@@ -398,7 +398,7 @@ export default function AbschlagEditorScreen({ route, navigation }: Props) {
           value={doc.datum}
           onChangeText={(v) => setDoc((p: any) => ({ ...p, datum: v }))}
           style={s.input}
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
         />
 
         <Text style={s.label}>Prozent %</Text>
@@ -407,7 +407,7 @@ export default function AbschlagEditorScreen({ route, navigation }: Props) {
           value={doc.percent}
           onChangeText={calcFromPercent}
           style={s.input}
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           keyboardType="decimal-pad"
         />
 
@@ -417,7 +417,7 @@ export default function AbschlagEditorScreen({ route, navigation }: Props) {
           value={doc.betrag}
           onChangeText={calcFromAmount}
           style={s.input}
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           keyboardType="decimal-pad"
         />
 
@@ -427,7 +427,7 @@ export default function AbschlagEditorScreen({ route, navigation }: Props) {
           value={doc.note}
           onChangeText={(v) => setDoc((p: any) => ({ ...p, note: v }))}
           style={[s.input, s.textArea]}
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           multiline
         />
 
@@ -555,7 +555,7 @@ const s = StyleSheet.create({
   },
 
   btn: {
-    backgroundColor: "#0ea5e9",
+    backgroundColor: COLORS.accent,
     padding: 12,
     borderRadius: 10,
     marginTop: 14,
@@ -569,10 +569,12 @@ const s = StyleSheet.create({
   },
 
   btnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     textAlign: "center",
     fontWeight: "900",
   },
 });
+
+
 
 

@@ -1,3 +1,4 @@
+import { API_BASE, apiUrl } from "../../lib/apiBase";
 import React, {
   useCallback,
   useEffect,
@@ -43,8 +44,11 @@ const toNum = (v: any) =>
     ? v
     : Number(String(v ?? "").replace(",", ".").trim()) || 0;
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL || "http://localhost:4000/api";
+
+
+function safeTrim(v: any) {
+  return String(v ?? "").trim();
+}
 
 /* ====== AUFMASS.JSON format (server: /api/aufmass/aufmass/:projectId) ====== */
 type AufmassJsonRow = {
@@ -76,6 +80,59 @@ function toAufmassJson(rows: Row[]): AufmassJsonRow[] {
     ist: Number(r.ist ?? 0),
     ep: Number(r.ep ?? 0),
   }));
+}
+
+function byPosAsc(a: Row, b: Row) {
+  return String(a.pos ?? "").localeCompare(String(b.pos ?? ""), "de-DE", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function mergeServerRowsByPos(a: AufmassJsonRow[], b: AufmassJsonRow[]): AufmassJsonRow[] {
+  const map = new Map<string, AufmassJsonRow>();
+  const norm = (p: any) => String(p ?? "").trim();
+
+  const put = (r: any) => {
+    const k = norm(r?.pos);
+    if (!k) return;
+
+    const prev = map.get(k);
+    if (!prev) {
+      map.set(k, {
+        pos: k,
+        text: String(r?.text ?? ""),
+        unit: String(r?.unit ?? "m"),
+        soll: Number(r?.soll ?? 0),
+        ist: Number(r?.ist ?? 0),
+        ep: Number(r?.ep ?? 0),
+      });
+      return;
+    }
+
+    const next: AufmassJsonRow = { ...prev };
+    if (!safeTrim(next.text) && safeTrim(r?.text)) next.text = String(r.text);
+    if (!safeTrim(next.unit) && safeTrim(r?.unit)) next.unit = String(r.unit);
+    if (!Number(next.ep) && Number(r?.ep)) next.ep = Number(r.ep);
+    if (!Number(next.soll) && Number(r?.soll)) next.soll = Number(r.soll);
+    next.ist = Math.max(Number(next.ist ?? 0), Number(r?.ist ?? 0));
+
+    map.set(k, next);
+  };
+
+  (Array.isArray(a) ? a : []).forEach(put);
+  (Array.isArray(b) ? b : []).forEach(put);
+
+  return Array.from(map.values()).sort((x, y) => byPosAsc(fromAufmassJson([x])[0], fromAufmassJson([y])[0]));
+}
+
+async function fetchRowsForKey(key: string): Promise<AufmassJsonRow[]> {
+  if (!safeTrim(key)) return [];
+  const url = `${API_BASE}/aufmass/aufmass/${encodeURIComponent(key)}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({}));
+  return Array.isArray(data?.rows) ? (data.rows as AufmassJsonRow[]) : [];
 }
 
 /* ========== piccolo grafico SVG (nessuna dipendenza) ========== */
@@ -161,13 +218,23 @@ function SollIstChart({ rows }: { rows: Row[] }) {
 
 /* ========== componente principale ========== */
 export default function SollIst() {
-  const { currentProject } = useProject() as any;
+  const projectStore = useProject() as any;
+  const currentProject = projectStore?.currentProject;
+  const getSelectedProject = projectStore?.getSelectedProject;
 
-  const projectId: string | undefined = currentProject?.id;
-  const projectKey: string | undefined =
-    currentProject?.code || currentProject?.id || undefined;
+  const selectedProject =
+    typeof getSelectedProject === "function" ? getSelectedProject() : null;
+
+  const project = currentProject || selectedProject || null;
+
+  const projectId: string | undefined = project?.id;
+  const projectCode: string | undefined = project?.code;
+  const projectKey: string | undefined = projectCode || projectId || undefined;
 
   const storageKey: string | null = projectKey ? `sollist-${projectKey}` : null;
+  const historyStorageKey: string | null = projectKey
+    ? `sollist-history-${projectKey}`
+    : null;
 
   const [rows, setRows] = useState<Row[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -199,6 +266,22 @@ export default function SollIst() {
     ]);
   }, [storageKey]);
 
+  /* ========== LOAD history locale ========== */
+  useEffect(() => {
+    if (!historyStorageKey) return;
+    try {
+      const raw = window.localStorage.getItem(historyStorageKey);
+      if (!raw) {
+        setHistory([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setHistory(Array.isArray(parsed) ? (parsed as HistoryEntry[]) : []);
+    } catch {
+      setHistory([]);
+    }
+  }, [historyStorageKey]);
+
   /* ========== SAVE su localStorage ========== */
   useEffect(() => {
     if (!storageKey) return;
@@ -209,68 +292,93 @@ export default function SollIst() {
     }
   }, [rows, storageKey]);
 
+  /* ========== SAVE history locale ========== */
+  useEffect(() => {
+    if (!historyStorageKey) return;
+    try {
+      window.localStorage.setItem(historyStorageKey, JSON.stringify(history));
+    } catch {
+      // ignore
+    }
+  }, [history, historyStorageKey]);
+
   /* ========== LOAD / SAVE su SERVER (STESSO FILE di AufmassEditor) ========== */
 
   const loadFromServer = useCallback(async () => {
-    if (!projectKey) return;
+    if (!projectKey && !projectId) return;
 
     try {
       setBusy(true);
 
-      // stesso endpoint usato dall’AufmassEditor nuovo
-      const url = `${API_BASE}/aufmass/aufmass/${encodeURIComponent(projectKey)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`API ${url} -> HTTP ${res.status}`);
+      const byCode =
+        projectCode ? await fetchRowsForKey(projectCode) : [];
+      const byId =
+        projectId && projectId !== projectCode
+          ? await fetchRowsForKey(projectId)
+          : [];
 
-      const data = await res.json();
-      const serverRows = Array.isArray(data?.rows) ? (data.rows as AufmassJsonRow[]) : [];
-      setRows(fromAufmassJson(serverRows));
+      const serverRows =
+        byCode.length && !byId.length
+          ? byCode
+          : !byCode.length && byId.length
+          ? byId
+          : mergeServerRowsByPos(byCode, byId);
 
-      // aufmass.json non ha history: teniamo history “leggera” locale
-      setHistory((prev) => {
-        if (!serverRows.length) return prev;
-        const snap = { ts: Date.now(), count: serverRows.length };
-        const next = [snap, ...prev].slice(0, 20);
-        return next;
-      });
+      if (serverRows.length) {
+        setRows(fromAufmassJson(serverRows));
+
+        setHistory((prev) => {
+          const snap = { ts: Date.now(), count: serverRows.length };
+          return [snap, ...prev].slice(0, 20);
+        });
+      }
     } catch (err) {
       console.error(err);
       alert("Aufmaßdaten vom Server laden fehlgeschlagen.");
     } finally {
       setBusy(false);
     }
-  }, [projectKey]);
+  }, [projectCode, projectId, projectKey]);
 
   useEffect(() => {
-    if (!projectKey) return;
+    if (!projectKey && !projectId) return;
     loadFromServer();
-  }, [projectKey, loadFromServer]);
+  }, [projectKey, projectId, loadFromServer]);
 
   async function saveToServer() {
-    if (!projectKey) {
+    if (!projectKey && !projectId) {
       alert("Kein Projekt ausgewählt. Bitte zuerst ein Projekt wählen.");
       return;
     }
+
+    const payloadRows = toAufmassJson(rows);
+
     try {
       setBusy(true);
 
-      // salva nello stesso file: data/projects/<projectKey>/aufmass.json
-      const url = `${API_BASE}/aufmass/aufmass/${encodeURIComponent(projectKey)}`;
-      const payloadRows = toAufmassJson(rows);
+      const post = async (key: string) => {
+        const url = `${API_BASE}/aufmass/aufmass/${encodeURIComponent(key)}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rows: payloadRows }),
+        });
+        if (!res.ok) throw new Error(`API ${url} -> HTTP ${res.status}`);
+      };
 
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: payloadRows }),
-      });
+      if (projectCode) {
+        await post(projectCode);
+      } else if (projectId) {
+        await post(projectId);
+      }
 
-      if (!res.ok) throw new Error(`API ${url} -> HTTP ${res.status}`);
+      if (projectId && projectId !== projectCode) {
+        post(projectId).catch(() => void 0);
+      }
 
-      // snapshot locale per UI “Verlauf”
       setHistory((prev) => {
         const snap = { ts: Date.now(), count: rows.length };
-        const next = [snap, ...prev].slice(0, 20);
-        return next;
+        return [snap, ...prev].slice(0, 20);
       });
     } catch (err) {
       console.error(err);
@@ -358,7 +466,7 @@ export default function SollIst() {
         ep: toNum(it.ep ?? 0),
       }));
 
-      setRows(mapped);
+      setRows(mapped.length ? mapped : rows);
     } catch (err) {
       console.error(err);
       alert("Aufmaß-Import (Datei) fehlgeschlagen.");
@@ -369,7 +477,11 @@ export default function SollIst() {
 
   /* ========== Import aus LV (Projekt) – DB → /api/project-lv/:projectId ========== */
   async function importFromLV() {
-    if (!projectId) {
+    const candidateKeys = [projectId, projectKey].filter(
+      (v, i, arr): v is string => !!v && arr.indexOf(v) === i
+    );
+
+    if (!candidateKeys.length) {
       alert("Kein Projekt ausgewählt. Bitte zuerst ein Projekt wählen.");
       return;
     }
@@ -377,12 +489,24 @@ export default function SollIst() {
     try {
       setBusy(true);
 
-      const url = `${API_BASE}/project-lv/${encodeURIComponent(projectId)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`API ${url} -> HTTP ${res.status}`);
+      let payload: any = null;
+      let lastErr: any = null;
 
-      const payload = await res.json();
-      const list: ParsedItem[] = payload.items || [];
+      for (const key of candidateKeys) {
+        try {
+          const url = `${API_BASE}/project-lv/${encodeURIComponent(key)}`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`API ${url} -> HTTP ${res.status}`);
+          payload = await res.json();
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+
+      if (!payload) throw lastErr || new Error("LV konnte nicht geladen werden.");
+
+      const list: ParsedItem[] = payload.items || payload.lv || [];
 
       if (!Array.isArray(list) || !list.length) {
         alert("Im LV wurden keine Positionen gefunden.");
@@ -423,7 +547,7 @@ export default function SollIst() {
             map.set(m.pos, m);
           }
         });
-        return Array.from(map.values());
+        return Array.from(map.values()).sort(byPosAsc);
       });
     } catch (err: any) {
       console.error(err);
@@ -452,7 +576,7 @@ export default function SollIst() {
       fd.append("scale", "1");
 
       const url = `${API_BASE}/import/parse`;
-      const res = await fetch(url, { method: "POST", body: fd }); // ✅ FIX
+      const res = await fetch(url, { method: "POST", body: fd });
       if (!res.ok) throw new Error(`Import API ${res.status}`);
       const data = await res.json();
       const items: ParsedItem[] = data.items || [];
@@ -466,7 +590,7 @@ export default function SollIst() {
         ep: 0,
       }));
 
-      setRows((prev) => [...prev, ...mapped]);
+      setRows((prev) => [...prev, ...mapped].sort(byPosAsc));
     } catch (err) {
       console.error(err);
       alert("PDF-Import fehlgeschlagen. Prüfe /api/import/parse.");
@@ -487,19 +611,15 @@ export default function SollIst() {
       const text = await f.text();
       const parsed: any = JSON.parse(text);
 
-      // oggetto { rows: [...] } (aufmass.json wrapper)
       if (!Array.isArray(parsed) && parsed && typeof parsed === "object") {
         const objRows = Array.isArray(parsed.rows) ? parsed.rows : [];
-        // può essere Row[] o AufmassJsonRow[]
         if (objRows.length && typeof objRows[0]?.soll !== "undefined") {
           setRows(fromAufmassJson(objRows as AufmassJsonRow[]));
           return;
         }
       }
 
-      // direttamente array
       if (Array.isArray(parsed)) {
-        // tenta come AufmassJsonRow
         if (parsed.length && typeof parsed[0]?.soll !== "undefined") {
           setRows(fromAufmassJson(parsed as AufmassJsonRow[]));
           return;
@@ -554,10 +674,10 @@ export default function SollIst() {
         <button className="btn" onClick={pickPdfFile} disabled={busy}>
           Import aus PDF
         </button>
-        <button className="btn" onClick={loadFromServer} disabled={busy || !projectKey}>
+        <button className="btn" onClick={loadFromServer} disabled={busy || (!projectKey && !projectId)}>
           Vom Server laden
         </button>
-        <button className="btn" onClick={saveToServer} disabled={busy || !projectKey}>
+        <button className="btn" onClick={saveToServer} disabled={busy || (!projectKey && !projectId)}>
           Speichern
         </button>
         <button className="btn" onClick={pickJsonFile} disabled={busy}>
@@ -692,17 +812,17 @@ export default function SollIst() {
 
       <div className="card" style={{ marginTop: 12, padding: 10 }}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>Verlauf</div>
-        {!projectKey && (
+        {!projectKey && !projectId && (
           <div style={{ fontSize: 13 }}>
             Kein Projekt gewählt. Verlauf steht erst nach Projektauswahl zur Verfügung.
           </div>
         )}
-        {projectKey && history.length === 0 && (
+        {(projectKey || projectId) && history.length === 0 && (
           <div style={{ fontSize: 13 }}>
             Noch keine gespeicherten Stände. Mit <b>Speichern</b> wird ein Snapshot erzeugt.
           </div>
         )}
-        {projectKey && history.length > 0 && (
+        {(projectKey || projectId) && history.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {history.map((h) => (
               <button
@@ -720,3 +840,9 @@ export default function SollIst() {
     </div>
   );
 }
+
+
+
+
+
+

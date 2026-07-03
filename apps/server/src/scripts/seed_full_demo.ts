@@ -12,7 +12,7 @@ async function run() {
   await prisma.company.upsert({
     where: { id: companyId },
     update: {},
-    create: { id: companyId, name: "Demo Company" },
+    create: { id: companyId, name: "Demo Company", code: "DEMO" },
   });
 
   // 2) Projekt sicherstellen – OHNE Konflikt mit unique Feldern
@@ -32,7 +32,7 @@ async function run() {
       data: {
         id: projectId,
         name: "BA-2025-TEST",
-        ort: "Beispielstadt",
+        place: "Beispielstadt",
         companyId,
         code: "P-" + Math.floor(Math.random() * 1000000),
         slug: "ba-2025-test-" + randomUUID().slice(0, 6),

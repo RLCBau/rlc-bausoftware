@@ -1,9 +1,10 @@
-// apps/web/src/store/useProject.tsx
+﻿// apps/web/src/store/useProject.tsx
 import React, {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -23,28 +24,37 @@ export type ProjectSummary = {
   place?: string;
 };
 
+type CreateProjectInput = {
+  code: string;
+  name: string;
+  client?: string;
+  place?: string;
+};
+
+type SelectProjectInput = string | ProjectSummary | null;
+
 type ProjectContextValue = {
   projects: ProjectSummary[];
   loading: boolean;
   error: string | null;
   selectedProjectId: string | null;
 
-  /** Projekt, das aktuell ausgewählt ist (oder null) */
   currentProject: ProjectSummary | null;
 
   loadProjects: () => Promise<void>;
   reloadProjects: () => Promise<void>;
-  selectProject: (id: string | null) => void;
+
+  selectProject: (input: SelectProjectInput) => void;
+  selectProjectById: (id: string | null) => void;
+
+  setCurrentProject: (project: ProjectSummary | null) => void;
+  setCurrentProjectId: (id: string | null) => void;
+
   getSelectedProject: () => ProjectSummary | null;
 
   importJsonFile: (file: File) => Promise<void>;
   importZipFile: (file: File) => Promise<void>;
-  createProject: (data: {
-    code: string;
-    name: string;
-    client?: string;
-    place?: string;
-  }) => Promise<ProjectSummary | null>;
+  createProject: (data: CreateProjectInput) => Promise<ProjectSummary | null>;
   deleteProject: (id: string) => Promise<void>;
 };
 
@@ -61,113 +71,256 @@ function loadInitialSelectedId(): string | null {
   }
 }
 
+function setStoredSelectedId(id: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (id) {
+      window.localStorage.setItem(STORAGE_KEY, id);
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function setGlobalCurrentProject(project: ProjectSummary | null) {
+  try {
+    const g = globalThis as any;
+    g.__RLC_CURRENT_PROJECT = project;
+  } catch {
+    // ignore
+  }
+}
+
+function syncCurrentProjectStorage(project: ProjectSummary | null) {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (!project) {
+      window.localStorage.removeItem("rlc_current_project_key_v1");
+      window.localStorage.removeItem("rlc_current_project");
+      window.localStorage.removeItem("rlc_current_project_code");
+      return;
+    }
+
+    const code = String(project.code || "").trim().toUpperCase();
+
+    if (code) {
+      window.localStorage.setItem("rlc_current_project_key_v1", code);
+      window.localStorage.setItem("rlc_current_project", JSON.stringify(project));
+      window.localStorage.setItem("rlc_current_project_code", code);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function normalizeProject(input: any): ProjectSummary | null {
+  if (!input || !input.id) return null;
+
+  return {
+    id: String(input.id),
+    code: String(input.code ?? ""),
+    name: String(input.name ?? ""),
+    client: input.client ? String(input.client) : undefined,
+    place: input.place ? String(input.place) : undefined,
+  };
+}
+
+function normalizeProjects(input: any): ProjectSummary[] {
+  const arr = Array.isArray(input?.projects)
+    ? input.projects
+    : Array.isArray(input)
+    ? input
+    : [];
+
+  return arr
+    .map(normalizeProject)
+    .filter(Boolean) as ProjectSummary[];
+}
+
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [selectedProjectId, setSelectedProjectId] =
-    useState<string | null>(loadInitialSelectedId);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    loadInitialSelectedId
+  );
+  const [currentProjectOverride, setCurrentProjectOverride] =
+    useState<ProjectSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ---- helper per salvare anche in localStorage ----
   const setSelected = useCallback((id: string | null) => {
     setSelectedProjectId(id);
-    if (typeof window !== "undefined") {
-      try {
-        if (id) {
-          window.localStorage.setItem(STORAGE_KEY, id);
-        } else {
-          window.localStorage.removeItem(STORAGE_KEY);
-        }
-      } catch {
-        // ignore
-      }
-    }
+    setStoredSelectedId(id);
   }, []);
 
-  // ---- Projekte laden ----
+  const currentProject = useMemo(() => {
+    if (currentProjectOverride) {
+      if (!selectedProjectId || currentProjectOverride.id === selectedProjectId) {
+        return currentProjectOverride;
+      }
+    }
+
+    if (!selectedProjectId) return null;
+
+    return projects.find((p) => p.id === selectedProjectId) ?? null;
+  }, [currentProjectOverride, projects, selectedProjectId]);
+
+  useEffect(() => {
+    setGlobalCurrentProject(currentProject);
+    syncCurrentProjectStorage(currentProject);
+  }, [currentProject]);
+
   const loadProjects = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
       const data = await fetchProjects();
-      const list: ProjectSummary[] = (data.projects ?? data) as any;
+      const list = normalizeProjects(data);
 
       setProjects(list);
 
-      // aktuelle Auswahl stabil halten oder sinnvolle Default-Auswahl
-      setSelectedProjectId((prev) => {
-        if (prev && list.some((p) => p.id === prev)) {
-          // bisherige Auswahl existiert noch
-          return prev;
-        }
-        if (list.length === 0) return null;
-        return list[0].id;
-      });
+      const currentSelectedId = selectedProjectId;
+      const currentOverrideId = currentProjectOverride?.id ?? null;
+
+      let nextSelectedId: string | null = null;
+
+      if (currentSelectedId && list.some((p) => p.id === currentSelectedId)) {
+        nextSelectedId = currentSelectedId;
+      } else if (
+        currentOverrideId &&
+        list.some((p) => p.id === currentOverrideId)
+      ) {
+        nextSelectedId = currentOverrideId;
+      } else if (list.length > 0) {
+        nextSelectedId = list[0].id;
+      }
+
+      setSelected(nextSelectedId);
+
+      if (!nextSelectedId) {
+        setCurrentProjectOverride(null);
+        setGlobalCurrentProject(null);
+        syncCurrentProjectStorage(null);
+        return;
+      }
+
+      const found = list.find((p) => p.id === nextSelectedId) ?? null;
+      setCurrentProjectOverride(found);
+      setGlobalCurrentProject(found);
+      syncCurrentProjectStorage(found);
     } catch (e: any) {
       console.error(e);
       setError(e?.message || "Fehler beim Laden der Projekte");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentProjectOverride?.id, selectedProjectId, setSelected]);
 
   const reloadProjects = loadProjects;
 
-  // beim Start einmal Projekte laden
   useEffect(() => {
     void loadProjects();
   }, [loadProjects]);
 
-  const selectProject = (id: string | null) => {
-    setSelected(id);
-  };
+  const setCurrentProject = useCallback(
+    (project: ProjectSummary | null) => {
+      const normalized = normalizeProject(project);
+      setCurrentProjectOverride(normalized);
+      setSelected(normalized?.id ?? null);
+      setGlobalCurrentProject(normalized);
+      syncCurrentProjectStorage(normalized);
+    },
+    [setSelected]
+  );
+
+  const setCurrentProjectId = useCallback(
+    (id: string | null) => {
+      setSelected(id);
+
+      if (!id) {
+        setCurrentProjectOverride(null);
+        setGlobalCurrentProject(null);
+        syncCurrentProjectStorage(null);
+        return;
+      }
+
+      const found = projects.find((p) => p.id === id) ?? null;
+      setCurrentProjectOverride(found);
+      setGlobalCurrentProject(found);
+      syncCurrentProjectStorage(found);
+    },
+    [projects, setSelected]
+  );
+
+  const selectProjectById = useCallback(
+    (id: string | null) => {
+      setCurrentProjectId(id);
+    },
+    [setCurrentProjectId]
+  );
+
+  const selectProject = useCallback(
+    (input: SelectProjectInput) => {
+      if (!input) {
+        setCurrentProject(null);
+        return;
+      }
+
+      if (typeof input === "string") {
+        setCurrentProjectId(input);
+        return;
+      }
+
+      setCurrentProject(input);
+    },
+    [setCurrentProject, setCurrentProjectId]
+  );
 
   const getSelectedProject = useCallback((): ProjectSummary | null => {
-    if (!selectedProjectId) return null;
-    return projects.find((p) => p.id === selectedProjectId) ?? null;
-  }, [projects, selectedProjectId]);
+    return currentProject;
+  }, [currentProject]);
 
-  // ---- Import JSON (project.json) ----
   const importJsonFile = useCallback(
     async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await importProjectJson(fd); // { ok, project }
-      const proj: ProjectSummary | undefined = res?.project;
+
+      const res = await importProjectJson(fd);
+      const proj = normalizeProject(res?.project);
+
       await loadProjects();
+
       if (proj?.id) {
-        setSelected(proj.id);
+        setCurrentProject(proj);
       }
     },
-    [loadProjects, setSelected]
+    [loadProjects, setCurrentProject]
   );
 
-  // ---- Import ZIP ----
   const importZipFile = useCallback(
     async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await importProjectZip(fd); // { ok, project }
-      const proj: ProjectSummary | undefined = res?.project;
+
+      const res = await importProjectZip(fd);
+      const proj = normalizeProject(res?.project);
+
       await loadProjects();
+
       if (proj?.id) {
-        setSelected(proj.id);
+        setCurrentProject(proj);
       }
     },
-    [loadProjects, setSelected]
+    [loadProjects, setCurrentProject]
   );
 
-  // ---- Neues Projekt anlegen ----
   const createProject = useCallback(
-    async (data: {
-      code: string;
-      name: string;
-      client?: string;
-      place?: string;
-    }) => {
+    async (data: CreateProjectInput) => {
       const result = await apiCreateProject({
         code: data.code,
         name: data.name,
@@ -175,43 +328,53 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({
         place: data.place,
       });
 
-      const project = (result.project ?? result) as ProjectSummary | null;
+      const project = normalizeProject(result?.project ?? result);
+
       await loadProjects();
 
       if (project?.id) {
-        setSelected(project.id);
+        setCurrentProject(project);
       }
+
       return project;
     },
-    [loadProjects, setSelected]
+    [loadProjects, setCurrentProject]
   );
 
-  // ---- Projekt löschen ----
   const deleteProject = useCallback(
     async (id: string) => {
       await apiDeleteProject(id);
-      await loadProjects();
-      // falls das gelöschte Projekt selektiert war, Auswahl korrigiert
-      setSelectedProjectId((prev) => {
-        if (prev === id) return null;
-        return prev;
-      });
-    },
-    [loadProjects]
-  );
 
-  // ✅ hier leiten wir das aktuell ausgewählte Projekt ab
-  const currentProject = getSelectedProject();
+      const wasSelected = selectedProjectId === id;
+
+      await loadProjects();
+
+      if (!wasSelected) return;
+
+      const remaining = projects.filter((p) => p.id !== id);
+      const next = remaining[0] ?? null;
+
+      if (next) {
+        setCurrentProject(next);
+      } else {
+        setCurrentProject(null);
+      }
+    },
+    [loadProjects, projects, selectedProjectId, setCurrentProject]
+  );
 
   const value: ProjectContextValue = {
     projects,
     loading,
     error,
     selectedProjectId,
-    currentProject,          // ⬅️ neu
+    currentProject,
     loadProjects,
     reloadProjects,
     selectProject,
+    selectProjectById,
+    setCurrentProject,
+    setCurrentProjectId,
     getSelectedProject,
     importJsonFile,
     importZipFile,
@@ -231,3 +394,10 @@ export function useProject() {
 }
 
 export default useProject;
+
+
+
+
+
+
+

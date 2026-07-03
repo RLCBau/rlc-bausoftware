@@ -8,16 +8,16 @@ datasource db {
 }
 
 model Company {
-  id                    String                @id @default(uuid())
-  name                  String
-  code                  String                @unique
-  createdAt             DateTime              @default(now())
-  address               String?
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  address   String?
 
-  // ✅ NEW: Company Header / Letterhead
-  phone                 String?
-  email                 String?
-  logoPath              String?               // e.g. "companies/<companyId>/logo.png"
+  // Company Header / Letterhead
+  phone    String?
+  email    String?
+  logoPath String? // e.g. "companies/<companyId>/logo.png"
 
   updatedAt             DateTime              @updatedAt
   activities            ActivityLog[]
@@ -28,36 +28,42 @@ model Company {
   users                 User[]
 
   // Subscription (1:1 optional)
-  subscription          CompanySubscription?
+  subscription CompanySubscription?
 
-  // ✅ NEW: Invites + Members (seat & invite system)
-  invites               CompanyInvite[]
-  members               CompanyMember[]
+  // Invites + Members (seat & invite system)
+  invites CompanyInvite[]
+  members CompanyMember[]
 }
 
-//
-// ✅ INVITES: ADMIN generates token -> user accepts -> becomes CompanyMember
-//
 model CompanyInvite {
-  id              String   @id @default(uuid())
-  companyId       String
-  email           String
-  role            ProjectRole
-  tokenHash       String   @unique
+  id        String      @id @default(uuid())
+  companyId String
+  email     String?
+  role      ProjectRole @default(MITARBEITER)
+
+  // codice che l'admin consegna all'utente
+  code String @unique
+
+  // opzionale, utile se in futuro vuoi anche link invito sicuri via email
+  tokenHash String? @unique
+
+  maxUses   Int     @default(1)
+  usedCount Int     @default(0)
+  isActive  Boolean @default(true)
+
   expiresAt       DateTime
   acceptedAt      DateTime?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
   createdByUserId String?
 
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([email])
+  @@index([code])
+  @@index([companyId, isActive])
 }
 
-//
-// ✅ MEMBERS: used for seat limit + roles in company scope
-//
 model CompanyMember {
   id        String      @id @default(uuid())
   companyId String
@@ -67,8 +73,8 @@ model CompanyMember {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, userId], name: "companyId_userId")
   @@index([companyId, active])
@@ -76,18 +82,25 @@ model CompanyMember {
 }
 
 model CompanySubscription {
-  id                         String             @id @default(uuid())
-  companyId                  String             @unique
-  status                     SubscriptionStatus @default(ACTIVE)
-  plan                       SubscriptionPlan   @default(MAX_UNLIMITED)
-  seatsLimit                 Int?
-  currentPeriodStart         DateTime           @default(now())
+  id        String             @id @default(uuid())
+  companyId String             @unique
+  status    SubscriptionStatus @default(ACTIVE)
+  plan      SubscriptionPlan   @default(MAX_UNLIMITED)
+
+  // limite legacy / generico
+  seatsLimit Int?
+
+  // nuove licenze esplicite per RLC
+  webSeatsPurchased    Int @default(0)
+  mobileSeatsPurchased Int @default(0)
+
+  currentPeriodStart         DateTime  @default(now())
   currentPeriodEnd           DateTime?
   appleLatestTransactionId   String?
   appleOriginalTransactionId String?
   lastVerifiedAt             DateTime?
-  createdAt                  DateTime           @default(now())
-  updatedAt                  DateTime           @updatedAt
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -107,54 +120,56 @@ enum SubscriptionPlan {
 }
 
 model User {
-  id                String        @id @default(cuid())
-  email             String        @unique
+  id                String    @id @default(cuid())
+  email             String    @unique
   password          String
-  createdAt         DateTime      @default(now())
+  createdAt         DateTime  @default(now())
   companyId         String?
-  role              UserRole      @default(user)
+  role              UserRole  @default(user)
   currentProjectId  String?
   appRole           String?
   emailVerifiedAt   DateTime?
   name              String?
   verifyTokenExpiry DateTime?
   verifyTokenHash   String?
+  resetTokenExpiry  DateTime?
+  resetTokenHash    String?
 
-  activities        ActivityLog[]
-  projectMembers    ProjectMember[]
-  companyMembers    CompanyMember[]  // ✅ NEW
+  activities     ActivityLog[]
+  projectMembers ProjectMember[]
+  companyMembers CompanyMember[]
 
-  company           Company?      @relation(fields: [companyId], references: [id])
-  currentProject    Project?      @relation("UserCurrentProject", fields: [currentProjectId], references: [id])
+  company        Company? @relation(fields: [companyId], references: [id])
+  currentProject Project? @relation("UserCurrentProject", fields: [currentProjectId], references: [id])
 }
 
 model Project {
-  id                 String                @id @default(uuid())
-  name               String
-  code               String
-  companyId          String
-  createdAt          DateTime              @default(now())
-  description        String?
-  endDate            DateTime?
-  startDate          DateTime?
-  updatedAt          DateTime              @updatedAt
-  number             String?
-  path               String?
-  slug               String?               @unique
-  status             String                @default("active")
-  client             String?
-  place              String?
+  id          String    @id @default(uuid())
+  name        String
+  code        String
+  companyId   String
+  createdAt   DateTime  @default(now())
+  description String?
+  endDate     DateTime?
+  startDate   DateTime?
+  updatedAt   DateTime  @updatedAt
+  number      String?
+  path        String?
+  slug        String?   @unique
+  status      String    @default("active")
+  client      String?
+  place       String?
 
-  accounting         AccountingRoot?
-  activities         ActivityLog[]
-  deliveryNotes      DeliveryNote[]
-  documents          Document[]
-  lvSets             LVHeader[]
-  lvItems            LVItem[]
-  measSets           MeasurementSet[]
-  offerVersions      OfferVersion[]
-  planSnapshots      PlanSnapshot[]
-  planTasks          PlanTask[]
+  accounting    AccountingRoot?
+  activities    ActivityLog[]
+  deliveryNotes DeliveryNote[]
+  documents     Document[]
+  lvSets        LVHeader[]
+  lvItems       LVItem[]
+  measSets      MeasurementSet[]
+  offerVersions OfferVersion[]
+  planSnapshots PlanSnapshot[]
+  planTasks     PlanTask[]
 
   company            Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   files              ProjectFile[]
@@ -582,15 +597,15 @@ model RecipeVariant {
 }
 
 model CompanyPrice {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   companyId String
   refKey    String
-  price     Decimal  @db.Decimal(18, 6)
+  price     Decimal   @db.Decimal(18, 6)
   unit      String
-  validFrom DateTime @default(now())
+  validFrom DateTime  @default(now())
   validTo   DateTime?
   note      String?
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, refKey, validFrom])
   @@index([companyId, refKey])
@@ -729,4 +744,223 @@ enum WorkflowStatus {
   EINGEREICHT
   FREIGEGEBEN
   ABGELEHNT
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  companyId String?
+  ip        String?
+  action    String
+  resource  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([createdAt])
+}
+
+model KalkulationsDbEntry {
+  id          String  @id @default(uuid())
+  companyId   String
+  projectId   String?
+  source      String  @default("ki")
+  projectCode String?
+  projectName String?
+
+  positionNumber String?
+  shortText      String
+  longText       String?
+  unit           String?
+  quantity       Float   @default(0)
+
+  materialCost      Float @default(0)
+  laborCost         Float @default(0)
+  machineCost       Float @default(0)
+  subcontractorCost Float @default(0)
+  disposalCost      Float @default(0)
+  transportCost     Float @default(0)
+  overheadCost      Float @default(0)
+  riskCost          Float @default(0)
+  profitCost        Float @default(0)
+
+  unitPriceNet Float @default(0)
+  totalNet     Float @default(0)
+
+  trade              String?
+  serviceType        String?
+  constructionMethod String?
+  soilClass          String?
+
+  riskLevel  String @default("mittel")
+  confidence Float  @default(0.75)
+
+  parameters Json?
+  resources  Json?
+  tags       Json?
+
+  aiNote         String?
+  calculatorNote String?
+
+  useCount   Int       @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([projectCode])
+  @@index([positionNumber])
+  @@index([companyId, positionNumber])
+}
+
+model CompanyRecipeDb {
+  id          String  @id @default(uuid())
+  companyId   String
+  projectId   String?
+  signature   String
+  title       String
+  sourcePosNr String?
+  sourceText  String?
+  unit        String?
+  context     Json?
+  lines       Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, signature], name: "companyId_signature")
+  @@index([companyId])
+  @@index([projectId])
+  @@index([signature])
+}
+
+model RlcGlobalPriceKnowledge {
+  id String @id @default(uuid())
+
+  normalizedKey String @unique
+
+  positionNumber String?
+  shortText      String
+  unit           String?
+
+  trade              String?
+  serviceType        String?
+  constructionMethod String?
+  soilClass          String?
+
+  minPrice    Float @default(0)
+  avgPrice    Float @default(0)
+  maxPrice    Float @default(0)
+  medianPrice Float @default(0)
+
+  sampleCount        Int @default(0)
+  sourceCompanyCount Int @default(0)
+
+  country   String?
+  region    String?
+  priceYear Int?
+
+  confidence Float @default(0.75)
+
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([normalizedKey])
+  @@index([shortText])
+  @@index([unit])
+  @@index([trade])
+  @@index([serviceType])
+  @@index([constructionMethod])
+}
+
+model RlcGlobalPosition {
+  id                 String   @id @default(uuid())
+
+  source             String?
+  sourceUrl          String?
+  sourceType         String?
+  region             String?
+  year               Int?
+
+  gewerk             String?
+  category           String?
+  positionNumber     String?
+  shortText          String
+  longText           String?
+  unit               String?
+
+  priceMin           Float?
+  priceAvg           Float?
+  priceMax           Float?
+
+  confidence         Float    @default(0.3)
+  sampleCount        Int      @default(1)
+
+  isContextSensitive Boolean  @default(false)
+  needsReview        Boolean  @default(true)
+
+  normalizedKey      String?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([shortText])
+  @@index([unit])
+  @@index([gewerk])
+  @@index([category])
+  @@index([normalizedKey])
+}
+
+model RlcGlobalImportLog {
+  id           String   @id @default(uuid())
+
+  sourceName   String
+  sourceType   String?
+  sourceUrl    String?
+
+  importedRows Int      @default(0)
+  acceptedRows Int      @default(0)
+  rejectedRows Int      @default(0)
+
+  notes        String?
+
+  createdAt    DateTime @default(now())
+}
+
+model RlcGlobalKnowledgeAggregated {
+  id                 String   @id @default(uuid())
+
+  normalizedKey      String   @unique
+  shortText          String
+  longText           String?
+  unit               String?
+
+  gewerk             String?
+  category           String?
+
+  priceMin           Float?
+  priceAvg           Float?
+  priceMax           Float?
+
+  confidence         Float    @default(0.3)
+  sampleCount        Int      @default(0)
+
+  sources            Json?
+  isContextSensitive Boolean  @default(false)
+  needsReview        Boolean  @default(true)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([shortText])
+  @@index([unit])
+  @@index([gewerk])
+  @@index([category])
+  @@index([confidence])
 }

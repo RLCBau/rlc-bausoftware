@@ -12,11 +12,13 @@ import {
   Modal,
   SafeAreaView,
   KeyboardAvoidingView,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { useFocusEffect } from "@react-navigation/native";
+import RlcCategoryGrid, { RlcCategoryItem } from "../components/RlcCategoryGrid";
 
 // ✅ NEW: cache downloads for auth-protected images/files
 import * as FileSystem from "expo-file-system/legacy";
@@ -26,6 +28,7 @@ import { hydrateRowForPreview } from "../lib/hydratePreview";
 
 // API
 import { api } from "../lib/api";
+import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 
 // ✅ Team / Rollen (prefill Email Versand Ansprechpartner)
 import { getProjectRoles } from "../storage/projectMeta";
@@ -251,7 +254,7 @@ function alpha(hex: string, a: number) {
 
 function statusColor(w: WorkflowStatus) {
   if (w === "FREIGEGEBEN") return UI.accent;
-  if (w === "ABGELEHNT") return "#C33";
+  if (w === "ABGELEHNT") return COLORS.danger;
   if (w === "EINGEREICHT") return UI.accentDark;
   return UI.sub;
 }
@@ -688,7 +691,98 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
   const prepareSnapshotForOpen = useCallback(
     async (kind: "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT", id: string, fallbackItem: any) => {
       const full = await tryFetchFullDoc(kind, pk, id);
-      const source = full || fallbackItem || {};
+
+      // RLC_FOTOS_OPEN_SNAPSHOT_PRESERVE_FIELDS_V1
+      // Server read can return a reduced snapshot. Keep local fallback fields.
+      const source =
+        kind === "FOTOS"
+          ? {
+              ...(fallbackItem || {}),
+              ...(full || {}),
+
+              ortAbschnitt:
+                (full as any)?.ortAbschnitt ||
+                (full as any)?.location ||
+                (full as any)?.ort ||
+                (full as any)?.payload?.row?.ortAbschnitt ||
+                (full as any)?.payload?.row?.location ||
+                (full as any)?.payload?.row?.ort ||
+                (fallbackItem as any)?.ortAbschnitt ||
+                (fallbackItem as any)?.location ||
+                (fallbackItem as any)?.ort ||
+                "",
+
+              location:
+                (full as any)?.location ||
+                (full as any)?.ortAbschnitt ||
+                (full as any)?.ort ||
+                (fallbackItem as any)?.location ||
+                (fallbackItem as any)?.ortAbschnitt ||
+                (fallbackItem as any)?.ort ||
+                "",
+
+              ort:
+                (full as any)?.ort ||
+                (full as any)?.ortAbschnitt ||
+                (full as any)?.location ||
+                (fallbackItem as any)?.ort ||
+                (fallbackItem as any)?.ortAbschnitt ||
+                (fallbackItem as any)?.location ||
+                "",
+
+              kategorie:
+                (full as any)?.kategorie ||
+                (full as any)?.category ||
+                (full as any)?.payload?.row?.kategorie ||
+                (full as any)?.payload?.row?.category ||
+                (fallbackItem as any)?.kategorie ||
+                (fallbackItem as any)?.category ||
+                "",
+
+              category:
+                (full as any)?.category ||
+                (full as any)?.kategorie ||
+                (fallbackItem as any)?.category ||
+                (fallbackItem as any)?.kategorie ||
+                "",
+
+              gewerk:
+                (full as any)?.gewerk ||
+                (full as any)?.trade ||
+                (full as any)?.payload?.row?.gewerk ||
+                (full as any)?.payload?.row?.trade ||
+                (fallbackItem as any)?.gewerk ||
+                (fallbackItem as any)?.trade ||
+                "",
+
+              trade:
+                (full as any)?.trade ||
+                (full as any)?.gewerk ||
+                (fallbackItem as any)?.trade ||
+                (fallbackItem as any)?.gewerk ||
+                "",
+
+              fotoStatus:
+                (full as any)?.fotoStatus ||
+                (full as any)?.statusFoto ||
+                (fallbackItem as any)?.fotoStatus ||
+                (fallbackItem as any)?.statusFoto ||
+                "",
+
+              statusFoto:
+                (full as any)?.statusFoto ||
+                (full as any)?.fotoStatus ||
+                (fallbackItem as any)?.statusFoto ||
+                (fallbackItem as any)?.fotoStatus ||
+                "",
+
+              tags:
+                (full as any)?.tags ||
+                (full as any)?.payload?.row?.tags ||
+                (fallbackItem as any)?.tags ||
+                "",
+            }
+          : full || fallbackItem || {};
 
       let hydratedSource: any = source;
       try {
@@ -1042,7 +1136,12 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
       try {
         setBusy(true);
         const out = await ensurePdf(kind, item);
-        Alert.alert("PDF erstellt", `${out.fileName}\n\nGespeichert lokal (offline) und bereit zum Versenden.`);
+
+        if (out?.pdfUri && String(out.pdfUri).startsWith("file://")) {
+          await Linking.openURL(out.pdfUri);
+        } else {
+          Alert.alert("PDF erstellt", `${out.fileName}\n\nGespeichert lokal (offline) und bereit zum Versenden.`);
+        }
       } catch (e: any) {
         Alert.alert("PDF Fehler", String(e?.message || "unbekannt"));
       } finally {
@@ -1270,8 +1369,64 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
         (a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0)
       );
 
-      setRegie(normalized);
-      await saveList(INBOX_KEY_REGIE(pk), normalized);
+      const localBeforeRegie = await loadList<InboxRegie[]>(INBOX_KEY_REGIE(pk), []);
+
+      const hasUsefulRegieRows = (rows: any) => {
+        if (!Array.isArray(rows) || !rows.length) return false;
+        return rows.some((r: any) =>
+          String(r?.kostenstelle || r?.machine || r?.worker || r?.hours || r?.comment || r?.material || r?.quantity || r?.unit || "").trim().length > 0 ||
+          (Array.isArray(r?.photos) && r.photos.length > 0)
+        );
+      };
+
+      const mergedRegie = normalized.map((srv: any) => {
+        const old = Array.isArray(localBeforeRegie)
+          ? localBeforeRegie.find((x: any) =>
+              String(x?.id || x?.docId || "") === String(srv?.id || srv?.docId || "")
+            )
+          : null;
+
+        const srvRows =
+          hasUsefulRegieRows(srv?.rows)
+            ? srv.rows
+            : hasUsefulRegieRows(srv?.payload?.row?.rows)
+            ? srv.payload.row.rows
+            : hasUsefulRegieRows(srv?.payload?.rows)
+            ? srv.payload.rows
+            : null;
+
+        const oldRows =
+          hasUsefulRegieRows((old as any)?.rows)
+            ? (old as any).rows
+            : hasUsefulRegieRows((old as any)?.payload?.row?.rows)
+            ? (old as any).payload.row.rows
+            : hasUsefulRegieRows((old as any)?.payload?.rows)
+            ? (old as any).payload.rows
+            : null;
+
+        const rows = srvRows || oldRows;
+
+        return rows
+          ? {
+              ...old,
+              ...srv,
+              rows,
+              payload: {
+                ...((old as any)?.payload || {}),
+                ...(srv?.payload || {}),
+                rows,
+                row: {
+                  ...((old as any)?.payload?.row || {}),
+                  ...(srv?.payload?.row || {}),
+                  rows,
+                },
+              },
+            }
+          : { ...old, ...srv };
+      });
+
+      setRegie(mergedRegie);
+      await saveList(INBOX_KEY_REGIE(pk), mergedRegie);
       okRegie = true;
     } catch {}
 
@@ -1334,8 +1489,56 @@ export default function EingangPruefungScreen({ route, navigation }: Props) {
         (a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submittedAt || a.createdAt || 0)
       );
 
-      setFotos(normalized);
-      await saveList(INBOX_KEY_FOTOS(pk), normalized);
+      const localBeforeFotos = await loadList<InboxFotos[]>(INBOX_KEY_FOTOS(pk), []);
+
+      const mergedFotos = normalized.map((srv: any) => {
+        const old = Array.isArray(localBeforeFotos)
+          ? localBeforeFotos.find((x: any) =>
+              String(x?.id || x?.docId || "") === String(srv?.id || srv?.docId || "")
+            )
+          : null;
+
+        return {
+          ...old,
+          ...srv,
+
+          ortAbschnitt: srv?.ortAbschnitt || srv?.location || srv?.ort || (old as any)?.ortAbschnitt || (old as any)?.location || (old as any)?.ort || "",
+          location: srv?.location || srv?.ortAbschnitt || srv?.ort || (old as any)?.location || (old as any)?.ortAbschnitt || (old as any)?.ort || "",
+          ort: srv?.ort || srv?.ortAbschnitt || srv?.location || (old as any)?.ort || (old as any)?.ortAbschnitt || (old as any)?.location || "",
+
+          kategorie: srv?.kategorie || srv?.category || (old as any)?.kategorie || (old as any)?.category || "",
+          category: srv?.category || srv?.kategorie || (old as any)?.category || (old as any)?.kategorie || "",
+
+          gewerk: srv?.gewerk || srv?.trade || (old as any)?.gewerk || (old as any)?.trade || "",
+          trade: srv?.trade || srv?.gewerk || (old as any)?.trade || (old as any)?.gewerk || "",
+
+          fotoStatus: srv?.fotoStatus || srv?.statusFoto || (old as any)?.fotoStatus || (old as any)?.statusFoto || "",
+          statusFoto: srv?.statusFoto || srv?.fotoStatus || (old as any)?.statusFoto || (old as any)?.fotoStatus || "",
+
+          tags: srv?.tags || (old as any)?.tags || "",
+
+          files: Array.isArray(srv?.files) && srv.files.length
+            ? srv.files
+            : Array.isArray((old as any)?.files)
+            ? (old as any).files
+            : [],
+
+          attachments: Array.isArray(srv?.attachments) && srv.attachments.length
+            ? srv.attachments
+            : Array.isArray((old as any)?.attachments)
+            ? (old as any).attachments
+            : [],
+
+          photos: Array.isArray(srv?.photos) && srv.photos.length
+            ? srv.photos
+            : Array.isArray((old as any)?.photos)
+            ? (old as any).photos
+            : [],
+        };
+      });
+
+      setFotos(mergedFotos);
+      await saveList(INBOX_KEY_FOTOS(pk), mergedFotos);
       okFotos = true;
     } catch {}
 
@@ -1964,7 +2167,7 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
           </View>
         </View>
 
-        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: COLORS.danger }]}>Ablehnung: {item.rejectionReason}</Text> : null}
         {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
 
         <View style={s.actions}>
@@ -2017,7 +2220,7 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
 
         {!!item.comment ? <Text style={s.cardBody}>{item.comment}</Text> : null}
 
-        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: COLORS.danger }]}>Ablehnung: {item.rejectionReason}</Text> : null}
         {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
 
         <View style={s.actions}>
@@ -2074,7 +2277,7 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
           </View>
         </View>
 
-        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: COLORS.danger }]}>Ablehnung: {item.rejectionReason}</Text> : null}
         {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
 
         <View style={s.actions}>
@@ -2136,7 +2339,7 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
         </View>
 
         {issues ? <Text style={s.cardBody}>Vorkommnisse: {issues}</Text> : null}
-        {item.rejectionReason ? <Text style={[s.err, { color: "#C33" }]}>Ablehnung: {item.rejectionReason}</Text> : null}
+        {item.rejectionReason ? <Text style={[s.err, { color: COLORS.danger }]}>Ablehnung: {item.rejectionReason}</Text> : null}
         {item.syncError ? <Text style={s.err}>Sync-Fehler: {item.syncError}</Text> : null}
 
         <View style={s.actions}>
@@ -2406,6 +2609,189 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
     }
   }
 
+  // RLC_GENERIC_INBOX_PDF_EMAIL_V1
+  function genericDocLabel(t: InboxTab) {
+    switch (t) {
+      case "BAUTAGEBUCH":
+        return "Bautagebuch";
+      case "ANGEBOT":
+        return "Angebot";
+      case "RECHNUNG":
+        return "Rechnung";
+      case "MENGEN":
+        return "Mengen";
+      case "KALKULATION":
+        return "Kalkulation";
+      default:
+        return "Dokument";
+    }
+  }
+
+  function pickGenericPdfUri(item: any) {
+    return String(
+      item?.pdfUri ||
+        item?.pdfUrl ||
+        item?.fileUri ||
+        item?.documentUri ||
+        item?.localPdfUri ||
+        item?.exportPdfUri ||
+        item?.attachmentUri ||
+        item?.payload?.pdfUri ||
+        item?.payload?.fileUri ||
+        item?.payload?.documentUri ||
+        item?.payload?.row?.pdfUri ||
+        item?.payload?.row?.fileUri ||
+        item?.payload?.row?.documentUri ||
+        ""
+    ).trim();
+  }
+
+  async function onOpenGenericPdf(t: InboxTab, item: any) {
+    try {
+      const uri = pickGenericPdfUri(item);
+
+      if (!uri) {
+        if (t === "ANGEBOT") {
+          await generateAndOpenAngebotPdfFromInbox(item);
+          return;
+        }
+
+        Alert.alert(
+          "PDF",
+          `${genericDocLabel(t)} hat noch keinen gespeicherten PDF-Link. Bitte PDF im Modul erzeugen.`
+        );
+        return;
+      }
+
+      if (uri.startsWith("file://") || uri.startsWith("http://") || uri.startsWith("https://")) {
+        await Linking.openURL(uri);
+        return;
+      }
+
+      Alert.alert("PDF", "PDF-Datei kann auf diesem Gerät nicht geöffnet werden.");
+    } catch (e: any) {
+      Alert.alert("PDF Fehler", String(e?.message || "unbekannt"));
+    }
+  }
+
+  async function onEmailGenericPdf(t: InboxTab, item: any) {
+    try {
+      setBusy(true);
+
+      const uri = pickGenericPdfUri(item);
+      if (!uri || !uri.startsWith("file://")) {
+        Alert.alert(
+          "E-Mail",
+          `${genericDocLabel(t)} hat keinen lokalen PDF-Anhang. Bitte zuerst im Modul PDF erzeugen.`
+        );
+        return;
+      }
+
+      const roles =
+        (await getProjectRoles(pk)) || (await getProjectRoles(String(projectId || "").trim())) || null;
+
+      const to = splitEmails((roles as any)?.emails?.bauleiter);
+      const cc = splitEmails((roles as any)?.emails?.buero);
+      const bcc = splitEmails((roles as any)?.emails?.extern);
+
+      const date = safeDate(item?.date || item?.datum || item?.submittedAt || item?.createdAt);
+      const subject = `${genericDocLabel(t)} ${pk} – ${date}`;
+
+      await emailPdf({
+        subject,
+        body: "",
+        attachments: [uri],
+        to: to.length ? to : undefined,
+        cc: cc.length ? cc : undefined,
+        bcc: bcc.length ? bcc : undefined,
+      });
+    } catch (e: any) {
+      Alert.alert("E-Mail Fehler", String(e?.message || "unbekannt"));
+    } finally {
+      setBusy(false);
+    }
+  }
+  // RLC_EINGANG_GENERATE_ANGEBOT_PDF_V1
+  async function generateAndOpenAngebotPdfFromInbox(item: any) {
+    const doc = item?.doc || item?.payload?.doc || item?.angebotSnapshot || item;
+
+    if (!doc) {
+      Alert.alert("PDF", "Angebot-Daten nicht gefunden.");
+      return;
+    }
+
+    const rows = Array.isArray(doc?.rows)
+      ? doc.rows.map((r: any, idx: number) => {
+          const qty = Number(String(r?.quantity ?? r?.menge ?? "0").replace(",", ".") || 0);
+          const ep = Number(String(r?.ep ?? r?.unitPrice ?? "0").replace(",", ".") || 0);
+
+          return {
+            pos: String(r?.pos || r?.posNr || idx + 1),
+            text: String(r?.text || r?.kurztext || ""),
+            unit: String(r?.unit || r?.einheit || ""),
+            quantity: String(r?.quantity || r?.menge || ""),
+            ep: String(r?.ep || r?.unitPrice || ""),
+            gp: qty * ep,
+          };
+        })
+      : [];
+
+    const netto = rows.reduce((sum: number, r: any) => sum + Number(r.gp || 0), 0);
+    const rabattPct = Number(String(doc?.rabattPct || doc?.rabatt || "0").replace(",", ".") || 0);
+    const zuschlagPct = Number(String(doc?.zuschlagPct || doc?.zuschlag || "0").replace(",", ".") || 0);
+    const mwstPct = Number(String(doc?.mwstPct || doc?.mwst || "19").replace(",", ".") || 19);
+
+    const rabattValue = netto * rabattPct / 100;
+    const zuschlagValue = netto * zuschlagPct / 100;
+    const nettoFinal = netto - rabattValue + zuschlagValue;
+    const mwstValue = nettoFinal * mwstPct / 100;
+    const brutto = nettoFinal + mwstValue;
+
+    const out: any = await buildDocumentPdf({
+      type: "ANGEBOT",
+      projectCode: String(doc?.projectCode || item?.projectCode || pk || "Projekt"),
+      fileName: `${String(doc?.angebotNr || item?.angebotNr || "Angebot")}.pdf`,
+      title: String(doc?.angebotTitle || "Angebot"),
+      subTitle: String(doc?.status || "Entwurf"),
+      docNo: String(doc?.angebotNr || item?.angebotNr || ""),
+      date: String(doc?.datum || item?.date || item?.datum || ""),
+      customer: {
+        name: String(doc?.customerName || ""),
+        address: String(doc?.customerAddress || ""),
+        email: String(doc?.customerEmail || ""),
+        phone: String(doc?.customerPhone || ""),
+      },
+      rows,
+      totals: {
+        netto,
+        rabattValue,
+        zuschlagValue,
+        nettoFinal,
+        mwstValue,
+        brutto,
+      } as any,
+      extraBlocks: [
+        {
+          title: "Projekt / Baustelle",
+          lines: [
+            String(doc?.baustelle || ""),
+            doc?.validUntil ? `Gültig bis: ${doc.validUntil}` : "",
+          ].filter(Boolean),
+        },
+      ],
+      note: String(doc?.note || ""),
+      shareAfterCreate: false,
+    });
+
+    const pdfUri = String(out?.pdfUri || out?.uri || "").trim();
+
+    if (!pdfUri) {
+      Alert.alert("PDF", "PDF konnte nicht erzeugt werden.");
+      return;
+    }
+
+    await Linking.openURL(pdfUri);
+  }
   function GenericInboxCard({ item }: { item: any }) {
     const wCol = statusColor(item.workflowStatus || "EINGEREICHT");
     const type = String(item.docType || item.type || item.kind || tab || "Dokument").toUpperCase();
@@ -2454,6 +2840,14 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
             <Text style={[s.chipTxt, s.chipAccentTxt]}>Öffnen</Text>
           </Pressable>
 
+          <Pressable style={s.chipBtn} onPress={() => onOpenGenericPdf(tab, item)} disabled={busy}>
+            <Text style={s.chipTxt}>PDF</Text>
+          </Pressable>
+
+          <Pressable style={s.chipDark} onPress={() => onEmailGenericPdf(tab, item)} disabled={busy || !canWork}>
+            <Text style={[s.chipTxt, s.chipDarkTxt]}>E-Mail</Text>
+          </Pressable>
+
           {(item.workflowStatus === "EINGEREICHT" || !item.workflowStatus || item.workflowStatus === "ABGELEHNT") && (
             <>
               <Pressable
@@ -2478,6 +2872,18 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
     );
   }
 
+  const categoryItems: RlcCategoryItem[] = [
+    { key: "REGIE", label: "Regie", count: regie.length, icon: "clipboard-outline" },
+    { key: "LS", label: "Lieferscheine", count: ls.length, icon: "cube-outline" },
+    { key: "FOTOS", label: "Fotos", count: fotos.length, icon: "camera-outline" },
+    { key: "TAGESBERICHT", label: "Tagesberichte", count: tagesberichte.length, icon: "newspaper-outline" },
+    { key: "BAUTAGEBUCH", label: "Bautagebuch", count: bautagebuch.length, icon: "book-outline" },
+    { key: "ANGEBOT", label: "Angebote", count: angebote.length, icon: "pricetag-outline" },
+    { key: "RECHNUNG", label: "Rechnungen", count: rechnungen.length, icon: "receipt-outline" },
+    { key: "MENGEN", label: "Mengen", count: mengen.length, icon: "resize-outline" },
+    { key: "KALKULATION", label: "Kalkulation", count: kalkulationen.length, icon: "calculator-outline" },
+  ];
+
   const shown =
     tab === "REGIE"
       ? regie
@@ -2501,6 +2907,10 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
     <SafeAreaView style={s.safe}>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={s.page}>
+          <FlatList
+            style={{ flex: 1 }}
+            ListHeaderComponent={
+              (
           <View style={s.header}>
             <View style={s.headerRow}>
               <View style={s.headerAccent} />
@@ -2525,38 +2935,17 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
                 </Text>
               </View>
             ) : null}
+            <RlcCategoryGrid
+              title="Übersicht"
+              items={categoryItems}
+              activeKey={tab}
+              onPress={(key) => setTab(key as InboxTab)}
+              onRefresh={reload}
+            />
 
-            <View style={s.tabs}>
-              {[
-                ["REGIE", `Regie (${regie.length})`],
-                ["LS", `Lieferscheine (${ls.length})`],
-                ["FOTOS", `Fotos (${fotos.length})`],
-                ["TAGESBERICHT", `Tagesberichte (${tagesberichte.length})`],
-                ["BAUTAGEBUCH", `Bautagebuch (${bautagebuch.length})`],
-                ["ANGEBOT", `Angebote (${angebote.length})`],
-                ["RECHNUNG", `Rechnungen (${rechnungen.length})`],
-                ["MENGEN", `Mengen (${mengen.length})`],
-                ["KALKULATION", `Kalkulation (${kalkulationen.length})`],
-              ].map(([k, label]) => (
-                <Pressable
-                  key={String(k)}
-                  style={[s.tabBtn, tab === k && s.tabBtnActive]}
-                  onPress={() => setTab(k as InboxTab)}
-                >
-                  <Text style={[s.tabTxt, tab === k && s.tabTxtActive]}>
-                    {String(label)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={s.headerActions}>
-              <Pressable style={[s.headerBtn, busy && s.disabledBtn]} onPress={reload} disabled={busy}>
-                <Text style={s.headerBtnTxt}>{busy ? "…" : "Aktualisieren"}</Text>
-              </Pressable>
-
+            <View style={s.headerActionsCompact}>
               <Pressable
-                style={[s.headerBtnAccent, busy && s.disabledBtn]}
+                style={[s.headerBtnAccentCompact, busy && s.disabledBtn]}
                 onPress={() => syncQueueNow({ silent: false })}
                 disabled={busy || !canWork}
               >
@@ -2564,8 +2953,8 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
               </Pressable>
             </View>
           </View>
-
-          <FlatList
+              )
+            }
             data={shown}
             keyExtractor={(x: any, i: number) => {
               const id = String(x?.id || "").trim();
@@ -2581,8 +2970,10 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
                 <LsCard item={item as InboxLs} />
               ) : tab === "FOTOS" ? (
                 <FotosCard item={item as InboxFotos} />
-              ) : (
+              ) : tab === "TAGESBERICHT" ? (
                 <TagesberichtCard item={item as InboxTagesbericht} />
+              ) : (
+                <GenericInboxCard item={item} />
               )
             }
             ListEmptyComponent={
@@ -2595,7 +2986,11 @@ rr.sort((a, b) => Number(b.submittedAt || b.createdAt || 0) - Number(a.submitted
                 </View>
               </View>
             }
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
+            keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={false}
           />
 
           <Modal visible={rejectOpen} transparent animationType="fade" onRequestClose={() => setRejectOpen(false)}>
@@ -2765,6 +3160,20 @@ const s = StyleSheet.create({
     color: UI.textLight,
   },
 
+  headerActionsCompact: {
+    marginTop: 12,
+    alignItems: "flex-end",
+  },
+
+  headerBtnAccentCompact: {
+    minWidth: 150,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: UI.accent,
+    alignItems: "center",
+  },
+
   headerActions: {
     flexDirection: "row",
     gap: 10,
@@ -2928,8 +3337,8 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#C33",
-    backgroundColor: "#C33",
+    borderColor: COLORS.danger,
+    backgroundColor: COLORS.danger,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -3062,8 +3471,8 @@ const s = StyleSheet.create({
     minHeight: 46,
     borderRadius: RLC_RADIUS.button,
     borderWidth: 1,
-    borderColor: "#C33",
-    backgroundColor: "#C33",
+    borderColor: COLORS.danger,
+    backgroundColor: COLORS.danger,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
@@ -3075,6 +3484,35 @@ const s = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

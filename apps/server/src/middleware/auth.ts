@@ -1,211 +1,95 @@
-// apps/server/src/middleware/auth.ts
-import type { Request, RequestHandler } from "express";
-import jwt from "jsonwebtoken";
-import { prisma } from "../lib/prisma";
+import type { Request, Response, NextFunction } from "express";
+import { verifyJwt } from "../lib/security/crypto";
 
-type Mode = "NUR_APP" | "SERVER_SYNC";
-
-type JwtPayload = {
+export type AuthCtx = {
   sub: string;
-  email?: string;
-  role?: string;
-  mode?: Mode;
-  emailVerifiedAt?: string | null;
-  emailVerified?: boolean;
-
-  companyId?: string | null;
-  companyRole?: string | null;
-  company?: string | null; // compat (alcune routes usano auth.company)
+  role: string;
+  companyId: string | null;
+  companyRole: string | null;
+  mode?: string | null;
+  device?: string | null;
+  emailVerified?: boolean | null;
 };
 
 declare global {
   namespace Express {
-    /**
-     * ✅ Tipizza "user" nel modo corretto:
-     * non su Request.user (che può essere già dichiarato altrove),
-     * ma su Express.User (che è l'interfaccia pensata per req.user).
-     */
-    interface User {
-      id: string;
-      email?: string;
-      role?: string;
-      mode?: Mode;
-      emailVerifiedAt?: string | null;
-      emailVerified?: boolean;
-
-      companyId?: string | null;
-      companyRole?: string | null;
-    }
-
     interface Request {
-      auth?: JwtPayload | any;
+      auth?: AuthCtx;
+      user?: {
+        id?: string;
+        email?: string;
+        role?: string;
+        mode?: string;
+        emailVerifiedAt?: string | null;
+        emailVerified?: boolean;
+      };
     }
   }
 }
 
-function jwtSecret() {
-  return process.env.JWT_SECRET || "dev_secret_change_me";
-}
+export function authJwt(req: Request, res: Response, next: NextFunction) {
+  const devOn = (process.env.DEV_AUTH || "").toLowerCase() === "on";
 
-function bearerToken(req: Request) {
-  const h = String(req.headers.authorization || "");
-  if (!h.toLowerCase().startsWith("bearer ")) return null;
-  return h.slice(7).trim();
-}
-
-function isDevAuthOn() {
-  return String(process.env.DEV_AUTH || "").toLowerCase() === "on";
-}
-
-async function resolveDevCompanyId(): Promise<string | null> {
-  const wanted = String(process.env.DEV_COMPANY_ID || "").trim();
-  if (wanted) {
-    const found = await prisma.company.findUnique({
-      where: { id: wanted },
-      select: { id: true },
-    });
-    if (found?.id) return found.id;
+  // ✅ DEV bypass: index.ts ha già settato req.user + req.auth
+  if (devOn && (req as any)?.user?.id) {
+    if (!req.auth) {
+      req.auth = {
+        sub: String((req as any).user.id || "dev-user"),
+        role: String((req as any).user.role || "ADMIN"),
+        companyId:
+          String((req as any)?.auth?.company || process.env.DEV_COMPANY_ID || "").trim() || null,
+        companyRole: String((req as any).user.role || "ADMIN"),
+        mode: String((req as any).user.mode || "SERVER_SYNC"),
+        device: "dev-device",
+        emailVerified: true,
+      };
+    }
+    return next();
   }
 
-  const first = await prisma.company.findFirst({ select: { id: true } });
-  return first?.id || null;
-}
+  const h = req.header("authorization");
+  if (!h || !h.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Kein Token" });
+  }
 
-function devRole() {
-  return String(process.env.DEV_ROLE || "ADMIN").toUpperCase();
-}
-
-function devEmail() {
-  const raw = String(process.env.ADMIN_BYPASS_EMAILS || "dev@local").trim();
-  const first = raw.split(",")[0]?.trim();
-  return first || "dev@local";
-}
-
-async function applyDevAuth(req: Request) {
-  const companyId = await resolveDevCompanyId();
-
-  const payload: JwtPayload = {
-    sub: "dev-user",
-    email: devEmail(),
-    role: devRole(),
-    mode: "SERVER_SYNC",
-    emailVerifiedAt: new Date().toISOString(),
-    emailVerified: true,
-    companyId,
-    companyRole: devRole(),
-    company: companyId, // compat
-  };
-
-  req.auth = payload;
-
-  // ✅ req.user esiste (Express.User). Non tipizziamo Request.user qui.
-  (req as any).user = {
-    id: payload.sub,
-    email: payload.email,
-    role: payload.role,
-    mode: payload.mode,
-    emailVerifiedAt: payload.emailVerifiedAt ?? null,
-    emailVerified: true,
-    companyId: payload.companyId ?? null,
-    companyRole: payload.companyRole ?? null,
-  } satisfies Express.User;
-}
-
-/**
- * optionalAuth
- * - se c'è token lo valida e popola req.auth / req.user
- * - se non c'è token → next()
- * - DEV_AUTH=on → popola comunque
- */
-export const optionalAuth: RequestHandler = async (req, _res, next) => {
   try {
-    if (isDevAuthOn()) {
-      await applyDevAuth(req);
-      return next();
-    }
+    const decoded: any = verifyJwt(h.slice(7));
 
-    const t = bearerToken(req);
-    if (!t) return next();
+    req.auth = {
+      sub: String(decoded.sub || ""),
+      role: String(decoded.role || decoded.companyRole || "USER"),
+      companyId: decoded.companyId ?? decoded.company ?? null,
+      companyRole: decoded.companyRole ?? decoded.role ?? null,
+      mode: decoded.mode ?? null,
+      device: decoded.device ?? null,
+      emailVerified: decoded.emailVerified ?? null,
+    };
 
-    const decoded = jwt.verify(t, jwtSecret()) as JwtPayload;
-
-    req.auth = decoded;
-    (req as any).user = {
-      id: decoded.sub,
-      email: decoded.email,
-      role: decoded.role,
-      mode: decoded.mode,
-      emailVerifiedAt: decoded.emailVerifiedAt ?? null,
-      emailVerified: !!decoded.emailVerifiedAt || !!decoded.emailVerified,
-      companyId: decoded.companyId ?? (decoded as any).company ?? null,
-      companyRole: decoded.companyRole ?? null,
-    } satisfies Express.User;
-
-    return next();
-  } catch (_e) {
-    req.auth = undefined;
-    (req as any).user = undefined;
-    return next();
-  }
-};
-
-/**
- * requireAuth
- * - richiede token valido
- * - DEV_AUTH=on → bypass totale
- */
-export const requireAuth: RequestHandler = async (req, res, next) => {
-  try {
-    if (isDevAuthOn()) {
-      await applyDevAuth(req);
-      return next();
-    }
-
-    const t = bearerToken(req);
-    if (!t) return res.status(401).json({ ok: false, error: "NO_TOKEN" });
-
-    const decoded = jwt.verify(t, jwtSecret()) as JwtPayload;
-
-    req.auth = decoded;
-    (req as any).user = {
-      id: decoded.sub,
-      email: decoded.email,
-      role: decoded.role,
-      mode: decoded.mode,
-      emailVerifiedAt: decoded.emailVerifiedAt ?? null,
-      emailVerified: !!decoded.emailVerifiedAt || !!decoded.emailVerified,
-      companyId: decoded.companyId ?? (decoded as any).company ?? null,
-      companyRole: decoded.companyRole ?? null,
-    } satisfies Express.User;
-
-    return next();
-  } catch (_e: any) {
-    return res.status(401).json({ ok: false, error: "BAD_TOKEN" });
-  }
-};
-
-/**
- * requireVerifiedEmail
- * - DEV_AUTH=on → passa
- */
-export const requireVerifiedEmail: RequestHandler = async (req, res, next) => {
-  try {
-    if (isDevAuthOn()) return next();
-
-    const userId = String((req as any).user?.id || req.auth?.sub || "");
-    if (!userId) return res.status(401).json({ ok: false, error: "NO_AUTH" });
-
-    const u = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { emailVerifiedAt: true },
-    });
-
-    if (!u?.emailVerifiedAt) {
-      return res.status(403).json({ ok: false, error: "EMAIL_NOT_VERIFIED" });
+    if (!req.auth.sub) {
+      return res.status(401).json({ error: "Ungültiges Token" });
     }
 
     return next();
-  } catch (_e) {
-    return res.status(500).json({ ok: false, error: "VERIFY_CHECK_FAILED" });
+  } catch {
+    return res.status(401).json({ error: "Ungültiges Token" });
   }
-};
+}
+
+export const requireAuth = authJwt;
+
+export function requireVerifiedEmail(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const devOn = (process.env.DEV_AUTH || "").toLowerCase() === "on";
+  if (devOn && (req as any)?.user?.id) return next();
+
+  const v =
+    (req as any)?.auth?.emailVerified ??
+    (req as any)?.user?.emailVerified ??
+    ((req as any)?.user?.emailVerifiedAt ? true : undefined);
+
+  if (v === true || v === undefined || v === null) return next();
+  return res.status(403).json({ ok: false, error: "EMAIL_NOT_VERIFIED" });
+}

@@ -5232,14 +5232,45 @@ function scheduleKiAutoSaveAfterCalculation(snapshotRows: EliteRow[], modeOverri
   if (!projectKey || typeof window === "undefined") return;
 
   const safeRows = sanitizeRowsForStorage(snapshotRows);
+  const rlcKiNet = round2(safeRows.reduce((sum, r) => sum + rlcKiLineNet(r), 0));
+  const angebotNet = round2(safeRows.reduce((sum, r) => sum + offerLineNet(r), 0));
+  const finalNet = round2(
+    safeRows.reduce((sum, r: any) => {
+      const qty = n(r?.menge ?? r?.quantity);
+      const ep =
+        n(r?.finalUnitPrice) ||
+        n(r?.preis) ||
+        n(r?.rlcKiUnitPrice) ||
+        n(r?.suggestedUnitPrice) ||
+        n(r?.unitPrice);
+      return sum + qty * ep;
+    }, 0)
+  );
+
   const payload = {
     ok: true,
     projectKey,
+    projectCode: projectKey,
     projectTitle,
     savedAt: new Date().toISOString(),
     source: "rlc-ki-autosave",
     mode: modeOverride || kiMode,
     rows: safeRows,
+    summary: {
+      rowCount: safeRows.length,
+      angebotNet,
+      rlcKiNet,
+      totalNet: finalNet > 0 ? finalNet : rlcKiNet,
+      net: finalNet > 0 ? finalNet : rlcKiNet,
+      netto: finalNet > 0 ? finalNet : rlcKiNet,
+    },
+    totals: {
+      angebotNet,
+      rlcKiNet,
+      totalNet: finalNet > 0 ? finalNet : rlcKiNet,
+      net: finalNet > 0 ? finalNet : rlcKiNet,
+      netto: finalNet > 0 ? finalNet : rlcKiNet,
+    },
     meta: {
       mwst,
       globalMarkup,
@@ -5257,9 +5288,26 @@ function scheduleKiAutoSaveAfterCalculation(snapshotRows: EliteRow[], modeOverri
     // Lokaler Autosave darf die Kalkulation niemals blockieren.
   }
 
-  // Server-Autosave temporaneamente disattivato:
-  // saveToProjectServer() usa rows dal React-State e può salvare uno stato vecchio.
-  // Il salvataggio locale usa invece snapshotRows corretto.
+  // Server-Snapshot ist ab jetzt die Wahrheit für Mobile.
+  // Wichtig: Es werden snapshotRows gespeichert, nicht der evtl. veraltete React-State.
+  void fetch(`${API_BASE}/api/kalkulation/storage/ki/${encodeURIComponent(projectKey)}/save`, {
+    method: "POST",
+    headers: authJsonHeaders(),
+    body: JSON.stringify({ data: payload }),
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(txt || `HTTP ${res.status}`);
+      }
+      setServerStatus("Server-Snapshot gespeichert");
+      window.setTimeout(() => setServerStatus(""), 2200);
+    })
+    .catch((e) => {
+      console.warn("[RLC-KI] Server-Snapshot konnte nicht gespeichert werden", e);
+      setServerStatus("Lokal gespeichert – Server-Snapshot fehlgeschlagen");
+      window.setTimeout(() => setServerStatus(""), 3500);
+    });
 }
 function showOfferCheckModal(input: {
   comparable: Array<{
@@ -8336,6 +8384,17 @@ return (
                 Prüfpflichtig {problemCounts.hochrisiko}
               </FilterButton>
 
+
+              <FilterButton
+                active={viewFilter === "doppelte"}
+                onClick={() => {
+                  setViewFilter("doppelte");
+                  selectDuplicateRowsToDelete();
+                  setLvPage(1);
+                }}
+              >
+                Doppelte {duplicateCountToDelete}
+              </FilterButton>
               <FilterButton
                 active={viewFilter === "ohneDb"}
                 onClick={() => setViewFilter("ohneDb")}
@@ -12050,6 +12109,7 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
 
 
 

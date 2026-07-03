@@ -10,8 +10,11 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList } from "../navigation/types";
@@ -32,6 +35,8 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
 
   const projectKey = String(projectCode || projectId || "").trim();
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [csvBusy, setCsvBusy] = useState(false);
   const [statsBusy, setStatsBusy] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
@@ -43,7 +48,7 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
     navigation.setOptions({
       title: "Bautagebuch",
       headerStyle: {
-        backgroundColor: "#12324A",
+        backgroundColor: COLORS.accentDark,
       },
       headerTitleStyle: {
         color: COLORS.card,
@@ -66,7 +71,7 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
           <Ionicons
             name="chatbubble-ellipses-outline"
             size={18}
-            color="#12324A"
+            color={COLORS.accentDark}
           />
           <Text style={s.headerKiTxt}>RLC KI</Text>
         </Pressable>
@@ -141,7 +146,7 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
 
       if (!rows.length) {
         Alert.alert(
-          "Bautagebuch PDF",
+          "PDF",
           "Für dieses Projekt sind noch keine Tagesberichte vorhanden."
         );
         return;
@@ -177,14 +182,89 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
         sourceScreen: "Bautagebuch",
       });
 
-      await openBautagebuchPdf(result);
+      await openBautagebuchPdf((result as any)?.pdfUri || (result as any)?.uri || result);
     } catch (e: any) {
       Alert.alert(
-        "Bautagebuch PDF",
+        "PDF",
         e?.message || "PDF konnte nicht erstellt werden."
       );
     } finally {
       setPdfBusy(false);
+    }
+  };
+
+  const saveBautagebuch = async () => {
+    try {
+      setSaveBusy(true);
+      const rows = await loadTagesberichte();
+
+      await submitToEingangPruefung({
+        type: "BAUTAGEBUCH",
+        projectKey,
+        projectId,
+        projectCode: projectKey,
+        title: `Bautagebuch ${projectKey}`,
+        doc: {
+          id: `bautagebuch_${projectKey}`,
+          projectId,
+          projectCode: projectKey,
+          title: `Bautagebuch ${projectKey}`,
+          rows,
+          savedAt: new Date().toISOString(),
+        },
+        pdfUri: null,
+        status: "EINGEREICHT",
+        sourceScreen: "Bautagebuch",
+      });
+
+      Alert.alert("Bautagebuch", "Gespeichert und an Eingang / Prüfung übergeben.");
+    } catch (e: any) {
+      Alert.alert("Bautagebuch", e?.message || "Speichern fehlgeschlagen.");
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const exportBautagebuchCsv = async () => {
+    try {
+      setCsvBusy(true);
+      const rows = await loadTagesberichte();
+
+      if (!rows.length) {
+        Alert.alert("Bautagebuch CSV", "Für dieses Projekt sind noch keine Tagesberichte vorhanden.");
+        return;
+      }
+
+      const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const header = ["Datum", "Wetter", "Arbeiten", "Personal", "Maschinen", "Probleme"].map(esc).join(";");
+
+      const body = rows.map((r: any) =>
+        [
+          r.date || r.datum || "",
+          r.weather || r.wetter || "",
+          r.workDone || r.arbeiten || "",
+          r.workers || r.personal || "",
+          r.machines || r.maschinen || "",
+          r.issues || r.probleme || "",
+        ].map(esc).join(";")
+      );
+
+      const csv = [header, ...body].join("\n");
+      const uri = `${FileSystem.cacheDirectory}Bautagebuch_${projectKey}.csv`;
+
+      await FileSystem.writeAsStringAsync(uri, csv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      } else {
+        Alert.alert("CSV erstellt", uri);
+      }
+    } catch (e: any) {
+      Alert.alert("Bautagebuch CSV", e?.message || "CSV konnte nicht erstellt werden.");
+    } finally {
+      setCsvBusy(false);
     }
   };
 
@@ -224,7 +304,7 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
           </View>
 
           <Text style={s.heroTextCompact}>
-            Tagesberichte erfassen, öffnen und gesammelt als PDF exportieren.
+            Tagesberichte erfassen, öffnen und gesammelt als PDF.
           </Text>
         </View>
 
@@ -275,14 +355,43 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
               <Ionicons name="document-text-outline" size={18} color={COLORS.card} />
             </View>
             <View style={s.actionTextWrap}>
-              <Text style={s.actionTitle}>Bautagebuch PDF</Text>
-              <Text style={s.actionSub}>Sammel-PDF erzeugen</Text>
+              <Text style={s.actionTitle}>PDF</Text>
+              <Text style={s.actionSub}>PDF erzeugen</Text>
             </View>
             {pdfBusy ? (
               <ActivityIndicator size="small" color={COLORS.text} />
             ) : null}
           </Pressable>
 
+          <Pressable
+            style={[s.actionCard, saveBusy ? s.cardDisabled : null]}
+            onPress={saveBautagebuch}
+            disabled={saveBusy}
+          >
+            <View style={s.actionIconRefresh}>
+              <Ionicons name="save-outline" size={18} color={COLORS.card} />
+            </View>
+            <View style={s.actionTextWrap}>
+              <Text style={s.actionTitle}>Speichern</Text>
+              <Text style={s.actionSub}>An Eingang / Prüfung übergeben</Text>
+            </View>
+            {saveBusy ? <ActivityIndicator size="small" color={COLORS.text} /> : null}
+          </Pressable>
+
+          <Pressable
+            style={[s.actionCard, csvBusy ? s.cardDisabled : null]}
+            onPress={exportBautagebuchCsv}
+            disabled={csvBusy}
+          >
+            <View style={s.actionIconRefresh}>
+              <Ionicons name="document-outline" size={18} color={COLORS.card} />
+            </View>
+            <View style={s.actionTextWrap}>
+              <Text style={s.actionTitle}>CSV Export</Text>
+              <Text style={s.actionSub}>Tagesberichte als CSV</Text>
+            </View>
+            {csvBusy ? <ActivityIndicator size="small" color={COLORS.text} /> : null}
+          </Pressable>
           <Pressable style={s.actionCard} onPress={refreshStats}>
             <View style={s.actionIconRefresh}>
               <Ionicons name="refresh" size={18} color={COLORS.card} />
@@ -334,13 +443,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DDF1FF",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "#A8D3F5",
+    borderColor: COLORS.border,
   },
 
   headerKiTxt: {
-    color: "#12324A",
+    color: COLORS.accentDark,
     fontWeight: "900",
     fontSize: 13,
   },
@@ -527,8 +636,8 @@ const s = StyleSheet.create({
   },
 
   actionPrimary: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
   },
 
   actionIconPrimary: {
@@ -555,7 +664,7 @@ const s = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0F766E",
+    backgroundColor: COLORS.success,
   },
 
   actionIconRefresh: {
@@ -564,7 +673,7 @@ const s = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#334155",
+    backgroundColor: COLORS.sub,
   },
 
   actionTextWrap: {
@@ -623,6 +732,18 @@ const s = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

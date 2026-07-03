@@ -54,9 +54,9 @@ function sourceBadgeStyle(sourceType?: string) {
   switch (sourceType) {
     case "ANGEBOT":
       return {
-        bg: "#EEF5FF",
-        border: "#BFDBFE",
-        text: "#1D4ED8",
+        bg: COLORS.accentSoft,
+        border: COLORS.border,
+        text: COLORS.accent,
       };
     default:
       return {
@@ -245,7 +245,7 @@ export default function MengenListScreen({ route, navigation }: Props) {
                 value={q}
                 onChangeText={setQ}
                 placeholder="Suchen (Titel, Datum, Angebot, Wert)…"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 style={s.search}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -654,13 +654,13 @@ const s = StyleSheet.create({
   },
 
   btnOrange: {
-    backgroundColor: "#F97316",
-    borderColor: "#F97316",
+    backgroundColor: COLORS.warning,
+    borderColor: COLORS.warning,
   },
 
   btnDanger: {
-    backgroundColor: "#DC2626",
-    borderColor: "#DC2626",
+    backgroundColor: COLORS.danger,
+    borderColor: COLORS.danger,
   },
 
   btnGhost: {
@@ -669,7 +669,7 @@ const s = StyleSheet.create({
   },
 
   btnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
     textAlign: "center",
   },
@@ -707,6 +707,9 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
 });
+
+
+
 
 
 

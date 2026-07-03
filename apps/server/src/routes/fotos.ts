@@ -1,3 +1,4 @@
+// @ts-nocheck
 // apps/server/src/routes/fotos.ts
 import express from "express";
 import multer from "multer";
@@ -28,19 +29,13 @@ function tryReadJsonFile(filePath: string, fallback: any) {
   try {
     if (!fs.existsSync(filePath)) return fallback;
     const raw = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
   }
 }
 
-function tryWriteJsonFile(filePath: string, data: any) {
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
-}
-
 function moveDirRobust(src: string, dst: string) {
-  // rename (fast) + fallback copy for cross-device cases
   try {
     ensureDir(path.dirname(dst));
     fs.renameSync(src, dst);
@@ -104,7 +99,6 @@ function resolveTargetDir(projectId: string, ctxRaw?: string) {
  * =========================================================
  */
 function inboxFotosDir(projectId: string) {
-  // ✅ SERVER: Inbox = Eingang/Prüfung
   return path.join(PROJECTS_ROOT, projectId, "eingangspruefung", "fotos");
 }
 function inboxFotosMetaPath(projectId: string) {
@@ -118,7 +112,11 @@ function readInboxNotes(projectId: string): any[] {
 }
 function writeInboxNotes(projectId: string, list: any[]) {
   ensureDir(inboxFotosDir(projectId));
-  fs.writeFileSync(inboxFotosMetaPath(projectId), JSON.stringify(list, null, 2), "utf8");
+  fs.writeFileSync(
+    inboxFotosMetaPath(projectId),
+    JSON.stringify(list, null, 2),
+    "utf8"
+  );
 }
 function inboxDocDir(projectId: string, docId: string) {
   return path.join(inboxFotosDir(projectId), safeName(docId));
@@ -127,38 +125,40 @@ function inboxDocFilesDir(projectId: string, docId: string) {
   return path.join(inboxDocDir(projectId, docId), "files");
 }
 function makeInboxPublicUrl(projectId: string, docId: string, fileName: string) {
-  // stored under: projects/<BA>/eingangspruefung/fotos/<docId>/files/<file>
-  return `/projects/${projectId}/eingangspruefung/fotos/${safeName(docId)}/files/${fileName}`.replace(
-    /\\/g,
-    "/"
-  );
+  return `/projects/${projectId}/eingangspruefung/fotos/${safeName(
+    docId
+  )}/files/${fileName}`.replace(/\\/g, "/");
 }
-function makeInboxMainPublicUrl(projectId: string, docId: string, fileName: string) {
-  // stored under: projects/<BA>/eingangspruefung/fotos/<docId>/<file>
-  return `/projects/${projectId}/eingangspruefung/fotos/${safeName(docId)}/${fileName}`.replace(
-    /\\/g,
-    "/"
-  );
+function makeInboxMainPublicUrl(
+  projectId: string,
+  docId: string,
+  fileName: string
+) {
+  return `/projects/${projectId}/eingangspruefung/fotos/${safeName(
+    docId
+  )}/${fileName}`.replace(/\\/g, "/");
 }
 
 /**
- * ✅ FINAL (after commit): folder moved to
- *   projects/<BA>/fotos/<docId>/...
- * so public URLs must change accordingly
- *
- * NOTE:
- * In this server implementation, FINAL notes files are actually stored in:
- *   projects/<BA>/fotos/files/<file>
- * (flat storage, used by notesUpload + makePublicUrl)
- * So commit MUST move into notesFilesDir and rewrite URLs via makePublicUrl().
+ * =========================================================
+ * ✅ FINAL (after commit): public URLs
+ * =========================================================
  */
 function makeFinalPublicUrl(projectId: string, docId: string, fileName: string) {
-  // stored under: projects/<BA>/fotos/<docId>/files/<file>
-  return `/projects/${projectId}/fotos/${safeName(docId)}/files/${fileName}`.replace(/\\/g, "/");
+  return `/projects/${projectId}/fotos/${safeName(docId)}/files/${fileName}`.replace(
+    /\\/g,
+    "/"
+  );
 }
-function makeFinalMainPublicUrl(projectId: string, docId: string, fileName: string) {
-  // stored under: projects/<BA>/fotos/<docId>/<file>
-  return `/projects/${projectId}/fotos/${safeName(docId)}/${fileName}`.replace(/\\/g, "/");
+function makeFinalMainPublicUrl(
+  projectId: string,
+  docId: string,
+  fileName: string
+) {
+  return `/projects/${projectId}/fotos/${safeName(docId)}/${fileName}`.replace(
+    /\\/g,
+    "/"
+  );
 }
 
 /**
@@ -167,13 +167,11 @@ function makeFinalMainPublicUrl(projectId: string, docId: string, fileName: stri
 function metaPath(projectId: string) {
   return path.join(resolveTargetDir(projectId, "FOTOS"), "fotos.json");
 }
-
 function readMeta(projectId: string): any[] {
   const p = metaPath(projectId);
   const parsed = tryReadJsonFile(p, []);
   return Array.isArray(parsed) ? parsed : [];
 }
-
 function writeMeta(projectId: string, list: any[]) {
   const dir = resolveTargetDir(projectId, "FOTOS");
   ensureDir(dir);
@@ -181,7 +179,7 @@ function writeMeta(projectId: string, list: any[]) {
 }
 
 /**
- * ---- NEW Fotos Notes Meta (records with main + files[]) ----
+ * ---- NEW Fotos Notes Meta (FINAL) ----
  * Used by mobile: /api/fotos/projects/:projectId/fotos/notes
  */
 function notesDir(projectId: string) {
@@ -215,23 +213,21 @@ function parseJsonField(v: any, fallback: any) {
 }
 
 function pickText(req: any) {
-  // Mobile manda spesso comment/bemerkungen/note; noi salviamo tutti coerenti
   const comment = String(req.body?.comment ?? req.body?.note ?? "").trim();
-  const bemerkungen = String(req.body?.bemerkungen ?? req.body?.comment ?? req.body?.note ?? "").trim();
+  const bemerkungen = String(
+    req.body?.bemerkungen ?? req.body?.comment ?? req.body?.note ?? ""
+  ).trim();
   const note = String(req.body?.note ?? req.body?.comment ?? "").trim();
   return { comment, bemerkungen, note };
 }
 
 function makePublicUrl(projectId: string, fileName: string) {
-  // files are stored under projects/<BA>/fotos/files/<file>
   return `/projects/${projectId}/fotos/files/${fileName}`.replace(/\\/g, "/");
 }
 
 /**
  * =========================================================
  * ✅ MOBILE COMPAT (Eingang/Prüfung)
- * - mobile expects attachments/photos with { uri, name, type? }
- * - also expects imageUri for preview/PDF
  * =========================================================
  */
 function inferMimeFromName(nameOrUrl: string) {
@@ -257,7 +253,7 @@ function toFileMetaFromInboxFile(f: any) {
 }
 
 function decorateInboxItem(projectId: string, it: any) {
-  const mainMeta = it?.main ? toFileMetaFromInboxFile(it.main) : null;
+  const mainMeta = it?.main ? toFileMetaFromInboxFile(it.main) : null; // ✅ FIX: no duplicate
   const fileMetas = Array.isArray(it?.files)
     ? it.files.map(toFileMetaFromInboxFile).filter(Boolean)
     : [];
@@ -268,7 +264,6 @@ function decorateInboxItem(projectId: string, it: any) {
     ...it,
     projectId,
     projectCode: projectId,
-    // ✅ compat for mobile previews + exporter
     imageUri: (mainMeta as any)?.uri || it?.imageUri || undefined,
     attachments,
     photos: attachments,
@@ -285,9 +280,10 @@ const storage = multer.diskStorage({
     const projectId = String((req.params as any)?.projectId || "").trim();
     if (!projectId) return cb(new Error("projectId fehlt"), "");
 
-    const ctx = (req.body?.context || req.body?.kind || req.query?.context || req.query?.kind) as
-      | string
-      | undefined;
+    const ctx = (req.body?.context ||
+      req.body?.kind ||
+      req.query?.context ||
+      req.query?.kind) as string | undefined;
 
     const dir = resolveTargetDir(projectId, ctx);
     try {
@@ -306,12 +302,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 /**
  * =========================================================
- * Multer (NEW notes upload: main + files[])
+ * Multer (NEW notes upload: FINAL main + files[])
  * =========================================================
  */
 const notesStorage = multer.diskStorage({
@@ -334,7 +330,7 @@ const notesStorage = multer.diskStorage({
 
 const notesUpload = multer({
   storage: notesStorage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB each
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 /**
@@ -345,15 +341,16 @@ const notesUpload = multer({
  */
 const inboxNotesStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const projectId = String(req.body?.projectId || "").trim();
+    const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
     const docId = String(req.body?.docId || req.body?.id || "").trim();
     if (!projectId) return cb(new Error("projectId fehlt"), "");
     if (!docId) return cb(new Error("docId fehlt"), "");
 
     try {
-      // main goes into doc root, files into doc/files
       const isMain = String(file.fieldname || "").toLowerCase() === "main";
-      const dir = isMain ? inboxDocDir(projectId, docId) : inboxDocFilesDir(projectId, docId);
+      const dir = isMain
+        ? inboxDocDir(projectId, docId)
+        : inboxDocFilesDir(projectId, docId);
       ensureDir(dir);
       cb(null, dir);
     } catch (e: any) {
@@ -376,7 +373,7 @@ const inboxNotesUpload = multer({
  * ROUTES (legacy bleiben)
  * =======================================================*/
 
-/* ---- Liste aller Fotos eines Projekts ---- */
+/* ---- Liste aller Fotos eines Projekts (legacy) ---- */
 router.get("/projects/:projectId/fotos", (req, res) => {
   const { projectId } = req.params;
   if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
@@ -385,7 +382,7 @@ router.get("/projects/:projectId/fotos", (req, res) => {
   res.json(list);
 });
 
-/* ---- Einzelnes Foto ausliefern ---- */
+/* ---- Einzelnes Foto ausliefern (legacy) ---- */
 router.get("/projects/:projectId/fotos/:file", (req, res) => {
   const { projectId, file } = req.params;
   if (!projectId || !file) {
@@ -403,20 +400,17 @@ router.get("/projects/:projectId/fotos/:file", (req, res) => {
 /* ---- Foto + Meta speichern (legacy) ---- */
 router.post("/projects/:projectId/fotos", upload.single("file"), (req, res) => {
   const { projectId } = req.params;
-  if (!projectId) {
-    return res.status(400).json({ error: "projectId fehlt" });
-  }
-  if (!req.file) {
-    return res.status(400).json({ error: "keine Datei gesendet" });
-  }
+  if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
+  if (!req.file) return res.status(400).json({ error: "keine Datei gesendet" });
 
-  const ctx = String(req.body?.context || req.body?.kind || req.query?.context || req.query?.kind || "")
+  const ctx = String(
+    req.body?.context || req.body?.kind || req.query?.context || req.query?.kind || ""
+  )
     .trim()
     .toUpperCase();
 
   const filename = req.file.filename;
 
-  // publicUrl immer über /projects (static in index.ts)
   const rel =
     ctx === "LIEFERSCHEIN" || ctx === "LS"
       ? path.join(projectId, "lieferscheine", "files", filename)
@@ -424,7 +418,6 @@ router.post("/projects/:projectId/fotos", upload.single("file"), (req, res) => {
 
   const publicUrl = `/projects/${rel.replace(/\\/g, "/")}`;
 
-  // Wenn es LIEFERSCHEIN ist: KEIN meta fotos.json
   if (ctx === "LIEFERSCHEIN" || ctx === "LS") {
     return res.json({
       ok: true,
@@ -474,24 +467,18 @@ router.post("/projects/:projectId/fotos", upload.single("file"), (req, res) => {
 /* ---- Foto + Meta löschen (legacy) ---- */
 router.delete("/projects/:projectId/fotos/:id", (req, res) => {
   const { projectId, id } = req.params;
-  if (!projectId || !id) {
-    return res.status(400).json({ error: "projectId oder id fehlt" });
-  }
+  if (!projectId || !id) return res.status(400).json({ error: "projectId oder id fehlt" });
 
   const list = readMeta(projectId);
   const idx = list.findIndex((e) => e.id === id);
-  if (idx === -1) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden" });
-  }
+  if (idx === -1) return res.status(404).json({ error: "Eintrag nicht gefunden" });
 
   const entry = list[idx];
   const filePath = path.join(resolveTargetDir(projectId, "FOTOS"), entry.file);
   if (fs.existsSync(filePath)) {
     try {
       fs.unlinkSync(filePath);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   list.splice(idx, 1);
@@ -505,7 +492,6 @@ router.delete("/projects/:projectId/fotos/:id", (req, res) => {
  * =========================================================
  */
 
-/* ---- Liste Notes ---- */
 router.get("/projects/:projectId/fotos/notes", (req, res) => {
   const { projectId } = req.params;
   if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
@@ -514,25 +500,29 @@ router.get("/projects/:projectId/fotos/notes", (req, res) => {
   res.json({ ok: true, items: list });
 });
 
-/* ---- Create/Upload Note (FINAL) ---- */
 router.post(
   "/projects/:projectId/fotos/notes",
-  notesUpload.fields([
-    { name: "main", maxCount: 1 },
-    { name: "files", maxCount: 50 },
-  ]),
+  notesUpload.fields([{ name: "main", maxCount: 1 },{ name: "files", maxCount: 50 },{ name: "file", maxCount: 50 },{ name: "photos", maxCount: 50 },{ name: "attachments", maxCount: 50 }]),
   (req, res) => {
     const { projectId } = req.params;
     if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
 
     const filesAny = req.files as any;
     const mainFile = Array.isArray(filesAny?.main) ? filesAny.main[0] : null;
-    const otherFiles = Array.isArray(filesAny?.files) ? filesAny.files : [];
+    const otherFiles = [
+      ...(Array.isArray(filesAny?.files) ? filesAny.files : []),
+      ...(Array.isArray(filesAny?.file) ? filesAny.file : []),
+      ...(Array.isArray(filesAny?.photos) ? filesAny.photos : []),
+      ...(Array.isArray(filesAny?.attachments) ? filesAny.attachments : []),
+    ];
 
     const idRaw = String(req.body?.docId || req.body?.id || "").trim();
     const id = idRaw || `ph_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
 
-    const date = String(req.body?.date || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+    const date =
+      String(req.body?.date || "").slice(0, 10) ||
+      new Date().toISOString().slice(0, 10);
+
     const kostenstelle = String(req.body?.kostenstelle || "").trim();
     const lvItemPos = String(req.body?.lvItemPos || "").trim();
 
@@ -559,396 +549,323 @@ router.post(
       publicUrl: makePublicUrl(projectId, f.filename),
     }));
 
-    const entry = {
-      id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      date,
-      kostenstelle,
-      lvItemPos: lvItemPos || null,
-      comment,
-      bemerkungen,
-      note,
-      extras,
-      boxes,
-      main,
-      files,
-    };
-
     const list = readNotes(projectId);
     const idx = list.findIndex((x: any) => String(x?.id) === String(id));
-    if (idx >= 0) list[idx] = { ...list[idx], ...entry, updatedAt: new Date().toISOString() };
-    else list.push(entry);
+    const base = idx >= 0 ? list[idx] : { id, docId: id, createdAt: new Date().toISOString() };
+
+    const entry = {
+      ...base,
+      id,
+      docId: id,
+      date,
+      kostenstelle,
+      lvItemPos,
+      comment,
+      bemerkungen,
+      note: note || comment || bemerkungen || "",
+      extras,
+      boxes,
+      main: main || base.main || null,
+      files: [...(base.files || []), ...files],
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (idx >= 0) list[idx] = entry;
+    else list.unshift(entry);
 
     writeNotes(projectId, list);
 
-    res.json({ ok: true, item: entry });
+    res.json({ ok: true, projectId, item: entry });
   }
 );
 
-/* ---- Delete Note (FINAL) ---- */
-router.delete("/projects/:projectId/fotos/notes/:id", (req, res) => {
-  const { projectId, id } = req.params;
-  if (!projectId || !id) {
-    return res.status(400).json({ error: "projectId oder id fehlt" });
-  }
-
-  const list = readNotes(projectId);
-  const idx = list.findIndex((x: any) => String(x?.id) === String(id));
-  if (idx === -1) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden" });
-  }
-
-  const entry = list[idx];
-
-  const candidates: string[] = [];
-  if (entry?.main?.file) candidates.push(String(entry.main.file));
-  if (Array.isArray(entry?.files)) {
-    for (const f of entry.files) {
-      if (f?.file) candidates.push(String(f.file));
-    }
-  }
-
-  for (const fn of candidates) {
-    const abs = path.join(notesFilesDir(projectId), fn);
-    if (fs.existsSync(abs)) {
-      try {
-        fs.unlinkSync(abs);
-      } catch {}
-    }
-  }
-
-  list.splice(idx, 1);
-  writeNotes(projectId, list);
-
-  res.json({ ok: true });
-});
-
 /* =========================================================
- * ✅ INBOX: Eingang/Prüfung Fotos
- *   - POST /api/fotos/inbox/upload
- *   - GET  /api/fotos/inbox/list?projectId=BA-...
- *   - GET  /api/fotos/inbox/read?projectId=BA-...&id=...
- *   - POST /api/fotos/inbox/reject   {projectId,id,reason?}
- *   - POST /api/fotos/commit         {projectId,id}   -> moves to FINAL
- *   - DEL  /api/fotos/inbox/delete?projectId=BA-...&id=...
+ * ✅ INBOX (Eingang/Prüfung) – Photos/Notes
  * =========================================================
  */
 
-/* ---- Inbox list (used by Eingang/Prüfung) ---- */
-router.get("/inbox/list", (req, res) => {
-  const projectId = String(req.query?.projectId || "").trim();
-  if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+// SUBMIT -> crea voce INBOX e ritorna docId
+router.post("/inbox/submit", express.json(), (req, res) => {
+  const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
+  if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
 
-  const itemsRaw = readInboxNotes(projectId);
+  const idRaw = String(req.body?.docId || req.body?.id || "").trim();
+  const docId = idRaw || `ph_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
 
-  // newest first
-  itemsRaw.sort((a: any, b: any) => {
-    const ta = Date.parse(String(a?.updatedAt || a?.createdAt || 0)) || 0;
-    const tb = Date.parse(String(b?.updatedAt || b?.createdAt || 0)) || 0;
-    return tb - ta;
-  });
+  const date =
+    String(req.body?.date || "").slice(0, 10) ||
+    new Date().toISOString().slice(0, 10);
 
-  // ✅ MOBILE COMPAT: decorate items with attachments/photos/imageUri
-  const items = itemsRaw.map((it: any) => decorateInboxItem(projectId, it));
+  const comment = String(req.body?.comment ?? req.body?.note ?? "").trim();
+  const bemerkungen = String(
+    req.body?.bemerkungen ?? req.body?.comment ?? req.body?.note ?? ""
+  ).trim();
+  const note = String(req.body?.note ?? req.body?.comment ?? "").trim();
 
-  res.json({ ok: true, items });
+  const entry = {
+    id: docId,
+    docId,
+    date,
+    projectId,
+    projectCode: projectId,
+    note: note || comment || bemerkungen || "",
+    comment,
+    bemerkungen,
+    kostenstelle: String(req.body?.kostenstelle || "").trim(),
+    lvItemPos: String(req.body?.lvItemPos || "").trim(),
+    extras: req.body?.extras ?? undefined,
+    boxes: req.body?.boxes ?? undefined,
+    createdAt: new Date().toISOString(),
+    status: "INBOX",
+    main: null,
+    files: [],
+  };
+
+  const list = readInboxNotes(projectId);
+  const next = [entry, ...list.filter((x: any) => String(x?.id) !== String(docId))];
+  writeInboxNotes(projectId, next);
+
+  return res.json({ ok: true, projectId, docId });
 });
 
-/* ---- Inbox read (single item) ---- */
-router.get("/inbox/read", (req, res) => {
-  const projectId = String(req.query?.projectId || "").trim();
-  const id = String(req.query?.id || req.query?.docId || "").trim();
-
-  if (!projectId || !id) {
-    return res.status(400).json({ ok: false, error: "projectId oder id fehlt" });
-  }
-
-  const items = readInboxNotes(projectId);
-  const itemRaw = items.find((x: any) => String(x?.id) === String(id));
-  if (!itemRaw) {
-    return res.status(404).json({ ok: false, error: "Eintrag nicht gefunden" });
-  }
-
-  // Ensure folder exists; we don't require it here, but helps debugging
-  const folder = inboxDocDir(projectId, id);
-  const exists = fs.existsSync(folder);
-
-  // ✅ MOBILE COMPAT: return snapshot + item decorated
-  const item = decorateInboxItem(projectId, itemRaw);
-
-  return res.json({ ok: true, item, snapshot: item, folder, folderExists: exists });
-});
-
-/* ---- Inbox upload (mobile must hit this!) ---- */
+// UPLOAD -> salva main + files[] in Eingang/Prüfung
 router.post(
   "/inbox/upload",
-  inboxNotesUpload.fields([
-    { name: "main", maxCount: 1 },
-    { name: "files", maxCount: 50 },
-  ]),
+  inboxNotesUpload.fields([{ name: "main", maxCount: 1 },{ name: "files", maxCount: 50 },{ name: "file", maxCount: 50 },{ name: "photos", maxCount: 50 },{ name: "attachments", maxCount: 50 }]),
   (req, res) => {
-    const projectId = String(req.body?.projectId || "").trim();
-    if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
-
-    const idRaw = String(req.body?.docId || req.body?.id || "").trim();
-    const id = idRaw || `ph_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-
-    const date = String(req.body?.date || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
-    const kostenstelle = String(req.body?.kostenstelle || "").trim();
-    const lvItemPos = String(req.body?.lvItemPos || "").trim();
-
-    const workflowStatus = String(req.body?.workflowStatus || "EINGEREICHT").trim();
-
-    const { comment, bemerkungen, note } = pickText(req);
-
-    const extras = parseJsonField(req.body?.extras, undefined);
-    const boxes = parseJsonField(req.body?.boxes, undefined);
+    const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
+    const docId = String(req.body?.docId || req.body?.id || "").trim();
+    if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
+    if (!docId) return res.status(400).json({ error: "docId fehlt" });
 
     const filesAny = req.files as any;
     const mainFile = Array.isArray(filesAny?.main) ? filesAny.main[0] : null;
-    const otherFiles = Array.isArray(filesAny?.files) ? filesAny.files : [];
+    const otherFiles = [
+      ...(Array.isArray(filesAny?.files) ? filesAny.files : []),
+      ...(Array.isArray(filesAny?.file) ? filesAny.file : []),
+      ...(Array.isArray(filesAny?.photos) ? filesAny.photos : []),
+      ...(Array.isArray(filesAny?.attachments) ? filesAny.attachments : []),
+    ];
 
-    // if no explicit main, derive from first files[]
     const derivedMain = !mainFile && otherFiles.length > 0 ? otherFiles[0] : null;
     const remainingFiles = derivedMain ? otherFiles.slice(1) : otherFiles;
 
-    const main =
-      mainFile || derivedMain
-        ? {
-            file: (mainFile || derivedMain).filename,
-            name: (mainFile || derivedMain).originalname,
-            publicUrl: mainFile
-              ? makeInboxMainPublicUrl(projectId, id, mainFile.filename)
-              : makeInboxPublicUrl(projectId, id, (derivedMain as any).filename),
-          }
-        : null;
+    const pickedMain = mainFile || derivedMain;
 
-    const files = remainingFiles.map((f: any) => ({
+    const main = pickedMain
+      ? {
+          file: pickedMain.filename,
+          name: pickedMain.originalname,
+          publicUrl: mainFile
+            ? makeInboxMainPublicUrl(projectId, docId, pickedMain.filename)
+            : makeInboxPublicUrl(projectId, docId, pickedMain.filename),
+        }
+      : null;
+
+    const files = (remainingFiles || []).map((f: any) => ({
       file: f.filename,
       name: f.originalname,
-      publicUrl: makeInboxPublicUrl(projectId, id, f.filename),
+      publicUrl: makeInboxPublicUrl(projectId, docId, f.filename),
     }));
 
-    const entry = {
-      id,
-      kind: "fotos",
-      workflowStatus,
+    const list = readInboxNotes(projectId);
+    const idx = list.findIndex((x: any) => String(x?.id) === String(docId));
 
-      createdAt: new Date().toISOString(),
+    const base =
+      idx >= 0
+        ? list[idx]
+        : { id: docId, docId, projectId, projectCode: projectId, createdAt: new Date().toISOString() };
+
+    const updated = {
+      ...base,
+      main: main || base.main || null,
+      files: [...(base.files || []), ...files],
       updatedAt: new Date().toISOString(),
-      date,
-      kostenstelle,
-      lvItemPos: lvItemPos || null,
-
-      comment,
-      bemerkungen,
-      note,
-
-      extras,
-      boxes,
-
-      main,
-      files,
     };
 
-    const list = readInboxNotes(projectId);
-    const idx = list.findIndex((x: any) => String(x?.id) === String(id));
-    if (idx >= 0) list[idx] = { ...list[idx], ...entry, updatedAt: new Date().toISOString() };
-    else list.push(entry);
+    if (idx >= 0) list[idx] = updated;
+    else list.unshift(updated);
 
     writeInboxNotes(projectId, list);
 
-    // ✅ return decorated item for mobile
-    res.json({ ok: true, item: decorateInboxItem(projectId, entry) });
+    const decorated = decorateInboxItem(projectId, updated);
+
+    return res.json({
+      ok: true,
+      projectId,
+      docId,
+      item: decorated,
+      items: [
+        ...(main ? [{ name: main.name, url: main.publicUrl }] : []),
+        ...files.map((x: any) => ({ name: x.name, url: x.publicUrl })),
+      ],
+    });
   }
 );
 
-/* ---- Inbox reject (mobile uses /inbox/reject) ---- */
-router.post("/inbox/reject", (req, res) => {
-  const projectId = String(req.body?.projectId || "").trim();
-  const id = String(req.body?.id || req.body?.docId || "").trim();
-  const reason = String(req.body?.reason || req.body?.ablehnGrund || "").trim();
-
-  if (!projectId || !id) {
-    return res.status(400).json({ ok: false, error: "projectId oder id fehlt" });
-  }
-
-  const list = readInboxNotes(projectId);
-  const idx = list.findIndex((x: any) => String(x?.id) === String(id));
-  if (idx === -1) {
-    return res.status(404).json({ ok: false, error: "Eintrag nicht gefunden" });
-  }
-
-  // Mark as rejected (keep entry for audit) + optionally delete folder
-  list[idx] = {
-    ...list[idx],
-    workflowStatus: "ABGELEHNT",
-    rejectedAt: new Date().toISOString(),
-    rejectReason: reason || undefined,
-    updatedAt: new Date().toISOString(),
-  };
-  writeInboxNotes(projectId, list);
-
-  // If you want to hard-delete folder, do it best-effort:
-  const folder = inboxDocDir(projectId, id);
-  if (fs.existsSync(folder)) {
-    try {
-      fs.rmSync(folder, { recursive: true, force: true });
-    } catch {}
-  }
-
-  return res.json({ ok: true });
+// LIST INBOX
+router.get("/inbox/list", (req, res) => {
+  const projectId = String(req.query?.projectId || "").trim();
+  if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
+  const list = readInboxNotes(projectId).map((it: any) => decorateInboxItem(projectId, it));
+  return res.json({ ok: true, items: list });
 });
 
-/* ---- Commit (Freigeben): move INBOX doc -> FINAL notes list ---- */
-router.post("/commit", (req, res) => {
-  const projectId = String(req.body?.projectId || "").trim();
-  const id = String(req.body?.id || req.body?.docId || "").trim();
 
-  if (!projectId || !id) {
-    return res.status(400).json({ ok: false, error: "projectId oder id fehlt" });
-  }
+// READ INBOX DOC
+router.get("/inbox/read", (req, res) => {
+  const projectId = String(req.query?.projectId || "").trim();
+  const docId = String(req.query?.docId || req.query?.id || "").trim();
 
-  // inbox entry
+  if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+  if (!docId) return res.status(400).json({ ok: false, error: "docId fehlt" });
+
+  const list = readInboxNotes(projectId);
+  const found = list.find((x: any) =>
+    String(x?.id || "") === docId || String(x?.docId || "") === docId
+  );
+
+  if (!found) return res.status(404).json({ ok: false, error: "doc not found in inbox" });
+
+  return res.json({
+    ok: true,
+    projectId,
+    docId,
+    snapshot: decorateInboxItem(projectId, found),
+  });
+});
+
+// APPROVE INBOX DOC -> FINAL
+function commitInboxDoc(projectId: string, docIdRaw: string) {
+  const docId = String(docIdRaw || "").trim();
+  if (!projectId) throw new Error("projectId fehlt");
+  if (!docId) throw new Error("docId fehlt");
+
   const inboxList = readInboxNotes(projectId);
-  const idx = inboxList.findIndex((x: any) => String(x?.id) === String(id));
-  if (idx === -1) {
-    return res.status(404).json({ ok: false, error: "Eintrag nicht gefunden" });
+  const idx = inboxList.findIndex((x: any) =>
+    String(x?.id || "") === docId || String(x?.docId || "") === docId
+  );
+
+  if (idx < 0) {
+    const err: any = new Error("doc not found in inbox");
+    err.statusCode = 404;
+    throw err;
   }
 
   const entry = inboxList[idx];
+  const realDocId = String(entry?.id || entry?.docId || docId).trim();
 
-  // ✅ Canonical FINAL: projects/<BA>/fotos/files/<file>
-  const finalDir = notesDir(projectId);
-  const finalFiles = notesFilesDir(projectId);
-  try {
-    ensureDir(finalDir);
-    ensureDir(finalFiles);
-  } catch {}
+  const srcDir = inboxDocDir(projectId, realDocId);
+  const dstDir = path.join(notesDir(projectId), safeName(realDocId));
 
-  const srcDoc = inboxDocDir(projectId, id);
-  const srcFiles = inboxDocFilesDir(projectId, id);
-
-  function moveFileRobust(fromAbs: string, toAbs: string) {
-    try {
-      ensureDir(path.dirname(toAbs));
-      fs.renameSync(fromAbs, toAbs);
-      return true;
-    } catch {
-      // fallback copy
-      try {
-        ensureDir(path.dirname(toAbs));
-        fs.copyFileSync(fromAbs, toAbs);
-        try {
-          fs.unlinkSync(fromAbs);
-        } catch {}
-        return true;
-      } catch {
-        return false;
-      }
-    }
+  if (fs.existsSync(srcDir)) {
+    moveDirRobust(srcDir, dstDir);
   }
 
-  // 1) move MAIN file (may be in doc root OR in doc/files if it was derived)
-  let patchedMain = entry?.main || null;
-  if (entry?.main?.file) {
-    const fn = String(entry.main.file).trim();
-    if (fn) {
-      const candA = path.join(srcDoc, fn);
-      const candB = path.join(srcFiles, fn);
-      let from = "";
-      if (fs.existsSync(candA)) from = candA;
-      else if (fs.existsSync(candB)) from = candB;
-
-      if (from) {
-        const to = path.join(finalFiles, fn);
-        moveFileRobust(from, to);
-      }
-
-      patchedMain = {
+  const finalMain = entry?.main
+    ? {
         ...entry.main,
-        publicUrl: makePublicUrl(projectId, fn),
-      };
-    }
-  }
+        publicUrl: makeFinalMainPublicUrl(projectId, realDocId, String(entry.main.file || "")),
+      }
+    : null;
 
-  // 2) move FILES[] (stored under doc/files)
-  const patchedFiles = Array.isArray(entry?.files)
-    ? entry.files.map((f: any) => {
-        const fn = String(f?.file || "").trim();
-        if (!fn) return f;
-
-        const from = path.join(srcFiles, fn);
-        if (fs.existsSync(from)) {
-          const to = path.join(finalFiles, fn);
-          moveFileRobust(from, to);
-        }
-
-        return {
-          ...f,
-          publicUrl: makePublicUrl(projectId, fn),
-        };
-      })
+  const finalFiles = Array.isArray(entry?.files)
+    ? entry.files.map((f: any) => ({
+        ...f,
+        publicUrl: makeFinalPublicUrl(projectId, realDocId, String(f.file || "")),
+      }))
     : [];
 
-  // 3) cleanup inbox folder best-effort
-  if (fs.existsSync(srcDoc)) {
-    try {
-      fs.rmSync(srcDoc, { recursive: true, force: true });
-    } catch {}
-  }
+  const finalList = readNotes(projectId);
+  const finalIdx = finalList.findIndex((x: any) =>
+    String(x?.id || "") === realDocId || String(x?.docId || "") === realDocId
+  );
 
-  // Build FINAL entry (same shape as notes)
   const finalEntry = {
     ...entry,
-    main: patchedMain,
-    files: patchedFiles,
+    id: realDocId,
+    docId: realDocId,
+    projectId,
+    projectCode: projectId,
+    status: "FREIGEGEBEN",
     workflowStatus: "FREIGEGEBEN",
-    committedAt: new Date().toISOString(),
+    submittedAt: entry?.submittedAt || entry?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    main: finalMain,
+    files: finalFiles,
+    imageUri: finalMain?.publicUrl || entry?.imageUri || undefined,
   };
 
-  // Write into final notes list
-  const finalList = readNotes(projectId);
-  const fIdx = finalList.findIndex((x: any) => String(x?.id) === String(id));
-  if (fIdx >= 0) finalList[fIdx] = { ...finalList[fIdx], ...finalEntry };
-  else finalList.push(finalEntry);
+  if (finalIdx >= 0) finalList[finalIdx] = finalEntry;
+  else finalList.unshift(finalEntry);
+
   writeNotes(projectId, finalList);
 
-  // Remove from inbox list
   inboxList.splice(idx, 1);
   writeInboxNotes(projectId, inboxList);
 
-  // ✅ return decorated item too (for mobile compat)
-  return res.json({ ok: true, item: decorateInboxItem(projectId, finalEntry) });
+  return finalEntry;
+}
+
+router.post("/inbox/approve", express.json(), (req, res) => {
+  try {
+    const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
+    const docId = String(req.body?.docId || req.body?.id || "").trim();
+
+    if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+    if (!docId) return res.status(400).json({ ok: false, error: "docId fehlt" });
+
+    const item = commitInboxDoc(projectId, docId);
+    return res.json({ ok: true, projectId, docId: item.docId, item });
+  } catch (e: any) {
+    const status = Number(e?.statusCode || 500);
+    return res.status(status).json({ ok: false, error: String(e?.message || e) });
+  }
 });
 
-/* ---- Inbox delete (legacy; useful for Ablehnen hard-delete) ---- */
-router.delete("/inbox/delete", (req, res) => {
-  const projectId = String(req.query?.projectId || "").trim();
-  const id = String(req.query?.id || "").trim();
+// alias
+router.post("/commit", express.json(), (req, res) => {
+  try {
+    const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
+    const docId = String(req.body?.docId || req.body?.id || "").trim();
 
-  if (!projectId || !id) return res.status(400).json({ ok: false, error: "projectId oder id fehlt" });
+    if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+    if (!docId) return res.status(400).json({ ok: false, error: "docId fehlt" });
+
+    const item = commitInboxDoc(projectId, docId);
+    return res.json({ ok: true, projectId, docId: item.docId, item });
+  } catch (e: any) {
+    const status = Number(e?.statusCode || 500);
+    return res.status(status).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+router.post("/inbox/reject", express.json(), (req, res) => {
+  const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
+  const docId = String(req.body?.docId || req.body?.id || "").trim();
+  const reason = String(req.body?.reason || "").trim();
+
+  if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+  if (!docId) return res.status(400).json({ ok: false, error: "docId fehlt" });
 
   const list = readInboxNotes(projectId);
-  const idx = list.findIndex((x: any) => String(x?.id) === String(id));
-  if (idx === -1) return res.status(404).json({ ok: false, error: "Eintrag nicht gefunden" });
+  const idx = list.findIndex((x: any) =>
+    String(x?.id || "") === docId || String(x?.docId || "") === docId
+  );
 
-  // delete folder best-effort: projects/<BA>/eingangspruefung/fotos/<docId>/
-  const folder = inboxDocDir(projectId, id);
-  if (fs.existsSync(folder)) {
-    try {
-      fs.rmSync(folder, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
-  }
+  if (idx < 0) return res.status(404).json({ ok: false, error: "doc not found in inbox" });
 
-  list.splice(idx, 1);
+  list[idx] = {
+    ...list[idx],
+    status: "ABGELEHNT",
+    workflowStatus: "ABGELEHNT",
+    rejectionReason: reason || "",
+    updatedAt: new Date().toISOString(),
+  };
+
   writeInboxNotes(projectId, list);
 
-  res.json({ ok: true });
+  return res.json({ ok: true, projectId, docId, item: decorateInboxItem(projectId, list[idx]) });
 });
 
 export default router;

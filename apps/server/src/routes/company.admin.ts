@@ -14,16 +14,15 @@ const r = Router();
 function requireCompanyAdmin(req: any, res: any, next: any) {
   if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
 
-  // ✅ robust role extraction (supports legacy + appRole + companyRole)
   const roleRaw = String(
     req?.auth?.role || req?.auth?.appRole || req?.auth?.companyRole || ""
   ).trim();
   const role = roleRaw.toUpperCase();
 
-  // ✅ accept ADMINISTRATOR as well (mobile checks ADMIN || ADMINISTRATOR)
-  if (role !== "ADMIN" && role !== "ADMINISTRATOR") {
-    return res.status(403).json({ ok: false, error: "Nur ADMIN" });
+  if (role !== "ADMIN" && role !== "ADMINISTRATOR" && role !== "BAULEITER") {
+    return res.status(403).json({ ok: false, error: "Nur ADMIN / BAULEITER" });
   }
+
   return next();
 }
 
@@ -49,10 +48,9 @@ function isAllowedImageMime(mime?: string) {
   );
 }
 
-// memory upload (logo è piccolo)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 6 * 1024 * 1024 }, // 6MB
+  limits: { fileSize: 6 * 1024 * 1024 },
 });
 
 async function seatInfo(companyId: string) {
@@ -62,6 +60,8 @@ async function seatInfo(companyId: string) {
       status: true,
       plan: true,
       seatsLimit: true,
+      webSeatsPurchased: true,
+      mobileSeatsPurchased: true,
       currentPeriodEnd: true,
       currentPeriodStart: true,
     },
@@ -76,12 +76,16 @@ async function seatInfo(companyId: string) {
     where: { companyId, active: true },
   });
 
+  const webSeatsPurchased = sub?.webSeatsPurchased ?? 0;
+
   return {
     subscription: sub
       ? {
           status: sub.status,
           plan: sub.plan,
           seatsLimit: sub.seatsLimit ?? null,
+          webSeatsPurchased,
+          mobileSeatsPurchased: sub.mobileSeatsPurchased ?? 0,
           currentPeriodStart: sub.currentPeriodStart
             ? sub.currentPeriodStart.toISOString()
             : null,
@@ -94,24 +98,22 @@ async function seatInfo(companyId: string) {
           status: "EXPIRED",
           plan: "BASIC_5",
           seatsLimit: null,
+          webSeatsPurchased: 0,
+          mobileSeatsPurchased: 0,
           currentPeriodStart: null,
           currentPeriodEnd: null,
           active: false,
         },
     seats: {
       used: usedSeats,
-      limit: sub?.seatsLimit ?? null,
-      available:
-        sub?.seatsLimit == null ? null : Math.max(0, sub.seatsLimit - usedSeats),
+      limit: webSeatsPurchased,
+      available: Math.max(0, webSeatsPurchased - usedSeats),
     },
   };
 }
 
 /**
- * =========================================================
- * ✅ Company Header (for mobile offline cache)
  * GET /api/company/header
- * =========================================================
  */
 r.get(
   "/header",
@@ -120,9 +122,10 @@ r.get(
   requireCompany,
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
-      if (!companyId)
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) {
         return res.status(400).json({ ok: false, error: "company missing" });
+      }
 
       const company = await prisma.company.findUnique({
         where: { id: companyId },
@@ -138,15 +141,15 @@ r.get(
         },
       });
 
-      if (!company)
+      if (!company) {
         return res.status(404).json({ ok: false, error: "company not found" });
+      }
 
       return res.json({
         ok: true,
         company: {
           ...company,
           updatedAt: company.updatedAt.toISOString(),
-          // ✅ optional helper for clients
           logoUrl: company.logoPath ? "/api/company/logo" : null,
         },
       });
@@ -158,10 +161,7 @@ r.get(
 );
 
 /**
- * =========================================================
- * ✅ Company Logo file (auth required)
  * GET /api/company/logo
- * =========================================================
  */
 r.get(
   "/logo",
@@ -170,9 +170,10 @@ r.get(
   requireCompany,
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
-      if (!companyId)
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) {
         return res.status(400).json({ ok: false, error: "company missing" });
+      }
 
       const row = await prisma.company.findUnique({
         where: { id: companyId },
@@ -182,9 +183,7 @@ r.get(
       const rel = String(row?.logoPath || "").trim();
       if (!rel) return res.status(404).json({ ok: false, error: "no logo" });
 
-      // rel: "companies/<companyId>/logo.png"
-      // ✅ serve from COMPANIES_ROOT to stay consistent with write path
-      const filename = path.basename(rel); // logo.png / logo.jpg / logo.webp
+      const filename = path.basename(rel);
       const abs = path.join(COMPANIES_ROOT, companyId, filename);
 
       const allowedBase = path.join(COMPANIES_ROOT, companyId) + path.sep;
@@ -195,9 +194,7 @@ r.get(
         return res.status(404).json({ ok: false, error: "logo missing" });
       }
 
-      // ✅ avoid stale cache on iOS (simple + safe)
       res.setHeader("Cache-Control", "no-store");
-
       return res.sendFile(abs);
     } catch (e: any) {
       console.error("GET /api/company/logo failed:", e);
@@ -207,11 +204,7 @@ r.get(
 );
 
 /**
- * =========================================================
- * ✅ ADMIN: update company header fields
  * PATCH /api/company/admin/header
- * body: { name?, address?, phone?, email? }
- * =========================================================
  */
 r.patch(
   "/admin/header",
@@ -221,18 +214,16 @@ r.patch(
   requireCompanyAdmin,
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
-      if (!companyId)
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) {
         return res.status(400).json({ ok: false, error: "company missing" });
+      }
 
       const data: any = {};
       if (typeof req.body?.name === "string") data.name = req.body.name.trim();
-      if (typeof req.body?.address === "string")
-        data.address = req.body.address.trim();
-      if (typeof req.body?.phone === "string")
-        data.phone = req.body.phone.trim();
-      if (typeof req.body?.email === "string")
-        data.email = req.body.email.trim();
+      if (typeof req.body?.address === "string") data.address = req.body.address.trim();
+      if (typeof req.body?.phone === "string") data.phone = req.body.phone.trim();
+      if (typeof req.body?.email === "string") data.email = req.body.email.trim();
 
       const updated = await prisma.company.update({
         where: { id: companyId },
@@ -261,10 +252,7 @@ r.patch(
 );
 
 /**
- * =========================================================
- * ✅ ADMIN: upload logo
- * POST /api/company/admin/logo  (multipart/form-data, field: "file")
- * =========================================================
+ * POST /api/company/admin/logo
  */
 r.post(
   "/admin/logo",
@@ -275,19 +263,18 @@ r.post(
   upload.single("file"),
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
-      if (!companyId)
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) {
         return res.status(400).json({ ok: false, error: "company missing" });
+      }
 
       const f = req.file;
-      if (!f || !f.buffer)
+      if (!f || !f.buffer) {
         return res.status(400).json({ ok: false, error: "file missing" });
+      }
 
-      // ✅ hard mime allow-list (avoid pdf/octet-stream weirdness)
       if (!isAllowedImageMime(f.mimetype)) {
-        return res
-          .status(400)
-          .json({ ok: false, error: "Nur PNG/JPG/WEBP" });
+        return res.status(400).json({ ok: false, error: "Nur PNG/JPG/WEBP" });
       }
 
       const ext = safeExtFromMime(f.mimetype);
@@ -298,10 +285,7 @@ r.post(
       const abs = path.join(dirAbs, filename);
       fs.writeFileSync(abs, f.buffer);
 
-      // store relative to /data
-      const rel = path
-        .join("companies", companyId, filename)
-        .replace(/\\/g, "/");
+      const rel = path.join("companies", companyId, filename).replace(/\\/g, "/");
 
       const updated = await prisma.company.update({
         where: { id: companyId },
@@ -330,7 +314,6 @@ r.post(
 );
 
 /**
- * ✅ ADMIN Dashboard
  * GET /api/company/admin/dashboard
  */
 r.get(
@@ -341,9 +324,10 @@ r.get(
   requireCompanyAdmin,
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
-      if (!companyId)
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) {
         return res.status(400).json({ ok: false, error: "company missing" });
+      }
 
       const [company, si, members, invites] = await Promise.all([
         prisma.company.findUnique({
@@ -375,7 +359,7 @@ r.get(
                 id: true,
                 email: true,
                 name: true,
-                role: true, // UserRole (admin/user)
+                role: true,
                 emailVerifiedAt: true,
               },
             },
@@ -389,6 +373,10 @@ r.get(
             id: true,
             email: true,
             role: true,
+            code: true,
+            maxUses: true,
+            usedCount: true,
+            isActive: true,
             expiresAt: true,
             createdAt: true,
             acceptedAt: true,
@@ -398,7 +386,12 @@ r.get(
 
       return res.json({
         ok: true,
-        company,
+        company: company
+          ? {
+              ...company,
+              createdAt: company.createdAt.toISOString(),
+            }
+          : null,
         subscription: si.subscription,
         seats: si.seats,
         members: members.map((m: any) => ({
@@ -406,8 +399,8 @@ r.get(
           userId: m.user.id,
           email: m.user.email,
           name: m.user.name,
-          appRole: m.user.role, // UserRole
-          companyRole: m.role, // ProjectRole
+          appRole: m.user.role,
+          companyRole: m.role,
           active: m.active,
           emailVerifiedAt: m.user.emailVerifiedAt
             ? m.user.emailVerifiedAt.toISOString()
@@ -419,29 +412,34 @@ r.get(
           id: i.id,
           email: i.email,
           role: i.role,
+          code: i.code,
+          maxUses: i.maxUses,
+          usedCount: i.usedCount,
+          isActive: i.isActive,
           expiresAt: i.expiresAt.toISOString(),
           createdAt: i.createdAt.toISOString(),
           acceptedAt: i.acceptedAt ? i.acceptedAt.toISOString() : null,
-          status: i.acceptedAt
-            ? "ACCEPTED"
+          status: !i.isActive
+            ? "INACTIVE"
             : i.expiresAt.getTime() < Date.now()
             ? "EXPIRED"
+            : i.usedCount >= i.maxUses
+            ? "USED_UP"
             : "PENDING",
         })),
       });
     } catch (e: any) {
       console.error("GET /api/company/admin/dashboard failed:", e);
-      return res
-        .status(500)
-        .json({ ok: false, error: e?.message || "dashboard failed" });
+      return res.status(500).json({
+        ok: false,
+        error: e?.message || "dashboard failed",
+      });
     }
   }
 );
 
 /**
- * ✅ Update member (activate/deactivate / role)
  * PATCH /api/company/admin/members/:userId
- * body: { active?: boolean, role?: ProjectRole }
  */
 r.patch(
   "/admin/members/:userId",
@@ -451,10 +449,12 @@ r.patch(
   requireCompanyAdmin,
   async (req: any, res) => {
     try {
-      const companyId = String(req.auth.company || "").trim();
+      const companyId = String(req.auth.companyId || "").trim();
       const userId = String(req.params.userId || "").trim();
-      if (!companyId || !userId)
+
+      if (!companyId || !userId) {
         return res.status(400).json({ ok: false, error: "bad params" });
+      }
 
       const data: any = {};
       if (typeof req.body?.active === "boolean") data.active = !!req.body.active;
@@ -471,9 +471,10 @@ r.patch(
         member: { ...updated, updatedAt: updated.updatedAt.toISOString() },
       });
     } catch (e: any) {
-      return res
-        .status(500)
-        .json({ ok: false, error: e?.message || "update failed" });
+      return res.status(500).json({
+        ok: false,
+        error: e?.message || "update failed",
+      });
     }
   }
 );

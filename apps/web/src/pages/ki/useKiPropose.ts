@@ -1,90 +1,133 @@
+// apps/web/src/pages/ki/useKiPropose.ts
+
 import { useState, useCallback } from "react";
-import { LVPos } from "./store.lv";
+
+type LVPos = {
+  id: string;
+  posNr: string;
+  kurztext: string;
+  einheit: string;
+  menge: number;
+  preis?: number;
+};
 
 type RawItem = {
   posNr?: string;
-  kurztext: string;
+  kurztext?: string;
   langtext?: string;
-  einheit: string;
-  menge?: number;
-  preis?: number;
-  confidence?: number;
+  einheit?: string;
+  menge?: number | string;
+  preis?: number | string;
+  confidence?: number | string;
 };
 
-const SYS_PROMPT = `Du bist Kalkulator für Tief-/Straßenbau. 
-Erzeuge eine Liste geeigneter LV-Positionen als JSON-Array.
-Jedes Element: { "posNr": "01.001" (optional), "kurztext": "...", "langtext": "...", "einheit": "m/m²/Stk", "menge": number, "preis": number (optional), "confidence": 0..1 }.
-Keine Erklärungen, nur JSON. Realistische deutsche Bezeichnungen.`;
+type ProposedLVPos = LVPos & {
+  confidence?: number;
+  langtext?: string;
+};
 
 export function useKiPropose() {
   const [loading, setLoading] = useState(false);
 
-  const propose = useCallback(async (projectText: string): Promise<(LVPos & {confidence?:number})[]> => {
-    if (!projectText?.trim()) return [];
-    setLoading(true);
-    try {
-      // 1) tenta proxy server
-      const res = await fetch("/api/ki/propose", {
-        method:"POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({ text: projectText }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        return normalize(json?.items || json);
-      }
+  const propose = useCallback(
+    async (projectText: string): Promise<ProposedLVPos[]> => {
+      const cleanText = String(projectText || "").trim();
+      if (!cleanText) return [];
 
-      // 2) fallback diretto OpenAI
-      const key = import.meta.env.VITE_OPENAI_API_KEY as string | undefined;
-      if (!key) return [];
-      const body = {
-        model: "gpt-4o-mini",
-        messages: [
-          { role:"system", content: SYS_PROMPT },
-          { role:"user", content: projectText }
-        ],
-        temperature: 0.2,
-        response_format: { type: "json_object" }, // riceviamo {items:[...]} o [...]
-      };
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json", Authorization:`Bearer ${key}` },
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) return [];
-      const data = await r.json();
-      const content = data.choices?.[0]?.message?.content as string | undefined;
-      const parsed = safeJson(content);
-      const arr = Array.isArray(parsed) ? parsed : parsed?.items;
-      return normalize(arr);
-    } catch {
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      setLoading(true);
+
+      try {
+        const res = await fetch("/api/ki/propose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: cleanText }),
+        });
+
+        if (!res.ok) {
+          const msg = await res.text().catch(() => "");
+          throw new Error(msg || "KI propose failed");
+        }
+
+        const json: unknown = await res.json();
+        return normalize(extractItems(json));
+      } catch (e) {
+        console.error("[useKiPropose]", e);
+        return [];
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   return { propose, loading };
 }
 
-function normalize(arr:any): (LVPos & {confidence?:number})[] {
+function extractItems(json: unknown): unknown {
+  if (Array.isArray(json)) return json;
+
+  if (json && typeof json === "object") {
+    const record = json as Record<string, unknown>;
+    if (Array.isArray(record.items)) return record.items;
+    if (Array.isArray(record.rows)) return record.rows;
+    if (Array.isArray(record.data)) return record.data;
+  }
+
+  return [];
+}
+
+function normalize(arr: unknown): ProposedLVPos[] {
   if (!Array.isArray(arr)) return [];
-  const out: (LVPos & {confidence?:number})[] = [];
-  for (const it of arr as RawItem[]) {
-    if (!it?.kurztext || !it?.einheit) continue;
+
+  const out: ProposedLVPos[] = [];
+
+  for (const raw of arr) {
+    if (!raw || typeof raw !== "object") continue;
+
+    const it = raw as RawItem;
+
+    const kurztext = String(it.kurztext || "").trim();
+    const einheit = String(it.einheit || "").trim();
+
+    if (!kurztext || !einheit) continue;
+
     out.push({
       id: crypto.randomUUID(),
-      posNr: it.posNr || "",
-      kurztext: it.kurztext,
-      langtext: it.langtext || "",
-      einheit: it.einheit,
-      menge: Number(it.menge) || 0,
-      preis: typeof it.preis === "number" ? it.preis : undefined,
-      confidence: clamp01(Number(it.confidence)),
+      posNr: String(it.posNr || "").trim(),
+      kurztext,
+      langtext: String(it.langtext || "").trim(),
+      einheit,
+      menge: toNumber(it.menge, 0),
+      preis: toOptionalNumber(it.preis),
+      confidence: clamp01(toOptionalNumber(it.confidence)),
     });
   }
+
   return out;
 }
 
-function clamp01(n:number){ return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : undefined as any; }
-function safeJson(s?:string){ try{ return s ? JSON.parse(s) : null; }catch{ return null; } }
+function toNumber(v: unknown, fallback = 0): number {
+  if (typeof v === "number") return Number.isFinite(v) ? v : fallback;
+  if (v == null || v === "") return fallback;
+
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function toOptionalNumber(v: unknown): number | undefined {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (v == null || v === "") return undefined;
+
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function clamp01(n?: number): number | undefined {
+  if (typeof n !== "number" || !Number.isFinite(n)) return undefined;
+  return Math.max(0, Math.min(1, n));
+}
+
+
+
+
+

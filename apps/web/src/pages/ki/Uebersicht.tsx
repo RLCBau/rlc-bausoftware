@@ -1,24 +1,110 @@
+// apps/web/src/pages/ki/Uebersicht.tsx
+
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/PageHeader";
 import Card from "../../components/Card";
 
+type Item = {
+  title: string;
+  desc: string;
+  path: string;
+  icon: string;
+};
+
+const items: Item[] = [
+  {
+    title: "Automatische LV-Erstellung",
+    desc: "KI generiert automatisch Positionen aus Beschreibung oder Projekt.",
+    path: "/ki/auto-lv",
+    icon: "📄",
+  },
+  {
+    title: "Vorschläge & Optimierungen",
+    desc: "Preise, Materialien und Geräte intelligent optimieren.",
+    path: "/ki/vorschlaege",
+    icon: "💡",
+  },
+  {
+    title: "Nachtragserkennung",
+    desc: "Abweichungen zwischen LV und Angebot automatisch erkennen.",
+    path: "/ki/nachtraege",
+    icon: "⚠️",
+  },
+  {
+    title: "LV-Analyse",
+    desc: "Mengen-, Preis- und Plausibilitätsprüfung.",
+    path: "/ki/analyse",
+    icon: "📊",
+  },
+  {
+    title: "Fotoerkennung",
+    desc: "Baustellenbilder analysieren (Rohre, Graben, Materialien).",
+    path: "/ki/fotoerkennung",
+    icon: "📷",
+  },
+  {
+    title: "Sprachsteuerung",
+    desc: "Regieberichte per Sprache diktieren und automatisch erstellen.",
+    path: "/ki/sprachsteuerung",
+    icon: "🎤",
+  },
+];
+
 export default function KIUebersicht() {
+  const nav = useNavigate();
+
   return (
-    <div className="space-y-3 p-4">
+    <div className="space-y-4 p-4">
       <PageHeader
         breadcrumb="RLC Module / KI"
         title="🤖 KI – Übersicht"
         subtitle="Künstliche Intelligenz unterstützt Sie bei Analyse, Automatisierung und Optimierung."
       />
+
+      {/* GRID MODULE */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
+          gap: 12,
+        }}
+      >
+        {items.map((it) => (
+          <Card
+            key={it.path}
+            style={{
+              cursor: "pointer",
+              transition: "0.2s",
+            }}
+            onClick={() => nav(it.path)}
+          >
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ fontSize: 20 }}>
+                {it.icon} <b>{it.title}</b>
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.75 }}>
+                {it.desc}
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* INFO */}
       <Card>
-        <ul className="list-disc ml-5 space-y-1">
-          <li><b>Automatische LV-Erstellung:</b> KI generiert Positionen nach Projektart und Region.</li>
-          <li><b>Vorschläge & Optimierungen:</b> Intelligente Empfehlungen für Preise, Material, Geräte.</li>
-          <li><b>Nachtragserkennung:</b> Abweichungen und Mehrleistungen automatisch identifizieren.</li>
-          <li><b>LV-Analyse:</b> Plausibilitäts-, Mengen- und Preisprüfung.</li>
-          <li><b>Fotoerkennung:</b> Objekte und Schichten aus Baustellenfotos erkennen.</li>
-          <li><b>Sprachsteuerung:</b> Aufmaße / Regieberichte per Spracheingabe erfassen.</li>
-        </ul>
+        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+          <b>Hinweis:</b><br />
+          Die KI-Module arbeiten direkt mit Ihren Projektdaten (LV, Regie,
+          Fotos, Angebote). Alle Ergebnisse können sofort weiterverarbeitet
+          werden (Kalkulation, Abrechnung, Nachträge).
+        </div>
       </Card>
     </div>
   );
 }
+
+
+
+
+

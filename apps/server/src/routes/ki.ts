@@ -698,6 +698,233 @@ function buildLieferscheinFieldPatchesFromEntities(opts: {
 }
 /* ============================================================ */
 
+
+function __rlcStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function __rlcBuildRegieText(input: {
+  text?: any;
+  start?: any;
+  end?: any;
+  machine?: any;
+  worker?: any;
+  location?: any;
+}) {
+  const raw = __rlcStr(input.text).toLowerCase();
+  const start = __rlcStr(input.start);
+  const end = __rlcStr(input.end);
+  const machine = __rlcStr(input.machine);
+  const worker = __rlcStr(input.worker);
+  const location = __rlcStr(input.location);
+
+  if (
+    raw.includes("baugrube") &&
+    (raw.includes("aufgefüllt") || raw.includes("aufgefuellt") || raw.includes("verfüllt") || raw.includes("verfuellt"))
+  ) {
+    return (
+      `${start && end ? `Von ${start} bis ${end} wurde ` : "Es wurde "}` +
+      `die Baugrube` +
+      `${location ? ` in ${location}` : ""}` +
+      `${machine ? ` mit dem ${machine}` : ""}` +
+      `${worker ? ` durch ${worker}` : ""}` +
+      ` aufgefüllt.`
+    ).replace(/\s+/g, " ").trim();
+  }
+
+  return "";
+}
+
+function __rlcPostProcessSuggest(args: {
+  kind?: any;
+  text?: any;
+  current?: any;
+  suggestions?: any[];
+}) {
+  const kind = __rlcStr(args.kind).toUpperCase();
+  const text = __rlcStr(args.text);
+  const current = args.current || {};
+  const suggestions = Array.isArray(args.suggestions) ? args.suggestions : [];
+
+  if (!suggestions.length) return suggestions;
+
+  const s0 = suggestions[0] || {};
+  const fp = { ...(s0.fieldPatches || {}) };
+
+  if (kind === "REGIE") {
+    const professional = __rlcBuildRegieText({
+      text,
+      start: fp.arbeitsbeginn || current.arbeitsbeginn || current.zeitVon,
+      end: fp.arbeitsende || current.arbeitsende || current.zeitBis,
+      machine: fp.maschinen || current.maschinen,
+      worker: fp.mitarbeiter || current.mitarbeiter,
+      location: fp.kostenstelle || current.kostenstelle || current.baustelle,
+    });
+
+    if (professional) {
+      fp.comment = professional;
+      fp.bemerkungen = professional;
+    }
+
+    if (fp.unit) fp.unit = "Std";
+    if (!fp.unit) fp.unit = "Std";
+
+    s0.fieldPatches = fp;
+    if (!s0.notes) {
+      s0.notes = "Fachlogik aktiv: Regie-Kommentar technisch ergänzt.";
+    }
+    suggestions[0] = s0;
+    return suggestions;
+  }
+
+  if (kind === "PHOTOS") {
+    const raw = text.toLowerCase();
+
+    let professional = "";
+    let material = __rlcStr(fp.materialien);
+
+    // --- MATERIALI ---
+    if (!material && raw.includes("kabel")) material = "Kabel";
+    if (!material && raw.includes("rohr")) material = "Rohr";
+    if (!material && raw.includes("speedpipe")) material = "Speedpipe";
+    if (!material && raw.includes("asphalt")) material = "Asphalt";
+    if (!material && raw.includes("schotter")) material = "Schotter";
+    if (!material && raw.includes("pflaster")) material = "Pflaster";
+
+    // --- DN ERKENNUNG ---
+    let dnMatch = raw.match(/dn\s?(\d+)/);
+    let dn = dnMatch ? dnMatch[1] : "";
+
+    // --- LOGICHE PROFESSIONALI ---
+
+    if (raw.includes("graben") && raw.includes("kabel") && raw.includes("verlegt")) {
+      professional = "Im Graben wurden Kabel verlegt.";
+      fp.unit = "m";
+    }
+
+    else if (raw.includes("rohr") && raw.includes("verlegt")) {
+      professional = dn
+        ? `Es wurden Rohre DN ${dn} verlegt.`
+        : "Es wurden Rohre verlegt.";
+      fp.unit = "m";
+    }
+
+    else if (raw.includes("speedpipe")) {
+      professional = dn
+        ? `Speedpipe DN ${dn} wurde verlegt.`
+        : "Speedpipe wurde verlegt.";
+      fp.unit = "m";
+    }
+
+    else if (raw.includes("schotter") && raw.includes("eingebaut")) {
+      professional = "Schottermaterial wurde eingebaut.";
+      fp.unit = "m3";
+    }
+
+    else if (raw.includes("asphalt")) {
+      professional = "Es wurden Asphaltarbeiten ausgeführt.";
+      fp.unit = "m2";
+    }
+
+    else if (raw.includes("pflaster") && raw.includes("verlegt")) {
+      professional = "Pflaster wurde verlegt.";
+      fp.unit = "m2";
+    }
+
+    else if (raw.includes("hausanschluss")) {
+      professional = "Hausanschluss wurde hergestellt.";
+      fp.unit = "Stk";
+    }
+
+    if (!professional && material) {
+      professional = `${material} wurde verarbeitet.`;
+    }
+
+    if (material) fp.materialien = material;
+    if (professional) {
+      fp.comment = professional;
+      fp.bemerkungen = professional;
+    }
+
+    // NON INVENTARE DATI
+    fp.mitarbeiter = "";
+    fp.maschinen = "";
+    fp.hours = 0;
+    fp.kostenstelle = "";
+    fp.arbeitsbeginn = "";
+    fp.arbeitsende = "";
+    fp.pause1 = "";
+    fp.pause2 = "";
+    fp.lvItemPos = null;
+
+    s0.fieldPatches = fp;
+    s0.notes = "Fachlogik aktiv: Tiefbau-Erkennung erweitert.";
+    suggestions[0] = s0;
+    return suggestions;
+  }
+
+  if (kind === "LIEFERSCHEIN" || kind === "LS") {
+    const tokens = text.split(/\s+/).filter(Boolean);
+
+    let material = "";
+    let menge = null;
+    let einheit = "";
+    let ort = "";
+    let fahrer = "";
+
+    for (let t of tokens) {
+      if (!menge && /^\d+(\.\d+)?$/.test(t)) {
+        menge = Number(t);
+        continue;
+      }
+
+      if (!material && /kies|schotter|sand|asphalt/i.test(t)) {
+        material = t;
+        continue;
+      }
+
+      if (!ort) {
+        ort = t;
+        continue;
+      }
+
+      if (!fahrer) {
+        fahrer = t;
+        continue;
+      }
+    }
+
+    if (material) fp.material = material;
+    if (menge != null) fp.menge = menge;
+    if (!fp.einheit && material) fp.einheit = "m3";
+    if (ort) fp.kostenstelle = ort;
+    if (fahrer) fp.fahrer = fahrer;
+
+    if (!__rlcStr(fp.textBeschreibung) && material) {
+      fp.textBeschreibung =
+        `${material}` +
+        `${menge != null ? ` (${menge} ${fp.einheit || "m3"})` : ""}` +
+        `${ort ? ` zur Baustelle ${ort}` : ""}` +
+        ` geliefert` +
+        `${fahrer ? ` (Fahrer: ${fahrer})` : ""}.`;
+    }
+
+    if (!__rlcStr(fp.bemerkungen) && __rlcStr(fp.textBeschreibung)) {
+      fp.bemerkungen = fp.textBeschreibung;
+    }
+
+    s0.fieldPatches = fp;
+    if (!s0.notes) {
+      s0.notes = "Fachlogik aktiv: Lieferschein vollständig interpretiert.";
+    }
+
+    suggestions[0] = s0;
+    return suggestions;
+  }
+
+  return suggestions;
+}
+
 export function parseLieferschein(
   ocrResults: Array<{ file: string; text: string }>
 ): Array<{
@@ -1307,7 +1534,14 @@ ${JSON.stringify(current || {}, null, 2).slice(0, 6000)}
     });
 
     const json = JSON.parse(out.choices?.[0]?.message?.content || "{}");
-    const suggestions = Array.isArray(json?.suggestions) ? json.suggestions : [];
+    let suggestions = Array.isArray(json?.suggestions) ? json.suggestions : [];
+
+    suggestions = __rlcPostProcessSuggest({
+      kind: finalKind,
+      text: fallbackText,
+      current,
+      suggestions,
+    });
 
     // ✅ safety: se AI torna vuoto in LS ma abbiamo entities, riempi comunque
     if (isLS) {
@@ -1355,6 +1589,13 @@ ${JSON.stringify(current || {}, null, 2).slice(0, 6000)}
         suggestions[0] = s0;
       }
     }
+
+    suggestions = __rlcPostProcessSuggest({
+      kind: finalKind,
+      text: fallbackText,
+      current,
+      suggestions,
+    });
 
     return res.json({ suggestions });
   } catch (err: any) {

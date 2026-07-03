@@ -8,6 +8,7 @@ import { Alert, Linking, Platform } from "react-native";
 import {
   getCompanyHeaderCached,
   getCompanyLogoUriCached,
+  syncCompanyHeaderAndLogo,
 } from "../companyCache";
 
 const API_URL_STORAGE_KEY = "api_base_url";
@@ -383,8 +384,18 @@ async function readAsBase64DataUrl(img: {
 
 async function buildCompanyPdfHeaderHtml(): Promise<string> {
   try {
-    const header = await getCompanyHeaderCached();
-    const rawLogoUri = await getCompanyLogoUriCached();
+    let header = await getCompanyHeaderCached();
+    let rawLogoUri = await getCompanyLogoUriCached();
+
+    if (!rawLogoUri) {
+      try {
+        const synced = await syncCompanyHeaderAndLogo();
+        header = header || synced?.header || null;
+        rawLogoUri = synced?.logoUri || rawLogoUri || null;
+      } catch (e) {
+        console.log("[PDFDBG] company sync fallback failed:", String((e as any)?.message || e));
+      }
+    }
 
     const name = escapeHtml(text(header?.name || ""));
     const address = escapeHtml(text(header?.address || ""));
@@ -393,12 +404,36 @@ async function buildCompanyPdfHeaderHtml(): Promise<string> {
 
     let logoDataUrl = "";
     if (rawLogoUri) {
-      const maybeDataUrl = await readAsBase64DataUrl({
-        uri: String(rawLogoUri),
-        name: "company_logo",
-        type: "image/jpeg",
-      });
-      if (maybeDataUrl) logoDataUrl = maybeDataUrl;
+      const logoUri = String(rawLogoUri || "").trim();
+
+      console.log("[PDFDBG] company rawLogoUri:", logoUri);
+
+      if (logoUri.startsWith("data:image/")) {
+        logoDataUrl = logoUri;
+      } else {
+        const maybeDataUrl = await readAsBase64DataUrl({
+          uri: logoUri,
+          name: "company_logo",
+          type: logoUri.toLowerCase().includes(".png") ? "image/png" : "image/jpeg",
+        });
+
+        if (maybeDataUrl) {
+          logoDataUrl = maybeDataUrl;
+        } else if (logoUri.startsWith("file://")) {
+          try {
+            const b64 = await FileSystem.readAsStringAsync(logoUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            } as any);
+
+            if (b64) {
+              const mime = logoUri.toLowerCase().includes(".png") ? "image/png" : "image/jpeg";
+              logoDataUrl = `data:${mime};base64,${b64}`;
+            }
+          } catch (e) {
+            console.log("[PDFDBG] company logo direct read failed:", String((e as any)?.message || e));
+          }
+        }
+      }
     }
 
     if (!logoDataUrl && !name && !address && !phone && !email) return "";
@@ -1511,6 +1546,1102 @@ function buildPdfShell(content: string) {
           border-bottom: 0.3mm solid #111;
           height: 0;
         }
+        /* RLC_BUSINESS_PDF_UNIFIED_STYLE_V1 */
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+          color: #172033;
+          background: #ffffff;
+          font-size: 11px;
+          line-height: 1.35;
+        }
+
+        .page {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 0;
+        }
+
+        .company-header {
+          border: 0;
+          border-bottom: 1px solid #d8e1ee;
+          padding: 0 0 14px 0;
+          margin: 0 0 18px 0;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 18px;
+        }
+
+        .company-header-left {
+          width: 130px;
+          min-height: 72px;
+        }
+
+        .company-logo,
+        .company-logo-placeholder {
+          width: 118px;
+          height: 64px;
+          object-fit: contain;
+          border: 1px solid #d8e1ee;
+          border-radius: 8px;
+          background: #ffffff;
+        }
+
+        .company-header-right {
+          flex: 1;
+          color: #344055;
+          font-size: 10px;
+          line-height: 1.35;
+        }
+
+        .company-line:first-child {
+          color: #172033;
+          font-weight: 800;
+          font-size: 12px;
+          margin-bottom: 3px;
+        }
+
+        .doc-banner {
+          border: 0;
+          background: transparent;
+          color: #172033;
+          font-size: 28px;
+          font-weight: 900;
+          letter-spacing: -0.3px;
+          text-align: left;
+          padding: 0;
+          margin: 0 0 4px 0;
+        }
+
+        .doc-banner.regie::after,
+        .doc-banner.ls::after,
+        .doc-banner.fotos::after {
+          content: "Eingang / Entwurf";
+          display: block;
+          color: #728096;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0;
+          margin-top: 2px;
+        }
+
+        .head {
+          display: grid;
+          grid-template-columns: 1.05fr 1.6fr 1.05fr;
+          gap: 12px;
+          border: 0;
+          margin: 16px 0 14px 0;
+        }
+
+        .head-left,
+        .head-mid,
+        .head-right,
+        .ls-info,
+        .desc,
+        .box,
+        .sign-col {
+          border: 1px solid #d8e1ee;
+          border-radius: 9px;
+          background: #ffffff;
+          overflow: hidden;
+        }
+
+        .head-left,
+        .head-mid,
+        .head-right {
+          padding: 10px;
+        }
+
+        .left-title {
+          font-size: 18px;
+          font-weight: 900;
+          color: #172033;
+        }
+
+        .type-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          border: 0;
+          border-bottom: 1px solid #eef2f7;
+          padding: 5px 0;
+          color: #344055;
+          font-weight: 700;
+        }
+
+        .type-row:last-child {
+          border-bottom: 0;
+        }
+
+        .cb {
+          width: 18px;
+          height: 18px;
+          border: 1px solid #9aa8ba;
+          border-radius: 4px;
+          text-align: center;
+          line-height: 18px;
+          font-weight: 900;
+          color: #172033;
+        }
+
+        .line {
+          display: grid;
+          grid-template-columns: 95px 1fr;
+          gap: 8px;
+          padding: 5px 0;
+          border-bottom: 1px solid #eef2f7;
+        }
+
+        .line:last-child {
+          border-bottom: 0;
+        }
+
+        .lab {
+          color: #66748a;
+          font-weight: 800;
+        }
+
+        .val {
+          color: #172033;
+          font-weight: 700;
+          border-bottom: 0;
+        }
+
+        .rf {
+          display: grid;
+          grid-template-columns: 90px 1fr;
+          gap: 8px;
+          border-bottom: 1px solid #eef2f7;
+          padding: 5px 0;
+        }
+
+        .rf:last-child {
+          border-bottom: 0;
+        }
+
+        .rf .val {
+          text-align: right;
+          font-weight: 900;
+        }
+
+        .zeit-grid {
+          border: 1px solid #d8e1ee;
+          border-radius: 9px;
+          overflow: hidden;
+          margin: 0 0 14px 0;
+        }
+
+        .zeit-row,
+        .zeit-row.values {
+          display: grid;
+          grid-template-columns: repeat(7, 1fr);
+        }
+
+        .cell {
+          border-right: 1px solid #d8e1ee;
+          border-bottom: 1px solid #d8e1ee;
+          padding: 7px 5px;
+          min-height: 24px;
+          text-align: center;
+        }
+
+        .cell:last-child {
+          border-right: 0;
+        }
+
+        .zeit-row:last-child .cell {
+          border-bottom: 0;
+        }
+
+        .zeit.h {
+          background: #f4f7fb;
+          color: #344055;
+          font-weight: 900;
+        }
+
+        .zeit.v {
+          color: #172033;
+          font-weight: 700;
+        }
+
+        .main {
+          width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
+          border: 1px solid #d8e1ee;
+          border-radius: 9px;
+          overflow: hidden;
+          margin: 0 0 14px 0;
+        }
+
+        .main th {
+          background: #f4f7fb;
+          color: #172033;
+          font-weight: 900;
+          border-right: 1px solid #d8e1ee;
+          border-bottom: 1px solid #d8e1ee;
+          padding: 8px 7px;
+          text-align: left;
+        }
+
+        .main th:last-child {
+          border-right: 0;
+        }
+
+        .main td {
+          border-right: 1px solid #edf2f7;
+          border-bottom: 1px solid #edf2f7;
+          padding: 8px 7px;
+          min-height: 28px;
+          vertical-align: top;
+        }
+
+        .main td:last-child {
+          border-right: 0;
+        }
+
+        .main tr:last-child td {
+          border-bottom: 0;
+        }
+
+        .tag {
+          display: inline-block;
+          background: #edf4ff;
+          color: #143b5a;
+          border: 1px solid #d6e8ff;
+          border-radius: 999px;
+          padding: 2px 7px;
+          font-size: 9px;
+          font-weight: 800;
+          margin: 0 4px 3px 0;
+        }
+
+        .desc {
+          margin: 0 0 14px 0;
+        }
+
+        .desc-title,
+        .box-title,
+        .sign-title {
+          background: #f4f7fb;
+          color: #172033;
+          font-weight: 900;
+          padding: 8px 10px;
+          border-bottom: 1px solid #d8e1ee;
+        }
+
+        .desc-body,
+        .bem-text {
+          min-height: 54px;
+          padding: 10px;
+          white-space: pre-wrap;
+          color: #344055;
+        }
+
+        .bottom {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 12px;
+          margin: 0 0 16px 0;
+        }
+
+        .foto-big {
+          min-height: 210px;
+        }
+
+        .bemerk-small {
+          min-height: 210px;
+        }
+
+        .photo {
+          width: 100%;
+          max-height: 235px;
+          object-fit: contain;
+          display: block;
+          background: #f8fafc;
+        }
+
+        .ph-muted {
+          height: 190px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #8793a6;
+          background: #f8fafc;
+          font-weight: 700;
+        }
+
+        .sign {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+          margin-top: 14px;
+        }
+
+        .sign-line {
+          display: grid;
+          grid-template-columns: 75px 1fr;
+          gap: 10px;
+          padding: 12px 10px;
+          align-items: end;
+        }
+
+        .sign-line .line {
+          display: block;
+          border-bottom: 1px solid #9aa8ba;
+          height: 14px;
+          padding: 0;
+        }
+
+        .ls-info {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0;
+          margin: 0 0 14px 0;
+        }
+
+        .ls-info > div {
+          padding: 10px;
+          border-right: 1px solid #edf2f7;
+        }
+
+        .ls-info > div:last-child {
+          border-right: 0;
+        }
+        /* RLC_BUSINESS_PDF_POLISH_V2 */
+        .doc-banner {
+          border-left: 0 !important;
+          background: transparent !important;
+          color: #172033 !important;
+          font-size: 26px !important;
+          line-height: 1.05 !important;
+          padding: 0 !important;
+          margin: 14px 0 6px 0 !important;
+          text-align: left !important;
+        }
+
+        .head {
+          display: grid !important;
+          grid-template-columns: 1fr 1.35fr 1.05fr !important;
+          gap: 12px !important;
+          border: 0 !important;
+          margin: 14px 0 14px 0 !important;
+        }
+
+        .head-left,
+        .head-mid,
+        .head-right,
+        .ls-info,
+        .desc,
+        .box,
+        .sign-col,
+        .zeit-grid,
+        .main {
+          border: 1px solid #dbe4ef !important;
+          border-radius: 10px !important;
+          background: #ffffff !important;
+          overflow: hidden !important;
+          box-shadow: none !important;
+        }
+
+        .main {
+          border-collapse: separate !important;
+          border-spacing: 0 !important;
+          width: 100% !important;
+          margin-top: 10px !important;
+        }
+
+        .main th {
+          background: #f5f8fc !important;
+          color: #172033 !important;
+          font-weight: 900 !important;
+          border-right: 1px solid #dbe4ef !important;
+          border-bottom: 1px solid #dbe4ef !important;
+          padding: 8px 7px !important;
+          font-size: 10px !important;
+        }
+
+        .main td {
+          border-right: 1px solid #edf2f7 !important;
+          border-bottom: 1px solid #edf2f7 !important;
+          padding: 8px 7px !important;
+          font-size: 10px !important;
+          color: #263246 !important;
+          min-height: 30px !important;
+        }
+
+        .main th:last-child,
+        .main td:last-child {
+          border-right: 0 !important;
+        }
+
+        .main tr:last-child td {
+          border-bottom: 0 !important;
+        }
+
+        .zeit-grid {
+          margin: 0 0 14px 0 !important;
+        }
+
+        .cell {
+          border-right: 1px solid #dbe4ef !important;
+          border-bottom: 1px solid #dbe4ef !important;
+          padding: 7px 5px !important;
+        }
+
+        .zeit.h {
+          background: #f5f8fc !important;
+          color: #172033 !important;
+          font-weight: 900 !important;
+        }
+
+        .zeit.v {
+          color: #263246 !important;
+          font-weight: 700 !important;
+        }
+
+        .type-row {
+          border-bottom: 1px solid #edf2f7 !important;
+          padding: 6px 0 !important;
+        }
+
+        .cb {
+          border: 1px solid #aeb9c8 !important;
+          border-radius: 5px !important;
+          color: #172033 !important;
+        }
+
+        .desc-title,
+        .box-title,
+        .sign-title {
+          background: #f5f8fc !important;
+          color: #172033 !important;
+          border-bottom: 1px solid #dbe4ef !important;
+          font-weight: 900 !important;
+          padding: 8px 10px !important;
+        }
+
+        .desc-body {
+          min-height: 58px !important;
+          padding: 10px !important;
+          font-size: 10px !important;
+        }
+
+        .bottom {
+          display: grid !important;
+          grid-template-columns: 1.65fr 1fr !important;
+          gap: 12px !important;
+          margin-top: 12px !important;
+        }
+
+        .foto-big,
+        .bemerk-small {
+          min-height: 205px !important;
+        }
+
+        .photo {
+          max-height: 220px !important;
+          object-fit: contain !important;
+          background: #f8fafc !important;
+        }
+
+        .ph-muted {
+          height: 180px !important;
+          background: #f8fafc !important;
+          color: #8793a6 !important;
+        }
+
+        .sign {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 14px !important;
+          margin-top: 14px !important;
+        }
+
+        .sign-line {
+          padding: 11px 10px !important;
+        }
+
+        .sign-line .line {
+          border-bottom: 1px solid #aeb9c8 !important;
+        }
+
+        .company-header {
+          border-bottom: 1px solid #dbe4ef !important;
+          margin-bottom: 18px !important;
+          padding-bottom: 12px !important;
+        }
+        /* RLC_REGIE_PDF_BUSINESS_V3 */
+        .regie-page .doc-banner.regie {
+          font-size: 30px !important;
+          font-weight: 900 !important;
+          letter-spacing: -0.5px !important;
+          margin-top: 8px !important;
+          margin-bottom: 14px !important;
+          color: #111827 !important;
+        }
+
+        .regie-page .doc-banner.regie::after {
+          content: "Leistungsnachweis / Baustellendokumentation" !important;
+          display: block !important;
+          font-size: 10px !important;
+          font-weight: 800 !important;
+          color: #6b7280 !important;
+          margin-top: 4px !important;
+          letter-spacing: 0 !important;
+        }
+
+        .regie-page .head {
+          display: grid !important;
+          grid-template-columns: 1.65fr 1fr !important;
+          gap: 14px !important;
+          margin: 0 0 14px 0 !important;
+        }
+
+        .regie-page .head-left {
+          display: none !important;
+        }
+
+        .regie-page .head-mid,
+        .regie-page .head-right {
+          border: 1px solid #d8e1ee !important;
+          border-radius: 12px !important;
+          background: #ffffff !important;
+          padding: 12px !important;
+        }
+
+        .regie-page .head-mid .line {
+          display: grid !important;
+          grid-template-columns: 120px 1fr !important;
+          gap: 10px !important;
+          padding: 7px 0 !important;
+          border-bottom: 1px solid #eef2f7 !important;
+        }
+
+        .regie-page .head-mid .line:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .regie-page .lab {
+          color: #6b7280 !important;
+          font-size: 10px !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.25px !important;
+        }
+
+        .regie-page .val {
+          color: #111827 !important;
+          font-size: 11px !important;
+          font-weight: 800 !important;
+        }
+
+        .regie-page .rf {
+          display: grid !important;
+          grid-template-columns: 85px 1fr !important;
+          gap: 8px !important;
+          padding: 7px 0 !important;
+          border-bottom: 1px solid #eef2f7 !important;
+        }
+
+        .regie-page .rf:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .regie-page .rf .val {
+          text-align: right !important;
+          font-weight: 900 !important;
+          color: #111827 !important;
+        }
+
+        .regie-page .zeit-grid {
+          border-radius: 12px !important;
+          margin-bottom: 14px !important;
+        }
+
+        .regie-page .cell {
+          padding: 7px 5px !important;
+          font-size: 10px !important;
+        }
+
+        .regie-page .zeit.h {
+          background: #f3f6fb !important;
+          font-weight: 900 !important;
+        }
+
+        .regie-page .main {
+          border-radius: 12px !important;
+          margin-top: 8px !important;
+          margin-bottom: 14px !important;
+        }
+
+        .regie-page .main th {
+          background: #f3f6fb !important;
+          font-size: 9.5px !important;
+          padding: 7px 6px !important;
+          color: #111827 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.15px !important;
+        }
+
+        .regie-page .main td {
+          font-size: 10px !important;
+          padding: 7px 6px !important;
+          min-height: 24px !important;
+          color: #1f2937 !important;
+        }
+
+        .regie-page .kosten {
+          width: 14% !important;
+        }
+
+        .regie-page .geraet {
+          width: 18% !important;
+        }
+
+        .regie-page .mitarb {
+          width: 16% !important;
+        }
+
+        .regie-page .std {
+          width: 8% !important;
+          text-align: center !important;
+        }
+
+        .regie-page .bes {
+          width: 28% !important;
+        }
+
+        .regie-page .mat {
+          width: 16% !important;
+        }
+
+        .regie-page .desc {
+          border-radius: 12px !important;
+          margin-bottom: 14px !important;
+        }
+
+        .regie-page .desc-title,
+        .regie-page .box-title,
+        .regie-page .sign-title {
+          background: #f3f6fb !important;
+          font-size: 10px !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.2px !important;
+        }
+
+        .regie-page .desc-body {
+          min-height: 48px !important;
+          font-size: 10.5px !important;
+          line-height: 1.45 !important;
+        }
+
+        .regie-page .bottom {
+          display: grid !important;
+          grid-template-columns: 1.8fr 1fr !important;
+          gap: 14px !important;
+          margin-top: 10px !important;
+          margin-bottom: 14px !important;
+        }
+
+        .regie-page .foto-big,
+        .regie-page .bemerk-small {
+          border-radius: 12px !important;
+          min-height: 190px !important;
+        }
+
+        .regie-page .photo {
+          max-height: 210px !important;
+          object-fit: contain !important;
+          background: #f8fafc !important;
+          padding: 4px !important;
+          box-sizing: border-box !important;
+        }
+
+        .regie-page .ph-muted {
+          height: 170px !important;
+          background: #f8fafc !important;
+          color: #94a3b8 !important;
+          font-weight: 800 !important;
+        }
+
+        .regie-page .bem-text {
+          min-height: 150px !important;
+          font-size: 10.5px !important;
+          line-height: 1.4 !important;
+        }
+
+        .regie-page .sign {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 14px !important;
+          margin-top: 12px !important;
+        }
+
+        .regie-page .sign-col {
+          border-radius: 12px !important;
+        }
+
+        .regie-page .sign-line {
+          padding: 13px 10px !important;
+        }
+
+        .regie-page .sign-line .line {
+          border-bottom: 1px solid #9ca3af !important;
+        }
+        /* RLC_LS_FOTOS_PDF_BUSINESS_V3 */
+        .lieferschein-page .doc-banner.ls,
+        .fotos-page .doc-banner.fotos {
+          font-size: 30px !important;
+          font-weight: 900 !important;
+          letter-spacing: -0.5px !important;
+          margin-top: 8px !important;
+          margin-bottom: 14px !important;
+          color: #111827 !important;
+        }
+
+        .lieferschein-page .doc-banner.ls::after {
+          content: "Materialnachweis / Lieferung";
+          display: block;
+          font-size: 10px;
+          font-weight: 800;
+          color: #6b7280;
+          margin-top: 4px;
+          letter-spacing: 0;
+        }
+
+        .fotos-page .doc-banner.fotos::after {
+          content: "Baustellendokumentation / Fotoprotokoll";
+          display: block;
+          font-size: 10px;
+          font-weight: 800;
+          color: #6b7280;
+          margin-top: 4px;
+          letter-spacing: 0;
+        }
+
+        .lieferschein-page .head,
+        .fotos-page .head {
+          display: grid !important;
+          grid-template-columns: 1.65fr 1fr !important;
+          gap: 14px !important;
+          margin: 0 0 14px 0 !important;
+        }
+
+        .lieferschein-page .head-left,
+        .fotos-page .head-left {
+          display: none !important;
+        }
+
+        .lieferschein-page .head-mid,
+        .lieferschein-page .head-right,
+        .fotos-page .head-mid,
+        .fotos-page .head-right,
+        .lieferschein-page .ls-info,
+        .fotos-page .desc,
+        .lieferschein-page .desc,
+        .fotos-page .box,
+        .lieferschein-page .box,
+        .fotos-page .sign-col,
+        .lieferschein-page .sign-col {
+          border: 1px solid #d8e1ee !important;
+          border-radius: 12px !important;
+          background: #ffffff !important;
+          overflow: hidden !important;
+        }
+
+        .lieferschein-page .head-mid,
+        .lieferschein-page .head-right,
+        .fotos-page .head-mid,
+        .fotos-page .head-right {
+          padding: 12px !important;
+        }
+
+        .lieferschein-page .line,
+        .fotos-page .line {
+          display: grid !important;
+          grid-template-columns: 120px 1fr !important;
+          gap: 10px !important;
+          padding: 7px 0 !important;
+          border-bottom: 1px solid #eef2f7 !important;
+        }
+
+        .lieferschein-page .line:last-child,
+        .fotos-page .line:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .lieferschein-page .lab,
+        .fotos-page .lab {
+          color: #6b7280 !important;
+          font-size: 10px !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.25px !important;
+        }
+
+        .lieferschein-page .val,
+        .fotos-page .val {
+          color: #111827 !important;
+          font-size: 11px !important;
+          font-weight: 800 !important;
+        }
+
+        .lieferschein-page .rf,
+        .fotos-page .rf {
+          display: grid !important;
+          grid-template-columns: 95px 1fr !important;
+          gap: 8px !important;
+          padding: 7px 0 !important;
+          border-bottom: 1px solid #eef2f7 !important;
+        }
+
+        .lieferschein-page .rf:last-child,
+        .fotos-page .rf:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .lieferschein-page .rf .val,
+        .fotos-page .rf .val {
+          text-align: right !important;
+          font-weight: 900 !important;
+          color: #111827 !important;
+        }
+
+        .lieferschein-page .ls-info {
+          display: grid !important;
+          grid-template-columns: repeat(3, 1fr) !important;
+          margin: 0 0 14px 0 !important;
+        }
+
+        .lieferschein-page .ls-info > div {
+          padding: 11px !important;
+          border-right: 1px solid #edf2f7 !important;
+          font-size: 10.5px !important;
+          color: #1f2937 !important;
+        }
+
+        .lieferschein-page .ls-info > div:last-child {
+          border-right: 0 !important;
+        }
+
+        .lieferschein-page .main,
+        .fotos-page .main {
+          border-radius: 12px !important;
+          margin-top: 8px !important;
+          margin-bottom: 14px !important;
+        }
+
+        .lieferschein-page .main th,
+        .fotos-page .main th {
+          background: #f3f6fb !important;
+          font-size: 9.5px !important;
+          padding: 7px 6px !important;
+          color: #111827 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.15px !important;
+        }
+
+        .lieferschein-page .main td,
+        .fotos-page .main td {
+          font-size: 10px !important;
+          padding: 7px 6px !important;
+          min-height: 24px !important;
+          color: #1f2937 !important;
+        }
+
+        .lieferschein-page .desc,
+        .fotos-page .desc {
+          border-radius: 12px !important;
+          margin-bottom: 14px !important;
+        }
+
+        .lieferschein-page .desc-title,
+        .lieferschein-page .box-title,
+        .lieferschein-page .sign-title,
+        .fotos-page .desc-title,
+        .fotos-page .box-title,
+        .fotos-page .sign-title {
+          background: #f3f6fb !important;
+          font-size: 10px !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.2px !important;
+          color: #111827 !important;
+          font-weight: 900 !important;
+        }
+
+        .lieferschein-page .desc-body,
+        .fotos-page .desc-body {
+          min-height: 52px !important;
+          font-size: 10.5px !important;
+          line-height: 1.45 !important;
+        }
+
+        .lieferschein-page .bottom,
+        .fotos-page .bottom {
+          display: grid !important;
+          grid-template-columns: 1.8fr 1fr !important;
+          gap: 14px !important;
+          margin-top: 10px !important;
+          margin-bottom: 14px !important;
+        }
+
+        .lieferschein-page .foto-big,
+        .lieferschein-page .bemerk-small,
+        .fotos-page .foto-big,
+        .fotos-page .bemerk-small {
+          border-radius: 12px !important;
+          min-height: 190px !important;
+        }
+
+        .lieferschein-page .photo,
+        .fotos-page .photo {
+          max-height: 210px !important;
+          object-fit: contain !important;
+          background: #f8fafc !important;
+          padding: 4px !important;
+          box-sizing: border-box !important;
+        }
+
+        .lieferschein-page .ph-muted,
+        .fotos-page .ph-muted {
+          height: 170px !important;
+          background: #f8fafc !important;
+          color: #94a3b8 !important;
+          font-weight: 800 !important;
+        }
+
+        .lieferschein-page .bem-text,
+        .fotos-page .bem-text {
+          min-height: 150px !important;
+          font-size: 10.5px !important;
+          line-height: 1.4 !important;
+        }
+
+        .lieferschein-page .sign,
+        .fotos-page .sign {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 14px !important;
+          margin-top: 12px !important;
+        }
+
+        .lieferschein-page .sign-col,
+        .fotos-page .sign-col {
+          border-radius: 12px !important;
+        }
+
+        .lieferschein-page .sign-line,
+        .fotos-page .sign-line {
+          padding: 13px 10px !important;
+        }
+
+        .lieferschein-page .sign-line .line,
+        .fotos-page .sign-line .line {
+          border-bottom: 1px solid #9ca3af !important;
+        }
+
+        .fotos-page .main .bes {
+          width: 42% !important;
+        }
+
+        .fotos-page .main .geraet {
+          width: 16% !important;
+        }
+
+        .fotos-page .main .kosten {
+          width: 16% !important;
+        }
+
+        .lieferschein-page .main .bes {
+          width: 34% !important;
+        }
+        /* RLC_PDF_FIX_HIDE_OLD_LEFT_BLOCK_V4 */
+        .doc-banner.regie + .head,
+        .doc-banner.ls + .head,
+        .doc-banner.fotos + .head {
+          display: grid !important;
+          grid-template-columns: 1.65fr 1fr !important;
+          gap: 14px !important;
+        }
+
+        .doc-banner.regie + .head .head-left,
+        .doc-banner.ls + .head .head-left,
+        .doc-banner.fotos + .head .head-left {
+          display: none !important;
+        }
+
+        .doc-banner.regie + .head .head-mid,
+        .doc-banner.ls + .head .head-mid,
+        .doc-banner.fotos + .head .head-mid {
+          min-height: 58px !important;
+        }
+
+        .doc-banner.regie + .head .head-right,
+        .doc-banner.ls + .head .head-right,
+        .doc-banner.fotos + .head .head-right {
+          min-height: 58px !important;
+        }
+
+        .main tr.empty-row td {
+          color: transparent !important;
+          height: 22px !important;
+          padding: 5px 6px !important;
+        }
+
+        .sign {
+          page-break-inside: avoid !important;
+        }
+
+        .bottom {
+          page-break-inside: avoid !important;
+        }
+        /* RLC_LS_FOTOS_FINAL_POLISH_V4 */
+        .lieferschein-page .head-left,
+        .fotos-page .head-left {
+          display: none !important;
+        }
+
+        .lieferschein-page .head,
+        .fotos-page .head {
+          grid-template-columns: 1.65fr 1fr !important;
+        }
+
+        .lieferschein-page .main tr.empty-row td,
+        .fotos-page .main tr.empty-row td {
+          color: transparent !important;
+          height: 22px !important;
+          padding: 5px 6px !important;
+        }
+
+        .lieferschein-page .main td,
+        .fotos-page .main td {
+          vertical-align: top !important;
+        }
+
+        .lieferschein-page .bottom,
+        .fotos-page .bottom {
+          page-break-inside: avoid !important;
+        }
+
+        .lieferschein-page .sign,
+        .fotos-page .sign {
+          page-break-inside: avoid !important;
+        }
+
+        .fotos-page .foto-big {
+          min-height: 230px !important;
+        }
+
+        .fotos-page .photo {
+          max-height: 250px !important;
+        }
+
+        .lieferschein-page .ls-info {
+          border-radius: 12px !important;
+          overflow: hidden !important;
+        }
       </style>
     </head>
     <body>
@@ -1562,27 +2693,39 @@ function regieReportHtml(params: {
 
       const rowsHtml = filled
         .map((r) => {
-          const hoursStr = r.hours != null && String(r.hours) !== "0" ? num(r.hours) : "";
+          const hasLineData = [
+            r.kostenstelle,
+            r.machine,
+            r.worker,
+            r.hours,
+            r.comment,
+            r.material,
+            r.quantity,
+            r.unit,
+          ].some((v) => String(v ?? "").trim().length > 0) ||
+            (Array.isArray((r as any)?.photos) && (r as any).photos.length > 0);
+
+          const hoursStr = hasLineData && r.hours != null && String(r.hours) !== "0" ? num(r.hours) : "";
           const qtyStr =
-            r.quantity != null && String(r.quantity) !== "0"
+            hasLineData && r.quantity != null && String(r.quantity) !== "0"
               ? `${num(r.quantity)} ${text(r.unit || "")}`.trim()
               : "";
-          const materialStr = [text(r.material || ""), qtyStr].filter(Boolean).join(" – ");
+          const materialStr = hasLineData ? [text(r.material || ""), qtyStr].filter(Boolean).join(" – ") : "";
 
           const attCount = Array.isArray((r as any)?.photos) ? (r as any).photos.length : 0;
           const badges: string[] = [];
-          if (attCount > 0) badges.push(`<span class="tag">Anhänge: ${attCount}</span>`);
+          if (hasLineData && attCount > 0) badges.push(`<span class="tag">Anhänge: ${attCount}</span>`);
           const badgeHtml = badges.length ? `<div class="badges">${badges.join("")}</div>` : "";
-          const besondereStr = `${badgeHtml}${escapeHtml(text(r.comment || ""))}`;
+          const besondereStr = hasLineData ? `${badgeHtml}${escapeHtml(text(r.comment || ""))}` : "";
 
           return `
-            <tr>
-              <td class="c kosten">${escapeHtml(text(r.kostenstelle || header.kostenstelle || ""))}</td>
-              <td class="c geraet">${escapeHtml(text(r.machine || r.material || ""))}</td>
-              <td class="c mitarb">${escapeHtml(text(r.worker || ""))}</td>
+            <tr class="${hasLineData ? "" : "empty-row"}">
+              <td class="c kosten">${escapeHtml(hasLineData ? text(r.kostenstelle || header.kostenstelle || "") : "")}</td>
+              <td class="c geraet">${escapeHtml(hasLineData ? text(r.machine || "") : "")}</td>
+              <td class="c mitarb">${escapeHtml(hasLineData ? text(r.worker || "") : "")}</td>
               <td class="c std">${escapeHtml(hoursStr)}</td>
               <td class="c bes">${besondereStr}</td>
-              <td class="c mat">${escapeHtml(materialStr)}</td>
+              <td class="c mat">${escapeHtml(hasLineData ? materialStr : "")}</td>
             </tr>
           `;
         })
@@ -1665,7 +2808,14 @@ function regieReportHtml(params: {
 
           <div class="desc">
             <div class="desc-title">Beschreibung der Arbeit, besondere Vorkommnisse, Anordnungen</div>
-            <div class="desc-body">${escapeHtml(descText)}</div>
+            <div class="desc-body">${escapeHtml([
+          descText,
+          (header as any).ortAbschnitt || (header as any).location || (header as any).ort ? `Ort / Abschnitt: ${(header as any).ortAbschnitt || (header as any).location || (header as any).ort}` : "",
+          (header as any).kategorie || (header as any).category ? `Kategorie: ${(header as any).kategorie || (header as any).category}` : "",
+          (header as any).gewerk || (header as any).trade ? `Gewerk: ${(header as any).gewerk || (header as any).trade}` : "",
+          (header as any).fotoStatus || (header as any).statusFoto ? `Status: ${(header as any).fotoStatus || (header as any).statusFoto}` : "",
+          (header as any).tags ? `Tags: ${Array.isArray((header as any).tags) ? (header as any).tags.join(", ") : (header as any).tags}` : "",
+        ].filter(Boolean).join("\n"))}</div>
           </div>
 
           <div class="bottom">
@@ -1788,7 +2938,14 @@ function lieferscheinReportHtml(params: {
 
       <div class="desc">
         <div class="desc-title">Zusätzliche Angaben</div>
-        <div class="desc-body">${escapeHtml(descText)}</div>
+        <div class="desc-body">${escapeHtml([
+          descText,
+          (header as any).ortAbschnitt || (header as any).location || (header as any).ort ? `Ort / Abschnitt: ${(header as any).ortAbschnitt || (header as any).location || (header as any).ort}` : "",
+          (header as any).kategorie || (header as any).category ? `Kategorie: ${(header as any).kategorie || (header as any).category}` : "",
+          (header as any).gewerk || (header as any).trade ? `Gewerk: ${(header as any).gewerk || (header as any).trade}` : "",
+          (header as any).fotoStatus || (header as any).statusFoto ? `Status: ${(header as any).fotoStatus || (header as any).statusFoto}` : "",
+          (header as any).tags ? `Tags: ${Array.isArray((header as any).tags) ? (header as any).tags.join(", ") : (header as any).tags}` : "",
+        ].filter(Boolean).join("\n"))}</div>
       </div>
 
       <div class="bottom">
@@ -1918,7 +3075,14 @@ function photosReportHtml(params: {
               <td class="geraet">Foto</td>
               <td class="mitarb"></td>
               <td class="std"></td>
-              <td class="bes">${escapeHtml(descText)}</td>
+              <td class="bes">${escapeHtml([
+                descText,
+                (header as any).ortAbschnitt || (header as any).location || (header as any).ort ? `Ort: ${(header as any).ortAbschnitt || (header as any).location || (header as any).ort}` : "",
+                (header as any).kategorie || (header as any).category ? `Kategorie: ${(header as any).kategorie || (header as any).category}` : "",
+                (header as any).gewerk || (header as any).trade ? `Gewerk: ${(header as any).gewerk || (header as any).trade}` : "",
+                (header as any).fotoStatus || (header as any).statusFoto ? `Status: ${(header as any).fotoStatus || (header as any).statusFoto}` : "",
+                (header as any).tags ? `Tags: ${Array.isArray((header as any).tags) ? (header as any).tags.join(", ") : (header as any).tags}` : "",
+              ].filter(Boolean).join(" | "))}</td>
               <td class="mat"></td>
             </tr>
           `
@@ -1928,7 +3092,14 @@ function photosReportHtml(params: {
 
       <div class="desc">
         <div class="desc-title">Beschreibung / Notiz</div>
-        <div class="desc-body">${escapeHtml(descText)}</div>
+        <div class="desc-body">${escapeHtml([
+          descText,
+          (header as any).ortAbschnitt || (header as any).location || (header as any).ort ? `Ort / Abschnitt: ${(header as any).ortAbschnitt || (header as any).location || (header as any).ort}` : "",
+          (header as any).kategorie || (header as any).category ? `Kategorie: ${(header as any).kategorie || (header as any).category}` : "",
+          (header as any).gewerk || (header as any).trade ? `Gewerk: ${(header as any).gewerk || (header as any).trade}` : "",
+          (header as any).fotoStatus || (header as any).statusFoto ? `Status: ${(header as any).fotoStatus || (header as any).statusFoto}` : "",
+          (header as any).tags ? `Tags: ${Array.isArray((header as any).tags) ? (header as any).tags.join(", ") : (header as any).tags}` : "",
+        ].filter(Boolean).join("\n"))}</div>
       </div>
 
       <div class="bottom">
@@ -2067,7 +3238,14 @@ function tagesberichtReportHtml(params: {
 
       <div class="desc">
         <div class="desc-title">Besondere Vorkommnisse / Tagesnotiz</div>
-        <div class="desc-body">${escapeHtml(descText)}</div>
+        <div class="desc-body">${escapeHtml([
+          descText,
+          (header as any).ortAbschnitt || (header as any).location || (header as any).ort ? `Ort / Abschnitt: ${(header as any).ortAbschnitt || (header as any).location || (header as any).ort}` : "",
+          (header as any).kategorie || (header as any).category ? `Kategorie: ${(header as any).kategorie || (header as any).category}` : "",
+          (header as any).gewerk || (header as any).trade ? `Gewerk: ${(header as any).gewerk || (header as any).trade}` : "",
+          (header as any).fotoStatus || (header as any).statusFoto ? `Status: ${(header as any).fotoStatus || (header as any).statusFoto}` : "",
+          (header as any).tags ? `Tags: ${Array.isArray((header as any).tags) ? (header as any).tags.join(", ") : (header as any).tags}` : "",
+        ].filter(Boolean).join("\n"))}</div>
       </div>
 
       <div class="bottom">
@@ -2510,4 +3688,19 @@ export async function exportAndOpenTagesberichtPdf(
   if (r?.pdfUri && Platform.OS !== "web") await openPdf(r.pdfUri);
   return r;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -2863,7 +2863,14 @@ export default function Recipes() {
     setSelectedId("");
     setDraftPos(makeDefaultDraft());
     setLines([]);
-    setInfo("Neue Position gestartet.");
+    setLibraryQuery("");
+    setInfo("Neue Position vorbereitet. Bitte Positionsdaten ausfüllen.");
+
+    window.setTimeout(() => {
+      document
+        .getElementById("rlc-recipes-position-data")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
   }
 
   function loadExistingPosition(row: LVPos) {
@@ -3632,7 +3639,7 @@ if (!lines.length) {
         </aside>
 
         <main style={mainStack}>
-          <section style={card}>
+          <section id="rlc-recipes-position-data" style={card}>
             <div style={sectionHead}>
               <div>
                 <h2 style={sectionTitle}>1. Positionsdaten</h2>
@@ -3773,7 +3780,52 @@ if (!lines.length) {
                 Verkehrssicherung
               </label>
             </div>
+          </section>          <section style={card}>
+            <div style={sectionHead}>
+              <div>
+                <h2 style={sectionTitle}>Position fertigstellen</h2>
+                <div style={sectionText}>
+                  Wenn Positionsdaten, Langtext und Ressourcen vollständig sind, kann die Position übernommen oder gespeichert werden.
+                </div>
+              </div>
+            </div>
+
+            <div style={buttonRowNoTop}>
+              <button
+                type="button"
+                style={btnPrimary}
+                onClick={pushToKi}
+                disabled={!lines.length}
+              >
+                In Kalkulation übernehmen
+              </button>
+
+              <button
+                type="button"
+                style={btnSecondary}
+                onClick={applyToLv}
+                disabled={!lines.length}
+              >
+                Position ins LV speichern
+              </button>
+
+              <button
+                type="button"
+                style={btnSecondary}
+                onClick={saveAsCompanyRecipe}
+                disabled={!lines.length}
+              >
+                Als Firmen-Rezept speichern
+              </button>
+            </div>
+
+            {!lines.length ? (
+              <div style={sectionText}>
+                Erst Positionsdaten ausfüllen und KI-Ressourcen vorschlagen oder Ressourcen manuell erfassen.
+              </div>
+            ) : null}
           </section>
+
 
           <section style={card}>
             <div style={sectionHead}>
@@ -4523,6 +4575,11 @@ const badgeWarn: React.CSSProperties = {
   background: "#FFFBEB",
   color: "#B45309",
 };
+
+
+
+
+
 
 
 

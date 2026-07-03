@@ -690,7 +690,7 @@ export default function ProjectsScreen({ navigation }: Props) {
                 onChangeText={setEditingValue}
                 placeholder="BA-2025-DEMO"
                 autoCapitalize="characters"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 style={s.codeInput}
               />
 
@@ -729,7 +729,7 @@ export default function ProjectsScreen({ navigation }: Props) {
                   startEdit(item);
                 }}
               >
-                <Text style={s.codeBtnPrimaryTxt}>{baCode ? "Ändern" : "Setzen"}</Text>
+                <Text style={s.codeBtnPrimaryTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{baCode ? "Ändern" : "Setzen"}</Text>
               </Pressable>
             </View>
           )}
@@ -768,10 +768,10 @@ export default function ProjectsScreen({ navigation }: Props) {
           <Text style={s.eyebrow}>RLC Bausoftware</Text>
           <Text style={s.eyebrowSub}>mobile</Text>
           <View style={s.titleRow}>
-            <Text style={s.h1}>Projekte</Text>
+            <Text style={s.h1} numberOfLines={1}>Projekte</Text>
 
             <Pressable onPress={onPressNew} style={s.newBtn}>
-              <Text style={s.newBtnTxt}>+ Neu</Text>
+              <Text style={s.newBtnTxt} numberOfLines={1}>+ Neu</Text>
             </Pressable>
           </View>
 
@@ -779,7 +779,7 @@ export default function ProjectsScreen({ navigation }: Props) {
             value={q}
             onChangeText={setQ}
             placeholder="Suchen (Code, Name, Ort, Kunde …)"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={s.search}
             autoCapitalize="none"
           />
@@ -833,7 +833,7 @@ export default function ProjectsScreen({ navigation }: Props) {
                   value={newName}
                   onChangeText={setNewName}
                   placeholder="z.B. Trinkwasserleitung BA III"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   style={s.modalInput}
                 />
 
@@ -842,7 +842,7 @@ export default function ProjectsScreen({ navigation }: Props) {
                   value={newClient}
                   onChangeText={setNewClient}
                   placeholder="z.B. Gemeinde / Stadtwerke"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   style={s.modalInput}
                 />
 
@@ -851,7 +851,7 @@ export default function ProjectsScreen({ navigation }: Props) {
                   value={newPlace}
                   onChangeText={setNewPlace}
                   placeholder="z.B. Bischofswiesen"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   style={s.modalInput}
                 />
 
@@ -860,7 +860,7 @@ export default function ProjectsScreen({ navigation }: Props) {
                   value={newNumber}
                   onChangeText={setNewNumber}
                   placeholder="z.B. 2026-001"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   style={s.modalInput}
                 />
 
@@ -911,71 +911,32 @@ const s = StyleSheet.create({
   },
 
   headerCard: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 22,
-    backgroundColor: COLORS.card,
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 28,
+    padding: 22,
+    marginBottom: 18,
+    backgroundColor: "#061A33",
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#143A63",
+    shadowColor: "#00152A",
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
-
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 8,
-  },
-
-  headerSpacer: {
-    flex: 1,
-  },
-
-  backBtn: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
-  },
-
-  backTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 13,
-  },
-
-  modePill: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
-  },
-
-  modeTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 12,
-  },
-
   eyebrow: {
-    color: COLORS.accentDark,
-    fontSize: 13,
+    color: "#2BB6FF",
+    fontSize: 16,
     fontWeight: "900",
-    letterSpacing: 0.3,
+    marginBottom: 2,
   },
-
   eyebrowSub: {
-    marginTop: 2,
-    color: COLORS.sub,
-    fontSize: 12,
-    fontWeight: "800",
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 20,
+    fontWeight: "900",
+    marginBottom: 16,
   },
-
   titleRow: {
     marginTop: 10,
     flexDirection: "row",
@@ -984,61 +945,39 @@ const s = StyleSheet.create({
   },
 
   h1: {
-    flex: 1,
-    fontSize: 32,
+    color: "#FFFFFF",
+    fontSize: 42,
+    lineHeight: 46,
     fontWeight: "900",
-    color: COLORS.text,
+    letterSpacing: -1.1,
   },
 
   newBtn: {
-    backgroundColor: COLORS.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    backgroundColor: "#FFFFFF",
     borderRadius: 999,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
     borderWidth: 1,
-    borderColor: COLORS.accent,
-  },
-
-  newBtnTxt: {
-    color: COLORS.textLight,
-    fontWeight: "900",
-  },
-
-  search: {
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }),
-    backgroundColor: COLORS.inputBg,
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  ctaWrap: {
-    marginTop: 14,
-  },
-
-  ctaBtn: {
-    backgroundColor: COLORS.text,
-    paddingVertical: 12,
-    borderRadius: 14,
+    borderColor: "rgba(255,255,255,0.72)",
     alignItems: "center",
+    justifyContent: "center",
   },
-
-  ctaTxt: {
-    color: COLORS.textLight,
+  newBtnTxt: {
+    color: "#061A33",
+    fontSize: 17,
     fontWeight: "900",
   },
-
-  ctaHint: {
-    marginTop: 8,
-    color: COLORS.sub,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
+  search: {
+    marginTop: 16,
+    minHeight: 56,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.76)",
+    color: "#0B1328",
+    fontSize: 17,
+    fontWeight: "800",
   },
 
   listWrap: {
@@ -1363,6 +1302,68 @@ const s = StyleSheet.create({
     opacity: 0.7,
   },
 
+  // RLC_PROJECTS_MISSING_STYLES_FIX_V1
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  backBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.72)",
+  },
+  backTxt: {
+    color: "#061A33",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  headerSpacer: {
+    flex: 1,
+  },
+  modePill: {
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.72)",
+  },
+  modeTxt: {
+    color: "#061A33",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  ctaWrap: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  ctaBtn: {
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "#0B5A7D",
+  },
+  ctaTxt: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  ctaHint: {
+    marginTop: 10,
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "800",
+  },
+
   modalHint: {
     marginTop: 10,
     fontSize: 12,
@@ -1371,5 +1372,11 @@ const s = StyleSheet.create({
     lineHeight: 18,
   },
 });
+
+
+
+
+
+
 
 
