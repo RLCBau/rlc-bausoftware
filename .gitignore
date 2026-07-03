@@ -131,3 +131,5 @@ apps/web/patch-recipes-ki.py
 apps/web/kalkulation.ki.ts
 *.bak-*
 apps/server/src/routes/projectLv.ts.before_*
+apps/server/data/
+apps/server/apps/server/data/
