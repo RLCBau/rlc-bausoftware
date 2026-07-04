@@ -279,17 +279,60 @@ const AUFMASS = {
    ============================================================ */
 
 const pageContainer: React.CSSProperties = {
-  maxWidth: 1180,
-  margin: "0 auto",
-  padding: "1.5rem 1.75rem 2rem",
+  display: "grid",
+  gap: 16,
+  padding: 16,
+};
+
+const heroCard: React.CSSProperties = {
+  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  color: "#FFFFFF",
+  borderRadius: 18,
+  padding: 22,
+  display: "grid",
+  gap: 14,
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+};
+
+const eyebrow: React.CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  opacity: 0.82,
+  fontWeight: 800,
+};
+
+const title: React.CSSProperties = {
+  margin: "4px 0",
+  fontSize: 30,
+  fontWeight: 900,
+};
+
+const subtitle: React.CSSProperties = {
+  margin: 0,
+  maxWidth: 980,
+  opacity: 0.9,
+  lineHeight: 1.55,
+};
+
+const heroActions: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const heroMeta: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.9,
 };
 
 const card: React.CSSProperties = {
   background: "#FFFFFF",
-  borderRadius: 12,
+  borderRadius: 16,
   border: "1px solid #E5E7EB",
   boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-  padding: "1.25rem 1.5rem 1.5rem",
+  padding: 16,
 };
 
 const cardTitleRow: React.CSSProperties = {
@@ -301,9 +344,9 @@ const cardTitleRow: React.CSSProperties = {
 };
 
 const cardTitle: React.CSSProperties = {
-  fontSize: "1rem",
-  fontWeight: 600,
-  color: "#111827",
+  fontSize: 17,
+  fontWeight: 900,
+  color: "#0F172A",
 };
 
 const cardHint: React.CSSProperties = {
@@ -321,16 +364,18 @@ const toolbar: React.CSSProperties = {
 };
 
 const btn: React.CSSProperties = {
-  fontSize: "0.8rem",
-  borderRadius: 999,
-  padding: "0.35rem 0.9rem",
   border: "1px solid #D1D5DB",
-  background: "#F9FAFB",
-  color: "#374151",
+  borderRadius: 10,
+  padding: "9px 13px",
+  fontSize: 13,
+  fontWeight: 800,
+  background: "#FFFFFF",
+  color: "#0F172A",
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
   gap: "0.35rem",
+  whiteSpace: "nowrap",
 };
 
 const btnDisabled: React.CSSProperties = {
@@ -341,9 +386,9 @@ const btnDisabled: React.CSSProperties = {
 const btnPrimary: React.CSSProperties = {
   ...btn,
   background: "#2563EB",
-  borderColor: "#1D4ED8",
+  borderColor: "#2563EB",
   color: "#FFFFFF",
-  fontWeight: 500,
+  fontWeight: 900,
 };
 
 const th: React.CSSProperties = {
@@ -2213,7 +2258,7 @@ export default function AufmassEditor() {
                       style={{ ...inpWide, cursor: "pointer" }}
                     />
                     <button style={btn} type="button" onClick={openFormulaEditor}>
-                      ↗︎ Editor
+                      ↗ Editor
                     </button>
                   </div>
 
@@ -2449,3 +2494,4 @@ export default function AufmassEditor() {
     </div>
   );
 }
+
