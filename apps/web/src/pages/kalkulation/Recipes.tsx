@@ -1,5 +1,6 @@
-﻿// apps/web/src/pages/kalkulation/Recipes.tsx
+// apps/web/src/pages/kalkulation/Recipes.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import RlcKiDashboard from "../../components/rlc-ai/RlcKiDashboard";
 import { useNavigate } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -868,7 +869,6 @@ function recipeLineFromLibrary(item: ExternalLibraryItem): RecipeLine {
 
 function isSurchargeLike(row: Partial<RecipeLine>): boolean {
   const group = String(row.group || "").trim();
-
   return (
     group === "Zuschläge" ||
     group === "Gemeinkosten" ||
@@ -999,6 +999,869 @@ function priceBreakdownGroupToResourceGroup(group: string): ResourceGroup {
   return "Material";
 }
 
+
+type RlcUrkalkulationFamily =
+  | "statik_berechnung"
+  | "besucherfuehrung"
+  | "naturschutz_auflagen"
+  | "vlies_geotextil"
+  | "rundholzlage"
+  | "kernbohrung"
+  | "hdd_start_zielgrube"
+  | "hdd_bohrung"
+  | "bentonit"
+  | "bohrprotokoll"
+  | "kompressor"
+  | "ueberdachung"
+  | "bitumen_anspruehen"
+  | "brunnen_aufschlussbohrung"
+  | "verbau_spundwand"
+  | "ramm_press_ruettel"
+  | "rohrvortrieb_einpressen"
+  | "nassbaggerarbeiten"
+  | "schlitzwand"
+  | "spritzbeton"
+  | "kampfmittel"
+  | "verkehrssicherung"
+  | "baulogistik"
+  | "abfallentsorgung"
+  | "abscheider_klaeranlage"
+  | "bahn_gleisbau"
+  | "abdichtung_bauwerk"
+  | "pflaster_bord_rinne"
+  | "asphalt_oberbau"
+  | "baustelle"
+  | "infrastruktur"
+  | "beweissicherung"
+  | "grenzstein"
+  | "bauschild"
+  | "beton_bauteile"
+  | "drainage"
+  | "spuelen_pruefen"
+  | "elektro_msr"
+  | "armaturen_zubehoer"
+  | "pumpstation"
+  | "hausanschluss"
+  | "mehr_minderpreis"
+  | "transport_montage"
+  | "dokumentation"
+  | "wartung_anleitung"
+  | "tuev_abnahme"
+  | "spreng_abstimmung"
+  | "haufwerk_zulage"
+  | "asphalt_trennen"
+  | "strassenaufbruch"
+  | "schachtbau"
+  | "mutterboden"
+  | "rodung"
+  | "aushub_zuschlag"
+  | "aushub"
+  | "verfuellung"
+  | "rohrleitung"
+  | "kabel"
+  | "oberflaeche"
+  | "wanderweg_wiederherstellen"
+  | "wasserhaltung"
+  | "zaunbau"
+  | "schutzmassnahme"
+  | "regie"
+  | "material"
+  | "unknown";
+
+function detectRlcUrkalkulationFamily(row: LVPos): RlcUrkalkulationFamily {
+  const t = normSearch(
+    `${row.posNr || ""} ${row.kurztext || ""} ${row.langtext || ""} ${row.einheit || ""}`
+  );
+
+  if (
+    t.includes("fremdleistung") ||
+    t.includes("subunternehmer") ||
+    t.includes("nachunternehmer") ||
+    t.includes("spezialfirma")
+  ) {
+    return "unknown";
+  }
+
+  if (
+    t.includes("stundensaetze") ||
+    t.includes("stundensatz") ||
+    t.includes("baggerstunden") ||
+    t.includes("lkw-stunden") ||
+    t.includes("lkw stunden") ||
+    t.includes("radlader") ||
+    t.includes("motorflex") ||
+    t.includes("stromaggregat") ||
+    t.includes("fahrzeugkosten") ||
+    t.includes("verrechnungssaetze") ||
+    t.includes("verrechnungssatz")
+  ) {
+    return "regie";
+  }
+
+  if (
+    t.includes("bestandszeichnung") ||
+    t.includes("bestandszeichnungen") ||
+    t.includes("as-built") ||
+    t.includes("as built") ||
+    t.includes("aufmassdokumentation") ||
+    t.includes("aufmaßdokumentation") ||
+    t.includes("dokumentation") ||
+    t.includes("revisionsunterlagen") ||
+    t.includes("planunterlagen")
+  ) {
+    return "dokumentation";
+  }
+
+  if (
+    t.includes("baustelleneinrichtung") ||
+    t.includes("baustelle raeumen") ||
+    t.includes("bauzaun") ||
+    t.includes("baustellenabsicherung") ||
+    t.includes("baustellendokumentation") ||
+    t.includes("baustellenkoordination") ||
+    t.includes("verkehrssicherung") ||
+    t.includes("besucherfuehrung") ||
+    t.includes("zufahrt") ||
+    t.includes("baustrasse") ||
+    t.includes("lagerflaeche") ||
+    t.includes("ueberfahrt") ||
+    t.includes("besprechungsraum") ||
+    t.includes("abstimmung") ||
+    t.includes("dokumentation")
+  ) {
+    return "baustelle";
+  }
+
+  if (
+    t.includes("mutterboden") ||
+    t.includes("oberboden") ||
+    t.includes("humus") ||
+    t.includes("humusmiete") ||
+    t.includes("grasnarbe")
+  ) {
+    return "mutterboden";
+  }
+
+  if (
+    t.includes("rodung") ||
+    t.includes("freimachen") ||
+    t.includes("bewuchs") ||
+    t.includes("straeucher") ||
+    t.includes("wurzeln") ||
+    t.includes("wurzelstoecke") ||
+    t.includes("stubben") ||
+    t.includes("baeume faellen")
+  ) {
+    return "rodung";
+  }
+
+  if (
+    t.includes("wasserhaltung") ||
+    t.includes("pumpenstunden") ||
+    t.includes("pumpe") ||
+    t.includes("grundwasser")
+  ) {
+    return "wasserhaltung";
+  }
+
+  if (
+    t.includes("flaechen einzaeunen") ||
+    t.includes("flachen einzaunen") ||
+    t.includes("flächen einzäunen") ||
+    t.includes("einzaeunen") ||
+    t.includes("einzaunen") ||
+    t.includes("einzäunen") ||
+    t.includes("zaun herstellen") ||
+    t.includes("weidezaun herstellen") ||
+    t.includes("zaun setzen")
+  ) {
+    return "zaunbau";
+  }
+
+  if (
+    t.includes("wanderweg") ||
+    t.includes("forststrasse") ||
+    t.includes("forststraße") ||
+    t.includes("kiesweg")
+  ) {
+    return "wanderweg_wiederherstellen";
+  }
+
+  if (
+    t.includes("baum") ||
+    t.includes("schutzmassnahme") ||
+    t.includes("bohlenschutz") ||
+    t.includes("weidezaun") ||
+    t.includes("zaeune abbauen") ||
+    t.includes("zaun")
+  ) {
+    return "schutzmassnahme";
+  }
+
+  if (
+    t.includes("rohrgrabenaushub") ||
+    t.includes("rohrgraben") ||
+    t.includes("leitungsgraben") ||
+    t.includes("kabelgraben") ||
+    t.includes("aushub") ||
+    t.includes("abtrag") ||
+    t.includes("boden loesen") ||
+    t.includes("bodenklasse") ||
+    t.includes("bd-kl") ||
+    t.includes("bd kl") ||
+    t.includes("fels") ||
+    t.includes("meissel") ||
+    t.includes("suchschlitz")
+  ) {
+    return "aushub";
+  }
+
+  if (
+    t.includes("verfuellen") ||
+    t.includes("verfuellung") ||
+    t.includes("verfuell") ||
+    t.includes("auffuellen") ||
+    t.includes("auffuell") ||
+    t.includes("einbauen") ||
+    t.includes("verdichten") ||
+    t.includes("planum") ||
+    t.includes("planie") ||
+    t.includes("flaechen auflockern") ||
+    t.includes("entwaesserungsrinne") ||
+    t.includes("entwaesserungsmulde") ||
+    t.includes("sauberkeitsschicht") ||
+    t.includes("mehr- oder mindertiefe") ||
+    t.includes("frostschutz") ||
+    t.includes("schotter") ||
+    t.includes("kies") ||
+    t.includes("sand") ||
+    t.includes("riesel") ||
+    t.includes("schroppen")
+  ) {
+    return "verfuellung";
+  }
+
+  if (
+    t.includes("rohrleitung") ||
+    t.includes("rohr verlegen") ||
+    t.includes("leitung verlegen") ||
+    t.includes("wasserleitung") ||
+    t.includes("druckleitung") ||
+    t.includes("kanal") ||
+    t.includes("schacht") ||
+    t.includes("formstueck") ||
+    t.includes("formstuecke") ||
+    t.includes("passstueck") ||
+    t.includes("passstuecke") ||
+    t.includes("boeschungsstueck") ||
+    t.includes("durchlass") ||
+    t.includes("ggg") ||
+    t.includes("pe-hd") ||
+    t.includes("pe hd") ||
+    t.includes("hydrant") ||
+    t.includes("schieber") ||
+    t.includes("armatur") ||
+    t.includes("isolierbinde") ||
+    t.includes("be- und entlueftungsrohr") ||
+    t.includes("entlueftungsrohr") ||
+    t.includes("spuelen und entkeimen")
+  ) {
+    return "rohrleitung";
+  }
+
+  if (
+    t.includes("kabel") ||
+    t.includes("speedpipe") ||
+    t.includes("leerrohr") ||
+    t.includes("schutzrohr") ||
+    t.includes("kabelschutzrohr") ||
+    t.includes("schutzmatte") ||
+    t.includes("trassenwarnband") ||
+    t.includes("warnband") ||
+    t.includes("runddraht") ||
+    t.includes("erdleitung") ||
+    t.includes("stromanschlussantrag") ||
+    t.includes("warnanlage") ||
+    t.includes("endstopfen") ||
+    t.includes("doppelsteckmuffe") ||
+    t.includes("einzelzugabdichtung")
+  ) {
+    return "kabel";
+  }
+
+  if (
+    t.includes("asphalt") ||
+    t.includes("pflaster") ||
+    t.includes("bordstein") ||
+    t.includes("belag") ||
+    t.includes("oberflaeche") ||
+    t.includes("decke") ||
+    t.includes("fraesen") ||
+    t.includes("schneiden") ||
+    t.includes("aufbruch") ||
+    t.includes("wasserbausteine")
+  ) {
+    return "oberflaeche";
+  }
+
+  if (
+    t.includes("material") ||
+    t.includes("liefern") ||
+    t.includes("zusaetzliche anreise") ||
+    t.includes("wartungs") ||
+    t.includes("bedienungsanleitung") ||
+    t.includes("tuev") ||
+    t.includes("ebb-abnahme") ||
+    t.includes("abnahme") ||
+    t.includes("bentonit") ||
+    t.includes("bohrung") ||
+    t.includes("bohrprotokoll") ||
+    t.includes("statische berechnung") ||
+    t.includes("ueberdachung") ||
+    t.includes("kompressorstunden") ||
+    t.includes("zulage") ||
+    t.includes("zuschlag") ||
+    t.includes("mehrpreis")
+  ) {
+    return "material";
+  }
+
+  return "unknown";
+}
+
+function detectRlcUrkalkulationFamilyV4(row: LVPos): RlcUrkalkulationFamily {
+  const k = normSearch(`${row.kurztext || ""}`);
+  const l = normSearch(`${row.langtext || ""}`);
+  const t = normSearch(`${row.posNr || ""} ${row.kurztext || ""} ${row.langtext || ""} ${row.einheit || ""}`);
+
+  const hasAny = (value: string, keys: string[]) => keys.some((x) => value.includes(x));
+
+  if (hasAny(t, ["fremdleistung", "subunternehmer", "nachunternehmer", "spezialfirma"])) return "unknown";
+
+  // RLC V20: zusätzliche Tiefbau-/STLB-/VOB-C-Familien aus Online-Recherche.
+  // Diese Regeln liegen absichtlich vor den generischen Aushub/Rohr/Material-Fallbacks.
+  if (hasAny(k, ["brunnenbau", "aufschlussbohrung", "aufschlussbohrungen", "pegelbohrung", "grundwassermessstelle", "brunnenstube", "brunnenkopf", "filterrohr", "vollrohr brunnen", "bohrloch ausbauen"])) return "brunnen_aufschlussbohrung";
+  if (hasAny(k, ["verbau", "spundwand", "trägerbohlwand", "traegerbohlwand", "kanaldielen", "grabenverbau", "verbaukasten", "gleitschienenverbau", "verbau ziehen", "verbau vorhalten"])) return "verbau_spundwand";
+  if (hasAny(k, ["rammarbeiten", "rüttelarbeiten", "ruettelarbeiten", "pressarbeiten", "pfahl rammen", "spundbohle rammen", "vibrationsramme", "rammgerät", "rammgeraet", "presspfahl"])) return "ramm_press_ruettel";
+  if (hasAny(k, ["rohrvortrieb", "vortriebsrohr", "pressbohrung", "einpressarbeiten", "rohr einpressen", "pilotrohrvortrieb", "durchpressung", "vortriebsschacht", "zielschacht vortrieb"])) return "rohrvortrieb_einpressen";
+  if (hasAny(k, ["nassbagger", "nassbaggerarbeiten", "gewässersohle", "gewaessersohle", "sohle räumen", "sohle raeumen", "sediment räumen", "sediment raeumen", "schlammfang räumen", "schlammfang raeumen"])) return "nassbaggerarbeiten";
+  if (hasAny(k, ["schlitzwand", "dichtwand", "stützflüssigkeit", "stuetzfluessigkeit", "bentonitschlitzwand", "dichtschlitzwand"])) return "schlitzwand";
+  if (hasAny(k, ["spritzbeton", "nassspritzbeton", "trockenspritzbeton", "spritzmörtel", "spritzmoertel", "sicherung mit spritzbeton"])) return "spritzbeton";
+  if (hasAny(k, ["kampfmittel", "kampfmittelräumung", "kampfmittelraeumung", "sondierung", "munition", "blindgänger", "blindgaenger", "bombenfund", "feuerwerker"])) return "kampfmittel";
+  if (hasAny(k, ["verkehrssicherung", "verkehrsführung", "verkehrsfuehrung", "baustellenampel", "lichtsignalanlage", "beschilderung", "absperrung", "leitbake", "leitkegel", "sicherungsfahrzeug", "rsa", "verkehrszeichenplan"])) return "verkehrssicherung";
+  if (hasAny(k, ["baulogistik", "logistikfläche", "logistikflaeche", "lagerplatz", "materiallager", "kranstellfläche", "kranstellflaeche", "lieferkoordination", "container umsetzen", "baustellentransport intern"])) return "baulogistik";
+  if (hasAny(k, ["abfallentsorgung", "entsorgung", "verwertung", "beseitigung", "deponie", "belasteter boden", "belasteten boden", "belastetes material", "kontaminierter boden", "kontaminierten boden", "dk i", "dk ii", "dk iii", "zuordnungswert", "laga", "teerhaltig", "pechhaltig", "asbest", "schadstoff", "boden analyse", "bodenanalyse", "haufwerksbeprobung"])) return "abfallentsorgung";
+  if (hasAny(k, ["abscheider", "kleinkläranlage", "kleinklaeranlage", "ölabscheider", "oelabscheider", "fettabscheider", "sedimentationsanlage", "regenklärbecken", "regenklaerbecken", "kläranlage", "klaeranlage"])) return "abscheider_klaeranlage";
+  if (hasAny(k, ["bahnübergang", "bahnuebergang", "gleisbau", "gleis", "weiche", "bahnsteig", "schiene", "schotteroberbau gleis", "stopfmaschine"])) return "bahn_gleisbau";
+  if (hasAny(k, ["abdichtung", "dichtungsbahn", "fugenband", "quellband", "mauerkragen", "rohrdurchführung abdichten", "rohrdurchfuehrung abdichten", "bitumenbahn", "kunststoffdichtungsbahn"])) return "abdichtung_bauwerk";
+  if (hasAny(k, ["pflaster", "plattenbelag", "bordstein", "bordsteine", "rinne setzen", "rinnensteine", "zeiler", "muldenrinne", "hochbord", "tiefbord", "rasengitter", "verbundsteinpflaster"])) return "pflaster_bord_rinne";
+  if (hasAny(k, ["asphaltdeckschicht", "asphalttragschicht", "asphaltbinder", "asphalttragdeckschicht", "bituminöse tragschicht", "bituminoese tragschicht", "walzasphalt", "gussasphalt", "fräsen asphalt", "fraesen asphalt"])) return "asphalt_oberbau";
+
+  // RLC V14: remaining X83 families before generic material/rohrleitung fallbacks.
+  if (hasAny(k, ["statische berechnung", "statischen berechnung", "statik", "standsicherheitsnachweis", "tragwerksplanung"])) return "statik_berechnung";
+  if (hasAny(k, ["besucherführung", "besucherfuhrung", "besucherfuehrung", "besucher fuehrung", "besucher fuhrung", "besucher führung", "besucherinformation", "besucher information"])) return "besucherfuehrung";
+  if (hasAny(k, ["naturschutz", "untere naturschutzbehörde", "untere naturschutzbehoerde", "vorgegebene bauzeiten", "bauzeiten", "bauabschnitte", "naturschutzauflage"])) return "naturschutz_auflagen";
+  if (hasAny(k, ["straßenbauvlies", "strassenbauvlies", "bauvlies", "geotextil", "filtervlies", "vlies"] )) return "vlies_geotextil";
+  if (hasAny(k, ["rundholzlage", "rundholz", "holzlage", "holzbohlen", "bohlenlage"] )) return "rundholzlage";
+  if (hasAny(k, ["kernbohrung", "kernbohrungen", "bohrkern", "wanddurchbruch", "deckendurchbruch"] )) return "kernbohrung";
+  if (hasAny(k, ["start-und zielgruben", "start- und zielgruben", "start-und zielgrube", "start- und zielgrube", "start und zielgrube", "startgrube", "zielgrube", "zielgruben"])) return "hdd_start_zielgrube";
+  if (hasAny(k, ["horizontalspülbohrung", "horizontalspuelbohrung", "horizontalspulbohrung", "hdd", "pilotbohrung", "spuelbohrung", "spülbohrung", "spulbohrung", "auflassene bohrung", "aufgelassene bohrung", "stillstandzeiten bei bohrung"] )) return "hdd_bohrung";
+  if (hasAny(k, ["bentonit", "bentonitver", "bentonitentsorgung", "betonit", "betonitver", "betonitentsorgung", "bohrspuelung", "bohrspülung", "bohrspulung"] )) return "bentonit";
+  if (hasAny(k, ["bohrprotokoll", "bohr protokoll", "protokoll bohrung", "bohrdokumentation"] )) return "bohrprotokoll";
+  if (hasAny(k, ["kompressorstunden", "kompressor", "druckluft"] )) return "kompressor";
+  if (hasAny(k, ["überdachung", "ueberdachung", "einstieg überdachung", "einstieg ueberdachung", "einhausung"] )) return "ueberdachung";
+  if (hasAny(k, ["schichtenverbund", "unterlage reinigen", "vorhandene unterlage reinigen", "ansprühen", "anspruehen", "bitumenhaltigem bindemittel", "bitumen bindemittel", "rampenspritzgerät", "rampenspritzgeraet", "haftkleber", "bitumenemulsion"])) return "bitumen_anspruehen";
+  if (hasAny(k, ["revisionsschacht", "revisionsschächte", "revisionsschaechte", "energieumwandlungsschacht", "energieumwandlungsschächte", "energieumwandlungsschaechte", "abdeckplatte", "ap-m"])) return "schachtbau";
+  if (hasAny(k, ["wanderweg wiederherstellen", "wanderweg", "forststrasse", "forststraße", "kiesweg", "weg wiederherstellen"])) return "wanderweg_wiederherstellen";
+  if (hasAny(k, ["flächen und wege wiederherstellen", "flaechen und wege wiederherstellen", "wege wiederherstellen", "flaechen wiederherstellen", "flächen wiederherstellen"])) return "oberflaeche";
+  if (hasAny(k, ["pe 100", "pe-trinkwasserdruckrohr", "trinkwasserdruckrohr", "polyethylenrohr", "polyethylen-rohr"])) return "rohrleitung";
+  if (hasAny(k, ["kreuzung durchl", "kreuzung durchlass", "kreuzung durchlässe", "kreuzung durchlaesse"])) return "rohrleitung";
+  if (hasAny(k, ["vorflut", "endgültiger ableitung", "endgueltiger ableitung", "zusammenschluss der best", "neuen ha-leitung"])) return "wasserhaltung";
+
+  // RLC V11: specific LV families first. Kurztext/technical keywords beat generic material.
+  if (hasAny(k, ["beweissicherung", "niederschrift über die beweissicherung", "niederschrift ueber die beweissicherung", "zustandsfeststellung", "fotodokumentation beweissicherung"])) return "beweissicherung";
+  if (hasAny(k, ["grenzsteine", "grenzstein", "vermessungsstein", "markierungsstein"])) return "grenzstein";
+  if (hasAny(k, ["bauschild", "bautafel", "informationstafel", "besucherinformation"])) return "bauschild";
+  if (hasAny(k, ["instandhaltung", "anliegerverkehr", "aufrechterhalten", "zufahrt zur baustelle", "beengte bauweise", "erschwerniszuschlag", "erschwernis alter", "zusaetzliche anreise", "zusätzliche anreise"])) return "infrastruktur";
+  if (hasAny(k, ["bestandspläne", "bestandsplaene", "bestandsplan", "revisionsplan", "lageplan", "kanallängsschnitt", "kanallaengsschnitt"])) return "dokumentation";
+  if (hasAny(k, ["sohl- und ummantelungsbeton", "sohl und ummantelungsbeton", "ummantelungsbeton", "sohlbeton", "stützbeton", "stuetzbeton", "magerbeton", "betonsockel", "stampfbeton", "lehmpfeiler", "baustahl", "bewehrung", "boeschungsbausteine", "böschungsbausteine", "wasserbausteine", "mauerrohr", "mauerdurchführung", "mauerdurchfuehrung"])) return "beton_bauteile";
+  if (hasAny(k, ["drainageleitung", "drainageleitungen", "drainagerohr", "drainagerohre", "drainage", "sickerleitung"])) return "drainage";
+  if (hasAny(k, ["druckprobe", "spülen", "spuelen", "spulen", "kanal spulen", "kanalspulen", "rohr spulen", "leitung spulen", "entkeimung", "spülung", "spuelung", "spulung", "desinfektion", "leitung reinigen", "leitung pruefen", "leitung prüfen", "leitung prufen", "dichtheitsprüfung", "dichtheitspruefung", "dichtheitsprufung"])) return "spuelen_pruefen";
+  if (hasAny(k, ["elektroverteilung", "elektroverteilungsanlage", "elektro verteilung", "freiluftschrank", "zählerplatz", "zaehlerplatz", "zahlerplatz", "niveaumessung", "fernwirkanlage", "durchflussmesser", "durchflußmesser", "durchflusmesser", "pumpensteuerung", "steuerung", "anschluss schrank", "warnanlage"])) return "elektro_msr";
+  if (hasAny(k, ["abwasserpumpstation", "pumpstation", "pumpschacht", "abwasserpumpe", "kreiselpumpe", "pumpenanlage"])) return "pumpstation";
+  if (hasAny(k, ["hausanschluss herstellen", "hausanschlussleitung", "mikrorohrhausanschlussleitung", "verlegung hausanschlussleitung", "anschluss bestehende leitung", "druckleitungsanschluss", "anschluss und verbindung"])) return "hausanschluss";
+  if (hasAny(k, ["losflansch", "isolierbinde", "ortungsband", "hinweisstein", "hinweissteine", "hinweisschild", "hinweisschilder", "hinweissaeule", "hinweissäule", "schmutzfänger", "schmutzfaenger", "ringraumdichtung", "ringraumdichtungen", "reduzierung", "aufweitung", "ffr-stück", "ffr-stueck", "t-stück", "t-stueck", "bogen", "90 grad", "fitting", "fittings", "messing", "rohrabschluss", "haube", "einsteigleiter", "einstieghilfe", "dichtkappen", "doppelsteckmuffe", "doppelsteckmufen", "mmb-stück", "mmb-stueck", "starre verbindung", "auskreuzen"])) return "armaturen_zubehoer";
+  if (hasAny(k, ["transport und montage", "verlegung", "transport und montage pumpensteuerung", "zusätzliche anreise", "zusaetzliche anreise"])) return "transport_montage";
+  if (hasAny(k, ["mehr- oder minderpreis", "mehr oder minderpreis", "mehr- oder minder", "mehr oder minder", "mehrpreis", "minderpreis", "zulage", "zuschlag", "erschwernisse"]) && !hasAny(k, ["rohrgrabenaushub", "bd-kl", "bd kl", "bodenklasse"])) return "mehr_minderpreis";
+
+  if (hasAny(k, ["bestandszeichnung", "bestandszeichnungen", "as-built", "as built", "aufmassdokumentation", "aufmaßdokumentation", "revisionsunterlagen", "planunterlagen", "dokumentation"])) return "dokumentation";
+  if (hasAny(k, ["wartungs- und bedienungsanleitung", "wartungs und bedienungsanleitung", "wartungsanleitung", "bedienungsanleitung", "betriebsanleitung", "anleitung"])) return "wartung_anleitung";
+  if (hasAny(k, ["tuv-abnahme", "tuev-abnahme", "tüv-abnahme", "tuv abnahme", "tuev abnahme", "tüv abnahme", "tuv", "tuev", "prüfstelle", "pruefstelle", "ebb-abnahme", "ebb abnahme", "abnahme pruefung", "abnahme prüfung"])) return "tuev_abnahme";
+  if (hasAny(k, ["sprengarbeiten", "sprengarbeit", "spreng", "sprengen"]) && hasAny(k, ["erkundung", "abstimmung", "koordinierung", "koordination", "zulage"])) return "spreng_abstimmung";
+  if (hasAny(k, ["gesondertes haufwerk", "haufwerk", "separates haufwerk", "haufwerksbildung"])) return "haufwerk_zulage";
+  if (hasAny(k, ["asphalt trennen", "asphalt schneiden", "asphaltschneiden", "asphaltfuge", "fugenschnitt", "schneiden asphalt", "trennen asphalt"])) return "asphalt_trennen";
+  if (hasAny(k, ["strassenaufbruch", "straßenaufbruch", "aufbruch strassenbereich", "aufbruch straßenbereich", "asphalt aufnehmen", "asphalt abbrechen", "asphaltaufbruch", "belag aufnehmen", "decke aufnehmen"])) return "strassenaufbruch";
+  if (hasAny(k, ["endschacht", "druckleitungsendschacht", "schachtbau", "fertigteilschacht", "schacht herstellen", "schacht setzen", "kontrollschacht", "schachtunterteil", "schachtoberteil"])) return "schachtbau";
+
+  // Kurztext has priority. This prevents long Langtext references like Mutterboden, Baum or Aushub
+  // from stealing the real family of Rohrgrabenaushub, Rohre, Kabel or Zulagen.
+  const isAushubZuschlagKurztext =
+    hasAny(k, ["zuschlag", "zulage", "mehrpreis", "erschwerniszuschlag", "mehr- oder minderpreis", "mehr oder minderpreis"]) &&
+    hasAny(k, ["rohrgrabenaushub", "rohrgraben", "leitungsgraben", "kabelgraben", "aushub", "bd-kl", "bd kl", "bodenklasse", "fels", "meissel", "meißel"]);
+
+  if (isAushubZuschlagKurztext) return "aushub_zuschlag";
+  if (hasAny(k, ["rohrgrabenaushub", "rohrgraben", "leitungsgraben", "kabelgraben", "aushub", "bodenabtrag", "abtrag", "suchschlitz", "fels", "meissel", "meißel"])) return "aushub";
+  if (hasAny(k, ["hdpe rohre", "hdpe", "pe rohre", "pe hd", "duktile gussrohre", "duktile gußrohre", "gussrohre", "gußrohre", "stahlbetonrohr", "kunststoffrohre", "drainagerohre", "rohrleitung", "wasserleitung", "druckleitung", "formstueck", "formstück", "formstuecke", "formstücke", "passstueck", "passstück", "passstuecke", "passstücke", "boeschungsstueck", "böschungsstück", "durchlass", "schacht", "hydrant", "schieber", "armatur", "strassenkappe", "straßenkappe", "entleerungsleitung", "entlueftungsrohr", "entlüftungsrohr", "ggg", "pp kanal", "abflussrohre"])) return "rohrleitung";
+  if (hasAny(k, ["kabel", "speedpipe", "leerrohr", "schutzrohr", "kabelschutzrohr", "schutzmatte", "trassenwarnband", "warnband", "runddraht", "erdleitung", "warnanlage", "stromanschlussantrag", "endstopfen", "doppelsteckmuffe", "einzelzugabdichtung", "fernwirkanlage"])) return "kabel";
+  if (hasAny(k, ["mutterboden", "oberboden", "humus", "humusmiete", "grasnarbe"])) return "mutterboden";
+  if (hasAny(k, ["wasserhaltung", "pumpenstunden", "pumpe", "grundwasser"])) return "wasserhaltung";
+  if (hasAny(k, ["asphalt", "pflaster", "bordstein", "belag", "oberflaeche", "oberfläche", "decke", "fraesen", "fräsen", "schneiden", "aufbruch", "wasserbausteine", "kiesstrassen", "kiesstraßen", "wanderweg", "wanderweg wiederherstellen"])) return "oberflaeche";
+  if (hasAny(k, ["rodung", "freimachen", "bewuchs", "straeucher", "sträucher", "hecken", "buschwerk", "gebuesch", "gebüsch", "wurzeln", "wurzelstoecke", "wurzelstöcke", "stubben", "baeume faellen", "bäume fällen"])) return "rodung";
+  if (hasAny(k, ["flächen einzäunen", "flaechen einzaeunen", "flachen einzaunen", "einzäunen", "einzaeunen", "einzaunen", "zaun herstellen", "weidezaun herstellen", "zaun setzen", "bauzaun setzen"])) return "zaunbau";
+  if (hasAny(k, ["schutzmassnahme", "schutzmaßnahme", "bohlenschutz", "weidezaun", "weideflaechen", "weideflächen", "zaeune abbauen", "zäune abbauen", "zaun", "baumschutz", "beweissicherung", "besucherinformation"])) return "schutzmassnahme";
+  if (hasAny(k, ["verfuellen", "verfüllen", "verfuellung", "verfüllung", "auffuellen", "auffüllen", "auffuell", "verdichten", "planum", "planie", "flaechen auflockern", "flächen auflockern", "entwaesserungsrinne", "entwässerungsrinne", "entwaesserungsmulde", "entwässerungsmulde", "sauberkeitsschicht", "frostschutz", "frostsicheres kiesmaterial", "mineralbeton", "schotter", "kies", "sand", "riesel", "rieselueberdeckung", "rieselüberdeckung", "sohlbettung", "rohrumhuellung", "rohrumhüllung", "schroppen"])) return "verfuellung";
+  if (hasAny(k, ["stundensaetze", "stundensätze", "stundensatz", "baggerstunden", "lkw stunden", "lkw-stunden", "radlader", "motorflex", "stromaggregat", "fahrzeugkosten", "verrechnungssaetze", "verrechnungssätze", "verrechnungssatz"])) return "regie";
+  if (hasAny(k, ["baustelleneinrichtung", "abbau und abfuhr", "baustelle raeumen", "baustelle räumen", "bauzaun", "baustellenabsicherung", "baustellendokumentation", "baustellenkoordination", "verkehrssicherung", "zufahrt", "baustrasse", "baustraße", "lagerflaeche", "lagerfläche", "ueberfahrt", "überfahrt", "besprechungsraum", "abstimmung", "dokumentation", "instandhaltung", "anliegerverkehr"])) return "baustelle";
+  if (hasAny(k, ["material", "liefern", "zulage", "zuschlag", "mehrpreis", "mehr oder minderpreis", "mehr- oder minderpreis", "mehr oder mindertiefe", "mehr- oder mindertiefe", "bedienungsanleitung", "tuev", "tüv", "ebb abnahme", "abnahme", "bentonit", "bohrung", "bohrprotokoll", "statische berechnung", "ueberdachung", "überdachung", "kompressorstunden", "erschwerniszuschlag", "erschwernis", "zusaetzliche anreise", "zusätzliche anreise", "reduzierung", "einsteigleiter", "durchflussmesser", "durchflußmesser", "isolierbinde", "entkeimung", "spuelung", "spülung", "spulung", "spuelen", "spülen", "spulen"])) return "material";
+
+  return detectRlcUrkalkulationFamily(row);
+}
+
+function isRlcForceLocalUrkalkulation(row: LVPos): boolean {
+  return detectRlcUrkalkulationFamilyV4(row) !== "unknown";
+}
+
+function createRlcFallbackUrkalkulation(row: LVPos, ctx: ContextValues): RecipeLine[] {
+  const family = detectRlcUrkalkulationFamilyV4(row);
+  if (family === "unknown") return [];
+
+  const qty = Math.max(n(row.menge), 1);
+  const unit = row.einheit || "EH";
+
+  const mk = (
+    group: ResourceGroup,
+    resourceId: string,
+    name: string,
+    lineUnit: string,
+    lineQty: number,
+    price: number,
+    note: string
+  ): RecipeLine => ({
+    id: safeId(),
+    group,
+    resourceId,
+    name,
+    unit: lineUnit,
+    qty: round2(Math.max(lineQty, 0)),
+    price: round2(Math.max(price, 0)),
+    note,
+    aiSuggested: true,
+  });
+
+  const dailyOutput = Math.max(n(ctx.dailyOutput), 60);
+  const distanceFactor = ctx.distanceKm > 50 ? 1.15 : ctx.distanceKm > 25 ? 1.08 : 1;
+  const restrictedFactor = ctx.restricted ? 1.2 : 1;
+  const depthFactor = ctx.depthM >= 2.5 ? 1.35 : ctx.depthM >= 1.5 ? 1.18 : 1;
+  const factor = distanceFactor * restrictedFactor * depthFactor;
+
+  const lines: RecipeLine[] = [];
+
+  // RLC V7: mk() expects total quantities for the whole LV position.
+  // buildPriceBreakdown() later divides by LV Menge to show Menge je Einheit.
+  // Therefore per-unit technical assumptions must be multiplied by qty here.
+  const qpu = (perUnitQty: number) => round2(qty * perUnitQty);
+
+  if (family === "statik_berechnung") {
+    lines.push(mk("Personal", "P-STATIK-ING", "Statiker / Tragwerksplaner", "h", Math.max(3, qty * 3), 92, "Statische Berechnung erstellen und prüfen"));
+    lines.push(mk("Personal", "P-TECHNIK-DOKU", "Technische Dokumentation", "h", Math.max(1, qty), 68, "Berechnungsunterlagen, Plausibilisierung, Ablage"));
+    lines.push(mk("Material", "MAT-STATIK-DOKU", "Berechnungsunterlagen / Ausdruck", "Psch", Math.max(1, qty), 45, "PDF, Prüffassung und Nachweisunterlagen"));
+  } else if (family === "besucherfuehrung") {
+    lines.push(mk("Personal", "P-BESUCHERFUEHRUNG", "Bauleitung / Besucherführung", "h", Math.max(2, qty * 1.5), 75, "Besucher informieren, führen und sichern"));
+    lines.push(mk("Personal", "P-SICHERUNG", "Einweiser / Sicherungsposten", "h", Math.max(2, qty * 1.5), 58, "Absicherung während der Führung"));
+    lines.push(mk("Material", "MAT-BESUCHERINFO", "Besucherinformation / PSA", "Psch", Math.max(1, qty), 45, "Informationsmaterial, Warnwesten, Unterlagen"));
+  } else if (family === "naturschutz_auflagen") {
+    lines.push(mk("Personal", "P-BAULEITUNG-NATUR", "Bauleitung Naturschutzauflagen", "h", Math.max(2, qty * 2), 75, "Bauzeiten, Bauabschnitte und Auflagen koordinieren"));
+    lines.push(mk("Personal", "P-POLIER-NATUR", "Polier / Dokumentation", "h", Math.max(1, qty), 68, "Einweisung, Nachweisführung und Abstimmung"));
+    lines.push(mk("Material", "MAT-NATUR-DOKU", "Abstimmungsunterlagen", "Psch", Math.max(1, qty), 35, "Protokolle, Auflagen, Dokumentation"));
+  } else if (family === "vlies_geotextil") {
+    lines.push(mk("Personal", "P-VLIES", "Tiefbauer / Einbaukolonne", "h", qpu(0.018 * factor), 52, "Vlies auslegen, überlappen, fixieren"));
+    lines.push(mk("Maschinen", "M-KLEINGERAET", "Kleingerät / Hilfsmittel", "h", qpu(0.006 * factor), 38, "Handling und Zuschnitt"));
+    lines.push(mk("Material", "MAT-GEOTEXTIL", "Straßenbauvlies / Geotextil", unit, qty, 3.2, "Vliesmaterial gemäß LV"));
+  } else if (family === "rundholzlage") {
+    lines.push(mk("Personal", "P-HOLZLAGE", "Tiefbaukolonne Holzlage", "h", qpu(0.060 * factor), 54, "Rundholz ausrichten und einbauen"));
+    lines.push(mk("Maschinen", "M-BAGGER-HOLZ", "Bagger / Greifer", "h", qpu(0.030 * factor), 82, "Rundholz setzen und ausrichten"));
+    lines.push(mk("Material", "MAT-RUNDHOLZ", "Rundholz / Verbindungsmaterial", unit, qty, 22, "Holzlage gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-RUNDHOLZ", "Anlieferung Rundholz", "h", qpu(0.010 * distanceFactor), 110, "Transportanteil"));
+  } else if (family === "kernbohrung") {
+    lines.push(mk("Fremdleistung", "FL-KERNBOHRUNG", "Kernbohrgerät / Spezialist", unit.toLowerCase().includes("st") ? unit : "St", qty, 180, "Kernbohrung herstellen, Bohrkrone/Verschleiß"));
+    lines.push(mk("Personal", "P-BAULEITUNG-KERN", "Bauleitung / Einweisung", "h", Math.max(0.5, qty * 0.35), 75, "Einweisen, Lage prüfen, Abnahme"));
+    lines.push(mk("Material", "MAT-KERNBOHRUNG", "Wasser / Verschleiß / Abdichtung", "Psch", Math.max(1, qty * 0.2), 35, "Nebenmaterial Kernbohrung"));
+  } else if (family === "hdd_start_zielgrube") {
+    lines.push(mk("Personal", "P-GRUBE-HDD", "Tiefbauer / Einweiser Start-Zielgrube", "h", Math.max(2, qty * 2.0), 52, "Start-/Zielgruben herstellen, sichern, einweisen"));
+    lines.push(mk("Maschinen", "M-BAGGER-GRUBE-HDD", "Bagger / Minibagger Start-Zielgrube", "h", Math.max(1.5, qty * 1.5), 82, "Aushub, Profilieren, Wiederverfüllen"));
+    lines.push(mk("LKW / Transport", "LKW-GRUBE-HDD", "Transport / Umsetzen Boden", "h", Math.max(0.5, qty * 0.75), 118, "Abfuhr, Zwischenlager oder Umsetzung"));
+    lines.push(mk("Entsorgung", "E-GRUBE-HDD", "Boden Start-/Zielgrube entsorgen/verwerten", "t", Math.max(1, qty * 4.0), 28, "Entsorgung abhängig von Bodenklasse und Belastung"));
+    lines.push(mk("Material", "MAT-GRUBE-SICHERUNG", "Sicherung / Kleinmaterial Grube", "St", Math.max(1, qty), 85, "Absicherung, Bohlen, Kleinteile"));
+  } else if (family === "hdd_bohrung") {
+    lines.push(mk("Fremdleistung", "FL-HDD", "Horizontalspülbohrkolonne", unit, qty, unit.toLowerCase().includes("m") ? 95 : 850, "HDD/Pilotbohrung gemäß LV, Spezialgerät"));
+    lines.push(mk("Personal", "P-HDD-BAULEITUNG", "Bauleitung / Vermessung HDD", "h", Math.max(2, qpu(0.030)), 75, "Trasse, Höhen, Koordination"));
+    lines.push(mk("Maschinen", "M-HDD-HILFE", "Bagger / Hilfsgerät Start-Zielgrube", "h", Math.max(1, qpu(0.020)), 82, "Start-/Zielgruben, Unterstützung"));
+  } else if (family === "bentonit") {
+    lines.push(mk("Material", "MAT-BENTONIT", "Bentonit / Bohrspülung", unit, qty, unit.toLowerCase().includes("m3") ? 75 : 180, "Bentonit liefern, aufbereiten oder entsorgen"));
+    lines.push(mk("LKW / Transport", "LKW-BENTONIT", "Transport / Entsorgung Bentonit", "h", Math.max(1, qpu(0.030 * distanceFactor)), 118, "Abfuhr/Anlieferung"));
+    lines.push(mk("Personal", "P-BENTONIT", "Facharbeiter Bohrspülung", "h", Math.max(1, qpu(0.020)), 58, "Handling, Nachweis, Reinigung"));
+  } else if (family === "bohrprotokoll") {
+    lines.push(mk("Personal", "P-BOHR-DOKU", "Techniker Bohrprotokoll", "h", Math.max(1.5, qty * 1.5), 68, "Bohrdaten erfassen und Protokoll erstellen"));
+    lines.push(mk("Personal", "P-BAULEITUNG-BOHR", "Bauleitung Prüfung", "h", Math.max(0.5, qty * 0.5), 75, "Plausibilitätsprüfung und Übergabe"));
+    lines.push(mk("Material", "MAT-BOHR-DOKU", "Protokoll / Datenausgabe", "Psch", Math.max(1, qty), 35, "PDF, Plot, Ablage"));
+  } else if (family === "kompressor") {
+    lines.push(mk("Maschinen", "M-KOMPRESSOR", "Kompressor einschl. Betrieb", "h", unit.toLowerCase().includes("h") ? qty : Math.max(1, qty), 48, "Kompressorstunden gemäß LV"));
+    lines.push(mk("Personal", "P-KOMPRESSOR", "Bedienung / Kontrolle", "h", unit.toLowerCase().includes("h") ? qty * 0.15 : Math.max(0.5, qty * 0.15), 54, "Kontrolle und Umsetzen"));
+    lines.push(mk("Material", "MAT-BETRIEB", "Kraftstoff / Verschleiß", "h", unit.toLowerCase().includes("h") ? qty : Math.max(1, qty), 8, "Betriebsstoffe"));
+  } else if (family === "ueberdachung") {
+    lines.push(mk("Material", "MAT-UEBERDACHUNG", "Überdachung / Einhausung", unit, qty, 420, "Material gemäß LV"));
+    lines.push(mk("Personal", "P-MONTAGE-UEBERDACHUNG", "Montagekolonne", "h", Math.max(2, qty * 2), 56, "Aufstellen, sichern, abbauen"));
+    lines.push(mk("LKW / Transport", "LKW-UEBERDACHUNG", "Transport Überdachung", "h", Math.max(0.5, qty * 0.5), 110, "An-/Abtransport"));
+  } else if (family === "bitumen_anspruehen") {
+    lines.push(mk("Personal", "P-OBERFLAECHE-BITUMEN", "Straßenbauer / Spritzkolonne", "h", qpu(0.018 * factor), 54, "Unterlage reinigen, ansprühen und kontrollieren"));
+    lines.push(mk("Maschinen", "M-RAMPENSPRITZGERAET", "Rampenspritzgerät / Kleingerät", "h", qpu(0.010 * factor), 58, "Bitumenhaltiges Bindemittel aufsprühen"));
+    lines.push(mk("Material", "MAT-BITUMEN-BINDEMITTEL", "Bitumenemulsion / Haftkleber", unit, qty, 1.35, "Bindemittel je Fläche gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-BITUMEN", "Transport / Einrichtung", "h", qpu(0.004 * distanceFactor), 110, "Geräte- und Materialtransport"));
+  } else if (family === "brunnen_aufschlussbohrung") {
+    lines.push(mk("Fremdleistung", "FL-BRUNNENBOHRUNG", "Bohrgerät / Brunnenbauer", unit.toLowerCase().includes("m") ? unit : "St", qty, unit.toLowerCase().includes("m") ? 135 : 950, "Brunnenbau/Aufschlussbohrung gemäß LV, Spezialgerät"));
+    lines.push(mk("Personal", "P-BRUNNEN-BAULEITUNG", "Bauleitung / Vermessung Brunnen", "h", Math.max(1, qpu(0.02)), 75, "Ansatzpunkt, Tiefe, Ausbau und Übergabe prüfen"));
+    lines.push(mk("Material", "MAT-BRUNNEN-AUSBAU", "Filterrohr / Vollrohr / Filterkies", unit.toLowerCase().includes("m") ? unit : "Psch", Math.max(1, qty), unit.toLowerCase().includes("m") ? 32 : 180, "Ausbau- und Filtermaterial gemäß LV"));
+  } else if (family === "verbau_spundwand") {
+    lines.push(mk("Personal", "P-VERBAU", "Verbaukolonne / Einweiser", "h", qpu(0.060 * factor), 58, "Verbau herstellen, umsetzen, ziehen"));
+    lines.push(mk("Maschinen", "M-VERBAUGERAET", "Bagger / Verbaugerät", "h", qpu(0.045 * factor), 96, "Verbautafeln, Spundwand oder Kanaldielen einbauen"));
+    lines.push(mk("Material", "MAT-VERBAU", "Verbaumaterial / Vorhaltung", unit, qty, 28, "Verbau- oder Vorhaltematerial gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-VERBAU", "Transport Verbau", "h", qpu(0.020 * distanceFactor), 118, "An-/Abtransport und Umsetzen"));
+  } else if (family === "ramm_press_ruettel") {
+    lines.push(mk("Fremdleistung", "FL-RAMM-PRESS", "Ramm-/Rüttel-/Pressgerät mit Bedienung", unit, qty, unit.toLowerCase().includes("h") ? 165 : 260, "Spezialgerät für Ramm-, Rüttel- oder Pressarbeiten"));
+    lines.push(mk("Personal", "P-RAMM-EINWEISER", "Einweiser / Bauleitung", "h", qpu(0.020 * factor), 75, "Lage, Erschütterung und Ablauf kontrollieren"));
+    lines.push(mk("Material", "MAT-RAMMGUT", "Rammgut / Hilfsmaterial", unit, qty, 35, "Material nach LV, falls enthalten"));
+  } else if (family === "rohrvortrieb_einpressen") {
+    lines.push(mk("Fremdleistung", "FL-ROHRVORTRIEB", "Rohrvortrieb / Einpresskolonne", unit, qty, unit.toLowerCase().includes("m") ? 220 : 1200, "Rohrvortrieb/Einpressen als Spezialleistung"));
+    lines.push(mk("Personal", "P-VORTRIEB-BAULEITUNG", "Bauleitung / Vermessung Vortrieb", "h", Math.max(2, qpu(0.035)), 75, "Achse, Höhe, Start-/Zielpunkte prüfen"));
+    lines.push(mk("Maschinen", "M-VORTRIEB-HILFE", "Bagger / Hilfsgerät Vortrieb", "h", Math.max(1, qpu(0.020)), 82, "Start- und Zielbereich unterstützen"));
+  } else if (family === "nassbaggerarbeiten") {
+    lines.push(mk("Maschinen", "M-NASSBAGGER", "Nassbagger / Langarmbagger", "h", qpu(0.050 * factor), 145, "Sediment, Schlamm oder Gewässersohle aufnehmen"));
+    lines.push(mk("Personal", "P-WASSERBAU", "Wasserbaukolonne / Einweiser", "h", qpu(0.040 * factor), 58, "Sicherung, Einweisung, Wasserbauarbeiten"));
+    lines.push(mk("Entsorgung", "E-SEDIMENT", "Sediment / Schlamm verwerten", "t", qpu(0.65), 45, "Entsorgung/Verwertung abhängig von Belastung"));
+  } else if (family === "schlitzwand") {
+    lines.push(mk("Fremdleistung", "FL-SCHLITZWAND", "Schlitzwandgerät / Spezialkolonne", unit, qty, unit.toLowerCase().includes("m2") ? 185 : 950, "Schlitzwand/Dichtwand mit Stützflüssigkeit"));
+    lines.push(mk("Material", "MAT-STUETZFLUESSIGKEIT", "Bentonit / Stützflüssigkeit", "Psch", Math.max(1, qty * 0.15), 160, "Stützflüssigkeit, Aufbereitung, Nachweis"));
+    lines.push(mk("Personal", "P-SCHLITZWAND-QS", "Bauleitung / Qualitätssicherung", "h", Math.max(2, qpu(0.025)), 75, "Lamellen, Tiefe, Protokolle prüfen"));
+  } else if (family === "spritzbeton") {
+    lines.push(mk("Personal", "P-SPRITZBETON", "Spritzbetonkolonne", "h", qpu(0.050 * factor), 62, "Untergrund vorbereiten, Spritzbeton aufbringen"));
+    lines.push(mk("Maschinen", "M-SPRITZBETON", "Spritzbetongerät / Kompressor", "h", qpu(0.035 * factor), 95, "Spritzgerät, Luft, Reinigung"));
+    lines.push(mk("Material", "MAT-SPRITZBETON", "Spritzbeton / Bewehrungsfasern", unit, qty, unit.toLowerCase().includes("m3") ? 155 : 38, "Spritzbetonmaterial gemäß LV"));
+  } else if (family === "kampfmittel") {
+    lines.push(mk("Fremdleistung", "FL-KAMPFMITTEL", "Kampfmittelsondierung / Feuerwerker", unit, qty, unit.toLowerCase().includes("m2") ? 1.8 : 650, "Sondierung/Räumung als Spezialleistung"));
+    lines.push(mk("Personal", "P-KAMPFMITTEL-KOORD", "Bauleitung / Sicherheitskoordination", "h", Math.max(1, qpu(0.010)), 75, "Sperrung, Freigabe und Dokumentation koordinieren"));
+    lines.push(mk("Material", "MAT-KAMPFMITTEL-DOKU", "Freigabe / Dokumentation", "Psch", Math.max(1, qty * 0.05), 65, "Protokoll, Lageplan, Freigabe"));
+  } else if (family === "verkehrssicherung") {
+    lines.push(mk("Personal", "P-VERKEHRSSICHERUNG", "Verkehrssicherungskolonne", "h", Math.max(2, qpu(0.020 * factor)), 58, "Beschilderung, Absperrung, Kontrolle"));
+    lines.push(mk("Material", "MAT-VZ", "Verkehrszeichen / Absperrmaterial", unit, qty, unit.toLowerCase().includes("psch") ? 420 : 18, "Beschilderung/Absperrung gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-VS", "Transport Verkehrssicherung", "h", Math.max(0.5, qpu(0.010 * distanceFactor)), 110, "An-/Abtransport und Umsetzen"));
+  } else if (family === "baulogistik") {
+    lines.push(mk("Personal", "P-BAULOGISTIK", "Logistikkoordination / Polier", "h", Math.max(2, qty * 1.5), 68, "Lieferungen, Lagerflächen, interne Transporte koordinieren"));
+    lines.push(mk("Maschinen", "M-STAPLER-RADLADER", "Stapler / Radlader", "h", Math.max(1, qty), 82, "Umschlag und interne Baustellentransporte"));
+    lines.push(mk("Material", "MAT-LOGISTIK", "Lagerfläche / Container / Hilfsmittel", "Psch", Math.max(1, qty), 150, "Baulogistik-Hilfsmittel gemäß LV"));
+  } else if (family === "abfallentsorgung") {
+    lines.push(mk("Personal", "P-ENTSORGUNG-DOKU", "Entsorgungsdokumentation / Einweiser", "h", Math.max(0.5, qpu(0.010)), 62, "Deklaration, Nachweise, Einweisung"));
+    lines.push(mk("LKW / Transport", "LKW-ENTSORGUNG", "Transport zur Entsorgung", "h", qpu(0.030 * distanceFactor), 118, "Abfuhr zur Anlage/Deponie"));
+    lines.push(mk("Entsorgung", "E-ABFALL", "Abfall / Boden / Bauschutt entsorgen", unit, qty, unit.toLowerCase().includes("t") ? 55 : 28, "Entsorgung/Verwertung gemäß Deklaration"));
+  } else if (family === "abscheider_klaeranlage") {
+    lines.push(mk("Personal", "P-ABSCHEIDER", "Montagekolonne Abscheider/Kleinkläranlage", "h", Math.max(4, qty * 4), 58, "Einbau, Anschluss, Kontrolle"));
+    lines.push(mk("Maschinen", "M-KRAN-ABSCHEIDER", "Bagger / Kran Hebeeinsatz", "h", Math.max(2, qty * 2), 98, "Heben, Versetzen, Ausrichten"));
+    lines.push(mk("Material", "MAT-ABSCHEIDER", "Abscheider / Kleinkläranlage / Zubehör", unit, qty, 2200, "Anlage gemäß LV"));
+    lines.push(mk("Personal", "P-INBETRIEBNAHME", "Inbetriebnahme / Prüfung", "h", Math.max(1, qty), 78, "Prüfung und Übergabe"));
+  } else if (family === "bahn_gleisbau") {
+    lines.push(mk("Fremdleistung", "FL-GLEISBAU", "Gleisbau-/Bahnübergangskolonne", unit, qty, unit.toLowerCase().includes("m") ? 180 : 1200, "Arbeiten im Gleisbereich als Spezialleistung"));
+    lines.push(mk("Personal", "P-BAHN-SICHERUNG", "Sicherungsaufsicht / Bauleitung Bahn", "h", Math.max(2, qpu(0.020)), 85, "Sicherung, Sperrpausen, Koordination"));
+    lines.push(mk("Material", "MAT-GLEIS", "Gleis-/Bahnübergangsmaterial", unit, qty, 45, "Material gemäß LV"));
+  } else if (family === "abdichtung_bauwerk") {
+    lines.push(mk("Personal", "P-ABDICHTUNG", "Abdichtungskolonne", "h", qpu(0.040 * factor), 56, "Abdichtung vorbereiten und einbauen"));
+    lines.push(mk("Material", "MAT-ABDICHTUNG", "Dichtungsbahn / Fugenband / Quellband", unit, qty, 18, "Abdichtungsmaterial gemäß LV"));
+    lines.push(mk("Maschinen", "M-ABDICHTUNG-KLEIN", "Kleingerät Abdichtung", "h", qpu(0.012 * factor), 42, "Schneiden, Reinigen, Einpassen"));
+  } else if (family === "pflaster_bord_rinne") {
+    lines.push(mk("Personal", "P-PFLASTER", "Pflasterer / Straßenbauer", "h", qpu(0.070 * factor), 56, "Pflaster, Bord oder Rinne setzen"));
+    lines.push(mk("Maschinen", "M-PFLASTER", "Minibagger / Schneidgerät / Rüttelplatte", "h", qpu(0.025 * factor), 52, "Material verteilen, schneiden, verdichten"));
+    lines.push(mk("Material", "MAT-PFLASTER-BORD", "Pflaster / Bord / Rinne", unit, qty, unit.toLowerCase().includes("m2") ? 38 : 24, "Oberflächenbauteile gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-PFLASTER", "Transport Oberflächenmaterial", "h", qpu(0.020 * distanceFactor), 118, "Anlieferung / Abfuhr"));
+  } else if (family === "asphalt_oberbau") {
+    lines.push(mk("Personal", "P-ASPHALT", "Asphaltkolonne", "h", qpu(0.030 * factor), 58, "Asphalt einbauen, verteilen, verdichten"));
+    lines.push(mk("Maschinen", "M-ASPHALT", "Fertiger / Walze / Kleingerät", "h", qpu(0.020 * factor), 95, "Einbau- und Verdichtungsgerät"));
+    lines.push(mk("Material", "MAT-ASPHALT", "Asphaltmischgut", unit, qty, unit.toLowerCase().includes("t") ? 95 : 22, "Asphaltmischgut gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-ASPHALT", "Transport Asphalt", "h", qpu(0.018 * distanceFactor), 118, "Anlieferung Mischgut"));
+  } else if (family === "regie") {
+    if (normSearch(row.kurztext).includes("lkw")) {
+      lines.push(mk("LKW / Transport", "LKW-REGIE", "LKW einschl. Fahrer", "h", 1, 118, "Regieansatz gemäß LV-Position"));
+    } else if (normSearch(row.kurztext).includes("bagger")) {
+      lines.push(mk("Maschinen", "M-BAGGER-REGIE", "Bagger einschl. Fahrer", "h", 1, 92, "Regieansatz gemäß LV-Position"));
+    } else if (normSearch(row.kurztext).includes("radlader")) {
+      lines.push(mk("Maschinen", "M-RADLADER-REGIE", "Radlader einschl. Fahrer", "h", 1, 82, "Regieansatz gemäß LV-Position"));
+    } else {
+      lines.push(mk("Personal", "P-REGIE", "Personal Regie", "h", 1, 54, "Regieansatz gemäß LV-Position"));
+    }
+    lines.push(mk("Zuschläge", "Z-GEMEINKOSTEN", "Baustellengemeinkosten", "%", 1, 10, "10 % Zuschlag"));
+    lines.push(mk("Zuschläge", "Z-GEWINN", "Gewinnzuschlag", "%", 1, 10, "10 % Zuschlag"));
+    return lines;
+  }
+
+  if (family === "infrastruktur") {
+    lines.push(mk("Personal", "P-BAULEITUNG-KOORD", "Bauleitung / Koordination", "h", Math.max(2, qty * 2), 75, "Verkehr, Anlieger, Zufahrt oder Erschwernis koordinieren"));
+    lines.push(mk("Personal", "P-POLIER", "Polier / Vorarbeiter", "h", Math.max(2, qty * 2), 68, "Einweisung, Kontrolle und tägliche Abstimmung"));
+    lines.push(mk("Maschinen", "M-KLEINGERAETE", "Kleingeräte / Absicherung", "Psch", Math.max(1, qty), 120, "Hilfsmittel, Absperrung, laufende Instandhaltung"));
+    lines.push(mk("LKW / Transport", "LKW-INFRA", "Transport / Umsetzen", "h", Math.max(1, qty), 110, "Zusätzliche Fahrten und Umsetzen"));
+  } else if (family === "beweissicherung") {
+    lines.push(mk("Fremdleistung", "FL-BEWEISSICHERUNG", "Sachverständiger Beweissicherung", "St", qty, 280, "Externe Beweissicherung / Gutachterleistung"));
+    lines.push(mk("Personal", "P-DOKU", "Dokumentation / Zuordnung", "h", Math.max(1, qty * 0.75), 68, "Fotos, Bericht, Zuordnung und Übergabe"));
+    lines.push(mk("Material", "MAT-DOKU", "Fotodokumentation / Bericht", "Psch", Math.max(1, qty), 35, "Bericht, Datenträger, Ablage"));
+  } else if (family === "grenzstein") {
+    lines.push(mk("Personal", "P-VERMESSUNG", "Vermesser / Einweiser", "h", qpu(0.35), 72, "Grenzsteine suchen, freilegen, sichern"));
+    lines.push(mk("Personal", "P-TIEFBAU", "Tiefbauer", "h", qpu(0.20), 52, "Freilegen und Schutz herstellen"));
+    lines.push(mk("Material", "MAT-MARKIERUNG", "Markierung / Schutzmaterial", unit, qty, 8, "Markierung und Schutz während Bauzeit"));
+  } else if (family === "bauschild") {
+    lines.push(mk("Material", "MAT-BAUSCHILD", "Bauschild / Informationstafel", unit, qty, 650, "Schild/Tafel gemäß LV-Text"));
+    lines.push(mk("Personal", "P-MONTAGE", "Montagekolonne", "h", qpu(1.20), 54, "Aufstellen, ausrichten, sichern"));
+    lines.push(mk("Maschinen", "M-KLEIN", "Kleingerät / Fundament", "h", qpu(0.40), 48, "Montagehilfen / Fundamente"));
+    lines.push(mk("LKW / Transport", "LKW-SCHILD", "Anlieferung / Abholung", "h", qpu(0.50), 110, "Transport Bauschild/Informationstafel"));
+  } else if (family === "beton_bauteile") {
+    lines.push(mk("Personal", "P-BETONBAU", "Betonbaukolonne", "h", qpu(0.35 * factor), 56, "Beton-/Bauteilleistung herstellen und einbauen"));
+    lines.push(mk("Maschinen", "M-HEBEGERAET", "Bagger / Hebegerät", "h", qpu(0.12 * factor), 82, "Heben, Einbauen, Verdichten"));
+    lines.push(mk("Material", "MAT-BETON-BAUTEIL", "Beton / Bauteil / Bewehrung", unit, qty, 115, "Material gemäß LV-Text prüfen"));
+    lines.push(mk("LKW / Transport", "LKW-MATERIAL", "Lieferung / Transport", "h", qpu(0.02 * distanceFactor), 110, "Materialtransport"));
+  } else if (family === "drainage") {
+    lines.push(mk("Personal", "P-DRAINAGE", "Drainagekolonne", "h", qpu(0.055 * factor), 54, "Drainageleitung verlegen, ausrichten, anschließen"));
+    lines.push(mk("Maschinen", "M-BAGGER-8T", "Bagger 8 t", "h", qpu(0.025 * factor), 78, "Bettung herstellen, Verfüllen"));
+    lines.push(mk("Material", "MAT-DRAINAGE", "Drainagerohr / Vlies / Kies", unit, qty, 18, "Drainagematerial gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-DRAINAGE", "Materialtransport", "h", qpu(0.012 * distanceFactor), 110, "Anlieferung Drainagematerial"));
+  } else if (family === "spuelen_pruefen") {
+    const isMeterPosition = normSearch(unit).includes("m");
+    lines.push(mk("Personal", "P-PRUEFUNG", "Prüf-/Spülkolonne", "h", Math.max(2, qpu(0.035)), 58, "Spülen, Prüfen, Entkeimen, Protokollieren"));
+    lines.push(mk("Maschinen", "M-SPUELGERAET", "Spül-/Prüfgerät", "h", Math.max(1, qpu(0.020)), 85, "Geräteeinsatz Spülen/Prüfen"));
+    if (isMeterPosition) {
+      lines.push(mk("Material", "MAT-SPUEL-VERBRAUCH", "Wasser / Spülmaterial / Protokoll", unit, qty, 0.65, "Verbrauchsmaterial, Wasser und Nachweis anteilig je Meter"));
+      lines.push(mk("Personal", "P-PROTOKOLL", "Protokoll / Nachweis", "h", Math.max(1, qty / 2500), 68, "Spülprotokoll und Übergabe"));
+    } else {
+      lines.push(mk("Material", "MAT-PRUEFUNG", "Wasser / Desinfektion / Protokoll", "Psch", Math.max(1, qty), 60, "Verbrauchsmaterial und Nachweise"));
+    }
+  } else if (family === "elektro_msr") {
+    lines.push(mk("Personal", "P-ELEKTRO", "Elektromonteur / MSR-Techniker", "h", Math.max(3, qty * 3), 72, "Montage, Anschluss, Parametrierung"));
+    lines.push(mk("Personal", "P-INBETRIEBNAHME", "Inbetriebnahme / Prüfung", "h", Math.max(1.5, qty * 1.5), 78, "Funktionsprüfung und Dokumentation"));
+    lines.push(mk("Material", "MAT-ELEKTRO-MSR", "Elektro-/MSR-Komponente", unit, qty, 450, "Komponente gemäß LV-Text"));
+    lines.push(mk("LKW / Transport", "LKW-ELEKTRO", "Lieferung / Transport", "h", qpu(0.30), 110, "Anlieferung Schaltschrank/Gerät"));
+  } else if (family === "armaturen_zubehoer") {
+    lines.push(mk("Material", "MAT-ARMATUR-ZUBEHOER", "Armatur / Formteil / Zubehör", unit, qty, 85, "Bauteil gemäß LV-Text"));
+    lines.push(mk("Personal", "P-MONTAGE-ZUBEHOER", "Rohrbauer / Monteur", "h", qpu(0.08 * factor), 56, "Einbauen, montieren, abdichten"));
+    lines.push(mk("Maschinen", "M-KLEINWERKZEUG", "Kleingerät / Werkzeug", "h", qpu(0.02), 38, "Montagehilfen"));
+  } else if (family === "pumpstation") {
+    lines.push(mk("Personal", "P-PUMPSTATION", "Montagekolonne Pumpstation", "h", Math.max(8, qty * 8), 58, "Pumpstation setzen, anschließen, prüfen"));
+    lines.push(mk("Maschinen", "M-BAGGER-KRAN", "Bagger/Kran Hebeeinsatz", "h", Math.max(3, qty * 3), 98, "Heben und Versetzen"));
+    lines.push(mk("Material", "MAT-PUMPSTATION", "Pumpstation / Pumpe / Zubehör", unit, qty, 2500, "Aggregat/Station gemäß LV-Text"));
+    lines.push(mk("Personal", "P-INBETRIEBNAHME", "Inbetriebnahme", "h", Math.max(2, qty * 2), 78, "Testlauf und Übergabe"));
+  } else if (family === "hausanschluss") {
+    lines.push(mk("Personal", "P-HAUSANSCHLUSS", "Hausanschlusskolonne", "h", qpu(0.09 * factor), 56, "Anschluss herstellen, Leitung verbinden"));
+    lines.push(mk("Maschinen", "M-MINIBAGGER", "Minibagger", "h", qpu(0.035 * factor), 68, "Freilegen, Verfüllen, Unterstützen"));
+    lines.push(mk("Material", "MAT-HAUSANSCHLUSS", "Hausanschlussmaterial", unit, qty, 28, "Material gemäß LV"));
+    lines.push(mk("Zeit / Leistung", "Z-LEISTUNG-HA", "Leistung Hausanschluss", unit.toLowerCase().includes("m") ? "m/Tag" : "St/Tag", Math.max(8, dailyOutput), 0, "Produktivitätsansatz"));
+  } else if (family === "mehr_minderpreis") {
+    lines.push(mk("Personal", "P-ZULAGE", "Mehraufwand Personal", "h", qpu(0.015 * factor), 56, "Nur Mehr-/Minderaufwand, keine komplette Position"));
+    lines.push(mk("Maschinen", "M-ZULAGE", "Mehraufwand Gerät", "h", qpu(0.010 * factor), 82, "Reduzierte Leistung / Zusatzhandling"));
+    lines.push(mk("Material", "MAT-ZULAGE", "Material-/Preisanteil Zulage", unit, qty, 4, "Zulage/Mehrpreis gemäß LV-Text prüfen"));
+  } else if (family === "transport_montage") {
+    lines.push(mk("LKW / Transport", "LKW-TRANSPORT-MONTAGE", "Transport / Anlieferung", "h", Math.max(1, qpu(0.05 * distanceFactor)), 110, "Transport und Montageanteil"));
+    lines.push(mk("Personal", "P-MONTAGE", "Montagepersonal", "h", Math.max(1, qpu(0.08 * factor)), 56, "Montage/Verlegung gemäß LV"));
+    lines.push(mk("Maschinen", "M-MONTAGEHILFE", "Montagehilfe / Kleingerät", "h", Math.max(0.5, qpu(0.02)), 45, "Hilfsgerät Montage"));
+  }
+
+  if (family === "dokumentation") {
+    lines.push(mk("Personal", "P-TECHNIKER-DOKU", "Techniker / Bauzeichner", "h", Math.max(2, qty * 2), 68, "Bestandszeichnungen prüfen, nachführen und erstellen"));
+    lines.push(mk("Personal", "P-BAULEITUNG-DOKU", "Bauleitung / Abnahme Dokumentation", "h", Math.max(0.5, qty * 0.75), 75, "Kontrolle, Abstimmung und Übergabe der Unterlagen"));
+    lines.push(mk("Material", "MAT-DOKU", "Planunterlagen / Datenausgabe", "Psch", Math.max(1, qty), 35, "Plot, PDF/DWG, Ablage und Übergabe"));
+  } else if (family === "wartung_anleitung") {
+    lines.push(mk("Personal", "P-TECHNIKER-DOKU", "Techniker Dokumentation", "h", Math.max(2, qty * 2), 68, "Wartungs- und Bedienungsanleitung erstellen/pruefen"));
+    lines.push(mk("Personal", "P-BAULEITUNG-DOKU", "Bauleitung / technische Kontrolle", "h", Math.max(0.5, qty * 0.75), 75, "Inhalte kontrollieren und Übergabe koordinieren"));
+    lines.push(mk("Material", "MAT-DOKU", "PDF / Herstellerunterlagen / Ablage", "Psch", Math.max(1, qty), 75, "Digitale Unterlagen, Zusammenstellung und Ablage"));
+  } else if (family === "tuev_abnahme") {
+    lines.push(mk("Fremdleistung", "FL-TUEV-PRUEFSTELLE", "TÜV / Prüfstelle", "Psch", Math.max(1, qty), 650, "Externe Abnahme-/Prüfleistung"));
+    lines.push(mk("Personal", "P-BAULEITUNG-ABNAHME", "Bauleitung Begleitung", "h", Math.max(2, qty * 2), 75, "Termin, Begleitung, Mängelaufnahme"));
+    lines.push(mk("Personal", "P-DOKU-ABNAHME", "Dokumentation Abnahme", "h", Math.max(1, qty), 68, "Protokoll, Nachweise, Übergabe"));
+  } else if (family === "spreng_abstimmung") {
+    lines.push(mk("Personal", "P-BAULEITUNG-SPRENG", "Bauleitung / Polier Abstimmung", "h", Math.max(4, qty * 4), 75, "Erkundung, Abstimmung und Koordination Sprengarbeiten"));
+    lines.push(mk("Personal", "P-SICHERHEIT-SPRENG", "Sicherheitskoordination", "h", Math.max(2, qty * 2), 68, "Sicherheits- und Ablaufkoordination"));
+    lines.push(mk("Fremdleistung", "FL-SPRENG-SPEZIALIST", "Sprengfachliche Beratung / Spezialist", "Psch", Math.max(1, qty), 450, "Spezialleistung nur für Abstimmung/Erkundung, keine Ausführung"));
+    lines.push(mk("Material", "MAT-DOKU-SPRENG", "Dokumentation / Lageunterlagen", "Psch", Math.max(1, qty), 60, "Pläne, Abstimmungsunterlagen, Protokoll"));
+  } else if (family === "haufwerk_zulage") {
+    lines.push(mk("Personal", "P-HAUFWERK-EINWEISER", "Einweiser / Polier", "h", qpu(0.008 * factor), 58, "Gesondertes Haufwerk einweisen, kontrollieren"));
+    lines.push(mk("Maschinen", "M-RADLADER-HAUFWERK", "Radlader / Bagger", "h", qpu(0.006 * factor), 82, "Haufwerk bilden/umsetzen"));
+    lines.push(mk("LKW / Transport", "LKW-INTERN-HAUFWERK", "Interner Transport / Umsetzen", "h", qpu(0.004 * distanceFactor), 110, "Nur zusätzlicher Handling-/Transportanteil"));
+  } else if (family === "asphalt_trennen") {
+    lines.push(mk("Personal", "P-ASFALT-SCHNEIDER", "Straßenbauer / Schneidhelfer", "h", qpu(0.025 * factor), 54, "Asphalt trennen, einmessen, sichern"));
+    lines.push(mk("Maschinen", "M-FUGENSCHNEIDER", "Fugenschneider / Asphaltschneider", "h", qpu(0.018 * factor), 44, "Schnitt herstellen"));
+    lines.push(mk("Material", "MAT-SCHNEIDVERSCHLEISS", "Wasser / Diamantblatt-Verschleiß", unit, qty, 1.8, "Verschleiß- und Nebenmaterial je Schnittmeter"));
+    lines.push(mk("Zeit / Leistung", "Z-LEISTUNG-ASPHALT-SCHNITT", "Leistung Asphaltschnitt", "m/Tag", Math.max(120, dailyOutput), 0, "Produktivitätsansatz"));
+  } else if (family === "strassenaufbruch") {
+    lines.push(mk("Personal", "P-STRASSENAUFBRUCH", "Straßenbauer / Aufbruchkolonne", "h", qpu(0.050 * factor), 54, "Straßenaufbruch herstellen, sichern, laden"));
+    lines.push(mk("Maschinen", "M-AUFBRUCHGERAET", "Bagger / Aufbruchgerät", "h", qpu(0.035 * factor), 68, "Aufbrechen und Laden"));
+    lines.push(mk("LKW / Transport", "LKW-AUFBRUCH", "LKW Abfuhr Aufbruch", "h", qpu(0.020 * distanceFactor), 118, "Abfuhr Asphalt/Bauschutt"));
+    lines.push(mk("Entsorgung", "E-ASPHALT-BAUSCHUTT", "Asphalt/Bauschutt entsorgen", "t", qpu(unit.toLowerCase().includes("m2") ? 0.22 : 0.15), 55, "Entsorgung/Verwertung Aufbruchmaterial"));
+  } else if (family === "schachtbau") {
+    lines.push(mk("Personal", "P-SCHACHTBAU", "Schachtbaukolonne", "h", Math.max(4, qpu(4.0 * factor)), 58, "Schacht setzen, ausrichten, anschließen"));
+    lines.push(mk("Maschinen", "M-BAGGER-14T", "Bagger 14 t", "h", Math.max(2, qpu(2.0 * factor)), 92, "Heben, Versetzen, Verfüllen"));
+    lines.push(mk("Material", "MAT-SCHACHT", "Schacht / Armaturen / Formstücke", unit, qty, 1000, "Schachtmaterial gemäß LV-Text prüfen"));
+    lines.push(mk("Material", "MAT-BETON-DICHTUNG", "Beton / Dichtung / Verguss", "Psch", Math.max(1, qty), 150, "Nebenmaterial Schachtanschluss"));
+  } else if (family === "baustelle") {
+    lines.push(mk("Personal", "P-POLIER", "Polier / Bauleitung", "h", Math.max(4, qty * 2), 68, "Einrichten, koordinieren, kontrollieren"));
+    lines.push(mk("Personal", "P-KOLONNE", "Tiefbaukolonne", "h", Math.max(8, qty * 6), 52, "Aufbau, Vorhaltung, Räumen"));
+    lines.push(mk("Maschinen", "M-LADER", "Radlader / Stapler", "h", Math.max(2, qty * 2), 82, "Einrichten und Umsetzen"));
+    lines.push(mk("LKW / Transport", "LKW-TRANSPORT", "Transport Baustelleneinrichtung", "h", Math.max(3, qty * 3), 118, "An- und Abtransport"));
+  } else if (family === "mutterboden") {
+    const widthM = unit.toLowerCase() === "m" ? 6 : 1;
+    const depthM = 0.15;
+    const qtyM3 = unit.toLowerCase() === "m" ? qty * widthM * depthM : unit.toLowerCase().includes("m2") ? qty * depthM : qty;
+    lines.push(mk("Personal", "P-FACHARBEITER-TIEFBAU", "Facharbeiter Tiefbau", "h", qty * 0.035 * factor, 52, "Mutterboden abtragen, lagern, wieder andecken"));
+    lines.push(mk("Maschinen", "M-BAGGER-8T", "Bagger 8 t", "h", qty * 0.030 * factor, 78, "Oberboden profilgerecht abtragen"));
+    lines.push(mk("LKW / Transport", "LKW-4A", "LKW 4-Achser", "h", qty * 0.020 * distanceFactor, 118, "Transport / Umsetzen im Baufeld"));
+    lines.push(mk("Entsorgung", "E-MUTTERBODEN-LAGERN", "Mutterboden lagern / behandeln", "t", Math.max(0.05, qtyM3 * 1.6), 12, "Humushaltiges Material lagern bzw. verwerten"));
+  } else if (family === "rodung") {
+    lines.push(mk("Personal", "P-LANDSCHAFTSBAU", "Facharbeiter Landschaftsbau", "h", qpu(0.06 * factor), 52, "Bewuchs entfernen, sichern, nacharbeiten"));
+    lines.push(mk("Maschinen", "M-MINIBAGGER", "Minibagger / Anbaugerät", "h", qpu(0.035 * factor), 68, "Rodung / Wurzelarbeiten"));
+    lines.push(mk("LKW / Transport", "LKW-ABFUHR", "Transport Grüngut", "h", qpu(0.025 * distanceFactor), 110, "Abfuhr / Umsetzen"));
+    lines.push(mk("Entsorgung", "E-GRUENGUT", "Grüngut verwerten", "t", qpu(0.08), 35, "Entsorgung / Verwertung"));
+  } else if (family === "aushub_zuschlag") {
+    const k = normSearch(`${row.kurztext || ""} ${row.langtext || ""}`);
+    const isBk7 = /(?:bd|bk|bodenklasse)\s*[-.]?\s*7/.test(k) || k.includes("klasse 7");
+    const isBk6 = isBk7 || /(?:bd|bk|bodenklasse)\s*[-.]?\s*6/.test(k) || k.includes("klasse 6") || k.includes("fels");
+    const hammerQty = isBk7 ? 0.14 : isBk6 ? 0.08 : 0.035;
+    const baggerQty = isBk7 ? 0.045 : isBk6 ? 0.030 : 0.015;
+    const laborQty = isBk7 ? 0.050 : isBk6 ? 0.030 : 0.015;
+    const hammerPrice = isBk7 ? 125 : isBk6 ? 110 : 92;
+
+    lines.push(mk("Personal", "P-ZUSCHLAG-AUSHUB", "Zusatzaufwand Tiefbauer / Einweiser", "h", qpu(laborQty * factor), 52, "Nur Mehraufwand zur Grundposition, keine komplette Aushubposition"));
+    lines.push(mk("Maschinen", "M-HYDRAULIKHAMMER", isBk6 ? "Hydraulikhammer / Felslöffel" : "Zusatzgerät Aushub", "h", qpu(hammerQty * factor), hammerPrice, "Zuschlag für schwere Bodenklasse / erschwertes Lösen"));
+    lines.push(mk("Maschinen", "M-BAGGER-ZUSCHLAG", "Bagger-Mehraufwand", "h", qpu(baggerQty * factor), 92, "Reduzierte Leistung gegenüber Grundposition"));
+    if (ctx.distanceKm > 0 || k.includes("abfuhr") || k.includes("entsorg")) {
+      lines.push(mk("LKW / Transport", "LKW-ZUSCHLAG-AUSHUB", "Transport-Mehraufwand", "h", qpu(0.010 * distanceFactor), 118, "Nur wenn zusätzlicher Transport/Handling entsteht"));
+    }
+  } else if (family === "aushub") {
+    lines.push(mk("Personal", "P-TIEFBAU-KOLONNE", "Tiefbauer / Einweiser", "h", qpu(0.045 * factor), 52, "Aushub herstellen, sichern, kontrollieren"));
+    lines.push(mk("Maschinen", "M-BAGGER-14T", "Kettenbagger 14 t", "h", qpu(0.035 * factor), 92, "Aushub / Laden / Profilieren"));
+    lines.push(mk("LKW / Transport", "LKW-4A", "LKW 4-Achser", "h", qpu(0.030 * distanceFactor), 118, "Transport Boden / Zwischenlager"));
+    lines.push(mk("Entsorgung", "E-BODEN", "Boden entsorgen / verwerten", "t", unit.toLowerCase().includes("m3") ? qpu(1.8) : qpu(0.25), 28, "Entsorgung abhängig von Bodenklasse"));
+  } else if (family === "verfuellung") {
+    lines.push(mk("Personal", "P-TIEFBAU", "Tiefbauer", "h", qpu(0.035 * factor), 52, "Einbauen, profilieren, verdichten"));
+    lines.push(mk("Maschinen", "M-RADLADER", "Radlader", "h", qpu(0.025 * factor), 82, "Material einbauen / verteilen"));
+    lines.push(mk("Maschinen", "M-RUETTELPLATTE", "Verdichtungsgerät", "h", qpu(0.018 * factor), 36, "Lagenweise verdichten"));
+    lines.push(mk("Material", "MAT-SCHUETTGUT", "Schüttgut / Einbaumaterial", unit, qty, 24, "Materialansatz gemäß LV"));
+  } else if (family === "rohrleitung") {
+    lines.push(mk("Personal", "P-ROHRBAU-KOLONNE", "Rohrbaukolonne", "h", qpu(0.065 * factor), 56, "Rohr/Formstück verlegen und dichten"));
+    lines.push(mk("Maschinen", "M-BAGGER-8T", "Bagger 8 t", "h", qpu(0.030 * factor), 78, "Heben, Ausrichten, Verfüllen im Rohrbereich"));
+    lines.push(mk("Material", "MAT-ROHR-FORMTEIL", "Rohr/Formstück/Armatur", unit, qty, 45, "Material gemäß LV-Text"));
+    lines.push(mk("Zeit / Leistung", "Z-LEISTUNG-ROHRBAU", "Leistung Rohrbau", "m/Tag", Math.max(20, dailyOutput), 0, "Produktivitätsansatz"));
+  } else if (family === "kabel") {
+    lines.push(mk("Personal", "P-KABELBAU", "Kabelbaukolonne", "h", qpu(0.040 * factor), 54, "Schutzrohr/Kabel/Speedpipe verlegen"));
+    lines.push(mk("Maschinen", "M-MINIBAGGER", "Minibagger", "h", qpu(0.018 * factor), 68, "Unterstützung Kabelbau"));
+    lines.push(mk("Material", "MAT-KABELBAU", "Kabelbau-Material", unit, qty, 8, "Material gemäß LV-Text"));
+    lines.push(mk("Zeit / Leistung", "Z-LEISTUNG-KABELBAU", "Leistung Kabelbau", "m/Tag", Math.max(80, dailyOutput), 0, "Produktivitätsansatz"));
+  } else if (family === "wanderweg_wiederherstellen") {
+    lines.push(mk("Personal", "P-WANDERWEG", "Tiefbauer / Wegebaukolonne", "h", qpu(0.050 * factor), 54, "Wanderweg profilgerecht wiederherstellen"));
+    lines.push(mk("Maschinen", "M-MINIBAGGER-RADLADER", "Minibagger / Radlader", "h", qpu(0.030 * factor), 76, "Material verteilen, profilieren"));
+    lines.push(mk("Maschinen", "M-RUETTELPLATTE", "Rüttelplatte / Walze klein", "h", qpu(0.018 * factor), 42, "Wegematerial verdichten"));
+    lines.push(mk("Material", "MAT-WEGEMATERIAL", "Wegematerial / Kies-Schotter", unit, qty, 18, "Wanderwegmaterial gemäß LV, kein Asphalt/Pflaster-Fallback"));
+    lines.push(mk("LKW / Transport", "LKW-WEGEMATERIAL", "Transport Wegematerial", "h", qpu(0.020 * distanceFactor), 118, "Anlieferung / Umsetzen Wegematerial"));
+  } else if (family === "oberflaeche") {
+    lines.push(mk("Personal", "P-OBERFLAECHE", "Straßenbauer / Pflasterer", "h", qpu(0.055 * factor), 54, "Oberfläche herstellen / aufnehmen"));
+    lines.push(mk("Maschinen", "M-SCHNEIDGERAET", "Schneid-/Verdichtungsgerät", "h", qpu(0.025 * factor), 44, "Schneiden, Einbauen, Verdichten"));
+    lines.push(mk("Material", "MAT-OBERFLAECHE", "Oberflächenmaterial", unit, qty, 32, "Asphalt/Pflaster/Bord gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-OBERFLAECHE", "Transport Oberfläche", "h", qpu(0.020 * distanceFactor), 118, "Anlieferung / Abfuhr"));
+  } else if (family === "wasserhaltung") {
+    lines.push(mk("Personal", "P-WASSERHALTUNG", "Facharbeiter Wasserhaltung", "h", qpu(0.04 * factor), 54, "Einrichten, kontrollieren, umsetzen"));
+    lines.push(mk("Maschinen", "M-PUMPE", "Pumpe / Zubehör", "h", unit.toLowerCase() === "h" ? qty : qpu(0.04), 34, "Pumpenbetrieb"));
+    lines.push(mk("Material", "MAT-SCHLAUCH", "Schläuche / Ableitung", "psch", Math.max(1, qty), 45, "Nebenmaterial Wasserhaltung"));
+  } else if (family === "zaunbau") {
+    lines.push(mk("Personal", "P-ZAUNBAU", "Zaunbaukolonne / Landschaftsbau", "h", qpu(0.050 * factor), 52, "Zaunlinie herstellen, Pfosten setzen, Draht/Netz montieren"));
+    lines.push(mk("Maschinen", "M-ERDBOHRER", "Erdbohrer / Kleingerät", "h", qpu(0.015 * factor), 42, "Pfostenlöcher herstellen / Montagehilfe"));
+    lines.push(mk("Material", "MAT-ZAUN", "Zaunmaterial / Pfosten / Draht", unit, qty, 18, "Zaunmaterial gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-ZAUN", "Transport Zaunmaterial", "h", qpu(0.015 * distanceFactor), 110, "An-/Abtransport Zaunmaterial"));
+  } else if (family === "schutzmassnahme") {
+    lines.push(mk("Personal", "P-SCHUTZ", "Facharbeiter Schutzmaßnahme", "h", qpu(0.05 * factor), 52, "Schutz herstellen, vorhalten, abbauen"));
+    lines.push(mk("Material", "MAT-SCHUTZ", "Schutzmaterial", unit, qty, 18, "Material gemäß LV"));
+    lines.push(mk("LKW / Transport", "LKW-SCHUTZ", "Transport Schutzmaterial", "h", qpu(0.015 * distanceFactor), 110, "An-/Abtransport"));
+  } else if (family === "material") {
+    lines.push(mk("Material", "MAT-LV", "Material / Zulage gemäß LV", unit, qty, 10, "Materialpreis oder Zulage aus LV-Text prüfen"));
+    lines.push(mk("LKW / Transport", "LKW-LIEFERUNG", "Lieferung / Transport", "h", qpu(0.01 * distanceFactor), 110, "Liefer-/Transportanteil"));
+    lines.push(mk("Personal", "P-EINBAU", "Einbau / Montage", "h", qpu(0.015 * factor), 52, "Einbauanteil soweit im LV enthalten"));
+  }
+
+  if (!lines.some((x) => x.group === "Personal") && family !== "material") {
+    lines.unshift(mk("Personal", "P-TIEFBAU", "Tiefbauer", "h", Math.max(0.02, qty / Math.max(dailyOutput, 1)), 52, "Arbeitszeitansatz"));
+  }
+
+  lines.push(mk("Zuschläge", "Z-GEMEINKOSTEN", "Baustellengemeinkosten", "%", 1, 10, "10 % Zuschlag"));
+  lines.push(mk("Zuschläge", "Z-RISIKO", "Risikozuschlag", "%", 1, ctx.groundwater || ctx.restricted ? 7 : 5, "Risiko abhängig von Ausführung und Randbedingungen"));
+  lines.push(mk("Zuschläge", "Z-GEWINN", "Gewinnzuschlag", "%", 1, 10, "10 % Zuschlag"));
+
+  return lines.filter((line) => n(line.price) > 0 || line.group === "Zeit / Leistung");
+}
+
+
+
+function createRlcMinimalReviewUrkalkulation(row: LVPos): RecipeLine[] {
+  const t = normSearch(`${row.posNr || ""} ${row.kurztext || ""} ${row.langtext || ""} ${row.einheit || ""}`);
+  const external =
+    t.includes("tuev") ||
+    t.includes("abnahme") ||
+    t.includes("labor") ||
+    t.includes("kampfmittel") ||
+    t.includes("subunternehmer") ||
+    t.includes("nachunternehmer") ||
+    t.includes("fremdleistung") ||
+    t.includes("spezialfirma");
+
+  const mk = (
+    group: ResourceGroup,
+    resourceId: string,
+    name: string,
+    unit: string,
+    qty: number,
+    price: number,
+    note: string
+  ): RecipeLine => ({
+    id: safeId(),
+    group,
+    resourceId,
+    name,
+    unit,
+    qty: round2(Math.max(qty, 0)),
+    price: round2(Math.max(price, 0)),
+    note,
+    aiSuggested: true,
+  });
+
+  const base: RecipeLine[] = external
+    ? [
+        mk("Fremdleistung", "FL-PRUEFEN", "Externe Spezialleistung prüfen", row.einheit || "EH", 1, 100, "Spezial-/Prüfleistung aus LV-Text, Preis fachlich prüfen"),
+        mk("Personal", "P-KOORDINATION", "Koordination / Prüfung", "h", 0.25, 58, "Anfragen, Koordination, technische Kontrolle"),
+      ]
+    : [
+        mk("Personal", "P-KOORDINATION", "Tiefbau / Koordination", "h", 0.25, 54, "Mindestansatz für Ausführung/Koordination"),
+        mk("Material", "MAT-LV-PRUEFEN", "Material / Leistung gemäß LV prüfen", row.einheit || "EH", 1, 10, "Fallback: LV-Text fachlich prüfen"),
+      ];
+
+  base.push(mk("Zuschläge", "Z-GEMEINKOSTEN", "Baustellengemeinkosten", "%", 1, 10, "10 % Zuschlag"));
+  base.push(mk("Zuschläge", "Z-RISIKO", "Risikozuschlag", "%", 1, 5, "5 % Zuschlag"));
+  base.push(mk("Zuschläge", "Z-GEWINN", "Gewinnzuschlag", "%", 1, 10, "10 % Zuschlag"));
+
+  return base;
+}
+
+
+function shouldNeverUseSingleFremdleistung(row: LVPos): boolean {
+  return isRlcForceLocalUrkalkulation(row);
+}
 function recipeLinesFromServerPriceBreakdown(serverRow: any): RecipeLine[] {
   const pb = Array.isArray(serverRow?.priceBreakdown)
     ? serverRow.priceBreakdown
@@ -1065,6 +1928,129 @@ function dispatchWorkTypeAmbiguous(detection: ReturnType<typeof detectWorkType>)
 function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
   const qty = Math.max(n(row.menge), 1);
   const text = normSearch(`${row.posNr} ${row.kurztext} ${row.langtext}`);
+  const rlcFamilyDirect = detectRlcUrkalkulationFamilyV4(row);
+
+  // RLC V6: if the X83/LV position belongs to a known Tiefbau family,
+  // use the family Urkalkulation immediately. This prevents later generic
+  // keyword blocks from misclassifying Rohrgrabenaushub as Mutterboden
+  // just because the Langtext contains words like Humus.
+  const directFallback = createRlcFallbackUrkalkulation(row, ctx);
+  if (directFallback.length) {
+    console.warn("[Recipes KI] Direct RLC family fallback used.", {
+      posNr: row.posNr,
+      kurztext: row.kurztext,
+      family: rlcFamilyDirect,
+      count: directFallback.length,
+    });
+    return directFallback;
+  }
+
+  const isMutterbodenAbtrag =
+    text.includes("mutterboden") ||
+    text.includes("oberboden") ||
+    text.includes("humus") ||
+    text.includes("humusmiete") ||
+    text.includes("grasnarbe") ||
+    ((text.includes("abtrag") || text.includes("boden abtragen") || text.includes("boden aufnehmen") || text.includes("boden lagern")) &&
+      (text.includes("oberboden") || text.includes("mutterboden") || text.includes("humus")));
+
+  if (isMutterbodenAbtrag) {
+    const depthM = 0.15;
+    const widthM = 6;
+    const qtyM3 = row.einheit === "m" ? qty * widthM * depthM : qty;
+    const disposalTons = round2(qtyM3 * 1.6);
+
+    return [
+      {
+        id: safeId(),
+        group: "Personal",
+        resourceId: "P-FACHARBEITER-TIEFBAU",
+        name: "Facharbeiter Tiefbau",
+        unit: "h",
+        qty: 0.035,
+        price: 52,
+        note: "Mutterboden abtragen, einweisen, profilgerecht arbeiten",
+        aiSuggested: true,
+      },
+      {
+        id: safeId(),
+        group: "Maschinen",
+        resourceId: "M-BAGGER-8T",
+        name: "Bagger 8 t",
+        unit: "h",
+        qty: 0.030,
+        price: 78,
+        note: "Oberboden/Mutterboden abtragen und seitlich lagern",
+        aiSuggested: true,
+      },
+      {
+        id: safeId(),
+        group: "LKW / Transport",
+        resourceId: "LKW-4A",
+        name: "LKW 4-Achser",
+        unit: "h",
+        qty: 0.020,
+        price: 118,
+        note: "Transport innerhalb Baufeld / Lagerfläche",
+        aiSuggested: true,
+      },
+      {
+        id: safeId(),
+        group: "Entsorgung",
+        resourceId: "E-MUTTERBODEN-LAGERN",
+        name: "Mutterboden lagern / behandeln",
+        unit: "t",
+        qty: row.einheit === "m" ? round2(disposalTons / qty) : 1.6,
+        price: 12,
+        note: "Humushaltiges Material lagern bzw. verwerten",
+        aiSuggested: true,
+      },
+      {
+        id: safeId(),
+        group: "Zeit / Leistung",
+        resourceId: "Z-LEISTUNG",
+        name: "Leistung / Produktivität",
+        unit: "m/Tag",
+        qty: 80,
+        price: 0,
+        note: "Leistungsansatz für Mutterbodenabtrag",
+        aiSuggested: true,
+      },
+      {
+        id: safeId(),
+        group: "Zuschläge",
+        resourceId: "Z-GEMEINKOSTEN",
+        name: "Baustellengemeinkosten",
+        unit: "%",
+        qty: 1,
+        price: 10,
+        note: "10 % Zuschlag",
+        aiSuggested: true,
+      },
+      {
+        id: safeId(),
+        group: "Zuschläge",
+        resourceId: "Z-RISIKO",
+        name: "Risikozuschlag",
+        unit: "%",
+        qty: 1,
+        price: 5,
+        note: "Boden, Lagerung, Feuchte",
+        aiSuggested: true,
+      },
+      {
+        id: safeId(),
+        group: "Zuschläge",
+        resourceId: "Z-GEWINN",
+        name: "Gewinnzuschlag",
+        unit: "%",
+        qty: 1,
+        price: 10,
+        note: "Gewinnzuschlag",
+        aiSuggested: true,
+      },
+    ];
+  }
   const calcText = normSearch(`${row.posNr} ${row.kurztext}`);
 
   const technicalPosition = detectTechnicalPosition({
@@ -1090,8 +2076,24 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
       });
 
   if (detectedWorkType.ambiguous || detectedWorkType.key === "unknown") {
-    dispatchWorkTypeAmbiguous(detectedWorkType);
-    return [];
+    const fallback = createRlcFallbackUrkalkulation(row, ctx);
+    if (fallback.length) {
+      console.warn("[Recipes KI] WorkType unknown/ambiguous, using RLC fallback Urkalkulation.", {
+        posNr: row.posNr,
+        kurztext: row.kurztext,
+        family: detectRlcUrkalkulationFamilyV4(row),
+        count: fallback.length,
+      });
+      return fallback;
+    }
+
+    const minimal = createRlcMinimalReviewUrkalkulation(row);
+    console.warn("[Recipes KI] No technical family found. Using minimal review Urkalkulation.", {
+      posNr: row.posNr,
+      kurztext: row.kurztext,
+      count: minimal.length,
+    });
+    return minimal;
   }
 
   const workType = detectedWorkType.key;
@@ -1176,6 +2178,39 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
 
   const days = Math.max(qty / dailyOutput, 0.15);
   const lines: RecipeLine[] = [];
+
+  const isRohrgrabenTiefbau =
+    text.includes("rohrgrabenaushub") ||
+    text.includes("rohrgraben") ||
+    text.includes("leitungsgraben") ||
+    text.includes("grabentiefe") ||
+    text.includes("bodenklasse") ||
+    text.includes("bd-kl");
+
+  if (isRohrgrabenTiefbau) {
+    const depthFactor = ctx.depthM >= 2.5 ? 1.35 : ctx.depthM >= 1.5 ? 1.18 : 1.0;
+    const soilFactor = /bk\s*[5-7]|bd-kl\.\s*[5-7]|bodenklasse\s*[5-7]/i.test(`${row.kurztext} ${row.langtext}`)
+      ? 1.25
+      : 1.0;
+
+    const distanceFactor = Math.max(1, Math.min(1.35, 1 + n(ctx.distanceKm) / 120));
+    const dailyOutput = Math.max(n(ctx.dailyOutput), ctx.depthM >= 2.5 ? 45 : 65);
+    const days = Math.max(qty / dailyOutput, 0.15);
+    const factor = depthFactor * soilFactor;
+
+    lines.push(makeLine("P-FACHARBEITER", round2(days * 8 * 1.05 * factor), "Rohrgraben herstellen / Tiefbaukolonne", true));
+    lines.push(makeLine("P-HELFER", round2(days * 8 * 0.75 * factor), "Einweisen, sichern, Nacharbeit", true));
+    lines.push(makeLine(ctx.depthM >= 2.5 ? "M-BAGGER-22T" : ctx.depthM >= 1.5 ? "M-BAGGER-15T" : "M-BAGGER-8T", round2(days * 6.8 * factor), "Rohrgrabenaushub lösen und laden", true));
+    lines.push(makeLine("T-LKW-4A", round2(days * 3.8 * distanceFactor), "Aushubtransport", true));
+    lines.push(makeLine("E-BODEN", round2(qty * 1.6), "Aushubmaterial entsorgen / verwerten", true));
+    lines.push(makeLine("Z-LEISTUNG", dailyOutput, "Leistung je Arbeitstag", true));
+    lines.push(makeLine("Z-BAUZEIT", round2(days), "rechnerische Bauzeit", true));
+    lines.push(makeLine("Z-GEMEINKOSTEN", 1, "10 % aus technischem Preisaufbau", true));
+    lines.push(makeLine("Z-RISIKO", 1, soilFactor > 1 ? "erhöht wegen Bodenklasse / Tiefe" : "normaler Risikopuffer", true));
+    lines.push(makeLine("Z-GEWINN", 1, "Gewinnzuschlag", true));
+
+    return lines;
+  }
 
 /* ✅ FIX: Planie/Feinplanum ist eine leichte Flächenleistung.
    Nicht als Aushub, Kiestragschicht, Entsorgung oder m²-Stunden-Mix kalkulieren. */
@@ -2999,20 +4034,53 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
           einheit: rowForCalc.einheit,
         });
 
-    if (detectedWorkType.ambiguous || detectedWorkType.key === "unknown") {
-      dispatchWorkTypeAmbiguous(detectedWorkType);
-      setLines([]);
-      setInfo(detectedWorkType.message || "Leistungsart unklar. Bitte Kurztext präzisieren.");
+    const forceLocalTiefbauPosition = isRlcForceLocalUrkalkulation(rowForCalc);
+
+    if ((detectedWorkType.ambiguous || detectedWorkType.key === "unknown") && !forceLocalTiefbauPosition) {
+      const minimal = createRlcMinimalReviewUrkalkulation(rowForCalc);
+      setLines(minimal);
+      setInfo(
+        "Leistungsart nicht eindeutig erkannt. RLC hat eine prüfpflichtige Mindest-Urkalkulation erstellt statt leer zu bleiben."
+      );
+      console.warn("[Recipes KI] Unknown work type replaced by minimal review Urkalkulation.", {
+        posNr: rowForCalc.posNr,
+        kurztext: rowForCalc.kurztext,
+        count: minimal.length,
+      });
       return;
     }
 
     setInfo(
       technicalPosition
         ? `Technische Position erkannt: ${technicalPosition.title} · Bibliothek: ${getTechnicalPositionCount()} Positionen`
-        : `KI-Urkalkulation wird berechnet: ${detectedWorkType.title}…`
+        : `KI-Urkalkulation wird berechnet: ${detectedWorkType.title || detectRlcUrkalkulationFamilyV4(rowForCalc)}…`
     );
 
-    const forceLocal = !!technicalPosition || shouldForceLocalCalculation(detectedWorkType.key);
+    console.log("[Recipes KI TRACE 1] before forceLocal", {
+      posNr: rowForCalc.posNr,
+      kurztext: rowForCalc.kurztext,
+      langtext: rowForCalc.langtext,
+      einheit: rowForCalc.einheit,
+      menge: rowForCalc.menge,
+      detectedWorkType: detectedWorkType.key,
+      technicalPosition,
+      ctx,
+    });
+
+    const forceLocal =
+      !!technicalPosition ||
+      forceLocalTiefbauPosition ||
+      shouldForceLocalCalculation(detectedWorkType.key);
+
+    console.log("[Recipes KI] Urkalkulation flow", {
+      posNr: rowForCalc.posNr,
+      kurztext: rowForCalc.kurztext,
+      detectedWorkType: detectedWorkType.key,
+      hasTechnicalPosition: !!technicalPosition,
+      forceLocalTiefbauPosition,
+      forceLocal,
+    });
+
     const serverRow = forceLocal ? null : await postKiSuggest(projectKey, rowForCalc);
 
     if (serverRow?.source === "rule-engine") {
@@ -3024,7 +4092,30 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       const serverLinesRaw = recipeLinesFromServerPriceBreakdown(serverRow);
       const serverLines = cleanRecipeLinesByWorkType(serverLinesRaw, detectedWorkType.key);
 
-      if (serverLines.length) {
+      const isSingleFremdleistung =
+        serverLines.length === 1 && serverLines[0]?.group === "Fremdleistung";
+
+      const rejectSingleFremdleistung =
+        isSingleFremdleistung && shouldNeverUseSingleFremdleistung(rowForCalc);
+
+      console.log("[Recipes KI] Server breakdown guard", {
+        posNr: rowForCalc.posNr,
+        kurztext: rowForCalc.kurztext,
+        serverLineCount: serverLines.length,
+        isSingleFremdleistung,
+        rejectSingleFremdleistung,
+      });
+
+      if (rejectSingleFremdleistung) {
+        console.warn("[Recipes KI] Single-Fremdleistung rejected. Falling back to local Urkalkulation.", {
+          posNr: rowForCalc.posNr,
+          kurztext: rowForCalc.kurztext,
+        });
+
+        setInfo(
+          "Server-KI hat nur eine Fremdleistung geliefert. Für diese Tiefbau-Position wird automatisch eine technische Urkalkulation erstellt."
+        );
+      } else if (serverLines.length) {
         setLines(serverLines);
 
         setInfo(
@@ -3046,7 +4137,21 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       return;
     }
 
-    const suggested = createKiSuggestion(rowForCalc, ctx);
+    console.log("[Recipes KI TRACE 2] before local createKiSuggestion", {
+      posNr: rowForCalc.posNr,
+      kurztext: rowForCalc.kurztext,
+    });
+
+    const suggestedRaw = createKiSuggestion(rowForCalc, ctx);
+    const suggested = suggestedRaw.length ? suggestedRaw : createRlcMinimalReviewUrkalkulation(rowForCalc);
+
+    console.log("[Recipes KI TRACE 3] local createKiSuggestion result", {
+      count: suggested.length,
+      rawCount: suggestedRaw.length,
+      groups: suggested.map((x) => x.group),
+      suggested,
+    });
+
     setLines(suggested);
 
     const surfaceFollowUp = detectSurfaceFollowUp(rowForCalc);
@@ -3114,7 +4219,7 @@ if (!lines.length) {
         title: "Urkalkulation fehlt",
         text:
           "Für diese Position fehlen Ressourcen und Preisaufbau. Soll ich Personal, Maschinen, Material, Transport, Zuschläge und EP automatisch vorschlagen?",
-        nextLabel: "KI-Ressourcen vorschlagen",
+        nextLabel: "Urkalkulation starten",
         action: "suggestResources",
         autoOpen: false,
         pulse: true,
@@ -3159,7 +4264,7 @@ if (!lines.length) {
       title: "Position bereit",
       text:
         "Langtext, Ressourcen und EP sind vorhanden. Nächster sinnvoller Schritt: Position ins LV speichern oder als Nachtrag/Angebot weitergeben.",
-      nextLabel: "Position übernehmen",
+      nextLabel: "Position einfügen",
       action: "insertPosition",
       autoOpen: false,
       pulse: false,
@@ -3513,6 +4618,69 @@ if (!lines.length) {
     return () => window.removeEventListener("rlc:rezepte-command", handleRezepteCommand);
   }, [draftPos, lines, selectedRow, summary.ep, companyRecipes, libraryRows]);
   const validationErrors = validateDraft(draftPos);
+  const rlcKiDashboardRow = useMemo(() => {
+    const byGroup = (group: string) =>
+      lines
+        .filter((x) => x.group === group)
+        .map((x) => x.name)
+        .filter(Boolean);
+
+    const risks = [
+      ctx.restricted ? "Eingeschränkter Arbeitsraum prüfen" : "",
+      ctx.groundwater ? "Grundwasser / Wasserhaltung prüfen" : "",
+      ctx.asphalt ? "Asphaltaufbruch / Wiederherstellung prüfen" : "",
+      ctx.trafficControl ? "Verkehrssicherung prüfen" : "",
+      ctx.soilClass ? `Bodenklasse BK ${ctx.soilClass} prüfen` : "",
+    ].filter(Boolean);
+
+    return {
+      ...(selectedRow || {}),
+      source: lines.some((x) => x.aiSuggested)
+        ? "RLC KI Urkalkulation"
+        : "Manuelle Urkalkulation",
+      confidence: lines.length ? 0.82 : null,
+      calculationStatus: lines.length ? "warning" : "needs_input",
+      riskLevel: risks.length ? "medium" : "low",
+      technicalBreakdown: {
+        machines: [...byGroup("Maschinen"), ...byGroup("LKW / Transport")],
+        labor: byGroup("Personal"),
+        materials: byGroup("Material"),
+        logistics: [
+          ...byGroup("Entsorgung"),
+          ...(ctx.distanceKm ? [`Entfernung Baustelle: ${ctx.distanceKm} km`] : []),
+        ],
+        risks,
+      },
+      explainability: {
+        version: "RLC_RECIPES_DASHBOARD_V1",
+        confidence: lines.length ? 0.82 : null,
+        source: lines.some((x) => x.aiSuggested)
+          ? "RLC KI Ressourcen"
+          : "Manuelle Ressourcen",
+        machines: [...byGroup("Maschinen"), ...byGroup("LKW / Transport")],
+        labor: byGroup("Personal"),
+        materials: byGroup("Material"),
+        logistics: [
+          ...byGroup("Entsorgung"),
+          ...(ctx.distanceKm ? [`Entfernung Baustelle: ${ctx.distanceKm} km`] : []),
+        ],
+        risks,
+        standards: [],
+        assumptions: [
+          draftPos.einheit ? `Einheit: ${draftPos.einheit}` : "",
+          draftPos.menge ? `Menge: ${draftPos.menge}` : "",
+          ctx.depthM ? `Tiefe: ${ctx.depthM} m` : "",
+          ctx.dailyOutput ? `Leistung pro Tag: ${ctx.dailyOutput}` : "",
+        ].filter(Boolean),
+        calculationSteps: [
+          "Positionsdaten gelesen.",
+          "Ausführungsparameter bewertet.",
+          "Ressourcen aus KI, Bibliothek oder manueller Eingabe übernommen.",
+          "Urkalkulation und Preisaufbau gebildet.",
+        ],
+      },
+    };
+  }, [selectedRow, lines, ctx, draftPos]);
 
   return (
     <div style={page}>
@@ -3538,10 +4706,6 @@ if (!lines.length) {
             Neue Position
           </button>
 
-          <button type="button" style={btnPrimary} onClick={kiSuggest}>
-            KI-Ressourcen vorschlagen
-          </button>
-
           <button type="button" style={btnSecondary} onClick={autoFillLangtext}>
             Langtext automatisch
           </button>
@@ -3551,7 +4715,7 @@ if (!lines.length) {
           </button>
 
           <button type="button" style={btnPrimary} onClick={pushToKi} disabled={!lines.length}>
-            In Kalkulation übernehmen
+            Position in Kalkulation übernehmen
           </button>
         </div>
 
@@ -3617,8 +4781,7 @@ if (!lines.length) {
           <div style={lvList}>
             {filteredLv.map((r) => {
               const active = String(r.id) === selectedId;
-
-              return (
+  return (
                 <button
                   key={r.id}
                   type="button"
@@ -3642,7 +4805,21 @@ if (!lines.length) {
           <section id="rlc-recipes-position-data" style={card}>
             <div style={sectionHead}>
               <div>
-                <h2 style={sectionTitle}>1. Positionsdaten</h2>
+                <section style={{ ...card, border: "2px solid #2563EB", background: "#EFF6FF" }}>
+  <div style={sectionHead}>
+    <div>
+      <h2 style={sectionTitle}>Urkalkulation starten</h2>
+      <div style={sectionText}>
+        RLC erstellt aus Positionsdaten, Langtext und Ausführungsparametern automatisch Ressourcen, Zuschläge, EP und Preisaufbau.
+      </div>
+    </div>
+
+    <button type="button" style={btnPrimary} onClick={kiSuggest}>
+      Urkalkulation starten
+    </button>
+  </div>
+</section>
+<h2 style={sectionTitle}>1. Positionsdaten</h2>
                 <div style={sectionText}>Hier wird die komplette LV-Position erfasst.</div>
               </div>
 
@@ -3780,7 +4957,11 @@ if (!lines.length) {
                 Verkehrssicherung
               </label>
             </div>
-          </section>          <section style={card}>
+          </section>
+
+          <RlcKiDashboard row={rlcKiDashboardRow} />
+
+          <section style={card}>
             <div style={sectionHead}>
               <div>
                 <h2 style={sectionTitle}>Position fertigstellen</h2>
@@ -3797,7 +4978,7 @@ if (!lines.length) {
                 onClick={pushToKi}
                 disabled={!lines.length}
               >
-                In Kalkulation übernehmen
+                Position in Kalkulation übernehmen
               </button>
 
               <button
@@ -3821,7 +5002,7 @@ if (!lines.length) {
 
             {!lines.length ? (
               <div style={sectionText}>
-                Erst Positionsdaten ausfüllen und KI-Ressourcen vorschlagen oder Ressourcen manuell erfassen.
+                Nach Abschluss der Urkalkulation wird die Position mit allen Ressourcen, Preisen und dem vollständigen Preisaufbau in die Kalkulation übernommen.
               </div>
             ) : null}
           </section>
@@ -3925,8 +5106,7 @@ if (!lines.length) {
                 <tbody>
                   {lines.map((line) => {
                     const hasKnownOption = resourceOptions.some((x) => x.id === line.resourceId);
-
-                    return (
+  return (
                       <tr key={line.id}>
                         <td style={td}>
                           <span style={groupBadge(line.group)}>{line.group}</span>
@@ -4029,7 +5209,7 @@ if (!lines.length) {
                   {!lines.length ? (
                     <tr>
                       <td colSpan={8} style={emptyCell}>
-                        Noch keine Ressourcen. Erfasse die Positionsdaten und klicke auf „KI-Ressourcen vorschlagen“ oder übernimm Artikel aus der Bibliothek.
+                        Noch keine Ressourcen. Erfasse die Positionsdaten und klicke auf „Urkalkulation starten“ oder übernimm Artikel aus der Bibliothek.
                       </td>
                     </tr>
                   ) : null}
@@ -4575,6 +5755,29 @@ const badgeWarn: React.CSSProperties = {
   background: "#FFFBEB",
   color: "#B45309",
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
