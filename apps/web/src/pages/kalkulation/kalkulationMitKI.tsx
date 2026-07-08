@@ -2709,6 +2709,7 @@ export default function KalkulationMitKI() {
 
   const csvInputRef = React.useRef<HTMLInputElement | null>(null);
 const importHandoffDoneRef = React.useRef(false);
+const recipesHandoffDoneRef = React.useRef(false);
 
   const [rows, setRows] = React.useState<EliteRow[]>(() => {
     if (!projectKey || typeof localStorage === "undefined") return [];
@@ -3267,9 +3268,75 @@ function importHandoff() {
     const loaded = tryLoadRowsFromKey(key);
 
     if (loaded.length) {
-      const safeLoaded = sanitizeRowsForStorage(mergeStoredX84OfferPrices(loaded));
+      const lvBeforeOverwrite = LV.list() as any[];
+
+      const urkByKey = new Map<string, any>();
+      for (const u of lvBeforeOverwrite) {
+        const hasUrk =
+          Array.isArray((u as any).priceBreakdown) && (u as any).priceBreakdown.length > 0;
+
+        if (!hasUrk) continue;
+
+        const keys = [
+          String((u as any).id || "").trim(),
+          String((u as any).posNr || "").trim(),
+          String((u as any).pos || "").trim(),
+        ].filter(Boolean);
+
+        for (const k of keys) {
+          urkByKey.set(k, u);
+        }
+      }
+
+      const loadedWithUrk = loaded.map((r: any) => {
+        const possibleKeys = [
+          String((r as any).id || "").trim(),
+          String((r as any).posNr || "").trim(),
+          String((r as any).pos || "").trim(),
+        ].filter(Boolean);
+
+        const u = possibleKeys.map((k) => urkByKey.get(k)).find(Boolean);
+        if (!u) return r;
+
+        const pb = normalizeBreakdown((u as any).priceBreakdown || []);
+        const ep =
+          sumBreakdown(pb) ||
+          n((u as any).rlcKiUnitPrice) ||
+          n((u as any).finalUnitPrice) ||
+          n((u as any).preis);
+
+        const menge = n((r as any).menge ?? (u as any).menge);
+
+        return {
+          ...(u as any),
+          ...r,
+          menge,
+          finalUnitPrice: (r as any).finalUnitPrice,
+          preis: (r as any).preis,
+          suggestedUnitPrice: (r as any).suggestedUnitPrice,
+          rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
+          rlcKiTotal: (r as any).rlcKiTotal,
+          gesamt: (r as any).gesamt,
+          totalNet: (r as any).totalNet,
+          gp: (r as any).gp,
+          priceBreakdown: pb,
+          recipeLines: pb,
+          urkalkulationUnitPrice: ep,
+          urkalkulationTotal: round2(menge * ep),
+          source: (u as any).source || "recipes-urkalkulation-global-lv-merged",
+          calculationStatus: pb.length ? "recipes_ready" : ((r as any).calculationStatus || "needs_review"),
+          aiReason: appendInfoText(
+            (u as any).aiReason || (r as any).aiReason,
+            "Globale Urkalkulation aus Recipes automatisch in Kalkulation mit KI übernommen."
+          ),
+        };
+      });
+
+      // RLC FIX: Globale Urkalkulation darf die Kalkulation nicht überschreiben.
+      // Sie bleibt nur Preisaufbau/Analyse in Recipes.
+      const safeLoaded = sanitizeRowsForStorage(loadedWithUrk);
       setRows(safeLoaded);
-      LV.setAll(safeLoaded as LVPos[]);
+      persistRows(safeLoaded);
 
       // Wichtig:
       // localBackupKey(projectKey) = rlc_kalkulation_mit_ki_elite_v1.
@@ -3277,7 +3344,7 @@ function importHandoff() {
       // LV/X83/X84-Quellen dürfen hier niemals automatisch hineinkopiert werden,
       // sonst wird ein importiertes LV fälschlich als KI-Ergebnis gezählt.
 
-      setServerStatus(`${safeLoaded.length} LV-Positionen geladen`);
+      setServerStatus(`${safeLoaded.length} LV-Positionen geladen · Preisaufbau übernommen · RLC-KI Preise unverändert`);
       setTimeout(() => setServerStatus(""), 2500);
       return;
     }
@@ -3288,6 +3355,97 @@ function importHandoff() {
   setRows([]);
 }
 
+React.useEffect(() => {
+  if (!projectKey) return;
+  if (!rows.length) return;
+
+  try {
+    const lvRows = LV.list() as any[];
+    const urkByKey = new Map<string, any>();
+
+    for (const u of lvRows) {
+      const pb = normalizeBreakdown((u as any).priceBreakdown || []);
+      if (!pb.length) continue;
+
+      const keys = [
+        String((u as any).id || "").trim(),
+        String((u as any).posNr || "").trim(),
+        String((u as any).pos || "").trim(),
+      ].filter(Boolean);
+
+      for (const k of keys) urkByKey.set(k, u);
+    }
+
+    if (!urkByKey.size) return;
+
+    let changed = false;
+
+    const merged = rows.map((r: any) => {
+      const keys = [
+        String((r as any).id || "").trim(),
+        String((r as any).posNr || "").trim(),
+        String((r as any).pos || "").trim(),
+      ].filter(Boolean);
+
+      const u = keys.map((k) => urkByKey.get(k)).find(Boolean);
+      if (!u) return r;
+
+      const pb = normalizeBreakdown((u as any).priceBreakdown || []);
+      if (!pb.length) return r;
+
+      const already =
+        Array.isArray((r as any).priceBreakdown) &&
+        JSON.stringify((r as any).priceBreakdown) === JSON.stringify(pb);
+
+      if (already) return r;
+
+      changed = true;
+
+      const menge = n((r as any).menge ?? (u as any).menge);
+      const ep = sumBreakdown(pb);
+
+      return normalizeEliteRow({
+        ...(r as any),
+
+        // Nur Info / Preisaufbau aus Recipes
+        priceBreakdown: pb,
+        recipeLines: pb,
+        urkalkulationUnitPrice: ep,
+        urkalkulationTotal: round2(menge * ep),
+
+        // Kalkulationspreise bleiben geschützt
+        finalUnitPrice: (r as any).finalUnitPrice,
+        preis: (r as any).preis,
+        ep: (r as any).ep,
+        suggestedUnitPrice: (r as any).suggestedUnitPrice,
+        rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
+        rlcKiTotal: (r as any).rlcKiTotal,
+        gesamt: (r as any).gesamt,
+        totalNet: (r as any).totalNet,
+        gp: (r as any).gp,
+
+        source: (r as any).source,
+        calculationStatus: (r as any).calculationStatus,
+        riskLevel: (r as any).riskLevel,
+        aiReason: appendInfoText(
+          (r as any).aiReason,
+          "Preisaufbau aus Recipes als Info übernommen. Kalkulationspreis unverändert."
+        ),
+      } as any);
+    });
+
+    if (!changed) return;
+
+    const safeRows = sanitizeRowsForStorage(merged);
+    setRows(safeRows);
+    persistRows(safeRows);
+
+    setServerStatus("Preisaufbau aus Recipes übernommen · RLC-KI Preise unverändert");
+    setTimeout(() => setServerStatus(""), 3000);
+  } catch (err) {
+    console.warn("RLC read-only Preisaufbau merge failed", err);
+  }
+}, [projectKey, rows]);
 const lvTotalPages = React.useMemo(() => {
   return Math.max(1, Math.ceil(filteredRows.length / lvPageSize));
 }, [filteredRows.length, lvPageSize]);
@@ -4046,6 +4204,171 @@ function persistRows(next: EliteRow[], modeOverride?: "offer-check" | "new-calcu
     console.warn("[KI] local backup failed:", e);
   }
 }
+React.useEffect(() => {
+  if (!projectKey || recipesHandoffDoneRef.current) return;
+  if (typeof localStorage === "undefined") return;
+
+  const storageKey = "rlc_recipes_to_kalkulation_pending";
+
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return;
+
+    const parsed = JSON.parse(raw);
+    if (parsed?.projectKey && String(parsed.projectKey) !== String(projectKey)) return;
+
+    if (
+      parsed?.mode === "global-lv" ||
+      parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V3" ||
+      parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V4"
+    ) {
+      // RLC FIX: Globale Urkalkulation darf die Kalkulation niemals automatisch übernehmen.
+      // Sie bleibt nur Preisaufbau/Analyse. Einzelposition-Handoff bleibt unverändert.
+      localStorage.removeItem(storageKey);
+      recipesHandoffDoneRef.current = true;
+      return;
+    }
+
+    if (parsed?.version !== "RLC_RECIPES_TRANSFER_V1") return;
+
+    const src = parsed?.row || {};
+    const posNr = String(src.posNr || src.pos || "").trim();
+    const kurztext = String(src.kurztext || src.title || "Rezeptposition").trim();
+    const einheit = String(src.einheit || src.unit || "m").trim();
+    const menge = n(src.menge ?? src.qty);
+    const ep = round2(n(src.ep ?? src.preis ?? src.unitPrice));
+    const gp = round2(ep * menge);
+
+    if (!kurztext || !einheit || menge <= 0 || ep <= 0) return;
+
+    const recipeRow = normalizeEliteRow({
+      ...src,
+      id: src.id || `recipes-${Date.now()}`,
+      posNr,
+      kurztext,
+      langtext: src.langtext || "",
+      einheit,
+      menge,
+      preis: ep,
+      ep,
+      gp,
+      rlcKiUnitPrice: ep,
+      rlcKiTotal: gp,
+      source: "recipes-urkalkulation-v21",
+      calculationStatus: "recipes_ready",
+      riskLevel: "low",
+      priceBreakdown: Array.isArray(src.priceBreakdown)
+        ? src.priceBreakdown
+        : Array.isArray(src.recipeLines)
+          ? src.recipeLines
+          : [],
+      recipeLines: Array.isArray(src.recipeLines)
+        ? src.recipeLines
+        : Array.isArray(src.priceBreakdown)
+          ? src.priceBreakdown
+          : [],
+      recipeSummary: src.recipeSummary || null,
+      aiReason: "Aus Recipes / Urkalkulation in Kalkulation mit KI übernommen.",
+    } as any);
+
+    recipesHandoffDoneRef.current = true;
+
+    let baseRows: EliteRow[] = Array.isArray(rows) ? rows : [];
+
+    try {
+      const backupRaw = localStorage.getItem(localBackupKey(projectKey));
+      const backupParsed = backupRaw ? JSON.parse(backupRaw) : null;
+      const backupRows = Array.isArray(backupParsed?.rows)
+        ? backupParsed.rows.map((r: any) => normalizeEliteRow(r))
+        : Array.isArray(backupParsed)
+          ? backupParsed.map((r: any) => normalizeEliteRow(r))
+          : [];
+
+      // Wichtig:
+      // Bei Einzel-Übergabe aus Recipes darf NIEMALS das komplette LV aus Recipes
+      // als Kalkulationsbasis verwendet werden, sonst wird der gesamte Netto-Betrag ersetzt.
+      // Basis bleibt immer die bestehende Kalkulation. Nur recipeRow wird danach eingemischt.
+      if (backupRows.length >= baseRows.length) {
+        baseRows = backupRows;
+      }
+    } catch {
+      // lokaler Backup konnte nicht gelesen werden
+    }
+
+    const existingIdx = baseRows.findIndex((r) => {
+      const a = String((r as any).posNr || (r as any).pos || "").trim();
+      return posNr && a === posNr;
+    });
+
+    const recipePriceBreakdown = Array.isArray((recipeRow as any).priceBreakdown)
+      ? ((recipeRow as any).priceBreakdown as any[])
+      : [];
+
+    const recipeLines = Array.isArray((recipeRow as any).recipeLines)
+      ? ((recipeRow as any).recipeLines as any[])
+      : recipePriceBreakdown;
+
+    const next =
+      existingIdx >= 0
+        ? baseRows.map((r, idx) => {
+            if (idx !== existingIdx) return r;
+
+            const mengeProtected = n((r as any).menge ?? (recipeRow as any).menge);
+            const urkEp = round2(sumBreakdown(normalizeBreakdown(recipePriceBreakdown)));
+
+            return normalizeEliteRow({
+              ...(r as any),
+
+              // Nur Preisaufbau / Urkalkulation aus Recipes übernehmen.
+              priceBreakdown: recipePriceBreakdown,
+              recipeLines,
+              recipeSummary: (recipeRow as any).recipeSummary || (r as any).recipeSummary || null,
+              urkalkulationUnitPrice: urkEp,
+              urkalkulationTotal: round2(mengeProtected * urkEp),
+
+              // Kalkulationspreise bleiben geschützt.
+              finalUnitPrice: (r as any).finalUnitPrice,
+              preis: (r as any).preis,
+              ep: (r as any).ep,
+              suggestedUnitPrice: (r as any).suggestedUnitPrice,
+              rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
+              rlcKiTotal: (r as any).rlcKiTotal,
+              gesamt: (r as any).gesamt,
+              totalNet: (r as any).totalNet,
+              gp: (r as any).gp,
+
+              source: (r as any).source,
+              calculationStatus: (r as any).calculationStatus,
+              riskLevel: (r as any).riskLevel,
+              aiReason: appendInfoText(
+                (r as any).aiReason,
+                "Preisaufbau aus Recipes für diese Position übernommen. Kalkulationspreis unverändert."
+              ),
+            } as any);
+          })
+        : [recipeRow, ...baseRows];
+
+    const safeNext = normalizeKiWarningRows(next);
+
+    setRows(safeNext);
+    persistRows(safeNext, "new-calculation");
+    // RLC FIX: kein LV.setAll hier. Einzel-Übergabe darf andere Urkalkulationen nicht löschen.
+
+    const selected =
+      safeNext.find((r: any) => String(r.id || "") === String(recipeRow.id || "")) ||
+      safeNext.find((r: any) => String(r.posNr || "") === String(recipeRow.posNr || "")) ||
+      recipeRow;
+
+    setSelectedId(String(selected.id || recipeRow.id || ""));
+    setLvPage(1);
+    setServerStatus("Urkalkulation übernommen");
+    window.setTimeout(() => setServerStatus(""), 2500);
+
+    localStorage.removeItem(storageKey);
+  } catch {
+    // Übergabe darf Kalkulation nicht blockieren.
+  }
+}, [projectKey, rows]);
 function updateRow(id: string, patch: Partial<EliteRow>) {
   const next = rows.map((r) =>
     r.id === id ? normalizeEliteRow({ ...r, ...patch }) : r
@@ -6458,17 +6781,94 @@ setServerStatus("Fehler beim Laden");
     if (meta.client) setClient(meta.client);
   }
 
+  function buildRlcKiPdfExportRows(inputRows: EliteRow[]): EliteRow[] {
+    return inputRows
+      .filter((r) => !kiIsStructuralRow(r))
+      .map((r) => {
+        const qty = n(r.menge);
+        const rlcEp =
+          getRlcKiUnitPrice(r) ||
+          n((r as any).rlcKiUnitPrice) ||
+          n((r as any).openAiSuggestedUnitPrice) ||
+          n((r as any).finalUnitPrice) ||
+          n((r as any).preis);
+
+        const gp = round2(qty * rlcEp);
+
+        return normalizeEliteRow({
+          ...r,
+          preis: rlcEp,
+          finalUnitPrice: rlcEp,
+          suggestedUnitPrice: rlcEp,
+          rlcKiUnitPrice: rlcEp,
+          rlcKiTotal: gp,
+          gesamt: gp,
+          totalNet: gp,
+          priceDecision: "rlcKi",
+        } as any);
+      });
+  }
+
+  function buildRlcKiPdfExportSummary(inputRows: EliteRow[], oldSummary: any, taxRate: number): any {
+    const netto = round2(inputRows.reduce((sum, r) => sum + round2(n(r.menge) * getRlcKiUnitPrice(r)), 0));
+    const mwstValue = round2(netto * (n(taxRate) / 100));
+    const brutto = round2(netto + mwstValue);
+
+    return {
+      ...oldSummary,
+      netto,
+      net: netto,
+      totalNet: netto,
+      rlcKiNet: netto,
+      finalNet: netto,
+      mwst: mwstValue,
+      mwstSum: mwstValue,
+      tax: mwstValue,
+      brutto,
+      gross: brutto,
+      totalGross: brutto,
+    };
+  }
+
+  function stripInternalPdfCosts(inputRows: EliteRow[]): EliteRow[] {
+    return inputRows.map((r) => {
+      const safeBreakdown = normalizeBreakdown((r as any).priceBreakdown || []).filter((line) => {
+        const g = String(line.group || "").trim().toLowerCase();
+        return g !== "risiko" && g !== "gewinn";
+      });
+
+      return {
+        ...r,
+        priceBreakdown: safeBreakdown,
+        recipeLines: safeBreakdown,
+        riskCost: 0,
+        profitCost: 0,
+      } as EliteRow;
+    });
+  }
+
+  function stripInternalPdfSummary(inputSummary: any): any {
+    return {
+      ...inputSummary,
+      riskSum: 0,
+      profitSum: 0,
+      marginPct: undefined,
+    };
+  }
   async function handlePdfExport() {
     try {
       setPdfBusy(true);
       setServerStatus("PDF wird erzeugt…");
 
+      const pdfRows = stripInternalPdfCosts(buildRlcKiPdfExportRows(rows));
+      const pdfSummary = stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
+
       await exportPdf({
         projectKey,
         projectTitle,
-        rows,
+        rows: pdfRows,
         chapterTotals,
-        summary,
+        summary: pdfSummary,
         offer,
         client,
         company,
@@ -6503,11 +6903,18 @@ setServerStatus("PDF Fehler");
       return;
     }
 
+    const isInternalPdf = window.confirm("Urkalkulation PDF intern erzeugen?\n\nOK = Intern mit Risiko/Gewinn\nAbbrechen = Kunde ohne Risiko/Gewinn");
+    const rawPdfRows = buildRlcKiPdfExportRows(exportRows);
+    const pdfRows = isInternalPdf ? rawPdfRows : stripInternalPdfCosts(rawPdfRows);
+    const pdfSummary = isInternalPdf
+      ? buildRlcKiPdfExportSummary(pdfRows, summary, mwst)
+      : stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
+
     exportUrkalkulationPdfLocal({
       projectKey,
       projectTitle,
-      rows: exportRows,
-      summary,
+      rows: pdfRows,
+      summary: pdfSummary,
       offer,
       selectedAuftrag: exportSelectedAuftrag,
       client,
@@ -7797,8 +8204,26 @@ return (
         </div>
 
         <button type="button" style={btnSecondary} onClick={addRow}>
-          Neue Position erstellen
+          Urkalkulation starten für neue und bestehende Positionen
+        </button>        <button
+          type="button"
+          style={btnPrimary}
+          onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
+          disabled={serverBusy || !projectKey}
+          title="Aktuellen Kalkulationsstand auf dem Server speichern."
+        >
+          Speichern
         </button>
+
+        <button
+          type="button"
+          style={btnSecondary}
+          onClick={() => navigate("/kalkulation/gaeb")}
+          title="GAEB-Dateien importieren, prüfen und exportieren."
+        >
+          GAEB Import / Export
+        </button>
+
 
         <button
           type="button"
@@ -8070,7 +8495,7 @@ return (
         return false;
       }
     })() && priceDiffReport.counts.total > 0 ? (
-      <section style={priceCompareCard}>
+<section style={{ ...priceCompareCard, display: rows.some((r) => getOfferUnitPrice(r) > 0) ? undefined : "none" }}>
         <div style={sectionHead}>
           <div>
             <h2 style={sectionTitle}>Optionaler Angebotsvergleich X84 ↔ RLC-KI</h2>
@@ -8264,15 +8689,15 @@ return (
       </section>
     ) : null}
 
-    <section id="rlc-lv-positionen" style={calcEditorGrid}>
+    
+<section id="rlc-lv-positionen" style={calcEditorGrid}>
           {/* ================= OBERER BEREICH: LV KOMPAKT ================= */}
           <div style={card}>
             <div style={sectionHead}>
               <div>
                 <h2 style={sectionTitle}>LV / Positionsliste</h2>
                 <div style={sectionText}>
-                  Kompakte Übersicht der LV-Positionen. Der Kurztext ist jetzt
-                  lesbar, die Detailkalkulation erfolgt unten in der Urkalkulation.
+                  Kompakte Übersicht der LV-Positionen. Die technische Detailkalkulation erfolgt in Urkalkulation / Rezepte.
                 </div>
               </div>
 
@@ -8282,7 +8707,7 @@ return (
                   style={btnSecondary}
                   onClick={addRow}
                 >
-                  Neue Position erstellen
+                  Urkalkulation starten für neue und bestehende Positionen
                 </button>
 
                 <details style={lvMenuWrap}>
@@ -8491,9 +8916,24 @@ return (
               In Datenbank übertragen ({rows.length})
             </button>
           </div>
+          <div style={lvStickyHeader}>
+            <div>OpenAI</div>
+            <div>Auftrag</div>
+            <div>Pos.</div>
+            <div>Kurztext</div>
+            <div style={{ textAlign: "right" }}>Menge</div>
+            <div>ME</div>
+            <div style={{ textAlign: "right" }}>EP X84</div>
+            <div style={{ textAlign: "right" }}>EP RLC-KI</div>
+            <div style={{ textAlign: "right" }}>EP final</div>
+            <div style={{ textAlign: "right" }}>GP final</div>
+            <div>Status</div>
+            <div>Aktion</div>
+          </div>
+
           <div style={lvTableScroll}>
             <table style={lvTable}>
-                <thead>
+                <thead style={{ display: "none" }}>
                   <tr>
                     <th style={lvTh}>OpenAI</th>
                     <th style={lvTh}>Auftrag</th>
@@ -8845,14 +9285,13 @@ return (
 
                 </div>
 
-<div style={bottomCalcGrid}>
-    <div style={card}>
+<div style={{ ...bottomCalcGrid, gridTemplateColumns: "minmax(0,1fr)" }}>
+    <div style={{ ...card, display: "none" }}>
       <div style={sectionHead}>
         <div>
-          <h2 style={sectionTitle}>Takte und Ansätze / Urkalkulation</h2>
+          <h2 style={sectionTitle}>Preisaufbau / Urkalkulation</h2>
           <div style={sectionText}>
-            Hier wird der EP der gewählten Position aufgebaut: Lohn, Geräte,
-            Stoffe, Fremdleistung, Sonstiges, EKT, EP und GP.
+            Kompakte Kontrolle der gewählten Position. Detailaufbau erfolgt in Urkalkulation / Rezepte; hier werden EP, GP und vorhandene Ansätze geprüft.
           </div>
         </div>
 
@@ -8863,7 +9302,7 @@ return (
             onClick={regenerateSelectedBreakdown}
             disabled={!selectedRow}
           >
-            KI neu aufbauen
+            Preisaufbau aktualisieren
           </button>
 
           <button
@@ -8872,7 +9311,7 @@ return (
             onClick={addBreakdownLine}
             disabled={!selectedRow}
           >
-            + Ansatz
+            Ansatz manuell ergänzen
           </button>
         </div>
       </div>
@@ -9057,8 +9496,7 @@ return (
                 {!selectedRow.priceBreakdown?.length ? (
                   <tr>
                     <td colSpan={12} style={{ ...td, color: "#64748B" }}>
-                      Noch keine Ansätze vorhanden. Klicke auf „+ Ansatz” oder
-                      „KI neu aufbauen”.
+                      Noch keine Ansätze vorhanden. Für den vollständigen technischen Preisaufbau die Position in Urkalkulation / Rezepte öffnen.
                     </td>
                   </tr>
                 ) : null}
@@ -9087,7 +9525,7 @@ return (
 
     {/* ================= RECHTS: INFO / KI ================= */}
     <aside style={sideCard}>
-      <h2 style={sectionTitle}>Info / KI-Prüfung</h2>
+      <h2 style={sectionTitle}>Positionsprüfung / Datenbankvergleich</h2>
 
       {selectedRow ? (
         <div style={{ display: "grid", gap: 12 }}>
@@ -9123,14 +9561,7 @@ return (
 
           <div style={separator} />
 
-          <Detail label="Gewerk" value={selectedRow.gewerk || "—"} />
-<Detail label="Leistungsart" value={selectedRow.leistungsart || "—"} />
-<Detail label="Bauverfahren" value={selectedRow.bauverfahren || "—"} />
-
-<div style={separator} />
-
-<details open>
-  <summary style={detailsSummary}>Artikel / Ressourcen übernehmen</summary>
+<details style={{ display: "none" }}><summary style={detailsSummary}>Artikel / Ressourcen übernehmen</summary>
 
   <div style={resourceToolbar}>
     <input
@@ -9194,16 +9625,83 @@ return (
               {selectedRow.warning || "Keine kritische Warnung erkannt."}
             </div>
           </div>
+          <div>
+            <div style={label}>Urkalkulation / Preisaufbau</div>
+
+            {(() => {
+              const lines =
+                Array.isArray(selectedRow.priceBreakdown) && selectedRow.priceBreakdown.length
+                  ? selectedRow.priceBreakdown
+                  : Array.isArray((selectedRow as any).recipeLines)
+                    ? (selectedRow as any).recipeLines
+                    : [];
+
+              const safeLines = normalizeBreakdown(lines);
+              const sum = sumBreakdown(safeLines);
+
+              if (!safeLines.length) {
+                return (
+                  <div style={reasonBox}>
+                    Kein Preisaufbau aus Urkalkulation übernommen. Position in Urkalkulation / Rezepte bearbeiten und erneut übernehmen.
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ overflowX: "auto", border: "1px solid #E2E8F0", borderRadius: 12 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, background: "#fff" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...th, textAlign: "left" }}>Gruppe</th>
+                        <th style={{ ...th, textAlign: "left" }}>Bezeichnung</th>
+                        <th style={{ ...th, textAlign: "left" }}>ME</th>
+                        <th style={{ ...th, textAlign: "right" }}>Menge je Einheit</th>
+                        <th style={{ ...th, textAlign: "right" }}>Preis</th>
+                        <th style={{ ...th, textAlign: "right" }}>EP-Anteil</th>
+                        <th style={{ ...th, textAlign: "left" }}>Hinweis</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {safeLines.map((line) => (
+                        <tr key={line.id}>
+                          <td style={td}>{line.group}</td>
+                          <td style={td}>{line.name}</td>
+                          <td style={td}>{line.unit}</td>
+                          <td style={{ ...tdRight }}>{qty(line.qty)}</td>
+                          <td style={{ ...tdRight }}>{money(line.price)}</td>
+                          <td style={{ ...tdRight, fontWeight: 900 }}>{money(line.total)}</td>
+                          <td style={td}>{line.note || "—"}</td>
+                        </tr>
+                      ))}
+
+                      <tr>
+                        <td colSpan={5} style={{ ...tdRight, fontWeight: 900 }}>
+                          Summe EP
+                        </td>
+                        <td style={{ ...tdRight, fontWeight: 900 }}>
+                          {money(sum)}
+                        </td>
+                        <td style={td}>
+                          Finaler EP: {money(getUnitPrice(selectedRow))}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+
 
           <div>
             <div style={label}>KI-Begründung</div>
             <div style={reasonBox}>
               {selectedRow.aiReason ||
-                "Noch keine KI-Begründung vorhanden. Starte die Elite-Kalkulation."}
+                "Noch keine KI-Begründung vorhanden. Starte die Kalkulation oder übernimm eine Position aus Urkalkulation / Rezepte."}
             </div>
           </div>
 
-          <details open={datenbankMatches.length > 0}>
+          <details style={{ display: "none" }} open={datenbankMatches.length > 0}>
             <summary style={detailsSummary}>
               Kalkulationsdatenbank ({datenbankMatches.length})
             </summary>
@@ -9224,7 +9722,7 @@ return (
                       style={btnMini}
                       onClick={() => applyKnowledge(match)}
                     >
-                      Werte übernehmen
+                      Vergleichswert übernehmen
                     </button>
                   </div>
                 ))}
@@ -9238,12 +9736,11 @@ return (
               style={{ ...btnSecondary, marginTop: 8 }}
               onClick={saveSelectedToKnowledge}
             >
-              Diese Position lernen
+              Sicheren Wert in Datenbank lernen
             </button>
           </details>
 
-          <details open={!selectedRow.langtext?.trim()}>
-            <summary style={detailsSummary}>Langtext / KI-Text</summary>
+          <details style={{ display: "none" }}><summary style={detailsSummary}>Langtext / Prüftext</summary>
 
             <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
               <Field label="Langtext">
@@ -9270,8 +9767,7 @@ return (
             </div>
           </details>
 
-          <details>
-            <summary style={detailsSummary}>Manuelle Anpassung</summary>
+          <details style={{ display: "none" }}><summary style={detailsSummary}>Manuelle EP-Anpassung</summary>
 
             <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
               <Field label="Rabatt Zeile %">
@@ -11397,6 +11893,24 @@ const lvTableWrap: React.CSSProperties = {
   background: "#FFFFFF",
 };
 
+
+const lvStickyHeader: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 200,
+  display: "grid",
+  gridTemplateColumns: "70px 220px 120px minmax(420px, 1fr) 110px 80px 130px 150px 130px 130px 110px 120px",
+  alignItems: "center",
+  gap: 0,
+  padding: "9px 10px",
+  background: "#F8FAFC",
+  borderTop: "1px solid #E5E7EB",
+  borderBottom: "1px solid #E5E7EB",
+  color: "#475569",
+  fontSize: 11,
+  fontWeight: 900,
+  whiteSpace: "nowrap",
+};
 const lvTable: React.CSSProperties = {
   width: "100%",
   minWidth: 980,
@@ -12109,6 +12623,65 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

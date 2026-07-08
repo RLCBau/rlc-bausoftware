@@ -1,4 +1,4 @@
-// apps/web/src/pages/kalkulation/Recipes.tsx
+﻿// apps/web/src/pages/kalkulation/Recipes.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import RlcKiDashboard from "../../components/rlc-ai/RlcKiDashboard";
 import { useNavigate } from "react-router-dom";
@@ -3690,6 +3690,7 @@ function exportPdf(opts: {
 /* ================= COMPONENT ================= */
 
 export default function Recipes() {
+  const navigate = useNavigate();
   const nav = useNavigate();
   const projectCtx: any = useProject();
   const project = getProject(projectCtx);
@@ -3728,6 +3729,10 @@ export default function Recipes() {
 
   const [lines, setLines] = useState<RecipeLine[]>([]);
   const [info, setInfo] = useState("");
+  const [globalUrkModalOpen, setGlobalUrkModalOpen] = useState(false);
+  const [globalUrkRunning, setGlobalUrkRunning] = useState(false);
+  const [globalUrkDone, setGlobalUrkDone] = useState(false);
+  const [globalUrkProgress, setGlobalUrkProgress] = useState({ done: 0, total: 0, changed: 0 });
   const [companyRecipes, setCompanyRecipes] = useState<CompanyRecipe[]>(() => loadCompanyRecipes());
 
   const [libraryRows, setLibraryRows] = useState<ExternalLibraryItem[]>(() =>
@@ -3911,9 +3916,45 @@ export default function Recipes() {
   function loadExistingPosition(row: LVPos) {
     setSelectedId(String(row.id || ""));
     setDraftPos(draftFromLv(row));
-    setLines([]);
+
+    let nextLines = createKiSuggestion(row, ctx);
+
+    if (!nextLines.length) {
+      nextLines = createRlcMinimalReviewUrkalkulation(row);
+    }
+
+    setLines(nextLines.map((line) => ({ ...line, id: line.id || safeId() })));
     setLibraryQuery(String(row.kurztext || ""));
-    setInfo(`Position ${row.posNr || "—"} als Grundlage geladen.`);
+
+    const pb = buildPriceBreakdown(nextLines, row);
+    const ep = round2(pb.reduce((sum, line) => sum + n(line.total), 0));
+    const gp = round2(n(row.menge) * ep);
+
+    LV.upsert({
+      ...(row as any),
+      // Beim Öffnen einer Position darf Recipes den Kalkulationspreis nicht ändern.
+      urkalkulationUnitPrice: ep,
+      urkalkulationTotal: gp,
+
+      preis: (row as any).preis,
+      ep: (row as any).ep,
+      finalUnitPrice: (row as any).finalUnitPrice,
+      suggestedUnitPrice: (row as any).suggestedUnitPrice,
+      rlcKiUnitPrice: (row as any).rlcKiUnitPrice,
+      gp: (row as any).gp,
+      gesamt: (row as any).gesamt,
+      totalNet: (row as any).totalNet,
+
+      priceBreakdown: pb,
+      recipeLines: nextLines,
+      source: "recipes-auto-recalc-on-load",
+      calculationStatus: "recipes_ready",
+      updatedAt: new Date().toISOString(),
+    } as any);
+
+    setLvRows(LV.list());
+
+    setInfo(`Position ${row.posNr || "—"} automatisch neu berechnet: EP ${money(ep)}.`);
   }
 
   async function autoFillLangtext() {
@@ -4462,6 +4503,211 @@ if (!lines.length) {
     return 1;
   }
 
+
+  function isGlobalUrkRealLvRow(row: LVPos): boolean {
+    const pos = String(row.posNr || "").trim();
+    const kurz = String(row.kurztext || "").trim();
+    const lang = String(row.langtext || "").trim();
+    const unit = String(row.einheit || "").trim();
+    const text = normSearch(`${pos} ${kurz} ${lang}`);
+
+    if (!unit || n(row.menge) <= 0) return false;
+    if (!kurz && !lang) return false;
+    if (/^\d{1,3}(\.0+)?$/.test(pos) && kurz.length < 5 && lang.length < 10) return false;
+
+    if (
+      text.includes("zwischensumme") ||
+      text.includes("gesamtsumme") ||
+      text.includes("summe titel") ||
+      text.includes("titel ") ||
+      text.includes("abschnitt ") ||
+      text.includes("los ")
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function rowHasUrkalkulation(row: LVPos): boolean {
+    return (
+      (Array.isArray((row as any).priceBreakdown) && (row as any).priceBreakdown.length > 0) ||
+      (Array.isArray((row as any).recipeLines) && (row as any).recipeLines.length > 0)
+    );
+  }
+
+  function createGlobalUrkalkulationForRow(row: LVPos): LVPos | null {
+    const detected = detectWorkType(row);
+    let nextLines = createKiSuggestion(row, ctx);
+
+    if (!nextLines.length) {
+      nextLines = createRlcFallbackUrkalkulation(row, ctx);
+    }
+
+    if (!nextLines.length) {
+      nextLines = createRlcMinimalReviewUrkalkulation(row);
+    }
+
+    // Wichtig: Globale Urkalkulation muss dieselben RecipeLines verwenden wie die Einzel-Urkalkulation.
+    // Keine zusätzliche Bereinigung hier, sonst entstehen andere Preise als bei "Urkalkulation starten".
+
+    if (!nextLines.length) {
+      nextLines = createRlcMinimalReviewUrkalkulation(row);
+    }
+
+    if (!nextLines.length) return null;
+
+    const pb = buildPriceBreakdown(nextLines, row);
+    const ep = round2(pb.reduce((sum, line) => sum + n(line.total), 0));
+    const qty = n(row.menge);
+    const gp = round2(qty * ep);
+
+    const groupSum = (group: PriceBreakdownGroup) =>
+      round2(pb.filter((line) => line.group === group).reduce((sum, line) => sum + n(line.total), 0));
+
+    return {
+      ...row,
+      // Globale Urkalkulation erklärt den Preisaufbau,
+      // darf aber den bestehenden EP/RLC-KI-Preis NICHT überschreiben.
+      urkalkulationUnitPrice: ep,
+      urkalkulationTotal: gp,
+
+      preis: (row as any).preis,
+      ep: (row as any).ep,
+      finalUnitPrice: (row as any).finalUnitPrice,
+      suggestedUnitPrice: (row as any).suggestedUnitPrice,
+      rlcKiUnitPrice: (row as any).rlcKiUnitPrice,
+      totalNet: (row as any).totalNet,
+      gp: (row as any).gp,
+      gesamt: (row as any).gesamt,
+
+      materialCost: groupSum("Material"),
+      laborCost: groupSum("Personal"),
+      machineCost: groupSum("Maschinen"),
+      transportCost: groupSum("LKW / Transport"),
+      subcontractorCost: groupSum("Fremdleistung"),
+      disposalCost: groupSum("Entsorgung"),
+      overheadCost: groupSum("Gemeinkosten"),
+      riskCost: groupSum("Risiko"),
+      profitCost: groupSum("Gewinn"),
+
+      priceBreakdown: pb,
+      recipeLines: nextLines,
+      source: "recipes-urkalkulation-global-lv-v1",
+      calculationStatus: "recipes_ready",
+      riskLevel: detected.ambiguous ? "high" : "medium",
+      confidence: detected.ambiguous ? 0.7 : 0.88,
+      aiReason: `Globale Urkalkulation für gesamtes LV erstellt.\n\nPreisaufbau:\n${breakdownText(pb)}`,
+      updatedAt: new Date().toISOString(),
+    } as any;
+  }
+
+  async function createGlobalLvUrkalkulation(mode: "missing" | "all") {
+    const current = LV.list();
+    const realRows = current.filter(isGlobalUrkRealLvRow);
+    const existingUrk = realRows.filter(rowHasUrkalkulation).length;
+
+    const candidates = realRows.filter((row) => {
+      if (mode === "missing" && rowHasUrkalkulation(row)) return false;
+      return true;
+    });
+
+    const changed: LVPos[] = [];
+    let skippedInvalid = current.length - realRows.length;
+    let skippedExisting = mode === "missing" ? existingUrk : 0;
+
+    setGlobalUrkModalOpen(false);
+    setGlobalUrkRunning(true);
+    setGlobalUrkDone(false);
+    setGlobalUrkProgress({ done: 0, total: candidates.length, changed: 0 });
+
+    if (!candidates.length) {
+      setGlobalUrkRunning(false);
+      setGlobalUrkDone(true);
+      setGlobalUrkProgress({ done: 0, total: 0, changed: 0 });
+      setInfo(
+        `Keine fehlenden Urkalkulationen gefunden. Reale LV-Positionen: ${realRows.length}, bereits mit Urkalkulation: ${existingUrk}. Für komplette Neuberechnung bitte "Alle Positionen neu erstellen" wählen.`
+      );
+      return;
+    }
+
+    setInfo(
+      `Globale Urkalkulation startet: ${candidates.length} Position(en) zu bearbeiten. Bereits vorhanden: ${existingUrk}.`
+    );
+
+    await new Promise((resolve) => window.setTimeout(resolve, 80));
+
+    for (let i = 0; i < candidates.length; i++) {
+      const row = candidates[i];
+
+      const updated = createGlobalUrkalkulationForRow(row);
+
+      if (updated) {
+        LV.upsert(updated);
+        changed.push(updated);
+      } else {
+        skippedInvalid++;
+      }
+
+      const done = i + 1;
+      const pct = Math.round((done / candidates.length) * 100);
+
+      setGlobalUrkProgress({ done, total: candidates.length, changed: changed.length });
+      setInfo(`Globale Urkalkulation läuft… ${done} / ${candidates.length} · ${pct} % · ${changed.length} erstellt`);
+
+      await new Promise((resolve) => window.setTimeout(resolve, 18));
+    }
+
+    const refreshedLv = LV.list();
+    setLvRows(refreshedLv);
+
+    const refreshedSelected =
+      refreshedLv.find((r) => String(r.id || "") === String(selectedId || "")) ||
+      refreshedLv.find((r) => String(r.posNr || "") === String(draftPos.posNr || "")) ||
+      refreshedLv[0];
+
+    if (refreshedSelected) {
+      setSelectedId(String(refreshedSelected.id || ""));
+      setDraftPos(draftFromLv(refreshedSelected));
+      setLines(
+        Array.isArray((refreshedSelected as any).recipeLines)
+          ? ((refreshedSelected as any).recipeLines as RecipeLine[])
+          : []
+      );
+    }
+
+    // RLC FIX: Globale Urkalkulation bleibt nur in Recipes/Preisaufbau.
+    // Kein global-lv Handoff mehr nach Kalkulation mit KI.
+    localStorage.removeItem("rlc_recipes_to_kalkulation_pending");
+
+    const firstDone = changed[0] || candidates[0];
+
+    if (firstDone) {
+      setSelectedId(String(firstDone.id || ""));
+      setDraftPos(draftFromLv(firstDone));
+
+      const firstLines = Array.isArray((firstDone as any).recipeLines)
+        ? ((firstDone as any).recipeLines as RecipeLine[])
+        : [];
+
+      const fallbackLines =
+        !firstLines.length && Array.isArray((firstDone as any).priceBreakdown)
+          ? recipeLinesFromServerPriceBreakdown(firstDone as any)
+          : [];
+
+      setLines((firstLines.length ? firstLines : fallbackLines).map((line) => ({ ...line, id: line.id || safeId() })));
+      setLibraryQuery(String(firstDone.kurztext || ""));
+    }
+
+    setGlobalUrkRunning(false);
+    setGlobalUrkDone(true);
+    setGlobalUrkProgress({ done: candidates.length, total: candidates.length, changed: changed.length });
+
+    setInfo(
+      `Globale Urkalkulation abgeschlossen: ${changed.length} Position(en) erstellt und erste Position automatisch geladen. Übersprungen: ${skippedExisting} bestehend, ${skippedInvalid} nicht kalkulierbar.`
+    );
+  }
+
   function applyToLv() {
     const made = makeLvPayload();
     if (!made) return null;
@@ -4509,9 +4755,65 @@ if (!lines.length) {
   function saveForHandoff() {
     const made = makeLvPayload();
     if (!made) return false;
-    LV.upsert(made.payload as LVPos);
+
+    const payload = made.payload as LVPos & any;
+    const ep = round2(n(payload.preis || payload.ep || summary.ep));
+    const qtyValue = n(payload.menge);
+    const gp = round2(ep * qtyValue);
+
+    LV.upsert({
+      ...payload,
+      preis: ep,
+      ep,
+      gp,
+      source: "recipes-urkalkulation-v21",
+      calculationStatus: "recipes_ready",
+      recipeLines: lines,
+    } as any);
+
     saveCurrentToDatenbank();
-    setLvRows(LV.list());
+    const refreshedLv = LV.list();
+    setLvRows(refreshedLv);
+
+    const refreshedSelected =
+      refreshedLv.find((r) => String(r.id || "") === String(selectedId || "")) ||
+      refreshedLv.find((r) => String(r.posNr || "") === String(draftPos.posNr || "")) ||
+      refreshedLv[0];
+
+    if (refreshedSelected) {
+      setSelectedId(String(refreshedSelected.id || ""));
+      setDraftPos(draftFromLv(refreshedSelected));
+      setLines(
+        Array.isArray((refreshedSelected as any).recipeLines)
+          ? ((refreshedSelected as any).recipeLines as RecipeLine[])
+          : []
+      );
+    }
+
+    localStorage.setItem(
+      "rlc_recipes_to_kalkulation_pending",
+      JSON.stringify({
+        source: "recipes",
+        version: "RLC_RECIPES_TRANSFER_V1",
+        createdAt: Date.now(),
+        projectKey,
+        row: {
+          ...payload,
+          preis: ep,
+          ep,
+          gp,
+          qty: qtyValue,
+          menge: qtyValue,
+          unit: payload.einheit || payload.unit || "m",
+          einheit: payload.einheit || payload.unit || "m",
+          source: "recipes-urkalkulation-v21",
+          calculationStatus: "recipes_ready",
+          recipeLines: lines,
+          recipeSummary: summary,
+        },
+      })
+    );
+
     return true;
   }
 
@@ -4726,6 +5028,128 @@ if (!lines.length) {
         </div>
       </section>
 
+
+      {globalUrkModalOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              width: "min(720px, 100%)",
+              borderRadius: 22,
+              background: "#FFFFFF",
+              border: "1px solid #E5E7EB",
+              boxShadow: "0 24px 80px rgba(15, 23, 42, 0.28)",
+              padding: 24,
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 900, color: "#2563EB", letterSpacing: 0.8, textTransform: "uppercase" }}>
+              RLC Urkalkulation
+            </div>
+
+            <h2 style={{ margin: "8px 0 8px", fontSize: 24, color: "#0F172A" }}>
+              Gesamtes LV urkalkulieren
+            </h2>
+
+            <p style={{ margin: "0 0 18px", color: "#475569", lineHeight: 1.55 }}>
+              RLC erstellt für alle echten LV-Positionen einen technischen Preisaufbau mit Personal, Maschinen,
+              Material, Transport, Gemeinkosten, Risiko und Gewinn. Titel, Summen und Strukturpositionen werden ignoriert.
+            </p>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              <button
+                type="button"
+                style={{ ...btnPrimary, justifyContent: "flex-start", padding: "14px 16px" }}
+                onClick={() => void createGlobalLvUrkalkulation("missing")} disabled={globalUrkRunning}
+              >
+                Nur Positionen ohne Urkalkulation erstellen und übernehmen
+              </button>
+
+              <button
+                type="button"
+                style={{ ...btnSecondary, justifyContent: "flex-start", padding: "14px 16px" }}
+                onClick={() => void createGlobalLvUrkalkulation("all")} disabled={globalUrkRunning}
+              >
+                Alle Positionen neu erstellen und in Kalkulation übernehmen
+              </button>
+
+              <button
+                type="button"
+                style={{ ...btnSecondary, justifyContent: "flex-start", padding: "14px 16px" }}
+                onClick={() => setGlobalUrkModalOpen(false)}
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {(globalUrkRunning || globalUrkDone) ? (
+        <div
+          style={{
+            position: "fixed",
+            right: 24,
+            bottom: 24,
+            width: 440,
+            maxWidth: "calc(100vw - 48px)",
+            zIndex: 10000,
+            borderRadius: 22,
+            background: "#FFFFFF",
+            border: "1px solid #D8E2F0",
+            boxShadow: "0 24px 70px rgba(15, 23, 42, 0.24)",
+            padding: 20,
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 900, color: "#2563EB", letterSpacing: 0.7, textTransform: "uppercase" }}>
+            RLC Urkalkulation
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900, color: "#0F172A" }}>
+            {globalUrkRunning ? "Globale Urkalkulation läuft…" : "Globale Urkalkulation abgeschlossen"}
+          </div>
+
+          <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
+            {globalUrkProgress.done.toLocaleString("de-DE")} / {globalUrkProgress.total.toLocaleString("de-DE")} Positionen ·{" "}
+            {globalUrkProgress.total ? Math.round((globalUrkProgress.done / globalUrkProgress.total) * 100) : 100} %
+          </div>
+
+          <div style={{ marginTop: 12, height: 10, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${globalUrkProgress.total ? Math.round((globalUrkProgress.done / globalUrkProgress.total) * 100) : 100}%`,
+                background: "#2563EB",
+                transition: "width 160ms ease",
+              }}
+            />
+          </div>
+
+          <div style={{ marginTop: 10, fontSize: 13, color: "#64748B" }}>
+            Erstellt: <b>{globalUrkProgress.changed.toLocaleString("de-DE")}</b> Position(en)
+          </div>
+
+          {globalUrkDone ? (
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button type="button" style={btnPrimary} onClick={() => navigate("/kalkulation/mit-ki")}>
+                Zur Kalkulation mit KI
+              </button>
+              <button type="button" style={btnSecondary} onClick={() => setGlobalUrkDone(false)}>
+                Schließen
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <section style={grid5}>
         <KpiCard label="Direkte Kosten" value={money(summary.base)} />
         <KpiCard label="Zuschläge" value={`${num(summary.surcharge, 1)} %`} />
@@ -4814,9 +5238,15 @@ if (!lines.length) {
       </div>
     </div>
 
-    <button type="button" style={btnPrimary} onClick={kiSuggest}>
-      Urkalkulation starten
-    </button>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <button type="button" style={btnPrimary} onClick={kiSuggest}>
+        Urkalkulation starten
+      </button>
+
+      <button type="button" style={btnSecondary} onClick={() => setGlobalUrkModalOpen(true)} disabled={globalUrkRunning}>
+        Urkalkulation gesamtes LV
+      </button>
+    </div>
   </div>
 </section>
 <h2 style={sectionTitle}>1. Positionsdaten</h2>
@@ -5755,6 +6185,28 @@ const badgeWarn: React.CSSProperties = {
   background: "#FFFBEB",
   color: "#B45309",
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
