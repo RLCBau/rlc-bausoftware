@@ -3,6 +3,8 @@ import OpenAI from "openai";
 import { prisma } from "../lib/prisma";
 import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreisBibliothek";
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
+import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalculationPipeline";
+import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
 
 const router = Router();
 
@@ -112,6 +114,53 @@ function n(value: any, fallback = 0): number {
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
+
+function appendUniqueSourceFlag(sourceRaw: any, flag: string): string {
+  const parts = String(sourceRaw || "rule-engine")
+    .split("+")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  if (!parts.includes(flag)) {
+    parts.push(flag);
+  }
+
+  return Array.from(new Set(parts)).join("+");
+}
+
+function cleanRlcSourceFlags(sourceRaw: any): string {
+  return Array.from(
+    new Set(
+      String(sourceRaw || "rlc-ki-autonomous")
+        .split("+")
+        .map((x) => x.trim())
+        .filter(Boolean)
+    )
+  ).join("+") || "rlc-ki-autonomous";
+}
+
+
+function cleanRlcWarningText(warningRaw: any): string {
+  const parts = String(warningRaw || "")
+    .split(" · ")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(parts)).join(" · ");
+}
+
+function cleanRlcOutputRow(row: any): any {
+  if (!row || typeof row !== "object") {
+    return row;
+  }
+
+  return {
+    ...row,
+    source: cleanRlcSourceFlags(row.source),
+    warning: cleanRlcWarningText(row.warning),
+  };
+}
+
 
 function norm(value: any): string {
   return s(value).toLowerCase();
@@ -3819,7 +3868,7 @@ function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
     confidence: Math.min(n(result.confidence, 0.62), 0.72),
     calculationStatus: "warning",
     riskLevel: "medium",
-    source: `${s(result.source) || "server"}+no-x84-family-guard`,
+    source: cleanRlcSourceFlags(appendUniqueSourceFlag(s(result.source) || "server", "no-x84-family-guard")),
 
     warning: [
       s(result.warning),
@@ -4479,6 +4528,43 @@ function calculationStatusFrom(warnings: string[], riskLevel: RiskLevel, confide
   if (warnings.some((x) => x.includes("fehlt")) || confidence < 0.55) return "critical";
   if (warnings.length || riskLevel !== "low") return "warning";
   return "ok";
+}
+
+
+function enrichFinalRowWithKnowledgeHub(row: any, result: any): any {
+  if (!result || typeof result !== "object") return result;
+
+  try {
+    const knowledgeHub = resolveRlcKnowledgeHub({
+      kurztext: row?.kurztext,
+      langtext: row?.langtext,
+      text: `${row?.kurztext || ""} ${row?.langtext || ""}`,
+      unit: row?.einheit,
+      family: result?.rlcFamily || result?.family || result?.gewerk || result?.source
+    });
+
+    console.log("[RLC KnowledgeHub FINAL CHECK]", {
+      posNr: row?.posNr,
+      kurztext: row?.kurztext,
+      matches: knowledgeHub.externalMatches.length,
+      confidence: knowledgeHub.externalKnowledgeConfidence
+    });
+
+    if (!knowledgeHub.hasExternalKnowledge) return result;
+
+    return {
+      ...result,
+      externalKnowledge: knowledgeHub.externalMatches,
+      externalKnowledgeConfidence: knowledgeHub.externalKnowledgeConfidence,
+      aiReason: [
+        String(result.aiReason || ""),
+        ...knowledgeHub.technicalNotes
+      ].filter(Boolean).join("\n\n")
+    };
+  } catch (e: any) {
+    console.warn("[RLC KnowledgeHub FINAL ERROR]", row?.posNr, e?.message || e);
+    return result;
+  }
 }
 
 function calcRuleRow(row: InputRow, matches: DbMatch[], sourceOverride?: CalcSource) {
@@ -7540,7 +7626,7 @@ JSON-Schema:
       ].filter(Boolean).join("\n\n") ||
       `OpenAI-Kalkulation: Keine ausreichend sichere Datenbankbasis vorhanden. Die Urkalkulation wurde per OpenAI aus LV-Text, Einheit, Menge, Gewerk, Leistungsart und Bauverfahren erstellt. Fachliche Prüfung erforderlich.`,
 
-    source: "openai",
+    source: cleanRlcSourceFlags("openai"),
     priceBreakdown,
   };
 }
@@ -7967,7 +8053,7 @@ function blockBadCompanyCalibrationByGlobalKnowledge(row: InputRow, result: any)
 
   return {
     ...result,
-    source: "company-calibration-blocked-by-global-knowledge-recalculated",
+    source: cleanRlcSourceFlags("company-calibration-blocked-by-global-knowledge-recalculated"),
     confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
     riskLevel: "high",
     calculationStatus: "needs_review",
@@ -8034,7 +8120,7 @@ function recalcBlockedTechnicalAfterGlobalKnowledge(row: InputRow, result: any):
 
   return {
     ...result,
-    source: "technical-parser-blocked-by-family-mismatch-recalculated-gk",
+    source: cleanRlcSourceFlags("technical-parser-blocked-by-family-mismatch-recalculated-gk"),
     confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
     riskLevel: "high",
     calculationStatus: "needs_review",
@@ -8081,7 +8167,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   ) {
     return {
       ep: 24.5,
-      source: "rlc-family-fallback-forststrasse-v30",
+      source: cleanRlcSourceFlags("rlc-family-fallback-forststrasse-v30"),
       reason: "Forst-/Kiesstraße wiederherstellen mit Bindekies, Fertiger, Bankettanpassung: V30-Fallback 24,50 €/m.",
     };
   }
@@ -8089,7 +8175,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m2|m²|qm|quadratmeter)$/.test(unit) && /(flächen und wege wiederherstellen|flaechen und wege wiederherstellen|bindekies|kleinflächen|kleinflaechen|almen)/.test(rowNorm)) {
     return {
       ep: 14.5,
-      source: "rlc-family-fallback-flaechen-wege-v30",
+      source: cleanRlcSourceFlags("rlc-family-fallback-flaechen-wege-v30"),
       reason: "Flächen/Wege wiederherstellen mit Bindekies, Planieren/Verdichten, Kleinflächen/Almen: V30-Fallback 14,50 €/m².",
     };
   }
@@ -8097,7 +8183,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /(gußeiserne schachtabdeckung|gusseiserne schachtabdeckung|schachtabdeckung.*klasse\s*b|klasse\s*b)/.test(rowNorm)) {
     return {
       ep: 200,
-      source: "rlc-family-fallback-schachtabdeckung-guss-klasse-b",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-guss-klasse-b"),
       reason: "Gusseiserne Schachtabdeckung Klasse B, rund DN625: V30-Fallback 200 €/St statt D400-Fallback 420 €/St.",
     };
   }
@@ -8105,7 +8191,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /(betonsockel.*c\s*25\/30|betonsockel)/.test(rowNorm) && /(2,300|2\.300|0,4|0\.4|1,5|1\.5|apparateschrank|leerrohre\s*dn\s*100)/.test(rowNorm)) {
     return {
       ep: 1200,
-      source: "rlc-family-fallback-betonsockel-gross-v30",
+      source: cleanRlcSourceFlags("rlc-family-fallback-betonsockel-gross-v30"),
       reason: "Großer Betonsockel C25/30 inkl. Erdarbeiten und Leerrohre DN100: V30-Fallback 1200 €/St.",
     };
   }
@@ -8113,7 +8199,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /(zuschlag.*elektroverteilung|elektroverteilung|notstromeinspeisung|netztrennschalter|schaltschrank)/.test(rowNorm)) {
     return {
       ep: 770,
-      source: "rlc-family-fallback-elektroverteilung-zuschlag-v30",
+      source: cleanRlcSourceFlags("rlc-family-fallback-elektroverteilung-zuschlag-v30"),
       reason: "Zuschlag Elektroverteilung mit Notstromeinspeisung/Netztrennschalter im Schaltschrank: V30-Fallback 770 €/St.",
     };
   }
@@ -8121,7 +8207,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /(überfahrten|ueberfahrten|brückenklasse\s*30|brueckenklasse\s*30|30\s*t|30\s*to|schrammbord|geländer|gelaender)/.test(rowNorm)) {
     return {
       ep: 300,
-      source: "rlc-family-fallback-ueberfahrt-30t-v30",
+      source: cleanRlcSourceFlags("rlc-family-fallback-ueberfahrt-30t-v30"),
       reason: "Überfahrt über offenen Rohrgraben, Brückenklasse 30 t, Schrammbord/Geländer: V30-Fallback 300 €/St.",
     };
   }
@@ -8129,7 +8215,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(lfm|m|meter)$/.test(unit) && /(mittelspannungskabel|na2xs|12\/20kv|einzeladern|kabelbinder)/.test(rowNorm)) {
     return {
       ep: 8.1,
-      source: "rlc-family-fallback-mittelspannungskabel-v30",
+      source: cleanRlcSourceFlags("rlc-family-fallback-mittelspannungskabel-v30"),
       reason: "Verlegung Mittelspannungskabel ohne Tiefbau, Bündeln/Einlegen im vorhandenen Graben: V30-Fallback 8,10 €/lfm.",
     };
   }
@@ -8137,7 +8223,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m|lfm|meter)$/.test(unit) && /(hdpe.*da\s*63|pe.*da\s*63|pn\s*16|sdr\s*11)/.test(rowNorm)) {
     return {
       ep: 5.8,
-      source: "rlc-family-fallback-hdpe-da63-pn16-v30",
+      source: cleanRlcSourceFlags("rlc-family-fallback-hdpe-da63-pn16-v30"),
       reason: "HDPE DA63 PN16/SDR11 liefern und verlegen: V30-Fallback 5,80 €/m.",
     };
   }
@@ -8146,7 +8232,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m|lfm|meter)$/.test(unit) && /(pp-rohr\s*dn\s*160|pp.*kanal.*dn\s*160|vollwand-pp.*dn\s*160)/.test(rowNorm)) {
     return {
       ep: 27,
-      source: "rlc-family-fallback-pp-rohr-dn160",
+      source: cleanRlcSourceFlags("rlc-family-fallback-pp-rohr-dn160"),
       reason: "PP-Rohr DN160 SN8 liefern und verlegen: V27-Fallback 27 €/m statt falschem Kanal-DN150-Fallback.",
     };
   }
@@ -8154,7 +8240,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m)$/.test(unit) && /(zulage.*schichtenverbund|schichtenverbund.*borde|borde.*rinnen.*asphaltkante)/.test(rowNorm)) {
     return {
       ep: 2,
-      source: "rlc-family-fallback-zulage-schichtenverbund",
+      source: cleanRlcSourceFlags("rlc-family-fallback-zulage-schichtenverbund"),
       reason: "Zulage Schichtenverbund an Bord/Rinne/Asphaltkante: V27-Fallback 2 €/m statt Bordstein-Komplettpreis.",
     };
   }
@@ -8162,7 +8248,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m3|m³|cbm|kubikmeter)$/.test(unit) && /(sohl.*ummantelungsbeton|ummantelungsbeton|stützbeton|stuetzbeton|sohlbeton)/.test(rowNorm)) {
     return {
       ep: 260,
-      source: "rlc-family-fallback-sohl-ummantelungsbeton",
+      source: cleanRlcSourceFlags("rlc-family-fallback-sohl-ummantelungsbeton"),
       reason: "Sohl-/Ummantelungsbeton C25/30 liefern und einbauen: V27-Fallback 260 €/m³ statt Betonsockel-Fallback.",
     };
   }
@@ -8170,7 +8256,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m|lfm|meter)$/.test(unit) && /(mikrorohrhausanschlussleitung|mikro.*hausanschluss.*leerrohr|2\s*leerrohre.*7\s*mm)/.test(rowNorm)) {
     return {
       ep: 3.5,
-      source: "rlc-family-fallback-mikrorohr-hausanschluss",
+      source: cleanRlcSourceFlags("rlc-family-fallback-mikrorohr-hausanschluss"),
       reason: "Mikrorohrhausanschlussleitung 2x7 mm: V27-Fallback 3,50 €/m statt Kabelschutzrohr-Fallback.",
     };
   }
@@ -8178,7 +8264,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /(zuschlag.*schachtabdeckung)/.test(rowNorm) && /(klasse\s*d|ausführung\s*in\s*klasse\s*d|ausfuehrung\s*in\s*klasse\s*d)/.test(rowNorm)) {
     return {
       ep: 2350,
-      source: "rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d",
+      source: cleanRlcSourceFlags("rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d"),
       reason: "Zuschlag Schachtabdeckung Klasse D: V27-Fallback 2350 €/St statt normaler 420 €/St.",
     };
   }
@@ -8186,7 +8272,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /(statik.*druckerhöhungsschacht|statik.*druckerhoehungsschacht|statische berechnung.*druckerhöhungsschacht|statische berechnung.*druckerhoehungsschacht)/.test(rowNorm)) {
     return {
       ep: 3750,
-      source: "rlc-family-fallback-statik-druckerhoehungsschacht-v27",
+      source: cleanRlcSourceFlags("rlc-family-fallback-statik-druckerhoehungsschacht-v27"),
       reason: "Statik Druckerhöhungsschacht inkl. Bewehrungspläne/Stahllisten: V27-Fallback 3750 €/St.",
     };
   }
@@ -8194,7 +8280,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m|lfm|meter)$/.test(unit) && /(asphalt.*trennen|asphaltoberbau.*schneiden|trenntiefe.*20\s*cm)/.test(rowNorm)) {
     return {
       ep: 3.5,
-      source: "rlc-family-fallback-asphalt-trennen-v27",
+      source: cleanRlcSourceFlags("rlc-family-fallback-asphalt-trennen-v27"),
       reason: "Asphalt trennen/schneiden ca. 20 cm: V27-Fallback 3,50 €/m statt 11 €/m.",
     };
   }
@@ -8202,7 +8288,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m2|m²|qm|quadratmeter)$/.test(unit) && /(flächen und wege wiederherstellen|flaechen und wege wiederherstellen|bindekies|kieswege|almen)/.test(rowNorm)) {
     return {
       ep: 14.5,
-      source: "rlc-family-fallback-flaechen-wege-wiederherstellen",
+      source: cleanRlcSourceFlags("rlc-family-fallback-flaechen-wege-wiederherstellen"),
       reason: "Flächen/Wege wiederherstellen mit Bindekies, Planieren/Verdichten: V27-Fallback 14,50 €/m².",
     };
   }
@@ -8211,7 +8297,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m|lfm|meter)$/.test(unit) && /(forststraßen wiederherstellen|forststrassen wiederherstellen|kiesstraßen|kiesstrassen)/.test(rowNorm)) {
     return {
       ep: 24,
-      source: "rlc-family-fallback-kiesstrasse-wiederherstellen",
+      source: cleanRlcSourceFlags("rlc-family-fallback-kiesstrasse-wiederherstellen"),
       reason: "Kies-/Forststraße wiederherstellen: profilieren, planieren, verdichten, ca. 10 cm Bindekies, Breite 4–5 m. V21-Fallback 24 €/m statt pauschal 35 €/m.",
     };
   }
@@ -8219,7 +8305,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m3|m³|cbm|kubikmeter)$/.test(unit) && /(zuschlag.*rohrgrabenaushub.*bd-kl.*6|zuschlag.*rohrgrabenaushub.*bkl.*6|bodenklassen\s*6|homogenbreich\s*b4|homogenbereich\s*b4)/.test(rowNorm)) {
     return {
       ep: 31.9,
-      source: "rlc-family-fallback-zuschlag-rohrgrabenaushub-bkl6",
+      source: cleanRlcSourceFlags("rlc-family-fallback-zuschlag-rohrgrabenaushub-bkl6"),
       reason: "Zuschlag Rohrgrabenaushub Bodenklasse 6 / Homogenbereich B4 inkl. Zerkleinern: V21-Fallback 31,90 €/m³.",
     };
   }
@@ -8227,7 +8313,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /schachtabdeckung/.test(rowNorm) && /(v2a|edelstahl|1000\s*x\s*1000|1000x1000|gasdruckfeder|tagwasserdicht|regensicher|rechteckig|klasse\s*d)/.test(rowNorm)) {
     return {
       ep: 5400,
-      source: "rlc-family-fallback-schachtabdeckung-v2a-sonder",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-v2a-sonder"),
       reason: "Sonder-Schachtabdeckung V2A/Edelstahl, Klasse D, rechteckig 1000x1000, regensicher/tagwasserdicht: V21-Fallback 5400 €/St statt generischem 420 €/St.",
     };
   }
@@ -8237,7 +8323,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m|lfm|meter)$/.test(unit) && /mikrokabelleerrohrverbund|mikrokabelleerrohr|mikrokabel.*leerrohr|leerrohrverbund/.test(rowNorm)) {
     return {
       ep: 4.37,
-      source: "rlc-family-fallback-mikrokabelleerrohrverbund",
+      source: cleanRlcSourceFlags("rlc-family-fallback-mikrokabelleerrohrverbund"),
       reason: "Mikrokabelleerrohrverbund: präziser Mikro-Leerrohrverbund-Fallback 4,37 €/m statt generischem Kabelschutzrohr-Fallback.",
     };
   }
@@ -8245,7 +8331,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(m|lfm|meter)$/.test(unit) && /lwl.*miko|lwl.*mikro|miko-kabel|mikro-kabel|12\s*fasern/.test(rowNorm)) {
     return {
       ep: 1.5,
-      source: "rlc-family-fallback-lwl-mikro-kabel",
+      source: cleanRlcSourceFlags("rlc-family-fallback-lwl-mikro-kabel"),
       reason: "LWL Mikro-Kabel: präziser Kabel-Fallback 1,50 €/m statt generischem LWL/Mikrorohr-Fallback.",
     };
   }
@@ -8275,7 +8361,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
 
     return {
       ep: fullInstall ? 28 : 3.5,
-      source: "rlc-family-fallback-auffuellmaterial",
+      source: cleanRlcSourceFlags("rlc-family-fallback-auffuellmaterial"),
       reason: fullInstall
         ? "Auffüllmaterial inkl. Einbau/Verdichtung: präziser Fallback 28 €/m³ statt Forststraßen-Fallback."
         : "Auffüllmaterial reine Material-/Zulageposition V20: präziser Fallback 3,50 €/m³ statt Forststraßen-Fallback.",
@@ -8285,7 +8371,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(cm)$/.test(unit) && /(mehr- oder mindertiefe|mindertiefe|mehrtiefe)/.test(rowNorm)) {
     return {
       ep: 62.61,
-      source: "rlc-family-fallback-schacht-mindertiefe-cm",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schacht-mindertiefe-cm"),
       reason: "Mehr-/Mindertiefe Schacht cm: präziser Tiefenzuschlag 62,61 €/cm statt falschem Stückpreis-Fallback.",
     };
   }
@@ -8293,7 +8379,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(cm)$/.test(unit) && /(mehr- oder minderpreis|mehr.*minderpreis|minderpreis|mehrpreis)/.test(rowNorm)) {
     return {
       ep: 2.22,
-      source: "rlc-family-fallback-schacht-cm-zuschlag",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schacht-cm-zuschlag"),
       reason: "Mehr-/Minderpreis Schacht cm: präziser cm-Zuschlag 2,22 €/cm statt falschem Stückpreis-Fallback.",
     };
   }
@@ -8301,7 +8387,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /schachtabdeckung.*dps|dps.*schachtabdeckung/.test(rowNorm)) {
     return {
       ep: 7500,
-      source: "rlc-family-fallback-schachtabdeckung-dps",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-dps"),
       reason: "Schachtabdeckung DPS/Sonderabdeckung: prüfpflichtiger Sonder-Fallback 7500 €/St statt generischem 420 €/St.",
     };
   }
@@ -8309,7 +8395,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/^(st|stk|stück|stueck)$/.test(unit) && /kabelzugschacht.*abdeckung|kabelzugschacht/.test(rowNorm)) {
     return {
       ep: 1385,
-      source: "rlc-family-fallback-kabelzugschacht-abdeckung",
+      source: cleanRlcSourceFlags("rlc-family-fallback-kabelzugschacht-abdeckung"),
       reason: "Kabelzugschacht inkl. Abdeckung: präziser Fallback 1385 €/St statt generischer Schachtabdeckung 420 €/St.",
     };
   }
@@ -8317,7 +8403,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/statik.*druckerh[oö]hungsschacht|druckerh[oö]hungsschacht.*statik/.test(rowNorm)) {
     return {
       ep: 3750,
-      source: "rlc-family-fallback-statik-druckerhoehungsschacht",
+      source: cleanRlcSourceFlags("rlc-family-fallback-statik-druckerhoehungsschacht"),
       reason: "Statik Druckerhöhungsschacht: V29-Fallback 3750 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8325,7 +8411,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/betonsockel|sockel.*c\s*25|c\s*25\/30/.test(rowNorm)) {
     return {
       ep: 450,
-      source: "rlc-family-fallback-betonsockel",
+      source: cleanRlcSourceFlags("rlc-family-fallback-betonsockel"),
       reason: "Betonsockel C25/30: technischer Fallback 450 €/Einheit prüfpflichtig gesetzt.",
     };
   }
@@ -8333,7 +8419,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/forststra[sß]e|forststrasse|forststraßen|forststrassen/.test(rowNorm)) {
     return {
       ep: 24.5,
-      source: "rlc-family-fallback-forststrasse",
+      source: cleanRlcSourceFlags("rlc-family-fallback-forststrasse"),
       reason: "Forststraße wiederherstellen: technischer Fallback 35 €/Einheit prüfpflichtig gesetzt.",
     };
   }
@@ -8341,7 +8427,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/kabelzugschacht.*abdeckung|kabelzugschacht/.test(rowNorm)) {
     return {
       ep: 1385.25,
-      source: "rlc-family-fallback-kabelzugschacht-abdeckung",
+      source: cleanRlcSourceFlags("rlc-family-fallback-kabelzugschacht-abdeckung"),
       reason: "Kabelzugschacht inkl. Abdeckung: präziser Fallback 1385,25 €/St statt generischer Schachtabdeckung 420 €/St.",
     };
   }
@@ -8349,7 +8435,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/schachtabdeckung.*dps|dps.*schachtabdeckung/.test(rowNorm)) {
     return {
       ep: 7500,
-      source: "rlc-family-fallback-schachtabdeckung-dps",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-dps"),
       reason: "Schachtabdeckung DPS/Sonderabdeckung: prüfpflichtiger Sonder-Fallback 7500 €/St statt generischem 420 €/St.",
     };
   }
@@ -8359,7 +8445,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/schachtabdeckung/.test(rowNorm) && /(v2a|edelstahl)/.test(rowNorm) && /(1000\s*1000|1000\s*x\s*1000|1000x1000|gasdruckfeder|tagwasserdicht|regensicher|rechteckig)/.test(rowNorm)) {
     return {
       ep: 5400,
-      source: "rlc-family-fallback-schachtabdeckung-v2a-sonder",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-v2a-sonder"),
       reason: "Sonder-Schachtabdeckung V2A/Edelstahl mit Sondermerkmalen: V24-Fallback 5400 €/St.",
     };
   }
@@ -8367,7 +8453,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/zulage.*schachtabdeckung|schachtabdeckung.*zulage/.test(rowNorm)) {
     return {
       ep: 120,
-      source: "rlc-family-fallback-schachtabdeckung-zulage-klasse-d",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-zulage-klasse-d"),
       reason: "Zulage Schachtabdeckung / Klasse D: V24-Fallback 120 €/St statt Sonderabdeckung 5400 €/St.",
     };
   }
@@ -8375,7 +8461,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/gusseiserne schachtabdeckung|perbunan|einlage|abd\.d\.kl\.d/.test(rowNorm)) {
     return {
       ep: 320,
-      source: "rlc-family-fallback-schachtabdeckung-guss-klasse-d",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-guss-klasse-d"),
       reason: "Gusseiserne Schachtabdeckung Klasse D mit Einlage: V25-Fallback 320 €/St statt Sonderabdeckung 5400 €/St.",
     };
   }
@@ -8383,7 +8469,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/zuschlag/.test(rowNorm) && /(klasse\s*d|ausführung\s*in\s*klasse\s*d|ausfuehrung\s*in\s*klasse\s*d)/.test(rowNorm)) {
     return {
       ep: 2350,
-      source: "rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d",
+      source: cleanRlcSourceFlags("rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d"),
       reason: "Zuschlag Schachtabdeckung Klasse D: V29-Fallback 2350 €/St statt normaler 420 €/St.",
     };
   }
@@ -8391,7 +8477,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/schachtabdeckung|abdeckung.*d400|d400/.test(rowNorm)) {
     return {
       ep: 420,
-      source: "rlc-family-fallback-schachtabdeckung",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung"),
       reason: "Normale Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8399,7 +8485,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/strassenablauf|straßenablauf/.test(rowNorm)) {
     return {
       ep: 850,
-      source: "rlc-family-fallback-strassenablauf",
+      source: cleanRlcSourceFlags("rlc-family-fallback-strassenablauf"),
       reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8407,7 +8493,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/kabelschacht/.test(rowNorm)) {
     return {
       ep: 900,
-      source: "rlc-family-fallback-kabelschacht",
+      source: cleanRlcSourceFlags("rlc-family-fallback-kabelschacht"),
       reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8415,7 +8501,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "kabelschutzrohr" && unit === "m") {
     return {
       ep: 18,
-      source: "rlc-family-fallback-kabelschutzrohr",
+      source: cleanRlcSourceFlags("rlc-family-fallback-kabelschutzrohr"),
       reason: "Kabelschutzrohr DN/Schutzrohr als Meterleistung: Mindestansatz 18 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8423,7 +8509,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "bordstein" && unit === "m") {
     return {
       ep: 95,
-      source: "rlc-family-fallback-bordstein",
+      source: cleanRlcSourceFlags("rlc-family-fallback-bordstein"),
       reason: "Bordstein setzen inkl. Rückenstütze: technischer Fallback 95 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8431,7 +8517,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "entsorgung" && (unit === "m³" || unit === "m3")) {
     return {
       ep: 45,
-      source: "rlc-family-fallback-entsorgung",
+      source: cleanRlcSourceFlags("rlc-family-fallback-entsorgung"),
       reason: "Aushub/Boden entsorgen inkl. Laden, Transport und Kippe: technischer Fallback 45 €/m³ prüfpflichtig gesetzt.",
     };
   }
@@ -8439,7 +8525,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "kanal" && unit === "m") {
     return {
       ep: 145,
-      source: "rlc-family-fallback-kanal-dn150",
+      source: cleanRlcSourceFlags("rlc-family-fallback-kanal-dn150"),
       reason: "Kanalrohr DN150 verlegen inkl. Bettung: technischer Fallback 145 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8447,7 +8533,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "suchschlitz" && unit === "m") {
     return {
       ep: 55,
-      source: "rlc-family-fallback-suchschlitz",
+      source: cleanRlcSourceFlags("rlc-family-fallback-suchschlitz"),
       reason: "Suchschlitz zur Leitungserkundung: technischer Fallback 55 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8455,7 +8541,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "gasleitung" && unit === "m") {
     return {
       ep: 42,
-      source: "rlc-family-fallback-gasleitung",
+      source: cleanRlcSourceFlags("rlc-family-fallback-gasleitung"),
       reason: "Gasleitung PE als Meterleistung: technischer Fallback 42 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8463,7 +8549,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if ((family === "lwl_mikrorohr" || family === "lwl_glasfaser") && unit === "m") {
     return {
       ep: 10,
-      source: "rlc-family-fallback-lwl-mikrorohr",
+      source: cleanRlcSourceFlags("rlc-family-fallback-lwl-mikrorohr"),
       reason: "LWL/Mikrorohrverband als Meterleistung: technischer Fallback 10 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8471,7 +8557,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "strom_kabel" && unit === "m") {
     return {
       ep: 32,
-      source: "rlc-family-fallback-stromkabel",
+      source: cleanRlcSourceFlags("rlc-family-fallback-stromkabel"),
       reason: "Strom-/Mittelspannungskabel als Meterleistung: technischer Fallback 32 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8479,7 +8565,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "asphalt_schneiden" && /^(m|lfm|meter)$/.test(unit)) {
     return {
       ep: 11,
-      source: "rlc-family-fallback-asphalt-schneiden",
+      source: cleanRlcSourceFlags("rlc-family-fallback-asphalt-schneiden"),
       reason: "Asphalt schneiden als Meterleistung: technischer Fallback 11 €/m prüfpflichtig gesetzt.",
     };
   }
@@ -8487,7 +8573,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "strassenablauf" && /^(st|stk|stück|stueck)$/.test(unit)) {
     return {
       ep: 850,
-      source: "rlc-family-fallback-strassenablauf",
+      source: cleanRlcSourceFlags("rlc-family-fallback-strassenablauf"),
       reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8495,7 +8581,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "schacht" && /^(st|stk|stück|stueck)$/.test(unit)) {
     return {
       ep: 1800,
-      source: "rlc-family-fallback-schacht",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schacht"),
       reason: "Fertigteilschacht setzen: technischer Fallback 1800 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8503,7 +8589,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "schachtabdeckung" && /^(st|stk|stück|stueck)$/.test(unit)) {
     return {
       ep: 420,
-      source: "rlc-family-fallback-schachtabdeckung",
+      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung"),
       reason: "Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8511,7 +8597,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "kabelschacht" && /^(st|stk|stück|stueck)$/.test(unit)) {
     return {
       ep: 900,
-      source: "rlc-family-fallback-kabelschacht",
+      source: cleanRlcSourceFlags("rlc-family-fallback-kabelschacht"),
       reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
     };
   }
@@ -8519,7 +8605,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "transport_lkw" && unit === "h") {
     return {
       ep: 95,
-      source: "rlc-family-fallback-lkw-transport",
+      source: cleanRlcSourceFlags("rlc-family-fallback-lkw-transport"),
       reason: "LKW Transport auf Nachweis: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
     };
   }
@@ -8527,7 +8613,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "regie_personal" && unit === "h") {
     return {
       ep: 58,
-      source: "rlc-family-fallback-regie-personal",
+      source: cleanRlcSourceFlags("rlc-family-fallback-regie-personal"),
       reason: "Regiestunde Facharbeiter: technischer Fallback 58 €/h prüfpflichtig gesetzt.",
     };
   }
@@ -8535,7 +8621,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (family === "regie_bagger" && unit === "h") {
     return {
       ep: 95,
-      source: "rlc-family-fallback-regie-bagger",
+      source: cleanRlcSourceFlags("rlc-family-fallback-regie-bagger"),
       reason: "Regiestunde Bagger inkl. Fahrer: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
     };
   }
@@ -8543,7 +8629,7 @@ function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: 
   if (/fels|klasse 6|klasse 7/.test(norm([row?.kurztext, row?.langtext, (row as any)?.text].join(" "))) && (unit === "m³" || unit === "m3")) {
     return {
       ep: 95,
-      source: "rlc-family-fallback-fels",
+      source: cleanRlcSourceFlags("rlc-family-fallback-fels"),
       reason: "Fels/Bodenklasse 6-7 lösen/laden/entsorgen: technischer Fallback 95 €/m³ prüfpflichtig gesetzt.",
     };
   }
@@ -8613,7 +8699,7 @@ function cleanRohrgrabenaushubTechnicalSource(row: InputRow, result: any): any {
 
   return {
     ...result,
-    source: "technical-parser-rohrgrabenaushub-cleaned",
+    source: cleanRlcSourceFlags("technical-parser-rohrgrabenaushub-cleaned"),
     confidence: Math.min(n((result as any).confidence, 0.5), 0.62),
     riskLevel: "high",
     calculationStatus: "needs_review",
@@ -8698,7 +8784,7 @@ function recalcBlockedOrTooLowByFamilyFallback(row: InputRow, result: any): any 
 
   return {
     ...result,
-    source: `${fallback.source}-recalculated`,
+    source: cleanRlcSourceFlags(`${fallback.source}-recalculated`),
     confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
     riskLevel: "high",
     calculationStatus: "needs_review",
@@ -8895,7 +8981,7 @@ async function calcSmartRow(
       bauverfahren: "Keine kalkulatorische Leistungsposition",
       warning: "",
       aiReason: "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition. Von OpenAI bewusst ausgeschlossen.",
-      source: "rule-engine",
+      source: cleanRlcSourceFlags("rule-engine"),
       priceBreakdown: [],
     };
   }
@@ -8927,7 +9013,7 @@ async function calcSmartRow(
     const dbRow = calcRuleRow(row, matches, "database");
     return {
       ...dbRow,
-      source: "database",
+      source: cleanRlcSourceFlags("database"),
       confidence: Math.max(n(dbRow.confidence), qualityGateStatusOf(approvedMatch.row) === "Freigegeben" ? 0.96 : 0.92),
       calculationStatus: "ok",
       riskLevel: n(dbRow.finalUnitPrice) > 0 ? "low" : dbRow.riskLevel,
@@ -9039,7 +9125,7 @@ async function calcSmartRow(
 
         const companyDbRow = {
           ...row,
-          source: "company-database-exact",
+          source: cleanRlcSourceFlags("company-database-exact"),
           _rlcLockFinalPrice: true,
           suggestedUnitPrice: exactDbEp,
           finalUnitPrice: exactDbEp,
@@ -9105,7 +9191,7 @@ async function calcSmartRow(
 
       const companyDbRow = {
         ...dbRow,
-        source: "database",
+        source: cleanRlcSourceFlags("database"),
         suggestedUnitPrice: exactDbEp,
         finalUnitPrice: exactDbEp,
         unitPrice: exactDbEp,
@@ -9213,7 +9299,7 @@ async function calcSmartRow(
 
         return {
           ...(row as any),
-          source: "company-database-exact",
+          source: cleanRlcSourceFlags("company-database-exact"),
           _rlcLockFinalPrice: true,
           suggestedUnitPrice: ep,
           finalUnitPrice: ep,
@@ -9278,7 +9364,7 @@ const technicalRecipeInput =
   ) {
     const technicalRow = {
       ...technicalRecipeRow,
-      source: "technical-parser",
+      source: cleanRlcSourceFlags("technical-parser"),
       warning: [
         s(technicalRecipeRow.warning),
         "RLC Technical Parser priorisiert vor Cache, Rule-Engine und OpenAI.",
@@ -9306,7 +9392,7 @@ const technicalRecipeInput =
       const finalTechnicalRow = technicalMismatchReason
         ? {
             ...technicalRow,
-            source: "technical-parser-blocked-by-family-mismatch-recalculated",
+            source: cleanRlcSourceFlags("technical-parser-blocked-by-family-mismatch-recalculated"),
             confidence: Math.min(n((technicalRow as any).confidence, 0.5), blockedFallbackEp > 0 ? 0.52 : 0.45),
             riskLevel: "high",
             calculationStatus: "needs_review",
@@ -9369,13 +9455,37 @@ const technicalRecipeInput =
    */
   const recipeRow = await calcRecipeKalkulationRow(row);
 
+  const knowledgeHub = resolveRlcKnowledgeHub({
+    kurztext: (row as any)?.kurztext,
+    langtext: (row as any)?.langtext,
+    text: `${(row as any)?.kurztext || ""} ${(row as any)?.langtext || ""}`,
+    unit: (row as any)?.einheit,
+    family: (recipeRow as any)?.rlcFamily || (recipeRow as any)?.family || (recipeRow as any)?.gewerk
+  });
+
+  console.log("[RLC KnowledgeHub]", {
+    posNr: (row as any)?.posNr,
+    family: (recipeRow as any)?.rlcFamily || (recipeRow as any)?.family || (recipeRow as any)?.gewerk,
+    matches: knowledgeHub.externalMatches.length,
+    confidence: knowledgeHub.externalKnowledgeConfidence
+  });
+
+  if (knowledgeHub.hasExternalKnowledge) {
+    (recipeRow as any).externalKnowledge = knowledgeHub.externalMatches;
+    (recipeRow as any).externalKnowledgeConfidence = knowledgeHub.externalKnowledgeConfidence;
+    (recipeRow as any).aiReason = [
+      String((recipeRow as any).aiReason || ""),
+      ...knowledgeHub.technicalNotes
+    ].filter(Boolean).join("\n\n");
+  }
+
   if (!technicalContextSensitive && !technicalSpecialCivilSensitive && recipeRow) {
     const guardedRecipeRow = applyPlausibilityGuard(
       row,
       matches,
       {
         ...recipeRow,
-        source: recipeRow.source || "recipe",
+        source: cleanRlcSourceFlags(recipeRow.source || "recipe"),
       },
       forceRecalculate
     );
@@ -9527,7 +9637,7 @@ async function saveKiLearningRows(
     const data = {
       companyId,
       projectId: project?.id || null,
-      source: "ki-learning",
+      source: cleanRlcSourceFlags("ki-learning"),
       projectCode: s(project?.code || project?.number || projectKey),
       projectName: s(project?.name),
 
@@ -9806,7 +9916,7 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
           offerBaselineGuard: {
             applied: true,
             type: guardType,
-            source: offerBaselineSource,
+            source: cleanRlcSourceFlags(offerBaselineSource),
             originalKiEp: ep,
             offerEp,
             factor: factorAgainstOffer,
@@ -10204,7 +10314,7 @@ function applyNoX84CompanyCalibration(row: any, result: any) {
   if (mismatchReason) {
     return {
       ...result,
-      source: "company-calibration-blocked-by-family-mismatch",
+      source: cleanRlcSourceFlags("company-calibration-blocked-by-family-mismatch"),
       confidence: Math.min(n(result?.confidence, 0.5), 0.45),
       riskLevel: "high",
       calculationStatus: "needs_review",
@@ -10236,7 +10346,7 @@ function applyNoX84CompanyCalibration(row: any, result: any) {
 
   return {
     ...result,
-    source: "company-calibration",
+    source: cleanRlcSourceFlags("company-calibration"),
     baseUnitPrice: noX84FinalEp,
     suggestedUnitPrice: noX84FinalEp,
     finalUnitPrice: noX84FinalEp,
@@ -10691,9 +10801,7 @@ function applyRlcFinalSuchschlitzGuard(row: any, result: any) {
 
   return {
     ...result,
-    source: String(result?.source || "rule-engine").includes("no-x84-family-guard")
-      ? result?.source
-      : `${result?.source || "rule-engine"}+no-x84-family-guard`,
+    source: cleanRlcSourceFlags(appendUniqueSourceFlag(result?.source || "rule-engine", "no-x84-family-guard")),
     suggestedUnitPrice: ep,
     finalUnitPrice: ep,
     rlcKiUnitPrice: ep,
@@ -10743,7 +10851,7 @@ function guardNoX84ImplausibleKiResult(row: any, result: any) {
 
     return {
       ...result,
-      source: "rlc-family-fallback-forststrasse-recalculated",
+      source: cleanRlcSourceFlags("rlc-family-fallback-forststrasse-recalculated"),
       confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
       riskLevel: "high",
       calculationStatus: "needs_review",
@@ -10818,7 +10926,7 @@ const note =
 
     return {
       ...result,
-      source: "technical-parser-rohrgrabenaushub-cleaned",
+      source: cleanRlcSourceFlags("technical-parser-rohrgrabenaushub-cleaned"),
       confidence: Math.min(n((result as any).confidence, 0.5), 0.62),
       riskLevel: "high",
       calculationStatus: "needs_review",
@@ -11150,7 +11258,7 @@ const note =
       warning: [
         s(result?.warning),
         directLinearReason,
-        `Alter EP ${round2(ep)} wurde auf ${round2(directLinearEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
+        ep > 0 ? (`Technischer Ziel-EP ${round2(directLinearEp)} €/` + (row?.einheit || result?.einheit || "EH") + " aus autonomer RLC-Kalkulation gesetzt.") : "",
         "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
       ].filter(Boolean).join(" · "),
       aiReason: [
@@ -11180,7 +11288,7 @@ const note =
       warning: [
         s(result?.warning),
         "RLC Calibration Guard V6: Context-sensitive Pauschale ohne X84 auf realistischen Mindestansatz kalibriert.",
-        `Alter EP ${round2(ep)} wurde auf ${round2(directPschEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
+        ep > 0 ? (`Technischer Ziel-EP ${round2(directPschEp)} €/` + (row?.einheit || result?.einheit || "EH") + " aus autonomer RLC-Kalkulation gesetzt.") : "",
         "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
       ].filter(Boolean).join(" · "),
       aiReason: [
@@ -11376,7 +11484,7 @@ const note =
         s(result?.warning),
         calibrationReason,
         meta ? meta.fixWarning : "",
-        `Alter EP ${round2(ep)} wurde auf ${round2(calibratedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " kalibriert.",
+        ep > 0 ? (`Technischer Ziel-EP ${round2(calibratedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " aus autonomer RLC-Kalkulation gesetzt.") : "",
         "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
       ].filter(Boolean).join(" · "),
       aiReason: [
@@ -11702,43 +11810,55 @@ function enrichRowWithReverseUrkalkulation(row: any, result: any) {
     dbComparability?.status === "not_comparable" ||
     dbComparability?.status === "needs_review"
   ) {
+    /*
+     * RLC NO-X84-FINAL-OVERRIDE:
+     * X84 darf hier NICHT mehr finalUnitPrice / rlcKiUnitPrice / preis überschreiben.
+     * X84 bleibt nur Benchmark, Reverse-Urkalkulation und Prüfhinweis.
+     * Der eigentliche RLC-KI-Preis bleibt aus Technical Parser / Recipe / DB / Global Knowledge / OpenAI / Rule Engine.
+     */
     return {
       ...enriched,
       dbComparability,
-      suggestedUnitPrice: round2(x84UnitPrice),
-      finalUnitPrice: round2(x84UnitPrice),
-      rlcKiUnitPrice: round2(x84UnitPrice),
-      unitPrice: round2(x84UnitPrice),
-      preis: round2(x84UnitPrice),
-      totalNet: round2(x84Total),
-      rlcKiTotal: round2(x84Total),
-      gesamt: round2(x84Total),
-      calculationStatus: "warning",
-      riskLevel: "medium",
-      source: "x84-reverse-urkalkulation",
+      reverseUrkalkulation,
+      x84BenchmarkUnitPrice: round2(x84UnitPrice),
+      x84BenchmarkTotal: round2(x84Total),
+      calculationStatus:
+        enriched?.calculationStatus === "critical" ? "critical" : "warning",
+      riskLevel:
+        enriched?.riskLevel === "high" ? "high" : "medium",
+      source:
+        enriched?.source && enriched.source !== "x84-reverse-urkalkulation"
+          ? enriched.source
+          : "rlc-ki-no-x84-final-override",
       warning: [
         s(result?.warning),
         dbComparability?.status === "not_comparable"
-          ? "DB-Treffer nicht vergleichbar mit X84-Urkalkulation. X84 wurde rückwärts zerlegt und als belastbare Angebotsbasis verwendet."
-          : "DB-Treffer weicht stark von X84 ab. X84 wurde als Angebotsbasis beibehalten; DB nur als Prüfhinweis.",
+          ? "DB-Treffer nicht vergleichbar. X84 wurde nur als Benchmark/Reverse-Analyse genutzt, nicht als finaler RLC-KI-Preis."
+          : "DB-Treffer prüfpflichtig. X84 bleibt Vergleichswert; finaler RLC-KI-Preis wurde nicht durch X84 überschrieben.",
       ].filter(Boolean).join(" · "),
       aiReason: [
         s(result?.aiReason),
-        "RLC Reverse-Urkalkulation: X84 ist bei vorhandener Angebotsbasis führend. Datenbankwerte dürfen nur bei echter Vergleichbarkeit und gleichem Kontext übernommen werden.",
+        "RLC NO-X84-FINAL-OVERRIDE: X84 ist nur Benchmark/Reverse-Urkalkulation. Der finale RLC-KI-Preis bleibt eigenständig.",
         reverseUrkalkulation?.explanation || "",
       ].filter(Boolean).join("\n\n"),
     };
   }
 
+  /*
+   * RLC NO-X84-SOURCE-OVERRIDE:
+   * Auch wenn ein X84-Benchmark exakt gleich ist, darf die Quelle nicht mehr
+   * als x84-reverse-urkalkulation markiert werden. X84 ist nur Vergleich.
+   */
   const finalSource =
-    dbComparability?.status === "x84_baseline" &&
-    n(enriched?.finalUnitPrice) === round2(x84UnitPrice)
-      ? "x84-reverse-urkalkulation"
-      : enriched?.source;
+    enriched?.source && enriched.source !== "x84-reverse-urkalkulation"
+      ? enriched.source
+      : result?.source && result.source !== "x84-reverse-urkalkulation"
+        ? result.source
+        : "rlc-ki-autonomous";
 
   return {
     ...enriched,
-    source: finalSource,
+    source: cleanRlcSourceFlags(finalSource),
     dbComparability,
     warning: [
       s(result?.warning),
@@ -11812,6 +11932,7 @@ router.post("/suggest-batch", async (req, res) => {
 
           out[index] = applyRlcX84BenchmarkLearningSignal(row, applyRlcProjectOutlierFinalOverride(row, applyRlcFinalSuchschlitzGuard(row, applyRlcAutonomousSmallPositionGuard(row, out[index]))));
           out[index] = await applyGlobalKnowledgeHint(row, out[index]);
+          out[index] = enrichRlcCalculationPipeline({ row, baseResult: out[index] });
 
           if (out[index]?.source !== "openai" && budgetLeft > 0) {
             openAiUsed = Math.max(0, openAiUsed - 1);
@@ -11828,7 +11949,32 @@ router.post("/suggest-batch", async (req, res) => {
             error: rowError?.message || rowError,
           });
 
-          out[index] = applyRlcX84BenchmarkLearningSignal(row, applyRlcProjectOutlierFinalOverride(row, applyRlcFinalSuchschlitzGuard(row, applyRlcAutonomousSmallPositionGuard(row, calcRuleRow(row, [], "rule-engine")))));
+          const finalRowBeforeKnowledgeHub = applyRlcX84BenchmarkLearningSignal(row, applyRlcProjectOutlierFinalOverride(row, applyRlcFinalSuchschlitzGuard(row, applyRlcAutonomousSmallPositionGuard(row, calcRuleRow(row, [], "rule-engine")))));
+
+          const knowledgeHub = resolveRlcKnowledgeHub({
+            kurztext: (row as any)?.kurztext,
+            langtext: (row as any)?.langtext,
+            text: `${(row as any)?.kurztext || ""} ${(row as any)?.langtext || ""}`,
+            unit: (row as any)?.einheit,
+            family: (finalRowBeforeKnowledgeHub as any)?.rlcFamily || (finalRowBeforeKnowledgeHub as any)?.family || (finalRowBeforeKnowledgeHub as any)?.gewerk
+          });
+
+          if (knowledgeHub.hasExternalKnowledge) {
+            console.log("[RLC KnowledgeHub FINAL]", {
+              posNr: (row as any)?.posNr,
+              matches: knowledgeHub.externalMatches.length,
+              confidence: knowledgeHub.externalKnowledgeConfidence
+            });
+
+            (finalRowBeforeKnowledgeHub as any).externalKnowledge = knowledgeHub.externalMatches;
+            (finalRowBeforeKnowledgeHub as any).externalKnowledgeConfidence = knowledgeHub.externalKnowledgeConfidence;
+            (finalRowBeforeKnowledgeHub as any).aiReason = [
+              String((finalRowBeforeKnowledgeHub as any).aiReason || ""),
+              ...knowledgeHub.technicalNotes
+            ].filter(Boolean).join("\n\n");
+          }
+
+          out[index] = finalRowBeforeKnowledgeHub;
         }
       }
 
@@ -11857,7 +12003,8 @@ router.post("/suggest-batch", async (req, res) => {
         const smallPositionGuarded = applyRlcAutonomousSmallPositionGuard(rows[index], implausibleGuarded);
         return applyRlcX84BenchmarkLearningSignal(rows[index], applyRlcProjectOutlierFinalOverride(rows[index], applyRlcFinalSuchschlitzGuard(rows[index], smallPositionGuarded)));
       });
-        const guardedFinalRows = applyDuplicateQuantityOutlierGuard(finalRows);
+        const guardedFinalRows = applyDuplicateQuantityOutlierGuard(finalRows)
+      .map(cleanRlcOutputRow);
 
         const learningProjectKey = s(req.body?.projectCode || req.body?.projectKey);
         const learnedCount = await saveKiLearningRows(
@@ -11882,7 +12029,7 @@ router.post("/suggest-batch", async (req, res) => {
 
       return res.json({
         ok: true,
-        source: "server",
+        source: cleanRlcSourceFlags("server"),
         engine: "database-recipe-openai-rule-engine-parallel-v2",
         rows: guardedFinalRows,
         summary: {
