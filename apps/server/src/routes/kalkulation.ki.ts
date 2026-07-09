@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { prisma } from "../lib/prisma";
 import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreisBibliothek";
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
+import { resolveRlcAutonomousCalculation, mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
 import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalculationPipeline";
 import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
 
@@ -9342,6 +9343,9 @@ async function calcSmartRow(
     const technicalSpecialCivilSensitive =
       /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(technicalContextText));
 
+    const technicalPreferAutonomousFamily =
+      /glasfaser|lwl|mikro(?:rohr|kabel|leerrohr)|speedpipe|leerrohrverbund|telekom|vodafone|bayernwerk/.test(norm(technicalContextText));
+
 const technicalRecipeInput =
     x83PriorityKurztext.includes("fsk korrigieren") ||
     (
@@ -9359,6 +9363,7 @@ const technicalRecipeInput =
   if (
     !technicalContextSensitive &&
     !technicalSpecialCivilSensitive &&
+    !technicalPreferAutonomousFamily &&
     !rlcBlocksTechnicalParser(row) &&
     technicalRecipeRow?.source === "technical-parser"
   ) {
@@ -9477,6 +9482,44 @@ const technicalRecipeInput =
       String((recipeRow as any).aiReason || ""),
       ...knowledgeHub.technicalNotes
     ].filter(Boolean).join("\n\n");
+  }
+
+  const autonomousResolved = resolveRlcAutonomousCalculation(row as any, [row as any], undefined);
+  const autonomousRow = mapAutonomousResultToKiRow(row as any, autonomousResolved);
+  const autonomousEp = n((autonomousRow as any)?.rlcKiUnitPrice ?? (autonomousRow as any)?.finalUnitPrice);
+  const recipeSourceForAutonomous = s((recipeRow as any)?.source);
+  const recipeEpForAutonomous = n((recipeRow as any)?.rlcKiUnitPrice ?? (recipeRow as any)?.finalUnitPrice ?? (recipeRow as any)?.suggestedUnitPrice);
+  const autonomousText = norm(`${s((row as any)?.kurztext)} ${s((row as any)?.langtext)}`);
+  const autonomousImportantFamily =
+    /wasserhaltung|verkehrssicherung|rsa|deponie|entsorgung|dk\s*[0i1]|belastet|glasfaser|lwl|mikro(?:rohr|kabel|leerrohr)|speedpipe|leerrohrverbund|hdd|spülbohr|spuelbohr|horizontalbohr|grabenlos|spezialtiefbau|verbau|baustellenlogistik|zufahrt|vermessung|dokumentation/.test(autonomousText);
+  const legacyResultTooWeak =
+    !recipeRow ||
+    recipeSourceForAutonomous.includes("rlc-family-fallback-lwl") ||
+    recipeSourceForAutonomous.includes("rule-engine") ||
+    (autonomousEp > 0 && recipeEpForAutonomous > 0 && recipeEpForAutonomous < autonomousEp * 0.45);
+
+  if (autonomousRow && autonomousEp > 0 && (technicalContextSensitive || technicalSpecialCivilSensitive || (autonomousImportantFamily && legacyResultTooWeak))) {
+    const guardedAutonomousRow = applyPlausibilityGuard(
+      row,
+      matches,
+      {
+        ...autonomousRow,
+        source: cleanRlcSourceFlags((autonomousRow as any).source || "rlc-autonomous-urkalkulation-v1"),
+        warning: cleanRlcWarningText([
+          s((autonomousRow as any).warning),
+          "RLC Autonomous Urkalkulation verwendet: Preis wurde aus Leistungsbestandteilen kalkuliert, nicht aus X84.",
+        ].filter(Boolean).join(" · ")),
+        aiReason: [
+          s((autonomousRow as any).aiReason),
+          "RLC Autonomous Kalkulator wurde vor OpenAI/Rule-Engine-Fallback verwendet, aber nur bei Context-/Risiko-Familien oder schwachen Legacy-Fallbacks.",
+        ].filter(Boolean).join("\n\n"),
+      },
+      forceRecalculate
+    );
+
+    kalkulationAiCache.set(cacheKey, guardedAutonomousRow);
+    scheduleKalkulationAiCacheSave();
+    return guardedAutonomousRow;
   }
 
   if (!technicalContextSensitive && !technicalSpecialCivilSensitive && recipeRow) {
@@ -9598,6 +9641,9 @@ async function saveKiLearningRows(
   let saved = 0;
 
   for (const row of rows) {
+    const learningSource = s(row?.source);
+    if (learningSource.includes("rlc-autonomous-urkalkulation")) continue;
+    if (isStructuralTitleRow(row)) continue;
     if (!isValidLearningRow(row)) continue;
 
     const posNr = s(row.posNr);
@@ -9994,11 +10040,12 @@ function buildSummary(rows: any[]) {
     highRiskCount: rows.filter((r) => r.riskLevel === "high").length,
     warningCount: rows.filter((r) => r.calculationStatus === "warning").length,
     criticalCount: rows.filter((r) => r.calculationStatus === "critical").length,
-    openAiCount: rows.filter((r) => r.source === "openai").length,
-    databaseCount: rows.filter((r) => r.source === "database").length,
-    ruleEngineCount: rows.filter((r) => r.source === "rule-engine").length,
-    recipeCount: rows.filter((r) => r.source === "recipe").length,
-    technicalParserCount: rows.filter((r) => r.source === "technical-parser").length,
+    openAiCount: rows.filter((r) => s(r.source).includes("openai")).length,
+    databaseCount: rows.filter((r) => s(r.source).includes("database")).length,
+    ruleEngineCount: rows.filter((r) => s(r.source) === "rule-engine").length,
+    recipeCount: rows.filter((r) => s(r.source).includes("recipe")).length,
+    technicalParserCount: rows.filter((r) => s(r.source).includes("technical-parser")).length,
+    autonomousCount: rows.filter((r) => s(r.source).includes("rlc-autonomous-urkalkulation")).length,
   };
 }
 
