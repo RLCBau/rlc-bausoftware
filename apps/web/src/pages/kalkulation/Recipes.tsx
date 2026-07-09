@@ -1,4 +1,4 @@
-﻿// apps/web/src/pages/kalkulation/Recipes.tsx
+// apps/web/src/pages/kalkulation/Recipes.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import RlcKiDashboard from "../../components/rlc-ai/RlcKiDashboard";
 import { useNavigate } from "react-router-dom";
@@ -415,7 +415,8 @@ async function postKiSuggest(projectCode: string, row: LVPos): Promise<any | nul
           calculationLevel: "elite",
           includePriceBreakdown: true,
           useKalkulationsDatenbank: true,
-          useOpenAIIfNoDatabaseHit: true,
+          useOpenAIIfNoDatabaseHit: false,
+          forceRecalculate: true,
         },
       }),
     });
@@ -987,15 +988,18 @@ function validateDraft(draft: DraftPosition): string[] {
 }
 
 function priceBreakdownGroupToResourceGroup(group: string): ResourceGroup {
-  if (group === "Personal") return "Personal";
-  if (group === "Maschinen") return "Maschinen";
-  if (group === "LKW / Transport") return "LKW / Transport";
-  if (group === "Material") return "Material";
-  if (group === "Entsorgung") return "Entsorgung";
-  if (group === "Fremdleistung") return "Fremdleistung";
-  if (group === "Gemeinkosten") return "Gemeinkosten";
-  if (group === "Risiko") return "Risiko";
-  if (group === "Gewinn") return "Gewinn";
+  const g = String(group || "").trim().toLowerCase();
+
+  if (g === "personal" || g === "lohn") return "Personal";
+  if (g === "maschinen" || g === "maschine" || g === "geräte" || g === "geraete") return "Maschinen";
+  if (g === "lkw / transport" || g === "transport" || g === "lkw") return "LKW / Transport";
+  if (g === "material") return "Material";
+  if (g === "entsorgung" || g === "deponie") return "Entsorgung";
+  if (g === "fremdleistung" || g === "nachunternehmer") return "Fremdleistung";
+  if (g === "gemeinkosten" || g === "bgk") return "Gemeinkosten";
+  if (g === "risiko") return "Risiko";
+  if (g === "gewinn") return "Gewinn";
+
   return "Material";
 }
 
@@ -1873,7 +1877,7 @@ function recipeLinesFromServerPriceBreakdown(serverRow: any): RecipeLine[] {
     .map((line: any) => {
       const group = priceBreakdownGroupToResourceGroup(String(line?.group || "Material"));
       const qtyPerUnit = Math.max(n(line?.qty, 1), 0.0001);
-      const price = n(line?.price ?? line?.total);
+      const price = n(line?.unitPrice ?? line?.price ?? line?.total);
 
       return {
         id: safeId(),
@@ -4122,7 +4126,9 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       forceLocal,
     });
 
-    const serverRow = forceLocal ? null : await postKiSuggest(projectKey, rowForCalc);
+    // Server-Autonomous zuerst versuchen.
+    // Falls Server keine echte Urkalkulation liefert, bleibt die lokale Recipes-Urkalkulation als Fallback aktiv.
+    const serverRow = await postKiSuggest(projectKey, rowForCalc);
 
     if (serverRow?.source === "rule-engine") {
       console.warn("[Recipes KI] Rule-Engine rejected for recipe calculation:", serverRow);

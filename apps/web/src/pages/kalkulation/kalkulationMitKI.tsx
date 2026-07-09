@@ -406,9 +406,29 @@ function kiPrepareStructuralRow(row: Partial<EliteRow>): Partial<EliteRow> {
 
 /* ================= PRICE BREAKDOWN ================= */
 
-function normalizeBreakdownLine(line: Partial<PriceBreakdownLine>): PriceBreakdownLine {
+function normalizeBreakdownGroup(value: unknown): PriceBreakdownGroup {
+  const raw = String(value || "").trim();
+
+  if (raw === "Lohn") return "Personal";
+  if (raw === "Personal") return "Personal";
+  if (raw === "Maschinen") return "Maschinen";
+  if (raw === "LKW / Transport" || raw === "Transport") return "LKW / Transport";
+  if (raw === "Material") return "Material";
+  if (raw === "Entsorgung") return "Entsorgung";
+  if (raw === "Fremdleistung") return "Fremdleistung";
+  if (raw === "Nachunternehmer") return "Fremdleistung";
+  if (raw === "Gemeinkosten") return "Gemeinkosten";
+  if (raw === "Risiko") return "Risiko";
+  if (raw === "Gewinn") return "Gewinn";
+
+  return "Material";
+}
+
+function normalizeBreakdownLine(
+  line: Partial<PriceBreakdownLine> & { unitPrice?: number }
+): PriceBreakdownLine {
   const qtyValue = n(line.qty, 1);
-  const priceValue = n(line.price);
+  const priceValue = n(line.price ?? line.unitPrice);
   const totalValue =
     line.total !== undefined && line.total !== null
       ? n(line.total)
@@ -416,11 +436,11 @@ function normalizeBreakdownLine(line: Partial<PriceBreakdownLine>): PriceBreakdo
 
   return {
     id: String(line.id || safeId()),
-    group: (line.group || "Material") as PriceBreakdownGroup,
+    group: normalizeBreakdownGroup(line.group),
     name: String(line.name || "Kostenansatz"),
     unit: String(line.unit || "EH"),
     qty: qtyValue,
-    price: priceValue,
+    price: priceValue > 0 ? priceValue : qtyValue > 0 ? round2(totalValue / qtyValue) : 0,
     total: round2(totalValue),
     note: String(line.note || ""),
   };
@@ -9551,6 +9571,10 @@ return (
               label="Sicherheit"
               value={selectedRow.confidence != null ? percent(selectedRow.confidence) : "—"}
             />
+            <Detail label="Gewerk" value={selectedRow.gewerk || "—"} />
+            <Detail label="Leistungsart" value={selectedRow.leistungsart || "—"} />
+            <Detail label="Bauverfahren" value={selectedRow.bauverfahren || "—"} />
+            <Detail label="Quelle" value={selectedRow.source || "—"} />
             <Detail label="Finaler EP" value={money(getUnitPrice(selectedRow))} />
             <Detail label="Zeilensumme" value={money(lineNet(selectedRow))} />
             <Detail label="EP Angebot X84" value={money(getOfferUnitPrice(selectedRow))} />
@@ -12623,6 +12647,7 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
 
 
 
