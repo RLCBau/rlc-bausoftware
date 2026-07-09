@@ -403,98 +403,138 @@ function CADTools() {
   );
 }
 
-/* ------------------ SIDENAV ------------------ */
+/* ------------------ TOPNAV ------------------ */
+
+function topNavLabel(title: string): string {
+  const clean = title.replace(/^\d+\.\s*/, "").trim();
+
+  if (clean === "Mengenermittlung") return "Mengen";
+  if (clean === "Büro / Verwaltung") return "Verwaltung";
+  if (clean === "Info / Hilfe / Videoerklärung") return "Hilfe";
+  if (clean === "CAD / PDF") return "CAD/PDF";
+
+  return clean;
+}
 
 function SideNav() {
   const { pathname } = useLocation();
-  const currentSectionKey = pathname.split("/")[1] || "";
-  const [open, setOpen] = React.useState<Record<string, boolean>>({});
-
-  React.useEffect(() => {
-    if (currentSectionKey) {
-      setOpen((old) => ({ ...old, [currentSectionKey]: true }));
-    }
-  }, [currentSectionKey]);
-
-  const toggle = (key: string) => {
-    setOpen((old) => ({ ...old, [key]: !old[key] }));
-  };
+  const [openMenu, setOpenMenu] = React.useState<string | null>(null);
 
   const topItems = [
-    { to: "/start", label: "Start (Projekt auswählen)" },
-    { to: "/projekt/uebersicht", label: "Projekt-Übersicht" },
+    { to: "/start", label: "Projekte öffnen / neu erstellen" },
+    { to: "/projekt/uebersicht", label: "Projekt Übersicht" },
   ];
 
+  const navButton = (active: boolean): React.CSSProperties => ({
+    width: "100%",
+    minHeight: 46,
+    padding: "9px 10px",
+    border: "1px solid #D7E2F0",
+    borderRadius: 14,
+    background: active ? "#DBEAFE" : "#FFFFFF",
+    color: "#0F172A",
+    fontWeight: 900,
+    fontSize: 13,
+    boxShadow: "0 2px 8px rgba(15,23,42,0.04)",
+    whiteSpace: "nowrap",
+    textAlign: "center",
+    cursor: "pointer",
+    textDecoration: "none",
+  });
+
   return (
-    <div className="card">
-      <div className="s-title">Projekt</div>
+    <nav
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1.45fr 1.1fr 1fr 0.8fr 0.75fr 0.95fr 0.5fr 0.55fr 0.9fr",
+        gap: 10,
+        alignItems: "start",
+        width: "100%",
+        overflow: "visible",
+      }}
+    >
+      {topItems.map((item) => (
+        <Link
+          key={item.to}
+          to={item.to}
+          className={`s-link ${pathname === item.to ? "active" : ""}`}
+          style={navButton(pathname === item.to)}
+          onClick={() => setOpenMenu(null)}
+        >
+          {item.label}
+        </Link>
+      ))}
 
-      <div className="s-sub" style={{ paddingBottom: 8 }}>
-        {topItems.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className={`s-link ${pathname === item.to ? "active" : ""}`}
+      {SECTIONS.map((section) => {
+        const activeSection =
+          pathname === `/${section.key}` || pathname.startsWith(`/${section.key}/`);
+        const isOpen = openMenu === section.key;
+
+        return (
+          <div
+            key={section.key}
+            style={{
+              position: "relative",
+              minWidth: 0,
+            }}
           >
-            {item.label}
-          </Link>
-        ))}
-      </div>
+            <button
+              type="button"
+              style={navButton(activeSection)}
+              onClick={() => setOpenMenu(isOpen ? null : section.key)}
+            >
+              {topNavLabel(section.title)} ▼
+            </button>
 
-      <div className="hr" />
-
-      <div className="s-title">RLC – Module</div>
-
-      <ul className="s-accordion">
-        {SECTIONS.map((section) => {
-          const isOpen = !!open[section.key];
-
-          return (
-            <li key={section.key} className={`s-sec ${isOpen ? "open" : ""}`}>
-              <button
-                type="button"
-                onClick={() => toggle(section.key)}
-                aria-expanded={isOpen}
+            {isOpen ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  left: 0,
+                  zIndex: 100,
+                  minWidth: 260,
+                  maxWidth: 360,
+                  display: "grid",
+                  gap: 4,
+                  padding: 10,
+                  background: "#FFFFFF",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 14,
+                  boxShadow: "0 18px 45px rgba(15,23,42,0.16)",
+                }}
               >
-                <span className="s-sec-title">
-                  <span className="s-badge">{section.title.split(".")[0]}</span>
-                  <span>{section.title.replace(/^\d+\.\s*/, "")}</span>
-                </span>
+                <Link
+                  className={`s-link ${pathname === `/${section.key}` ? "active" : ""}`}
+                  to={`/${section.key}`}
+                  style={{ margin: 0 }}
+                  onClick={() => setOpenMenu(null)}
+                >
+                  Übersicht
+                </Link>
 
-                <span className="chev">▶</span>
-              </button>
+                {section.items.map((item) => {
+                  const to = `/${section.key}/${item.key}`;
+                  const active = pathname === to;
 
-              {isOpen ? (
-                <div className="s-sub">
-                  <Link
-                    className={`s-link ${
-                      pathname === `/${section.key}` ? "active" : ""
-                    }`}
-                    to={`/${section.key}`}
-                  >
-                    Übersicht
-                  </Link>
-
-                  {section.items.map((item) => {
-                    const active = pathname === `/${section.key}/${item.key}`;
-
-                    return (
-                      <Link
-                        key={item.key}
-                        className={`s-link ${active ? "active" : ""}`}
-                        to={`/${section.key}/${item.key}`}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+                  return (
+                    <Link
+                      key={item.key}
+                      className={`s-link ${active ? "active" : ""}`}
+                      to={to}
+                      style={{ margin: 0 }}
+                      onClick={() => setOpenMenu(null)}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -639,21 +679,54 @@ function AppShell() {
   return (
     <RequireAuth>
       <div className="app">
-        <div className="header">
+        <div
+          className="header"
+          style={{
+            display: "grid",
+            gap: 14,
+            padding: "22px 28px",
+            alignItems: "center",
+            background: "linear-gradient(180deg, #F8FBFF 0%, #EEF4FF 100%)",
+            border: "1px solid #DCE7F7",
+            borderRadius: 24,
+            boxShadow: "0 10px 28px rgba(15,23,42,0.06)",
+            marginBottom: 18,
+          }}
+        >
           <Link
             to="/start"
             className="brand"
-            style={{ display: "flex", alignItems: "center", gap: 8 }}
+            style={{
+              display: "inline-flex",
+              alignItems: "baseline",
+              gap: 12,
+              textDecoration: "none",
+              width: "fit-content",
+            }}
           >
-            <img src={logo} alt="RLC Logo" style={{ height: 56 }} />
-            <span>-Tiefbau -Hochbau -Planungsbüro -Vermessung</span>
+            <span style={{ fontSize: 34, fontWeight: 950, letterSpacing: "-0.045em", color: "#0F172A" }}>
+              RLC Bausoftware
+            </span>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 900,
+                color: "#1D4ED8",
+                background: "#DBEAFE",
+                padding: "6px 12px",
+                borderRadius: 999,
+                border: "1px solid #BFDBFE",
+              }}
+            >
+              Spezialisiert im Tiefbau
+            </span>
           </Link>
+
+          <SideNav />
         </div>
 
-        <div className="layout">
-          <SideNav />
-
-          <div className="content">
+        <div className="layout" style={{ display: "block" }}>
+          <div className="content" style={{ width: "100%", maxWidth: "none" }}>
             <CurrentProjectBar />
 
             <Routes>
@@ -985,6 +1058,11 @@ export default function App() {
     </ProjectProvider>
   );
 }
+
+
+
+
+
 
 
 

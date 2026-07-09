@@ -9672,8 +9672,8 @@ return (
               }
 
               return (
-                <div style={{ overflowX: "auto", border: "1px solid #E2E8F0", borderRadius: 12 }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, background: "#fff" }}>
+                <div style={{ maxWidth: "100%", overflowX: "auto", overflowY: "hidden", border: "1px solid #E2E8F0", borderRadius: 12 }}>
+                  <table style={{ width: "100%", minWidth: 860, tableLayout: "fixed", borderCollapse: "collapse", fontSize: 12, background: "#fff" }}>
                     <thead>
                       <tr>
                         <th style={{ ...th, textAlign: "left" }}>Gruppe</th>
@@ -9694,13 +9694,13 @@ return (
                           <td style={{ ...tdRight }}>{qty(line.qty)}</td>
                           <td style={{ ...tdRight }}>{money(line.price)}</td>
                           <td style={{ ...tdRight, fontWeight: 900 }}>{money(line.total)}</td>
-                          <td style={td}>{line.note || "—"}</td>
+                          <td style={{ ...td, maxWidth: 360, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>{line.note || "—"}</td>
                         </tr>
                       ))}
 
                       <tr>
                         <td colSpan={5} style={{ ...tdRight, fontWeight: 900 }}>
-                          Summe EP
+                          Summe Urkalkulation
                         </td>
                         <td style={{ ...tdRight, fontWeight: 900 }}>
                           {money(sum)}
@@ -9719,7 +9719,7 @@ return (
 
           <div>
             <div style={label}>KI-Begründung</div>
-            <div style={reasonBox}>
+            <div style={{ ...reasonBox, maxHeight: 260, overflowY: "auto", overflowX: "hidden", whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" }}>
               {selectedRow.aiReason ||
                 "Noch keine KI-Begründung vorhanden. Starte die Kalkulation oder übernimm eine Position aus Urkalkulation / Rezepte."}
             </div>
@@ -12647,6 +12647,7 @@ const rlcActionProgressFill: React.CSSProperties = {
   borderRadius: 999,
   transition: "width 420ms ease",
 };
+
 
 
 
