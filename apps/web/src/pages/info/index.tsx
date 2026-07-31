@@ -1,11 +1,11 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const shell: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "260px 1fr",
   minHeight: "100vh",
-  background: "#f8fafc",
+  background: "#f8fafc"
 };
 
 const aside: React.CSSProperties = {
@@ -13,12 +13,12 @@ const aside: React.CSSProperties = {
   padding: 12,
   fontFamily: "Inter, system-ui, Arial",
   fontSize: 13,
-  background: "#ffffff",
+  background: "#ffffff"
 };
 
 const main: React.CSSProperties = {
   overflow: "auto",
-  padding: 0,
+  padding: 0
 };
 
 const item: React.CSSProperties = {
@@ -28,16 +28,16 @@ const item: React.CSSProperties = {
   borderRadius: 8,
   color: "#0f172a",
   textDecoration: "none",
-  transition: "all 0.15s ease",
+  transition: "all 0.15s ease"
 };
 
 const title: React.CSSProperties = {
   margin: "16px 6px 8px",
   color: "#334155",
-  fontWeight: 700,
+  fontWeight: 600,
   fontSize: 12,
   textTransform: "uppercase",
-  letterSpacing: 0.4,
+  letterSpacing: 0.4
 };
 
 const brand: React.CSSProperties = {
@@ -45,42 +45,42 @@ const brand: React.CSSProperties = {
   padding: "10px 12px",
   borderRadius: 10,
   background: "#f8fafc",
-  border: "1px solid #e2e8f0",
+  border: "1px solid #e2e8f0"
 };
 
 const brandTitle: React.CSSProperties = {
   fontSize: 15,
-  fontWeight: 700,
+  fontWeight: 600,
   color: "#0f172a",
-  marginBottom: 4,
+  marginBottom: 4
 };
 
 const brandSub: React.CSSProperties = {
   fontSize: 12,
   color: "#64748b",
-  lineHeight: 1.4,
+  lineHeight: 1.4
 };
 
 const supportBox: React.CSSProperties = {
   margin: "18px 6px 6px",
   padding: 12,
   borderRadius: 10,
-  background: "#eff6ff",
-  border: "1px solid #bfdbfe",
+  background: "#eaf2ff",
+  border: "1px solid #bed6ff"
 };
 
 const supportTitle: React.CSSProperties = {
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600,
   color: "#0f172a",
-  marginBottom: 6,
+  marginBottom: 6
 };
 
 const supportText: React.CSSProperties = {
   fontSize: 12,
   color: "#334155",
   lineHeight: 1.45,
-  marginBottom: 10,
+  marginBottom: 10
 };
 
 const supportBtn: React.CSSProperties = {
@@ -90,8 +90,8 @@ const supportBtn: React.CSSProperties = {
   background: "#0ea5e9",
   color: "#fff",
   padding: "10px 12px",
-  fontWeight: 700,
-  cursor: "pointer",
+  fontWeight: 600,
+  cursor: "pointer"
 };
 
 export default function InfoIndex() {
@@ -99,27 +99,27 @@ export default function InfoIndex() {
   const navigate = useNavigate();
 
   const is = (p: string): React.CSSProperties =>
-    loc.pathname === p
-      ? {
-          background: "#f1f5f9",
-          fontWeight: 700,
-          color: "#0f172a",
-          border: "1px solid #e2e8f0",
-        }
-      : {};
+  loc.pathname === p ?
+  {
+    background: "#f1f5f9",
+    fontWeight: 600,
+    color: "#0f172a",
+    border: "1px solid #e2e8f0"
+  } :
+  {};
 
   return (
-    <div style={shell}>
-      <aside style={aside}>
-        <div style={brand}>
-          <div style={brandTitle}>Info & Hilfe</div>
-          <div style={brandSub}>
+    <div className={rlcClass(null, shell)}>
+      <aside className={rlcClass(null, aside)}>
+        <div className={rlcClass(null, brand)}>
+          <div className={rlcClass(null, brandTitle)}>Info & Hilfe</div>
+          <div className={rlcClass(null, brandSub)}>
             Anleitungen, FAQ, rechtliche Hinweise und direkter Support für die
             RLC Bausoftware.
           </div>
         </div>
 
-        <div style={title}>Info & Hilfe</div>
+        <div className={rlcClass(null, title)}>Info & Hilfe</div>
         <Link style={{ ...item, ...is("/info/hilfe") }} to="/info/hilfe">
           Hilfe / Anleitungen
         </Link>
@@ -139,18 +139,18 @@ export default function InfoIndex() {
           Updates
         </Link>
 
-        <div style={title}>Rechtliches</div>
+        <div className={rlcClass(null, title)}>Rechtliches</div>
         <Link
           style={{ ...item, ...is("/info/datenschutz") }}
-          to="/info/datenschutz"
-        >
+          to="/info/datenschutz">
+          
           Datenschutz
         </Link>
         <Link style={{ ...item, ...is("/info/impressum") }} to="/info/impressum">
           Impressum
         </Link>
 
-        <div style={title}>Kontakt</div>
+        <div className={rlcClass(null, title)}>Kontakt</div>
         <Link style={{ ...item, ...is("/info/support") }} to="/info/support">
           Support / Feedback
         </Link>
@@ -158,30 +158,25 @@ export default function InfoIndex() {
           Über die App
         </Link>
 
-        <div style={supportBox}>
-          <div style={supportTitle}>Support Chat</div>
-          <div style={supportText}>
+        <div className={rlcClass(null, supportBox)}>
+          <div className={rlcClass(null, supportTitle)}>Support Chat</div>
+          <div className={rlcClass(null, supportText)}>
             Direkte Hilfe bei Fragen, Problemen mit Synchronisation, Uploads oder
             Bedienung.
           </div>
-          <button
-            style={supportBtn}
-            onClick={() => navigate("/info/support")}
-            type="button"
-          >
+          <button className={rlcClass(null,
+          supportBtn)}
+          onClick={() => navigate("/info/support")}
+          type="button">
+            
             Support öffnen
           </button>
         </div>
       </aside>
 
-      <main style={main}>
+      <main className={rlcClass(null, main)}>
         <Outlet />
       </main>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

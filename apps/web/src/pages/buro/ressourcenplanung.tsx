@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { PersonalDB } from "./store.personal";
 import { MachinesDB } from "./store.machines";
 import { ResDB } from "./store.ressourcen";
@@ -8,7 +8,7 @@ const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const th: React.CSSProperties = {
@@ -16,14 +16,14 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 function monday(d = new Date()) {
@@ -74,13 +74,13 @@ export default function Ressourcenplanung() {
     const qq = q.trim().toLowerCase();
 
     return [
-      ...people.map((p) => ({ kind: "emp" as const, id: p.id, name: p.name })),
-      ...machines.map((m) => ({
-        kind: "mac" as const,
-        id: m.id,
-        name: m.name || m.serial || "Maschine",
-      })),
-    ].filter((r) => !qq || r.name.toLowerCase().includes(qq));
+    ...people.map((p) => ({ kind: "emp" as const, id: p.id, name: p.name })),
+    ...machines.map((m) => ({
+      kind: "mac" as const,
+      id: m.id,
+      name: m.name || m.serial || "Maschine"
+    }))].
+    filter((r) => !qq || r.name.toLowerCase().includes(qq));
   }, [people, machines, q]);
 
   const projects = React.useMemo(
@@ -92,9 +92,9 @@ export default function Ressourcenplanung() {
     (rId: string, day: string) => {
       return assign.filter(
         (a) =>
-          a.resourceId === rId &&
-          a.date === day &&
-          (!proj || a.projectId === proj)
+        a.resourceId === rId &&
+        a.date === day && (
+        !proj || a.projectId === proj)
       );
     },
     [assign, proj]
@@ -115,7 +115,7 @@ export default function Ressourcenplanung() {
         date,
         projectId: "",
         hours: 8,
-        notes: "",
+        notes: ""
       };
       ResDB.upsert(a);
       refresh();
@@ -156,16 +156,16 @@ export default function Ressourcenplanung() {
   }, [assign]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, padding: 10 }}>
+    <div className="rlc-migrated-pages-buro-ressourcenplanung-tsx-619">
       <div
-        className="card"
-        style={{ padding: "8px 10px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-      >
+        className="card rlc-migrated-pages-buro-ressourcenplanung-tsx-620">
+
+        
         <button className="btn" onClick={prevWeek}>
           ◀ KW
         </button>
 
-        <div style={{ fontWeight: 700 }}>
+        <div className="rlc-migrated-pages-buro-ressourcenplanung-tsx-621">
           {`KW ${kw(week0)}  (${ymd(days[0])} – ${ymd(days[6])})`}
         </div>
 
@@ -173,26 +173,26 @@ export default function Ressourcenplanung() {
           KW ▶
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-ressourcenplanung-tsx-622" />
 
         <input
           placeholder="Suche Ressource…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 220 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 220 })} />
+        
 
         <select
           value={proj}
-          onChange={(e) => setProj(e.target.value)}
-          style={{ ...inp, width: 180 }}
-        >
+          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 180 })}>
+          
           <option value="">Alle Projekte</option>
-          {projects.map((p) => (
-            <option key={p} value={p}>
+          {projects.map((p) =>
+          <option key={p} value={p}>
               {p}
             </option>
-          ))}
+          )}
         </select>
 
         <button className="btn" onClick={clearWeek}>
@@ -204,21 +204,21 @@ export default function Ressourcenplanung() {
         </button>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="card rlc-migrated-pages-buro-ressourcenplanung-tsx-623">
+        <table className="rlc-migrated-pages-buro-ressourcenplanung-tsx-624">
           <thead>
             <tr>
-              <th style={{ ...th, width: 240 }}>Ressource</th>
-              {days.map((d, i) => (
-                <th key={i} style={th}>
+              <th className={rlcClass(null, { ...th, width: 240 })}>Ressource</th>
+              {days.map((d, i) =>
+              <th key={i} className={rlcClass(null, th)}>
                   {d.toLocaleDateString(undefined, {
-                    weekday: "short",
-                    day: "2-digit",
-                    month: "2-digit",
-                  })}
+                  weekday: "short",
+                  day: "2-digit",
+                  month: "2-digit"
+                })}
                 </th>
-              ))}
-              <th style={th}>Σ Woche</th>
+              )}
+              <th className={rlcClass(null, th)}>Σ Woche</th>
             </tr>
           </thead>
           <tbody>
@@ -227,9 +227,9 @@ export default function Ressourcenplanung() {
 
               return (
                 <tr key={r.id}>
-                  <td style={td}>
+                  <td className={rlcClass(null, td)}>
                     <b>{r.name}</b>{" "}
-                    <span style={{ opacity: 0.6, fontSize: 12 }}>
+                    <span className="rlc-migrated-pages-buro-ressourcenplanung-tsx-625">
                       ({r.kind === "emp" ? "MA" : "Maschine"})
                     </span>
                   </td>
@@ -241,92 +241,92 @@ export default function Ressourcenplanung() {
 
                     return (
                       <td
-                        key={idx}
-                        style={{
+                        key={idx} className={rlcClass(null,
+                        {
                           ...td,
                           verticalAlign: "top",
-                          background: over ? "#fff3f0" : undefined,
-                        }}
-                      >
-                        {items.map((a) => (
-                          <div
-                            key={a.id}
-                            style={{
-                              border: "1px solid var(--line)",
-                              borderRadius: 6,
-                              padding: "6px 8px",
-                              marginBottom: 6,
-                              background: "#fafafa",
-                            }}
-                          >
-                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          background: over ? "#fff3f0" : undefined
+                        })}>
+                        
+                        {items.map((a) =>
+                        <div
+                          key={a.id} className="rlc-migrated-pages-buro-ressourcenplanung-tsx-626">
+
+
+
+
+
+
+
+                          
+                            <div className="rlc-migrated-pages-buro-ressourcenplanung-tsx-627">
+                              <input className={rlcClass(null,
+                            { ...inp, width: 90 })}
+                            placeholder="Projekt"
+                            value={a.projectId}
+                            onChange={(e) =>
+                            upd({ ...a, projectId: e.target.value })
+                            } />
+                            
                               <input
-                                style={{ ...inp, width: 90 }}
-                                placeholder="Projekt"
-                                value={a.projectId}
-                                onChange={(e) =>
-                                  upd({ ...a, projectId: e.target.value })
-                                }
-                              />
-                              <input
-                                type="number"
-                                min={0}
-                                max={24}
-                                style={{ ...inp, width: 70 }}
-                                value={a.hours}
-                                onChange={(e) =>
-                                  upd({
-                                    ...a,
-                                    hours: Number(e.target.value) || 0,
-                                  })
-                                }
-                              />
+                              type="number"
+                              min={0}
+                              max={24} className={rlcClass(null,
+                              { ...inp, width: 70 })}
+                              value={a.hours}
+                              onChange={(e) =>
+                              upd({
+                                ...a,
+                                hours: Number(e.target.value) || 0
+                              })
+                              } />
+                            
                               <button className="btn" onClick={() => del(a.id)}>
                                 ✕
                               </button>
                             </div>
 
-                            <input
-                              style={{ ...inp, marginTop: 6, width: "100%" }}
-                              placeholder="Notiz"
-                              value={a.notes ?? ""}
-                              onChange={(e) =>
-                                upd({ ...a, notes: e.target.value })
-                              }
-                            />
+                            <input className={rlcClass(null,
+                          { ...inp, marginTop: 6, width: "100%" })}
+                          placeholder="Notiz"
+                          value={a.notes ?? ""}
+                          onChange={(e) =>
+                          upd({ ...a, notes: e.target.value })
+                          } />
+                          
                           </div>
-                        ))}
+                        )}
 
                         <button className="btn" onClick={() => newAssign(r.id, k)}>
                           + Eintrag
                         </button>
 
-                        {sum > 0 && (
-                          <div style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+                        {sum > 0 &&
+                        <div className="rlc-migrated-pages-buro-ressourcenplanung-tsx-628">
                             Σ {sum}h
                           </div>
-                        )}
-                      </td>
-                    );
+                        }
+                      </td>);
+
                   })}
 
-                  <td style={{ ...td, fontWeight: 700 }}>{weekSum}h</td>
-                </tr>
-              );
+                  <td className={rlcClass(null, { ...td, fontWeight: 600 })}>{weekSum}h</td>
+                </tr>);
+
             })}
 
-            {resources.length === 0 && (
-              <tr>
-                <td style={{ ...td, opacity: 0.6 }} colSpan={9}>
+            {resources.length === 0 &&
+            <tr>
+                <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={9}>
                   Keine Ressourcen gefunden.
                 </td>
               </tr>
-            )}
+            }
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function kw(d: Date) {
@@ -338,11 +338,11 @@ function kw(d: Date) {
     1 +
     Math.round(
       ((t.getTime() - f.getTime()) / 86400000 -
-        3 +
-        ((f.getUTCDay() + 6) % 7)) /
-        7
-    )
-  );
+      3 +
+      (f.getUTCDay() + 6) % 7) /
+      7
+    ));
+
 }
 
 function download(type: string, name: string, data: string) {
@@ -353,8 +353,3 @@ function download(type: string, name: string, data: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-
-
-
-

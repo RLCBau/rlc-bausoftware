@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { MachinesDB } from "./store.machines";
 import { Machine, MaintRecord, MachAttachment } from "./types";
 
@@ -7,26 +7,26 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 export default function Maschinenverwaltung() {
@@ -98,7 +98,7 @@ export default function Maschinenverwaltung() {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
       hours: sel.hours || 0,
-      notes: "",
+      notes: ""
     };
     up({ maintenance: [r, ...(sel.maintenance || [])] });
   }, [sel, up]);
@@ -165,11 +165,11 @@ export default function Maschinenverwaltung() {
   }, [sel, up]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, padding: 10 }}>
+    <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-536">
       <div
-        className="card"
-        style={{ padding: "8px 10px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-      >
+        className="card rlc-migrated-pages-buro-maschinenverwaltung-tsx-537">
+
+        
         <button className="btn" onClick={add}>
           + Maschine
         </button>
@@ -177,35 +177,35 @@ export default function Maschinenverwaltung() {
           Löschen
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-538" />
 
         <input
           placeholder="Suche Name / Typ / Seriennr. / Projekt…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 300 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 300 })} />
+        
 
         <select
           value={proj}
-          onChange={(e) => setProj(e.target.value)}
-          style={{ ...inp, width: 160 }}
-        >
+          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 160 })}>
+          
           <option value="">Alle Projekte</option>
-          {projects.map((p) => (
-            <option key={p} value={p}>
+          {projects.map((p) =>
+          <option key={p} value={p}>
               {p}
             </option>
-          ))}
+          )}
         </select>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <label className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-539">
           <input
             type="checkbox"
             checked={onlyDue}
-            onChange={(e) => setOnlyDue(e.target.checked)}
-          />
-          <span style={{ fontSize: 13 }}>nur fällige</span>
+            onChange={(e) => setOnlyDue(e.target.checked)} />
+          
+          <span className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-540">nur fällige</span>
         </label>
 
         <button className="btn" onClick={importCSV}>
@@ -222,25 +222,25 @@ export default function Maschinenverwaltung() {
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(520px,48vw) 1fr",
-          gap: 10,
-          minHeight: "60vh",
-        }}
-      >
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-541">
+
+
+
+
+
+
+        
+        <div className="card rlc-migrated-pages-buro-maschinenverwaltung-tsx-542">
+          <table className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-543">
             <thead>
               <tr>
-                <th style={th}>Name</th>
-                <th style={th}>Typ</th>
-                <th style={th}>Seriennr.</th>
-                <th style={th}>Projekt</th>
-                <th style={th}>Stunden</th>
-                <th style={th}>nächster Service</th>
-                <th style={th}>Status</th>
+                <th className={rlcClass(null, th)}>Name</th>
+                <th className={rlcClass(null, th)}>Typ</th>
+                <th className={rlcClass(null, th)}>Seriennr.</th>
+                <th className={rlcClass(null, th)}>Projekt</th>
+                <th className={rlcClass(null, th)}>Stunden</th>
+                <th className={rlcClass(null, th)}>nächster Service</th>
+                <th className={rlcClass(null, th)}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -251,294 +251,294 @@ export default function Maschinenverwaltung() {
                 return (
                   <tr
                     key={m.id}
-                    onClick={() => setSelId(m.id)}
-                    style={{
+                    onClick={() => setSelId(m.id)} className={rlcClass(null,
+                    {
                       cursor: "pointer",
-                      background: sel?.id === m.id ? "#f1f5ff" : undefined,
-                    }}
-                  >
-                    <td style={td}>
+                      background: sel?.id === m.id ? "#f1f5ff" : undefined
+                    })}>
+                    
+                    <td className={rlcClass(null, td)}>
                       <b>{m.name}</b>
                     </td>
-                    <td style={td}>{m.type || "—"}</td>
-                    <td style={td}>{m.serial || "—"}</td>
-                    <td style={td}>{m.projectId || "—"}</td>
-                    <td style={td}>{m.hours ?? 0}</td>
-                    <td style={td}>
+                    <td className={rlcClass(null, td)}>{m.type || "—"}</td>
+                    <td className={rlcClass(null, td)}>{m.serial || "—"}</td>
+                    <td className={rlcClass(null, td)}>{m.projectId || "—"}</td>
+                    <td className={rlcClass(null, td)}>{m.hours ?? 0}</td>
+                    <td className={rlcClass(null, td)}>
                       {m.nextService ? fmt(m.nextService) : "—"}
-                      {m.nextService && (
-                        <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                      {m.nextService &&
+                      <span className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-544">
                           ({days} Tg)
                         </span>
-                      )}
+                      }
                     </td>
-                    <td style={td}>{due ? "⚠️ fällig" : m.status || "Betrieb"}</td>
-                  </tr>
-                );
+                    <td className={rlcClass(null, td)}>{due ? "⚠️ fällig" : m.status || "Betrieb"}</td>
+                  </tr>);
+
               })}
 
-              {filtered.length === 0 && (
-                <tr>
-                  <td style={{ ...td, opacity: 0.6 }} colSpan={7}>
+              {filtered.length === 0 &&
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={7}>
                     Keine Maschinen.
                   </td>
                 </tr>
-              )}
+              }
             </tbody>
           </table>
         </div>
 
         <div
-          className="card"
+          className="card rlc-migrated-pages-buro-maschinenverwaltung-tsx-545"
           onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          style={{ padding: 12 }}
-        >
-          {!sel ? (
-            <div style={{ opacity: 0.7 }}>Links Maschine wählen oder neu anlegen.</div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "130px 1fr 130px 1fr",
-                gap: 10,
-              }}
-            >
-              <label style={lbl}>Name</label>
-              <input
-                style={inp}
-                value={sel.name}
-                onChange={(e) => up({ name: e.target.value })}
-              />
+          onDrop={onDrop}>
 
-              <label style={lbl}>Typ</label>
-              <input
-                style={inp}
-                value={sel.type ?? ""}
-                onChange={(e) => up({ type: e.target.value })}
-              />
+          
+          {!sel ?
+          <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-546">Links Maschine wählen oder neu anlegen.</div> :
 
-              <label style={lbl}>Seriennr.</label>
-              <input
-                style={inp}
-                value={sel.serial ?? ""}
-                onChange={(e) => up({ serial: e.target.value })}
-              />
+          <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-547">
 
-              <label style={lbl}>Projekt-ID</label>
-              <input
-                style={inp}
-                value={sel.projectId ?? ""}
-                onChange={(e) => up({ projectId: e.target.value })}
-              />
 
-              <label style={lbl}>Standort</label>
-              <input
-                style={inp}
-                value={sel.location ?? ""}
-                onChange={(e) => up({ location: e.target.value })}
-              />
 
-              <label style={lbl}>Status</label>
-              <select
-                style={inp}
-                value={sel.status ?? "Betrieb"}
-                onChange={(e) => up({ status: e.target.value as any })}
-              >
+
+
+            
+              <label className={rlcClass(null, lbl)}>Name</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.name}
+            onChange={(e) => up({ name: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Typ</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.type ?? ""}
+            onChange={(e) => up({ type: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Seriennr.</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.serial ?? ""}
+            onChange={(e) => up({ serial: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Projekt-ID</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.projectId ?? ""}
+            onChange={(e) => up({ projectId: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Standort</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.location ?? ""}
+            onChange={(e) => up({ location: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Status</label>
+              <select className={rlcClass(null,
+            inp)}
+            value={sel.status ?? "Betrieb"}
+            onChange={(e) => up({ status: e.target.value as any })}>
+              
                 <option>Betrieb</option>
                 <option>Wartung</option>
                 <option>Außer Betrieb</option>
               </select>
 
-              <label style={lbl}>Betriebsstunden</label>
+              <label className={rlcClass(null, lbl)}>Betriebsstunden</label>
               <input
-                type="number"
-                style={inp}
-                value={sel.hours ?? 0}
-                onChange={(e) => up({ hours: Number(e.target.value) || 0 })}
-              />
+              type="number" className={rlcClass(null,
+              inp)}
+              value={sel.hours ?? 0}
+              onChange={(e) => up({ hours: Number(e.target.value) || 0 })} />
+            
 
-              <label style={lbl}>Letzter Service</label>
+              <label className={rlcClass(null, lbl)}>Letzter Service</label>
               <input
-                type="date"
-                style={inp}
-                value={toDateInput(sel.lastService)}
-                onChange={(e) => up({ lastService: fromDateInput(e.target.value) })}
-              />
+              type="date" className={rlcClass(null,
+              inp)}
+              value={toDateInput(sel.lastService)}
+              onChange={(e) => up({ lastService: fromDateInput(e.target.value) })} />
+            
 
-              <label style={lbl}>Intervall (Tage)</label>
+              <label className={rlcClass(null, lbl)}>Intervall (Tage)</label>
               <input
-                type="number"
-                style={inp}
-                value={sel.serviceIntervalDays ?? 180}
-                onChange={(e) =>
-                  up({ serviceIntervalDays: Number(e.target.value) || 0 })
-                }
-              />
+              type="number" className={rlcClass(null,
+              inp)}
+              value={sel.serviceIntervalDays ?? 180}
+              onChange={(e) =>
+              up({ serviceIntervalDays: Number(e.target.value) || 0 })
+              } />
+            
 
-              <label style={lbl}>Nächster Service</label>
-              <div style={{ display: "flex", gap: 8 }}>
+              <label className={rlcClass(null, lbl)}>Nächster Service</label>
+              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-548">
                 <input
-                  type="date"
-                  style={{ ...inp, flex: 1 }}
-                  value={toDateInput(sel.nextService)}
-                  onChange={(e) => up({ nextService: fromDateInput(e.target.value) })}
-                />
+                type="date" className={rlcClass(null,
+                { ...inp, flex: 1 })}
+                value={toDateInput(sel.nextService)}
+                onChange={(e) => up({ nextService: fromDateInput(e.target.value) })} />
+              
                 <button className="btn" onClick={recalcNext}>
                   Berechnen
                 </button>
               </div>
 
-              <label style={{ ...lbl, gridColumn: "1 / -1" }}>Wartungsprotokolle</label>
-              <div style={{ gridColumn: "1 / -1", display: "grid", gap: 6 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>Wartungsprotokolle</label>
+              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-549">
+                <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-550">
                   <button className="btn" onClick={addMaint}>
                     + Eintrag
                   </button>
                 </div>
 
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <table className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-551">
                   <thead>
                     <tr>
-                      <th style={th}>Datum</th>
-                      <th style={th}>Std.</th>
-                      <th style={th}>Notizen</th>
-                      <th style={th}></th>
+                      <th className={rlcClass(null, th)}>Datum</th>
+                      <th className={rlcClass(null, th)}>Std.</th>
+                      <th className={rlcClass(null, th)}>Notizen</th>
+                      <th className={rlcClass(null, th)}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(sel.maintenance || []).map((r) => (
-                      <tr key={r.id}>
-                        <td style={td}>
+                    {(sel.maintenance || []).map((r) =>
+                  <tr key={r.id}>
+                        <td className={rlcClass(null, td)}>
                           <input
-                            type="date"
-                            style={inp}
-                            value={toDateInput(r.date)}
-                            onChange={(e) =>
-                              up({
-                                maintenance: (sel.maintenance || []).map((x) =>
-                                  x.id === r.id
-                                    ? { ...r, date: fromDateInput(e.target.value) }
-                                    : x
-                                ),
-                              })
-                            }
-                          />
+                        type="date" className={rlcClass(null,
+                        inp)}
+                        value={toDateInput(r.date)}
+                        onChange={(e) =>
+                        up({
+                          maintenance: (sel.maintenance || []).map((x) =>
+                          x.id === r.id ?
+                          { ...r, date: fromDateInput(e.target.value) } :
+                          x
+                          )
+                        })
+                        } />
+                      
                         </td>
-                        <td style={td}>
+                        <td className={rlcClass(null, td)}>
                           <input
-                            type="number"
-                            style={inp}
-                            value={r.hours ?? 0}
-                            onChange={(e) =>
-                              up({
-                                maintenance: (sel.maintenance || []).map((x) =>
-                                  x.id === r.id
-                                    ? { ...r, hours: Number(e.target.value) || 0 }
-                                    : x
-                                ),
-                              })
-                            }
-                          />
+                        type="number" className={rlcClass(null,
+                        inp)}
+                        value={r.hours ?? 0}
+                        onChange={(e) =>
+                        up({
+                          maintenance: (sel.maintenance || []).map((x) =>
+                          x.id === r.id ?
+                          { ...r, hours: Number(e.target.value) || 0 } :
+                          x
+                          )
+                        })
+                        } />
+                      
                         </td>
-                        <td style={td}>
-                          <input
-                            style={{ ...inp, width: "100%" }}
-                            value={r.notes ?? ""}
-                            onChange={(e) =>
-                              up({
-                                maintenance: (sel.maintenance || []).map((x) =>
-                                  x.id === r.id ? { ...r, notes: e.target.value } : x
-                                ),
-                              })
-                            }
-                          />
+                        <td className={rlcClass(null, td)}>
+                          <input className={rlcClass(null,
+                      { ...inp, width: "100%" })}
+                      value={r.notes ?? ""}
+                      onChange={(e) =>
+                      up({
+                        maintenance: (sel.maintenance || []).map((x) =>
+                        x.id === r.id ? { ...r, notes: e.target.value } : x
+                        )
+                      })
+                      } />
+                      
                         </td>
-                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                        <td className={rlcClass(null, { ...td, whiteSpace: "nowrap" })}>
                           <button className="btn" onClick={() => delMaint(r.id)}>
                             Entfernen
                           </button>
                         </td>
                       </tr>
-                    ))}
+                  )}
 
-                    {(sel.maintenance || []).length === 0 && (
-                      <tr>
-                        <td style={{ ...td, opacity: 0.6 }} colSpan={4}>
+                    {(sel.maintenance || []).length === 0 &&
+                  <tr>
+                        <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={4}>
                           Keine Einträge.
                         </td>
                       </tr>
-                    )}
+                  }
                   </tbody>
                 </table>
               </div>
 
-              <label style={{ ...lbl, gridColumn: "1 / -1" }}>
+              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>
                 Dokumente / Fotos (Drag&amp;Drop)
               </label>
+              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-552">
+
+
+
+
+
+
+              
+                {(sel.attachments || []).map((a) =>
               <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-                  gap: 8,
-                }}
-              >
-                {(sel.attachments || []).map((a) => (
-                  <div
-                    key={a.id}
-                    style={{
-                      border: "1px solid var(--line)",
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      background: "#fff",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "6px 8px",
-                        fontSize: 12,
-                        display: "flex",
-                        gap: 8,
-                        alignItems: "center",
-                      }}
-                    >
+                key={a.id} className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-553">
+
+
+
+
+
+
+                
+                    <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-554">
+
+
+
+
+
+
+
+                  
                       <b
-                        style={{
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={a.name}
-                      >
+
+
+
+
+
+                    title={a.name} className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-555">
+                    
                         {a.name}
                       </b>
-                      <div style={{ flex: 1 }} />
+                      <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-556" />
                       <button className="btn" onClick={() => open(a)}>
                         Öffnen
                       </button>
                     </div>
 
-                    {(a.mime || "").startsWith("image/") && (
-                      <img
-                        src={a.dataURL}
-                        alt={a.name}
-                        style={{ width: "100%", height: "auto", display: "block" }}
-                      />
-                    )}
-                  </div>
-                ))}
+                    {(a.mime || "").startsWith("image/") &&
+                <img
+                  src={a.dataURL}
+                  alt={a.name} className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-557" />
 
-                {(sel.attachments || []).length === 0 && (
-                  <div style={{ opacity: 0.6 }}>Keine Anhänge.</div>
-                )}
+
+                }
+                  </div>
+              )}
+
+                {(sel.attachments || []).length === 0 &&
+              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-558">Keine Anhänge.</div>
+              }
               </div>
             </div>
-          )}
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function toDateInput(iso?: string) {
@@ -564,7 +564,7 @@ function daysLeft(iso?: string) {
 
 function isDue(m: Machine) {
   const d = daysLeft(m.nextService);
-  return (!isNaN(d) && d <= 14) || m.status === "Wartung";
+  return !isNaN(d) && d <= 14 || m.status === "Wartung";
 }
 
 function pickFile(onPick: (f: File) => void) {
@@ -585,8 +585,3 @@ function download(type: string, name: string, data: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-
-
-
-

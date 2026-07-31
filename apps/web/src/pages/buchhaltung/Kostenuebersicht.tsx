@@ -55,7 +55,7 @@ const safeTrim = (v: unknown) => String(v ?? "").trim();
 const safeNumber = (v: unknown, fallback = 0) => {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 };
@@ -81,13 +81,13 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 const eur = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 const sum = (arr: number[]) => arr.reduce((a, b) => a + safeNumber(b), 0);
 
@@ -98,9 +98,9 @@ const projectKeysOf = (row: {
   projectId?: string;
   projectCode?: string;
 }) =>
-  [row.projectCode, row.projectId, row.projekt]
-    .map((v) => safeTrim(v))
-    .filter(Boolean);
+[row.projectCode, row.projectId, row.projekt].
+map((v) => safeTrim(v)).
+filter(Boolean);
 
 const matchesZeitraum = (datum: string, zeitraum: Zeitraum) => {
   const d = parseDate(datum);
@@ -140,9 +140,9 @@ const downloadCSV = (rows: Record<string, unknown>[], filename: string) => {
 
   const headers = Object.keys(rows[0] || {});
   const csv = [
-    headers.join(";"),
-    ...rows.map((r) => headers.map((h) => csvEscape(r[h])).join(";")),
-  ].join("\n");
+  headers.join(";"),
+  ...rows.map((r) => headers.map((h) => csvEscape(r[h])).join(";"))].
+  join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
@@ -158,12 +158,12 @@ const spark = (series: number[]) => {
   const max = Math.max(...series, 0);
   const glyphs = "▁▂▃▄▅▆▇█";
 
-  return series
-    .map((n) => {
-      const idx = max === 0 ? 0 : Math.round((safeNumber(n) / max) * (glyphs.length - 1));
-      return glyphs.charAt(idx);
-    })
-    .join("");
+  return series.
+  map((n) => {
+    const idx = max === 0 ? 0 : Math.round(safeNumber(n) / max * (glyphs.length - 1));
+    return glyphs.charAt(idx);
+  }).
+  join("");
 };
 
 /** =========================
@@ -199,7 +199,7 @@ export default function Kostenuebersicht() {
       gezahlt: safeNumber(r.gezahlt ?? 0),
       projekt: r.projekt ? String(r.projekt) : undefined,
       projectId: r.projectId ? String(r.projectId) : undefined,
-      projectCode: r.projectCode ? String(r.projectCode) : undefined,
+      projectCode: r.projectCode ? String(r.projectCode) : undefined
     }));
   }, [rechnungen]);
 
@@ -212,7 +212,7 @@ export default function Kostenuebersicht() {
       referenz: z.referenz ? String(z.referenz) : undefined,
       projekt: z.projekt ? String(z.projekt) : undefined,
       projectId: z.projectId ? String(z.projectId) : undefined,
-      projectCode: z.projectCode ? String(z.projectCode) : undefined,
+      projectCode: z.projectCode ? String(z.projectCode) : undefined
     }));
   }, [zahlungen]);
 
@@ -225,13 +225,13 @@ export default function Kostenuebersicht() {
       betrag: safeNumber(ls.kosten ?? ls.betrag ?? 0),
       projekt: ls.projekt ? String(ls.projekt) : undefined,
       projectId: ls.projectId ? String(ls.projectId) : undefined,
-      projectCode: ls.projectCode ? String(ls.projectCode) : undefined,
+      projectCode: ls.projectCode ? String(ls.projectCode) : undefined
     }));
   }, [lieferscheine]);
 
-  const filterByProject = <T extends { projekt?: string; projectId?: string; projectCode?: string }>(
-    rows: T[]
-  ): T[] => {
+  const filterByProject = <T extends {projekt?: string;projectId?: string;projectCode?: string;},>(
+  rows: T[])
+  : T[] => {
     if (!activeProjectKey) return rows;
 
     const hasAnyProjectInfo = rows.some((row) => projectKeysOf(row).length > 0);
@@ -309,20 +309,20 @@ export default function Kostenuebersicht() {
   const deckungsbeitrag = reGezahlt - kosten;
 
   const offeneListe = useMemo(() => {
-    return rechnungenGefiltert
-      .map((r) => {
-        const brutto = bruttoOf(r);
-        const bezahlt = safeNumber(r.gezahlt);
-        return {
-          ...r,
-          offen: Math.max(0, brutto - bezahlt),
-          brutto,
-          bezahlt,
-        };
-      })
-      .filter((r) => r.offen > 0.01)
-      .sort((a, b) => b.offen - a.offen)
-      .slice(0, 10);
+    return rechnungenGefiltert.
+    map((r) => {
+      const brutto = bruttoOf(r);
+      const bezahlt = safeNumber(r.gezahlt);
+      return {
+        ...r,
+        offen: Math.max(0, brutto - bezahlt),
+        brutto,
+        bezahlt
+      };
+    }).
+    filter((r) => r.offen > 0.01).
+    sort((a, b) => b.offen - a.offen).
+    slice(0, 10);
   }, [rechnungenGefiltert]);
 
   const kostenByKs = useMemo<[string, number][]>(() => {
@@ -339,12 +339,12 @@ export default function Kostenuebersicht() {
   const exportKPIs = () => {
     downloadCSV(
       [
-        { Kennzahl: "Rechnungen (Brutto)", Wert: reBrutto.toFixed(2) },
-        { Kennzahl: "Zahlungseingänge", Wert: reGezahlt.toFixed(2) },
-        { Kennzahl: "Offene Posten", Wert: offenePosten.toFixed(2) },
-        { Kennzahl: "Kosten (Belege/Lieferscheine)", Wert: kosten.toFixed(2) },
-        { Kennzahl: "Deckungsbeitrag", Wert: deckungsbeitrag.toFixed(2) },
-      ],
+      { Kennzahl: "Rechnungen (Brutto)", Wert: reBrutto.toFixed(2) },
+      { Kennzahl: "Zahlungseingänge", Wert: reGezahlt.toFixed(2) },
+      { Kennzahl: "Offene Posten", Wert: offenePosten.toFixed(2) },
+      { Kennzahl: "Kosten (Belege/Lieferscheine)", Wert: kosten.toFixed(2) },
+      { Kennzahl: "Deckungsbeitrag", Wert: deckungsbeitrag.toFixed(2) }],
+
       "kostenuebersicht_kpi.csv"
     );
   };
@@ -358,7 +358,7 @@ export default function Kostenuebersicht() {
         Brutto: o.brutto.toFixed(2),
         Gezahlt: safeNumber(o.bezahlt).toFixed(2),
         Offen: o.offen.toFixed(2),
-        Faellig: o.faellig || "",
+        Faellig: o.faellig || ""
       })),
       "offene_posten.csv"
     );
@@ -368,7 +368,7 @@ export default function Kostenuebersicht() {
     downloadCSV(
       kostenByKs.map(([ks, betrag]) => ({
         Kostenstelle: ks,
-        Betrag: betrag.toFixed(2),
+        Betrag: betrag.toFixed(2)
       })),
       "kosten_nach_kostenstelle.csv"
     );
@@ -386,12 +386,12 @@ export default function Kostenuebersicht() {
       end.setDate(end.getDate() + 1);
 
       return sum(
-        zahlungenProjectFiltered
-          .filter((z) => {
-            const dt = parseDate(z.datum);
-            return dt >= start && dt < end;
-          })
-          .map((z) => safeNumber(z.betrag))
+        zahlungenProjectFiltered.
+        filter((z) => {
+          const dt = parseDate(z.datum);
+          return dt >= start && dt < end;
+        }).
+        map((z) => safeNumber(z.betrag))
       );
     });
   }, [zahlungenProjectFiltered]);
@@ -412,8 +412,8 @@ export default function Kostenuebersicht() {
           </button>
           <button
             className="bh-btn ghost"
-            onClick={() => nav("/mengenermittlung/lieferscheine")}
-          >
+            onClick={() => nav("/mengenermittlung/lieferscheine")}>
+            
             → Zu Lieferscheinen
           </button>
         </div>
@@ -435,11 +435,11 @@ export default function Kostenuebersicht() {
         <div>
           <label>Kunde</label>
           <select value={kunde} onChange={(e) => setKunde(e.target.value)}>
-            {kundenListe.map((k) => (
-              <option key={k} value={k}>
+            {kundenListe.map((k) =>
+            <option key={k} value={k}>
                 {k === "ALL" ? "Alle" : k}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
@@ -447,8 +447,8 @@ export default function Kostenuebersicht() {
           <label>Status</label>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as RechnungsStatus)}
-          >
+            onChange={(e) => setStatus(e.target.value as RechnungsStatus)}>
+            
             <option value="ALL">Alle</option>
             <option value="OPEN">Offen</option>
             <option value="PART">Teilbezahlt</option>
@@ -484,7 +484,7 @@ export default function Kostenuebersicht() {
           <div className="k">Kosten (Belege/Lieferscheine)</div>
           <div className="v">{eur(kosten)} €</div>
           <div className="s">
-            <span style={{ opacity: 0.8 }}>
+            <span className="rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-167">
               Quelle: <code>useLieferscheine()</code>
             </span>
           </div>
@@ -519,30 +519,30 @@ export default function Kostenuebersicht() {
               </tr>
             </thead>
             <tbody>
-              {offeneListe.map((o) => (
-                <tr key={o.id}>
+              {offeneListe.map((o) =>
+              <tr key={o.id}>
                   <td>{o.nr}</td>
                   <td>{o.kunde}</td>
                   <td>{o.datum}</td>
                   <td>{o.faellig || "—"}</td>
                   <td>{eur(o.brutto)}</td>
                   <td>{eur(safeNumber(o.bezahlt))}</td>
-                  <td style={{ fontWeight: 600 }}>{eur(o.offen)}</td>
+                  <td className="rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-168">{eur(o.offen)}</td>
                   <td>
                     <Link to="/buchhaltung/zahlungen" className="bh-link">
                       zu Zahlungen
                     </Link>
                   </td>
                 </tr>
-              ))}
+              )}
 
-              {offeneListe.length === 0 && (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: "center", color: "#777" }}>
+              {offeneListe.length === 0 &&
+              <tr>
+                  <td colSpan={8} className="rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-169">
                     Keine offenen Posten im Filterzeitraum.
                   </td>
                 </tr>
-              )}
+              }
             </tbody>
           </table>
         </div>
@@ -563,40 +563,35 @@ export default function Kostenuebersicht() {
               </tr>
             </thead>
             <tbody>
-              {kostenByKs.map(([ks, betrag]) => (
-                <tr key={ks}>
+              {kostenByKs.map(([ks, betrag]) =>
+              <tr key={ks}>
                   <td>{ks}</td>
                   <td>{eur(betrag)}</td>
                 </tr>
-              ))}
+              )}
 
-              {kostenByKs.length === 0 && (
-                <tr>
-                  <td colSpan={2} style={{ textAlign: "center", color: "#777" }}>
+              {kostenByKs.length === 0 &&
+              <tr>
+                  <td colSpan={2} className="rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-170">
                     Keine Kosten im Filterzeitraum.
                   </td>
                 </tr>
-              )}
+              }
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-171">
         *Live-Daten aus <code>stores.ts</code> (Rechnungen/Zahlungen/Lieferscheine).{" "}
-        {activeProjectKey ? (
-          <>
+        {activeProjectKey ?
+        <>
             Aktuelles Projekt: <b>{activeProjectKey}</b>
-          </>
-        ) : (
-          <>Kein Projekt gewählt: Projektfilter wird nicht angewendet.</>
-        )}
+          </> :
+
+        <>Kein Projekt gewählt: Projektfilter wird nicht angewendet.</>
+        }
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

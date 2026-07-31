@@ -1,4 +1,4 @@
-// apps/web/src/pages/start/projektUebersicht.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/start/projektUebersicht.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../../lib/apiBase";
@@ -53,7 +53,7 @@ type ModuleTile = {
 
 /* ================= IMPORT WIDGET ================= */
 
-function ImportProjectJsonInline({ onDone }: { onDone?: () => void }) {
+function ImportProjectJsonInline({ onDone }: {onDone?: () => void;}) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -72,7 +72,7 @@ function ImportProjectJsonInline({ onDone }: { onDone?: () => void }) {
       const res = await fetch(apiUrl("/api/import/project-json"), {
         method: "POST",
         body: form,
-        credentials: "include",
+        credentials: "include"
       });
 
       const json = await res.json().catch(() => null);
@@ -93,24 +93,24 @@ function ImportProjectJsonInline({ onDone }: { onDone?: () => void }) {
   }
 
   return (
-    <div style={importInline}>
+    <div className={rlcClass(null, importInline)}>
       <input
         type="file"
         accept=".json,application/json"
-        onChange={(e) => setFile(e.target.files?.[0] || null)}
-        style={fileInput}
-      />
+        onChange={(e) => setFile(e.target.files?.[0] || null)} className={rlcClass(null,
+        fileInput)} />
+      
 
       <button
         type="button"
         onClick={upload}
-        disabled={!file || busy}
-        style={!file || busy ? btnDisabled : btnPrimary}
-      >
+        disabled={!file || busy} className={rlcClass(null,
+        !file || busy ? btnDisabled : btnPrimary)}>
+        
         {busy ? "Importiere…" : "Project.json importieren"}
       </button>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= HELPERS ================= */
@@ -138,7 +138,7 @@ function readLastOpenedAt(idOrCode: string): string {
       month: "2-digit",
       year: "numeric",
       hour: "2-digit",
-      minute: "2-digit",
+      minute: "2-digit"
     });
   } catch {
     return "—";
@@ -152,19 +152,19 @@ function saveLastOpenedAt(idOrCode: string) {
     parsed[idOrCode] = new Date().toISOString();
     localStorage.setItem("rlc_recent_projects_meta", JSON.stringify(parsed));
   } catch {
-    // ignore
-  }
-}
 
+
+    // ignore
+  }}
 function getProjectFromCtx(projectCtx: any): ProjectLike | null {
   const p =
-    projectCtx?.currentProject ??
-    projectCtx?.current ??
-    projectCtx?.selectedProject ??
-    projectCtx?.project ??
-    (typeof projectCtx?.getCurrentProject === "function"
-      ? projectCtx.getCurrentProject()
-      : null);
+  projectCtx?.currentProject ??
+  projectCtx?.current ??
+  projectCtx?.selectedProject ??
+  projectCtx?.project ?? (
+  typeof projectCtx?.getCurrentProject === "function" ?
+  projectCtx.getCurrentProject() :
+  null);
 
   if (p && typeof p === "object") return p as ProjectLike;
 
@@ -180,9 +180,9 @@ function statusBadge(status: ProjectStatus): React.CSSProperties {
   if (status === "Cloud") {
     return {
       ...badgeBase,
-      border: "1px solid #BFDBFE",
-      background: "#EFF6FF",
-      color: "#1D4ED8",
+      border: "1px solid #BED6FF",
+      background: "#EAF2FF",
+      color: "#0B5BD3"
     };
   }
 
@@ -191,7 +191,7 @@ function statusBadge(status: ProjectStatus): React.CSSProperties {
       ...badgeBase,
       border: "1px solid #FDE68A",
       background: "#FFFBEB",
-      color: "#92400E",
+      color: "#92400E"
     };
   }
 
@@ -199,7 +199,7 @@ function statusBadge(status: ProjectStatus): React.CSSProperties {
     ...badgeBase,
     border: "1px solid #CBD5E1",
     background: "#F8FAFC",
-    color: "#475569",
+    color: "#475569"
   };
 }
 
@@ -214,17 +214,17 @@ export default function ProjektUebersicht() {
     if (!projectCtx || !cur) return;
 
     const already =
-      projectCtx.currentProject ??
-      projectCtx.current ??
-      projectCtx.selectedProject ??
-      projectCtx.project ??
-      null;
+    projectCtx.currentProject ??
+    projectCtx.current ??
+    projectCtx.selectedProject ??
+    projectCtx.project ??
+    null;
 
     if (
-      already &&
-      ((already.id && cur.id && already.id === cur.id) ||
-        (already.code && cur.code && already.code === cur.code))
-    ) {
+    already && (
+    already.id && cur.id && already.id === cur.id ||
+    already.code && cur.code && already.code === cur.code))
+    {
       return;
     }
 
@@ -243,10 +243,10 @@ export default function ProjektUebersicht() {
       const g = globalThis as any;
       g.__RLC_CURRENT_PROJECT = cur;
     } catch {
-      // ignore
-    }
-  }, [projectCtx, cur]);
 
+
+      // ignore
+    }}, [projectCtx, cur]);
   useEffect(() => {
     const key = String(cur?.id || cur?.code || "");
     if (key) saveLastOpenedAt(key);
@@ -266,153 +266,153 @@ export default function ProjektUebersicht() {
       client,
       location,
       status,
-      lastOpened,
+      lastOpened
     };
   }, [cur]);
 
   const tiles: ModuleTile[] = [
-    {
-      nr: "01",
-      title: "Kalkulation",
-      desc: "LV, Preise, KI-Kalkulation, Nachträge, Angebot, GAEB und Angebotsanalyse.",
-      to: "/kalkulation",
-      icon: "💰",
-      accent: "#DCFCE7",
-      accentText: "#166534",
-      main: true,
-    },
-    {
-      nr: "02",
-      title: "Mengenermittlung",
-      desc: "Aufmaß, Regieberichte, Lieferscheine, Fotos, Soll-Ist und Abrechnung.",
-      to: "/mengenermittlung",
-      icon: "📋",
-      accent: "#DBEAFE",
-      accentText: "#1D4ED8",
-      main: true,
-    },
-    {
-      nr: "03",
-      title: "CAD / Planung",
-      desc: "Pläne, Viewer, PDF, As-Built, technische Projektansicht und Export.",
-      to: "/cad/viewer",
-      icon: "📐",
-      accent: "#EDE9FE",
-      accentText: "#6D28D9",
-      main: true,
-    },
-    {
-      nr: "04",
-      title: "Büro / Verwaltung",
-      desc: "Dokumente, Kommunikation, Aufgaben, Nutzer, Kalender und Organisation.",
-      to: "/buro",
-      icon: "🏢",
-      accent: "#E0F2FE",
-      accentText: "#0369A1",
-      main: true,
-    },
-    {
-      nr: "05",
-      title: "KI",
-      desc: "Intelligente Unterstützung für Kalkulation, Analyse und Baustellenlogik.",
-      to: "/ki",
-      icon: "🤖",
-      accent: "#FCE7F3",
-      accentText: "#BE185D",
-      main: true,
-    },
-    {
-      nr: "06",
-      title: "Buchhaltung",
-      desc: "Rechnungen, Abschläge, Zahlungen, Kostenstellen, DATEV und Auswertung.",
-      to: "/buchhaltung",
-      icon: "📒",
-      accent: "#FEF3C7",
-      accentText: "#B45309",
-      main: true,
-    },
-    {
-      nr: "07",
-      title: "Info / Hilfe",
-      desc: "Anleitungen, Updates, Support, Videoerklärungen und Systeminformationen.",
-      to: "/info",
-      icon: "ℹ️",
-      accent: "#E2E8F0",
-      accentText: "#334155",
-    },
-  ];
+  {
+    nr: "01",
+    title: "Kalkulation",
+    desc: "LV, Preise, KI-Kalkulation, Nachträge, Angebot, GAEB und Angebotsanalyse.",
+    to: "/kalkulation",
+    icon: "💰",
+    accent: "#DCFCE7",
+    accentText: "#166534",
+    main: true
+  },
+  {
+    nr: "02",
+    title: "Mengenermittlung",
+    desc: "Aufmaß, Regieberichte, Lieferscheine, Fotos, Soll-Ist und Abrechnung.",
+    to: "/mengenermittlung",
+    icon: "📋",
+    accent: "#DBEAFE",
+    accentText: "#0B5BD3",
+    main: true
+  },
+  {
+    nr: "03",
+    title: "CAD / Planung",
+    desc: "Pläne, Viewer, PDF, As-Built, technische Projektansicht und Export.",
+    to: "/cad/viewer",
+    icon: "📐",
+    accent: "#EDE9FE",
+    accentText: "#6D28D9",
+    main: true
+  },
+  {
+    nr: "04",
+    title: "Büro / Verwaltung",
+    desc: "Dokumente, Kommunikation, Aufgaben, Nutzer, Kalender und Organisation.",
+    to: "/buro",
+    icon: "🏢",
+    accent: "#E0F2FE",
+    accentText: "#0369A1",
+    main: true
+  },
+  {
+    nr: "05",
+    title: "KI",
+    desc: "Intelligente Unterstützung für Kalkulation, Analyse und Baustellenlogik.",
+    to: "/ki",
+    icon: "🤖",
+    accent: "#FCE7F3",
+    accentText: "#BE185D",
+    main: true
+  },
+  {
+    nr: "06",
+    title: "Buchhaltung",
+    desc: "Rechnungen, Abschläge, Zahlungen, Kostenstellen, DATEV und Auswertung.",
+    to: "/buchhaltung",
+    icon: "📒",
+    accent: "#FEF3C7",
+    accentText: "#B45309",
+    main: true
+  },
+  {
+    nr: "07",
+    title: "Info / Hilfe",
+    desc: "Anleitungen, Updates, Support, Videoerklärungen und Systeminformationen.",
+    to: "/info",
+    icon: "ℹ️",
+    accent: "#E2E8F0",
+    accentText: "#334155"
+  }];
+
 
   if (!cur) {
     return (
-      <div style={page}>
-        <section style={heroCard}>
+      <div className={rlcClass(null, page)}>
+        <section className={rlcClass("rlc-page-hero", heroCard)}>
           <div>
-            <div style={eyebrow}>RLC Projekt</div>
-            <h1 style={heroTitle}>Kein Projekt gewählt</h1>
-            <p style={heroSubtitle}>
+            <div className={rlcClass(null, eyebrow)}>RLC Projekt</div>
+            <h1 className={rlcClass(null, heroTitle)}>Kein Projekt gewählt</h1>
+            <p className={rlcClass(null, heroSubtitle)}>
               Bitte zuerst ein Projekt auswählen oder eine project.json importieren.
             </p>
           </div>
 
-          <div style={heroActions}>
-            <button type="button" style={btnPrimary} onClick={() => nav("/start")}>
+          <div className={rlcClass(null, heroActions)}>
+            <button type="button" className={rlcClass(null, btnPrimary)} onClick={() => nav("/start")}>
               Projekt auswählen
             </button>
           </div>
         </section>
 
-        <section style={card}>
-          <h2 style={sectionTitle}>Projekt importieren</h2>
-          <p style={sectionText}>
+        <section className={rlcClass(null, card)}>
+          <h2 className={rlcClass(null, sectionTitle)}>Projekt importieren</h2>
+          <p className={rlcClass(null, sectionText)}>
             Optional kann ein bestehendes Projekt über eine project.json übernommen werden.
           </p>
 
-          <div style={{ marginTop: 14 }}>
+          <div className="rlc-migrated-pages-start-projektuebersicht-tsx-1566">
             <ImportProjectJsonInline onDone={() => nav("/start")} />
           </div>
         </section>
-      </div>
-    );
+      </div>);
+
   }
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Projektzentrale</div>
-          <h1 style={heroTitle}>Projekt-Übersicht</h1>
-          <p style={heroSubtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Projektzentrale</div>
+          <h1 className={rlcClass(null, heroTitle)}>Projekt-Übersicht</h1>
+          <p className={rlcClass(null, heroSubtitle)}>
             Zentrale Projektseite für Module, Status, Schnellzugriffe und Weiterbearbeitung.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button type="button" style={btnPrimary} onClick={() => nav("/kalkulation")}>
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={() => nav("/kalkulation")}>
             Kalkulation öffnen
           </button>
 
           <button
-            type="button"
-            style={btnSecondaryDark}
-            onClick={() => nav("/kalkulation/lv-import")}
-          >
+            type="button" className={rlcClass(null,
+            btnSecondaryDark)}
+            onClick={() => nav("/kalkulation/lv-import")}>
+            
             LV / Positionen
           </button>
 
           <button
-            type="button"
-            style={btnSecondaryDark}
-            onClick={() => nav("/kalkulation/angebot")}
-          >
+            type="button" className={rlcClass(null,
+            btnSecondaryDark)}
+            onClick={() => nav("/kalkulation/angebot")}>
+            
             Angebot / Export
           </button>
 
-          <button type="button" style={btnSecondaryDark} onClick={() => nav("/start")}>
+          <button type="button" className={rlcClass(null, btnSecondaryDark)} onClick={() => nav("/start")}>
             Projekt wechseln
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{normalized.number || "—"}</b>
           {normalized.name ? <span> · {normalized.name}</span> : null}
           <span> · Status: </span>
@@ -420,7 +420,7 @@ export default function ProjektUebersicht() {
         </div>
       </section>
 
-      <section style={kpiGrid}>
+      <section className={rlcClass(null, kpiGrid)}>
         <InfoKpi label="Projektcode" value={normalized.number || "—"} />
         <InfoKpi label="Projektname" value={normalized.name || "—"} />
         <InfoKpi label="Auftraggeber" value={normalized.client || "—"} />
@@ -429,94 +429,94 @@ export default function ProjektUebersicht() {
         <InfoKpi label="Speicherart" value={normalized.status} badge={normalized.status} />
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Module</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Module</h2>
+            <div className={rlcClass(null, sectionText)}>
               Gleiche Struktur wie in der Kalkulation: klare Module, schnelle Navigation,
               saubere Projektlogik.
             </div>
           </div>
 
-          <div style={statusBadge(normalized.status)}>{normalized.status}</div>
+          <div className={rlcClass(null, statusBadge(normalized.status))}>{normalized.status}</div>
         </div>
 
-        <div style={tilesGrid}>
-          {tiles.map((tile) => (
-            <button
-              key={tile.to}
-              type="button"
-              onClick={() => nav(tile.to)}
-              style={{
-                ...tileCard,
-                minHeight: tile.main ? 178 : 154,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 14px 32px rgba(15,23,42,0.10)";
-                e.currentTarget.style.borderColor = "#BFDBFE";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 1px 2px rgba(15,23,42,0.04)";
-                e.currentTarget.style.borderColor = "#E5E7EB";
-              }}
-            >
-              <div style={tileTop}>
-                <div style={{ ...tileIcon, background: tile.accent, color: tile.accentText }}>
+        <div className={rlcClass(null, tilesGrid)}>
+          {tiles.map((tile) =>
+          <button
+            key={tile.to}
+            type="button"
+            onClick={() => nav(tile.to)} className={rlcClass(null,
+            {
+              ...tileCard,
+              minHeight: tile.main ? 178 : 154
+            })}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 14px 32px rgba(15,23,42,0.10)";
+              e.currentTarget.style.borderColor = "#BED6FF";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 1px 2px rgba(15,23,42,0.04)";
+              e.currentTarget.style.borderColor = "#E5E7EB";
+            }}>
+            
+              <div className={rlcClass(null, tileTop)}>
+                <div className={rlcClass(null, { ...tileIcon, background: tile.accent, color: tile.accentText })}>
                   {tile.icon}
                 </div>
-                <div style={tileNr}>{tile.nr}</div>
+                <div className={rlcClass(null, tileNr)}>{tile.nr}</div>
               </div>
 
-              <div style={tileTitle}>{tile.title}</div>
-              <div style={tileDesc}>{tile.desc}</div>
+              <div className={rlcClass(null, tileTitle)}>{tile.title}</div>
+              <div className={rlcClass(null, tileDesc)}>{tile.desc}</div>
 
-              <div style={tileFooter}>
+              <div className={rlcClass(null, tileFooter)}>
                 Öffnen <span>→</span>
               </div>
             </button>
-          ))}
+          )}
         </div>
       </section>
 
-      <section style={quickCard}>
+      <section className={rlcClass(null, quickCard)}>
         <div>
-          <h2 style={sectionTitle}>Schnellzugriffe</h2>
-          <div style={sectionText}>
+          <h2 className={rlcClass(null, sectionTitle)}>Schnellzugriffe</h2>
+          <div className={rlcClass(null, sectionText)}>
             Direkte Wege zu den wichtigsten Projektfunktionen.
           </div>
         </div>
 
-        <div style={quickActions}>
-          <button type="button" style={btnSecondary} onClick={() => nav("/kalkulation/gaeb")}>
+        <div className={rlcClass(null, quickActions)}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => nav("/kalkulation/gaeb")}>
             GAEB prüfen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => nav("/kalkulation/nachtraege")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => nav("/kalkulation/nachtraege")}>
             Nachträge
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => nav("/kalkulation/crm")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => nav("/kalkulation/crm")}>
             CRM / Angebotsverfolgung
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => nav("/kalkulation/versionsvergleich")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => nav("/kalkulation/versionsvergleich")}>
             Versionsvergleich / Analyse
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => nav("/start")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => nav("/start")}>
             Zurück zur Projektauswahl
           </button>
         </div>
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Weiteres Projekt importieren</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Weiteres Projekt importieren</h2>
+            <div className={rlcClass(null, sectionText)}>
               Optional: project.json direkt importieren und danach zur Projekt-Auswahl wechseln.
             </div>
           </div>
@@ -524,8 +524,8 @@ export default function ProjektUebersicht() {
 
         <ImportProjectJsonInline onDone={() => nav("/start")} />
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UI ================= */
@@ -533,20 +533,20 @@ export default function ProjektUebersicht() {
 function InfoKpi({
   label,
   value,
-  badge,
-}: {
-  label: string;
-  value: string;
-  badge?: ProjectStatus;
-}) {
+  badge
+
+
+
+
+}: {label: string;value: string;badge?: ProjectStatus;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>
-        {badge ? <span style={statusBadge(badge)}>{value}</span> : value}
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>
+        {badge ? <span className={rlcClass(null, statusBadge(badge))}>{value}</span> : value}
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= STYLES ================= */
@@ -554,17 +554,17 @@ function InfoKpi({
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 24,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -572,14 +572,14 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.82,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const heroTitle: React.CSSProperties = {
-  margin: "4px 0",
+  color: "#FFFFFF", margin: "4px 0",
   fontSize: 32,
   lineHeight: 1.12,
-  fontWeight: 950,
+  fontWeight: 700
 };
 
 const heroSubtitle: React.CSSProperties = {
@@ -587,18 +587,18 @@ const heroSubtitle: React.CSSProperties = {
   maxWidth: 980,
   opacity: 0.9,
   lineHeight: 1.55,
-  fontSize: 14,
+  fontSize: 14
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92,
+  opacity: 0.92
 };
 
 const card: React.CSSProperties = {
@@ -606,7 +606,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 18,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const quickCard: React.CSSProperties = {
@@ -616,13 +616,13 @@ const quickCard: React.CSSProperties = {
   alignItems: "center",
   gap: 14,
   flexWrap: "wrap",
-  border: "1px solid #DBEAFE",
+  border: "1px solid #DBEAFE"
 };
 
 const kpiGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -630,23 +630,23 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 7,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
-  wordBreak: "break-word",
+  fontWeight: 700,
+  wordBreak: "break-word"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -655,27 +655,27 @@ const sectionHead: React.CSSProperties = {
   alignItems: "flex-start",
   gap: 12,
   flexWrap: "wrap",
-  marginBottom: 14,
+  marginBottom: 14
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 19,
   color: "#0F172A",
-  fontWeight: 950,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 5,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const tilesGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(285px,1fr))",
-  gap: 14,
+  gap: 14
 };
 
 const tileCard: React.CSSProperties = {
@@ -689,14 +689,14 @@ const tileCard: React.CSSProperties = {
   boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
   display: "grid",
   alignContent: "space-between",
-  gap: 10,
+  gap: 10
 };
 
 const tileTop: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
-  gap: 10,
+  gap: 10
 };
 
 const tileIcon: React.CSSProperties = {
@@ -706,46 +706,46 @@ const tileIcon: React.CSSProperties = {
   display: "grid",
   placeItems: "center",
   fontSize: 25,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const tileNr: React.CSSProperties = {
   border: "1px solid #DBEAFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  background: "#EAF2FF",
+  color: "#0B5BD3",
   borderRadius: 999,
   padding: "5px 9px",
   fontSize: 11,
-  fontWeight: 950,
+  fontWeight: 700
 };
 
 const tileTitle: React.CSSProperties = {
   marginTop: 4,
   fontSize: 19,
-  fontWeight: 950,
-  color: "#0F172A",
+  fontWeight: 700,
+  color: "#0F172A"
 };
 
 const tileDesc: React.CSSProperties = {
   color: "#64748B",
   fontSize: 13,
-  lineHeight: 1.5,
+  lineHeight: 1.5
 };
 
 const tileFooter: React.CSSProperties = {
   marginTop: 6,
-  color: "#1D4ED8",
+  color: "#0B5BD3",
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700,
   display: "flex",
   gap: 6,
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const quickActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const btnBase: React.CSSProperties = {
@@ -753,29 +753,29 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "10px 14px",
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnSecondaryDark: React.CSSProperties = {
   ...btnBase,
   border: "1px solid rgba(255,255,255,0.35)",
   background: "rgba(255,255,255,0.95)",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnDisabled: React.CSSProperties = {
@@ -784,7 +784,7 @@ const btnDisabled: React.CSSProperties = {
   background: "#E5E7EB",
   color: "#64748B",
   cursor: "not-allowed",
-  opacity: 0.75,
+  opacity: 0.75
 };
 
 const badgeBase: React.CSSProperties = {
@@ -794,14 +794,14 @@ const badgeBase: React.CSSProperties = {
   borderRadius: 999,
   padding: "5px 10px",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const importInline: React.CSSProperties = {
   display: "flex",
   gap: 10,
   alignItems: "center",
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const fileInput: React.CSSProperties = {
@@ -809,8 +809,5 @@ const fileInput: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 11px",
   background: "#FFFFFF",
-  fontSize: 13,
+  fontSize: 13
 };
-
-
-

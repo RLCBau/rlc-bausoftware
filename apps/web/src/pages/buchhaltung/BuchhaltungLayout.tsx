@@ -8,20 +8,20 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { to: "/buchhaltung", label: "Übersicht" },
-  { to: "/buchhaltung/kostenuebersicht", label: "Kostenübersicht (live)" },
-  { to: "/buchhaltung/rechnungen", label: "Rechnungen / Abschläge" },
-  { to: "/buchhaltung/abschlagsrechnungen", label: "Abschlagsrechnungen" },
-  { to: "/buchhaltung/zahlungen", label: "Zahlungen" },
-  { to: "/buchhaltung/eingang", label: "Eingangsrechnungen" },
-  { to: "/buchhaltung/kassenbuch", label: "Kassenbuch" },
-  { to: "/buchhaltung/kostenstellen", label: "Kostenstellen" },
-  { to: "/buchhaltung/mahnwesen", label: "Mahnwesen" },
-  { to: "/buchhaltung/reports", label: "Belege / Reports" },
-  { to: "/buchhaltung/datev", label: "DATEV Export" },
-  { to: "/buchhaltung/ust", label: "USt.-Übersicht" },
-  { to: "/buchhaltung/lieferscheine", label: "Lieferscheine (Kosten)" },
-];
+{ to: "/buchhaltung", label: "Übersicht" },
+{ to: "/buchhaltung/kostenuebersicht", label: "Kostenübersicht (live)" },
+{ to: "/buchhaltung/rechnungen", label: "Rechnungen / Abschläge" },
+{ to: "/buchhaltung/abschlagsrechnungen", label: "Abschlagsrechnungen" },
+{ to: "/buchhaltung/zahlungen", label: "Zahlungen" },
+{ to: "/buchhaltung/eingang", label: "Eingangsrechnungen" },
+{ to: "/buchhaltung/kassenbuch", label: "Kassenbuch" },
+{ to: "/buchhaltung/kostenstellen", label: "Kostenstellen" },
+{ to: "/buchhaltung/mahnwesen", label: "Mahnwesen" },
+{ to: "/buchhaltung/reports", label: "Belege / Reports" },
+{ to: "/buchhaltung/datev", label: "DATEV Export" },
+{ to: "/buchhaltung/ust", label: "USt.-Übersicht" },
+{ to: "/buchhaltung/lieferscheine", label: "Lieferscheine (Kosten)" }];
+
 
 function normalizePath(path: string) {
   return String(path || "").replace(/\/+$/, "") || "/";
@@ -43,32 +43,33 @@ export default function BuchhaltungLayout() {
 
   return (
     <div className="bh-page">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <h1 style={{ margin: 0 }}>7. Buchhaltung</h1>
-        <div style={{ opacity: 0.7, fontSize: 13 }}>
+      <header className="rlc-page-hero">
+
+
+
+
+
+
+        
+        <h1 className="rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-164">7. Buchhaltung</h1>
+        <div className="rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-165">
           Übersicht, Rechnungen, Zahlungen, Kostenstellen, Belege und Exporte
         </div>
-      </div>
+      </header>
 
       <div
-        className="card"
-        style={{
-          padding: 10,
-          marginTop: 10,
-          marginBottom: 12,
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
+        className="bh-module-nav rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-166">
+
+
+
+
+
+
+
+
+
+
+        
         {navItems.map((it) => {
           const active = isActivePath(pathname, it.to);
 
@@ -84,21 +85,16 @@ export default function BuchhaltungLayout() {
                 gap: 6,
                 border: active ? "1px solid var(--line, #d0d7de)" : undefined,
                 background: active ? "rgba(59,130,246,0.08)" : undefined,
-                fontWeight: active ? 700 : 600,
-              }}
-            >
+                fontWeight: active ? 700 : 600
+              }}>
+              
               {it.label}
-            </NavLink>
-          );
+            </NavLink>);
+
         })}
       </div>
 
       <Outlet />
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

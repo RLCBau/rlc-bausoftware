@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { ProjekteDB } from "./store";
 import { Projekt, ID } from "./types";
 
@@ -7,36 +7,36 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 const inpB: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const inpN: React.CSSProperties = {
   ...inpB,
-  width: 220,
+  width: 220
 };
 
 const inpS: React.CSSProperties = {
   ...inpB,
-  width: 150,
+  width: 150
 };
 
 function toDateValue(value: string | number | undefined | null): Date | null {
@@ -89,7 +89,7 @@ export default function Projekte() {
       id: crypto.randomUUID(),
       name: `${selected.name} (Kopie)`,
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     };
     ProjekteDB.upsert(copy);
     refresh();
@@ -109,7 +109,7 @@ export default function Projekte() {
       const next: Projekt = {
         ...selected,
         ...patch,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       ProjekteDB.upsert(next);
       setSel(next.id);
@@ -123,7 +123,7 @@ export default function Projekte() {
 
     return all.filter((p) => {
       const s =
-        `${p.name} ${p.baustellenNummer ?? ""} ${p.ort ?? ""} ${p.bauleiter ?? ""}`.toLowerCase();
+      `${p.name} ${p.baustellenNummer ?? ""} ${p.ort ?? ""} ${p.bauleiter ?? ""}`.toLowerCase();
       const okQ = !qq || s.includes(qq);
       const okS = status === "alle" ? true : p.status === status;
       return okQ && okS;
@@ -156,16 +156,16 @@ export default function Projekte() {
   }, [refresh]);
 
   return (
-    <div className="card" style={{ padding: 0 }}>
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          padding: "8px 10px",
-          borderBottom: "1px solid var(--line)",
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="card rlc-migrated-pages-buro-projekte-tsx-610">
+      <div className="rlc-migrated-pages-buro-projekte-tsx-611">
+
+
+
+
+
+
+
+        
         <button className="btn" onClick={add}>
           + Projekt
         </button>
@@ -176,20 +176,20 @@ export default function Projekte() {
           Löschen
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-projekte-tsx-612" />
 
         <input
           placeholder="Suchen…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inpN, width: 260 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inpN, width: 260 })} />
+        
 
         <select
           value={status}
-          onChange={(e) => setStatus(e.target.value as "alle" | "aktiv" | "archiv")}
-          style={inpS}
-        >
+          onChange={(e) => setStatus(e.target.value as "alle" | "aktiv" | "archiv")} className={rlcClass(null,
+          inpS)}>
+          
           <option value="alle">Alle</option>
           <option value="aktiv">Aktiv</option>
           <option value="archiv">Archiv</option>
@@ -203,124 +203,119 @@ export default function Projekte() {
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateRows: "minmax(220px, 44vh) auto",
-          gap: 10,
-          padding: 10,
-        }}
-      >
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="rlc-migrated-pages-buro-projekte-tsx-613">
+
+
+
+
+
+
+        
+        <div className="card rlc-migrated-pages-buro-projekte-tsx-614">
+          <table className="rlc-migrated-pages-buro-projekte-tsx-615">
             <thead>
               <tr>
-                <th style={th}>Name</th>
-                <th style={th}>Baustellen-Nr.</th>
-                <th style={th}>Ort</th>
-                <th style={th}>Bauleiter</th>
-                <th style={th}>Status</th>
-                <th style={th}>Erstellt</th>
+                <th className={rlcClass(null, th)}>Name</th>
+                <th className={rlcClass(null, th)}>Baustellen-Nr.</th>
+                <th className={rlcClass(null, th)}>Ort</th>
+                <th className={rlcClass(null, th)}>Bauleiter</th>
+                <th className={rlcClass(null, th)}>Status</th>
+                <th className={rlcClass(null, th)}>Erstellt</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td style={{ ...td, opacity: 0.7 }} colSpan={6}>
+              {filtered.length === 0 ?
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.7 })} colSpan={6}>
                     Keine Projekte gefunden.
                   </td>
-                </tr>
-              ) : (
-                filtered.map((p) => (
-                  <tr
-                    key={p.id}
-                    onClick={() => setSel(p.id)}
-                    style={{
-                      cursor: "pointer",
-                      background: p.id === sel ? "#f1f5ff" : undefined,
-                    }}
-                  >
-                    <td style={td}>{p.name}</td>
-                    <td style={td}>{p.baustellenNummer || "—"}</td>
-                    <td style={td}>{p.ort || "—"}</td>
-                    <td style={td}>{p.bauleiter || "—"}</td>
-                    <td style={{ ...td, fontWeight: 600 }}>{p.status}</td>
-                    <td style={td}>{formatDate(p.createdAt)}</td>
+                </tr> :
+
+              filtered.map((p) =>
+              <tr
+                key={p.id}
+                onClick={() => setSel(p.id)} className={rlcClass(null,
+                {
+                  cursor: "pointer",
+                  background: p.id === sel ? "#f1f5ff" : undefined
+                })}>
+                
+                    <td className={rlcClass(null, td)}>{p.name}</td>
+                    <td className={rlcClass(null, td)}>{p.baustellenNummer || "—"}</td>
+                    <td className={rlcClass(null, td)}>{p.ort || "—"}</td>
+                    <td className={rlcClass(null, td)}>{p.bauleiter || "—"}</td>
+                    <td className={rlcClass(null, { ...td, fontWeight: 600 })}>{p.status}</td>
+                    <td className={rlcClass(null, td)}>{formatDate(p.createdAt)}</td>
                   </tr>
-                ))
-              )}
+              )
+              }
             </tbody>
           </table>
         </div>
 
-        <div className="card" style={{ padding: 12 }}>
-          {!selected ? (
-            <div style={{ opacity: 0.7 }}>
+        <div className="card rlc-migrated-pages-buro-projekte-tsx-616">
+          {!selected ?
+          <div className="rlc-migrated-pages-buro-projekte-tsx-617">
               Wähle links ein Projekt aus oder erstelle ein neues.
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "150px 1fr 150px 1fr",
-                gap: 10,
-                alignItems: "start",
-              }}
-            >
-              <label style={lbl}>Name</label>
-              <input
-                style={{ ...inpB, width: "100%" }}
-                value={selected.name}
-                onChange={(e) => update({ name: e.target.value })}
-              />
+            </div> :
 
-              <label style={lbl}>Baustellen-Nr.</label>
-              <input
-                style={inpS}
-                value={selected.baustellenNummer ?? ""}
-                onChange={(e) => update({ baustellenNummer: e.target.value })}
-              />
+          <div className="rlc-migrated-pages-buro-projekte-tsx-618">
 
-              <label style={lbl}>Ort</label>
-              <input
-                style={inpS}
-                value={selected.ort ?? ""}
-                onChange={(e) => update({ ort: e.target.value })}
-              />
 
-              <label style={lbl}>Bauleiter</label>
-              <input
-                style={inpS}
-                value={selected.bauleiter ?? ""}
-                onChange={(e) => update({ bauleiter: e.target.value })}
-              />
 
-              <label style={lbl}>Status</label>
-              <select
-                style={inpS}
-                value={selected.status}
-                onChange={(e) =>
-                  update({ status: e.target.value as Projekt["status"] })
-                }
-              >
+
+
+
+            
+              <label className={rlcClass(null, lbl)}>Name</label>
+              <input className={rlcClass(null,
+            { ...inpB, width: "100%" })}
+            value={selected.name}
+            onChange={(e) => update({ name: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Baustellen-Nr.</label>
+              <input className={rlcClass(null,
+            inpS)}
+            value={selected.baustellenNummer ?? ""}
+            onChange={(e) => update({ baustellenNummer: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Ort</label>
+              <input className={rlcClass(null,
+            inpS)}
+            value={selected.ort ?? ""}
+            onChange={(e) => update({ ort: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Bauleiter</label>
+              <input className={rlcClass(null,
+            inpS)}
+            value={selected.bauleiter ?? ""}
+            onChange={(e) => update({ bauleiter: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Status</label>
+              <select className={rlcClass(null,
+            inpS)}
+            value={selected.status}
+            onChange={(e) =>
+            update({ status: e.target.value as Projekt["status"] })
+            }>
+              
                 <option value="aktiv">Aktiv</option>
                 <option value="archiv">Archiv</option>
               </select>
 
-              <label style={lbl}>Erstellt</label>
+              <label className={rlcClass(null, lbl)}>Erstellt</label>
               <div>{formatDateTime(selected.createdAt)}</div>
 
-              <label style={lbl}>Geändert</label>
+              <label className={rlcClass(null, lbl)}>Geändert</label>
               <div>{formatDateTime(selected.updatedAt)}</div>
             </div>
-          )}
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

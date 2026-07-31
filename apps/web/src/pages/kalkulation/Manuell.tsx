@@ -1,10 +1,14 @@
-// apps/web/src/pages/kalkulation/Manuell.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/Manuell.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { useProject } from "../../store/useProject";
 import { API_BASE } from "../../lib/apiBase";
 import { LV, type LVPos } from "./store.lv";
+import {
+  openPdfBlobPreview,
+  reservePdfPreview } from
+"../../lib/pdf/companyPdfHeader";
 
 const MWST_KEY = "rlc_lv_mwst_v1";
 const MANUELL_HANDOFF_KEY = "rlc_kalkulation_manuell_handoff_v1";
@@ -66,9 +70,9 @@ function apiUrl(path: string): string {
 
 function n(value: unknown, fallback = 0): number {
   const x =
-    typeof value === "number"
-      ? value
-      : Number(String(value ?? "").replace(",", ".").trim());
+  typeof value === "number" ?
+  value :
+  Number(String(value ?? "").replace(",", ".").trim());
 
   return Number.isFinite(x) ? x : fallback;
 }
@@ -80,14 +84,14 @@ function round2(value: number): number {
 function money(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(n(value));
 }
 
 function safeFileName(value: string): string {
-  return String(value || "Datei")
-    .replace(/[^\w.-]+/g, "_")
-    .replace(/_+/g, "_");
+  return String(value || "Datei").
+  replace(/[^\w.-]+/g, "_").
+  replace(/_+/g, "_");
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -110,13 +114,13 @@ function safeId(): string {
 function getAuthToken(): string {
   try {
     const keys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of keys) {
       const value = localStorage.getItem(key);
@@ -132,23 +136,23 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-        //
-      }
-    }
-  } catch {
-    //
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 function authJsonHeaders(): HeadersInit {
@@ -156,7 +160,7 @@ function authJsonHeaders(): HeadersInit {
 
   return {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -165,7 +169,7 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
 
   return {
     ...(extra || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -175,8 +179,8 @@ function getCurrentProject(projectCtx: any): ProjectLike | null {
     projectCtx?.currentProject ||
     projectCtx?.selectedProject ||
     projectCtx?.current ||
-    null
-  );
+    null);
+
 }
 
 function getProjectKey(projectCtx: any): string {
@@ -184,16 +188,16 @@ function getProjectKey(projectCtx: any): string {
 
   return String(
     p?.code ||
-      p?.projectCode ||
-      p?.number ||
-      projectCtx?.projectCode ||
-      projectCtx?.projectId ||
-      p?.id ||
-      projectCtx?.id ||
-      ""
-  )
-    .trim()
-    .toUpperCase();
+    p?.projectCode ||
+    p?.number ||
+    projectCtx?.projectCode ||
+    projectCtx?.projectId ||
+    p?.id ||
+    projectCtx?.id ||
+    ""
+  ).
+  trim().
+  toUpperCase();
 }
 
 function getProjectName(projectCtx: any): string {
@@ -206,12 +210,12 @@ function getProjectPlace(projectCtx: any, offerPlace?: string): string {
 
   return String(
     offerPlace ||
-      p?.place ||
-      p?.location ||
-      p?.ort ||
-      projectCtx?.place ||
-      projectCtx?.location ||
-      ""
+    p?.place ||
+    p?.location ||
+    p?.ort ||
+    projectCtx?.place ||
+    projectCtx?.location ||
+    ""
   ).trim();
 }
 
@@ -292,7 +296,7 @@ function normalizeRow(row: Partial<ManualRow>): ManualRow {
     updatedAt: new Date().toISOString(),
 
     rabatt: n(row.rabatt),
-    note: row.note || "",
+    note: row.note || ""
   };
 }
 
@@ -309,17 +313,17 @@ function cadToLV(p: CadPayload): ManualRow {
     menge: roundForUnit(p.menge ?? 0, einheit),
     preis: typeof p.preis === "number" ? p.preis : 0,
     confidence: typeof p.confidence === "number" ? p.confidence : undefined,
-    source: "cad",
+    source: "cad"
   });
 }
 
 function toManualRows(rows: LVPos[]): ManualRow[] {
   return rows.map((r) =>
-    normalizeRow({
-      ...r,
-      rabatt: (r as any).rabatt ?? 0,
-      note: (r as any).note ?? "",
-    })
+  normalizeRow({
+    ...r,
+    rabatt: (r as any).rabatt ?? 0,
+    note: (r as any).note ?? ""
+  })
   );
 }
 
@@ -334,7 +338,7 @@ export default function Manuell() {
   const [rows, setRows] = useState<ManualRow[]>(() => toManualRows(LV.list()));
   const [selectedId, setSelectedId] = useState<string>("");
   const [mwst, setMwst] = useState<number>(() =>
-    Number(localStorage.getItem(MWST_KEY) ?? 19)
+  Number(localStorage.getItem(MWST_KEY) ?? 19)
   );
   const [globalMarkup, setGlobalMarkup] = useState<number>(() => {
     const saved = localStorage.getItem("rlc_kalkulation_global_markup_v1");
@@ -351,7 +355,7 @@ export default function Manuell() {
     clientName: "Muster Bau GmbH",
     clientAddress: "Hauptstraße 5, 50667 Köln",
     notes:
-      "Zahlungsbedingungen: 30 Tage netto. Angebot gültig 30 Tage. Manuell kalkulierte Preise.",
+    "Zahlungsbedingungen: 30 Tage netto. Angebot gültig 30 Tage. Manuell kalkulierte Preise."
   });
 
   useEffect(() => {
@@ -372,16 +376,16 @@ export default function Manuell() {
       if (!d || d.type !== "CAD_TO_KALKULATION") return;
 
       try {
-        const list = Array.isArray(d.payload)
-          ? (d.payload as CadPayload[]).map(cadToLV)
-          : [cadToLV(d.payload as CadPayload)];
+        const list = Array.isArray(d.payload) ?
+        (d.payload as CadPayload[]).map(cadToLV) :
+        [cadToLV(d.payload as CadPayload)];
 
         persistRows([...list, ...toManualRows(LV.list())]);
       } catch {
-        //
-      }
-    };
 
+
+        //
+      }};
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -408,7 +412,7 @@ export default function Manuell() {
       brutto: round2(brutto),
       priced,
       total: rows.length,
-      coveragePct: rows.length ? Math.round((priced / rows.length) * 100) : 0,
+      coveragePct: rows.length ? Math.round(priced / rows.length * 100) : 0
     };
   }, [rows, mwst, globalMarkup]);
 
@@ -422,14 +426,14 @@ export default function Manuell() {
         preis: n(r.preis),
         gesamt: lineNet(r),
         confidence: r.confidence,
-        source: r.source || "manual",
+        source: r.source || "manual"
       })) as LVPos[]
     );
   }
 
   function updateRow(id: string, patch: Partial<ManualRow>) {
     const next = rows.map((r) =>
-      r.id === id ? normalizeRow({ ...r, ...patch }) : r
+    r.id === id ? normalizeRow({ ...r, ...patch }) : r
     );
     persistRows(next);
   }
@@ -444,7 +448,7 @@ export default function Manuell() {
       menge: 0,
       preis: 0,
       rabatt: 0,
-      source: "manual",
+      source: "manual"
     });
 
     persistRows([row, ...rows]);
@@ -479,15 +483,15 @@ export default function Manuell() {
         savedAt: new Date().toISOString(),
         mwst,
         globalMarkup,
-        offer,
+        offer
       },
       rows,
       summary,
       totals: {
         netto: summary.netto,
         aufschlagWert: summary.markupValue,
-        brutto: summary.brutto,
-      },
+        brutto: summary.brutto
+      }
     };
 
     try {
@@ -500,16 +504,16 @@ export default function Manuell() {
           method: "POST",
           credentials: "include",
           headers: authJsonHeaders(),
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payload)
         }
       );
 
       if (r.status === 401 || r.status === 403 || r.status === 404) {
         localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
         setServerStatus(
-          r.status === 404
-            ? "Server-Route fehlt · lokal gesichert"
-            : "Nicht angemeldet · lokal gesichert"
+          r.status === 404 ?
+          "Server-Route fehlt · lokal gesichert" :
+          "Nicht angemeldet · lokal gesichert"
         );
         return;
       }
@@ -546,7 +550,7 @@ export default function Manuell() {
         {
           method: "GET",
           credentials: "include",
-          headers: authJsonHeaders(),
+          headers: authJsonHeaders()
         }
       );
 
@@ -603,10 +607,10 @@ export default function Manuell() {
           return;
         }
       } catch {
-        //
-      }
-    }
 
+
+        //
+      }}
     const pasted = prompt(
       'CAD JSON einfügen ({posNr,kurztext,einheit?,menge,preis} oder Array):'
     );
@@ -614,9 +618,9 @@ export default function Manuell() {
 
     try {
       const data = JSON.parse(pasted);
-      const list = Array.isArray(data)
-        ? (data as CadPayload[]).map(cadToLV)
-        : [cadToLV(data as CadPayload)];
+      const list = Array.isArray(data) ?
+      (data as CadPayload[]).map(cadToLV) :
+      [cadToLV(data as CadPayload)];
 
       persistRows([...list, ...rows]);
     } catch {
@@ -657,20 +661,20 @@ export default function Manuell() {
         Zeilen_Netto: lineNet(r),
         Confidence: r.confidence ?? "",
         Quelle: r.source ?? "manual",
-        Notiz: r.note ?? "",
+        Notiz: r.note ?? ""
       }))
     );
 
     const wsSummary = XLSX.utils.json_to_sheet([
-      { Kennzahl: "Projekt", Wert: projectKey || "—" },
-      { Kennzahl: "Angebot", Wert: offer.number },
-      { Kennzahl: "Netto", Wert: summary.netto },
-      { Kennzahl: "MwSt %", Wert: mwst },
-      { Kennzahl: "MwSt €", Wert: summary.tax },
-      { Kennzahl: "Brutto", Wert: summary.brutto },
-      { Kennzahl: "Positionen", Wert: rows.length },
-      { Kennzahl: "Abdeckung %", Wert: summary.coveragePct },
-    ]);
+    { Kennzahl: "Projekt", Wert: projectKey || "—" },
+    { Kennzahl: "Angebot", Wert: offer.number },
+    { Kennzahl: "Netto", Wert: summary.netto },
+    { Kennzahl: "MwSt %", Wert: mwst },
+    { Kennzahl: "MwSt €", Wert: summary.tax },
+    { Kennzahl: "Brutto", Wert: summary.brutto },
+    { Kennzahl: "Positionen", Wert: rows.length },
+    { Kennzahl: "Abdeckung %", Wert: summary.coveragePct }]
+    );
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsRows, "Manuelle Kalkulation");
@@ -680,6 +684,9 @@ export default function Manuell() {
 
   async function exportPDF() {
     if (!rows.length) return;
+
+    const pdfFileName = `Angebot_${safeFileName(offer.number)}.pdf`;
+    const preview = reservePdfPreview(pdfFileName);
 
     try {
       setPdfBusy(true);
@@ -697,7 +704,7 @@ export default function Manuell() {
           address: offer.clientAddress,
           adresse: offer.clientAddress,
           location: getProjectPlace(projectCtx, offer.place),
-          place: getProjectPlace(projectCtx, offer.place),
+          place: getProjectPlace(projectCtx, offer.place)
         },
         recipient: {
           name: offer.clientName,
@@ -706,7 +713,7 @@ export default function Manuell() {
           address: offer.clientAddress,
           adresse: offer.clientAddress,
           city: "",
-          ort: "",
+          ort: ""
         },
         options: {
           offerNumber: offer.number,
@@ -719,7 +726,7 @@ export default function Manuell() {
           showWatermark: false,
           colorHeader: true,
           showTableHeader: true,
-          showChapterRows: false,
+          showChapterRows: false
         },
         rows: rows.map((r) => ({
           id: r.id,
@@ -739,7 +746,7 @@ export default function Manuell() {
           rabatt: n(r.rabatt),
           zeilen: lineNet(r),
           total: lineNet(r),
-          source: r.source || "manual",
+          source: r.source || "manual"
         })),
         totals: {
           netto: summary.netto,
@@ -748,15 +755,15 @@ export default function Manuell() {
           aufschlagWert: summary.markupValue,
           mwst,
           steuer: summary.tax,
-          brutto: summary.brutto,
-        },
+          brutto: summary.brutto
+        }
       };
 
       const res = await fetch("/api/pdf/kalkulation-manuell", {
         method: "POST",
         credentials: "include",
         headers: authJsonHeaders(),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
@@ -765,11 +772,12 @@ export default function Manuell() {
       }
 
       const blob = await res.blob();
-      downloadBlob(blob, `Angebot_${safeFileName(offer.number)}.pdf`);
+      openPdfBlobPreview(blob, pdfFileName, preview);
 
       setServerStatus("PDF erzeugt");
       setTimeout(() => setServerStatus(""), 1800);
     } catch (e: any) {
+      if (preview && !preview.closed) preview.close();
       setServerStatus("PDF Fehler");
       alert("PDF Export fehlgeschlagen: " + (e?.message || e));
     } finally {
@@ -795,8 +803,8 @@ export default function Manuell() {
         qty: r.menge,
         preis: r.preis ?? 0,
         ep: r.preis ?? 0,
-        confidence: r.confidence,
-      })),
+        confidence: r.confidence
+      }))
     };
 
     localStorage.setItem(KI_HANDOFF_KEY, JSON.stringify(payload));
@@ -826,9 +834,9 @@ export default function Manuell() {
         menge: r.menge,
         ep: r.preis ?? 0,
         preis: r.preis ?? 0,
-        rabatt: r.rabatt ?? 0,
+        rabatt: r.rabatt ?? 0
       })),
-      summary,
+      summary
     };
 
     localStorage.setItem(ANGEBOT_HANDOFF_KEY, JSON.stringify(payload));
@@ -838,153 +846,153 @@ export default function Manuell() {
   }
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Manuelle Elite-Kalkulation</div>
-          <h1 style={title}>Kalkulation manuell</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Manuelle Elite-Kalkulation</div>
+          <h1 className={rlcClass(null, title)}>Kalkulation manuell</h1>
+          <p className={rlcClass(null, subtitle)}>
             Professionelle manuelle Kalkulation mit Server-Snapshot, CAD-Import,
             Angebotsübergabe und direkter Verbindung zur KI-Kalkulation.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button style={btnSecondary} onClick={addRow}>
+        <div className={rlcClass(null, heroActions)}>
+          <button className={rlcClass(null, btnSecondary)} onClick={addRow}>
             + Position
           </button>
-          <button style={btnSecondary} onClick={handleAddFromCAD}>
+          <button className={rlcClass(null, btnSecondary)} onClick={handleAddFromCAD}>
             + aus CAD
           </button>
-          <button style={btnPrimary} onClick={goToKi} disabled={!rows.length}>
+          <button className={rlcClass(null, btnPrimary)} onClick={goToKi} disabled={!rows.length}>
             An KI übergeben
           </button>
-          <button style={btnPrimary} onClick={goToAngebot} disabled={!rows.length}>
+          <button className={rlcClass(null, btnPrimary)} onClick={goToAngebot} disabled={!rows.length}>
             Angebot erstellen
           </button>
-          <button
-            style={btnSecondary}
-            onClick={saveToServer}
-            disabled={serverBusy || !projectKey}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={saveToServer}
+          disabled={serverBusy || !projectKey}>
+            
             Speichern
           </button>
-          <button
-            style={btnSecondary}
-            onClick={loadFromServer}
-            disabled={serverBusy || !projectKey}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={loadFromServer}
+          disabled={serverBusy || !projectKey}>
+            
             Laden
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectKey || "—"}</b>
           {projectName ? <span> · {projectName}</span> : null}
           {serverStatus ? <span> · {serverStatus}</span> : null}
         </div>
       </section>
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <KpiCard label="Netto gesamt" value={money(summary.netto)} />
         <KpiCard label="Brutto gesamt" value={money(summary.brutto)} />
         <KpiCard
           label="Positionen"
           value={`${summary.total}`}
-          sub={`${summary.coveragePct}% mit EP`}
-        />
+          sub={`${summary.coveragePct}% mit EP`} />
+        
         <KpiCard
           label="MwSt / Aufschlag"
           value={`${mwst}% / ${globalMarkup}%`}
-          sub={`Aufschlag: ${money(summary.markupValue)}`}
-        />
+          sub={`Aufschlag: ${money(summary.markupValue)}`} />
+        
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Angebot / Rahmenwerte</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Angebot / Rahmenwerte</h2>
+            <div className={rlcClass(null, sectionText)}>
               Diese Daten werden für PDF, XLSX, Server-Snapshot und Angebot verwendet.
             </div>
           </div>
 
-          <div style={exportRow}>
-            <button style={btnSecondary} onClick={exportCSV} disabled={!rows.length}>
+          <div className={rlcClass(null, exportRow)}>
+            <button className={rlcClass(null, btnSecondary)} onClick={exportCSV} disabled={!rows.length}>
               CSV
             </button>
-            <button style={btnSecondary} onClick={exportXLSX} disabled={!rows.length}>
+            <button className={rlcClass(null, btnSecondary)} onClick={exportXLSX} disabled={!rows.length}>
               XLSX
             </button>
-            <button
-              style={btnSecondary}
-              onClick={exportPDF}
-              disabled={!rows.length || pdfBusy}
-            >
+            <button className={rlcClass(null,
+            btnSecondary)}
+            onClick={exportPDF}
+            disabled={!rows.length || pdfBusy}>
+              
               {pdfBusy ? "PDF…" : "PDF"}
             </button>
-            <button style={btnDanger} onClick={clearAll} disabled={!rows.length}>
+            <button className={rlcClass(null, btnDanger)} onClick={clearAll} disabled={!rows.length}>
               Alles löschen
             </button>
           </div>
         </div>
 
-        <div style={formGrid}>
+        <div className={rlcClass(null, formGrid)}>
           <Field label="Angebot Nr.">
-            <input
-              style={input}
-              value={offer.number}
-              onChange={(e) => setOffer({ ...offer, number: e.target.value })}
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={offer.number}
+            onChange={(e) => setOffer({ ...offer, number: e.target.value })} />
+            
           </Field>
           <Field label="Ort">
-            <input
-              style={input}
-              value={offer.place}
-              onChange={(e) => setOffer({ ...offer, place: e.target.value })}
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={offer.place}
+            onChange={(e) => setOffer({ ...offer, place: e.target.value })} />
+            
           </Field>
           <Field label="Kunde">
-            <input
-              style={input}
-              value={offer.clientName}
-              onChange={(e) => setOffer({ ...offer, clientName: e.target.value })}
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={offer.clientName}
+            onChange={(e) => setOffer({ ...offer, clientName: e.target.value })} />
+            
           </Field>
           <Field label="Kundenadresse">
-            <input
-              style={input}
-              value={offer.clientAddress}
-              onChange={(e) =>
-                setOffer({ ...offer, clientAddress: e.target.value })
-              }
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={offer.clientAddress}
+            onChange={(e) =>
+            setOffer({ ...offer, clientAddress: e.target.value })
+            } />
+            
           </Field>
           <Field label="MwSt %">
             <input
-              type="number"
-              style={input}
+              type="number" className={rlcClass(null,
+              input)}
               value={mwst}
-              onChange={(e) => setMwst(n(e.target.value))}
-            />
+              onChange={(e) => setMwst(n(e.target.value))} />
+            
           </Field>
           <Field label="Globaler Aufschlag %">
             <input
-              type="number"
-              style={input}
+              type="number" className={rlcClass(null,
+              input)}
               value={globalMarkup}
-              onChange={(e) => setGlobalMarkup(n(e.target.value))}
-            />
+              onChange={(e) => setGlobalMarkup(n(e.target.value))} />
+            
           </Field>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="rlc-migrated-pages-kalkulation-manuell-tsx-822">
           <Field label="Notizen / Zahlungsbedingungen">
-            <textarea
-              style={{ ...input, minHeight: 72 }}
-              value={offer.notes}
-              onChange={(e) => setOffer({ ...offer, notes: e.target.value })}
-            />
+            <textarea className={rlcClass(null,
+            { ...input, minHeight: 72 })}
+            value={offer.notes}
+            onChange={(e) => setOffer({ ...offer, notes: e.target.value })} />
+            
           </Field>
         </div>
 
@@ -992,149 +1000,149 @@ export default function Manuell() {
           ref={fileRef}
           type="file"
           accept=".csv"
-          style={{ display: "none" }}
+
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) importCSVFile(f);
-          }}
-        />
+          }} className="rlc-migrated-pages-kalkulation-manuell-tsx-823" />
+        
 
-        <div style={{ marginTop: 12 }}>
-          <button style={btnSecondary} onClick={() => fileRef.current?.click()}>
+        <div className="rlc-migrated-pages-kalkulation-manuell-tsx-824">
+          <button className={rlcClass(null, btnSecondary)} onClick={() => fileRef.current?.click()}>
             Import CSV
           </button>
         </div>
       </section>
 
-      <section style={mainGrid}>
-        <div style={card}>
-          <div style={sectionHead}>
+      <section className={rlcClass(null, mainGrid)}>
+        <div className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>LV-Positionen · manuelle Kalkulation</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>LV-Positionen · manuelle Kalkulation</h2>
+              <div className={rlcClass(null, sectionText)}>
                 Kompakte Haupttabelle. Langtext, Rabatt und Notizen stehen im Detailpanel rechts.
               </div>
             </div>
           </div>
 
-          <div style={tableWrap}>
-            <table style={table}>
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, table)}>
               <thead>
                 <tr>
-                  <th style={th}>Pos-Nr</th>
-                  <th style={th}>Kurztext</th>
-                  <th style={th}>ME</th>
-                  <th style={th}>Menge</th>
-                  <th style={th}>EP netto</th>
-                  <th style={th}>Rabatt</th>
-                  <th style={th}>Gesamt</th>
-                  <th style={th}>Quelle</th>
-                  <th style={th}></th>
+                  <th className={rlcClass(null, th)}>Pos-Nr</th>
+                  <th className={rlcClass(null, th)}>Kurztext</th>
+                  <th className={rlcClass(null, th)}>ME</th>
+                  <th className={rlcClass(null, th)}>Menge</th>
+                  <th className={rlcClass(null, th)}>EP netto</th>
+                  <th className={rlcClass(null, th)}>Rabatt</th>
+                  <th className={rlcClass(null, th)}>Gesamt</th>
+                  <th className={rlcClass(null, th)}>Quelle</th>
+                  <th className={rlcClass(null, th)}></th>
                 </tr>
               </thead>
 
               <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={r.id}
-                    style={{
-                      background: selectedRow?.id === r.id ? "#EFF6FF" : "#FFFFFF",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => setSelectedId(r.id)}
-                  >
-                    <td style={td}>
+                {rows.map((r) =>
+                <tr
+                  key={r.id} className={rlcClass(null,
+                  {
+                    background: selectedRow?.id === r.id ? "#EAF2FF" : "#FFFFFF",
+                    cursor: "pointer"
+                  })}
+                  onClick={() => setSelectedId(r.id)}>
+                  
+                    <td className={rlcClass(null, td)}>
+                      <input className={rlcClass(null,
+                    { ...cellInput, width: 92 })}
+                    value={r.posNr}
+                    onChange={(e) => updateRow(r.id, { posNr: e.target.value })} />
+                    
+                    </td>
+                    <td className={rlcClass(null, td)}>
+                      <input className={rlcClass(null,
+                    { ...cellInput, width: "100%" })}
+                    value={r.kurztext}
+                    onChange={(e) =>
+                    updateRow(r.id, { kurztext: e.target.value })
+                    } />
+                    
+                    </td>
+                    <td className={rlcClass(null, td)}>
+                      <input className={rlcClass(null,
+                    { ...cellInput, width: 58 })}
+                    value={r.einheit}
+                    onChange={(e) => updateRow(r.id, { einheit: e.target.value })} />
+                    
+                    </td>
+                    <td className={rlcClass(null, tdRight)}>
                       <input
-                        style={{ ...cellInput, width: 92 }}
-                        value={r.posNr}
-                        onChange={(e) => updateRow(r.id, { posNr: e.target.value })}
-                      />
+                      type="number" className={rlcClass(null,
+                      { ...cellInput, width: 80, textAlign: "right" })}
+                      value={r.menge}
+                      onChange={(e) => updateRow(r.id, { menge: n(e.target.value) })} />
+                    
                     </td>
-                    <td style={td}>
+                    <td className={rlcClass(null, tdRight)}>
                       <input
-                        style={{ ...cellInput, width: "100%" }}
-                        value={r.kurztext}
-                        onChange={(e) =>
-                          updateRow(r.id, { kurztext: e.target.value })
-                        }
-                      />
+                      type="number" className={rlcClass(null,
+                      { ...cellInput, width: 90, textAlign: "right" })}
+                      value={r.preis ?? 0}
+                      onChange={(e) => updateRow(r.id, { preis: n(e.target.value) })} />
+                    
                     </td>
-                    <td style={td}>
+                    <td className={rlcClass(null, tdRight)}>
                       <input
-                        style={{ ...cellInput, width: 58 }}
-                        value={r.einheit}
-                        onChange={(e) => updateRow(r.id, { einheit: e.target.value })}
-                      />
+                      type="number" className={rlcClass(null,
+                      { ...cellInput, width: 72, textAlign: "right" })}
+                      value={r.rabatt ?? 0}
+                      onChange={(e) => updateRow(r.id, { rabatt: n(e.target.value) })} />
+                    
                     </td>
-                    <td style={tdRight}>
-                      <input
-                        type="number"
-                        style={{ ...cellInput, width: 80, textAlign: "right" }}
-                        value={r.menge}
-                        onChange={(e) => updateRow(r.id, { menge: n(e.target.value) })}
-                      />
+                    <td className={rlcClass(null, tdRight)}>{money(lineNet(r))}</td>
+                    <td className={rlcClass(null, td)}>
+                      <span className={rlcClass(null, badgeNeutral)}>{r.source || "manual"}</span>
                     </td>
-                    <td style={tdRight}>
-                      <input
-                        type="number"
-                        style={{ ...cellInput, width: 90, textAlign: "right" }}
-                        value={r.preis ?? 0}
-                        onChange={(e) => updateRow(r.id, { preis: n(e.target.value) })}
-                      />
-                    </td>
-                    <td style={tdRight}>
-                      <input
-                        type="number"
-                        style={{ ...cellInput, width: 72, textAlign: "right" }}
-                        value={r.rabatt ?? 0}
-                        onChange={(e) => updateRow(r.id, { rabatt: n(e.target.value) })}
-                      />
-                    </td>
-                    <td style={tdRight}>{money(lineNet(r))}</td>
-                    <td style={td}>
-                      <span style={badgeNeutral}>{r.source || "manual"}</span>
-                    </td>
-                    <td style={td}>
-                      <button
-                        style={btnDangerMini}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeRow(r.id);
-                        }}
-                      >
+                    <td className={rlcClass(null, td)}>
+                      <button className={rlcClass(null,
+                    btnDangerMini)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeRow(r.id);
+                    }}>
+                      
                         Löschen
                       </button>
                     </td>
                   </tr>
-                ))}
+                )}
 
-                {!rows.length ? (
-                  <tr>
-                    <td colSpan={9} style={{ ...td, color: "#64748B" }}>
+                {!rows.length ?
+                <tr>
+                    <td colSpan={9} className={rlcClass(null, { ...td, color: "#64748B" })}>
                       Keine Positionen vorhanden.
                     </td>
-                  </tr>
-                ) : null}
+                  </tr> :
+                null}
               </tbody>
             </table>
           </div>
         </div>
 
-        <aside style={sideCard}>
-          <h2 style={sectionTitle}>Positionsdetails</h2>
+        <aside className={rlcClass(null, sideCard)}>
+          <h2 className={rlcClass(null, sectionTitle)}>Positionsdetails</h2>
 
-          {selectedRow ? (
-            <div style={{ display: "grid", gap: 12 }}>
+          {selectedRow ?
+          <div className="rlc-migrated-pages-kalkulation-manuell-tsx-825">
               <div>
-                <div style={label}>Position</div>
-                <div style={sideTitle}>
+                <div className={rlcClass(null, label)}>Position</div>
+                <div className={rlcClass(null, sideTitle)}>
                   {selectedRow.posNr || "—"} · {selectedRow.kurztext || "Ohne Text"}
                 </div>
               </div>
 
-              <div style={sideBadges}>
-                <span style={badgeOk}>Manuell kalkuliert</span>
-                <span style={badgeNeutral}>{selectedRow.einheit || "—"}</span>
+              <div className={rlcClass(null, sideBadges)}>
+                <span className={rlcClass(null, badgeOk)}>Manuell kalkuliert</span>
+                <span className={rlcClass(null, badgeNeutral)}>{selectedRow.einheit || "—"}</span>
               </div>
 
               <Detail label="Menge" value={String(selectedRow.menge ?? 0)} />
@@ -1142,46 +1150,46 @@ export default function Manuell() {
               <Detail label="Rabatt" value={`${n(selectedRow.rabatt).toFixed(1)} %`} />
               <Detail label="Zeilensumme netto" value={money(lineNet(selectedRow))} />
 
-              <div style={separator} />
+              <div className={rlcClass(null, separator)} />
 
               <Field label="Langtext">
-                <textarea
-                  style={{ ...input, minHeight: 110 }}
-                  value={selectedRow.langtext}
-                  onChange={(e) =>
-                    updateRow(selectedRow.id, { langtext: e.target.value })
-                  }
-                />
+                <textarea className={rlcClass(null,
+              { ...input, minHeight: 110 })}
+              value={selectedRow.langtext}
+              onChange={(e) =>
+              updateRow(selectedRow.id, { langtext: e.target.value })
+              } />
+              
               </Field>
 
               <Field label="Bemerkung">
-                <textarea
-                  style={{ ...input, minHeight: 80 }}
-                  value={selectedRow.bemerkung || ""}
-                  onChange={(e) =>
-                    updateRow(selectedRow.id, { bemerkung: e.target.value })
-                  }
-                />
+                <textarea className={rlcClass(null,
+              { ...input, minHeight: 80 })}
+              value={selectedRow.bemerkung || ""}
+              onChange={(e) =>
+              updateRow(selectedRow.id, { bemerkung: e.target.value })
+              } />
+              
               </Field>
 
               <Field label="Confidence / Sicherheit">
                 <input
-                  type="number"
-                  style={input}
-                  value={selectedRow.confidence ?? ""}
-                  onChange={(e) =>
-                    updateRow(selectedRow.id, { confidence: n(e.target.value) })
-                  }
-                />
+                type="number" className={rlcClass(null,
+                input)}
+                value={selectedRow.confidence ?? ""}
+                onChange={(e) =>
+                updateRow(selectedRow.id, { confidence: n(e.target.value) })
+                } />
+              
               </Field>
-            </div>
-          ) : (
-            <div style={muted}>Keine Position gewählt.</div>
-          )}
+            </div> :
+
+          <div className={rlcClass(null, muted)}>Keine Position gewählt.</div>
+          }
         </aside>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UI ================= */
@@ -1189,43 +1197,43 @@ export default function Manuell() {
 function KpiCard({
   label,
   value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+  sub
+
+
+
+
+}: {label: string;value: string;sub?: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 function Field({
   label: fieldLabel,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={label}>{fieldLabel}</span>
+    <label className="rlc-migrated-pages-kalkulation-manuell-tsx-826">
+      <span className={rlcClass(null, label)}>{fieldLabel}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
-function Detail({ label: l, value }: { label: string; value: string }) {
+function Detail({ label: l, value }: {label: string;value: string;}) {
   return (
     <div>
-      <div style={label}>{l}</div>
-      <div style={detailValue}>{value}</div>
-    </div>
-  );
+      <div className={rlcClass(null, label)}>{l}</div>
+      <div className={rlcClass(null, detailValue)}>{value}</div>
+    </div>);
+
 }
 
 /* ================= STYLES ================= */
@@ -1233,17 +1241,17 @@ function Detail({ label: l, value }: { label: string; value: string }) {
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -1251,37 +1259,37 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 850,
   opacity: 0.88,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.9,
+  opacity: 0.9
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -1289,28 +1297,28 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const card: React.CSSProperties = {
@@ -1318,14 +1326,14 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sideCard: React.CSSProperties = {
   ...card,
   alignSelf: "start",
   position: "sticky",
-  top: 12,
+  top: 12
 };
 
 const sectionHead: React.CSSProperties = {
@@ -1334,32 +1342,32 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const formGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const label: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const input: React.CSSProperties = {
@@ -1368,7 +1376,7 @@ const input: React.CSSProperties = {
   padding: "9px 11px",
   fontSize: 13,
   width: "100%",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const cellInput: React.CSSProperties = {
@@ -1377,32 +1385,32 @@ const cellInput: React.CSSProperties = {
   padding: "6px 8px",
   fontSize: 12,
   background: "#FFFFFF",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const mainGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0,1fr) 370px",
   gap: 16,
-  alignItems: "start",
+  alignItems: "start"
 };
 
 const exportRow: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const tableWrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 980,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -1412,20 +1420,20 @@ const th: React.CSSProperties = {
   color: "#475569",
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "8px 9px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnBase: React.CSSProperties = {
@@ -1433,29 +1441,29 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnDanger: React.CSSProperties = {
   ...btnBase,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const btnDangerMini: React.CSSProperties = {
@@ -1465,8 +1473,8 @@ const btnDangerMini: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -1477,43 +1485,43 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeOk: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #BBF7D0",
   background: "#F0FDF4",
-  color: "#15803D",
+  color: "#15803D"
 };
 
 const sideTitle: React.CSSProperties = {
   marginTop: 4,
   fontSize: 15,
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0F172A",
-  lineHeight: 1.35,
+  lineHeight: 1.35
 };
 
 const sideBadges: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const separator: React.CSSProperties = {
   height: 1,
-  background: "#E5E7EB",
+  background: "#E5E7EB"
 };
 
 const detailValue: React.CSSProperties = {
   marginTop: 4,
   color: "#0F172A",
-  fontWeight: 700,
-  fontSize: 13,
+  fontWeight: 600,
+  fontSize: 13
 };
 
 const muted: React.CSSProperties = {
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };

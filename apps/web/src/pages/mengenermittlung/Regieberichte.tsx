@@ -1,12 +1,12 @@
-import { API_BASE, apiUrl } from "../../lib/apiBase";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { API_BASE } from "../../lib/apiBase";
+import MengPageHeader from "./MengPageHeader";
 // apps/web/src/pages/mengenermittlung/Regieberichte.tsx
 import React from "react";
-import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 import { useProject } from "../../store/useProject";
 
 /* ===== Tipi ===== */
-type Datei = { id: string; name: string; url: string; type: string };
+type Datei = {id: string;name: string;url: string;type: string;};
 
 type ReportType = "REGIE" | "TAGESBERICHT" | "BAUTAGEBUCH";
 
@@ -45,6 +45,7 @@ type RegieHistoryItem = {
   savedAt?: string;
   pdfUrl?: string | null;
   fsKey?: string;
+  reportType?: ReportType;
 };
 
 type WorkflowStatus = "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT" | "REGISTRIERT";
@@ -60,6 +61,7 @@ type RegieWorkflowItem = {
   title?: string;
   note?: string;
   rowsCount?: number;
+  reportType?: ReportType;
 };
 
 type NachtragDraft = {
@@ -81,7 +83,7 @@ type NachtragDraft = {
 const NACHTRAG_BUFFER_KEY = "rlc:nachtrag-buffer";
 
 /* ===== Utils ===== */
-const rid = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+const rid = () => crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
 const STATE_STORAGE_KEY = "rlc-regieberichte-state-v2";
 
@@ -93,26 +95,110 @@ function withApiBase(url: string) {
   return `${API_BASE}${u}`;
 }
 
+function authHeaders(): Record<string, string> {
+  const keys = [
+  "rlc_token",
+  "token",
+  "authToken",
+  "accessToken",
+  "rlc_auth_token",
+  "rlc.auth.token",
+  "rlc_mobile_token"];
+
+
+  for (const key of keys) {
+    const token =
+    localStorage.getItem(key) ||
+    sessionStorage.getItem(key);
+
+    if (token?.trim()) {
+      return { Authorization: `Bearer ${token.trim()}` };
+    }
+  }
+
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      const raw = storage.getItem("rlc_auth");
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const token = parsed?.token || parsed?.accessToken;
+
+      if (token) {
+        return { Authorization: `Bearer ${String(token).trim()}` };
+      }
+    } catch {
+
+
+      // Ungültige alte Auth-Daten ignorieren.
+    }}
+  return {};
+}
+
+async function readApiPayload(res: Response): Promise<any> {
+  const text = await res.text();
+
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(withApiBase(url), {
-    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...authHeaders(),
+      ...((init?.headers || {}) as Record<string, string>)
+    }
   });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<T>;
+
+  const payload = await readApiPayload(res);
+
+  if (!res.ok || payload?.ok === false) {
+    const detail =
+    typeof payload === "string" ?
+    payload :
+    payload?.message || payload?.error || `HTTP ${res.status}`;
+
+    throw new Error(detail);
+  }
+
+  return payload as T;
 }
 
 async function apiTry<T>(url: string, init?: RequestInit): Promise<T | null> {
-  try {
-    const res = await fetch(withApiBase(url), {
-      headers: { "Content-Type": "application/json" },
-      ...init,
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
+  const res = await fetch(withApiBase(url), {
+    credentials: "include",
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...authHeaders(),
+      ...((init?.headers || {}) as Record<string, string>)
+    }
+  });
+
+  const payload = await readApiPayload(res);
+
+  if (res.status === 404) return null;
+
+  if (!res.ok || payload?.ok === false) {
+    const detail =
+    typeof payload === "string" ?
+    payload :
+    payload?.message || payload?.error || `HTTP ${res.status}`;
+
+    throw new Error(detail);
   }
+
+  return payload as T;
 }
 
 function useQuery() {
@@ -140,7 +226,7 @@ function guessType(name: string) {
   const ext = name.split(".").pop()?.toLowerCase();
   if (!ext) return "application/octet-stream";
   if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif"].includes(ext))
-    return `image/${ext === "jpg" ? "jpeg" : ext}`;
+  return `image/${ext === "jpg" ? "jpeg" : ext}`;
   if (ext === "pdf") return "application/pdf";
   return "application/octet-stream";
 }
@@ -190,7 +276,7 @@ async function urlToDataURL(url: string, preferType = "image/jpeg"): Promise<str
 async function readPdfText(file: File): Promise<string> {
   const pdfjsLib: any = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   const array = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjsLib.getDocument({ data: array }).promise;
@@ -204,11 +290,11 @@ async function readPdfText(file: File): Promise<string> {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function parseRegieFromText(txt: string, defaults: { projectId: string }): RegieRow[] {
+function parseRegieFromText(txt: string, defaults: {projectId: string;}): RegieRow[] {
   const date = (
-    txt.match(/Datum[:\s]*([0-9]{2}\.[0-9]{2}\.[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i)?.[1] ??
-    today()
-  ).replace(/(\d{2})\.(\d{2})\.(\d{4})/, "$3-$2-$1");
+  txt.match(/Datum[:\s]*([0-9]{2}\.[0-9]{2}\.[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i)?.[1] ??
+  today()).
+  replace(/(\d{2})\.(\d{2})\.(\d{4})/, "$3-$2-$1");
 
   const worker = txt.match(/Mitarbeiter[:\s]*([A-Za-zÄÖÜäöüß\-.\s]+)/i)?.[1]?.trim();
   const hours = Number((txt.match(/Stunden[:\s]*([0-9]+(?:[.,][0-9]+)?)/i)?.[1] ?? "0").replace(",", "."));
@@ -220,20 +306,20 @@ function parseRegieFromText(txt: string, defaults: { projectId: string }): Regie
   const lvPos = txt.match(/(LV[\s-]*Pos|Pos\.?)[:\s]*([A-Za-z0-9.\-]+)/i)?.[2]?.trim();
 
   return [
-    {
-      projectId: defaults.projectId,
-      date,
-      worker,
-      hours,
-      machine,
-      material,
-      quantity: qty,
-      unit,
-      comment,
-      lvItemPos: lvPos,
-      reportType: "REGIE",
-    },
-  ];
+  {
+    projectId: defaults.projectId,
+    date,
+    worker,
+    hours,
+    machine,
+    material,
+    quantity: qty,
+    unit,
+    comment,
+    lvItemPos: lvPos,
+    reportType: "REGIE"
+  }];
+
 }
 
 const KI_BUFFER_KEY = "ki-regie-buffer";
@@ -260,7 +346,7 @@ function consumeKiBuffer(projectId: string, date: string): RegieRow[] {
       comment: it.kurztext || it.comment || "",
       lvItemPos: it.lvItemPos || "",
       photos: it.photos || [],
-      reportType: "REGIE",
+      reportType: "REGIE"
     }));
   } catch {
     return [];
@@ -274,8 +360,8 @@ function reviveRows(list: any[]): RegieRow[] {
       id: ph.id || rid(),
       name: ph.name || "Foto",
       type: ph.type || "image/jpeg",
-      url: ph.url || ph.dataUrl || "",
-    })),
+      url: ph.url || ph.dataUrl || ""
+    }))
   }));
 }
 
@@ -315,13 +401,13 @@ function buildNachtragDraft(projectId: string, rows: RegieRow[]): NachtragDraft 
       const kurztext = (kurzBase || "Regie-Leistung").slice(0, 120);
 
       const parts = [
-        r.comment ? `Leistung: ${r.comment}` : null,
-        r.worker ? `Mitarbeiter: ${r.worker}` : null,
-        r.machine ? `Maschine: ${r.machine}` : null,
-        r.material ? `Material: ${r.material}` : null,
-        r.quantity != null && r.quantity !== 0 ? `Menge: ${r.quantity} ${r.unit || ""}`.trim() : null,
-        r.hours != null && r.hours !== 0 ? `Stunden: ${r.hours}` : null,
-      ].filter(Boolean) as string[];
+      r.comment ? `Leistung: ${r.comment}` : null,
+      r.worker ? `Mitarbeiter: ${r.worker}` : null,
+      r.machine ? `Maschine: ${r.machine}` : null,
+      r.material ? `Material: ${r.material}` : null,
+      r.quantity != null && r.quantity !== 0 ? `Menge: ${r.quantity} ${r.unit || ""}`.trim() : null,
+      r.hours != null && r.hours !== 0 ? `Stunden: ${r.hours}` : null].
+      filter(Boolean) as string[];
 
       const einheit = r.hours && r.hours > 0 ? "h" : r.unit || "Stk";
       const qty = r.hours && r.hours > 0 ? Number(r.hours) : Number(r.quantity || 0);
@@ -334,31 +420,35 @@ function buildNachtragDraft(projectId: string, rows: RegieRow[]): NachtragDraft 
         qty: Number.isFinite(qty) ? qty : 0,
         hint: [r.worker, r.machine, r.material].filter(Boolean).join(" / "),
         regieRowId: r.id ? String(r.id) : undefined,
-        date: r.date ? String(r.date).slice(0, 10) : undefined,
+        date: r.date ? String(r.date).slice(0, 10) : undefined
       };
-    }),
+    })
   };
 }
 
-type TabKey = "INBOX" | "FREIGEGEBEN" | "FINAL";
+type TabKey = "INBOX" | "VERWALTUNG";
 
 export default function Regieberichte() {
   const q = useQuery();
+  const routeReportType: ReportType = "REGIE";
+  const stateStorageKey = `${STATE_STORAGE_KEY}:${routeReportType}`;
   const { getSelectedProject } = useProject();
   const selectedProject = getSelectedProject();
 
   const qFromKi = q.get("from") === "ki";
+  const qDocId = q.get("docId") || "";
+  const qSourceMobile = q.get("source") === "mobile";
 
   const qProjectId =
-    q.get("projectId") ||
-    sessionStorage.getItem("regie:openProjectId") ||
-    (selectedProject?.code as string | undefined) ||
-    (selectedProject?.id as string | undefined) ||
-    "";
+  q.get("projectId") ||
+  sessionStorage.getItem("regie:openProjectId") ||
+  selectedProject?.code as string | undefined ||
+  selectedProject?.id as string | undefined ||
+  "";
 
   const qDate = q.get("date") || today();
 
-  const [tab, setTab] = React.useState<TabKey>("FINAL");
+  const [tab, setTab] = React.useState<TabKey>(qSourceMobile ? "INBOX" : "VERWALTUNG");
 
   const [projectId, setProjectId] = React.useState(qProjectId);
   const [rows, setRows] = React.useState<RegieRow[]>([]);
@@ -367,21 +457,21 @@ export default function Regieberichte() {
     projectId: qProjectId || "",
     date: qDate,
     photos: [],
-    reportType: "REGIE",
+    reportType: routeReportType,
     unit: "Std",
     hours: 0,
-    quantity: 0,
+    quantity: 0
   });
 
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = React.useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [kiImported, setKiImported] = React.useState<{ count: number; date: string } | null>(null);
+  const [activeWorkflowDocId, setActiveWorkflowDocId] = React.useState<string | null>(qDocId || null);
+  const [kiImported, setKiImported] = React.useState<{count: number;date: string;} | null>(null);
 
   const [history, setHistory] = React.useState<RegieHistoryItem[]>([]);
   const [inboxItems, setInboxItems] = React.useState<RegieWorkflowItem[]>([]);
-  const [approvedItems, setApprovedItems] = React.useState<RegieWorkflowItem[]>([]);
 
   const tableRef = React.useRef<HTMLTableSectionElement | null>(null);
   const [flashId, setFlashId] = React.useState<string | null>(null);
@@ -391,21 +481,25 @@ export default function Regieberichte() {
   function looksLikeUuid(v?: string) {
     return (
       !!v &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
-    );
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v));
+
   }
 
   const projectKey =
-    (selectedProject?.code as string | undefined) || (!looksLikeUuid(projectId) ? projectId : "") || "";
-
+  String(q.get("projectId") || "").trim() ||
+  selectedProject?.code as string | undefined || (
+  !looksLikeUuid(projectId) ? projectId : "") ||
+  selectedProject?.id as string | undefined ||
+  projectId ||
+  "";
   React.useEffect(() => {
     if (projectId) sessionStorage.setItem("regie:openProjectId", projectId);
   }, [projectId]);
 
   React.useEffect(() => {
-    if (qFromKi) return;
+    if (qFromKi || qSourceMobile) return;
     try {
-      const raw = localStorage.getItem(STATE_STORAGE_KEY);
+      const raw = localStorage.getItem(stateStorageKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
         projectId?: string;
@@ -415,30 +509,31 @@ export default function Regieberichte() {
       };
       if (parsed.projectId) setProjectId(parsed.projectId);
       if (parsed.rows && parsed.rows.length)
-        setRows(
-          parsed.rows.map((r) => ({
-            ...r,
-            reportType: r.reportType || "REGIE",
-          }))
-        );
+      setRows(
+        parsed.rows.map((r) => ({
+          ...r,
+          reportType: r.reportType || routeReportType
+        }))
+      );
       if (parsed.form)
-        setForm({
-          ...parsed.form,
-          reportType: parsed.form.reportType || "REGIE",
-        });
-      if (parsed.tab) setTab(parsed.tab);
+      setForm({
+        ...parsed.form,
+        reportType: parsed.form.reportType || routeReportType
+      });
+      if (parsed.tab === "INBOX") setTab("INBOX");else
+      if (parsed.tab) setTab("VERWALTUNG");
     } catch (e) {
       console.error("Konnte Regie-Zustand nicht laden", e);
     }
-  }, [qFromKi]);
+  }, [qFromKi, routeReportType, stateStorageKey]);
 
   React.useEffect(() => {
     try {
-      localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify({ projectId, rows, form, tab }));
+      localStorage.setItem(stateStorageKey, JSON.stringify({ projectId, rows, form, tab }));
     } catch {
-      /* ignore */
-    }
-  }, [projectId, rows, form, tab]);
+
+      /* ignore */}
+  }, [projectId, rows, form, tab, stateStorageKey]);
 
   const loadHistory = React.useCallback(async () => {
     if (!projectKey) {
@@ -446,80 +541,60 @@ export default function Regieberichte() {
       return;
     }
 
-    const primary = await apiTry<{ ok: boolean; items: RegieHistoryItem[] }>(
+    const primary = await apiTry<{ok: boolean;items: RegieHistoryItem[];}>(
       `/api/regie/list?projectId=${encodeURIComponent(projectKey)}`
     );
 
     if (primary?.ok) {
-      const items = (primary.items || []).filter((it) => isFinalRegieberichtFilename(it.filename));
+      const items = (primary.items || []).filter(
+        (it) =>
+        isFinalRegieberichtFilename(it.filename) &&
+        String(it.reportType || "REGIE") === routeReportType
+      );
       setHistory(items);
       return;
     }
 
-    const legacy = await apiTry<{ ok: boolean; items: RegieHistoryItem[] }>(
+    const legacy = await apiTry<{ok: boolean;items: RegieHistoryItem[];}>(
       `/api/ki/regie/list?projectId=${encodeURIComponent(projectKey)}`
     );
 
     if (legacy?.ok) {
-      const items = (legacy.items || []).filter((it) => isFinalRegieberichtFilename(it.filename));
+      const items = (legacy.items || []).filter(
+        (it) =>
+        isFinalRegieberichtFilename(it.filename) &&
+        String(it.reportType || "REGIE") === routeReportType
+      );
       setHistory(items);
       return;
     }
 
     setHistory([]);
-  }, [projectKey]);
+  }, [projectKey, routeReportType]);
 
   const loadInbox = React.useCallback(async () => {
     if (!projectKey) {
       setInboxItems([]);
       return;
     }
-    const res = await api<{ ok: boolean; items: RegieWorkflowItem[] }>(
+    const res = await api<{ok: boolean;items: RegieWorkflowItem[];}>(
       `/api/regie/inbox/list?projectId=${encodeURIComponent(projectKey)}`
     );
-    setInboxItems(res.items || []);
-  }, [projectKey]);
-
-  const loadApproved = React.useCallback(async () => {
-    if (!projectKey) {
-      setApprovedItems([]);
-      return;
-    }
-
-    const primary = await apiTry<{ ok: boolean; items: RegieWorkflowItem[] }>(
-      `/api/regie/final/list?projectId=${encodeURIComponent(projectKey)}`
+    setInboxItems(
+      (res.items || []).filter((item) => String(item.reportType || "REGIE") === routeReportType)
     );
-    if (primary?.ok) {
-      setApprovedItems(primary.items || []);
-      return;
-    }
-
-    const aliasA = await apiTry<{ ok: boolean; items: RegieWorkflowItem[] }>(
-      `/api/regie/freigegeben/list?projectId=${encodeURIComponent(projectKey)}`
-    );
-    if (aliasA?.ok) {
-      setApprovedItems(aliasA.items || []);
-      return;
-    }
-
-    const legacy = await apiTry<{ ok: boolean; items: RegieWorkflowItem[] }>(
-      `/api/regie/approved/list?projectId=${encodeURIComponent(projectKey)}`
-    );
-
-    setApprovedItems(legacy?.items || []);
-  }, [projectKey]);
+  }, [projectKey, routeReportType]);
 
   const reloadActiveTab = React.useCallback(async () => {
     setError(null);
     try {
       if (!projectKey) return;
-      if (tab === "FINAL") await loadHistory();
       if (tab === "INBOX") await loadInbox();
-      if (tab === "FREIGEGEBEN") await loadApproved();
+      if (tab === "VERWALTUNG") await loadHistory();
     } catch (e: any) {
       setError(msg(e));
     }
-  }, [tab, projectKey, loadHistory, loadInbox, loadApproved]);
+  }, [tab, projectKey, loadHistory, loadInbox]);
 
   React.useEffect(() => {
     if (!projectKey) return;
@@ -529,9 +604,9 @@ export default function Regieberichte() {
   async function commitSnapshot(proj: string, dateStr: string, rowsSnapshot: RegieRow[]) {
     if (!proj) return;
     const snapshot = { projectId: proj, date: dateStr, note: form.comment ?? "", rows: rowsSnapshot };
-    await api<{ ok: boolean }>(`/api/ki/regie/commit/regiebericht`, {
+    await api<{ok: boolean;}>(`/api/regie/commit/regiebericht`, {
       method: "POST",
-      body: JSON.stringify(snapshot),
+      body: JSON.stringify(snapshot)
     });
   }
 
@@ -542,14 +617,14 @@ export default function Regieberichte() {
     setPdfUrl(null);
     try {
       const d = (formDate || qDate || today()).slice(0, 10);
-      const data = await api<{ ok: boolean; rows?: RegieRow[]; date?: string; note?: string }>(
+      const data = await api<{ok: boolean;rows?: RegieRow[];date?: string;note?: string;}>(
         `/api/ki/regie?projectId=${encodeURIComponent(projectKey)}&date=${encodeURIComponent(d)}`
       );
 
       const list = (data.rows || []).map((r) => ({
         ...r,
         date: r.date?.slice(0, 10),
-        reportType: r.reportType || "REGIE",
+        reportType: r.reportType || "REGIE"
       }));
       setRows(list);
       setSelIdx(null);
@@ -557,7 +632,7 @@ export default function Regieberichte() {
         ...prev,
         projectId: projectKey,
         date: d,
-        photos: [],
+        photos: []
       }));
     } catch (e: any) {
       setError(msg(e));
@@ -574,7 +649,7 @@ export default function Regieberichte() {
       setRows((prev) => [...kiRows, ...prev]);
       setKiImported({
         count: kiRows.length,
-        date: (q.get("date") || today()).slice(0, 10),
+        date: (q.get("date") || today()).slice(0, 10)
       });
     }
 
@@ -632,7 +707,7 @@ export default function Regieberichte() {
       blattNr: r.blattNr ?? "",
       wetter: r.wetter ?? "",
       kostenstelle: r.kostenstelle ?? "",
-      bemerkungen: r.bemerkungen ?? "",
+      bemerkungen: r.bemerkungen ?? ""
     });
   }
 
@@ -656,7 +731,7 @@ export default function Regieberichte() {
       blattNr: "",
       wetter: "",
       kostenstelle: "",
-      bemerkungen: "",
+      bemerkungen: ""
     });
   }
 
@@ -674,7 +749,7 @@ export default function Regieberichte() {
       comment: "",
       lvItemId: "",
       lvItemPos: undefined,
-      photos: [],
+      photos: []
     }));
   }
 
@@ -704,7 +779,7 @@ export default function Regieberichte() {
           if (Array.isArray(obj.rows)) loadedRows = obj.rows as RegieRow[];
 
           if ((!loadedRows || !loadedRows.length) && obj.items && Array.isArray(obj.items.aufmass))
-            loadedRows = obj.items.aufmass as RegieRow[];
+          loadedRows = obj.items.aufmass as RegieRow[];
 
           if (!loadedRows || !loadedRows.length) {
             const arrays = Object.values(obj).filter((v) => Array.isArray(v)) as any[];
@@ -728,7 +803,7 @@ export default function Regieberichte() {
           ...r,
           id: r.id || rid(),
           projectId: r.projectId || proj,
-          date: (r.date || d).slice(0, 10),
+          date: (r.date || d).slice(0, 10)
         }));
 
         const rowsWithPhotos = reviveRows(normalizedRows as any);
@@ -767,49 +842,68 @@ export default function Regieberichte() {
       setLoading(true);
       setError(null);
 
-      const urlNew = `/api/regie/read?projectId=${encodeURIComponent(projectKey)}&filename=${encodeURIComponent(
-        item.filename
-      )}`;
-      const urlAlt = `/api/regie?projectId=${encodeURIComponent(projectKey)}&filename=${encodeURIComponent(item.filename)}`;
+      const urlPrimary = `/api/regie?projectId=${encodeURIComponent(projectKey)}&filename=${encodeURIComponent(item.filename)}`;
       const urlLegacy = `/api/ki/regie/read?projectId=${encodeURIComponent(projectKey)}&filename=${encodeURIComponent(
         item.filename
       )}`;
 
       let data: any = null;
-      data = await apiTry<any>(urlNew);
-      if (!data) data = await apiTry<any>(urlAlt);
+      data = await apiTry<any>(urlPrimary);
       if (!data) data = await apiTry<any>(urlLegacy);
       if (!data) throw new Error("Konnte Regiebericht-Datei nicht laden (kein passender Endpoint).");
 
       let loadedRows: RegieRow[] = [];
-      if (Array.isArray(data.rows)) loadedRows = data.rows;
-      else if (data.items && Array.isArray(data.items.aufmass)) loadedRows = data.items.aufmass;
+      if (Array.isArray(data.rows)) loadedRows = data.rows;else
+      if (data.items && Array.isArray(data.items.aufmass)) loadedRows = data.items.aufmass;
 
       if (!loadedRows.length) return alert("Kein gespeicherter Regiebericht in dieser Datei gefunden.");
 
       const d =
-        (data.date as string | undefined)?.slice(0, 10) ||
-        (loadedRows[0].date && loadedRows[0].date!.slice(0, 10)) ||
-        item.date.slice(0, 10);
+      (data.date as string | undefined)?.slice(0, 10) ||
+      loadedRows[0].date && loadedRows[0].date!.slice(0, 10) ||
+      item.date.slice(0, 10);
 
       const list = reviveRows(loadedRows as any).map((r) => ({
         ...r,
         projectId: projectKey,
         date: (r.date || d).slice(0, 10),
-        reportType: r.reportType || "REGIE",
+        reportType: r.reportType || "REGIE"
       }));
 
       setRows(list);
       setSelIdx(null);
+      const head = list[0] || {} as RegieRow;
       setForm((prev) => ({
         ...prev,
+        id: head.id,
         projectId: projectKey,
         date: d,
-        photos: [],
-        comment: (data as any).note ?? prev.comment ?? "",
+        reportType: head.reportType || "REGIE",
+        regieNummer: head.regieNummer || (data as any).regieNummer || "",
+        auftraggeber: head.auftraggeber || (data as any).auftraggeber || "",
+        worker: head.worker || "",
+        hours: Number(head.hours || 0),
+        machine: head.machine || "",
+        material: head.material || "",
+        quantity: Number(head.quantity || 0),
+        unit: head.unit || "Std",
+        lvItemId: head.lvItemId || "",
+        lvItemPos: head.lvItemPos || "",
+        arbeitsbeginn: head.arbeitsbeginn || (data as any).arbeitsbeginn || "",
+        arbeitsende: head.arbeitsende || (data as any).arbeitsende || "",
+        pause1: head.pause1 || (data as any).pause1 || "",
+        pause2: head.pause2 || (data as any).pause2 || "",
+        blattNr: head.blattNr || (data as any).blattNr || "",
+        wetter: head.wetter || (data as any).wetter || "",
+        kostenstelle: head.kostenstelle || (data as any).kostenstelle || "",
+        comment: head.comment || (data as any).note || "",
+        bemerkungen: head.bemerkungen || (data as any).bemerkungen || "",
+        photos: head.photos || []
       }));
 
-      setPdfUrl((data as any).pdfUrl ?? item.pdfUrl ?? null);
+      setActiveWorkflowDocId(null);
+      const loadedPdf = (data as any).pdfUrl ?? item.pdfUrl ?? null;
+      setPdfUrl(loadedPdf ? withApiBase(loadedPdf) : null);
     } catch (e: any) {
       console.error(e);
       setError(msg(e));
@@ -819,46 +913,230 @@ export default function Regieberichte() {
   }
 
   function normalizeFileArray(arr: any[]): Datei[] {
-    return (arr || [])
-      .filter(Boolean)
-      .map((x: any) => ({
-        id: String(x.id || rid()),
-        name: String(x.name || "Anhang"),
-        type: String(x.type || guessType(String(x.name || ""))),
-        url: String(x.url || x.path || ""),
-      }))
-      .filter((x) => !!x.url);
+    return (arr || []).
+    filter(Boolean).
+    map((x: any) => ({
+      id: String(x.id || rid()),
+      name: String(x.name || "Anhang"),
+      type: String(x.type || guessType(String(x.name || ""))),
+      url: String(x.url || x.dataUrl || x.path || "")
+    })).
+    filter((x) => !!x.url);
   }
 
-  function normalizeWorkflowDocToLoaded(snap: any): { loadedRows: RegieRow[]; d: string; note: string; pdfUrl?: string | null } {
+  function normalizeWorkflowDocToLoaded(snap: any): {loadedRows: RegieRow[];d: string;note: string;pdfUrl?: string | null;} {
     const rowsIn = (snap?.rows || snap?.items?.aufmass || []) as any[];
     const d = String(snap?.date || today()).slice(0, 10);
 
     const isFlatRegie =
-      !Array.isArray(rowsIn) || rowsIn.length === 0
-        ? !!snap && typeof snap === "object" && (snap.kind === "regie" || snap.reportType || snap.workflowStatus)
-        : false;
+    !Array.isArray(rowsIn) || rowsIn.length === 0 ?
+    !!snap && typeof snap === "object" && (snap.kind === "regie" || snap.reportType || snap.workflowStatus) :
+    false;
 
     const note = String(snap?.note ?? snap?.comment ?? "").trim();
 
     if (Array.isArray(rowsIn) && rowsIn.length > 0) {
-      const loadedRows = rowsIn.map((r) => ({
-        ...r,
-        projectId: projectKey,
-        date: String(r.date || d).slice(0, 10),
-        reportType: (r as any).reportType || "REGIE",
-        photos: normalizeFileArray((r as any).photos || (r as any).attachments || []),
-      })) as RegieRow[];
-      return { loadedRows, d, note, pdfUrl: snap?.pdfUrl ?? null };
-    }
+      const rootFiles = normalizeFileArray(
+        snap?.photos ||
+        snap?.attachments ||
+        snap?.files ||
+        []
+      );
 
+      const loadedRows = rowsIn.map((rawRow: any, index: number) => {
+        const r = rawRow || {};
+
+        return {
+          ...r,
+
+          id: String(r.id || rid()),
+          projectId: projectKey,
+
+          date: String(
+            r.date ||
+            r.datum ||
+            snap?.date ||
+            snap?.datum ||
+            d
+          ).slice(0, 10),
+
+          reportType:
+          r.reportType as ReportType ||
+          r.docType as ReportType ||
+          snap?.reportType as ReportType ||
+          routeReportType,
+
+          regieNummer: String(
+            r.regieNummer ||
+            r.regieNr ||
+            snap?.regieNummer ||
+            snap?.regieNr ||
+            snap?.nummer ||
+            ""
+          ),
+
+          auftraggeber: String(
+            r.auftraggeber ||
+            r.client ||
+            r.customer ||
+            snap?.auftraggeber ||
+            snap?.client ||
+            snap?.customer ||
+            ""
+          ),
+
+          worker: String(
+            r.worker ||
+            r.mitarbeiter || (
+            index === 0 ?
+            snap?.worker || snap?.mitarbeiter || "" :
+            "")
+          ),
+
+          hours: Number(
+            r.hours ??
+            r.stunden ?? (
+            index === 0 ?
+            snap?.hours ?? snap?.stunden ?? 0 :
+            0)
+          ),
+
+          machine: String(
+            r.machine ||
+            r.maschine || (
+            index === 0 ?
+            snap?.machine || snap?.maschine || "" :
+            "")
+          ),
+
+          material: String(
+            r.material ||
+            r.materialien || (
+            index === 0 ?
+            snap?.material || snap?.materialien || "" :
+            "")
+          ),
+
+          quantity: Number(
+            r.quantity ??
+            r.menge ?? (
+            index === 0 ?
+            snap?.quantity ?? snap?.menge ?? 0 :
+            0)
+          ),
+
+          unit: String(
+            r.unit ||
+            r.einheit ||
+            snap?.unit ||
+            snap?.einheit ||
+            "Std"
+          ),
+
+          comment: String(
+            r.comment ||
+            r.text ||
+            r.taetigkeit || (
+            index === 0 ?
+            snap?.comment || snap?.text || "" :
+            "")
+          ),
+
+          bemerkungen: String(
+            r.bemerkungen ||
+            r.notes || (
+            index === 0 ?
+            snap?.bemerkungen || snap?.notes || "" :
+            "")
+          ),
+
+          arbeitsbeginn: String(
+            r.arbeitsbeginn ||
+            r.von ||
+            r.timeFrom ||
+            snap?.arbeitsbeginn ||
+            ""
+          ),
+
+          arbeitsende: String(
+            r.arbeitsende ||
+            r.bis ||
+            r.timeTo ||
+            snap?.arbeitsende ||
+            ""
+          ),
+
+          pause1: String(r.pause1 || snap?.pause1 || ""),
+          pause2: String(r.pause2 || snap?.pause2 || ""),
+
+          blattNr: String(
+            r.blattNr ||
+            r.blatt ||
+            snap?.blattNr ||
+            snap?.blatt ||
+            ""
+          ),
+
+          wetter: String(
+            r.wetter ||
+            r.weather ||
+            snap?.wetter ||
+            snap?.weather ||
+            ""
+          ),
+
+          kostenstelle: String(
+            r.kostenstelle ||
+            r.costCenter ||
+            snap?.kostenstelle ||
+            snap?.costCenter ||
+            ""
+          ),
+
+          lvItemId: String(
+            r.lvItemId ||
+            r.positionId ||
+            snap?.lvItemId ||
+            ""
+          ),
+
+          lvItemPos: String(
+            r.lvItemPos ||
+            r.pos ||
+            r.position ||
+            snap?.lvItemPos ||
+            ""
+          ),
+
+          photos: normalizeFileArray(
+            r.photos ||
+            r.attachments ||
+            r.files || (
+            index === 0 ? rootFiles : [])
+          )
+        } as RegieRow;
+      });
+
+      return {
+        loadedRows,
+        d: loadedRows[0]?.date || d,
+        note: loadedRows[0]?.comment || note,
+        pdfUrl:
+        snap?.pdfUrl ||
+        snap?.pdfUri ||
+        snap?.fileUrl ||
+        snap?.previewUrl ||
+        snap?.documentUrl ||
+        null
+      };
+    }
     if (isFlatRegie) {
       const photos = normalizeFileArray(snap.photos || snap.attachments || []);
       const row: RegieRow = {
         id: String(snap.id || rid()),
         projectId: projectKey,
         date: String(snap.date || d).slice(0, 10),
-        reportType: (snap.reportType as ReportType) || "REGIE",
+        reportType: snap.reportType as ReportType || "REGIE",
         comment: String(snap.comment || ""),
         bemerkungen: String(snap.bemerkungen || ""),
         hours: Number(snap.hours || 0),
@@ -878,7 +1156,7 @@ export default function Regieberichte() {
         blattNr: String(snap.blattNr || ""),
         wetter: String(snap.wetter || ""),
         kostenstelle: String(snap.kostenstelle || ""),
-        photos,
+        photos
       };
 
       return { loadedRows: [row], d: row.date || d, note: row.comment || note, pdfUrl: snap?.pdfUrl ?? null };
@@ -893,20 +1171,20 @@ export default function Regieberichte() {
     const stageKey = stage === "approved" ? "freigegeben" : stage;
 
     const candidates: string[] = [
-      `/api/regie/${stageKey}/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
-      stageKey === "freigegeben"
-        ? `/api/regie/approved/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`
-        : "",
-      stageKey === "freigegeben"
-        ? `/api/regie/final/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`
-        : "",
-      `/api/regie/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}&stage=${encodeURIComponent(
-        stageKey
-      )}`,
-      `/api/regie/workflow/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(
-        docId
-      )}&stage=${encodeURIComponent(stageKey)}`,
-    ].filter(Boolean);
+    `/api/regie/${stageKey}/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
+    stageKey === "freigegeben" ?
+    `/api/regie/approved/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}` :
+    "",
+    stageKey === "freigegeben" ?
+    `/api/regie/final/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}` :
+    "",
+    `/api/regie/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}&stage=${encodeURIComponent(
+      stageKey
+    )}`,
+    `/api/regie/workflow/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(
+      docId
+    )}&stage=${encodeURIComponent(stageKey)}`].
+    filter(Boolean);
 
     try {
       setLoading(true);
@@ -916,12 +1194,57 @@ export default function Regieberichte() {
       let data: any = null;
       let hitUrl: string | null = null;
 
-      for (const u of candidates) {
-        const r = await apiTry<any>(u);
-        if (r) {
-          data = r;
-          hitUrl = u;
-          break;
+      const handoffKey = `rlc:mobile-workflow:${projectKey}:REGIE:${docId}`;
+      const handoffRaw = sessionStorage.getItem(handoffKey);
+      if (handoffRaw) {
+        try {
+          data = JSON.parse(handoffRaw);
+          hitUrl = "sessionStorage";
+        } catch {
+          sessionStorage.removeItem(handoffKey);
+        }
+      }
+
+      if (!data) {
+        for (let index = 0; index < sessionStorage.length; index++) {
+          const key = sessionStorage.key(index);
+          if (!key || !key.startsWith(`rlc:mobile-workflow:${projectKey}:REGIE:`)) continue;
+          try {
+            const candidate = JSON.parse(sessionStorage.getItem(key) || "null");
+            if (candidate?.id === docId) {
+              data = candidate;
+              hitUrl = "sessionStorage:scan";
+              break;
+            }
+          } catch {
+
+
+            // Ungültigen Eintrag ignorieren.
+          }}}
+
+      if (!data) {
+        const lastRaw = sessionStorage.getItem("rlc:mobile-workflow:last");
+        if (lastRaw) {
+          try {
+            const last = JSON.parse(lastRaw);
+            if (last?.docId === docId && last?.document) {
+              data = last.document;
+              hitUrl = "sessionStorage:last";
+            }
+          } catch {
+
+
+            // Ungültigen Übergabewert ignorieren.
+          }}}
+
+      if (!data) {
+        for (const u of candidates) {
+          const r = await apiTry<any>(u);
+          if (r) {
+            data = r;
+            hitUrl = u;
+            break;
+          }
         }
       }
 
@@ -941,11 +1264,12 @@ export default function Regieberichte() {
         ...r,
         projectId: projectKey,
         date: String(r.date || norm.d).slice(0, 10),
-        reportType: r.reportType || "REGIE",
+        reportType: r.reportType || "REGIE"
       }));
 
       setRows(revived);
-      setSelIdx(null);
+      setSelIdx(0);
+      setActiveWorkflowDocId(docId);
 
       const head = revived[0];
 
@@ -965,10 +1289,18 @@ export default function Regieberichte() {
         blattNr: head.blattNr || prev.blattNr || "",
         wetter: head.wetter || prev.wetter || "",
         kostenstelle: head.kostenstelle || prev.kostenstelle || "",
-        photos: [],
+        worker: head.worker || prev.worker || "",
+        hours: Number(head.hours || prev.hours || 0),
+        machine: head.machine || prev.machine || "",
+        material: head.material || prev.material || "",
+        quantity: Number(head.quantity || prev.quantity || 0),
+        unit: head.unit || prev.unit || "Std",
+        lvItemId: head.lvItemId || prev.lvItemId || "",
+        lvItemPos: head.lvItemPos || prev.lvItemPos || "",
+        photos: head.photos || []
       }));
 
-      if (norm.pdfUrl) setPdfUrl(norm.pdfUrl);
+      if (norm.pdfUrl) setPdfUrl(withApiBase(norm.pdfUrl));
     } catch (e: any) {
       console.error(e);
       setError("Workflow-Dokument konnte nicht geladen werden. " + msg(e));
@@ -977,18 +1309,85 @@ export default function Regieberichte() {
     }
   }
 
+  React.useEffect(() => {
+    if (!qSourceMobile || !qDocId || !projectKey) return;
+    setTab("INBOX");
+    void loadWorkflowDoc("inbox", qDocId);
+    // Nur beim expliziten Mobile-Handoff laden.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qSourceMobile, qDocId, projectKey]);
+
+  function rowsIncludingCurrentForm(): RegieRow[] {
+    if (!form.id) return rows;
+
+    const project = projectKey || form.projectId || "";
+    const current: RegieRow = {
+      ...form,
+      projectId: project,
+      date: String(form.date || today()).slice(0, 10),
+      reportType: form.reportType || "REGIE"
+    };
+
+    return rows.map((row) => String(row.id || "") === String(form.id || "") ? current : row);
+  }
+
+  async function persistInboxDocument(
+  docId: string,
+  snapshotRows: RegieRow[] = rowsIncludingCurrentForm(),
+  header: RegieRow = form)
+  {
+    if (!projectKey) throw new Error("Projekt-ID fehlt.");
+
+    const exportRows = await rowsForServerPdf(snapshotRows);
+    const head = exportRows[0] || header;
+    const rootPhotos = await Promise.all((header.photos || []).map(attachmentForServer));
+
+    await api<{ok: boolean;}>(`/api/regie/inbox/update`, {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: projectKey,
+        docId,
+        date: String(header.date || head.date || today()).slice(0, 10),
+        reportType: header.reportType || head.reportType || "REGIE",
+        regieNummer: header.regieNummer || head.regieNummer || "",
+        auftraggeber: header.auftraggeber || head.auftraggeber || "",
+        arbeitsbeginn: header.arbeitsbeginn || head.arbeitsbeginn || "",
+        arbeitsende: header.arbeitsende || head.arbeitsende || "",
+        pause1: header.pause1 || head.pause1 || "",
+        pause2: header.pause2 || head.pause2 || "",
+        blattNr: header.blattNr || head.blattNr || "",
+        wetter: header.wetter || head.wetter || "",
+        kostenstelle: header.kostenstelle || head.kostenstelle || "",
+        comment: header.comment || head.comment || "",
+        bemerkungen: header.bemerkungen || head.bemerkungen || "",
+        photos: rootPhotos,
+        attachments: rootPhotos,
+        rows: exportRows,
+        items: { aufmass: exportRows, lieferscheine: [] }
+      })
+    });
+  }
+
   async function approveInbox(docId: string) {
     if (!projectKey) return;
-    if (!window.confirm("Einreichen/Freigeben? (Inbox → Freigegeben)")) return;
+    if (!window.confirm("Regiebericht freigeben und direkt in Verwaltung speichern?")) return;
     try {
       setLoading(true);
-      await api<{ ok: boolean }>(`/api/regie/inbox/approve`, {
-        method: "POST",
-        body: JSON.stringify({ projectId: projectKey, docId }),
-      });
-      await loadInbox();
-      await loadApproved();
-      alert("Freigegeben.");
+      if (activeWorkflowDocId === docId) {
+        await persistInboxDocument(docId);
+      }
+      const result = await api<{ok: boolean;pdfUrl?: string | null;filename?: string;reportId?: string;}>(
+        `/api/regie/inbox/approve`,
+        {
+          method: "POST",
+          body: JSON.stringify({ projectId: projectKey, docId })
+        }
+      );
+      setActiveWorkflowDocId(null);
+      if (result.pdfUrl) setPdfUrl(withApiBase(result.pdfUrl));
+      await Promise.all([loadInbox(), loadHistory()]);
+      setTab("VERWALTUNG");
+      alert("Freigegeben und in Verwaltung gespeichert.");
     } catch (e: any) {
       alert(msg(e));
     } finally {
@@ -1001,11 +1400,12 @@ export default function Regieberichte() {
     const reason = window.prompt("Ablehnungsgrund (optional):", "") ?? "";
     try {
       setLoading(true);
-      await api<{ ok: boolean }>(`/api/regie/inbox/reject`, {
+      await api<{ok: boolean;}>(`/api/regie/inbox/reject`, {
         method: "POST",
-        body: JSON.stringify({ projectId: projectKey, docId, reason }),
+        body: JSON.stringify({ projectId: projectKey, docId, reason })
       });
       await loadInbox();
+      if (activeWorkflowDocId === docId) setActiveWorkflowDocId(null);
       alert("Abgelehnt.");
     } catch (e: any) {
       alert(msg(e));
@@ -1014,344 +1414,99 @@ export default function Regieberichte() {
     }
   }
 
-  async function registerApproved(docId: string) {
-    if (!projectKey) return;
-    if (!window.confirm("Registrieren? (Freigegeben → Final)")) return;
-    try {
-      setLoading(true);
-      await api<{ ok: boolean; stored?: string; pdfUrl?: string | null }>(`/api/regie/register`, {
-        method: "POST",
-        body: JSON.stringify({ projectId: projectKey, docId }),
-      });
-      await loadApproved();
-      await loadHistory();
-      alert("Registriert.");
-    } catch (e: any) {
-      alert(msg(e));
-    } finally {
-      setLoading(false);
+  async function attachmentForServer(photo: Datei) {
+    const url = String(photo.url || "");
+    if (!url) return { name: photo.name, type: photo.type, url: "" };
+
+    if (url.startsWith("data:")) {
+      return { name: photo.name, type: photo.type, dataUrl: url };
     }
+
+    if (url.startsWith("blob:")) {
+      try {
+        return {
+          name: photo.name,
+          type: photo.type,
+          dataUrl: await toDataUrl(url)
+        };
+      } catch {
+        return { name: photo.name, type: photo.type, url };
+      }
+    }
+
+    return { name: photo.name, type: photo.type, url };
   }
 
-  async function exportPdfRows(rowsToExport: RegieRow[], opts: { preview: boolean; single?: boolean }) {
+  async function rowsForServerPdf(rowsToExport: RegieRow[]) {
+    return Promise.all(
+      rowsToExport.map(async (row) => ({
+        ...row,
+        photos: await Promise.all((row.photos || []).map(attachmentForServer))
+      }))
+    );
+  }
+
+  async function exportPdfRows(rowsToExport: RegieRow[], opts: {preview: boolean;single?: boolean;}) {
     if (!rowsToExport.length) {
       alert("Keine Einträge zum Exportieren.");
       return;
     }
-
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-    const pageW = doc.internal.pageSize.getWidth();
-    const margin = 10;
-    const lineW = 0.2;
-
-    const labelFont = 8;
-    const valueFont = 8;
-
-    doc.setLineWidth(lineW);
-    doc.setFont("helvetica", "normal");
-
-    const projectIdForBauNr = projectKey || rowsToExport[0].projectId || "";
-    const baustelleName = selectedProject?.name || selectedProject?.code || projectIdForBauNr;
-    const exportDate = (form.date || rowsToExport[0]?.date || today()).slice(0, 10);
-
-    const chunkSize = 6;
-    const totalPages = Math.ceil(rowsToExport.length / chunkSize);
-
-    for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-      if (pageIndex > 0) doc.addPage();
-
-      const pageRows = rowsToExport.slice(pageIndex * chunkSize, (pageIndex + 1) * chunkSize);
-      const headerRow = pageRows[0] || rowsToExport[0];
-
-      const headTop = margin;
-      const headH = 32;
-      const leftW = 55;
-      const rightW = 55;
-      const midW = pageW - margin * 2 - leftW - rightW;
-
-      const leftX = margin;
-      const midX = leftX + leftW;
-      const rightX = midX + midW;
-
-      const headerType: ReportType = headerRow.reportType || "REGIE";
-
-      doc.rect(leftX, headTop, leftW + midW + rightW, headH);
-      doc.rect(leftX, headTop, leftW, headH);
-
-      doc.setFontSize(labelFont);
-
-      const cbSize = 10;
-      let tx = leftX + 6;
-      let ty = headTop + 10;
-
-      const drawTypeRow = (label: string, type: ReportType) => {
-        const isActive = headerType === type;
-        doc.text(label, tx, ty);
-        const boxY = ty - cbSize + 2;
-        doc.rect(leftX + leftW - cbSize - 6, boxY, cbSize, cbSize);
-        if (isActive) {
-          doc.setFontSize(labelFont + 1);
-          doc.text("X", leftX + leftW - cbSize - 6 + cbSize / 2, boxY + cbSize / 2 + 1, {
-            align: "center",
-          });
-          doc.setFontSize(labelFont);
-        }
-        ty += 10;
-      };
-
-      drawTypeRow("Tagesbericht", "TAGESBERICHT");
-      drawTypeRow("Bautagebuch", "BAUTAGEBUCH");
-      drawTypeRow("Regiebericht", "REGIE");
-
-      doc.rect(midX, headTop, midW, headH);
-      const midInnerX = midX + 6;
-      let lineY = headTop + 10;
-
-      doc.text("Baustelle:", midInnerX, lineY);
-      doc.setFontSize(valueFont);
-      doc.text(baustelleName || "-", midInnerX + 22, lineY);
-      doc.setFontSize(labelFont);
-      doc.line(midInnerX + 20, lineY + 1.5, midX + midW - 6, lineY + 1.5);
-
-      lineY += 10;
-      doc.text("Auftraggeber/Anschrift:", midInnerX, lineY);
-      doc.setFontSize(valueFont);
-      if (headerRow.auftraggeber) {
-        doc.text(headerRow.auftraggeber, midInnerX + 42, lineY, { maxWidth: midW - 6 - 42 });
-      }
-      doc.setFontSize(labelFont);
-      doc.line(midInnerX + 38, lineY + 1.5, midX + midW - 6, lineY + 1.5);
-
-      doc.rect(rightX, headTop, rightW, headH);
-
-      const fieldH = headH / 3;
-      let fy = headTop;
-
-      const drawRightField = (label: string, value?: string) => {
-        doc.rect(rightX, fy, rightW, fieldH);
-        doc.setFontSize(labelFont);
-        doc.text(label, rightX + rightW / 2, fy + 4, { align: "center" });
-        if (value) {
-          doc.setFontSize(valueFont);
-          doc.text(value, rightX + rightW / 2, fy + fieldH - 2, { align: "center" });
-        }
-        fy += fieldH;
-      };
-
-      drawRightField("Bau-Nr.", projectIdForBauNr || "");
-      drawRightField("Regie-Nr.", headerRow.regieNummer || "");
-      drawRightField("Datum", (headerRow.date || exportDate || today()).slice(0, 10));
-
-      let curY = headTop + headH + 8;
-
-      const dayRowH = 10;
-      const timeRowH = 10;
-      const days = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-
-      const daysWidth = pageW - margin * 2;
-      doc.rect(margin, curY, daysWidth, dayRowH + timeRowH * 2);
-
-      const dayCellW = daysWidth / days.length;
-      days.forEach((d, i) => {
-        const x = margin + i * dayCellW;
-        doc.rect(x, curY, dayCellW, dayRowH);
-        doc.text(d, x + dayCellW / 2, curY + 6, { align: "center" });
-      });
-
-      curY += dayRowH;
-
-      const labelsZeit = ["Arbeitsbeginn", "Pause 1", "Pause 2", "Arbeitsende", "Blatt Nr.", "Wetter"];
-      const zeitCellW = daysWidth / labelsZeit.length;
-
-      labelsZeit.forEach((txt, i) => {
-        const x = margin + i * zeitCellW;
-        doc.rect(x, curY, zeitCellW, timeRowH);
-        doc.text(txt, x + zeitCellW / 2, curY + 6, { align: "center" });
-      });
-
-      curY += timeRowH;
-
-      const zeitValues = [
-        headerRow.arbeitsbeginn || "",
-        headerRow.pause1 || "",
-        headerRow.pause2 || "",
-        headerRow.arbeitsende || "",
-        headerRow.blattNr || "",
-        headerRow.wetter || "",
-      ];
-      zeitValues.forEach((val, i) => {
-        const x = margin + i * zeitCellW;
-        doc.rect(x, curY, zeitCellW, timeRowH);
-        if (val) {
-          doc.setFontSize(valueFont);
-          doc.text(val, x + zeitCellW / 2, curY + 6, { align: "center" });
-          doc.setFontSize(labelFont);
-        }
-      });
-
-      curY += timeRowH + 6;
-
-      const tableTop = curY;
-      const tableW = pageW - margin * 2;
-      const tableH = 6 * 9;
-      const headerH = 7;
-
-      doc.rect(margin, tableTop, tableW, headerH + tableH);
-
-      const colKosten = tableW * 0.1;
-      const colGerät = tableW * 0.26;
-      const colMitarbeiter = tableW * 0.18;
-      const colStd = tableW * 0.08;
-      const colBesLeist = tableW * 0.22;
-      const colMat = tableW - (colKosten + colGerät + colMitarbeiter + colStd + colBesLeist);
-
-      let colX = margin;
-      const drawCol = (w: number, label: string) => {
-        doc.rect(colX, tableTop, w, headerH + tableH);
-        doc.setFontSize(labelFont);
-        doc.text(label, colX + w / 2, tableTop + 4, { align: "center" });
-        colX += w;
-      };
-
-      drawCol(colKosten, "Kostenstelle");
-      drawCol(colGerät, "Bezeichnung der Geräte");
-      drawCol(colMitarbeiter, "Mitarbeiter");
-      drawCol(colStd, "Std.");
-      drawCol(colBesLeist, "Besondere Leistungen");
-      drawCol(colMat, "Material");
-
-      const mainRowYStart = tableTop + headerH;
-      const rowH = tableH / 6;
-
-      for (let i = 0; i < 6; i++) {
-        const y = mainRowYStart + i * rowH;
-        doc.line(margin, y, margin + tableW, y);
-      }
-
-      doc.setFontSize(valueFont);
-
-      pageRows.forEach((r, idx) => {
-        if (idx >= 6) return;
-        const textY = mainRowYStart + idx * rowH + rowH / 2 + 2;
-
-        const hoursStr = r.hours != null ? num(r.hours) : "";
-        const qtyStr = r.quantity != null && r.quantity !== 0 ? `${num(r.quantity)} ${r.unit || ""}`.trim() : "";
-        const materialStr = [r.material || "", qtyStr].filter(Boolean).join(" – ");
-        const besondereStr = r.comment || "";
-
-        let txCol = margin + 2;
-
-        if ((r as any).kostenstelle || headerRow.kostenstelle) {
-          doc.text((r as any).kostenstelle || headerRow.kostenstelle || "", txCol, textY, {
-            maxWidth: colKosten - 4,
-          });
-        }
-        txCol += colKosten;
-
-        if (r.machine || r.material) {
-          doc.text(r.machine || r.material || "", txCol + 2, textY, { maxWidth: colGerät - 4 });
-        }
-        txCol += colGerät;
-
-        if (r.worker) {
-          doc.text(r.worker, txCol + 2, textY, { maxWidth: colMitarbeiter - 4 });
-        }
-        txCol += colMitarbeiter;
-
-        if (hoursStr) {
-          doc.text(hoursStr, txCol + colStd / 2, textY, { align: "center" });
-        }
-        txCol += colStd;
-
-        if (besondereStr) {
-          doc.text(besondereStr, txCol + 2, textY, { maxWidth: colBesLeist - 4 });
-        }
-        txCol += colBesLeist;
-
-        if (materialStr) {
-          doc.text(materialStr, txCol + 2, textY, { maxWidth: colMat - 4 });
-        }
-      });
-
-      curY = tableTop + headerH + tableH + 8;
-
-      const beschH = 30;
-      doc.rect(margin, curY, tableW, beschH);
-      doc.setFontSize(labelFont);
-      doc.text("Beschreibung der Arbeit, besondere Vorkommnisse, Anordnungen", margin + 2, curY + 5);
-
-      curY += beschH + 6;
-
-      const fotoBoxH = 55;
-      const fotoBoxW = tableW * 0.58;
-      const bemerkW = tableW - fotoBoxW;
-
-      const fotoX = margin;
-      const bemerkX = margin + fotoBoxW;
-
-      doc.rect(fotoX, curY, fotoBoxW, fotoBoxH);
-      doc.rect(bemerkX, curY, bemerkW, fotoBoxH);
-
-      doc.setFontSize(labelFont);
-      doc.text("Fotodokumentation", fotoX + 2, curY + 5);
-      doc.text("Bemerkungen", bemerkX + 2, curY + 5);
-
-      if (headerRow.bemerkungen) {
-        doc.setFontSize(valueFont);
-        doc.text(headerRow.bemerkungen, bemerkX + 2, curY + 11, { maxWidth: bemerkW - 4 });
-        doc.setFontSize(labelFont);
-      }
-
-      const firstImg = pageRows.flatMap((r) => r.photos || []).find((p) => isImg(p.type)) || null;
-      if (firstImg) {
-        const dataUrl = await urlToDataURL(firstImg.url, "image/jpeg");
-        if (dataUrl) {
-          const imgMargin = 6;
-          const imgW = fotoBoxW - imgMargin * 2;
-          const imgH = fotoBoxH - imgMargin * 2 - 6;
-          doc.addImage(dataUrl, "JPEG", fotoX + imgMargin, curY + imgMargin + 4, imgW, imgH);
-        }
-      }
-
-      curY += fotoBoxH + 8;
-
-      const signH = 16;
-      doc.rect(margin, curY, tableW, signH * 2);
-
-      const midSignX = margin + tableW / 2;
-      doc.line(midSignX, curY, midSignX, curY + signH * 2);
-
-      doc.setFontSize(labelFont);
-      doc.text("Geprüft", margin + 2, curY + 5);
-      doc.text("Aufgestellt", midSignX + 2, curY + 5);
-
-      const lineY1 = curY + signH - 4;
-      doc.text("Bauleiter", margin + 2, lineY1 - 2);
-      doc.line(margin + 22, lineY1, midSignX - 4, lineY1);
-
-      doc.text("Polier", midSignX + 2, lineY1 - 2);
-      doc.line(midSignX + 18, lineY1, margin + tableW - 4, lineY1);
-
-      const lineY2 = curY + signH * 2 - 4;
-      doc.text("Bauherr", margin + 2, lineY2 - 2);
-      doc.line(margin + 22, lineY2, midSignX - 4, lineY2);
-
-      doc.text("Bauführer", midSignX + 2, lineY2 - 2);
-      doc.line(midSignX + 22, lineY2, margin + tableW - 4, lineY2);
-    }
-
-    const baseName = opts.single ? `Regiebericht_${exportDate}` : `Regieberichte_${exportDate}`;
-    const fileName = `${baseName}_${projectIdForBauNr || "ohneProjekt"}.pdf`;
-
-    if (opts.preview) {
-      const blob = doc.output("blob");
-      const url = URL.createObjectURL(blob);
-      setPdfUrl(url);
+    if (!projectKey) {
+      alert("Bitte Projekt-ID eingeben.");
       return;
     }
 
-    doc.save(fileName);
+    try {
+      setLoading(true);
+      setError(null);
+      const exportRows = await rowsForServerPdf(rowsToExport);
+      const exportDate = String(form.date || exportRows[0]?.date || today()).slice(0, 10);
+      const result = await api<{ok: boolean;pdfUrl: string;}>(`/api/regie/preview`, {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: projectKey,
+          projectName: selectedProject?.name || selectedProject?.code || projectKey,
+          date: exportDate,
+          regieNummer: form.regieNummer || exportRows[0]?.regieNummer || "",
+          auftraggeber: form.auftraggeber || exportRows[0]?.auftraggeber || "",
+          arbeitsbeginn: form.arbeitsbeginn || exportRows[0]?.arbeitsbeginn || "",
+          arbeitsende: form.arbeitsende || exportRows[0]?.arbeitsende || "",
+          pause1: form.pause1 || exportRows[0]?.pause1 || "",
+          pause2: form.pause2 || exportRows[0]?.pause2 || "",
+          blattNr: form.blattNr || exportRows[0]?.blattNr || "",
+          wetter: form.wetter || exportRows[0]?.wetter || "",
+          kostenstelle: form.kostenstelle || exportRows[0]?.kostenstelle || "",
+          bemerkungen: form.bemerkungen || exportRows[0]?.bemerkungen || "",
+          rows: exportRows,
+          items: { aufmass: exportRows, lieferscheine: [] }
+        })
+      });
+
+      const absoluteUrl = withApiBase(result.pdfUrl);
+      if (opts.preview) {
+        setPdfUrl(`${absoluteUrl}${absoluteUrl.includes("?") ? "&" : "?"}v=${Date.now()}`);
+        return;
+      }
+
+      const response = await fetch(absoluteUrl, {
+        credentials: "include",
+        headers: { ...authHeaders() }
+      });
+      if (!response.ok) throw new Error(`PDF Download fehlgeschlagen: HTTP ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `${opts.single ? "Regiebericht" : "Regieberichte"}_${exportDate}_${projectKey}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+    } catch (e: any) {
+      setError(`PDF konnte nicht erstellt werden: ${msg(e)}`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function exportPdf(preview = false) {
@@ -1364,7 +1519,7 @@ export default function Regieberichte() {
 
   async function save() {
     const proj =
-      projectKey || form.projectId || (selectedProject?.code as string | undefined) || (selectedProject?.id as string | undefined) || "";
+    projectKey || form.projectId || selectedProject?.code as string | undefined || selectedProject?.id as string | undefined || "";
 
     if (!proj) {
       alert("Bitte Projekt-ID eingeben.");
@@ -1372,49 +1527,43 @@ export default function Regieberichte() {
     }
 
     try {
+      setLoading(true);
       setError(null);
-      const optimisticId = form.id || rid();
-      const dateStr = (form.date || today()).slice(0, 10);
 
       const local: RegieRow = {
         ...form,
-        id: optimisticId,
+        id: form.id || rid(),
         projectId: proj,
-        date: dateStr,
-        reportType: form.reportType || "REGIE",
+        date: String(form.date || today()).slice(0, 10),
+        reportType: form.reportType || "REGIE"
       };
 
-      let nextRows: RegieRow[] = [];
-      setRows((prev) => {
-        const updated = form.id ? prev.map((r) => (r.id === form.id ? local : r)) : [local, ...prev];
-        nextRows = updated;
-        return updated;
-      });
+      const nextRows = form.id ?
+      rows.map((row) => String(row.id || "") === String(form.id || "") ? local : row) :
+      [local, ...rows];
+
+      setRows(nextRows);
+      setSelIdx(form.id ? nextRows.findIndex((row) => row.id === local.id) : 0);
+
+      if (activeWorkflowDocId) {
+        await persistInboxDocument(activeWorkflowDocId, nextRows, local);
+        alert("Änderungen im Mobile-Dokument gespeichert.");
+      } else {
+        alert("Eintrag im Entwurf übernommen. Mit „In Verwaltung speichern“ wird der Regiebericht offiziell gespeichert.");
+      }
 
       clearLineKeepHeader();
-
-      const snapshot = { projectId: proj, date: dateStr, note: form.comment ?? "", rows: nextRows };
-
-      const resp = await api<any>(`/api/ki/regie/commit/regiebericht`, {
-        method: "POST",
-        body: JSON.stringify(snapshot),
-      });
-
-      const reportId = resp?.reportId ?? resp?.id ?? resp?.nummer ?? "?";
-      const stored = resp?.stored ?? resp?.filename ?? resp?.file ?? resp?.path ?? "-";
-
-      alert(`Regiebericht gespeichert (Nr. ${reportId}).\nDatei: ${stored}`);
-
-      await loadHistory();
     } catch (e: any) {
       console.error(e);
-      setError(`Lokal gespeichert. Serverfehler: ${msg(e)}`);
+      setError(`Speichern fehlgeschlagen: ${msg(e)}`);
+    } finally {
+      setLoading(false);
     }
   }
 
   async function saveReportToServer() {
     const proj =
-      projectKey || form.projectId || (selectedProject?.code as string | undefined) || (selectedProject?.id as string | undefined) || "";
+    projectKey || form.projectId || selectedProject?.code as string | undefined || selectedProject?.id as string | undefined || "";
 
     if (!proj || !rows.length) {
       alert("Projekt und mindestens eine Zeile erforderlich.");
@@ -1440,26 +1589,40 @@ export default function Regieberichte() {
           ...r,
           projectId: proj,
           date: (r.date || date).slice(0, 10),
-          photos,
+          photos
         });
       }
 
+      const head = rowsWithPhotos[0] || form;
       const snapshot = {
         projectId: proj,
+        projectName: selectedProject?.name || selectedProject?.code || proj,
         date,
-        note: form.comment ?? "",
+        reportType: form.reportType || head.reportType || "REGIE",
+        regieNummer: form.regieNummer || head.regieNummer || "",
+        auftraggeber: form.auftraggeber || head.auftraggeber || "",
+        arbeitsbeginn: form.arbeitsbeginn || head.arbeitsbeginn || "",
+        arbeitsende: form.arbeitsende || head.arbeitsende || "",
+        pause1: form.pause1 || head.pause1 || "",
+        pause2: form.pause2 || head.pause2 || "",
+        blattNr: form.blattNr || head.blattNr || "",
+        wetter: form.wetter || head.wetter || "",
+        kostenstelle: form.kostenstelle || head.kostenstelle || "",
+        bemerkungen: form.bemerkungen || head.bemerkungen || "",
+        note: form.comment || head.comment || "",
         rows: rowsWithPhotos,
-        items: { aufmass: rowsWithPhotos, lieferscheine: [] },
+        items: { aufmass: rowsWithPhotos, lieferscheine: [] }
       };
 
-      const resp = await api<any>(`/api/ki/regie/commit/regiebericht`, {
+      const resp = await api<any>(`/api/regie/commit/regiebericht`, {
         method: "POST",
-        body: JSON.stringify(snapshot),
+        body: JSON.stringify(snapshot)
       });
 
       const reportId = resp?.reportId ?? resp?.id ?? resp?.nummer ?? "?";
       const stored = resp?.stored ?? resp?.filename ?? resp?.file ?? resp?.path ?? "-";
 
+      if (resp?.pdfUrl) setPdfUrl(withApiBase(resp.pdfUrl));
       alert(`Regiebericht gespeichert (Nr. ${reportId}).\nDatei: ${stored}`);
       await loadHistory();
     } catch (e: any) {
@@ -1472,7 +1635,7 @@ export default function Regieberichte() {
 
   async function saveRowToServer(row: RegieRow) {
     const proj =
-      projectKey || row.projectId || (selectedProject?.code as string | undefined) || (selectedProject?.id as string | undefined) || "";
+    projectKey || row.projectId || selectedProject?.code as string | undefined || selectedProject?.id as string | undefined || "";
 
     if (!proj) {
       alert("Bitte Projekt-ID eingeben.");
@@ -1481,6 +1644,13 @@ export default function Regieberichte() {
 
     try {
       setLoading(true);
+
+      if (activeWorkflowDocId) {
+        await persistInboxDocument(activeWorkflowDocId, rows, row);
+        alert("Mobile-Dokument gespeichert.");
+        return;
+      }
+
       const date = (row.date || form.date || today()).slice(0, 10);
 
       const photos: any[] = [];
@@ -1500,12 +1670,12 @@ export default function Regieberichte() {
         date,
         note: row.comment ?? "",
         rows: [rowOut],
-        items: { aufmass: [rowOut], lieferscheine: [] },
+        items: { aufmass: [rowOut], lieferscheine: [] }
       };
 
-      const resp = await api<any>(`/api/ki/regie/commit/regiebericht`, {
+      const resp = await api<any>(`/api/regie/commit/regiebericht`, {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       const reportId = resp?.reportId ?? resp?.id ?? resp?.nummer ?? "?";
@@ -1525,7 +1695,7 @@ export default function Regieberichte() {
     if (!window.confirm("Diesen Regiebericht wirklich löschen?")) return;
 
     const proj =
-      projectKey || row.projectId || (selectedProject?.code as string | undefined) || (selectedProject?.id as string | undefined) || "";
+    projectKey || row.projectId || selectedProject?.code as string | undefined || selectedProject?.id as string | undefined || "";
 
     const updated = rows.filter((_, i) => i !== index);
     setRows(updated);
@@ -1539,12 +1709,17 @@ export default function Regieberichte() {
     try {
       if (!proj) return;
       const dateStr = (row.date || form.date || today()).slice(0, 10);
-      const snapshot = { projectId: proj, date: dateStr, note: form.comment ?? "", rows: updated };
-      await api<{ ok: boolean }>(`/api/ki/regie/commit/regiebericht`, {
-        method: "POST",
-        body: JSON.stringify(snapshot),
-      });
-      await loadHistory();
+      if (activeWorkflowDocId) {
+        await persistInboxDocument(activeWorkflowDocId, updated, { ...form, date: dateStr });
+        await loadInbox();
+      } else {
+        const snapshot = { projectId: proj, date: dateStr, note: form.comment ?? "", rows: updated };
+        await api<{ok: boolean;}>(`/api/regie/commit/regiebericht`, {
+          method: "POST",
+          body: JSON.stringify(snapshot)
+        });
+        await loadHistory();
+      }
     } catch (e) {
       console.error(e);
       alert("Die Zeile wurde lokal gelöscht, aber der Server-Speicher konnte nicht aktualisiert werden: " + msg(e));
@@ -1557,7 +1732,7 @@ export default function Regieberichte() {
       id: rid(),
       name: f.name,
       url: URL.createObjectURL(f),
-      type: f.type || guessType(f.name),
+      type: f.type || guessType(f.name)
     }));
     setForm((p) => ({ ...p, photos: [...(p.photos || []), ...arr] }));
   }
@@ -1565,7 +1740,7 @@ export default function Regieberichte() {
   function removePhoto(id: string) {
     setForm((p) => ({
       ...p,
-      photos: (p.photos || []).filter((ph) => ph.id !== id),
+      photos: (p.photos || []).filter((ph) => ph.id !== id)
     }));
   }
 
@@ -1581,7 +1756,7 @@ export default function Regieberichte() {
       id: rid(),
       name: file.name,
       url: URL.createObjectURL(file),
-      type: "application/pdf",
+      type: "application/pdf"
     };
 
     const localRows = parsed.map((r) => {
@@ -1591,7 +1766,7 @@ export default function Regieberichte() {
         id: rid(),
         lvItemPos: ensuredPos,
         lvItemId: r.lvItemId ?? ensuredPos,
-        photos: [attach] as Datei[],
+        photos: [attach] as Datei[]
       };
     });
 
@@ -1616,7 +1791,7 @@ export default function Regieberichte() {
     }
   }
 
-  function linkToAufmassLocal(args: { projectId: string; lvPos: string; regieId: string }) {
+  function linkToAufmassLocal(args: {projectId: string;lvPos: string;regieId: string;}) {
     const key = `aufmass-links`;
     const map = JSON.parse(localStorage.getItem(key) || "{}");
     const k = `${args.projectId}:${args.lvPos}`;
@@ -1625,7 +1800,7 @@ export default function Regieberichte() {
     localStorage.setItem(key, JSON.stringify(map));
   }
 
-  function ensureRegiePositions(list: RegieRow[], proj: string): { updated: RegieRow[]; created: number } {
+  function ensureRegiePositions(list: RegieRow[], proj: string): {updated: RegieRow[];created: number;} {
     let created = 0;
     const updated = list.map((r) => {
       if (hasPos(r.lvItemPos)) return r;
@@ -1654,19 +1829,19 @@ export default function Regieberichte() {
     if (!pos) return null;
 
     const ist =
-      r.hours != null && Number(r.hours) > 0 ? Number(r.hours) : r.quantity != null ? Number(r.quantity) : 0;
+    r.hours != null && Number(r.hours) > 0 ? Number(r.hours) : r.quantity != null ? Number(r.quantity) : 0;
 
     const unit = r.hours != null && Number(r.hours) > 0 ? "h" : (r.unit || "").trim() || "Stk";
 
     const text = (r.comment || "").trim() || (r.material || "").trim() || (r.machine || "").trim() || "Regie";
 
     const noteParts = [
-      r.worker ? `Mitarbeiter: ${r.worker}` : null,
-      r.machine ? `Maschine: ${r.machine}` : null,
-      r.material ? `Material: ${r.material}` : null,
-      r.date ? `Datum: ${String(r.date).slice(0, 10)}` : null,
-      r.regieNummer ? `Regie-Nr.: ${r.regieNummer}` : null,
-    ].filter(Boolean) as string[];
+    r.worker ? `Mitarbeiter: ${r.worker}` : null,
+    r.machine ? `Maschine: ${r.machine}` : null,
+    r.material ? `Material: ${r.material}` : null,
+    r.date ? `Datum: ${String(r.date).slice(0, 10)}` : null,
+    r.regieNummer ? `Regie-Nr.: ${r.regieNummer}` : null].
+    filter(Boolean) as string[];
 
     return {
       pos,
@@ -1678,7 +1853,7 @@ export default function Regieberichte() {
       formula: "",
       note: noteParts.join(" | "),
       factor: 1,
-      source: "REGIE",
+      source: "REGIE"
     };
   }
 
@@ -1690,14 +1865,14 @@ export default function Regieberichte() {
     const res = await api<any>(url, { method: "POST", body: JSON.stringify({ rows: aufmassRows }) });
 
     const appended =
-      typeof res?.appended === "number" ? res.appended : Array.isArray(res?.rows) ? res.rows.length : aufmassRows.length;
+    typeof res?.appended === "number" ? res.appended : Array.isArray(res?.rows) ? res.rows.length : aufmassRows.length;
 
     return { ok: true as const, appended };
   }
 
   async function createNachtraegeFromRegie() {
     const projKey =
-      (selectedProject?.code as string | undefined) || projectKey || form.projectId || (selectedProject?.id as string | undefined) || "";
+    selectedProject?.code as string | undefined || projectKey || form.projectId || selectedProject?.id as string | undefined || "";
 
     if (!projKey) return alert("Bitte Projekt-ID eingeben.");
     if (!rows.length) return alert("Keine Regie-Zeilen vorhanden.");
@@ -1714,7 +1889,7 @@ export default function Regieberichte() {
 
       let serverCreatedCount: number | null = null;
       try {
-        const out = await api<{ ok: boolean; created?: any[]; error?: string }>(
+        const out = await api<{ok: boolean;created?: any[];error?: string;}>(
           `/api/verknuepfung/nachtrag/${encodeURIComponent(projKey)}`,
           { method: "POST", body: JSON.stringify({ lvPos: lvPosList }) }
         );
@@ -1726,15 +1901,15 @@ export default function Regieberichte() {
       const draft = buildNachtragDraft(projKey, updated);
       const sanitized: NachtragDraft = {
         ...draft,
-        rows: draft.rows.map((x) => ({ ...x, pos: String(x.pos || "").trim() })).filter((x) => x.pos.length > 0),
+        rows: draft.rows.map((x) => ({ ...x, pos: String(x.pos || "").trim() })).filter((x) => x.pos.length > 0)
       };
 
       localStorage.setItem(NACHTRAG_BUFFER_KEY, JSON.stringify(sanitized));
 
       alert(
         `Nachträge erstellt.\nNeue Position(en): ${created}\nPos-Keys: ${lvPosList.length}\nServer erstellt: ${
-          serverCreatedCount == null ? "—" : serverCreatedCount
-        }\nDraft lokal: ${sanitized.rows.length}\n(Beispiel: ${sanitized.rows[0]?.pos || "—"})`
+        serverCreatedCount == null ? "—" : serverCreatedCount}\nDraft lokal: ${
+        sanitized.rows.length}\n(Beispiel: ${sanitized.rows[0]?.pos || "—"})`
       );
 
       window.location.href = `/kalkulation/nachtraege?projectId=${encodeURIComponent(projKey)}&from=regie`;
@@ -1747,7 +1922,7 @@ export default function Regieberichte() {
 
   async function transferToAufmassEditor() {
     const proj =
-      projectKey || form.projectId || (selectedProject?.code as string | undefined) || (selectedProject?.id as string | undefined) || "";
+    projectKey || form.projectId || selectedProject?.code as string | undefined || selectedProject?.id as string | undefined || "";
 
     if (!proj || !rows.length) {
       alert("Projekt und mindestens eine Zeile erforderlich.");
@@ -1797,7 +1972,7 @@ export default function Regieberichte() {
       Einheit: r.unit ?? "",
       "Pos (REGIE/LV)": r.lvItemPos ?? "",
       Beschreibung: r.comment ?? "",
-      ID: r.id ?? "",
+      ID: r.id ?? ""
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -1806,704 +1981,530 @@ export default function Regieberichte() {
   }
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title" style={{ marginBottom: 4 }}>
-            Regieberichte
-          </h2>
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            Inbox → Freigabe → Büro (Final). Regieberichte erfassen, bearbeiten, registrieren, drucken.
-          </p>
-        </div>
+    <div className="page regie-only-page">
+      <style>{`
+        .regie-only-page {
+          --regie-blue: #1546b8;
+          --regie-blue-dark: #0b2f7f;
+          --regie-soft: #eef4ff;
+          --regie-line: #d9e2f0;
+          --regie-text: #14213d;
+          --regie-muted: #61708c;
+        }
+        .regie-only-page .btn {
+          min-height: 36px !important;
+          padding: 7px 12px !important;
+          border-radius: 8px !important;
+          font-size: 12px !important;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .regie-only-page .regie-primary {
+          background: var(--regie-blue) !important;
+          border-color: var(--regie-blue) !important;
+          color: #fff !important;
+        }
+        .regie-only-page .regie-danger {
+          color: #b42318 !important;
+          border-color: #f2b8b5 !important;
+          background: #fff7f6 !important;
+        }
+        .regie-toolbar {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 10px 12px;
+          margin-bottom: 14px;
+          border: 1px solid var(--regie-line);
+          border-radius: 12px;
+          background: #fff;
+        }
+        .regie-toolbar-spacer { flex: 1; }
+        .regie-project {
+          display: grid;
+          grid-template-columns: auto minmax(180px, 250px);
+          align-items: center;
+          gap: 8px;
+        }
+        .regie-project span { font-size: 12px; color: var(--regie-muted); }
+        .regie-project input { min-height: 36px; }
+        .regie-card {
+          border: 1px solid var(--regie-line);
+          border-radius: 14px;
+          background: #fff;
+          box-shadow: 0 8px 22px rgba(20, 33, 61, 0.05);
+        }
+        .regie-card-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 16px;
+          border-bottom: 1px solid var(--regie-line);
+        }
+        .regie-card-head h3 { margin: 0; font-size: 17px; color: var(--regie-text); }
+        .regie-card-head p { margin: 3px 0 0; font-size: 12px; color: var(--regie-muted); }
+        .regie-form {
+          display: grid;
+          grid-template-columns: repeat(12, minmax(0, 1fr));
+          gap: 12px;
+          padding: 16px;
+        }
+        .regie-field {
+          display: grid;
+          gap: 5px;
+          min-width: 0;
+        }
+        .regie-field > span {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--regie-muted);
+        }
+        .regie-field input,
+        .regie-field textarea {
+          width: 100%;
+          min-height: 40px;
+          box-sizing: border-box;
+        }
+        .regie-field textarea { resize: vertical; }
+        .span-1 { grid-column: span 1; }
+        .span-2 { grid-column: span 2; }
+        .span-3 { grid-column: span 3; }
+        .span-4 { grid-column: span 4; }
+        .span-5 { grid-column: span 5; }
+        .span-6 { grid-column: span 6; }
+        .span-8 { grid-column: span 8; }
+        .span-12 { grid-column: 1 / -1; }
+        .regie-section-label {
+          grid-column: 1 / -1;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-top: 3px;
+          color: var(--regie-blue-dark);
+          font-size: 12px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: .04em;
+        }
+        .regie-section-label::after {
+          content: "";
+          height: 1px;
+          flex: 1;
+          background: var(--regie-line);
+        }
+        .regie-attachments {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        .regie-thumb {
+          position: relative;
+          width: 78px;
+          height: 78px;
+          overflow: hidden;
+          border: 1px solid var(--regie-line);
+          border-radius: 10px;
+          background: #f8fafc;
+        }
+        .regie-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: zoom-in; }
+        .regie-thumb .btn { position: absolute; top: 3px; right: 3px; min-height: 27px !important; padding: 1px 7px !important; }
+        .regie-actionbar {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 12px 16px 16px;
+          border-top: 1px solid var(--regie-line);
+        }
+        .regie-actionbar .group {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .regie-actionbar .separator {
+          width: 1px;
+          height: 28px;
+          background: var(--regie-line);
+          margin: 0 2px;
+        }
+        .regie-workspace {
+          display: grid;
+          grid-template-columns: minmax(0, 1.35fr) minmax(340px, .85fr);
+          gap: 14px;
+          margin-top: 14px;
+        }
+        .regie-preview-body { padding: 10px; }
+        .regie-preview-body iframe {
+          width: 100%;
+          height: 430px;
+          border: 1px solid var(--regie-line);
+          border-radius: 10px;
+          background: #f8fafc;
+        }
+        .regie-empty {
+          min-height: 430px;
+          display: grid;
+          place-items: center;
+          border: 1px dashed var(--regie-line);
+          border-radius: 10px;
+          color: var(--regie-muted);
+          font-size: 13px;
+          background: #fbfcfe;
+        }
+        .regie-list { max-height: 430px; overflow: auto; padding: 6px 10px 10px; }
+        .regie-list-item {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 10px;
+          align-items: center;
+          padding: 11px 4px;
+          border-bottom: 1px solid var(--regie-line);
+        }
+        .regie-list-item.active {
+          margin: 4px 0;
+          padding: 10px;
+          border: 1px solid #aec5f4;
+          border-radius: 9px;
+          background: var(--regie-soft);
+        }
+        .regie-list-title { font-size: 13px; font-weight: 800; color: var(--regie-text); }
+        .regie-list-meta { margin-top: 3px; font-size: 11px; color: var(--regie-muted); }
+        .regie-list-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .regie-list-actions .btn { min-height: 31px !important; padding: 4px 8px !important; font-size: 11px !important; }
+        .regie-table-card { margin-top: 14px; overflow: hidden; }
+        .regie-table-wrap { overflow: auto; }
+        .regie-table { width: 100%; min-width: 1450px; border-collapse: collapse; table-layout: fixed; }
+        .regie-table th {
+          padding: 9px 8px;
+          background: #f5f7fb;
+          border-bottom: 1px solid var(--regie-line);
+          color: #34425e;
+          font-size: 11px;
+          text-align: left;
+          white-space: nowrap;
+        }
+        .regie-table td {
+          padding: 9px 8px;
+          border-bottom: 1px solid var(--regie-line);
+          color: var(--regie-text);
+          font-size: 11px;
+          vertical-align: top;
+          overflow-wrap: anywhere;
+        }
+        .regie-row-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+        .regie-row-actions .btn { min-height: 29px !important; padding: 3px 7px !important; font-size: 10px !important; }
+        @media (max-width: 1200px) {
+          .regie-form { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+          .span-8, .span-12 { grid-column: 1 / -1; }
+          .span-5, .span-6 { grid-column: span 6; }
+          .span-4 { grid-column: span 3; }
+          .span-3 { grid-column: span 3; }
+          .span-2 { grid-column: span 2; }
+          .regie-workspace { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 720px) {
+          .regie-form { grid-template-columns: 1fr; }
+          .regie-form > * { grid-column: 1 / -1 !important; }
+          .regie-project { grid-template-columns: 1fr; }
+          .regie-toolbar-spacer { display: none; }
+        }
+      `}</style>
 
-        <div className="page-header-actions" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <MengPageHeader
+        title="Regieberichte"
+        subtitle="Mobile → Inbox → Prüfung → Freigeben → Verwaltung"
+        actions={
+          <>
           <input
             id="regieJsonImport"
             type="file"
             accept="application/json"
-            style={{ display: "none" }}
-            onChange={(e) => handleJsonFileChange(e.target.files)}
-          />
 
-          <button className="btn" onClick={openJsonFilePicker} disabled={loading}>
-            Regiebericht laden (Datei)
-          </button>
-
-          <button
-            className="btn"
-            onClick={() => void createNachtraegeFromRegie()}
-            disabled={!rows.length || !projectKey || loading}
-            title="Erstellt neue Positionen (REGIE.###) und erstellt Nachträge am Server + Draft lokal"
-          >
+            onChange={(e) => handleJsonFileChange(e.target.files)} className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1323" />
+          
+          <button className="btn" onClick={openJsonFilePicker} disabled={loading}>Datei laden</button>
+          <button className="btn" onClick={() => void createNachtraegeFromRegie()} disabled={!rows.length || !projectKey || loading}>
             Nachträge erstellen
           </button>
-
           <button className="btn" onClick={() => void transferToAufmassEditor()} disabled={!rows.length || !projectKey || loading}>
             Ins Aufmaßeditor übertragen
           </button>
+          <button className="btn" onClick={() => void reloadActiveTab()} disabled={loading || !projectKey}>Aktualisieren</button>
+          </>
+        }
+      />
 
-          <button className="btn" onClick={() => void reloadActiveTab()} disabled={loading || !projectKey}>
-            Aktualisieren
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <div className="regie-toolbar">
         <TabButton active={tab === "INBOX"} onClick={() => setTab("INBOX")}>
           Inbox (Eingereicht) {inboxItems.length ? `• ${inboxItems.length}` : ""}
         </TabButton>
-        <TabButton active={tab === "FREIGEGEBEN"} onClick={() => setTab("FREIGEGEBEN")}>
-          Freigegeben {approvedItems.length ? `• ${approvedItems.length}` : ""}
-        </TabButton>
-        <TabButton active={tab === "FINAL"} onClick={() => setTab("FINAL")}>
-          Final (Historie) {history.length ? `• ${history.length}` : ""}
+        <TabButton active={tab === "VERWALTUNG"} onClick={() => setTab("VERWALTUNG")}>
+          Verwaltung {history.length ? `• ${history.length}` : ""}
         </TabButton>
 
-        <div style={{ flex: 1 }} />
+        <div className="regie-toolbar-spacer" />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>Projekt-ID</span>
-          <input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="z. B. BA-2025-001" style={{ minWidth: 220 }} />
+        {activeWorkflowDocId &&
+        <>
+            <button className="btn regie-primary" onClick={() => void approveInbox(activeWorkflowDocId)} disabled={loading}>
+              Freigeben
+            </button>
+            <button className="btn regie-danger" onClick={() => void rejectInbox(activeWorkflowDocId)} disabled={loading}>
+              Ablehnen
+            </button>
+          </>
+        }
+
+        <div className="regie-project">
+          <span>Projekt-ID</span>
+          <input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="z. B. BA-2026-028" />
         </div>
       </div>
 
-      <div
-        className="page-body"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(290px, 330px) 1fr",
-          gap: 16,
-          alignItems: "flex-start",
-        }}
-      >
-        <div className="card" style={{ padding: 10 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 6 }}>Büro-Bearbeitung</h3>
-
-          {kiImported && (
-            <div
-              style={{
-                margin: "4px 0 8px",
-                padding: "6px 10px",
-                border: "1px solid #c7f0d8",
-                background: "#ecfdf5",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-            >
-              <b>{kiImported.count}</b> Position(en) aus KI-Diktat für <b>{kiImported.date}</b> übernommen.
-            </div>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
-            <L label="Berichtstyp">
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", fontSize: 12 }}>
-                {[
-                  { key: "REGIE", label: "Regiebericht" },
-                  { key: "TAGESBERICHT", label: "Tagesbericht" },
-                  { key: "BAUTAGEBUCH", label: "Bautagebuch" },
-                ].map((t) => {
-                  const active = form.reportType === (t.key as ReportType);
-                  return (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setField("reportType", t.key as ReportType)}
-                      className="btn"
-                      style={{
-                        padding: "2px 8px",
-                        fontSize: 11,
-                        borderRadius: 999,
-                        border: active ? "1px solid var(--primary)" : "1px solid var(--line)",
-                        background: active ? "var(--primary-soft)" : "#fff",
-                      }}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </L>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Datum" style={{ flex: 1 }}>
-                <input type="date" value={form.date ?? ""} onChange={(e) => setField("date", e.target.value)} />
-              </L>
-              <L label="Stunden" style={{ width: 110 }}>
-                <input type="number" step="0.25" value={form.hours ?? 0} onChange={(e) => setField("hours", Number(e.target.value))} />
-              </L>
-            </div>
-
-            <L label="Regie-Nr.">
-              <input value={form.regieNummer ?? ""} onChange={(e) => setField("regieNummer", e.target.value)} placeholder="z. B. R-001" />
-            </L>
-
-            <L label="Auftraggeber / Anschrift" full>
-              <input value={form.auftraggeber ?? ""} onChange={(e) => setField("auftraggeber", e.target.value)} />
-            </L>
-
-            <L label="Mitarbeiter">
-              <input value={form.worker ?? ""} onChange={(e) => setField("worker", e.target.value)} />
-            </L>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Maschine" style={{ flex: 1 }}>
-                <input value={form.machine ?? ""} onChange={(e) => setField("machine", e.target.value)} />
-              </L>
-              <L label="Material" style={{ flex: 1 }}>
-                <input value={form.material ?? ""} onChange={(e) => setField("material", e.target.value)} />
-              </L>
-            </div>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Menge" style={{ flex: 1 }}>
-                <input type="number" step="0.01" value={form.quantity ?? 0} onChange={(e) => setField("quantity", Number(e.target.value))} />
-              </L>
-              <L label="Einheit" style={{ width: 100 }}>
-                <input value={form.unit ?? ""} onChange={(e) => setField("unit", e.target.value)} />
-              </L>
-            </div>
-
-            <L label="LV-Position (ID)">
-              <input
-                value={form.lvItemId ?? ""}
-                onChange={(e) => setField("lvItemId", e.target.value)}
-                placeholder={form.lvItemPos ? `Pos: ${form.lvItemPos}` : "optional"}
-              />
-            </L>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Arbeitsbeginn" style={{ flex: 1 }}>
-                <input value={form.arbeitsbeginn ?? ""} onChange={(e) => setField("arbeitsbeginn", e.target.value)} placeholder="z. B. 07:00" />
-              </L>
-              <L label="Arbeitsende" style={{ flex: 1 }}>
-                <input value={form.arbeitsende ?? ""} onChange={(e) => setField("arbeitsende", e.target.value)} placeholder="z. B. 16:00" />
-              </L>
-            </div>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Pause 1" style={{ flex: 1 }}>
-                <input value={form.pause1 ?? ""} onChange={(e) => setField("pause1", e.target.value)} placeholder="z. B. 09:00–09:15" />
-              </L>
-              <L label="Pause 2" style={{ flex: 1 }}>
-                <input value={form.pause2 ?? ""} onChange={(e) => setField("pause2", e.target.value)} placeholder="optional" />
-              </L>
-            </div>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Blatt Nr." style={{ flex: 1 }}>
-                <input value={form.blattNr ?? ""} onChange={(e) => setField("blattNr", e.target.value)} />
-              </L>
-              <L label="Wetter" style={{ flex: 1 }}>
-                <input value={form.wetter ?? ""} onChange={(e) => setField("wetter", e.target.value)} placeholder="z. B. sonnig, 18°C" />
-              </L>
-            </div>
-
-            <L label="Kostenstelle">
-              <input value={form.kostenstelle ?? ""} onChange={(e) => setField("kostenstelle", e.target.value)} placeholder="z. B. 100-BA-01" />
-            </L>
-
-            <L label="Beschreibung" full>
-              <textarea
-                value={form.comment ?? ""}
-                onChange={(e) => setField("comment", e.target.value)}
-                style={{ height: 80, resize: "vertical" }}
-                placeholder="Ausführliche Beschreibung / Bemerkung…"
-              />
-            </L>
-
-            <L label="Bemerkungen (PDF-Feld unten)" full>
-              <textarea
-                value={form.bemerkungen ?? ""}
-                onChange={(e) => setField("bemerkungen", e.target.value)}
-                style={{ height: 60, resize: "vertical" }}
-                placeholder="Bemerkungen für das untere Feld im Regiebericht…"
-              />
-            </L>
-
-            <L label="Foto/Anhang (Bilder & PDF)">
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <input
-                  id="regiePhotos"
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf,.heic,.heif"
-                  onChange={(e) => addPhotos(e.target.files)}
-                  style={{ display: "none" }}
-                />
-                <label htmlFor="regiePhotos" className="btn">
-                  Dateien wählen
-                </label>
-
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {(form.photos || []).map((ph) => (
-                    <div
-                      key={ph.id}
-                      style={{
-                        position: "relative",
-                        border: "1px solid var(--line)",
-                        borderRadius: 10,
-                        overflow: "hidden",
-                        width: 90,
-                        height: 90,
-                        background: "#fafafa",
-                      }}
-                    >
-                      {isImg(ph.type) ? (
-                        <img
-                          src={ph.url}
-                          alt={ph.name}
-                          onClick={() => setPreviewUrl(ph.url)}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
-                        />
-                      ) : isPdf(ph.type) ? (
-                        <a
-                          href={ph.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display: "grid",
-                            placeItems: "center",
-                            width: "100%",
-                            height: "100%",
-                            fontSize: 12,
-                            textDecoration: "underline",
-                          }}
-                        >
-                          PDF
-                        </a>
-                      ) : (
-                        <a
-                          href={ph.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display: "grid",
-                            placeItems: "center",
-                            width: "100%",
-                            height: "100%",
-                            fontSize: 11,
-                          }}
-                        >
-                          FILE
-                        </a>
-                      )}
-
-                      <button onClick={() => removePhoto(ph.id)} className="btn" style={{ position: "absolute", top: 4, right: 4, padding: "0 6px" }}>
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </L>
-
-            <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
-              <button className="btn" onClick={() => void save()} disabled={loading}>
-                {form.id ? "Änderungen speichern" : "Eintrag anlegen (Snapshot)"}
-              </button>
-              <button className="btn" onClick={() => clearForm(true)} disabled={loading}>
-                Formular leeren
-              </button>
-              <button className="btn" onClick={() => void loadByDate()} disabled={loading}>
-                Neu laden (Datum)
-              </button>
-            </div>
-
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-              <button className="btn" onClick={exportXlsx} disabled={loading}>
-                Export XLSX
-              </button>
-              <button className="btn" onClick={() => void exportPdf(false)} disabled={loading}>
-                Export PDF
-              </button>
-              <button className="btn" onClick={() => void exportPdf(true)} disabled={loading}>
-                PDF Vorschau
-              </button>
-            </div>
-
-            <button
-              className="btn"
-              style={{ marginTop: 4 }}
-              onClick={() => void saveReportToServer()}
-              disabled={!rows.length || !projectKey || loading}
-              title="Legacy snapshot speichern (mit Fotos als base64)"
-            >
-              Regiebericht speichern (Snapshot)
-            </button>
-
-            <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-              <input id="regieImport" type="file" accept="application/pdf" onChange={(e) => void importPdfRegie(e.target.files)} style={{ display: "none" }} />
-              <label htmlFor="regieImport" className="btn">
-                Import PDF
-              </label>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>Extrahiert: Datum, Mitarbeiter, Stunden, Material, Menge, Einheit, Pos.</span>
-            </div>
-
-            {error && <div style={{ color: "crimson", marginTop: 4 }}>{error}</div>}
+      <div className="regie-card">
+        <div className="regie-card-head">
+          <div>
+            <h3>Büro-Bearbeitung</h3>
+            <p>{activeWorkflowDocId ? "Mobile-Dokument geladen – prüfen, bearbeiten und freigeben." : "Regiebericht erfassen oder einen gespeicherten Bericht bearbeiten."}</p>
           </div>
+          <div className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1324">{rows.length} Position(en)</div>
         </div>
 
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, alignItems: "stretch" }}>
-            <div className="card" style={{ padding: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <strong>PDF Vorschau</strong>
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>{pdfUrl ? "" : "Noch kein PDF geladen"}</span>
-              </div>
-              {pdfUrl ? (
-                <iframe src={pdfUrl} style={{ width: "100%", height: 230, border: "1px solid var(--line)", borderRadius: 8 }} />
-              ) : (
-                <div
-                  style={{
-                    height: 230,
-                    border: "1px dashed var(--line)",
-                    borderRadius: 8,
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: 12,
-                    color: "var(--muted)",
-                  }}
-                >
-                  Regiebericht wählen oder erzeugen…
+        {kiImported &&
+        <div className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1325">
+            <b>{kiImported.count}</b> Position(en) aus KI-Diktat für <b>{kiImported.date}</b> übernommen.
+          </div>
+        }
+
+        <div className="regie-form">
+          <div className="regie-section-label">Allgemeine Informationen</div>
+
+          <label className="regie-field span-2"><span>Datum</span><input type="date" value={form.date ?? ""} onChange={(e) => setField("date", e.target.value)} /></label>
+          <label className="regie-field span-2"><span>Regie-Nr.</span><input value={form.regieNummer ?? ""} onChange={(e) => setField("regieNummer", e.target.value)} placeholder="z. B. R-001" /></label>
+          <label className="regie-field span-5"><span>Auftraggeber / Anschrift</span><input value={form.auftraggeber ?? ""} onChange={(e) => setField("auftraggeber", e.target.value)} /></label>
+          <label className="regie-field span-3"><span>Kostenstelle</span><input value={form.kostenstelle ?? ""} onChange={(e) => setField("kostenstelle", e.target.value)} /></label>
+
+          <div className="regie-section-label">Leistung und Personal</div>
+
+          <label className="regie-field span-3"><span>Mitarbeiter</span><input value={form.worker ?? ""} onChange={(e) => setField("worker", e.target.value)} /></label>
+          <label className="regie-field span-1"><span>Stunden</span><input type="number" step="0.25" value={form.hours ?? 0} onChange={(e) => setField("hours", Number(e.target.value))} /></label>
+          <label className="regie-field span-2"><span>Maschine</span><input value={form.machine ?? ""} onChange={(e) => setField("machine", e.target.value)} /></label>
+          <label className="regie-field span-2"><span>Material</span><input value={form.material ?? ""} onChange={(e) => setField("material", e.target.value)} /></label>
+          <label className="regie-field span-1"><span>Menge</span><input type="number" step="0.01" value={form.quantity ?? 0} onChange={(e) => setField("quantity", Number(e.target.value))} /></label>
+          <label className="regie-field span-1"><span>Einheit</span><input value={form.unit ?? ""} onChange={(e) => setField("unit", e.target.value)} /></label>
+          <label className="regie-field span-2"><span>LV-Position</span><input value={form.lvItemId ?? ""} onChange={(e) => setField("lvItemId", e.target.value)} placeholder={form.lvItemPos ? `Pos: ${form.lvItemPos}` : "optional"} /></label>
+
+          <div className="regie-section-label">Arbeitszeit und Baustelle</div>
+
+          <label className="regie-field span-2"><span>Arbeitsbeginn</span><input value={form.arbeitsbeginn ?? ""} onChange={(e) => setField("arbeitsbeginn", e.target.value)} placeholder="07:00" /></label>
+          <label className="regie-field span-2"><span>Arbeitsende</span><input value={form.arbeitsende ?? ""} onChange={(e) => setField("arbeitsende", e.target.value)} placeholder="16:00" /></label>
+          <label className="regie-field span-2"><span>Pause 1</span><input value={form.pause1 ?? ""} onChange={(e) => setField("pause1", e.target.value)} /></label>
+          <label className="regie-field span-2"><span>Pause 2</span><input value={form.pause2 ?? ""} onChange={(e) => setField("pause2", e.target.value)} /></label>
+          <label className="regie-field span-2"><span>Blatt Nr.</span><input value={form.blattNr ?? ""} onChange={(e) => setField("blattNr", e.target.value)} /></label>
+          <label className="regie-field span-2"><span>Wetter</span><input value={form.wetter ?? ""} onChange={(e) => setField("wetter", e.target.value)} placeholder="sonnig, 18 °C" /></label>
+
+          <div className="regie-section-label">Beschreibung und Dokumentation</div>
+
+          <label className="regie-field span-6"><span>Beschreibung</span><textarea value={form.comment ?? ""} onChange={(e) => setField("comment", e.target.value)} rows={5} placeholder="Ausgeführte Arbeiten und besondere Vorkommnisse" /></label>
+          <label className="regie-field span-6"><span>Bemerkungen</span><textarea value={form.bemerkungen ?? ""} onChange={(e) => setField("bemerkungen", e.target.value)} rows={5} placeholder="Zusätzliche Hinweise für den Regiebericht" /></label>
+
+          <div className="regie-field span-12">
+            <span>Fotos und Anhänge</span>
+            <div className="regie-attachments">
+              <input id="regiePhotos" type="file" multiple accept="image/*,.pdf,.heic,.heif" onChange={(e) => addPhotos(e.target.files)} className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1326" />
+              <label htmlFor="regiePhotos" className="btn">Dateien wählen</label>
+              {(form.photos || []).map((ph) =>
+              <div className="regie-thumb" key={ph.id}>
+                  {isImg(ph.type) ?
+                <img src={ph.url} alt={ph.name} onClick={() => setPreviewUrl(ph.url)} /> :
+
+                <a href={ph.url} target="_blank" rel="noreferrer" className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1327">
+                      {isPdf(ph.type) ? "PDF" : "DATEI"}
+                    </a>
+                }
+                  <button className="btn" onClick={() => removePhoto(ph.id)}>×</button>
                 </div>
               )}
             </div>
-
-            <div className="card" style={{ padding: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <strong>{tab === "INBOX" ? "Inbox (Eingereicht)" : tab === "FREIGEGEBEN" ? "Freigegeben" : "Final (Historie)"}</strong>
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                  {tab === "INBOX"
-                    ? `${inboxItems.length} Eintrag(e)`
-                    : tab === "FREIGEGEBEN"
-                    ? `${approvedItems.length} Eintrag(e)`
-                    : `${history.length} Eintrag(e)`}
-                </span>
-              </div>
-
-              <div style={{ maxHeight: 230, overflowY: "auto", paddingRight: 4 }}>
-                {!projectKey ? (
-                  <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 2px" }}>Projekt-ID eingeben.</div>
-                ) : tab === "FINAL" ? (
-                  history.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 2px" }}>Noch keine Regieberichte gespeichert.</div>
-                  ) : (
-                    history.map((h) => (
-                      <div
-                        key={h.filename}
-                        style={{ padding: "6px 4px", borderBottom: "1px solid var(--line)", display: "flex", gap: 6, alignItems: "flex-start" }}
-                      >
-                        <div style={{ flex: 1, fontSize: 12 }}>
-                          <div style={{ fontWeight: 600 }}>
-                            {h.date}{" "}
-                            {h.savedAt ? `, ${new Date(h.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
-                          </div>
-                          <div style={{ color: "var(--muted)", marginTop: 2 }}>{h.rows} Position(en)</div>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => void loadSavedReportItem(h)}>
-                            Laden
-                          </button>
-                          {h.pdfUrl && (
-                            <a className="btn" style={{ fontSize: 11, padding: "2px 6px", textAlign: "center" }} href={h.pdfUrl} target="_blank" rel="noreferrer">
-                              PDF
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )
-                ) : tab === "INBOX" ? (
-                  inboxItems.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 2px" }}>Keine Inbox-Einträge.</div>
-                  ) : (
-                    inboxItems.map((it) => (
-                      <div key={it.id} style={{ padding: "6px 4px", borderBottom: "1px solid var(--line)", display: "flex", gap: 6, alignItems: "flex-start" }}>
-                        <div style={{ flex: 1, fontSize: 12 }}>
-                          <div style={{ fontWeight: 600 }}>
-                            {it.date || "—"} • {it.rowsCount ?? "?"} Pos.
-                          </div>
-                          <div style={{ color: "var(--muted)", marginTop: 2 }}>
-                            Status: {it.workflowStatus} • ID: {it.id.slice(0, 8)}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => void loadWorkflowDoc("inbox", it.id)}>
-                            Öffnen
-                          </button>
-                          <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => void approveInbox(it.id)}>
-                            Freigeben
-                          </button>
-                          <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => void rejectInbox(it.id)}>
-                            Ablehnen
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )
-                ) : approvedItems.length === 0 ? (
-                  <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 2px" }}>Keine freigegebenen Einträge.</div>
-                ) : (
-                  approvedItems.map((it) => (
-                    <div key={it.id} style={{ padding: "6px 4px", borderBottom: "1px solid var(--line)", display: "flex", gap: 6, alignItems: "flex-start" }}>
-                      <div style={{ flex: 1, fontSize: 12 }}>
-                        <div style={{ fontWeight: 600 }}>
-                          {it.date || "—"} • {it.rowsCount ?? "?"} Pos.
-                        </div>
-                        <div style={{ color: "var(--muted)", marginTop: 2 }}>
-                          Status: {it.workflowStatus} • ID: {it.id.slice(0, 8)}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => void loadWorkflowDoc("freigegeben", it.id)}>
-                          Öffnen
-                        </button>
-                        <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => void registerApproved(it.id)}>
-                          Registrieren
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
+        </div>
 
-          <div className="card" style={{ padding: 0 }}>
-            <div
-              style={{
-                padding: "8px 10px",
-                borderBottom: "1px solid var(--line)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 14 }}>Editor: Übersicht (geladener Bericht)</div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>{rows.length} Eintrag(e)</div>
+        <div className="regie-actionbar">
+          <div className="group">
+            <button className="btn regie-primary" onClick={() => void save()} disabled={loading}>
+              {form.id ? "Änderungen speichern" : "Eintrag hinzufügen"}
+            </button>
+            <button className="btn" onClick={() => clearForm(true)} disabled={loading}>Formular leeren</button>
+            <button className="btn" onClick={() => void loadByDate()} disabled={loading}>Nach Datum laden</button>
+          </div>
+          <div className="separator" />
+          <div className="group">
+            <button className="btn" onClick={() => void exportPdf(true)} disabled={loading || !rows.length}>PDF Vorschau</button>
+            <button className="btn" onClick={() => void exportPdf(false)} disabled={loading || !rows.length}>PDF exportieren</button>
+            <button className="btn" onClick={exportXlsx} disabled={loading || !rows.length}>XLSX exportieren</button>
+          </div>
+          <div className="separator" />
+          <div className="group">
+            <button className="btn" onClick={() => void saveReportToServer()} disabled={!rows.length || !projectKey || loading}>In Verwaltung speichern</button>
+            <input id="regieImport" type="file" accept="application/pdf" onChange={(e) => void importPdfRegie(e.target.files)} className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1328" />
+            <label htmlFor="regieImport" className="btn">PDF importieren</label>
+          </div>
+        </div>
+
+        {error && <div className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1329">{error}</div>}
+      </div>
+
+      <div className="regie-workspace">
+        <div className="regie-card">
+          <div className="regie-card-head">
+            <div><h3>PDF Vorschau</h3><p>Einheitliches Server-PDF für Mobile und Web.</p></div>
+            {pdfUrl && <a className="btn" href={pdfUrl} target="_blank" rel="noreferrer">Öffnen</a>}
+          </div>
+          <div className="regie-preview-body">
+            {pdfUrl ? <iframe src={pdfUrl} title="Regiebericht PDF Vorschau" /> : <div className="regie-empty">Regiebericht laden oder PDF Vorschau erzeugen</div>}
+          </div>
+        </div>
+
+        <div className="regie-card">
+          <div className="regie-card-head">
+            <div>
+              <h3>{tab === "INBOX" ? "Inbox (Eingereicht)" : "Verwaltung"}</h3>
+              <p>{tab === "INBOX" ? "Dokumente aus dem Mobile-Workflow" : "Freigegebene und gespeicherte Regieberichte"}</p>
             </div>
-
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <Th>Datum</Th>
-                    <Th>Typ</Th>
-                    <Th>Regie-Nr.</Th>
-                    <Th>Mitarbeiter</Th>
-                    <Th>Std</Th>
-                    <Th>Maschine</Th>
-                    <Th>Material</Th>
-                    <Th>Menge</Th>
-                    <Th>Einheit</Th>
-                    <Th>Pos (REGIE/LV)</Th>
-                    <Th>Beschreibung</Th>
-                    <Th>Anhänge</Th>
-                    <Th></Th>
-                  </tr>
-                </thead>
-
-                <tbody ref={tableRef}>
-                  {rows.length === 0 ? (
-                    <tr>
-                      <Td colSpan={13} style={{ textAlign: "center" }}>
-                        {projectKey ? "Kein Bericht geladen (rechts auswählen)" : "Projekt-ID eingeben"}
-                      </Td>
-                    </tr>
-                  ) : (
-                    rows.map((r, i) => {
-                      const isSelected = selIdx === i;
-                      const isFlash = flashId && String(r.id) === String(flashId);
-
-                      return (
-                        <tr
-                          key={r.id ?? `r-${i}`}
-                          data-row-id={r.id || `r-${i}`}
-                          style={{
-                            background: isSelected ? "rgba(0,0,0,0.04)" : isFlash ? "rgba(34,197,94,0.15)" : undefined,
-                            transition: "background .6s ease",
-                          }}
-                        >
-                          <Td>{r.date}</Td>
-                          <Td>{r.reportType === "TAGESBERICHT" ? "Tagesbericht" : r.reportType === "BAUTAGEBUCH" ? "Bautagebuch" : "Regiebericht"}</Td>
-                          <Td>{r.regieNummer}</Td>
-                          <Td>{r.worker}</Td>
-                          <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{num(r.hours)}</Td>
-                          <Td>{r.machine}</Td>
-                          <Td>{r.material}</Td>
-                          <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{num(r.quantity)}</Td>
-                          <Td>{r.unit}</Td>
-                          <Td>{r.lvItemPos ?? ""}</Td>
-                          <Td style={{ maxWidth: 380, whiteSpace: "pre-wrap" }}>{r.comment}</Td>
-
-                          <Td>
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", maxWidth: 200 }}>
-                              {(r.photos || []).slice(0, 4).map((ph) => (
-                                <a
-                                  key={ph.id}
-                                  href={ph.url}
-                                  onClick={(e) => {
-                                    if (isImg(ph.type)) {
-                                      e.preventDefault();
-                                      setPreviewUrl(ph.url);
-                                    }
-                                  }}
-                                  rel="noreferrer"
-                                  style={{
-                                    display: "block",
-                                    width: 46,
-                                    height: 46,
-                                    border: "1px solid var(--line)",
-                                    borderRadius: 8,
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {isImg(ph.type) ? (
-                                    <img src={ph.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                  ) : (
-                                    <div style={{ fontSize: 10, display: "grid", placeItems: "center", height: "100%" }}>{isPdf(ph.type) ? "PDF" : "FILE"}</div>
-                                  )}
-                                </a>
-                              ))}
-                              {(r.photos?.length || 0) > 4 && <span style={{ fontSize: 11, opacity: 0.7 }}>+{r.photos!.length - 4}</span>}
-                            </div>
-                          </Td>
-
-                          <Td>
-                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                              <button className="btn" onClick={() => void saveRowToServer(r)} style={{ fontSize: 11, padding: "2px 6px" }} disabled={loading}>
-                                Speichern
-                              </button>
-                              <button className="btn" onClick={() => select(i)} style={{ fontSize: 11, padding: "2px 6px" }} disabled={loading}>
-                                Bearbeiten
-                              </button>
-                              <button className="btn" onClick={() => void del(r, i)} style={{ fontSize: 11, padding: "2px 6px" }} disabled={loading}>
-                                Löschen
-                              </button>
-
-                              <button className="btn" onClick={() => void exportSingleRowPdf(r, false)} style={{ fontSize: 11, padding: "2px 6px" }} title="Nur diese Zeile als PDF" disabled={loading}>
-                                PDF
-                              </button>
-                              <button className="btn" onClick={() => void exportSingleRowPdf(r, true)} style={{ fontSize: 11, padding: "2px 6px" }} title="Vorschau: nur diese Zeile" disabled={loading}>
-                                PDF Vorschau
-                              </button>
-                            </div>
-                          </Td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <span className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1330">{tab === "INBOX" ? inboxItems.length : history.length} Eintrag(e)</span>
+          </div>
+          <div className="regie-list">
+            {!projectKey ?
+            <div className="regie-empty rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1331">Projekt-ID eingeben</div> :
+            tab === "INBOX" ?
+            inboxItems.length === 0 ?
+            <div className="regie-empty rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1332">Keine eingereichten Regieberichte</div> :
+            inboxItems.map((it) =>
+            <div key={it.id} className={`regie-list-item ${activeWorkflowDocId === it.id ? "active" : ""}`}>
+                  <div>
+                    <div className="regie-list-title">{it.date || "—"} · {it.rowsCount ?? "?"} Position(en)</div>
+                    <div className="regie-list-meta">Status: {it.workflowStatus} · ID: {it.id.slice(0, 8)}</div>
+                  </div>
+                  <div className="regie-list-actions">
+                    <button className="btn" onClick={() => void loadWorkflowDoc("inbox", it.id)}>Öffnen</button>
+                    <button className="btn regie-primary" onClick={() => void approveInbox(it.id)}>Freigeben</button>
+                    <button className="btn regie-danger" onClick={() => void rejectInbox(it.id)}>Ablehnen</button>
+                  </div>
+                </div>
+            ) :
+            history.length === 0 ?
+            <div className="regie-empty rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1333">Noch keine Regieberichte in Verwaltung</div> :
+            history.map((item) =>
+            <div key={item.filename} className="regie-list-item">
+                <div>
+                  <div className="regie-list-title">{item.date} · {item.rows} Position(en)</div>
+                  <div className="regie-list-meta">{item.savedAt ? new Date(item.savedAt).toLocaleString() : item.filename}</div>
+                </div>
+                <div className="regie-list-actions">
+                  <button className="btn" onClick={() => void loadSavedReportItem(item)}>Laden</button>
+                  {item.pdfUrl && <a className="btn" href={withApiBase(item.pdfUrl)} target="_blank" rel="noreferrer">PDF</a>}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {previewUrl && (
-        <div
-          onClick={() => setPreviewUrl(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.6)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          <img
-            src={previewUrl}
-            style={{
-              maxWidth: "98vw",
-              maxHeight: "98vh",
-              borderRadius: 12,
-              boxShadow: "0 10px 30px rgba(0,0,0,.5)",
-            }}
-          />
+      <div className="regie-card regie-table-card">
+        <div className="regie-card-head">
+          <div><h3>Geladener Regiebericht</h3><p>Positionen, Stunden, Maschinen, Material und Anhänge</p></div>
+          <span className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1334">{rows.length} Eintrag(e)</span>
         </div>
-      )}
-    </div>
-  );
+        <div className="regie-table-wrap">
+          <table className="regie-table">
+            <colgroup>
+              <col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1335" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1336" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1337" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1338" />
+              <col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1339" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1340" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1341" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1342" />
+              <col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1343" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1344" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1345" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1346" />
+              <col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1347" /><col className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1348" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Datum</th><th>Typ</th><th>Regie-Nr.</th><th>Auftraggeber</th><th>Mitarbeiter</th><th>Std.</th><th>Maschine</th><th>Material</th>
+                <th>Menge</th><th>Einheit</th><th>Pos. (REGIE/LV)</th><th>Beschreibung</th><th>Anhänge</th><th>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody ref={tableRef}>
+              {rows.length === 0 ?
+              <tr><td colSpan={14} className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1349">Kein Regiebericht geladen</td></tr> :
+              rows.map((r, i) => {
+                const selected = selIdx === i;
+                const flashing = flashId && String(r.id) === String(flashId);
+                return (
+                  <tr key={r.id ?? `r-${i}`} data-row-id={r.id || `r-${i}`} className={rlcClass(null, { background: selected ? "#eef4ff" : flashing ? "#ecfdf3" : undefined })}>
+                    <td>{r.date}</td>
+                    <td>{r.reportType === "TAGESBERICHT" ? "Tagesbericht" : r.reportType === "BAUTAGEBUCH" ? "Bautagebuch" : "Regiebericht"}</td>
+                    <td>{r.regieNummer || "—"}</td>
+                    <td>{r.auftraggeber || "—"}</td>
+                    <td>{r.worker || "—"}</td>
+                    <td className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1350">{num(r.hours)}</td>
+                    <td>{r.machine || "—"}</td>
+                    <td>{r.material || "—"}</td>
+                    <td className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1351">{num(r.quantity)}</td>
+                    <td>{r.unit || "—"}</td>
+                    <td>{r.lvItemPos || "—"}</td>
+                    <td className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1352">{r.comment || "—"}</td>
+                    <td>
+                      <div className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1353">
+                        {(r.photos || []).slice(0, 4).map((ph) =>
+                        <a key={ph.id} href={ph.url} onClick={(e) => {if (isImg(ph.type)) {e.preventDefault();setPreviewUrl(ph.url);}}} target="_blank" rel="noreferrer">
+                            {isImg(ph.type) ? <img src={ph.url} alt={ph.name} className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1354" /> : <span className="btn">PDF</span>}
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="regie-row-actions">
+                        <button className="btn" onClick={() => select(i)} disabled={loading}>Bearbeiten</button>
+                        <button className="btn" onClick={() => void saveRowToServer(r)} disabled={loading}>Speichern</button>
+                        <button className="btn" onClick={() => void exportSingleRowPdf(r, true)} disabled={loading}>PDF Vorschau</button>
+                        <button className="btn regie-danger" onClick={() => void del(r, i)} disabled={loading}>Löschen</button>
+                      </div>
+                    </td>
+                  </tr>);
+
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {previewUrl &&
+      <div onClick={() => setPreviewUrl(null)} className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1355">
+          <img src={previewUrl} alt="Vorschau" className="rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1356" />
+        </div>
+      }
+    </div>);
+
 }
+
 
 /* ===== UI helpers ===== */
-function TabButton(props: { active: boolean; onClick: () => void; children?: React.ReactNode }) {
+function TabButton(props: {active: boolean;onClick: () => void;children?: React.ReactNode;}) {
   return (
     <button
-      className="btn"
-      onClick={props.onClick}
-      style={{
-        padding: "4px 10px",
-        borderRadius: 999,
-        border: props.active ? "1px solid var(--primary)" : "1px solid var(--line)",
-        background: props.active ? "var(--primary-soft)" : "#fff",
-        fontSize: 12,
-      }}
-    >
+
+      onClick={props.onClick} className={rlcClass("btn",
+        {
+          minHeight: 38,
+          padding: "7px 14px",
+          borderRadius: 8,
+          border: props.active ? "1px solid var(--primary)" : "1px solid var(--line)",
+          background: props.active ? "var(--primary-soft)" : "#fff",
+          fontSize: 12,
+          fontWeight: 600
+        })}>
+      
       {props.children}
-    </button>
-  );
+    </button>);
+
 }
-
-function L(props: React.PropsWithChildren<{ label: string; full?: boolean; style?: React.CSSProperties }>) {
-  return (
-    <label
-      style={{
-        display: "grid",
-        gridTemplateColumns: props.full ? "1fr" : "110px 1fr",
-        gap: 4,
-        alignItems: "center",
-        ...props.style,
-      }}
-    >
-      <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.2 }}>{props.label}</span>
-      <div>{props.children}</div>
-    </label>
-  );
-}
-
-function Th({ children }: { children?: React.ReactNode }) {
-  return (
-    <th
-      style={{
-        textAlign: "left",
-        padding: "6px 8px",
-        borderBottom: "1px solid var(--line)",
-        fontSize: 12,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td(
-  props: React.TdHTMLAttributes<HTMLTableCellElement> & {
-    children?: React.ReactNode;
-  }
-) {
-  const { children, style, ...rest } = props;
-  return (
-    <td
-      {...rest}
-      style={{
-        padding: "6px 8px",
-        borderBottom: "1px solid var(--line)",
-        verticalAlign: "top",
-        fontSize: 12,
-        ...style,
-      }}
-    >
-      {children}
-    </td>
-  );
-}
-
-
-
-
-
-

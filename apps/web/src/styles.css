@@ -1,4 +1,4 @@
-﻿/* src/styles.css — RLC Theme (Light Default) + CAD Dark Scope + Fix Layout/Maps
+/* src/styles.css — RLC Theme (Light Default) + CAD Dark Scope + Fix Layout/Maps
    Fixes:
    - Removes duplicate :root overrides that broke colors/layout in other pages (GPS etc.)
    - Fixes absurd header logo height (was 300px)
@@ -13,8 +13,8 @@
   --text:#0f172a;
   --muted:#64748b;
 
-  --accent:#2563eb;
-  --accent-600:#1d4ed8;
+  --accent:#146ef5;
+  --accent-600:#0b5bd3;
   --accent-weak:#eaf1ff;
 
   --radius:12px;
@@ -36,14 +36,18 @@ body{
   font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
   color:var(--text);
   background:var(--bg);
-  font-size:13px;
+  font-size:12.5px;
+  overflow-x:hidden;
 }
 
 /* Shell */
 .app{
-  max-width:1360px;
-  margin:0 auto;
-  padding:14px 18px 26px;
+  width:100%;
+  max-width:none;
+  min-width:0;
+  margin:0;
+  padding:10px 14px 20px;
+  overflow-x:clip;
 }
 
 .header{
@@ -59,7 +63,7 @@ body{
 }
 
 .brand{
-  font-weight:800;
+  font-weight: 600;
   font-size:14px;
   letter-spacing:.2px;
   color:#0b1324;
@@ -67,29 +71,33 @@ body{
 }
 
 .layout{
-  display:grid;
-  grid-template-columns:260px 1fr;
-  gap:14px;
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
 }
 
 /* Card */
 .card{
+  width:100%;
+  max-width:100%;
+  min-width:0;
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--radius);
   box-shadow:var(--shadow);
-  padding:12px;
+  padding:10px;
   color:var(--text);
 }
 
 /* Side + Accordion */
-.s-title{font-size:12px;font-weight:800;margin-bottom:8px;color:#0f172a;opacity:.9}
+.s-title{font-size:12px;font-weight: 600;margin-bottom:8px;color:#0f172a;opacity:.9}
 .s-accordion{margin:0;padding:0;list-style:none}
 .s-sec{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden;background:#fff}
 .s-sec>button{all:unset;display:flex;align-items:center;justify-content:space-between;width:100%;cursor:pointer;padding:9px 10px;background:#fff}
 .s-sec>button:hover{background:#f9fbff}
 .s-sec-title{display:flex;gap:8px;align-items:center;color:#0f172a;font-weight:650}
-.s-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;background:#e8efff;color:#1d4ed8;border:1px solid #d7e4ff}
+.s-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;background:#e8efff;color:#0b5bd3;border:1px solid #d7e4ff}
 .chev{font-size:12px;color:#9aa3b2;transition:transform .2s}
 .s-sec.open .chev{transform:rotate(90deg)}
 .s-sub{display:grid;padding:6px 6px 8px;gap:4px;border-top:1px dashed var(--line);background:linear-gradient(180deg,#ffffff 0%,#fbfcff 100%)}
@@ -97,13 +105,13 @@ body{
 .s-link:hover{background:#f3f6ff}
 .s-link.active{background:var(--accent-weak);color:#0b1324;font-weight:700;border:1px solid #d8e2ff}
 
-.h1{font-size:16px;font-weight:800;margin:0 0 8px}
+.h1{font-size:16px;font-weight: 600;margin:0 0 8px}
 .breadcrumbs{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:8px}
 .sep{opacity:.55}
 
 /* Empty */
 .empty{border:1px dashed var(--line);border-radius:10px;padding:12px;background:#fcfdff}
-.empty h3{margin:0 0 6px 0;font-size:13.5px;font-weight:800}
+.empty h3{margin:0 0 6px 0;font-size:13.5px;font-weight: 600}
 .empty p{margin:0;color:var(--muted);font-size:12.5px}
 
 /* Hero (Startseite) */
@@ -123,7 +131,7 @@ body{
 }
 .hero-logo{display:flex;align-items:center;justify-content:center;padding:22px}
 .hero-body{padding:22px 22px 18px 0}
-.hero-title{font-size:32px;font-weight:900;letter-spacing:.2px;color:#0b1324;margin-bottom:6px}
+.hero-title{font-size:32px;font-weight: 700;letter-spacing:.2px;color:#0b1324;margin-bottom:6px}
 .hero-text{color:#131416;line-height:1.55;font-size:16px}
 .quick-links{padding:12px 12px 14px}
 .quick-links a{display:inline-block;border:1px solid #d7e4ff;background:#eef4ff;padding:6px 10px;border-radius:10px;font-weight:700;text-decoration:none;color:#0b1324;margin:0 6px 6px 0}
@@ -195,7 +203,7 @@ body{
 
 .r-modal{position:fixed;inset:0;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;z-index:999;}
 .r-modal__card{background:#fff;border-radius:12px;width:min(680px,92vw);padding:16px 18px;box-shadow:0 12px 36px rgba(0,0,0,.18);}
-.r-modal__title{font-weight:800;margin-bottom:10px;}
+.r-modal__title{font-weight: 600;margin-bottom:10px;}
 .r-textarea{width:100%;border:1px solid #e2e6f0;border-radius:10px;padding:10px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;}
 .r-modal__actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px;}
 .r-primary{background:#1a73e8;color:#fff;border:1px solid #1a73e8;border-radius:10px;padding:6px 12px;}
@@ -298,8 +306,20 @@ input,textarea,select{
    If GPS “non si vede”, 90% is missing height rules.
    ================================================================= */
 .leaflet-container{
+  position:relative;
+  z-index:0;
   width:100%;
   height:100%;
+}
+
+/* RLC: Navigationsmen?s m?ssen immer ?ber Karten liegen */
+header,
+nav,
+.s-nav,
+.s-topbar{
+  position:relative;
+  z-index:10000;
+  overflow:visible;
 }
 
 /* generic map wrappers (apply one of these classes in GPS pages if needed) */
@@ -396,7 +416,7 @@ input,textarea,select{
   padding:10px 12px;
 }
 .bh-card .k{font-size:12px;font-weight:600;color:var(--muted);}
-.bh-card .v{font-size:20px;font-weight:800;color:var(--text);margin-top:2px;}
+.bh-card .v{font-size:20px;font-weight: 600;color:var(--text);margin-top:2px;}
 .bh-card .s{font-family:monospace;font-size:12px;color:#667;margin-top:4px;}
 
 .bh-grid-2{
@@ -424,7 +444,7 @@ input,textarea,select{
 .bh-panel-head h3{
   margin:0;
   font-size:13.5px;
-  font-weight:800;
+  font-weight: 600;
   color:var(--text);
 }
 
@@ -459,3 +479,216 @@ input,textarea,select{
   color:var(--muted);
   margin-top:10px;
 }
+
+/* =================================================================
+   RLC RESPONSIVE COMPACT SHELL — globale, definitiva
+   ================================================================= */
+
+html,
+body,
+#root {
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  overflow-x:hidden;
+}
+
+.app,
+.header,
+.layout,
+.content {
+  width:100%;
+  max-width:100%;
+  min-width:0;
+}
+
+.content {
+  overflow-x:clip;
+}
+
+.content > *,
+.content > div,
+.content > section,
+.content > main,
+.content > article {
+  min-width:0;
+  max-width:100%;
+}
+
+.header {
+  min-width:0;
+}
+
+.header nav {
+  width:100%;
+  max-width:100%;
+  min-width:0;
+}
+
+.header nav > * {
+  min-width:0;
+}
+
+/* Riduce in modo uniforme l'ingombro senza usare zoom */
+h1,
+.h1 {
+  line-height:1.15;
+}
+
+button,
+.btn,
+input,
+select,
+textarea {
+  font-size:inherit;
+}
+
+button,
+.btn {
+  line-height:1.15;
+}
+
+/* Griglie generiche: le colonne possono realmente restringersi */
+.content [style*="display: grid"],
+.content [style*="display:grid"] {
+  min-width:0;
+  max-width:100%;
+}
+
+/* Tabelle larghe: scroll soltanto nel contenitore tabella */
+.table-scroll,
+.table-wrapper,
+.table-responsive,
+.content [style*="overflow-x: auto"],
+.content [style*="overflowX: auto"],
+.content [style*="overflowX:'auto'"],
+.content [style*='overflowX: "auto"'] {
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  overflow-x:auto !important;
+  overscroll-behavior-x:contain;
+}
+
+/* Evita che toolbar e pulsanti allarghino l'intera pagina */
+.toolbar,
+.actions,
+.page-actions,
+.card-actions,
+.button-row,
+.r-toolbar,
+.bh-actions,
+.bh-filters,
+.bh-header-row {
+  min-width:0;
+  max-width:100%;
+  flex-wrap:wrap;
+}
+
+@media (max-width: 1366px) {
+  .app {
+    padding:8px 10px 16px;
+  }
+
+  .header {
+    padding:10px 12px !important;
+    gap:8px !important;
+    border-radius:16px !important;
+  }
+
+  .card {
+    padding:9px;
+  }
+
+  .bh-page {
+    padding:10px 12px 28px;
+  }
+
+  .bh-cards {
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:9px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .header nav {
+    grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+  }
+
+  .header nav > *:nth-child(n+6) {
+    margin-top:0;
+  }
+}
+
+@media (max-width: 760px) {
+  .app {
+    padding:6px;
+  }
+
+  .header nav {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+
+  .header .brand {
+    flex-wrap:wrap;
+  }
+
+  .bh-grid-2 {
+    grid-template-columns:1fr;
+  }
+}
+
+
+
+/* =========================================================
+   RLC DESIGN SYSTEM 2.0 — light, compact, shared with Mobile
+   ========================================================= */
+:root{
+  --bg:#f7f9fc;
+  --card:#ffffff;
+  --line:#e6eaf0;
+  --text:#111827;
+  --muted:#6b7280;
+  --accent:#1769e0;
+  --accent-600:#0f4fb4;
+  --accent-weak:#eef5ff;
+  --radius:10px;
+  --shadow:0 1px 2px rgba(15,23,42,.035);
+  --rlc-control-height:42px;
+}
+body{font-size:14px;font-weight:400;line-height:1.45;background:var(--bg);}
+.header{border-radius:10px;padding:7px 12px;box-shadow:none;background:#fff;}
+.card{border-radius:10px;padding:12px;box-shadow:none;}
+.h1{font-size:24px;line-height:1.25;font-weight:600;letter-spacing:-.02em;}
+.s-title,.empty h3{font-weight:600;}
+.s-sec{border-radius:10px;margin-bottom:4px;}
+.s-sec>button{padding:10px 12px;}
+.s-sec-title{font-weight:600;}
+.s-link{min-height:42px;padding:9px 10px;border-radius:8px;font-size:14px;}
+.s-link.active{font-weight:600;}
+button,.btn,input,select,textarea{font:inherit;}
+input,select{min-height:var(--rlc-control-height);}
+.btn,button{font-weight:500;}
+.rlc-list{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.rlc-list-item{display:flex;align-items:center;gap:12px;min-height:68px;padding:11px 14px;border:0;border-bottom:1px solid var(--line);background:#fff;color:var(--text);text-decoration:none;width:100%;text-align:left;}
+.rlc-list-item:last-child{border-bottom:0;}
+.rlc-list-item:hover{background:#fafcff;}
+.rlc-list-item__icon{width:9px;height:9px;border-radius:999px;background:var(--accent);flex:0 0 auto;}
+.rlc-list-item__body{min-width:0;flex:1;}
+.rlc-list-item__title{font-size:15px;line-height:20px;font-weight:600;}
+.rlc-list-item__subtitle{margin-top:2px;font-size:13px;line-height:18px;font-weight:400;color:var(--muted);}
+.rlc-list-item__chevron{font-size:20px;line-height:1;color:#9ca3af;font-weight:400;}
+@media(max-width:700px){.app{padding:8px 10px 16px}.h1{font-size:22px}.card{padding:10px}}
+
+
+/* RLC DESIGN SYSTEM 2.0 - GLOBAL COMPACT WEB NORMALIZATION */
+:root{--rlc-font:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--rlc-bg:#f5f7fa;--rlc-surface:#fff;--rlc-line:#dce3ec;--rlc-text:#111827;--rlc-muted:#66758c;--rlc-blue:#0f67d8;--rlc-radius:12px;--rlc-shadow:0 1px 2px rgba(15,23,42,.04)}
+html{font-size:15px}body{font-family:var(--rlc-font);background:var(--rlc-bg);color:var(--rlc-text);font-weight:400;line-height:1.45}
+button,input,select,textarea{font:inherit}button,.btn,[role="button"]{min-height:40px;border-radius:10px;font-weight:600;box-shadow:none}
+input,select,textarea{border-radius:10px!important;border-color:var(--rlc-line)!important;box-shadow:none!important}
+.card,.panel,.box,.section-card,.content-card{border-radius:12px!important;border-color:var(--rlc-line)!important;box-shadow:var(--rlc-shadow)!important}
+h1,.h1{font-size:clamp(1.55rem,2vw,2rem)!important;line-height:1.15!important;font-weight:700!important;letter-spacing:-.02em}
+h2,.h2{font-size:clamp(1.25rem,1.5vw,1.55rem)!important;line-height:1.2!important;font-weight:650!important}
+h3,.h3{font-size:1.1rem!important;line-height:1.25!important;font-weight:600!important}p,label,li,td,th{font-weight:400}
+small,.muted,.subtitle,.description{color:var(--rlc-muted)}.app,.page,.page-content,.content{max-width:100%;min-width:0}
+@media(max-width:760px){body{font-size:14px}.app{padding:8px 10px 18px}.card,.panel,.box,.section-card,.content-card{padding:12px!important}button,.btn,[role="button"]{min-height:40px;padding:8px 12px!important}}

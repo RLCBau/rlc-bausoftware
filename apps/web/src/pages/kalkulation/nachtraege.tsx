@@ -1,15 +1,20 @@
-﻿// apps/web/src/pages/kalkulation/nachtraege.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/nachtraege.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { runRlcAction } from "../../lib/rlcProgress";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Changes, type ChangeRow, type ChangeStatus } from "./changeStore";
 import { useProject } from "../../store/useProject";
+import {
+  openPdfBlobPreview,
+  reservePdfPreview,
+  type PdfPreviewWindow } from
+"../../lib/pdf/companyPdfHeader";
 
 const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "";
+(import.meta as any)?.env?.VITE_API_URL ||
+(import.meta as any)?.env?.VITE_BACKEND_URL ||
+"";
 
 const MWST_KEY = "rlc_changes_mwst_v1";
 const NACHTRAG_BUFFER_KEY = "rlc:nachtrag-buffer";
@@ -21,11 +26,11 @@ const RECIPE_CONTEXT_KEY = "rlc_recipes_new_position_context_v1";
 const EXT_STORE_KEY = "rlc_changes_ext_v2";
 
 const STATI: ChangeStatus[] = [
-  "Entwurf",
-  "Abgegeben",
-  "Beauftragt",
-  "Abgelehnt",
-];
+"Entwurf",
+"Abgegeben",
+"Beauftragt",
+"Abgelehnt"];
+
 
 type NachtragRow = ChangeRow & {
   langtext?: string;
@@ -69,16 +74,16 @@ type ProjectLike = {
 };
 
 type NachtragQualityFilter =
-  | "alle"
-  | "Entwurf"
-  | "Abgegeben"
-  | "Beauftragt"
-  | "Abgelehnt"
-  | "begruendungFehlt"
-  | "epFehlt"
-  | "mengeFehlt"
-  | "einheitFehlt"
-  | "doppelte";
+"alle" |
+"Entwurf" |
+"Abgegeben" |
+"Beauftragt" |
+"Abgelehnt" |
+"begruendungFehlt" |
+"epFehlt" |
+"mengeFehlt" |
+"einheitFehlt" |
+"doppelte";
 
 type NachtragDraftRow = {
   pos?: string;
@@ -149,10 +154,10 @@ type KalkulationHandoff = {
 };
 
 type ServerNachtragStatus =
-  | "offen"
-  | "inBearbeitung"
-  | "freigegeben"
-  | "abgelehnt";
+"offen" |
+"inBearbeitung" |
+"freigegeben" |
+"abgelehnt";
 
 type ServerNachtrag = {
   id: string;
@@ -194,14 +199,14 @@ function apiUrl(path: string): string {
 function getAuthToken(): string {
   try {
     const directKeys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-      "rlc.auth.token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token",
+    "rlc.auth.token"];
+
 
     for (const key of directKeys) {
       const value = localStorage.getItem(key);
@@ -209,14 +214,14 @@ function getAuthToken(): string {
     }
 
     const jsonKeys = [
-      "auth",
-      "user",
-      "session",
-      "rlc_auth",
-      "rlc_session",
-      "rlc.auth",
-      "rlc.session",
-    ];
+    "auth",
+    "user",
+    "session",
+    "rlc_auth",
+    "rlc_session",
+    "rlc.auth",
+    "rlc.session"];
+
 
     for (const key of jsonKeys) {
       const raw = localStorage.getItem(key);
@@ -225,25 +230,25 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken ??
-          parsed?.user?.token ??
-          parsed?.user?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken ??
+        parsed?.user?.token ??
+        parsed?.user?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-        //
-      }
-    }
-  } catch {
-    //
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
@@ -251,7 +256,7 @@ function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
 
   return {
     ...(extra || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -268,8 +273,8 @@ async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
       signal: controller.signal,
       headers: withAuthHeaders({
         ...(hasBody ? { "Content-Type": "application/json" } : {}),
-        ...((init.headers as Record<string, string>) || {}),
-      }),
+        ...(init.headers as Record<string, string> || {})
+      })
     });
 
     const text = await res.text().catch(() => "");
@@ -283,10 +288,10 @@ async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
 
     if (!res.ok) {
       const msg =
-        data?.error ||
-        data?.message ||
-        text ||
-        `Server-Fehler (${res.status})`;
+      data?.error ||
+      data?.message ||
+      text ||
+      `Server-Fehler (${res.status})`;
 
       throw new Error(msg);
     }
@@ -331,10 +336,10 @@ function loadKalkulationBasis(projectKey: string): KalkulationBasisRow[] {
   if (!projectKey || typeof localStorage === "undefined") return [];
 
   const keys = [
-    `rlc_kalkulation_mit_ki_elite_v1:${projectKey}`,
-    `rlc_lv_data_v1:${projectKey}`,
-    `rlc_gaeb_import_v1:${projectKey}`,
-  ];
+  `rlc_kalkulation_mit_ki_elite_v1:${projectKey}`,
+  `rlc_lv_data_v1:${projectKey}`,
+  `rlc_gaeb_import_v1:${projectKey}`];
+
 
   for (const key of keys) {
     try {
@@ -342,36 +347,36 @@ function loadKalkulationBasis(projectKey: string): KalkulationBasisRow[] {
       if (!raw) continue;
 
       const parsed = JSON.parse(raw);
-      const rawRows = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.rows)
-          ? parsed.rows
-          : Array.isArray(parsed?.items)
-            ? parsed.items
-            : [];
+      const rawRows = Array.isArray(parsed) ?
+      parsed :
+      Array.isArray(parsed?.rows) ?
+      parsed.rows :
+      Array.isArray(parsed?.items) ?
+      parsed.items :
+      [];
 
-      const rows = rawRows
-        .map((r: any) => ({
-          ...r,
-          posNr: String(r?.posNr || r?.pos || r?.positionNumber || "").trim(),
-          kurztext: String(r?.kurztext || r?.shortText || r?.title || "").trim(),
-          langtext: String(r?.langtext || r?.longText || "").trim(),
-          einheit: String(r?.einheit || r?.unit || "").trim(),
-          menge: n(r?.menge ?? r?.quantity),
-          preis: n(r?.rlcKiUnitPrice ?? r?.finalUnitPrice ?? r?.preis ?? r?.unitPrice),
-          rlcKiTotal: n(r?.rlcKiTotal ?? r?.totalNet ?? r?.gesamt),
-          calculationStatus: String(r?.calculationStatus || ""),
-          riskLevel: String(r?.riskLevel || ""),
-          confidence: n(r?.confidence),
-        }))
-        .filter((r: any) => r.posNr || r.kurztext);
+      const rows = rawRows.
+      map((r: any) => ({
+        ...r,
+        posNr: String(r?.posNr || r?.pos || r?.positionNumber || "").trim(),
+        kurztext: String(r?.kurztext || r?.shortText || r?.title || "").trim(),
+        langtext: String(r?.langtext || r?.longText || "").trim(),
+        einheit: String(r?.einheit || r?.unit || "").trim(),
+        menge: n(r?.menge ?? r?.quantity),
+        preis: n(r?.rlcKiUnitPrice ?? r?.finalUnitPrice ?? r?.preis ?? r?.unitPrice),
+        rlcKiTotal: n(r?.rlcKiTotal ?? r?.totalNet ?? r?.gesamt),
+        calculationStatus: String(r?.calculationStatus || ""),
+        riskLevel: String(r?.riskLevel || ""),
+        confidence: n(r?.confidence)
+      })).
+      filter((r: any) => r.posNr || r.kurztext);
 
       if (rows.length) return rows;
     } catch {
-      //
-    }
-  }
 
+
+      //
+    }}
   return [];
 }
 
@@ -403,10 +408,10 @@ function loadExtRows(pid: string): NachtragRow[] {
   if (extRows.length) return extRows.map(normalizeRow);
 
   return Changes.list(pid).map((row) =>
-    normalizeRow({
-      ...row,
-      langtext: "",
-    })
+  normalizeRow({
+    ...row,
+    langtext: ""
+  })
   );
 }
 
@@ -428,7 +433,7 @@ function saveExtRows(pid: string, rows: NachtragRow[]) {
       mengeDelta: row.mengeDelta,
       preis: row.preis,
       status: row.status,
-      begruendung: row.begruendung,
+      begruendung: row.begruendung
     });
   });
 }
@@ -454,9 +459,9 @@ function n(value: unknown, fallback = 0): number {
   const raw = String(value ?? "").trim();
   if (!raw) return fallback;
 
-  const normalized = raw.includes(",")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw;
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw;
 
   const x = typeof value === "number" ? value : Number(normalized);
   return Number.isFinite(x) ? x : fallback;
@@ -469,26 +474,26 @@ function round2(value: number): number {
 function money(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(n(value));
 }
 
 function fmtNum(value: unknown, digits = 2): string {
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
+    maximumFractionDigits: digits
   }).format(n(value));
 }
 
 function getCurrentProject(projectCtx: any): ProjectLike | null {
   const candidate =
-    projectCtx?.currentProject ??
-    projectCtx?.project ??
-    projectCtx?.selectedProject ??
-    projectCtx?.current ??
-    (typeof projectCtx?.getCurrentProject === "function"
-      ? projectCtx.getCurrentProject()
-      : null);
+  projectCtx?.currentProject ??
+  projectCtx?.project ??
+  projectCtx?.selectedProject ??
+  projectCtx?.current ?? (
+  typeof projectCtx?.getCurrentProject === "function" ?
+  projectCtx.getCurrentProject() :
+  null);
 
   if (candidate && typeof candidate === "object") {
     return candidate as ProjectLike;
@@ -507,12 +512,12 @@ function buildKeys(currentProject: ProjectLike | null) {
 
   const projectCodeFs = String(
     currentProject?.code ||
-      currentProject?.number ||
-      currentProject?.projektnummer ||
-      ""
-  )
-    .trim()
-    .toUpperCase();
+    currentProject?.number ||
+    currentProject?.projektnummer ||
+    ""
+  ).
+  trim().
+  toUpperCase();
 
   const apiKey = projectCodeFs || projectIdUuid || "";
   const serverProjectKey = projectCodeFs || apiKey || "";
@@ -525,11 +530,11 @@ function projectTitle(project: ProjectLike | null): string {
   if (!project) return "Kein Projekt gewählt";
 
   const code =
-    project.code ||
-    project.number ||
-    project.projektnummer ||
-    project.id ||
-    "Projekt";
+  project.code ||
+  project.number ||
+  project.projektnummer ||
+  project.id ||
+  "Projekt";
 
   const name = project.name || project.projectName || "Projekt";
 
@@ -585,7 +590,7 @@ function normalizeRow(row: Partial<NachtragRow>): NachtragRow {
 
     warning: String(row.warning || ""),
     aiReason: String(row.aiReason || ""),
-    priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [],
+    priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : []
   };
 }
 
@@ -599,16 +604,16 @@ function fromServer(row: ServerNachtrag): NachtragRow {
     mengeDelta: n(row.qty),
     preis: n(row.ep),
     status: toUiStatus(row.status),
-    begruendung: row.note || "",
+    begruendung: row.note || ""
   });
 }
 
 function toServer(
-  projectKey: string,
-  row: NachtragRow,
-  existingNumber?: string,
-  existingCreatedAt?: string
-): ServerNachtrag {
+projectKey: string,
+row: NachtragRow,
+existingNumber?: string,
+existingCreatedAt?: string)
+: ServerNachtrag {
   const qty = n(row.mengeDelta);
   const ep = n(row.preis);
   const now = new Date().toISOString();
@@ -627,7 +632,7 @@ function toServer(
     status: toServerStatus((row.status || "Entwurf") as ChangeStatus),
     note: String(row.begruendung || ""),
     createdAt: existingCreatedAt || now,
-    updatedAt: now,
+    updatedAt: now
   };
 }
 
@@ -647,7 +652,7 @@ function mergeRowsKeepLocal(prev: NachtragRow[], incoming: NachtragRow[]) {
       normalizeRow({
         ...(serverRow || {}),
         ...row,
-        langtext: row.langtext || serverRow?.langtext || "",
+        langtext: row.langtext || serverRow?.langtext || ""
       })
     );
   }
@@ -685,20 +690,20 @@ function mergeByPosNrKeepExisting(prev: NachtragRow[], incoming: NachtragRow[]) 
 }
 
 function nachtragDuplicateKey(row: NachtragRow): string {
-  const text = `${row.posNr || ""} ${row.kurztext || ""} ${row.langtext || ""}`
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = `${row.posNr || ""} ${row.kurztext || ""} ${row.langtext || ""}`.
+  toLowerCase().
+  replace(/[^\p{L}\p{N}]+/gu, " ").
+  replace(/\s+/g, " ").
+  trim();
 
   if (text.length < 6) return "";
 
   return [
-    text,
-    String(row.einheit || "").trim().toLowerCase(),
-    round2(n(row.mengeDelta)),
-    round2(n(row.preis)),
-  ].join("|");
+  text,
+  String(row.einheit || "").trim().toLowerCase(),
+  round2(n(row.mengeDelta)),
+  round2(n(row.preis))].
+  join("|");
 }
 
 function getNachtragDuplicateIds(rows: NachtragRow[]): Set<string> {
@@ -755,28 +760,28 @@ function mergeByIdKeepExisting(prev: NachtragRow[], incoming: NachtragRow[]) {
    PosNr;Kurztext;Langtext;Einheit;DeltaMenge;EP (netto);Status;Begründung
 */
 function parseCsv(text: string): NachtragRow[] {
-  const raw = String(text || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .trim();
+  const raw = String(text || "").
+  replace(/\r\n/g, "\n").
+  replace(/\r/g, "\n").
+  trim();
 
   if (!raw) return [];
 
   const sep = raw.includes(";") ? ";" : ",";
-  const lines = raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const lines = raw.
+  split("\n").
+  map((line) => line.trim()).
+  filter(Boolean);
 
   if (!lines.length) return [];
 
   const header = lines[0].toLowerCase();
   const hasHeader =
-    header.includes("pos") ||
-    header.includes("kurz") ||
-    header.includes("lang") ||
-    header.includes("einheit") ||
-    header.includes("status");
+  header.includes("pos") ||
+  header.includes("kurz") ||
+  header.includes("lang") ||
+  header.includes("einheit") ||
+  header.includes("status");
 
   const start = hasHeader ? 1 : 0;
   const out: NachtragRow[] = [];
@@ -832,7 +837,7 @@ function parseCsv(text: string): NachtragRow[] {
         mengeDelta: n(mengeDelta),
         preis: n(preis),
         status,
-        begruendung,
+        begruendung
       })
     );
   }
@@ -845,9 +850,9 @@ function csvCell(value: unknown): string {
 }
 
 function safeFileName(value: string): string {
-  return String(value || "Nachtraege")
-    .replace(/[^\w.-]+/g, "_")
-    .replace(/_+/g, "_");
+  return String(value || "Nachtraege").
+  replace(/[^\w.-]+/g, "_").
+  replace(/_+/g, "_");
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -872,18 +877,18 @@ function readKalkulationHandoff(): KalkulationHandoff | null {
 
       if (rows.length) return parsed;
     } catch {
-      //
-    }
-  }
 
+
+      //
+    }}
   return null;
 }
 
 function handoffMatchesProject(
-  handoff: KalkulationHandoff | null,
-  currentProject: ProjectLike | null,
-  apiKey: string
-): boolean {
+handoff: KalkulationHandoff | null,
+currentProject: ProjectLike | null,
+apiKey: string)
+: boolean {
   if (!handoff) return false;
 
   const hk = String(handoff.projectKey || "").trim().toUpperCase();
@@ -891,14 +896,14 @@ function handoffMatchesProject(
 
   const currentKey = String(
     currentProject?.code ||
-      currentProject?.number ||
-      currentProject?.projektnummer ||
-      currentProject?.id ||
-      apiKey ||
-      ""
-  )
-    .trim()
-    .toUpperCase();
+    currentProject?.number ||
+    currentProject?.projektnummer ||
+    currentProject?.id ||
+    apiKey ||
+    ""
+  ).
+  trim().
+  toUpperCase();
 
   return !currentKey || hk === currentKey;
 }
@@ -906,81 +911,81 @@ function handoffMatchesProject(
 function mapHandoffRowsToNachtraege(handoff: KalkulationHandoff): NachtragRow[] {
   const rows = Array.isArray(handoff.rows) ? handoff.rows : [];
 
-  return rows
-    .map((row) => {
-      const posNr = String(row.posNr || row.pos || "").trim();
-      const kurztext = String(row.kurztext || row.title || "").trim();
-      const langtext = String(row.langtext || "").trim();
+  return rows.
+  map((row) => {
+    const posNr = String(row.posNr || row.pos || "").trim();
+    const kurztext = String(row.kurztext || row.title || "").trim();
+    const langtext = String(row.langtext || "").trim();
 
-      const einheit = String(row.einheit || row.unit || "m").trim() || "m";
+    const einheit = String(row.einheit || row.unit || "m").trim() || "m";
 
-      const mengeDelta = n(row.mengeDelta ?? row.menge ?? row.qty, 0);
-      const preis = n(
-        row.preis ??
-          row.ep ??
-          row.finalUnitPrice ??
-          row.suggestedUnitPrice ??
-          row.baseUnitPrice,
-        0
-      );
+    const mengeDelta = n(row.mengeDelta ?? row.menge ?? row.qty, 0);
+    const preis = n(
+      row.preis ??
+      row.ep ??
+      row.finalUnitPrice ??
+      row.suggestedUnitPrice ??
+      row.baseUnitPrice,
+      0
+    );
 
-      const auftragName = String(row.auftragName || handoff.auftragName || "").trim();
+    const auftragName = String(row.auftragName || handoff.auftragName || "").trim();
 
-      const begruendungParts = [
-        "Aus Rezept / Urkalkulation übernommen.",
-        auftragName ? `Auftrag: ${auftragName}` : "",
-        row.warning ? `Hinweis: ${row.warning}` : "",
-        row.aiReason ? `Kalkulationshinweis: ${row.aiReason}` : "",
-      ].filter(Boolean);
+    const begruendungParts = [
+    "Aus Rezept / Urkalkulation übernommen.",
+    auftragName ? `Auftrag: ${auftragName}` : "",
+    row.warning ? `Hinweis: ${row.warning}` : "",
+    row.aiReason ? `Kalkulationshinweis: ${row.aiReason}` : ""].
+    filter(Boolean);
 
-      if (!posNr && !kurztext) return null;
+    if (!posNr && !kurztext) return null;
 
-      return normalizeRow({
-        id: `REZEPT-${String(row.id || `${posNr}-${Date.now()}`)}`,
-        posNr,
-        kurztext: kurztext || (posNr ? `Nachtrag zu ${posNr}` : "Nachtrag"),
-        langtext,
-        einheit,
-        mengeDelta,
-        preis,
-        status: "Entwurf",
-        begruendung: begruendungParts.join("\n"),
+    return normalizeRow({
+      id: `REZEPT-${String(row.id || `${posNr}-${Date.now()}`)}`,
+      posNr,
+      kurztext: kurztext || (posNr ? `Nachtrag zu ${posNr}` : "Nachtrag"),
+      langtext,
+      einheit,
+      mengeDelta,
+      preis,
+      status: "Entwurf",
+      begruendung: begruendungParts.join("\n"),
 
-        materialCost: n((row as any).materialCost),
-        laborCost: n((row as any).laborCost),
-        machineCost: n((row as any).machineCost),
-        subcontractorCost: n((row as any).subcontractorCost),
-        disposalCost: n((row as any).disposalCost),
-        transportCost: n((row as any).transportCost),
-        overheadCost: n((row as any).overheadCost),
-        riskCost: n((row as any).riskCost),
-        profitCost: n((row as any).profitCost),
+      materialCost: n((row as any).materialCost),
+      laborCost: n((row as any).laborCost),
+      machineCost: n((row as any).machineCost),
+      subcontractorCost: n((row as any).subcontractorCost),
+      disposalCost: n((row as any).disposalCost),
+      transportCost: n((row as any).transportCost),
+      overheadCost: n((row as any).overheadCost),
+      riskCost: n((row as any).riskCost),
+      profitCost: n((row as any).profitCost),
 
-        baseUnitPrice: n((row as any).baseUnitPrice),
-        suggestedUnitPrice: n((row as any).suggestedUnitPrice),
-        finalUnitPrice: n((row as any).finalUnitPrice),
+      baseUnitPrice: n((row as any).baseUnitPrice),
+      suggestedUnitPrice: n((row as any).suggestedUnitPrice),
+      finalUnitPrice: n((row as any).finalUnitPrice),
 
-        riskLevel: (row as any).riskLevel,
-        calculationStatus: (row as any).calculationStatus,
+      riskLevel: (row as any).riskLevel,
+      calculationStatus: (row as any).calculationStatus,
 
-        gewerk: String((row as any).gewerk || ""),
-        leistungsart: String((row as any).leistungsart || ""),
-        bauverfahren: String((row as any).bauverfahren || ""),
+      gewerk: String((row as any).gewerk || ""),
+      leistungsart: String((row as any).leistungsart || ""),
+      bauverfahren: String((row as any).bauverfahren || ""),
 
-        warning: String(row.warning || ""),
-        aiReason: String(row.aiReason || ""),
-        priceBreakdown: Array.isArray((row as any).priceBreakdown)
-          ? (row as any).priceBreakdown
-          : Array.isArray(row.meta?.priceBreakdown)
-            ? row.meta.priceBreakdown
-            : [],
-      });
-    })
-    .filter(Boolean) as NachtragRow[];
+      warning: String(row.warning || ""),
+      aiReason: String(row.aiReason || ""),
+      priceBreakdown: Array.isArray((row as any).priceBreakdown) ?
+      (row as any).priceBreakdown :
+      Array.isArray(row.meta?.priceBreakdown) ?
+      row.meta.priceBreakdown :
+      []
+    });
+  }).
+  filter(Boolean) as NachtragRow[];
 }
 
-function StatusPill({ status }: { status: ChangeStatus }) {
-  return <span style={statusStyle(status)}>{status}</span>;
+function StatusPill({ status }: {status: ChangeStatus;}) {
+  return <span className={rlcClass(null, statusStyle(status))}>{status}</span>;
 }
 
 /* ================= COMPONENT ================= */
@@ -1008,7 +1013,7 @@ export default function NachtraegePage() {
   );
   const [rows, setRows] = useState<NachtragRow[]>([]);
   const [mwst, setMwst] = useState<number>(() =>
-    Number(localStorage.getItem(MWST_KEY) ?? 19)
+  Number(localStorage.getItem(MWST_KEY) ?? 19)
   );
   const [q, setQ] = useState("");
   const [filterStatus, setFilterStatus] = useState<ChangeStatus | "Alle">(
@@ -1052,13 +1057,13 @@ export default function NachtraegePage() {
     setLoading(true);
 
     try {
-      const data = await apiJson<{ ok: boolean; items: ServerNachtrag[] }>(
+      const data = await apiJson<{ok: boolean;items: ServerNachtrag[];}>(
         `/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`
       );
 
-      const incoming = Array.isArray(data?.items)
-        ? data.items.map(fromServer)
-        : [];
+      const incoming = Array.isArray(data?.items) ?
+      data.items.map(fromServer) :
+      [];
 
       const merged = mergeRowsKeepLocal(localRows, incoming);
 
@@ -1102,7 +1107,7 @@ export default function NachtraegePage() {
       let existing: ServerNachtrag[] = [];
 
       try {
-        const data = await apiJson<{ ok: boolean; items: ServerNachtrag[] }>(
+        const data = await apiJson<{ok: boolean;items: ServerNachtrag[];}>(
           `/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`
         );
 
@@ -1111,12 +1116,12 @@ export default function NachtraegePage() {
         existing = [];
       }
 
-      const metaById = new Map<string, { number: string; createdAt: string }>();
+      const metaById = new Map<string, {number: string;createdAt: string;}>();
 
       for (const item of existing) {
         metaById.set(String(item.id), {
           number: String(item.number || ""),
-          createdAt: String(item.createdAt || ""),
+          createdAt: String(item.createdAt || "")
         });
       }
 
@@ -1127,7 +1132,7 @@ export default function NachtraegePage() {
 
       await apiJson(`/api/verknuepfung/nachtraege/${encodeURIComponent(apiKey)}`, {
         method: "PUT",
-        body: JSON.stringify({ items: payloadItems }),
+        body: JSON.stringify({ items: payloadItems })
       });
 
       setRows(sourceRows);
@@ -1164,8 +1169,16 @@ export default function NachtraegePage() {
     if (importedDraftRef.current) return;
 
     const qs = new URLSearchParams(location.search);
-    const from = qs.get("from");
-    if (from !== "regie" && from !== "rezepte") return;
+    const from = String(qs.get("from") || "").trim().toLowerCase();
+
+    if (
+    from !== "regie" &&
+    from !== "rezepte" &&
+    from !== "auto-ki" &&
+    from !== "autoki")
+    {
+      return;
+    }
     if (!currentProject) return;
 
     try {
@@ -1179,20 +1192,31 @@ export default function NachtraegePage() {
 
       const qsProjectId = String(qs.get("projectId") || "").trim();
 
-      const currentKey = String(
-        currentProject.code ||
-          currentProject.number ||
-          currentProject.projektnummer ||
-          currentProject.id ||
-          ""
-      ).trim();
 
-      const draftKey = String(parsed.projectId || parsed.projectKey || "").trim();
+      const currentProjectKeys = new Set(
+        [
+        currentProject.code,
+        currentProject.number,
+        currentProject.projektnummer,
+        currentProject.id,
+        apiKey,
+        pid].
+
+        map((value) => String(value || "").trim().toUpperCase()).
+        filter(Boolean)
+      );
+
+      const draftProjectKeys = [
+      parsed.projectId,
+      parsed.projectKey,
+      qsProjectId].
+
+      map((value) => String(value || "").trim().toUpperCase()).
+      filter(Boolean);
 
       const matches =
-        !draftKey ||
-        draftKey === currentKey ||
-        (!!qsProjectId && draftKey === qsProjectId);
+      !draftProjectKeys.length ||
+      draftProjectKeys.some((value) => currentProjectKeys.has(value));
 
       if (!matches) return;
 
@@ -1206,10 +1230,10 @@ export default function NachtraegePage() {
       });
       setDraftSel(sel);
     } catch {
-      //
-    }
-  }, [location.search, currentProject]);
 
+
+      //
+    }}, [location.search, currentProject]);
   useEffect(() => {
     if (importedRecipeRef.current) return;
 
@@ -1269,27 +1293,27 @@ export default function NachtraegePage() {
 
       result = result.filter(
         (x) =>
-          String(x.posNr || "").toLowerCase().includes(s) ||
-          String(x.kurztext || "").toLowerCase().includes(s) ||
-          String(x.langtext || "").toLowerCase().includes(s) ||
-          String(x.begruendung || "").toLowerCase().includes(s)
+        String(x.posNr || "").toLowerCase().includes(s) ||
+        String(x.kurztext || "").toLowerCase().includes(s) ||
+        String(x.langtext || "").toLowerCase().includes(s) ||
+        String(x.begruendung || "").toLowerCase().includes(s)
       );
     }
 
     if (sortKey === "pos") {
       result.sort((a, b) =>
-        String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
-          numeric: true,
-          sensitivity: "base",
-        })
+      String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
+        numeric: true,
+        sensitivity: "base"
+      })
       );
     }
 
     if (sortKey === "status") {
       result.sort(
         (a, b) =>
-          STATI.indexOf((a.status || "Entwurf") as ChangeStatus) -
-          STATI.indexOf((b.status || "Entwurf") as ChangeStatus)
+        STATI.indexOf((a.status || "Entwurf") as ChangeStatus) -
+        STATI.indexOf((b.status || "Entwurf") as ChangeStatus)
       );
     }
 
@@ -1321,17 +1345,17 @@ export default function NachtraegePage() {
       count: viewRows.length,
       selected: Object.values(selected).filter(Boolean).length,
       beauftragt: viewRows.filter((r) => r.status === "Beauftragt").length,
-      offen: viewRows.filter((r) => r.status === "Entwurf").length,
+      offen: viewRows.filter((r) => r.status === "Entwurf").length
     };
   }, [viewRows, mwst, selected]);
 
   const draftRows = useMemo(
-    () => (Array.isArray(draft?.rows) ? draft.rows : []),
+    () => Array.isArray(draft?.rows) ? draft.rows : [],
     [draft]
   );
 
   const recipeRows = useMemo(
-    () => (Array.isArray(recipeDraft?.rows) ? recipeDraft.rows : []),
+    () => Array.isArray(recipeDraft?.rows) ? recipeDraft.rows : [],
     [recipeDraft]
   );
 
@@ -1347,11 +1371,11 @@ export default function NachtraegePage() {
     if (existing) existing.remove();
 
     const esc = (value: unknown) =>
-      String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+    String(value ?? "").
+    replace(/&/g, "&amp;").
+    replace(/</g, "&lt;").
+    replace(/>/g, "&gt;").
+    replace(/"/g, "&quot;");
 
     const overlay = document.createElement("div");
     overlay.id = "rlc-nachtrag-position-picker";
@@ -1379,21 +1403,21 @@ export default function NachtraegePage() {
     const renderRows = (query: string) => {
       const q = String(query || "").trim().toLowerCase();
 
-      currentMatches = kalkulationBasis
-        .filter((r) => {
-          if (!q) return true;
-          return (
-            String(r.posNr || "").toLowerCase().includes(q) ||
-            String(r.kurztext || "").toLowerCase().includes(q) ||
-            String(r.langtext || "").toLowerCase().includes(q)
-          );
-        })
-        .slice(0, 80);
+      currentMatches = kalkulationBasis.
+      filter((r) => {
+        if (!q) return true;
+        return (
+          String(r.posNr || "").toLowerCase().includes(q) ||
+          String(r.kurztext || "").toLowerCase().includes(q) ||
+          String(r.langtext || "").toLowerCase().includes(q));
 
-      const rowsHtml = currentMatches.length
-        ? currentMatches
-            .map((r, i) => {
-              return `
+      }).
+      slice(0, 80);
+
+      const rowsHtml = currentMatches.length ?
+      currentMatches.
+      map((r, i) => {
+        return `
                 <tr>
                   <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-weight:800;color:#0f172a;">${esc(r.posNr || "—")}</td>
                   <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;">
@@ -1404,15 +1428,15 @@ export default function NachtraegePage() {
                   <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;color:#0f172a;">${esc(String(r.menge || ""))}</td>
                   <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:900;color:#0f172a;">${esc(money(n(r.preis)))}</td>
                   <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">
-                    <button data-pick-index="${i}" style="padding:9px 13px;border-radius:10px;border:0;background:#2563eb;color:white;font-weight:900;cursor:pointer;">
+                    <button data-pick-index="${i}" style="padding:9px 13px;border-radius:10px;border:0;background:#146ef5;color:white;font-weight:900;cursor:pointer;">
                       Übernehmen
                     </button>
                   </td>
                 </tr>
               `;
-            })
-            .join("")
-        : `<tr><td colspan="6" style="padding:24px;text-align:center;color:#64748b;">Keine passende Position gefunden.</td></tr>`;
+      }).
+      join("") :
+      `<tr><td colspan="6" style="padding:24px;text-align:center;color:#64748b;">Keine passende Position gefunden.</td></tr>`;
 
       const tbody = modal.querySelector("[data-role='rows']");
       const count = modal.querySelector("[data-role='count']");
@@ -1520,7 +1544,7 @@ export default function NachtraegePage() {
             <button data-action="back" style="padding:11px 18px;border-radius:12px;border:1px solid #cbd5e1;background:#fff;font-weight:900;cursor:pointer;">
               Zurück
             </button>
-            <button data-action="create-nachtrag" style="padding:11px 18px;border-radius:12px;border:0;background:#2563eb;color:white;font-weight:950;cursor:pointer;">
+            <button data-action="create-nachtrag" style="padding:11px 18px;border-radius:12px;border:0;background:#146ef5;color:white;font-weight:950;cursor:pointer;">
               Nachtrag erstellen
             </button>
           </div>
@@ -1562,7 +1586,7 @@ export default function NachtraegePage() {
             mengeDelta: delta,
             preis: n(selected.preis),
             status: "Entwurf",
-            begruendung: reason,
+            begruendung: reason
           });
 
           setInfo(
@@ -1590,7 +1614,7 @@ export default function NachtraegePage() {
       mengeDelta: tpl?.mengeDelta ?? 0,
       preis: tpl?.preis ?? 0,
       status: tpl?.status || "Entwurf",
-      begruendung: tpl?.begruendung || "",
+      begruendung: tpl?.begruendung || ""
     });
 
     const next = [row, ...rows];
@@ -1600,9 +1624,9 @@ export default function NachtraegePage() {
     setInfo("");
   }
 
-  function save(patch: Partial<NachtragRow> & { id: string }) {
+  function save(patch: Partial<NachtragRow> & {id: string;}) {
     const next = rows.map((row) =>
-      row.id === patch.id ? normalizeRow({ ...row, ...patch }) : row
+    row.id === patch.id ? normalizeRow({ ...row, ...patch }) : row
     );
 
     saveLocal(next);
@@ -1627,7 +1651,7 @@ export default function NachtraegePage() {
       ...row,
       id: undefined,
       status: "Entwurf",
-      begruendung: `${row.begruendung || ""}`.trim(),
+      begruendung: `${row.begruendung || ""}`.trim()
     });
   }
 
@@ -1679,48 +1703,48 @@ export default function NachtraegePage() {
       return;
     }
 
-    const selectedIndexes = Object.keys(draftSel)
-      .map((key) => Number(key))
-      .filter((i) => draftSel[i]);
+    const selectedIndexes = Object.keys(draftSel).
+    map((key) => Number(key)).
+    filter((i) => draftSel[i]);
 
     if (!selectedIndexes.length) {
       setDraftOpen(false);
       return;
     }
 
-    const imported = selectedIndexes
-      .map((i) => draftRows[i])
-      .map((row) => {
-        const posNr = String(row.posNr || row.pos || "").trim();
+    const imported = selectedIndexes.
+    map((i) => draftRows[i]).
+    map((row) => {
+      const posNr = String(row.posNr || row.pos || "").trim();
 
-        const kurztext =
-          String(row.kurztext || row.title || "").trim() ||
-          (posNr ? `Nachtrag zu ${posNr}` : "");
+      const kurztext =
+      String(row.kurztext || row.title || "").trim() || (
+      posNr ? `Nachtrag zu ${posNr}` : "");
 
-        const langtext = String(row.langtext || "").trim();
-        const einheit = String(row.einheit || row.unit || "m").trim() || "m";
-        const mengeDelta = n(row.mengeDelta ?? row.qty);
-        const preis = n(row.preis);
+      const langtext = String(row.langtext || "").trim();
+      const einheit = String(row.einheit || row.unit || "m").trim() || "m";
+      const mengeDelta = n(row.mengeDelta ?? row.qty);
+      const preis = n(row.preis);
 
-        const begruendung = String(
-          row.begruendung || row.note || row.hint || "aus Regiebericht"
-        ).trim();
+      const begruendung = String(
+        row.begruendung || row.note || row.hint || "aus Regiebericht"
+      ).trim();
 
-        if (!posNr && !kurztext) return null;
+      if (!posNr && !kurztext) return null;
 
-        return normalizeRow({
-          id: `REGIE-${String(row.regieRowId || safeId())}`,
-          posNr,
-          kurztext,
-          langtext,
-          einheit,
-          mengeDelta,
-          preis,
-          status: "Entwurf",
-          begruendung,
-        });
-      })
-      .filter(Boolean) as NachtragRow[];
+      return normalizeRow({
+        id: `REGIE-${String(row.regieRowId || safeId())}`,
+        posNr,
+        kurztext,
+        langtext,
+        einheit,
+        mengeDelta,
+        preis,
+        status: "Entwurf",
+        begruendung
+      });
+    }).
+    filter(Boolean) as NachtragRow[];
 
     if (!imported.length) {
       setDraftOpen(false);
@@ -1736,17 +1760,17 @@ export default function NachtraegePage() {
       localStorage.removeItem(NACHTRAG_BUFFER_KEY);
       setDraftOpen(false);
       setDraft(null);
-      setInfo("Regie-Entwurf wurde in Nachträge übernommen.");
+      setInfo(draft?.source === "AUTO_KI" ? "AutoKI-Entwurf wurde in Nachträge übernommen." : "Regie-Entwurf wurde in Nachträge übernommen.");
 
       const url = new URL(window.location.href);
       url.searchParams.delete("from");
       url.searchParams.delete("projectId");
       window.history.replaceState({}, "", url.toString());
     } catch {
-      //
-    }
-  }
 
+
+      //
+    }}
   function applyRecipeDraft() {
     if (!recipeDraft || !recipeRows.length) {
       setRecipeOpen(false);
@@ -1754,9 +1778,9 @@ export default function NachtraegePage() {
       return;
     }
 
-    const selectedIndexes = Object.keys(recipeSel)
-      .map((key) => Number(key))
-      .filter((i) => recipeSel[i]);
+    const selectedIndexes = Object.keys(recipeSel).
+    map((key) => Number(key)).
+    filter((i) => recipeSel[i]);
 
     if (!selectedIndexes.length) {
       setRecipeOpen(false);
@@ -1765,7 +1789,7 @@ export default function NachtraegePage() {
 
     const selectedHandoff: KalkulationHandoff = {
       ...recipeDraft,
-      rows: selectedIndexes.map((i) => recipeRows[i]).filter(Boolean),
+      rows: selectedIndexes.map((i) => recipeRows[i]).filter(Boolean)
     };
 
     const imported = mapHandoffRowsToNachtraege(selectedHandoff);
@@ -1788,20 +1812,20 @@ export default function NachtraegePage() {
       url.searchParams.delete("from");
       window.history.replaceState({}, "", url.toString());
     } catch {
-      //
-    }
-  }
 
+
+      //
+    }}
   function discardDraft() {
     if (!confirm("Regie-Entwurf verwerfen?")) return;
 
     try {
       localStorage.removeItem(NACHTRAG_BUFFER_KEY);
     } catch {
-      //
-    }
 
-    setDraftOpen(false);
+
+      //
+    }setDraftOpen(false);
     setDraft(null);
   }
 
@@ -1842,20 +1866,20 @@ export default function NachtraegePage() {
 
   function exportCSV() {
     const lines = [
-      "PosNr;Kurztext;Langtext;Einheit;DeltaMenge;EP (netto);Status;Begründung",
-      ...viewRows.map((row) =>
-        [
-          row.posNr || "",
-          csvCell(row.kurztext || ""),
-          csvCell(row.langtext || ""),
-          row.einheit || "",
-          String(n(row.mengeDelta)),
-          String(n(row.preis)),
-          String(row.status || "Entwurf"),
-          csvCell(row.begruendung || ""),
-        ].join(";")
-      ),
-    ].join("\n");
+    "PosNr;Kurztext;Langtext;Einheit;DeltaMenge;EP (netto);Status;Begründung",
+    ...viewRows.map((row) =>
+    [
+    row.posNr || "",
+    csvCell(row.kurztext || ""),
+    csvCell(row.langtext || ""),
+    row.einheit || "",
+    String(n(row.mengeDelta)),
+    String(n(row.preis)),
+    String(row.status || "Entwurf"),
+    csvCell(row.begruendung || "")].
+    join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([lines], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, "nachtraege.csv");
@@ -1876,7 +1900,7 @@ export default function NachtraegePage() {
       projectKey: apiKey,
       projectTitle: projectTitle(currentProject),
       mwst: n(mwst, 19),
-      rows: cleanRows,
+      rows: cleanRows
     };
 
     localStorage.setItem(ANGEBOT_NACHTRAG_ONLY_KEY, JSON.stringify(buffer));
@@ -1893,24 +1917,29 @@ export default function NachtraegePage() {
   }
 
   async function exportPDF() {
+    let preview: PdfPreviewWindow = null;
+
     try {
       const projectCode = String(
         currentProject?.code ||
-          currentProject?.number ||
-          currentProject?.projektnummer ||
-          apiKey ||
-          "Projekt"
+        currentProject?.number ||
+        currentProject?.projektnummer ||
+        apiKey ||
+        "Projekt"
       ).trim();
 
       const projectName = String(
         currentProject?.name || currentProject?.projectName || ""
       ).trim();
 
+      const pdfFileName = `Nachtraege_${safeFileName(projectCode)}.pdf`;
+      preview = reservePdfPreview(pdfFileName);
+
       const projectPlace = String(
         currentProject?.place ||
-          currentProject?.ort ||
-          currentProject?.location ||
-          ""
+        currentProject?.ort ||
+        currentProject?.location ||
+        ""
       ).trim();
 
       const payload = {
@@ -1920,13 +1949,13 @@ export default function NachtraegePage() {
           code: projectCode,
           number: projectCode,
           name: projectName,
-          location: projectPlace,
+          location: projectPlace
         },
         options: {
           mwst,
           dateISO: new Date().toISOString().slice(0, 10),
           payment:
-            "Zahlungsbedingungen: 30 Tage netto. Nachträge vorbehaltlich Prüfung und Beauftragung.",
+          "Zahlungsbedingungen: 30 Tage netto. Nachträge vorbehaltlich Prüfung und Beauftragung."
         },
         rows: viewRows.map((row) => ({
           id: row.id,
@@ -1969,23 +1998,23 @@ export default function NachtraegePage() {
 
           warning: row.warning || "",
           aiReason: row.aiReason || "",
-          priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [],
+          priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : []
         })),
         totals: {
           netto: totals.netto,
           mwst,
           steuer: round2(totals.netto * (n(mwst) / 100)),
-          brutto: totals.brutto,
-        },
+          brutto: totals.brutto
+        }
       };
 
       const res = await fetch(apiUrl("/api/pdf/nachtraege"), {
         method: "POST",
         credentials: "include",
         headers: withAuthHeaders({
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         }),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
@@ -1994,8 +2023,9 @@ export default function NachtraegePage() {
       }
 
       const blob = await res.blob();
-      downloadBlob(blob, `Nachtraege_${safeFileName(projectCode)}.pdf`);
+      openPdfBlobPreview(blob, pdfFileName, preview);
     } catch (e: any) {
+      if (preview && !preview.closed) preview.close();
       alert(`PDF Export fehlgeschlagen: ${e?.message || e}`);
     }
   }
@@ -2004,11 +2034,11 @@ export default function NachtraegePage() {
     setQualityFilter(filter);
 
     if (
-      filter === "Entwurf" ||
-      filter === "Abgegeben" ||
-      filter === "Beauftragt" ||
-      filter === "Abgelehnt"
-    ) {
+    filter === "Entwurf" ||
+    filter === "Abgegeben" ||
+    filter === "Beauftragt" ||
+    filter === "Abgelehnt")
+    {
       setFilterStatus(filter);
     } else {
       setFilterStatus("Alle");
@@ -2026,7 +2056,7 @@ export default function NachtraegePage() {
 
       if (!String(row.begruendung || "").trim()) {
         patch.begruendung =
-          "Automatisch ergänzt: Begründung muss fachlich geprüft werden.";
+        "Automatisch ergänzt: Begründung muss fachlich geprüft werden.";
       }
 
       if (!String(row.kurztext || "").trim()) {
@@ -2043,7 +2073,7 @@ export default function NachtraegePage() {
 
   useEffect(() => {
     function handleNachtraegeCommand(event: Event) {
-      const detail = (event as CustomEvent<{ filter?: string; action?: string }>).detail;
+      const detail = (event as CustomEvent<{filter?: string;action?: string;}>).detail;
       if (!detail) return;
 
       const filter = String(detail.filter || "") as NachtragQualityFilter;
@@ -2066,530 +2096,530 @@ export default function NachtraegePage() {
   });
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Elite Nachtragsmanagement</div>
-          <h1 style={title}>Nachträge erstellen</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Elite Nachtragsmanagement</div>
+          <h1 className={rlcClass(null, title)}>Nachträge erstellen</h1>
+          <p className={rlcClass(null, subtitle)}>
             Nachträge professionell erfassen, aus Regie oder Urkalkulation übernehmen,
             dokumentieren, lokal bearbeiten, als PDF ausgeben und bei Bedarf serverseitig speichern.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button style={btnPrimary} onClick={addFromKalkulationBasis}>
+        <div className={rlcClass(null, heroActions)}>
+          <button className={rlcClass(null, btnPrimary)} onClick={addFromKalkulationBasis}>
             + Nachtrag
           </button>
 
-          {recipeDraft ? (
-            <button style={btnPrimary} onClick={() => setRecipeOpen(!recipeOpen)}>
+          {recipeDraft ?
+          <button className={rlcClass(null, btnPrimary)} onClick={() => setRecipeOpen(!recipeOpen)}>
               Rezept prüfen / übernehmen
-            </button>
-          ) : null}
+            </button> :
+          null}
 
-          <button
-            style={btnSecondary}
-            onClick={() => navigate("/kalkulation/rezepte")}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={() => navigate("/kalkulation/rezepte")}>
+            
             Zur Urkalkulation
           </button>
 
-          <button
-            style={btnSecondary}
-            onClick={() => navigate("/kalkulation/mit-ki")}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={() => navigate("/kalkulation/mit-ki")}>
+            
             Zur Kalkulation
           </button>
 
-          <button
-            style={btnPrimary}
-            onClick={openAngebotFromSelection}
-            disabled={!selectedRows.length}
-          >
+          <button className={rlcClass(null,
+          btnPrimary)}
+          onClick={openAngebotFromSelection}
+          disabled={!selectedRows.length}>
+            
             Angebot aus Auswahl
           </button>
 
-          <button
-            style={btnSecondary}
-            onClick={openAngebotFromAllNachtraege}
-            disabled={!rows.length}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={openAngebotFromAllNachtraege}
+          disabled={!rows.length}>
+            
             Angebot alle Nachträge
           </button>
 
-          <button style={btnSecondary} onClick={() => void exportPDF()} disabled={!rows.length}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => void exportPDF()} disabled={!rows.length}>
             PDF Export
           </button>
 
-          <button style={btnSecondary} onClick={() => void load()} disabled={loading}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => void load()} disabled={loading}>
             {loading ? "Lädt…" : "Server laden"}
           </button>
 
-          <button
-            style={btnSecondary}
-            onClick={() => void saveServerNow()}
-            disabled={loading || rows.length === 0}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={() => void saveServerNow()}
+          disabled={loading || rows.length === 0}>
+            
             {loading ? "Speichert…" : "Server speichern"}
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectTitle(currentProject)}</b>
           <span> · Server-Key: </span>
           <b>{apiKey || "—"}</b>
           <span> · Modus: lokal zuerst, Server manuell</span>
-          {kalkulationBasis.length ? (
-            <span>
+          {kalkulationBasis.length ?
+          <span>
               {" "}· Kalkulationsbasis: <b>{kalkulationBasis.length}</b> Pos. /{" "}
               <b>{money(kalkulationBasisNetto)}</b>
-            </span>
-          ) : (
-            <span> · Keine RLC-KI Kalkulationsbasis geladen</span>
-          )}
+            </span> :
+
+          <span> · Keine RLC-KI Kalkulationsbasis geladen</span>
+          }
         </div>
       </section>
 
-      {info ? <div style={alertBox(info)}>{info}</div> : null}
+      {info ? <div className={rlcClass(null, alertBox(info))}>{info}</div> : null}
 
-      {recipeDraft ? (
-        <section style={recipeCard}>
+      {recipeDraft ?
+      <section className={rlcClass(null, recipeCard)}>
           <div>
             <b>Rezept-/Urkalkulations-Entwurf vorhanden</b>
-            <div style={muted}>
+            <div className={rlcClass(null, muted)}>
               Quelle: {recipeDraft.source || "rezepte"} · Zeilen: {recipeRows.length}
               {recipeDraft.auftragName ? ` · Auftrag: ${recipeDraft.auftragName}` : ""}
             </div>
           </div>
 
-          <div style={buttonRow}>
-            <button style={btnSecondary} onClick={() => setRecipeOpen(!recipeOpen)}>
+          <div className={rlcClass(null, buttonRow)}>
+            <button className={rlcClass(null, btnSecondary)} onClick={() => setRecipeOpen(!recipeOpen)}>
               Prüfen / bearbeiten
             </button>
 
-            <button style={btnPrimary} onClick={applyRecipeDraft}>
+            <button className={rlcClass(null, btnPrimary)} onClick={applyRecipeDraft}>
               In Nachträge übernehmen
             </button>
 
-            <button style={btnDanger} onClick={discardRecipeDraft}>
+            <button className={rlcClass(null, btnDanger)} onClick={discardRecipeDraft}>
               Verwerfen
             </button>
           </div>
-        </section>
-      ) : null}
+        </section> :
+      null}
 
-      {recipeDraft && recipeOpen ? (
-        <section style={card}>
-          <div style={sectionHead}>
+      {recipeDraft && recipeOpen ?
+      <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>Rezept / Urkalkulation übernehmen</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>Rezept / Urkalkulation übernehmen</h2>
+              <div className={rlcClass(null, sectionText)}>
                 Diese Positionen kommen aus der Rezeptkalkulation und werden erst nach
                 „Übernehmen“ als Nachträge gespeichert.
               </div>
             </div>
 
-            <div style={buttonRow}>
-              <button
-                style={btnSecondary}
-                onClick={() => {
-                  const s: Record<number, boolean> = {};
-                  recipeRows.forEach((_, i) => {
-                    s[i] = true;
-                  });
-                  setRecipeSel(s);
-                }}
-              >
+            <div className={rlcClass(null, buttonRow)}>
+              <button className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => {
+              const s: Record<number, boolean> = {};
+              recipeRows.forEach((_, i) => {
+                s[i] = true;
+              });
+              setRecipeSel(s);
+            }}>
+              
                 Alles auswählen
               </button>
 
-              <button style={btnSecondary} onClick={() => setRecipeSel({})}>
+              <button className={rlcClass(null, btnSecondary)} onClick={() => setRecipeSel({})}>
                 Alles abwählen
               </button>
 
-              <button style={btnPrimary} onClick={applyRecipeDraft}>
+              <button className={rlcClass(null, btnPrimary)} onClick={applyRecipeDraft}>
                 Übernehmen
               </button>
             </div>
           </div>
 
-          <div style={tableWrap}>
-            <table style={{ ...table, minWidth: 1320 }}>
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, { ...table, minWidth: 1320 })}>
               <thead>
                 <tr>
-                  <th style={thSmall}></th>
-                  <th style={th}>PosNr</th>
-                  <th style={th}>Kurztext</th>
-                  <th style={th}>Langtext</th>
-                  <th style={th}>ME</th>
-                  <th style={thRight}>Menge</th>
-                  <th style={thRight}>EP netto</th>
-                  <th style={th}>Begründung</th>
+                  <th className={rlcClass(null, thSmall)}></th>
+                  <th className={rlcClass(null, th)}>PosNr</th>
+                  <th className={rlcClass(null, th)}>Kurztext</th>
+                  <th className={rlcClass(null, th)}>Langtext</th>
+                  <th className={rlcClass(null, th)}>ME</th>
+                  <th className={rlcClass(null, thRight)}>Menge</th>
+                  <th className={rlcClass(null, thRight)}>EP netto</th>
+                  <th className={rlcClass(null, th)}>Begründung</th>
                 </tr>
               </thead>
 
               <tbody>
                 {recipeRows.map((row, index) => {
-                  const posNr = String(row.posNr || row.pos || "");
-                  const kurztext = String(row.kurztext || row.title || "");
-                  const langtext = String(row.langtext || "");
-                  const einheit = String(row.einheit || row.unit || "m");
-                  const menge = n(row.mengeDelta ?? row.menge ?? row.qty);
-                  const preis = n(
-                    row.preis ??
-                      row.ep ??
-                      row.finalUnitPrice ??
-                      row.suggestedUnitPrice ??
-                      row.baseUnitPrice
-                  );
+                const posNr = String(row.posNr || row.pos || "");
+                const kurztext = String(row.kurztext || row.title || "");
+                const langtext = String(row.langtext || "");
+                const einheit = String(row.einheit || row.unit || "m");
+                const menge = n(row.mengeDelta ?? row.menge ?? row.qty);
+                const preis = n(
+                  row.preis ??
+                  row.ep ??
+                  row.finalUnitPrice ??
+                  row.suggestedUnitPrice ??
+                  row.baseUnitPrice
+                );
 
-                  const begruendung = String(
-                    row.warning ||
-                      row.aiReason ||
-                      "Aus Rezept / Urkalkulation übernommen."
-                  );
+                const begruendung = String(
+                  row.warning ||
+                  row.aiReason ||
+                  "Aus Rezept / Urkalkulation übernommen."
+                );
 
-                  return (
-                    <tr key={index}>
-                      <td style={tdCenter}>
+                return (
+                  <tr key={index}>
+                      <td className={rlcClass(null, tdCenter)}>
                         <input
-                          type="checkbox"
-                          checked={!!recipeSel[index]}
-                          onChange={(e) =>
-                            setRecipeSel((s) => ({
-                              ...s,
-                              [index]: e.target.checked,
-                            }))
-                          }
-                        />
+                        type="checkbox"
+                        checked={!!recipeSel[index]}
+                        onChange={(e) =>
+                        setRecipeSel((s) => ({
+                          ...s,
+                          [index]: e.target.checked
+                        }))
+                        } />
+                      
                       </td>
 
-                      <td style={td}>
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                      cellInput)}
+                      value={posNr}
+                      onChange={(e) =>
+                      updateRecipeRow(index, { posNr: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                      cellInput)}
+                      value={kurztext}
+                      onChange={(e) =>
+                      updateRecipeRow(index, { kurztext: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, td)}>
+                        <textarea className={rlcClass(null,
+                      cellTextarea)}
+                      value={langtext}
+                      onChange={(e) =>
+                      updateRecipeRow(index, { langtext: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                      { ...cellInput, width: 70 })}
+                      value={einheit}
+                      onChange={(e) =>
+                      updateRecipeRow(index, { einheit: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, tdRight)}>
                         <input
-                          style={cellInput}
-                          value={posNr}
-                          onChange={(e) =>
-                            updateRecipeRow(index, { posNr: e.target.value })
-                          }
-                        />
+                        type="number" className={rlcClass(null,
+                        { ...cellInput, width: 100, textAlign: "right" })}
+                        value={menge}
+                        onChange={(e) =>
+                        updateRecipeRow(index, {
+                          menge: n(e.target.value)
+                        })
+                        } />
+                      
                       </td>
 
-                      <td style={td}>
+                      <td className={rlcClass(null, tdRight)}>
                         <input
-                          style={cellInput}
-                          value={kurztext}
-                          onChange={(e) =>
-                            updateRecipeRow(index, { kurztext: e.target.value })
-                          }
-                        />
+                        type="number" className={rlcClass(null,
+                        { ...cellInput, width: 100, textAlign: "right" })}
+                        value={preis}
+                        onChange={(e) =>
+                        updateRecipeRow(index, {
+                          preis: n(e.target.value)
+                        })
+                        } />
+                      
                       </td>
 
-                      <td style={td}>
-                        <textarea
-                          style={cellTextarea}
-                          value={langtext}
-                          onChange={(e) =>
-                            updateRecipeRow(index, { langtext: e.target.value })
-                          }
-                        />
+                      <td className={rlcClass(null, td)}>
+                        <textarea className={rlcClass(null,
+                      cellTextarea)}
+                      value={begruendung}
+                      onChange={(e) =>
+                      updateRecipeRow(index, {
+                        warning: e.target.value
+                      })
+                      } />
+                      
                       </td>
+                    </tr>);
 
-                      <td style={td}>
-                        <input
-                          style={{ ...cellInput, width: 70 }}
-                          value={einheit}
-                          onChange={(e) =>
-                            updateRecipeRow(index, { einheit: e.target.value })
-                          }
-                        />
-                      </td>
+              })}
 
-                      <td style={tdRight}>
-                        <input
-                          type="number"
-                          style={{ ...cellInput, width: 100, textAlign: "right" }}
-                          value={menge}
-                          onChange={(e) =>
-                            updateRecipeRow(index, {
-                              menge: n(e.target.value),
-                            })
-                          }
-                        />
-                      </td>
-
-                      <td style={tdRight}>
-                        <input
-                          type="number"
-                          style={{ ...cellInput, width: 100, textAlign: "right" }}
-                          value={preis}
-                          onChange={(e) =>
-                            updateRecipeRow(index, {
-                              preis: n(e.target.value),
-                            })
-                          }
-                        />
-                      </td>
-
-                      <td style={td}>
-                        <textarea
-                          style={cellTextarea}
-                          value={begruendung}
-                          onChange={(e) =>
-                            updateRecipeRow(index, {
-                              warning: e.target.value,
-                            })
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {!recipeRows.length ? (
-                  <tr>
-                    <td colSpan={8} style={emptyCell}>
+                {!recipeRows.length ?
+              <tr>
+                    <td colSpan={8} className={rlcClass(null, emptyCell)}>
                       Keine Rezept-Zeilen vorhanden.
                     </td>
-                  </tr>
-                ) : null}
+                  </tr> :
+              null}
               </tbody>
             </table>
           </div>
-        </section>
-      ) : null}
+        </section> :
+      null}
 
-      {draft ? (
-        <section style={draftCard}>
+      {draft ?
+      <section className={rlcClass(null, draftCard)}>
           <div>
             <b>Regie-Entwurf vorhanden</b>
-            <div style={muted}>
+            <div className={rlcClass(null, muted)}>
               Quelle: {draft.source || "REGIE"} · Zeilen: {draftRows.length}
             </div>
           </div>
 
-          <div style={buttonRow}>
-            <button style={btnSecondary} onClick={() => setDraftOpen(!draftOpen)}>
+          <div className={rlcClass(null, buttonRow)}>
+            <button className={rlcClass(null, btnSecondary)} onClick={() => setDraftOpen(!draftOpen)}>
               Prüfen / bearbeiten
             </button>
 
-            <button style={btnPrimary} onClick={() => void applyDraft()}>
+            <button className={rlcClass(null, btnPrimary)} onClick={() => void applyDraft()}>
               In Nachträge übernehmen
             </button>
 
-            <button style={btnDanger} onClick={discardDraft}>
+            <button className={rlcClass(null, btnDanger)} onClick={discardDraft}>
               Verwerfen
             </button>
           </div>
-        </section>
-      ) : null}
+        </section> :
+      null}
 
-      {draft && draftOpen ? (
-        <section style={card}>
-          <div style={sectionHead}>
+      {draft && draftOpen ?
+      <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>Regie-Entwurf bearbeiten</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>Regie-Entwurf bearbeiten</h2>
+              <div className={rlcClass(null, sectionText)}>
                 Erst nach „Übernehmen“ werden diese Zeilen als Nachträge gespeichert.
               </div>
             </div>
 
-            <div style={buttonRow}>
-              <button
-                style={btnSecondary}
-                onClick={() => {
-                  const s: Record<number, boolean> = {};
-                  draftRows.forEach((_, i) => {
-                    s[i] = true;
-                  });
-                  setDraftSel(s);
-                }}
-              >
+            <div className={rlcClass(null, buttonRow)}>
+              <button className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => {
+              const s: Record<number, boolean> = {};
+              draftRows.forEach((_, i) => {
+                s[i] = true;
+              });
+              setDraftSel(s);
+            }}>
+              
                 Alles auswählen
               </button>
 
-              <button style={btnSecondary} onClick={() => setDraftSel({})}>
+              <button className={rlcClass(null, btnSecondary)} onClick={() => setDraftSel({})}>
                 Alles abwählen
               </button>
 
-              <button style={btnPrimary} onClick={() => void applyDraft()}>
+              <button className={rlcClass(null, btnPrimary)} onClick={() => void applyDraft()}>
                 Übernehmen
               </button>
             </div>
           </div>
 
-          <div style={tableWrap}>
-            <table style={{ ...table, minWidth: 1250 }}>
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, { ...table, minWidth: 1250 })}>
               <thead>
                 <tr>
-                  <th style={thSmall}></th>
-                  <th style={th}>PosNr</th>
-                  <th style={th}>Kurztext</th>
-                  <th style={th}>Langtext</th>
-                  <th style={th}>ME</th>
-                  <th style={thRight}>Δ-Menge</th>
-                  <th style={th}>Begründung</th>
+                  <th className={rlcClass(null, thSmall)}></th>
+                  <th className={rlcClass(null, th)}>PosNr</th>
+                  <th className={rlcClass(null, th)}>Kurztext</th>
+                  <th className={rlcClass(null, th)}>Langtext</th>
+                  <th className={rlcClass(null, th)}>ME</th>
+                  <th className={rlcClass(null, thRight)}>Δ-Menge</th>
+                  <th className={rlcClass(null, th)}>Begründung</th>
                 </tr>
               </thead>
 
               <tbody>
                 {draftRows.map((row, index) => {
-                  const posNr = String(row.posNr || row.pos || "");
-                  const kurztext = String(row.kurztext || row.title || "");
-                  const langtext = String(row.langtext || "");
-                  const einheit = String(row.einheit || row.unit || "m");
-                  const mengeDelta = n(row.mengeDelta ?? row.qty);
-                  const begruendung = String(row.begruendung || row.note || row.hint || "");
+                const posNr = String(row.posNr || row.pos || "");
+                const kurztext = String(row.kurztext || row.title || "");
+                const langtext = String(row.langtext || "");
+                const einheit = String(row.einheit || row.unit || "m");
+                const mengeDelta = n(row.mengeDelta ?? row.qty);
+                const begruendung = String(row.begruendung || row.note || row.hint || "");
 
-                  return (
-                    <tr key={index}>
-                      <td style={tdCenter}>
+                return (
+                  <tr key={index}>
+                      <td className={rlcClass(null, tdCenter)}>
                         <input
-                          type="checkbox"
-                          checked={!!draftSel[index]}
-                          onChange={(e) =>
-                            setDraftSel((s) => ({
-                              ...s,
-                              [index]: e.target.checked,
-                            }))
-                          }
-                        />
+                        type="checkbox"
+                        checked={!!draftSel[index]}
+                        onChange={(e) =>
+                        setDraftSel((s) => ({
+                          ...s,
+                          [index]: e.target.checked
+                        }))
+                        } />
+                      
                       </td>
 
-                      <td style={td}>
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                      cellInput)}
+                      value={posNr}
+                      onChange={(e) =>
+                      updateDraftRow(index, { posNr: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                      cellInput)}
+                      value={kurztext}
+                      onChange={(e) =>
+                      updateDraftRow(index, { kurztext: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, td)}>
+                        <textarea className={rlcClass(null,
+                      cellTextarea)}
+                      value={langtext}
+                      onChange={(e) =>
+                      updateDraftRow(index, { langtext: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                      { ...cellInput, width: 70 })}
+                      value={einheit}
+                      onChange={(e) =>
+                      updateDraftRow(index, { einheit: e.target.value })
+                      } />
+                      
+                      </td>
+
+                      <td className={rlcClass(null, tdRight)}>
                         <input
-                          style={cellInput}
-                          value={posNr}
-                          onChange={(e) =>
-                            updateDraftRow(index, { posNr: e.target.value })
-                          }
-                        />
+                        type="number" className={rlcClass(null,
+                        { ...cellInput, width: 100, textAlign: "right" })}
+                        value={mengeDelta}
+                        onChange={(e) =>
+                        updateDraftRow(index, {
+                          mengeDelta: n(e.target.value)
+                        })
+                        } />
+                      
                       </td>
 
-                      <td style={td}>
-                        <input
-                          style={cellInput}
-                          value={kurztext}
-                          onChange={(e) =>
-                            updateDraftRow(index, { kurztext: e.target.value })
-                          }
-                        />
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                      cellInput)}
+                      value={begruendung}
+                      onChange={(e) =>
+                      updateDraftRow(index, {
+                        begruendung: e.target.value
+                      })
+                      } />
+                      
                       </td>
+                    </tr>);
 
-                      <td style={td}>
-                        <textarea
-                          style={cellTextarea}
-                          value={langtext}
-                          onChange={(e) =>
-                            updateDraftRow(index, { langtext: e.target.value })
-                          }
-                        />
-                      </td>
+              })}
 
-                      <td style={td}>
-                        <input
-                          style={{ ...cellInput, width: 70 }}
-                          value={einheit}
-                          onChange={(e) =>
-                            updateDraftRow(index, { einheit: e.target.value })
-                          }
-                        />
-                      </td>
-
-                      <td style={tdRight}>
-                        <input
-                          type="number"
-                          style={{ ...cellInput, width: 100, textAlign: "right" }}
-                          value={mengeDelta}
-                          onChange={(e) =>
-                            updateDraftRow(index, {
-                              mengeDelta: n(e.target.value),
-                            })
-                          }
-                        />
-                      </td>
-
-                      <td style={td}>
-                        <input
-                          style={cellInput}
-                          value={begruendung}
-                          onChange={(e) =>
-                            updateDraftRow(index, {
-                              begruendung: e.target.value,
-                            })
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {!draftRows.length ? (
-                  <tr>
-                    <td colSpan={7} style={emptyCell}>
+                {!draftRows.length ?
+              <tr>
+                    <td colSpan={7} className={rlcClass(null, emptyCell)}>
                       Keine Draft-Zeilen vorhanden.
                     </td>
-                  </tr>
-                ) : null}
+                  </tr> :
+              null}
               </tbody>
             </table>
           </div>
-        </section>
-      ) : null}
+        </section> :
+      null}
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <KpiCard label="Netto gesamt" value={money(totals.netto)} />
         <KpiCard label="Brutto gesamt" value={money(totals.brutto)} />
         <KpiCard
           label="Nachträge"
           value={String(totals.count)}
-          sub={`${totals.offen} Entwurf`}
-        />
+          sub={`${totals.offen} Entwurf`} />
+        
         <KpiCard
           label="Kalkulationsbasis"
           value={String(kalkulationBasis.length)}
-          sub={`${money(kalkulationBasisNetto)} RLC-KI`}
-        />
+          sub={`${money(kalkulationBasisNetto)} RLC-KI`} />
+        
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Steuerung & Export</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Steuerung & Export</h2>
+            <div className={rlcClass(null, sectionText)}>
               Suche, Statusfilter, CSV/PDF-Export, Angebot-Übergabe und Server-Synchronisierung.
             </div>
           </div>
         </div>
 
-        <div style={toolbarGrid}>
+        <div className={rlcClass(null, toolbarGrid)}>
           <input
             placeholder="Suchen… PosNr / Kurztext / Langtext / Begründung"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            style={input}
-          />
+            onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+            input)} />
+          
 
           <select
             value={filterStatus}
             onChange={(e) =>
-              setFilterStatus(e.target.value as ChangeStatus | "Alle")
-            }
-            style={input}
-          >
+            setFilterStatus(e.target.value as ChangeStatus | "Alle")
+            } className={rlcClass(null,
+            input)}>
+            
             <option>Alle</option>
-            {STATI.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
+            {STATI.map((s) =>
+            <option key={s}>{s}</option>
+            )}
           </select>
 
           <select
             value={sortKey}
             onChange={(e) =>
-              setSortKey(e.target.value as "pos" | "status" | "value")
-            }
-            style={input}
-          >
+            setSortKey(e.target.value as "pos" | "status" | "value")
+            } className={rlcClass(null,
+            input)}>
+            
             <option value="pos">Sortierung: Position</option>
             <option value="status">Sortierung: Status</option>
             <option value="value">Sortierung: Wert</option>
@@ -2598,70 +2628,70 @@ export default function NachtraegePage() {
           <input
             type="number"
             value={mwst}
-            onChange={(e) => setMwst(n(e.target.value))}
-            style={input}
-            placeholder="MwSt %"
-          />
+            onChange={(e) => setMwst(n(e.target.value))} className={rlcClass(null,
+            input)}
+            placeholder="MwSt %" />
+          
         </div>
 
-        <div style={buttonRow}>
-          <button style={btnSecondary} onClick={() => fileRef.current?.click()}>
+        <div className={rlcClass(null, buttonRow)}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => fileRef.current?.click()}>
             CSV Import
           </button>
 
-          <button style={btnSecondary} onClick={pasteRows}>
+          <button className={rlcClass(null, btnSecondary)} onClick={pasteRows}>
             Zeilen einfügen
           </button>
 
-          <button style={btnSecondary} onClick={exportCSV}>
+          <button className={rlcClass(null, btnSecondary)} onClick={exportCSV}>
             CSV Export
           </button>
 
-          <button style={btnSecondary} onClick={() => void exportPDF()}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => void exportPDF()}>
             PDF Export
           </button>
 
-          <button
-            style={btnPrimary}
-            onClick={openAngebotFromSelection}
-            disabled={!selectedRows.length}
-          >
+          <button className={rlcClass(null,
+          btnPrimary)}
+          onClick={openAngebotFromSelection}
+          disabled={!selectedRows.length}>
+            
             Angebot aus Auswahl
           </button>
 
-          <button
-            style={btnSecondary}
-            onClick={openAngebotFromAllNachtraege}
-            disabled={!rows.length}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={openAngebotFromAllNachtraege}
+          disabled={!rows.length}>
+            
             Angebot alle Nachträge
           </button>
 
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/angebot")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/angebot")}>
             Angebot öffnen
           </button>
 
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/rezepte")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/rezepte")}>
             Urkalkulation
           </button>
 
-          <button
-            style={btnSecondary}
-            onClick={() => void saveServerNow()}
-            disabled={loading || rows.length === 0}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={() => void saveServerNow()}
+          disabled={loading || rows.length === 0}>
+            
             Server speichern
           </button>
 
-          <button
-            style={btnDanger}
-            onClick={delSelected}
-            disabled={!Object.values(selected).some(Boolean)}
-          >
+          <button className={rlcClass(null,
+          btnDanger)}
+          onClick={delSelected}
+          disabled={!Object.values(selected).some(Boolean)}>
+            
             Auswahl löschen
           </button>
 
-          <button style={btnDanger} onClick={clearAll}>
+          <button className={rlcClass(null, btnDanger)} onClick={clearAll}>
             Alles löschen
           </button>
         </div>
@@ -2670,7 +2700,7 @@ export default function NachtraegePage() {
           ref={fileRef}
           type="file"
           accept=".csv"
-          style={{ display: "none" }}
+
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (!file) return;
@@ -2681,36 +2711,36 @@ export default function NachtraegePage() {
               if (fileRef.current) fileRef.current.value = "";
             };
             reader.readAsText(file, "utf-8");
-          }}
-        />
+          }} className="rlc-migrated-pages-kalkulation-nachtraege-tsx-918" />
+        
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Nachtragspositionen</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Nachtragspositionen</h2>
+            <div className={rlcClass(null, sectionText)}>
               Änderungen werden sofort lokal gespeichert. Der Server wird erst mit
               „Server speichern“ aktualisiert.
             </div>
           </div>
         </div>
 
-        <div style={tableWrap}>
-          <table style={table}>
+        <div className={rlcClass(null, tableWrap)}>
+          <table className={rlcClass(null, table)}>
             <thead>
               <tr>
-                <th style={thSmall}></th>
-                <th style={th}>PosNr</th>
-                <th style={th}>Kurztext</th>
-                <th style={th}>Langtext</th>
-                <th style={th}>ME</th>
-                <th style={thRight}>Δ-Menge</th>
-                <th style={thRight}>EP netto</th>
-                <th style={th}>Status</th>
-                <th style={th}>Begründung</th>
-                <th style={thRight}>Zeilen-Netto</th>
-                <th style={th}>Aktion</th>
+                <th className={rlcClass(null, thSmall)}></th>
+                <th className={rlcClass(null, th)}>PosNr</th>
+                <th className={rlcClass(null, th)}>Kurztext</th>
+                <th className={rlcClass(null, th)}>Langtext</th>
+                <th className={rlcClass(null, th)}>ME</th>
+                <th className={rlcClass(null, thRight)}>Δ-Menge</th>
+                <th className={rlcClass(null, thRight)}>EP netto</th>
+                <th className={rlcClass(null, th)}>Status</th>
+                <th className={rlcClass(null, th)}>Begründung</th>
+                <th className={rlcClass(null, thRight)}>Zeilen-Netto</th>
+                <th className={rlcClass(null, th)}>Aktion</th>
               </tr>
             </thead>
 
@@ -2721,170 +2751,170 @@ export default function NachtraegePage() {
 
                 return (
                   <tr
-                    key={row.id}
-                    style={{
-                      background: isSelected
-                        ? "#EFF6FF"
-                        : index % 2
-                        ? "#FCFCFC"
-                        : "#FFFFFF",
-                    }}
-                  >
-                    <td style={tdCenter}>
+                    key={row.id} className={rlcClass(null,
+                    {
+                      background: isSelected ?
+                      "#EAF2FF" :
+                      index % 2 ?
+                      "#FCFCFC" :
+                      "#FFFFFF"
+                    })}>
+                    
+                    <td className={rlcClass(null, tdCenter)}>
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={(e) =>
-                          setSelected((s) => ({
-                            ...s,
-                            [row.id]: e.target.checked,
-                          }))
-                        }
-                      />
+                        setSelected((s) => ({
+                          ...s,
+                          [row.id]: e.target.checked
+                        }))
+                        } />
+                      
                     </td>
 
-                    <td style={td}>
+                    <td className={rlcClass(null, td)}>
+                      <input className={rlcClass(null,
+                      { ...cellInput, width: 100 })}
+                      value={row.posNr || ""}
+                      onChange={(e) =>
+                      save({ id: row.id, posNr: e.target.value })
+                      } />
+                      
+                    </td>
+
+                    <td className={rlcClass(null, td)}>
+                      <input className={rlcClass(null,
+                      cellInput)}
+                      value={row.kurztext || ""}
+                      onChange={(e) =>
+                      save({ id: row.id, kurztext: e.target.value })
+                      } />
+                      
+                    </td>
+
+                    <td className={rlcClass(null, td)}>
+                      <textarea className={rlcClass(null,
+                      cellTextarea)}
+                      value={row.langtext || ""}
+                      placeholder="Langtext / ausführliche Leistungsbeschreibung"
+                      onChange={(e) =>
+                      save({ id: row.id, langtext: e.target.value })
+                      } />
+                      
+                    </td>
+
+                    <td className={rlcClass(null, td)}>
+                      <input className={rlcClass(null,
+                      { ...cellInput, width: 62 })}
+                      value={row.einheit || "m"}
+                      onChange={(e) =>
+                      save({ id: row.id, einheit: e.target.value })
+                      } />
+                      
+                    </td>
+
+                    <td className={rlcClass(null, tdRight)}>
                       <input
-                        style={{ ...cellInput, width: 100 }}
-                        value={row.posNr || ""}
-                        onChange={(e) =>
-                          save({ id: row.id, posNr: e.target.value })
-                        }
-                      />
-                    </td>
-
-                    <td style={td}>
-                      <input
-                        style={cellInput}
-                        value={row.kurztext || ""}
-                        onChange={(e) =>
-                          save({ id: row.id, kurztext: e.target.value })
-                        }
-                      />
-                    </td>
-
-                    <td style={td}>
-                      <textarea
-                        style={cellTextarea}
-                        value={row.langtext || ""}
-                        placeholder="Langtext / ausführliche Leistungsbeschreibung"
-                        onChange={(e) =>
-                          save({ id: row.id, langtext: e.target.value })
-                        }
-                      />
-                    </td>
-
-                    <td style={td}>
-                      <input
-                        style={{ ...cellInput, width: 62 }}
-                        value={row.einheit || "m"}
-                        onChange={(e) =>
-                          save({ id: row.id, einheit: e.target.value })
-                        }
-                      />
-                    </td>
-
-                    <td style={tdRight}>
-                      <input
-                        type="number"
-                        style={{
+                        type="number" className={rlcClass(null,
+                        {
                           ...cellInput,
                           width: 95,
                           textAlign: "right",
                           background:
-                            n(row.mengeDelta) > 0
-                              ? "#F0FDF4"
-                              : n(row.mengeDelta) < 0
-                              ? "#FEF2F2"
-                              : "#FFFFFF",
-                        }}
+                          n(row.mengeDelta) > 0 ?
+                          "#F0FDF4" :
+                          n(row.mengeDelta) < 0 ?
+                          "#FEF2F2" :
+                          "#FFFFFF"
+                        })}
                         value={row.mengeDelta ?? 0}
                         onChange={(e) =>
-                          save({ id: row.id, mengeDelta: n(e.target.value) })
-                        }
-                      />
+                        save({ id: row.id, mengeDelta: n(e.target.value) })
+                        } />
+                      
                     </td>
 
-                    <td style={tdRight}>
+                    <td className={rlcClass(null, tdRight)}>
                       <input
-                        type="number"
-                        style={{ ...cellInput, width: 95, textAlign: "right" }}
+                        type="number" className={rlcClass(null,
+                        { ...cellInput, width: 95, textAlign: "right" })}
                         value={row.preis ?? 0}
                         onChange={(e) =>
-                          save({ id: row.id, preis: n(e.target.value) })
-                        }
-                      />
+                        save({ id: row.id, preis: n(e.target.value) })
+                        } />
+                      
                     </td>
 
-                    <td style={td}>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          alignItems: "center",
-                        }}
-                      >
+                    <td className={rlcClass(null, td)}>
+                      <div className="rlc-migrated-pages-kalkulation-nachtraege-tsx-919">
+
+
+
+
+
+                        
                         <select
                           value={row.status || "Entwurf"}
                           onChange={(e) =>
-                            save({
-                              id: row.id,
-                              status: e.target.value as ChangeStatus,
-                            })
-                          }
-                          style={{ ...cellInput, width: 130 }}
-                        >
-                          {STATI.map((s) => (
-                            <option key={s}>{s}</option>
-                          ))}
+                          save({
+                            id: row.id,
+                            status: e.target.value as ChangeStatus
+                          })
+                          } className={rlcClass(null,
+                          { ...cellInput, width: 130 })}>
+                          
+                          {STATI.map((s) =>
+                          <option key={s}>{s}</option>
+                          )}
                         </select>
 
                         <StatusPill
-                          status={(row.status || "Entwurf") as ChangeStatus}
-                        />
+                          status={(row.status || "Entwurf") as ChangeStatus} />
+                        
                       </div>
                     </td>
 
-                    <td style={td}>
-                      <input
-                        style={cellInput}
-                        value={row.begruendung || ""}
-                        onChange={(e) =>
-                          save({ id: row.id, begruendung: e.target.value })
-                        }
-                      />
+                    <td className={rlcClass(null, td)}>
+                      <input className={rlcClass(null,
+                      cellInput)}
+                      value={row.begruendung || ""}
+                      onChange={(e) =>
+                      save({ id: row.id, begruendung: e.target.value })
+                      } />
+                      
                     </td>
 
-                    <td style={tdRight}>{money(total)}</td>
+                    <td className={rlcClass(null, tdRight)}>{money(total)}</td>
 
-                    <td style={td}>
-                      <div style={buttonRowCompact}>
-                        <button style={btnMini} onClick={() => duplicate(row)}>
+                    <td className={rlcClass(null, td)}>
+                      <div className={rlcClass(null, buttonRowCompact)}>
+                        <button className={rlcClass(null, btnMini)} onClick={() => duplicate(row)}>
                           Duplizieren
                         </button>
 
-                        <button style={btnDangerMini} onClick={() => del(row.id)}>
+                        <button className={rlcClass(null, btnDangerMini)} onClick={() => del(row.id)}>
                           Löschen
                         </button>
                       </div>
                     </td>
-                  </tr>
-                );
+                  </tr>);
+
               })}
 
-              {!viewRows.length ? (
-                <tr>
-                  <td colSpan={11} style={emptyCell}>
+              {!viewRows.length ?
+              <tr>
+                  <td colSpan={11} className={rlcClass(null, emptyCell)}>
                     Noch keine Nachträge vorhanden.
                   </td>
-                </tr>
-              ) : null}
+                </tr> :
+              null}
             </tbody>
           </table>
         </div>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UI ================= */
@@ -2892,19 +2922,19 @@ export default function NachtraegePage() {
 function KpiCard({
   label,
   value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+  sub
+
+
+
+
+}: {label: string;value: string;sub?: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 function statusStyle(status: ChangeStatus): React.CSSProperties {
@@ -2918,12 +2948,12 @@ function alertBox(text: string): React.CSSProperties {
   const lower = text.toLowerCase();
 
   const isOk =
-    lower.includes("erfolgreich") ||
-    lower.includes("gespeichert") ||
-    lower.includes("lokal") ||
-    lower.includes("übernommen") ||
-    lower.includes("erkannt") ||
-    lower.includes("angebot vorbereitet");
+  lower.includes("erfolgreich") ||
+  lower.includes("gespeichert") ||
+  lower.includes("lokal") ||
+  lower.includes("übernommen") ||
+  lower.includes("erkannt") ||
+  lower.includes("angebot vorbereitet");
 
   if (isOk && !lower.includes("fehlgeschlagen") && !lower.includes("timeout")) {
     return alertSuccess;
@@ -2937,17 +2967,17 @@ function alertBox(text: string): React.CSSProperties {
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -2955,37 +2985,37 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.88,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.9,
+  opacity: 0.9
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -2993,28 +3023,28 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const card: React.CSSProperties = {
@@ -3022,7 +3052,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const draftCard: React.CSSProperties = {
@@ -3034,19 +3064,19 @@ const draftCard: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: 12,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const recipeCard: React.CSSProperties = {
   ...card,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   gap: 12,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -3055,32 +3085,32 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const muted: React.CSSProperties = {
   fontSize: 13,
   opacity: 0.8,
-  marginTop: 3,
+  marginTop: 3
 };
 
 const toolbarGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(260px,1fr) 180px 200px 120px",
-  gap: 10,
+  gap: 10
 };
 
 const input: React.CSSProperties = {
@@ -3090,19 +3120,19 @@ const input: React.CSSProperties = {
   fontSize: 13,
   width: "100%",
   boxSizing: "border-box",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const tableWrap: React.CSSProperties = {
   overflow: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 1460,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -3113,43 +3143,43 @@ const th: React.CSSProperties = {
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const thRight: React.CSSProperties = {
   ...th,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const thSmall: React.CSSProperties = {
   ...th,
   width: 42,
-  textAlign: "center",
+  textAlign: "center"
 };
 
 const td: React.CSSProperties = {
   padding: "8px 9px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
   whiteSpace: "nowrap",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const tdCenter: React.CSSProperties = {
   ...td,
-  textAlign: "center",
+  textAlign: "center"
 };
 
 const emptyCell: React.CSSProperties = {
   padding: 16,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const cellInput: React.CSSProperties = {
@@ -3159,7 +3189,7 @@ const cellInput: React.CSSProperties = {
   fontSize: 12,
   background: "#FFFFFF",
   boxSizing: "border-box",
-  width: "100%",
+  width: "100%"
 };
 
 const cellTextarea: React.CSSProperties = {
@@ -3168,7 +3198,7 @@ const cellTextarea: React.CSSProperties = {
   minHeight: 58,
   resize: "vertical",
   fontFamily: "inherit",
-  lineHeight: 1.35,
+  lineHeight: 1.35
 };
 
 const buttonRow: React.CSSProperties = {
@@ -3176,13 +3206,13 @@ const buttonRow: React.CSSProperties = {
   gap: 8,
   flexWrap: "wrap",
   alignItems: "center",
-  marginTop: 12,
+  marginTop: 12
 };
 
 const buttonRowCompact: React.CSSProperties = {
   display: "flex",
   gap: 6,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const btnBase: React.CSSProperties = {
@@ -3190,29 +3220,29 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnDanger: React.CSSProperties = {
   ...btnBase,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const btnMini: React.CSSProperties = {
@@ -3222,15 +3252,15 @@ const btnMini: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const btnDangerMini: React.CSSProperties = {
   ...btnMini,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const alertError: React.CSSProperties = {
@@ -3240,8 +3270,8 @@ const alertError: React.CSSProperties = {
   borderRadius: 12,
   padding: "10px 12px",
   fontSize: 13,
-  fontWeight: 700,
-  whiteSpace: "pre-wrap",
+  fontWeight: 600,
+  whiteSpace: "pre-wrap"
 };
 
 const alertSuccess: React.CSSProperties = {
@@ -3251,8 +3281,8 @@ const alertSuccess: React.CSSProperties = {
   borderRadius: 12,
   padding: "10px 12px",
   fontSize: 13,
-  fontWeight: 700,
-  whiteSpace: "pre-wrap",
+  fontWeight: 600,
+  whiteSpace: "pre-wrap"
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -3263,52 +3293,26 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeOk: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #BBF7D0",
   background: "#F0FDF4",
-  color: "#15803D",
+  color: "#15803D"
 };
 
 const badgeWarn: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FDE68A",
   background: "#FFFBEB",
-  color: "#B45309",
+  color: "#B45309"
 };
 
 const badgeCritical: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

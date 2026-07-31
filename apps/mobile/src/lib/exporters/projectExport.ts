@@ -1,4 +1,5 @@
-﻿// apps/mobile/src/lib/exporters/projectExport.ts
+import { renderMobilePdfViaServer } from "../mobilePdfCore";
+// apps/mobile/src/lib/exporters/projectExport.ts
 import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as MailComposer from "expo-mail-composer";
@@ -6,10 +7,10 @@ import * as ImageManipulator from "expo-image-manipulator";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Linking, Platform } from "react-native";
 import {
-  getCompanyHeaderCached,
-  getCompanyLogoUriCached,
-  syncCompanyHeaderAndLogo,
-} from "../companyCache";
+  RLC_PDF_FONT_STACK,
+  loadRlcPdfBranding,
+  renderRlcPdfCompanyHeader,
+} from "./pdfBranding";
 
 const API_URL_STORAGE_KEY = "api_base_url";
 
@@ -384,81 +385,13 @@ async function readAsBase64DataUrl(img: {
 
 async function buildCompanyPdfHeaderHtml(): Promise<string> {
   try {
-    let header = await getCompanyHeaderCached();
-    let rawLogoUri = await getCompanyLogoUriCached();
-
-    if (!rawLogoUri) {
-      try {
-        const synced = await syncCompanyHeaderAndLogo();
-        header = header || synced?.header || null;
-        rawLogoUri = synced?.logoUri || rawLogoUri || null;
-      } catch (e) {
-        console.log("[PDFDBG] company sync fallback failed:", String((e as any)?.message || e));
-      }
-    }
-
-    const name = escapeHtml(text(header?.name || ""));
-    const address = escapeHtml(text(header?.address || ""));
-    const phone = escapeHtml(text(header?.phone || ""));
-    const email = escapeHtml(text(header?.email || ""));
-
-    let logoDataUrl = "";
-    if (rawLogoUri) {
-      const logoUri = String(rawLogoUri || "").trim();
-
-      console.log("[PDFDBG] company rawLogoUri:", logoUri);
-
-      if (logoUri.startsWith("data:image/")) {
-        logoDataUrl = logoUri;
-      } else {
-        const maybeDataUrl = await readAsBase64DataUrl({
-          uri: logoUri,
-          name: "company_logo",
-          type: logoUri.toLowerCase().includes(".png") ? "image/png" : "image/jpeg",
-        });
-
-        if (maybeDataUrl) {
-          logoDataUrl = maybeDataUrl;
-        } else if (logoUri.startsWith("file://")) {
-          try {
-            const b64 = await FileSystem.readAsStringAsync(logoUri, {
-              encoding: FileSystem.EncodingType.Base64,
-            } as any);
-
-            if (b64) {
-              const mime = logoUri.toLowerCase().includes(".png") ? "image/png" : "image/jpeg";
-              logoDataUrl = `data:${mime};base64,${b64}`;
-            }
-          } catch (e) {
-            console.log("[PDFDBG] company logo direct read failed:", String((e as any)?.message || e));
-          }
-        }
-      }
-    }
-
-    if (!logoDataUrl && !name && !address && !phone && !email) return "";
-
-    const logoHtml = logoDataUrl
-      ? `<img class="company-logo" src="${logoDataUrl}" />`
-      : `<div class="company-logo-placeholder"></div>`;
-
-    const infoLines = [name, address, phone, email]
-      .filter(Boolean)
-      .map((v) => `<div class="company-line">${v}</div>`)
-      .join("");
-
-    return `
-      <div class="company-header">
-        <div class="company-header-left">
-          ${logoHtml}
-        </div>
-        <div class="company-header-right">
-          ${infoLines}
-        </div>
-      </div>
-    `;
+    const branding = await loadRlcPdfBranding();
+    return renderRlcPdfCompanyHeader(branding);
   } catch (e: any) {
-    console.log("[PDFDBG] buildCompanyPdfHeaderHtml failed:", String(e?.message || e));
+    console.log(
+      "[PDFDBG] buildCompanyPdfHeaderHtml failed:",
+      String(e?.message || e)
+    );
     return "";
   }
 }
@@ -882,7 +815,7 @@ function normalizeRegieLines(rootAny: any): RegieLine[] {
       r?.notiz ||
       r?.note ||
       r?.taetigkeit ||
-      r?.tätigkeit ||
+      r?.["tätigkeit"] ||
       r?.beschreibung ||
       r?.leistung ||
       r?.leistungBeschreibung ||
@@ -913,7 +846,16 @@ function normalizeRegieLines(rootAny: any): RegieLine[] {
 
 type DocKind = "REGIE" | "LIEFERSCHEIN" | "FOTOS" | "TAGESBERICHT";
 
-function collectAllAttachmentsMaybe(rowAny: any): Array<{ uri?: string; type?: string; name?: string }> {
+type LocalPdfAttachment = {
+  uri?: string;
+  type?: string;
+  name?: string;
+  contentBase64?: string;
+  base64?: string;
+  dataBase64?: string;
+};
+
+function collectAllAttachmentsMaybe(rowAny: any): LocalPdfAttachment[] {
   const row = unwrapRowMaybeQueue(rowAny);
 
   const a1 = Array.isArray(row?.attachments) ? row.attachments : [];
@@ -937,17 +879,19 @@ function collectAllAttachmentsMaybe(rowAny: any): Array<{ uri?: string; type?: s
         if (typeof p === "string") return { uri: p, type: undefined, name: undefined };
         return {
           uri: p?.uri || p?.url || p?.path,
-          type: p?.type,
-          name: p?.name,
+          type: p?.type || p?.mimeType || p?.contentType,
+          name: p?.name || p?.fileName || p?.filename,
+          contentBase64: p?.contentBase64 || p?.base64 || p?.dataBase64,
           url: p?.url,
           path: p?.path,
         };
       })
-      .filter((p) => !!p.uri)
-  ).map((p) => ({
+      .filter((p) => !!p.uri || !!p.contentBase64)
+  ).map((p: any) => ({
     uri: p.uri,
     type: p.type,
     name: p.name,
+    contentBase64: p.contentBase64,
   }));
 }
 
@@ -991,9 +935,26 @@ async function firstPhotoDataUrlFromRowOrLines(opts: {
       ...rowPhotos,
     ]);
 
-    const firstImg = all.find((p) => isLikelyImg(p?.type || p?.name || p?.uri)) || null;
+    const firstImg: any =
+      all.find((p: any) =>
+        Boolean(p?.contentBase64 || p?.base64 || p?.dataBase64) ||
+        isLikelyImg(p?.type || p?.name || p?.uri)
+      ) || null;
+
+    const directBase64 = String(
+      firstImg?.contentBase64 || firstImg?.base64 || firstImg?.dataBase64 || ""
+    ).trim();
+    const mime = String(firstImg?.type || "image/jpeg");
+
+    if (directBase64) {
+      return directBase64.startsWith("data:")
+        ? directBase64
+        : `data:${mime};base64,${directBase64}`;
+    }
+
     const uri = String(firstImg?.uri || "").trim();
     if (!uri) return null;
+    if (uri.startsWith("data:")) return uri;
 
     return await readAsBase64DataUrl({
       uri,
@@ -1036,7 +997,7 @@ function synthLinesForLieferschein(rowAny: any): RegieLine[] {
       machine: material || "Material",
       worker: driver || "",
       hours: "",
-      comment: commentParts.join(" • "),
+      comment: commentParts.join(" â€¢ "),
       material: qtyStr,
       photos: rowPhotos,
     },
@@ -1188,17 +1149,17 @@ function renderRightField(label: string, value: string) {
   `;
 }
 
-function buildPdfShell(content: string) {
+function buildPdfShell(content: string, footerLabel = "RLC Bausoftware") {
   return `
   <html>
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <style>
-        @page { size: A4; margin: 10mm; }
+        @page { size: A4; margin: 10mm 10mm 16mm; }
 
         body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+          font-family: ${RLC_PDF_FONT_STACK};
           color: #111;
           margin: 0;
           padding: 0;
@@ -1206,6 +1167,22 @@ function buildPdfShell(content: string) {
 
         .page { width: 100%; }
         .page-break { page-break-after: always; }
+
+        .rlc-global-footer {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: -11mm;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-top: 0.3mm solid #d8e1ea;
+          padding-top: 2mm;
+          color: #64748b;
+          font-size: 8px;
+        }
+
+        .rlc-page-number::after { content: counter(page); }
 
         .company-header {
           display: flex;
@@ -1546,9 +1523,30 @@ function buildPdfShell(content: string) {
           border-bottom: 0.3mm solid #111;
           height: 0;
         }
+        /* RLC_OFFLINE_BLUE_HEADER_V1: same visual identity as PDF Core */
+        .company-header {
+          background: #0b4f78 !important;
+          border: 0 !important;
+          border-radius: 10px !important;
+          padding: 14px 16px !important;
+          margin-bottom: 18px !important;
+          color: #ffffff !important;
+        }
+        .company-header-right,
+        .company-header-right *,
+        .company-line,
+        .company-line:first-child {
+          color: #ffffff !important;
+        }
+        .company-logo,
+        .company-logo-placeholder {
+          background: #ffffff !important;
+          border-color: rgba(255,255,255,0.7) !important;
+        }
+
         /* RLC_BUSINESS_PDF_UNIFIED_STYLE_V1 */
         body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+          font-family: ${RLC_PDF_FONT_STACK};
           color: #172033;
           background: #ffffff;
           font-size: 11px;
@@ -2645,6 +2643,10 @@ function buildPdfShell(content: string) {
       </style>
     </head>
     <body>
+      <div class="rlc-global-footer">
+        <span>RLC Bausoftware Â· ${escapeHtml(footerLabel)}</span>
+        <span>Seite <span class="rlc-page-number"></span></span>
+      </div>
       ${content}
     </body>
   </html>
@@ -2710,11 +2712,11 @@ function regieReportHtml(params: {
             hasLineData && r.quantity != null && String(r.quantity) !== "0"
               ? `${num(r.quantity)} ${text(r.unit || "")}`.trim()
               : "";
-          const materialStr = hasLineData ? [text(r.material || ""), qtyStr].filter(Boolean).join(" – ") : "";
+          const materialStr = hasLineData ? [text(r.material || ""), qtyStr].filter(Boolean).join(" â€“ ") : "";
 
           const attCount = Array.isArray((r as any)?.photos) ? (r as any).photos.length : 0;
           const badges: string[] = [];
-          if (hasLineData && attCount > 0) badges.push(`<span class="tag">Anhänge: ${attCount}</span>`);
+          if (hasLineData && attCount > 0) badges.push(`<span class="tag">AnhÃ¤nge: ${attCount}</span>`);
           const badgeHtml = badges.length ? `<div class="badges">${badges.join("")}</div>` : "";
           const besondereStr = hasLineData ? `${badgeHtml}${escapeHtml(text(r.comment || ""))}` : "";
 
@@ -2794,7 +2796,7 @@ function regieReportHtml(params: {
             <thead>
               <tr>
                 <th class="kosten">Kostenstelle</th>
-                <th class="geraet">Bezeichnung der Geräte</th>
+                <th class="geraet">Bezeichnung der GerÃ¤te</th>
                 <th class="mitarb">Mitarbeiter</th>
                 <th class="std">Std.</th>
                 <th class="bes">Besondere Leistungen</th>
@@ -2831,14 +2833,14 @@ function regieReportHtml(params: {
 
           <div class="sign">
             <div class="sign-col">
-              <div class="sign-title">Geprüft</div>
+              <div class="sign-title">GeprÃ¼ft</div>
               <div class="sign-line"><span class="lab">Bauleiter</span><span class="line"></span></div>
               <div class="sign-line"><span class="lab">Bauherr</span><span class="line"></span></div>
             </div>
             <div class="sign-col">
               <div class="sign-title">Aufgestellt</div>
               <div class="sign-line"><span class="lab">Polier</span><span class="line"></span></div>
-              <div class="sign-line"><span class="lab">Bauführer</span><span class="line"></span></div>
+              <div class="sign-line"><span class="lab">BaufÃ¼hrer</span><span class="line"></span></div>
             </div>
           </div>
         </div>
@@ -2847,7 +2849,7 @@ function regieReportHtml(params: {
     })
     .join("");
 
-  return buildPdfShell(pageHtml);
+  return buildPdfShell(pageHtml, projectFsKey);
 }
 
 function lieferscheinReportHtml(params: {
@@ -2937,7 +2939,7 @@ function lieferscheinReportHtml(params: {
       </table>
 
       <div class="desc">
-        <div class="desc-title">Zusätzliche Angaben</div>
+        <div class="desc-title">ZusÃ¤tzliche Angaben</div>
         <div class="desc-body">${escapeHtml([
           descText,
           (header as any).ortAbschnitt || (header as any).location || (header as any).ort ? `Ort / Abschnitt: ${(header as any).ortAbschnitt || (header as any).location || (header as any).ort}` : "",
@@ -2961,8 +2963,8 @@ function lieferscheinReportHtml(params: {
 
       <div class="sign">
         <div class="sign-col">
-          <div class="sign-title">Bestätigt</div>
-          <div class="sign-line"><span class="lab">Empfänger</span><span class="line"></span></div>
+          <div class="sign-title">BestÃ¤tigt</div>
+          <div class="sign-line"><span class="lab">EmpfÃ¤nger</span><span class="line"></span></div>
           <div class="sign-line"><span class="lab">Bauleiter</span><span class="line"></span></div>
         </div>
         <div class="sign-col">
@@ -2974,7 +2976,7 @@ function lieferscheinReportHtml(params: {
     </div>
   `;
 
-  return buildPdfShell(content);
+  return buildPdfShell(content, projectFsKey);
 }
 
 function photosReportHtml(params: {
@@ -3012,7 +3014,7 @@ function photosReportHtml(params: {
       if (isExtra) badges.push(`<span class="tag">EXTRA</span>`);
       if (isFoto) badges.push(`<span class="tag">FOTO</span>`);
       if (isLv) badges.push(`<span class="tag">LV</span>`);
-      if (attCount > 0) badges.push(`<span class="tag">Anhänge: ${attCount}</span>`);
+      if (attCount > 0) badges.push(`<span class="tag">AnhÃ¤nge: ${attCount}</span>`);
 
       return `
         <tr>
@@ -3115,7 +3117,7 @@ function photosReportHtml(params: {
 
       <div class="sign">
         <div class="sign-col">
-          <div class="sign-title">Geprüft</div>
+          <div class="sign-title">GeprÃ¼ft</div>
           <div class="sign-line"><span class="lab">Bauleiter</span><span class="line"></span></div>
           <div class="sign-line"><span class="lab">Projekt</span><span class="line"></span></div>
         </div>
@@ -3128,7 +3130,7 @@ function photosReportHtml(params: {
     </div>
   `;
 
-  return buildPdfShell(content);
+  return buildPdfShell(content, projectFsKey);
 }
 
 function tagesberichtReportHtml(params: {
@@ -3227,7 +3229,7 @@ function tagesberichtReportHtml(params: {
             <th class="geraet">Maschine</th>
             <th class="mitarb">Mitarbeiter</th>
             <th class="std">Std.</th>
-            <th class="bes">Tätigkeit / Notiz</th>
+            <th class="bes">TÃ¤tigkeit / Notiz</th>
             <th class="mat">Material</th>
           </tr>
         </thead>
@@ -3261,7 +3263,7 @@ function tagesberichtReportHtml(params: {
 
       <div class="sign">
         <div class="sign-col">
-          <div class="sign-title">Geprüft</div>
+          <div class="sign-title">GeprÃ¼ft</div>
           <div class="sign-line"><span class="lab">Bauleiter</span><span class="line"></span></div>
           <div class="sign-line"><span class="lab">Auftraggeber</span><span class="line"></span></div>
         </div>
@@ -3274,7 +3276,7 @@ function tagesberichtReportHtml(params: {
     </div>
   `;
 
-  return buildPdfShell(content);
+  return buildPdfShell(content, projectFsKey);
 }
 /* ============================================================
  * PRINT / SAVE / EMAIL / OPEN
@@ -3369,7 +3371,7 @@ export async function emailPdf(input: EmailPdfInput) {
   try {
     const available = await MailComposer.isAvailableAsync();
     if (!available) {
-      Alert.alert("Mail nicht verfügbar", "Auf diesem Gerät ist kein Mail-Client verfügbar.");
+      Alert.alert("Mail nicht verfÃ¼gbar", "Auf diesem GerÃ¤t ist kein Mail-Client verfÃ¼gbar.");
       return;
     }
 
@@ -3467,6 +3469,49 @@ function buildDescriptionText(
   return joined;
 }
 
+function applyOfflinePdfCoreSkin(html: string, docKind: DocKind) {
+  const title =
+    docKind === "REGIE"
+      ? "Regiebericht"
+      : docKind === "LIEFERSCHEIN"
+      ? "Lieferschein"
+      : docKind === "TAGESBERICHT"
+      ? "Tagesbericht"
+      : "Fotodokumentation";
+
+  const css = `
+    <style id="rlc-offline-pdf-core">
+      :root { color-scheme: light; }
+      html, body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+        color: #0f172a !important;
+        background: #ffffff !important;
+      }
+      .page, .sheet, .pdf-page {
+        box-shadow: none !important;
+        border: 0 !important;
+      }
+      table { border-collapse: collapse !important; }
+      th {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        font-weight: 700 !important;
+      }
+      td, th { border-color: #dbe3ee !important; }
+      .tag {
+        background: #eaf2ff !important;
+        color: #135cbd !important;
+        border-color: #b8d4ff !important;
+      }
+      h1, h2, h3 { letter-spacing: -0.2px !important; }
+    </style>
+  `;
+  const marker = `<div style="font-size:8px;color:#64748b;text-align:right;margin:0 0 4px 0">RLC PDF Core · Offline · ${title}</div>`;
+  let out = html.includes("</head>") ? html.replace("</head>", `${css}</head>`) : `${css}${html}`;
+  out = out.includes("<body") ? out.replace(/(<body[^>]*>)/i, `$1${marker}`) : `${marker}${out}`;
+  return out;
+}
+
 async function exportUnifiedRegieModelPdf(params: {
   projectFsKey: string;
   projectTitle?: string;
@@ -3549,6 +3594,8 @@ async function exportUnifiedRegieModelPdf(params: {
     });
   }
 
+  html = applyOfflinePdfCoreSkin(html, docKind);
+
   if (Platform.OS === "web") {
     try {
       const w = (globalThis as any)?.window?.open?.("", "_blank");
@@ -3619,6 +3666,16 @@ async function exportUnifiedRegieModelPdf(params: {
  * ============================================================ */
 
 export async function exportRegiePdfToProject(input: ExportRegieInput): Promise<ExportResult> {
+  try {
+    return await renderMobilePdfViaServer({
+      documentType: "REGIE",
+      projectFsKey: input.projectFsKey,
+      fileName: `${input.filenameHint || "Regiebericht"}.pdf`,
+      payload: input,
+    });
+  } catch (error: any) {
+    console.log("[RLC PDF CORE] Regie fallback lokal:", String(error?.message || error));
+  }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
     projectTitle: input.projectTitle,
@@ -3629,6 +3686,16 @@ export async function exportRegiePdfToProject(input: ExportRegieInput): Promise<
 }
 
 export async function exportLieferscheinPdfToProject(input: ExportLsInput): Promise<ExportResult> {
+  try {
+    return await renderMobilePdfViaServer({
+      documentType: "LIEFERSCHEIN",
+      projectFsKey: input.projectFsKey,
+      fileName: `${input.filenameHint || "Lieferschein"}.pdf`,
+      payload: input,
+    });
+  } catch (error: any) {
+    console.log("[RLC PDF CORE] Lieferschein fallback lokal:", String(error?.message || error));
+  }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
     projectTitle: input.projectTitle,
@@ -3639,6 +3706,16 @@ export async function exportLieferscheinPdfToProject(input: ExportLsInput): Prom
 }
 
 export async function exportPhotosPdfToProject(input: ExportPhotosInput): Promise<ExportResult> {
+  try {
+    return await renderMobilePdfViaServer({
+      documentType: "FOTOS",
+      projectFsKey: input.projectFsKey,
+      fileName: `${input.filenameHint || "Fotos"}.pdf`,
+      payload: input,
+    });
+  } catch (error: any) {
+    console.log("[RLC PDF CORE] Fotos fallback lokal:", String(error?.message || error));
+  }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
     projectTitle: input.projectTitle,
@@ -3651,6 +3728,16 @@ export async function exportPhotosPdfToProject(input: ExportPhotosInput): Promis
 export async function exportTagesberichtPdfToProject(
   input: ExportTagesberichtInput
 ): Promise<ExportResult> {
+  try {
+    return await renderMobilePdfViaServer({
+      documentType: "TAGESBERICHT",
+      projectFsKey: input.projectFsKey,
+      fileName: `${input.filenameHint || "Tagesbericht"}.pdf`,
+      payload: input,
+    });
+  } catch (error: any) {
+    console.log("[RLC PDF CORE] Tagesbericht fallback lokal:", String(error?.message || error));
+  }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
     projectTitle: input.projectTitle,
@@ -3688,6 +3775,7 @@ export async function exportAndOpenTagesberichtPdf(
   if (r?.pdfUri && Platform.OS !== "web") await openPdf(r.pdfUri);
   return r;
 }
+
 
 
 

@@ -1,4 +1,4 @@
-import { apiUrl } from "../../lib/apiBase";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { apiUrl } from "../../lib/apiBase";
 // apps/web/src/pages/ki/Maengel.tsx
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +24,7 @@ type Mangel = {
   email?: string;
 };
 
-type Opt = { id: string; label: string };
+type Opt = {id: string;label: string;};
 
 type LookupResponse = {
   items?: Opt[];
@@ -53,21 +53,21 @@ type ProjectLike = {
 const shell: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 24,
+  padding: 24
 };
 
 const card: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 10,
   padding: 16,
-  background: "#fff",
+  background: "#fff"
 };
 
 const input: React.CSSProperties = {
   border: "1px solid #cbd5e1",
   borderRadius: 8,
   padding: "8px 10px",
-  fontSize: 14,
+  fontSize: 14
 };
 
 const btn: React.CSSProperties = {
@@ -76,12 +76,12 @@ const btn: React.CSSProperties = {
   background: "#fff",
   borderRadius: 8,
   fontSize: 13,
-  cursor: "pointer",
+  cursor: "pointer"
 };
 
 const table: React.CSSProperties = {
   width: "100%",
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -89,13 +89,13 @@ const th: React.CSSProperties = {
   textAlign: "left",
   padding: 8,
   background: "#f8fafc",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: 6,
   borderBottom: "1px solid #eee",
-  verticalAlign: "top",
+  verticalAlign: "top"
 };
 
 export default function Maengel() {
@@ -134,10 +134,10 @@ export default function Maengel() {
 
     void fetch(
       apiUrl(`/api/lookup/lv?projectId=${encodeURIComponent(effectiveProjectId)}`)
-    )
-      .then((r) => r.json())
-      .then((d: LookupResponse) => setLvOpts(Array.isArray(d.items) ? d.items : []))
-      .catch(() => {});
+    ).
+    then((r) => r.json()).
+    then((d: LookupResponse) => setLvOpts(Array.isArray(d.items) ? d.items : [])).
+    catch(() => {});
 
     void fetch(
       apiUrl(
@@ -145,12 +145,12 @@ export default function Maengel() {
           effectiveProjectId
         )}`
       )
-    )
-      .then((r) => r.json())
-      .then((d: LookupResponse) =>
-        setRegieOpts(Array.isArray(d.items) ? d.items : [])
-      )
-      .catch(() => {});
+    ).
+    then((r) => r.json()).
+    then((d: LookupResponse) =>
+    setRegieOpts(Array.isArray(d.items) ? d.items : [])
+    ).
+    catch(() => {});
   }, [effectiveProjectId]);
 
   async function uploadFotos(e: React.ChangeEvent<HTMLInputElement>) {
@@ -176,7 +176,7 @@ export default function Maengel() {
         apiUrl(`/api/ki/maengel/upload?ai=${useAI ? "1" : "0"}`),
         {
           method: "POST",
-          body: fd,
+          body: fd
         }
       );
 
@@ -202,7 +202,7 @@ export default function Maengel() {
         notiz: "",
         erkannt: JSON.stringify(detected || {}),
         erstelltAm: new Date().toISOString(),
-        email: "",
+        email: ""
       };
 
       setItems((arr) => [neu, ...arr]);
@@ -218,7 +218,7 @@ export default function Maengel() {
   }
 
   function update(i: number, patch: Partial<Mangel>) {
-    setItems((arr) => arr.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+    setItems((arr) => arr.map((m, idx) => idx === i ? { ...m, ...patch } : m));
   }
 
   function remove(i: number) {
@@ -238,7 +238,7 @@ export default function Maengel() {
       const res = await fetch(apiUrl("/api/ki/maengel/save"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: effectiveProjectId, items }),
+        body: JSON.stringify({ projectId: effectiveProjectId, items })
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -265,7 +265,7 @@ export default function Maengel() {
       const r = await fetch(apiUrl("/api/ki/maengel/load"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: effectiveProjectId }),
+        body: JSON.stringify({ projectId: effectiveProjectId })
       });
 
       if (!r.ok) throw new Error(await r.text());
@@ -291,12 +291,12 @@ export default function Maengel() {
       const r = await fetch(apiUrl("/api/ki/maengel/pdf"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: effectiveProjectId, items: list }),
+        body: JSON.stringify({ projectId: effectiveProjectId, items: list })
       });
 
       if (!r.ok) throw new Error(await r.text());
 
-      const data = (await r.json()) as { url?: string };
+      const data = (await r.json()) as {url?: string;};
       if (data.url) window.open(data.url, "_blank");
       return data.url;
     } catch (e) {
@@ -320,15 +320,15 @@ export default function Maengel() {
 
     const html = `
       <p>Guten Tag,</p>
-      <p><b>${escapeHtml(m.titel)}</b> – Priorität: ${escapeHtml(
-        m.prioritaet
-      )} – Status: ${escapeHtml(m.status)}</p>
-      <p>Ort: ${escapeHtml(m.ort || "-")} – Fällig: ${escapeHtml(
-        m.faelligAm || "-"
-      )}</p>
-      <p>LV-Pos.: ${escapeHtml(m.lvPos || "-")} – Regiebericht: ${escapeHtml(
-        m.regieberichtId || "-"
-      )}</p>
+      <p><b>${escapeHtml(m.titel)}</b> â€“ PrioritÃ¤t: ${escapeHtml(
+      m.prioritaet
+    )} â€“ Status: ${escapeHtml(m.status)}</p>
+      <p>Ort: ${escapeHtml(m.ort || "-")} â€“ FÃ¤llig: ${escapeHtml(
+      m.faelligAm || "-"
+    )}</p>
+      <p>LV-Pos.: ${escapeHtml(m.lvPos || "-")} â€“ Regiebericht: ${escapeHtml(
+      m.regieberichtId || "-"
+    )}</p>
       <p>Protokoll: <a href="${url}" target="_blank" rel="noreferrer">${url}</a></p>`;
 
     try {
@@ -341,8 +341,8 @@ export default function Maengel() {
           subject: `Mangel: ${m.titel} (${effectiveProjectId})`,
           html,
           pdfUrl: url,
-          fileName: "Maengelprotokoll.pdf",
-        }),
+          fileName: "Maengelprotokoll.pdf"
+        })
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -402,156 +402,156 @@ export default function Maengel() {
   }
 
   return (
-    <div style={shell}>
-      <h1>Mängelmanagement KI-gestützt</h1>
+    <div className={rlcClass(null, shell)}>
+      <h1>MÃ¤ngelmanagement KI-gestÃ¼tzt</h1>
 
-      <div style={card}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-maengel-tsx-1006">
           <label>
             Projekt-ID:&nbsp;
-            <input
-              style={input}
-              value={projectInput}
-              onChange={(e) => setProjectInput(e.target.value)}
-              placeholder="P-2025-001"
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={projectInput}
+            onChange={(e) => setProjectInput(e.target.value)}
+            placeholder="P-2025-001" />
+            
           </label>
 
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
-            onChange={uploadFotos}
-          />
+            onChange={uploadFotos} />
+          
 
           <label>
             KI aktiv:&nbsp;
             <input
               type="checkbox"
               checked={useAI}
-              onChange={(e) => setUseAI(e.target.checked)}
-            />
+              onChange={(e) => setUseAI(e.target.checked)} />
+            
           </label>
 
-          <button style={btn} onClick={laden} disabled={!effectiveProjectId || busy}>
+          <button className={rlcClass(null, btn)} onClick={laden} disabled={!effectiveProjectId || busy}>
             Laden
           </button>
 
-          <button style={btn} onClick={speichern} disabled={!effectiveProjectId || busy}>
+          <button className={rlcClass(null, btn)} onClick={speichern} disabled={!effectiveProjectId || busy}>
             {busy ? "..." : "Speichern"}
           </button>
 
-          <button
-            style={btn}
-            onClick={() => void exportPdf(items)}
-            disabled={!items.length || busy}
-          >
-            Mängelprotokoll (PDF)
+          <button className={rlcClass(null,
+          btn)}
+          onClick={() => void exportPdf(items)}
+          disabled={!items.length || busy}>
+            
+            MÃ¤ngelprotokoll (PDF)
           </button>
         </div>
 
-        <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-          Aktiv: {effectiveProjectId || "kein Projekt gewählt"}
+        <div className="rlc-migrated-pages-ki-maengel-tsx-1007">
+          Aktiv: {effectiveProjectId || "kein Projekt gewÃ¤hlt"}
         </div>
 
-        {error && (
-          <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 13 }}>
+        {error &&
+        <div className="rlc-migrated-pages-ki-maengel-tsx-1008">
             {error}
           </div>
-        )}
+        }
       </div>
 
       <datalist id="lvlist">
-        {lvOpts.map((o) => (
-          <option key={o.id} value={o.id}>
+        {lvOpts.map((o) =>
+        <option key={o.id} value={o.id}>
             {o.label}
           </option>
-        ))}
+        )}
       </datalist>
 
       <datalist id="regielist">
-        {regieOpts.map((o) => (
-          <option key={o.id} value={o.id}>
+        {regieOpts.map((o) =>
+        <option key={o.id} value={o.id}>
             {o.label}
           </option>
-        ))}
+        )}
       </datalist>
 
-      <div style={{ ...card, overflowX: "auto" }}>
-        <table style={table}>
+      <div className={rlcClass(null, { ...card, overflowX: "auto" })}>
+        <table className={rlcClass(null, table)}>
           <thead>
             <tr>
               {[
-                "Foto",
-                "Titel",
-                "Beschreibung",
-                "Kategorie",
-                "Priorität",
-                "Status",
-                "Ort/Bereich",
-                "LV-Pos.",
-                "Regiebericht",
-                "Fällig am",
-                "Verantw.",
-                "E-Mail",
-                "Notiz",
-                "Aktion",
-              ].map((h) => (
-                <th key={h} style={th}>
+              "Foto",
+              "Titel",
+              "Beschreibung",
+              "Kategorie",
+              "PrioritÃ¤t",
+              "Status",
+              "Ort/Bereich",
+              "LV-Pos.",
+              "Regiebericht",
+              "FÃ¤llig am",
+              "Verantw.",
+              "E-Mail",
+              "Notiz",
+              "Aktion"].
+              map((h) =>
+              <th key={h} className={rlcClass(null, th)}>
                   {h}
                 </th>
-              ))}
+              )}
             </tr>
           </thead>
 
           <tbody>
-            {items.map((m, i) => (
-              <tr key={m.id}>
-                <td style={{ ...td, minWidth: 110 }}>
-                  {m.foto ? (
-                    <a href={m.foto} target="_blank" rel="noreferrer">
+            {items.map((m, i) =>
+            <tr key={m.id}>
+                <td className={rlcClass(null, { ...td, minWidth: 110 })}>
+                  {m.foto ?
+                <a href={m.foto} target="_blank" rel="noreferrer">
                       Foto
-                    </a>
-                  ) : (
-                    "-"
-                  )}
+                    </a> :
+
+                "-"
+                }
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={m.titel}
-                    onChange={(e) => update(i, { titel: e.target.value })}
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={m.titel}
+                onChange={(e) => update(i, { titel: e.target.value })} />
+                
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={m.beschreibung}
-                    onChange={(e) => update(i, { beschreibung: e.target.value })}
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={m.beschreibung}
+                onChange={(e) => update(i, { beschreibung: e.target.value })} />
+                
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={m.kategorie}
-                    onChange={(e) => update(i, { kategorie: e.target.value })}
-                    placeholder="Erdarbeiten/Leitungen/..."
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={m.kategorie}
+                onChange={(e) => update(i, { kategorie: e.target.value })}
+                placeholder="Erdarbeiten/Leitungen/..." />
+                
                 </td>
 
-                <td style={td}>
-                  <select
-                    style={input}
-                    value={m.prioritaet}
-                    onChange={(e) =>
-                      update(i, {
-                        prioritaet: e.target.value as Mangel["prioritaet"],
-                      })
-                    }
-                  >
+                <td className={rlcClass(null, td)}>
+                  <select className={rlcClass(null,
+                input)}
+                value={m.prioritaet}
+                onChange={(e) =>
+                update(i, {
+                  prioritaet: e.target.value as Mangel["prioritaet"]
+                })
+                }>
+                  
                     <option value="niedrig">niedrig</option>
                     <option value="mittel">mittel</option>
                     <option value="hoch">hoch</option>
@@ -559,16 +559,16 @@ export default function Maengel() {
                   </select>
                 </td>
 
-                <td style={td}>
-                  <select
-                    style={input}
-                    value={m.status}
-                    onChange={(e) =>
-                      update(i, {
-                        status: e.target.value as Mangel["status"],
-                      })
-                    }
-                  >
+                <td className={rlcClass(null, td)}>
+                  <select className={rlcClass(null,
+                input)}
+                value={m.status}
+                onChange={(e) =>
+                update(i, {
+                  status: e.target.value as Mangel["status"]
+                })
+                }>
+                  
                     <option value="offen">offen</option>
                     <option value="in Bearbeitung">in Bearbeitung</option>
                     <option value="behoben">behoben</option>
@@ -576,113 +576,113 @@ export default function Maengel() {
                   </select>
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={m.ort || ""}
-                    onChange={(e) => update(i, { ort: e.target.value })}
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={m.ort || ""}
+                onChange={(e) => update(i, { ort: e.target.value })} />
+                
                 </td>
 
-                <td style={{ ...td, minWidth: 260 }}>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input
-                      style={{ ...input, margin: 0 }}
-                      list="lvlist"
-                      value={m.lvPos || ""}
-                      onChange={(e) => {
-                        update(i, { lvPos: e.target.value });
-                        void searchLv(e.target.value);
-                      }}
-                      placeholder="ERD-1001 …"
-                    />
-                    <button style={btn} onClick={() => openLV(m.lvPos)} disabled={!m.lvPos}>
-                      Öffnen
+                <td className={rlcClass(null, { ...td, minWidth: 260 })}>
+                  <div className="rlc-migrated-pages-ki-maengel-tsx-1009">
+                    <input className={rlcClass(null,
+                  { ...input, margin: 0 })}
+                  list="lvlist"
+                  value={m.lvPos || ""}
+                  onChange={(e) => {
+                    update(i, { lvPos: e.target.value });
+                    void searchLv(e.target.value);
+                  }}
+                  placeholder="ERD-1001 â€¦" />
+                  
+                    <button className={rlcClass(null, btn)} onClick={() => openLV(m.lvPos)} disabled={!m.lvPos}>
+                      Ã–ffnen
                     </button>
                   </div>
                 </td>
 
-                <td style={{ ...td, minWidth: 260 }}>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input
-                      style={{ ...input, margin: 0 }}
-                      list="regielist"
-                      value={m.regieberichtId || ""}
-                      onChange={(e) => {
-                        update(i, { regieberichtId: e.target.value });
-                        void searchRegie(e.target.value);
-                      }}
-                      placeholder="RB-2025-…"
-                    />
-                    <button
-                      style={btn}
-                      onClick={() => openRegie(m.regieberichtId)}
-                      disabled={!m.regieberichtId}
-                    >
-                      Öffnen
+                <td className={rlcClass(null, { ...td, minWidth: 260 })}>
+                  <div className="rlc-migrated-pages-ki-maengel-tsx-1010">
+                    <input className={rlcClass(null,
+                  { ...input, margin: 0 })}
+                  list="regielist"
+                  value={m.regieberichtId || ""}
+                  onChange={(e) => {
+                    update(i, { regieberichtId: e.target.value });
+                    void searchRegie(e.target.value);
+                  }}
+                  placeholder="RB-2025-â€¦" />
+                  
+                    <button className={rlcClass(null,
+                  btn)}
+                  onClick={() => openRegie(m.regieberichtId)}
+                  disabled={!m.regieberichtId}>
+                    
+                      Ã–ffnen
                     </button>
                   </div>
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    type="date"
-                    value={m.faelligAm || ""}
-                    onChange={(e) => update(i, { faelligAm: e.target.value })}
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                type="date"
+                value={m.faelligAm || ""}
+                onChange={(e) => update(i, { faelligAm: e.target.value })} />
+                
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={m.verantwortlicher || ""}
-                    onChange={(e) =>
-                      update(i, { verantwortlicher: e.target.value })
-                    }
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={m.verantwortlicher || ""}
+                onChange={(e) =>
+                update(i, { verantwortlicher: e.target.value })
+                } />
+                
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={m.email || ""}
-                    onChange={(e) => update(i, { email: e.target.value })}
-                    placeholder="name@firma.de"
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={m.email || ""}
+                onChange={(e) => update(i, { email: e.target.value })}
+                placeholder="name@firma.de" />
+                
                 </td>
 
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={m.notiz || ""}
-                    onChange={(e) => update(i, { notiz: e.target.value })}
-                  />
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={m.notiz || ""}
+                onChange={(e) => update(i, { notiz: e.target.value })} />
+                
                 </td>
 
-                <td style={{ ...td, width: 180 }}>
-                  <button style={btn} onClick={() => void notifySingle(m)}>
+                <td className={rlcClass(null, { ...td, width: 180 })}>
+                  <button className={rlcClass(null, btn)} onClick={() => void notifySingle(m)}>
                     Benachrichtigen
                   </button>
-                  <button style={{ ...btn, marginLeft: 6 }} onClick={() => remove(i)}>
+                  <button className={rlcClass(null, { ...btn, marginLeft: 6 })} onClick={() => remove(i)}>
                     Entf.
                   </button>
                 </td>
               </tr>
-            ))}
+            )}
 
-            {!items.length && (
-              <tr>
-                <td colSpan={14} style={{ padding: 10, color: "#777" }}>
-                  Keine Mängel erfasst.
+            {!items.length &&
+            <tr>
+                <td colSpan={14} className="rlc-migrated-pages-ki-maengel-tsx-1011">
+                  Keine MÃ¤ngel erfasst.
                 </td>
               </tr>
-            )}
+            }
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function isPrioritaet(v: unknown): v is Mangel["prioritaet"] {
@@ -699,12 +699,12 @@ function normalizeMangel(m: unknown): Mangel {
     kategorie: String(x.kategorie || "Allgemein"),
     prioritaet: isPrioritaet(x.prioritaet) ? x.prioritaet : "mittel",
     status:
-      x.status === "offen" ||
-      x.status === "in Bearbeitung" ||
-      x.status === "behoben" ||
-      x.status === "abgenommen"
-        ? x.status
-        : "offen",
+    x.status === "offen" ||
+    x.status === "in Bearbeitung" ||
+    x.status === "behoben" ||
+    x.status === "abgenommen" ?
+    x.status :
+    "offen",
     ort: x.ort ? String(x.ort) : "",
     lvPos: x.lvPos ? String(x.lvPos) : "",
     regieberichtId: x.regieberichtId ? String(x.regieberichtId) : "",
@@ -713,15 +713,15 @@ function normalizeMangel(m: unknown): Mangel {
     notiz: x.notiz ? String(x.notiz) : "",
     erkannt: x.erkannt ? String(x.erkannt) : "",
     erstelltAm: String(x.erstelltAm || new Date().toISOString()),
-    email: x.email ? String(x.email) : "",
+    email: x.email ? String(x.email) : ""
   };
 }
 
 function escapeHtml(s: string) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  return String(s || "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;").
+  replace(/'/g, "&#39;");
 }

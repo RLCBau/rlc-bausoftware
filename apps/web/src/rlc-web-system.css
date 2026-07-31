@@ -1,0 +1,864 @@
+/* RLC Web UI System
+ * Importato per ultimo da App.tsx: uniforma tutte le pagine senza alterare
+ * le aree tecniche (CAD, mappe, canvas e viewer PDF).
+ */
+
+:root {
+  --rlc-bg: #f7f9fc;
+  --rlc-surface: #ffffff;
+  --rlc-surface-soft: #f5f8ff;
+  --rlc-border: #dde5f0;
+  --rlc-border-strong: #bed6ff;
+  --rlc-text: #172033;
+  --rlc-muted: #6d7890;
+  --rlc-primary: #146ef5;
+  --rlc-primary-hover: #0b5bd3;
+  --rlc-primary-soft: #eaf2ff;
+  --rlc-primary-faint: #f5f8ff;
+  --rlc-danger: #d63a46;
+  --rlc-radius-sm: 8px;
+  --rlc-radius: 10px;
+  --rlc-radius-lg: 12px;
+  --rlc-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --rlc-page-gap: 14px;
+  --rlc-control-height: 40px;
+}
+
+body {
+  background: var(--rlc-bg);
+  color: var(--rlc-text);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+.rlc-app-shell {
+  min-height: 100vh;
+  padding: 0 18px 28px;
+}
+
+.rlc-app-shell .rlc-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  gap: 10px !important;
+  margin: 0 -18px 16px !important;
+  padding: 12px 18px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--rlc-border) !important;
+  border-radius: 0 !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: var(--rlc-shadow) !important;
+  backdrop-filter: blur(14px);
+}
+
+.rlc-app-shell .rlc-brand {
+  gap: 10px !important;
+  min-height: 34px;
+}
+
+.rlc-app-shell .rlc-content {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.rlc-app-shell :where(h1, .h1) {
+  margin: 0 0 10px;
+  color: var(--rlc-text);
+  font-size: clamp(1.45rem, 1.8vw, 1.85rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+  line-height: 1.16;
+}
+
+.rlc-app-shell :where(h2) {
+  margin: 0 0 8px;
+  color: var(--rlc-text);
+  font-size: clamp(1.1rem, 1.35vw, 1.35rem) !important;
+  font-weight: 650 !important;
+  line-height: 1.2;
+}
+
+.rlc-app-shell :where(h3, h4) {
+  color: var(--rlc-text);
+  font-weight: 600 !important;
+  line-height: 1.25;
+}
+
+.rlc-app-shell :where(p, label, li, td, th, input, select, textarea, button) {
+  line-height: 1.4;
+}
+
+.rlc-app-shell :where(.card, .panel, .box, .empty, [class*="Card"], [class*="Panel"]):not(.page-cad *) {
+  border-color: var(--rlc-border);
+  border-radius: var(--rlc-radius);
+}
+
+.rlc-app-shell :where(.card, .panel):not(.page-cad *) {
+  background: var(--rlc-surface);
+  box-shadow: none;
+}
+
+.rlc-app-shell :where(input, select, textarea):not(.page-cad *) {
+  min-height: var(--rlc-control-height);
+  border: 1px solid var(--rlc-border);
+  border-radius: var(--rlc-radius-sm);
+  background: var(--rlc-surface);
+  color: var(--rlc-text);
+  padding: 8px 11px;
+  font-size: 0.92rem !important;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.rlc-app-shell textarea:not(.page-cad *) {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.rlc-app-shell :where(input, select, textarea):focus:not(.page-cad *) {
+  border-color: var(--rlc-primary);
+  box-shadow: 0 0 0 3px rgba(20, 110, 245, 0.13);
+}
+
+.rlc-app-shell :where(button, .btn, [role="button"]):not(.page-cad *) {
+  min-height: 38px;
+  border-radius: var(--rlc-radius-sm);
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+}
+
+.rlc-app-shell :where(.btn-primary, button.primary, button[data-variant="primary"]):not(.page-cad *) {
+  border-color: var(--rlc-primary);
+  background: var(--rlc-primary);
+  color: #ffffff;
+}
+
+.rlc-app-shell :where(.btn-primary, button.primary, button[data-variant="primary"]):hover:not(.page-cad *) {
+  background: var(--rlc-primary-hover);
+}
+
+.rlc-app-shell :where(table):not(.page-cad *) {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--rlc-surface);
+  font-size: 0.86rem !important;
+}
+
+.rlc-app-shell :where(th):not(.page-cad *) {
+  background: var(--rlc-surface-soft);
+  color: #334155;
+  font-size: 0.75rem !important;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+
+.rlc-app-shell :where(th, td):not(.page-cad *) {
+  border-bottom: 1px solid #e8eef6;
+  padding: 9px 11px;
+  vertical-align: top;
+}
+
+.rlc-app-shell :where(.breadcrumbs, .muted, small) {
+  color: var(--rlc-muted);
+}
+
+.rlc-app-shell :where(.toolbar, .actions, .page-actions, .card-actions, .button-row) {
+  gap: 8px;
+}
+
+@media print {
+  .rlc-topbar,
+  .rlc-app-shell > [class*="Assistant"],
+  .rlc-app-shell > [class*="Progress"] {
+    display: none !important;
+  }
+
+  .rlc-app-shell {
+    padding: 0;
+    background: #fff;
+  }
+
+  .rlc-app-shell :where(.card, .panel) {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+
+@media (max-width: 900px) {
+  .rlc-app-shell {
+    padding: 0 10px 20px;
+  }
+
+  .rlc-app-shell .rlc-topbar {
+    position: static;
+    margin: 0 -10px 12px !important;
+    padding: 10px !important;
+  }
+
+  .rlc-app-shell :where(h1, .h1) {
+    font-size: 1.55rem;
+  }
+}
+
+/* RLC Design System 3.0: layout aperto, righe fluide e blu più vivo. */
+.rlc-app-shell .rlc-brand > span:first-child {
+  color: var(--rlc-text) !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.rlc-app-shell .rlc-top-nav-button {
+  min-height: 36px !important;
+  padding: 7px 10px !important;
+  border-color: transparent !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.rlc-app-shell .rlc-top-nav-button:hover {
+  border-color: var(--rlc-border-strong) !important;
+  background: var(--rlc-primary-faint) !important;
+  color: var(--rlc-primary-hover) !important;
+}
+
+.rlc-app-shell .rlc-content > .card:not(.page-cad),
+.rlc-app-shell .rlc-content > main.card:not(.page-cad) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.rlc-app-shell .card > .card:not(.page-cad *),
+.rlc-app-shell .panel > .panel:not(.page-cad *) {
+  border-width: 0 0 1px !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.rlc-app-shell :where(.row, [class*="Row"], [class*="row"]):not(.page-cad *) {
+  border-color: var(--rlc-border);
+}
+
+.rlc-app-shell :where(.badge, .pill, [class*="Badge"], [class*="Pill"]):not(.page-cad *) {
+  font-weight: 600 !important;
+}
+
+.rlc-app-shell :where([role="dialog"], .modal, [class*="Modal"]):not(.page-cad *) {
+  border-color: var(--rlc-border);
+  border-radius: var(--rlc-radius-lg);
+}
+
+.rlc-app-shell :where(strong, b) {
+  font-weight: 650;
+}
+
+.rlc-app-shell :where(a.link, .link) {
+  color: var(--rlc-primary-hover);
+  font-weight: 550;
+}
+
+.rlc-app-shell :where(table tr):not(.page-cad *) {
+  transition: background-color 120ms ease;
+}
+
+.rlc-app-shell :where(table tbody tr:hover):not(.page-cad *) {
+  background: var(--rlc-primary-faint);
+}
+
+@media (max-width: 640px) {
+  .rlc-app-shell .rlc-brand > span:first-child {
+    font-size: 22px !important;
+  }
+
+  .rlc-app-shell .rlc-brand > span:last-child {
+    display: none;
+  }
+
+  .rlc-app-shell :where(th, td):not(.page-cad *) {
+    padding: 8px;
+  }
+}
+
+/* =========================================================
+   RLC HERO – contrasto uniforme globale
+   ========================================================= */
+
+[style*="linear-gradient"] h1,
+[style*="linear-gradient"] h2,
+[style*="linear-gradient"] h3,
+[style*="linear-gradient"] [class*="heroTitle"],
+[style*="linear-gradient"] [class*="HeroTitle"],
+[style*="linear-gradient"] [class*="pageTitle"],
+[style*="linear-gradient"] [class*="PageTitle"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+[style*="linear-gradient"] p {
+  color: rgba(255, 255, 255, 0.94) !important;
+}
+
+/* Non cambiare il testo dei pulsanti bianchi */
+[style*="linear-gradient"] button,
+[style*="linear-gradient"] a,
+[style*="linear-gradient"] input,
+[style*="linear-gradient"] select {
+  -webkit-text-fill-color: initial;
+}
+
+
+/* =========================================================
+   RLC TOP NAV – testi sempre su una riga
+   ========================================================= */
+
+.rlc-topnav button,
+.rlc-topnav a,
+.rlc-main-nav button,
+.rlc-main-nav a,
+header nav button,
+header nav a {
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  line-height: 1.1 !important;
+  min-width: max-content !important;
+  width: auto !important;
+  flex: 0 0 auto !important;
+}
+
+/* Barra menu orizzontale */
+.rlc-topnav,
+.rlc-main-nav,
+header nav {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 10px !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+/* Evita che il testo venga spezzato dentro span/div */
+.rlc-topnav button *,
+.rlc-topnav a *,
+.rlc-main-nav button *,
+.rlc-main-nav a *,
+header nav button *,
+header nav a * {
+  white-space: nowrap !important;
+  word-break: normal !important;
+}
+/* RLC TOP NAV: stessa tipografia per Link e Button */
+.rlc-top-nav-button {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+.rlc-top-nav-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+/* =========================================================
+   RLC WEB V5 – intestazione unica per tutti i moduli
+   ========================================================= */
+
+.rlc-page-hero {
+  position: relative;
+  isolation: isolate;
+  margin: 0 0 14px !important;
+  padding: 16px 20px !important;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 14px !important;
+  background: linear-gradient(125deg, #0b5bd3 0%, #146ef5 64%, #248cff 100%) !important;
+  box-shadow: 0 10px 28px rgba(20, 110, 245, 0.16) !important;
+  color: #ffffff !important;
+}
+
+.rlc-page-hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -90px;
+  right: -60px;
+  width: 250px;
+  height: 250px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 68%);
+  pointer-events: none;
+}
+
+.rlc-page-hero--split {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  flex-wrap: wrap !important;
+}
+
+.rlc-app-shell .rlc-page-hero h1,
+.rlc-app-shell .rlc-gradient-surface h1,
+.rlc-app-shell .rlc-gradient-surface h2,
+.rlc-app-shell .rlc-gradient-surface h3 {
+  margin: 3px 0 4px !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+.rlc-app-shell .rlc-page-hero h1 {
+  font-size: clamp(1.55rem, 2vw, 1.9rem) !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.rlc-app-shell .rlc-page-hero p,
+.rlc-app-shell .rlc-gradient-surface p {
+  margin: 4px 0 0 !important;
+  max-width: 900px;
+  color: rgba(255, 255, 255, 0.88) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+}
+
+.rlc-app-shell .rlc-page-hero > div > div:not(.rlc-page-hero__actions),
+.rlc-app-shell .rlc-page-hero > div > small {
+  color: rgba(255, 255, 255, 0.84) !important;
+}
+
+.rlc-page-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  margin-bottom: 3px;
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rlc-page-hero__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-page-hero__button,
+.rlc-page-hero .rlc-page-hero__button {
+  min-height: 36px !important;
+  padding: 7px 11px !important;
+  border: 1px solid rgba(255, 255, 255, 0.38) !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 550 !important;
+  cursor: pointer;
+}
+
+.rlc-page-hero__button:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Il vecchio selettore [style] non vedeva più gli stili migrati a runtime. */
+.rlc-gradient-surface {
+  color: #ffffff;
+}
+
+/* =========================================================
+   RLC COPILOT – popover compatto, non pannello fisso
+   ========================================================= */
+
+.rlc-copilot-layer {
+  /* La navigazione V6/V7 arriva a 30003: il Copilot deve restare sopra
+     l'intera testata quando viene aperto. */
+  z-index: 40000 !important;
+}
+
+.rlc-copilot-popover {
+  animation: rlcCopilotOpen 160ms ease-out;
+}
+
+@keyframes rlcCopilotOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 700px) {
+  .rlc-copilot-popover {
+    top: 8px !important;
+    right: 8px !important;
+    width: calc(100vw - 16px) !important;
+    max-width: none !important;
+    height: calc(100vh - 16px) !important;
+    max-height: calc(100vh - 16px) !important;
+    border-radius: 16px !important;
+  }
+
+  .rlc-page-hero {
+    padding: 14px 15px !important;
+    border-radius: 12px !important;
+  }
+}
+
+/* =========================================================
+   RLC TOP NAV V6 — dropdown sopra i moduli e densità compatta
+   ========================================================= */
+
+.rlc-app-shell .rlc-topbar {
+  z-index: 30000;
+  overflow: visible !important;
+}
+
+/* Le intestazioni dei moduli non devono superare la navigazione globale. */
+.rlc-app-shell .rlc-page-hero {
+  z-index: 0;
+}
+
+.rlc-app-shell .rlc-brand-title,
+.rlc-app-shell .rlc-brand > span:first-child {
+  color: var(--rlc-primary-hover) !important;
+  font-size: 23px !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1 !important;
+}
+
+.rlc-app-shell .rlc-brand {
+  display: inline-flex;
+  align-items: baseline;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  gap: 9px !important;
+  text-decoration: none;
+}
+
+.rlc-app-shell .rlc-top-nav {
+  position: relative;
+  z-index: 30001;
+  display: flex !important;
+  align-items: center !important;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px !important;
+  overflow: visible !important;
+  flex-wrap: nowrap !important;
+}
+
+.rlc-app-shell .rlc-top-nav-group {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.rlc-app-shell .rlc-top-nav-group.is-open {
+  z-index: 30002;
+}
+
+.rlc-app-shell .rlc-top-nav-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  min-width: max-content !important;
+  min-height: 34px !important;
+  padding: 6px 9px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--rlc-text) !important;
+  box-shadow: none !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  text-decoration: none !important;
+  cursor: pointer;
+  flex: 0 0 auto !important;
+}
+
+.rlc-app-shell .rlc-top-nav-button:hover {
+  border-color: var(--rlc-border-strong) !important;
+  background: var(--rlc-primary-faint) !important;
+  color: var(--rlc-primary-hover) !important;
+}
+
+.rlc-app-shell .rlc-top-nav-button.active {
+  border-color: var(--rlc-border-strong) !important;
+  background: var(--rlc-primary-soft) !important;
+  color: var(--rlc-primary-hover) !important;
+}
+
+.rlc-app-shell .rlc-top-nav-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30003;
+  min-width: 248px;
+  max-width: 330px;
+  max-height: calc(100vh - 116px);
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--rlc-border);
+  border-radius: 9px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.rlc-app-shell .rlc-top-nav-dropdown .s-link {
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 30px !important;
+  margin: 0 !important;
+  padding: 6px 8px !important;
+  border: 1px solid transparent;
+  border-radius: 7px !important;
+  color: var(--rlc-text);
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+}
+
+.rlc-app-shell .rlc-top-nav-dropdown .s-link:hover {
+  background: var(--rlc-primary-faint);
+  color: var(--rlc-primary-hover);
+}
+
+.rlc-app-shell .rlc-top-nav-dropdown .s-link.active {
+  border-color: var(--rlc-border-strong);
+  background: var(--rlc-primary-soft);
+  color: var(--rlc-primary-hover);
+  font-weight: 650 !important;
+}
+
+.rlc-app-shell .rlc-top-nav-group:last-child .rlc-top-nav-dropdown {
+  right: 0;
+  left: auto;
+}
+
+@media (max-width: 1180px) {
+  .rlc-app-shell .rlc-top-nav {
+    row-gap: 4px !important;
+    flex-wrap: wrap !important;
+  }
+}
+
+/* =========================================================
+   RLC HEADER IDENTITY V7 — technische Markenleiste
+   ========================================================= */
+
+.rlc-app-shell .rlc-topbar {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+}
+
+.rlc-app-shell .rlc-brand {
+  position: relative;
+  isolation: isolate;
+  display: flex !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-height: 64px !important;
+  padding: 8px 18px !important;
+  overflow: hidden;
+  border: 1px solid #c9dcfb;
+  border-radius: 11px;
+  background:
+    linear-gradient(90deg, rgba(20, 110, 245, 0.10), rgba(234, 242, 255, 0.72) 42%, rgba(248, 251, 255, 0.96)),
+    #f8fbff;
+  box-shadow:
+    inset 4px 0 0 var(--rlc-primary),
+    0 1px 2px rgba(19, 66, 135, 0.06);
+  text-decoration: none !important;
+}
+
+.rlc-app-shell .rlc-brand::before {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  content: "";
+  opacity: 0.42;
+  background:
+    linear-gradient(118deg, transparent 0 31%, rgba(20, 110, 245, 0.055) 31.2% 31.7%, transparent 31.9%),
+    repeating-linear-gradient(90deg, transparent 0 79px, rgba(20, 110, 245, 0.025) 80px);
+  pointer-events: none;
+}
+
+.rlc-app-shell .rlc-brand::after {
+  position: absolute;
+  top: 1px;
+  right: 14px;
+  bottom: 1px;
+  z-index: -1;
+  width: min(68%, 1120px);
+  content: "";
+  opacity: 0.9;
+  background: url("/assets/rlc-header-machinery.svg") right center / auto 100% no-repeat;
+  pointer-events: none;
+}
+
+.rlc-app-shell .rlc-brand-mark,
+.rlc-app-shell .rlc-brand > span:first-child {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  place-items: center;
+  color: var(--rlc-primary) !important;
+  font-size: inherit !important;
+  line-height: 1 !important;
+}
+
+.rlc-app-shell .rlc-brand-mark svg {
+  display: block;
+  width: 42px;
+  height: 42px;
+  overflow: visible;
+}
+
+.rlc-app-shell .rlc-brand-mark-frame {
+  fill: var(--rlc-primary);
+  stroke: #0b5bd3;
+  stroke-width: 1.5;
+}
+
+.rlc-app-shell .rlc-brand-mark-line {
+  fill: none;
+  stroke: #ffffff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.rlc-app-shell .rlc-brand-copy {
+  display: grid !important;
+  min-width: 0;
+  gap: 3px;
+}
+
+.rlc-app-shell .rlc-brand-title,
+.rlc-app-shell .rlc-brand-copy > .rlc-brand-title {
+  color: #0b5bd3 !important;
+  font-size: 24px !important;
+  font-weight: 780 !important;
+  letter-spacing: -0.035em !important;
+  line-height: 1 !important;
+  text-shadow: 0 1px 0 #ffffff;
+}
+
+.rlc-app-shell .rlc-brand-subtitle {
+  color: #40577a !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.075em !important;
+  line-height: 1.15 !important;
+  text-transform: uppercase;
+}
+
+.rlc-app-shell .rlc-brand:focus-visible {
+  outline: 2px solid var(--rlc-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1180px) {
+  .rlc-app-shell .rlc-brand {
+    min-height: 58px !important;
+    padding: 7px 14px !important;
+  }
+
+  .rlc-app-shell .rlc-brand::after {
+    right: 6px;
+    width: 62%;
+    opacity: 0.72;
+  }
+
+  .rlc-app-shell .rlc-brand-title,
+  .rlc-app-shell .rlc-brand-copy > .rlc-brand-title {
+    font-size: 22px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .rlc-app-shell .rlc-brand {
+    min-height: 54px !important;
+    padding: 6px 11px !important;
+  }
+
+  .rlc-app-shell .rlc-brand::after {
+    width: 48%;
+    opacity: 0.42;
+  }
+
+  .rlc-app-shell .rlc-brand-mark,
+  .rlc-app-shell .rlc-brand > span:first-child,
+  .rlc-app-shell .rlc-brand-mark svg {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+  }
+
+  .rlc-app-shell .rlc-brand-title,
+  .rlc-app-shell .rlc-brand-copy > .rlc-brand-title {
+    font-size: 20px !important;
+  }
+
+  .rlc-app-shell .rlc-brand-subtitle {
+    font-size: 9px !important;
+    letter-spacing: 0.055em !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .rlc-app-shell .rlc-brand {
+    min-height: 48px !important;
+  }
+
+  .rlc-app-shell .rlc-brand::after {
+    width: 42%;
+    opacity: 0.28;
+  }
+
+  .rlc-app-shell .rlc-brand-subtitle {
+    display: none;
+  }
+}

@@ -1,4 +1,4 @@
-import { API_BASE } from "../../lib/apiBase";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { API_BASE } from "../../lib/apiBase";
 import React, { useEffect, useState } from "react";
 
 const shell = {
@@ -6,7 +6,7 @@ const shell = {
   margin: "0 auto",
   padding: "12px 16px 40px",
   fontFamily: "Inter,system-ui,Arial",
-  color: "#0f172a",
+  color: "#0f172a"
 } as const;
 
 const box = {
@@ -14,14 +14,14 @@ const box = {
   borderRadius: 8,
   padding: 12,
   margin: "10px 0",
-  background: "#fafafa",
+  background: "#fafafa"
 } as const;
 
 const row = {
   display: "flex",
   gap: 10,
   flexWrap: "wrap" as const,
-  marginTop: 12,
+  marginTop: 12
 } as const;
 
 const btn = {
@@ -30,7 +30,7 @@ const btn = {
   borderRadius: 8,
   background: "#fff",
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: 600
 } as const;
 
 const supportBtn = {
@@ -44,7 +44,7 @@ const supportBtn = {
   padding: "12px 18px",
   fontWeight: 600,
   cursor: "pointer",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
 } as const;
 
 function apiUrl(path: string): string {
@@ -74,12 +74,12 @@ export default function Systemstatus() {
       online: navigator.onLine,
       storage: !!window.localStorage,
       time: new Date().toISOString(),
-      api: "unbekannt",
+      api: "unbekannt"
     };
 
     try {
       const res = await fetch(apiUrl("/health"), {
-        method: "GET",
+        method: "GET"
       });
 
       if (res.ok) {
@@ -102,7 +102,7 @@ export default function Systemstatus() {
       setInfo((prev) => ({
         ...prev,
         online: true,
-        time: new Date().toISOString(),
+        time: new Date().toISOString()
       }));
     };
 
@@ -110,7 +110,7 @@ export default function Systemstatus() {
       setInfo((prev) => ({
         ...prev,
         online: false,
-        time: new Date().toISOString(),
+        time: new Date().toISOString()
       }));
     };
 
@@ -136,18 +136,18 @@ export default function Systemstatus() {
   };
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h2>Systemstatus</h2>
 
-      <div style={box}>
+      <div className={rlcClass(null, box)}>
         <b>API-Status:</b> {loading ? "Prüfung läuft..." : info.api}
       </div>
 
-      <div style={box}>
+      <div className={rlcClass(null, box)}>
         <b>Browser:</b> {info.ua}
       </div>
 
-      <div style={box}>
+      <div className={rlcClass(null, box)}>
         <b>Sprache:</b> {info.lang}
         <br />
         <b>Online:</b> {String(info.online)}
@@ -155,33 +155,23 @@ export default function Systemstatus() {
         <b>LocalStorage:</b> {String(info.storage)}
       </div>
 
-      <div style={box}>
+      <div className={rlcClass(null, box)}>
         <b>Uhrzeit:</b> {info.time}
       </div>
 
-      <div style={row}>
-        <button style={btn} onClick={loadInfo} type="button">
+      <div className={rlcClass(null, row)}>
+        <button className={rlcClass(null, btn)} onClick={loadInfo} type="button">
           Status aktualisieren
         </button>
 
-        <button style={btn} onClick={clearAll} type="button">
+        <button className={rlcClass(null, btn)} onClick={clearAll} type="button">
           Lokale Daten löschen
         </button>
       </div>
 
-      <button style={supportBtn} onClick={openSupport} type="button">
+      <button className={rlcClass(null, supportBtn)} onClick={openSupport} type="button">
         Support Chat
       </button>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-
-
-
-
-
-

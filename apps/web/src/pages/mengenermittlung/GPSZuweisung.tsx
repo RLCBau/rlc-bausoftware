@@ -1,5 +1,9 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+import DxfParser from "dxf-parser";
 import { apiUrl } from "../../lib/apiBase";
+import MengPageHeader from "./MengPageHeader";
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import proj4 from "proj4";
 // @ts-ignore
@@ -11,14 +15,14 @@ import autoTable from "jspdf-autotable";
 import "leaflet/dist/leaflet.css";
 import { useProject } from "../../store/useProject";
 
-/* ------------------ PROJEKTIONEN ------------------ */
+/* ===================== PROJEKTIONEN ===================== */
+
 proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
 proj4.defs("EPSG:32632", "+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs");
 proj4.defs(
   "EPSG:25832",
   "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0 +units=m +no_defs"
 );
-
 proj4.defs(
   "EPSG:31466",
   "+proj=tmerc +lat_0=0 +lon_0=6 +k=1 +x_0=2500000 +y_0=0 +ellps=bessel +towgs84=598.1,73.7,418.2,0.202,0.045,-2.455,6.7 +units=m +no_defs"
@@ -41,173 +45,84 @@ function toWGS84(e: number, n: number, crs: string) {
   return { lat, lng };
 }
 
-function normKey(s: unknown) {
-  return String(s || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[-_]/g, "");
+function crsDisplayName(crs: string) {
+  const labels: Record<string, string> = {
+    "EPSG:4326": "WGS 84 – geografische Koordinaten",
+    "EPSG:25832": "ETRS89 / UTM Zone 32N",
+    "EPSG:32632": "WGS 84 / UTM Zone 32N",
+    "EPSG:31466": "DHDN / Gauß-Krüger Zone 2",
+    "EPSG:31467": "DHDN / Gauß-Krüger Zone 3",
+    "EPSG:31468": "DHDN / Gauß-Krüger Zone 4",
+    "EPSG:31469": "DHDN / Gauß-Krüger Zone 5"
+  };
+
+  return labels[String(crs || "").trim()] || crs || "Nicht angegeben";
 }
 
-function toNum(v: unknown): number {
-  if (v === null || v === undefined) return NaN;
-  const s = String(v).trim().replace(",", ".");
-  const n = parseFloat(s);
-  return Number.isFinite(n) ? n : NaN;
-}
+function projectedPointValues(point: GpsPoint, fallbackCrs: string) {
+  const crs = point.sourceCrs || fallbackCrs || "EPSG:25832";
 
-type GpsPoint = { lat: number; lng: number; ts?: number };
-
-function clampPts(pts: GpsPoint[]) {
-  const MAX = 20000;
-  if (pts.length <= MAX) return pts;
-  return pts.slice(0, MAX);
-}
-
-function isPlausibleWGS84(p: { lat: number; lng: number }) {
-  return p.lat >= 35 && p.lat <= 65 && p.lng >= -10 && p.lng <= 30;
-}
-
-function pad2(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-function tsForFilename(t = Date.now()) {
-  const d = new Date(t);
-  return (
-    d.getFullYear() +
-    "-" +
-    pad2(d.getMonth() + 1) +
-    "-" +
-    pad2(d.getDate()) +
-    "_" +
-    pad2(d.getHours()) +
-    "-" +
-    pad2(d.getMinutes()) +
-    "-" +
-    pad2(d.getSeconds())
-  );
-}
-
-function normalizePdfDataUrl(u: string) {
-  const s = String(u || "");
-  if (!s) return s;
-  return s.replace(
-    /^data:application\/pdf;filename=[^;]+;base64,/,
-    "data:application/pdf;base64,"
-  );
-}
-
-/* ------------------ DISTANCE (Haversine) ------------------ */
-function haversineMeters(a: GpsPoint, b: GpsPoint) {
-  const R = 6371000;
-  const toRad = (x: number) => (x * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-
-  const s =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
-  return R * c;
-}
-
-function polylineLengthMeters(pts: GpsPoint[]) {
-  if (!pts || pts.length < 2) return 0;
-  let sum = 0;
-  for (let i = 1; i < pts.length; i++) sum += haversineMeters(pts[i - 1], pts[i]);
-  return sum;
-}
-
-/* ------------------ SIMPLE CSV PARSER (no papaparse) ------------------ */
-function splitCsvLine(line: string, delimiter: string) {
-  const out: string[] = [];
-  let cur = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    const next = line[i + 1];
-
-    if (ch === '"') {
-      if (inQuotes && next === '"') {
-        cur += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (ch === delimiter && !inQuotes) {
-      out.push(cur);
-      cur = "";
-      continue;
-    }
-
-    cur += ch;
+  if (
+  Number.isFinite(point.easting) &&
+  Number.isFinite(point.northing))
+  {
+    return {
+      easting: Number(point.easting),
+      northing: Number(point.northing),
+      crs
+    };
   }
 
-  out.push(cur);
-  return out.map((s) => s.trim());
-}
-
-function detectDelimiter(lines: string[]) {
-  const sample = lines.find((l) => l.trim().length > 0) || "";
-  const candidates = [",", ";", "\t"];
-  let best = ",";
-  let bestCount = -1;
-
-  for (const d of candidates) {
-    const count = (sample.match(new RegExp(`\\${d}`, "g")) || []).length;
-    if (count > bestCount) {
-      best = d;
-      bestCount = count;
-    }
+  if (crs === "EPSG:4326") {
+    return {
+      easting: point.lng,
+      northing: point.lat,
+      crs
+    };
   }
 
-  return best;
+  try {
+    const [easting, northing] = proj4(
+      "EPSG:4326",
+      crs,
+      [point.lng, point.lat]
+    ) as [number, number];
+
+    return { easting, northing, crs };
+  } catch {
+    return {
+      easting: point.lng,
+      northing: point.lat,
+      crs: "EPSG:4326"
+    };
+  }
 }
 
-function parseCsvText(fileText: string, withHeader: boolean): Array<Record<string, string> | string[]> {
-  const lines = fileText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  if (!lines.length) return [];
-
-  const delimiter = detectDelimiter(lines);
-  const rows = lines.map((line) => splitCsvLine(line, delimiter));
-
-  if (!withHeader) return rows;
-
-  const header = rows[0] || [];
-  return rows.slice(1).map((row) => {
-    const obj: Record<string, string> = {};
-    header.forEach((h, i) => {
-      obj[h] = row[i] ?? "";
-    });
-    return obj;
-  });
+function formatCoordinate(value: number | undefined, crs: string) {
+  if (!Number.isFinite(value)) return "?";
+  return crs === "EPSG:4326" ?
+  Number(value).toFixed(8) :
+  Number(value).toFixed(3);
 }
 
-/* ------------------ API ------------------ */
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  
-
-  const res = await fetch(apiUrl(url), {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return (await res.json()) as T;
+function formatHeight(value: number | undefined) {
+  return Number.isFinite(value) ? Number(value).toFixed(3) : "";
 }
 
-/* ------------------ TYPES ------------------ */
+/* ===================== TYPES ===================== */
+
+type GpsPoint = {
+  lat: number;
+  lng: number;
+  ts?: number;
+  name?: string;
+  code?: string;
+  easting?: number;
+  northing?: number;
+  height?: number;
+  sourceCrs?: string;
+};
+
 type LVPos = {
   id: string;
   position: string;
@@ -215,179 +130,854 @@ type LVPos = {
   langtext?: string | null;
 };
 
+type CompanyProfile = {
+  name: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logoDataUrl?: string;
+};
+
+type Measurement = {
+  id: string;
+  name: string;
+  pointIndexes: number[];
+  createdAt: number;
+  comment?: string;
+  color?: string;
+};
+
+type AreaMeasurement = {
+  id: string;
+  name: string;
+  pointIndexes: number[];
+  createdAt: number;
+  comment?: string;
+  color?: string;
+};
+
+type MapAnnotation = {
+  id: string;
+  lat: number;
+  lng: number;
+  text: string;
+  createdAt: number;
+  fontSize?: number;
+  rotation?: number;
+};
+
 type Assignment = {
   id: string;
   projectId: string;
   lvPosId: string;
-  lvPos?: { position: string; kurztext?: string; langtext?: string | null };
+  lvPos?: {position: string;kurztext?: string;langtext?: string | null;};
   points: GpsPoint[];
+  measurements?: Measurement[];
+  areas?: AreaMeasurement[];
+  annotations?: MapAnnotation[];
   createdAt: number;
 };
 
-/* =======================================================================
-   CSV PARSING (ESTESO)
-======================================================================== */
+type EditorMode = "POINT" | "DISTANCE" | "AREA" | "COMMENT";
 
-function tryParseRowObject(row: Record<string, unknown>): { lat: number; lng: number } | null {
-  const keys = Object.keys(row || {});
-  const get = (variants: string[]) => {
-    for (const k of keys) {
-      const nk = normKey(k);
-      if (variants.includes(nk)) return row[k];
-    }
-    return undefined;
-  };
+/* ===================== GENERIC HELPERS ===================== */
 
-  const lat = toNum(
-    get(["lat", "latitude", "breite", "latitudedeg", "y_wgs", "y_wgs84"])
+function normKey(value: unknown) {
+  return String(value || "").
+  trim().
+  toLowerCase().
+  replace(/\s+/g, "").
+  replace(/[-_]/g, "");
+}
+
+function toNum(value: unknown): number {
+  if (value === null || value === undefined) return Number.NaN;
+  const raw = String(value).trim();
+  if (!raw) return Number.NaN;
+
+  const normalized =
+  raw.includes(",") && raw.includes(".") ?
+  raw.replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".") :
+  raw.replace(",", ".");
+
+  const result = Number.parseFloat(normalized);
+  return Number.isFinite(result) ? result : Number.NaN;
+}
+
+function clampPts(points: GpsPoint[]) {
+  const MAX = 20_000;
+  return points.length <= MAX ? points : points.slice(0, MAX);
+}
+
+function isPlausibleWGS84(point: {lat: number;lng: number;}) {
+  return point.lat >= 35 && point.lat <= 65 && point.lng >= -10 && point.lng <= 30;
+}
+
+function pointDisplayName(point: GpsPoint, index: number) {
+  const code = String(point.code || "").trim();
+  const name = String(point.name || "").trim();
+  if (name && code && name !== code) return `${name} • ${code}`;
+  return name || code || `Punkt ${index + 1}`;
+}
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function tsForFilename(timestamp = Date.now()) {
+  const date = new Date(timestamp);
+  return (
+    date.getFullYear() +
+    "-" +
+    pad2(date.getMonth() + 1) +
+    "-" +
+    pad2(date.getDate()) +
+    "_" +
+    pad2(date.getHours()) +
+    "-" +
+    pad2(date.getMinutes()) +
+    "-" +
+    pad2(date.getSeconds()));
+
+}
+
+function normalizePdfDataUrl(value: string) {
+  return String(value || "").replace(
+    /^data:application\/pdf;filename=[^;]+;base64,/,
+    "data:application/pdf;base64,"
   );
-  const lng = toNum(
-    get(["lng", "lon", "long", "longitude", "laenge", "longitudedeg", "x_wgs", "x_wgs84"])
-  );
-
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-  return null;
 }
 
-function pickENFromArray(arr: unknown[]): { e: number; n: number } | null {
-  if (arr.length >= 3) {
-    const e = toNum(arr[1]);
-    const n = toNum(arr[2]);
-    if (Number.isFinite(e) && Number.isFinite(n)) return { e, n };
-  }
 
-  if (arr.length >= 2) {
-    const a0 = toNum(arr[0]);
-    const a1 = toNum(arr[1]);
-    if (Number.isFinite(a0) && Number.isFinite(a1)) return { e: a0, n: a1 };
-  }
-
-  return null;
+function escapeHtml(value: unknown) {
+  return String(value ?? "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;").
+  replace(/'/g, "&#039;");
 }
 
-function detectCrsForEN(sample: { e: number; n: number }[]): string[] {
-  const candidates = ["EPSG:31468", "EPSG:31467", "EPSG:31469", "EPSG:25832", "EPSG:32632"];
-  const scored: { crs: string; ok: number }[] = [];
 
-  for (const crs of candidates) {
-    let ok = 0;
-    for (const s of sample) {
-      try {
-        const p = toWGS84(s.e, s.n, crs);
-        if (isPlausibleWGS84(p)) ok++;
-      } catch {
-        // ignore
-      }
-    }
-    scored.push({ crs, ok });
+function firstNonEmpty(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
   }
-
-  scored.sort((a, b) => b.ok - a.ok);
-  return scored.filter((x) => x.ok > 0).map((x) => x.crs);
+  return "";
 }
 
-function parseCsvToPointsAuto(
-  rawRows: Array<Record<string, unknown> | string[]>,
-  preferredCrs: string
-): { pts: GpsPoint[]; usedCrs: string; debug: string } {
-  const directWgs: GpsPoint[] = [];
+function readCompanyProfile(context: any, project: any): CompanyProfile {
+  // Es geht hier um die AUSFÜHRENDE FIRMA / den Auftragnehmer,
+  // nicht um RLC Bausoftware.
+  const candidates = [
+  project?.executingCompany,
+  project?.contractor,
+  project?.auftragnehmer,
+  project?.bauunternehmen,
+  project?.company,
+  project?.firma,
+  context?.executingCompany,
+  context?.contractor,
+  context?.auftragnehmer,
+  context?.currentCompany,
+  context?.selectedCompany,
+  context?.company];
 
-  for (const row of rawRows) {
-    if (row && !Array.isArray(row) && typeof row === "object") {
-      const p = tryParseRowObject(row);
-      if (p && Number.isFinite(p.lat) && Number.isFinite(p.lng)) {
-        if (isPlausibleWGS84(p)) directWgs.push({ lat: p.lat, lng: p.lng });
-      }
-    }
-  }
 
-  if (directWgs.length > 0) {
-    return {
-      pts: directWgs,
-      usedCrs: "EPSG:4326",
-      debug: `WGS84 direkt erkannt (${directWgs.length}).`,
+  const storageKeys = [
+  "rlc_executing_company",
+  "rlc_contractor",
+  "auftragnehmer",
+  "bauunternehmen",
+  "companyProfile",
+  "rlc_company_profile",
+  "rlc_company",
+  "company",
+  "firmenDaten",
+  "firmendaten"];
+
+
+  for (const key of storageKeys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      candidates.push(
+        parsed?.executingCompany ||
+        parsed?.contractor ||
+        parsed?.auftragnehmer ||
+        parsed?.bauunternehmen ||
+        parsed?.company ||
+        parsed?.data ||
+        parsed
+      );
+    } catch {
+
+
+      // ignore invalid storage entry
+    }}
+  for (const value of candidates) {
+    if (!value) continue;
+
+    const logoCandidate = firstNonEmpty(
+      value?.logoDataUrl,
+      value?.logo,
+      value?.branding?.logoDataUrl
+    );
+
+    const profile: CompanyProfile = {
+      name: firstNonEmpty(
+        value?.name,
+        value?.companyName,
+        value?.firmenname,
+        value?.firma,
+        value?.auftragnehmerName,
+        value?.contractorName
+      ),
+      street: firstNonEmpty(
+        value?.street,
+        value?.strasse,
+        value?.straße,
+        value?.address?.street,
+        value?.adresse?.strasse
+      ),
+      postalCode: firstNonEmpty(
+        value?.postalCode,
+        value?.zip,
+        value?.plz,
+        value?.address?.postalCode,
+        value?.adresse?.plz
+      ),
+      city: firstNonEmpty(
+        value?.city,
+        value?.ort,
+        value?.address?.city,
+        value?.adresse?.ort
+      ),
+      phone: firstNonEmpty(
+        value?.phone,
+        value?.telefon,
+        value?.mobile,
+        value?.mobil
+      ),
+      email: firstNonEmpty(value?.email, value?.mail),
+      website: firstNonEmpty(value?.website, value?.web, value?.homepage),
+      logoDataUrl: logoCandidate.startsWith("data:image/") ?
+      logoCandidate :
+      undefined
     };
-  }
 
-  const enRows: { e: number; n: number }[] = [];
-  const sampleEN: { e: number; n: number }[] = [];
-
-  for (const row of rawRows) {
-    if (!row) continue;
-    if (Array.isArray(row)) {
-      const en = pickENFromArray(row);
-      if (en) {
-        enRows.push(en);
-        if (sampleEN.length < 10) sampleEN.push(en);
-      }
-    }
-  }
-
-  if (enRows.length === 0) {
-    return {
-      pts: [],
-      usedCrs: preferredCrs,
-      debug: "Keine RW/HW oder lat/lng gefunden (CSV-Spalten prüfen).",
-    };
-  }
-
-  const detected = detectCrsForEN(sampleEN);
-  const order = [
-    ...detected,
-    preferredCrs,
-    "EPSG:31468",
-    "EPSG:31467",
-    "EPSG:31469",
-    "EPSG:25832",
-    "EPSG:32632",
-  ].filter((v, i, a) => a.indexOf(v) === i);
-
-  for (const crs of order) {
-    const pts: GpsPoint[] = [];
-    let ok = 0;
-
-    for (const en of enRows) {
-      try {
-        const p = toWGS84(en.e, en.n, crs);
-        if (isPlausibleWGS84(p)) {
-          pts.push({ lat: p.lat, lng: p.lng });
-          ok++;
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (ok > 0 && ok >= Math.max(1, Math.floor(enRows.length * 0.6))) {
+    if (profile.name || profile.logoDataUrl) {
       return {
-        pts,
-        usedCrs: crs,
-        debug: `CRS auto-detektiert: ${crs} (${ok}/${enRows.length}).`,
+        ...profile,
+        name: profile.name || "Ausführende Firma"
       };
     }
   }
 
-  for (const crs of order) {
-    const pts: GpsPoint[] = [];
-    let ok = 0;
+  return { name: "Ausführende Firma nicht hinterlegt" };
+}
 
-    for (const en of enRows) {
-      try {
-        const p = toWGS84(en.e, en.n, crs);
-        if (isPlausibleWGS84(p)) {
-          pts.push({ lat: p.lat, lng: p.lng });
-          ok++;
-        }
-      } catch {
-        // ignore
+
+function applyPointLabelZoomScale(map: L.Map) {
+  const zoom = map.getZoom();
+  const container = map.getContainer();
+
+  let level = "far";
+  if (zoom >= 19) level = "max";else
+  if (zoom >= 18) level = "near";else
+  if (zoom >= 17) level = "medium";else
+  if (zoom >= 16) level = "small";else
+  if (zoom >= 15) level = "tiny";
+
+  container.setAttribute("data-point-label-zoom", level);
+}
+
+/* ===================== GEOMETRY ===================== */
+
+function haversineMeters(a: GpsPoint, b: GpsPoint) {
+  const R = 6_371_000;
+  const toRad = (value: number) => value * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+
+  const h =
+  Math.sin(dLat / 2) ** 2 +
+  Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function polylineLengthMeters(points: GpsPoint[]) {
+  if (points.length < 2) return 0;
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    total += haversineMeters(points[index - 1], points[index]);
+  }
+  return total;
+}
+
+function polygonAreaMeters2(points: GpsPoint[]) {
+  if (points.length < 3) return 0;
+
+  const meanLat =
+  points.reduce((sum, point) => sum + point.lat, 0) / points.length;
+  const metersPerDegreeLat = 111_320;
+  const metersPerDegreeLng =
+  111_320 * Math.cos(meanLat * Math.PI / 180);
+
+  const local = points.map((point) => ({
+    x: point.lng * metersPerDegreeLng,
+    y: point.lat * metersPerDegreeLat
+  }));
+
+  let area = 0;
+  for (let index = 0; index < local.length; index += 1) {
+    const current = local[index];
+    const next = local[(index + 1) % local.length];
+    area += current.x * next.y - next.x * current.y;
+  }
+
+  return Math.abs(area) / 2;
+}
+
+function formatDistance(value: number) {
+  return value >= 1000 ? `${(value / 1000).toFixed(3)} km` : `${value.toFixed(2)} m`;
+}
+
+function formatArea(value: number) {
+  return value >= 10_000 ?
+  `${(value / 10_000).toFixed(4)} ha` :
+  `${value.toFixed(2)} m²`;
+}
+
+/* ===================== CSV ===================== */
+
+function splitCsvLine(line: string, delimiter: string) {
+  const output: string[] = [];
+  let current = "";
+  let quoted = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+
+    if (char === '"') {
+      if (quoted && next === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
       }
+      continue;
     }
 
-    if (ok > 0) {
+    if (char === delimiter && !quoted) {
+      output.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  output.push(current.trim());
+  return output;
+}
+
+function detectDelimiter(lines: string[]) {
+  const sample = lines.find((line) => line.trim()) || "";
+  const candidates = [",", ";", "\t"];
+  const best = candidates.
+  map((delimiter) => ({
+    delimiter,
+    count: sample.split(delimiter).length - 1
+  })).
+  sort((a, b) => b.count - a.count)[0];
+
+  if (best && best.count > 0) return best.delimiter;
+  if (sample.trim().split(/\s+/).length >= 4) return "__WHITESPACE__";
+  return ",";
+}
+
+function parseCsvText(
+fileText: string,
+withHeader: boolean)
+: Array<Record<string, string> | string[]> {
+  const lines = fileText.
+  split(/\r?\n/).
+  map((line) => line.trim()).
+  filter(Boolean);
+
+  if (!lines.length) return [];
+
+  const delimiter = detectDelimiter(lines);
+  const rows = lines.map((line) =>
+  delimiter === "__WHITESPACE__" ?
+  line.trim().split(/\s+/).map((value) => value.trim()) :
+  splitCsvLine(line, delimiter)
+  );
+
+  if (!withHeader) return rows;
+
+  const headers = rows[0] || [];
+  return rows.slice(1).map((row) => {
+    const result: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      result[header] = row[index] ?? "";
+    });
+    return result;
+  });
+}
+
+function rowGetter(row: Record<string, unknown>) {
+  const keys = Object.keys(row || {});
+  return (variants: string[]) => {
+    for (const key of keys) {
+      if (variants.includes(normKey(key))) return row[key];
+    }
+    return undefined;
+  };
+}
+
+function inferPointMeta(
+row: Record<string, unknown>,
+coordinateValues: unknown[])
+: {name?: string;code?: string;} {
+  const entries = Object.entries(row || {});
+  const get = rowGetter(row);
+
+  const explicitCode = String(
+    get([
+    "code",
+    "punktcode",
+    "pointcode",
+    "artcode",
+    "objektcode",
+    "featurecode",
+    "symbolcode",
+    "kenncode",
+    "akls"]
+    ) ?? ""
+  ).trim();
+
+  const explicitName = String(
+    get([
+    "punktname",
+    "pointname",
+    "punktnummer",
+    "punktnr",
+    "pointnumber",
+    "nummer",
+    "nr",
+    "id",
+    "name"]
+    ) ?? ""
+  ).trim();
+
+  const coordinateStrings = new Set(
+    coordinateValues.map((value) => String(value ?? "").trim())
+  );
+
+  const nonNumericValues = entries.
+  map(([, value]) => String(value ?? "").trim()).
+  filter(Boolean).
+  filter((value) => !coordinateStrings.has(value)).
+  filter((value) => !Number.isFinite(toNum(value)));
+
+  const fallbackCode = nonNumericValues.length ?
+  nonNumericValues[nonNumericValues.length - 1] :
+  "";
+
+  const integerCandidates = entries.
+  map(([, value]) => String(value ?? "").trim()).
+  filter(Boolean).
+  filter((value) => !coordinateStrings.has(value)).
+  filter((value) => /^\d{1,12}$/.test(value));
+
+  const fallbackName = integerCandidates.length ?
+  integerCandidates[integerCandidates.length - 1] :
+  "";
+
+  const explicitNameLooksLikeHeight =
+  explicitName.includes(".") || explicitName.includes(",");
+
+  const name =
+  fallbackName && (!explicitName || explicitNameLooksLikeHeight) ?
+  fallbackName :
+  explicitName || fallbackName;
+
+  const code = explicitCode || fallbackCode;
+
+  return {
+    name: name || undefined,
+    code: code || undefined
+  };
+}
+
+
+function parseSurveyNumber(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  const raw = String(value ?? "").
+  trim().
+  replace(/^["']|["']$/g, "").
+  replace(/\s+/g, "").
+  replace(/m$/i, "");
+
+  if (!raw) return undefined;
+
+  let normalized = raw;
+
+  if (raw.includes(",") && raw.includes(".")) {
+    const lastComma = raw.lastIndexOf(",");
+    const lastDot = raw.lastIndexOf(".");
+
+    normalized =
+    lastComma > lastDot ?
+    raw.replace(/\./g, "").replace(",", ".") :
+    raw.replace(/,/g, "");
+  } else if (raw.includes(",")) {
+    normalized = raw.replace(",", ".");
+  }
+
+  const direct = Number(normalized);
+  if (Number.isFinite(direct)) return direct;
+
+  const match = normalized.match(/[-+]?\d+(?:\.\d+)?/);
+  if (!match) return undefined;
+
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseObjectWgs84(row: Record<string, unknown>): GpsPoint | null {
+  const get = rowGetter(row);
+  const latRaw = get(["lat", "latitude", "breite", "latitudedeg", "ywgs", "ywgs84"]);
+  const lngRaw = get([
+  "lng",
+  "lon",
+  "long",
+  "longitude",
+  "laenge",
+  "longitudedeg",
+  "xwgs",
+  "xwgs84"]
+  );
+
+  const lat = toNum(latRaw);
+  const lng = toNum(lngRaw);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const meta = inferPointMeta(row, [latRaw, lngRaw]);
+
+  return {
+    lat,
+    lng,
+    height: parseSurveyNumber(
+      get([
+      "height",
+      "hoehe",
+      "höhe",
+      "höhe",
+      "z",
+      "elevation",
+      "altitude"]
+      )
+    ),
+    sourceCrs: "EPSG:4326",
+    name: meta.name,
+    code: meta.code
+  };
+}
+
+function parseObjectEN(
+row: Record<string, unknown>)
+: {
+  e: number;
+  n: number;
+  height?: number;
+  code?: string;
+  name?: string;
+} | null {
+  const get = rowGetter(row);
+  const eRaw = get([
+  "e",
+  "east",
+  "easting",
+  "rechtswert",
+  "rw",
+  "x",
+  "ost",
+  "xcoord",
+  "xkoordinate"]
+  );
+  const nRaw = get([
+  "n",
+  "north",
+  "northing",
+  "hochwert",
+  "hw",
+  "y",
+  "nord",
+  "ycoord",
+  "ykoordinate"]
+  );
+
+  const e = toNum(eRaw);
+  const n = toNum(nRaw);
+
+  if (!Number.isFinite(e) || !Number.isFinite(n)) return null;
+
+  const meta = inferPointMeta(row, [eRaw, nRaw]);
+
+  const heightRaw = get([
+  "height",
+  "hoehe",
+  "höhe",
+  "z",
+  "elevation",
+  "altitude",
+  "orthometricheight"]
+  );
+  const height = parseSurveyNumber(heightRaw);
+
+  return {
+    e,
+    n,
+    height: Number.isFinite(height) ? height : undefined,
+    name: meta.name,
+    code: meta.code
+  };
+}
+
+function parseArrayEN(
+row: unknown[])
+: {
+  e: number;
+  n: number;
+  height?: number;
+  code?: string;
+  name?: string;
+} | null {
+  const values = row.map((value) => String(value ?? "").trim());
+
+  if (!values.length) return null;
+
+  const name = values[0] || undefined;
+  const code = values.length >= 2 ? values[values.length - 1] || undefined : undefined;
+
+  // Standard: Punktname, Rechtswert, Hochwert, Höhe, Code
+  if (values.length >= 5) {
+    const e = parseSurveyNumber(values[1]);
+    const n = parseSurveyNumber(values[2]);
+
+    const middleNumbers = values.
+    slice(3, -1).
+    map(parseSurveyNumber).
+    filter((value): value is number => Number.isFinite(value));
+
+    const height = middleNumbers.find(
+      (value) => value > -1000 && value < 10000
+    );
+
+    if (Number.isFinite(e) && Number.isFinite(n)) {
       return {
-        pts,
+        e: Number(e),
+        n: Number(n),
+        height,
+        name,
+        code
+      };
+    }
+  }
+
+  // Sonderfall:
+  // Punktname,"Rechtswert Hochwert",Höhe,Code
+  if (values.length >= 4) {
+    const pair = values[1].split(/\s+/).filter(Boolean);
+
+    if (pair.length >= 2) {
+      const e = parseSurveyNumber(pair[0]);
+      const n = parseSurveyNumber(pair[1]);
+
+      const middleNumbers = values.
+      slice(2, -1).
+      map(parseSurveyNumber).
+      filter((value): value is number => Number.isFinite(value));
+
+      const height = middleNumbers.find(
+        (value) => value > -1000 && value < 10000
+      );
+
+      if (Number.isFinite(e) && Number.isFinite(n)) {
+        return {
+          e: Number(e),
+          n: Number(n),
+          height,
+          name,
+          code
+        };
+      }
+    }
+  }
+
+  // Generischer Fallback: erste zwei großen Koordinaten + plausible Höhe
+  const numeric = values.
+  map((value, index) => ({
+    index,
+    value: parseSurveyNumber(value)
+  })).
+  filter(
+    (item): item is {index: number;value: number;} =>
+    Number.isFinite(item.value)
+  );
+
+  const coordinateCandidates = numeric.filter(
+    (item) => Math.abs(item.value) >= 10000
+  );
+
+  if (coordinateCandidates.length >= 2) {
+    const e = coordinateCandidates[0].value;
+    const n = coordinateCandidates[1].value;
+
+    const height = numeric.
+    filter(
+      (item) =>
+      item.index !== coordinateCandidates[0].index &&
+      item.index !== coordinateCandidates[1].index
+    ).
+    map((item) => item.value).
+    find((value) => value > -1000 && value < 10000);
+
+    return { e, n, height, name, code };
+  }
+
+  return null;
+}
+
+function detectCrsForEN(sample: Array<{e: number;n: number;}>) {
+  const candidates = [
+  "EPSG:25832",
+  "EPSG:32632",
+  "EPSG:31468",
+  "EPSG:31467",
+  "EPSG:31469"];
+
+
+  return candidates.
+  map((crs) => {
+    let plausible = 0;
+    sample.forEach((item) => {
+      try {
+        if (isPlausibleWGS84(toWGS84(item.e, item.n, crs))) plausible += 1;
+      } catch {
+
+
+        // ignore
+      }});return { crs, plausible };
+  }).
+  sort((a, b) => b.plausible - a.plausible).
+  filter((item) => item.plausible > 0).
+  map((item) => item.crs);
+}
+
+function parseCsvToPointsAuto(
+rows: Array<Record<string, unknown> | string[]>,
+preferredCrs: string)
+: {pts: GpsPoint[];usedCrs: string;debug: string;} {
+  const direct: GpsPoint[] = [];
+  const enRows: Array<{
+    e: number;
+    n: number;
+    height?: number;
+    code?: string;
+    name?: string;
+  }> = [];
+
+  rows.forEach((row) => {
+    if (Array.isArray(row)) {
+      const parsed = parseArrayEN(row);
+      if (parsed) enRows.push(parsed);
+      return;
+    }
+
+    const wgs = parseObjectWgs84(row);
+    if (wgs && isPlausibleWGS84(wgs)) {
+      direct.push(wgs);
+      return;
+    }
+
+    const en = parseObjectEN(row);
+    if (en) enRows.push(en);
+  });
+
+  if (direct.length) {
+    return {
+      pts: direct,
+      usedCrs: "EPSG:4326",
+      debug: `WGS84 direkt erkannt: ${direct.length} Punkte.`
+    };
+  }
+
+  if (!enRows.length) {
+    return {
+      pts: [],
+      usedCrs: preferredCrs,
+      debug: "Keine Koordinatenspalten erkannt."
+    };
+  }
+
+  const detected = detectCrsForEN(enRows.slice(0, 12));
+  const order = Array.from(
+    new Set([
+    ...detected,
+    preferredCrs,
+    "EPSG:25832",
+    "EPSG:32632",
+    "EPSG:31468",
+    "EPSG:31467",
+    "EPSG:31469"]
+    )
+  );
+
+  for (const crs of order) {
+    const points: GpsPoint[] = [];
+
+    enRows.forEach((item) => {
+      try {
+        const converted = toWGS84(item.e, item.n, crs);
+        if (isPlausibleWGS84(converted)) {
+          points.push({
+            ...converted,
+            easting: item.e,
+            northing: item.n,
+            height: item.height,
+            sourceCrs: crs,
+            code: item.code,
+            name: item.name
+          });
+        }
+      } catch {
+
+
+        // ignore
+      }});
+    if (points.length >= Math.max(1, Math.floor(enRows.length * 0.6))) {
+      return {
+        pts: points,
         usedCrs: crs,
-        debug: `CRS gewählt (Teilmenge): ${crs} (${ok}/${enRows.length}).`,
+        debug: `CRS erkannt: ${crs} (${points.length}/${enRows.length}).`
       };
     }
   }
@@ -395,65 +985,541 @@ function parseCsvToPointsAuto(
   return {
     pts: [],
     usedCrs: preferredCrs,
-    debug: "Koordinaten gefunden, aber CRS passt nicht (Dropdown wechseln).",
+    debug: "Koordinaten erkannt, aber kein passendes CRS gefunden."
   };
 }
 
-/* ------------------ COMPONENT ------------------ */
+/* ===================== API ===================== */
+
+function getAuthHeaders(): Record<string, string> {
+  const keys = [
+  "rlc_token",
+  "token",
+  "authToken",
+  "accessToken",
+  "rlc.auth.token",
+  "rlc_mobile_token",
+  "rlc_auth_token",
+  "rlc_access_token"];
+
+
+  for (const key of keys) {
+    const token = localStorage.getItem(key) || sessionStorage.getItem(key);
+    if (token?.trim()) return { Authorization: `Bearer ${token.trim()}` };
+  }
+
+  try {
+    const raw =
+    localStorage.getItem("auth") ||
+    localStorage.getItem("rlc_auth") ||
+    localStorage.getItem("user");
+
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const token =
+      parsed?.token ||
+      parsed?.accessToken ||
+      parsed?.authToken ||
+      parsed?.jwt ||
+      parsed?.data?.token ||
+      parsed?.data?.accessToken ||
+      parsed?.user?.token ||
+      parsed?.user?.accessToken;
+
+      if (typeof token === "string" && token.trim()) {
+        return { Authorization: `Bearer ${token.trim()}` };
+      }
+    }
+  } catch {
+
+
+    // ignore
+  }return {};
+}
+
+
+async function loadCompanyLogoForPdf(): Promise<string | null> {
+  try {
+    const tokenKeys = [
+    "rlc_token",
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_access_token"];
+
+
+    let token = "";
+
+    for (const key of tokenKeys) {
+      const value =
+      localStorage.getItem(key) ||
+      sessionStorage.getItem(key);
+
+      if (value?.trim()) {
+        token = value.trim();
+        break;
+      }
+    }
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(apiUrl("/api/company/logo"), {
+      method: "GET",
+      headers,
+      credentials: "include",
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const blob = await response.blob();
+
+    if (!blob.type.startsWith("image/")) {
+      return null;
+    }
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+        } else {
+          reject(new Error("Firmenlogo konnte nicht gelesen werden."));
+        }
+      };
+
+      reader.onerror = () =>
+      reject(reader.error || new Error("Firmenlogo konnte nicht gelesen werden."));
+
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.warn("Firmenlogo für PDF konnte nicht geladen werden:", error);
+    return null;
+  }
+}
+
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers || {});
+  if (!headers.has("Content-Type") && init?.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  Object.entries(getAuthHeaders()).forEach(([key, value]) => {
+    headers.set(key, value);
+  });
+
+  const response = await fetch(apiUrl(url), {
+    ...init,
+    credentials: "include",
+    headers
+  });
+
+  const text = await response.text();
+  if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
+
+  if (!text.trim()) return {} as T;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`Ungültige Serverantwort von ${url}`);
+  }
+}
+
+function asArray<T = any>(value: any): T[] {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.items)) return value.items;
+  if (Array.isArray(value?.rows)) return value.rows;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.data?.items)) return value.data.items;
+  if (Array.isArray(value?.data?.rows)) return value.data.rows;
+  return [];
+}
+
+/* ===================== LOCAL LV ===================== */
+
+function readLocalLvPositions(keys: string[]): LVPos[] {
+  const storageKeys = Array.from(
+    new Set(
+      keys.filter(Boolean).flatMap((key) => [
+      `rlc_lv_data_v1:${key}`,
+      `rlc_gaeb_import_v1:${key}`,
+      `RLC_AUFMASS_${key}`]
+      )
+    )
+  );
+
+  for (const storageKey of storageKeys) {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const rows = Array.isArray(parsed) ?
+      parsed :
+      Array.isArray(parsed?.rows) ?
+      parsed.rows :
+      Array.isArray(parsed?.items) ?
+      parsed.items :
+      [];
+
+      const normalized = rows.
+      map((row: any, index: number) => ({
+        id: String(row?.id ?? row?.uuid ?? `${storageKey}-${index}`),
+        position: String(
+          row?.position ?? row?.pos ?? row?.posNr ?? row?.positionsnummer ?? ""
+        ).trim(),
+        kurztext: String(
+          row?.kurztext ?? row?.Kurztext ?? row?.text ?? row?.description ?? ""
+        ).trim(),
+        langtext:
+        String(row?.langtext ?? row?.Langtext ?? "").trim() || null
+      })).
+      filter((row: LVPos) => row.position || row.kurztext);
+
+      if (normalized.length) return normalized;
+    } catch {
+
+
+      // next key
+    }}
+  return [];
+}
+
+/* ===================== COMPONENT ===================== */
+
 export default function GPSZuweisung() {
-  const ctx: any = useProject();
-  const project = ctx?.currentProject || ctx?.selectedProject || ctx?.project || null;
+  const navigate = useNavigate();
+  const context: any = useProject();
+  const project =
+  context?.getSelectedProject?.() ||
+  context?.currentProject ||
+  context?.selectedProject ||
+  context?.project ||
+  null;
 
-  const projectCode =
-    (project as any)?.code ||
-    (project as any)?.baustellenNummer ||
-    (project as any)?.baustelleNummer ||
-    (project as any)?.projectCode ||
-    (project as any)?.projektCode ||
-    (project as any)?.slug ||
-    (project as any)?.key ||
-    "";
+  const projectCode = String(
+    project?.code ||
+    project?.baustellenNummer ||
+    project?.baustelleNummer ||
+    project?.projectCode ||
+    project?.projektCode ||
+    project?.slug ||
+    project?.key ||
+    ""
+  ).trim();
 
-  const projectDbId = (project as any)?.id || "";
-  const projectId = (projectCode || projectDbId || "").trim();
+  const projectDbId = String(project?.id || "").trim();
+  const projectId = projectCode || projectDbId;
+  const serverProjectId = projectDbId || projectId;
 
   const mapRef = React.useRef<L.Map | null>(null);
   const pointsLayerRef = React.useRef<L.LayerGroup | null>(null);
-  const lineLayerRef = React.useRef<L.LayerGroup | null>(null);
+  const geometryLayerRef = React.useRef<L.LayerGroup | null>(null);
+  const annotationLayerRef = React.useRef<L.LayerGroup | null>(null);
+
+  const pointsRef = React.useRef<GpsPoint[]>([]);
+  const measurementsRef = React.useRef<Measurement[]>([]);
+  const areasRef = React.useRef<AreaMeasurement[]>([]);
+  const annotationsRef = React.useRef<MapAnnotation[]>([]);
+  const activeDistanceRef = React.useRef<number[]>([]);
+  const activeAreaRef = React.useRef<number[]>([]);
+  const editorModeRef = React.useRef<EditorMode>("POINT");
+  const commentTextRef = React.useRef("");
+  const commentFontSizeRef = React.useRef(14);
+  const commentRotationRef = React.useRef(0);
+  const selectedLVRef = React.useRef<LVPos | null>(null);
+  const csvCrsRef = React.useRef("EPSG:25832");
+  const showPointLabelsRef = React.useRef(false);
+  const draftKeyRef = React.useRef("");
 
   const [points, setPoints] = React.useState<GpsPoint[]>([]);
   const [selectedLV, setSelectedLV] = React.useState<LVPos | null>(null);
   const [lvList, setLvList] = React.useState<LVPos[]>([]);
   const [assignments, setAssignments] = React.useState<Assignment[]>([]);
-  const [csvCrs, setCsvCrs] = React.useState("EPSG:31468");
+  const [csvCrs, setCsvCrs] = React.useState("EPSG:25832");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [lvSearch, setLvSearch] = React.useState("");
+
+  const [editorMode, setEditorMode] = React.useState<EditorMode>("POINT");
+  const [activeDistanceIndexes, setActiveDistanceIndexes] = React.useState<number[]>([]);
+  const [activeAreaIndexes, setActiveAreaIndexes] = React.useState<number[]>([]);
+  const [measurements, setMeasurements] = React.useState<Measurement[]>([]);
+  const [areas, setAreas] = React.useState<AreaMeasurement[]>([]);
+  const [annotations, setAnnotations] = React.useState<MapAnnotation[]>([]);
+  const [commentText, setCommentText] = React.useState("");
+  const [commentFontSize, setCommentFontSize] = React.useState(14);
+  const [commentRotation, setCommentRotation] = React.useState(0);
+  const [measurementComment, setMeasurementComment] = React.useState("");
+  const [areaComment, setAreaComment] = React.useState("");
+  const [showPointLabels, setShowPointLabels] = React.useState(true);
+  const [printWithoutPointLabels, setPrintWithoutPointLabels] = React.useState(false);
+  const [savePdfServer] = React.useState(true);
+  const [serverPdfs, setServerPdfs] = React.useState<any[]>([]);
+  const [serverSaveStatus, setServerSaveStatus] = React.useState("Noch nicht am Server gespeichert");
+  const [workspaceHydrated, setWorkspaceHydrated] = React.useState(false);
+  const serverSaveTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    pointsRef.current = points;
+  }, [points]);
+  React.useEffect(() => {
+    measurementsRef.current = measurements;
+  }, [measurements]);
+  React.useEffect(() => {
+    areasRef.current = areas;
+  }, [areas]);
+  React.useEffect(() => {
+    annotationsRef.current = annotations;
+  }, [annotations]);
+  React.useEffect(() => {
+    activeDistanceRef.current = activeDistanceIndexes;
+  }, [activeDistanceIndexes]);
+  React.useEffect(() => {
+    activeAreaRef.current = activeAreaIndexes;
+  }, [activeAreaIndexes]);
+  React.useEffect(() => {
+    editorModeRef.current = editorMode;
+  }, [editorMode]);
+  React.useEffect(() => {
+    commentTextRef.current = commentText;
+  }, [commentText]);
+  React.useEffect(() => {
+    commentFontSizeRef.current = commentFontSize;
+  }, [commentFontSize]);
+  React.useEffect(() => {
+    commentRotationRef.current = commentRotation;
+  }, [commentRotation]);
+  React.useEffect(() => {
+    selectedLVRef.current = selectedLV;
+  }, [selectedLV]);
+  React.useEffect(() => {
+    csvCrsRef.current = csvCrs;
+  }, [csvCrs]);
+  React.useEffect(() => {
+    showPointLabelsRef.current = showPointLabels;
+  }, [showPointLabels]);
 
   const DRAFT_KEY = React.useMemo(() => {
     const key = (projectId || "no-project").replace(/[^\w.-]/g, "_");
-    return `rlc_gpszuweisung_draft_v1_${key}`;
+    return `rlc_gpszuweisung_draft_v3_${key}`;
   }, [projectId]);
 
-  function saveDraft(nextPoints: GpsPoint[], nextSelectedId?: string | null, nextCsvCrs?: string) {
+  React.useEffect(() => {
+    draftKeyRef.current = DRAFT_KEY;
+  }, [DRAFT_KEY]);
+
+  const filteredLvList = React.useMemo(() => {
+    const query = lvSearch.trim().toLowerCase();
+    if (!query) return lvList;
+    return lvList.filter((row) =>
+    `${row.position} ${row.kurztext} ${row.langtext || ""}`.
+    toLowerCase().
+    includes(query)
+    );
+  }, [lvList, lvSearch]);
+
+  const activeDistance = React.useMemo(
+    () =>
+    polylineLengthMeters(
+      activeDistanceIndexes.map((index) => points[index]).filter(Boolean)
+    ),
+    [activeDistanceIndexes, points]
+  );
+
+  const activeArea = React.useMemo(
+    () =>
+    polygonAreaMeters2(
+      activeAreaIndexes.map((index) => points[index]).filter(Boolean)
+    ),
+    [activeAreaIndexes, points]
+  );
+
+  const totalDistance = React.useMemo(
+    () =>
+    measurements.reduce(
+      (sum, measurement) =>
+      sum +
+      polylineLengthMeters(
+        measurement.pointIndexes.map((index) => points[index]).filter(Boolean)
+      ),
+      0
+    ),
+    [measurements, points]
+  );
+
+  const totalArea = React.useMemo(
+    () =>
+    areas.reduce(
+      (sum, area) =>
+      sum +
+      polygonAreaMeters2(
+        area.pointIndexes.map((index) => points[index]).filter(Boolean)
+      ),
+      0
+    ),
+    [areas, points]
+  );
+
+
+  function resolveCurrentLV(): LVPos | null {
+    if (selectedLVRef.current) return selectedLVRef.current;
+    if (selectedLV) return selectedLV;
+
+    const query = lvSearch.trim().toLowerCase();
+    if (!query) return null;
+
+    return (
+      lvList.find((position) => {
+        const full = `${position.position} ${position.kurztext}`.trim().toLowerCase();
+        return full === query || query.startsWith(position.position.toLowerCase());
+      }) || null);
+
+  }
+
+  async function saveWorkspaceToServer(payload?: any) {
+    if (!serverProjectId) return;
+    const body = payload || {
+      projectId: serverProjectId,
+      selectedLvId: selectedLVRef.current?.id || "",
+      selectedLv: selectedLVRef.current || null,
+      csvCrs: csvCrsRef.current,
+      points: pointsRef.current,
+      measurements: measurementsRef.current,
+      areas: areasRef.current,
+      annotations: annotationsRef.current,
+      activeDistanceIndexes: activeDistanceRef.current,
+      activeAreaIndexes: activeAreaRef.current
+    };
+
     try {
-      const payload = {
-        projectId,
-        points: nextPoints,
-        selectedLvId: nextSelectedId ?? selectedLV?.id ?? null,
-        csvCrs: nextCsvCrs ?? csvCrs,
-        savedAt: Date.now(),
-      };
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
-    } catch {
-      // ignore
+      const result = await api<any>("/api/gps/state", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      const when = result?.data?.updatedAt || Date.now();
+      setServerSaveStatus(`Server gespeichert: ${new Date(when).toLocaleString("de-DE")}`);
+    } catch (error: any) {
+      setServerSaveStatus(`Serverfehler: ${String(error?.message || error)}`);
     }
   }
 
+  function queueWorkspaceServerSave() {
+    if (!workspaceHydrated) return;
+    if (serverSaveTimerRef.current) window.clearTimeout(serverSaveTimerRef.current);
+    serverSaveTimerRef.current = window.setTimeout(() => {
+      void saveWorkspaceToServer();
+      serverSaveTimerRef.current = null;
+    }, 450);
+  }
+
+  async function loadWorkspaceFromServer() {
+    if (!serverProjectId) return false;
+    try {
+      const response = await api<any>(
+        `/api/gps/state?projectId=${encodeURIComponent(serverProjectId)}`
+      );
+      const data = response?.data;
+      if (!data || !Array.isArray(data.points)) return false;
+
+      const restoredPoints = clampPts(data.points || []);
+      const restoredMeasurements = Array.isArray(data.measurements) ? data.measurements : [];
+      const restoredAreas = Array.isArray(data.areas) ? data.areas : [];
+      const restoredAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
+      const restoredActiveDistance = Array.isArray(data.activeDistanceIndexes) ?
+      data.activeDistanceIndexes :
+      [];
+      const restoredActiveArea = Array.isArray(data.activeAreaIndexes) ?
+      data.activeAreaIndexes :
+      [];
+
+      updateAll(
+        restoredPoints,
+        restoredMeasurements,
+        restoredAreas,
+        restoredAnnotations,
+        restoredActiveDistance,
+        restoredActiveArea,
+        true,
+        false
+      );
+      if (data.csvCrs) setCsvCrs(String(data.csvCrs));
+      if (data.selectedLvId) {
+        const selected = lvList.find((position) => position.id === data.selectedLvId) || null;
+        if (selected) {
+          selectedLVRef.current = selected;
+          setSelectedLV(selected);
+          setLvSearch(`${selected.position} ${selected.kurztext}`.trim());
+        }
+      }
+      setServerSaveStatus(
+        `Server geladen: ${new Date(data.updatedAt || Date.now()).toLocaleString("de-DE")}`
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function loadServerPdfs() {
+    if (!serverProjectId) return;
+    try {
+      const response = await api<any>(
+        `/api/gps/pdfs?projectId=${encodeURIComponent(serverProjectId)}`
+      );
+      setServerPdfs(asArray<any>(response));
+    } catch {
+      setServerPdfs([]);
+    }
+  }
+
+  function saveDraft(args?: {
+    points?: GpsPoint[];
+    selectedLvId?: string | null;
+    csvCrs?: string;
+    measurements?: Measurement[];
+    areas?: AreaMeasurement[];
+    annotations?: MapAnnotation[];
+    activeDistanceIndexes?: number[];
+    activeAreaIndexes?: number[];
+  }) {
+    try {
+      localStorage.setItem(
+        draftKeyRef.current || DRAFT_KEY,
+        JSON.stringify({
+          projectId,
+          points: args?.points ?? pointsRef.current,
+          selectedLvId:
+          args && "selectedLvId" in args ?
+          args.selectedLvId :
+          selectedLVRef.current?.id ?? null,
+          csvCrs: args?.csvCrs ?? csvCrsRef.current,
+          measurements: args?.measurements ?? measurementsRef.current,
+          areas: args?.areas ?? areasRef.current,
+          annotations: args?.annotations ?? annotationsRef.current,
+          activeDistanceIndexes:
+          args?.activeDistanceIndexes ?? activeDistanceRef.current,
+          activeAreaIndexes: args?.activeAreaIndexes ?? activeAreaRef.current,
+          savedAt: Date.now()
+        })
+      );
+    } catch {
+
+
+      // ignore
+    }}
   function loadDraft() {
     try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      const raw = localStorage.getItem(draftKeyRef.current || DRAFT_KEY);
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
@@ -461,29 +1527,337 @@ export default function GPSZuweisung() {
 
   function clearDraft() {
     try {
-      localStorage.removeItem(DRAFT_KEY);
+      localStorage.removeItem(draftKeyRef.current || DRAFT_KEY);
     } catch {
+
+
       // ignore
+    }}
+  function clearLayers() {
+    pointsLayerRef.current?.clearLayers();
+    geometryLayerRef.current?.clearLayers();
+    annotationLayerRef.current?.clearLayers();
+  }
+
+  function updateAll(
+  nextPoints = pointsRef.current,
+  nextMeasurements = measurementsRef.current,
+  nextAreas = areasRef.current,
+  nextAnnotations = annotationsRef.current,
+  nextActiveDistance = activeDistanceRef.current,
+  nextActiveArea = activeAreaRef.current,
+  fit = false,
+  persist = true)
+  {
+    pointsRef.current = nextPoints;
+    measurementsRef.current = nextMeasurements;
+    areasRef.current = nextAreas;
+    annotationsRef.current = nextAnnotations;
+    activeDistanceRef.current = nextActiveDistance;
+    activeAreaRef.current = nextActiveArea;
+
+    setPoints(nextPoints);
+    setMeasurements(nextMeasurements);
+    setAreas(nextAreas);
+    setAnnotations(nextAnnotations);
+    setActiveDistanceIndexes(nextActiveDistance);
+    setActiveAreaIndexes(nextActiveArea);
+
+    redrawMap(
+      nextPoints,
+      nextMeasurements,
+      nextAreas,
+      nextAnnotations,
+      nextActiveDistance,
+      nextActiveArea,
+      fit
+    );
+
+    if (persist) {
+      saveDraft({
+        points: nextPoints,
+        measurements: nextMeasurements,
+        areas: nextAreas,
+        annotations: nextAnnotations,
+        activeDistanceIndexes: nextActiveDistance,
+        activeAreaIndexes: nextActiveArea
+      });
+      queueWorkspaceServerSave();
     }
   }
 
-  /* ------------------ MAP INIT ------------------ */
+  function selectPoint(index: number) {
+    const mode = editorModeRef.current;
+
+    if (mode === "DISTANCE") {
+      const current = activeDistanceRef.current;
+      const next =
+      current[current.length - 1] === index ? current : [...current, index];
+      updateAll(
+        pointsRef.current,
+        measurementsRef.current,
+        areasRef.current,
+        annotationsRef.current,
+        next,
+        activeAreaRef.current
+      );
+      return;
+    }
+
+    if (mode === "AREA") {
+      const current = activeAreaRef.current;
+      const next =
+      current[current.length - 1] === index ? current : [...current, index];
+      updateAll(
+        pointsRef.current,
+        measurementsRef.current,
+        areasRef.current,
+        annotationsRef.current,
+        activeDistanceRef.current,
+        next
+      );
+    }
+  }
+
+  function redrawMap(
+  mapPoints = pointsRef.current,
+  mapMeasurements = measurementsRef.current,
+  mapAreas = areasRef.current,
+  mapAnnotations = annotationsRef.current,
+  activeDistanceIds = activeDistanceRef.current,
+  activeAreaIds = activeAreaRef.current,
+  fit = false)
+  {
+    const map = mapRef.current;
+    if (!map) return;
+
+    clearLayers();
+
+    const pointLayer = pointsLayerRef.current;
+    const geometryLayer = geometryLayerRef.current;
+    const annotationLayer = annotationLayerRef.current;
+    if (!pointLayer || !geometryLayer || !annotationLayer) return;
+
+    const distanceColors = ["#d97706", "#7c3aed", "#059669", "#dc2626", "#0891b2"];
+    const areaColors = ["#dc2626", "#db2777", "#7c3aed", "#ea580c", "#146ef5"];
+
+    mapPoints.forEach((point, index) => {
+      const isDxfGeometryPoint =
+      String(point.code || "").startsWith("DXF:");
+
+      if (isDxfGeometryPoint) return;
+      const selected =
+      activeDistanceIds.includes(index) || activeAreaIds.includes(index);
+
+      const marker = L.circleMarker([point.lat, point.lng], {
+        radius: selected ? 4 : 2.6,
+        weight: selected ? 1.5 : 0.8,
+        opacity: 0.95,
+        fillOpacity: 0.72,
+        color: selected ? "#7f1d1d" : "#146ef5",
+        fillColor: selected ? "#f43f5e" : "#3b82f6"
+      }).addTo(pointLayer);
+
+      const label = pointDisplayName(point, index);
+      marker.bindTooltip(label, {
+        direction: "top",
+        offset: [0, -3],
+        permanent: showPointLabelsRef.current,
+        opacity: 0.88,
+        className: "rlc-gps-point-label"
+      });
+
+      marker.on("click", (event: any) => {
+        L.DomEvent.stopPropagation(event);
+        selectPoint(index);
+      });
+    });
+
+    mapMeasurements.forEach((measurement, index) => {
+      const selectedPoints = measurement.pointIndexes.
+      map((pointIndex) => mapPoints[pointIndex]).
+      filter(Boolean);
+      if (selectedPoints.length < 2) return;
+
+      const color =
+      measurement.color || distanceColors[index % distanceColors.length];
+      const length = polylineLengthMeters(selectedPoints);
+
+      L.polyline(
+        selectedPoints.map((point) => [point.lat, point.lng]) as [number, number][],
+        {
+          color,
+          weight: 2,
+          opacity: 0.9
+        }
+      ).
+      bindTooltip(
+        `${measurement.name}: ${formatDistance(length)}${
+        measurement.comment ? ` · ${measurement.comment}` : ""}`,
+
+        { permanent: !String(measurement.comment || "").startsWith("DXF-Layer:"), direction: "top", opacity: 0.85 }
+      ).
+      addTo(geometryLayer);
+    });
+
+    mapAreas.forEach((area, index) => {
+      const selectedPoints = area.pointIndexes.
+      map((pointIndex) => mapPoints[pointIndex]).
+      filter(Boolean);
+      if (selectedPoints.length < 3) return;
+
+      const color = area.color || areaColors[index % areaColors.length];
+      const size = polygonAreaMeters2(selectedPoints);
+
+      L.polygon(
+        selectedPoints.map((point) => [point.lat, point.lng]) as [number, number][],
+        {
+          color,
+          weight: 3,
+          opacity: 1,
+          fillColor: color,
+          fillOpacity: 0.28,
+          dashArray: "8 4"
+        }
+      ).
+      bindTooltip(
+        `${area.name}: ${formatArea(size)}${
+        area.comment ? ` · ${area.comment}` : ""}`,
+
+        { permanent: !String(area.comment || "").startsWith("DXF-Layer:"), direction: "center", opacity: 0.85 }
+      ).
+      addTo(geometryLayer);
+    });
+
+    const activeDistancePoints = activeDistanceIds.
+    map((index) => mapPoints[index]).
+    filter(Boolean);
+
+    if (activeDistancePoints.length >= 2) {
+      L.polyline(
+        activeDistancePoints.map((point) => [point.lat, point.lng]) as [number, number][],
+        {
+          color: "#eab308",
+          weight: 1.8,
+          opacity: 0.95,
+          dashArray: "5 5"
+        }
+      ).
+      bindTooltip(
+        `Aktuelle Strecke: ${formatDistance(
+          polylineLengthMeters(activeDistancePoints)
+        )}`,
+        { permanent: true, direction: "top", opacity: 0.85 }
+      ).
+      addTo(geometryLayer);
+    }
+
+    const activeAreaPoints = activeAreaIds.
+    map((index) => mapPoints[index]).
+    filter(Boolean);
+
+    if (activeAreaPoints.length >= 2) {
+      const latLngs = activeAreaPoints.map((point) => [
+      point.lat,
+      point.lng]
+      ) as [number, number][];
+
+      if (activeAreaPoints.length >= 3) {
+        L.polygon(latLngs, {
+          color: "#dc2626",
+          weight: 3,
+          opacity: 1,
+          dashArray: "8 4",
+          fillColor: "#f43f5e",
+          fillOpacity: 0.26
+        }).
+        bindTooltip(`Aktuelle Fläche: ${formatArea(polygonAreaMeters2(activeAreaPoints))}`, {
+          permanent: true,
+          direction: "center",
+          opacity: 0.85
+        }).
+        addTo(geometryLayer);
+      } else {
+        L.polyline(latLngs, {
+          color: "#dc2626",
+          weight: 3,
+          opacity: 1,
+          dashArray: "8 4"
+        }).addTo(geometryLayer);
+      }
+    }
+
+    mapAnnotations.forEach((annotation) => {
+      const fontSize = Math.max(8, Math.min(40, Number(annotation.fontSize) || 14));
+      const rotation = Math.max(-180, Math.min(180, Number(annotation.rotation) || 0));
+
+      const icon = L.divIcon({
+        className: "rlc-map-comment-marker",
+        html: `<div class="rlc-map-comment-content" style="
+          transform: translate(-50%, -50%) rotate(${rotation}deg);
+          transform-origin: center center;
+          font-size: ${fontSize}px;
+        ">${escapeHtml(annotation.text)}</div>`,
+        iconSize: [1, 1],
+        iconAnchor: [0, 0]
+      });
+
+      const marker = L.marker([annotation.lat, annotation.lng], {
+        icon,
+        interactive: true,
+        draggable: true,
+        keyboard: false,
+        title: "Kommentar ziehen, um ihn exakt zu positionieren"
+      }).addTo(annotationLayer);
+
+      marker.on("dragend", () => {
+        const nextPosition = marker.getLatLng();
+        const nextAnnotations = annotationsRef.current.map((item) =>
+        item.id === annotation.id ?
+        { ...item, lat: nextPosition.lat, lng: nextPosition.lng } :
+        item
+        );
+
+        updateAll(
+          pointsRef.current,
+          measurementsRef.current,
+          areasRef.current,
+          nextAnnotations,
+          activeDistanceRef.current,
+          activeAreaRef.current
+        );
+      });
+    });
+
+    if (fit && mapPoints.length) {
+      map.fitBounds(
+        L.latLngBounds(
+          mapPoints.map((point) => [point.lat, point.lng]) as [number, number][]
+        ),
+        { padding: [30, 30] }
+      );
+    }
+  }
+
   React.useEffect(() => {
     if (mapRef.current) return;
 
-    const m = L.map("gps-map", {
+    const map = L.map("gps-map", {
       zoomControl: true,
       preferCanvas: true,
-      maxZoom: 22,
-    }).setView([48.14, 11.58], 12);
+      maxZoom: 22
+    }).setView([47.63, 12.98], 12);
 
-    const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap",
-      crossOrigin: true,
-    }).addTo(m);
+    const osm = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap",
+        crossOrigin: true
+      }
+    ).addTo(map);
 
-    const bayernLuftbild = (L as any).tileLayer.wms(
+    const aerial = (L as any).tileLayer.wms(
       "https://geoservices.bayern.de/od/wms/dop/v1/dop20?",
       {
         layers: "by_dop20c",
@@ -493,36 +1867,34 @@ export default function GPSZuweisung() {
         tiled: true,
         maxZoom: 21,
         attribution: "© Bayerische Vermessungsverwaltung",
-        crossOrigin: true,
+        crossOrigin: true
       }
     );
 
-    const base: Record<string, any> = {
+    const baseLayers: Record<string, any> = {
       OSM: osm,
-      "Bayern Luftbild (WMS)": bayernLuftbild,
+      "Bayern Luftbild": aerial
     };
 
     try {
       const key = (import.meta as any)?.env?.VITE_GOOGLE_MAPS_KEY;
       if (key && (L as any).gridLayer?.googleMutant) {
-        const gRoad = (L as any).gridLayer.googleMutant({
+        baseLayers["Google Road"] = (L as any).gridLayer.googleMutant({
           type: "roadmap",
           maxZoom: 21,
-          apiKey: key,
+          apiKey: key
         });
-        const gSat = (L as any).gridLayer.googleMutant({
+        baseLayers["Google Sat"] = (L as any).gridLayer.googleMutant({
           type: "satellite",
           maxZoom: 21,
-          apiKey: key,
+          apiKey: key
         });
-        base["Google Road"] = gRoad;
-        base["Google Sat"] = gSat;
       }
-    } catch (e) {
-      console.warn("Google layers disabled:", e);
-    }
+    } catch {
 
-    const overlayParzellen = (L as any).tileLayer.wms(
+
+      // Google optional
+    }const parcels = (L as any).tileLayer.wms(
       "https://geoservices.bayern.de/od/wms/alkis/v1/parzellarkarte?",
       {
         layers: "by_alkis_parzellarkarte_umr_schwarz",
@@ -532,11 +1904,11 @@ export default function GPSZuweisung() {
         tiled: true,
         maxZoom: 21,
         attribution: "© Bayerische Vermessungsverwaltung (ALKIS® OpenData)",
-        crossOrigin: true,
+        crossOrigin: true
       }
     );
 
-    const overlayGrenzen = (L as any).tileLayer.wms(
+    const borders = (L as any).tileLayer.wms(
       "https://geoservices.bayern.de/od/wms/alkis/v1/verwaltungsgrenzen?",
       {
         layers: "by_alkis_gmd_grenze",
@@ -545,848 +1917,2562 @@ export default function GPSZuweisung() {
         version: "1.3.0",
         tiled: true,
         maxZoom: 21,
-        attribution: "© Bayerische Vermessungsverwaltung (ALKIS® OpenData)",
-        crossOrigin: true,
+        attribution: "© Bayerische Vermessungsverwaltung",
+        crossOrigin: true
       }
     );
 
-    const overlays: Record<string, any> = {
-      "Flurkarte / Parzellen (WMS)": overlayParzellen,
-      "Grenzen (WMS)": overlayGrenzen,
-    };
+    L.control.
+    layers(baseLayers, {
+      "Flurkarte / Parzellen": parcels,
+      Grenzen: borders
+    }).
+    addTo(map);
 
-    L.control.layers(base, overlays).addTo(m);
+    parcels.addTo(map);
+    borders.addTo(map);
 
-    overlayParzellen.addTo(m);
-    overlayGrenzen.addTo(m);
+    pointsLayerRef.current = L.layerGroup().addTo(map);
+    geometryLayerRef.current = L.layerGroup().addTo(map);
+    annotationLayerRef.current = L.layerGroup().addTo(map);
 
-    pointsLayerRef.current = L.layerGroup().addTo(m);
-    lineLayerRef.current = L.layerGroup().addTo(m);
-
-    m.on("click", (e: L.LeafletMouseEvent) => {
-      const p: GpsPoint = { lat: e.latlng.lat, lng: e.latlng.lng, ts: Date.now() };
-      setPoints((prev) => {
-        const next = [...prev, p];
-        redrawCurrent(next);
-        saveDraft(next);
-        return next;
-      });
+    applyPointLabelZoomScale(map);
+    map.on("zoom zoomend", () => {
+      applyPointLabelZoomScale(map);
     });
 
-    mapRef.current = m;
-    setTimeout(() => m.invalidateSize(), 200);
-  }, [csvCrs, selectedLV, DRAFT_KEY, projectId]);
+    map.on("click", (event: L.LeafletMouseEvent) => {
+      const mode = editorModeRef.current;
 
-  function clearLayers() {
-    pointsLayerRef.current?.clearLayers();
-    lineLayerRef.current?.clearLayers();
-  }
+      if (mode === "COMMENT") {
+        const text = commentTextRef.current.trim();
+        if (!text) {
+          setErr("Bitte zuerst einen Kommentar eingeben.");
+          return;
+        }
 
-  function redrawCurrent(pts: GpsPoint[]) {
-    const m = mapRef.current;
-    if (!m) return;
+        const nextAnnotations = [
+        ...annotationsRef.current,
+        {
+          id: crypto.randomUUID(),
+          lat: event.latlng.lat,
+          lng: event.latlng.lng,
+          text,
+          createdAt: Date.now(),
+          fontSize: commentFontSizeRef.current,
+          rotation: commentRotationRef.current
+        }];
 
-    clearLayers();
 
-    const lgPts = pointsLayerRef.current;
-    const lgLine = lineLayerRef.current;
-    if (!lgPts || !lgLine) return;
-
-    if (pts.length) {
-      for (const p of pts) L.circleMarker([p.lat, p.lng], { radius: 4 }).addTo(lgPts);
-
-      if (pts.length >= 2) {
-        L.polyline(
-          pts.map((p) => [p.lat, p.lng]) as [number, number][],
-          { weight: 3 }
-        ).addTo(lgLine);
+        updateAll(
+          pointsRef.current,
+          measurementsRef.current,
+          areasRef.current,
+          nextAnnotations
+        );
+        return;
       }
 
-      m.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng]) as [number, number][]), {
-        padding: [30, 30],
-      });
-    }
-  }
+      const nextPoint: GpsPoint = {
+        lat: event.latlng.lat,
+        lng: event.latlng.lng,
+        ts: Date.now(),
+        code: `M${String(pointsRef.current.length + 1).padStart(3, "0")}`,
+        name: "Manueller Punkt"
+      };
 
-  function drawAssignment(ass: Assignment) {
-    const m = mapRef.current;
-    if (!m) return;
+      const nextPoints = [...pointsRef.current, nextPoint];
+      const newIndex = nextPoints.length - 1;
 
-    clearLayers();
+      if (mode === "DISTANCE") {
+        updateAll(
+          nextPoints,
+          measurementsRef.current,
+          areasRef.current,
+          annotationsRef.current,
+          [...activeDistanceRef.current, newIndex],
+          activeAreaRef.current
+        );
+      } else if (mode === "AREA") {
+        updateAll(
+          nextPoints,
+          measurementsRef.current,
+          areasRef.current,
+          annotationsRef.current,
+          activeDistanceRef.current,
+          [...activeAreaRef.current, newIndex]
+        );
+      } else {
+        updateAll(nextPoints);
+      }
+    });
 
-    const lgPts = pointsLayerRef.current;
-    const lgLine = lineLayerRef.current;
-    if (!lgPts || !lgLine) return;
+    mapRef.current = map;
+    window.setTimeout(() => map.invalidateSize(), 200);
+  }, []);
 
-    const pts = ass.points || [];
+  React.useEffect(() => {
+    redrawMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPointLabels]);
 
-    for (const p of pts) L.circleMarker([p.lat, p.lng], { radius: 4 }).addTo(lgPts);
+  /* ===================== DATA LOAD ===================== */
 
-    if (pts.length >= 2) {
-      L.polyline(
-        pts.map((p) => [p.lat, p.lng]) as [number, number][],
-        { weight: 3 }
-      ).addTo(lgLine);
-    }
-
-    if (pts.length) {
-      m.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng]) as [number, number][]), {
-        padding: [30, 30],
-      });
-    }
-  }
-
-  function resolveLvFromLists(lvPosId: string): LVPos | null {
-    if (!lvPosId) return null;
-    return lvList.find((x) => x.id === lvPosId) || null;
-  }
-
-  function loadAssignmentIntoCurrent(a: Assignment) {
-    const pts = clampPts(a.points || []);
-    setPoints(pts);
-    redrawCurrent(pts);
-    saveDraft(pts, a.lvPosId ?? null, csvCrs);
-
-    const found = resolveLvFromLists(a.lvPosId);
-    if (found) setSelectedLV(found);
-
-    setErr(`Zuweisung geladen: ${found?.position || a.lvPosId} (${pts.length} Punkte)`);
-  }
-
-  /* ------------------ DATA: LV / ASSIGNMENTS ------------------ */
   async function loadLV() {
     if (!projectDbId) return;
     setBusy(true);
     setErr(null);
 
     try {
-      const res = await api<{
-        ok: boolean;
-        page: number;
-        pageSize: number;
-        total: number;
-        rows: Array<{ id: string; title: string; version: number; positions: LVPos[] }>;
-      }>(`/api/projects/${encodeURIComponent(projectDbId)}/lv?page=1&pageSize=20`);
+      const response = await api<any>(
+        `/api/projects/${encodeURIComponent(projectDbId)}/lv?page=1&pageSize=20`
+      );
 
-      const latest = (res.rows || [])[0];
-      const positions = (latest?.positions || []) as LVPos[];
-      setLvList(positions);
+      const lvRows = asArray<any>(response);
+      const latest = lvRows[0] || null;
+      const serverPositions = asArray<LVPos>(
+        latest?.positions ??
+        latest?.data?.positions ??
+        response?.positions ??
+        response?.data?.positions
+      );
 
-      const d = loadDraft();
-      if (d?.selectedLvId) {
-        const found = positions.find((p) => p.id === d.selectedLvId) || null;
-        if (found) setSelectedLV(found);
+      const localPositions = readLocalLvPositions([
+      projectCode,
+      projectDbId,
+      projectId]
+      );
+
+      const result = serverPositions.length ? serverPositions : localPositions;
+      setLvList(result);
+
+      if (!result.length) {
+        setErr("Keine LV-Positionen gefunden.");
+      } else if (!serverPositions.length) {
+        setErr(`LV lokal geladen: ${result.length} Positionen.`);
       }
-    } catch (e: any) {
-      setErr(String(e?.message || e));
+
+      const draft = loadDraft();
+      if (draft?.selectedLvId) {
+        const selected =
+        result.find((position) => position.id === draft.selectedLvId) || null;
+        if (selected) {
+          selectedLVRef.current = selected;
+          setSelectedLV(selected);
+        }
+      }
+    } catch (error: any) {
+      const localPositions = readLocalLvPositions([
+      projectCode,
+      projectDbId,
+      projectId]
+      );
+      setLvList(localPositions);
+      setErr(
+        localPositions.length ?
+        `Server-LV nicht verfügbar; lokal geladen: ${localPositions.length} Positionen.` :
+        String(error?.message || error)
+      );
     } finally {
       setBusy(false);
     }
   }
 
   async function loadAssignments() {
-    if (!projectId) return;
+    if (!serverProjectId) return;
     setBusy(true);
     setErr(null);
 
     try {
-      const res = await api<{ ok: boolean; items: Assignment[] }>(
-        `/api/gps/list?projectId=${encodeURIComponent(projectId)}`
+      const response = await api<any>(
+        `/api/gps/list?projectId=${encodeURIComponent(serverProjectId)}`
       );
-
-      const enriched = (res.items || []).map((a) => {
-        if (a.lvPos) return a;
-        const f = lvList.find((x) => x.id === a.lvPosId);
-        if (!f) return a;
-        return {
-          ...a,
-          lvPos: {
-            position: f.position,
-            kurztext: f.kurztext,
-            langtext: f.langtext ?? null,
-          },
-        };
-      });
-
-      setAssignments(enriched);
-    } catch (e: any) {
-      setErr(String(e?.message || e));
+      const rows = asArray<Assignment>(response);
+      setAssignments(rows);
+    } catch (error: any) {
+      setErr(String(error?.message || error));
     } finally {
       setBusy(false);
     }
   }
 
   React.useEffect(() => {
-    setPoints([]);
-    setSelectedLV(null);
-    setLvList([]);
-    setAssignments([]);
-    clearLayers();
+    let cancelled = false;
 
-    const d = loadDraft();
-    if (d?.csvCrs) setCsvCrs(d.csvCrs);
-    if (Array.isArray(d?.points) && d.points.length) {
-      const restored = clampPts(d.points as GpsPoint[]);
-      setPoints(restored);
-      setTimeout(() => redrawCurrent(restored), 200);
+    async function hydrateWorkspace() {
+      setWorkspaceHydrated(false);
+
+      if (projectDbId) await loadLV();
+      if (cancelled) return;
+
+      if (serverProjectId) {
+        await Promise.all([loadAssignments(), loadServerPdfs()]);
+        if (cancelled) return;
+
+        const loadedFromServer = await loadWorkspaceFromServer();
+        if (cancelled) return;
+
+        if (loadedFromServer) {
+          setWorkspaceHydrated(true);
+          return;
+        }
+      }
+
+      const draft = loadDraft();
+      if (draft?.csvCrs) setCsvCrs(draft.csvCrs);
+
+      const restoredPoints = Array.isArray(draft?.points) ?
+      clampPts(draft.points) :
+      [];
+      const restoredMeasurements = Array.isArray(draft?.measurements) ?
+      draft.measurements :
+      [];
+      const restoredAreas = Array.isArray(draft?.areas) ? draft.areas : [];
+      const restoredAnnotations = Array.isArray(draft?.annotations) ?
+      draft.annotations :
+      [];
+      const restoredDistance = Array.isArray(draft?.activeDistanceIndexes) ?
+      draft.activeDistanceIndexes :
+      [];
+      const restoredArea = Array.isArray(draft?.activeAreaIndexes) ?
+      draft.activeAreaIndexes :
+      [];
+
+      updateAll(
+        restoredPoints,
+        restoredMeasurements,
+        restoredAreas,
+        restoredAnnotations,
+        restoredDistance,
+        restoredArea,
+        Boolean(restoredPoints.length),
+        false
+      );
+
+      setServerSaveStatus(
+        restoredPoints.length ?
+        "Server leer/nicht erreichbar – lokaler Entwurf geladen" :
+        "Server leer – neuer GPS-Entwurf"
+      );
+      setWorkspaceHydrated(true);
     }
 
-    if (projectDbId) void loadLV();
-    if (projectId) void loadAssignments();
+    void hydrateWorkspace();
+
+    return () => {
+      cancelled = true;
+      if (serverSaveTimerRef.current) {
+        window.clearTimeout(serverSaveTimerRef.current);
+        serverSaveTimerRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, projectDbId]);
+  }, [projectId, projectDbId, serverProjectId]);
+
+  /* ===================== EDITOR ACTIONS ===================== */
+
+  function saveDistanceMeasurement() {
+    if (activeDistanceIndexes.length < 2) {
+      setErr("Für eine Strecke mindestens zwei Punkte wählen.");
+      return;
+    }
+
+    const next: Measurement = {
+      id: crypto.randomUUID(),
+      name: `Messung ${measurements.length + 1}`,
+      pointIndexes: [...activeDistanceIndexes],
+      createdAt: Date.now(),
+      comment: measurementComment.trim() || undefined
+    };
+
+    updateAll(
+      points,
+      [...measurements, next],
+      areas,
+      annotations,
+      [],
+      activeAreaIndexes
+    );
+    setMeasurementComment("");
+  }
+
+  function saveAreaMeasurement() {
+    if (activeAreaIndexes.length < 3) {
+      setErr("Für eine Fläche mindestens drei Punkte wählen.");
+      return;
+    }
+
+    const next: AreaMeasurement = {
+      id: crypto.randomUUID(),
+      name: `Fläche ${areas.length + 1}`,
+      pointIndexes: [...activeAreaIndexes],
+      createdAt: Date.now(),
+      comment: areaComment.trim() || undefined
+    };
+
+    updateAll(
+      points,
+      measurements,
+      [...areas, next],
+      annotations,
+      activeDistanceIndexes,
+      []
+    );
+    setAreaComment("");
+  }
+
+  function deleteMeasurement(id: string) {
+    updateAll(
+      points,
+      measurements.filter((measurement) => measurement.id !== id),
+      areas,
+      annotations
+    );
+  }
+
+  function deleteArea(id: string) {
+    updateAll(
+      points,
+      measurements,
+      areas.filter((area) => area.id !== id),
+      annotations
+    );
+  }
+
+  function deleteAnnotation(id: string) {
+    updateAll(
+      points,
+      measurements,
+      areas,
+      annotations.filter((annotation) => annotation.id !== id)
+    );
+  }
+
+
+  function updateAnnotation(
+  id: string,
+  patch: Partial<Pick<MapAnnotation, "text" | "fontSize" | "rotation">>)
+  {
+    updateAll(
+      points,
+      measurements,
+      areas,
+      annotations.map((annotation) =>
+      annotation.id === id ? { ...annotation, ...patch } : annotation
+      )
+    );
+  }
+
+  function clearCurrent() {
+    if (!window.confirm("Punkte, Messungen, Flächen und Kommentare dieses Entwurfs löschen?")) {
+      return;
+    }
+    updateAll([], [], [], [], [], []);
+  }
 
   async function saveAssignment() {
-    if (!projectId) return alert("Kein Projekt gewählt.");
-    if (!selectedLV) return alert("Bitte LV-Position wählen.");
-    if (!points.length) return alert("Keine Punkte vorhanden.");
+    if (!serverProjectId) {
+      setErr("Kein Projekt gewählt.");
+      return;
+    }
+
+    const currentLV = resolveCurrentLV();
+    if (!currentLV) {
+      setErr("Bitte LV-Position wählen.");
+      return;
+    }
+
+    selectedLVRef.current = currentLV;
+    if (!selectedLV || selectedLV.id !== currentLV.id) {
+      setSelectedLV(currentLV);
+    }
+
+    if (!points.length) {
+      setErr("Keine Punkte vorhanden.");
+      return;
+    }
 
     setBusy(true);
     setErr(null);
 
-    try {
-      const payload: Assignment = {
-        id: crypto.randomUUID(),
-        projectId,
-        lvPosId: selectedLV.id,
-        points: clampPts(points),
-        createdAt: Date.now(),
-      };
+    const localItem: Assignment = {
+      id: crypto.randomUUID(),
+      projectId: serverProjectId,
+      lvPosId: currentLV.id,
+      lvPos: {
+        position: currentLV.position,
+        kurztext: currentLV.kurztext,
+        langtext: currentLV.langtext
+      },
+      points: clampPts(points),
+      measurements,
+      areas,
+      annotations,
+      createdAt: Date.now()
+    };
 
-      const res = await api<{ ok: boolean; item: Assignment }>("/api/gps/assign", {
+    try {
+      const response = await api<any>("/api/gps/assign", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(localItem)
       });
 
-      const item = res.item?.lvPos
-        ? res.item
-        : {
-            ...res.item,
-            lvPos: {
-              position: selectedLV.position,
-              kurztext: selectedLV.kurztext,
-              langtext: selectedLV.langtext ?? null,
-            },
-          };
-
-      setAssignments((prev) => [item, ...prev]);
+      const saved = response?.item || response?.data?.item || localItem;
+      setAssignments((previous) => [saved, ...previous]);
       clearDraft();
-      alert("Gespeichert!");
-    } catch (e: any) {
-      setErr(String(e?.message || e));
-      alert("Fehler beim Speichern.");
+      setErr("Zuweisung am Server gespeichert.");
+    } catch (error: any) {
+      setErr(`Server-Speicherung fehlgeschlagen: ${String(error?.message || error)}`);
     } finally {
       setBusy(false);
     }
   }
 
   async function deleteAssignment(id: string) {
-    if (!projectId) return;
-    if (!window.confirm("Wirklich löschen?")) return;
-
-    setBusy(true);
-    setErr(null);
+    if (!window.confirm("Zuweisung wirklich löschen?")) return;
 
     try {
-      await api<{ ok: boolean }>(
-        `/api/gps/delete?id=${encodeURIComponent(id)}&projectId=${encodeURIComponent(projectId)}`,
+      await api(
+        `/api/gps/delete?id=${encodeURIComponent(
+          id
+        )}&projectId=${encodeURIComponent(serverProjectId)}`,
         { method: "DELETE" }
       );
-      setAssignments((prev) => prev.filter((a) => a.id !== id));
-    } catch (e: any) {
-      setErr(String(e?.message || e));
-      alert("Fehler beim Löschen.");
+    } catch {
+
+
+      // local removal still useful
+    }setAssignments((previous) => previous.filter((item) => item.id !== id));
+  }
+
+  function loadAssignmentIntoCurrent(assignment: Assignment) {
+    const nextPoints = clampPts(assignment.points || []);
+    updateAll(
+      nextPoints,
+      assignment.measurements || [],
+      assignment.areas || [],
+      assignment.annotations || [],
+      [],
+      [],
+      true
+    );
+
+    const found = lvList.find((position) => position.id === assignment.lvPosId);
+    if (found) {
+      selectedLVRef.current = found;
+      setSelectedLV(found);
+      setLvSearch(`${found.position} ${found.kurztext}`.trim());
+    }
+  }
+
+  /* ===================== IMPORT ===================== */
+
+  async function importCSV(file: File) {
+    setErr(null);
+    const text = await file.text();
+
+    // Prima senza intestazione: i file di rilievo hanno righe del tipo
+    // Punktname,Easting,Northing,Höhe,Code
+    // esempio: 1158,798...,528...,572...,ak-ls
+    let result = parseCsvToPointsAuto(
+      parseCsvText(text, false) as Array<Record<string, unknown> | string[]>,
+      csvCrs
+    );
+
+    // Solo fallback per CSV realmente dotati di intestazione.
+    if (!result.pts.length) {
+      result = parseCsvToPointsAuto(
+        parseCsvText(text, true) as Array<Record<string, unknown> | string[]>,
+        csvCrs
+      );
+    }
+
+    if (!result.pts.length) {
+      setErr(result.debug);
+      return;
+    }
+
+    const nextPoints = clampPts(result.pts);
+    setCsvCrs(result.usedCrs);
+    updateAll(
+      nextPoints,
+      [],
+      [],
+      [],
+      [],
+      [],
+      true
+    );
+
+    saveDraft({
+      points: nextPoints,
+      measurements: [],
+      areas: [],
+      annotations: [],
+      csvCrs: result.usedCrs
+    });
+    setErr(result.debug);
+  }
+
+  async function importXML(file: File) {
+    const xml = new DOMParser().parseFromString(
+      await file.text(),
+      "application/xml"
+    );
+    const featureCollection = file.name.toLowerCase().endsWith(".gpx") ?
+    gpx(xml) :
+    kml(xml);
+
+    const imported: GpsPoint[] = [];
+
+    (featureCollection.features || []).forEach((feature: any) => {
+      const properties = feature.properties || {};
+      const name = String(properties.name || properties.title || "").trim();
+      const code = String(
+        properties.code || properties.id || properties.number || ""
+      ).trim();
+
+      if (feature.geometry?.type === "LineString") {
+        feature.geometry.coordinates.forEach((coordinate: any) => {
+          imported.push({
+            lng: coordinate[0],
+            lat: coordinate[1],
+            name: name || undefined,
+            code: code || undefined
+          });
+        });
+      } else if (feature.geometry?.type === "Point") {
+        imported.push({
+          lng: feature.geometry.coordinates[0],
+          lat: feature.geometry.coordinates[1],
+          name: name || undefined,
+          code: code || undefined
+        });
+      }
+    });
+
+    updateAll(clampPts([...pointsRef.current, ...imported]), undefined, undefined, undefined, undefined, undefined, true);
+  }
+
+  async function importGeoJSON(file: File) {
+    const geoJson = JSON.parse(await file.text());
+    const imported: GpsPoint[] = [];
+
+    (geoJson.features || []).forEach((feature: any) => {
+      const properties = feature.properties || {};
+      const name = String(properties.name || properties.title || "").trim();
+      const code = String(
+        properties.code || properties.id || properties.number || ""
+      ).trim();
+
+      if (feature.geometry?.type === "LineString") {
+        feature.geometry.coordinates.forEach((coordinate: any) => {
+          imported.push({
+            lng: coordinate[0],
+            lat: coordinate[1],
+            name: name || undefined,
+            code: code || undefined
+          });
+        });
+      } else if (feature.geometry?.type === "Point") {
+        imported.push({
+          lng: feature.geometry.coordinates[0],
+          lat: feature.geometry.coordinates[1],
+          name: name || undefined,
+          code: code || undefined
+        });
+      }
+    });
+
+    updateAll(clampPts([...pointsRef.current, ...imported]), undefined, undefined, undefined, undefined, undefined, true);
+  }
+
+  async function importDXF(file: File) {
+    setBusy(true);
+    setErr("DXF wird analysiert...");
+
+    let worker: Worker | null = null;
+
+    try {
+      if (file.size > 30 * 1024 * 1024) {
+        throw new Error("DXF ist größer als 30 MB.");
+      }
+
+      const source = await file.text();
+
+      const dxf = await new Promise<any>((resolve, reject) => {
+        worker = new Worker(
+          new URL("../../workers/dxfParser.worker.ts", import.meta.url),
+          { type: "module" }
+        );
+
+        const timeout = window.setTimeout(() => {
+          (worker as Worker | null)?.terminate();
+          reject(new Error("DXF-Analyse dauerte länger als 60 Sekunden."));
+        }, 60_000);
+
+        worker.onmessage = (event) => {
+          window.clearTimeout(timeout);
+
+          if (event.data?.ok) {
+            resolve(event.data.dxf);
+          } else {
+            reject(
+              new Error(
+                event.data?.error || "DXF konnte nicht gelesen werden."
+              )
+            );
+          }
+        };
+
+        worker.onerror = () => {
+          window.clearTimeout(timeout);
+          reject(new Error("DXF-Worker ist fehlgeschlagen."));
+        };
+
+        worker.postMessage({ source });
+      });
+
+      const entities = Array.isArray(dxf?.entities) ?
+      dxf.entities.slice(0, 5000) :
+      [];
+
+      const importedPoints: GpsPoint[] = [];
+      const importedMeasurements: any[] = [];
+      const importedAreas: any[] = [];
+      const importedAnnotations: any[] = [];
+
+      const coordinateIndex = new Map<string, number>();
+
+      const yieldToBrowser = () =>
+      new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() => resolve())
+      );
+
+      const convertPoint = (
+      xValue: unknown,
+      yValue: unknown,
+      zValue: unknown = 0,
+      name?: string,
+      code?: string)
+      : GpsPoint | null => {
+        const x = Number(xValue);
+        const y = Number(yValue);
+        const z = Number(zValue);
+
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+        let lng = x;
+        let lat = y;
+
+        if (csvCrs !== "EPSG:4326") {
+          const converted = proj4(csvCrs, "EPSG:4326", [x, y]) as [
+            number,
+            number];
+
+
+          lng = Number(converted[0]);
+          lat = Number(converted[1]);
+        }
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        return {
+          lat,
+          lng,
+          height: Number.isFinite(z) ? z : undefined,
+          name: name || undefined,
+          code: code || undefined
+        };
+      };
+
+      const addPoint = (
+      xValue: unknown,
+      yValue: unknown,
+      zValue: unknown = 0,
+      name?: string,
+      code?: string)
+      : number | null => {
+        if (importedPoints.length >= 10000) return null;
+
+        const x = Number(xValue);
+        const y = Number(yValue);
+        const z = Number(zValue) || 0;
+
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+        const key = `${x.toFixed(4)}|${y.toFixed(4)}|${z.toFixed(3)}`;
+        const existing = coordinateIndex.get(key);
+
+        if (existing !== undefined) return existing;
+
+        const point = convertPoint(x, y, z, name, code);
+        if (!point) return null;
+
+        const index = importedPoints.length;
+        importedPoints.push(point);
+        coordinateIndex.set(key, index);
+
+        return index;
+      };
+
+      for (let entityIndex = 0; entityIndex < entities.length; entityIndex += 1) {
+        if (entityIndex % 100 === 0) {
+          setErr(`DXF wird importiert... ${entityIndex}/${entities.length}`);
+          await yieldToBrowser();
+        }
+
+        const entity = entities[entityIndex];
+        const type = String(entity?.type || "").toUpperCase();
+        const layer = String(entity?.layer || "DXF").trim() || "DXF";
+
+        const allowedGeometryTypes = new Set([
+        "LINE",
+        "POLYLINE",
+        "LWPOLYLINE"]
+        );
+
+        if (!allowedGeometryTypes.has(type)) {
+          continue;
+        }
+
+        // Beschriftungen, Bemaßungen und Führungslinien ausblenden.
+        const ignoredLayer =
+        /beschrift|text|bemass|bemaß|dimension|leader|fuehrung|führung|hinweis|symbol/i.test(
+          layer
+        );
+
+        if (ignoredLayer) {
+          continue;
+        }
+
+        if (type === "POINT") {
+          const position = entity.position || entity.center || entity;
+
+          addPoint(
+            position?.x,
+            position?.y,
+            position?.z,
+            `DXF Punkt ${importedPoints.length + 1}`,
+            layer
+          );
+
+          continue;
+        }
+
+        if (type === "CIRCLE") {
+          if (layer === "RLC_PUNKTE") continue;
+
+          const center = entity.center || entity.position;
+
+          if (center) {
+            addPoint(
+              center.x,
+              center.y,
+              center.z,
+              `Kreis ${importedPoints.length + 1}`,
+              layer
+            );
+          }
+
+          continue;
+        }if (type === "TEXT" || type === "MTEXT") {
+          // DXF-Texte werden nicht als permanente Karten-Kommentare importiert.
+          continue;
+        }
+
+        if (
+        type === "LINE" ||
+        type === "POLYLINE" ||
+        type === "LWPOLYLINE")
+        {
+          if (layer === "RLC_PUNKTE") continue;
+
+          const vertices = Array.isArray(entity.vertices) ?
+          entity.vertices.slice(0, 500) :
+          entity.startPoint && entity.endPoint ?
+          [entity.startPoint, entity.endPoint] :
+          [];
+
+          const indexes = vertices.
+          map((vertex: any) =>
+          addPoint(vertex.x, vertex.y, vertex.z, undefined, `DXF:${layer}`)
+          ).
+          filter((index: number | null): index is number => index !== null);
+
+          if (indexes.length < 2) continue;
+
+          const closed =
+          entity.shape === true ||
+          entity.closed === true ||
+          (Number(entity.flags) & 1) === 1;
+
+          if (closed && indexes.length >= 3) {
+            importedAreas.push({
+              id: crypto.randomUUID(),
+              name: `${layer} Fläche ${importedAreas.length + 1}`,
+              pointIndexes: indexes,
+              comment: `DXF-Layer: ${layer}`
+            });
+          } else {
+            importedMeasurements.push({
+              id: crypto.randomUUID(),
+              name: `${layer} Strecke ${importedMeasurements.length + 1}`,
+              pointIndexes: indexes,
+              comment: `DXF-Layer: ${layer}`
+            });
+          }
+        }
+      }
+
+      const baseIndex = pointsRef.current.length;
+      const nextPoints = clampPts([
+      ...pointsRef.current,
+      ...importedPoints]
+      );
+
+      const shiftIndexes = (indexes: number[]) =>
+      indexes.
+      map((index) => index + baseIndex).
+      filter((index) => index < nextPoints.length);
+
+      const nextMeasurements = [
+      ...measurementsRef.current,
+      ...importedMeasurements.map((measurement) => ({
+        ...measurement,
+        pointIndexes: shiftIndexes(measurement.pointIndexes)
+      }))].
+      filter((measurement) => measurement.pointIndexes.length >= 2);
+
+      const nextAreas = [
+      ...areasRef.current,
+      ...importedAreas.map((area) => ({
+        ...area,
+        pointIndexes: shiftIndexes(area.pointIndexes)
+      }))].
+      filter((area) => area.pointIndexes.length >= 3);
+
+      const nextAnnotations = [
+      ...annotationsRef.current,
+      ...importedAnnotations];
+
+
+      updateAll(
+        nextPoints,
+        nextMeasurements,
+        nextAreas,
+        nextAnnotations,
+        [],
+        [],
+        false
+      );
+
+      const fitPoints = importedPoints.filter(
+        (point) =>
+        Number.isFinite(point.lat) &&
+        Number.isFinite(point.lng) &&
+        point.lat >= 35 &&
+        point.lat <= 65 &&
+        point.lng >= -10 &&
+        point.lng <= 30
+      );
+
+      if (fitPoints.length && mapRef.current) {
+        const sortedLat = fitPoints.map((point) => point.lat).sort((a, b) => a - b);
+        const sortedLng = fitPoints.map((point) => point.lng).sort((a, b) => a - b);
+
+        const medianLat = sortedLat[Math.floor(sortedLat.length / 2)];
+        const medianLng = sortedLng[Math.floor(sortedLng.length / 2)];
+
+        const clustered = fitPoints.filter(
+          (point) =>
+          haversineMeters(
+            { lat: medianLat, lng: medianLng },
+            point
+          ) <= 5000
+        );
+
+        const visiblePoints = clustered.length >= 2 ? clustered : fitPoints;
+
+        mapRef.current.fitBounds(
+          L.latLngBounds(
+            visiblePoints.map((point) => [point.lat, point.lng]) as [number, number][]
+          ),
+          {
+            padding: [40, 40],
+            maxZoom: 19
+          }
+        );
+      }
+
+      saveDraft({
+        points: nextPoints,
+        measurements: nextMeasurements,
+        areas: nextAreas,
+        annotations: nextAnnotations,
+        csvCrs
+      });
+
+      setErr(
+        `DXF importiert: ${importedPoints.length} Punkte, ` +
+        `${importedMeasurements.length} Strecken, ` +
+        `${importedAreas.length} Flächen, ` +
+        `${importedAnnotations.length} Texte.`
+      );
+    } catch (error: any) {
+      console.error("DXF import failed:", error);
+      setErr(`DXF-Import fehlgeschlagen: ${String(error?.message || error)}`);
+    } finally {
+      (worker as Worker | null)?.terminate();
+      setBusy(false);
+    }
+  }
+  function onFileImport(file: File) {
+    const extension = file.name.toLowerCase().split(".").pop();
+    if (extension === "csv" || extension === "txt") void importCSV(file);else
+    if (extension === "gpx" || extension === "kml") void importXML(file);else
+    if (extension === "geojson" || extension === "json") void importGeoJSON(file);else
+    if (extension === "dxf") void importDXF(file);else
+    setErr("Format nicht unterstützt.");
+  }
+
+  /* ===================== DXF ===================== */
+
+  function dxfNumber(value: unknown): string {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ?
+    parsed.toFixed(4).replace(/\.?0+$/, "") :
+    "0";
+  }
+
+  function dxfText(value: unknown): string {
+    return String(value ?? "").
+    replace(/[\r\n]+/g, " ").
+    replace(/[\u0000-\u001f]/g, "").
+    replace(/[^\x20-\x7e]/g, (character) => {
+      const code = character.charCodeAt(0).toString(16).toUpperCase();
+      return `\\U+${code.padStart(4, "0")}`;
+    }).
+    trim();
+  }
+
+  function exportDxf() {
+    const currentLV = resolveCurrentLV();
+
+    if (!currentLV) {
+      setErr("Bitte LV-Position wählen.");
+      return;
+    }
+
+    if (
+    !points.length &&
+    !measurements.length &&
+    !areas.length &&
+    !annotations.length)
+    {
+      setErr("Keine Punkte oder Geometrien für den DXF-Export vorhanden.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setErr(null);
+
+      const rows: string[] = [];
+
+      const push = (...values: Array<string | number>) => {
+        values.forEach((value) => rows.push(String(value)));
+      };
+
+      const projectPoint = (point: any) => {
+        const projected = projectedPointValues(point, csvCrs);
+
+        return {
+          x: Number(projected.easting) || 0,
+          y: Number(projected.northing) || 0,
+          z: Number(point?.height) || 0
+        };
+      };
+
+      const validPoints = points.
+      map((point, index) => ({
+        point,
+        index,
+        projected: projectPoint(point)
+      })).
+      filter(
+        (entry) =>
+        Number.isFinite(entry.projected.x) &&
+        Number.isFinite(entry.projected.y)
+      );
+
+      const xValues = validPoints.map((entry) => entry.projected.x);
+      const yValues = validPoints.map((entry) => entry.projected.y);
+      const zValues = validPoints.map((entry) => entry.projected.z);
+
+      const minX = xValues.length ? Math.min(...xValues) : 0;
+      const minY = yValues.length ? Math.min(...yValues) : 0;
+      const minZ = zValues.length ? Math.min(...zValues) : 0;
+      const maxX = xValues.length ? Math.max(...xValues) : 0;
+      const maxY = yValues.length ? Math.max(...yValues) : 0;
+      const maxZ = zValues.length ? Math.max(...zValues) : 0;
+
+      // HEADER
+      push(
+        0, "SECTION",
+        2, "HEADER",
+        9, "$ACADVER",
+        1, "AC1009",
+        9, "$EXTMIN",
+        10, dxfNumber(minX),
+        20, dxfNumber(minY),
+        30, dxfNumber(minZ),
+        9, "$EXTMAX",
+        10, dxfNumber(maxX),
+        20, dxfNumber(maxY),
+        30, dxfNumber(maxZ),
+        0, "ENDSEC"
+      );
+
+      // LAYERS
+      push(
+        0, "SECTION",
+        2, "TABLES",
+        0, "TABLE",
+        2, "LAYER",
+        70, 4
+      );
+
+      const layers = [
+      ["RLC_PUNKTE", 5],
+      ["RLC_STRECKEN", 1],
+      ["RLC_FLAECHEN", 3],
+      ["RLC_TEXTE", 7]] as
+      const;
+
+      layers.forEach(([name, color]) => {
+        push(
+          0, "LAYER",
+          2, name,
+          70, 0,
+          62, color,
+          6, "CONTINUOUS"
+        );
+      });
+
+      push(
+        0, "ENDTAB",
+        0, "ENDSEC",
+        0, "SECTION",
+        2, "ENTITIES"
+      );
+
+      // POINTS AND LABELS
+      validPoints.forEach(({ point, index, projected }) => {
+        const pointName = String(point.name || `Punkt ${index + 1}`);
+        const pointCode = String(point.code || "").trim();
+        const label = pointCode ?
+        `${pointName} ${pointCode}` :
+        pointName;
+
+        const markerRadius = 0.18;
+        const crossSize = 0.24;
+
+        // Originaler Vermessungspunkt
+        push(
+          0, "POINT",
+          8, "RLC_PUNKTE",
+          10, dxfNumber(projected.x),
+          20, dxfNumber(projected.y),
+          30, dxfNumber(projected.z)
+        );
+
+        // Sichtbarer Kreis
+        push(
+          0, "CIRCLE",
+          8, "RLC_PUNKTE",
+          10, dxfNumber(projected.x),
+          20, dxfNumber(projected.y),
+          30, dxfNumber(projected.z),
+          40, dxfNumber(markerRadius)
+        );
+
+        // Horizontale Kreuzlinie
+        push(
+          0, "LINE",
+          8, "RLC_PUNKTE",
+          10, dxfNumber(projected.x - crossSize),
+          20, dxfNumber(projected.y),
+          30, dxfNumber(projected.z),
+          11, dxfNumber(projected.x + crossSize),
+          21, dxfNumber(projected.y),
+          31, dxfNumber(projected.z)
+        );
+
+        // Vertikale Kreuzlinie
+        push(
+          0, "LINE",
+          8, "RLC_PUNKTE",
+          10, dxfNumber(projected.x),
+          20, dxfNumber(projected.y - crossSize),
+          30, dxfNumber(projected.z),
+          11, dxfNumber(projected.x),
+          21, dxfNumber(projected.y + crossSize),
+          31, dxfNumber(projected.z)
+        );
+
+        push(
+          0, "TEXT",
+          8, "RLC_TEXTE",
+          10, dxfNumber(projected.x + 0.15),
+          20, dxfNumber(projected.y + 0.15),
+          30, dxfNumber(projected.z),
+          40, "0.25",
+          1, dxfText(label),
+          7, "STANDARD"
+        );
+      });
+
+      const addPolyline = (
+      selectedPoints: any[],
+      layer: string,
+      closed: boolean) =>
+      {
+        if (selectedPoints.length < 2) return;
+
+        push(
+          0, "POLYLINE",
+          8, layer,
+          66, 1,
+          70, closed ? 9 : 8
+        );
+
+        selectedPoints.forEach((point) => {
+          const projected = projectPoint(point);
+
+          push(
+            0, "VERTEX",
+            8, layer,
+            10, dxfNumber(projected.x),
+            20, dxfNumber(projected.y),
+            30, dxfNumber(projected.z),
+            70, 32
+          );
+        });
+
+        push(
+          0, "SEQEND",
+          8, layer
+        );
+      };
+
+      // DISTANCES
+      measurements.forEach((measurement) => {
+        const selectedPoints = measurement.pointIndexes.
+        map((index) => points[index]).
+        filter(Boolean);
+
+        addPolyline(selectedPoints, "RLC_STRECKEN", false);
+
+        if (selectedPoints.length) {
+          const middlePoint =
+          selectedPoints[Math.floor(selectedPoints.length / 2)];
+          const projected = projectPoint(middlePoint);
+
+          push(
+            0, "TEXT",
+            8, "RLC_TEXTE",
+            10, dxfNumber(projected.x),
+            20, dxfNumber(projected.y),
+            30, dxfNumber(projected.z),
+            40, "0.30",
+            1, dxfText(
+              `${measurement.name || "Strecke"} - ${formatDistance(
+                polylineLengthMeters(selectedPoints)
+              )}`
+            ),
+            7, "STANDARD"
+          );
+        }
+      });
+
+      // AREAS
+      areas.forEach((area) => {
+        const selectedPoints = area.pointIndexes.
+        map((index) => points[index]).
+        filter(Boolean);
+
+        addPolyline(selectedPoints, "RLC_FLAECHEN", true);
+
+        if (selectedPoints.length) {
+          const coordinates = selectedPoints.map(projectPoint);
+
+          const center = coordinates.reduce(
+            (result, point) => ({
+              x: result.x + point.x / coordinates.length,
+              y: result.y + point.y / coordinates.length,
+              z: result.z + point.z / coordinates.length
+            }),
+            { x: 0, y: 0, z: 0 }
+          );
+
+          push(
+            0, "TEXT",
+            8, "RLC_TEXTE",
+            10, dxfNumber(center.x),
+            20, dxfNumber(center.y),
+            30, dxfNumber(center.z),
+            40, "0.30",
+            1, dxfText(
+              `${area.name || "Fläche"} - ${formatArea(
+                polygonAreaMeters2(selectedPoints)
+              )}`
+            ),
+            7, "STANDARD"
+          );
+        }
+      });
+
+      // COMMENTS
+      annotations.forEach((annotation) => {
+        const projected = projectPoint(annotation);
+        const text = String(annotation.text || "").trim();
+
+        if (!text) return;
+
+        push(
+          0, "TEXT",
+          8, "RLC_TEXTE",
+          10, dxfNumber(projected.x),
+          20, dxfNumber(projected.y),
+          30, dxfNumber(projected.z),
+          40, "0.30",
+          1, dxfText(text),
+          7, "STANDARD"
+        );
+      });
+
+      push(
+        0, "ENDSEC",
+        0, "EOF"
+      );
+
+      const content = `${rows.join("\r\n")}\r\n`;
+      const blob = new Blob([content], {
+        type: "application/dxf"
+      });
+
+      const filename =
+      `gps_aufmass_${String(currentLV.position || "lv").
+      replace(/[^a-zA-Z0-9_-]+/g, "_")}_${tsForFilename()}.dxf`;
+
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      setErr(`DXF lokal gespeichert: ${filename}`);
+    } catch (error: any) {
+      console.error("DXF export failed:", error);
+      setErr(`DXF-Export fehlgeschlagen: ${String(error?.message || error)}`);
     } finally {
       setBusy(false);
     }
   }
+  /* ===================== PDF ===================== */
 
-  function clearCurrent() {
-    setPoints([]);
-    clearLayers();
-    saveDraft([]);
-  }
-
-  /* ------------------ IMPORTS ------------------ */
-  async function importCSV(file: File, preferredCrs: string) {
-    setErr(null);
-
-    const text = await file.text();
-
-    const withHeader = parseCsvText(text, true);
-    const out = parseCsvToPointsAuto(
-      withHeader as Array<Record<string, unknown> | string[]>,
-      preferredCrs
-    );
-
-    if ((out.pts || []).length > 0) {
-      const clean = clampPts(out.pts);
-      setPoints((prev) => {
-        const next = [...prev, ...clean];
-        redrawCurrent(next);
-        saveDraft(next, selectedLV?.id ?? null, csvCrs);
-        return next;
-      });
-      setErr(out.debug);
-      return;
-    }
-
-    const noHeader = parseCsvText(text, false);
-    const out2 = parseCsvToPointsAuto(
-      noHeader as Array<Record<string, unknown> | string[]>,
-      preferredCrs
-    );
-    const clean2 = clampPts(out2.pts);
-
-    setPoints((prev) => {
-      const next = [...prev, ...clean2];
-      redrawCurrent(next);
-      saveDraft(next, selectedLV?.id ?? null, csvCrs);
-      return next;
-    });
-
-    setErr(out2.debug);
-  }
-
-  async function importXML(file: File) {
-    setErr(null);
-    const text = await file.text();
-    const xml = new DOMParser().parseFromString(text, "application/xml");
-    const fc = file.name.toLowerCase().endsWith(".gpx") ? gpx(xml) : kml(xml);
-
-    const pts: GpsPoint[] = [];
-    (fc.features || []).forEach((f: any) => {
-      if (f.geometry?.type === "LineString") {
-        f.geometry.coordinates.forEach((c: any) => pts.push({ lng: c[0], lat: c[1] }));
-      } else if (f.geometry?.type === "Point") {
-        pts.push({ lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] });
-      }
-    });
-
-    const clean = clampPts(pts);
-    setPoints((prev) => {
-      const next = [...prev, ...clean];
-      redrawCurrent(next);
-      saveDraft(next, selectedLV?.id ?? null, csvCrs);
-      return next;
-    });
-  }
-
-  async function importGeoJSON(file: File) {
-    setErr(null);
-    const gj = JSON.parse(await file.text());
-    const pts: GpsPoint[] = [];
-
-    (gj.features || []).forEach((f: any) => {
-      if (f.geometry?.type === "LineString") {
-        f.geometry.coordinates.forEach((c: any) => pts.push({ lng: c[0], lat: c[1] }));
-      } else if (f.geometry?.type === "Point") {
-        pts.push({ lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] });
-      }
-    });
-
-    const clean = clampPts(pts);
-    setPoints((prev) => {
-      const next = [...prev, ...clean];
-      redrawCurrent(next);
-      saveDraft(next, selectedLV?.id ?? null, csvCrs);
-      return next;
-    });
-  }
-
-  function onFileImport(file: File) {
-    const ext = file.name.toLowerCase().split(".").pop();
-    if (ext === "csv") return void importCSV(file, csvCrs);
-    if (ext === "gpx" || ext === "kml") return void importXML(file);
-    if (ext === "geojson" || ext === "json") return void importGeoJSON(file);
-    alert("Format nicht unterstützt");
-  }
-
-  /* ------------------ MAP SNAPSHOT ------------------ */
-  async function captureMapSnapshotPngDataUrl(): Promise<string | null> {
-    const el = document.getElementById("gps-map");
-    const m = mapRef.current;
-    if (!el || !m) return null;
+  async function captureMapSnapshotPngDataUrl() {
+    const element = document.getElementById("gps-map");
+    const map = mapRef.current;
+    if (!element || !map) return null;
 
     try {
-      m.invalidateSize();
-      await new Promise((r) => setTimeout(r, 300));
+      map.invalidateSize();
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
 
-      const canvas = await html2canvas(el, {
+      const canvas = await html2canvas(element, {
         useCORS: true,
         allowTaint: false,
         backgroundColor: "#ffffff",
-        scale: 2,
-        logging: false,
+        scale: 1.6,
+        logging: false
       });
 
       return canvas.toDataURL("image/png");
-    } catch (e) {
-      console.warn("Map snapshot failed:", e);
+    } catch (error) {
+      console.warn("Map snapshot failed:", error);
       return null;
     }
   }
 
-  /* ------------------ PDF EXPORT ------------------ */
-  function buildPdfDoc(opts: {
-    projectTitle: string;
-    projectId: string;
-    projectDbId: string;
-    lv?: { position?: string; kurztext?: string; langtext?: string | null; lvPosId?: string };
-    pts: GpsPoint[];
-    createdAt?: number;
-    mapPngDataUrl?: string | null;
-  }) {
+  function buildPdfDoc(
+  mapImage: string | null,
+  serverLogoDataUrl?: string | null)
+  {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const margin = 14;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const company = readCompanyProfile(context, project);
 
-    const marginX = 14;
+    if (serverLogoDataUrl?.startsWith("data:image/")) {
+      company.logoDataUrl = serverLogoDataUrl;
+    }
+
+    const pdfLV = resolveCurrentLV();
     let y = 14;
+
+    // Firmenkopf: bewusst rein synchron, damit der PDF-Export stabil bleibt.
+    if (company.logoDataUrl) {
+      try {
+        const props = (doc as any).getImageProperties(company.logoDataUrl);
+        const logoWidth = 32;
+        const logoHeight = Math.min(18, props.height * logoWidth / props.width);
+        doc.addImage(
+          company.logoDataUrl,
+          props.fileType || "PNG",
+          margin,
+          y,
+          logoWidth,
+          logoHeight,
+          undefined,
+          "FAST"
+        );
+      } catch {
+
+
+        // Logo überspringen, PDF trotzdem erstellen.
+      }}
+    const companyX = company.logoDataUrl ? margin + 38 : margin;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(company.name || "Ausführende Firma", companyX, y + 2);
+
+    const companyLines = [
+    [company.street, [company.postalCode, company.city].filter(Boolean).join(" ")].
+    filter(Boolean).
+    join(" · "),
+    [company.phone ? `Tel. ${company.phone}` : "", company.email].
+    filter(Boolean).
+    join(" · "),
+    company.website || ""].
+    filter(Boolean);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    companyLines.slice(0, 3).forEach((line, index) => {
+      doc.text(String(line), companyX, y + 7 + index * 4);
+    });
+
+    doc.setDrawColor(203, 213, 225);
+    doc.line(margin, y + 22, pageWidth - margin, y + 22);
+
+    y += 31;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("GPS-basierte Positionszuweisung", marginX, y);
+    doc.text("GPS-Messprotokoll", margin, y);
     y += 8;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-
-    const created = opts.createdAt ? new Date(opts.createdAt) : new Date();
-    const lenM = polylineLengthMeters(opts.pts);
-    const lenTxt = lenM >= 1000 ? `${(lenM / 1000).toFixed(3)} km` : `${lenM.toFixed(1)} m`;
-
-    const metaRows = [
-      ["Projekt", opts.projectTitle || "—"],
-      ["Projekt-Code/ID (FS)", opts.projectId || "—"],
-      ["Projekt-ID (DB)", opts.projectDbId || "—"],
-      ["LV-Position", opts.lv?.position || "—"],
-      ["Kurztext", opts.lv?.kurztext || "—"],
-      ["Langtext", opts.lv?.langtext || "—"],
-      ["Punkte", String(opts.pts?.length || 0)],
-      ["Linienlänge", lenTxt],
-      ["Erstellt am", created.toLocaleString()],
-    ];
 
     autoTable(doc, {
       startY: y,
       head: [["Feld", "Wert"]],
-      body: metaRows,
+      body: [
+      ["Projekt", project?.name || project?.title || projectCode || "—"],
+      ["Projekt-Code", projectCode || "—"],
+      [
+      "LV-Position",
+      pdfLV ?
+      `${pdfLV.position} – ${pdfLV.kurztext}` :
+      "—"],
+
+      ["Lagebezug", crsDisplayName(csvCrs)],
+      ["EPSG-Code", csvCrs || "?"],
+      ["Höhensystem", "DHHN2016"],
+      ["Geoidmodell", "GCG2016"],
+      ["Messungen", String(measurements.length)],
+      ["Gesamtlänge", formatDistance(totalDistance)],
+      ["Flächen", String(areas.length)],
+      ["Gesamtfläche", formatArea(totalArea)],
+      ["Kommentare", String(annotations.length)],
+      ["Erstellt", new Date().toLocaleString("de-DE")]],
+
       styles: { fontSize: 9, cellPadding: 2 },
-      headStyles: { fillColor: [240, 240, 240] },
+      headStyles: { fillColor: [235, 239, 245], textColor: [15, 23, 42] },
       columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 130 } },
-      margin: { left: marginX, right: marginX },
+      margin: { left: margin, right: margin }
     });
 
-    // @ts-ignore
-    y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 8 : y + 40;
+    y = (doc as any).lastAutoTable?.finalY + 7 || y + 40;
 
-    if (opts.mapPngDataUrl) {
+    if (mapImage) {
       try {
-        // @ts-ignore
-        const imgProps = (doc as any).getImageProperties(opts.mapPngDataUrl);
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+        const props = (doc as any).getImageProperties(mapImage);
+        const width = pageWidth - margin * 2;
+        const height = Math.min(110, props.height * width / props.width);
 
-        const maxW = pageWidth - marginX * 2;
-        const imgW = maxW;
-        const imgH = (imgProps.height * imgW) / imgProps.width;
-
-        if (y + imgH + 14 > pageHeight) {
+        if (y + height > 270) {
           doc.addPage();
           y = 14;
         }
 
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        doc.text("Kartenausschnitt (Snapshot)", marginX, y);
+        doc.setFontSize(10);
+        doc.text("Kartenausschnitt", margin, y);
         y += 5;
+        doc.addImage(mapImage, "PNG", margin, y, width, height, undefined, "FAST");
+        y += height + 7;
+      } catch {
 
-        doc.addImage(opts.mapPngDataUrl, "PNG", marginX, y, imgW, imgH, undefined, "FAST");
-        y += imgH + 8;
-      } catch (e) {
-        console.warn("PDF addImage failed:", e);
-      }
+
+        // continue without map
+      }}
+    if (areas.length) {
+      autoTable(doc, {
+        startY: y,
+        head: [["Fläche", "Eckpunkte", "Größe", "Kommentar"]],
+        body: areas.map((area) => {
+          const selectedPoints = area.pointIndexes.
+          map((index) => points[index]).
+          filter(Boolean);
+
+          return [
+          area.name,
+          String(selectedPoints.length),
+          formatArea(polygonAreaMeters2(selectedPoints)),
+          area.comment || ""];
+
+        }),
+        styles: { fontSize: 8.5, cellPadding: 1.8 },
+        headStyles: {
+          fillColor: [235, 239, 245],
+          textColor: [15, 23, 42]
+        },
+        margin: { left: margin, right: margin }
+      });
+
+      y = (doc as any).lastAutoTable?.finalY + 7 || y + 25;
     }
 
-    const ptsBody = (opts.pts || []).slice(0, 5000).map((p, idx) => [
-      String(idx + 1),
-      p.lat.toFixed(7),
-      p.lng.toFixed(7),
-      p.ts ? new Date(p.ts).toLocaleString() : "",
-    ]);
+    if (measurements.length) {
+      autoTable(doc, {
+        startY: y,
+        head: [["Messung", "Punkte", "Länge", "Kommentar"]],
+        body: measurements.map((measurement) => {
+          const selectedPoints = measurement.pointIndexes.
+          map((index) => points[index]).
+          filter(Boolean);
 
-    autoTable(doc, {
-      startY: y,
-      head: [["#", "Lat", "Lng", "Zeit"]],
-      body: ptsBody,
-      styles: { fontSize: 8, cellPadding: 1.6 },
-      headStyles: { fillColor: [240, 240, 240] },
-      margin: { left: marginX, right: marginX },
-      didDrawPage: () => {
-        doc.setFontSize(8);
-        doc.text(
-          `RLC Bausoftware – GPSZuweisung   |   Seite ${doc.getNumberOfPages()}`,
-          marginX,
-          290
-        );
-      },
+          return [
+          measurement.name,
+          String(selectedPoints.length),
+          formatDistance(polylineLengthMeters(selectedPoints)),
+          measurement.comment || ""];
+
+        }),
+        styles: { fontSize: 8.5, cellPadding: 1.8 },
+        headStyles: {
+          fillColor: [235, 239, 245],
+          textColor: [15, 23, 42]
+        },
+        margin: { left: margin, right: margin }
+      });
+
+      y = (doc as any).lastAutoTable?.finalY + 7 || y + 25;
+    }
+
+    const commentRows: string[][] = [];
+
+    areas.forEach((area) => {
+      const areaComment = String(area.comment || "").trim();
+      if (!areaComment) return;
+
+      const selectedPoints = area.pointIndexes.
+      map((index) => points[index]).
+      filter(Boolean);
+
+      commentRows.push([
+      areaComment,
+      `Fläche: ${formatArea(polygonAreaMeters2(selectedPoints))}`]
+      );
     });
+
+    measurements.forEach((measurement) => {
+      const measurementComment = String(measurement.comment || "").trim();
+      if (!measurementComment) return;
+
+      const selectedPoints = measurement.pointIndexes.
+      map((index) => points[index]).
+      filter(Boolean);
+
+      commentRows.push([
+      measurementComment,
+      `Länge: ${formatDistance(polylineLengthMeters(selectedPoints))}`]
+      );
+    });
+
+    annotations.forEach((annotation) => {
+      let bestReference = "Kein Geometriebezug";
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      areas.forEach((area) => {
+        const selectedPoints = area.pointIndexes.
+        map((index) => points[index]).
+        filter(Boolean);
+
+        selectedPoints.forEach((point) => {
+          const distance = haversineMeters(annotation, point);
+
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestReference =
+            `Fläche: ${formatArea(polygonAreaMeters2(selectedPoints))}`;
+          }
+        });
+      });
+
+      measurements.forEach((measurement) => {
+        const selectedPoints = measurement.pointIndexes.
+        map((index) => points[index]).
+        filter(Boolean);
+
+        selectedPoints.forEach((point) => {
+          const distance = haversineMeters(annotation, point);
+
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestReference =
+            `Länge: ${formatDistance(polylineLengthMeters(selectedPoints))}`;
+          }
+        });
+      });
+
+      const annotationText = String(annotation.text || "").trim();
+      if (annotationText) {
+        commentRows.push([annotationText, bestReference]);
+      }
+    });
+
+    if (commentRows.length) {
+      autoTable(doc, {
+        startY: y,
+        head: [["Kommentar", "Bezug / Menge"]],
+        body: commentRows,
+        styles: { fontSize: 8.5, cellPadding: 1.8 },
+        headStyles: {
+          fillColor: [235, 239, 245],
+          textColor: [15, 23, 42]
+        },
+        columnStyles: {
+          0: { cellWidth: 105 },
+          1: { cellWidth: 70 }
+        },
+        margin: { left: margin, right: margin }
+      });
+
+      y = (doc as any).lastAutoTable?.finalY + 8 || y + 25;
+    }
+
+    if (points.length) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Punktliste", margin, y);
+      y += 5;
+
+      autoTable(doc, {
+        startY: y,
+        head: [[
+        "Nr.",
+        "Punktname",
+        "Rechtswert",
+        "Hochwert",
+        "Höhe",
+        "Code"]],
+
+        body: points.map((point, index) => {
+          const projected = projectedPointValues(point, csvCrs);
+
+          return [
+          String(index + 1),
+          point.name || `Punkt ${index + 1}`,
+          formatCoordinate(projected.easting, projected.crs),
+          formatCoordinate(projected.northing, projected.crs),
+          formatHeight(point.height),
+          point.code || ""];
+
+        }),
+        styles: {
+          fontSize: 7.4,
+          cellPadding: 1.5,
+          overflow: "linebreak"
+        },
+        headStyles: {
+          fillColor: [235, 239, 245],
+          textColor: [15, 23, 42],
+          fontStyle: "bold"
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: "left" },
+          1: { cellWidth: 30, halign: "left" },
+          2: { cellWidth: 38, halign: "left" },
+          3: { cellWidth: 38, halign: "left" },
+          4: { cellWidth: 24, halign: "left" },
+          5: { cellWidth: 32, halign: "left" }
+        },
+        margin: { left: margin, right: margin },
+        showHead: "everyPage"
+      });
+
+      y = (doc as any).lastAutoTable?.finalY + 7 || y + 30;
+    }
+
+    // Unterschriften
+    if (y > 238) {
+      doc.addPage();
+      y = 24;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("Bestätigung", margin, y);
+    y += 20;
+
+    const signatureWidth = 78;
+    const rightX = pageWidth - margin - signatureWidth;
+
+    doc.setDrawColor(100, 116, 139);
+    doc.line(margin, y, margin + signatureWidth, y);
+    doc.line(rightX, y, rightX + signatureWidth, y);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text("Ort, Datum / Bauleiter", margin, y + 5);
+    doc.text("Ort, Datum / Bauherr / Auftraggeber", rightX, y + 5);
+
+    const pages = doc.getNumberOfPages();
+    for (let page = 1; page <= pages; page += 1) {
+      doc.setPage(page);
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(
+        `${company.name || "Ausführende Firma"} · GPS-Messprotokoll · Seite ${page}/${pages}`,
+        margin,
+        290
+      );
+    }
 
     return doc;
   }
 
-  function openPrintPdf(doc: jsPDF) {
-    const blob = doc.output("blob");
-    const url = URL.createObjectURL(blob);
-    const w = window.open(url, "_blank");
-    if (!w) {
-      alert("Popup blockiert. Bitte Popups erlauben.");
-      return;
-    }
-    setTimeout(() => {
-      try {
-        w.focus();
-      } catch {
-        // ignore
-      }
-    }, 250);
-  }
-
-  async function savePdfToServer(doc: jsPDF, filenameHint: string) {
-    if (!projectId) throw new Error("Kein projectId");
-
+  async function savePdfToServer(doc: jsPDF, filename: string) {
     const dataUrl = normalizePdfDataUrl(doc.output("datauristring"));
-    if (!dataUrl.startsWith("data:application/pdf;base64,")) {
-      throw new Error("PDF DataURL ist ungültig (kein data:application/pdf;base64, ...).");
-    }
-
-    return await api<{ ok: boolean; filename: string; url: string }>(`/api/gps/export-pdf`, {
+    return api<any>("/api/gps/export-pdf", {
       method: "POST",
       body: JSON.stringify({
-        projectId,
-        filenameHint,
-        pdfDataUrl: dataUrl,
-      }),
+        projectId: serverProjectId,
+        filenameHint: filename,
+        pdfDataUrl: dataUrl
+      })
     });
   }
 
-  async function exportCurrentPdf(printAlso = true) {
-    if (!projectId) return alert("Kein Projekt gewählt.");
-    if (!selectedLV) return alert("Bitte LV-Position wählen.");
-    if (!points.length) return alert("Keine Punkte vorhanden.");
+  async function exportPdf() {
+    const currentLV = resolveCurrentLV();
+    if (!currentLV) {
+      setErr("Bitte LV-Position wählen.");
+      return;
+    }
+
+    selectedLVRef.current = currentLV;
+    if (!selectedLV || selectedLV.id !== currentLV.id) {
+      setSelectedLV(currentLV);
+    }
+
+    if (!points.length && !measurements.length && !areas.length && !annotations.length) {
+      setErr("Keine Messung, Fläche oder Kommentar für den PDF-Export vorhanden.");
+      return;
+    }
 
     setBusy(true);
     setErr(null);
+
     try {
-      const pts = clampPts(points);
-      redrawCurrent(pts);
+      const [mapImage, serverLogoDataUrl] = await Promise.all([
+      captureMapSnapshotPngDataUrl(),
+      loadCompanyLogoForPdf()]
+      );
 
-      const mapSnap = await captureMapSnapshotPngDataUrl();
+      const doc = buildPdfDoc(mapImage, serverLogoDataUrl);
+      const filename = `gps_messprotokoll_${currentLV.position}_${tsForFilename()}.pdf`;
 
-      const doc = buildPdfDoc({
-        projectTitle: (project as any)?.name || (project as any)?.title || projectCode || "—",
-        projectId,
-        projectDbId,
-        lv: {
-          position: selectedLV.position,
-          kurztext: selectedLV.kurztext,
-          langtext: selectedLV.langtext || null,
+      saveRlcPdfWithCompanyHeader(doc, filename);
+
+      const result = await savePdfToServer(doc, filename);
+      setErr(`PDF lokal und am Server gespeichert: ${result?.filename || filename}`);
+      await loadServerPdfs();
+    } catch (error: any) {
+      setErr(`PDF-Export fehlgeschlagen: ${String(error?.message || error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function transferToAufmassEditor() {
+    if (!serverProjectId || !selectedLV) {
+      setErr("Projekt und LV-Position müssen gewählt sein.");
+      return;
+    }
+
+    const items: any[] = [];
+
+    measurements.forEach((measurement, index) => {
+      const selectedPoints = measurement.pointIndexes.
+      map((pointIndex) => points[pointIndex]).
+      filter(Boolean);
+      const qty = polylineLengthMeters(selectedPoints);
+      if (qty > 0) {
+        items.push({
+          id: measurement.id,
+          type: "DISTANCE",
+          label: measurement.name || `Messung ${index + 1}`,
+          qty,
+          unit: "m",
+          comment: measurement.comment || ""
+        });
+      }
+    });
+
+    areas.forEach((area, index) => {
+      const selectedPoints = area.pointIndexes.
+      map((pointIndex) => points[pointIndex]).
+      filter(Boolean);
+      const qty = polygonAreaMeters2(selectedPoints);
+      if (qty > 0) {
+        items.push({
+          id: area.id,
+          type: "AREA",
+          label: area.name || `Fläche ${index + 1}`,
+          qty,
+          unit: "m²",
+          comment: area.comment || ""
+        });
+      }
+    });
+
+    if (!items.length) {
+      setErr("Keine gespeicherten Strecken oder Flächen zum Übertragen vorhanden.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const transferId = crypto.randomUUID();
+      await api("/api/gps/aufmass-transfer", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: serverProjectId,
+          transferId,
           lvPosId: selectedLV.id,
-        },
-        pts,
-        createdAt: Date.now(),
-        mapPngDataUrl: mapSnap,
+          lvPosition: selectedLV.position,
+          lvKurztext: selectedLV.kurztext,
+          items,
+          createdAt: Date.now()
+        })
       });
-
-      const hint = `gpszuweisung_${selectedLV.position || selectedLV.id}_${tsForFilename()}.pdf`;
-      const saved = await savePdfToServer(doc, hint);
-
-      if (printAlso) openPrintPdf(doc);
-
-      alert(`PDF gespeichert: ${saved.filename}`);
-      window.open(saved.url, "_blank");
-    } catch (e: any) {
-      setErr(String(e?.message || e));
-      alert("PDF Export fehlgeschlagen.");
+      await saveWorkspaceToServer();
+      setErr(`${items.length} GPS-Aufmaßzeile(n) am Server für den AufmaßEditor gespeichert.`);
+      navigate("/mengenermittlung/aufmasseditor?import=gps");
+    } catch (error: any) {
+      setErr(`Übertragung fehlgeschlagen: ${String(error?.message || error)}`);
     } finally {
       setBusy(false);
     }
   }
 
-  async function exportAssignmentPdf(a: Assignment) {
-    if (!projectId) return alert("Kein Projekt gewählt.");
-    if (!a?.points?.length) return alert("Keine Punkte in dieser Zuweisung.");
 
-    setBusy(true);
-    setErr(null);
-    try {
-      drawAssignment(a);
+  function printMap() {
+    const previousLabels = showPointLabelsRef.current;
 
-      const mapSnap = await captureMapSnapshotPngDataUrl();
+    setPrintWithoutPointLabels(true);
+    showPointLabelsRef.current = false;
+    setShowPointLabels(false);
 
-      const lvPos = a?.lvPos || null;
-      const doc = buildPdfDoc({
-        projectTitle: (project as any)?.name || (project as any)?.title || projectCode || "—",
-        projectId,
-        projectDbId,
-        lv: {
-          position: lvPos?.position || a.lvPosId,
-          kurztext: lvPos?.kurztext || "",
-          langtext: lvPos?.langtext || null,
-          lvPosId: a.lvPosId,
-        },
-        pts: clampPts(a.points),
-        createdAt: a.createdAt,
-        mapPngDataUrl: mapSnap,
-      });
+    window.setTimeout(() => {
+      redrawMap();
+      window.print();
 
-      const hint = `gpszuweisung_${(lvPos?.position || a.lvPosId || "LV")}_${tsForFilename(
-        a.createdAt
-      )}.pdf`;
-      const saved = await savePdfToServer(doc, hint);
-
-      openPrintPdf(doc);
-      window.open(saved.url, "_blank");
-    } catch (e: any) {
-      setErr(String(e?.message || e));
-      alert("PDF Export fehlgeschlagen.");
-    } finally {
-      setBusy(false);
-    }
+      window.setTimeout(() => {
+        setPrintWithoutPointLabels(false);
+        showPointLabelsRef.current = previousLabels;
+        setShowPointLabels(previousLabels);
+        redrawMap();
+      }, 250);
+    }, 150);
   }
 
-  /* ------------------ UI ------------------ */
+  /* ===================== UI ===================== */
+
+  const modeButton = (mode: EditorMode, label: string) =>
+  <button
+    type="button"
+
+    onClick={() => {
+      setEditorMode(mode);
+      editorModeRef.current = mode;
+    }} className={rlcClass("btn",
+
+      editorMode === mode ?
+      {
+        borderColor: "#146ef5",
+        background: "#eaf2ff",
+        color: "#0b5bd3",
+        fontWeight: 700
+      } :
+      undefined)}>
+    
+    
+      {label}
+    </button>;
+
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 16 }}>
-      <div className="card" style={{ padding: 12 }}>
-        <h3 style={{ marginTop: 0 }}>GPS-basierte Positionszuweisung</h3>
+    <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1287">
+      <style>{`
+        .leaflet-tooltip.rlc-gps-point-label {
+          padding: 0 2px !important;
+          border-radius: 2px !important;
+          font-size: 8px !important;
+          line-height: 1 !important;
+          font-weight: 700 !important;
+          white-space: nowrap !important;
+          color: rgba(15, 23, 42, 0.90) !important;
+          background: rgba(255, 255, 255, 0.10) !important;
+          border: 1px solid rgba(100, 116, 139, 0.16) !important;
+          box-shadow: none !important;
+          pointer-events: none !important;
+          transition:
+            font-size 90ms linear,
+            opacity 90ms linear,
+            padding 90ms linear,
+            background-color 90ms linear,
+            border-color 90ms linear !important;
+        }
 
-        <div style={{ marginBottom: 10, opacity: 0.9 }}>
-          <div style={{ fontSize: 12 }}>Projekt</div>
-          <div style={{ fontWeight: 700 }}>
-            {(project as any)?.name || (project as any)?.title || projectCode || "—"}
+        #gps-map[data-point-label-zoom="far"] .leaflet-tooltip.rlc-gps-point-label {
+          font-size: 2px !important;
+          padding: 0 !important;
+          opacity: 0.10 !important;
+          background: transparent !important;
+          border-color: transparent !important;
+        }
+
+        #gps-map[data-point-label-zoom="tiny"] .leaflet-tooltip.rlc-gps-point-label {
+          font-size: 3px !important;
+          padding: 0 !important;
+          opacity: 0.18 !important;
+          background: transparent !important;
+          border-color: transparent !important;
+        }
+
+        #gps-map[data-point-label-zoom="small"] .leaflet-tooltip.rlc-gps-point-label {
+          font-size: 4px !important;
+          padding: 0 1px !important;
+          opacity: 0.32 !important;
+          background: rgba(255, 255, 255, 0.02) !important;
+          border-color: transparent !important;
+        }
+
+        #gps-map[data-point-label-zoom="medium"] .leaflet-tooltip.rlc-gps-point-label {
+          font-size: 5.5px !important;
+          padding: 0 1px !important;
+          opacity: 0.52 !important;
+          background: rgba(255, 255, 255, 0.05) !important;
+          border-color: rgba(100, 116, 139, 0.08) !important;
+        }
+
+        #gps-map[data-point-label-zoom="near"] .leaflet-tooltip.rlc-gps-point-label {
+          font-size: 7px !important;
+          padding: 0 2px !important;
+          opacity: 0.76 !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+          border-color: rgba(100, 116, 139, 0.12) !important;
+        }
+
+        #gps-map[data-point-label-zoom="max"] .leaflet-tooltip.rlc-gps-point-label {
+          font-size: 9px !important;
+          padding: 1px 3px !important;
+          opacity: 0.96 !important;
+          background: rgba(255, 255, 255, 0.14) !important;
+          border-color: rgba(100, 116, 139, 0.18) !important;
+        }
+
+
+        #gps-map[data-print-without-point-labels="true"] .leaflet-tooltip.rlc-gps-point-label {
+          display: none !important;
+        }
+
+        .leaflet-tooltip-top.rlc-gps-point-label::before {
+          border-top-color: transparent !important;
+        }
+
+
+        .rlc-map-comment-marker {
+          background: transparent !important;
+          border: 0 !important;
+        }
+
+        .rlc-map-comment-content {
+          display: inline-block;
+          width: max-content;
+          max-width: 420px;
+          padding: 3px 6px;
+          border: 1px solid rgba(71, 85, 105, 0.42);
+          border-radius: 5px;
+          background: rgba(255, 255, 255, 0.74);
+          color: #0f172a;
+          font-family: system-ui, sans-serif;
+          font-weight: 700;
+          line-height: 1.15;
+          white-space: pre-wrap;
+          box-shadow: 0 2px 7px rgba(15, 23, 42, 0.15);
+          cursor: move;
+          user-select: none;
+        }
+
+        @media print {
+          .rlc-map-comment-content {
+            background: rgba(255, 255, 255, 0.55) !important;
+            box-shadow: none !important;
+          }
+        }
+
+
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+
+          #gps-map,
+          #gps-map * {
+            visibility: visible !important;
+          }
+
+          #gps-map {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            min-height: 0 !important;
+            border: 0 !important;
+          }
+
+          .leaflet-control-container,
+          .leaflet-tooltip.rlc-gps-point-label {
+            display: none !important;
+          }
+        }
+      `}</style>
+      <MengPageHeader
+        title="GPS-Zuweisung"
+        subtitle="GPS-Punkte, Strecken, Flächen und Kommentare einer LV-Position zuordnen." />
+      
+
+      <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1288">
+
+
+
+
+
+
+        
+        <div className="card rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1289">
+          <h3 className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1290">GPS-Messeditor</h3>
+
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1291">
+            <strong>{project?.name || project?.title || "Neues Projekt"}</strong>
+            <br />
+            Projekt-Code: {projectCode || "—"}
           </div>
 
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            Projekt-Code (FS): <b>{projectCode || "—"}</b>
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1292">
+            <button className="btn" onClick={() => void loadLV()} disabled={busy}>
+              LV laden
+            </button>
+            <button className="btn" onClick={() => void loadAssignments()} disabled={busy}>
+              Zuweisungen laden
+            </button>
+            <button className="btn" onClick={clearCurrent} disabled={busy}>
+              Entwurf löschen
+            </button>
           </div>
 
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            Projekt-ID (DB): {projectDbId || "—"}
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1293">
+            <label className={rlcClass(null, labelStyle)}>LV-Position</label>
+            <input
+              value={lvSearch}
+              onChange={(event) => setLvSearch(event.target.value)}
+              placeholder="Positionsnummer oder Text suchen…" className={rlcClass(null,
+              inputStyle)} />
+            
+            <div className={rlcClass(null, listStyle)}>
+              {!lvList.length ?
+              <div className={rlcClass(null, emptyStyle)}>Keine LV-Positionen geladen.</div> :
+              !filteredLvList.length ?
+              <div className={rlcClass(null, emptyStyle)}>Keine passende LV-Position.</div> :
+
+              filteredLvList.map((position) =>
+              <button
+                type="button"
+                key={position.id}
+                onClick={() => {
+                  selectedLVRef.current = position;
+                  setSelectedLV(position);
+                  setLvSearch(
+                    `${position.position} ${position.kurztext}`.trim()
+                  );
+                  saveDraft({ selectedLvId: position.id });
+                }} className={rlcClass(null,
+                {
+                  ...listButtonStyle,
+                  background:
+                  selectedLV?.id === position.id ? "#eef2ff" : "white"
+                })}>
+                
+                    <strong>{position.position}</strong>
+                    <span>{position.kurztext || position.langtext || ""}</span>
+                  </button>
+              )
+              }
+            </div>
           </div>
-        </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" onClick={() => void loadLV()} disabled={!projectDbId || busy}>
-            LV laden
-          </button>
-          <button className="btn" onClick={() => void loadAssignments()} disabled={!projectId || busy}>
-            Zuweisungen laden
-          </button>
-          <button className="btn" onClick={clearCurrent} disabled={busy}>
-            Punkte löschen
-          </button>
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <label>LV-Position wählen</label>
-          <div
-            style={{
-              maxHeight: 170,
-              overflow: "auto",
-              border: "1px solid #ddd",
-              borderRadius: 8,
-              marginTop: 6,
-            }}
-          >
-            {lvList.length === 0 ? (
-              <div style={{ padding: 10, opacity: 0.8 }}>Keine LV-Positionen geladen.</div>
-            ) : (
-              lvList.map((l) => (
-                <div
-                  key={l.id}
-                  onClick={() => {
-                    setSelectedLV(l);
-                    saveDraft(points, l.id, csvCrs);
-                  }}
-                  style={{
-                    padding: 8,
-                    cursor: "pointer",
-                    background: selectedLV?.id === l.id ? "#eef2ff" : "",
-                    borderBottom: "1px solid #eee",
-                  }}
-                >
-                  <div style={{ fontWeight: 700 }}>{l.position}</div>
-                  <div style={{ fontSize: 12, opacity: 0.85 }}>
-                    {l.kurztext || l.langtext || ""}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <label>Import-Datei (CSV / GPX / KML / GeoJSON)</label>
-          <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1294">
+            <label className={rlcClass(null, labelStyle)}>Punktdatei</label>
             <select
               value={csvCrs}
-              onChange={(e) => {
-                setCsvCrs(e.target.value);
-                saveDraft(points, selectedLV?.id ?? null, e.target.value);
-              }}
-            >
-              <option value="EPSG:4326">WGS84 (lat/lng)</option>
-              <option value="EPSG:32632">UTM32 WGS84</option>
+              onChange={(event) => {
+                setCsvCrs(event.target.value);
+                saveDraft({ csvCrs: event.target.value });
+              }} className={rlcClass(null,
+              inputStyle)}>
+              
+              <option value="EPSG:4326">WGS84</option>
               <option value="EPSG:25832">UTM32 ETRS89</option>
+              <option value="EPSG:32632">UTM32 WGS84</option>
               <option value="EPSG:31466">DHDN GK2</option>
               <option value="EPSG:31467">DHDN GK3</option>
               <option value="EPSG:31468">DHDN GK4</option>
               <option value="EPSG:31469">DHDN GK5</option>
             </select>
-
             <input
               type="file"
-              accept=".csv,.gpx,.kml,.geojson,.json"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) onFileImport(f);
-                e.currentTarget.value = "";
-              }}
-            />
+              id="gps-import-file-input"
+              accept=".csv,.txt,.gpx,.kml,.geojson,.json,.dxf"
 
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="btn" onClick={() => void saveAssignment()} disabled={busy}>
-                Zuweisen & Speichern
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onFileImport(file);
+                event.currentTarget.value = "";
+              }} className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1295" />
+            
+            <button
+              type="button"
+              className="btn rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1296"
+
+              disabled={busy}
+              onClick={() =>
+              document.getElementById("gps-import-file-input")?.click()
+              }>
+              
+              DXF importieren
+            </button>
+          </div>
+
+          <div className={rlcClass(null, editorCardStyle)}>
+            <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1297">Mini-Editor</div>
+
+            <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1298">
+              {modeButton("POINT", "Punkt")}
+              {modeButton("DISTANCE", "Strecke")}
+              {modeButton("AREA", "Fläche")}
+              {modeButton("COMMENT", "Kommentar")}
+            </div>
+
+            <label className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1299">
+              <input
+                type="checkbox"
+                checked={showPointLabels}
+                onChange={(event) => setShowPointLabels(event.target.checked)} />
+              
+              Punktnamen dauerhaft anzeigen
+            </label>
+
+            <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1300">
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setShowPointLabels((current) => !current)}>
+                
+                {showPointLabels ? "Punkttexte ausschalten" : "Punkttexte einschalten"}
               </button>
 
               <button
                 className="btn"
-                onClick={() => void exportCurrentPdf(true)}
-                disabled={busy || !selectedLV || points.length === 0}
-              >
-                PDF Export & Stampa
+                type="button"
+                onClick={printMap}>
+                
+                Drucken
               </button>
-
-              <div style={{ alignSelf: "center", fontSize: 12, opacity: 0.8 }}>
-                Punkte: <b>{points.length}</b> | Länge:{" "}
-                <b>
-                  {(() => {
-                    const m = polylineLengthMeters(points);
-                    return m >= 1000 ? `${(m / 1000).toFixed(3)} km` : `${m.toFixed(1)} m`;
-                  })()}
-                </b>
-              </div>
             </div>
+
+            {editorMode === "DISTANCE" ?
+            <>
+                <input
+                value={measurementComment}
+                onChange={(event) => setMeasurementComment(event.target.value)}
+                placeholder="Kommentar zur Strecke" className={rlcClass(null,
+                inputStyle)} />
+              
+                <div className={rlcClass(null, statusStyle)}>
+                  Punkte: {activeDistanceIndexes.length} ·{" "}
+                  {formatDistance(activeDistance)}
+                </div>
+                <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1301">
+                  <button
+                  className="btn"
+                  type="button"
+                  onClick={saveDistanceMeasurement}
+                  disabled={activeDistanceIndexes.length < 2}>
+                  
+                    Strecke speichern
+                  </button>
+                  <button
+                  className="btn"
+                  type="button"
+                  onClick={() =>
+                  updateAll(
+                    points,
+                    measurements,
+                    areas,
+                    annotations,
+                    [],
+                    activeAreaIndexes
+                  )
+                  }
+                  disabled={!activeDistanceIndexes.length}>
+                  
+                    Abbrechen
+                  </button>
+                </div>
+              </> :
+            null}
+
+            {editorMode === "AREA" ?
+            <>
+                <input
+                value={areaComment}
+                onChange={(event) => setAreaComment(event.target.value)}
+                placeholder="Kommentar zur Fläche" className={rlcClass(null,
+                inputStyle)} />
+              
+                <div className={rlcClass(null, statusStyle)}>
+                  Eckpunkte: {activeAreaIndexes.length} · {formatArea(activeArea)}
+                </div>
+                <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1302">
+                  <button
+                  className="btn"
+                  type="button"
+                  onClick={saveAreaMeasurement}
+                  disabled={activeAreaIndexes.length < 3}>
+                  
+                    Fläche schließen & speichern
+                  </button>
+                  <button
+                  className="btn"
+                  type="button"
+                  onClick={() =>
+                  updateAll(
+                    points,
+                    measurements,
+                    areas,
+                    annotations,
+                    activeDistanceIndexes,
+                    []
+                  )
+                  }
+                  disabled={!activeAreaIndexes.length}>
+                  
+                    Abbrechen
+                  </button>
+                </div>
+              </> :
+            null}
+
+            {editorMode === "COMMENT" ?
+            <>
+                <textarea
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+                placeholder="Kommentar eingeben und anschließend die genaue Position auf der Karte anklicken" className={rlcClass(null,
+                { ...inputStyle, minHeight: 58, resize: "vertical" })} />
+              
+
+                <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1303">
+
+
+
+
+
+                
+                  <label className={rlcClass(null, labelStyle)}>
+                    Textgröße
+                    <input
+                    type="number"
+                    min={8}
+                    max={40}
+                    step={1}
+                    value={commentFontSize}
+                    onChange={(event) =>
+                    setCommentFontSize(
+                      Math.max(8, Math.min(40, Number(event.target.value) || 14))
+                    )
+                    } className={rlcClass(null,
+                    { ...inputStyle, marginTop: 4 })} />
+                  
+                  </label>
+
+                  <label className={rlcClass(null, labelStyle)}>
+                    Drehung (°)
+                    <input
+                    type="number"
+                    min={-180}
+                    max={180}
+                    step={5}
+                    value={commentRotation}
+                    onChange={(event) =>
+                    setCommentRotation(
+                      Math.max(-180, Math.min(180, Number(event.target.value) || 0))
+                    )
+                    } className={rlcClass(null,
+                    { ...inputStyle, marginTop: 4 })} />
+                  
+                  </label>
+                </div>
+
+                <div className={rlcClass(null, statusStyle)}>
+                  Karte anklicken: Der Klickpunkt ist jetzt exakt die Mitte des Kommentars.
+                  Danach kann der Kommentar mit der Maus verschoben werden.
+                </div>
+              </> :
+            null}
           </div>
-        </div>
 
-        {err ? <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 12 }}>{err}</div> : null}
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1304">
+            Punkte: <strong>{points.length}</strong> · Strecken:{" "}
+            <strong>{measurements.length}</strong> ({formatDistance(totalDistance)}) ·
+            Flächen: <strong>{areas.length}</strong> ({formatArea(totalArea)})
+          </div>
 
-        <hr style={{ margin: "14px 0", borderColor: "#eee" }} />
-
-        <div>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Gespeicherte Zuweisungen</div>
-
-          {assignments.length === 0 ? (
-            <div style={{ opacity: 0.8, fontSize: 12 }}>Keine gespeicherten Zuweisungen.</div>
-          ) : (
-            <div
-              style={{
-                maxHeight: 220,
-                overflow: "auto",
-                border: "1px solid #ddd",
-                borderRadius: 8,
-              }}
-            >
-              {assignments.map((a) => {
-                const lvFromList = resolveLvFromLists(a.lvPosId);
-                const posLabel = a?.lvPos?.position || lvFromList?.position || a.lvPosId;
-                const kurz =
-                  a?.lvPos?.kurztext ||
-                  lvFromList?.kurztext ||
-                  a?.lvPos?.langtext ||
-                  "";
-
-                return (
-                  <div
-                    key={a.id}
-                    style={{
-                      padding: 10,
-                      borderBottom: "1px solid #eee",
-                      display: "grid",
-                      gap: 6,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{posLabel}</div>
-                      <div style={{ fontSize: 12, opacity: 0.8 }}>
-                        {new Date(a.createdAt).toLocaleString()}
+          {measurements.length ?
+          <div className={rlcClass(null, resultListStyle)}>
+              {measurements.map((measurement, index) => {
+              const selectedPoints = measurement.pointIndexes.
+              map((pointIndex) => points[pointIndex]).
+              filter(Boolean);
+              return (
+                <div key={measurement.id} className={rlcClass(null, resultRowStyle)}>
+                    <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1305">
+                      <strong>{measurement.name || `Messung ${index + 1}`}</strong>
+                      <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1306">
+                        {formatDistance(polylineLengthMeters(selectedPoints))}
+                        {measurement.comment ? ` · ${measurement.comment}` : ""}
                       </div>
                     </div>
+                    <button
+                    className="btn"
+                    type="button"
+                    onClick={() => deleteMeasurement(measurement.id)}>
+                    
+                      Löschen
+                    </button>
+                  </div>);
 
-                    {kurz ? <div style={{ fontSize: 12, opacity: 0.85 }}>{kurz}</div> : null}
+            })}
+            </div> :
+          null}
 
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <button className="btn" onClick={() => drawAssignment(a)} disabled={busy}>
-                        Anzeigen
-                      </button>
-
-                      <button
-                        className="btn"
-                        onClick={() => loadAssignmentIntoCurrent(a)}
-                        disabled={busy}
-                      >
-                        Laden
-                      </button>
-
-                      <button
-                        className="btn"
-                        onClick={() => void exportAssignmentPdf(a)}
-                        disabled={busy}
-                      >
-                        PDF
-                      </button>
-
-                      <button
-                        className="btn"
-                        onClick={() => void deleteAssignment(a.id)}
-                        disabled={busy}
-                      >
-                        Löschen
-                      </button>
-
-                      <div style={{ fontSize: 12, opacity: 0.8 }}>
-                        Punkte: <b>{a.points?.length || 0}</b>
+          {areas.length ?
+          <div className={rlcClass(null, resultListStyle)}>
+              {areas.map((area, index) => {
+              const selectedPoints = area.pointIndexes.
+              map((pointIndex) => points[pointIndex]).
+              filter(Boolean);
+              return (
+                <div key={area.id} className={rlcClass(null, resultRowStyle)}>
+                    <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1307">
+                      <strong>{area.name || `Fläche ${index + 1}`}</strong>
+                      <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1308">
+                        {formatArea(polygonAreaMeters2(selectedPoints))}
+                        {area.comment ? ` · ${area.comment}` : ""}
                       </div>
+                    </div>
+                    <button
+                    className="btn"
+                    type="button"
+                    onClick={() => deleteArea(area.id)}>
+                    
+                      Löschen
+                    </button>
+                  </div>);
+
+            })}
+            </div> :
+          null}
+
+          {annotations.length ?
+          <div className={rlcClass(null, resultListStyle)}>
+              {annotations.map((annotation) =>
+            <div
+              key={annotation.id} className={rlcClass(null,
+              {
+                ...resultRowStyle,
+                alignItems: "flex-end",
+                flexWrap: "wrap"
+              })}>
+              
+                  <label className={rlcClass(null, { ...labelStyle, flex: "1 1 180px", marginBottom: 0 })}>
+                    Kommentar
+                    <input
+                  value={annotation.text}
+                  onChange={(event) =>
+                  updateAnnotation(annotation.id, { text: event.target.value })
+                  } className={rlcClass(null,
+                  { ...inputStyle, marginTop: 4 })} />
+                
+                  </label>
+
+                  <label className={rlcClass(null, { ...labelStyle, width: 82, marginBottom: 0 })}>
+                    Größe
+                    <input
+                  type="number"
+                  min={8}
+                  max={40}
+                  value={annotation.fontSize || 14}
+                  onChange={(event) =>
+                  updateAnnotation(annotation.id, {
+                    fontSize: Math.max(
+                      8,
+                      Math.min(40, Number(event.target.value) || 14)
+                    )
+                  })
+                  } className={rlcClass(null,
+                  { ...inputStyle, marginTop: 4 })} />
+                
+                  </label>
+
+                  <label className={rlcClass(null, { ...labelStyle, width: 88, marginBottom: 0 })}>
+                    Drehung
+                    <input
+                  type="number"
+                  min={-180}
+                  max={180}
+                  step={5}
+                  value={annotation.rotation || 0}
+                  onChange={(event) =>
+                  updateAnnotation(annotation.id, {
+                    rotation: Math.max(
+                      -180,
+                      Math.min(180, Number(event.target.value) || 0)
+                    )
+                  })
+                  } className={rlcClass(null,
+                  { ...inputStyle, marginTop: 4 })} />
+                
+                  </label>
+
+                  <button
+                className="btn"
+                type="button"
+                onClick={() => deleteAnnotation(annotation.id)}>
+                
+                    Löschen
+                  </button>
+                </div>
+            )}
+            </div> :
+          null}
+
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1309">
+            <button className="btn" onClick={() => void saveAssignment()} disabled={busy}>
+              Zuweisen & speichern
+            </button>
+            <button className="btn" onClick={() => void exportPdf()} disabled={busy}>
+              PDF exportieren
+            </button>
+            <button className="btn" onClick={() => exportDxf()} disabled={busy}>
+              DXF exportieren
+            </button><button className="btn" onClick={() => void transferToAufmassEditor()} disabled={busy}>
+              Ins AufmaßEditor übertragen
+            </button>
+          </div>
+
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1310">
+            {serverSaveStatus}
+          </div>
+
+          {serverPdfs.length ?
+          <div className={rlcClass(null, { ...resultListStyle, marginTop: 8 })}>
+              {serverPdfs.map((pdf: any) =>
+            <div key={pdf.name} className={rlcClass(null, resultRowStyle)}>
+                  <span className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1311">{pdf.name}</span>
+                  <span className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1312">
+                    {new Date(pdf.mtime).toLocaleString("de-DE")}
+                  </span>
+                  <a className="btn" href={apiUrl(pdf.url)} target="_blank" rel="noreferrer">
+                    Öffnen
+                  </a>
+                </div>
+            )}
+            </div> :
+          null}
+
+          {err ?
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1313">
+              {err}
+            </div> :
+          null}
+
+          <hr className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1314" />
+
+          <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1315">
+            Gespeicherte Zuweisungen
+          </div>
+
+          {!assignments.length ?
+          <div className={rlcClass(null, emptyStyle)}>Keine gespeicherten Zuweisungen.</div> :
+
+          <div className={rlcClass(null, resultListStyle)}>
+              {assignments.map((assignment) =>
+            <div key={assignment.id} className={rlcClass(null, resultRowStyle)}>
+                  <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1316">
+                    <strong>
+                      {assignment.lvPos?.position || assignment.lvPosId}
+                    </strong>
+                    <div className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1317">
+                      {assignment.points?.length || 0} Punkte
                     </div>
                   </div>
-                );
-              })}
+                  <button
+                className="btn"
+                onClick={() => loadAssignmentIntoCurrent(assignment)}>
+                
+                    Laden
+                  </button>
+                  <button
+                className="btn"
+                onClick={() => void deleteAssignment(assignment.id)}>
+                
+                    Löschen
+                  </button>
+                </div>
+            )}
             </div>
-          )}
+          }
         </div>
 
-        <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
-          Tipp: Klick auf die Karte fügt Punkte hinzu. Import ergänzt Punkte. “Punkte löschen”
-          löscht nur die aktuelle Auswahl.
-          <br />
-          Hinweis: Die ALKIS®-Parzellarkarte enthält laut Dienstbeschreibung keine Flurstücksnummern.
-          <br />
-          Snapshot-Hinweis: Wenn Google-Layer aktiv sind, kann der Screenshot im PDF leer/schwarz
-          sein. Für sicheren Snapshot: OSM/WMS nutzen.
+        <div className="card rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1318">
+          <div
+            id="gps-map"
+            data-print-without-point-labels={printWithoutPointLabels ? "true" : "false"} className="rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1319" />
+
+          
         </div>
       </div>
+    </div>);
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div id="gps-map" style={{ width: "100%", height: "75vh" }} />
-      </div>
-    </div>
-  );
 }
 
+/* ===================== STYLES ===================== */
 
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#334155",
+  marginBottom: 5
+};
 
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "8px 9px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  background: "white",
+  fontSize: 13
+};
 
+const listStyle: React.CSSProperties = {
+  maxHeight: 175,
+  overflow: "auto",
+  border: "1px solid #dbe2ea",
+  borderRadius: 8,
+  marginTop: 6
+};
 
+const listButtonStyle: React.CSSProperties = {
+  width: "100%",
+  border: 0,
+  borderBottom: "1px solid #edf1f5",
+  padding: 8,
+  textAlign: "left",
+  display: "grid",
+  gap: 2,
+  cursor: "pointer"
+};
 
+const emptyStyle: React.CSSProperties = {
+  padding: 9,
+  fontSize: 12,
+  opacity: 0.7
+};
 
+const editorCardStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 8,
+  marginTop: 12,
+  padding: 10,
+  border: "1px solid #dbe4ef",
+  borderRadius: 10,
+  background: "#f8fafc"
+};
+
+const statusStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#475569"
+};
+
+const resultListStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 5,
+  marginTop: 8,
+  padding: 7,
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  background: "#f8fafc"
+};
+
+const resultRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  padding: 5,
+  borderBottom: "1px solid #e8edf3",
+  fontSize: 12
+};

@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../ui/rlcRuntimeStyle";import React from "react";
 import { Outlet } from "react-router-dom";
 
 type Props = {
@@ -14,43 +14,38 @@ export default function Section({
   right,
   centerVisible = true,
   children,
-  style,
+  style
 }: Props) {
   const twoCols = centerVisible === false;
-  const gridTemplateColumns = twoCols
-    ? "260px minmax(0, 1fr)"
-    : right
-    ? "260px minmax(0, 1fr) 320px"
-    : "260px minmax(0, 1fr)";
+  const gridTemplateColumns = twoCols ?
+  "260px minmax(0, 1fr)" :
+  right ?
+  "260px minmax(0, 1fr) 320px" :
+  "260px minmax(0, 1fr)";
 
   const content = children ?? <Outlet />;
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns,
-        gap: 16,
-        padding: 16,
-        alignItems: "start",
-        ...style,
-      }}
-    >
-      <aside style={{ minWidth: 0 }}>{left}</aside>
+    <div className={rlcClass(null,
+    {
+      display: "grid",
+      gridTemplateColumns,
+      gap: 16,
+      padding: 16,
+      alignItems: "start",
+      ...style
+    })}>
+      
+      <aside className="rlc-migrated-components-section-tsx-15">{left}</aside>
 
-      {twoCols ? (
-        <section style={{ minWidth: 0 }}>{content}</section>
-      ) : (
-        <>
-          <main style={{ minWidth: 0 }}>{content}</main>
-          {right ? <aside style={{ minWidth: 0 }}>{right}</aside> : null}
+      {twoCols ?
+      <section className="rlc-migrated-components-section-tsx-16">{content}</section> :
+
+      <>
+          <main className="rlc-migrated-components-section-tsx-17">{content}</main>
+          {right ? <aside className="rlc-migrated-components-section-tsx-18">{right}</aside> : null}
         </>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
-
-
-
-
-

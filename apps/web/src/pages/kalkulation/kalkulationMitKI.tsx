@@ -1,6 +1,11 @@
-﻿// apps/web/src/pages/kalkulation/kalkulationMitKI.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import {
+  openPdfBlobPreview,
+  outputPdfBlobWithCompanyHeader,
+  reservePdfPreview,
+  savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from
+"../../lib/pdf/companyPdfHeader";
+// apps/web/src/pages/kalkulation/kalkulationMitKI.tsx
 import React from "react";
-
 import { runRlcAction } from "../../lib/rlcProgress";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -14,24 +19,24 @@ import {
   useKiSuggest,
   type CalcStatus,
   type EliteKalkulationResultRow,
-  type RiskLevel,
-} from "./useKiSuggest";
+  type RiskLevel } from
+"./useKiSuggest";
 import {
   KalkulationsDatenbank,
   type KalkulationsErfahrung,
-  type KalkulationsSuchTreffer,
-} from "./kalkulationsDatenbank";
+  type KalkulationsSuchTreffer } from
+"./kalkulationsDatenbank";
 
 type PriceBreakdownGroup =
-  | "Personal"
-  | "Maschinen"
-  | "LKW / Transport"
-  | "Material"
-  | "Entsorgung"
-  | "Fremdleistung"
-  | "Gemeinkosten"
-  | "Risiko"
-  | "Gewinn";
+"Personal" |
+"Maschinen" |
+"LKW / Transport" |
+"Material" |
+"Entsorgung" |
+"Fremdleistung" |
+"Gemeinkosten" |
+"Risiko" |
+"Gewinn";
 
 type PriceBreakdownLine = {
   id: string;
@@ -108,17 +113,17 @@ type OfferData = {
 };
 
 type ViewFilter =
-  | "alle"
-  | "kritisch"
-  | "warnungen"
-  | "hochrisiko"
-  | "ohneDb"
-  | "sicher"
-  | "mengeFehlt"
-  | "preisFehlt"
-  | "einheitFehlt"
-  | "urkalkulationFehlt"
-  | "doppelte";
+"alle" |
+"kritisch" |
+"warnungen" |
+"hochrisiko" |
+"ohneDb" |
+"sicher" |
+"mengeFehlt" |
+"preisFehlt" |
+"einheitFehlt" |
+"urkalkulationFehlt" |
+"doppelte";
 
 type KiRowClass = "structure" | "real-position" | "incomplete" | "review";
 
@@ -142,9 +147,9 @@ function apiUrl(path: string): string {
 }
 
 function safeFileName(value: string): string {
-  return String(value || "Datei")
-    .replace(/[^\w.-]+/g, "_")
-    .replace(/_+/g, "_");
+  return String(value || "Datei").
+  replace(/[^\w.-]+/g, "_").
+  replace(/_+/g, "_");
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -163,13 +168,13 @@ function localBackupKey(projectKey: string) {
 function getAuthToken(): string {
   try {
     const keys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of keys) {
       const value = localStorage.getItem(key);
@@ -185,23 +190,23 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-//
-      }
-    }
-  } catch {
-//
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 function authJsonHeaders(): HeadersInit {
@@ -209,7 +214,7 @@ function authJsonHeaders(): HeadersInit {
 
   return {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -218,9 +223,9 @@ function n(value: unknown, fallback = 0): number {
 
   const raw = String(value).trim();
 
-  const normalized = raw.includes(",")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw.replace(/\s/g, "");
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw.replace(/\s/g, "");
 
   const parsed = typeof value === "number" ? value : Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -233,14 +238,14 @@ function round2(value: number): number {
 function money(value: unknown): string {
   return `${n(value).toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 2
   })} €`;
 }
 
 function qty(value: unknown): string {
   return n(value).toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 3
   });
 }
 
@@ -252,16 +257,16 @@ function safeId(): string {
   try {
     return crypto.randomUUID();
   } catch {
-return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 }
 
 function normText(value: unknown): string {
-  return String(value ?? "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
+  return String(value ?? "").
+  toLowerCase().
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  trim();
 }
 
 function getProjectObject(projectCtx: any): any {
@@ -271,8 +276,8 @@ function getProjectObject(projectCtx: any): any {
     projectCtx?.selectedProject ||
     projectCtx?.current ||
     projectCtx ||
-    {}
-  );
+    {});
+
 }
 
 function hasRealX84ForProject(projectKey: string): boolean {
@@ -289,24 +294,24 @@ function getProjectKey(projectCtx: any): string {
 
   return String(
     projectObj?.code ||
-      projectObj?.projectCode ||
-      projectObj?.number ||
-      projectCtx?.projectCode ||
-      projectObj?.id ||
-      projectCtx?.projectId ||
-      projectCtx?.id ||
-      ""
+    projectObj?.projectCode ||
+    projectObj?.number ||
+    projectCtx?.projectCode ||
+    projectObj?.id ||
+    projectCtx?.projectId ||
+    projectCtx?.id ||
+    ""
   ).trim();
 }
 
 function getProjectTitle(projectCtx: any): string {
   const projectObj = getProjectObject(projectCtx);
   const code =
-    projectObj?.code ||
-    projectObj?.projectCode ||
-    projectObj?.number ||
-    projectObj?.id ||
-    "";
+  projectObj?.code ||
+  projectObj?.projectCode ||
+  projectObj?.number ||
+  projectObj?.id ||
+  "";
   const name = projectObj?.name || projectObj?.projectName || "Projekt";
 
   if (!code) return "Kein Projekt gewählt";
@@ -331,38 +336,38 @@ function kiIsStructuralRow(row: Partial<EliteRow>): boolean {
   const text = `${kurz} ${lang}`.replace(/\s+/g, " ").trim();
 
   const unit = String(row.einheit || "").trim().toLowerCase();
-const gewerk = String(row.gewerk || "").trim().toLowerCase();
+  const gewerk = String(row.gewerk || "").trim().toLowerCase();
   const leistungsart = String(row.leistungsart || "").trim().toLowerCase();
 
   const hasRealText =
-    kurzRaw.length >= 8 ||
-    langRaw.length >= 18 ||
-    /(aushub|abfuhr|verfüll|verfull|pflaster|asphalt|rohr|leitung|speedpipe|kabel|schacht|beton|schalung|bewehrung)/i.test(
-      `${kurzRaw} ${langRaw}`
-    );
+  kurzRaw.length >= 8 ||
+  langRaw.length >= 18 ||
+  /(aushub|abfuhr|verfüll|verfull|pflaster|asphalt|rohr|leitung|speedpipe|kabel|schacht|beton|schalung|bewehrung)/i.test(
+    `${kurzRaw} ${langRaw}`
+  );
 
   const pureChapter =
-    /^\d{1,2}$/.test(pos) ||
-    /^\d{1,2}\.0{1,3}$/.test(pos);
+  /^\d{1,2}$/.test(pos) ||
+  /^\d{1,2}\.0{1,3}$/.test(pos);
 
   const placeholder =
-    /^leistung\s+zu\s+position\s+\d+/i.test(kurzRaw) ||
-    /^leistung\s+zu\s+pos\.?\s*\d+/i.test(kurzRaw) ||
-    /^position\s+\d+$/i.test(kurzRaw) ||
-    /^leistung prüfen$/i.test(kurzRaw);
+  /^leistung\s+zu\s+position\s+\d+/i.test(kurzRaw) ||
+  /^leistung\s+zu\s+pos\.?\s*\d+/i.test(kurzRaw) ||
+  /^position\s+\d+$/i.test(kurzRaw) ||
+  /^leistung prüfen$/i.test(kurzRaw);
 
   const structuralText =
-    /^titel\s*\d*$/i.test(kurzRaw) ||
-    /^abschnitt\s*\d*$/i.test(kurzRaw) ||
-    /^kapitel\s*\d*$/i.test(kurzRaw) ||
-    /^los\s*\d*$/i.test(kurzRaw) ||
-    /^bereich\s*\d*$/i.test(kurzRaw) ||
-    text.includes("summe titel") ||
-    text.includes("zwischensumme") ||
-    text.includes("gesamtsumme") ||
-    text.includes("keine kalkulatorische leistungsposition") ||
-    gewerk.includes("gliederung") ||
-    leistungsart.includes("struktur");
+  /^titel\s*\d*$/i.test(kurzRaw) ||
+  /^abschnitt\s*\d*$/i.test(kurzRaw) ||
+  /^kapitel\s*\d*$/i.test(kurzRaw) ||
+  /^los\s*\d*$/i.test(kurzRaw) ||
+  /^bereich\s*\d*$/i.test(kurzRaw) ||
+  text.includes("summe titel") ||
+  text.includes("zwischensumme") ||
+  text.includes("gesamtsumme") ||
+  text.includes("keine kalkulatorische leistungsposition") ||
+  gewerk.includes("gliederung") ||
+  leistungsart.includes("struktur");
 
   if (structuralText) return true;
   if (pureChapter && !hasRealText) return true;
@@ -400,7 +405,7 @@ function kiPrepareStructuralRow(row: Partial<EliteRow>): Partial<EliteRow> {
     riskLevel: "low",
     calculationStatus: "ok",
     warning: "",
-    aiReason: "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition.",
+    aiReason: "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition."
   };
 }
 
@@ -425,14 +430,14 @@ function normalizeBreakdownGroup(value: unknown): PriceBreakdownGroup {
 }
 
 function normalizeBreakdownLine(
-  line: Partial<PriceBreakdownLine> & { unitPrice?: number }
-): PriceBreakdownLine {
+line: Partial<PriceBreakdownLine> & {unitPrice?: number;})
+: PriceBreakdownLine {
   const qtyValue = n(line.qty, 1);
   const priceValue = n(line.price ?? line.unitPrice);
   const totalValue =
-    line.total !== undefined && line.total !== null
-      ? n(line.total)
-      : round2(qtyValue * priceValue);
+  line.total !== undefined && line.total !== null ?
+  n(line.total) :
+  round2(qtyValue * priceValue);
 
   return {
     id: String(line.id || safeId()),
@@ -442,7 +447,7 @@ function normalizeBreakdownLine(
     qty: qtyValue,
     price: priceValue > 0 ? priceValue : qtyValue > 0 ? round2(totalValue / qtyValue) : 0,
     total: round2(totalValue),
-    note: String(line.note || ""),
+    note: String(line.note || "")
   };
 }
 
@@ -481,12 +486,12 @@ function rowHasRealX84(row: EliteRow): boolean {
 
   const marker = String(
     anyRow.gaebType ||
-      anyRow.importType ||
-      anyRow.importMode ||
-      anyRow.importSource ||
-      anyRow.source ||
-      anyRow.quelle ||
-      ""
+    anyRow.importType ||
+    anyRow.importMode ||
+    anyRow.importSource ||
+    anyRow.source ||
+    anyRow.quelle ||
+    ""
   ).toLowerCase();
 
   return (
@@ -494,8 +499,8 @@ function rowHasRealX84(row: EliteRow): boolean {
     anyRow.hasX84 === true ||
     anyRow.angebotImported === true ||
     anyRow.offerImported === true ||
-    marker.includes("x84")
-  );
+    marker.includes("x84"));
+
 }
 
 function getOfferUnitPrice(row: EliteRow): number {
@@ -506,19 +511,19 @@ function getOfferUnitPrice(row: EliteRow): number {
    * - finalUnitPrice/suggestedUnitPrice werden NICHT als X84 abgeleitet
    */
   const direct =
-    n((row as any).angebotUnitPrice) ||
-    n((row as any).originalPreKiPrice) ||
-    n((row as any).x84UnitPrice) ||
-    n((row as any).reverseUrkalkulation?.x84UnitPrice) ||
-    n((row as any).dbComparability?.x84UnitPrice);
+  n((row as any).angebotUnitPrice) ||
+  n((row as any).originalPreKiPrice) ||
+  n((row as any).x84UnitPrice) ||
+  n((row as any).reverseUrkalkulation?.x84UnitPrice) ||
+  n((row as any).dbComparability?.x84UnitPrice);
 
   if (direct > 0) return direct;
 
   const hasKiResult =
-    n((row as any).rlcKiUnitPrice) > 0 ||
-    n((row as any).openAiSuggestedUnitPrice) > 0 ||
-    (Array.isArray((row as any).priceBreakdown) && (row as any).priceBreakdown.length > 0) ||
-    String((row as any).source || "").trim().length > 0;
+  n((row as any).rlcKiUnitPrice) > 0 ||
+  n((row as any).openAiSuggestedUnitPrice) > 0 ||
+  Array.isArray((row as any).priceBreakdown) && (row as any).priceBreakdown.length > 0 ||
+  String((row as any).source || "").trim().length > 0;
 
   if (!hasKiResult && n(row.preis) > 0) {
     return n(row.preis);
@@ -550,20 +555,20 @@ function getLightWorkRlcUnitPrice(row: EliteRow): number {
   }
 
   if (
-    text.includes("unterlage reinigen") ||
-    text.includes("untergrund reinigen") ||
-    text.includes("flache reinigen") ||
-    text.includes("fläche reinigen") ||
-    text.includes("flaeche reinigen")
-  ) {
+  text.includes("unterlage reinigen") ||
+  text.includes("untergrund reinigen") ||
+  text.includes("flache reinigen") ||
+  text.includes("fläche reinigen") ||
+  text.includes("flaeche reinigen"))
+  {
     return 0.45;
   }
 
   if (
-    text.includes("asphalt trennen") ||
-    text.includes("asphalt schneiden") ||
-    text.includes("asphalt einschneiden")
-  ) {
+  text.includes("asphalt trennen") ||
+  text.includes("asphalt schneiden") ||
+  text.includes("asphalt einschneiden"))
+  {
     return 12;
   }
 
@@ -590,14 +595,14 @@ function sanitizeRlcKiPruefwert(row: EliteRow, rawKiEp: number): {
 
   const light = getLightWorkRlcUnitPrice({
     ...row,
-    rlcKiUnitPrice: kiEp,
+    rlcKiUnitPrice: kiEp
   } as EliteRow);
 
   if (light > 0) {
     return {
       value: round2(light),
       rejected: false,
-      reason: "RLC-Plausibilität: leichte Nebenleistung erkannt.",
+      reason: "RLC-Plausibilität: leichte Nebenleistung erkannt."
     };
   }
 
@@ -611,18 +616,18 @@ function sanitizeRlcKiPruefwert(row: EliteRow, rawKiEp: number): {
     return {
       value: 0,
       rejected: true,
-      reason: `RLC-Plausibilität: KI-Prüfwert als extremer Ausreißer verworfen (${money(kiEp)} RLC-KI ↔ RLC max ${money(range.max)}).`,
+      reason: `RLC-Plausibilität: KI-Prüfwert als extremer Ausreißer verworfen (${money(kiEp)} RLC-KI ↔ RLC max ${money(range.max)}).`
     };
   }
 
   const isPauschal =
-    unit === "psch" ||
-    unit === "ps" ||
-    unit === "pauschal" ||
-    text.includes("baustelleneinricht") ||
-    text.includes("baustelle einricht") ||
-    text.includes("baustelle räumen") ||
-    text.includes("baustelle raumen");
+  unit === "psch" ||
+  unit === "ps" ||
+  unit === "pauschal" ||
+  text.includes("baustelleneinricht") ||
+  text.includes("baustelle einricht") ||
+  text.includes("baustelle räumen") ||
+  text.includes("baustelle raumen");
 
   /*
    * Pauschalpositionen dürfen stark abweichen.
@@ -632,7 +637,7 @@ function sanitizeRlcKiPruefwert(row: EliteRow, rawKiEp: number): {
     return {
       value: 0,
       rejected: true,
-      reason: `RLC-Plausibilität: Pauschalposition als extremer Ausreißer verworfen (${money(kiEp)} RLC-KI).`,
+      reason: `RLC-Plausibilität: Pauschalposition als extremer Ausreißer verworfen (${money(kiEp)} RLC-KI).`
     };
   }
 
@@ -649,74 +654,74 @@ function getRlcRangeForRow(row: EliteRow | null | undefined): {
 
   const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
   const unit = String(row.einheit || "").trim().toLowerCase();
-const direct = {
+  const direct = {
     min: n((row as any).rlcPreisMin),
     avg: n((row as any).rlcPreisAvg),
     max: n((row as any).rlcPreisMax),
     source: String((row as any).rlcPreisSource || ""),
-    group: String((row as any).rlcPreisGroup || ""),
+    group: String((row as any).rlcPreisGroup || "")
   };
 
   if (unit === "m²" || unit === "m2" || unit === "qm" || unit === "m^2") {
     if (
-      text.includes("unterlage reinigen") ||
-      text.includes("untergrund reinigen") ||
-      text.includes("fläche reinigen") ||
-      text.includes("flaeche reinigen")
-    ) {
+    text.includes("unterlage reinigen") ||
+    text.includes("untergrund reinigen") ||
+    text.includes("fläche reinigen") ||
+    text.includes("flaeche reinigen"))
+    {
       return {
         min: 0.15,
         avg: 0.45,
         max: 2.5,
         source: "RLC Plausibilitätsbibliothek",
-        group: "Oberfläche / Reinigung",
+        group: "Oberfläche / Reinigung"
       };
     }
 
     if (
-      text.includes("asphalt einfräsen") ||
-      text.includes("asphalt einfraesen") ||
-      text.includes("fräsen") ||
-      text.includes("fraesen") ||
-      text.includes("abfräsen") ||
-      text.includes("abfraesen")
-    ) {
+    text.includes("asphalt einfräsen") ||
+    text.includes("asphalt einfraesen") ||
+    text.includes("fräsen") ||
+    text.includes("fraesen") ||
+    text.includes("abfräsen") ||
+    text.includes("abfraesen"))
+    {
       return {
         min: 2,
         avg: 4.5,
         max: 9,
         source: "RLC Plausibilitätsbibliothek",
-        group: "Oberfläche / Asphalt fräsen",
+        group: "Oberfläche / Asphalt fräsen"
       };
     }
 
     if (
-      text.includes("ac 11 ds") ||
-      text.includes("ads aus ac 11") ||
-      text.includes("asphaltdeckschicht") ||
-      text.includes("deckschicht") ||
-      text.includes("4 cm")
-    ) {
+    text.includes("ac 11 ds") ||
+    text.includes("ads aus ac 11") ||
+    text.includes("asphaltdeckschicht") ||
+    text.includes("deckschicht") ||
+    text.includes("4 cm"))
+    {
       return {
         min: 10,
         avg: 18,
         max: 32,
         source: "RLC Plausibilitätsbibliothek",
-        group: "Oberfläche / Asphaltdeckschicht",
+        group: "Oberfläche / Asphaltdeckschicht"
       };
     }
 
     if (
-      text.includes("zulage") &&
-      (text.includes("mehr") || text.includes("minder")) &&
-      (text.includes("stärke") || text.includes("staerke"))
-    ) {
+    text.includes("zulage") && (
+    text.includes("mehr") || text.includes("minder")) && (
+    text.includes("stärke") || text.includes("staerke")))
+    {
       return {
         min: 1,
         avg: 4.5,
         max: 12,
         source: "RLC Plausibilitätsbibliothek",
-        group: "Oberfläche / Asphalt Zulage",
+        group: "Oberfläche / Asphalt Zulage"
       };
     }
 
@@ -726,22 +731,22 @@ const direct = {
         avg: 5,
         max: 10,
         source: "RLC Plausibilitätsbibliothek",
-        group: "Oberfläche / Planie",
+        group: "Oberfläche / Planie"
       };
     }
   }
 
   if (
-    text.includes("abfuhr erdreich") &&
-    text.includes("bis 5 km") &&
-    (text.includes("lkw") || text.includes("kippvorgang"))
-  ) {
+  text.includes("abfuhr erdreich") &&
+  text.includes("bis 5 km") && (
+  text.includes("lkw") || text.includes("kippvorgang")))
+  {
     return {
       min: 18,
       avg: 28,
       max: 42,
       source: "RLC Preisbibliothek",
-      group: "LKW / Transport",
+      group: "LKW / Transport"
     };
   }
 
@@ -767,19 +772,19 @@ function getTrustedRlcDatabasePrice(row: EliteRow): number {
         leistungsart: row.leistungsart || "",
         bauverfahren: row.bauverfahren || "",
         menge: n(row.menge),
-        einheit: row.einheit || "",
-      },
+        einheit: row.einheit || ""
+      }
     },
     8
   );
 
-  const candidates = matches
-    .map((m) => {
-      const ep = n(m.eintrag?.kosten?.epNetto);
-      return { match: m, ep };
-    })
-    .filter((x) => x.ep > 0 && x.ep < 1000000)
-    .sort((a, b) => b.match.score - a.match.score);
+  const candidates = matches.
+  map((m) => {
+    const ep = n(m.eintrag?.kosten?.epNetto);
+    return { match: m, ep };
+  }).
+  filter((x) => x.ep > 0 && x.ep < 1000000).
+  sort((a, b) => b.match.score - a.match.score);
 
   for (const item of candidates) {
     const score = n(item.match.score);
@@ -843,9 +848,9 @@ function resolveBestRlcKiPrice(row: EliteRow, allowDatabaseSearch = false): RlcK
   const dbEp = allowDatabaseSearch ? getTrustedRlcDatabasePrice(row) : 0;
 
   const serverRaw =
-    n((row as any).rlcKiUnitPrice) ||
-    n((row as any).suggestedUnitPrice) ||
-    n((row as any).baseUnitPrice);
+  n((row as any).rlcKiUnitPrice) ||
+  n((row as any).suggestedUnitPrice) ||
+  n((row as any).baseUnitPrice);
 
   const openAiRaw = n((row as any).openAiSuggestedUnitPrice);
 
@@ -860,9 +865,9 @@ function resolveBestRlcKiPrice(row: EliteRow, allowDatabaseSearch = false): RlcK
   const openAiEp = checkedOpenAi.value > 0 ? checkedOpenAi.value : 0;
 
   const libraryAvgEp =
-    range.avg > 0 && range.max > 0
-      ? round2(range.avg)
-      : 0;
+  range.avg > 0 && range.max > 0 ?
+  round2(range.avg) :
+  0;
 
   function isPlausibleAgainstX84(ep: number, source: string): boolean {
     if (ep <= 0) return false;
@@ -907,28 +912,28 @@ function resolveBestRlcKiPrice(row: EliteRow, allowDatabaseSearch = false): RlcK
   }> = [];
 
   if (
-    dbEp > 0 &&
-    isPlausibleAgainstX84(dbEp, "datenbank") &&
-    isPlausibleAgainstLibrary(dbEp, "datenbank")
-  ) {
+  dbEp > 0 &&
+  isPlausibleAgainstX84(dbEp, "datenbank") &&
+  isPlausibleAgainstLibrary(dbEp, "datenbank"))
+  {
     candidates.push({
       source: "datenbank",
       ep: dbEp,
       weight: 100,
-      reason: "Firmen-Datenbank: stärkste Quelle, Treffer wurde plausibilisiert.",
+      reason: "Firmen-Datenbank: stärkste Quelle, Treffer wurde plausibilisiert."
     });
   }
 
   if (
-    serverEp > 0 &&
-    isPlausibleAgainstX84(serverEp, "server") &&
-    isPlausibleAgainstLibrary(serverEp, "server")
-  ) {
+  serverEp > 0 &&
+  isPlausibleAgainstX84(serverEp, "server") &&
+  isPlausibleAgainstLibrary(serverEp, "server"))
+  {
     candidates.push({
       source: "server",
       ep: serverEp,
       weight: 70,
-      reason: "Server-/Recipe-Kalkulation wurde als plausibler RLC-KI-Prüfwert akzeptiert.",
+      reason: "Server-/Recipe-Kalkulation wurde als plausibler RLC-KI-Prüfwert akzeptiert."
     });
   }
 
@@ -953,20 +958,20 @@ function resolveBestRlcKiPrice(row: EliteRow, allowDatabaseSearch = false): RlcK
       confidence: 0,
       warning: "",
       reason: [
-        "Kein belastbarer RLC-KI-Preis gefunden.",
-        `Server/RLC ${money(serverEp)}, DB ${money(dbEp)}, OpenAI ${money(openAiEp)}, Bibliothek Ø ${money(libraryAvgEp)}, X84 ${money(angebotEp)}.`,
-        "OpenAI und Bibliothek wurden nicht automatisch als Preis übernommen.",
-      ].join(" "),
+      "Kein belastbarer RLC-KI-Preis gefunden.",
+      `Server/RLC ${money(serverEp)}, DB ${money(dbEp)}, OpenAI ${money(openAiEp)}, Bibliothek Ø ${money(libraryAvgEp)}, X84 ${money(angebotEp)}.`,
+      "OpenAI und Bibliothek wurden nicht automatisch als Preis übernommen."].
+      join(" ")
     };
   }
 
   const diffPct =
-    angebotEp > 0 ? round2(((best.ep - angebotEp) / angebotEp) * 100) : 0;
+  angebotEp > 0 ? round2((best.ep - angebotEp) / angebotEp * 100) : 0;
 
   const warning =
-    angebotEp > 0 && Math.abs(diffPct) >= 35
-      ? `RLC-KI weicht deutlich vom X84-Angebotspreis ab (${money(angebotEp)} X84 ↔ ${money(best.ep)} RLC-KI, ${diffPct}%). Fachlich prüfen.`
-      : "";
+  angebotEp > 0 && Math.abs(diffPct) >= 35 ?
+  `RLC-KI weicht deutlich vom X84-Angebotspreis ab (${money(angebotEp)} X84 ↔ ${money(best.ep)} RLC-KI, ${diffPct}%). Fachlich prüfen.` :
+  "";
 
   return {
     angebotEp,
@@ -979,10 +984,10 @@ function resolveBestRlcKiPrice(row: EliteRow, allowDatabaseSearch = false): RlcK
     confidence: best.source === "datenbank" ? 0.92 : 0.78,
     warning,
     reason: [
-      best.reason,
-      `Quellen geprüft: DB ${money(dbEp)}, Server/RLC ${money(serverEp)}, OpenAI ${money(openAiEp)}, Bibliothek Ø ${money(libraryAvgEp)}, X84 ${money(angebotEp)}.`,
-      "X84 bleibt Referenz/Angebot. RLC-KI ist ein geprüfter Vergleichswert.",
-    ].join(" "),
+    best.reason,
+    `Quellen geprüft: DB ${money(dbEp)}, Server/RLC ${money(serverEp)}, OpenAI ${money(openAiEp)}, Bibliothek Ø ${money(libraryAvgEp)}, X84 ${money(angebotEp)}.`,
+    "X84 bleibt Referenz/Angebot. RLC-KI ist ein geprüfter Vergleichswert."].
+    join(" ")
   };
 }
 function getRawRlcKiUnitPrice(row: EliteRow): number {
@@ -1005,15 +1010,15 @@ function scrollToLvPosition(rowId: string | undefined) {
 
   try {
     const escaped =
-      typeof CSS !== "undefined" && typeof CSS.escape === "function"
-        ? CSS.escape(id)
-        : id.replace(/["\\]/g, "\\$&");
+    typeof CSS !== "undefined" && typeof CSS.escape === "function" ?
+    CSS.escape(id) :
+    id.replace(/["\\]/g, "\\$&");
 
     const el =
-      document.querySelector(`[data-row-id="${escaped}"]`) ||
-      document.querySelector(`[data-lv-row-id="${escaped}"]`) ||
-      document.getElementById(`rlc-row-${id}`) ||
-      document.getElementById(id);
+    document.querySelector(`[data-row-id="${escaped}"]`) ||
+    document.querySelector(`[data-lv-row-id="${escaped}"]`) ||
+    document.getElementById(`rlc-row-${id}`) ||
+    document.getElementById(id);
 
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1023,10 +1028,10 @@ function scrollToLvPosition(rowId: string | undefined) {
       }
     }
   } catch {
-    // Scroll ist nur Komfortfunktion. Keine Kalkulation blockieren.
-  }
-}
 
+
+    // Scroll ist nur Komfortfunktion. Keine Kalkulation blockieren.
+  }}
 function getRlcKiDisplay(row: EliteRow): {
   valid: number;
   raw: number;
@@ -1045,7 +1050,7 @@ function getRlcKiDisplay(row: EliteRow): {
     valid: checked.value,
     raw,
     label: checked.value > 0 ? money(checked.value) : "—",
-    rejected: checked.rejected,
+    rejected: checked.rejected
   };
 }
 
@@ -1161,8 +1166,8 @@ function getX84CompanyFrontendOverride(row: EliteRow): number {
       n((hit as any).kosten?.epNetto) ||
       n((hit as any).preis) ||
       n((hit as any).unitPriceNet) ||
-      n((hit as any).finalUnitPrice)
-    );
+      n((hit as any).finalUnitPrice));
+
   } catch {
     return 0;
   }
@@ -1179,10 +1184,10 @@ function getRlcKiUnitPrice(row: EliteRow): number {
 function clearOldKiProposalFields(row: EliteRow): EliteRow {
   // X84 darf RLC-KI nicht mehr bestimmen.
   const x84 =
-    getOfferUnitPrice(row) ||
-    n((row as any).originalPreKiPrice) ||
-    n(row.preis) ||
-    n(row.finalUnitPrice);
+  getOfferUnitPrice(row) ||
+  n((row as any).originalPreKiPrice) ||
+  n(row.preis) ||
+  n(row.finalUnitPrice);
 
   return normalizeEliteRow({
     ...row,
@@ -1211,7 +1216,7 @@ function clearOldKiProposalFields(row: EliteRow): EliteRow {
     // Alte künstliche Prüfhinweise entfernen
     warning: "",
     calculationStatus: "ok",
-    riskLevel: "medium",
+    riskLevel: "medium"
   } as unknown as EliteRow);
 }
 
@@ -1228,7 +1233,7 @@ function getPriceDifference(row: EliteRow): number {
 function getPriceDifferencePct(row: EliteRow): number {
   const angebot = getOfferUnitPrice(row);
   if (angebot <= 0) return 0;
-  return round2((getPriceDifference(row) / angebot) * 100);
+  return round2(getPriceDifference(row) / angebot * 100);
 }
 
 function isRlcKiWithinFivePercent(row: EliteRow): boolean {
@@ -1237,7 +1242,7 @@ function isRlcKiWithinFivePercent(row: EliteRow): boolean {
 
   if (x84 <= 0 || rlc <= 0) return false;
 
-  const pct = Math.abs(((rlc - x84) / x84) * 100);
+  const pct = Math.abs((rlc - x84) / x84 * 100);
   return pct <= 5;
 }
 
@@ -1249,7 +1254,7 @@ function cleanRlcKiWarningState(row: EliteRow): EliteRow {
     warning: "",
     calculationStatus: "ok",
     riskLevel: "low",
-    confidence: Math.max(n(row.confidence), 0.96),
+    confidence: Math.max(n(row.confidence), 0.96)
   };
 }
 
@@ -1260,13 +1265,13 @@ function getRlcKiDifference(row: EliteRow): number {
 function getRlcKiDifferencePct(row: EliteRow): number {
   const angebot = getOfferUnitPrice(row);
   if (angebot <= 0) return 0;
-  return round2((getRlcKiDifference(row) / angebot) * 100);
+  return round2(getRlcKiDifference(row) / angebot * 100);
 }
 
 function shouldKeepOfferPrice(angebotEp: number, kiEp: number): boolean {
   if (angebotEp <= 0 || kiEp <= 0) return false;
 
-  const diffPct = Math.abs(((kiEp - angebotEp) / angebotEp) * 100);
+  const diffPct = Math.abs((kiEp - angebotEp) / angebotEp * 100);
 
   // Sicherheitsregel:
   // Bei großer Abweichung bleibt der X84-Angebotspreis final.
@@ -1279,23 +1284,23 @@ function costBuildUp(row: EliteRow): number {
 
   return round2(
     n(row.materialCost) +
-      n(row.laborCost) +
-      n(row.machineCost) +
-      n(row.subcontractorCost) +
-      n(row.disposalCost) +
-      n(row.overheadCost) +
-      n(row.riskCost) +
-      n(row.profitCost)
+    n(row.laborCost) +
+    n(row.machineCost) +
+    n(row.subcontractorCost) +
+    n(row.disposalCost) +
+    n(row.overheadCost) +
+    n(row.riskCost) +
+    n(row.profitCost)
   );
 }
 
 function makeBreakdownLine(
-  group: PriceBreakdownGroup,
-  name: string,
-  unit: string,
-  total: number,
-  note = ""
-): PriceBreakdownLine {
+group: PriceBreakdownGroup,
+name: string,
+unit: string,
+total: number,
+note = "")
+: PriceBreakdownLine {
   return normalizeBreakdownLine({
     group,
     name,
@@ -1303,7 +1308,7 @@ function makeBreakdownLine(
     qty: 1,
     price: round2(total),
     total: round2(total),
-    note,
+    note
   });
 }
 
@@ -1311,11 +1316,11 @@ function buildAutomaticPriceBreakdown(row: Partial<EliteRow>): PriceBreakdownLin
   const unit = String(row.einheit || "EH");
   const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
   const ep =
-    n(row.finalUnitPrice) ||
-    n(row.preis) ||
-    n(row.suggestedUnitPrice) ||
-    n(row.baseUnitPrice) ||
-    0;
+  n(row.finalUnitPrice) ||
+  n(row.preis) ||
+  n(row.suggestedUnitPrice) ||
+  n(row.baseUnitPrice) ||
+  0;
 
   let material = n(row.materialCost);
   let labor = n(row.laborCost);
@@ -1327,15 +1332,15 @@ function buildAutomaticPriceBreakdown(row: Partial<EliteRow>): PriceBreakdownLin
   let profit = n(row.profitCost);
 
   const existingSum =
-    material + labor + machine + subcontractor + disposal + overhead + risk + profit;
+  material + labor + machine + subcontractor + disposal + overhead + risk + profit;
 
   if (existingSum <= 0 && ep > 0) {
     if (
-      text.includes("aushub") ||
-      text.includes("graben") ||
-      text.includes("verfull") ||
-      text.includes("verfüll")
-    ) {
+    text.includes("aushub") ||
+    text.includes("graben") ||
+    text.includes("verfull") ||
+    text.includes("verfüll"))
+    {
       material = round2(ep * 0.14);
       labor = round2(ep * 0.28);
       machine = round2(ep * 0.27);
@@ -1345,10 +1350,10 @@ function buildAutomaticPriceBreakdown(row: Partial<EliteRow>): PriceBreakdownLin
       risk = round2(ep * 0.04);
       profit = round2(ep * 0.08);
     } else if (
-      text.includes("rohr") ||
-      text.includes("speedpipe") ||
-      text.includes("kabel")
-    ) {
+    text.includes("rohr") ||
+    text.includes("speedpipe") ||
+    text.includes("kabel"))
+    {
       material = round2(ep * 0.42);
       labor = round2(ep * 0.24);
       machine = round2(ep * 0.11);
@@ -1418,27 +1423,27 @@ function buildAutomaticPriceBreakdown(row: Partial<EliteRow>): PriceBreakdownLin
 }
 
 function breakdownText(row: EliteRow): string {
-  const lines = row.priceBreakdown?.length
-    ? row.priceBreakdown
-    : buildAutomaticPriceBreakdown(row);
+  const lines = row.priceBreakdown?.length ?
+  row.priceBreakdown :
+  buildAutomaticPriceBreakdown(row);
 
   if (!lines.length) return "";
 
-  return lines
-    .map(
-      (line) =>
-        `${line.group}: ${line.name} · ${qty(line.qty)} ${line.unit} × ${money(
-          line.price
-        )} = ${money(line.total)}`
-    )
-    .join("\n");
+  return lines.
+  map(
+    (line) =>
+    `${line.group}: ${line.name} · ${qty(line.qty)} ${line.unit} × ${money(
+      line.price
+    )} = ${money(line.total)}`
+  ).
+  join("\n");
 }
 
 function groupSum(row: EliteRow, group: PriceBreakdownGroup): number {
   return round2(
-    (row.priceBreakdown || [])
-      .filter((x) => x.group === group)
-      .reduce((sum, x) => sum + n(x.total), 0)
+    (row.priceBreakdown || []).
+    filter((x) => x.group === group).
+    reduce((sum, x) => sum + n(x.total), 0)
   );
 }
 
@@ -1451,48 +1456,48 @@ function suggestUnitFromText(row: Partial<EliteRow>): string {
   const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
 
   if (
-    text.includes("aushub") ||
-    text.includes("boden") ||
-    text.includes("verfull") ||
-    text.includes("verfüll") ||
-    text.includes("kies") ||
-    text.includes("schotter") ||
-    text.includes("beton")
-  ) {
+  text.includes("aushub") ||
+  text.includes("boden") ||
+  text.includes("verfull") ||
+  text.includes("verfüll") ||
+  text.includes("kies") ||
+  text.includes("schotter") ||
+  text.includes("beton"))
+  {
     return "m³";
   }
 
   if (
-    text.includes("asphalt") ||
-    text.includes("pflaster") ||
-    text.includes("flache") ||
-    text.includes("fläche") ||
-    text.includes("schalung") ||
-    text.includes("deckschicht") ||
-    text.includes("tragschicht")
-  ) {
+  text.includes("asphalt") ||
+  text.includes("pflaster") ||
+  text.includes("flache") ||
+  text.includes("fläche") ||
+  text.includes("schalung") ||
+  text.includes("deckschicht") ||
+  text.includes("tragschicht"))
+  {
     return "m²";
   }
 
   if (
-    text.includes("rohr") ||
-    text.includes("leitung") ||
-    text.includes("kabel") ||
-    text.includes("speedpipe") ||
-    text.includes("markierung") ||
-    text.includes("trasse")
-  ) {
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("kabel") ||
+  text.includes("speedpipe") ||
+  text.includes("markierung") ||
+  text.includes("trasse"))
+  {
     return "m";
   }
 
   if (
-    text.includes("schacht") ||
-    text.includes("hausanschluss") ||
-    text.includes("anschluss") ||
-    text.includes("muffe") ||
-    text.includes("abzweig") ||
-    text.includes("bogen")
-  ) {
+  text.includes("schacht") ||
+  text.includes("hausanschluss") ||
+  text.includes("anschluss") ||
+  text.includes("muffe") ||
+  text.includes("abzweig") ||
+  text.includes("bogen"))
+  {
     return "Stk";
   }
 
@@ -1518,38 +1523,38 @@ function suggestGewerk(row: Partial<EliteRow>): string {
   const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
 
   if (
-    text.includes("aushub") ||
-    text.includes("graben") ||
-    text.includes("verfull") ||
-    text.includes("verfüll") ||
-    text.includes("boden")
-  ) {
+  text.includes("aushub") ||
+  text.includes("graben") ||
+  text.includes("verfull") ||
+  text.includes("verfüll") ||
+  text.includes("boden"))
+  {
     return "Tiefbau / Erdarbeiten";
   }
 
   if (
-    text.includes("rohr") ||
-    text.includes("leitung") ||
-    text.includes("speedpipe") ||
-    text.includes("kabel")
-  ) {
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("speedpipe") ||
+  text.includes("kabel"))
+  {
     return "Tiefbau / Leitungsbau";
   }
 
   if (
-    text.includes("asphalt") ||
-    text.includes("pflaster") ||
-    text.includes("markierung")
-  ) {
+  text.includes("asphalt") ||
+  text.includes("pflaster") ||
+  text.includes("markierung"))
+  {
     return "Straßenbau / Oberfläche";
   }
 
   if (
-    text.includes("beton") ||
-    text.includes("schalung") ||
-    text.includes("bewehrung") ||
-    text.includes("fundament")
-  ) {
+  text.includes("beton") ||
+  text.includes("schalung") ||
+  text.includes("bewehrung") ||
+  text.includes("fundament"))
+  {
     return "Rohbau / Betonbau";
   }
 
@@ -1660,11 +1665,11 @@ function suggestLangtext(row: Partial<EliteRow>): string {
   }
 
   if (
-    text.includes("rohr") ||
-    text.includes("speedpipe") ||
-    text.includes("kabel") ||
-    text.includes("leitung")
-  ) {
+  text.includes("rohr") ||
+  text.includes("speedpipe") ||
+  text.includes("kabel") ||
+  text.includes("leitung"))
+  {
     parts.push(
       "Einschließlich Lieferung beziehungsweise Verlegung, Ausrichtung, Bettung und fachgerechtem Anschluss gemäß Ausführungsplanung."
     );
@@ -1704,8 +1709,8 @@ function normalizeEliteRow(row: Partial<EliteRow>): EliteRow {
   return {
     id: String(row.id || safeId()),
     auftragId: row.auftragId || "",
-auftragName: row.auftragName || "",
-auftragType: row.auftragType,
+    auftragName: row.auftragName || "",
+    auftragType: row.auftragType,
     posNr: String(row.posNr ?? ""),
     parentPosNr: row.parentPosNr,
     sortIndex: row.sortIndex,
@@ -1784,7 +1789,7 @@ auftragType: row.auftragType,
     rlcPreisAvg: (row as any).rlcPreisAvg,
     rlcPreisMax: (row as any).rlcPreisMax,
     rlcPreisSource: (row as any).rlcPreisSource,
-    rlcPreisGroup: (row as any).rlcPreisGroup,
+    rlcPreisGroup: (row as any).rlcPreisGroup
   } as unknown as EliteRow;
 }
 
@@ -1804,7 +1809,7 @@ function enhanceKalkulatorInsertions(row: EliteRow): EliteRow {
     ...row,
     kurztext,
     einheit,
-    gewerk,
+    gewerk
   });
 
   const bauverfahren = suggestBauverfahren(
@@ -1818,7 +1823,7 @@ function enhanceKalkulatorInsertions(row: EliteRow): EliteRow {
     einheit,
     gewerk,
     leistungsart,
-    bauverfahren,
+    bauverfahren
   });
 
   let warning = String(row.warning || "");
@@ -1831,24 +1836,24 @@ function enhanceKalkulatorInsertions(row: EliteRow): EliteRow {
     einheit,
     gewerk,
     leistungsart,
-    bauverfahren,
+    bauverfahren
   });
 
-  const priceBreakdown = prepared.priceBreakdown?.length
-    ? normalizeBreakdown(prepared.priceBreakdown)
-    : buildAutomaticPriceBreakdown(prepared);
+  const priceBreakdown = prepared.priceBreakdown?.length ?
+  normalizeBreakdown(prepared.priceBreakdown) :
+  buildAutomaticPriceBreakdown(prepared);
 
   const breakdownSum = sumBreakdown(priceBreakdown);
 
-/*
- * Wichtig:
- * finalUnitPrice vom Server ist die verbindliche Wahrheit.
- * priceBreakdown kann bewusst eine KI-Prognose enthalten, z.B. wenn die
- * Stabilitätsbremse aktiv ist. Dann darf die Urkalkulationssumme den finalen EP
- * NICHT automatisch überschreiben.
- */
-const stableServerEp = n(prepared.finalUnitPrice ?? prepared.preis);
-const finalUnitPrice =
+  /*
+   * Wichtig:
+   * finalUnitPrice vom Server ist die verbindliche Wahrheit.
+   * priceBreakdown kann bewusst eine KI-Prognose enthalten, z.B. wenn die
+   * Stabilitätsbremse aktiv ist. Dann darf die Urkalkulationssumme den finalen EP
+   * NICHT automatisch überschreiben.
+   */
+  const stableServerEp = n(prepared.finalUnitPrice ?? prepared.preis);
+  const finalUnitPrice =
   stableServerEp > 0 ? stableServerEp : breakdownSum > 0 ? breakdownSum : getUnitPrice(prepared);
 
   const fixed: string[] = [];
@@ -1872,24 +1877,24 @@ const finalUnitPrice =
 
   return normalizeEliteRow({
     ...prepared,
-    priceBreakdown,    finalUnitPrice,
+    priceBreakdown, finalUnitPrice,
     preis: finalUnitPrice,
     suggestedUnitPrice: prepared.suggestedUnitPrice || finalUnitPrice,
     gesamt: round2(n(prepared.menge) * finalUnitPrice),
     warning,
-    aiReason,
+    aiReason
   });
 }
 
 function fromLvRows(rows: LVPos[]): EliteRow[] {
   return rows.map((r) => {
     const realX84 =
-      rowHasRealX84(r as any) ||
-      String((r as any).gaebType || (r as any).importType || "").toLowerCase().includes("x84");
+    rowHasRealX84(r as any) ||
+    String((r as any).gaebType || (r as any).importType || "").toLowerCase().includes("x84");
 
-    const importedEp = realX84
-      ? n((r as any).angebotUnitPrice) || n((r as any).originalPreKiPrice) || n(r.preis)
-      : 0;
+    const importedEp = realX84 ?
+    n((r as any).angebotUnitPrice) || n((r as any).originalPreKiPrice) || n(r.preis) :
+    0;
 
     const base = normalizeEliteRow({
       ...r,
@@ -1905,7 +1910,7 @@ function fromLvRows(rows: LVPos[]): EliteRow[] {
       confidence: r.confidence,
       calculationStatus: realX84 && importedEp > 0 ? "manual" : "critical",
       riskLevel: "medium",
-      rabatt: 0,
+      rabatt: 0
     });
 
     if (kiIsStructuralRow(base)) {
@@ -1917,10 +1922,10 @@ function fromLvRows(rows: LVPos[]): EliteRow[] {
 }
 
 function mergeEliteResult(
-  oldRow: EliteRow,
-  result: EliteKalkulationResultRow,
-  mode: "offer-check" | "new-calculation" = "offer-check"
-): EliteRow {
+oldRow: EliteRow,
+result: EliteKalkulationResultRow,
+mode: "offer-check" | "new-calculation" = "offer-check")
+: EliteRow {
   const resultBreakdown = normalizeBreakdown(result.priceBreakdown);
   const oldBreakdown = normalizeBreakdown(oldRow.priceBreakdown);
   const menge = n(result.menge ?? oldRow.menge);
@@ -1933,14 +1938,14 @@ function mergeEliteResult(
    * expliziten Angebotsfeldern.
    */
   const existingOfferEp =
-    n((oldRow as any).angebotUnitPrice) ||
-    n((oldRow as any).originalPreKiPrice) ||
-    n((oldRow as any).x84UnitPrice);
+  n((oldRow as any).angebotUnitPrice) ||
+  n((oldRow as any).originalPreKiPrice) ||
+  n((oldRow as any).x84UnitPrice);
 
   const resultOfferEp =
-    n((result as any).angebotUnitPrice) ||
-    n((result as any).originalPreKiPrice) ||
-    n((result as any).x84UnitPrice);
+  n((result as any).angebotUnitPrice) ||
+  n((result as any).originalPreKiPrice) ||
+  n((result as any).x84UnitPrice);
 
   /*
    * X84 bleibt immer Vergleichsbasis im Frontend.
@@ -1950,13 +1955,13 @@ function mergeEliteResult(
   const angebotEp = existingOfferEp || (mode === "offer-check" ? resultOfferEp : 0);
 
   const serverEp =
-    n((result as any).rlcKiUnitPrice) ||
-    n(result.finalUnitPrice) ||
-    n(result.suggestedUnitPrice) ||
-    n(result.baseUnitPrice) ||
-    n((result as any).unitPrice) ||
-    n((result as any).preis) ||
-    0;
+  n((result as any).rlcKiUnitPrice) ||
+  n(result.finalUnitPrice) ||
+  n(result.suggestedUnitPrice) ||
+  n(result.baseUnitPrice) ||
+  n((result as any).unitPrice) ||
+  n((result as any).preis) ||
+  0;
 
   const normalizedResult = {
     ...result,
@@ -1966,7 +1971,7 @@ function mergeEliteResult(
     suggestedUnitPrice: n(result.suggestedUnitPrice) || serverEp,
     baseUnitPrice: n(result.baseUnitPrice) || serverEp,
     preis: serverEp,
-    totalNet: serverEp > 0 ? round2(menge * serverEp) : 0,
+    totalNet: serverEp > 0 ? round2(menge * serverEp) : 0
   } as any;
 
   const temp = normalizeEliteRow({
@@ -1982,9 +1987,9 @@ function mergeEliteResult(
     rlcPreisAvg: (result as any).rlcPreisAvg ?? (oldRow as any).rlcPreisAvg,
     rlcPreisMax: (result as any).rlcPreisMax ?? (oldRow as any).rlcPreisMax,
     rlcPreisSource:
-      (result as any).rlcPreisSource ?? (oldRow as any).rlcPreisSource,
+    (result as any).rlcPreisSource ?? (oldRow as any).rlcPreisSource,
     rlcPreisGroup:
-      (result as any).rlcPreisGroup ?? (oldRow as any).rlcPreisGroup,
+    (result as any).rlcPreisGroup ?? (oldRow as any).rlcPreisGroup
   } as any);
 
   const decision = resolveBestRlcKiPrice(temp, false);
@@ -1993,7 +1998,7 @@ function mergeEliteResult(
 
   const diff = rlcKiEp > 0 && angebotEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
   const diffPct =
-    rlcKiEp > 0 && angebotEp > 0 ? round2((diff / angebotEp) * 100) : 0;
+  rlcKiEp > 0 && angebotEp > 0 ? round2(diff / angebotEp * 100) : 0;
 
   const merged = normalizeEliteRow({
     ...oldRow,
@@ -2039,14 +2044,14 @@ function mergeEliteResult(
     ),
 
     riskLevel:
-      mode === "offer-check" && Math.abs(diffPct) >= 35
-        ? "high"
-        : result.riskLevel ?? oldRow.riskLevel ?? "medium",
+    mode === "offer-check" && Math.abs(diffPct) >= 35 ?
+    "high" :
+    result.riskLevel ?? oldRow.riskLevel ?? "medium",
 
     calculationStatus:
-      mode === "offer-check" && Math.abs(diffPct) >= 35
-        ? "warning"
-        : result.calculationStatus ?? oldRow.calculationStatus ?? "manual",
+    mode === "offer-check" && Math.abs(diffPct) >= 35 ?
+    "warning" :
+    result.calculationStatus ?? oldRow.calculationStatus ?? "manual",
 
     gewerk: result.gewerk ?? oldRow.gewerk,
     leistungsart: result.leistungsart ?? oldRow.leistungsart,
@@ -2056,24 +2061,24 @@ function mergeEliteResult(
     rlcPreisAvg: (result as any).rlcPreisAvg ?? (oldRow as any).rlcPreisAvg,
     rlcPreisMax: (result as any).rlcPreisMax ?? (oldRow as any).rlcPreisMax,
     rlcPreisSource:
-      (result as any).rlcPreisSource ?? (oldRow as any).rlcPreisSource,
+    (result as any).rlcPreisSource ?? (oldRow as any).rlcPreisSource,
     rlcPreisGroup:
-      (result as any).rlcPreisGroup ?? (oldRow as any).rlcPreisGroup,
+    (result as any).rlcPreisGroup ?? (oldRow as any).rlcPreisGroup,
 
-    warning: [decision.warning, result.warning ?? oldRow.warning]
-      .filter(Boolean)
-      .join(" · "),
+    warning: [decision.warning, result.warning ?? oldRow.warning].
+    filter(Boolean).
+    join(" · "),
 
     aiReason: [
-      result.aiReason ?? oldRow.aiReason,
-      `RLC-KI Preisentscheidung: ${decision.source}. ${decision.reason}`,
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
+    result.aiReason ?? oldRow.aiReason,
+    `RLC-KI Preisentscheidung: ${decision.source}. ${decision.reason}`].
+
+    filter(Boolean).
+    join("\n\n"),
 
     source: (result as any).source || "server",
 
-    priceBreakdown: resultBreakdown.length ? resultBreakdown : oldBreakdown,
+    priceBreakdown: resultBreakdown.length ? resultBreakdown : oldBreakdown
   } as any);
 
   const enhanced = enhanceKalkulatorInsertions(merged);
@@ -2085,18 +2090,18 @@ function mergeEliteResult(
    * wieder von Server 3,50 €/m³ auf lokalen Altwert 28 €/m³ zurücksetzen.
    */
   const strictServerEp =
-    n((result as any).rlcKiUnitPrice) ||
-    n((result as any).finalUnitPrice) ||
-    n((result as any).suggestedUnitPrice) ||
-    n((result as any).baseUnitPrice) ||
-    n((result as any).unitPrice) ||
-    n((result as any).preis);
+  n((result as any).rlcKiUnitPrice) ||
+  n((result as any).finalUnitPrice) ||
+  n((result as any).suggestedUnitPrice) ||
+  n((result as any).baseUnitPrice) ||
+  n((result as any).unitPrice) ||
+  n((result as any).preis);
 
   if (strictServerEp > 0) {
     const strictServerTotal = round2(menge * strictServerEp);
     const strictDiff = angebotEp > 0 ? round2(strictServerEp - angebotEp) : 0;
     const strictDiffPct =
-      angebotEp > 0 ? round2((strictDiff / angebotEp) * 100) : 0;
+    angebotEp > 0 ? round2(strictDiff / angebotEp * 100) : 0;
 
     return normalizeEliteRow({
       ...enhanced,
@@ -2121,7 +2126,7 @@ function mergeEliteResult(
       riskLevel: ((result as any).riskLevel || enhanced.riskLevel) as RiskLevel,
       calculationStatus: ((result as any).calculationStatus || enhanced.calculationStatus) as CalcStatus,
       confidence: n((result as any).confidence) || enhanced.confidence,
-      priceBreakdown: resultBreakdown.length ? resultBreakdown : enhanced.priceBreakdown,
+      priceBreakdown: resultBreakdown.length ? resultBreakdown : enhanced.priceBreakdown
     } as any);
   }
 
@@ -2129,22 +2134,22 @@ function mergeEliteResult(
 }
 function keepX84AsFinalPrice(row: EliteRow): EliteRow {
   const angebotEp =
-    n((row as any).angebotUnitPrice) ||
-    n((row as any).originalPreKiPrice) ||
-    n(row.preis) ||
-    n(row.finalUnitPrice);
+  n((row as any).angebotUnitPrice) ||
+  n((row as any).originalPreKiPrice) ||
+  n(row.preis) ||
+  n(row.finalUnitPrice);
 
   /*
    * RLC-KI bleibt nur Vergleich.
    * Kein Fallback auf finalUnitPrice/preis, sonst wird X84 erneut als KI-Wert erzeugt.
    */
   const rlcKiEp =
-    n((row as any).rlcKiUnitPrice) ||
-    n((row as any).openAiSuggestedUnitPrice);
+  n((row as any).rlcKiUnitPrice) ||
+  n((row as any).openAiSuggestedUnitPrice);
 
   const diff = rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
   const diffPct =
-    rlcKiEp > 0 && angebotEp > 0 ? round2((diff / angebotEp) * 100) : 0;
+  rlcKiEp > 0 && angebotEp > 0 ? round2(diff / angebotEp * 100) : 0;
 
   return normalizeEliteRow({
     ...row,
@@ -2163,7 +2168,7 @@ function keepX84AsFinalPrice(row: EliteRow): EliteRow {
     rlcKiTotal: rlcKiEp > 0 ? round2(n(row.menge) * rlcKiEp) : 0,
 
     priceDifference: diff,
-    priceDifferencePct: diffPct,
+    priceDifferencePct: diffPct
   } as unknown as EliteRow);
 }
 function normalizeKiWarningStatus(row: EliteRow): EliteRow {
@@ -2171,30 +2176,30 @@ function normalizeKiWarningStatus(row: EliteRow): EliteRow {
   const lower = warning.toLowerCase();
 
   const hasRealProblem =
-    lower.includes("plausibilitäts") ||
-    lower.includes("openai-vorschlag") ||
-    lower.includes("gezielte openai") ||
-    lower.includes("kritisch") ||
-    lower.includes("bestandsanschluss") ||
-    lower.includes("technisch prüfen") ||
-    lower.includes("erhöhtes kalkulationsrisiko") ||
-    lower.includes("menge fehlt") ||
-    lower.includes("einheit fehlt") ||
-    lower.includes("kein ausreichend") ||
-    lower.includes("außerhalb");
+  lower.includes("plausibilitäts") ||
+  lower.includes("openai-vorschlag") ||
+  lower.includes("gezielte openai") ||
+  lower.includes("kritisch") ||
+  lower.includes("bestandsanschluss") ||
+  lower.includes("technisch prüfen") ||
+  lower.includes("erhöhtes kalkulationsrisiko") ||
+  lower.includes("menge fehlt") ||
+  lower.includes("einheit fehlt") ||
+  lower.includes("kein ausreichend") ||
+  lower.includes("außerhalb");
 
   const onlyRecipeHint =
-    lower.includes("rezeptkalkulation verwendet") && !hasRealProblem;
+  lower.includes("rezeptkalkulation verwendet") && !hasRealProblem;
 
   const onlyFallbackHint =
-    lower.includes("nur regel-engine-fallback verwendet") && !hasRealProblem;
+  lower.includes("nur regel-engine-fallback verwendet") && !hasRealProblem;
 
   if (onlyRecipeHint || onlyFallbackHint) {
     return {
       ...row,
       calculationStatus: "ok",
       riskLevel: row.riskLevel === "high" ? "medium" : row.riskLevel,
-      warning: "",
+      warning: ""
     };
   }
 
@@ -2240,8 +2245,8 @@ function rowHasNoDb(row: EliteRow): boolean {
     warning.includes("keine passende erfahrung") ||
     warning.includes("keine passende") ||
     reason.includes("kein ausreichend ähnlicher datenbanktreffer") ||
-    reason.includes("kein direkter datenbanktreffer")
-  );
+    reason.includes("kein direkter datenbanktreffer"));
+
 }
 
 function rowProblem(row: EliteRow): string {
@@ -2284,8 +2289,8 @@ function isSafeRow(row: EliteRow): boolean {
     row.priceBreakdown.length > 0 &&
     n(row.confidence) >= 0.75 &&
     row.calculationStatus !== "critical" &&
-    row.riskLevel !== "high"
-  );
+    row.riskLevel !== "high");
+
 }
 
 function riskFromDb(risk?: string): RiskLevel {
@@ -2302,13 +2307,13 @@ function getCurrentBreakdown(row: EliteRow): PriceBreakdownLine[] {
 }
 
 function breakdownGroupTotal(
-  row: EliteRow,
-  groups: PriceBreakdownGroup[]
-): number {
+row: EliteRow,
+groups: PriceBreakdownGroup[])
+: number {
   return round2(
-    getCurrentBreakdown(row)
-      .filter((line) => groups.includes(line.group))
-      .reduce((sum, line) => sum + n(line.total), 0)
+    getCurrentBreakdown(row).
+    filter((line) => groups.includes(line.group)).
+    reduce((sum, line) => sum + n(line.total), 0)
   );
 }
 
@@ -2322,15 +2327,15 @@ function databaseCostsFromCurrentRow(row: EliteRow) {
     disposalCost: breakdownGroupTotal(row, ["Entsorgung"]),
     overheadCost: breakdownGroupTotal(row, ["Gemeinkosten"]),
     riskCost: breakdownGroupTotal(row, ["Risiko"]),
-    profitCost: breakdownGroupTotal(row, ["Gewinn"]),
+    profitCost: breakdownGroupTotal(row, ["Gewinn"])
   };
 }
 
 function saveRowsToDatenbank(
-  rows: EliteRow[],
-  projectKey: string,
-  projectTitle = ""
-): number {
+rows: EliteRow[],
+projectKey: string,
+projectTitle = "")
+: number {
   const valid = rows.filter((r) => {
     if (kiIsStructuralRow(r)) return false;
 
@@ -2342,23 +2347,23 @@ function saveRowsToDatenbank(
   if (!valid.length) return 0;
 
   const datenbankDuplicateKey = (r: any) =>
-    [
-      String(projectKey || "").trim().toLowerCase(),
-      String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
-      String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
-      String(r?.einheit || r?.unit || "").trim().toLowerCase(),
-      String(r?.datenbankQuelle || r?.quelle || r?.source || "ki").trim().toLowerCase(),
-    ].join("||");
+  [
+  String(projectKey || "").trim().toLowerCase(),
+  String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+  String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+  String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+  String(r?.datenbankQuelle || r?.quelle || r?.source || "ki").trim().toLowerCase()].
+  join("||");
 
   const existingKeys = new Set(
     KalkulationsDatenbank.list().map((r: any) =>
-      [
-        String(r?.projektCode || "").trim().toLowerCase(),
-        String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
-        String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
-        String(r?.einheit || r?.unit || "").trim().toLowerCase(),
-        String(r?.quelle || r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase(),
-      ].join("||")
+    [
+    String(r?.projektCode || "").trim().toLowerCase(),
+    String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+    String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+    String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+    String(r?.quelle || r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase()].
+    join("||")
     )
   );
 
@@ -2372,14 +2377,14 @@ function saveRowsToDatenbank(
     return true;
   });
 
-  const serverSyncSourceRows = uniqueValid.length
-    ? uniqueValid
-    : valid.filter((r: any) => Boolean((r as any).approvedForGlobalKnowledge));
+  const serverSyncSourceRows = uniqueValid.length ?
+  uniqueValid :
+  valid.filter((r: any) => Boolean((r as any).approvedForGlobalKnowledge));
 
   if (!uniqueValid.length && !serverSyncSourceRows.length) {
     console.log("[RLC-KI] V48C Datenbank Duplicate Guard: no new rows", {
       projectKey,
-      skipped: valid.length,
+      skipped: valid.length
     });
     return 0;
   }
@@ -2388,16 +2393,16 @@ function saveRowsToDatenbank(
     console.log("[RLC-KI] V51D server sync despite local duplicate", {
       projectKey,
       serverSyncRows: serverSyncSourceRows.length,
-      localNewRows: 0,
+      localNewRows: 0
     });
   }
 
   const serverSyncRows = serverSyncSourceRows.map((r: any) => {
     const currentBreakdown = getCurrentBreakdown(r);
     const ep =
-      sumBreakdown(currentBreakdown) > 0
-        ? sumBreakdown(currentBreakdown)
-        : getUnitPrice(r);
+    sumBreakdown(currentBreakdown) > 0 ?
+    sumBreakdown(currentBreakdown) :
+    getUnitPrice(r);
     const gp = round2(n(r.menge) * ep * (1 - n(r.rabatt) / 100));
 
     return {
@@ -2435,7 +2440,7 @@ function saveRowsToDatenbank(
       confidence: n(r.confidence, 0.75),
       riskLevel: r.riskLevel || "medium",
       aiReason: r.aiReason || "",
-      warning: r.warning || "",
+      warning: r.warning || ""
     };
   });
 
@@ -2446,48 +2451,48 @@ function saveRowsToDatenbank(
     body: JSON.stringify({
       projectKey,
       projectTitle,
-      rows: serverSyncRows,
-    }),
-  })
-    .then(async (res) => {
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        console.warn("[RLC-KI] V51 server datenbank sync failed", {
-          status: res.status,
-          json,
-          projectKey,
-          count: serverSyncRows.length,
-        });
-        return;
-      }
-
-      console.log("[RLC-KI] V51 server datenbank sync ok", {
-        projectKey,
-        saved: json.saved,
-        rows: serverSyncRows.length,
-        globalCandidates: serverSyncRows.filter((r: any) => r.approvedForGlobalKnowledge).length,
-      });
+      rows: serverSyncRows
     })
-    .catch((error) => {
-      console.warn("[RLC-KI] V51 server datenbank sync error", {
+  }).
+  then(async (res) => {
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.ok) {
+      console.warn("[RLC-KI] V51 server datenbank sync failed", {
+        status: res.status,
+        json,
         projectKey,
-        count: serverSyncRows.length,
-        error,
+        count: serverSyncRows.length
       });
+      return;
+    }
+
+    console.log("[RLC-KI] V51 server datenbank sync ok", {
+      projectKey,
+      saved: json.saved,
+      rows: serverSyncRows.length,
+      globalCandidates: serverSyncRows.filter((r: any) => r.approvedForGlobalKnowledge).length
     });
+  }).
+  catch((error) => {
+    console.warn("[RLC-KI] V51 server datenbank sync error", {
+      projectKey,
+      count: serverSyncRows.length,
+      error
+    });
+  });
 
   KalkulationsDatenbank.bulkUpsert(
     uniqueValid.map((r) => {
       const currentBreakdown = getCurrentBreakdown(r);
       const costs = databaseCostsFromCurrentRow({
         ...r,
-        priceBreakdown: currentBreakdown,
+        priceBreakdown: currentBreakdown
       });
 
       const ep =
-        sumBreakdown(currentBreakdown) > 0
-          ? sumBreakdown(currentBreakdown)
-          : getUnitPrice(r);
+      sumBreakdown(currentBreakdown) > 0 ?
+      sumBreakdown(currentBreakdown) :
+      getUnitPrice(r);
 
       const gp = round2(n(r.menge) * ep * (1 - n(r.rabatt) / 100));
 
@@ -2523,10 +2528,10 @@ function saveRowsToDatenbank(
 
         aiReason: `${r.aiReason || ""}\n\nPreisaufbau:\n${breakdownText({
           ...r,
-          priceBreakdown: currentBreakdown,
+          priceBreakdown: currentBreakdown
         })}`,
 
-        warning: r.warning || "",
+        warning: r.warning || ""
       });
     })
   );
@@ -2549,8 +2554,8 @@ function findDatenbankMatches(row: EliteRow | null): KalkulationsSuchTreffer[] {
         leistungsart: row.leistungsart || "",
         bauverfahren: row.bauverfahren || "",
         menge: n(row.menge),
-        einheit: row.einheit || "",
-      },
+        einheit: row.einheit || ""
+      }
     },
     5
   );
@@ -2583,14 +2588,14 @@ function datenbankEntryToRowPatch(entry: KalkulationsErfahrung): Partial<EliteRo
     bauverfahren: entry.parameter?.bauverfahren || "",
 
     warning: "",
-    aiReason: entry.kiHinweis
-      ? `${entry.kiHinweis}\n\nAus Kalkulationsdatenbank übernommen.`
-      : "Aus Kalkulationsdatenbank übernommen.",
+    aiReason: entry.kiHinweis ?
+    `${entry.kiHinweis}\n\nAus Kalkulationsdatenbank übernommen.` :
+    "Aus Kalkulationsdatenbank übernommen."
   });
 
   return {
     ...patch,
-    priceBreakdown: buildAutomaticPriceBreakdown(patch),
+    priceBreakdown: buildAutomaticPriceBreakdown(patch)
   };
 }
 
@@ -2630,16 +2635,16 @@ function splitCsvLine(line: string): string[] {
 }
 
 function parseImportedCsv(text: string): Partial<EliteRow>[] {
-  const lines = text
-    .replace(/\r/g, "")
-    .split("\n")
-    .map((x) => x.trim())
-    .filter(Boolean);
+  const lines = text.
+  replace(/\r/g, "").
+  split("\n").
+  map((x) => x.trim()).
+  filter(Boolean);
 
   if (lines.length < 2) return [];
 
   const headers = splitCsvLine(lines[0]).map((h) =>
-    normText(h).replace(/[^a-z0-9]+/g, "")
+  normText(h).replace(/[^a-z0-9]+/g, "")
   );
 
   function get(row: string[], names: string[]) {
@@ -2674,22 +2679,22 @@ function parseImportedCsv(text: string): Partial<EliteRow>[] {
       warning: get(row, ["warnung", "warning"]),
       aiReason: get(row, ["kibegruendung", "aireason"]),
       riskLevel: "medium",
-      calculationStatus: ep > 0 ? "manual" : "critical",
+      calculationStatus: ep > 0 ? "manual" : "critical"
     });
 
     return {
       ...parsed,
-      priceBreakdown: buildAutomaticPriceBreakdown(parsed),
+      priceBreakdown: buildAutomaticPriceBreakdown(parsed)
     };
   });
 }
 
 function xmlEscape(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(value ?? "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;");
 }
 
 function buildLocalGaebFallback(rows: EliteRow[], mode: "x83" | "x84"): string {
@@ -2699,8 +2704,8 @@ function buildLocalGaebFallback(rows: EliteRow[], mode: "x83" | "x84"): string {
 <RLC-GAEB-EXPORT mode="${mode.toUpperCase()}" createdAt="${now}">
   <Info>Lokaler Fallback-Export. Für echten GAEB-Standard Serverroute verwenden.</Info>
   <Positions>
-${rows
-  .map(
+${rows.
+  map(
     (r) => `    <Position>
       <PosNr>${xmlEscape(r.posNr)}</PosNr>
       <Kurztext>${xmlEscape(r.kurztext)}</Kurztext>
@@ -2712,10 +2717,143 @@ ${rows
       <Preisaufbau>${xmlEscape(breakdownText(r))}</Preisaufbau>
       <KI>${xmlEscape(r.aiReason)}</KI>
     </Position>`
-  )
-  .join("\n")}
+  ).
+  join("\n")}
   </Positions>
 </RLC-GAEB-EXPORT>`;
+}
+
+
+function serverLvTextSignature(row: any): string {
+  return [
+  normText(row?.kurztext ?? row?.text ?? row?.shortText ?? row?.title ?? ""),
+  String(row?.einheit ?? row?.unit ?? row?.me ?? "").trim().toLowerCase()].
+  join("|");
+}
+
+function extractServerLvItems(payload: any): any[] {
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.positions)) return payload.positions;
+  if (Array.isArray(payload?.lv)) return payload.lv;
+
+  if (Array.isArray(payload?.rows)) {
+    // Neuer LV-Endpunkt kann entweder direkt Positionen oder
+    // einen Import-Container mit verschachtelten `positions` liefern.
+    const directRows = payload.rows;
+    const nestedPositions = directRows.flatMap((row: any) =>
+    Array.isArray(row?.positions) ? row.positions : []
+    );
+    return nestedPositions.length ? nestedPositions : directRows;
+  }
+
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+function reconcileKalkulationWithServerLv(
+currentRows: EliteRow[],
+serverItems: any[])
+: EliteRow[] {
+  const current = Array.isArray(currentRows) ? currentRows : [];
+  const server = Array.isArray(serverItems) ? serverItems : [];
+  if (!server.length) return current;
+
+  const used = new Set<number>();
+  const exact = new Map<string, number[]>();
+  const signatures = new Map<string, number[]>();
+
+  current.forEach((row, index) => {
+    const pos = String(row?.posNr || "").trim();
+    if (pos) {
+      const list = exact.get(pos) || [];
+      list.push(index);
+      exact.set(pos, list);
+    }
+
+    const signature = serverLvTextSignature(row);
+    if (signature !== "|") {
+      const list = signatures.get(signature) || [];
+      list.push(index);
+      signatures.set(signature, list);
+    }
+  });
+
+  const takeFirstUnused = (indexes?: number[]): number | null => {
+    for (const index of indexes || []) {
+      if (!used.has(index)) {
+        used.add(index);
+        return index;
+      }
+    }
+    return null;
+  };
+
+  const reconciled = server.map((src: any, serverIndex: number) => {
+    const posNr = String(
+      src?.posNr ??
+      src?.position ??
+      src?.pos ??
+      src?.positionsnummer ??
+      src?.oz ??
+      ""
+    ).trim();
+
+    let currentIndex = takeFirstUnused(exact.get(posNr));
+    if (currentIndex === null) {
+      currentIndex = takeFirstUnused(signatures.get(serverLvTextSignature(src)));
+    }
+
+    // Ultimo fallback controllato: il vecchio import aveva numerazione progressiva
+    // 001, 002... nello stesso ordine dell'X83.
+    if (currentIndex === null) {
+      const candidate = current[serverIndex];
+      const candidatePos = String(candidate?.posNr || "").trim();
+      if (
+      candidate &&
+      !used.has(serverIndex) && (
+      /^\d{1,4}$/.test(candidatePos) || /^\d{1,3}\.\d{1,3}$/.test(candidatePos)))
+      {
+        used.add(serverIndex);
+        currentIndex = serverIndex;
+      }
+    }
+
+    const old = currentIndex === null ? null : current[currentIndex];
+    const menge = n(src?.menge ?? src?.quantity ?? src?.qty ?? old?.menge);
+    const kurztext = String(
+      src?.kurztext ?? src?.text ?? src?.shortText ?? old?.kurztext ?? ""
+    );
+    const langtext = String(
+      src?.langtext ??
+      src?.longText ??
+      src?.description ??
+      old?.langtext ??
+      ""
+    );
+    const einheit = String(src?.einheit ?? src?.unit ?? src?.me ?? old?.einheit ?? "");
+
+    return normalizeEliteRow({
+      ...(old || {}),
+      id: String(old?.id || src?.id || safeId()),
+      posNr,
+      parentPosNr: src?.parentPosNr ?? old?.parentPosNr,
+      sortIndex: src?.sortIndex ?? serverIndex,
+      kurztext,
+      langtext,
+      einheit,
+      menge,
+      updatedAt: new Date().toISOString()
+    });
+  });
+
+  // Mantieni soltanto vere posizioni aggiuntive create fuori dal LV.
+  const extras = current.filter((row, index) => {
+    if (used.has(index)) return false;
+    const pos = String(row?.posNr || "").trim().toUpperCase();
+    return /^(AUTO|CAD|FOTO|NACHTRAG|NT|REGIE)[.-]/.test(pos);
+  });
+
+  return [...reconciled, ...extras].map((row) => cleanRlcKiWarningState(normalizeEliteRow(row)));
 }
 
 /* ================= COMPONENT ================= */
@@ -2724,12 +2862,17 @@ export default function KalkulationMitKI() {
   const projectCtx: any = useProject() as any;
   const projectKey = getProjectKey(projectCtx);
   const projectTitle = getProjectTitle(projectCtx);
+  const projectObj = getProjectObject(projectCtx);
+  const projectUuid = String(
+    projectObj?.id || projectCtx?.projectId || projectCtx?.id || ""
+  ).trim();
   const { eliteCalculateRows, loading } = useKiSuggest();
   const navigate = useNavigate();
 
   const csvInputRef = React.useRef<HTMLInputElement | null>(null);
-const importHandoffDoneRef = React.useRef(false);
-const recipesHandoffDoneRef = React.useRef(false);
+  const selectedDetailRef = React.useRef<HTMLElement | null>(null);
+  const importHandoffDoneRef = React.useRef(false);
+  const recipesHandoffDoneRef = React.useRef(false);
 
   const [rows, setRows] = React.useState<EliteRow[]>(() => {
     if (!projectKey || typeof localStorage === "undefined") return [];
@@ -2739,15 +2882,15 @@ const recipesHandoffDoneRef = React.useRef(false);
       if (!raw) return [];
 
       const parsed = JSON.parse(raw);
-      const rawRows = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.rows)
-          ? parsed.rows
-          : Array.isArray(parsed?.items)
-            ? parsed.items
-            : Array.isArray(parsed?.positions)
-              ? parsed.positions
-              : [];
+      const rawRows = Array.isArray(parsed) ?
+      parsed :
+      Array.isArray(parsed?.rows) ?
+      parsed.rows :
+      Array.isArray(parsed?.items) ?
+      parsed.items :
+      Array.isArray(parsed?.positions) ?
+      parsed.positions :
+      [];
 
       if (!rawRows.length) return [];
 
@@ -2764,42 +2907,159 @@ const recipesHandoffDoneRef = React.useRef(false);
 
     let alive = true;
 
-    KalkulationsDatenbank.listServer()
-      .then(() => {
-        if (!alive) return;
+    KalkulationsDatenbank.listServer().
+    then(() => {
+      if (!alive) return;
 
-        /*
-         * Nach Firmen-Datenbank-Sync UI neu berechnen,
-         * damit getX84CompanyFrontendOverride() die x84-company-baseline nutzt.
-         */
-        setRows((prev) =>
-          prev.map((r) => cleanRlcKiWarningState(normalizeEliteRow({ ...r })))
-        );
-      })
-      .catch(() => {
-        // Offline / nicht angemeldet: bestehender lokaler Stand bleibt aktiv.
-      });
+      /*
+       * Nach Firmen-Datenbank-Sync UI neu berechnen,
+       * damit getX84CompanyFrontendOverride() die x84-company-baseline nutzt.
+       */
+      setRows((prev) =>
+      prev.map((r) => cleanRlcKiWarningState(normalizeEliteRow({ ...r })))
+      );
+    }).
+    catch(() => {
 
-    return () => {
+
+      // Offline / nicht angemeldet: bestehender lokaler Stand bleibt aktiv.
+    });return () => {
       alive = false;
     };
   }, [projectKey]);
+
+  React.useEffect(() => {
+    if (!projectKey) return;
+
+    let cancelled = false;
+    let retryTimer: number | null = null;
+    let syncInFlight = false;
+    let syncCompleted = false;
+
+    const fetchLvPayload = async (): Promise<any[]> => {
+      // Primär: kanonisches Projekt-LV über UUID.
+      if (projectUuid) {
+        const pageSize = 500;
+        const all: any[] = [];
+
+        for (let page = 1; page <= 50; page += 1) {
+          const response = await fetch(
+            apiUrl(
+              `/api/projects/${encodeURIComponent(projectUuid)}/lv?page=${page}&pageSize=${pageSize}`
+            ),
+            {
+              method: "GET",
+              credentials: "include",
+              cache: "no-store",
+              headers: authJsonHeaders()
+            }
+          );
+
+          if (!response.ok) break;
+
+          const payload = await response.json().catch(() => null);
+          const pageItems = extractServerLvItems(payload);
+          if (!pageItems.length) break;
+
+          all.push(...pageItems);
+          if (pageItems.length < pageSize) break;
+        }
+
+        if (all.length) return all;
+      }
+
+      // Fallback: älterer Endpunkt über Projektcode.
+      const response = await fetch(
+        apiUrl(`/api/project-lv/${encodeURIComponent(projectKey)}`),
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+          headers: authJsonHeaders()
+        }
+      );
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || `LV HTTP ${response.status}`);
+      }
+
+      return extractServerLvItems(payload);
+    };
+
+    const syncWithServerLv = async () => {
+      if (cancelled || syncInFlight || syncCompleted) return;
+      syncInFlight = true;
+
+      try {
+        const serverItems = await fetchLvPayload();
+        if (!serverItems.length || cancelled) return;
+        syncCompleted = true;
+
+        setRows((previous) => {
+          const next = reconcileKalkulationWithServerLv(previous, serverItems);
+
+          try {
+            localStorage.setItem(
+              localBackupKey(projectKey),
+              JSON.stringify({
+                version: "elite-v3-server-lv-reconciled",
+                source: "server-lv-reconcile",
+                meta: {
+                  projectKey,
+                  projectUuid,
+                  updatedAt: new Date().toISOString()
+                },
+                rows: next
+              })
+            );
+          } catch {
+
+
+            // UI darf nicht wegen lokaler Cache-Probleme abbrechen.
+          }return next;
+        });
+
+        setServerStatus(
+          `${serverItems.length} LV-Positionen mit Server-OZ synchronisiert`
+        );
+        window.setTimeout(() => setServerStatus(""), 2600);
+      } catch (error) {
+        console.warn("[RLC-KI] Server-LV-Synchronisierung fehlgeschlagen", error);
+      } finally {
+        syncInFlight = false;
+      }
+    };
+
+    void syncWithServerLv();
+    retryTimer = window.setTimeout(() => {
+      if (!cancelled && !syncCompleted && !syncInFlight) {
+        void syncWithServerLv();
+      }
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [projectKey, projectUuid]);
+
   const [selectedId, setSelectedId] = React.useState<string>("");
   const [auftraege, setAuftraege] = React.useState<Auftrag[]>(() => {
-  AuftragStore.ensureDefault(projectKey);
-  return AuftragStore.list();
-});
+    AuftragStore.ensureDefault(projectKey);
+    return AuftragStore.list();
+  });
 
-const [selectedAuftragId, setSelectedAuftragId] = React.useState<string>(() => {
-  const haupt = AuftragStore.ensureDefault(projectKey);
-  return haupt.id;
-});
+  const [selectedAuftragId, setSelectedAuftragId] = React.useState<string>(() => {
+    const haupt = AuftragStore.ensureDefault(projectKey);
+    return haupt.id;
+  });
 
-const selectedAuftrag = React.useMemo(
-  () => auftraege.find((a) => a.id === selectedAuftragId) || null,
-  [auftraege, selectedAuftragId]
-);
-    const [serverBusy, setServerBusy] = React.useState(false);
+  const selectedAuftrag = React.useMemo(
+    () => auftraege.find((a) => a.id === selectedAuftragId) || null,
+    [auftraege, selectedAuftragId]
+  );
+  const [serverBusy, setServerBusy] = React.useState(false);
   const [serverStatus, setServerStatus] = React.useState("");
   const [activeAction, setActiveAction] = React.useState<{
     id: string;
@@ -2809,10 +3069,10 @@ const selectedAuftrag = React.useMemo(
   } | null>(null);
 
   async function runWithAction(
-    id: string,
-    label: string,
-    fn: () => void | Promise<void>
-  ) {
+  id: string,
+  label: string,
+  fn: () => void | Promise<void>)
+  {
     let progressTimer: number | undefined;
 
     try {
@@ -2863,7 +3123,7 @@ const selectedAuftrag = React.useMemo(
   const [showQuickActions, setShowQuickActions] = React.useState(false);
   const [showLvActions, setShowLvActions] = React.useState(false);
   const [showAdvancedLvColumns, setShowAdvancedLvColumns] =
-    React.useState(false);
+  React.useState(false);
 
   const [viewFilter, setViewFilter] = React.useState<ViewFilter>("alle");
   const [selectedDuplicateIds, setSelectedDuplicateIds] = React.useState<string[]>([]);
@@ -2871,18 +3131,18 @@ const selectedAuftrag = React.useMemo(
   const [lvPage, setLvPage] = React.useState(1);
   const [lvPageSize, setLvPageSize] = React.useState(5);
   const [showCommercialSettings, setShowCommercialSettings] =
-    React.useState(false);
+  React.useState(false);
   const [showChapterSettings, setShowChapterSettings] = React.useState(false);
   const [priceDiffView, setPriceDiffView] = React.useState<
-    | "outside10"
-    | "higher10"
-    | "lower10"
-    | "inside10"
-    | "over20"
-    | "over10000"
-    | "all"
-    | "missing"
-  >("outside10");
+    "outside10" |
+    "higher10" |
+    "lower10" |
+    "inside10" |
+    "over20" |
+    "over10000" |
+    "all" |
+    "missing">(
+    "outside10");
 
   const [mwst, setMwst] = React.useState(19);
   const [globalMarkup, setGlobalMarkup] = React.useState<number>(() => {
@@ -2902,216 +3162,216 @@ const selectedAuftrag = React.useMemo(
 
   const [catalogRows, setCatalogRows] = React.useState<CatalogPos[]>(() =>
   Catalog.list()
-);
-const [catalogQuery, setCatalogQuery] = React.useState("");
-const [catalogGroup, setCatalogGroup] = React.useState<
-  "Alle" | "Material" | "Arbeiter" | "Maschinen" | "Sonstiges"
->("Alle");
+  );
+  const [catalogQuery, setCatalogQuery] = React.useState("");
+  const [catalogGroup, setCatalogGroup] = React.useState<
+    "Alle" | "Material" | "Arbeiter" | "Maschinen" | "Sonstiges">(
+    "Alle");
 
-const visibleCatalogRows = React.useMemo(() => {
-  const q = catalogQuery.trim().toLowerCase();
+  const visibleCatalogRows = React.useMemo(() => {
+    const q = catalogQuery.trim().toLowerCase();
 
-  return catalogRows
-    .filter((r) => {
+    return catalogRows.
+    filter((r) => {
       if (catalogGroup !== "Alle" && r.gruppe !== catalogGroup) return false;
 
       if (!q) return true;
 
-      return `${r.posNr} ${r.kurztext} ${r.einheit}`
-        .toLowerCase()
-        .includes(q);
-    })
-    .slice(0, 300);
-}, [catalogRows, catalogQuery, catalogGroup]);
+      return `${r.posNr} ${r.kurztext} ${r.einheit}`.
+      toLowerCase().
+      includes(q);
+    }).
+    slice(0, 300);
+  }, [catalogRows, catalogQuery, catalogGroup]);
 
   const [company] = React.useState<CompanyData>({
     name: "RLC Bausoftware GmbH",
     address: "Musterstraße 12, 80333 München",
     phone: "+49 89 123456",
     email: "info@rlc-bau.de",
-    logoUrl: "/rlc-logo.png",
+    logoUrl: "/rlc-logo.png"
   });
 
   const [client, setClient] = React.useState<ClientData>({
     name: "Muster Bau GmbH",
-    address: "Hauptstraße 5, 50667 Köln",
+    address: "Hauptstraße 5, 50667 Köln"
   });
 
   const [offer, setOffer] = React.useState<OfferData>({
     number: `ANG-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
     place: "München",
     notes:
-      "Zahlungsbedingungen: 30 Tage netto. Angebot gültig 30 Tage. Preise basieren auf KI-gestützter Kalkulation und technischer Plausibilitätsprüfung.",
+    "Zahlungsbedingungen: 30 Tage netto. Angebot gültig 30 Tage. Preise basieren auf KI-gestützter Kalkulation und technischer Plausibilitätsprüfung."
   });
 
-const chapters = React.useMemo(() => {
-  const map = new Map<string, EliteRow[]>();
+  const chapters = React.useMemo(() => {
+    const map = new Map<string, EliteRow[]>();
 
-  for (const r of rows) {
-    const ch = getChapter(r.posNr);
-    if (!map.has(ch)) map.set(ch, []);
-    map.get(ch)!.push(r);
-  }
+    for (const r of rows) {
+      const ch = getChapter(r.posNr);
+      if (!map.has(ch)) map.set(ch, []);
+      map.get(ch)!.push(r);
+    }
 
-  return map;
-}, [rows]);
+    return map;
+  }, [rows]);
 
-const filteredRows = React.useMemo(() => {
-  const duplicateMap = new Map<string, EliteRow[]>();
+  const filteredRows = React.useMemo(() => {
+    const duplicateMap = new Map<string, EliteRow[]>();
 
-  for (const row of rows) {
-    if (kiIsStructuralRow(row)) continue;
+    for (const row of rows) {
+      if (kiIsStructuralRow(row)) continue;
 
-    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`)
-      .replace(/[^a-z0-9äöüß]+/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+      const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`).
+      replace(/[^a-z0-9äöüß]+/gi, " ").
+      replace(/\s+/g, " ").
+      trim();
 
-    if (text.length < 8) continue;
+      if (text.length < 8) continue;
 
-    const key = [
+      const key = [
       text.slice(0, 140),
       String(row.einheit || "").trim().toLowerCase(),
       round2(n(row.menge)),
-      round2(getUnitPrice(row)),
-    ].join("|");
+      round2(getUnitPrice(row))].
+      join("|");
 
-    if (!duplicateMap.has(key)) duplicateMap.set(key, []);
-    duplicateMap.get(key)!.push(row);
-  }
+      if (!duplicateMap.has(key)) duplicateMap.set(key, []);
+      duplicateMap.get(key)!.push(row);
+    }
 
-  const duplicateIds = new Set(
-    Array.from(duplicateMap.values())
-      .filter((group) => group.length > 1)
-      .flatMap((group) => group.map((row) => row.id))
+    const duplicateIds = new Set(
+      Array.from(duplicateMap.values()).
+      filter((group) => group.length > 1).
+      flatMap((group) => group.map((row) => row.id))
+    );
+
+    return rows.filter((r) => {
+      if (selectedAuftragId) {
+        const rowAuftragId = String(r.auftragId || "").trim();
+        const rowAuftragIsKnown = rowAuftragId ?
+        auftraege.some((a) => a.id === rowAuftragId) :
+        false;
+
+        if (rowAuftragIsKnown && rowAuftragId !== selectedAuftragId) return false;
+      }
+
+      if (viewFilter === "alle") return true;
+      if (viewFilter === "kritisch") return !kiIsStructuralRow(r) && r.calculationStatus === "critical";
+      if (viewFilter === "warnungen") return !kiIsStructuralRow(r) && r.calculationStatus === "warning";
+      if (viewFilter === "hochrisiko") return !kiIsStructuralRow(r) && r.riskLevel === "high";
+      if (viewFilter === "sicher") return !kiIsStructuralRow(r) && isSafeRow(r);
+
+      if (viewFilter === "ohneDb") {
+        return !kiIsStructuralRow(r) && rowHasNoDb(r) && r.calculationStatus !== "manual";
+      }
+
+      if (viewFilter === "mengeFehlt") return !kiIsStructuralRow(r) && n(r.menge) <= 0;
+      if (viewFilter === "preisFehlt") return !kiIsStructuralRow(r) && getUnitPrice(r) <= 0;
+      if (viewFilter === "einheitFehlt") return !kiIsStructuralRow(r) && !String(r.einheit || "").trim();
+      if (viewFilter === "urkalkulationFehlt") return !kiIsStructuralRow(r) && (!Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0);
+      if (viewFilter === "doppelte") return duplicateIds.has(r.id);
+
+      return true;
+    });
+  }, [rows, viewFilter, selectedAuftragId, auftraege]);
+
+  const selectedRow = React.useMemo(
+    () => filteredRows.find((r) => r.id === selectedId) || filteredRows[0] || null,
+    [filteredRows, selectedId]
   );
 
-  return rows.filter((r) => {
-    if (selectedAuftragId) {
-      const rowAuftragId = String(r.auftragId || "").trim();
-      const rowAuftragIsKnown = rowAuftragId
-        ? auftraege.some((a) => a.id === rowAuftragId)
-        : false;
+  const datenbankMatches = React.useMemo(
+    () => findDatenbankMatches(selectedRow),
+    [selectedRow]
+  );
 
-      if (rowAuftragIsKnown && rowAuftragId !== selectedAuftragId) return false;
+  React.useLayoutEffect(() => {
+    if (!projectKey) return;
+    importHandoff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey]);
+
+  React.useEffect(() => {
+    if (!filteredRows.length) {
+      setSelectedId("");
+      return;
     }
 
-    if (viewFilter === "alle") return true;
-    if (viewFilter === "kritisch") return !kiIsStructuralRow(r) && r.calculationStatus === "critical";
-    if (viewFilter === "warnungen") return !kiIsStructuralRow(r) && r.calculationStatus === "warning";
-    if (viewFilter === "hochrisiko") return !kiIsStructuralRow(r) && r.riskLevel === "high";
-    if (viewFilter === "sicher") return !kiIsStructuralRow(r) && isSafeRow(r);
+    const exists = filteredRows.some((r) => r.id === selectedId);
+    if (!exists) setSelectedId(filteredRows[0].id);
+  }, [filteredRows, selectedId]);
 
-    if (viewFilter === "ohneDb") {
-      return !kiIsStructuralRow(r) && rowHasNoDb(r) && r.calculationStatus !== "manual";
+  React.useEffect(() => {
+    if (!selectedRow) {
+      setActiveHint("Keine Position gewählt.");
+      return;
     }
 
-    if (viewFilter === "mengeFehlt") return !kiIsStructuralRow(r) && n(r.menge) <= 0;
-    if (viewFilter === "preisFehlt") return !kiIsStructuralRow(r) && getUnitPrice(r) <= 0;
-    if (viewFilter === "einheitFehlt") return !kiIsStructuralRow(r) && !String(r.einheit || "").trim();
-    if (viewFilter === "urkalkulationFehlt") return !kiIsStructuralRow(r) && (!Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0);
-    if (viewFilter === "doppelte") return duplicateIds.has(r.id);
+    const hints: string[] = [];
 
-    return true;
-  });
-}, [rows, viewFilter, selectedAuftragId, auftraege]);
+    if (!selectedRow.kurztext.trim()) hints.push("Kurztext fehlt.");
+    if (!selectedRow.langtext.trim()) hints.push("Langtext fehlt.");
+    if (!selectedRow.einheit.trim()) hints.push("Einheit fehlt.");
+    if (!selectedRow.priceBreakdown?.length) hints.push("Preisaufbau fehlt.");
+    if (n(selectedRow.menge) <= 0) hints.push("Menge fehlt oder ist 0.");
+    if (getUnitPrice(selectedRow) <= 0) hints.push("Einheitspreis fehlt.");
+    if (selectedRow.riskLevel === "high") hints.push("Hohes Risiko prüfen.");
 
-const selectedRow = React.useMemo(
-  () => filteredRows.find((r) => r.id === selectedId) || filteredRows[0] || null,
-  [filteredRows, selectedId]
-);
+    if (selectedRow.calculationStatus === "critical") {
+      hints.push("Kalkulation kritisch: Kostenansätze prüfen.");
+    }
 
-const datenbankMatches = React.useMemo(
-  () => findDatenbankMatches(selectedRow),
-  [selectedRow]
-);
+    if (datenbankMatches.length) {
+      hints.push(
+        `Kalkulationsdatenbank kennt ${datenbankMatches.length} ähnliche Position(en).`
+      );
+    }
 
-React.useLayoutEffect(() => {
-  if (!projectKey) return;
-  importHandoff();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [projectKey]);
+    setActiveHint(hints.length ? hints.join(" ") : "Position wirkt plausibel.");
+  }, [selectedRow, datenbankMatches.length]);
 
-React.useEffect(() => {
-  if (!filteredRows.length) {
-    setSelectedId("");
-    return;
-  }
+  function importHandoff() {
+    if (importHandoffDoneRef.current && rows.length > 0) {
+      return;
+    }
 
-  const exists = filteredRows.some((r) => r.id === selectedId);
-  if (!exists) setSelectedId(filteredRows[0].id);
-}, [filteredRows, selectedId]);
+    importHandoffDoneRef.current = true;
+    function extractRowsFromParsed(parsed: any): any[] {
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.rows)) return parsed.rows;
+      if (Array.isArray(parsed?.items)) return parsed.items;
+      if (Array.isArray(parsed?.data)) return parsed.data;
+      if (Array.isArray(parsed?.data?.rows)) return parsed.data.rows;
+      if (Array.isArray(parsed?.positions)) return parsed.positions;
+      if (Array.isArray(parsed?.lvPositions)) return parsed.lvPositions;
+      return [];
+    }
 
-React.useEffect(() => {
-  if (!selectedRow) {
-    setActiveHint("Keine Position gewählt.");
-    return;
-  }
-
-  const hints: string[] = [];
-
-  if (!selectedRow.kurztext.trim()) hints.push("Kurztext fehlt.");
-  if (!selectedRow.langtext.trim()) hints.push("Langtext fehlt.");
-  if (!selectedRow.einheit.trim()) hints.push("Einheit fehlt.");
-  if (!selectedRow.priceBreakdown?.length) hints.push("Preisaufbau fehlt.");
-  if (n(selectedRow.menge) <= 0) hints.push("Menge fehlt oder ist 0.");
-  if (getUnitPrice(selectedRow) <= 0) hints.push("Einheitspreis fehlt.");
-  if (selectedRow.riskLevel === "high") hints.push("Hohes Risiko prüfen.");
-
-  if (selectedRow.calculationStatus === "critical") {
-    hints.push("Kalkulation kritisch: Kostenansätze prüfen.");
-  }
-
-  if (datenbankMatches.length) {
-    hints.push(
-      `Kalkulationsdatenbank kennt ${datenbankMatches.length} ähnliche Position(en).`
-    );
-  }
-
-  setActiveHint(hints.length ? hints.join(" ") : "Position wirkt plausibel.");
-}, [selectedRow, datenbankMatches.length]);
-
-function importHandoff() {
-  if (importHandoffDoneRef.current && rows.length > 0) {
-    return;
-  }
-
-  importHandoffDoneRef.current = true;
-  function extractRowsFromParsed(parsed: any): any[] {
-    if (Array.isArray(parsed)) return parsed;
-    if (Array.isArray(parsed?.rows)) return parsed.rows;
-    if (Array.isArray(parsed?.items)) return parsed.items;
-    if (Array.isArray(parsed?.data)) return parsed.data;
-    if (Array.isArray(parsed?.data?.rows)) return parsed.data.rows;
-    if (Array.isArray(parsed?.positions)) return parsed.positions;
-    if (Array.isArray(parsed?.lvPositions)) return parsed.lvPositions;
-    return [];
-  }
-
-  function normalizeImportedStorageRows(rawRows: any[]): EliteRow[] {
-    return rawRows
-      .map((x: any) => {
+    function normalizeImportedStorageRows(rawRows: any[]): EliteRow[] {
+      return rawRows.
+      map((x: any) => {
         const sourceKind = String(
           x.gaebType || x.importType || x.format || x.source || x.name || ""
         ).toLowerCase();
 
         const explicitOfferEp =
-          n(x.angebotUnitPrice) ||
-          n(x.originalPreKiPrice) ||
-          n(x.x84UnitPrice);
+        n(x.angebotUnitPrice) ||
+        n(x.originalPreKiPrice) ||
+        n(x.x84UnitPrice);
 
         const rawEp =
-          n(x.preis) ||
-          n(x.ep) ||
-          n(x.unitPrice) ||
-          n(x.finalUnitPrice);
+        n(x.preis) ||
+        n(x.ep) ||
+        n(x.unitPrice) ||
+        n(x.finalUnitPrice);
 
         const isRealOfferImport =
-          sourceKind.includes("x84") ||
-          sourceKind.includes("angebot") ||
-          explicitOfferEp > 0;
+        sourceKind.includes("x84") ||
+        sourceKind.includes("angebot") ||
+        explicitOfferEp > 0;
 
-        const offerEp = isRealOfferImport ? (explicitOfferEp || rawEp) : 0;
+        const offerEp = isRealOfferImport ? explicitOfferEp || rawEp : 0;
         const workEp = offerEp > 0 ? offerEp : rawEp;
 
         return normalizeEliteRow({
@@ -3146,52 +3406,52 @@ function importHandoff() {
           confidence: typeof x.confidence === "number" ? x.confidence : 0.75,
           calculationStatus: x.calculationStatus || "manual",
           riskLevel: x.riskLevel || "medium",
-          priceDecision: isRealOfferImport ? "x84" : ((x as any).priceDecision || "manual"),
+          priceDecision: isRealOfferImport ? "x84" : (x as any).priceDecision || "manual"
         });
-      })
-      .filter((r: EliteRow) => {
+      }).
+      filter((r: EliteRow) => {
         return (
           String(r.posNr || "").trim() ||
           String(r.kurztext || "").trim() ||
-          String(r.langtext || "").trim()
-        );
+          String(r.langtext || "").trim());
+
       });
-  }
-
-  function tryLoadRowsFromKey(key: string): EliteRow[] {
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return [];
-
-      const parsed = JSON.parse(raw);
-      const rawRows = extractRowsFromParsed(parsed);
-      if (!rawRows.length) return [];
-
-      return normalizeImportedStorageRows(rawRows).map((r) =>
-        kiIsStructuralRow(r)
-          ? normalizeEliteRow(kiPrepareStructuralRow(r))
-          : enhanceKalkulatorInsertions(r)
-      );
-    } catch {
-      return [];
     }
-  }
 
-  function readStoredX84OfferMap(): Map<string, number> {
-    const map = new Map<string, number>();
+    function tryLoadRowsFromKey(key: string): EliteRow[] {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return [];
 
-    try {
-      const raw = localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`);
-      if (!raw) return map;
+        const parsed = JSON.parse(raw);
+        const rawRows = extractRowsFromParsed(parsed);
+        if (!rawRows.length) return [];
 
-      const parsed = JSON.parse(raw);
-      const rawRows = extractRowsFromParsed(parsed);
+        return normalizeImportedStorageRows(rawRows).map((r) =>
+        kiIsStructuralRow(r) ?
+        normalizeEliteRow(kiPrepareStructuralRow(r)) :
+        enhanceKalkulatorInsertions(r)
+        );
+      } catch {
+        return [];
+      }
+    }
 
-      for (const x of rawRows) {
-        const pos = String(x?.posNr || x?.position || x?.oz || "").trim();
-        if (!pos) continue;
+    function readStoredX84OfferMap(): Map<string, number> {
+      const map = new Map<string, number>();
 
-        const ep =
+      try {
+        const raw = localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`);
+        if (!raw) return map;
+
+        const parsed = JSON.parse(raw);
+        const rawRows = extractRowsFromParsed(parsed);
+
+        for (const x of rawRows) {
+          const pos = String(x?.posNr || x?.position || x?.oz || "").trim();
+          if (!pos) continue;
+
+          const ep =
           n(x?.angebotUnitPrice) ||
           n(x?.originalPreKiPrice) ||
           n(x?.x84UnitPrice) ||
@@ -3200,557 +3460,559 @@ function importHandoff() {
           n(x?.unitPrice) ||
           n(x?.preis);
 
-        if (ep > 0) map.set(pos, ep);
+          if (ep > 0) map.set(pos, ep);
+        }
+      } catch {
+
+
+        //
+      }return map;
+    }
+
+    function mergeStoredX84OfferPrices(input: EliteRow[]): EliteRow[] {
+      const x84Map = readStoredX84OfferMap();
+      if (!x84Map.size) return input;
+
+      return input.map((row) => {
+        const pos = String(row.posNr || "").trim();
+        const offerEp = x84Map.get(pos) || getOfferUnitPrice(row);
+
+        if (offerEp <= 0) return row;
+
+        const rlcEp = n((row as any).rlcKiUnitPrice);
+
+        return normalizeEliteRow({
+          ...row,
+          angebotUnitPrice: offerEp,
+          x84UnitPrice: offerEp,
+          originalPreKiPrice: offerEp,
+          angebotTotal: round2(n(row.menge) * offerEp),
+
+          // X84 darf RLC-KI nicht überschreiben.
+          rlcKiUnitPrice: rlcEp,
+          rlcKiTotal: rlcEp > 0 ? round2(n(row.menge) * rlcEp) : 0,
+          suggestedUnitPrice: rlcEp > 0 ? n((row as any).suggestedUnitPrice) : 0,
+          baseUnitPrice: rlcEp > 0 ? n((row as any).baseUnitPrice) : 0
+        });
+      });
+    }
+
+    /*
+     * Wichtig:
+     * Wenn nach einer KI-Kalkulation ein X84 importiert wird, darf der X84-Import
+     * NICHT die gesamte KI-Kalkulation ersetzen. Wir laden daher zuerst den
+     * Kalkulationsstand und mergen X84 nur als Vergleichspreis.
+     * Wenn es noch keinen Kalkulationsstand gibt, wird der GAEB/X83/X84-Import geladen.
+     */
+    try {
+      const rawKiBackup = localStorage.getItem(localBackupKey(projectKey));
+      if (rawKiBackup) {
+        const parsedKiBackup = JSON.parse(rawKiBackup);
+        const source = String(parsedKiBackup?.source || "");
+        const backupRows = Array.isArray(parsedKiBackup) ?
+        parsedKiBackup :
+        Array.isArray(parsedKiBackup?.rows) ?
+        parsedKiBackup.rows :
+        [];
+
+        const backupSafeRows = sanitizeRowsForStorage(
+          backupRows.map((x: any) => normalizeEliteRow(x))
+        );
+
+        const backupKiNet = backupSafeRows.reduce((sum: number, r: any) => {
+          return sum + n(r.rlcKiTotal ?? r.totalNet ?? r.gesamt);
+        }, 0);
+
+        if (
+        backupSafeRows.length &&
+        backupKiNet > 0)
+        {
+          setRows(backupSafeRows);
+          setServerStatus("KI-Kalkulation geladen");
+          setTimeout(() => setServerStatus(""), 1800);
+          return;
+        }
       }
     } catch {
-      //
-    }
 
-    return map;
-  }
 
-  function mergeStoredX84OfferPrices(input: EliteRow[]): EliteRow[] {
-    const x84Map = readStoredX84OfferMap();
-    if (!x84Map.size) return input;
-
-    return input.map((row) => {
-      const pos = String(row.posNr || "").trim();
-      const offerEp = x84Map.get(pos) || getOfferUnitPrice(row);
-
-      if (offerEp <= 0) return row;
-
-      const rlcEp = n((row as any).rlcKiUnitPrice);
-
-      return normalizeEliteRow({
-        ...row,
-        angebotUnitPrice: offerEp,
-        x84UnitPrice: offerEp,
-        originalPreKiPrice: offerEp,
-        angebotTotal: round2(n(row.menge) * offerEp),
-
-        // X84 darf RLC-KI nicht überschreiben.
-        rlcKiUnitPrice: rlcEp,
-        rlcKiTotal: rlcEp > 0 ? round2(n(row.menge) * rlcEp) : 0,
-        suggestedUnitPrice: rlcEp > 0 ? n((row as any).suggestedUnitPrice) : 0,
-        baseUnitPrice: rlcEp > 0 ? n((row as any).baseUnitPrice) : 0,
-      });
-    });
-  }
-
-  /*
-   * Wichtig:
-   * Wenn nach einer KI-Kalkulation ein X84 importiert wird, darf der X84-Import
-   * NICHT die gesamte KI-Kalkulation ersetzen. Wir laden daher zuerst den
-   * Kalkulationsstand und mergen X84 nur als Vergleichspreis.
-   * Wenn es noch keinen Kalkulationsstand gibt, wird der GAEB/X83/X84-Import geladen.
-   */
-  try {
-    const rawKiBackup = localStorage.getItem(localBackupKey(projectKey));
-    if (rawKiBackup) {
-      const parsedKiBackup = JSON.parse(rawKiBackup);
-      const source = String(parsedKiBackup?.source || "");
-      const backupRows = Array.isArray(parsedKiBackup)
-        ? parsedKiBackup
-        : Array.isArray(parsedKiBackup?.rows)
-          ? parsedKiBackup.rows
-          : [];
-
-      const backupSafeRows = sanitizeRowsForStorage(
-        backupRows.map((x: any) => normalizeEliteRow(x))
-      );
-
-      const backupKiNet = backupSafeRows.reduce((sum: number, r: any) => {
-        return sum + n(r.rlcKiTotal ?? r.totalNet ?? r.gesamt);
-      }, 0);
-
-      if (
-        backupSafeRows.length &&
-        backupKiNet > 0
-      ) {
-        setRows(backupSafeRows);
-        setServerStatus("KI-Kalkulation geladen");
-        setTimeout(() => setServerStatus(""), 1800);
-        return;
-      }
-    }
-  } catch {
-    // Wenn der KI-Backup beschädigt ist, darf normaler LV-Fallback weiterlaufen.
-  }
-
-  const keys = [
+      // Wenn der KI-Backup beschädigt ist, darf normaler LV-Fallback weiterlaufen.
+    }const keys = [
     localBackupKey(projectKey),
     `rlc_lv_data_v1:${projectKey}`,
     `rlc_gaeb_import_v1:${projectKey}`,
-    `RLC_POSITIONLV_${projectKey}`,
-  ];
+    `RLC_POSITIONLV_${projectKey}`];
 
-  for (const key of keys) {
-    const loaded = tryLoadRowsFromKey(key);
 
-    if (loaded.length) {
-      const lvBeforeOverwrite = LV.list() as any[];
+    for (const key of keys) {
+      const loaded = tryLoadRowsFromKey(key);
 
-      const urkByKey = new Map<string, any>();
-      for (const u of lvBeforeOverwrite) {
-        const hasUrk =
+      if (loaded.length) {
+        const lvBeforeOverwrite = LV.list() as any[];
+
+        const urkByKey = new Map<string, any>();
+        for (const u of lvBeforeOverwrite) {
+          const hasUrk =
           Array.isArray((u as any).priceBreakdown) && (u as any).priceBreakdown.length > 0;
 
-        if (!hasUrk) continue;
+          if (!hasUrk) continue;
 
-        const keys = [
+          const keys = [
           String((u as any).id || "").trim(),
           String((u as any).posNr || "").trim(),
-          String((u as any).pos || "").trim(),
-        ].filter(Boolean);
+          String((u as any).pos || "").trim()].
+          filter(Boolean);
 
-        for (const k of keys) {
-          urkByKey.set(k, u);
+          for (const k of keys) {
+            urkByKey.set(k, u);
+          }
         }
-      }
 
-      const loadedWithUrk = loaded.map((r: any) => {
-        const possibleKeys = [
+        const loadedWithUrk = loaded.map((r: any) => {
+          const possibleKeys = [
           String((r as any).id || "").trim(),
           String((r as any).posNr || "").trim(),
-          String((r as any).pos || "").trim(),
-        ].filter(Boolean);
+          String((r as any).pos || "").trim()].
+          filter(Boolean);
 
-        const u = possibleKeys.map((k) => urkByKey.get(k)).find(Boolean);
-        if (!u) return r;
+          const u = possibleKeys.map((k) => urkByKey.get(k)).find(Boolean);
+          if (!u) return r;
 
-        const pb = normalizeBreakdown((u as any).priceBreakdown || []);
-        const ep =
+          const pb = normalizeBreakdown((u as any).priceBreakdown || []);
+          const ep =
           sumBreakdown(pb) ||
           n((u as any).rlcKiUnitPrice) ||
           n((u as any).finalUnitPrice) ||
           n((u as any).preis);
 
-        const menge = n((r as any).menge ?? (u as any).menge);
+          const menge = n((r as any).menge ?? (u as any).menge);
 
-        return {
-          ...(u as any),
-          ...r,
-          menge,
+          return {
+            ...(u as any),
+            ...r,
+            menge,
+            finalUnitPrice: (r as any).finalUnitPrice,
+            preis: (r as any).preis,
+            suggestedUnitPrice: (r as any).suggestedUnitPrice,
+            rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
+            rlcKiTotal: (r as any).rlcKiTotal,
+            gesamt: (r as any).gesamt,
+            totalNet: (r as any).totalNet,
+            gp: (r as any).gp,
+            priceBreakdown: pb,
+            recipeLines: pb,
+            urkalkulationUnitPrice: ep,
+            urkalkulationTotal: round2(menge * ep),
+            source: (u as any).source || "recipes-urkalkulation-global-lv-merged",
+            calculationStatus: pb.length ? "recipes_ready" : (r as any).calculationStatus || "needs_review",
+            aiReason: appendInfoText(
+              (u as any).aiReason || (r as any).aiReason,
+              "Globale Urkalkulation aus Recipes automatisch in Kalkulation mit KI übernommen."
+            )
+          };
+        });
+
+        // RLC FIX: Globale Urkalkulation darf die Kalkulation nicht überschreiben.
+        // Sie bleibt nur Preisaufbau/Analyse in Recipes.
+        const safeLoaded = sanitizeRowsForStorage(loadedWithUrk);
+        setRows(safeLoaded);
+        persistRows(safeLoaded);
+
+        // Wichtig:
+        // localBackupKey(projectKey) = rlc_kalkulation_mit_ki_elite_v1.
+        // Diese Datei darf NUR echte KI/Kalkulationsdaten enthalten.
+        // LV/X83/X84-Quellen dürfen hier niemals automatisch hineinkopiert werden,
+        // sonst wird ein importiertes LV fälschlich als KI-Ergebnis gezählt.
+
+        setServerStatus(`${safeLoaded.length} LV-Positionen geladen · Preisaufbau übernommen · RLC-KI Preise unverändert`);
+        setTimeout(() => setServerStatus(""), 2500);
+        return;
+      }
+    }
+
+    // Kein globaler LV-Fallback:
+    // Neues Projekt bleibt leer, bis explizit GAEB/X83/X84 importiert wird.
+    setRows([]);
+  }
+
+  React.useEffect(() => {
+    if (!projectKey) return;
+    if (!rows.length) return;
+
+    try {
+      const lvRows = LV.list() as any[];
+      const urkByKey = new Map<string, any>();
+
+      for (const u of lvRows) {
+        const pb = normalizeBreakdown((u as any).priceBreakdown || []);
+        if (!pb.length) continue;
+
+        const keys = [
+        String((u as any).id || "").trim(),
+        String((u as any).posNr || "").trim(),
+        String((u as any).pos || "").trim()].
+        filter(Boolean);
+
+        for (const k of keys) urkByKey.set(k, u);
+      }
+
+      if (!urkByKey.size) return;
+
+      let changed = false;
+
+      const merged = rows.map((r: any) => {
+        const keys = [
+        String((r as any).id || "").trim(),
+        String((r as any).posNr || "").trim(),
+        String((r as any).pos || "").trim()].
+        filter(Boolean);
+
+        const u = keys.map((k) => urkByKey.get(k)).find(Boolean);
+        if (!u) return r;
+
+        const pb = normalizeBreakdown((u as any).priceBreakdown || []);
+        if (!pb.length) return r;
+
+        const already =
+        Array.isArray((r as any).priceBreakdown) &&
+        JSON.stringify((r as any).priceBreakdown) === JSON.stringify(pb);
+
+        if (already) return r;
+
+        changed = true;
+
+        const menge = n((r as any).menge ?? (u as any).menge);
+        const ep = sumBreakdown(pb);
+
+        return normalizeEliteRow({
+          ...(r as any),
+
+          // Nur Info / Preisaufbau aus Recipes
+          priceBreakdown: pb,
+          recipeLines: pb,
+          urkalkulationUnitPrice: ep,
+          urkalkulationTotal: round2(menge * ep),
+
+          // Kalkulationspreise bleiben geschützt
           finalUnitPrice: (r as any).finalUnitPrice,
           preis: (r as any).preis,
+          ep: (r as any).ep,
           suggestedUnitPrice: (r as any).suggestedUnitPrice,
           rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
           rlcKiTotal: (r as any).rlcKiTotal,
           gesamt: (r as any).gesamt,
           totalNet: (r as any).totalNet,
           gp: (r as any).gp,
-          priceBreakdown: pb,
-          recipeLines: pb,
-          urkalkulationUnitPrice: ep,
-          urkalkulationTotal: round2(menge * ep),
-          source: (u as any).source || "recipes-urkalkulation-global-lv-merged",
-          calculationStatus: pb.length ? "recipes_ready" : ((r as any).calculationStatus || "needs_review"),
+
+          source: (r as any).source,
+          calculationStatus: (r as any).calculationStatus,
+          riskLevel: (r as any).riskLevel,
           aiReason: appendInfoText(
-            (u as any).aiReason || (r as any).aiReason,
-            "Globale Urkalkulation aus Recipes automatisch in Kalkulation mit KI übernommen."
-          ),
-        };
+            (r as any).aiReason,
+            "Preisaufbau aus Recipes als Info übernommen. Kalkulationspreis unverändert."
+          )
+        } as any);
       });
 
-      // RLC FIX: Globale Urkalkulation darf die Kalkulation nicht überschreiben.
-      // Sie bleibt nur Preisaufbau/Analyse in Recipes.
-      const safeLoaded = sanitizeRowsForStorage(loadedWithUrk);
-      setRows(safeLoaded);
-      persistRows(safeLoaded);
+      if (!changed) return;
 
-      // Wichtig:
-      // localBackupKey(projectKey) = rlc_kalkulation_mit_ki_elite_v1.
-      // Diese Datei darf NUR echte KI/Kalkulationsdaten enthalten.
-      // LV/X83/X84-Quellen dürfen hier niemals automatisch hineinkopiert werden,
-      // sonst wird ein importiertes LV fälschlich als KI-Ergebnis gezählt.
+      const safeRows = sanitizeRowsForStorage(merged);
+      setRows(safeRows);
+      persistRows(safeRows);
 
-      setServerStatus(`${safeLoaded.length} LV-Positionen geladen · Preisaufbau übernommen · RLC-KI Preise unverändert`);
-      setTimeout(() => setServerStatus(""), 2500);
-      return;
+      setServerStatus("Preisaufbau aus Recipes übernommen · RLC-KI Preise unverändert");
+      setTimeout(() => setServerStatus(""), 3000);
+    } catch (err) {
+      console.warn("RLC read-only Preisaufbau merge failed", err);
     }
-  }
+  }, [projectKey, rows]);
+  const lvTotalPages = React.useMemo(() => {
+    return Math.max(1, Math.ceil(filteredRows.length / lvPageSize));
+  }, [filteredRows.length, lvPageSize]);
 
-  // Kein globaler LV-Fallback:
-  // Neues Projekt bleibt leer, bis explizit GAEB/X83/X84 importiert wird.
-  setRows([]);
-}
+  React.useEffect(() => {
+    if (lvPage > lvTotalPages) setLvPage(lvTotalPages);
+  }, [lvPage, lvTotalPages]);
 
-React.useEffect(() => {
-  if (!projectKey) return;
-  if (!rows.length) return;
+  const visibleLvRows = React.useMemo(() => {
+    return filteredRows;
+  }, [filteredRows]);
 
-  try {
-    const lvRows = LV.list() as any[];
-    const urkByKey = new Map<string, any>();
+  const filteredChapters = React.useMemo(() => {
+    const map = new Map<string, EliteRow[]>();
 
-    for (const u of lvRows) {
-      const pb = normalizeBreakdown((u as any).priceBreakdown || []);
-      if (!pb.length) continue;
-
-      const keys = [
-        String((u as any).id || "").trim(),
-        String((u as any).posNr || "").trim(),
-        String((u as any).pos || "").trim(),
-      ].filter(Boolean);
-
-      for (const k of keys) urkByKey.set(k, u);
+    for (const r of visibleLvRows) {
+      const ch = getChapter(r.posNr);
+      if (!map.has(ch)) map.set(ch, []);
+      map.get(ch)!.push(r);
     }
 
-    if (!urkByKey.size) return;
+    return map;
+  }, [visibleLvRows]);
 
-    let changed = false;
+  const problemCounts = React.useMemo(() => {
+    const relevantRows = rows.filter((r) => !kiIsStructuralRow(r));
 
-    const merged = rows.map((r: any) => {
-      const keys = [
-        String((r as any).id || "").trim(),
-        String((r as any).posNr || "").trim(),
-        String((r as any).pos || "").trim(),
-      ].filter(Boolean);
+    return {
+      kritisch: relevantRows.filter((r) => r.calculationStatus === "critical").length,
+      warnungen: relevantRows.filter(
+        (r) => r.calculationStatus === "warning" || r.riskLevel === "high"
+      ).length,
+      hochrisiko: relevantRows.filter((r) => r.riskLevel === "high").length,
+      ohneDb: relevantRows.filter(
+        (r) => rowHasNoDb(r) && r.calculationStatus !== "manual"
+      ).length,
+      sicher: relevantRows.filter(isSafeRow).length,
 
-      const u = keys.map((k) => urkByKey.get(k)).find(Boolean);
-      if (!u) return r;
+      einheitFehlt: relevantRows.filter((r) => !String(r.einheit || "").trim()).length,
+      kurztextFehlt: relevantRows.filter((r) => !String(r.kurztext || "").trim()).length,
+      langtextFehlt: relevantRows.filter((r) => !String(r.langtext || "").trim()).length,
+      preisFehlt: relevantRows.filter((r) => round2(getUnitPrice(r)) <= 0).length,
+      preisaufbauFehlt: relevantRows.filter(
+        (r) => !Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0
+      ).length,
+      mengeFehlt: relevantRows.filter((r) => n(r.menge) <= 0).length
+    };
+  }, [rows]);
+  const duplicateGroups = React.useMemo(() => {
+    const map = new Map<string, EliteRow[]>();
 
-      const pb = normalizeBreakdown((u as any).priceBreakdown || []);
-      if (!pb.length) return r;
+    for (const row of rows) {
+      if (kiIsStructuralRow(row)) continue;
 
-      const already =
-        Array.isArray((r as any).priceBreakdown) &&
-        JSON.stringify((r as any).priceBreakdown) === JSON.stringify(pb);
+      const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`).
+      replace(/[^a-z0-9äöüß]+/gi, " ").
+      replace(/\s+/g, " ").
+      trim();
 
-      if (already) return r;
+      if (text.length < 8) continue;
 
-      changed = true;
-
-      const menge = n((r as any).menge ?? (u as any).menge);
-      const ep = sumBreakdown(pb);
-
-      return normalizeEliteRow({
-        ...(r as any),
-
-        // Nur Info / Preisaufbau aus Recipes
-        priceBreakdown: pb,
-        recipeLines: pb,
-        urkalkulationUnitPrice: ep,
-        urkalkulationTotal: round2(menge * ep),
-
-        // Kalkulationspreise bleiben geschützt
-        finalUnitPrice: (r as any).finalUnitPrice,
-        preis: (r as any).preis,
-        ep: (r as any).ep,
-        suggestedUnitPrice: (r as any).suggestedUnitPrice,
-        rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
-        rlcKiTotal: (r as any).rlcKiTotal,
-        gesamt: (r as any).gesamt,
-        totalNet: (r as any).totalNet,
-        gp: (r as any).gp,
-
-        source: (r as any).source,
-        calculationStatus: (r as any).calculationStatus,
-        riskLevel: (r as any).riskLevel,
-        aiReason: appendInfoText(
-          (r as any).aiReason,
-          "Preisaufbau aus Recipes als Info übernommen. Kalkulationspreis unverändert."
-        ),
-      } as any);
-    });
-
-    if (!changed) return;
-
-    const safeRows = sanitizeRowsForStorage(merged);
-    setRows(safeRows);
-    persistRows(safeRows);
-
-    setServerStatus("Preisaufbau aus Recipes übernommen · RLC-KI Preise unverändert");
-    setTimeout(() => setServerStatus(""), 3000);
-  } catch (err) {
-    console.warn("RLC read-only Preisaufbau merge failed", err);
-  }
-}, [projectKey, rows]);
-const lvTotalPages = React.useMemo(() => {
-  return Math.max(1, Math.ceil(filteredRows.length / lvPageSize));
-}, [filteredRows.length, lvPageSize]);
-
-React.useEffect(() => {
-  if (lvPage > lvTotalPages) setLvPage(lvTotalPages);
-}, [lvPage, lvTotalPages]);
-
-const visibleLvRows = React.useMemo(() => {
-  return filteredRows;
-}, [filteredRows]);
-
-const filteredChapters = React.useMemo(() => {
-  const map = new Map<string, EliteRow[]>();
-
-  for (const r of visibleLvRows) {
-    const ch = getChapter(r.posNr);
-    if (!map.has(ch)) map.set(ch, []);
-    map.get(ch)!.push(r);
-  }
-
-  return map;
-}, [visibleLvRows]);
-
-const problemCounts = React.useMemo(() => {
-  const relevantRows = rows.filter((r) => !kiIsStructuralRow(r));
-
-  return {
-    kritisch: relevantRows.filter((r) => r.calculationStatus === "critical").length,
-    warnungen: relevantRows.filter(
-      (r) => r.calculationStatus === "warning" || r.riskLevel === "high"
-    ).length,
-    hochrisiko: relevantRows.filter((r) => r.riskLevel === "high").length,
-    ohneDb: relevantRows.filter(
-      (r) => rowHasNoDb(r) && r.calculationStatus !== "manual"
-    ).length,
-    sicher: relevantRows.filter(isSafeRow).length,
-
-    einheitFehlt: relevantRows.filter((r) => !String(r.einheit || "").trim()).length,
-    kurztextFehlt: relevantRows.filter((r) => !String(r.kurztext || "").trim()).length,
-    langtextFehlt: relevantRows.filter((r) => !String(r.langtext || "").trim()).length,
-    preisFehlt: relevantRows.filter((r) => round2(getUnitPrice(r)) <= 0).length,
-    preisaufbauFehlt: relevantRows.filter(
-      (r) => !Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0
-    ).length,
-    mengeFehlt: relevantRows.filter((r) => n(r.menge) <= 0).length,
-  };
-}, [rows]);
-const duplicateGroups = React.useMemo(() => {
-  const map = new Map<string, EliteRow[]>();
-
-  for (const row of rows) {
-    if (kiIsStructuralRow(row)) continue;
-
-    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`)
-      .replace(/[^a-z0-9äöüß]+/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (text.length < 8) continue;
-
-    const key = [
+      const key = [
       text.slice(0, 140),
       String(row.einheit || "").trim().toLowerCase(),
       round2(n(row.menge)),
-      round2(getUnitPrice(row)),
-    ].join("|");
+      round2(getUnitPrice(row))].
+      join("|");
 
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(row);
-  }
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    }
 
-  return Array.from(map.values())
-    .filter((group) => group.length > 1)
-    .map((group) =>
-      [...group].sort((a, b) => {
-        const pa = String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
-          numeric: true,
-        });
-        if (pa !== 0) return pa;
+    return Array.from(map.values()).
+    filter((group) => group.length > 1).
+    map((group) =>
+    [...group].sort((a, b) => {
+      const pa = String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
+        numeric: true
+      });
+      if (pa !== 0) return pa;
 
-        return String(a.id).localeCompare(String(b.id));
-      })
+      return String(a.id).localeCompare(String(b.id));
+    })
     );
-}, [rows]);
+  }, [rows]);
 
-const duplicateCountToDelete = React.useMemo(() => {
-  return duplicateGroups.reduce((sum, group) => sum + Math.max(0, group.length - 1), 0);
-}, [duplicateGroups]);
+  const duplicateCountToDelete = React.useMemo(() => {
+    return duplicateGroups.reduce((sum, group) => sum + Math.max(0, group.length - 1), 0);
+  }, [duplicateGroups]);
 
-React.useEffect(() => {
-  function handleGlobalKiCommand(event: Event) {
-    const detail = (event as CustomEvent<{ filter?: string; action?: string }>).detail;
-    if (!detail) return;
+  React.useEffect(() => {
+    function handleGlobalKiCommand(event: Event) {
+      const detail = (event as CustomEvent<{filter?: string;action?: string;}>).detail;
+      if (!detail) return;
 
-    const filter = String(detail.filter || "");
-    const action = String(detail.action || "");
+      const filter = String(detail.filter || "");
+      const action = String(detail.action || "");
 
-    // Wenn die globale KI einen Prüf-Filter setzt, muss die Liste alle Aufträge zeigen,
-    // sonst kann z.B. "Menge fehlt" 1 melden, aber in "Hauptauftrag" 0 anzeigen.
-    if (filter) {
-      setSelectedAuftragId("");
+      // Wenn die globale KI einen Prüf-Filter setzt, muss die Liste alle Aufträge zeigen,
+      // sonst kann z.B. "Menge fehlt" 1 melden, aber in "Hauptauftrag" 0 anzeigen.
+      if (filter) {
+        setSelectedAuftragId("");
+      }
+
+      if (filter === "alle") setViewFilter("alle");
+      if (filter === "kritisch") setViewFilter("kritisch");
+      if (filter === "warnungen") setViewFilter("warnungen");
+      if (filter === "hochrisiko") setViewFilter("hochrisiko");
+      if (filter === "ohneDb") setViewFilter("ohneDb");
+      if (filter === "sicher") setViewFilter("sicher");
+      if (filter === "mengeFehlt") setViewFilter("mengeFehlt");
+      if (filter === "preisFehlt") setViewFilter("preisFehlt");
+      if (filter === "einheitFehlt") setViewFilter("einheitFehlt");
+      if (filter === "urkalkulationFehlt") setViewFilter("urkalkulationFehlt");
+      if (filter === "doppelte") setViewFilter("doppelte");
+
+      if (action === "runKi") void runEliteCalculation(false);
+      if (action === "completeMissing") autoCompleteMissingFields();
+      if (action === "selectDuplicates") selectDuplicateRowsToDelete();
+
+      setLvPage(1);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
     }
 
-    if (filter === "alle") setViewFilter("alle");
-    if (filter === "kritisch") setViewFilter("kritisch");
-    if (filter === "warnungen") setViewFilter("warnungen");
-    if (filter === "hochrisiko") setViewFilter("hochrisiko");
-    if (filter === "ohneDb") setViewFilter("ohneDb");
-    if (filter === "sicher") setViewFilter("sicher");
-    if (filter === "mengeFehlt") setViewFilter("mengeFehlt");
-    if (filter === "preisFehlt") setViewFilter("preisFehlt");
-    if (filter === "einheitFehlt") setViewFilter("einheitFehlt");
-    if (filter === "urkalkulationFehlt") setViewFilter("urkalkulationFehlt");
-    if (filter === "doppelte") setViewFilter("doppelte");
+    window.addEventListener("rlc:kalkulation-filter", handleGlobalKiCommand);
 
-    if (action === "runKi") void runEliteCalculation(false);
-    if (action === "completeMissing") autoCompleteMissingFields();
-    if (action === "selectDuplicates") selectDuplicateRowsToDelete();
+    return () => {
+      window.removeEventListener("rlc:kalkulation-filter", handleGlobalKiCommand);
+    };
+    // Handler nur bei Projektwechsel neu registrieren, nicht bei jedem Render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey]);
 
-    setLvPage(1);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
+  React.useEffect(() => {
+    const nextR = { ...kapRabatt };
+    const nextM = { ...kapMarkup };
+
+    for (const ch of chapters.keys()) {
+      if (nextR[ch] == null) nextR[ch] = 0;
+      if (nextM[ch] == null) nextM[ch] = 0;
+    }
+
+    for (const k of Object.keys(nextR)) if (!chapters.has(k)) delete nextR[k];
+    for (const k of Object.keys(nextM)) if (!chapters.has(k)) delete nextM[k];
+
+    setKapRabatt(nextR);
+    setKapMarkup(nextM);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapters.size]);
+
+  const chapterTotals = React.useMemo(() => {
+    const out: Record<
+      string,
+      {
+        netRaw: number;
+        afterChapterDiscount: number;
+        afterChapterMarkup: number;
+        risk: number;
+        profit: number;
+      }> =
+    {};
+
+    chapters.forEach((list, ch) => {
+      const netRaw = list.reduce((sum, r) => sum + lineNet(r), 0);
+      const risk = list.reduce((sum, r) => sum + n(r.riskCost) * n(r.menge), 0);
+      const profit = list.reduce(
+        (sum, r) => sum + n(r.profitCost) * n(r.menge),
+        0
+      );
+
+      const afterChapterDiscount = netRaw * (1 - n(kapRabatt[ch]) / 100);
+      const afterChapterMarkup =
+      afterChapterDiscount * (1 + n(kapMarkup[ch]) / 100);
+
+      out[ch] = {
+        netRaw: round2(netRaw),
+        afterChapterDiscount: round2(afterChapterDiscount),
+        afterChapterMarkup: round2(afterChapterMarkup),
+        risk: round2(risk),
+        profit: round2(profit)
+      };
     });
-  }
 
-  window.addEventListener("rlc:kalkulation-filter", handleGlobalKiCommand);
+    return out;
+  }, [chapters, kapRabatt, kapMarkup]);
 
-  return () => {
-    window.removeEventListener("rlc:kalkulation-filter", handleGlobalKiCommand);
-  };
-});
+  const summary = React.useMemo(() => {
+    const netBeforeGlobal = Object.values(chapterTotals).reduce(
+      (sum, total) => sum + total.afterChapterMarkup,
+      0
+    );
 
+    const globalMarkupValue = netBeforeGlobal * (globalMarkup / 100);
+    const net = netBeforeGlobal + globalMarkupValue;
+    const tax = net * (mwst / 100);
+    const gross = net + tax;
 
-React.useEffect(() => {
-  const nextR = { ...kapRabatt };
-  const nextM = { ...kapMarkup };
+    const angebotNet = round2(rows.reduce((sum, r) => sum + offerLineNet(r), 0));
+    const angebotTax = round2(angebotNet * (mwst / 100));
+    const angebotGross = round2(angebotNet + angebotTax);
 
-  for (const ch of chapters.keys()) {
-    if (nextR[ch] == null) nextR[ch] = 0;
-    if (nextM[ch] == null) nextM[ch] = 0;
-  }
+    const rlcKiNet = round2(rows.reduce((sum, r) => sum + rlcKiLineNet(r), 0));
+    const rlcKiTax = round2(rlcKiNet * (mwst / 100));
+    const rlcKiGross = round2(rlcKiNet + rlcKiTax);
 
-  for (const k of Object.keys(nextR)) if (!chapters.has(k)) delete nextR[k];
-  for (const k of Object.keys(nextM)) if (!chapters.has(k)) delete nextM[k];
+    const diffNet = round2(rlcKiNet - angebotNet);
+    const diffPct = angebotNet > 0 ? round2(diffNet / angebotNet * 100) : 0;
 
-  setKapRabatt(nextR);
-  setKapMarkup(nextM);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [chapters.size]);
+    const directCost = rows.reduce(
+      (sum, r) =>
+      sum +
+      n(r.menge) * (
+      n(r.materialCost) +
+      n(r.laborCost) +
+      n(r.machineCost) +
+      n(r.subcontractorCost) +
+      n(r.disposalCost)),
+      0
+    );
 
-const chapterTotals = React.useMemo(() => {
-  const out: Record<
-    string,
-    {
-      netRaw: number;
-      afterChapterDiscount: number;
-      afterChapterMarkup: number;
-      risk: number;
-      profit: number;
-    }
-  > = {};
+    const riskSum = rows.reduce(
+      (sum, r) => sum + n(r.riskCost) * n(r.menge),
+      0
+    );
 
-  chapters.forEach((list, ch) => {
-    const netRaw = list.reduce((sum, r) => sum + lineNet(r), 0);
-    const risk = list.reduce((sum, r) => sum + n(r.riskCost) * n(r.menge), 0);
-    const profit = list.reduce(
+    const profitSum = rows.reduce(
       (sum, r) => sum + n(r.profitCost) * n(r.menge),
       0
     );
 
-    const afterChapterDiscount = netRaw * (1 - n(kapRabatt[ch]) / 100);
-    const afterChapterMarkup =
-      afterChapterDiscount * (1 + n(kapMarkup[ch]) / 100);
+    const priced = rows.filter((r) => getUnitPrice(r) > 0).length;
 
-    out[ch] = {
-      netRaw: round2(netRaw),
-      afterChapterDiscount: round2(afterChapterDiscount),
-      afterChapterMarkup: round2(afterChapterMarkup),
-      risk: round2(risk),
-      profit: round2(profit),
+    const avgConfidence = rows.length ?
+    rows.reduce((sum, r) => sum + n(r.confidence), 0) / rows.length :
+    0;
+
+    return {
+      net: round2(net),
+      gross: round2(gross),
+      tax: round2(tax),
+
+      angebotNet,
+      angebotTax,
+      angebotGross,
+
+      rlcKiNet,
+      rlcKiTax,
+      rlcKiGross,
+      diffNet,
+      diffPct,
+      directCost: round2(directCost),
+      riskSum: round2(riskSum),
+      profitSum: round2(profitSum),
+      globalMarkupValue: round2(globalMarkupValue),
+      marginPct: net > 0 ? round2(profitSum / net * 100) : 0,
+      priced,
+      total: rows.length,
+      coveragePct: rows.length ? Math.round(priced / rows.length * 100) : 0,
+      avgConfidence: round2(avgConfidence),
+      highRisk: rows.filter((r) => r.riskLevel === "high").length,
+      warnings: rows.filter((r) => r.calculationStatus === "warning").length,
+      critical: rows.filter((r) => r.calculationStatus === "critical").length,
+      knowledgeCount: KalkulationsDatenbank.count()
     };
-  });
+  }, [rows, chapterTotals, globalMarkup, mwst]);
 
-  return out;
-}, [chapters, kapRabatt, kapMarkup]);
+  const selectedAuftragSummary = React.useMemo(() => {
+    const list = selectedAuftragId ?
+    rows.filter((r) => r.auftragId === selectedAuftragId) :
+    rows;
 
-const summary = React.useMemo(() => {
-  const netBeforeGlobal = Object.values(chapterTotals).reduce(
-    (sum, total) => sum + total.afterChapterMarkup,
-    0
-  );
+    const net = round2(list.reduce((sum, r) => sum + lineNet(r), 0));
+    const count = list.length;
+    const priced = list.filter((r) => getUnitPrice(r) > 0).length;
 
-  const globalMarkupValue = netBeforeGlobal * (globalMarkup / 100);
-  const net = netBeforeGlobal + globalMarkupValue;
-  const tax = net * (mwst / 100);
-  const gross = net + tax;
+    return { net, count, priced };
+  }, [rows, selectedAuftragId]);
 
-    const angebotNet = round2(rows.reduce((sum, r) => sum + offerLineNet(r), 0));
-  const angebotTax = round2(angebotNet * (mwst / 100));
-  const angebotGross = round2(angebotNet + angebotTax);
-
-  const rlcKiNet = round2(rows.reduce((sum, r) => sum + rlcKiLineNet(r), 0));
-  const rlcKiTax = round2(rlcKiNet * (mwst / 100));
-  const rlcKiGross = round2(rlcKiNet + rlcKiTax);
-
-  const diffNet = round2(rlcKiNet - angebotNet);
-  const diffPct = angebotNet > 0 ? round2((diffNet / angebotNet) * 100) : 0;
-
-  const directCost = rows.reduce(
-    (sum, r) =>
-      sum +
-      n(r.menge) *
-        (n(r.materialCost) +
-          n(r.laborCost) +
-          n(r.machineCost) +
-          n(r.subcontractorCost) +
-          n(r.disposalCost)),
-    0
-  );
-
-  const riskSum = rows.reduce(
-    (sum, r) => sum + n(r.riskCost) * n(r.menge),
-    0
-  );
-
-  const profitSum = rows.reduce(
-    (sum, r) => sum + n(r.profitCost) * n(r.menge),
-    0
-  );
-
-  const priced = rows.filter((r) => getUnitPrice(r) > 0).length;
-
-  const avgConfidence = rows.length
-    ? rows.reduce((sum, r) => sum + n(r.confidence), 0) / rows.length
-    : 0;
-
-  return {
-    net: round2(net),
-    gross: round2(gross),
-    tax: round2(tax),
-
-    angebotNet,
-    angebotTax,
-    angebotGross,
-
-    rlcKiNet,
-    rlcKiTax,
-    rlcKiGross,
-    diffNet,
-    diffPct,
-    directCost: round2(directCost),
-    riskSum: round2(riskSum),
-    profitSum: round2(profitSum),
-    globalMarkupValue: round2(globalMarkupValue),
-    marginPct: net > 0 ? round2((profitSum / net) * 100) : 0,
-    priced,
-    total: rows.length,
-    coveragePct: rows.length ? Math.round((priced / rows.length) * 100) : 0,
-    avgConfidence: round2(avgConfidence),
-    highRisk: rows.filter((r) => r.riskLevel === "high").length,
-    warnings: rows.filter((r) => r.calculationStatus === "warning").length,
-    critical: rows.filter((r) => r.calculationStatus === "critical").length,
-    knowledgeCount: KalkulationsDatenbank.count(),
-  };
-}, [rows, chapterTotals, globalMarkup, mwst]);
-
-const selectedAuftragSummary = React.useMemo(() => {
-  const list = selectedAuftragId
-    ? rows.filter((r) => r.auftragId === selectedAuftragId)
-    : rows;
-
-  const net = round2(list.reduce((sum, r) => sum + lineNet(r), 0));
-  const count = list.length;
-  const priced = list.filter((r) => getUnitPrice(r) > 0).length;
-
-  return { net, count, priced };
-}, [rows, selectedAuftragId]);
-
-const priceDiffRows = React.useMemo(() => {
-  return rows
-    .filter((r) => !kiIsStructuralRow(r))
-    .map((r) => {
+  const priceDiffRows = React.useMemo(() => {
+    return rows.
+    filter((r) => !kiIsStructuralRow(r)).
+    map((r) => {
       const angebotEp = getOfferUnitPrice(r);
       const kiEp = getRlcKiUnitPrice(r);
 
@@ -3759,27 +4021,27 @@ const priceDiffRows = React.useMemo(() => {
       const kiGp = round2(menge * kiEp);
       const diffEp = round2(kiEp - angebotEp);
       const diffGp = round2(kiGp - angebotGp);
-      const diffPct = angebotEp > 0 ? round2((diffEp / angebotEp) * 100) : 0;
+      const diffPct = angebotEp > 0 ? round2(diffEp / angebotEp * 100) : 0;
       const absDiffPct = Math.abs(diffPct);
 
       let gruppe:
-        | "RLC_HOEHER_UEBER_10"
-        | "RLC_NIEDRIGER_UEBER_10"
-        | "INNERHALB_10"
-        | "OHNE_VERGLEICH" = "OHNE_VERGLEICH";
+      "RLC_HOEHER_UEBER_10" |
+      "RLC_NIEDRIGER_UEBER_10" |
+      "INNERHALB_10" |
+      "OHNE_VERGLEICH" = "OHNE_VERGLEICH";
 
       if (angebotEp > 0 && kiEp > 0) {
-        if (diffPct > 10) gruppe = "RLC_HOEHER_UEBER_10";
-        else if (diffPct < -10) gruppe = "RLC_NIEDRIGER_UEBER_10";
-        else gruppe = "INNERHALB_10";
+        if (diffPct > 10) gruppe = "RLC_HOEHER_UEBER_10";else
+        if (diffPct < -10) gruppe = "RLC_NIEDRIGER_UEBER_10";else
+        gruppe = "INNERHALB_10";
       }
 
       let empfehlung = "OK";
-      if (gruppe === "OHNE_VERGLEICH") empfehlung = "Ohne Vergleich";
-      else if (absDiffPct >= 30) empfehlung = "Kritisch";
-      else if (absDiffPct >= 20) empfehlung = "Prüfen";
-      else if (absDiffPct > 10) empfehlung = diffPct > 0 ? "RLC höher > 10%" : "RLC niedriger > 10%";
-      else empfehlung = "Innerhalb ±10%";
+      if (gruppe === "OHNE_VERGLEICH") empfehlung = "Ohne Vergleich";else
+      if (absDiffPct >= 30) empfehlung = "Kritisch";else
+      if (absDiffPct >= 20) empfehlung = "Prüfen";else
+      if (absDiffPct > 10) empfehlung = diffPct > 0 ? "RLC höher > 10%" : "RLC niedriger > 10%";else
+      empfehlung = "Innerhalb ±10%";
 
       return {
         id: r.id,
@@ -3795,198 +4057,198 @@ const priceDiffRows = React.useMemo(() => {
         diffGp,
         diffPct,
         gruppe,
-        empfehlung,
+        empfehlung
       };
     });
-}, [rows]);
+  }, [rows]);
 
-const priceDiffReport = React.useMemo(() => {
-  const byAbsGp = (a: any, b: any) => Math.abs(b.diffGp) - Math.abs(a.diffGp);
-  const byHigherGp = (a: any, b: any) => b.diffGp - a.diffGp;
-  const byLowerGp = (a: any, b: any) => a.diffGp - b.diffGp;
+  const priceDiffReport = React.useMemo(() => {
+    const byAbsGp = (a: any, b: any) => Math.abs(b.diffGp) - Math.abs(a.diffGp);
+    const byHigherGp = (a: any, b: any) => b.diffGp - a.diffGp;
+    const byLowerGp = (a: any, b: any) => a.diffGp - b.diffGp;
 
-  const comparable = priceDiffRows.filter((r) => r.angebotEp > 0 && r.kiEp > 0);
-  const higher10 = comparable.filter((r) => r.gruppe === "RLC_HOEHER_UEBER_10").sort(byHigherGp);
-  const lower10 = comparable.filter((r) => r.gruppe === "RLC_NIEDRIGER_UEBER_10").sort(byLowerGp);
-  const inside10 = comparable.filter((r) => r.gruppe === "INNERHALB_10").sort(byAbsGp);
-  const missing = priceDiffRows.filter((r) => r.gruppe === "OHNE_VERGLEICH").sort(byAbsGp);
-  const outside10 = [...higher10, ...lower10].sort(byAbsGp);
-  const over20Pct = comparable.filter((r) => Math.abs(r.diffPct) >= 20).sort(byAbsGp);
-  const over10000Gp = comparable.filter((r) => Math.abs(r.diffGp) >= 10000).sort(byAbsGp);
+    const comparable = priceDiffRows.filter((r) => r.angebotEp > 0 && r.kiEp > 0);
+    const higher10 = comparable.filter((r) => r.gruppe === "RLC_HOEHER_UEBER_10").sort(byHigherGp);
+    const lower10 = comparable.filter((r) => r.gruppe === "RLC_NIEDRIGER_UEBER_10").sort(byLowerGp);
+    const inside10 = comparable.filter((r) => r.gruppe === "INNERHALB_10").sort(byAbsGp);
+    const missing = priceDiffRows.filter((r) => r.gruppe === "OHNE_VERGLEICH").sort(byAbsGp);
+    const outside10 = [...higher10, ...lower10].sort(byAbsGp);
+    const over20Pct = comparable.filter((r) => Math.abs(r.diffPct) >= 20).sort(byAbsGp);
+    const over10000Gp = comparable.filter((r) => Math.abs(r.diffGp) >= 10000).sort(byAbsGp);
 
-  return {
-    all: comparable.sort(byAbsGp),
-    comparable,
-    higher10,
-    lower10,
-    inside10,
-    missing,
-    outside10,
-    topAbs: [...outside10].sort(byAbsGp).slice(0, 30),
-    over20Pct,
-    over10000Gp,
-    counts: {
-      total: priceDiffRows.length,
-      comparable: comparable.length,
-      outside10: outside10.length,
-      higher10: higher10.length,
-      lower10: lower10.length,
-      inside10: inside10.length,
-      missing: missing.length,
-    },
-    sums: {
-      x84: round2(comparable.reduce((sum, r) => sum + r.angebotGp, 0)),
-      rlc: round2(comparable.reduce((sum, r) => sum + r.kiGp, 0)),
-      diff: round2(comparable.reduce((sum, r) => sum + r.diffGp, 0)),
-      higher: round2(higher10.reduce((sum, r) => sum + r.diffGp, 0)),
-      lower: round2(lower10.reduce((sum, r) => sum + r.diffGp, 0)),
-      inside: round2(inside10.reduce((sum, r) => sum + r.diffGp, 0)),
-    },
-  };
-}, [priceDiffRows]);
-
-const activePriceDiffRows = React.useMemo(() => {
-  if (priceDiffView === "higher10") return priceDiffReport.higher10;
-  if (priceDiffView === "lower10") return priceDiffReport.lower10;
-  if (priceDiffView === "inside10") return priceDiffReport.inside10;
-  if (priceDiffView === "over20") return priceDiffReport.over20Pct;
-  if (priceDiffView === "over10000") return priceDiffReport.over10000Gp;
-  if (priceDiffView === "all") return priceDiffReport.all;
-  if (priceDiffView === "missing") return priceDiffReport.missing;
-  return priceDiffReport.outside10;
-}, [priceDiffReport, priceDiffView]);
-
-const topPriceDiffRows = activePriceDiffRows;
-const activeKiDecision = React.useMemo(() => {
-  if (!rows.length) {
     return {
-      level: "info",
-      title: "Keine LV-Positionen vorhanden",
-      text: "Lade zuerst ein Leistungsverzeichnis oder füge Positionen hinzu. Danach kann die KI aktiv prüfen.",
-      nextLabel: "LV importieren",
+      all: comparable.sort(byAbsGp),
+      comparable,
+      higher10,
+      lower10,
+      inside10,
+      missing,
+      outside10,
+      topAbs: [...outside10].sort(byAbsGp).slice(0, 30),
+      over20Pct,
+      over10000Gp,
+      counts: {
+        total: priceDiffRows.length,
+        comparable: comparable.length,
+        outside10: outside10.length,
+        higher10: higher10.length,
+        lower10: lower10.length,
+        inside10: inside10.length,
+        missing: missing.length
+      },
+      sums: {
+        x84: round2(comparable.reduce((sum, r) => sum + r.angebotGp, 0)),
+        rlc: round2(comparable.reduce((sum, r) => sum + r.kiGp, 0)),
+        diff: round2(comparable.reduce((sum, r) => sum + r.diffGp, 0)),
+        higher: round2(higher10.reduce((sum, r) => sum + r.diffGp, 0)),
+        lower: round2(lower10.reduce((sum, r) => sum + r.diffGp, 0)),
+        inside: round2(inside10.reduce((sum, r) => sum + r.diffGp, 0))
+      }
+    };
+  }, [priceDiffRows]);
+
+  const activePriceDiffRows = React.useMemo(() => {
+    if (priceDiffView === "higher10") return priceDiffReport.higher10;
+    if (priceDiffView === "lower10") return priceDiffReport.lower10;
+    if (priceDiffView === "inside10") return priceDiffReport.inside10;
+    if (priceDiffView === "over20") return priceDiffReport.over20Pct;
+    if (priceDiffView === "over10000") return priceDiffReport.over10000Gp;
+    if (priceDiffView === "all") return priceDiffReport.all;
+    if (priceDiffView === "missing") return priceDiffReport.missing;
+    return priceDiffReport.outside10;
+  }, [priceDiffReport, priceDiffView]);
+
+  const topPriceDiffRows = activePriceDiffRows;
+  const activeKiDecision = React.useMemo(() => {
+    if (!rows.length) {
+      return {
+        level: "info",
+        title: "Keine LV-Positionen vorhanden",
+        text: "Lade zuerst ein Leistungsverzeichnis oder füge Positionen hinzu. Danach kann die KI aktiv prüfen.",
+        nextLabel: "LV importieren",
+        filter: "alle",
+        action: "",
+        readyForExport: false,
+        shouldRecalculate: false
+      };
+    }
+
+    if (problemCounts.mengeFehlt > 0) {
+      return {
+        level: "critical",
+        title: "Mengen fehlen",
+        text: `${problemCounts.mengeFehlt} Position(en) haben keine gültige Menge. Ohne Menge ist Angebot, Urkalkulation und Abrechnung nicht belastbar.`,
+        nextLabel: "Mengen prüfen",
+        filter: "mengeFehlt",
+        action: "",
+        readyForExport: false,
+        shouldRecalculate: false
+      };
+    }
+
+    if (problemCounts.einheitFehlt > 0) {
+      return {
+        level: "critical",
+        title: "Einheiten fehlen",
+        text: `${problemCounts.einheitFehlt} Position(en) haben keine Einheit. Die KI kann diese Positionen nicht sauber kalkulieren.`,
+        nextLabel: "Einheiten prüfen",
+        filter: "einheitFehlt",
+        action: "",
+        readyForExport: false,
+        shouldRecalculate: false
+      };
+    }
+
+    if (problemCounts.preisFehlt > 0 || problemCounts.preisaufbauFehlt > 0) {
+      return {
+        level: "warning",
+        title: "Kalkulation unvollständig",
+        text: `${problemCounts.preisFehlt} EP fehlen, ${problemCounts.preisaufbauFehlt} Urkalkulation(en) fehlen. Starte zuerst die KI-Kalkulation für offene Positionen.`,
+        nextLabel: "KI starten",
+        filter: "preisFehlt",
+        action: "runKi",
+        readyForExport: false,
+        shouldRecalculate: false
+      };
+    }
+
+    if (duplicateGroups.length > 0) {
+      return {
+        level: "warning",
+        title: "Doppelte LV-Positionen erkannt",
+        text: `${duplicateGroups.length} Duplikatgruppe(n) gefunden. Vor Angebot/GAEB sollten doppelte Positionen geprüft oder gelöscht werden.`,
+        nextLabel: "Doppelte prüfen",
+        filter: "doppelte",
+        action: "selectDuplicates",
+        readyForExport: false,
+        shouldRecalculate: false
+      };
+    }
+
+    if (summary.critical > 0 || summary.highRisk > 0) {
+      return {
+        level: "warning",
+        title: "Prüfung erforderlich",
+        text: `${summary.critical} kritische Position(en), ${summary.highRisk} Hochrisiko-Position(en). Vor Export bitte fachlich prüfen.`,
+        nextLabel: "Prüfhinweise prüfen",
+        filter: "warnungen",
+        action: "",
+        readyForExport: false,
+        shouldRecalculate: false
+      };
+    }
+
+    if (summary.warnings > 0) {
+      return {
+        level: "warning",
+        title: "Kalkulation plausibel, aber mit Hinweisen",
+        text: `${summary.warnings} Position(en) haben Warnhinweise. Export ist möglich, aber vorher fachlich prüfen.`,
+        nextLabel: "Prüfhinweise prüfen",
+        filter: "warnungen",
+        action: "",
+        readyForExport: true,
+        shouldRecalculate: false
+      };
+    }
+
+    return {
+      level: "ok",
+      title: "Kalkulation exportbereit",
+      text: "Alle relevanten Positionen sind kalkuliert. KI neu berechnen ist aktuell nicht nötig. Nächster sinnvoller Schritt: Urkalkulation PDF, Angebot oder GAEB Export.",
+      nextLabel: "Export vorbereiten",
       filter: "alle",
       action: "",
-      readyForExport: false,
-      shouldRecalculate: false,
-    };
-  }
-
-  if (problemCounts.mengeFehlt > 0) {
-    return {
-      level: "critical",
-      title: "Mengen fehlen",
-      text: `${problemCounts.mengeFehlt} Position(en) haben keine gültige Menge. Ohne Menge ist Angebot, Urkalkulation und Abrechnung nicht belastbar.`,
-      nextLabel: "Mengen prüfen",
-      filter: "mengeFehlt",
-      action: "",
-      readyForExport: false,
-      shouldRecalculate: false,
-    };
-  }
-
-  if (problemCounts.einheitFehlt > 0) {
-    return {
-      level: "critical",
-      title: "Einheiten fehlen",
-      text: `${problemCounts.einheitFehlt} Position(en) haben keine Einheit. Die KI kann diese Positionen nicht sauber kalkulieren.`,
-      nextLabel: "Einheiten prüfen",
-      filter: "einheitFehlt",
-      action: "",
-      readyForExport: false,
-      shouldRecalculate: false,
-    };
-  }
-
-  if (problemCounts.preisFehlt > 0 || problemCounts.preisaufbauFehlt > 0) {
-    return {
-      level: "warning",
-      title: "Kalkulation unvollständig",
-      text: `${problemCounts.preisFehlt} EP fehlen, ${problemCounts.preisaufbauFehlt} Urkalkulation(en) fehlen. Starte zuerst die KI-Kalkulation für offene Positionen.`,
-      nextLabel: "KI starten",
-      filter: "preisFehlt",
-      action: "runKi",
-      readyForExport: false,
-      shouldRecalculate: false,
-    };
-  }
-
-  if (duplicateGroups.length > 0) {
-    return {
-      level: "warning",
-      title: "Doppelte LV-Positionen erkannt",
-      text: `${duplicateGroups.length} Duplikatgruppe(n) gefunden. Vor Angebot/GAEB sollten doppelte Positionen geprüft oder gelöscht werden.`,
-      nextLabel: "Doppelte prüfen",
-      filter: "doppelte",
-      action: "selectDuplicates",
-      readyForExport: false,
-      shouldRecalculate: false,
-    };
-  }
-
-  if (summary.critical > 0 || summary.highRisk > 0) {
-    return {
-      level: "warning",
-      title: "Prüfung erforderlich",
-      text: `${summary.critical} kritische Position(en), ${summary.highRisk} Hochrisiko-Position(en). Vor Export bitte fachlich prüfen.`,
-      nextLabel: "Prüfhinweise prüfen",
-      filter: "warnungen",
-      action: "",
-      readyForExport: false,
-      shouldRecalculate: false,
-    };
-  }
-
-  if (summary.warnings > 0) {
-    return {
-      level: "warning",
-      title: "Kalkulation plausibel, aber mit Hinweisen",
-      text: `${summary.warnings} Position(en) haben Warnhinweise. Export ist möglich, aber vorher fachlich prüfen.`,
-      nextLabel: "Prüfhinweise prüfen",
-      filter: "warnungen",
-      action: "",
       readyForExport: true,
-      shouldRecalculate: false,
+      shouldRecalculate: false
     };
-  }
+  }, [rows.length, problemCounts, duplicateGroups, summary]);
 
-  return {
-    level: "ok",
-    title: "Kalkulation exportbereit",
-    text: "Alle relevanten Positionen sind kalkuliert. KI neu berechnen ist aktuell nicht nötig. Nächster sinnvoller Schritt: Urkalkulation PDF, Angebot oder GAEB Export.",
-    nextLabel: "Export vorbereiten",
-    filter: "alle",
-    action: "",
-    readyForExport: true,
-    shouldRecalculate: false,
-  };
-}, [rows.length, problemCounts, duplicateGroups, summary]);
+  React.useEffect(() => {
+    const duplicateCount = duplicateGroups.reduce(
+      (sum, group) => sum + Math.max(0, group.length - 1),
+      0
+    );
 
-React.useEffect(() => {
-  const duplicateCount = duplicateGroups.reduce(
-    (sum, group) => sum + Math.max(0, group.length - 1),
-    0
-  );
+    const payload = {
+      count: rows.length,
+      net: summary.net,
+      gross: summary.gross,
+      duplicateCount,
+      missingUnits: problemCounts.einheitFehlt,
+      missingQty: problemCounts.mengeFehlt,
+      missingPrice: problemCounts.preisFehlt,
+      missingBreakdown: problemCounts.preisaufbauFehlt,
+      activeKi: activeKiDecision
+    };
 
-  const payload = {
-    count: rows.length,
-    net: summary.net,
-    gross: summary.gross,
-    duplicateCount,
-    missingUnits: problemCounts.einheitFehlt,
-    missingQty: problemCounts.mengeFehlt,
-    missingPrice: problemCounts.preisFehlt,
-    missingBreakdown: problemCounts.preisaufbauFehlt,
-    activeKi: activeKiDecision,
-  };
+    (window as any).__RLC_KALKULATION_RUNTIME_SUMMARY__ = payload;
 
-  (window as any).__RLC_KALKULATION_RUNTIME_SUMMARY__ = payload;
-
-  window.dispatchEvent(
-    new CustomEvent("rlc:kalkulation-runtime-summary", {
-      detail: payload,
-    })
-  );
-}, [
+    window.dispatchEvent(
+      new CustomEvent("rlc:kalkulation-runtime-summary", {
+        detail: payload
+      })
+    );
+  }, [
   rows.length,
   summary.net,
   summary.gross,
@@ -3995,735 +4257,996 @@ React.useEffect(() => {
   problemCounts.mengeFehlt,
   problemCounts.preisFehlt,
   problemCounts.preisaufbauFehlt,
-  activeKiDecision,
-]);
+  activeKiDecision]
+  );
 
 
 
-React.useEffect(() => {
-  if (!activeKiDecision) return;
+  React.useEffect(() => {
+    if (!activeKiDecision) return;
 
-  const shouldPulse =
+    const shouldPulse =
     activeKiDecision.level === "critical" ||
     activeKiDecision.level === "warning" ||
     Boolean(activeKiDecision.action);
 
-  if (!shouldPulse) return;
+    if (!shouldPulse) return;
 
-  window.dispatchEvent(
-    new CustomEvent("rlc:active-ki-suggestion", {
-      detail: {
-        id: "rlc:kalkulation-active-ki-bridge",
-        module: "kalkulation",
-        level: activeKiDecision.level,
-        title: activeKiDecision.title,
-        text: activeKiDecision.text,
-        nextLabel: activeKiDecision.nextLabel,
-        action: activeKiDecision.action,
-        filter: activeKiDecision.filter,
-        eventName: "rlc:kalkulation-filter",
-        autoOpen: false,
-        pulse: true,
-      },
-    })
-  );
-}, [activeKiDecision]);
+    window.dispatchEvent(
+      new CustomEvent("rlc:active-ki-suggestion", {
+        detail: {
+          id: "rlc:kalkulation-active-ki-bridge",
+          module: "kalkulation",
+          level: activeKiDecision.level,
+          title: activeKiDecision.title,
+          text: activeKiDecision.text,
+          nextLabel: activeKiDecision.nextLabel,
+          action: activeKiDecision.action,
+          filter: activeKiDecision.filter,
+          eventName: "rlc:kalkulation-filter",
+          autoOpen: false,
+          pulse: true
+        }
+      })
+    );
+  }, [activeKiDecision]);
 
-function sanitizeRowsForStorage(input: EliteRow[]): EliteRow[] {
-  return input.map((r) => {
-    const kiEp = getRlcKiUnitPrice(r);
-    const x84 = getOfferUnitPrice(r);
+  function sanitizeRowsForStorage(input: EliteRow[]): EliteRow[] {
+    return input.map((r) => {
+      const kiEp = getRlcKiUnitPrice(r);
+      const x84 = getOfferUnitPrice(r);
 
-    const decision = ((r as any).priceDecision || "x84") as
-      | "x84"
-      | "rlcKi"
-      | "manual";
+      const decision = ((r as any).priceDecision || "x84") as
+      "x84" |
+      "rlcKi" |
+      "manual";
 
-    let finalEp = x84;
+      let finalEp = x84;
 
-    if (decision === "rlcKi" && kiEp > 0) finalEp = kiEp;
-    if (decision === "manual" && n(r.finalUnitPrice) > 0) {
-      finalEp = n(r.finalUnitPrice);
+      if (decision === "rlcKi" && kiEp > 0) finalEp = kiEp;
+      if (decision === "manual" && n(r.finalUnitPrice) > 0) {
+        finalEp = n(r.finalUnitPrice);
+      }
+
+      return cleanRlcKiWarningState(normalizeEliteRow({
+        ...r,
+        angebotUnitPrice: x84,
+        angebotTotal: round2(n(r.menge) * x84),
+        originalPreKiPrice: x84,
+
+        rlcKiUnitPrice: kiEp,
+        rlcKiTotal: kiEp > 0 ? round2(n(r.menge) * kiEp) : 0,
+
+        priceDifference: kiEp > 0 ? round2(kiEp - x84) : 0,
+        priceDifferencePct:
+        kiEp > 0 && x84 > 0 ? round2((kiEp - x84) / x84 * 100) : 0,
+
+        priceDecision: decision,
+        finalUnitPrice: finalEp,
+        preis: finalEp,
+        gesamt: round2(n(r.menge) * finalEp)
+      }));
+    });
+  }
+  function compactKiRowsForStorage(rows: EliteRow[], projectKeyForX84?: string): any[] {
+    const hasRealX84 = projectKeyForX84 ? hasRealX84ForProject(projectKeyForX84) : false;
+
+    return rows.map((r: any) => ({
+      id: r.id,
+      auftragId: r.auftragId,
+      auftragName: r.auftragName,
+      parentPosNr: r.parentPosNr,
+
+      posNr: r.posNr,
+      positionNumber: r.positionNumber,
+      kurztext: r.kurztext,
+      shortText: r.shortText,
+      langtext: typeof r.langtext === "string" ? r.langtext.slice(0, 1200) : r.langtext,
+
+      menge: r.menge,
+      quantity: r.quantity,
+      einheit: r.einheit,
+      unit: r.unit,
+
+      angebotUnitPrice: hasRealX84 ? r.angebotUnitPrice : 0,
+      angebotTotal: hasRealX84 ? r.angebotTotal : 0,
+      angebotTotalNet: hasRealX84 ? r.angebotTotalNet : 0,
+      originalPreKiPrice: hasRealX84 ? r.originalPreKiPrice : 0,
+      x84UnitPrice: hasRealX84 ? r.x84UnitPrice : 0,
+      x84TotalNet: hasRealX84 ? r.x84TotalNet : 0,
+
+      materialCost: r.materialCost,
+      laborCost: r.laborCost,
+      machineCost: r.machineCost,
+      subcontractorCost: r.subcontractorCost,
+      disposalCost: r.disposalCost,
+      overheadCost: r.overheadCost,
+      riskCost: r.riskCost,
+      profitCost: r.profitCost,
+
+      baseUnitPrice: r.baseUnitPrice,
+      suggestedUnitPrice: r.suggestedUnitPrice,
+      finalUnitPrice: r.finalUnitPrice,
+      rlcKiUnitPrice: r.rlcKiUnitPrice,
+      rlcKiTotal: r.rlcKiTotal,
+      totalNet: r.totalNet,
+
+      confidence: r.confidence,
+      riskLevel: r.riskLevel,
+      calculationStatus: r.calculationStatus,
+      status: r.status,
+      source: r.source,
+      warning: r.warning,
+      pruefHinweis: r.pruefHinweis,
+      priceDecision: r.priceDecision
+    }));
+  }
+  function persistRows(next: EliteRow[], modeOverride?: "offer-check" | "new-calculation") {
+    const persistKiMode = modeOverride || kiMode;
+
+    /*
+     * AutoKi-Schutz:
+     * Ein späterer Reload/Persist mit einem veralteten rows-Snapshot darf
+     * bereits importierte AutoKi-Positionen nicht wieder entfernen.
+     */
+    let rowsToPersist: EliteRow[] = Array.isArray(next) ? [...next] : [];
+
+    try {
+      const rawStored = localStorage.getItem(localBackupKey(projectKey));
+
+      if (rawStored) {
+        const parsedStored = JSON.parse(rawStored);
+        const storedRows = Array.isArray(parsedStored) ?
+        parsedStored :
+        Array.isArray(parsedStored?.rows) ?
+        parsedStored.rows :
+        [];
+
+        const existingKeys = new Set(
+          rowsToPersist.map((row: any) =>
+          String(row?.posNr || row?.pos || row?.id || "").
+          trim().
+          toUpperCase()
+          )
+        );
+
+        const protectedAutoKiRows = storedRows.
+        filter((row: any) => {
+          const source = String(row?.source || "").toLowerCase();
+
+          return (
+            row?.importedFromAutoKi === true ||
+            source.includes("auto-ki"));
+
+        }).
+        filter((row: any) => {
+          const key = String(
+            row?.posNr ||
+            row?.pos ||
+            row?.id ||
+            ""
+          ).
+          trim().
+          toUpperCase();
+
+          if (!key || existingKeys.has(key)) return false;
+
+          existingKeys.add(key);
+          return true;
+        }).
+        map((row: any) => normalizeEliteRow(row));
+
+        if (protectedAutoKiRows.length) {
+          rowsToPersist = [...rowsToPersist, ...protectedAutoKiRows];
+        }
+      }
+    } catch (error) {
+      console.warn("AutoKi persist protection failed", error);
     }
 
-    return cleanRlcKiWarningState(normalizeEliteRow({
-      ...r,
-      angebotUnitPrice: x84,
-      angebotTotal: round2(n(r.menge) * x84),
-      originalPreKiPrice: x84,
+    const safeInput = sanitizeRowsForStorage(rowsToPersist);
 
-      rlcKiUnitPrice: kiEp,
-      rlcKiTotal: kiEp > 0 ? round2(n(r.menge) * kiEp) : 0,
-
-      priceDifference: kiEp > 0 ? round2(kiEp - x84) : 0,
-      priceDifferencePct:
-        kiEp > 0 && x84 > 0 ? round2(((kiEp - x84) / x84) * 100) : 0,
-
-      priceDecision: decision,
-      finalUnitPrice: finalEp,
-      preis: finalEp,
-      gesamt: round2(n(r.menge) * finalEp),
-    }));
-  });
-}
-function compactKiRowsForStorage(rows: EliteRow[], projectKeyForX84?: string): any[] {
-  const hasRealX84 = projectKeyForX84 ? hasRealX84ForProject(projectKeyForX84) : false;
-
-  return rows.map((r: any) => ({
-    id: r.id,
-    auftragId: r.auftragId,
-    auftragName: r.auftragName,
-    parentPosNr: r.parentPosNr,
-
-    posNr: r.posNr,
-    positionNumber: r.positionNumber,
-    kurztext: r.kurztext,
-    shortText: r.shortText,
-    langtext: typeof r.langtext === "string" ? r.langtext.slice(0, 1200) : r.langtext,
-
-    menge: r.menge,
-    quantity: r.quantity,
-    einheit: r.einheit,
-    unit: r.unit,
-
-    angebotUnitPrice: hasRealX84 ? r.angebotUnitPrice : 0,
-    angebotTotal: hasRealX84 ? r.angebotTotal : 0,
-    angebotTotalNet: hasRealX84 ? r.angebotTotalNet : 0,
-    originalPreKiPrice: hasRealX84 ? r.originalPreKiPrice : 0,
-    x84UnitPrice: hasRealX84 ? r.x84UnitPrice : 0,
-    x84TotalNet: hasRealX84 ? r.x84TotalNet : 0,
-
-    materialCost: r.materialCost,
-    laborCost: r.laborCost,
-    machineCost: r.machineCost,
-    subcontractorCost: r.subcontractorCost,
-    disposalCost: r.disposalCost,
-    overheadCost: r.overheadCost,
-    riskCost: r.riskCost,
-    profitCost: r.profitCost,
-
-    baseUnitPrice: r.baseUnitPrice,
-    suggestedUnitPrice: r.suggestedUnitPrice,
-    finalUnitPrice: r.finalUnitPrice,
-    rlcKiUnitPrice: r.rlcKiUnitPrice,
-    rlcKiTotal: r.rlcKiTotal,
-    totalNet: r.totalNet,
-
-    confidence: r.confidence,
-    riskLevel: r.riskLevel,
-    calculationStatus: r.calculationStatus,
-    status: r.status,
-    source: r.source,
-    warning: r.warning,
-    pruefHinweis: r.pruefHinweis,
-    priceDecision: r.priceDecision,
-  }));
-}
-function persistRows(next: EliteRow[], modeOverride?: "offer-check" | "new-calculation") {
-  const persistKiMode = modeOverride || kiMode;
-  const safeInput = sanitizeRowsForStorage(next);
-
-  const normalized = safeInput.map((r: EliteRow, idx: number) => {
-    const originalRow: any = Array.isArray(next) ? (next as any[])[idx] || {} : {};
-    const explicitOfferEp =
+    const normalized = safeInput.map((r: EliteRow, idx: number) => {
+      const originalRow: any = Array.isArray(rowsToPersist) ?
+      (rowsToPersist as any[])[idx] || {} :
+      {};
+      const explicitOfferEp =
       n((r as any).angebotUnitPrice) ||
       n((r as any).originalPreKiPrice) ||
       n((r as any).x84UnitPrice);
 
-    // X84/Angebot bleibt immer Vergleichsbasis.
-    // Es darf aber niemals als RLC-KI-Preis interpretiert werden.
-    const angebotEp = explicitOfferEp;
+      // X84/Angebot bleibt immer Vergleichsbasis.
+      // Es darf aber niemals als RLC-KI-Preis interpretiert werden.
+      const angebotEp = explicitOfferEp;
 
-    const rlcKiEp =
+      const rlcKiEp =
       n((r as any).rlcKiUnitPrice) ||
       0;
 
-    const decision = ((r as any).priceDecision || (persistKiMode === "offer-check" ? "x84" : "rlcKi")) as
-      | "x84"
-      | "rlcKi"
-      | "manual";
+      const decision = ((r as any).priceDecision || (persistKiMode === "offer-check" ? "x84" : "rlcKi")) as
+      "x84" |
+      "rlcKi" |
+      "manual";
 
-    const manualEp = n((r as any).finalUnitPrice);
+      const manualEp = n((r as any).finalUnitPrice);
 
-    const finalEp =
-      decision === "rlcKi" && rlcKiEp > 0
-        ? rlcKiEp
-        : decision === "manual" && manualEp > 0
-          ? manualEp
-          : angebotEp > 0
-            ? angebotEp
-            : rlcKiEp;
+      const finalEp =
+      decision === "rlcKi" && rlcKiEp > 0 ?
+      rlcKiEp :
+      decision === "manual" && manualEp > 0 ?
+      manualEp :
+      angebotEp > 0 ?
+      angebotEp :
+      rlcKiEp;
 
-    const diff = angebotEp > 0 && rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
-    const diffPct = angebotEp > 0 && rlcKiEp > 0 ? round2((diff / angebotEp) * 100) : 0;
+      const diff = angebotEp > 0 && rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
+      const diffPct = angebotEp > 0 && rlcKiEp > 0 ? round2(diff / angebotEp * 100) : 0;
 
-    return cleanRlcKiWarningState(normalizeEliteRow({
-      ...r,
+      return cleanRlcKiWarningState(normalizeEliteRow({
+        ...r,
 
-      // Nur echte Angebotsbasis speichern; nie aus KI-Preis ableiten.
-      angebotUnitPrice: angebotEp,
-      angebotTotal: angebotEp > 0 ? round2(n(r.menge) * angebotEp) : 0,
-      originalPreKiPrice: angebotEp,
-      x84UnitPrice: angebotEp,
+        // Nur echte Angebotsbasis speichern; nie aus KI-Preis ableiten.
+        angebotUnitPrice: angebotEp,
+        angebotTotal: angebotEp > 0 ? round2(n(r.menge) * angebotEp) : 0,
+        originalPreKiPrice: angebotEp,
+        x84UnitPrice: angebotEp,
 
-      rlcKiUnitPrice: rlcKiEp,
-      rlcKiTotal: rlcKiEp > 0 ? round2(n(r.menge) * rlcKiEp) : 0,
+        rlcKiUnitPrice: rlcKiEp,
+        rlcKiTotal: rlcKiEp > 0 ? round2(n(r.menge) * rlcKiEp) : 0,
 
-      priceDifference: diff,
-      priceDifferencePct: diffPct,
+        priceDifference: diff,
+        priceDifferencePct: diffPct,
 
-      finalUnitPrice: finalEp,
-      preis: finalEp,
-      gesamt: round2(n(r.menge) * finalEp),
-      priceDecision: decision,
-    }));
-  });
-
-  const normalizedWithX84Learning = normalized.map((r: any, idx: number) => {
-    const originalRow: any = Array.isArray(next) ? (next as any[])[idx] || {} : {};
-
-    return {
-      ...r,
-      x84BenchmarkEp: originalRow.x84BenchmarkEp ?? r.x84BenchmarkEp,
-      x84BenchmarkGp: originalRow.x84BenchmarkGp ?? r.x84BenchmarkGp,
-      x84BenchmarkDiffPct: originalRow.x84BenchmarkDiffPct ?? r.x84BenchmarkDiffPct,
-      x84BenchmarkDiffGp: originalRow.x84BenchmarkDiffGp ?? r.x84BenchmarkDiffGp,
-      x84BenchmarkStatus: originalRow.x84BenchmarkStatus ?? r.x84BenchmarkStatus,
-      x84BenchmarkLearningSignal: originalRow.x84BenchmarkLearningSignal ?? r.x84BenchmarkLearningSignal,
-      x84BenchmarkUsedAsPrice: originalRow.x84BenchmarkUsedAsPrice ?? r.x84BenchmarkUsedAsPrice,
-      x84BenchmarkNote: originalRow.x84BenchmarkNote ?? r.x84BenchmarkNote,
-    };
-  });
-
-  setRows(normalizedWithX84Learning);
-
-  try {
-    localStorage.setItem(
-      localBackupKey(projectKey),
-      JSON.stringify({
-        meta: {
-          projectKey,
-          projectTitle,
-          updatedAt: new Date().toISOString(),
-          kiMode: persistKiMode,
-        },
-        rows: compactKiRowsForStorage(normalizedWithX84Learning, projectKey).map((r: any, idx: number) => ({
-          ...r,
-          x84BenchmarkEp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkEp,
-          x84BenchmarkGp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkGp,
-          x84BenchmarkDiffPct: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkDiffPct,
-          x84BenchmarkDiffGp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkDiffGp,
-          x84BenchmarkStatus: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkStatus,
-          x84BenchmarkLearningSignal: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkLearningSignal,
-          x84BenchmarkUsedAsPrice: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkUsedAsPrice,
-          x84BenchmarkNote: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkNote,
-        })),
-      })
-    );
-  } catch (e) {
-    console.warn("[KI] local backup failed:", e);
-  }
-}
-React.useEffect(() => {
-  if (!projectKey || recipesHandoffDoneRef.current) return;
-  if (typeof localStorage === "undefined") return;
-
-  const storageKey = "rlc_recipes_to_kalkulation_pending";
-
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return;
-
-    const parsed = JSON.parse(raw);
-    if (parsed?.projectKey && String(parsed.projectKey) !== String(projectKey)) return;
-
-    if (
-      parsed?.mode === "global-lv" ||
-      parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V3" ||
-      parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V4"
-    ) {
-      // RLC FIX: Globale Urkalkulation darf die Kalkulation niemals automatisch übernehmen.
-      // Sie bleibt nur Preisaufbau/Analyse. Einzelposition-Handoff bleibt unverändert.
-      localStorage.removeItem(storageKey);
-      recipesHandoffDoneRef.current = true;
-      return;
-    }
-
-    if (parsed?.version !== "RLC_RECIPES_TRANSFER_V1") return;
-
-    const src = parsed?.row || {};
-    const posNr = String(src.posNr || src.pos || "").trim();
-    const kurztext = String(src.kurztext || src.title || "Rezeptposition").trim();
-    const einheit = String(src.einheit || src.unit || "m").trim();
-    const menge = n(src.menge ?? src.qty);
-    const ep = round2(n(src.ep ?? src.preis ?? src.unitPrice));
-    const gp = round2(ep * menge);
-
-    if (!kurztext || !einheit || menge <= 0 || ep <= 0) return;
-
-    const recipeRow = normalizeEliteRow({
-      ...src,
-      id: src.id || `recipes-${Date.now()}`,
-      posNr,
-      kurztext,
-      langtext: src.langtext || "",
-      einheit,
-      menge,
-      preis: ep,
-      ep,
-      gp,
-      rlcKiUnitPrice: ep,
-      rlcKiTotal: gp,
-      source: "recipes-urkalkulation-v21",
-      calculationStatus: "recipes_ready",
-      riskLevel: "low",
-      priceBreakdown: Array.isArray(src.priceBreakdown)
-        ? src.priceBreakdown
-        : Array.isArray(src.recipeLines)
-          ? src.recipeLines
-          : [],
-      recipeLines: Array.isArray(src.recipeLines)
-        ? src.recipeLines
-        : Array.isArray(src.priceBreakdown)
-          ? src.priceBreakdown
-          : [],
-      recipeSummary: src.recipeSummary || null,
-      aiReason: "Aus Recipes / Urkalkulation in Kalkulation mit KI übernommen.",
-    } as any);
-
-    recipesHandoffDoneRef.current = true;
-
-    let baseRows: EliteRow[] = Array.isArray(rows) ? rows : [];
-
-    try {
-      const backupRaw = localStorage.getItem(localBackupKey(projectKey));
-      const backupParsed = backupRaw ? JSON.parse(backupRaw) : null;
-      const backupRows = Array.isArray(backupParsed?.rows)
-        ? backupParsed.rows.map((r: any) => normalizeEliteRow(r))
-        : Array.isArray(backupParsed)
-          ? backupParsed.map((r: any) => normalizeEliteRow(r))
-          : [];
-
-      // Wichtig:
-      // Bei Einzel-Übergabe aus Recipes darf NIEMALS das komplette LV aus Recipes
-      // als Kalkulationsbasis verwendet werden, sonst wird der gesamte Netto-Betrag ersetzt.
-      // Basis bleibt immer die bestehende Kalkulation. Nur recipeRow wird danach eingemischt.
-      if (backupRows.length >= baseRows.length) {
-        baseRows = backupRows;
-      }
-    } catch {
-      // lokaler Backup konnte nicht gelesen werden
-    }
-
-    const existingIdx = baseRows.findIndex((r) => {
-      const a = String((r as any).posNr || (r as any).pos || "").trim();
-      return posNr && a === posNr;
+        finalUnitPrice: finalEp,
+        preis: finalEp,
+        gesamt: round2(n(r.menge) * finalEp),
+        priceDecision: decision
+      }));
     });
 
-    const recipePriceBreakdown = Array.isArray((recipeRow as any).priceBreakdown)
-      ? ((recipeRow as any).priceBreakdown as any[])
-      : [];
+    const normalizedWithX84Learning = normalized.map((r: any, idx: number) => {
+      const originalRow: any = Array.isArray(next) ? (next as any[])[idx] || {} : {};
 
-    const recipeLines = Array.isArray((recipeRow as any).recipeLines)
-      ? ((recipeRow as any).recipeLines as any[])
-      : recipePriceBreakdown;
+      return {
+        ...r,
+        x84BenchmarkEp: originalRow.x84BenchmarkEp ?? r.x84BenchmarkEp,
+        x84BenchmarkGp: originalRow.x84BenchmarkGp ?? r.x84BenchmarkGp,
+        x84BenchmarkDiffPct: originalRow.x84BenchmarkDiffPct ?? r.x84BenchmarkDiffPct,
+        x84BenchmarkDiffGp: originalRow.x84BenchmarkDiffGp ?? r.x84BenchmarkDiffGp,
+        x84BenchmarkStatus: originalRow.x84BenchmarkStatus ?? r.x84BenchmarkStatus,
+        x84BenchmarkLearningSignal: originalRow.x84BenchmarkLearningSignal ?? r.x84BenchmarkLearningSignal,
+        x84BenchmarkUsedAsPrice: originalRow.x84BenchmarkUsedAsPrice ?? r.x84BenchmarkUsedAsPrice,
+        x84BenchmarkNote: originalRow.x84BenchmarkNote ?? r.x84BenchmarkNote
+      };
+    });
 
-    const next =
-      existingIdx >= 0
-        ? baseRows.map((r, idx) => {
-            if (idx !== existingIdx) return r;
+    setRows(normalizedWithX84Learning);
 
-            const mengeProtected = n((r as any).menge ?? (recipeRow as any).menge);
-            const urkEp = round2(sumBreakdown(normalizeBreakdown(recipePriceBreakdown)));
+    try {
+      localStorage.setItem(
+        localBackupKey(projectKey),
+        JSON.stringify({
+          meta: {
+            projectKey,
+            projectTitle,
+            updatedAt: new Date().toISOString(),
+            kiMode: persistKiMode
+          },
+          rows: compactKiRowsForStorage(normalizedWithX84Learning, projectKey).map((r: any, idx: number) => ({
+            ...r,
+            x84BenchmarkEp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkEp,
+            x84BenchmarkGp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkGp,
+            x84BenchmarkDiffPct: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkDiffPct,
+            x84BenchmarkDiffGp: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkDiffGp,
+            x84BenchmarkStatus: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkStatus,
+            x84BenchmarkLearningSignal: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkLearningSignal,
+            x84BenchmarkUsedAsPrice: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkUsedAsPrice,
+            x84BenchmarkNote: (normalizedWithX84Learning as any[])[idx]?.x84BenchmarkNote
+          }))
+        })
+      );
+    } catch (e) {
+      console.warn("[KI] local backup failed:", e);
+    }
+  }
+  React.useEffect(() => {
+    if (!projectKey || recipesHandoffDoneRef.current) return;
+    if (typeof localStorage === "undefined") return;
 
-            return normalizeEliteRow({
-              ...(r as any),
+    const storageKey = "rlc_recipes_to_kalkulation_pending";
 
-              // Nur Preisaufbau / Urkalkulation aus Recipes übernehmen.
-              priceBreakdown: recipePriceBreakdown,
-              recipeLines,
-              recipeSummary: (recipeRow as any).recipeSummary || (r as any).recipeSummary || null,
-              urkalkulationUnitPrice: urkEp,
-              urkalkulationTotal: round2(mengeProtected * urkEp),
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return;
 
-              // Kalkulationspreise bleiben geschützt.
-              finalUnitPrice: (r as any).finalUnitPrice,
-              preis: (r as any).preis,
-              ep: (r as any).ep,
-              suggestedUnitPrice: (r as any).suggestedUnitPrice,
-              rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
-              rlcKiTotal: (r as any).rlcKiTotal,
-              gesamt: (r as any).gesamt,
-              totalNet: (r as any).totalNet,
-              gp: (r as any).gp,
+      const parsed = JSON.parse(raw);
+      if (parsed?.projectKey && String(parsed.projectKey) !== String(projectKey)) return;
 
-              source: (r as any).source,
-              calculationStatus: (r as any).calculationStatus,
-              riskLevel: (r as any).riskLevel,
-              aiReason: appendInfoText(
-                (r as any).aiReason,
-                "Preisaufbau aus Recipes für diese Position übernommen. Kalkulationspreis unverändert."
-              ),
-            } as any);
-          })
-        : [recipeRow, ...baseRows];
+      if (
+      parsed?.mode === "global-lv" ||
+      parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V3" ||
+      parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V4")
+      {
+        // RLC FIX: Globale Urkalkulation darf die Kalkulation niemals automatisch übernehmen.
+        // Sie bleibt nur Preisaufbau/Analyse. Einzelposition-Handoff bleibt unverändert.
+        localStorage.removeItem(storageKey);
+        recipesHandoffDoneRef.current = true;
+        return;
+      }
 
-    const safeNext = normalizeKiWarningRows(next);
+      if (parsed?.version !== "RLC_RECIPES_TRANSFER_V1") return;
 
-    setRows(safeNext);
-    persistRows(safeNext, "new-calculation");
-    // RLC FIX: kein LV.setAll hier. Einzel-Übergabe darf andere Urkalkulationen nicht löschen.
+      const src = parsed?.row || {};
+      const posNr = String(src.posNr || src.pos || "").trim();
+      const kurztext = String(src.kurztext || src.title || "Rezeptposition").trim();
+      const einheit = String(src.einheit || src.unit || "m").trim();
+      const menge = n(src.menge ?? src.qty);
+      const ep = round2(n(src.ep ?? src.preis ?? src.unitPrice));
+      const gp = round2(ep * menge);
 
-    const selected =
+      if (!kurztext || !einheit || menge <= 0 || ep <= 0) return;
+
+      const recipeRow = normalizeEliteRow({
+        ...src,
+        id: src.id || `recipes-${Date.now()}`,
+        posNr,
+        kurztext,
+        langtext: src.langtext || "",
+        einheit,
+        menge,
+        preis: ep,
+        ep,
+        gp,
+        rlcKiUnitPrice: ep,
+        rlcKiTotal: gp,
+        source: "recipes-urkalkulation-v21",
+        calculationStatus: "recipes_ready",
+        riskLevel: "low",
+        priceBreakdown: Array.isArray(src.priceBreakdown) ?
+        src.priceBreakdown :
+        Array.isArray(src.recipeLines) ?
+        src.recipeLines :
+        [],
+        recipeLines: Array.isArray(src.recipeLines) ?
+        src.recipeLines :
+        Array.isArray(src.priceBreakdown) ?
+        src.priceBreakdown :
+        [],
+        recipeSummary: src.recipeSummary || null,
+        aiReason: "Aus Recipes / Urkalkulation in Kalkulation mit KI übernommen."
+      } as any);
+
+      recipesHandoffDoneRef.current = true;
+
+      let baseRows: EliteRow[] = Array.isArray(rows) ? rows : [];
+
+      try {
+        const backupRaw = localStorage.getItem(localBackupKey(projectKey));
+        const backupParsed = backupRaw ? JSON.parse(backupRaw) : null;
+        const backupRows = Array.isArray(backupParsed?.rows) ?
+        backupParsed.rows.map((r: any) => normalizeEliteRow(r)) :
+        Array.isArray(backupParsed) ?
+        backupParsed.map((r: any) => normalizeEliteRow(r)) :
+        [];
+
+        // Wichtig:
+        // Bei Einzel-Übergabe aus Recipes darf NIEMALS das komplette LV aus Recipes
+        // als Kalkulationsbasis verwendet werden, sonst wird der gesamte Netto-Betrag ersetzt.
+        // Basis bleibt immer die bestehende Kalkulation. Nur recipeRow wird danach eingemischt.
+        if (backupRows.length >= baseRows.length) {
+          baseRows = backupRows;
+        }
+      } catch {
+
+
+        // lokaler Backup konnte nicht gelesen werden
+      }const existingIdx = baseRows.findIndex((r) => {
+        const a = String((r as any).posNr || (r as any).pos || "").trim();
+        return posNr && a === posNr;
+      });
+
+      const recipePriceBreakdown = Array.isArray((recipeRow as any).priceBreakdown) ?
+      (recipeRow as any).priceBreakdown as any[] :
+      [];
+
+      const recipeLines = Array.isArray((recipeRow as any).recipeLines) ?
+      (recipeRow as any).recipeLines as any[] :
+      recipePriceBreakdown;
+
+      const next =
+      existingIdx >= 0 ?
+      baseRows.map((r, idx) => {
+        if (idx !== existingIdx) return r;
+
+        const mengeProtected = n((r as any).menge ?? (recipeRow as any).menge);
+        const urkEp = round2(sumBreakdown(normalizeBreakdown(recipePriceBreakdown)));
+
+        return normalizeEliteRow({
+          ...(r as any),
+
+          // Nur Preisaufbau / Urkalkulation aus Recipes übernehmen.
+          priceBreakdown: recipePriceBreakdown,
+          recipeLines,
+          recipeSummary: (recipeRow as any).recipeSummary || (r as any).recipeSummary || null,
+          urkalkulationUnitPrice: urkEp,
+          urkalkulationTotal: round2(mengeProtected * urkEp),
+
+          // Kalkulationspreise bleiben geschützt.
+          finalUnitPrice: (r as any).finalUnitPrice,
+          preis: (r as any).preis,
+          ep: (r as any).ep,
+          suggestedUnitPrice: (r as any).suggestedUnitPrice,
+          rlcKiUnitPrice: (r as any).rlcKiUnitPrice,
+          rlcKiTotal: (r as any).rlcKiTotal,
+          gesamt: (r as any).gesamt,
+          totalNet: (r as any).totalNet,
+          gp: (r as any).gp,
+
+          source: (r as any).source,
+          calculationStatus: (r as any).calculationStatus,
+          riskLevel: (r as any).riskLevel,
+          aiReason: appendInfoText(
+            (r as any).aiReason,
+            "Preisaufbau aus Recipes für diese Position übernommen. Kalkulationspreis unverändert."
+          )
+        } as any);
+      }) :
+      [recipeRow, ...baseRows];
+
+      const safeNext = normalizeKiWarningRows(next);
+
+      setRows(safeNext);
+      persistRows(safeNext, "new-calculation");
+      // RLC FIX: kein LV.setAll hier. Einzel-Übergabe darf andere Urkalkulationen nicht löschen.
+
+      const selected =
       safeNext.find((r: any) => String(r.id || "") === String(recipeRow.id || "")) ||
       safeNext.find((r: any) => String(r.posNr || "") === String(recipeRow.posNr || "")) ||
       recipeRow;
 
-    setSelectedId(String(selected.id || recipeRow.id || ""));
-    setLvPage(1);
-    setServerStatus("Urkalkulation übernommen");
-    window.setTimeout(() => setServerStatus(""), 2500);
+      setSelectedId(String(selected.id || recipeRow.id || ""));
+      setLvPage(1);
+      setServerStatus("Urkalkulation übernommen");
+      window.setTimeout(() => setServerStatus(""), 2500);
 
-    localStorage.removeItem(storageKey);
-  } catch {
-    // Übergabe darf Kalkulation nicht blockieren.
-  }
-}, [projectKey, rows]);
-function updateRow(id: string, patch: Partial<EliteRow>) {
-  const next = rows.map((r) =>
+      localStorage.removeItem(storageKey);
+    } catch {
+
+
+      // Übergabe darf Kalkulation nicht blockieren.
+    }}, [projectKey, rows]);React.useEffect(() => {
+    if (!projectKey) return;
+
+    const handoffKey = "rlc_auto_ki_kalkulation_import_v1";
+    const rawHandoff = localStorage.getItem(handoffKey);
+
+    if (!rawHandoff) return;
+
+    // Bei Projekten mit bestehendem LV zuerst den normalen
+    // Kalkulations-Speicherstand vollständig laden lassen.
+    if (!rows.length) return;
+
+    try {
+      const parsed = JSON.parse(rawHandoff) as any;
+      const importedRows = Array.isArray(parsed?.rows) ? parsed.rows : [];
+
+      if (!importedRows.length) {
+        localStorage.removeItem(handoffKey);
+        return;
+      }
+
+      const handoffProjectKeys = new Set(
+        [
+        parsed?.projectKey,
+        parsed?.projectId].
+
+        map((value) => String(value || "").trim().toUpperCase()).
+        filter(Boolean)
+      );
+
+      const activeProjectKeys = new Set(
+        [projectKey].
+        map((value) => String(value || "").trim().toUpperCase()).
+        filter(Boolean)
+      );
+
+      const projectMatches =
+      !handoffProjectKeys.size ||
+      Array.from(handoffProjectKeys).some((value) =>
+      activeProjectKeys.has(value)
+      );
+
+      if (!projectMatches) return;
+
+      const normalizedImported = importedRows.
+      map((input: any, index: number) => {
+        const posNr = String(
+          input?.posNr ||
+          input?.pos ||
+          `AUTO.${String(index + 1).padStart(3, "0")}`
+        ).trim();
+
+        const menge = n(input?.menge ?? input?.qty);
+        const einheit =
+        String(input?.einheit || input?.unit || "m").trim() || "m";
+
+        return normalizeEliteRow({
+          ...input,
+          id:
+          String(input?.id || "").trim() ||
+          `AUTO-KI-${Date.now()}-${index + 1}`,
+          posNr,
+          pos: posNr,
+          kurztext:
+          String(input?.kurztext || input?.text || "").trim() ||
+          `Neue Position ${posNr}`,
+          text:
+          String(input?.text || input?.kurztext || "").trim() ||
+          `Neue Position ${posNr}`,
+          langtext: String(input?.langtext || input?.aiReason || "").trim(),
+          einheit,
+          unit: einheit,
+          menge,
+          qty: menge,
+          ep: 0,
+          unitPrice: 0,
+          finalUnitPrice: 0,
+          rlcKiUnitPrice: 0,
+          rlcKiTotal: 0,
+          gesamt: 0,
+          totalNet: 0,
+          source: "auto-ki-plan-foto",
+          calculationStatus: "needs_review",
+          status: "needs_review",
+          riskLevel: "high",
+          warning:
+          String(input?.warning || "").trim() ||
+          "Neue Position aus KI-Mengenermittlung. Preis und Urkalkulation prüfen.",
+          pruefHinweis:
+          String(input?.pruefHinweis || "").trim() ||
+          "Aus Plan-/Fotoanalyse übernommen. Noch nicht kalkuliert.",
+          aiReason:
+          String(input?.aiReason || input?.langtext || "").trim() ||
+          "Neue Position aus KI-Mengenermittlung",
+          importedFromAutoKi: true,
+          importedAt:
+          String(input?.importedAt || "").trim() ||
+          new Date().toISOString()
+        } as any);
+      }).
+      filter((row: EliteRow) => {
+        return Boolean(
+          String((row as any).posNr || "").trim() ||
+          String((row as any).kurztext || "").trim()
+        );
+      });
+
+      if (!normalizedImported.length) {
+        localStorage.removeItem(handoffKey);
+        return;
+      }
+
+      const existingKeys = new Set(
+        rows.map((row: any) =>
+        String(
+          row?.posNr ||
+          row?.pos ||
+          row?.id ||
+          ""
+        ).
+        trim().
+        toUpperCase()
+        )
+      );
+
+      let nextAutoNumber = 1;
+
+      const getNextFreeAutoPos = () => {
+        while (
+        existingKeys.has(
+          `AUTO.${String(nextAutoNumber).padStart(3, "0")}`
+        ))
+        {
+          nextAutoNumber += 1;
+        }
+
+        const value =
+        `AUTO.${String(nextAutoNumber).padStart(3, "0")}`;
+
+        nextAutoNumber += 1;
+        existingKeys.add(value);
+
+        return value;
+      };
+
+      const uniqueImported = normalizedImported.map((row: any) => {
+        const originalKey = String(
+          row?.posNr ||
+          row?.pos ||
+          row?.id ||
+          ""
+        ).
+        trim().
+        toUpperCase();
+
+        if (originalKey && !existingKeys.has(originalKey)) {
+          existingKeys.add(originalKey);
+          return row;
+        }
+
+        const newPosNr = getNextFreeAutoPos();
+
+        return normalizeEliteRow({
+          ...row,
+          id: `AUTO-KI-${crypto.randomUUID()}`,
+          posNr: newPosNr,
+          pos: newPosNr,
+          aiReason: appendInfoText(
+            String(row?.aiReason || ""),
+            `Ursprüngliche Position ${originalKey || "ohne Nummer"} war bereits vorhanden. Neue Nummer: ${newPosNr}.`
+          ),
+          importedFromAutoKi: true
+        } as any);
+      });
+
+      const next = normalizeKiWarningRows([
+      ...rows,
+      ...uniqueImported]
+      );
+
+      persistRows(next, "new-calculation");
+      setSelectedId(String(uniqueImported[0]?.id || ""));
+      setLvPage(1);
+
+      localStorage.removeItem(handoffKey);
+
+      setServerStatus(
+        `${uniqueImported.length} AutoKI-Position(en) in Kalkulation übernommen`
+      );
+      window.setTimeout(() => setServerStatus(""), 3500);
+    } catch (error) {
+      console.error("AutoKI Kalkulation handoff failed", error);
+
+      setServerStatus("AutoKI-Positionen konnten nicht übernommen werden");
+      window.setTimeout(() => setServerStatus(""), 3500);
+    }
+  }, [projectKey, rows.length]);
+
+  function updateRow(id: string, patch: Partial<EliteRow>) {
+    const next = rows.map((r) =>
     r.id === id ? normalizeEliteRow({ ...r, ...patch }) : r
-  );
+    );
 
-  persistRows(next);
-}
-
-function refreshAuftraege() {
-  setAuftraege(AuftragStore.list());
-}
-
-function createUnterauftrag() {
-  const name = window.prompt(
-    "Name des Unterauftrags, z.B. Wasserleitung, Kanalbau, Straßenbau"
-  );
-
-  if (!name?.trim()) return;
-
-  const haupt = AuftragStore.ensureDefault(projectKey);
-  const created = AuftragStore.createUnterauftrag(name.trim(), haupt.id, projectKey);
-
-  refreshAuftraege();
-  setSelectedAuftragId(created.id);
-}
-
-function addRow() {
-  const haupt = AuftragStore.ensureDefault(projectKey);
-
-  const auftrag =
-    selectedAuftragId && selectedAuftrag
-      ? selectedAuftrag
-      : haupt;
-
-  sessionStorage.setItem(
-    "rlc_recipes_new_position_context_v1",
-    JSON.stringify({
-      source: "kalkulationMitKI",
-      projectKey,
-      projectTitle,
-      auftragId: auftrag.id,
-      auftragName: auftrag.name,
-      auftragType: auftrag.type,
-      returnTo: "/kalkulation/mit-ki",
-      ts: new Date().toISOString(),
-    })
-  );
-
-  window.location.href = "/kalkulation/rezepte";
-}
-
-function deleteRow(id: string) {
-  if (!window.confirm("Position wirklich löschen?")) return;
-
-  const next = rows.filter((r) => r.id !== id);
-
-  try {
-    localStorage.removeItem(KI_HANDOFF_KEY);
-    sessionStorage.removeItem(HANDOFF_CONSUMED_TS_KEY);
-  } catch {
-//
+    persistRows(next);
   }
 
-  try {
-    const store: any = LV as any;
-
-    if (typeof store.remove === "function") store.remove(id);
-    if (typeof store.delete === "function") store.delete(id);
-    if (typeof store.deleteById === "function") store.deleteById(id);
-  } catch {
-//
+  function refreshAuftraege() {
+    setAuftraege(AuftragStore.list());
   }
 
-  persistRows(next);
+  function createUnterauftrag() {
+    const name = window.prompt(
+      "Name des Unterauftrags, z.B. Wasserleitung, Kanalbau, Straßenbau"
+    );
 
-  if (selectedId === id) {
-    setSelectedId(next[0]?.id || "");
+    if (!name?.trim()) return;
+
+    const haupt = AuftragStore.ensureDefault(projectKey);
+    const created = AuftragStore.createUnterauftrag(name.trim(), haupt.id, projectKey);
+
+    refreshAuftraege();
+    setSelectedAuftragId(created.id);
   }
 
-  setServerStatus("Position gelöscht und gespeichert");
-  setTimeout(() => setServerStatus(""), 1800);
-}
+  function addRow() {
+    const haupt = AuftragStore.ensureDefault(projectKey);
 
-function updateBreakdownLine(
+    const auftrag =
+    selectedAuftragId && selectedAuftrag ?
+    selectedAuftrag :
+    haupt;
+
+    sessionStorage.setItem(
+      "rlc_recipes_new_position_context_v1",
+      JSON.stringify({
+        source: "kalkulationMitKI",
+        projectKey,
+        projectTitle,
+        auftragId: auftrag.id,
+        auftragName: auftrag.name,
+        auftragType: auftrag.type,
+        returnTo: "/kalkulation/mit-ki",
+        ts: new Date().toISOString()
+      })
+    );
+
+    window.location.href = "/kalkulation/rezepte";
+  }
+
+  function deleteRow(id: string) {
+    if (!window.confirm("Position wirklich löschen?")) return;
+
+    const next = rows.filter((r) => r.id !== id);
+
+    try {
+      localStorage.removeItem(KI_HANDOFF_KEY);
+      sessionStorage.removeItem(HANDOFF_CONSUMED_TS_KEY);
+    } catch {
+
+
+      //
+    }try {
+      const store: any = LV as any;
+
+      if (typeof store.remove === "function") store.remove(id);
+      if (typeof store.delete === "function") store.delete(id);
+      if (typeof store.deleteById === "function") store.deleteById(id);
+    } catch {
+
+
+      //
+    }persistRows(next);
+
+    if (selectedId === id) {
+      setSelectedId(next[0]?.id || "");
+    }
+
+    setServerStatus("Position gelöscht und gespeichert");
+    setTimeout(() => setServerStatus(""), 1800);
+  }
+
+  function updateBreakdownLine(
   lineId: string,
-  patch: Partial<PriceBreakdownLine>
-) {
-  if (!selectedRow) return;
+  patch: Partial<PriceBreakdownLine>)
+  {
+    if (!selectedRow) return;
 
-  const nextLines = (selectedRow.priceBreakdown || []).map((line) => {
-    if (line.id !== lineId) return line;
+    const nextLines = (selectedRow.priceBreakdown || []).map((line) => {
+      if (line.id !== lineId) return line;
 
-    const next = normalizeBreakdownLine({ ...line, ...patch });
+      const next = normalizeBreakdownLine({ ...line, ...patch });
 
-    return {
-      ...next,
-      total: round2(n(next.qty) * n(next.price)),
-    };
-  });
+      return {
+        ...next,
+        total: round2(n(next.qty) * n(next.price))
+      };
+    });
 
-  const ep = sumBreakdown(nextLines);
+    const ep = sumBreakdown(nextLines);
 
-  updateRow(selectedRow.id, {
-    priceBreakdown: nextLines,
-    finalUnitPrice: ep,
-    preis: ep,
-    suggestedUnitPrice: ep,
-  });
-}
-
-function catalogGroupToBreakdownGroup(group?: string): PriceBreakdownGroup {
-  if (group === "Arbeiter") return "Personal";
-  if (group === "Maschinen") return "Maschinen";
-  if (group === "Material") return "Material";
-  return "Fremdleistung";
-}
-
-function addCatalogRowToSelected(row: CatalogPos) {
-  if (!selectedRow) {
-    alert("Bitte zuerst eine LV-Position auswählen.");
-    return;
+    updateRow(selectedRow.id, {
+      priceBreakdown: nextLines,
+      finalUnitPrice: ep,
+      preis: ep,
+      suggestedUnitPrice: ep
+    });
   }
 
-  const nextLine = normalizeBreakdownLine({
-    group: catalogGroupToBreakdownGroup(row.gruppe),
-    name: row.kurztext || row.posNr || "Artikel",
-    unit: row.einheit || selectedRow.einheit || "EH",
-    qty: 1,
-    price: n(row.ep),
-    total: n(row.ep),
-    note: row.posNr ? `Artikel-Nr.: ${row.posNr}` : "",
-  });
+  function catalogGroupToBreakdownGroup(group?: string): PriceBreakdownGroup {
+    if (group === "Arbeiter") return "Personal";
+    if (group === "Maschinen") return "Maschinen";
+    if (group === "Material") return "Material";
+    return "Fremdleistung";
+  }
 
-  const nextLines = [...(selectedRow.priceBreakdown || []), nextLine];
-  const ep = sumBreakdown(nextLines);
+  function addCatalogRowToSelected(row: CatalogPos) {
+    if (!selectedRow) {
+      alert("Bitte zuerst eine LV-Position auswählen.");
+      return;
+    }
 
-  updateRow(selectedRow.id, {
-    priceBreakdown: nextLines,
-    finalUnitPrice: ep,
-    preis: ep,
-    suggestedUnitPrice: ep,
-    calculationStatus: "manual",
-    aiReason: appendInfoText(
-      selectedRow.aiReason,
-      `Artikel "${row.kurztext}" wurde aus der Ressourcenliste in die Urkalkulation übernommen.`
-    ),
-  });
-}
+    const nextLine = normalizeBreakdownLine({
+      group: catalogGroupToBreakdownGroup(row.gruppe),
+      name: row.kurztext || row.posNr || "Artikel",
+      unit: row.einheit || selectedRow.einheit || "EH",
+      qty: 1,
+      price: n(row.ep),
+      total: n(row.ep),
+      note: row.posNr ? `Artikel-Nr.: ${row.posNr}` : ""
+    });
 
-function addBreakdownLine() {
-  if (!selectedRow) return;
+    const nextLines = [...(selectedRow.priceBreakdown || []), nextLine];
+    const ep = sumBreakdown(nextLines);
 
-  const nextLines = [
+    updateRow(selectedRow.id, {
+      priceBreakdown: nextLines,
+      finalUnitPrice: ep,
+      preis: ep,
+      suggestedUnitPrice: ep,
+      calculationStatus: "manual",
+      aiReason: appendInfoText(
+        selectedRow.aiReason,
+        `Artikel "${row.kurztext}" wurde aus der Ressourcenliste in die Urkalkulation übernommen.`
+      )
+    });
+  }
+
+  function addBreakdownLine() {
+    if (!selectedRow) return;
+
+    const nextLines = [
     ...(selectedRow.priceBreakdown || []),
     normalizeBreakdownLine({
       group: "Material",
       name: "Neue Preiszeile",
       unit: selectedRow.einheit || "EH",
       qty: 1,
-      price: 0,
-    }),
-  ];
+      price: 0
+    })];
 
-  updateRow(selectedRow.id, {
-    priceBreakdown: nextLines,
-    finalUnitPrice: sumBreakdown(nextLines),
-    preis: sumBreakdown(nextLines),
-  });
-}
 
-function deleteBreakdownLine(lineId: string) {
-  if (!selectedRow) return;
-
-  const nextLines = (selectedRow.priceBreakdown || []).filter(
-    (line) => line.id !== lineId
-  );
-
-  updateRow(selectedRow.id, {
-    priceBreakdown: nextLines,
-    finalUnitPrice: sumBreakdown(nextLines),
-    preis: sumBreakdown(nextLines),
-  });
-}
-
-function regenerateSelectedBreakdown() {
-  if (!selectedRow) return;
-
-  const next = buildAutomaticPriceBreakdown(selectedRow);
-  const ep = sumBreakdown(next);
-
-  updateRow(selectedRow.id, {
-    priceBreakdown: next,
-    finalUnitPrice: ep,
-    preis: ep,
-    suggestedUnitPrice: ep,
-    aiReason: appendInfoText(
-      selectedRow.aiReason,
-      "KI hat den Preisaufbau dieser Position neu erzeugt."
-    ),
-  });
-}
-
-function saveAllToKnowledge() {
-  const count = saveRowsToDatenbank(rows, projectKey, projectTitle);
-  setServerStatus(`✅ ${count} Position(en) in Kalkulationsdatenbank übertragen`);
-  setTimeout(() => setServerStatus(""), 3500);
-}
-
-function saveSelectedToKnowledge() {
-  if (!selectedRow) return;
-
-  const count = saveRowsToDatenbank([selectedRow], projectKey, projectTitle);
-  setServerStatus(`${count} Position in Kalkulationsdatenbank gespeichert`);
-  setTimeout(() => setServerStatus(""), 2500);
-}
-
-function applyKnowledge(match: KalkulationsSuchTreffer) {
-  if (!selectedRow) return;
-
-  updateRow(selectedRow.id, datenbankEntryToRowPatch(match.eintrag));
-  KalkulationsDatenbank.markUsed(match.eintrag.id);
-  setServerStatus("Kalkulationsdatenbankwert übernommen");
-  setTimeout(() => setServerStatus(""), 2000);
-}
-function applyKiSuggestedPrice(rowId: string) {
-  const row = rows.find((r) => r.id === rowId);
-  if (!row) return;
-
-  const kiEp = getRlcKiUnitPrice(row);
-  const current = getUnitPrice(row);
-
-  if (kiEp <= 0) {
-    alert("Kein gültiger RLC-KI-Vorschlag vorhanden.");
-    return;
+    updateRow(selectedRow.id, {
+      priceBreakdown: nextLines,
+      finalUnitPrice: sumBreakdown(nextLines),
+      preis: sumBreakdown(nextLines)
+    });
   }
 
-  updateRow(rowId, {
-    preis: kiEp,
-    finalUnitPrice: kiEp,
-    suggestedUnitPrice: kiEp,
-    priceDecision: "rlcKi" as any,
-    calculationStatus: "ok",
-    riskLevel: row.riskLevel === "high" ? "medium" : row.riskLevel,
-    warning: "",
-    aiReason: appendInfoText(
-      row.aiReason,
-      `RLC-KI-Vorschlag manuell als finaler EP übernommen: ${money(current)} → ${money(kiEp)}.`
-    ),
-  });
+  function deleteBreakdownLine(lineId: string) {
+    if (!selectedRow) return;
 
-  setServerStatus("RLC-KI-Preis übernommen");
-  setTimeout(() => setServerStatus(""), 2200);
-}
-function kiCloneRows(input: EliteRow[]): EliteRow[] {
-  try {
-    return JSON.parse(JSON.stringify(input)) as EliteRow[];
-  } catch {
-return input.map((r) => ({ ...r }));
+    const nextLines = (selectedRow.priceBreakdown || []).filter(
+      (line) => line.id !== lineId
+    );
+
+    updateRow(selectedRow.id, {
+      priceBreakdown: nextLines,
+      finalUnitPrice: sumBreakdown(nextLines),
+      preis: sumBreakdown(nextLines)
+    });
   }
-}
 
-function kiRowLabel(row: Partial<EliteRow>): string {
-  const pos = String(row.posNr || "").trim();
-  const text = String(row.kurztext || "").trim();
+  function regenerateSelectedBreakdown() {
+    if (!selectedRow) return;
 
-  if (pos && text) return `Pos. ${pos} – ${text.slice(0, 80)}`;
-  if (pos) return `Pos. ${pos}`;
-  if (text) return text.slice(0, 90);
+    const next = buildAutomaticPriceBreakdown(selectedRow);
+    const ep = sumBreakdown(next);
 
-  return String(row.id || "Position");
-}
-
-function kiEmitStart(title: string) {
-  window.dispatchEvent(
-    new CustomEvent("rlc:ki-action-start", {
-      detail: {
-        title,
-        text: title,
-      },
-    })
-  );
-}
-
-let kiSmoothProgressTimer: number | null = null;
-
-function kiEmitProgress(progress: number, text: string) {
-  window.dispatchEvent(
-    new CustomEvent("rlc:ki-action-progress", {
-      detail: {
-        progress,
-        text,
-      },
-    })
-  );
-}
-
-function kiStopSmoothProgress() {
-  if (kiSmoothProgressTimer !== null) {
-    window.clearInterval(kiSmoothProgressTimer);
-    kiSmoothProgressTimer = null;
+    updateRow(selectedRow.id, {
+      priceBreakdown: next,
+      finalUnitPrice: ep,
+      preis: ep,
+      suggestedUnitPrice: ep,
+      aiReason: appendInfoText(
+        selectedRow.aiReason,
+        "KI hat den Preisaufbau dieser Position neu erzeugt."
+      )
+    });
   }
-}
 
-function kiStartSmoothProgress(args: {
-  from: number;
-  to: number;
-  text: string;
-  estimatedMs: number;
-}) {
-const startedAt = Date.now();
-  const from = Math.max(0, Math.min(100, args.from));
-  const to = Math.max(from, Math.min(96, args.to));
-  const duration = Math.max(args.estimatedMs, 8000);
+  function saveAllToKnowledge() {
+    const count = saveRowsToDatenbank(rows, projectKey, projectTitle);
+    setServerStatus(`✅ ${count} Position(en) in Kalkulationsdatenbank übertragen`);
+    setTimeout(() => setServerStatus(""), 3500);
+  }
 
-  kiEmitProgress(from, args.text);
+  function saveSelectedToKnowledge() {
+    if (!selectedRow) return;
 
-  kiSmoothProgressTimer = window.setInterval(() => {
-    const elapsed = Date.now() - startedAt;
-    const ratio = Math.min(elapsed / duration, 0.97);
-    const eased = 1 - Math.pow(1 - ratio, 2);
-    const progress = Math.min(to, Math.round(from + (to - from) * eased));
+    const count = saveRowsToDatenbank([selectedRow], projectKey, projectTitle);
+    setServerStatus(`${count} Position in Kalkulationsdatenbank gespeichert`);
+    setTimeout(() => setServerStatus(""), 2500);
+  }
 
-    kiEmitProgress(progress, args.text);
-  }, 650);
-}
+  function applyKnowledge(match: KalkulationsSuchTreffer) {
+    if (!selectedRow) return;
 
-function kiClassifyRow(row: Partial<EliteRow>): KiRowClass {
-  const pos = String(row.posNr || "").trim();
-  const kurzRaw = String(row.kurztext || "").trim();
-  const langRaw = String(row.langtext || "").trim();
-  const text = `${kurzRaw} ${langRaw}`.toLowerCase().replace(/\s+/g, " ").trim();
-  const unit = String(row.einheit || "").trim();
+    updateRow(selectedRow.id, datenbankEntryToRowPatch(match.eintrag));
+    KalkulationsDatenbank.markUsed(match.eintrag.id);
+    setServerStatus("Kalkulationsdatenbankwert übernommen");
+    setTimeout(() => setServerStatus(""), 2000);
+  }
+  function applyKiSuggestedPrice(rowId: string) {
+    const row = rows.find((r) => r.id === rowId);
+    if (!row) return;
 
-  const menge = n(row.menge);
-  const lightEp =
+    const kiEp = getRlcKiUnitPrice(row);
+    const current = getUnitPrice(row);
+
+    if (kiEp <= 0) {
+      alert("Kein gültiger RLC-KI-Vorschlag vorhanden.");
+      return;
+    }
+
+    updateRow(rowId, {
+      preis: kiEp,
+      finalUnitPrice: kiEp,
+      suggestedUnitPrice: kiEp,
+      priceDecision: "rlcKi" as any,
+      calculationStatus: "ok",
+      riskLevel: row.riskLevel === "high" ? "medium" : row.riskLevel,
+      warning: "",
+      aiReason: appendInfoText(
+        row.aiReason,
+        `RLC-KI-Vorschlag manuell als finaler EP übernommen: ${money(current)} → ${money(kiEp)}.`
+      )
+    });
+
+    setServerStatus("RLC-KI-Preis übernommen");
+    setTimeout(() => setServerStatus(""), 2200);
+  }
+  function kiCloneRows(input: EliteRow[]): EliteRow[] {
+    try {
+      return JSON.parse(JSON.stringify(input)) as EliteRow[];
+    } catch {
+      return input.map((r) => ({ ...r }));
+    }
+  }
+
+  function kiRowLabel(row: Partial<EliteRow>): string {
+    const pos = String(row.posNr || "").trim();
+    const text = String(row.kurztext || "").trim();
+
+    if (pos && text) return `Pos. ${pos} – ${text.slice(0, 80)}`;
+    if (pos) return `Pos. ${pos}`;
+    if (text) return text.slice(0, 90);
+
+    return String(row.id || "Position");
+  }
+
+  function kiEmitStart(title: string) {
+    window.dispatchEvent(
+      new CustomEvent("rlc:ki-action-start", {
+        detail: {
+          title,
+          text: title
+        }
+      })
+    );
+  }
+
+  let kiSmoothProgressTimer: number | null = null;
+
+  function kiEmitProgress(progress: number, text: string) {
+    window.dispatchEvent(
+      new CustomEvent("rlc:ki-action-progress", {
+        detail: {
+          progress,
+          text
+        }
+      })
+    );
+  }
+
+  function kiStopSmoothProgress() {
+    if (kiSmoothProgressTimer !== null) {
+      window.clearInterval(kiSmoothProgressTimer);
+      kiSmoothProgressTimer = null;
+    }
+  }
+
+  function kiStartSmoothProgress(args: {
+    from: number;
+    to: number;
+    text: string;
+    estimatedMs: number;
+  }) {
+    const startedAt = Date.now();
+    const from = Math.max(0, Math.min(100, args.from));
+    const to = Math.max(from, Math.min(96, args.to));
+    const duration = Math.max(args.estimatedMs, 8000);
+
+    kiEmitProgress(from, args.text);
+
+    kiSmoothProgressTimer = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const ratio = Math.min(elapsed / duration, 0.97);
+      const eased = 1 - Math.pow(1 - ratio, 2);
+      const progress = Math.min(to, Math.round(from + (to - from) * eased));
+
+      kiEmitProgress(progress, args.text);
+    }, 650);
+  }
+
+  function kiClassifyRow(row: Partial<EliteRow>): KiRowClass {
+    const pos = String(row.posNr || "").trim();
+    const kurzRaw = String(row.kurztext || "").trim();
+    const langRaw = String(row.langtext || "").trim();
+    const text = `${kurzRaw} ${langRaw}`.toLowerCase().replace(/\s+/g, " ").trim();
+    const unit = String(row.einheit || "").trim();
+
+    const menge = n(row.menge);
+    const lightEp =
     n((row as any).angebotUnitPrice) ||
     n((row as any).originalPreKiPrice) ||
     n((row as any).finalUnitPrice) ||
@@ -4731,11 +5254,11 @@ function kiClassifyRow(row: Partial<EliteRow>): KiRowClass {
     n((row as any).suggestedUnitPrice) ||
     0;
 
-  const pureChapter =
+    const pureChapter =
     /^\d{1,2}$/.test(pos) ||
     /^\d{1,2}\.0{1,3}$/.test(pos);
 
-  const structuralText =
+    const structuralText =
     /^titel\s*\d*$/i.test(kurzRaw) ||
     /^abschnitt\s*\d*$/i.test(kurzRaw) ||
     /^kapitel\s*\d*$/i.test(kurzRaw) ||
@@ -4744,554 +5267,554 @@ function kiClassifyRow(row: Partial<EliteRow>): KiRowClass {
     text.includes("gesamtsumme") ||
     text.includes("summe titel");
 
-  const hasRealWorkText =
+    const hasRealWorkText =
     kurzRaw.length >= 8 ||
     langRaw.length >= 18 ||
     /(aushub|abfuhr|verfüll|verfull|pflaster|asphalt|rohr|leitung|speedpipe|kabel|schacht|beton|schalung|bewehrung|plani|sandbett|tragschicht|deckschicht)/i.test(
       `${kurzRaw} ${langRaw}`
     );
 
-  if (structuralText) return "structure";
-  if (pureChapter && !hasRealWorkText) return "structure";
+    if (structuralText) return "structure";
+    if (pureChapter && !hasRealWorkText) return "structure";
 
-  if (!hasRealWorkText || !unit || menge <= 0) return "incomplete";
+    if (!hasRealWorkText || !unit || menge <= 0) return "incomplete";
 
-  if (
-    lightEp <= 0 &&
-    (!Array.isArray(row.priceBreakdown) || row.priceBreakdown.length === 0)
-  ) {
-    return "incomplete";
+    if (
+    lightEp <= 0 && (
+    !Array.isArray(row.priceBreakdown) || row.priceBreakdown.length === 0))
+    {
+      return "incomplete";
+    }
+
+    if (row.riskLevel === "high" || row.calculationStatus === "critical") {
+      return "review";
+    }
+
+    return "real-position";
   }
 
-  if (row.riskLevel === "high" || row.calculationStatus === "critical") {
-    return "review";
+  function kiIsRealCalcRow(row: Partial<EliteRow>) {
+    return !kiIsStructuralRow(row);
   }
 
-  return "real-position";
-}
+  function kiSourceShort(row: any): string {
+    const source = String(row?.source || "").toLowerCase();
 
-function kiIsRealCalcRow(row: Partial<EliteRow>) {
-  return !kiIsStructuralRow(row);
-}
+    if (source.includes("company-calibration")) return "RLC-KI · Firmenkalibrierung";
+    if (source.includes("database")) return "Datenbank";
+    if (source.includes("openai")) return "OpenAI";
+    if (source.includes("technical-parser")) return "RLC-KI · technische Kalkulation";
+    if (source.includes("recipe")) return "RLC-KI · Rezept/Urkalkulation";
+    if (source.includes("rule")) return "RLC-KI · Regelwerk";
+    if (source.includes("x84")) return "X84 / Angebotsbasis";
 
-function kiSourceShort(row: any): string {
-  const source = String(row?.source || "").toLowerCase();
+    return "RLC-KI";
+  }
 
-  if (source.includes("company-calibration")) return "RLC-KI · Firmenkalibrierung";
-  if (source.includes("database")) return "Datenbank";
-  if (source.includes("openai")) return "OpenAI";
-  if (source.includes("technical-parser")) return "RLC-KI · technische Kalkulation";
-  if (source.includes("recipe")) return "RLC-KI · Rezept/Urkalkulation";
-  if (source.includes("rule")) return "RLC-KI · Regelwerk";
-  if (source.includes("x84")) return "X84 / Angebotsbasis";
+  function kiRowShortStatus(row: any): string {
+    const source = kiSourceShort(row);
+    const ep = getUnitPrice(row);
+    const gp = lineNet(row);
 
-  return "RLC-KI";
-}
+    const status =
+    row?.riskLevel === "high" || row?.calculationStatus === "warning" ?
+    "prüfpflichtig" :
+    row?.calculationStatus === "critical" ?
+    "kritisch prüfen" :
+    "berechnet";
 
-function kiRowShortStatus(row: any): string {
-  const source = kiSourceShort(row);
-  const ep = getUnitPrice(row);
-  const gp = lineNet(row);
+    return `${source} · ${status} · EP ${money(ep)} · GP ${money(gp)}`;
+  }
+  function compactKiWarningText(value: string): string {
+    const raw = String(value || "").replace(/\s+/g, " ").trim();
+    if (!raw) return "";
 
-  const status =
-    row?.riskLevel === "high" || row?.calculationStatus === "warning"
-      ? "prüfpflichtig"
-      : row?.calculationStatus === "critical"
-        ? "kritisch prüfen"
-        : "berechnet";
+    const parts = raw.
+    split(" · ").
+    map((x) => x.trim()).
+    filter(Boolean);
 
-  return `${source} · ${status} · EP ${money(ep)} · GP ${money(gp)}`;
-}
-function compactKiWarningText(value: string): string {
-  const raw = String(value || "").replace(/\s+/g, " ").trim();
-  if (!raw) return "";
+    const important = parts.filter((x) => {
+      const t = x.toLowerCase();
+      return (
+        t.includes("plausibilitätsgrenze") ||
+        t.includes("stabilitätsbremse") ||
+        t.includes("datenbankpreis") ||
+        t.includes("regionalen unterschieden") ||
+        t.includes("prüfen"));
 
-  const parts = raw
-    .split(" · ")
-    .map((x) => x.trim())
-    .filter(Boolean);
+    });
 
-  const important = parts.filter((x) => {
-    const t = x.toLowerCase();
-    return (
-      t.includes("plausibilitätsgrenze") ||
-      t.includes("stabilitätsbremse") ||
-      t.includes("datenbankpreis") ||
-      t.includes("regionalen unterschieden") ||
-      t.includes("prüfen")
-    );
-  });
+    const selected = (important.length ? important : parts).slice(0, 2);
+    let out = selected.join(" · ");
 
-  const selected = (important.length ? important : parts).slice(0, 2);
-  let out = selected.join(" · ");
+    if (out.length > 260) out = out.slice(0, 257).trimEnd() + "…";
+    return out;
+  }
+  function kiBuildChangeLog(beforeRows: EliteRow[], afterRows: EliteRow[]) {
+    const beforeMap = new Map(beforeRows.map((r) => [r.id, r]));
+    const afterMap = new Map(afterRows.map((r) => [r.id, r]));
 
-  if (out.length > 260) out = out.slice(0, 257).trimEnd() + "…";
-  return out;
-}
-function kiBuildChangeLog(beforeRows: EliteRow[], afterRows: EliteRow[]) {
-  const beforeMap = new Map(beforeRows.map((r) => [r.id, r]));
-  const afterMap = new Map(afterRows.map((r) => [r.id, r]));
+    const changes: string[] = [];
+    const warnings: string[] = [];
+    const unchanged: string[] = [];
 
-  const changes: string[] = [];
-  const warnings: string[] = [];
-  const unchanged: string[] = [];
-
-  const countRelevantRows = (list: EliteRow[]) =>
+    const countRelevantRows = (list: EliteRow[]) =>
     list.filter((r) => !kiIsStructuralRow(r));
 
-  const countMissingPrice = (list: EliteRow[]) =>
+    const countMissingPrice = (list: EliteRow[]) =>
     countRelevantRows(list).filter((r) => round2(getUnitPrice(r)) <= 0).length;
 
-  const countMissingUrkalkulation = (list: EliteRow[]) =>
+    const countMissingUrkalkulation = (list: EliteRow[]) =>
     countRelevantRows(list).filter((r) => !Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0).length;
 
-  const countMissingUnit = (list: EliteRow[]) =>
+    const countMissingUnit = (list: EliteRow[]) =>
     countRelevantRows(list).filter((r) => !String(r.einheit || "").trim()).length;
 
-  const countMissingQty = (list: EliteRow[]) =>
+    const countMissingQty = (list: EliteRow[]) =>
     countRelevantRows(list).filter((r) => n(r.menge) <= 0).length;
 
-  const beforeMissingPrice = countMissingPrice(beforeRows);
-  const afterMissingPrice = countMissingPrice(afterRows);
+    const beforeMissingPrice = countMissingPrice(beforeRows);
+    const afterMissingPrice = countMissingPrice(afterRows);
 
-  const beforeMissingUrk = countMissingUrkalkulation(beforeRows);
-  const afterMissingUrk = countMissingUrkalkulation(afterRows);
+    const beforeMissingUrk = countMissingUrkalkulation(beforeRows);
+    const afterMissingUrk = countMissingUrkalkulation(afterRows);
 
-  const beforeMissingUnit = countMissingUnit(beforeRows);
-  const afterMissingUnit = countMissingUnit(afterRows);
+    const beforeMissingUnit = countMissingUnit(beforeRows);
+    const afterMissingUnit = countMissingUnit(afterRows);
 
-  const beforeMissingQty = countMissingQty(beforeRows);
-  const afterMissingQty = countMissingQty(afterRows);
+    const beforeMissingQty = countMissingQty(beforeRows);
+    const afterMissingQty = countMissingQty(afterRows);
 
-  if (beforeMissingPrice !== afterMissingPrice) {
-    changes.push(
-      `EP fehlend reduziert: ${beforeMissingPrice} → ${afterMissingPrice}.`
-    );
-  }
-
-  if (beforeMissingUrk !== afterMissingUrk) {
-    changes.push(
-      `Urkalkulation fehlend reduziert: ${beforeMissingUrk} → ${afterMissingUrk}.`
-    );
-  }
-
-  if (beforeMissingUnit !== afterMissingUnit) {
-    changes.push(
-      `Einheiten fehlend reduziert: ${beforeMissingUnit} → ${afterMissingUnit}.`
-    );
-  }
-
-  if (beforeMissingQty !== afterMissingQty) {
-    changes.push(
-      `Mengen fehlend reduziert: ${beforeMissingQty} → ${afterMissingQty}.`
-    );
-  }
-
-  for (const after of afterRows) {
-    if (kiIsStructuralRow(after)) continue;
-
-    const before = beforeMap.get(after.id);
-
-    if (!before) {
-      changes.push(`${kiRowLabel(after)} neu hinzugefügt.`);
-      continue;
-    }
-
-    const beforePrice = round2(getUnitPrice(before));
-    const afterPrice = round2(getUnitPrice(after));
-
-    if (beforePrice !== afterPrice) {
+    if (beforeMissingPrice !== afterMissingPrice) {
       changes.push(
-        `${kiRowLabel(after)} – Preis geändert: ${money(beforePrice)} → ${money(afterPrice)}.`
+        `EP fehlend reduziert: ${beforeMissingPrice} → ${afterMissingPrice}.`
       );
     }
 
-    const beforeText = String(before.kurztext || "").trim();
-    const afterText = String(after.kurztext || "").trim();
-
-    if (beforeText !== afterText) {
+    if (beforeMissingUrk !== afterMissingUrk) {
       changes.push(
-        !beforeText && afterText
-          ? `${kiRowLabel(after)} – Kurztext ergänzt.`
-          : `${kiRowLabel(after)} – Kurztext geändert.`
+        `Urkalkulation fehlend reduziert: ${beforeMissingUrk} → ${afterMissingUrk}.`
       );
     }
 
-    const beforeLang = String(before.langtext || "").trim();
-    const afterLang = String(after.langtext || "").trim();
-
-    if (beforeLang !== afterLang) {
+    if (beforeMissingUnit !== afterMissingUnit) {
       changes.push(
-        !beforeLang && afterLang
-          ? `${kiRowLabel(after)} – Langtext ergänzt.`
-          : `${kiRowLabel(after)} – Langtext geändert.`
+        `Einheiten fehlend reduziert: ${beforeMissingUnit} → ${afterMissingUnit}.`
       );
     }
 
-    if (String(before.einheit || "").trim() !== String(after.einheit || "").trim()) {
+    if (beforeMissingQty !== afterMissingQty) {
       changes.push(
-        `${kiRowLabel(after)} – Einheit geändert: ${String(before.einheit || "leer")} → ${String(after.einheit || "leer")}.`
+        `Mengen fehlend reduziert: ${beforeMissingQty} → ${afterMissingQty}.`
       );
     }
 
-    if (round2(n(before.menge)) !== round2(n(after.menge))) {
-      changes.push(
-        `${kiRowLabel(after)} – Menge geändert: ${qty(before.menge)} → ${qty(after.menge)}.`
-      );
-    }
+    for (const after of afterRows) {
+      if (kiIsStructuralRow(after)) continue;
 
-    const beforeBreakdown = before.priceBreakdown?.length || 0;
-    const afterBreakdown = after.priceBreakdown?.length || 0;
+      const before = beforeMap.get(after.id);
 
-    if (beforeBreakdown !== afterBreakdown) {
-      changes.push(
-        beforeBreakdown === 0 && afterBreakdown > 0
-          ? `${kiRowLabel(after)} – Urkalkulation / Preisaufbau ergänzt (${afterBreakdown} Ansatz/Ansätze).`
-          : `${kiRowLabel(after)} – Urkalkulation geändert (${beforeBreakdown} → ${afterBreakdown} Ansätze).`
-      );
-    } else if (beforeBreakdown > 0 && afterBreakdown > 0) {
-      const beforeSum = round2(
-        (before.priceBreakdown || []).reduce((sum, x) => sum + n(x.total), 0)
-      );
-      const afterSum = round2(
-        (after.priceBreakdown || []).reduce((sum, x) => sum + n(x.total), 0)
-      );
+      if (!before) {
+        changes.push(`${kiRowLabel(after)} neu hinzugefügt.`);
+        continue;
+      }
 
-      if (beforeSum !== afterSum) {
+      const beforePrice = round2(getUnitPrice(before));
+      const afterPrice = round2(getUnitPrice(after));
+
+      if (beforePrice !== afterPrice) {
         changes.push(
-          `${kiRowLabel(after)} – Urkalkulation Summe geändert: ${money(beforeSum)} → ${money(afterSum)}.`
+          `${kiRowLabel(after)} – Preis geändert: ${money(beforePrice)} → ${money(afterPrice)}.`
         );
       }
-    }
 
-    if (before.calculationStatus !== after.calculationStatus) {
-      changes.push(
-        `${kiRowLabel(after)} – Status geändert: ${statusLabel(before.calculationStatus)} → ${statusLabel(after.calculationStatus)}.`
-      );
-    }
+      const beforeText = String(before.kurztext || "").trim();
+      const afterText = String(after.kurztext || "").trim();
 
-    if (before.riskLevel !== after.riskLevel) {
-      changes.push(
-        `${kiRowLabel(after)} – Risiko geändert: ${riskLabel(before.riskLevel)} → ${riskLabel(after.riskLevel)}.`
-      );
-    }
+      if (beforeText !== afterText) {
+        changes.push(
+          !beforeText && afterText ?
+          `${kiRowLabel(after)} – Kurztext ergänzt.` :
+          `${kiRowLabel(after)} – Kurztext geändert.`
+        );
+      }
 
-    if (after.warning && after.warning !== before.warning) {
-      const compactWarning = compactKiWarningText(after.warning);
-      if (compactWarning) {
-        warnings.push(`${kiRowLabel(after)} – ${compactWarning}`);
+      const beforeLang = String(before.langtext || "").trim();
+      const afterLang = String(after.langtext || "").trim();
+
+      if (beforeLang !== afterLang) {
+        changes.push(
+          !beforeLang && afterLang ?
+          `${kiRowLabel(after)} – Langtext ergänzt.` :
+          `${kiRowLabel(after)} – Langtext geändert.`
+        );
+      }
+
+      if (String(before.einheit || "").trim() !== String(after.einheit || "").trim()) {
+        changes.push(
+          `${kiRowLabel(after)} – Einheit geändert: ${String(before.einheit || "leer")} → ${String(after.einheit || "leer")}.`
+        );
+      }
+
+      if (round2(n(before.menge)) !== round2(n(after.menge))) {
+        changes.push(
+          `${kiRowLabel(after)} – Menge geändert: ${qty(before.menge)} → ${qty(after.menge)}.`
+        );
+      }
+
+      const beforeBreakdown = before.priceBreakdown?.length || 0;
+      const afterBreakdown = after.priceBreakdown?.length || 0;
+
+      if (beforeBreakdown !== afterBreakdown) {
+        changes.push(
+          beforeBreakdown === 0 && afterBreakdown > 0 ?
+          `${kiRowLabel(after)} – Urkalkulation / Preisaufbau ergänzt (${afterBreakdown} Ansatz/Ansätze).` :
+          `${kiRowLabel(after)} – Urkalkulation geändert (${beforeBreakdown} → ${afterBreakdown} Ansätze).`
+        );
+      } else if (beforeBreakdown > 0 && afterBreakdown > 0) {
+        const beforeSum = round2(
+          (before.priceBreakdown || []).reduce((sum, x) => sum + n(x.total), 0)
+        );
+        const afterSum = round2(
+          (after.priceBreakdown || []).reduce((sum, x) => sum + n(x.total), 0)
+        );
+
+        if (beforeSum !== afterSum) {
+          changes.push(
+            `${kiRowLabel(after)} – Urkalkulation Summe geändert: ${money(beforeSum)} → ${money(afterSum)}.`
+          );
+        }
+      }
+
+      if (before.calculationStatus !== after.calculationStatus) {
+        changes.push(
+          `${kiRowLabel(after)} – Status geändert: ${statusLabel(before.calculationStatus)} → ${statusLabel(after.calculationStatus)}.`
+        );
+      }
+
+      if (before.riskLevel !== after.riskLevel) {
+        changes.push(
+          `${kiRowLabel(after)} – Risiko geändert: ${riskLabel(before.riskLevel)} → ${riskLabel(after.riskLevel)}.`
+        );
+      }
+
+      if (after.warning && after.warning !== before.warning) {
+        const compactWarning = compactKiWarningText(after.warning);
+        if (compactWarning) {
+          warnings.push(`${kiRowLabel(after)} – ${compactWarning}`);
+        }
       }
     }
-  }
 
-  for (const before of beforeRows) {
-    if (kiIsStructuralRow(before)) continue;
+    for (const before of beforeRows) {
+      if (kiIsStructuralRow(before)) continue;
 
-    if (!afterMap.has(before.id)) {
-      changes.push(`${kiRowLabel(before)} gelöscht.`);
+      if (!afterMap.has(before.id)) {
+        changes.push(`${kiRowLabel(before)} gelöscht.`);
+      }
     }
-  }
 
-  if (!changes.length && !warnings.length) {
-    const allComplete =
+    if (!changes.length && !warnings.length) {
+      const allComplete =
       afterMissingPrice === 0 &&
       afterMissingUrk === 0 &&
       afterMissingUnit === 0 &&
       afterMissingQty === 0;
 
-    unchanged.push(
-      allComplete
-        ? "Prüfung abgeschlossen: Alle sichtbaren LV-Positionen haben EP, Menge, Einheit und Urkalkulation."
-        : "Keine sichtbaren Änderungen erkannt. Einzelne Positionen müssen noch manuell geprüft werden."
-    );
+      unchanged.push(
+        allComplete ?
+        "Prüfung abgeschlossen: Alle sichtbaren LV-Positionen haben EP, Menge, Einheit und Urkalkulation." :
+        "Keine sichtbaren Änderungen erkannt. Einzelne Positionen müssen noch manuell geprüft werden."
+      );
+    }
+
+    return { changes, warnings, unchanged };
   }
 
-  return { changes, warnings, unchanged };
-}
-
-function kiEmitResult(
+  function kiEmitResult(
   title: string,
   beforeRows: EliteRow[],
   afterRows: EliteRow[],
-  summary?: any
-) {
-  const log = kiBuildChangeLog(beforeRows, afterRows);
+  summary?: any)
+  {
+    const log = kiBuildChangeLog(beforeRows, afterRows);
 
-  const protocol: string[] = [];
+    const protocol: string[] = [];
 
-  const checkedCount = typeof summary?.checkedCount === "number" ? summary.checkedCount : afterRows.length;
-  const skippedCount = typeof summary?.skippedCount === "number" ? summary.skippedCount : 0;
-  const serverRequestedCount =
+    const checkedCount = typeof summary?.checkedCount === "number" ? summary.checkedCount : afterRows.length;
+    const skippedCount = typeof summary?.skippedCount === "number" ? summary.skippedCount : 0;
+    const serverRequestedCount =
     typeof summary?.serverRequestedCount === "number" ? summary.serverRequestedCount : 0;
-  const serverReturnedCount =
+    const serverReturnedCount =
     typeof summary?.serverReturnedCount === "number" ? summary.serverReturnedCount : 0;
-  const localFallbackCount =
+    const localFallbackCount =
     typeof summary?.localFallbackCount === "number" ? summary.localFallbackCount : 0;
 
-  protocol.push(`Geprüfte LV-Positionen: ${checkedCount}.`);
+    protocol.push(`Geprüfte LV-Positionen: ${checkedCount}.`);
 
-  if (skippedCount > 0) {
-    protocol.push(`Bereits vollständig übernommen: ${skippedCount}.`);
-  }
-
-  if (serverRequestedCount > 0) {
-    protocol.push(`An Server-KI gesendet: ${serverRequestedCount}.`);
-  }
-
-  if (serverReturnedCount > 0) {
-    protocol.push(`Vom Server/OpenAI berechnet: ${serverReturnedCount}.`);
-  }
-
-  if (localFallbackCount > 0 && serverReturnedCount === 0) {
-    protocol.push(`Lokaler Fallback verwendet: ${localFallbackCount}.`);
-  }
-
-  if (serverRequestedCount === 0 && skippedCount > 0) {
-    protocol.push("Keine Server-KI nötig: vollständige Positionen übernommen.");
-  }
-
-  const cleanWarnings = log.warnings.filter((w) => {
-    const x = String(w || "").toLowerCase();
-
-    if (!x.trim()) return false;
-
-    // Nicht als Warnung anzeigen, wenn Server/OpenAI erfolgreich gerechnet hat.
-    if (serverReturnedCount > 0) {
-      if (x.includes("openai-schätzung verwendet")) return false;
-      if (x.includes("regel-engine-fallback verwendet")) return false;
-      if (x.includes("lokaler fallback verwendet")) return false;
-      if (x.includes("ki-cache verwendet")) return false;
+    if (skippedCount > 0) {
+      protocol.push(`Bereits vollständig übernommen: ${skippedCount}.`);
     }
 
-    return true;
-  });
+    if (serverRequestedCount > 0) {
+      protocol.push(`An Server-KI gesendet: ${serverRequestedCount}.`);
+    }
 
-  const unchanged =
-    !log.changes.length && !cleanWarnings.length && protocol.length
-      ? ["Prüfung abgeschlossen. Keine weiteren sichtbaren Änderungen nötig."]
-      : log.unchanged;
+    if (serverReturnedCount > 0) {
+      protocol.push(`Vom Server/OpenAI berechnet: ${serverReturnedCount}.`);
+    }
 
-  window.dispatchEvent(
-    new CustomEvent("rlc:ki-action-result", {
-      detail: {
-        title,
-        changes: [...protocol, ...log.changes],
-        warnings: cleanWarnings,
-        unchanged,
-      },
-    })
-  );
-}
+    if (localFallbackCount > 0 && serverReturnedCount === 0) {
+      protocol.push(`Lokaler Fallback verwendet: ${localFallbackCount}.`);
+    }
 
-function buildNoX84KiPayloadRows(rows: any[]): any[] {
-  return (Array.isArray(rows) ? rows : []).map((r: any, index: number) => ({
-    id: String(r.id ?? r.rowId ?? `row-${index + 1}`),
-    posNr: String(r.posNr ?? r.pos ?? r.positionNumber ?? r.position ?? ""),
-    kurztext: String(r.kurztext ?? r.shortText ?? r.text ?? ""),
-    langtext: String(r.langtext ?? r.longText ?? r.description ?? ""),
-    einheit: String(r.einheit ?? r.unit ?? ""),
-    menge: Number(r.menge ?? r.quantity ?? r.qty ?? 0) || 0,
-  }));
-}
+    if (serverRequestedCount === 0 && skippedCount > 0) {
+      protocol.push("Keine Server-KI nötig: vollständige Positionen übernommen.");
+    }
+
+    const cleanWarnings = log.warnings.filter((w) => {
+      const x = String(w || "").toLowerCase();
+
+      if (!x.trim()) return false;
+
+      // Nicht als Warnung anzeigen, wenn Server/OpenAI erfolgreich gerechnet hat.
+      if (serverReturnedCount > 0) {
+        if (x.includes("openai-schätzung verwendet")) return false;
+        if (x.includes("regel-engine-fallback verwendet")) return false;
+        if (x.includes("lokaler fallback verwendet")) return false;
+        if (x.includes("ki-cache verwendet")) return false;
+      }
+
+      return true;
+    });
+
+    const unchanged =
+    !log.changes.length && !cleanWarnings.length && protocol.length ?
+    ["Prüfung abgeschlossen. Keine weiteren sichtbaren Änderungen nötig."] :
+    log.unchanged;
+
+    window.dispatchEvent(
+      new CustomEvent("rlc:ki-action-result", {
+        detail: {
+          title,
+          changes: [...protocol, ...log.changes],
+          warnings: cleanWarnings,
+          unchanged
+        }
+      })
+    );
+  }
+
+  function buildNoX84KiPayloadRows(rows: any[]): any[] {
+    return (Array.isArray(rows) ? rows : []).map((r: any, index: number) => ({
+      id: String(r.id ?? r.rowId ?? `row-${index + 1}`),
+      posNr: String(r.posNr ?? r.pos ?? r.positionNumber ?? r.position ?? ""),
+      kurztext: String(r.kurztext ?? r.shortText ?? r.text ?? ""),
+      langtext: String(r.langtext ?? r.longText ?? r.description ?? ""),
+      einheit: String(r.einheit ?? r.unit ?? ""),
+      menge: Number(r.menge ?? r.quantity ?? r.qty ?? 0) || 0
+    }));
+  }
 
 
-function buildRlcX84DiffReport(rows: any[], projectKey: string): any {
-  const list = Array.isArray(rows) ? rows : [];
+  function buildRlcX84DiffReport(rows: any[], projectKey: string): any {
+    const list = Array.isArray(rows) ? rows : [];
 
-  const toNum = (v: any): number => {
-    const x = Number(v ?? 0);
-    return Number.isFinite(x) ? x : 0;
-  };
+    const toNum = (v: any): number => {
+      const x = Number(v ?? 0);
+      return Number.isFinite(x) ? x : 0;
+    };
 
-  const qtyOf = (r: any): number =>
+    const qtyOf = (r: any): number =>
     toNum(r.menge) || toNum(r.quantity) || toNum(r.qty);
 
-  const rlcEpOf = (r: any): number =>
+    const rlcEpOf = (r: any): number =>
     toNum(r.finalUnitPrice) || toNum(r.rlcKiUnitPrice) || toNum(r.unitPrice) || toNum(r.preis);
 
-  const rlcGpOf = (r: any): number =>
+    const rlcGpOf = (r: any): number =>
     toNum(r.totalNet) ||
     toNum(r.rlcKiTotal) ||
     toNum(r.totalPrice) ||
     toNum(r.gesamt) ||
     Math.round(rlcEpOf(r) * qtyOf(r) * 100) / 100;
 
-  const x84EpOf = (r: any): number =>
+    const x84EpOf = (r: any): number =>
     toNum(r.x84UnitPrice) || toNum(r.angebotUnitPrice) || toNum(r.originalPreKiPrice);
 
-  const x84GpOf = (r: any): number => {
-    const gp = toNum(r.x84Total) || toNum(r.angebotTotal) || toNum(r.originalPreKiTotal);
-    if (gp > 0) return gp;
-    const ep = x84EpOf(r);
-    const qty = qtyOf(r);
-    return ep > 0 && qty > 0 ? Math.round(ep * qty * 100) / 100 : 0;
-  };
+    const x84GpOf = (r: any): number => {
+      const gp = toNum(r.x84Total) || toNum(r.angebotTotal) || toNum(r.originalPreKiTotal);
+      if (gp > 0) return gp;
+      const ep = x84EpOf(r);
+      const qty = qtyOf(r);
+      return ep > 0 && qty > 0 ? Math.round(ep * qty * 100) / 100 : 0;
+    };
 
-  const compact = (r: any) => {
-    const qty = qtyOf(r);
-    const x84Ep = x84EpOf(r);
-    const rlcEp = rlcEpOf(r);
-    const x84Gp = x84GpOf(r);
-    const rlcGp = rlcGpOf(r);
-    const diffGp = Math.round((rlcGp - x84Gp) * 100) / 100;
-    const diffPct = x84Gp > 0 ? Math.round((diffGp / x84Gp) * 10000) / 100 : 0;
+    const compact = (r: any) => {
+      const qty = qtyOf(r);
+      const x84Ep = x84EpOf(r);
+      const rlcEp = rlcEpOf(r);
+      const x84Gp = x84GpOf(r);
+      const rlcGp = rlcGpOf(r);
+      const diffGp = Math.round((rlcGp - x84Gp) * 100) / 100;
+      const diffPct = x84Gp > 0 ? Math.round(diffGp / x84Gp * 10000) / 100 : 0;
 
-    let status = "OK";
-    if (Math.abs(diffPct) >= 30 || Math.abs(diffGp) >= 10000) status = "Kritisch";
-    else if (diffPct > 10) status = "RLC höher > 10%";
-    else if (diffPct < -10) status = "RLC niedriger > 10%";
-    else if (Math.abs(diffPct) > 5) status = "Prüfen";
+      let status = "OK";
+      if (Math.abs(diffPct) >= 30 || Math.abs(diffGp) >= 10000) status = "Kritisch";else
+      if (diffPct > 10) status = "RLC höher > 10%";else
+      if (diffPct < -10) status = "RLC niedriger > 10%";else
+      if (Math.abs(diffPct) > 5) status = "Prüfen";
+
+      return {
+        id: r.id,
+        posNr: r.posNr ?? r.pos,
+        kurztext: r.kurztext ?? r.text ?? "",
+        einheit: r.einheit ?? r.unit ?? "",
+        menge: qty,
+        x84Ep,
+        rlcEp,
+        x84Gp,
+        rlcGp,
+        diffPct,
+        diffGp,
+        status,
+        source: r.source,
+        riskLevel: r.riskLevel,
+        calculationStatus: r.calculationStatus,
+        warning: r.warning
+      };
+    };
+
+    const comparable = list.map(compact).filter((r) => r.x84Ep > 0 && r.rlcEp > 0 && r.menge > 0);
+
+    const totalX84 = comparable.reduce((s, r) => s + r.x84Gp, 0);
+    const totalRlc = comparable.reduce((s, r) => s + r.rlcGp, 0);
+    const delta = totalRlc - totalX84;
+
+    const critical = comparable.
+    filter((r) => r.status === "Kritisch").
+    sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+
+    const rlcHigher = comparable.
+    filter((r) => r.diffGp > 0 && r.status !== "OK").
+    sort((a, b) => b.diffGp - a.diffGp);
+
+    const rlcLower = comparable.
+    filter((r) => r.diffGp < 0 && r.status !== "OK").
+    sort((a, b) => a.diffGp - b.diffGp);
+
+    const over10000 = comparable.
+    filter((r) => Math.abs(r.diffGp) >= 10000).
+    sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
 
     return {
-      id: r.id,
-      posNr: r.posNr ?? r.pos,
-      kurztext: r.kurztext ?? r.text ?? "",
-      einheit: r.einheit ?? r.unit ?? "",
-      menge: qty,
-      x84Ep,
-      rlcEp,
-      x84Gp,
-      rlcGp,
-      diffPct,
-      diffGp,
-      status,
-      source: r.source,
-      riskLevel: r.riskLevel,
-      calculationStatus: r.calculationStatus,
-      warning: r.warning,
+      ok: true,
+      projectKey,
+      createdAt: new Date().toISOString(),
+      count: comparable.length,
+      totalX84: Math.round(totalX84 * 100) / 100,
+      totalRlc: Math.round(totalRlc * 100) / 100,
+      delta: Math.round(delta * 100) / 100,
+      deltaPct: totalX84 > 0 ? Math.round(delta / totalX84 * 10000) / 100 : 0,
+      summary: {
+        criticalCount: critical.length,
+        rlcHigherCount: rlcHigher.length,
+        rlcLowerCount: rlcLower.length,
+        over10000Count: over10000.length
+      },
+      topByAbsDiff: [...comparable].sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp)).slice(0, 150),
+      critical: critical.slice(0, 150),
+      rlcHigher: rlcHigher.slice(0, 150),
+      rlcLower: rlcLower.slice(0, 150),
+      over10000: over10000.slice(0, 150)
     };
-  };
-
-  const comparable = list.map(compact).filter((r) => r.x84Ep > 0 && r.rlcEp > 0 && r.menge > 0);
-
-  const totalX84 = comparable.reduce((s, r) => s + r.x84Gp, 0);
-  const totalRlc = comparable.reduce((s, r) => s + r.rlcGp, 0);
-  const delta = totalRlc - totalX84;
-
-  const critical = comparable
-    .filter((r) => r.status === "Kritisch")
-    .sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
-
-  const rlcHigher = comparable
-    .filter((r) => r.diffGp > 0 && r.status !== "OK")
-    .sort((a, b) => b.diffGp - a.diffGp);
-
-  const rlcLower = comparable
-    .filter((r) => r.diffGp < 0 && r.status !== "OK")
-    .sort((a, b) => a.diffGp - b.diffGp);
-
-  const over10000 = comparable
-    .filter((r) => Math.abs(r.diffGp) >= 10000)
-    .sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
-
-  return {
-    ok: true,
-    projectKey,
-    createdAt: new Date().toISOString(),
-    count: comparable.length,
-    totalX84: Math.round(totalX84 * 100) / 100,
-    totalRlc: Math.round(totalRlc * 100) / 100,
-    delta: Math.round(delta * 100) / 100,
-    deltaPct: totalX84 > 0 ? Math.round((delta / totalX84) * 10000) / 100 : 0,
-    summary: {
-      criticalCount: critical.length,
-      rlcHigherCount: rlcHigher.length,
-      rlcLowerCount: rlcLower.length,
-      over10000Count: over10000.length,
-    },
-    topByAbsDiff: [...comparable].sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp)).slice(0, 150),
-    critical: critical.slice(0, 150),
-    rlcHigher: rlcHigher.slice(0, 150),
-    rlcLower: rlcLower.slice(0, 150),
-    over10000: over10000.slice(0, 150),
-  };
-}
-
-
-function rlcBuildX84DiffSummarySafe(items: any[]) {
-  const n = (v: any) => {
-    const x = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
-    return Number.isFinite(x) ? x : 0;
-  };
-
-  const rows = Array.isArray(items) ? items : [];
-
-  let comparableCount = 0;
-  let rlcHigherCount = 0;
-  let rlcLowerCount = 0;
-  let within10Count = 0;
-  let outside10Count = 0;
-  let over20Count = 0;
-  let over10000Count = 0;
-  let criticalCount = 0;
-
-  for (const r of rows) {
-    const qty = n(r.menge ?? r.quantity);
-
-    const x84Ep = n(
-      r.x84Ep ??
-      r.x84UnitPrice ??
-      r.angebotUnitPrice ??
-      r.offerUnitPrice ??
-      r.originalPreKiPrice ??
-      r.reverseUrkalkulation?.x84UnitPrice ??
-      r.dbComparability?.x84UnitPrice
-    );
-
-    const rlcEp = n(
-      r.rlcEp ??
-      r.rlcKiUnitPrice ??
-      r.finalUnitPrice ??
-      r.suggestedUnitPrice ??
-      r.preis ??
-      r.unitPrice
-    );
-
-    if (!(qty > 0 && x84Ep > 0 && rlcEp > 0)) continue;
-
-    comparableCount++;
-
-    const x84Gp = qty * x84Ep;
-    const rlcGp = qty * rlcEp;
-    const diffGp = rlcGp - x84Gp;
-    const diffPct = x84Gp !== 0 ? (diffGp / x84Gp) * 100 : 0;
-
-    if (diffPct > 10) {
-      rlcHigherCount++;
-      outside10Count++;
-    } else if (diffPct < -10) {
-      rlcLowerCount++;
-      outside10Count++;
-    } else {
-      within10Count++;
-    }
-
-    if (Math.abs(diffPct) > 20) over20Count++;
-    if (Math.abs(diffGp) > 10000) over10000Count++;
-
-    if (Math.abs(diffPct) > 20 || Math.abs(diffGp) > 10000) {
-      criticalCount++;
-    }
   }
 
-  return {
-    count: comparableCount,
-    comparableCount,
-    outside10Count,
-    rlcHigherCount,
-    rlcLowerCount,
-    within10Count,
-    over20Count,
-    over10000Count,
-    criticalCount,
-  };
-}
-function saveRlcX84LearningReport(rows: any[], projectKey: string) {
-  const safeRows = Array.isArray(rows) ? rows : [];
 
-  const entries = safeRows
-    .filter((r: any) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none")
-    .map((r: any) => {
+  function rlcBuildX84DiffSummarySafe(items: any[]) {
+    const n = (v: any) => {
+      const x = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
+      return Number.isFinite(x) ? x : 0;
+    };
+
+    const rows = Array.isArray(items) ? items : [];
+
+    let comparableCount = 0;
+    let rlcHigherCount = 0;
+    let rlcLowerCount = 0;
+    let within10Count = 0;
+    let outside10Count = 0;
+    let over20Count = 0;
+    let over10000Count = 0;
+    let criticalCount = 0;
+
+    for (const r of rows) {
+      const qty = n(r.menge ?? r.quantity);
+
+      const x84Ep = n(
+        r.x84Ep ??
+        r.x84UnitPrice ??
+        r.angebotUnitPrice ??
+        r.offerUnitPrice ??
+        r.originalPreKiPrice ??
+        r.reverseUrkalkulation?.x84UnitPrice ??
+        r.dbComparability?.x84UnitPrice
+      );
+
+      const rlcEp = n(
+        r.rlcEp ??
+        r.rlcKiUnitPrice ??
+        r.finalUnitPrice ??
+        r.suggestedUnitPrice ??
+        r.preis ??
+        r.unitPrice
+      );
+
+      if (!(qty > 0 && x84Ep > 0 && rlcEp > 0)) continue;
+
+      comparableCount++;
+
+      const x84Gp = qty * x84Ep;
+      const rlcGp = qty * rlcEp;
+      const diffGp = rlcGp - x84Gp;
+      const diffPct = x84Gp !== 0 ? diffGp / x84Gp * 100 : 0;
+
+      if (diffPct > 10) {
+        rlcHigherCount++;
+        outside10Count++;
+      } else if (diffPct < -10) {
+        rlcLowerCount++;
+        outside10Count++;
+      } else {
+        within10Count++;
+      }
+
+      if (Math.abs(diffPct) > 20) over20Count++;
+      if (Math.abs(diffGp) > 10000) over10000Count++;
+
+      if (Math.abs(diffPct) > 20 || Math.abs(diffGp) > 10000) {
+        criticalCount++;
+      }
+    }
+
+    return {
+      count: comparableCount,
+      comparableCount,
+      outside10Count,
+      rlcHigherCount,
+      rlcLowerCount,
+      within10Count,
+      over20Count,
+      over10000Count,
+      criticalCount
+    };
+  }
+  function saveRlcX84LearningReport(rows: any[], projectKey: string) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+
+    const entries = safeRows.
+    filter((r: any) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none").
+    map((r: any) => {
       const x84Ep = Number(r.x84BenchmarkEp || 0);
       const rlcEp = Number(r.rlcKiUnitPrice || r.finalUnitPrice || r.preis || 0);
       const qty = Number(r.menge || r.quantity || 0);
@@ -5317,59 +5840,151 @@ function saveRlcX84LearningReport(rows: any[], projectKey: string) {
         signal: r.x84BenchmarkLearningSignal,
         bucket,
         usedAsPrice: false,
-        source: String(r.source || "").slice(0, 120),
+        source: String(r.source || "").slice(0, 120)
       };
-    })
-    .sort((a: any, b: any) => Math.abs(b.diffGp || 0) - Math.abs(a.diffGp || 0))
-    .slice(0, 200);
+    }).
+    sort((a: any, b: any) => Math.abs(b.diffGp || 0) - Math.abs(a.diffGp || 0)).
+    slice(0, 200);
 
-  const summary = {
-    stableReferenceCount: entries.filter((x: any) => x.bucket === "stable_reference").length,
-    softLearningCandidateCount: entries.filter((x: any) => x.bucket === "soft_learning_candidate").length,
-    lowPriorityLearningCandidateCount: entries.filter((x: any) => x.bucket === "low_priority_learning_candidate").length,
-    strongLearningCandidateCount: entries.filter((x: any) => x.bucket === "strong_learning_candidate").length,
-    technicalReviewRequiredCount: entries.filter((x: any) => x.bucket === "technical_review_required").length,
-  };
-
-  const report = {
-    ok: true,
-    projectKey,
-    createdAt: new Date().toISOString(),
-    count: entries.length,
-    summary,
-    entries,
-  };
-
-  const storageKey = `rlc_x84_learning_report_v1:${projectKey}`;
-
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(report));
-    console.log("[RLC-KI] X84 Learning Report saved", {
-      storageKey,
-      count: report.count,
-      summary: report.summary,
-    });
-  } catch (e) {
-    console.warn("[RLC-KI] X84 Learning Report localStorage quota exceeded, saving compact top 50", e);
-
-    const compactReport = {
-      ...report,
-      entries: entries.slice(0, 50),
-      count: Math.min(entries.length, 50),
-      compact: true,
+    const summary = {
+      stableReferenceCount: entries.filter((x: any) => x.bucket === "stable_reference").length,
+      softLearningCandidateCount: entries.filter((x: any) => x.bucket === "soft_learning_candidate").length,
+      lowPriorityLearningCandidateCount: entries.filter((x: any) => x.bucket === "low_priority_learning_candidate").length,
+      strongLearningCandidateCount: entries.filter((x: any) => x.bucket === "strong_learning_candidate").length,
+      technicalReviewRequiredCount: entries.filter((x: any) => x.bucket === "technical_review_required").length
     };
 
-    localStorage.setItem(storageKey, JSON.stringify(compactReport));
+    const report = {
+      ok: true,
+      projectKey,
+      createdAt: new Date().toISOString(),
+      count: entries.length,
+      summary,
+      entries
+    };
+
+    // Der vollstaendige Learning-Stand wird serverseitig gespeichert.
+    // Kein grosses localStorage-Backup mehr: verhindert QuotaExceededError
+    // und doppelte Browser-Persistenz.
+    console.log("[RLC-KI] X84 Learning Report prepared for server workflow", {
+      projectKey,
+      count: report.count,
+      summary: report.summary
+    });
+
+    return report;
+  }
+  const RLC_LEARNING_CACHE_TTL_MS = 15_000;
+  const rlcLearningStateCache = new Map<string, {value: any;loadedAt: number;}>();
+  const rlcLearningStateRequests = new Map<string, Promise<any>>();
+
+  async function loadRlcX84LearningState(
+  projectKey: string,
+  options: {force?: boolean;} = {})
+  : Promise<any> {
+    const key = String(projectKey || "").trim();
+    if (!key) return {};
+
+    const cached = rlcLearningStateCache.get(key);
+    if (
+    !options.force &&
+    cached &&
+    Date.now() - cached.loadedAt < RLC_LEARNING_CACHE_TTL_MS)
+    {
+      return cached.value;
+    }
+
+    const pending = rlcLearningStateRequests.get(key);
+    if (!options.force && pending) return pending;
+
+    const request = (async () => {
+      try {
+        const token = getAuthToken();
+        const response = await fetch(
+          apiUrl(
+            `/api/kalkulation/storage/learning/${encodeURIComponent(key)}`
+          ),
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Learning State konnte nicht geladen werden: HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const value =
+        payload?.data && typeof payload.data === "object" ? payload.data : {};
+
+        rlcLearningStateCache.set(key, { value, loadedAt: Date.now() });
+        return value;
+      } catch (error) {
+        console.error("[RLC-KI] Learning State load failed", error);
+        return cached?.value || {};
+      } finally {
+        rlcLearningStateRequests.delete(key);
+      }
+    })();
+
+    rlcLearningStateRequests.set(key, request);
+    return request;
   }
 
-  return report;
-}
-function saveRlcX84LearningApprovalDraft(rows: any[], projectKey: string) {
-  const safeRows = Array.isArray(rows) ? rows : [];
+  async function saveRlcX84LearningState(
+  projectKey: string,
+  state: any)
+  : Promise<any> {
+    const response = await fetch(
+      apiUrl(
+        `/api/kalkulation/storage/learning/${encodeURIComponent(projectKey)}/save`
+      ),
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...(getAuthToken() ?
+          { Authorization: `Bearer ${getAuthToken()}` } :
+          {})
+        },
+        body: JSON.stringify({
+          data: state
+        })
+      }
+    );
 
-  const candidates = safeRows
-    .filter((r: any) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none")
-    .map((r: any) => {
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(
+        `Learning State konnte nicht gespeichert werden: HTTP ${response.status} ${text}`
+      );
+    }
+
+    const payload = await response.json();
+    const savedState =
+    payload?.data && typeof payload.data === "object" ? payload.data : state;
+
+    rlcLearningStateCache.set(String(projectKey), {
+      value: savedState,
+      loadedAt: Date.now()
+    });
+
+    return savedState;
+  }
+  async function saveRlcX84LearningApprovalDraft(rows: any[], projectKey: string) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+
+    const candidates = safeRows.
+    filter((r: any) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none").
+    map((r: any) => {
       const x84Ep = Number(r.x84BenchmarkEp || 0);
       const rlcEp = Number(r.rlcKiUnitPrice || r.finalUnitPrice || r.preis || 0);
       const qty = Number(r.menge || r.quantity || 0);
@@ -5416,15 +6031,15 @@ function saveRlcX84LearningApprovalDraft(rows: any[], projectKey: string) {
         usedAsPrice: false,
 
         note:
-          "Nur Freigabe-Entwurf. X84 wird nicht automatisch als Preis übernommen und nicht automatisch in die Datenbank geschrieben.",
+        "Nur Freigabe-Entwurf. X84 wird nicht automatisch als Preis übernommen und nicht automatisch in die Datenbank geschrieben."
       };
-    })
-    .sort((a: any, b: any) => {
+    }).
+    sort((a: any, b: any) => {
       const levelOrder: Record<string, number> = {
         safe_review: 1,
         soft_review: 2,
         manual_review: 3,
-        blocked_review: 4,
+        blocked_review: 4
       };
 
       const la = levelOrder[a.approvalLevel] || 9;
@@ -5432,247 +6047,241 @@ function saveRlcX84LearningApprovalDraft(rows: any[], projectKey: string) {
 
       if (la !== lb) return la - lb;
       return Math.abs(b.diffGp || 0) - Math.abs(a.diffGp || 0);
-    })
-    .slice(0, 200);
+    }).
+    slice(0, 200);
 
-  const summary = {
-    total: candidates.length,
-    safeReviewCount: candidates.filter((x: any) => x.approvalLevel === "safe_review").length,
-    softReviewCount: candidates.filter((x: any) => x.approvalLevel === "soft_review").length,
-    manualReviewCount: candidates.filter((x: any) => x.approvalLevel === "manual_review").length,
-    blockedReviewCount: candidates.filter((x: any) => x.approvalLevel === "blocked_review").length,
-    approvedForCompanyDbCount: 0,
-    approvedForGlobalKnowledgeCount: 0,
-  };
-
-  const draft = {
-    ok: true,
-    projectKey,
-    createdAt: new Date().toISOString(),
-    mode: "approval_draft_only",
-    autoWriteToDatabase: false,
-    x84UsedAsPrice: false,
-    summary,
-    candidates,
-  };
-
-  const storageKey = `rlc_x84_learning_approval_draft_v1:${projectKey}`;
-
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(draft));
-    console.log("[RLC-KI] X84 Learning Approval Draft saved", {
-      storageKey,
-      summary,
-    });
-  } catch (e) {
-    console.warn("[RLC-KI] Approval Draft quota exceeded, saving compact top 50", e);
-
-    const compactDraft = {
-      ...draft,
-      candidates: candidates.slice(0, 50),
-      compact: true,
-      summary: {
-        ...summary,
-        total: Math.min(candidates.length, 50),
-      },
+    const summary = {
+      total: candidates.length,
+      safeReviewCount: candidates.filter((x: any) => x.approvalLevel === "safe_review").length,
+      softReviewCount: candidates.filter((x: any) => x.approvalLevel === "soft_review").length,
+      manualReviewCount: candidates.filter((x: any) => x.approvalLevel === "manual_review").length,
+      blockedReviewCount: candidates.filter((x: any) => x.approvalLevel === "blocked_review").length,
+      approvedForCompanyDbCount: 0,
+      approvedForGlobalKnowledgeCount: 0
     };
 
-    localStorage.setItem(storageKey, JSON.stringify(compactDraft));
+    const draft = {
+      ok: true,
+      projectKey,
+      createdAt: new Date().toISOString(),
+      mode: "approval_draft_only",
+      autoWriteToDatabase: false,
+      x84UsedAsPrice: false,
+      summary,
+      candidates
+    };
+
+    try {
+      const currentState = await loadRlcX84LearningState(projectKey);
+
+      await saveRlcX84LearningState(projectKey, {
+        ...currentState,
+        projectKey,
+        draft,
+        updatedAt: new Date().toISOString()
+      });
+
+      console.log("[RLC-KI] X84 Learning Approval Draft saved on server", {
+        projectKey,
+        summary
+      });
+    } catch (error) {
+      console.error("[RLC-KI] X84 Learning Approval Draft server save failed", error);
+    }
+
+    return draft;
   }
 
-  return draft;
-}
-
-function applyX84BenchmarkLearningToRows(rows: any[], diffReport: any): any[] {
-  const list =
+  function applyX84BenchmarkLearningToRows(rows: any[], diffReport: any): any[] {
+    const list =
     Array.isArray(diffReport?.rows) ? diffReport.rows :
     Array.isArray(diffReport?.allRows) ? diffReport.allRows :
     Array.isArray(diffReport?.topByAbsDiff) ? diffReport.topByAbsDiff :
     [];
 
-  const byPos = new Map<string, any>();
-  for (const d of list) {
-    const pos = String(d?.posNr ?? d?.pos ?? "").trim();
-    if (pos) byPos.set(pos, d);
-  }
-
-  return (Array.isArray(rows) ? rows : []).map((r: any) => {
-    const pos = String(r?.posNr ?? r?.pos ?? "").trim();
-    const d = byPos.get(pos);
-    if (!d) return r;
-
-    const x84Ep = Number(d.x84Ep ?? d.x84UnitPrice ?? d.angebotUnitPrice ?? 0);
-    const rlcEp = Number(d.rlcEp ?? r.rlcKiUnitPrice ?? r.finalUnitPrice ?? 0);
-    const diffPct = Number(d.diffPct ?? 0);
-    const diffGp = Number(d.diffGp ?? 0);
-
-    if (!x84Ep || !rlcEp) return r;
-
-    const absPct = Math.abs(diffPct);
-    const absGp = Math.abs(diffGp);
-
-    let status = "ok";
-    let signal = "none";
-
-    if (absPct <= 10) {
-      status = "within_10_percent";
-      signal = "stable_reference";
-    } else if (absPct <= 15) {
-      status = "review_light";
-      signal = "soft_learning_candidate";
-    } else if (absGp <= 500) {
-      status = "review_small_amount";
-      signal = "low_priority_learning_candidate";
-    } else {
-      status = "review_required";
-      signal = "strong_learning_candidate";
+    const byPos = new Map<string, any>();
+    for (const d of list) {
+      const pos = String(d?.posNr ?? d?.pos ?? "").trim();
+      if (pos) byPos.set(pos, d);
     }
 
-    return {
-      ...r,
-      x84BenchmarkEp: x84Ep,
-      x84BenchmarkDiffPct: diffPct,
-      x84BenchmarkDiffGp: diffGp,
-      x84BenchmarkStatus: status,
-      x84BenchmarkLearningSignal: signal,
-      x84BenchmarkUsedAsPrice: false,
-      x84BenchmarkNote:
-        "X84 wurde nur als Benchmark/Lernsignal gespeichert. Der Preis wurde nicht blind aus X84 übernommen.",
-    };
-  });
-}
+    return (Array.isArray(rows) ? rows : []).map((r: any) => {
+      const pos = String(r?.posNr ?? r?.pos ?? "").trim();
+      const d = byPos.get(pos);
+      if (!d) return r;
 
-function saveRlcX84DiffReport(rows: any[], projectKey: string): any {
-  const baseReport = buildRlcX84DiffReport(rows, projectKey);
-  const safeSummary = rlcBuildX84DiffSummarySafe(rows);
+      const x84Ep = Number(d.x84Ep ?? d.x84UnitPrice ?? d.angebotUnitPrice ?? 0);
+      const rlcEp = Number(d.rlcEp ?? r.rlcKiUnitPrice ?? r.finalUnitPrice ?? 0);
+      const diffPct = Number(d.diffPct ?? 0);
+      const diffGp = Number(d.diffGp ?? 0);
 
-  const report = {
-    ...baseReport,
-    count: safeSummary.count,
-    summary: safeSummary,
-  };
-  const storageKey = `rlc_last_ki_x84_diff_report_v1:${projectKey}`;
+      if (!x84Ep || !rlcEp) return r;
 
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(report));
-    console.log("[RLC-KI] X84 Diff Report saved", {
-      storageKey,
-      count: report.count,
-      totalX84: report.totalX84,
-      totalRlc: report.totalRlc,
-      delta: report.delta,
-      deltaPct: report.deltaPct,
-      summary: report.summary,
+      const absPct = Math.abs(diffPct);
+      const absGp = Math.abs(diffGp);
+
+      let status = "ok";
+      let signal = "none";
+
+      if (absPct <= 10) {
+        status = "within_10_percent";
+        signal = "stable_reference";
+      } else if (absPct <= 15) {
+        status = "review_light";
+        signal = "soft_learning_candidate";
+      } else if (absGp <= 500) {
+        status = "review_small_amount";
+        signal = "low_priority_learning_candidate";
+      } else {
+        status = "review_required";
+        signal = "strong_learning_candidate";
+      }
+
+      return {
+        ...r,
+        x84BenchmarkEp: x84Ep,
+        x84BenchmarkDiffPct: diffPct,
+        x84BenchmarkDiffGp: diffGp,
+        x84BenchmarkStatus: status,
+        x84BenchmarkLearningSignal: signal,
+        x84BenchmarkUsedAsPrice: false,
+        x84BenchmarkNote:
+        "X84 wurde nur als Benchmark/Lernsignal gespeichert. Der Preis wurde nicht blind aus X84 übernommen."
+      };
     });
-    console.table(report.topByAbsDiff.slice(0, 30));
-  } catch (e) {
-    console.warn("[RLC-KI] could not save X84 Diff Report", e);
   }
 
-  return report;
-}
-function scheduleKiAutoSaveAfterCalculation(snapshotRows: EliteRow[], modeOverride?: "offer-check" | "new-calculation") {
-  if (!projectKey || typeof window === "undefined") return;
+  function saveRlcX84DiffReport(rows: any[], projectKey: string): any {
+    const baseReport = buildRlcX84DiffReport(rows, projectKey);
+    const safeSummary = rlcBuildX84DiffSummarySafe(rows);
 
-  const safeRows = sanitizeRowsForStorage(snapshotRows);
-  const rlcKiNet = round2(safeRows.reduce((sum, r) => sum + rlcKiLineNet(r), 0));
-  const angebotNet = round2(safeRows.reduce((sum, r) => sum + offerLineNet(r), 0));
-  const finalNet = round2(
-    safeRows.reduce((sum, r: any) => {
-      const qty = n(r?.menge ?? r?.quantity);
-      const ep =
+    const report = {
+      ...baseReport,
+      count: safeSummary.count,
+      summary: safeSummary
+    };
+    const storageKey = `rlc_last_ki_x84_diff_report_v1:${projectKey}`;
+
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(report));
+      console.log("[RLC-KI] X84 Diff Report saved", {
+        storageKey,
+        count: report.count,
+        totalX84: report.totalX84,
+        totalRlc: report.totalRlc,
+        delta: report.delta,
+        deltaPct: report.deltaPct,
+        summary: report.summary
+      });
+      console.table(report.topByAbsDiff.slice(0, 30));
+    } catch (e) {
+      console.warn("[RLC-KI] could not save X84 Diff Report", e);
+    }
+
+    return report;
+  }
+  function scheduleKiAutoSaveAfterCalculation(snapshotRows: EliteRow[], modeOverride?: "offer-check" | "new-calculation") {
+    if (!projectKey || typeof window === "undefined") return;
+
+    const safeRows = sanitizeRowsForStorage(snapshotRows);
+    const rlcKiNet = round2(safeRows.reduce((sum, r) => sum + rlcKiLineNet(r), 0));
+    const angebotNet = round2(safeRows.reduce((sum, r) => sum + offerLineNet(r), 0));
+    const finalNet = round2(
+      safeRows.reduce((sum, r: any) => {
+        const qty = n(r?.menge ?? r?.quantity);
+        const ep =
         n(r?.finalUnitPrice) ||
         n(r?.preis) ||
         n(r?.rlcKiUnitPrice) ||
         n(r?.suggestedUnitPrice) ||
         n(r?.unitPrice);
-      return sum + qty * ep;
-    }, 0)
-  );
+        return sum + qty * ep;
+      }, 0)
+    );
 
-  const payload = {
-    ok: true,
-    projectKey,
-    projectCode: projectKey,
-    projectTitle,
-    savedAt: new Date().toISOString(),
-    source: "rlc-ki-autosave",
-    mode: modeOverride || kiMode,
-    rows: safeRows,
-    summary: {
-      rowCount: safeRows.length,
-      angebotNet,
-      rlcKiNet,
-      totalNet: finalNet > 0 ? finalNet : rlcKiNet,
-      net: finalNet > 0 ? finalNet : rlcKiNet,
-      netto: finalNet > 0 ? finalNet : rlcKiNet,
-    },
-    totals: {
-      angebotNet,
-      rlcKiNet,
-      totalNet: finalNet > 0 ? finalNet : rlcKiNet,
-      net: finalNet > 0 ? finalNet : rlcKiNet,
-      netto: finalNet > 0 ? finalNet : rlcKiNet,
-    },
-    meta: {
-      mwst,
-      globalMarkup,
+    const payload = {
+      ok: true,
       projectKey,
+      projectCode: projectKey,
       projectTitle,
-    },
-  };
+      savedAt: new Date().toISOString(),
+      source: "rlc-ki-autosave",
+      mode: modeOverride || kiMode,
+      rows: safeRows,
+      summary: {
+        rowCount: safeRows.length,
+        angebotNet,
+        rlcKiNet,
+        totalNet: finalNet > 0 ? finalNet : rlcKiNet,
+        net: finalNet > 0 ? finalNet : rlcKiNet,
+        netto: finalNet > 0 ? finalNet : rlcKiNet
+      },
+      totals: {
+        angebotNet,
+        rlcKiNet,
+        totalNet: finalNet > 0 ? finalNet : rlcKiNet,
+        net: finalNet > 0 ? finalNet : rlcKiNet,
+        netto: finalNet > 0 ? finalNet : rlcKiNet
+      },
+      meta: {
+        mwst,
+        globalMarkup,
+        projectKey,
+        projectTitle
+      }
+    };
 
-  try {
-    localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
-    localStorage.setItem(`rlc_kalkulation_mit_ki_elite_v1:${projectKey}`, JSON.stringify(payload));
-    setServerStatus("Automatisch gespeichert");
-    window.setTimeout(() => setServerStatus(""), 1800);
-  } catch {
-    // Lokaler Autosave darf die Kalkulation niemals blockieren.
-  }
+    try {
+      localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+      localStorage.setItem(`rlc_kalkulation_mit_ki_elite_v1:${projectKey}`, JSON.stringify(payload));
+      setServerStatus("Automatisch gespeichert");
+      window.setTimeout(() => setServerStatus(""), 1800);
+    } catch {
 
-  // Server-Snapshot ist ab jetzt die Wahrheit für Mobile.
-  // Wichtig: Es werden snapshotRows gespeichert, nicht der evtl. veraltete React-State.
-  void fetch(`${API_BASE}/api/kalkulation/storage/ki/${encodeURIComponent(projectKey)}/save`, {
-    method: "POST",
-    headers: authJsonHeaders(),
-    body: JSON.stringify({ data: payload }),
-  })
-    .then(async (res) => {
+
+      // Lokaler Autosave darf die Kalkulation niemals blockieren.
+    } // Server-Snapshot ist ab jetzt die Wahrheit für Mobile.
+    // Wichtig: Es werden snapshotRows gespeichert, nicht der evtl. veraltete React-State.
+    void fetch(`${API_BASE}/api/kalkulation/storage/ki/${encodeURIComponent(projectKey)}/save`, {
+      method: "POST",
+      headers: authJsonHeaders(),
+      body: JSON.stringify({ data: payload })
+    }).
+    then(async (res) => {
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         throw new Error(txt || `HTTP ${res.status}`);
       }
       setServerStatus("Server-Snapshot gespeichert");
       window.setTimeout(() => setServerStatus(""), 2200);
-    })
-    .catch((e) => {
+    }).
+    catch((e) => {
       console.warn("[RLC-KI] Server-Snapshot konnte nicht gespeichert werden", e);
       setServerStatus("Lokal gespeichert – Server-Snapshot fehlgeschlagen");
       window.setTimeout(() => setServerStatus(""), 3500);
     });
-}
-function showOfferCheckModal(input: {
-  comparable: Array<{
-    row: EliteRow;
-    offerEp: number;
-    rlcEp: number;
-    offerGp: number;
-    rlcGp: number;
-    diffGp: number;
-    diffPct: number;
-  }>;
-  offerTotal: number;
-  rlcTotal: number;
-  diffTotal: number;
-  diffPctTotal: number;
-  outside10: number;
-  rlcHigher: number;
-  rlcLower: number;
-}) {
-  if (typeof document === "undefined") {
-    alert(
-      [
+  }
+  function showOfferCheckModal(input: {
+    comparable: Array<{
+      row: EliteRow;
+      offerEp: number;
+      rlcEp: number;
+      offerGp: number;
+      rlcGp: number;
+      diffGp: number;
+      diffPct: number;
+    }>;
+    offerTotal: number;
+    rlcTotal: number;
+    diffTotal: number;
+    diffPctTotal: number;
+    outside10: number;
+    rlcHigher: number;
+    rlcLower: number;
+  }) {
+    if (typeof document === "undefined") {
+      alert(
+        [
         "Angebot prüfen – Vergleich ohne Neuberechnung",
         "",
         `Vergleichbare Positionen: ${input.comparable.length}`,
@@ -5680,34 +6289,34 @@ function showOfferCheckModal(input: {
         `RLC-KI netto: ${money(input.rlcTotal)}`,
         `Differenz: ${money(input.diffTotal)} (${input.diffPctTotal}%)`,
         "",
-        "Wichtig: Es wurde keine neue Kalkulation erstellt und kein Preis geändert.",
-      ].join("\n")
-    );
-    return;
-  }
+        "Wichtig: Es wurde keine neue Kalkulation erstellt und kein Preis geändert."].
+        join("\n")
+      );
+      return;
+    }
 
-  const esc = (value: any) =>
-    String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+    const esc = (value: any) =>
+    String(value ?? "").
+    replace(/&/g, "&amp;").
+    replace(/</g, "&lt;").
+    replace(/>/g, "&gt;").
+    replace(/"/g, "&quot;");
 
-  const topRows = [...input.comparable]
-    .sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp))
-    .slice(0, 15);
+    const topRows = [...input.comparable].
+    sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp)).
+    slice(0, 15);
 
-  const overlay = document.createElement("div");
-  overlay.style.position = "fixed";
-  overlay.style.inset = "0";
-  overlay.style.zIndex = "99999";
-  overlay.style.background = "rgba(15,23,42,0.55)";
-  overlay.style.display = "flex";
-  overlay.style.alignItems = "center";
-  overlay.style.justifyContent = "center";
-  overlay.style.padding = "24px";
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "99999";
+    overlay.style.background = "rgba(15,23,42,0.55)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "24px";
 
-  overlay.innerHTML = `
+    overlay.innerHTML = `
     <div style="width:min(1100px,96vw);max-height:90vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.35);display:flex;flex-direction:column;">
       <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
         <div style="font-size:21px;font-weight:900;color:#0f172a;">Angebot prüfen</div>
@@ -5755,9 +6364,9 @@ function showOfferCheckModal(input: {
               </tr>
             </thead>
             <tbody>
-              ${topRows
-                .map(
-                  (x) => `
+              ${topRows.
+    map(
+      (x) => `
                     <tr>
                       <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:800;">${esc(x.row.posNr)}</td>
                       <td style="padding:10px;border-bottom:1px solid #f1f5f9;">${esc(x.row.kurztext)}</td>
@@ -5767,8 +6376,8 @@ function showOfferCheckModal(input: {
                       <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${x.diffPct}%</td>
                     </tr>
                   `
-                )
-                .join("")}
+    ).
+    join("")}
             </tbody>
           </table>
         </div>
@@ -5786,36 +6395,36 @@ function showOfferCheckModal(input: {
     </div>
   `;
 
-  document.body.appendChild(overlay);
+    document.body.appendChild(overlay);
 
-  const close = () => overlay.remove();
-  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", close);
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) close();
-  });
-}
-function runOfferCheckOnly() {
-  if (!rows.length) {
-    alert("Keine Positionen vorhanden.");
-    return;
+    const close = () => overlay.remove();
+    overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", close);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close();
+    });
   }
+  function runOfferCheckOnly() {
+    if (!rows.length) {
+      alert("Keine Positionen vorhanden.");
+      return;
+    }
 
-  const hasX84 = hasRealX84ForProject(projectKey);
-  if (!hasX84) {
-    alert("Keine echte X84-/Angebotsbasis geladen. Angebot prüfen ist nur als Vergleich nach X84/Angebot sinnvoll.");
-    return;
-  }
+    const hasX84 = hasRealX84ForProject(projectKey);
+    if (!hasX84) {
+      alert("Keine echte X84-/Angebotsbasis geladen. Angebot prüfen ist nur als Vergleich nach X84/Angebot sinnvoll.");
+      return;
+    }
 
-  const realRows = rows.filter((r) => kiIsRealCalcRow(r));
-  const comparable = realRows
-    .map((r) => {
+    const realRows = rows.filter((r) => kiIsRealCalcRow(r));
+    const comparable = realRows.
+    map((r) => {
       const qty = n(r.menge);
       const offerEp = getOfferUnitPrice(r);
       const rlcEp = getRlcKiUnitPrice(r);
       const offerGp = round2(qty * offerEp);
       const rlcGp = round2(qty * rlcEp);
       const diffGp = round2(rlcGp - offerGp);
-      const diffPct = offerGp > 0 ? round2((diffGp / offerGp) * 100) : 0;
+      const diffPct = offerGp > 0 ? round2(diffGp / offerGp * 100) : 0;
 
       return {
         row: r,
@@ -5824,53 +6433,53 @@ function runOfferCheckOnly() {
         offerGp,
         rlcGp,
         diffGp,
-        diffPct,
+        diffPct
       };
-    })
-    .filter((x) => x.offerEp > 0 && x.rlcEp > 0);
+    }).
+    filter((x) => x.offerEp > 0 && x.rlcEp > 0);
 
-  const offerTotal = round2(comparable.reduce((sum, x) => sum + x.offerGp, 0));
-  const rlcTotal = round2(comparable.reduce((sum, x) => sum + x.rlcGp, 0));
-  const diffTotal = round2(rlcTotal - offerTotal);
-  const diffPctTotal = offerTotal > 0 ? round2((diffTotal / offerTotal) * 100) : 0;
+    const offerTotal = round2(comparable.reduce((sum, x) => sum + x.offerGp, 0));
+    const rlcTotal = round2(comparable.reduce((sum, x) => sum + x.rlcGp, 0));
+    const diffTotal = round2(rlcTotal - offerTotal);
+    const diffPctTotal = offerTotal > 0 ? round2(diffTotal / offerTotal * 100) : 0;
 
-  const outside10 = comparable.filter((x) => Math.abs(x.diffPct) > 10).length;
-  const rlcHigher = comparable.filter((x) => x.diffGp > 0).length;
-  const rlcLower = comparable.filter((x) => x.diffGp < 0).length;
+    const outside10 = comparable.filter((x) => Math.abs(x.diffPct) > 10).length;
+    const rlcHigher = comparable.filter((x) => x.diffGp > 0).length;
+    const rlcLower = comparable.filter((x) => x.diffGp < 0).length;
 
-  setServerStatus(
-    `Angebot geprüft: ${comparable.length} Positionen · Differenz ${money(diffTotal)} (${diffPctTotal}%)`
-  );
-  window.setTimeout(() => setServerStatus(""), 4500);
+    setServerStatus(
+      `Angebot geprüft: ${comparable.length} Positionen · Differenz ${money(diffTotal)} (${diffPctTotal}%)`
+    );
+    window.setTimeout(() => setServerStatus(""), 4500);
 
-  showOfferCheckModal({
-    comparable,
-    offerTotal,
-    rlcTotal,
-    diffTotal,
-    diffPctTotal,
-    outside10,
-    rlcHigher,
-    rlcLower,
-  });
-}
-function showExpertReviewModal(currentRows: EliteRow[], expertRows: EliteRow[]) {
-  if (typeof document === "undefined") {
-    alert("KI Expertprüfung abgeschlossen. Änderungen wurden nicht automatisch übernommen.");
-    return;
+    showOfferCheckModal({
+      comparable,
+      offerTotal,
+      rlcTotal,
+      diffTotal,
+      diffPctTotal,
+      outside10,
+      rlcHigher,
+      rlcLower
+    });
   }
+  function showExpertReviewModal(currentRows: EliteRow[], expertRows: EliteRow[]) {
+    if (typeof document === "undefined") {
+      alert("KI Expertprüfung abgeschlossen. Änderungen wurden nicht automatisch übernommen.");
+      return;
+    }
 
-  const esc = (value: any) =>
-    String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+    const esc = (value: any) =>
+    String(value ?? "").
+    replace(/&/g, "&amp;").
+    replace(/</g, "&lt;").
+    replace(/>/g, "&gt;").
+    replace(/"/g, "&quot;");
 
-  const oldById = new Map(currentRows.map((r: any) => [String(r.id), r]));
+    const oldById = new Map(currentRows.map((r: any) => [String(r.id), r]));
 
-  const changes = expertRows
-    .map((next: any) => {
+    const changes = expertRows.
+    map((next: any) => {
       const old = oldById.get(String(next.id));
       if (!old) return null;
 
@@ -5879,7 +6488,7 @@ function showExpertReviewModal(currentRows: EliteRow[], expertRows: EliteRow[]) 
       const qty = n((next as any).menge);
       const diffEp = round2(newEp - oldEp);
       const diffGp = round2(diffEp * qty);
-      const diffPct = oldEp > 0 ? round2((diffEp / oldEp) * 100) : 0;
+      const diffPct = oldEp > 0 ? round2(diffEp / oldEp * 100) : 0;
 
       return {
         row: next,
@@ -5887,28 +6496,28 @@ function showExpertReviewModal(currentRows: EliteRow[], expertRows: EliteRow[]) 
         newEp,
         diffEp,
         diffGp,
-        diffPct,
+        diffPct
       };
-    })
-    .filter((x: any) => x && Math.abs(x.diffGp) > 0.01)
-    .sort((a: any, b: any) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+    }).
+    filter((x: any) => x && Math.abs(x.diffGp) > 0.01).
+    sort((a: any, b: any) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
 
-  const oldTotal = round2(currentRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
-  const newTotal = round2(expertRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
-  const diffTotal = round2(newTotal - oldTotal);
-  const diffPctTotal = oldTotal > 0 ? round2((diffTotal / oldTotal) * 100) : 0;
+    const oldTotal = round2(currentRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
+    const newTotal = round2(expertRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
+    const diffTotal = round2(newTotal - oldTotal);
+    const diffPctTotal = oldTotal > 0 ? round2(diffTotal / oldTotal * 100) : 0;
 
-  const overlay = document.createElement("div");
-  overlay.style.position = "fixed";
-  overlay.style.inset = "0";
-  overlay.style.zIndex = "99999";
-  overlay.style.background = "rgba(15,23,42,0.55)";
-  overlay.style.display = "flex";
-  overlay.style.alignItems = "center";
-  overlay.style.justifyContent = "center";
-  overlay.style.padding = "24px";
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "99999";
+    overlay.style.background = "rgba(15,23,42,0.55)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "24px";
 
-  overlay.innerHTML = `
+    overlay.innerHTML = `
     <div style="width:min(1100px,96vw);max-height:90vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.35);display:flex;flex-direction:column;">
       <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
         <div style="font-size:21px;font-weight:900;color:#0f172a;">KI Expertprüfung</div>
@@ -5983,52 +6592,52 @@ function showExpertReviewModal(currentRows: EliteRow[], expertRows: EliteRow[]) 
     </div>
   `;
 
-  document.body.appendChild(overlay);
+    document.body.appendChild(overlay);
 
-  const close = () => overlay.remove();
+    const close = () => overlay.remove();
 
-  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", close);
-  overlay.querySelector<HTMLButtonElement>('[data-action="apply"]')?.addEventListener("click", () => {
-    persistRows(expertRows, "new-calculation");
-    scheduleKiAutoSaveAfterCalculation(expertRows, "new-calculation");
-    setServerStatus("Expertprüfung übernommen");
-    window.setTimeout(() => setServerStatus(""), 2500);
-    close();
-  });
+    overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", close);
+    overlay.querySelector<HTMLButtonElement>('[data-action="apply"]')?.addEventListener("click", () => {
+      persistRows(expertRows, "new-calculation");
+      scheduleKiAutoSaveAfterCalculation(expertRows, "new-calculation");
+      setServerStatus("Expertprüfung übernommen");
+      window.setTimeout(() => setServerStatus(""), 2500);
+      close();
+    });
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) close();
-  });
-}
-async function runEliteCalculation(forceRecalculate = false, expertMode = false, modeOverride?: "offer-check" | "new-calculation") {
-  const effectiveKiMode = modeOverride || kiMode;
-  if (!rows.length) {
-    alert("Keine Positionen vorhanden.");
-    return;
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close();
+    });
   }
+  async function runEliteCalculation(forceRecalculate = false, expertMode = false, modeOverride?: "offer-check" | "new-calculation") {
+    const effectiveKiMode = modeOverride || kiMode;
+    if (!rows.length) {
+      alert("Keine Positionen vorhanden.");
+      return;
+    }
 
-  const preparedRows = rows.map((row) =>
-    kiIsStructuralRow(row)
-      ? normalizeEliteRow(kiPrepareStructuralRow(row))
-      : row
-  );
+    const preparedRows = rows.map((row) =>
+    kiIsStructuralRow(row) ?
+    normalizeEliteRow(kiPrepareStructuralRow(row)) :
+    row
+    );
 
-  const rowsForKi = preparedRows
-    .filter((row) => kiIsRealCalcRow(row) && (forceRecalculate || expertMode || !(row as any).preisManuellGeprueft))
-    .map((row) => {
+    const rowsForKi = preparedRows.
+    filter((row) => kiIsRealCalcRow(row) && (forceRecalculate || expertMode || !(row as any).preisManuellGeprueft)).
+    map((row) => {
       const storedOfferUnitPrice =
-        effectiveKiMode === "offer-check"
-          ? n((row as any).angebotUnitPrice) ||
-            n((row as any).originalPreKiPrice) ||
-            n((row as any).x84UnitPrice) ||
-            n((row as any).reverseUrkalkulation?.x84UnitPrice) ||
-            n((row as any).dbComparability?.x84UnitPrice)
-          : 0;
+      effectiveKiMode === "offer-check" ?
+      n((row as any).angebotUnitPrice) ||
+      n((row as any).originalPreKiPrice) ||
+      n((row as any).x84UnitPrice) ||
+      n((row as any).reverseUrkalkulation?.x84UnitPrice) ||
+      n((row as any).dbComparability?.x84UnitPrice) :
+      0;
 
       const calculationStartEp =
-        effectiveKiMode === "offer-check" && storedOfferUnitPrice > 0
-          ? storedOfferUnitPrice
-          : 0;
+      effectiveKiMode === "offer-check" && storedOfferUnitPrice > 0 ?
+      storedOfferUnitPrice :
+      0;
 
       return {
         ...row,
@@ -6049,390 +6658,390 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false,
         suggestedUnitPrice: effectiveKiMode === "offer-check" ? n((row as any).suggestedUnitPrice) : 0,
         baseUnitPrice: effectiveKiMode === "offer-check" ? n((row as any).baseUnitPrice) : 0,
         priceDecision: effectiveKiMode === "offer-check" ? (row as any).priceDecision : "rlcKi",
-        source: effectiveKiMode === "offer-check" ? (row as any).source : undefined,
+        source: effectiveKiMode === "offer-check" ? (row as any).source : undefined
       } as EliteRow;
     });
 
-  const beforeRows = kiCloneRows(preparedRows);
+    const beforeRows = kiCloneRows(preparedRows);
 
-  /*
-   * Performance-Regel:
-   * - normale KI / Neue Kalkulation: große Server-Batches, KEIN OpenAI-Massenlauf
-   * - Expertprüfung: kleinere Batches, OpenAI erlaubt
-   */
-  const batchSize = expertMode ? 20 : 50;
-  const batches: EliteRow[][] = [];
+    /*
+     * Performance-Regel:
+     * - normale KI / Neue Kalkulation: große Server-Batches, KEIN OpenAI-Massenlauf
+     * - Expertprüfung: kleinere Batches, OpenAI erlaubt
+     */
+    const batchSize = expertMode ? 20 : 50;
+    const batches: EliteRow[][] = [];
 
-  for (let i = 0; i < rowsForKi.length; i += batchSize) {
-    batches.push(rowsForKi.slice(i, i + batchSize));
-  }
+    for (let i = 0; i < rowsForKi.length; i += batchSize) {
+      batches.push(rowsForKi.slice(i, i + batchSize));
+    }
 
-  try {
-    const fullRequestRows =
-      effectiveKiMode === "offer-check"
-        ? rowsForKi
-        : buildNoX84KiPayloadRows(rowsForKi);
+    try {
+      const fullRequestRows =
+      effectiveKiMode === "offer-check" ?
+      rowsForKi :
+      buildNoX84KiPayloadRows(rowsForKi);
 
-    const fullWithX84Fields = fullRequestRows.filter((r: any) =>
+      const fullWithX84Fields = fullRequestRows.filter((r: any) =>
       Number(r.x84UnitPrice ?? 0) > 0 ||
       Number(r.angebotUnitPrice ?? 0) > 0 ||
       Number(r.originalPreKiPrice ?? 0) > 0 ||
       Number(r.preis ?? 0) > 0 ||
       Number(r.gesamt ?? 0) > 0
-    ).length;
+      ).length;
 
-    const fullPayload = {
-      forceRecalculate,
-      rows: fullRequestRows,
-      maxParallelRows: expertMode ? 4 : 10,
-      maxOpenAiRowsPerBatch: expertMode ? Math.min(batchSize, 10) : 0,
-      expertMode,
-      useOpenAIIfNoDatabaseHit: expertMode,
-      forceOpenAIReview: expertMode,
-      debug: {
-        sourceInput: effectiveKiMode === "offer-check"
-          ? "offer-check-full-rowsForKi"
-          : "gaeb-import-no-x84-clean-full",
-        projectKey,
-        requestRows: fullRequestRows.length,
-        batches: batches.length,
-        batchSize,
-        withX84Fields: fullWithX84Fields,
-        createdAt: new Date().toISOString(),
-      },
-    };
+      const fullPayload = {
+        forceRecalculate,
+        rows: fullRequestRows,
+        maxParallelRows: expertMode ? 4 : 10,
+        maxOpenAiRowsPerBatch: expertMode ? Math.min(batchSize, 10) : 0,
+        expertMode,
+        useOpenAIIfNoDatabaseHit: expertMode,
+        forceOpenAIReview: expertMode,
+        debug: {
+          sourceInput: effectiveKiMode === "offer-check" ?
+          "offer-check-full-rowsForKi" :
+          "gaeb-import-no-x84-clean-full",
+          projectKey,
+          requestRows: fullRequestRows.length,
+          batches: batches.length,
+          batchSize,
+          withX84Fields: fullWithX84Fields,
+          createdAt: new Date().toISOString()
+        }
+      };
 
-    localStorage.setItem(
-      `rlc_last_ki_full_request_payload_v1:${projectKey}`,
-      JSON.stringify(fullPayload)
-    );
+      localStorage.setItem(
+        `rlc_last_ki_full_request_payload_v1:${projectKey}`,
+        JSON.stringify(fullPayload)
+      );
 
-    console.log("[RLC-KI] FULL request payload saved", {
-      storageKey: `rlc_last_ki_full_request_payload_v1:${projectKey}`,
-      sourceInput: fullPayload.debug.sourceInput,
-      rows: fullPayload.debug.requestRows,
-      batches: fullPayload.debug.batches,
-      withX84Fields: fullPayload.debug.withX84Fields,
-    });
-  } catch (e) {
-    console.warn("[RLC-KI] could not save FULL request payload", e);
-  }
+      console.log("[RLC-KI] FULL request payload saved", {
+        storageKey: `rlc_last_ki_full_request_payload_v1:${projectKey}`,
+        sourceInput: fullPayload.debug.sourceInput,
+        rows: fullPayload.debug.requestRows,
+        batches: fullPayload.debug.batches,
+        withX84Fields: fullPayload.debug.withX84Fields
+      });
+    } catch (e) {
+      console.warn("[RLC-KI] could not save FULL request payload", e);
+    }
 
-  async function callServerKiBatch(batchRows: EliteRow[], batchIndex: number) {
-    const res = await fetch(apiUrl("/api/kalkulation/ki/suggest-batch"), {
-      method: "POST",
-      credentials: "include",
-      headers: authJsonHeaders(),
-      body: JSON.stringify((() => {
-        const requestRows =
-          effectiveKiMode === "offer-check"
-            ? batchRows
-            : buildNoX84KiPayloadRows(batchRows);
+    async function callServerKiBatch(batchRows: EliteRow[], batchIndex: number) {
+      const res = await fetch(apiUrl("/api/kalkulation/ki/suggest-batch"), {
+        method: "POST",
+        credentials: "include",
+        headers: authJsonHeaders(),
+        body: JSON.stringify((() => {
+          const requestRows =
+          effectiveKiMode === "offer-check" ?
+          batchRows :
+          buildNoX84KiPayloadRows(batchRows);
 
-        const withX84Fields = requestRows.filter((r: any) =>
+          const withX84Fields = requestRows.filter((r: any) =>
           Number(r.x84UnitPrice ?? 0) > 0 ||
           Number(r.angebotUnitPrice ?? 0) > 0 ||
           Number(r.originalPreKiPrice ?? 0) > 0 ||
           Number(r.preis ?? 0) > 0 ||
           Number(r.gesamt ?? 0) > 0
-        ).length;
+          ).length;
 
-        const payload = {
-          forceRecalculate,
-          rows: requestRows,
-          maxParallelRows: expertMode ? 4 : 10,
-          maxOpenAiRowsPerBatch: expertMode ? Math.min(batchRows.length, 10) : 0,
-          expertMode,
-          useOpenAIIfNoDatabaseHit: expertMode,
-          forceOpenAIReview: expertMode,
-          debug: {
-            sourceInput: effectiveKiMode === "offer-check" ? "offer-check-batchRows" : "gaeb-import-no-x84-clean",
-            projectKey,
-            batchRows: batchRows.length,
-            requestRows: requestRows.length,
-            withX84Fields,
-            createdAt: new Date().toISOString(),
-          },
-        };
+          const payload = {
+            forceRecalculate,
+            rows: requestRows,
+            maxParallelRows: expertMode ? 4 : 10,
+            maxOpenAiRowsPerBatch: expertMode ? Math.min(batchRows.length, 10) : 0,
+            expertMode,
+            useOpenAIIfNoDatabaseHit: expertMode,
+            forceOpenAIReview: expertMode,
+            debug: {
+              sourceInput: effectiveKiMode === "offer-check" ? "offer-check-batchRows" : "gaeb-import-no-x84-clean",
+              projectKey,
+              batchRows: batchRows.length,
+              requestRows: requestRows.length,
+              withX84Fields,
+              createdAt: new Date().toISOString()
+            }
+          };
 
-        try {
-          const storageKey = `rlc_last_ki_request_payload_v1:${projectKey}`;
-          localStorage.setItem(storageKey, JSON.stringify(payload));
-          console.log("[RLC-KI] request payload saved", {
-            storageKey,
-            sourceInput: payload.debug.sourceInput,
-            rows: payload.debug.requestRows,
-            withX84Fields,
-          });
-        } catch (e) {
-          console.warn("[RLC-KI] could not save request payload", e);
-        }
+          try {
+            const storageKey = `rlc_last_ki_request_payload_v1:${projectKey}`;
+            localStorage.setItem(storageKey, JSON.stringify(payload));
+            console.log("[RLC-KI] request payload saved", {
+              storageKey,
+              sourceInput: payload.debug.sourceInput,
+              rows: payload.debug.requestRows,
+              withX84Fields
+            });
+          } catch (e) {
+            console.warn("[RLC-KI] could not save request payload", e);
+          }
 
-        return payload;
-      })()),
-    });
-
-    const text = await res.text();
-    let json: any = null;
-
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      throw new Error(`KI_BATCH_${batchIndex}_INVALID_JSON_STATUS_${res.status}: ${text.slice(0, 300)}`);
-    }
-
-    if (!res.ok || !json?.ok || !Array.isArray(json.rows)) {
-      throw new Error(
-        `KI_BATCH_${batchIndex}_FAILED_STATUS_${res.status}: ${json?.error || json?.message || text.slice(0, 300)}`
-      );
-    }
-
-    return json;
-  }
-
-  try {
-    kiEmitStart(
-      expertMode
-        ? "KI-Expertprüfung wird gestartet…"
-        : forceRecalculate
-          ? "KI-Neuberechnung schnell wird gestartet…"
-          : "KI-Kalkulation wird gestartet…"
-    );
-    kiEmitProgress(18, "LV-Positionen werden vorbereitet…");
-
-    if (!rowsForKi.length) {
-      const unchangedNext = normalizeKiWarningRows(preparedRows);
-      persistRows(unchangedNext, effectiveKiMode);
-      scheduleKiAutoSaveAfterCalculation(unchangedNext, effectiveKiMode);
-      kiEmitProgress(96, "Keine Server-KI nötig…");
-      kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, unchangedNext, {
-        checkedCount: preparedRows.length,
-        skippedCount: preparedRows.length,
-        serverRequestedCount: 0,
-        serverReturnedCount: 0,
-        localFallbackCount: 0,
+          return payload;
+        })())
       });
-      setServerStatus("Keine Server-KI nötig: alle Positionen sind bereits geprüft.");
-      setTimeout(() => setServerStatus(""), 3000);
-      return;
-    }
 
-    kiStartSmoothProgress({
-      from: 18,
-      to: 82,
-      text: `Server-KI berechnet ${rowsForKi.length} Position(en) in ${batches.length} Batch(es)…`,
-      estimatedMs: Math.max(5000, rowsForKi.length * (expertMode ? 650 : 120)),
-    });
+      const text = await res.text();
+      let json: any = null;
 
-    const allServerRows: EliteKalkulationResultRow[] = [];
-    const batchSummaries: any[] = [];
-    const startedAt = Date.now();
-
-    for (let i = 0; i < batches.length; i += 1) {
-      const batch = batches[i];
-      const from = i * batchSize + 1;
-      const to = Math.min(rowsForKi.length, from + batch.length - 1);
-
-      setServerStatus(`Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`);
-      kiEmitProgress(
-        Math.min(82, Math.round(22 + (i / Math.max(1, batches.length)) * 58)),
-        `Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`
-      );
-
-      const json = await callServerKiBatch(batch, i + 1);
-      allServerRows.push(...json.rows);
-      batchSummaries.push(json.summary || {});
-    }
-
-    const returnedById = new Set<string>();
-    const returnedByPos = new Set<string>();
-
-    for (const item of allServerRows) {
-      if ((item as any).id) returnedById.add(String((item as any).id));
-      if ((item as any).posNr) returnedByPos.add(String((item as any).posNr));
-    }
-
-    const missingRequested = rowsForKi.filter(
-      (row) => !returnedById.has(String(row.id)) && !returnedByPos.has(String(row.posNr || ""))
-    );
-
-    if (missingRequested.length > 0) {
-      throw new Error(
-        `KI_SERVER_INCOMPLETE_RESULT: ${missingRequested.length} von ${rowsForKi.length} Position(en) fehlen. Beispiel: ${kiRowLabel(missingRequested[0])}`
-      );
-    }
-
-    kiStopSmoothProgress();
-    kiEmitProgress(84, "KI-Ergebnisse werden übernommen…");
-
-
-    const byKey = new Map<string, EliteKalkulationResultRow>();
-
-    for (const item of allServerRows) {
-      const id = (item as any).id;
-      const pos = (item as any).posNr;
-      if (id) byKey.set(String(id), item);
-      if (pos) byKey.set(String(pos), item);
-    }
-
-    const requestedIds = new Set(rowsForKi.map((r) => String(r.id)));
-    const requestedPos = new Set(rowsForKi.map((r) => String(r.posNr || "")).filter(Boolean));
-
-    const next = preparedRows.map((old) => {
-      const result = byKey.get(String(old.id)) || byKey.get(String(old.posNr || ""));
-      const wasRequested = requestedIds.has(String(old.id)) || requestedPos.has(String(old.posNr || ""));
-
-      if (wasRequested && !result) {
-        throw new Error(`KI_RESULT_MISSING_FOR_${kiRowLabel(old)}`);
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error(`KI_BATCH_${batchIndex}_INVALID_JSON_STATUS_${res.status}: ${text.slice(0, 300)}`);
       }
 
-      const base = result
-        ? mergeEliteResult(old, result, effectiveKiMode)
-        : kiIsStructuralRow(old)
-          ? normalizeEliteRow(kiPrepareStructuralRow(old))
-          : old;
-
-      return {
-        ...base,
-        auftragId: old.auftragId || selectedAuftragId,
-        auftragName: old.auftragName || selectedAuftrag?.name || "",
-        auftragType: old.auftragType || selectedAuftrag?.type,
-      };
-    });
-
-    kiEmitProgress(88, "Änderungen werden gespeichert…");
-
-    const cleanedNext = next.map((r) =>
-      kiIsStructuralRow(r)
-        ? {
-            ...r,
-            materialCost: 0,
-            laborCost: 0,
-            machineCost: 0,
-            subcontractorCost: 0,
-            disposalCost: 0,
-            overheadCost: 0,
-            riskCost: 0,
-            profitCost: 0,
-            baseUnitPrice: 0,
-            suggestedUnitPrice: 0,
-            finalUnitPrice: 0,
-            preis: 0,
-            rlcKiUnitPrice: 0,
-            rlcKiTotal: 0,
-            priceBreakdown: [],
-            riskLevel: "low" as RiskLevel,
-            calculationStatus: "ok" as CalcStatus,
-            warning: "",
-            aiReason:
-              "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition.",
-          }
-        : r
-    );
-
-    const cleanedNextNormalized = normalizeKiWarningRows(cleanedNext);
-    saveRlcX84DiffReport(cleanedNextNormalized, projectKey);
-
-    const x84DiffReportForLearning = JSON.parse(
-      localStorage.getItem(`rlc_last_ki_x84_diff_report_v1:${projectKey}`) || "{}"
-    );
-
-    const cleanedNextWithX84Learning = applyX84BenchmarkLearningToRows(
-      cleanedNextNormalized,
-      x84DiffReportForLearning
-    );
-    saveRlcX84LearningReport(cleanedNextWithX84Learning, projectKey);
-    saveRlcX84LearningApprovalDraft(cleanedNextWithX84Learning, projectKey);
-
-    if (expertMode) {
-      try {
-        localStorage.setItem(
-          `rlc_ki_expert_review_v1:${projectKey}`,
-          JSON.stringify({
-            ok: true,
-            projectKey,
-            projectTitle,
-            createdAt: new Date().toISOString(),
-            rows: sanitizeRowsForStorage(cleanedNextWithX84Learning),
-          })
+      if (!res.ok || !json?.ok || !Array.isArray(json.rows)) {
+        throw new Error(
+          `KI_BATCH_${batchIndex}_FAILED_STATUS_${res.status}: ${json?.error || json?.message || text.slice(0, 300)}`
         );
-      } catch {}
+      }
 
-      showExpertReviewModal(beforeRows, cleanedNextWithX84Learning);
-    } else {
-      persistRows(cleanedNextWithX84Learning, effectiveKiMode);
-      scheduleKiAutoSaveAfterCalculation(cleanedNextWithX84Learning, effectiveKiMode);
+      return json;
     }
 
-    // saveRowsToDatenbank(cleanedNext, projectKey, projectTitle); // deaktiviert: KI-Kalkulation darf Datenbank nicht automatisch füllen
+    try {
+      kiEmitStart(
+        expertMode ?
+        "KI-Expertprüfung wird gestartet…" :
+        forceRecalculate ?
+        "KI-Neuberechnung schnell wird gestartet…" :
+        "KI-Kalkulation wird gestartet…"
+      );
+      kiEmitProgress(18, "LV-Positionen werden vorbereitet…");
 
-    const durationMs = Date.now() - startedAt;
-    const openAiUsed = batchSummaries.reduce((sum, x) => sum + n(x?.openAiUsed), 0);
-    const serverSummary = {
-      totalNet: round2(cleanedNext.reduce((sum, r) => sum + n(r.rlcKiTotal), 0)),
-      durationMs,
-      openAiUsed,
-      batchCount: batches.length,
-      checkedCount: preparedRows.length,
-      skippedCount: preparedRows.length - rowsForKi.length,
-      serverRequestedCount: rowsForKi.length,
-      serverReturnedCount: allServerRows.length,
-      localFallbackCount: 0,
-      maxParallelRows: expertMode ? 4 : 10,
-    };
+      if (!rowsForKi.length) {
+        const unchangedNext = normalizeKiWarningRows(preparedRows);
+        persistRows(unchangedNext, effectiveKiMode);
+        scheduleKiAutoSaveAfterCalculation(unchangedNext, effectiveKiMode);
+        kiEmitProgress(96, "Keine Server-KI nötig…");
+        kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, unchangedNext, {
+          checkedCount: preparedRows.length,
+          skippedCount: preparedRows.length,
+          serverRequestedCount: 0,
+          serverReturnedCount: 0,
+          localFallbackCount: 0
+        });
+        setServerStatus("Keine Server-KI nötig: alle Positionen sind bereits geprüft.");
+        setTimeout(() => setServerStatus(""), 3000);
+        return;
+      }
 
-    setLastKiSource("Server-KI");
+      kiStartSmoothProgress({
+        from: 18,
+        to: 82,
+        text: `Server-KI berechnet ${rowsForKi.length} Position(en) in ${batches.length} Batch(es)…`,
+        estimatedMs: Math.max(5000, rowsForKi.length * (expertMode ? 650 : 120))
+      });
 
-    const kiDurationSec = `${(durationMs / 1000).toFixed(1).replace(".", ",")} s`;
-    const kiSpeedInfo = [
+      const allServerRows: EliteKalkulationResultRow[] = [];
+      const batchSummaries: any[] = [];
+      const startedAt = Date.now();
+
+      for (let i = 0; i < batches.length; i += 1) {
+        const batch = batches[i];
+        const from = i * batchSize + 1;
+        const to = Math.min(rowsForKi.length, from + batch.length - 1);
+
+        setServerStatus(`Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`);
+        kiEmitProgress(
+          Math.min(82, Math.round(22 + i / Math.max(1, batches.length) * 58)),
+          `Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`
+        );
+
+        const json = await callServerKiBatch(batch, i + 1);
+        allServerRows.push(...json.rows);
+        batchSummaries.push(json.summary || {});
+      }
+
+      const returnedById = new Set<string>();
+      const returnedByPos = new Set<string>();
+
+      for (const item of allServerRows) {
+        if ((item as any).id) returnedById.add(String((item as any).id));
+        if ((item as any).posNr) returnedByPos.add(String((item as any).posNr));
+      }
+
+      const missingRequested = rowsForKi.filter(
+        (row) => !returnedById.has(String(row.id)) && !returnedByPos.has(String(row.posNr || ""))
+      );
+
+      if (missingRequested.length > 0) {
+        throw new Error(
+          `KI_SERVER_INCOMPLETE_RESULT: ${missingRequested.length} von ${rowsForKi.length} Position(en) fehlen. Beispiel: ${kiRowLabel(missingRequested[0])}`
+        );
+      }
+
+      kiStopSmoothProgress();
+      kiEmitProgress(84, "KI-Ergebnisse werden übernommen…");
+
+
+      const byKey = new Map<string, EliteKalkulationResultRow>();
+
+      for (const item of allServerRows) {
+        const id = (item as any).id;
+        const pos = (item as any).posNr;
+        if (id) byKey.set(String(id), item);
+        if (pos) byKey.set(String(pos), item);
+      }
+
+      const requestedIds = new Set(rowsForKi.map((r) => String(r.id)));
+      const requestedPos = new Set(rowsForKi.map((r) => String(r.posNr || "")).filter(Boolean));
+
+      const next = preparedRows.map((old) => {
+        const result = byKey.get(String(old.id)) || byKey.get(String(old.posNr || ""));
+        const wasRequested = requestedIds.has(String(old.id)) || requestedPos.has(String(old.posNr || ""));
+
+        if (wasRequested && !result) {
+          throw new Error(`KI_RESULT_MISSING_FOR_${kiRowLabel(old)}`);
+        }
+
+        const base = result ?
+        mergeEliteResult(old, result, effectiveKiMode) :
+        kiIsStructuralRow(old) ?
+        normalizeEliteRow(kiPrepareStructuralRow(old)) :
+        old;
+
+        return {
+          ...base,
+          auftragId: old.auftragId || selectedAuftragId,
+          auftragName: old.auftragName || selectedAuftrag?.name || "",
+          auftragType: old.auftragType || selectedAuftrag?.type
+        };
+      });
+
+      kiEmitProgress(88, "Änderungen werden gespeichert…");
+
+      const cleanedNext = next.map((r) =>
+      kiIsStructuralRow(r) ?
+      {
+        ...r,
+        materialCost: 0,
+        laborCost: 0,
+        machineCost: 0,
+        subcontractorCost: 0,
+        disposalCost: 0,
+        overheadCost: 0,
+        riskCost: 0,
+        profitCost: 0,
+        baseUnitPrice: 0,
+        suggestedUnitPrice: 0,
+        finalUnitPrice: 0,
+        preis: 0,
+        rlcKiUnitPrice: 0,
+        rlcKiTotal: 0,
+        priceBreakdown: [],
+        riskLevel: "low" as RiskLevel,
+        calculationStatus: "ok" as CalcStatus,
+        warning: "",
+        aiReason:
+        "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition."
+      } :
+      r
+      );
+
+      const cleanedNextNormalized = normalizeKiWarningRows(cleanedNext);
+      saveRlcX84DiffReport(cleanedNextNormalized, projectKey);
+
+      const x84DiffReportForLearning = JSON.parse(
+        localStorage.getItem(`rlc_last_ki_x84_diff_report_v1:${projectKey}`) || "{}"
+      );
+
+      const cleanedNextWithX84Learning = applyX84BenchmarkLearningToRows(
+        cleanedNextNormalized,
+        x84DiffReportForLearning
+      );
+      saveRlcX84LearningReport(cleanedNextWithX84Learning, projectKey);
+      void saveRlcX84LearningApprovalDraft(cleanedNextWithX84Learning, projectKey);
+
+      if (expertMode) {
+        try {
+          localStorage.setItem(
+            `rlc_ki_expert_review_v1:${projectKey}`,
+            JSON.stringify({
+              ok: true,
+              projectKey,
+              projectTitle,
+              createdAt: new Date().toISOString(),
+              rows: sanitizeRowsForStorage(cleanedNextWithX84Learning)
+            })
+          );
+        } catch {}
+
+        showExpertReviewModal(beforeRows, cleanedNextWithX84Learning);
+      } else {
+        persistRows(cleanedNextWithX84Learning, effectiveKiMode);
+        scheduleKiAutoSaveAfterCalculation(cleanedNextWithX84Learning, effectiveKiMode);
+      }
+
+      // saveRowsToDatenbank(cleanedNext, projectKey, projectTitle); // deaktiviert: KI-Kalkulation darf Datenbank nicht automatisch füllen
+
+      const durationMs = Date.now() - startedAt;
+      const openAiUsed = batchSummaries.reduce((sum, x) => sum + n(x?.openAiUsed), 0);
+      const serverSummary = {
+        totalNet: round2(cleanedNext.reduce((sum, r) => sum + n(r.rlcKiTotal), 0)),
+        durationMs,
+        openAiUsed,
+        batchCount: batches.length,
+        checkedCount: preparedRows.length,
+        skippedCount: preparedRows.length - rowsForKi.length,
+        serverRequestedCount: rowsForKi.length,
+        serverReturnedCount: allServerRows.length,
+        localFallbackCount: 0,
+        maxParallelRows: expertMode ? 4 : 10
+      };
+
+      setLastKiSource("Server-KI");
+
+      const kiDurationSec = `${(durationMs / 1000).toFixed(1).replace(".", ",")} s`;
+      const kiSpeedInfo = [
       `Zeit: ${kiDurationSec}`,
       `Batch: ${batches.length}`,
-      openAiUsed > 0 ? `OpenAI: ${openAiUsed}` : "OpenAI: 0",
-    ]
-      .filter(Boolean)
-      .join(" · ");
+      openAiUsed > 0 ? `OpenAI: ${openAiUsed}` : "OpenAI: 0"].
 
-    setServerStatus(
-      `KI-Prüfung abgeschlossen · Server-KI · ${rowsForKi.length} Position(en) · ${kiSpeedInfo}`
-    );
-    kiEmitProgress(96, "Änderungsprotokoll wird erstellt…");
-    kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, cleanedNext, serverSummary);
+      filter(Boolean).
+      join(" · ");
 
-    setTimeout(() => setServerStatus(""), 3500);
-  } catch (e) {
-    kiStopSmoothProgress();
-    console.error("[RLC-KI] server calculation failed", e);
+      setServerStatus(
+        `KI-Prüfung abgeschlossen · Server-KI · ${rowsForKi.length} Position(en) · ${kiSpeedInfo}`
+      );
+      kiEmitProgress(96, "Änderungsprotokoll wird erstellt…");
+      kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, cleanedNext, serverSummary);
 
-    window.dispatchEvent(
-      new CustomEvent("rlc:ki-action-result", {
-        detail: {
-          title: "KI-Kalkulation fehlgeschlagen",
-          changes: [],
-          warnings: [
+      setTimeout(() => setServerStatus(""), 3500);
+    } catch (e) {
+      kiStopSmoothProgress();
+      console.error("[RLC-KI] server calculation failed", e);
+
+      window.dispatchEvent(
+        new CustomEvent("rlc:ki-action-result", {
+          detail: {
+            title: "KI-Kalkulation fehlgeschlagen",
+            changes: [],
+            warnings: [
             "Die Server-KI konnte nicht abgeschlossen werden. Es wurde nichts gespeichert und kein lokaler/manual Fallback übernommen.",
-            e instanceof Error ? e.message : "Unbekannter Fehler",
-          ],
-          unchanged: [],
-        },
-      })
-    );
+            e instanceof Error ? e.message : "Unbekannter Fehler"],
 
-    setLastKiSource("Server-KI Fehler");
-    setServerStatus("KI-Kalkulation fehlgeschlagen · nichts gespeichert");
-    setTimeout(() => setServerStatus(""), 4500);
+            unchanged: []
+          }
+        })
+      );
+
+      setLastKiSource("Server-KI Fehler");
+      setServerStatus("KI-Kalkulation fehlgeschlagen · nichts gespeichert");
+      setTimeout(() => setServerStatus(""), 4500);
+    }
   }
-}
 
   function autoCompleteMissingFields() {
     if (!rows.length) return;
 
     const missingCount =
-      problemCounts.kurztextFehlt +
-      problemCounts.langtextFehlt +
-      problemCounts.einheitFehlt +
-      problemCounts.mengeFehlt +
-      problemCounts.preisFehlt +
-      problemCounts.preisaufbauFehlt;
+    problemCounts.kurztextFehlt +
+    problemCounts.langtextFehlt +
+    problemCounts.einheitFehlt +
+    problemCounts.mengeFehlt +
+    problemCounts.preisFehlt +
+    problemCounts.preisaufbauFehlt;
 
     if (missingCount <= 0) {
       setServerStatus("Keine fehlenden Daten gefunden");
@@ -6452,15 +7061,15 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false,
     persistRows(normalizeKiWarningRows(next));
 
     const count =
-      problemCounts.kurztextFehlt +
-      problemCounts.langtextFehlt +
-      problemCounts.einheitFehlt +
-      problemCounts.preisaufbauFehlt;
+    problemCounts.kurztextFehlt +
+    problemCounts.langtextFehlt +
+    problemCounts.einheitFehlt +
+    problemCounts.preisaufbauFehlt;
 
     setServerStatus(
-      count > 0
-        ? "KI hat fehlende Texte, Einheiten und Preisaufbau ergänzt"
-        : "Keine fehlenden Texte, Einheiten oder Preisaufbauten gefunden"
+      count > 0 ?
+      "KI hat fehlende Texte, Einheiten und Preisaufbau ergänzt" :
+      "Keine fehlenden Texte, Einheiten oder Preisaufbauten gefunden"
     );
 
     kiEmitProgress(96, "Änderungsprotokoll wird erstellt…");
@@ -6478,7 +7087,7 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false,
       try {
         const text = String(reader.result || "");
         const imported = parseImportedCsv(text).map((r) =>
-          normalizeEliteRow(r)
+        normalizeEliteRow(r)
         );
 
         if (!imported.length) {
@@ -6492,7 +7101,7 @@ async function runEliteCalculation(forceRecalculate = false, expertMode = false,
         setServerStatus(`${imported.length} CSV-Position(en) importiert`);
         setTimeout(() => setServerStatus(""), 2500);
       } catch {
-alert("CSV konnte nicht gelesen werden.");
+        alert("CSV konnte nicht gelesen werden.");
       } finally {
         if (csvInputRef.current) csvInputRef.current.value = "";
       }
@@ -6522,14 +7131,14 @@ alert("CSV konnte nicht gelesen werden.");
         waehrung: "EUR",
         priceBreakdown: r.priceBreakdown || [],
         bemerkung: [
-          r.bemerkung,
-          r.aiReason ? `KI-Begründung: ${r.aiReason}` : "",
-          r.warning ? `Warnung: ${r.warning}` : "",
-          breakdownText(r) ? `Preisaufbau:\n${breakdownText(r)}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-      })),
+        r.bemerkung,
+        r.aiReason ? `KI-Begründung: ${r.aiReason}` : "",
+        r.warning ? `Warnung: ${r.warning}` : "",
+        breakdownText(r) ? `Preisaufbau:\n${breakdownText(r)}` : ""].
+
+        filter(Boolean).
+        join("\n")
+      }))
     };
 
     try {
@@ -6545,7 +7154,7 @@ alert("CSV konnte nicht gelesen werden.");
           method: "POST",
           credentials: "include",
           headers: authJsonHeaders(),
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payload)
         }
       );
 
@@ -6557,8 +7166,8 @@ alert("CSV konnte nicht gelesen werden.");
       setServerStatus(`GAEB ${mode.toUpperCase()} exportiert`);
       setTimeout(() => setServerStatus(""), 2200);
     } catch {
-const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
-        type: "application/xml;charset=utf-8",
+      const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
+        type: "application/xml;charset=utf-8"
       });
 
       downloadBlob(blob, filename);
@@ -6577,17 +7186,17 @@ const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
         {
           method: "GET",
           credentials: "include",
-          headers: authJsonHeaders(),
+          headers: authJsonHeaders()
         }
       );
 
       const json = await r.json().catch(() => null);
 
-      const serverRows = Array.isArray(json?.rows)
-        ? json.rows
-        : Array.isArray(json?.items)
-          ? json.items
-          : [];
+      const serverRows = Array.isArray(json?.rows) ?
+      json.rows :
+      Array.isArray(json?.items) ?
+      json.items :
+      [];
 
       if (!r.ok || !serverRows.length) {
         setX84OfferNet(0);
@@ -6636,7 +7245,7 @@ const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
         aufschlag: globalMarkup,
         kapRabatt,
         kapMarkup,
-        offerNumber: offer.number,
+        offerNumber: offer.number
       },
       rows: storageRows,
       summary,
@@ -6644,8 +7253,8 @@ const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
       totals: {
         netto: summary.net,
         aufschlagWert: summary.globalMarkupValue,
-        brutto: summary.gross,
-      },
+        brutto: summary.gross
+      }
     };
 
     try {
@@ -6658,7 +7267,7 @@ const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
           method: "POST",
           credentials: "include",
           headers: authJsonHeaders(),
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payload)
         }
       );
 
@@ -6685,7 +7294,7 @@ const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
       setServerStatus("Gespeichert");
       setTimeout(() => setServerStatus(""), 2000);
     } catch {
-localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+      localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
       setServerStatus("Fehler · lokal gesichert");
     } finally {
       setServerBusy(false);
@@ -6700,15 +7309,15 @@ localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
       const kurztext = String((r as any).kurztext || (r as any).text || "").trim();
       const menge = n((r as any).menge);
       const ep =
-        n((r as any).angebotUnitPrice) ||
-        n((r as any).originalPreKiPrice) ||
-        n((r as any).preis) ||
-        n((r as any).finalUnitPrice);
+      n((r as any).angebotUnitPrice) ||
+      n((r as any).originalPreKiPrice) ||
+      n((r as any).preis) ||
+      n((r as any).finalUnitPrice);
 
       const looksLikePlaceholder =
-        /^Position\s+\d+/i.test(kurztext) ||
-        kurztext === "" ||
-        kurztext.toLowerCase() === pos.toLowerCase();
+      /^Position\s+\d+/i.test(kurztext) ||
+      kurztext === "" ||
+      kurztext.toLowerCase() === pos.toLowerCase();
 
       return pos && !looksLikePlaceholder && menge > 0 && ep > 0;
     });
@@ -6731,7 +7340,7 @@ localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
         {
           method: "GET",
           credentials: "include",
-          headers: authJsonHeaders(),
+          headers: authJsonHeaders()
         }
       );
 
@@ -6768,16 +7377,16 @@ localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
       setServerStatus("Geladen");
       setTimeout(() => setServerStatus(""), 2000);
     } catch {
-setServerStatus("Fehler beim Laden");
+      setServerStatus("Fehler beim Laden");
     } finally {
       setServerBusy(false);
     }
   }
 
   function applySnapshot(data: any) {
-    const loadedRows = Array.isArray(data.rows)
-      ? data.rows.map((x: any) => normalizeEliteRow(x))
-      : [];
+    const loadedRows = Array.isArray(data.rows) ?
+    data.rows.map((x: any) => normalizeEliteRow(x)) :
+    [];
 
     if (loadedRows.length) {
       const safeRows = sanitizeRowsForStorage(loadedRows);
@@ -6802,31 +7411,31 @@ setServerStatus("Fehler beim Laden");
   }
 
   function buildRlcKiPdfExportRows(inputRows: EliteRow[]): EliteRow[] {
-    return inputRows
-      .filter((r) => !kiIsStructuralRow(r))
-      .map((r) => {
-        const qty = n(r.menge);
-        const rlcEp =
-          getRlcKiUnitPrice(r) ||
-          n((r as any).rlcKiUnitPrice) ||
-          n((r as any).openAiSuggestedUnitPrice) ||
-          n((r as any).finalUnitPrice) ||
-          n((r as any).preis);
+    return inputRows.
+    filter((r) => !kiIsStructuralRow(r)).
+    map((r) => {
+      const qty = n(r.menge);
+      const rlcEp =
+      getRlcKiUnitPrice(r) ||
+      n((r as any).rlcKiUnitPrice) ||
+      n((r as any).openAiSuggestedUnitPrice) ||
+      n((r as any).finalUnitPrice) ||
+      n((r as any).preis);
 
-        const gp = round2(qty * rlcEp);
+      const gp = round2(qty * rlcEp);
 
-        return normalizeEliteRow({
-          ...r,
-          preis: rlcEp,
-          finalUnitPrice: rlcEp,
-          suggestedUnitPrice: rlcEp,
-          rlcKiUnitPrice: rlcEp,
-          rlcKiTotal: gp,
-          gesamt: gp,
-          totalNet: gp,
-          priceDecision: "rlcKi",
-        } as any);
-      });
+      return normalizeEliteRow({
+        ...r,
+        preis: rlcEp,
+        finalUnitPrice: rlcEp,
+        suggestedUnitPrice: rlcEp,
+        rlcKiUnitPrice: rlcEp,
+        rlcKiTotal: gp,
+        gesamt: gp,
+        totalNet: gp,
+        priceDecision: "rlcKi"
+      } as any);
+    });
   }
 
   function buildRlcKiPdfExportSummary(inputRows: EliteRow[], oldSummary: any, taxRate: number): any {
@@ -6846,7 +7455,7 @@ setServerStatus("Fehler beim Laden");
       tax: mwstValue,
       brutto,
       gross: brutto,
-      totalGross: brutto,
+      totalGross: brutto
     };
   }
 
@@ -6862,7 +7471,7 @@ setServerStatus("Fehler beim Laden");
         priceBreakdown: safeBreakdown,
         recipeLines: safeBreakdown,
         riskCost: 0,
-        profitCost: 0,
+        profitCost: 0
       } as EliteRow;
     });
   }
@@ -6872,9 +7481,140 @@ setServerStatus("Fehler beim Laden");
       ...inputSummary,
       riskSum: 0,
       profitSum: 0,
-      marginPct: undefined,
+      marginPct: undefined
     };
   }
+  React.useEffect(() => {
+    const producer = async () => {
+      const pdfRows = stripInternalPdfCosts(buildRlcKiPdfExportRows(rows));
+      const pdfSummary = stripInternalPdfSummary(
+        buildRlcKiPdfExportSummary(pdfRows, summary, mwst)
+      );
+
+      const blob = await exportPdf({
+        projectKey,
+        projectTitle,
+        rows: pdfRows,
+        chapterTotals,
+        summary: pdfSummary,
+        offer,
+        client,
+        company,
+        mwst,
+        globalMarkup,
+        delivery: true
+      });
+
+      if (!blob) {
+        throw new Error("KI-Kalkulation PDF konnte nicht erzeugt werden.");
+      }
+
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = "";
+      const chunkSize = 0x8000;
+
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+
+      return {
+        name: `KI_Angebot_${safeFileName(offer.number || projectKey)}.pdf`,
+        base64: btoa(binary)
+      };
+    };
+
+    (window as any).__RLC_DOCUMENT_PDF_PRODUCER__ = producer;
+
+    return () => {
+      if ((window as any).__RLC_DOCUMENT_PDF_PRODUCER__ === producer) {
+        delete (window as any).__RLC_DOCUMENT_PDF_PRODUCER__;
+      }
+    };
+  }, [
+  rows,
+  summary,
+  mwst,
+  projectKey,
+  projectTitle,
+  chapterTotals,
+  offer,
+  client,
+  company,
+  globalMarkup]
+  );
+
+  React.useEffect(() => {
+    const producer = async () => {
+      const pdfRows = stripInternalPdfCosts(
+        buildRlcKiPdfExportRows(rows)
+      );
+
+      const pdfSummary = stripInternalPdfSummary(
+        buildRlcKiPdfExportSummary(pdfRows, summary, mwst)
+      );
+
+      const result = await exportPdf({
+        projectKey,
+        projectTitle,
+        rows: pdfRows,
+        chapterTotals,
+        summary: pdfSummary,
+        offer,
+        client,
+        company,
+        mwst,
+        globalMarkup,
+        delivery: true
+      });
+
+      if (!(result instanceof Blob)) {
+        throw new Error(
+          "Kalkulations-PDF konnte nicht an Document Delivery übergeben werden."
+        );
+      }
+
+      const pdfBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => {
+          const dataUrl = String(reader.result || "");
+          resolve(dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl);
+        };
+
+        reader.onerror = () =>
+        reject(new Error("Kalkulations-PDF konnte nicht gelesen werden."));
+
+        reader.readAsDataURL(result);
+      });
+
+      return {
+        base64: pdfBase64,
+        name: `KI_Angebot_${safeFileName(offer.number || projectKey)}.pdf`
+      };
+    };
+
+    (window as any).__RLC_DOCUMENT_PDF_PRODUCER__ = producer;
+
+    return () => {
+      if (
+      (window as any).__RLC_DOCUMENT_PDF_PRODUCER__ === producer)
+      {
+        delete (window as any).__RLC_DOCUMENT_PDF_PRODUCER__;
+      }
+    };
+  }, [
+  projectKey,
+  projectTitle,
+  rows,
+  chapterTotals,
+  summary,
+  offer,
+  client,
+  company,
+  mwst,
+  globalMarkup]
+  );
+
   async function handlePdfExport() {
     try {
       setPdfBusy(true);
@@ -6893,65 +7633,65 @@ setServerStatus("Fehler beim Laden");
         client,
         company,
         mwst,
-        globalMarkup,
+        globalMarkup
       });
 
       setServerStatus("PDF erzeugt");
       setTimeout(() => setServerStatus(""), 1800);
     } catch {
-setServerStatus("PDF Fehler");
+      setServerStatus("PDF Fehler");
     } finally {
       setPdfBusy(false);
     }
   }
 
   async function handleUrkalkulationPdfExport() {
-  try {
-    setPdfBusy(true);
-    setServerStatus("Urkalkulation PDF wird erzeugt…");
-    const realRowsForPdf = rows.filter((r) => !kiIsStructuralRow(r));
-    const auftragRows = selectedAuftragId
-      ? realRowsForPdf.filter((r) => r.auftragId === selectedAuftragId)
-      : realRowsForPdf;
+    try {
+      setPdfBusy(true);
+      setServerStatus("Urkalkulation PDF wird erzeugt…");
+      const realRowsForPdf = rows.filter((r) => !kiIsStructuralRow(r));
+      const auftragRows = selectedAuftragId ?
+      realRowsForPdf.filter((r) => r.auftragId === selectedAuftragId) :
+      realRowsForPdf;
 
-    const exportRows = auftragRows.length ? auftragRows : realRowsForPdf;
-    const exportSelectedAuftrag = auftragRows.length && selectedAuftragId ? selectedAuftrag : null;
+      const exportRows = auftragRows.length ? auftragRows : realRowsForPdf;
+      const exportSelectedAuftrag = auftragRows.length && selectedAuftragId ? selectedAuftrag : null;
 
-    if (!exportRows.length) {
-      setServerStatus("Keine Positionen für Urkalkulation PDF vorhanden");
-      window.setTimeout(() => setServerStatus(""), 2500);
-      return;
+      if (!exportRows.length) {
+        setServerStatus("Keine Positionen für Urkalkulation PDF vorhanden");
+        window.setTimeout(() => setServerStatus(""), 2500);
+        return;
+      }
+
+      const isInternalPdf = window.confirm("Urkalkulation PDF intern erzeugen?\n\nOK = Intern mit Risiko/Gewinn\nAbbrechen = Kunde ohne Risiko/Gewinn");
+      const rawPdfRows = buildRlcKiPdfExportRows(exportRows);
+      const pdfRows = isInternalPdf ? rawPdfRows : stripInternalPdfCosts(rawPdfRows);
+      const pdfSummary = isInternalPdf ?
+      buildRlcKiPdfExportSummary(pdfRows, summary, mwst) :
+      stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
+
+      exportUrkalkulationPdfLocal({
+        projectKey,
+        projectTitle,
+        rows: pdfRows,
+        summary: pdfSummary,
+        offer,
+        selectedAuftrag: exportSelectedAuftrag,
+        client,
+        company,
+        globalMarkup
+      });
+
+      setServerStatus("Urkalkulation PDF erzeugt");
+      setTimeout(() => setServerStatus(""), 1800);
+    } catch {
+      setServerStatus("Urkalkulation PDF Fehler");
+    } finally {
+      setPdfBusy(false);
     }
-
-    const isInternalPdf = window.confirm("Urkalkulation PDF intern erzeugen?\n\nOK = Intern mit Risiko/Gewinn\nAbbrechen = Kunde ohne Risiko/Gewinn");
-    const rawPdfRows = buildRlcKiPdfExportRows(exportRows);
-    const pdfRows = isInternalPdf ? rawPdfRows : stripInternalPdfCosts(rawPdfRows);
-    const pdfSummary = isInternalPdf
-      ? buildRlcKiPdfExportSummary(pdfRows, summary, mwst)
-      : stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
-
-    exportUrkalkulationPdfLocal({
-      projectKey,
-      projectTitle,
-      rows: pdfRows,
-      summary: pdfSummary,
-      offer,
-      selectedAuftrag: exportSelectedAuftrag,
-      client,
-      company,
-      globalMarkup,
-    });
-
-    setServerStatus("Urkalkulation PDF erzeugt");
-    setTimeout(() => setServerStatus(""), 1800);
-  } catch {
-setServerStatus("Urkalkulation PDF Fehler");
-  } finally {
-    setPdfBusy(false);
   }
-}
 
-    function acceptSafeSuggestions() {
+  function acceptSafeSuggestions() {
     const safe = rows.filter(isSafeRow);
 
     if (!safe.length) {
@@ -6965,603 +7705,603 @@ setServerStatus("Urkalkulation PDF Fehler");
     setTimeout(() => setServerStatus(""), 2500);
   }
 
-function selectDuplicateRowsToDelete() {
-  const ids = duplicateGroups.flatMap((group) => group.slice(1).map((row) => row.id));
+  function selectDuplicateRowsToDelete() {
+    const ids = duplicateGroups.flatMap((group) => group.slice(1).map((row) => row.id));
 
-  setSelectedDuplicateIds(ids);
+    setSelectedDuplicateIds(ids);
 
-  if (ids.length) {
-    setServerStatus(`${ids.length} doppelte Position(en) ausgewählt. Es bleibt je Gruppe 1 Position erhalten.`);
-    setTimeout(() => setServerStatus(""), 3000);
-  } else {
-    setServerStatus("Keine doppelten Positionen gefunden.");
-    setTimeout(() => setServerStatus(""), 2500);
-  }
-}
-
-function toggleDuplicateSelection(rowId: string, checked: boolean) {
-  setSelectedDuplicateIds((current) => {
-    if (checked) return Array.from(new Set([...current, rowId]));
-    return current.filter((id) => id !== rowId);
-  });
-}
-
-function deleteSelectedDuplicateRows() {
-  if (!selectedDuplicateIds.length) {
-    alert("Keine doppelten Positionen ausgewählt.");
-    return;
+    if (ids.length) {
+      setServerStatus(`${ids.length} doppelte Position(en) ausgewählt. Es bleibt je Gruppe 1 Position erhalten.`);
+      setTimeout(() => setServerStatus(""), 3000);
+    } else {
+      setServerStatus("Keine doppelten Positionen gefunden.");
+      setTimeout(() => setServerStatus(""), 2500);
+    }
   }
 
-  const ok = window.confirm(
-    `${selectedDuplicateIds.length} doppelte Position(en) löschen? Je Duplikatgruppe bleibt mindestens 1 Position erhalten.`
-  );
-
-  if (!ok) return;
-
-  const ids = new Set(selectedDuplicateIds);
-  const next = rows.filter((row) => !ids.has(row.id));
-
-  setSelectedDuplicateIds([]);
-  persistRows(next);
-
-  try {
-    localStorage.removeItem(KI_HANDOFF_KEY);
-    sessionStorage.removeItem(HANDOFF_CONSUMED_TS_KEY);
-  } catch {
-//
-  }
-
-  setServerStatus(`${ids.size} doppelte Position(en) gelöscht.`);
-  setTimeout(() => setServerStatus(""), 3000);
-}
-function toggleOpenAiSelection(rowId: string, checked: boolean) {
-  setSelectedOpenAiIds((current) => {
-    if (checked) return Array.from(new Set([...current, rowId]));
-    return current.filter((id) => id !== rowId);
-  });
-}
-
-function clearOpenAiSelection() {
-  setSelectedOpenAiIds([]);
-  setServerStatus("OpenAI-Auswahl gelöscht");
-  setTimeout(() => setServerStatus(""), 1800);
-}
-
-function selectWarningsForOpenAi() {
-  const ids = rows
-    .filter(
-      (r) =>
-        !kiIsStructuralRow(r) &&
-        (r.calculationStatus === "warning" ||
-          r.calculationStatus === "critical" ||
-          r.riskLevel === "high" ||
-          rowHasNoDb(r))
-    )
-    .map((r) => r.id);
-
-  setSelectedOpenAiIds(Array.from(new Set(ids)));
-  setServerStatus(`${ids.length} Position(en) für OpenAI-Prüfung ausgewählt`);
-  setTimeout(() => setServerStatus(""), 2500);
-}
-
-async function runSelectedOpenAiCheck() {
-  const selectedRows = rows.filter(
-    (r) => selectedOpenAiIds.includes(r.id) && !kiIsStructuralRow(r)
-  );
-
-  if (!selectedRows.length) {
-    setServerStatus("Keine Positionen für OpenAI ausgewählt");
-    setTimeout(() => setServerStatus(""), 2200);
-    return;
-  }
-
-  const beforeRows = kiCloneRows(rows);
-
-  try {
-    kiEmitStart("Ausgewählte Positionen werden mit OpenAI geprüft…");
-    kiEmitProgress(15, `${selectedRows.length} ausgewählte Position(en) werden vorbereitet…`);
-
-    setServerStatus(`${selectedRows.length} Position(en) werden mit OpenAI geprüft…`);
-
-    const res = await eliteCalculateRows(projectKey, selectedRows, {
-      forceRecalculate: true,
-      expertMode: true,
-      useOpenAIIfNoDatabaseHit: true,
-      forceOpenAIReview: true,
-      maxParallelRows: 3,
-      maxOpenAiRowsPerBatch: Math.min(selectedRows.length, 50),
+  function toggleDuplicateSelection(rowId: string, checked: boolean) {
+    setSelectedDuplicateIds((current) => {
+      if (checked) return Array.from(new Set([...current, rowId]));
+      return current.filter((id) => id !== rowId);
     });
+  }
 
-    const byId = new Map<string, EliteKalkulationResultRow>();
-    const byPos = new Map<string, EliteKalkulationResultRow>();
-
-    for (const item of res.rows || []) {
-      if (item.id) byId.set(String(item.id), item);
-      if (item.posNr) byPos.set(String(item.posNr), item);
+  function deleteSelectedDuplicateRows() {
+    if (!selectedDuplicateIds.length) {
+      alert("Keine doppelten Positionen ausgewählt.");
+      return;
     }
 
-    const next = rows.map((r) => {
-      const result = byId.get(r.id) || byPos.get(r.posNr || "");
-      if (!result) return r;
+    const ok = window.confirm(
+      `${selectedDuplicateIds.length} doppelte Position(en) löschen? Je Duplikatgruppe bleibt mindestens 1 Position erhalten.`
+    );
 
-      const currentEp = n(r.finalUnitPrice ?? r.preis);
-      const openAiEp = n(
-        result.finalUnitPrice ??
+    if (!ok) return;
+
+    const ids = new Set(selectedDuplicateIds);
+    const next = rows.filter((row) => !ids.has(row.id));
+
+    setSelectedDuplicateIds([]);
+    persistRows(next);
+
+    try {
+      localStorage.removeItem(KI_HANDOFF_KEY);
+      sessionStorage.removeItem(HANDOFF_CONSUMED_TS_KEY);
+    } catch {
+
+
+      //
+    }setServerStatus(`${ids.size} doppelte Position(en) gelöscht.`);
+    setTimeout(() => setServerStatus(""), 3000);
+  }
+  function toggleOpenAiSelection(rowId: string, checked: boolean) {
+    setSelectedOpenAiIds((current) => {
+      if (checked) return Array.from(new Set([...current, rowId]));
+      return current.filter((id) => id !== rowId);
+    });
+  }
+
+  function clearOpenAiSelection() {
+    setSelectedOpenAiIds([]);
+    setServerStatus("OpenAI-Auswahl gelöscht");
+    setTimeout(() => setServerStatus(""), 1800);
+  }
+
+  function selectWarningsForOpenAi() {
+    const ids = rows.
+    filter(
+      (r) =>
+      !kiIsStructuralRow(r) && (
+      r.calculationStatus === "warning" ||
+      r.calculationStatus === "critical" ||
+      r.riskLevel === "high" ||
+      rowHasNoDb(r))
+    ).
+    map((r) => r.id);
+
+    setSelectedOpenAiIds(Array.from(new Set(ids)));
+    setServerStatus(`${ids.length} Position(en) für OpenAI-Prüfung ausgewählt`);
+    setTimeout(() => setServerStatus(""), 2500);
+  }
+
+  async function runSelectedOpenAiCheck() {
+    const selectedRows = rows.filter(
+      (r) => selectedOpenAiIds.includes(r.id) && !kiIsStructuralRow(r)
+    );
+
+    if (!selectedRows.length) {
+      setServerStatus("Keine Positionen für OpenAI ausgewählt");
+      setTimeout(() => setServerStatus(""), 2200);
+      return;
+    }
+
+    const beforeRows = kiCloneRows(rows);
+
+    try {
+      kiEmitStart("Ausgewählte Positionen werden mit OpenAI geprüft…");
+      kiEmitProgress(15, `${selectedRows.length} ausgewählte Position(en) werden vorbereitet…`);
+
+      setServerStatus(`${selectedRows.length} Position(en) werden mit OpenAI geprüft…`);
+
+      const res = await eliteCalculateRows(projectKey, selectedRows, {
+        forceRecalculate: true,
+        expertMode: true,
+        useOpenAIIfNoDatabaseHit: true,
+        forceOpenAIReview: true,
+        maxParallelRows: 3,
+        maxOpenAiRowsPerBatch: Math.min(selectedRows.length, 50)
+      });
+
+      const byId = new Map<string, EliteKalkulationResultRow>();
+      const byPos = new Map<string, EliteKalkulationResultRow>();
+
+      for (const item of res.rows || []) {
+        if (item.id) byId.set(String(item.id), item);
+        if (item.posNr) byPos.set(String(item.posNr), item);
+      }
+
+      const next = rows.map((r) => {
+        const result = byId.get(r.id) || byPos.get(r.posNr || "");
+        if (!result) return r;
+
+        const currentEp = n(r.finalUnitPrice ?? r.preis);
+        const openAiEp = n(
+          result.finalUnitPrice ??
           result.suggestedUnitPrice ??
           result.baseUnitPrice ??
           currentEp
-      );
+        );
 
-      const diff = round2(openAiEp - currentEp);
-      const diffPct =
-        currentEp > 0 ? round2((Math.abs(diff) / currentEp) * 100) : 0;
+        const diff = round2(openAiEp - currentEp);
+        const diffPct =
+        currentEp > 0 ? round2(Math.abs(diff) / currentEp * 100) : 0;
 
-      return normalizeEliteRow(
-        enhanceKalkulatorInsertions({
-          ...r,
+        return normalizeEliteRow(
+          enhanceKalkulatorInsertions({
+            ...r,
 
-          // WICHTIG:
-          // OpenAI wird NICHT automatisch übernommen.
-          // Der bestehende EP bleibt unverändert.
-          preis: currentEp,
-          finalUnitPrice: currentEp,
-          gesamt: round2(n(r.menge) * currentEp),
+            // WICHTIG:
+            // OpenAI wird NICHT automatisch übernommen.
+            // Der bestehende EP bleibt unverändert.
+            preis: currentEp,
+            finalUnitPrice: currentEp,
+            gesamt: round2(n(r.menge) * currentEp),
 
-          // OpenAI-Vorschlag wird separat gespeichert.
-          openAiSuggestedUnitPrice: openAiEp,
-          openAiSuggestedTotal: round2(n(r.menge) * openAiEp),
-          openAiSuggestedAt: new Date().toISOString(),
-          openAiSuggestedReason: result.aiReason || "",
-          openAiSuggestedWarning: result.warning || "",
-          openAiSuggestedPriceBreakdown: result.priceBreakdown || [],
+            // OpenAI-Vorschlag wird separat gespeichert.
+            openAiSuggestedUnitPrice: openAiEp,
+            openAiSuggestedTotal: round2(n(r.menge) * openAiEp),
+            openAiSuggestedAt: new Date().toISOString(),
+            openAiSuggestedReason: result.aiReason || "",
+            openAiSuggestedWarning: result.warning || "",
+            openAiSuggestedPriceBreakdown: result.priceBreakdown || [],
 
-          rlcPreisMin: (result as any).rlcPreisMin,
-          rlcPreisAvg: (result as any).rlcPreisAvg,
-          rlcPreisMax: (result as any).rlcPreisMax,
-          rlcPreisSource: (result as any).rlcPreisSource,
-          rlcPreisGroup: (result as any).rlcPreisGroup,
+            rlcPreisMin: (result as any).rlcPreisMin,
+            rlcPreisAvg: (result as any).rlcPreisAvg,
+            rlcPreisMax: (result as any).rlcPreisMax,
+            rlcPreisSource: (result as any).rlcPreisSource,
+            rlcPreisGroup: (result as any).rlcPreisGroup,
 
-          calculationStatus: diffPct >= 10 ? "warning" : r.calculationStatus,
-          riskLevel: diffPct >= 25 ? "high" : r.riskLevel,
+            calculationStatus: diffPct >= 10 ? "warning" : r.calculationStatus,
+            riskLevel: diffPct >= 25 ? "high" : r.riskLevel,
 
-          warning: [
+            warning: [
             cleanOpenAiProposalWarning(r.warning),
-            `OpenAI-Vorschlag vorhanden: ${openAiEp} €/EH statt aktuell ${currentEp} €/EH (${diff >= 0 ? "+" : ""}${diff} €, ${diffPct} % Abweichung). Bitte manuell übernehmen oder ablehnen.`,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        } as unknown as EliteRow)
-      );
-    });
+            `OpenAI-Vorschlag vorhanden: ${openAiEp} €/EH statt aktuell ${currentEp} €/EH (${diff >= 0 ? "+" : ""}${diff} €, ${diffPct} % Abweichung). Bitte manuell übernehmen oder ablehnen.`].
 
-    persistRows(normalizeKiWarningRows(next));
+            filter(Boolean).
+            join(" · ")
+          } as unknown as EliteRow)
+        );
+      });
 
-    // Wichtig: OpenAI-Testwerte NICHT automatisch in Datenbank speichern.
-    // saveRowsToDatenbank(next, projectKey, projectTitle);
+      persistRows(normalizeKiWarningRows(next));
 
-    kiEmitProgress(96, "OpenAI-Vorschläge werden gespeichert…");
-    kiEmitResult("OpenAI-Prüfung als Vorschlag gespeichert", beforeRows, next, res.summary);
+      // Wichtig: OpenAI-Testwerte NICHT automatisch in Datenbank speichern.
+      // saveRowsToDatenbank(next, projectKey, projectTitle);
 
-    setSelectedOpenAiIds([]);
-    setServerStatus(`${selectedRows.length} OpenAI-Vorschlag/Vorschläge gespeichert`);
-    setTimeout(() => setServerStatus(""), 3500);
-  } catch (e) {
-    console.error(e);
-    setServerStatus("OpenAI-Prüfung fehlgeschlagen");
-    setTimeout(() => setServerStatus(""), 3500);
+      kiEmitProgress(96, "OpenAI-Vorschläge werden gespeichert…");
+      kiEmitResult("OpenAI-Prüfung als Vorschlag gespeichert", beforeRows, next, res.summary);
+
+      setSelectedOpenAiIds([]);
+      setServerStatus(`${selectedRows.length} OpenAI-Vorschlag/Vorschläge gespeichert`);
+      setTimeout(() => setServerStatus(""), 3500);
+    } catch (e) {
+      console.error(e);
+      setServerStatus("OpenAI-Prüfung fehlgeschlagen");
+      setTimeout(() => setServerStatus(""), 3500);
+    }
   }
-}
-function getRawOpenAiProposalPrice(row: EliteRow | null | undefined): number {
-  return n((row as any)?.openAiSuggestedUnitPrice);
-}
+  function getRawOpenAiProposalPrice(row: EliteRow | null | undefined): number {
+    return n((row as any)?.openAiSuggestedUnitPrice);
+  }
 
-function getOpenAiProposalPrice(row: EliteRow | null | undefined): number {
-  const openAi = getRawOpenAiProposalPrice(row);
-  const rlc = getRlcRangeForRow(row);
+  function getOpenAiProposalPrice(row: EliteRow | null | undefined): number {
+    const openAi = getRawOpenAiProposalPrice(row);
+    const rlc = getRlcRangeForRow(row);
 
-  if (openAi <= 0) return 0;
+    if (openAi <= 0) return 0;
 
-  /*
-   * Zentrale Plausibilitätslogik:
-   * RLC-Materialpreise dürfen den finalen EP NICHT deckeln.
-   * Material dient nur als Urkalkulations-/Materialansatz.
-   * Deckelung ist nur erlaubt bei echten Leistungs-/Transport-/Fremdleistungswerten.
-   */
-  const rlcGroup = String((rlc as any).group || "").toLowerCase();
-  const rlcCanLimitFinalPrice =
+    /*
+     * Zentrale Plausibilitätslogik:
+     * RLC-Materialpreise dürfen den finalen EP NICHT deckeln.
+     * Material dient nur als Urkalkulations-/Materialansatz.
+     * Deckelung ist nur erlaubt bei echten Leistungs-/Transport-/Fremdleistungswerten.
+     */
+    const rlcGroup = String((rlc as any).group || "").toLowerCase();
+    const rlcCanLimitFinalPrice =
     rlcGroup.includes("transport") ||
     rlcGroup.includes("maschine") ||
     rlcGroup.includes("fremdleistung") ||
     rlcGroup.includes("oberfläche");
 
-  if (rlcCanLimitFinalPrice && rlc.avg > 0 && rlc.min > 0 && rlc.max > 0) {
-    if (openAi > rlc.max) return rlc.avg;
-    if (openAi < rlc.min) return rlc.avg;
+    if (rlcCanLimitFinalPrice && rlc.avg > 0 && rlc.min > 0 && rlc.max > 0) {
+      if (openAi > rlc.max) return rlc.avg;
+      if (openAi < rlc.min) return rlc.avg;
+    }
+
+    return openAi;
   }
 
-  return openAi;
-}
+  function rowHasOpenAiProposal(row: EliteRow | null | undefined): boolean {
+    return getRawOpenAiProposalPrice(row) > 0 || getOpenAiProposalPrice(row) > 0;
+  }
 
-function rowHasOpenAiProposal(row: EliteRow | null | undefined): boolean {
-  return getRawOpenAiProposalPrice(row) > 0 || getOpenAiProposalPrice(row) > 0;
-}
+  function acceptOpenAiSuggestionForRow(rowId: string) {
+    const target = rows.find((r) => r.id === rowId);
+    if (!target) return;
 
-function acceptOpenAiSuggestionForRow(rowId: string) {
-  const target = rows.find((r) => r.id === rowId);
-  if (!target) return;
+    const proposal = getOpenAiProposalPrice(target);
+    if (proposal <= 0) return;
 
-  const proposal = getOpenAiProposalPrice(target);
-  if (proposal <= 0) return;
+    const next = rows.map((r) => {
+      if (r.id !== rowId) return r;
 
-  const next = rows.map((r) => {
-    if (r.id !== rowId) return r;
+      const anyRow = r as any;
 
-    const anyRow = r as any;
-
-    return normalizeEliteRow(
-      enhanceKalkulatorInsertions({
-        ...r,
-        preis: proposal,
-        finalUnitPrice: proposal,
-        suggestedUnitPrice: proposal,
-        gesamt: round2(n(r.menge) * proposal),
-        source: "ki",
-        priceBreakdown:
+      return normalizeEliteRow(
+        enhanceKalkulatorInsertions({
+          ...r,
+          preis: proposal,
+          finalUnitPrice: proposal,
+          suggestedUnitPrice: proposal,
+          gesamt: round2(n(r.menge) * proposal),
+          source: "ki",
+          priceBreakdown:
           Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
-          anyRow.openAiSuggestedPriceBreakdown.length
-            ? anyRow.openAiSuggestedPriceBreakdown
-            : r.priceBreakdown,
+          anyRow.openAiSuggestedPriceBreakdown.length ?
+          anyRow.openAiSuggestedPriceBreakdown :
+          r.priceBreakdown,
+          warning: "",
+          calculationStatus: "ok",
+          riskLevel: r.riskLevel === "high" ? "medium" : r.riskLevel,
+          aiReason: [
+          r.aiReason,
+          "OpenAI-Vorschlag wurde manuell für diese Position übernommen.",
+          anyRow.openAiSuggestedReason].
+
+          filter(Boolean).
+          join("\n\n"),
+          preisManuellGeprueft: true,
+          preisManuellGeprueftAt: new Date().toISOString(),
+          openAiRejected: true,
+          openAiSuggestedUnitPrice: undefined,
+          openAiSuggestedTotal: undefined,
+          openAiSuggestedAt: undefined,
+          openAiSuggestedReason: undefined,
+          openAiSuggestedWarning: undefined,
+          openAiSuggestedPriceBreakdown: undefined
+        } as unknown as EliteRow)
+      );
+    });
+
+    persistRows(normalizeKiWarningRows(next));
+    setServerStatus("OpenAI-Preis für Position übernommen");
+    setTimeout(() => setServerStatus(""), 2500);
+  }
+
+  function rejectOpenAiSuggestionForRow(rowId: string) {
+    const next = rows.map((r) => {
+      if (r.id !== rowId) return r;
+
+      return cleanRlcKiWarningState(normalizeEliteRow({
+        ...r,
         warning: "",
         calculationStatus: "ok",
         riskLevel: r.riskLevel === "high" ? "medium" : r.riskLevel,
-        aiReason: [
-          r.aiReason,
-          "OpenAI-Vorschlag wurde manuell für diese Position übernommen.",
-          anyRow.openAiSuggestedReason,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
         preisManuellGeprueft: true,
         preisManuellGeprueftAt: new Date().toISOString(),
-      openAiRejected: true,
-      openAiSuggestedUnitPrice: undefined,
+        openAiRejected: true,
+        openAiSuggestedUnitPrice: undefined,
         openAiSuggestedTotal: undefined,
         openAiSuggestedAt: undefined,
         openAiSuggestedReason: undefined,
         openAiSuggestedWarning: undefined,
-        openAiSuggestedPriceBreakdown: undefined,
-      } as unknown as EliteRow)
-    );
-  });
+        openAiSuggestedPriceBreakdown: undefined
+      } as unknown as EliteRow));
+    });
 
-  persistRows(normalizeKiWarningRows(next));
-  setServerStatus("OpenAI-Preis für Position übernommen");
-  setTimeout(() => setServerStatus(""), 2500);
-}
-
-function rejectOpenAiSuggestionForRow(rowId: string) {
-  const next = rows.map((r) => {
-    if (r.id !== rowId) return r;
-
-    return cleanRlcKiWarningState(normalizeEliteRow({
-      ...r,
-      warning: "",
-      calculationStatus: "ok",
-      riskLevel: r.riskLevel === "high" ? "medium" : r.riskLevel,
-      preisManuellGeprueft: true,
-      preisManuellGeprueftAt: new Date().toISOString(),
-      openAiRejected: true,
-      openAiSuggestedUnitPrice: undefined,
-      openAiSuggestedTotal: undefined,
-      openAiSuggestedAt: undefined,
-      openAiSuggestedReason: undefined,
-      openAiSuggestedWarning: undefined,
-      openAiSuggestedPriceBreakdown: undefined,
-    } as unknown as EliteRow));
-  });
-
-  persistRows(normalizeKiWarningRows(next));
-  setServerStatus("OpenAI-Vorschlag abgelehnt");
-  setTimeout(() => setServerStatus(""), 2500);
-}
-
-function saveOpenAiSuggestionForRow(rowId: string) {
-  const target = rows.find((r) => r.id === rowId);
-  if (!target) return;
-
-  const proposal = getOpenAiProposalPrice(target);
-  if (proposal <= 0) return;
-
-  const anyRow = target as any;
-
-  const learnedRow = normalizeEliteRow(
-    enhanceKalkulatorInsertions({
-      ...target,
-      preis: proposal,
-      finalUnitPrice: proposal,
-      suggestedUnitPrice: proposal,
-      gesamt: round2(n(target.menge) * proposal),
-      source: "ki",
-      priceBreakdown:
-        Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
-        anyRow.openAiSuggestedPriceBreakdown.length
-          ? anyRow.openAiSuggestedPriceBreakdown
-          : target.priceBreakdown,
-      warning: "",
-      aiReason: [
-        target.aiReason,
-        "Als geprüfter Firmenwert aus OpenAI-Vorschlag gespeichert.",
-        anyRow.openAiSuggestedReason,
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-    } as unknown as EliteRow)
-  );
-
-  const count = saveRowsToDatenbank([learnedRow], projectKey, projectTitle);
-  setServerStatus(`${count} Firmenwert gespeichert`);
-  setTimeout(() => setServerStatus(""), 2500);
-}
-
-function selectedOpenAiProposalPrice(): number {
-  return n((selectedRow as any)?.openAiSuggestedUnitPrice);
-}
-
-function selectedHasOpenAiProposal(): boolean {
-  return !!selectedRow && selectedOpenAiProposalPrice() > 0;
-}
-
-function cleanOpenAiProposalWarning(text?: string): string {
-  return String(text || "")
-    .split(" · ")
-    .filter((part) => !part.toLowerCase().includes("openai-vorschlag"))
-    .join(" · ")
-    .trim();
-}
-
-function acceptSelectedOpenAiSuggestion() {
-  if (!selectedRow) return;
-
-  const proposal = selectedOpenAiProposalPrice();
-  if (proposal <= 0) {
-    setServerStatus("Kein OpenAI-Vorschlag für diese Position vorhanden");
-    setTimeout(() => setServerStatus(""), 2200);
-    return;
+    persistRows(normalizeKiWarningRows(next));
+    setServerStatus("OpenAI-Vorschlag abgelehnt");
+    setTimeout(() => setServerStatus(""), 2500);
   }
 
-  const next = rows.map((r) => {
-    if (r.id !== selectedRow.id) return r;
+  function saveOpenAiSuggestionForRow(rowId: string) {
+    const target = rows.find((r) => r.id === rowId);
+    if (!target) return;
 
-    const anyRow = r as any;
-    const cleanedWarning = cleanOpenAiProposalWarning(r.warning);
+    const proposal = getOpenAiProposalPrice(target);
+    if (proposal <= 0) return;
 
-    return normalizeEliteRow(
+    const anyRow = target as any;
+
+    const learnedRow = normalizeEliteRow(
       enhanceKalkulatorInsertions({
-        ...r,
+        ...target,
         preis: proposal,
         finalUnitPrice: proposal,
         suggestedUnitPrice: proposal,
-        gesamt: round2(n(r.menge) * proposal),
+        gesamt: round2(n(target.menge) * proposal),
         source: "ki",
         priceBreakdown:
-          Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
-          anyRow.openAiSuggestedPriceBreakdown.length
-            ? anyRow.openAiSuggestedPriceBreakdown
-            : r.priceBreakdown,
-        warning: cleanedWarning,
+        Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
+        anyRow.openAiSuggestedPriceBreakdown.length ?
+        anyRow.openAiSuggestedPriceBreakdown :
+        target.priceBreakdown,
+        warning: "",
         aiReason: [
-          r.aiReason,
-          "OpenAI-Vorschlag wurde manuell übernommen.",
-          anyRow.openAiSuggestedReason,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
+        target.aiReason,
+        "Als geprüfter Firmenwert aus OpenAI-Vorschlag gespeichert.",
+        anyRow.openAiSuggestedReason].
 
-        preisManuellGeprueft: true,
-        preisManuellGeprueftAt: new Date().toISOString(),
-      openAiRejected: true,
-      openAiSuggestedUnitPrice: undefined,
-        openAiSuggestedTotal: undefined,
-        openAiSuggestedAt: undefined,
-        openAiSuggestedReason: undefined,
-        openAiSuggestedWarning: undefined,
-        openAiSuggestedPriceBreakdown: undefined,
+        filter(Boolean).
+        join("\n\n")
       } as unknown as EliteRow)
     );
-  });
 
-  persistRows(normalizeKiWarningRows(next));
-  setServerStatus("OpenAI-Vorschlag wurde übernommen");
-  setTimeout(() => setServerStatus(""), 2500);
-}
-
-function rejectSelectedOpenAiSuggestion() {
-  const next = rows.map((r) => clearOldKiProposalFields(r));
-
-  persistRows(next);
-
-  setSelectedOpenAiIds([]);
-  setServerStatus("Alle alten OpenAI/RLC-KI-Vorschläge wurden gelöscht. X84 bleibt final.");
-  setTimeout(() => setServerStatus(""), 3000);
-}
-
-function saveSelectedOpenAiSuggestionAsKnowledge() {
-  if (!selectedRow) return;
-
-  const proposal = selectedOpenAiProposalPrice();
-  if (proposal <= 0) {
-    setServerStatus("Kein OpenAI-Vorschlag zum Speichern vorhanden");
-    setTimeout(() => setServerStatus(""), 2200);
-    return;
+    const count = saveRowsToDatenbank([learnedRow], projectKey, projectTitle);
+    setServerStatus(`${count} Firmenwert gespeichert`);
+    setTimeout(() => setServerStatus(""), 2500);
   }
 
-  const anyRow = selectedRow as any;
+  function selectedOpenAiProposalPrice(): number {
+    return n((selectedRow as any)?.openAiSuggestedUnitPrice);
+  }
 
-  const learnedRow = normalizeEliteRow(
-    enhanceKalkulatorInsertions({
-      ...selectedRow,
-      preis: proposal,
-      finalUnitPrice: proposal,
-      suggestedUnitPrice: proposal,
-      gesamt: round2(n(selectedRow.menge) * proposal),
-      source: "ki",
-      priceBreakdown:
+  function selectedHasOpenAiProposal(): boolean {
+    return !!selectedRow && selectedOpenAiProposalPrice() > 0;
+  }
+
+  function cleanOpenAiProposalWarning(text?: string): string {
+    return String(text || "").
+    split(" · ").
+    filter((part) => !part.toLowerCase().includes("openai-vorschlag")).
+    join(" · ").
+    trim();
+  }
+
+  function acceptSelectedOpenAiSuggestion() {
+    if (!selectedRow) return;
+
+    const proposal = selectedOpenAiProposalPrice();
+    if (proposal <= 0) {
+      setServerStatus("Kein OpenAI-Vorschlag für diese Position vorhanden");
+      setTimeout(() => setServerStatus(""), 2200);
+      return;
+    }
+
+    const next = rows.map((r) => {
+      if (r.id !== selectedRow.id) return r;
+
+      const anyRow = r as any;
+      const cleanedWarning = cleanOpenAiProposalWarning(r.warning);
+
+      return normalizeEliteRow(
+        enhanceKalkulatorInsertions({
+          ...r,
+          preis: proposal,
+          finalUnitPrice: proposal,
+          suggestedUnitPrice: proposal,
+          gesamt: round2(n(r.menge) * proposal),
+          source: "ki",
+          priceBreakdown:
+          Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
+          anyRow.openAiSuggestedPriceBreakdown.length ?
+          anyRow.openAiSuggestedPriceBreakdown :
+          r.priceBreakdown,
+          warning: cleanedWarning,
+          aiReason: [
+          r.aiReason,
+          "OpenAI-Vorschlag wurde manuell übernommen.",
+          anyRow.openAiSuggestedReason].
+
+          filter(Boolean).
+          join("\n\n"),
+
+          preisManuellGeprueft: true,
+          preisManuellGeprueftAt: new Date().toISOString(),
+          openAiRejected: true,
+          openAiSuggestedUnitPrice: undefined,
+          openAiSuggestedTotal: undefined,
+          openAiSuggestedAt: undefined,
+          openAiSuggestedReason: undefined,
+          openAiSuggestedWarning: undefined,
+          openAiSuggestedPriceBreakdown: undefined
+        } as unknown as EliteRow)
+      );
+    });
+
+    persistRows(normalizeKiWarningRows(next));
+    setServerStatus("OpenAI-Vorschlag wurde übernommen");
+    setTimeout(() => setServerStatus(""), 2500);
+  }
+
+  function rejectSelectedOpenAiSuggestion() {
+    const next = rows.map((r) => clearOldKiProposalFields(r));
+
+    persistRows(next);
+
+    setSelectedOpenAiIds([]);
+    setServerStatus("Alle alten OpenAI/RLC-KI-Vorschläge wurden gelöscht. X84 bleibt final.");
+    setTimeout(() => setServerStatus(""), 3000);
+  }
+
+  function saveSelectedOpenAiSuggestionAsKnowledge() {
+    if (!selectedRow) return;
+
+    const proposal = selectedOpenAiProposalPrice();
+    if (proposal <= 0) {
+      setServerStatus("Kein OpenAI-Vorschlag zum Speichern vorhanden");
+      setTimeout(() => setServerStatus(""), 2200);
+      return;
+    }
+
+    const anyRow = selectedRow as any;
+
+    const learnedRow = normalizeEliteRow(
+      enhanceKalkulatorInsertions({
+        ...selectedRow,
+        preis: proposal,
+        finalUnitPrice: proposal,
+        suggestedUnitPrice: proposal,
+        gesamt: round2(n(selectedRow.menge) * proposal),
+        source: "ki",
+        priceBreakdown:
         Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
-        anyRow.openAiSuggestedPriceBreakdown.length
-          ? anyRow.openAiSuggestedPriceBreakdown
-          : selectedRow.priceBreakdown,
-      warning: "",
-      aiReason: [
+        anyRow.openAiSuggestedPriceBreakdown.length ?
+        anyRow.openAiSuggestedPriceBreakdown :
+        selectedRow.priceBreakdown,
+        warning: "",
+        aiReason: [
         selectedRow.aiReason,
         "Als geprüfter Firmenwert aus OpenAI-Vorschlag gespeichert.",
-        anyRow.openAiSuggestedReason,
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-    } as unknown as EliteRow)
-  );
+        anyRow.openAiSuggestedReason].
 
-  const count = saveRowsToDatenbank([learnedRow], projectKey, projectTitle);
+        filter(Boolean).
+        join("\n\n")
+      } as unknown as EliteRow)
+    );
 
-  setServerStatus(`${count} OpenAI-Vorschlag als Firmenwert gespeichert`);
-  setTimeout(() => setServerStatus(""), 3000);
-}
+    const count = saveRowsToDatenbank([learnedRow], projectKey, projectTitle);
 
-function activeFilterLabel(): string {
-  switch (viewFilter) {
-    case "kritisch":
-      return "Kritische Positionen";
-    case "warnungen":
-      return "Warnungen";
-    case "hochrisiko":
-      return "Hochrisiko";
-    case "ohneDb":
-      return "Ohne Datenbanktreffer";
-    case "sicher":
-      return "Sichere Positionen";
-    case "alle":
-    default:
-      return "Alle Positionen";
-  }
-}
-function kiAssistantMessage(): string {
-  if (!rows.length) {
-    return "Noch keine LV-Positionen vorhanden. Lade zuerst ein Leistungsverzeichnis oder füge Positionen manuell hinzu.";
+    setServerStatus(`${count} OpenAI-Vorschlag als Firmenwert gespeichert`);
+    setTimeout(() => setServerStatus(""), 3000);
   }
 
-  if (loading) {
-    return "Ich analysiere gerade die Positionen, ergänze fehlende Angaben, prüfe Risiken und baue die Urkalkulation auf.";
+  function activeFilterLabel(): string {
+    switch (viewFilter) {
+      case "kritisch":
+        return "Kritische Positionen";
+      case "warnungen":
+        return "Warnungen";
+      case "hochrisiko":
+        return "Hochrisiko";
+      case "ohneDb":
+        return "Ohne Datenbanktreffer";
+      case "sicher":
+        return "Sichere Positionen";
+      case "alle":
+      default:
+        return "Alle Positionen";
+    }
   }
+  function kiAssistantMessage(): string {
+    if (!rows.length) {
+      return "Noch keine LV-Positionen vorhanden. Lade zuerst ein Leistungsverzeichnis oder füge Positionen manuell hinzu.";
+    }
 
-  if (
+    if (loading) {
+      return "Ich analysiere gerade die Positionen, ergänze fehlende Angaben, prüfe Risiken und baue die Urkalkulation auf.";
+    }
+
+    if (
     problemCounts.kurztextFehlt > 0 ||
     problemCounts.langtextFehlt > 0 ||
     problemCounts.einheitFehlt > 0 ||
-    problemCounts.preisaufbauFehlt > 0
-  ) {
-    return `Es fehlen noch Angaben: ${problemCounts.kurztextFehlt} Kurztext, ${problemCounts.langtextFehlt} Langtext, ${problemCounts.einheitFehlt} Einheit, ${problemCounts.preisaufbauFehlt} Preisaufbau. Du kannst diese automatisch ergänzen lassen.`;
+    problemCounts.preisaufbauFehlt > 0)
+    {
+      return `Es fehlen noch Angaben: ${problemCounts.kurztextFehlt} Kurztext, ${problemCounts.langtextFehlt} Langtext, ${problemCounts.einheitFehlt} Einheit, ${problemCounts.preisaufbauFehlt} Preisaufbau. Du kannst diese automatisch ergänzen lassen.`;
+    }
+
+    if (summary.critical > 0) {
+      return `${summary.critical} Position(en) sind kritisch. Prüfe zuerst Mengen, Einheitspreise und fehlende Kostenansätze.`;
+    }
+
+    if (summary.highRisk > 0) {
+      return `${summary.highRisk} Position(en) haben erhöhtes Risiko. Prüfe diese Positionen vor dem Export.`;
+    }
+
+    if (problemCounts.ohneDb > 0) {
+      return `${problemCounts.ohneDb} Position(en) haben keinen sicheren Datenbanktreffer. Nach manueller Prüfung können sie gelernt werden.`;
+    }
+
+    if (problemCounts.sicher > 0) {
+      return `${problemCounts.sicher} Position(en) sind plausibel und können in die Wissensbasis übernommen werden.`;
+    }
+
+    return "Die Kalkulation wirkt plausibel. Prüfe die größten Positionen und exportiere danach Angebot, XLSX, PDF oder GAEB.";
   }
 
-  if (summary.critical > 0) {
-    return `${summary.critical} Position(en) sind kritisch. Prüfe zuerst Mengen, Einheitspreise und fehlende Kostenansätze.`;
-  }
+  function runPrimaryKiAction() {
+    if (!rows.length) {
+      alert("Keine Positionen vorhanden.");
+      return;
+    }
 
-  if (summary.highRisk > 0) {
-    return `${summary.highRisk} Position(en) haben erhöhtes Risiko. Prüfe diese Positionen vor dem Export.`;
-  }
-
-  if (problemCounts.ohneDb > 0) {
-    return `${problemCounts.ohneDb} Position(en) haben keinen sicheren Datenbanktreffer. Nach manueller Prüfung können sie gelernt werden.`;
-  }
-
-  if (problemCounts.sicher > 0) {
-    return `${problemCounts.sicher} Position(en) sind plausibel und können in die Wissensbasis übernommen werden.`;
-  }
-
-  return "Die Kalkulation wirkt plausibel. Prüfe die größten Positionen und exportiere danach Angebot, XLSX, PDF oder GAEB.";
-}
-
-function runPrimaryKiAction() {
-  if (!rows.length) {
-    alert("Keine Positionen vorhanden.");
-    return;
-  }
-
-  if (
+    if (
     problemCounts.kurztextFehlt > 0 ||
     problemCounts.langtextFehlt > 0 ||
     problemCounts.einheitFehlt > 0 ||
-    problemCounts.preisaufbauFehlt > 0
-  ) {
-    autoCompleteMissingFields();
-    return;
+    problemCounts.preisaufbauFehlt > 0)
+    {
+      autoCompleteMissingFields();
+      return;
+    }
+
+    void runEliteCalculation();
   }
 
-  void runEliteCalculation();
-}
+  function rlcCanSendToGlobalKnowledge(row: any): boolean {
+    const ep = Number(row?.rlcEp ?? row?.finalUnitPrice ?? row?.preis ?? 0);
+    const qty = Number(row?.menge ?? row?.quantity ?? 0);
+    const unit = String(row?.einheit ?? row?.unit ?? "").trim();
+    const text = String(row?.kurztext ?? row?.shortText ?? "").trim();
+    const confidence = Number(row?.confidence ?? 0.75);
+    const approvalLevel = String(row?.approvalLevel || "").trim();
+    const diffPct = Math.abs(Number(row?.diffPct ?? 0));
 
-function rlcCanSendToGlobalKnowledge(row: any): boolean {
-  const ep = Number(row?.rlcEp ?? row?.finalUnitPrice ?? row?.preis ?? 0);
-  const qty = Number(row?.menge ?? row?.quantity ?? 0);
-  const unit = String(row?.einheit ?? row?.unit ?? "").trim();
-  const text = String(row?.kurztext ?? row?.shortText ?? "").trim();
-  const confidence = Number(row?.confidence ?? 0.75);
-  const approvalLevel = String(row?.approvalLevel || "").trim();
-  const diffPct = Math.abs(Number(row?.diffPct ?? 0));
+    if (!text) return false;
+    if (!unit) return false;
+    if (!Number.isFinite(ep) || ep <= 0) return false;
+    if (!Number.isFinite(qty) || qty <= 0) return false;
+    if (confidence < 0.5) return false;
+    if (approvalLevel === "blocked_review" || approvalLevel === "manual_review") return false;
+    if (diffPct > 20) return false;
 
-  if (!text) return false;
-  if (!unit) return false;
-  if (!Number.isFinite(ep) || ep <= 0) return false;
-  if (!Number.isFinite(qty) || qty <= 0) return false;
-  if (confidence < 0.5) return false;
-  if (approvalLevel === "blocked_review" || approvalLevel === "manual_review") return false;
-  if (diffPct > 20) return false;
+    const unitLower = unit.toLowerCase();
+    const lumpSumUnit = unitLower === "psch" || unitLower === "st" || unitLower === "stk";
 
-  const unitLower = unit.toLowerCase();
-  const lumpSumUnit = unitLower === "psch" || unitLower === "st" || unitLower === "stk";
+    if (!lumpSumUnit && ep > 5000) return false;
 
-  if (!lumpSumUnit && ep > 5000) return false;
-
-  return true;
-}
-function rlcX84LearningCandidateKey(r: any): string {
-  return [
+    return true;
+  }
+  function rlcX84LearningCandidateKey(r: any): string {
+    return [
     String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
     String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
-    String(r?.einheit || r?.unit || "").trim().toLowerCase(),
-  ].join("||");
-}
-
-function showRlcX84LearningFreigabeModal(
-  candidates: any[]
-): Promise<{
-  ok: boolean;
-  writeCompanyDb: boolean;
-  approveGlobalKnowledge: boolean;
-  selectedKeys: string[];
-}> {
-  if (typeof document === "undefined") {
-    const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
-    return Promise.resolve({
-      ok: true,
-      writeCompanyDb: true,
-      approveGlobalKnowledge: false,
-      selectedKeys: safe.map(rlcX84LearningCandidateKey),
-    });
+    String(r?.einheit || r?.unit || "").trim().toLowerCase()].
+    join("||");
   }
 
-  const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
+  function showRlcX84LearningFreigabeModal(
+  candidates: any[])
+  : Promise<{
+    ok: boolean;
+    writeCompanyDb: boolean;
+    approveGlobalKnowledge: boolean;
+    selectedKeys: string[];
+  }> {
+    if (typeof document === "undefined") {
+      const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
+      return Promise.resolve({
+        ok: true,
+        writeCompanyDb: true,
+        approveGlobalKnowledge: false,
+        selectedKeys: safe.map(rlcX84LearningCandidateKey)
+      });
+    }
 
-  const esc = (value: any) =>
-    String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+    const safe = candidates.filter((r: any) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
 
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.style.cssText = `
+    const esc = (value: any) =>
+    String(value ?? "").
+    replace(/&/g, "&amp;").
+    replace(/</g, "&lt;").
+    replace(/>/g, "&gt;").
+    replace(/"/g, "&quot;");
+
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.style.cssText = `
       position: fixed;
       inset: 0;
       z-index: 99999;
@@ -7573,9 +8313,9 @@ function showRlcX84LearningFreigabeModal(
       font-family: Arial, sans-serif;
     `;
 
-    const rows = safe
-      .slice(0, 200)
-      .map((r: any, idx: number) => {
+      const rows = safe.
+      slice(0, 200).
+      map((r: any, idx: number) => {
         const diff = Number(r.diffPct || 0);
         const diffGp = Number(r.diffGp || 0);
         return `
@@ -7594,10 +8334,10 @@ function showRlcX84LearningFreigabeModal(
             </td>
           </tr>
         `;
-      })
-      .join("");
+      }).
+      join("");
 
-    overlay.innerHTML = `
+      overlay.innerHTML = `
       <div style="
         width: min(1180px, 96vw);
         max-height: 88vh;
@@ -7662,87 +8402,87 @@ function showRlcX84LearningFreigabeModal(
       </div>
     `;
 
-    document.body.appendChild(overlay);
+      document.body.appendChild(overlay);
 
-    const close = (result: {
-      ok: boolean;
-      writeCompanyDb: boolean;
-      approveGlobalKnowledge: boolean;
-      selectedKeys: string[];
-    }) => {
-      overlay.remove();
-      resolve(result);
-    };
+      const close = (result: {
+        ok: boolean;
+        writeCompanyDb: boolean;
+        approveGlobalKnowledge: boolean;
+        selectedKeys: string[];
+      }) => {
+        overlay.remove();
+        resolve(result);
+      };
 
-    const updateSelectedCount = () => {
-      const count = overlay.querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]:checked").length;
-      const el = overlay.querySelector<HTMLElement>("#rlcLearningSelectedCount");
-      if (el) el.textContent = String(count);
-    };
+      const updateSelectedCount = () => {
+        const count = overlay.querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]:checked").length;
+        const el = overlay.querySelector<HTMLElement>("#rlcLearningSelectedCount");
+        if (el) el.textContent = String(count);
+      };
 
-    const collectSelectedKeys = () =>
+      const collectSelectedKeys = () =>
       Array.from(
         overlay.querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]:checked")
-      )
-        .map((el) => safe[Number(el.dataset.rlcLearningIndex)])
-        .filter(Boolean)
-        .map(rlcX84LearningCandidateKey);
+      ).
+      map((el) => safe[Number(el.dataset.rlcLearningIndex)]).
+      filter(Boolean).
+      map(rlcX84LearningCandidateKey);
 
-    overlay.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.addEventListener("click", () => {
-      close({ ok: false, writeCompanyDb: false, approveGlobalKnowledge: false, selectedKeys: [] });
-    });
-
-    overlay.querySelector<HTMLButtonElement>('[data-action="approve"]')?.addEventListener("click", () => {
-      const selectedKeys = collectSelectedKeys();
-      const approveGlobalKnowledge = Boolean(
-        overlay.querySelector<HTMLInputElement>("#rlcLearningGlobal")?.checked
-      );
-
-      if (!selectedKeys.length) {
-        alert("Bitte mindestens eine Position auswählen.");
-        return;
-      }
-
-      close({
-        ok: true,
-        writeCompanyDb: true,
-        approveGlobalKnowledge,
-        selectedKeys,
+      overlay.querySelector<HTMLButtonElement>('[data-action="cancel"]')?.addEventListener("click", () => {
+        close({ ok: false, writeCompanyDb: false, approveGlobalKnowledge: false, selectedKeys: [] });
       });
-    });
 
-    overlay.querySelector<HTMLInputElement>("#rlcLearningSelectAll")?.addEventListener("change", (event) => {
-      const checked = Boolean((event.target as HTMLInputElement).checked);
-      overlay
-        .querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]")
-        .forEach((input) => {
+      overlay.querySelector<HTMLButtonElement>('[data-action="approve"]')?.addEventListener("click", () => {
+        const selectedKeys = collectSelectedKeys();
+        const approveGlobalKnowledge = Boolean(
+          overlay.querySelector<HTMLInputElement>("#rlcLearningGlobal")?.checked
+        );
+
+        if (!selectedKeys.length) {
+          alert("Bitte mindestens eine Position auswählen.");
+          return;
+        }
+
+        close({
+          ok: true,
+          writeCompanyDb: true,
+          approveGlobalKnowledge,
+          selectedKeys
+        });
+      });
+
+      overlay.querySelector<HTMLInputElement>("#rlcLearningSelectAll")?.addEventListener("change", (event) => {
+        const checked = Boolean((event.target as HTMLInputElement).checked);
+        overlay.
+        querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]").
+        forEach((input) => {
           input.checked = checked;
         });
-      updateSelectedCount();
-    });
+        updateSelectedCount();
+      });
 
-    overlay
-      .querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]")
-      .forEach((input) => {
+      overlay.
+      querySelectorAll<HTMLInputElement>("input[data-rlc-learning-index]").
+      forEach((input) => {
         input.addEventListener("change", updateSelectedCount);
       });
 
-    updateSelectedCount();
-  });
-}
-function showRlcOutlierReportModal() {
-  if (typeof document === "undefined") return;
+      updateSelectedCount();
+    });
+  }
+  function showRlcOutlierReportModal() {
+    if (typeof document === "undefined") return;
 
-  const esc = (value: any) =>
-    String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+    const esc = (value: any) =>
+    String(value ?? "").
+    replace(/&/g, "&amp;").
+    replace(/</g, "&lt;").
+    replace(/>/g, "&gt;").
+    replace(/"/g, "&quot;");
 
-  const outliers = rows
-    .filter((r: any) => !kiIsStructuralRow(r))
-    .map((r: any) => {
+    const outliers = rows.
+    filter((r: any) => !kiIsStructuralRow(r)).
+    map((r: any) => {
       const ep = getUnitPrice(r);
       const gp = lineNet(r);
       const qty = n(r.menge);
@@ -7773,18 +8513,18 @@ function showRlcOutlierReportModal() {
         confidence,
         riskLevel: r.riskLevel || "",
         status: r.calculationStatus || "",
-        issues,
+        issues
       };
-    })
-    .filter((r: any) => r.issues.length > 0)
-    .sort((a: any, b: any) => {
+    }).
+    filter((r: any) => r.issues.length > 0).
+    sort((a: any, b: any) => {
       const gpDiff = Math.abs(b.gp || 0) - Math.abs(a.gp || 0);
       if (gpDiff !== 0) return gpDiff;
       return b.issues.length - a.issues.length;
     });
 
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
     position: fixed;
     inset: 0;
     z-index: 99999;
@@ -7796,7 +8536,7 @@ function showRlcOutlierReportModal() {
     font-family: Arial, sans-serif;
   `;
 
-  const rowsHtml = outliers.slice(0, 300).map((r: any) => `
+    const rowsHtml = outliers.slice(0, 300).map((r: any) => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:800;">${esc(r.posNr)}</td>
       <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
@@ -7811,7 +8551,7 @@ function showRlcOutlierReportModal() {
     </tr>
   `).join("");
 
-  overlay.innerHTML = `
+    overlay.innerHTML = `
     <div style="
       width: min(1240px, 96vw);
       max-height: 88vh;
@@ -7870,65 +8610,60 @@ function showRlcOutlierReportModal() {
     </div>
   `;
 
-  document.body.appendChild(overlay);
+    document.body.appendChild(overlay);
 
-  overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", () => {
-    overlay.remove();
-  });
+    overlay.querySelector<HTMLButtonElement>('[data-action="close"]')?.addEventListener("click", () => {
+      overlay.remove();
+    });
 
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) overlay.remove();
-  });
-}
-if (typeof window !== "undefined") {
-  (window as any).rlcOpenKalkulationOutlierReport = showRlcOutlierReportModal;
-}
-async function showRlcX84LearningApprovalDraft() {
-  const storageKey = `rlc_x84_learning_approval_draft_v1:${projectKey}`;
-
-  let draft: any = {};
-  try {
-    draft = JSON.parse(localStorage.getItem(storageKey) || "{}");
-  } catch {
-    draft = {};
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) overlay.remove();
+    });
   }
+  if (typeof window !== "undefined") {
+    (window as any).rlcOpenKalkulationOutlierReport = showRlcOutlierReportModal;
+  }
+  async function showRlcX84LearningApprovalDraft() {
+    let learningState = await loadRlcX84LearningState(projectKey);
+    const draft: any = learningState?.draft || {};
 
-  const candidates = Array.isArray(draft?.candidates) ? draft.candidates : [];
-  const summary = draft?.summary || {};
+    const candidates = Array.isArray(draft?.candidates) ? draft.candidates : [];
+    const summary = draft?.summary || {};
 
-  console.log("[RLC-KI] Learning Approval Draft", {
-    storageKey,
-    ok: draft?.ok,
-    mode: draft?.mode,
-    autoWriteToDatabase: draft?.autoWriteToDatabase,
-    x84UsedAsPrice: draft?.x84UsedAsPrice,
-    summary,
-  });
+    console.log("[RLC-KI] Learning Approval Draft", {
+      projectKey,
+      storage: "server",
+      ok: draft?.ok,
+      mode: draft?.mode,
+      autoWriteToDatabase: draft?.autoWriteToDatabase,
+      x84UsedAsPrice: draft?.x84UsedAsPrice,
+      summary
+    });
 
-  console.table(
-    candidates.slice(0, 80).map((r: any) => ({
-      posNr: r.posNr,
-      kurztext: r.kurztext,
-      x84Ep: r.x84Ep,
-      rlcEp: r.rlcEp,
-      diffPct: r.diffPct,
-      diffGp: r.diffGp,
-      approvalLevel: r.approvalLevel,
-      decision: r.decision,
-      companyDb: r.approvedForCompanyDb,
-      globalDb: r.approvedForGlobalKnowledge,
-      source: r.source,
-    }))
-  );
+    console.table(
+      candidates.slice(0, 80).map((r: any) => ({
+        posNr: r.posNr,
+        kurztext: r.kurztext,
+        x84Ep: r.x84Ep,
+        rlcEp: r.rlcEp,
+        diffPct: r.diffPct,
+        diffGp: r.diffGp,
+        approvalLevel: r.approvalLevel,
+        decision: r.decision,
+        companyDb: r.approvedForCompanyDb,
+        globalDb: r.approvedForGlobalKnowledge,
+        source: r.source
+      }))
+    );
 
-  const freigabe = await showRlcX84LearningFreigabeModal(candidates);
-  if (!freigabe.ok) return;
+    const freigabe = await showRlcX84LearningFreigabeModal(candidates);
+    if (!freigabe.ok) return;
 
-  const selectedFreigabeKeys = new Set(freigabe.selectedKeys);
-  const approveGlobalKnowledge = freigabe.approveGlobalKnowledge;
-  const approved = candidates
-    .filter((r: any) => (r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review") && selectedFreigabeKeys.has(rlcX84LearningCandidateKey(r)))
-    .map((r: any) => ({
+    const selectedFreigabeKeys = new Set(freigabe.selectedKeys);
+    const approveGlobalKnowledge = freigabe.approveGlobalKnowledge;
+    const approved = candidates.
+    filter((r: any) => (r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review") && selectedFreigabeKeys.has(rlcX84LearningCandidateKey(r))).
+    map((r: any) => ({
       ...r,
       decision: "approved",
       approvedForCompanyDb: true,
@@ -7936,19 +8671,15 @@ async function showRlcX84LearningApprovalDraft() {
       globalKnowledgeBlockedByQualityGuard: approveGlobalKnowledge && !rlcCanSendToGlobalKnowledge(r),
       usedAsPrice: false,
       approvedAt: new Date().toISOString(),
-      approvalSource: approveGlobalKnowledge
-        ? "manual_safe_review_company_and_global_approval"
-        : "manual_safe_review_company_only_approval",
-      note: approveGlobalKnowledge
-        ? "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Anonyme Übernahme in RLC Global Knowledge wurde bestätigt."
-        : "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Speicherung nur in Firmen-Datenbank.",
+      approvalSource: approveGlobalKnowledge ?
+      "manual_safe_review_company_and_global_approval" :
+      "manual_safe_review_company_only_approval",
+      note: approveGlobalKnowledge ?
+      "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Anonyme Übernahme in RLC Global Knowledge wurde bestätigt." :
+      "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Speicherung nur in Firmen-Datenbank."
     }));
 
-  const approvedKey = `rlc_x84_learning_approved_v1:${projectKey}`;
-
-  localStorage.setItem(
-    approvedKey,
-    JSON.stringify({
+    const approvedSnapshot = {
       ok: true,
       projectKey,
       createdAt: new Date().toISOString(),
@@ -7956,25 +8687,35 @@ async function showRlcX84LearningApprovalDraft() {
       autoWriteToDatabase: false,
       x84UsedAsPrice: false,
       count: approved.length,
-      approvedForCompanyDbCount: approved.filter((r: any) => r.approvedForCompanyDb).length,
-      approvedForGlobalKnowledgeCount: approved.filter((r: any) => r.approvedForGlobalKnowledge).length,
-      entries: approved,
-    })
-  );
+      approvedForCompanyDbCount: approved.filter(
+        (r: any) => r.approvedForCompanyDb
+      ).length,
+      approvedForGlobalKnowledgeCount: approved.filter(
+        (r: any) => r.approvedForGlobalKnowledge
+      ).length,
+      entries: approved
+    };
 
-  const writeDb = freigabe.writeCompanyDb;
-  if (!writeDb) return;
-  const learnedRows = approved
-    .filter((r: any) => Number(r.rlcEp || 0) > 0)
-    .map((r: any, idx: number) => ({
+    learningState = await saveRlcX84LearningState(projectKey, {
+      ...learningState,
+      projectKey,
+      approved: approvedSnapshot,
+      updatedAt: new Date().toISOString()
+    });
+
+    const writeDb = freigabe.writeCompanyDb;
+    if (!writeDb) return;
+    const learnedRows = approved.
+    filter((r: any) => Number(r.rlcEp || 0) > 0).
+    map((r: any, idx: number) => ({
       ...normalizeEliteRow({
         id: `x84-learning-approved-${r.posNr || idx}`,
         posNr: String(r.posNr || ""),
         kurztext: String(r.kurztext || ""),
         langtext:
-          `RLC X84 Benchmark Learning geprüft. ` +
-          `X84 EP ${r.x84Ep} wurde nur als Vergleich genutzt. ` +
-          `Gespeichert wird der geprüfte RLC-KI EP ${r.rlcEp}.`,
+        `RLC X84 Benchmark Learning geprüft. ` +
+        `X84 EP ${r.x84Ep} wurde nur als Vergleich genutzt. ` +
+        `Gespeichert wird der geprüfte RLC-KI EP ${r.rlcEp}.`,
         einheit: String(r.einheit || ""),
         menge: Number(r.menge || 1) || 1,
 
@@ -7997,437 +8738,438 @@ async function showRlcX84LearningApprovalDraft() {
         confidence: 0.92,
         warning: "",
         aiReason:
-          "Manuell freigegebener X84-Benchmark-Learning-Kandidat. " +
-          "X84 wurde nur als Vergleich genutzt; gespeichert wurde der geprüfte RLC-KI-Preis.",
+        "Manuell freigegebener X84-Benchmark-Learning-Kandidat. " +
+        "X84 wurde nur als Vergleich genutzt; gespeichert wurde der geprüfte RLC-KI-Preis."
       } as any),
       approvedForCompanyDb: true,
       approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge) && rlcCanSendToGlobalKnowledge(r),
-      globalKnowledgeBlockedByQualityGuard: Boolean((r as any).globalKnowledgeBlockedByQualityGuard),
+      globalKnowledgeBlockedByQualityGuard: Boolean((r as any).globalKnowledgeBlockedByQualityGuard)
     }));
-  const duplicateKey = (r: any) =>
+    const duplicateKey = (r: any) =>
     [
-      String(projectKey || "").trim().toLowerCase(),
-      String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
-      String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
-      String(r?.einheit || r?.unit || "").trim().toLowerCase(),
-      String(r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase(),
-    ].join("||");
+    String(projectKey || "").trim().toLowerCase(),
+    String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+    String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+    String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+    String(r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase()].
+    join("||");
 
-  const dbWrittenKey = `rlc_x84_learning_db_written_v1:${projectKey}`;
+    const dbWrittenRaw =
+    learningState?.dbWritten && typeof learningState.dbWritten === "object" ?
+    learningState.dbWritten :
+    {};
 
-  const dbWrittenRaw = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(dbWrittenKey) || "{}");
-    } catch {
-      return {};
+    const alreadyWrittenKeys = new Set<string>(
+      Array.isArray(dbWrittenRaw?.keys) ? dbWrittenRaw.keys.map(String) : []
+    );
+
+    const uniqueLearnedRows: any[] = [];
+    const uniqueLearningKeys: string[] = [];
+    const seenLearningKeys = new Set<string>();
+
+    for (const row of learnedRows as any[]) {
+      const key = duplicateKey(row);
+      if (alreadyWrittenKeys.has(key)) continue;
+      if (seenLearningKeys.has(key)) continue;
+      seenLearningKeys.add(key);
+      uniqueLearningKeys.push(key);
+      uniqueLearnedRows.push(row);
     }
-  })();
 
-  const alreadyWrittenKeys = new Set<string>(
-    Array.isArray(dbWrittenRaw?.keys) ? dbWrittenRaw.keys.map(String) : []
-  );
+    if (!uniqueLearnedRows.length) {
+      setServerStatus("ℹ️ Keine neuen Learning-Kandidaten: bereits in Firmen-Datenbank gespeichert");
+      setTimeout(() => setServerStatus(""), 3500);
+      console.log("[RLC-KI] V48B Duplicate Guard: no new DB learning rows", {
+        projectKey,
+        skipped: learnedRows.length
+      });
+      return;
+    }
 
-  const uniqueLearnedRows: any[] = [];
-  const uniqueLearningKeys: string[] = [];
-  const seenLearningKeys = new Set<string>();
+    const count = saveRowsToDatenbank(uniqueLearnedRows as any, projectKey, projectTitle);
 
-  for (const row of learnedRows as any[]) {
-    const key = duplicateKey(row);
-    if (alreadyWrittenKeys.has(key)) continue;
-    if (seenLearningKeys.has(key)) continue;
-    seenLearningKeys.add(key);
-    uniqueLearningKeys.push(key);
-    uniqueLearnedRows.push(row);
-  }
-
-  if (!uniqueLearnedRows.length) {
-    setServerStatus("ℹ️ Keine neuen Learning-Kandidaten: bereits in Firmen-Datenbank gespeichert");
-    setTimeout(() => setServerStatus(""), 3500);
-    console.log("[RLC-KI] V48B Duplicate Guard: no new DB learning rows", {
+    learningState = await saveRlcX84LearningState(projectKey, {
+      ...learningState,
       projectKey,
-      skipped: learnedRows.length,
+      dbWritten: {
+        ok: true,
+        projectKey,
+        updatedAt: new Date().toISOString(),
+        keys: Array.from(
+          new Set([
+          ...Array.from(alreadyWrittenKeys),
+          ...uniqueLearningKeys]
+          )
+        )
+      },
+      updatedAt: new Date().toISOString()
     });
-    return;
-  }
 
-  const count = saveRowsToDatenbank(uniqueLearnedRows as any, projectKey, projectTitle);
+    setServerStatus(`✅ ${count} neue geprüfte Learning-Kandidat(en) in Firmen-Datenbank übernommen`);
+    setTimeout(() => setServerStatus(""), 3500);
 
-  localStorage.setItem(
-    dbWrittenKey,
-    JSON.stringify({
-      ok: true,
-      projectKey,
-      updatedAt: new Date().toISOString(),
-      keys: Array.from(new Set([...Array.from(alreadyWrittenKeys), ...uniqueLearningKeys])),
-    })
-  );
+    console.log("[RLC-KI] Approved Learning written to Firmen-Datenbank", {
+      count,
+      projectKey
+    });
 
-  setServerStatus(`✅ ${count} neue geprüfte Learning-Kandidat(en) in Firmen-Datenbank übernommen`);
-  setTimeout(() => setServerStatus(""), 3500);
-
-  console.log("[RLC-KI] Approved Learning written to Firmen-Datenbank", {
-    count,
-    projectKey,
-  });
-
-  alert(
-    [
+    alert(
+      [
       "Firmen-Datenbank aktualisiert.",
       "",
       `Übernommen: ${count}`,
       "",
       "Quelle: geprüfte RLC-KI Learning-Kandidaten.",
-      "X84 wurde nicht als Preis gespeichert.",
-    ].join("\n")
-  );
-}
-function renderPriceDiffTable(title: string, text: string, list: typeof topPriceDiffRows) {
-  if (!list.length) return null;
+      "X84 wurde nicht als Preis gespeichert."].
+      join("\n")
+    );
+  }
+  function renderPriceDiffTable(title: string, text: string, list: typeof topPriceDiffRows) {
+    if (!list.length) return null;
 
-  return (
-    <div style={{ marginTop: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-end", marginBottom: 10 }}>
+    return (
+      <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-869">
+      <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-870">
         <div>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "#10204a" }}>{title}</h3>
-          <div style={sectionText}>{text}</div>
+          <h3 className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-871">{title}</h3>
+          <div className={rlcClass(null, sectionText)}>{text}</div>
         </div>
-        <div style={priceCompareBadge}>{list.length} Position(en)</div>
+        <div className={rlcClass(null, priceCompareBadge)}>{list.length} Position(en)</div>
       </div>
 
-      <div style={priceCompareTableWrap}>
-        <table style={priceCompareTable}>
+      <div className={rlcClass(null, priceCompareTableWrap)}>
+        <table className={rlcClass(null, priceCompareTable)}>
           <thead>
             <tr>
-              <th style={priceCompareTh}>Pos.</th>
-              <th style={priceCompareTh}>Kurztext</th>
-              <th style={priceCompareThRight}>Menge</th>
-              <th style={priceCompareTh}>ME</th>
-              <th style={priceCompareThRight}>EP X84</th>
-              <th style={priceCompareThRight}>EP RLC-KI</th>
-              <th style={priceCompareThRight}>Diff. %</th>
-              <th style={priceCompareThRight}>Diff. GP</th>
-              <th style={priceCompareTh}>Bewertung</th>
+              <th className={rlcClass(null, priceCompareTh)}>Pos.</th>
+              <th className={rlcClass(null, priceCompareTh)}>Kurztext</th>
+              <th className={rlcClass(null, priceCompareThRight)}>Menge</th>
+              <th className={rlcClass(null, priceCompareTh)}>ME</th>
+              <th className={rlcClass(null, priceCompareThRight)}>EP X84</th>
+              <th className={rlcClass(null, priceCompareThRight)}>EP RLC-KI</th>
+              <th className={rlcClass(null, priceCompareThRight)}>Diff. %</th>
+              <th className={rlcClass(null, priceCompareThRight)}>Diff. GP</th>
+              <th className={rlcClass(null, priceCompareTh)}>Bewertung</th>
             </tr>
           </thead>
           <tbody>
-            {list.map((r) => (
+            {list.map((r) =>
               <tr
-                key={`${title}-${r.id}`}
-                style={priceCompareTr}
+                key={`${title}-${r.id}`} className={rlcClass(null,
+                priceCompareTr)}
                 onClick={() => {
                   setSelectedId(r.id);
                   setViewFilter("alle");
-                }}
-              >
-                <td style={priceCompareTdStrong}>{r.posNr || "—"}</td>
-                <td style={priceCompareTd}>{r.kurztext || "—"}</td>
-                <td style={priceCompareTdRight}>{qty(r.menge)}</td>
-                <td style={priceCompareTd}>{r.einheit || "—"}</td>
-                <td style={priceCompareTdRight}>{money(r.angebotEp)}</td>
-                <td style={priceCompareTdRight}>{money(r.kiEp)}</td>
-                <td style={priceCompareTdRight}>{r.diffPct}%</td>
-                <td style={priceCompareTdRight}>{money(r.diffGp)}</td>
-                <td style={priceCompareTd}>
-                  <span
-                    style={
-                      Math.abs(r.diffPct) >= 30
-                        ? badgeCritical
-                        : Math.abs(r.diffPct) >= 20
-                          ? badgeWarn
-                          : Math.abs(r.diffPct) >= 10
-                            ? badgeInfo
-                            : badgeOk
-                    }
-                  >
+                }}>
+                
+                <td className={rlcClass(null, priceCompareTdStrong)}>{r.posNr || "—"}</td>
+                <td className={rlcClass(null, priceCompareTd)}>{r.kurztext || "—"}</td>
+                <td className={rlcClass(null, priceCompareTdRight)}>{qty(r.menge)}</td>
+                <td className={rlcClass(null, priceCompareTd)}>{r.einheit || "—"}</td>
+                <td className={rlcClass(null, priceCompareTdRight)}>{money(r.angebotEp)}</td>
+                <td className={rlcClass(null, priceCompareTdRight)}>{money(r.kiEp)}</td>
+                <td className={rlcClass(null, priceCompareTdRight)}>{r.diffPct}%</td>
+                <td className={rlcClass(null, priceCompareTdRight)}>{money(r.diffGp)}</td>
+                <td className={rlcClass(null, priceCompareTd)}>
+                  <span className={rlcClass(null,
+
+                  Math.abs(r.diffPct) >= 30 ?
+                  badgeCritical :
+                  Math.abs(r.diffPct) >= 20 ?
+                  badgeWarn :
+                  Math.abs(r.diffPct) >= 10 ?
+                  badgeInfo :
+                  badgeOk)}>
+                    
+                    
                     {r.empfehlung}
                   </span>
                 </td>
               </tr>
-            ))}
+              )}
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
+    </div>);
 
-return (
-  <div style={page}>
+  }
+  return (
+    <div className={rlcClass(null, page)}>
     <input
-      ref={csvInputRef}
-      type="file"
-      accept=".csv,text/csv"
-      style={{ display: "none" }}
-      onChange={(e) => handleCsvImport(e.target.files?.[0] || null)}
-    />
+        ref={csvInputRef}
+        type="file"
+        accept=".csv,text/csv"
 
-    <section style={heroCardCompact}>
-      <div style={heroTopLine}>
+        onChange={(e) => handleCsvImport(e.target.files?.[0] || null)} className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-872" />
+      
+
+    <section className={rlcClass("rlc-page-hero", heroCardCompact)}>
+      <div className={rlcClass(null, heroTopLine)}>
         <div>
-          <div style={eyebrow}>RLC KI-Kalkulation</div>
+          <div className={rlcClass(null, eyebrow)}>RLC KI-Kalkulation</div>
 
-          <h1 style={titleCompact}>Kalkulation mit KI</h1>
+          <h1 className={rlcClass(null, titleCompact)}>Kalkulation mit KI</h1>
 
-          <p style={subtitleCompact}>
+          <p className={rlcClass(null, subtitleCompact)}>
             LV-Positionen kalkulieren, Urkalkulation aufbauen, Risiken prüfen
             und Angebot, PDF, XLSX und GAEB direkt erzeugen.
           </p>
         </div>
 
-        <div style={heroMetaCompact}>
+        <div className={rlcClass(null, heroMetaCompact)}>
           <span>Projekt</span>
           <b>{projectKey || "—"}</b>
           {lastKiSource ? <em>{lastKiSource}</em> : null}
         </div>
       </div>
 
-      <div style={compactToolbar}>
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-            padding: "6px",
-            border: "1px solid #d7dde8",
-            borderRadius: 12,
-            background: "#f8fafc",
-          }}
-        >
+      <div className={rlcClass(null, compactToolbar)}>
+        <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-873">
+
+
+
+
+
+
+
+
+
+            
           <button
-            type="button"
-            style={kiMode === "new-calculation" ? btnPrimary : btnSecondary}
-            onClick={() => {
-              setKiMode("new-calculation");
-              void runWithAction("ki-new-calculation", "Neue Kalkulation erstellen", () =>
+              type="button" className={rlcClass(null,
+              kiMode === "new-calculation" ? btnPrimary : btnSecondary)}
+              onClick={() => {
+                setKiMode("new-calculation");
+                void runWithAction("ki-new-calculation", "Neue Kalkulation erstellen", () =>
                 runEliteCalculation(true, false, "new-calculation")
-              );
-            }}
-            disabled={loading || !rows.length}
-            title="Ohne Angebotsbasis: RLC erstellt die Kalkulation aus LV, Langtext, Menge, Einheit, Datenbank und Urkalkulation."
-          >
+                );
+              }}
+              disabled={loading || !rows.length}
+              title="Ohne Angebotsbasis: RLC erstellt die Kalkulation aus LV, Langtext, Menge, Einheit, Datenbank und Urkalkulation.">
+              
             Neue Kalkulation erstellen
           </button>
 
           <button
-            type="button"
-            style={btnSecondary}
-            onClick={() => {
-              void runWithAction("ki-offer-check", "Angebot prüfen", () =>
+              type="button" className={rlcClass(null,
+              btnSecondary)}
+              onClick={() => {
+                void runWithAction("ki-offer-check", "Angebot prüfen", () =>
                 runOfferCheckOnly()
-              );
-            }}
-            disabled={loading || !rows.length}
-            title="Prüft eine vorhandene Angebots-/X84-Basis. Dieser Modus ist Kontrolle, nicht Hauptkalkulation."
-          >
+                );
+              }}
+              disabled={loading || !rows.length}
+              title="Prüft eine vorhandene Angebots-/X84-Basis. Dieser Modus ist Kontrolle, nicht Hauptkalkulation.">
+              
             Angebot prüfen
           </button>
         </div>
 
-        <button type="button" style={btnSecondary} onClick={addRow}>
+        <button type="button" className={rlcClass(null, btnSecondary)} onClick={addRow}>
           Urkalkulation starten für neue und bestehende Positionen
         </button>        <button
-          type="button"
-          style={btnPrimary}
-          onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
-          disabled={serverBusy || !projectKey}
-          title="Aktuellen Kalkulationsstand auf dem Server speichern."
-        >
+            type="button" className={rlcClass(null,
+            btnPrimary)}
+            onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
+            disabled={serverBusy || !projectKey}
+            title="Aktuellen Kalkulationsstand auf dem Server speichern.">
+            
           Speichern
         </button>
 
         <button
-          type="button"
-          style={btnSecondary}
-          onClick={() => navigate("/kalkulation/gaeb")}
-          title="GAEB-Dateien importieren, prüfen und exportieren."
-        >
+            type="button" className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => navigate("/kalkulation/gaeb")}
+            title="GAEB-Dateien importieren, prüfen und exportieren.">
+            
           GAEB Import / Export
         </button>
 
 
         <button
-          type="button"
-          style={btnSecondary}
-          onClick={() => setShowQuickActions((v) => !v)}
-        >
+            type="button" className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => setShowQuickActions((v) => !v)}>
+            
           {showQuickActions ? "Funktionen schließen" : "Funktionen"}
         </button>
       </div>
-      {serverStatus ? <div style={heroStatus}>{serverStatus}</div> : null}
+      {serverStatus ? <div className={rlcClass(null, heroStatus)}>{serverStatus}</div> : null}
       {activeAction ? <RlcActionProgress action={activeAction} /> : null}
     </section>
 
-    {showQuickActions ? (
-      <section style={compactActionPanel}>
-        <div style={compactActionHeader}>
+    {showQuickActions ?
+      <section className={rlcClass(null, compactActionPanel)}>
+        <div className={rlcClass(null, compactActionHeader)}>
           <div>
-            <h2 style={sectionTitle}>Funktionen</h2>
-<div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Funktionen</h2>
+<div className={rlcClass(null, sectionText)}>
   Zentrale Funktionen für LV, Nachträge, Angebot, GAEB, Export und Einstellungen.
 </div>
           </div>
         </div>
 
-        <div style={compactActionGrid}>
+        <div className={rlcClass(null, compactActionGrid)}>
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
-            disabled={loading || !rows.length}
-          >
+            disabled={loading || !rows.length}>
+            
             <b>KI Expertprüfung</b>
             <span>Langsame Tiefprüfung nur bei Bedarf</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={showRlcX84LearningApprovalDraft}
-            disabled={loading}
-          >
+            disabled={loading}>
+            
             <b>Learning prüfen / freigeben</b>
             <span>Geprüfte Kandidaten in Firmen-Datenbank übernehmen</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => void runWithAction("ki-complete", "Fehlende Daten prüfen", () => autoCompleteMissingFields())}
-            disabled={!rows.length}
-          >
+            disabled={!rows.length}>
+            
             <b>Fehlende Daten prüfen</b>
             <span>Prüft fehlende Kurztexte, Langtexte, Einheiten, Mengen und Preisaufbau</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
-            disabled={serverBusy || !projectKey}
-          >
+            disabled={serverBusy || !projectKey}>
+            
             <b>Speichern</b>
             <span>Aktuellen Stand manuell sichern</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => void runWithAction("server-load", "Laden", () => loadFromProjectServer())}
-            disabled={serverBusy || !projectKey}
-          >
+            disabled={serverBusy || !projectKey}>
+            
             <b>Laden</b>
             <span>Gespeicherten Stand wiederherstellen</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
-            onClick={() => navigate("/kalkulation/lv-import")}
-          >
+            type="button" className={rlcClass(null,
+            compactActionButton)}
+            onClick={() => navigate("/kalkulation/lv-import")}>
+            
             <b>LV / Positionen</b>
             <span>Importieren und bearbeiten</span>
           </button>
 
           <button
-  type="button"
-  style={compactActionButton}
-  onClick={() => navigate("/kalkulation/nachtraege")}
->
+            type="button" className={rlcClass(null,
+            compactActionButton)}
+            onClick={() => navigate("/kalkulation/nachtraege")}>
+            
   <b>Nachträge</b>
   <span>Zusatzleistungen und Änderungen bearbeiten</span>
 </button>
 
 <button
-  type="button"
-  style={compactActionButton}
-  onClick={() => navigate("/kalkulation/angebot")}
->
+            type="button" className={rlcClass(null,
+            compactActionButton)}
+            onClick={() => navigate("/kalkulation/angebot")}>
+            
   <b>Angebot / Export</b>
   <span>Angebot, PDF und Angebotsunterlagen erzeugen</span>
 </button>
 
 <button
-  type="button"
-  style={compactActionButton}
-  onClick={() => navigate("/kalkulation/gaeb")}
->
+            type="button" className={rlcClass(null,
+            compactActionButton)}
+            onClick={() => navigate("/kalkulation/gaeb")}>
+            
   <b>GAEB Import / Export</b>
   <span>GAEB-Dateien importieren, prüfen und alle Formate zentral exportieren</span>
 </button>
 
           <button
-            type="button"
-            style={compactActionButton}
-            onClick={() => csvInputRef.current?.click()}
-          >
+            type="button" className={rlcClass(null,
+            compactActionButton)}
+            onClick={() => csvInputRef.current?.click()}>
+            
             <b>CSV Import</b>
             <span>Positionen aus CSV laden</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => downloadCsv(rows)}
-            disabled={!rows.length}
-          >
+            disabled={!rows.length}>
+            
             <b>CSV Export</b>
             <span>Aktuelle Kalkulation exportieren</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => exportXlsx(rows, chapterTotals, summary, offer)}
-            disabled={!rows.length}
-          >
+            disabled={!rows.length}>
+            
             <b>XLSX</b>
             <span>Kalkulation mit Preisaufbau</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport())}
-            disabled={!rows.length || pdfBusy}
-          >
+            disabled={!rows.length || pdfBusy}>
+            
             <b>{pdfBusy ? "PDF…" : "PDF Angebot"}</b>
             <span>Angebots-PDF erzeugen</span>
           </button>
 
           <button
-            type="button"
-            style={compactActionButton}
+            type="button" className={rlcClass(null,
+            compactActionButton)}
             onClick={() => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport())}
-            disabled={!rows.length || pdfBusy}
-          >
+            disabled={!rows.length || pdfBusy}>
+            
             <b>Urkalkulation PDF</b>
             <span>Detailkalkulation exportieren</span>
           </button>
         </div>
-      </section>
-    ) : null}
+      </section> :
+      null}
 
-    <section style={compactOrderCard}>
-      <div style={orderHead}>
+    <section className={rlcClass(null, compactOrderCard)}>
+      <div className={rlcClass(null, orderHead)}>
         <div>
-          <h2 style={sectionTitle}>Auftragsstruktur</h2>
-          <div style={sectionText}>
+          <h2 className={rlcClass(null, sectionTitle)}>Auftragsstruktur</h2>
+          <div className={rlcClass(null, sectionText)}>
             Hauptauftrag und Unteraufträge kompakt steuern.
           </div>
         </div>
 
-        <button type="button" style={btnPrimary} onClick={createUnterauftrag}>
+        <button type="button" className={rlcClass(null, btnPrimary)} onClick={createUnterauftrag}>
           + Unterauftrag
         </button>
       </div>
 
-      <div style={auftragSummaryBoxCompact}>
+      <div className={rlcClass(null, auftragSummaryBoxCompact)}>
         <div>
           Auftrag:{" "}
           <b>
-            {selectedAuftragId
-              ? selectedAuftrag?.name || "—"
-              : "Alle Aufträge"}
+            {selectedAuftragId ?
+              selectedAuftrag?.name || "—" :
+              "Alle Aufträge"}
           </b>
         </div>
 
@@ -8438,98 +9180,98 @@ return (
         </div>
       </div>
 
-      <div style={auftragTabsCompact}>
+      <div className={rlcClass(null, auftragTabsCompact)}>
         <button
-          type="button"
-          style={!selectedAuftragId ? auftragTabActive : auftragTab}
-          onClick={() => setSelectedAuftragId("")}
-        >
+            type="button" className={rlcClass(null,
+            !selectedAuftragId ? auftragTabActive : auftragTab)}
+            onClick={() => setSelectedAuftragId("")}>
+            
           Alle
         </button>
 
-        {auftraege.map((auftrag) => (
+        {auftraege.map((auftrag) =>
           <button
             key={auftrag.id}
-            type="button"
-            style={
-              selectedAuftragId === auftrag.id ? auftragTabActive : auftragTab
-            }
-            onClick={() => setSelectedAuftragId(auftrag.id)}
-          >
+            type="button" className={rlcClass(null,
+
+            selectedAuftragId === auftrag.id ? auftragTabActive : auftragTab)}
+
+            onClick={() => setSelectedAuftragId(auftrag.id)}>
+            
             {auftrag.type === "haupt" ? "Haupt" : "Unter"} · {auftrag.name}
           </button>
-        ))}
+          )}
       </div>
     </section>
 
-    <section style={grid4Compact}>
+    <section className={rlcClass(null, grid4Compact)}>
       <KpiCard
-        label="Angebot X84 netto"
-        value={(() => {
-          try {
-            const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
-            const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
-            const offerNet = x84OfferNet || summary.angebotNet;
-            return hasRealX84 && offerNet > 0 ? money(offerNet) : "Keine X84 geladen";
-          } catch {
-            return "Keine X84 geladen";
-          }
-        })()}
-        sub={(() => {
-          try {
-            const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
-            const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
-            const offerNet = x84OfferNet || summary.angebotNet;
-            return hasRealX84 && offerNet > 0
-              ? `Brutto ${money(round2(offerNet * 1.19))}`
-              : "Nur X83/LV vorhanden · keine Angebotsdatei";
-          } catch {
-            return "Nur X83/LV vorhanden · keine Angebotsdatei";
-          }
-        })()}
-      />
+          label="Angebot X84 netto"
+          value={(() => {
+            try {
+              const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+              const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
+              const offerNet = x84OfferNet || summary.angebotNet;
+              return hasRealX84 && offerNet > 0 ? money(offerNet) : "Keine X84 geladen";
+            } catch {
+              return "Keine X84 geladen";
+            }
+          })()}
+          sub={(() => {
+            try {
+              const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+              const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
+              const offerNet = x84OfferNet || summary.angebotNet;
+              return hasRealX84 && offerNet > 0 ?
+              `Brutto ${money(round2(offerNet * 1.19))}` :
+              "Nur X83/LV vorhanden · keine Angebotsdatei";
+            } catch {
+              return "Nur X83/LV vorhanden · keine Angebotsdatei";
+            }
+          })()} />
+        
 
       <KpiCard
-        label="RLC-KI netto"
-        value={loading ? "Wird berechnet…" : summary.rlcKiNet > 0 ? money(summary.rlcKiNet) : "0,00 €"}
-        sub={loading ? "Server-KI berechnet gerade echte RLC-Preise" : summary.rlcKiNet > 0 ? `Brutto ${money(summary.rlcKiGross)}` : "Noch keine RLC-KI berechnet"}
-      />
+          label="RLC-KI netto"
+          value={loading ? "Wird berechnet…" : summary.rlcKiNet > 0 ? money(summary.rlcKiNet) : "0,00 €"}
+          sub={loading ? "Server-KI berechnet gerade echte RLC-Preise" : summary.rlcKiNet > 0 ? `Brutto ${money(summary.rlcKiGross)}` : "Noch keine RLC-KI berechnet"} />
+        
 
       <KpiCard
-        label="Prüfen"
-        value={`${summary.critical + summary.highRisk}`}
-        sub={summary.highRisk > 0 ? "Bitte jede Position prüfen · fachliche Prüfung erforderlich · RLC-KI übernimmt keine Haftung" : `${summary.critical} kritisch · fachlich geprüft`}
-      />
+          label="Prüfen"
+          value={`${summary.critical + summary.highRisk}`}
+          sub={summary.highRisk > 0 ? "Bitte jede Position prüfen · fachliche Prüfung erforderlich · RLC-KI übernimmt keine Haftung" : `${summary.critical} kritisch · fachlich geprüft`} />
+        
 
       <KpiCard
-        label="Ø Sicherheit"
-        value={percent(summary.avgConfidence)}
-        sub={`${summary.priced}/${summary.total} kalkuliert`}
-      />
+          label="Ø Sicherheit"
+          value={percent(summary.avgConfidence)}
+          sub={`${summary.priced}/${summary.total} kalkuliert`} />
+        
     </section>
     {(() => {
-      try {
-        const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
-        return String(parsed?.format || "").toUpperCase() === "X84";
-      } catch {
-        return false;
-      }
-    })() && priceDiffReport.counts.total > 0 ? (
-<section style={{ ...priceCompareCard, display: rows.some((r) => getOfferUnitPrice(r) > 0) ? undefined : "none" }}>
-        <div style={sectionHead}>
+        try {
+          const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+          return String(parsed?.format || "").toUpperCase() === "X84";
+        } catch {
+          return false;
+        }
+      })() && priceDiffReport.counts.total > 0 ?
+      <section className={rlcClass(null, { ...priceCompareCard, display: rows.some((r) => getOfferUnitPrice(r) > 0) ? undefined : "none" })}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Optionaler Angebotsvergleich X84 ↔ RLC-KI</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Optionaler Angebotsvergleich X84 ↔ RLC-KI</h2>
+            <div className={rlcClass(null, sectionText)}>
               Optionaler Vergleich aller {priceDiffReport.counts.total} Positionen. X84 ist nur eine externe Angebots-/Vergleichsdatei und keine Kalkulationsgrundlage der RLC-KI.
             </div>
           </div>
 
-          <div style={priceCompareBadge}>
+          <div className={rlcClass(null, priceCompareBadge)}>
             {priceDiffReport.counts.outside10} Abweichungen &gt; ±10%
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 18 }}>
+        <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-874">
           <KpiCard label="Alle Positionen" value={`${priceDiffReport.counts.total}`} sub={`${priceDiffReport.counts.comparable} vergleichbar · ${priceDiffReport.counts.missing} ohne Vergleich`} />
           <KpiCard label="RLC-KI höher als X84 >10%" value={`${priceDiffReport.counts.higher10}`} sub={`${money(priceDiffReport.sums.higher)} GP-Differenz`} />
           <KpiCard label="RLC-KI niedriger als X84 >10%" value={`${priceDiffReport.counts.lower10}`} sub={`${money(priceDiffReport.sums.lower)} GP-Differenz`} />
@@ -8537,262 +9279,262 @@ return (
           <KpiCard label="Differenz zum X84-Vergleich" value={money(priceDiffReport.sums.diff)} sub={`${money(priceDiffReport.sums.x84)} X84 ↔ ${money(priceDiffReport.sums.rlc)} RLC-KI`} />
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+        <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-875">
           {[
-            ["outside10", `Außerhalb ±10% (${priceDiffReport.counts.outside10})`],
-            ["higher10", `RLC höher >10% (${priceDiffReport.counts.higher10})`],
-            ["lower10", `RLC niedriger >10% (${priceDiffReport.counts.lower10})`],
-            ["inside10", `Innerhalb ±10% (${priceDiffReport.counts.inside10})`],
-            ["over20", `Über ±20% (${priceDiffReport.over20Pct.length})`],
-            ["over10000", `Über 10.000 € (${priceDiffReport.over10000Gp.length})`],
-            ["all", `Alle vergleichbaren (${priceDiffReport.counts.comparable})`],
-            ["missing", `Ohne Vergleich (${priceDiffReport.counts.missing})`],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              style={priceDiffView === key ? btnPrimary : btnSecondary}
-              onClick={() => setPriceDiffView(key as any)}
-            >
+          ["outside10", `Außerhalb ±10% (${priceDiffReport.counts.outside10})`],
+          ["higher10", `RLC höher >10% (${priceDiffReport.counts.higher10})`],
+          ["lower10", `RLC niedriger >10% (${priceDiffReport.counts.lower10})`],
+          ["inside10", `Innerhalb ±10% (${priceDiffReport.counts.inside10})`],
+          ["over20", `Über ±20% (${priceDiffReport.over20Pct.length})`],
+          ["over10000", `Über 10.000 € (${priceDiffReport.over10000Gp.length})`],
+          ["all", `Alle vergleichbaren (${priceDiffReport.counts.comparable})`],
+          ["missing", `Ohne Vergleich (${priceDiffReport.counts.missing})`]].
+          map(([key, label]) =>
+          <button
+            key={key}
+            type="button" className={rlcClass(null,
+            priceDiffView === key ? btnPrimary : btnSecondary)}
+            onClick={() => setPriceDiffView(key as any)}>
+            
               {label}
             </button>
-          ))}
+          )}
         </div>
 
         {renderPriceDiffTable(
-          priceDiffView === "higher10"
-            ? "RLC-KI höher als X84 um mehr als 10%"
-            : priceDiffView === "lower10"
-              ? "RLC-KI niedriger als X84 um mehr als 10%"
-              : priceDiffView === "inside10"
-                ? "Positionen innerhalb ±10%"
-                : priceDiffView === "over20"
-                  ? "Positionen über ±20%"
-                  : priceDiffView === "over10000"
-                    ? "Positionen über 10.000 € GP-Differenz"
-                    : priceDiffView === "all"
-                      ? "Alle vergleichbaren Positionen"
-                      : priceDiffView === "missing"
-                        ? "Positionen ohne Vergleich"
-                        : "Alle Vergleichsabweichungen über ±10%",
+          priceDiffView === "higher10" ?
+          "RLC-KI höher als X84 um mehr als 10%" :
+          priceDiffView === "lower10" ?
+          "RLC-KI niedriger als X84 um mehr als 10%" :
+          priceDiffView === "inside10" ?
+          "Positionen innerhalb ±10%" :
+          priceDiffView === "over20" ?
+          "Positionen über ±20%" :
+          priceDiffView === "over10000" ?
+          "Positionen über 10.000 € GP-Differenz" :
+          priceDiffView === "all" ?
+          "Alle vergleichbaren Positionen" :
+          priceDiffView === "missing" ?
+          "Positionen ohne Vergleich" :
+          "Alle Vergleichsabweichungen über ±10%",
           "Die Tabelle ist vollständig für den gewählten Filter. Diese Analyse bewertet eine externe X84-Datei gegen die autonome RLC-Kalkulation; sie kalibriert die RLC-KI nicht automatisch.",
           activePriceDiffRows
         )}
-      </section>
-    ) : null}
+      </section> :
+      null}
     {/* KI interna rimossa: ora lavora solo il RLC-KI Assistent globale */}
 
-    {showCommercialSettings ? (
-      <section style={card}>
-        <div style={sectionHead}>
+    {showCommercialSettings ?
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Angebot / Rahmenwerte</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Angebot / Rahmenwerte</h2>
+            <div className={rlcClass(null, sectionText)}>
               Diese Werte fließen in PDF, XLSX, Snapshot und Angebotsübergabe
               ein.
             </div>
           </div>
         </div>
 
-        <div style={formGrid}>
+        <div className={rlcClass(null, formGrid)}>
           <Field label="Angebot Nr.">
-            <input
-              style={input}
-              value={offer.number}
-              onChange={(e) => setOffer({ ...offer, number: e.target.value })}
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={offer.number}
+            onChange={(e) => setOffer({ ...offer, number: e.target.value })} />
+            
           </Field>
 
           <Field label="Ort">
-            <input
-              style={input}
-              value={offer.place}
-              onChange={(e) => setOffer({ ...offer, place: e.target.value })}
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={offer.place}
+            onChange={(e) => setOffer({ ...offer, place: e.target.value })} />
+            
           </Field>
 
           <Field label="Kunde">
-            <input
-              style={input}
-              value={client.name}
-              onChange={(e) => setClient({ ...client, name: e.target.value })}
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={client.name}
+            onChange={(e) => setClient({ ...client, name: e.target.value })} />
+            
           </Field>
 
           <Field label="Kundenadresse">
-            <input
-              style={input}
-              value={client.address}
-              onChange={(e) =>
-                setClient({ ...client, address: e.target.value })
-              }
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={client.address}
+            onChange={(e) =>
+            setClient({ ...client, address: e.target.value })
+            } />
+            
           </Field>
 
           <Field label="Globaler Aufschlag %">
             <input
-              type="number"
-              style={input}
+              type="number" className={rlcClass(null,
+              input)}
               value={globalMarkup}
-              onChange={(e) => setGlobalMarkup(n(e.target.value))}
-            />
+              onChange={(e) => setGlobalMarkup(n(e.target.value))} />
+            
           </Field>
 
           <Field label="MwSt %">
             <input
-              type="number"
-              style={input}
+              type="number" className={rlcClass(null,
+              input)}
               value={mwst}
-              onChange={(e) => setMwst(n(e.target.value))}
-            />
+              onChange={(e) => setMwst(n(e.target.value))} />
+            
           </Field>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-876">
           <Field label="Notizen / Zahlungsbedingungen">
-            <textarea
-              style={{ ...input, minHeight: 70 }}
-              value={offer.notes}
-              onChange={(e) => setOffer({ ...offer, notes: e.target.value })}
-            />
+            <textarea className={rlcClass(null,
+            { ...input, minHeight: 70 })}
+            value={offer.notes}
+            onChange={(e) => setOffer({ ...offer, notes: e.target.value })} />
+            
           </Field>
         </div>
-      </section>
-    ) : null}
+      </section> :
+      null}
 
-    {showChapterSettings ? (
-      <section style={card}>
-        <div style={sectionHead}>
+    {showChapterSettings ?
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Kapitelsteuerung</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Kapitelsteuerung</h2>
+            <div className={rlcClass(null, sectionText)}>
               Rabatt und Markup pro Kapitel für Angebotsstrategie.
             </div>
           </div>
         </div>
 
-        <div style={chapterGrid}>
-          {Array.from(chapters.keys()).map((ch) => (
-            <div key={ch} style={chapterBox}>
-              <div style={{ fontWeight: 800 }}>Kapitel {ch}</div>
+        <div className={rlcClass(null, chapterGrid)}>
+          {Array.from(chapters.keys()).map((ch) =>
+          <div key={ch} className={rlcClass(null, chapterBox)}>
+              <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-877">Kapitel {ch}</div>
 
-              <div style={chapterInputs}>
-                <label style={label}>Rabatt %</label>
+              <div className={rlcClass(null, chapterInputs)}>
+                <label className={rlcClass(null, label)}>Rabatt %</label>
                 <input
-                  type="number"
-                  style={smallInput}
-                  value={kapRabatt[ch] ?? 0}
-                  onChange={(e) =>
-                    setKapRabatt({ ...kapRabatt, [ch]: n(e.target.value) })
-                  }
-                />
+                type="number" className={rlcClass(null,
+                smallInput)}
+                value={kapRabatt[ch] ?? 0}
+                onChange={(e) =>
+                setKapRabatt({ ...kapRabatt, [ch]: n(e.target.value) })
+                } />
+              
 
-                <label style={label}>Markup %</label>
+                <label className={rlcClass(null, label)}>Markup %</label>
                 <input
-                  type="number"
-                  style={smallInput}
-                  value={kapMarkup[ch] ?? 0}
-                  onChange={(e) =>
-                    setKapMarkup({ ...kapMarkup, [ch]: n(e.target.value) })
-                  }
-                />
+                type="number" className={rlcClass(null,
+                smallInput)}
+                value={kapMarkup[ch] ?? 0}
+                onChange={(e) =>
+                setKapMarkup({ ...kapMarkup, [ch]: n(e.target.value) })
+                } />
+              
               </div>
 
-              <div style={tiny}>
+              <div className={rlcClass(null, tiny)}>
                 Netto: {money(chapterTotals[ch]?.afterChapterMarkup)}
               </div>
             </div>
-          ))}
+          )}
 
-          {!chapters.size ? <div style={muted}>Noch keine Kapitel.</div> : null}
+          {!chapters.size ? <div className={rlcClass(null, muted)}>Noch keine Kapitel.</div> : null}
         </div>
-      </section>
-    ) : null}
+      </section> :
+      null}
 
     
-<section id="rlc-lv-positionen" style={calcEditorGrid}>
+<section id="rlc-lv-positionen" className={rlcClass(null, calcEditorGrid)}>
           {/* ================= OBERER BEREICH: LV KOMPAKT ================= */}
-          <div style={card}>
-            <div style={sectionHead}>
+          <div className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>LV / Positionsliste</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>LV / Positionsliste</h2>
+                <div className={rlcClass(null, sectionText)}>
                   Kompakte Übersicht der LV-Positionen. Die technische Detailkalkulation erfolgt in Urkalkulation / Rezepte.
                 </div>
               </div>
 
-              <div style={exportRow}>
+              <div className={rlcClass(null, exportRow)}>
                 <button
-                  type="button"
-                  style={btnSecondary}
-                  onClick={addRow}
-                >
+                type="button" className={rlcClass(null,
+                btnSecondary)}
+                onClick={addRow}>
+                
                   Urkalkulation starten für neue und bestehende Positionen
                 </button>
 
-                <details style={lvMenuWrap}>
-                  <summary style={lvMenuButton}>Mehr ▾</summary>
+                <details className={rlcClass(null, lvMenuWrap)}>
+                  <summary className={rlcClass(null, lvMenuButton)}>Mehr ▾</summary>
 
-                  <div style={lvMenuPanel}>
+                  <div className={rlcClass(null, lvMenuPanel)}>
                     <button
-                      type="button"
-                      style={lvMenuItem}
-                      onClick={() => csvInputRef.current?.click()}
-                    >
+                    type="button" className={rlcClass(null,
+                    lvMenuItem)}
+                    onClick={() => csvInputRef.current?.click()}>
+                    
                       CSV importieren
                     </button>
 
                     <button
-                      type="button"
-                      style={lvMenuItem}
-                      onClick={() => downloadCsv(rows)}
-                      disabled={!rows.length}
-                    >
+                    type="button" className={rlcClass(null,
+                    lvMenuItem)}
+                    onClick={() => downloadCsv(rows)}
+                    disabled={!rows.length}>
+                    
                       CSV exportieren
                     </button>
 
                     <button
-                      type="button"
-                      style={lvMenuItem}
-                      onClick={() => exportXlsx(rows, chapterTotals, summary, offer)}
-                      disabled={!rows.length}
-                    >
+                    type="button" className={rlcClass(null,
+                    lvMenuItem)}
+                    onClick={() => exportXlsx(rows, chapterTotals, summary, offer)}
+                    disabled={!rows.length}>
+                    
                       XLSX exportieren
                     </button>
 
                     <button
-                      type="button"
-                      style={lvMenuItem}
-                      onClick={() => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport())}
-                      disabled={!rows.length || pdfBusy}
-                    >
+                    type="button" className={rlcClass(null,
+                    lvMenuItem)}
+                    onClick={() => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport())}
+                    disabled={!rows.length || pdfBusy}>
+                    
                       PDF Angebot
                     </button>
 
                     <button
-                      type="button"
-                      style={lvMenuItem}
-                      onClick={() => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport())}
-                      disabled={!rows.length || pdfBusy}
-                    >
+                    type="button" className={rlcClass(null,
+                    lvMenuItem)}
+                    onClick={() => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport())}
+                    disabled={!rows.length || pdfBusy}>
+                    
                       Urkalkulation PDF
                     </button>
 
                     <button
-                      type="button"
-                      style={lvMenuItem}
-                      onClick={() => void runRlcAction("ki-export-x83", "GAEB X83 exportieren", () => exportGaeb("x83"))}
-                      disabled={!rows.length}
-                    >
+                    type="button" className={rlcClass(null,
+                    lvMenuItem)}
+                    onClick={() => void runRlcAction("ki-export-x83", "GAEB X83 exportieren", () => exportGaeb("x83"))}
+                    disabled={!rows.length}>
+                    
                       GAEB X83
                     </button>
 
                     <button
-                      type="button"
-                      style={lvMenuItem}
-                      onClick={() => void runRlcAction("ki-export-x84", "GAEB X84 exportieren", () => exportGaeb("x84"))}
-                      disabled={!rows.length}
-                    >
+                    type="button" className={rlcClass(null,
+                    lvMenuItem)}
+                    onClick={() => void runRlcAction("ki-export-x84", "GAEB X84 exportieren", () => exportGaeb("x84"))}
+                    disabled={!rows.length}>
+                    
                       GAEB X84
                     </button>
                   </div>
@@ -8800,173 +9542,172 @@ return (
               </div>
             </div>
 
-            <div style={filterRow}>
+            <div className={rlcClass(null, filterRow)}>
               <FilterButton
-                active={viewFilter === "alle"}
-                onClick={() => setViewFilter("alle")}
-              >
+              active={viewFilter === "alle"}
+              onClick={() => setViewFilter("alle")}>
+              
                 Alle {rows.length}
               </FilterButton>
 
               <FilterButton
-                active={viewFilter === "kritisch"}
-                onClick={() => setViewFilter("kritisch")}
-              >
+              active={viewFilter === "kritisch"}
+              onClick={() => setViewFilter("kritisch")}>
+              
                 Kritisch {problemCounts.kritisch}
               </FilterButton>
 
               <FilterButton
-                active={viewFilter === "warnungen"}
-                onClick={() => setViewFilter("warnungen")}
-              >
+              active={viewFilter === "warnungen"}
+              onClick={() => setViewFilter("warnungen")}>
+              
                 Prüfhinweise {problemCounts.warnungen}
               </FilterButton>
 
               <FilterButton
-                active={viewFilter === "hochrisiko"}
-                onClick={() => setViewFilter("hochrisiko")}
-              >
+              active={viewFilter === "hochrisiko"}
+              onClick={() => setViewFilter("hochrisiko")}>
+              
                 Prüfpflichtig {problemCounts.hochrisiko}
               </FilterButton>
 
 
               <FilterButton
-                active={viewFilter === "doppelte"}
-                onClick={() => {
-                  setViewFilter("doppelte");
-                  selectDuplicateRowsToDelete();
-                  setLvPage(1);
-                }}
-              >
+              active={viewFilter === "doppelte"}
+              onClick={() => {
+                setViewFilter("doppelte");
+                selectDuplicateRowsToDelete();
+                setLvPage(1);
+              }}>
+              
                 Doppelte {duplicateCountToDelete}
               </FilterButton>
               <FilterButton
-                active={viewFilter === "ohneDb"}
-                onClick={() => setViewFilter("ohneDb")}
-              >
+              active={viewFilter === "ohneDb"}
+              onClick={() => setViewFilter("ohneDb")}>
+              
                 Ohne DB {problemCounts.ohneDb}
               </FilterButton>
 
               <FilterButton
-                active={viewFilter === "sicher"}
-                onClick={() => setViewFilter("sicher")}
-              >
+              active={viewFilter === "sicher"}
+              onClick={() => setViewFilter("sicher")}>
+              
                 Direkt sicher {problemCounts.sicher}
               </FilterButton>
 
-              <span style={filterMeta}>
+              <span className={rlcClass(null, filterMeta)}>
                 Sichtbar: {filteredRows.length}/{rows.length}
               </span>
             </div>
 
-            <details open style={lvDropdownBox}>
-          <summary style={lvDropdownSummary}>
+            <details open className={rlcClass(null, lvDropdownBox)}>
+          <summary className={rlcClass(null, lvDropdownSummary)}>
             <span>
               LV-Positionen · {filteredRows.length} Position(en) · Sichtbar max. {lvPageSize}
             </span>
-            <span style={lvDropdownHint}>öffnen / schließen</span>
+            <span className={rlcClass(null, lvDropdownHint)}>öffnen / schließen</span>
           </summary>
 
-          <div style={{ ...exportRow, marginBottom: 10 }}>
+          <div className={rlcClass(null, { ...exportRow, marginBottom: 10 })}>
             <button
-              type="button"
-              style={btnSecondary}
-              onClick={selectWarningsForOpenAi}
-              disabled={!rows.length}
-              title="Wählt Warnungen, kritische Positionen, Prüfpflichtig und Positionen ohne DB für OpenAI aus."
-            >
+                type="button" className={rlcClass(null,
+                btnSecondary)}
+                onClick={selectWarningsForOpenAi}
+                disabled={!rows.length}
+                title="Wählt Warnungen, kritische Positionen, Prüfpflichtig und Positionen ohne DB für OpenAI aus.">
+                
               Prüfhinweise auswählen
             </button>
 
             <button
-              type="button"
-              style={btnPrimary}
-              onClick={() => void runRlcAction("ki-openai-selected", "Auswahl mit OpenAI prüfen", () => runSelectedOpenAiCheck())}
-              disabled={loading || selectedOpenAiIds.length === 0}
-              title="Prüft nur die ausgewählten Positionen mit OpenAI."
-            >
+                type="button" className={rlcClass(null,
+                btnPrimary)}
+                onClick={() => void runRlcAction("ki-openai-selected", "Auswahl mit OpenAI prüfen", () => runSelectedOpenAiCheck())}
+                disabled={loading || selectedOpenAiIds.length === 0}
+                title="Prüft nur die ausgewählten Positionen mit OpenAI.">
+                
               Auswahl mit OpenAI prüfen ({selectedOpenAiIds.length})
             </button>
 
             <button
-              type="button"
-              style={btnSecondary}
-              onClick={clearOpenAiSelection}
-              disabled={selectedOpenAiIds.length === 0}
-            >
+                type="button" className={rlcClass(null,
+                btnSecondary)}
+                onClick={clearOpenAiSelection}
+                disabled={selectedOpenAiIds.length === 0}>
+                
               Auswahl löschen
             </button>
 
             <button
-              type="button"
-              style={btnPrimary}
-              onClick={acceptSelectedOpenAiSuggestion}
-              disabled={!selectedHasOpenAiProposal()}
-              title="Übernimmt den OpenAI-Vorschlag nur für die aktuell ausgewählte Position."
-            >
+                type="button" className={rlcClass(null,
+                btnPrimary)}
+                onClick={acceptSelectedOpenAiSuggestion}
+                disabled={!selectedHasOpenAiProposal()}
+                title="Übernimmt den OpenAI-Vorschlag nur für die aktuell ausgewählte Position.">
+                
               OpenAI übernehmen
             </button>
 
             <button
-              type="button"
-              style={btnSecondary}
-              onClick={rejectSelectedOpenAiSuggestion}
-              disabled={!selectedHasOpenAiProposal()}
-            >
+                type="button" className={rlcClass(null,
+                btnSecondary)}
+                onClick={rejectSelectedOpenAiSuggestion}
+                disabled={!selectedHasOpenAiProposal()}>
+                
               OpenAI ablehnen
             </button>
 
             <button
-              type="button"
-              style={btnSecondary}
-              onClick={saveSelectedOpenAiSuggestionAsKnowledge}
-              disabled={!selectedHasOpenAiProposal()}
-              title="Speichert den OpenAI-Vorschlag als geprüften Firmenwert in der lokalen Kalkulationsdatenbank."
-            >
+                type="button" className={rlcClass(null,
+                btnSecondary)}
+                onClick={saveSelectedOpenAiSuggestionAsKnowledge}
+                disabled={!selectedHasOpenAiProposal()}
+                title="Speichert den OpenAI-Vorschlag als geprüften Firmenwert in der lokalen Kalkulationsdatenbank.">
+                
               Als Firmenwert speichern
             </button>
 
             <button
-              type="button"
-              style={btnPrimary}
-              onClick={() => void runRlcAction("ki-save-knowledge", "In Datenbank übertragen", () => saveAllToKnowledge())}
-              disabled={!rows.length}
-              title="Überträgt alle aktuell kalkulierten LV-Positionen in die Kalkulationsdatenbank."
-            >
+                type="button" className={rlcClass(null,
+                btnPrimary)}
+                onClick={() => void runRlcAction("ki-save-knowledge", "In Datenbank übertragen", () => saveAllToKnowledge())}
+                disabled={!rows.length}
+                title="Überträgt alle aktuell kalkulierten LV-Positionen in die Kalkulationsdatenbank.">
+                
               In Datenbank übertragen ({rows.length})
             </button>
           </div>
-          <div style={lvStickyHeader}>
-            <div>OpenAI</div>
-            <div>Auftrag</div>
-            <div>Pos.</div>
-            <div>Kurztext</div>
-            <div style={{ textAlign: "right" }}>Menge</div>
-            <div>ME</div>
-            <div style={{ textAlign: "right" }}>EP X84</div>
-            <div style={{ textAlign: "right" }}>EP RLC-KI</div>
-            <div style={{ textAlign: "right" }}>EP final</div>
-            <div style={{ textAlign: "right" }}>GP final</div>
-            <div>Status</div>
-            <div>Aktion</div>
-          </div>
-
-          <div style={lvTableScroll}>
-            <table style={lvTable}>
-                <thead style={{ display: "none" }}>
+          <div className={rlcClass(null, lvTableScroll)}>
+            <table className={rlcClass(null, lvTable)}>
+                <colgroup>
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-878" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-879" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-880" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-881" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-882" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-883" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-884" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-885" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-886" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-887" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-888" />
+                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-889" />
+                </colgroup>
+                <thead>
                   <tr>
-                    <th style={lvTh}>OpenAI</th>
-                    <th style={lvTh}>Auftrag</th>
-                    <th style={lvTh}>Pos.</th>
-                    <th style={lvTh}>Kurztext</th>
-                    <th style={lvThRight}>Menge</th>
-                    <th style={lvTh}>ME</th>
-                    <th style={lvThRight}>{hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}</th>
-                    <th style={lvThRight}>EP RLC-KI</th>
-                    <th style={lvThRight}>EP final</th>
-                    <th style={lvThRight}>GP final</th>
-                    <th style={lvTh}>Status</th>
-                    <th style={lvTh}></th>
+                    <th className={rlcClass(null, lvTh)}>OpenAI</th>
+                    <th className={rlcClass(null, lvTh)}>Auftrag</th>
+                    <th className={rlcClass(null, lvTh)}>Pos.</th>
+                    <th className={rlcClass(null, lvTh)}>Kurztext</th>
+                    <th className={rlcClass(null, lvThRight)}>Menge</th>
+                    <th className={rlcClass(null, lvTh)}>ME</th>
+                    <th className={rlcClass(null, lvThRight)}>{hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}</th>
+                    <th className={rlcClass(null, lvThRight)}>EP RLC-KI</th>
+                    <th className={rlcClass(null, lvThRight)}>EP final</th>
+                    <th className={rlcClass(null, lvThRight)}>GP final</th>
+                    <th className={rlcClass(null, lvTh)}>Status</th>
+                    <th className={rlcClass(null, lvTh)}></th>
                   </tr>
                 </thead>
 
@@ -8978,326 +9719,347 @@ return (
                     return (
                       <tr
                         id={`rlc-row-${r.id}`}
-                        key={r.id}
-                        style={{
+                        key={r.id} className={rlcClass(null,
+                        {
                           ...lvRow,
                           ...(isSelected ? lvRowSelected : {}),
-                          ...(r.calculationStatus === "critical"
-                            ? lvRowCritical
-                            : {}),
+                          ...(r.calculationStatus === "critical" ?
+                          lvRowCritical :
+                          {}),
                           ...(r.calculationStatus === "warning" ? lvRowWarning : {}),
-                          ...(kiIsStructuralRow(r) ? lvRowStructure : {}),
-                        }}
-                        onClick={() => setSelectedId(r.id)}
-                      >
-                        <td style={lvTd}>
+                          ...(kiIsStructuralRow(r) ? lvRowStructure : {})
+                        })}
+                        onClick={() => {
+                          setSelectedId(r.id);
+                          window.setTimeout(() => {
+                            selectedDetailRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start"
+                            });
+                          }, 50);
+                        }}>
+                        
+                        <td className={rlcClass(null, lvTd)}>
                           <input
                             type="checkbox"
                             checked={selectedOpenAiIds.includes(r.id)}
                             disabled={kiIsStructuralRow(r)}
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) =>
-                              toggleOpenAiSelection(r.id, e.target.checked)
-                            }
-                          />
+                            toggleOpenAiSelection(r.id, e.target.checked)
+                            } />
+                          
                         </td>
 
-                        <td style={lvTd}>
-                          <select
-                            style={lvSelect}
-                            value={r.auftragId || ""}
-                            onChange={(e) => {
-                              const a = auftraege.find(
-                                (x) => x.id === e.target.value
-                              );
+                        <td className={rlcClass(null, lvTd)}>
+                          <select className={rlcClass(null,
+                          lvSelect)}
+                          value={r.auftragId || ""}
+                          onChange={(e) => {
+                            const a = auftraege.find(
+                              (x) => x.id === e.target.value
+                            );
 
-                              updateRow(r.id, {
-                                auftragId: a?.id || "",
-                                auftragName: a?.name || "",
-                                auftragType: a?.type,
-                              });
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                            updateRow(r.id, {
+                              auftragId: a?.id || "",
+                              auftragName: a?.name || "",
+                              auftragType: a?.type
+                            });
+                          }}
+                          onClick={(e) => e.stopPropagation()}>
+                            
                             <option value="">Ohne Auftrag</option>
 
-                            {auftraege.map((a) => (
-                              <option key={a.id} value={a.id}>
+                            {auftraege.map((a) =>
+                            <option key={a.id} value={a.id}>
                                 {a.type === "haupt" ? "Haupt" : "Unter"} ·{" "}
                                 {a.name}
                               </option>
-                            ))}
+                            )}
                           </select>
                         </td>
 
-                        <td style={lvTd}>
-                          <input
-                            style={lvPosInput}
-                            value={r.posNr}
-                            onChange={(e) =>
-                              updateRow(r.id, { posNr: e.target.value })
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                        <td className={rlcClass(null, lvTd)}>
+                          <input className={rlcClass(null,
+                          lvPosInput)}
+                          value={r.posNr}
+                          onChange={(e) =>
+                          updateRow(r.id, { posNr: e.target.value })
+                          }
+                          onClick={(e) => e.stopPropagation()} />
+                          
                         </td>
 
-                        <td style={lvTextTd}>
-                          <input
-                            style={lvKurztextInput}
-                            value={r.kurztext}
-                            placeholder="Kurztext eingeben…"
-                            onChange={(e) =>
-                              updateRow(r.id, { kurztext: e.target.value })
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                        <td className={rlcClass(null, lvTextTd)}>
+                          <input className={rlcClass(null,
+                          lvKurztextInput)}
+                          value={r.kurztext}
+                          placeholder="Kurztext eingeben…"
+                          onChange={(e) =>
+                          updateRow(r.id, { kurztext: e.target.value })
+                          }
+                          onClick={(e) => e.stopPropagation()} />
+                          
 
-                          {r.langtext?.trim() ? (
-  <div style={lvLangPreview}>
+                          {r.langtext?.trim() ?
+                          <div className={rlcClass(null, lvLangPreview)}>
     {r.langtext.slice(0, 150)}
     {r.langtext.length > 150 ? "…" : ""}
 
-    <div style={{ marginTop: 8 }}>
+    <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-890">
       <button
-        type="button"
-        style={btnMini}
-        onClick={(e) => {
-          e.stopPropagation();
+                                type="button" className={rlcClass(null,
+                                { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
 
-          const text = [
-            `Position: ${r.posNr || "—"}`,
-            `Kurztext: ${r.kurztext || "—"}`,
-            "",
-            "Langtext:",
-            r.langtext || "—",
-            "",
-            `Menge: ${qty(r.menge)} ${r.einheit || "EH"}`,
-            `${hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}: ${hasRealX84ForProject(projectKey) ? money(getOfferUnitPrice(r)) : "—"}`,
-            `EP RLC-KI: ${money(getRlcKiUnitPrice(r))}`,
-            `EP final: ${money(getUnitPrice(r))}`,
-            `Gesamt netto: ${money(lineNet(r))}`,
-          ].join("\n");
+                                  const text = [
+                                  `Position: ${r.posNr || "—"}`,
+                                  `Kurztext: ${r.kurztext || "—"}`,
+                                  "",
+                                  "Langtext:",
+                                  r.langtext || "—",
+                                  "",
+                                  `Menge: ${qty(r.menge)} ${r.einheit || "EH"}`,
+                                  `${hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}: ${hasRealX84ForProject(projectKey) ? money(getOfferUnitPrice(r)) : "—"}`,
+                                  `EP RLC-KI: ${money(getRlcKiUnitPrice(r))}`,
+                                  `EP final: ${money(getUnitPrice(r))}`,
+                                  `Gesamt netto: ${money(lineNet(r))}`].
+                                  join("\n");
 
-          showLangtextModal(text);
-        }}
-      >
+                                  showLangtextModal(text);
+                                }}>
+                                
         Langtext / Summe
       </button>
     </div>
-  </div>
-) : null}
+  </div> :
+                          null}
 
-                          {r.warning && !rowHasOpenAiProposal(r) ? (
-                            <div style={lvMiniWarning}>{kiRowShortStatus(r)}</div>
-                          ) : null}
+                          {r.warning && !rowHasOpenAiProposal(r) ?
+                          <div className={rlcClass(null, lvMiniWarning)}>{kiRowShortStatus(r)}</div> :
+                          null}
 
-                          {rowHasOpenAiProposal(r) ? (
-                            <div
-                              style={{
-                                marginTop: 8,
-                                padding: 10,
-                                border: "1px solid #93C5FD",
-                                background: "#EFF6FF",
-                                borderRadius: 12,
-                                color: "#1E3A8A",
-                                fontSize: 12,
-                                fontWeight: 800,
-                                lineHeight: 1.45,
-                              }}
-                            >
+                          {rowHasOpenAiProposal(r) ?
+                          <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-891">
+
+
+
+
+
+
+
+
+
+
+
+                            
                               <div>
   OpenAI-Vorschlag: {money(getOpenAiProposalPrice(r))} / EH
 </div>
 
-<div style={{ marginTop: 4 }}>
+<div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-892">
   EP Angebot X84: {money(getOfferUnitPrice(r))} / EH · RLC-KI aktuell:{" "}
   {money(getRlcKiUnitPrice(r))} / EH
 </div>
 
-<div style={{ marginTop: 4 }}>
+<div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-893">
   Differenz OpenAI zu X84:{" "}
   {money(round2(getOpenAiProposalPrice(r) - getOfferUnitPrice(r)))} ·{" "}
-  {getOfferUnitPrice(r) > 0
-    ? `${round2((Math.abs(getOpenAiProposalPrice(r) - getOfferUnitPrice(r)) / getOfferUnitPrice(r)) * 100)} %`
-    : "—"}
+  {getOfferUnitPrice(r) > 0 ?
+                              `${round2(Math.abs(getOpenAiProposalPrice(r) - getOfferUnitPrice(r)) / getOfferUnitPrice(r) * 100)} %` :
+                              "—"}
 </div>
 
-<div style={{ marginTop: 4 }}>
+<div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-894">
   Differenz OpenAI zu RLC-KI:{" "}
   {money(round2(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)))} ·{" "}
-  {getRlcKiUnitPrice(r) > 0
-    ? `${round2((Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r)) * 100)} %`
-    : "—"}
+  {getRlcKiUnitPrice(r) > 0 ?
+                              `${round2(Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r) * 100)} %` :
+                              "—"}
 </div>
 
-                              {n((r as any).rlcPreisAvg) > 0 ? (
-                                <div style={{ marginTop: 6, fontSize: 11, color: "#1E40AF" }}>
+                              {n((r as any).rlcPreisAvg) > 0 ?
+                            <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-895">
                                   RLC Bibliothek: min {money(n((r as any).rlcPreisMin))} · avg{" "}
                                   {money(n((r as any).rlcPreisAvg))} · max{" "}
                                   {money(n((r as any).rlcPreisMax))}
-                                </div>
-                              ) : null}
+                                </div> :
+                            null}
 
-                              <div style={{ marginTop: 4, fontSize: 11, color: "#1D4ED8" }}>
+                              <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-896">
                                 Bewertung:{" "}
-                                {getRawOpenAiProposalPrice(r) !== getOpenAiProposalPrice(r)
-                                  ? "OpenAI wurde automatisch gegen RLC-Bibliothek plausibilisiert"
-                                  : getRlcKiUnitPrice(r) <= 0
-                                    ? "kein RLC-KI EP vorhanden"
-                                    : Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r) < 0.1
-                                      ? "nahe am aktuellen Preis"
-                                      : getOpenAiProposalPrice(r) > getRlcKiUnitPrice(r)
-                                        ? "OpenAI sieht aktuellen Preis eher zu niedrig"
-                                        : "OpenAI sieht aktuellen Preis eher zu hoch"}
+                                {getRawOpenAiProposalPrice(r) !== getOpenAiProposalPrice(r) ?
+                              "OpenAI wurde automatisch gegen RLC-Bibliothek plausibilisiert" :
+                              getRlcKiUnitPrice(r) <= 0 ?
+                              "kein RLC-KI EP vorhanden" :
+                              Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r) < 0.1 ?
+                              "nahe am aktuellen Preis" :
+                              getOpenAiProposalPrice(r) > getRlcKiUnitPrice(r) ?
+                              "OpenAI sieht aktuellen Preis eher zu niedrig" :
+                              "OpenAI sieht aktuellen Preis eher zu hoch"}
                               </div>
 
-                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                              <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-897">
                                 <button
-                                  type="button"
-                                  style={btnMini}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    acceptOpenAiSuggestionForRow(r.id);
-                                  }}
-                                >
+                                type="button" className={rlcClass(null,
+                                { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  acceptOpenAiSuggestionForRow(r.id);
+                                }}>
+                                
                                   OpenAI-Preis übernehmen
                                 </button>
 
                                 <button
-                                  type="button"
-                                  style={btnMini}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    rejectOpenAiSuggestionForRow(r.id);
-                                  }}
-                                >
+                                type="button" className={rlcClass(null,
+                                { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  rejectOpenAiSuggestionForRow(r.id);
+                                }}>
+                                
                                   Ablehnen
                                 </button>
 
                                 <button
-                                  type="button"
-                                  style={btnMini}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    saveOpenAiSuggestionForRow(r.id);
-                                  }}
-                                >
+                                type="button" className={rlcClass(null,
+                                { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  saveOpenAiSuggestionForRow(r.id);
+                                }}>
+                                
                                   Als Firmenwert speichern
                                 </button>
                               </div>
-                            </div>
-                          ) : null}
+                            </div> :
+                          null}
                         </td>
 
-                        <td style={lvTdRight}>
+                        <td className={rlcClass(null, lvTdRight)}>
                           <input
-                            type="number"
-                            style={lvNumberInput}
+                            type="number" className={rlcClass(null,
+                            lvNumberInput)}
                             value={r.menge}
                             onChange={(e) =>
-                              updateRow(r.id, { menge: n(e.target.value) })
+                            updateRow(r.id, { menge: n(e.target.value) })
                             }
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                            onClick={(e) => e.stopPropagation()} />
+                          
                         </td>
 
-                        <td style={lvTd}>
-                          <input
-                            style={lvUnitInput}
-                            value={r.einheit}
-                            onChange={(e) =>
-                              updateRow(r.id, { einheit: e.target.value })
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                        <td className={rlcClass(null, lvTd)}>
+                          <input className={rlcClass(null,
+                          lvUnitInput)}
+                          value={r.einheit}
+                          onChange={(e) =>
+                          updateRow(r.id, { einheit: e.target.value })
+                          }
+                          onClick={(e) => e.stopPropagation()} />
+                          
                         </td>
 
-                        <td style={lvTdRight}>
+                        <td className={rlcClass(null, lvTdRight)}>
                           <b>{money(getOfferUnitPrice(r))}</b>
                         </td>
 
-                        <td style={lvTdRight}>
+                        <td className={rlcClass(null, lvTdRight)}>
                           {(() => {
                             const ki = getRlcKiDisplay(r);
 
                             return (
-                              <div style={{ display: "grid", gap: 4, justifyItems: "end" }}>
-                                <b style={ki.rejected ? { color: "#B91C1C" } : undefined}>
+                              <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-898">
+                                <b className={rlcClass(null, ki.rejected ? { color: "#B91C1C" } : undefined)}>
                                   {ki.label}
                                 </b>
 
-                                {ki.rejected && ki.raw > 0 ? (
-                                  <span style={{ fontSize: 11, color: "#B91C1C", fontWeight: 800 }}>
+                                {ki.rejected && ki.raw > 0 ?
+                                <span className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-899">
                                     verworfen
-                                  </span>
-                                ) : null}
+                                  </span> :
+                                null}
 
-                                {ki.valid > 0 ? (
-                                  <button
-                                    type="button"
-                                    style={btnMini}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      applyKiSuggestedPrice(r.id);
-                                    }}
-                                  >
+                                {ki.valid > 0 ?
+                                <button
+                                  type="button" className={rlcClass(null,
+                                  {
+                                    ...btnMini,
+                                    width: "100%",
+                                    maxWidth: "100%",
+                                    minWidth: 0,
+                                    minHeight: 26,
+                                    padding: "3px 4px",
+                                    fontSize: 9.5,
+                                    lineHeight: 1.05,
+                                    whiteSpace: "normal",
+                                    overflowWrap: "anywhere",
+                                    textAlign: "center",
+                                    boxSizing: "border-box"
+                                  })}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    applyKiSuggestedPrice(r.id);
+                                  }}>
+                                  
                                     KI übernehmen
-                                  </button>
-                                ) : null}
-                              </div>
-                            );
+                                  </button> :
+                                null}
+                              </div>);
+
                           })()}
                         </td>
 
-                        <td style={lvTdRight}>
+                        <td className={rlcClass(null, lvTdRight)}>
                           <input
-                            type="number"
-                            style={lvPriceInput}
+                            type="number" className={rlcClass(null,
+                            lvPriceInput)}
                             value={getUnitPrice(r)}
                             onChange={(e) =>
-                              updateRow(r.id, {
-                                finalUnitPrice: n(e.target.value),
-                                preis: n(e.target.value),
-                                priceDecision: "manual" as any,
-                              })
+                            updateRow(r.id, {
+                              finalUnitPrice: n(e.target.value),
+                              preis: n(e.target.value),
+                              priceDecision: "manual" as any
+                            })
                             }
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                            onClick={(e) => e.stopPropagation()} />
+                          
                         </td>
 
-                        <td style={lvTdRight}>
+                        <td className={rlcClass(null, lvTdRight)}>
                           <b>{money(gp)}</b>
                         </td>
 
-                        <td style={lvTd}>
-                          <span style={statusStyle(r.calculationStatus)}>
+                        <td className={rlcClass(null, lvTd)}>
+                          <span className={rlcClass(null, statusStyle(r.calculationStatus))}>
                             {kiIsStructuralRow(r) ? "Struktur" : statusLabel(r.calculationStatus)}
                           </span>
                         </td>
 
-                        <td style={lvTd}>
+                        <td className={rlcClass(null, lvTd)}>
                           <button
-                            type="button"
-                            style={btnDangerMini}
+                            type="button" className={rlcClass(null,
+                            { ...btnDangerMini, minHeight: 26, padding: "3px 6px", fontSize: 9.5, lineHeight: 1, whiteSpace: "nowrap" })}
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteRow(r.id);
-                            }}
-                          >
+                            }}>
+                            
                             Löschen
                           </button>
                         </td>
-                      </tr>
-                    );
+                      </tr>);
+
                   })}
 
-                  {!visibleLvRows.length ? (
-                    <tr>
-                      <td colSpan={12} style={{ ...lvTd, color: "#64748B" }}>
+                  {!visibleLvRows.length ?
+                  <tr>
+                      <td colSpan={12} className={rlcClass(null, { ...lvTd, color: "#64748B" })}>
                         Keine Positionen für diesen Filter vorhanden.
                       </td>
-                    </tr>
-                  ) : null}
+                    </tr> :
+                  null}
                 </tbody>
               </table>
           </div>
@@ -9305,40 +10067,40 @@ return (
 
                 </div>
 
-<div style={{ ...bottomCalcGrid, gridTemplateColumns: "minmax(0,1fr)" }}>
-    <div style={{ ...card, display: "none" }}>
-      <div style={sectionHead}>
+<div className={rlcClass(null, { ...bottomCalcGrid, gridTemplateColumns: "minmax(0,1fr)" })}>
+    <div className={rlcClass(null, { ...card, display: "none" })}>
+      <div className={rlcClass(null, sectionHead)}>
         <div>
-          <h2 style={sectionTitle}>Preisaufbau / Urkalkulation</h2>
-          <div style={sectionText}>
+          <h2 className={rlcClass(null, sectionTitle)}>Preisaufbau / Urkalkulation</h2>
+          <div className={rlcClass(null, sectionText)}>
             Kompakte Kontrolle der gewählten Position. Detailaufbau erfolgt in Urkalkulation / Rezepte; hier werden EP, GP und vorhandene Ansätze geprüft.
           </div>
         </div>
 
-        <div style={exportRow}>
+        <div className={rlcClass(null, exportRow)}>
           <button
-            type="button"
-            style={btnSecondary}
-            onClick={regenerateSelectedBreakdown}
-            disabled={!selectedRow}
-          >
+                  type="button" className={rlcClass(null,
+                  btnSecondary)}
+                  onClick={regenerateSelectedBreakdown}
+                  disabled={!selectedRow}>
+                  
             Preisaufbau aktualisieren
           </button>
 
           <button
-            type="button"
-            style={btnPrimary}
-            onClick={addBreakdownLine}
-            disabled={!selectedRow}
-          >
+                  type="button" className={rlcClass(null,
+                  btnPrimary)}
+                  onClick={addBreakdownLine}
+                  disabled={!selectedRow}>
+                  
             Ansatz manuell ergänzen
           </button>
         </div>
       </div>
 
-      {selectedRow ? (
-        <>
-          <div style={selectedPositionBar}>
+      {selectedRow ?
+            <>
+          <div className={rlcClass(null, selectedPositionBar)}>
             <div>
               <b>{selectedRow.posNr || "—"}</b> ·{" "}
               {selectedRow.kurztext || "Ohne Text"}
@@ -9351,95 +10113,95 @@ return (
             </div>
           </div>
 
-          <div style={urkalkulationSummary}>
-            <div style={urkBox}>
-              <span style={urkLabel}>Lohn</span>
+          <div className={rlcClass(null, urkalkulationSummary)}>
+            <div className={rlcClass(null, urkBox)}>
+              <span className={rlcClass(null, urkLabel)}>Lohn</span>
               <b>{money(groupSum(selectedRow, "Personal"))}</b>
             </div>
 
-            <div style={urkBox}>
-              <span style={urkLabel}>Geräte</span>
+            <div className={rlcClass(null, urkBox)}>
+              <span className={rlcClass(null, urkLabel)}>Geräte</span>
               <b>
                 {money(
-                  groupSum(selectedRow, "Maschinen") +
-                    groupSum(selectedRow, "LKW / Transport")
-                )}
+                      groupSum(selectedRow, "Maschinen") +
+                      groupSum(selectedRow, "LKW / Transport")
+                    )}
               </b>
             </div>
 
-            <div style={urkBox}>
-              <span style={urkLabel}>Stoffe</span>
+            <div className={rlcClass(null, urkBox)}>
+              <span className={rlcClass(null, urkLabel)}>Stoffe</span>
               <b>{money(groupSum(selectedRow, "Material"))}</b>
             </div>
 
-            <div style={urkBox}>
-              <span style={urkLabel}>Fremd</span>
+            <div className={rlcClass(null, urkBox)}>
+              <span className={rlcClass(null, urkLabel)}>Fremd</span>
               <b>{money(groupSum(selectedRow, "Fremdleistung"))}</b>
             </div>
 
-            <div style={urkBox}>
-              <span style={urkLabel}>Sonstiges</span>
+            <div className={rlcClass(null, urkBox)}>
+              <span className={rlcClass(null, urkLabel)}>Sonstiges</span>
               <b>
                 {money(
-                  groupSum(selectedRow, "Entsorgung") +
-                    groupSum(selectedRow, "Gemeinkosten") +
-                    groupSum(selectedRow, "Risiko") +
-                    groupSum(selectedRow, "Gewinn")
-                )}
+                      groupSum(selectedRow, "Entsorgung") +
+                      groupSum(selectedRow, "Gemeinkosten") +
+                      groupSum(selectedRow, "Risiko") +
+                      groupSum(selectedRow, "Gewinn")
+                    )}
               </b>
             </div>
 
-            <div style={urkBoxStrong}>
-              <span style={urkLabel}>EP</span>
+            <div className={rlcClass(null, urkBoxStrong)}>
+              <span className={rlcClass(null, urkLabel)}>EP</span>
               <b>{money(getUnitPrice(selectedRow))}</b>
             </div>
           </div>
 
-          <details open style={lvDropdownBox}>
-  <summary style={lvDropdownSummary}>
+          <details open className={rlcClass(null, lvDropdownBox)}>
+  <summary className={rlcClass(null, lvDropdownSummary)}>
     <span>
       LV / Positionsliste · {filteredRows.length} Position(en) · Anzeige max. {lvPageSize}
     </span>
-    <span style={lvDropdownHint}>öffnen / schließen</span>
+    <span className={rlcClass(null, lvDropdownHint)}>öffnen / schließen</span>
   </summary>
 
-  <div style={lvTableScroll}>
-    <table style={table}>
+  <div className={rlcClass(null, lvTableScroll)}>
+    <table className={rlcClass(null, table)}>
               <thead>
                 <tr>
-                  <th style={th}>Nr</th>
-                  <th style={th}>Art</th>
-                  <th style={th}>Bezeichnung</th>
-                  <th style={th}>Einheit</th>
-                  <th style={th}>Menge</th>
-                  <th style={th}>Preis</th>
-                  <th style={th}>Leistung Netto</th>
-                  <th style={th}>Faktor</th>
-                  <th style={th}>EP Gesamt</th>
-                  <th style={th}>GP Gesamt</th>
-                  <th style={th}>Kostenart</th>
-                  <th style={th}></th>
+                  <th className={rlcClass(null, th)}>Nr</th>
+                  <th className={rlcClass(null, th)}>Art</th>
+                  <th className={rlcClass(null, th)}>Bezeichnung</th>
+                  <th className={rlcClass(null, th)}>Einheit</th>
+                  <th className={rlcClass(null, th)}>Menge</th>
+                  <th className={rlcClass(null, th)}>Preis</th>
+                  <th className={rlcClass(null, th)}>Leistung Netto</th>
+                  <th className={rlcClass(null, th)}>Faktor</th>
+                  <th className={rlcClass(null, th)}>EP Gesamt</th>
+                  <th className={rlcClass(null, th)}>GP Gesamt</th>
+                  <th className={rlcClass(null, th)}>Kostenart</th>
+                  <th className={rlcClass(null, th)}></th>
                 </tr>
               </thead>
 
               <tbody>
                 {(selectedRow.priceBreakdown || []).map((line, idx) => {
-                  const gp = round2(n(line.total) * n(selectedRow.menge));
+                        const gp = round2(n(line.total) * n(selectedRow.menge));
 
-                  return (
-                    <tr key={line.id}>
-                      <td style={td}>{String(idx + 10).padStart(2, "0")}</td>
+                        return (
+                          <tr key={line.id}>
+                      <td className={rlcClass(null, td)}>{String(idx + 10).padStart(2, "0")}</td>
 
-                      <td style={td}>
-                        <select
-                          style={{ ...cellInput, width: 145 }}
-                          value={line.group}
-                          onChange={(e) =>
-                            updateBreakdownLine(line.id, {
-                              group: e.target.value as PriceBreakdownGroup,
-                            })
-                          }
-                        >
+                      <td className={rlcClass(null, td)}>
+                        <select className={rlcClass(null,
+                              { ...cellInput, width: 145 })}
+                              value={line.group}
+                              onChange={(e) =>
+                              updateBreakdownLine(line.id, {
+                                group: e.target.value as PriceBreakdownGroup
+                              })
+                              }>
+                                
                           <option value="Personal">Personal / Lohn</option>
                           <option value="Maschinen">Maschinen / Gerät</option>
                           <option value="LKW / Transport">LKW / Transport</option>
@@ -9452,125 +10214,135 @@ return (
                         </select>
                       </td>
 
-                      <td style={td}>
-                        <input
-                          style={{ ...cellInput, width: "100%" }}
-                          value={line.name}
-                          onChange={(e) =>
-                            updateBreakdownLine(line.id, { name: e.target.value })
-                          }
-                        />
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                              { ...cellInput, width: "100%" })}
+                              value={line.name}
+                              onChange={(e) =>
+                              updateBreakdownLine(line.id, { name: e.target.value })
+                              } />
+                              
                       </td>
 
-                      <td style={td}>
-                        <input
-                          style={{ ...cellInput, width: 68 }}
-                          value={line.unit}
-                          onChange={(e) =>
-                            updateBreakdownLine(line.id, { unit: e.target.value })
-                          }
-                        />
+                      <td className={rlcClass(null, td)}>
+                        <input className={rlcClass(null,
+                              { ...cellInput, width: 68 })}
+                              value={line.unit}
+                              onChange={(e) =>
+                              updateBreakdownLine(line.id, { unit: e.target.value })
+                              } />
+                              
                       </td>
 
-                      <td style={tdRight}>
+                      <td className={rlcClass(null, tdRight)}>
                         <input
-                          type="number"
-                          style={{ ...cellInput, width: 78, textAlign: "right" }}
-                          value={line.qty}
-                          onChange={(e) =>
-                            updateBreakdownLine(line.id, { qty: n(e.target.value) })
-                          }
-                        />
+                                type="number" className={rlcClass(null,
+                                { ...cellInput, width: 78, textAlign: "right" })}
+                                value={line.qty}
+                                onChange={(e) =>
+                                updateBreakdownLine(line.id, { qty: n(e.target.value) })
+                                } />
+                              
                       </td>
 
-                      <td style={tdRight}>
+                      <td className={rlcClass(null, tdRight)}>
                         <input
-                          type="number"
-                          style={{ ...cellInput, width: 86, textAlign: "right" }}
-                          value={line.price}
-                          onChange={(e) =>
-                            updateBreakdownLine(line.id, { price: n(e.target.value) })
-                          }
-                        />
+                                type="number" className={rlcClass(null,
+                                { ...cellInput, width: 86, textAlign: "right" })}
+                                value={line.price}
+                                onChange={(e) =>
+                                updateBreakdownLine(line.id, { price: n(e.target.value) })
+                                } />
+                              
                       </td>
 
-                      <td style={tdRight}>{money(line.total)}</td>
-                      <td style={tdRight}>1,000</td>
-                      <td style={tdRight}>{money(line.total)}</td>
-                      <td style={tdRight}>{money(gp)}</td>
-                      <td style={td}>{line.group}</td>
+                      <td className={rlcClass(null, tdRight)}>{money(line.total)}</td>
+                      <td className={rlcClass(null, tdRight)}>1,000</td>
+                      <td className={rlcClass(null, tdRight)}>{money(line.total)}</td>
+                      <td className={rlcClass(null, tdRight)}>{money(gp)}</td>
+                      <td className={rlcClass(null, td)}>{line.group}</td>
 
-                      <td style={td}>
+                      <td className={rlcClass(null, td)}>
                         <button
-                          type="button"
-                          style={btnDangerMini}
-                          onClick={() => deleteBreakdownLine(line.id)}
-                        >
+                                type="button" className={rlcClass(null,
+                                { ...btnDangerMini, minHeight: 26, padding: "3px 6px", fontSize: 9.5, lineHeight: 1, whiteSpace: "nowrap" })}
+                                onClick={() => deleteBreakdownLine(line.id)}>
+                                
                           ×
                         </button>
                       </td>
-                    </tr>
-                  );
-                })}
+                    </tr>);
 
-                {!selectedRow.priceBreakdown?.length ? (
-                  <tr>
-                    <td colSpan={12} style={{ ...td, color: "#64748B" }}>
+                      })}
+
+                {!selectedRow.priceBreakdown?.length ?
+                      <tr>
+                    <td colSpan={12} className={rlcClass(null, { ...td, color: "#64748B" })}>
                       Noch keine Ansätze vorhanden. Für den vollständigen technischen Preisaufbau die Position in Urkalkulation / Rezepte öffnen.
                     </td>
-                  </tr>
-                ) : null}
+                  </tr> :
+                      null}
 
                 <tr>
-                  <td colSpan={8} style={{ ...tdRight, fontWeight: 900 }}>
+                  <td colSpan={8} className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>
                     Summe EP
                   </td>
-                  <td style={{ ...tdRight, fontWeight: 900 }}>
+                  <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>
                     {money(sumBreakdown(selectedRow.priceBreakdown))}
                   </td>
-                  <td style={{ ...tdRight, fontWeight: 900 }}>
+                  <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>
                     {money(lineNet(selectedRow))}
                   </td>
-                  <td colSpan={2} style={td}></td>
+                  <td colSpan={2} className={rlcClass(null, td)}></td>
                 </tr>
               </tbody>
             </table>
           </div>
         </details>
-        </>
-      ) : (
-        <div style={muted}>Keine Position gewählt.</div>
-      )}
+        </> :
+
+            <div className={rlcClass(null, muted)}>Keine Position gewählt.</div>
+            }
     </div>
 
     {/* ================= RECHTS: INFO / KI ================= */}
-    <aside style={sideCard}>
-      <h2 style={sectionTitle}>Positionsprüfung / Datenbankvergleich</h2>
+    <aside ref={selectedDetailRef} className={rlcClass(null, sideCard)}>
+      <div className={rlcClass(null, selectedDetailHeader)}>
+        <div>
+          <div className={rlcClass(null, selectedDetailEyebrow)}>Ausgewählte LV-Position</div>
+          <h2 className={rlcClass(null, sectionTitle)}>Positionsprüfung / Datenbankvergleich</h2>
+        </div>
+        {selectedRow ?
+              <div className={rlcClass(null, selectedDetailPosition)}>
+            {selectedRow.posNr || "—"} · {selectedRow.kurztext || "Ohne Text"}
+          </div> :
+              null}
+      </div>
 
-      {selectedRow ? (
-        <div style={{ display: "grid", gap: 12 }}>
+      {selectedRow ?
+            <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-900">
           <div>
-            <div style={label}>Position</div>
-            <div style={sideTitle}>
+            <div className={rlcClass(null, label)}>Position</div>
+            <div className={rlcClass(null, sideTitle)}>
               {selectedRow.posNr || "—"} · {selectedRow.kurztext || "Ohne Text"}
             </div>
           </div>
 
-          <div style={sideBadges}>
-            <span style={riskStyle(selectedRow.riskLevel)}>
+          <div className={rlcClass(null, sideBadges)}>
+            <span className={rlcClass(null, riskStyle(selectedRow.riskLevel))}>
               Risiko: {riskLabel(selectedRow.riskLevel)}
             </span>
-            <span style={statusStyle(selectedRow.calculationStatus)}>
+            <span className={rlcClass(null, statusStyle(selectedRow.calculationStatus))}>
               {statusLabel(selectedRow.calculationStatus)}
             </span>
           </div>
 
-          <div style={compactInfoGrid}>
+          <div className={rlcClass(null, compactInfoGrid)}>
             <Detail label="Problem" value={rowProblem(selectedRow)} />
             <Detail
-              label="Sicherheit"
-              value={selectedRow.confidence != null ? percent(selectedRow.confidence) : "—"}
-            />
+                  label="Sicherheit"
+                  value={selectedRow.confidence != null ? percent(selectedRow.confidence) : "—"} />
+                
             <Detail label="Gewerk" value={selectedRow.gewerk || "—"} />
             <Detail label="Leistungsart" value={selectedRow.leistungsart || "—"} />
             <Detail label="Bauverfahren" value={selectedRow.bauverfahren || "—"} />
@@ -9583,23 +10355,23 @@ return (
             <Detail label="Differenz GP" value={money(lineNet(selectedRow) - offerLineNet(selectedRow))} />
           </div>
 
-          <div style={separator} />
+          <div className={rlcClass(null, separator)} />
 
-<details style={{ display: "none" }}><summary style={detailsSummary}>Artikel / Ressourcen übernehmen</summary>
+<details className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-901"><summary className={rlcClass(null, detailsSummary)}>Artikel / Ressourcen übernehmen</summary>
 
-  <div style={resourceToolbar}>
-    <input
-      style={input}
-      value={catalogQuery}
-      onChange={(e) => setCatalogQuery(e.target.value)}
-      placeholder="Artikel suchen…"
-    />
+  <div className={rlcClass(null, resourceToolbar)}>
+    <input className={rlcClass(null,
+                  input)}
+                  value={catalogQuery}
+                  onChange={(e) => setCatalogQuery(e.target.value)}
+                  placeholder="Artikel suchen…" />
+                  
 
-    <select
-      style={input}
-      value={catalogGroup}
-      onChange={(e) => setCatalogGroup(e.target.value as any)}
-    >
+    <select className={rlcClass(null,
+                  input)}
+                  value={catalogGroup}
+                  onChange={(e) => setCatalogGroup(e.target.value as any)}>
+                    
       <option value="Alle">Alle</option>
       <option value="Material">Material</option>
       <option value="Arbeiter">Arbeiter</option>
@@ -9608,349 +10380,349 @@ return (
     </select>
 
     <button
-      type="button"
-      style={btnSecondary}
-      onClick={() => setCatalogRows(Catalog.list())}
-    >
+                    type="button" className={rlcClass(null,
+                    btnSecondary)}
+                    onClick={() => setCatalogRows(Catalog.list())}>
+                    
       Aktualisieren
     </button>
   </div>
 
-  <div style={resourceList}>
-    {visibleCatalogRows.map((item) => (
-      <button
-        key={item.id}
-        type="button"
-        style={resourceItem}
-        onClick={() => addCatalogRowToSelected(item)}
-      >
-        <div style={resourceTitle}>
+  <div className={rlcClass(null, resourceList)}>
+    {visibleCatalogRows.map((item) =>
+                  <button
+                    key={item.id}
+                    type="button" className={rlcClass(null,
+                    resourceItem)}
+                    onClick={() => addCatalogRowToSelected(item)}>
+                    
+        <div className={rlcClass(null, resourceTitle)}>
           {item.posNr || "—"} · {item.kurztext || "Ohne Text"}
         </div>
 
-        <div style={resourceMeta}>
+        <div className={rlcClass(null, resourceMeta)}>
           {item.gruppe || "Sonstiges"} · {item.einheit || "EH"} ·{" "}
           {money(item.ep)}
         </div>
       </button>
-    ))}
+                  )}
 
-    {!visibleCatalogRows.length ? (
-      <div style={muted}>Keine Artikel gefunden.</div>
-    ) : null}
+    {!visibleCatalogRows.length ?
+                  <div className={rlcClass(null, muted)}>Keine Artikel gefunden.</div> :
+                  null}
   </div>
 </details>
 
-<div style={separator} />
+<div className={rlcClass(null, separator)} />
 
           <div>
-            <div style={label}>Warnung</div>
-            <div style={warningBox}>
+            <div className={rlcClass(null, label)}>Warnung</div>
+            <div className={rlcClass(null, warningBox)}>
               {selectedRow.warning || "Keine kritische Warnung erkannt."}
             </div>
           </div>
           <div>
-            <div style={label}>Urkalkulation / Preisaufbau</div>
+            <div className={rlcClass(null, label)}>Urkalkulation / Preisaufbau</div>
 
             {(() => {
-              const lines =
-                Array.isArray(selectedRow.priceBreakdown) && selectedRow.priceBreakdown.length
-                  ? selectedRow.priceBreakdown
-                  : Array.isArray((selectedRow as any).recipeLines)
-                    ? (selectedRow as any).recipeLines
-                    : [];
+                  const lines =
+                  Array.isArray(selectedRow.priceBreakdown) && selectedRow.priceBreakdown.length ?
+                  selectedRow.priceBreakdown :
+                  Array.isArray((selectedRow as any).recipeLines) ?
+                  (selectedRow as any).recipeLines :
+                  [];
 
-              const safeLines = normalizeBreakdown(lines);
-              const sum = sumBreakdown(safeLines);
+                  const safeLines = normalizeBreakdown(lines);
+                  const sum = sumBreakdown(safeLines);
 
-              if (!safeLines.length) {
-                return (
-                  <div style={reasonBox}>
+                  if (!safeLines.length) {
+                    return (
+                      <div className={rlcClass(null, reasonBox)}>
                     Kein Preisaufbau aus Urkalkulation übernommen. Position in Urkalkulation / Rezepte bearbeiten und erneut übernehmen.
-                  </div>
-                );
-              }
+                  </div>);
 
-              return (
-                <div style={{ maxWidth: "100%", overflowX: "auto", overflowY: "hidden", border: "1px solid #E2E8F0", borderRadius: 12 }}>
-                  <table style={{ width: "100%", minWidth: 860, tableLayout: "fixed", borderCollapse: "collapse", fontSize: 12, background: "#fff" }}>
+                  }
+
+                  return (
+                    <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-902">
+                  <table className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-903">
                     <thead>
                       <tr>
-                        <th style={{ ...th, textAlign: "left" }}>Gruppe</th>
-                        <th style={{ ...th, textAlign: "left" }}>Bezeichnung</th>
-                        <th style={{ ...th, textAlign: "left" }}>ME</th>
-                        <th style={{ ...th, textAlign: "right" }}>Menge je Einheit</th>
-                        <th style={{ ...th, textAlign: "right" }}>Preis</th>
-                        <th style={{ ...th, textAlign: "right" }}>EP-Anteil</th>
-                        <th style={{ ...th, textAlign: "left" }}>Hinweis</th>
+                        <th className={rlcClass(null, { ...th, textAlign: "left" })}>Gruppe</th>
+                        <th className={rlcClass(null, { ...th, textAlign: "left" })}>Bezeichnung</th>
+                        <th className={rlcClass(null, { ...th, textAlign: "left" })}>ME</th>
+                        <th className={rlcClass(null, { ...th, textAlign: "right" })}>Menge je Einheit</th>
+                        <th className={rlcClass(null, { ...th, textAlign: "right" })}>Preis</th>
+                        <th className={rlcClass(null, { ...th, textAlign: "right" })}>EP-Anteil</th>
+                        <th className={rlcClass(null, { ...th, textAlign: "left" })}>Hinweis</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {safeLines.map((line) => (
-                        <tr key={line.id}>
-                          <td style={td}>{line.group}</td>
-                          <td style={td}>{line.name}</td>
-                          <td style={td}>{line.unit}</td>
-                          <td style={{ ...tdRight }}>{qty(line.qty)}</td>
-                          <td style={{ ...tdRight }}>{money(line.price)}</td>
-                          <td style={{ ...tdRight, fontWeight: 900 }}>{money(line.total)}</td>
-                          <td style={{ ...td, maxWidth: 360, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>{line.note || "—"}</td>
+                      {safeLines.map((line) =>
+                          <tr key={line.id}>
+                          <td className={rlcClass(null, td)}>{line.group}</td>
+                          <td className={rlcClass(null, td)}>{line.name}</td>
+                          <td className={rlcClass(null, td)}>{line.unit}</td>
+                          <td className={rlcClass(null, { ...tdRight })}>{qty(line.qty)}</td>
+                          <td className={rlcClass(null, { ...tdRight })}>{money(line.price)}</td>
+                          <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>{money(line.total)}</td>
+                          <td className={rlcClass(null, { ...td, maxWidth: 360, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" })}>{line.note || "—"}</td>
                         </tr>
-                      ))}
+                          )}
 
                       <tr>
-                        <td colSpan={5} style={{ ...tdRight, fontWeight: 900 }}>
+                        <td colSpan={5} className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>
                           Summe Urkalkulation
                         </td>
-                        <td style={{ ...tdRight, fontWeight: 900 }}>
+                        <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>
                           {money(sum)}
                         </td>
-                        <td style={td}>
+                        <td className={rlcClass(null, td)}>
                           Finaler EP: {money(getUnitPrice(selectedRow))}
                         </td>
                       </tr>
                     </tbody>
                   </table>
-                </div>
-              );
-            })()}
+                </div>);
+
+                })()}
           </div>
 
 
           <div>
-            <div style={label}>KI-Begründung</div>
-            <div style={{ ...reasonBox, maxHeight: 260, overflowY: "auto", overflowX: "hidden", whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" }}>
+            <div className={rlcClass(null, label)}>KI-Begründung</div>
+            <div className={rlcClass(null, { ...reasonBox, maxHeight: 260, overflowY: "auto", overflowX: "hidden", whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" })}>
               {selectedRow.aiReason ||
-                "Noch keine KI-Begründung vorhanden. Starte die Kalkulation oder übernimm eine Position aus Urkalkulation / Rezepte."}
+                  "Noch keine KI-Begründung vorhanden. Starte die Kalkulation oder übernimm eine Position aus Urkalkulation / Rezepte."}
             </div>
           </div>
 
-          <details style={{ display: "none" }} open={datenbankMatches.length > 0}>
-            <summary style={detailsSummary}>
+          <details open={datenbankMatches.length > 0} className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-904">
+            <summary className={rlcClass(null, detailsSummary)}>
               Kalkulationsdatenbank ({datenbankMatches.length})
             </summary>
 
-            {datenbankMatches.length ? (
-              <div style={knowledgeList}>
-                {datenbankMatches.map((match) => (
-                  <div key={match.eintrag.id} style={knowledgeItem}>
-                    <div style={knowledgeTitle}>{match.eintrag.kurztext}</div>
-                    <div style={tiny}>
+            {datenbankMatches.length ?
+                <div className={rlcClass(null, knowledgeList)}>
+                {datenbankMatches.map((match) =>
+                  <div key={match.eintrag.id} className={rlcClass(null, knowledgeItem)}>
+                    <div className={rlcClass(null, knowledgeTitle)}>{match.eintrag.kurztext}</div>
+                    <div className={rlcClass(null, tiny)}>
                       {match.eintrag.posNr || "—"} · EP{" "}
                       {money(match.eintrag.kosten.epNetto)} · Score {match.score}% · genutzt{" "}
                       {match.eintrag.verwendungen}x
                     </div>
-                    <div style={tiny}>{match.gruende.join(" · ")}</div>
+                    <div className={rlcClass(null, tiny)}>{match.gruende.join(" · ")}</div>
                     <button
-                      type="button"
-                      style={btnMini}
-                      onClick={() => applyKnowledge(match)}
-                    >
+                      type="button" className={rlcClass(null,
+                      { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 })}
+                      onClick={() => applyKnowledge(match)}>
+                      
                       Vergleichswert übernehmen
                     </button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div style={muted}>Keine ähnliche Position in der Kalkulationsdatenbank.</div>
-            )}
+                  )}
+              </div> :
+
+                <div className={rlcClass(null, muted)}>Keine ähnliche Position in der Kalkulationsdatenbank.</div>
+                }
 
             <button
-              type="button"
-              style={{ ...btnSecondary, marginTop: 8 }}
-              onClick={saveSelectedToKnowledge}
-            >
+                  type="button" className={rlcClass(null,
+                  { ...btnSecondary, marginTop: 8 })}
+                  onClick={saveSelectedToKnowledge}>
+                  
               Sicheren Wert in Datenbank lernen
             </button>
           </details>
 
-          <details style={{ display: "none" }}><summary style={detailsSummary}>Langtext / Prüftext</summary>
+          <details className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-905"><summary className={rlcClass(null, detailsSummary)}>Langtext / Prüftext</summary>
 
-            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+            <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-906">
               <Field label="Langtext">
-                <textarea
-                  style={{ ...input, minHeight: 130 }}
-                  value={selectedRow.langtext}
-                  onChange={(e) =>
+                <textarea className={rlcClass(null,
+                    { ...input, minHeight: 130 })}
+                    value={selectedRow.langtext}
+                    onChange={(e) =>
                     updateRow(selectedRow.id, { langtext: e.target.value })
-                  }
-                />
+                    } />
+                    
               </Field>
 
               <button
-                type="button"
-                style={btnSecondary}
-                onClick={() =>
-                  updateRow(selectedRow.id, {
-                    ...enhanceKalkulatorInsertions(selectedRow),
-                  })
-                }
-              >
+                    type="button" className={rlcClass(null,
+                    btnSecondary)}
+                    onClick={() =>
+                    updateRow(selectedRow.id, {
+                      ...enhanceKalkulatorInsertions(selectedRow)
+                    })
+                    }>
+                    
                 Langtext automatisch erstellen
               </button>
             </div>
           </details>
 
-          <details style={{ display: "none" }}><summary style={detailsSummary}>Manuelle EP-Anpassung</summary>
+          <details className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-907"><summary className={rlcClass(null, detailsSummary)}>Manuelle EP-Anpassung</summary>
 
-            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+            <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-908">
               <Field label="Rabatt Zeile %">
                 <input
-                  type="number"
-                  style={input}
-                  value={selectedRow.rabatt ?? 0}
-                  onChange={(e) =>
-                    updateRow(selectedRow.id, { rabatt: n(e.target.value) })
-                  }
-                />
+                      type="number" className={rlcClass(null,
+                      input)}
+                      value={selectedRow.rabatt ?? 0}
+                      onChange={(e) =>
+                      updateRow(selectedRow.id, { rabatt: n(e.target.value) })
+                      } />
+                    
               </Field>
             </div>
           </details>
-        </div>
-      ) : (
-        <div style={muted}>Keine Position gewählt.</div>
-      )}
+        </div> :
+
+            <div className={rlcClass(null, muted)}>Keine Position gewählt.</div>
+            }
     </aside>
   </div>
 </section>
-</div>
-);
+</div>);
+
 }
 
 /* ================= UI ================= */
 
 function RlcActionProgress({
-  action,
-}: {
-  action: {
-    id: string;
-    label: string;
-    progress: number;
-    status: "running" | "success" | "error";
-  };
-}) {
+  action
+
+
+
+
+
+
+
+}: {action: {id: string;label: string;progress: number;status: "running" | "success" | "error";};}) {
   const progress = Math.max(0, Math.min(100, Math.round(action.progress)));
 
   return (
-    <div style={rlcActionProgressWrap}>
-      <div style={rlcActionProgressTop}>
+    <div className={rlcClass(null, rlcActionProgressWrap)}>
+      <div className={rlcClass(null, rlcActionProgressTop)}>
         <b>
-          {action.status === "running"
-            ? "RLC arbeitet…"
-            : action.status === "success"
-              ? "Abgeschlossen"
-              : "Fehler"}
+          {action.status === "running" ?
+          "RLC arbeitet…" :
+          action.status === "success" ?
+          "Abgeschlossen" :
+          "Fehler"}
         </b>
         <span>{action.label} · {progress}%</span>
       </div>
 
-      <div style={rlcActionProgressTrack}>
-        <div
-          style={{
-            ...rlcActionProgressFill,
-            width: `${progress}%`,
-            background:
-              action.status === "error"
-                ? "linear-gradient(90deg,#DC2626,#EF4444)"
-                : action.status === "success"
-                  ? "linear-gradient(90deg,#16A34A,#22C55E)"
-                  : "linear-gradient(90deg,#2563EB,#60A5FA)",
-          }}
-        />
+      <div className={rlcClass(null, rlcActionProgressTrack)}>
+        <div className={rlcClass(null,
+        {
+          ...rlcActionProgressFill,
+          width: `${progress}%`,
+          background:
+          action.status === "error" ?
+          "linear-gradient(90deg,#DC2626,#EF4444)" :
+          action.status === "success" ?
+          "linear-gradient(90deg,#16A34A,#22C55E)" :
+          "linear-gradient(90deg,#146EF5,#60A5FA)"
+        })} />
+        
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 
 function FilterButton({
   active,
   onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+
+}: {active: boolean;onClick: () => void;children: React.ReactNode;}) {
   return (
     <button
-      type="button"
-      style={active ? btnFilterActive : btnFilter}
-      onClick={onClick}
-    >
+      type="button" className={rlcClass(null,
+      active ? btnFilterActive : btnFilter)}
+      onClick={onClick}>
+      
       {children}
-    </button>
-  );
+    </button>);
+
 }
 
 function KpiCard({
   label,
   value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+  sub
+
+
+
+
+}: {label: string;value: string;sub?: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 function Field({
   label: fieldLabel,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={label}>{fieldLabel}</span>
+    <label className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-909">
+      <span className={rlcClass(null, label)}>{fieldLabel}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
-function Detail({ label: l, value }: { label: string; value: string }) {
+function Detail({ label: l, value }: {label: string;value: string;}) {
   return (
     <div>
-      <div style={label}>{l}</div>
-      <div style={detailValue}>{value}</div>
-    </div>
-  );
+      <div className={rlcClass(null, label)}>{l}</div>
+      <div className={rlcClass(null, detailValue)}>{value}</div>
+    </div>);
+
 }
 
 function QuickAction({
   title,
   text,
   onClick,
-  disabled,
-}: {
-  title: string;
-  text: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
+  disabled
+
+
+
+
+
+}: {title: string;text: string;onClick: () => void;disabled?: boolean;}) {
   return (
     <button
-      type="button"
-      style={{
+      type="button" className={rlcClass(null,
+      {
         ...quickActionButton,
         opacity: disabled ? 0.55 : 1,
-        cursor: disabled ? "not-allowed" : "pointer",
-      }}
+        cursor: disabled ? "not-allowed" : "pointer"
+      })}
       onClick={onClick}
-      disabled={disabled}
-    >
-      <div style={quickActionTitle}>{title}</div>
-      <div style={quickActionText}>{text}</div>
-    </button>
-  );
+      disabled={disabled}>
+      
+      <div className={rlcClass(null, quickActionTitle)}>{title}</div>
+      <div className={rlcClass(null, quickActionText)}>{text}</div>
+    </button>);
+
 }
 
 
@@ -9959,69 +10731,69 @@ function QuickAction({
 
 function downloadCsv(rows: EliteRow[]) {
   const header = [
-    "PosNr",
-    "Kurztext",
-    "Langtext",
-    "Einheit",
-    "Menge",
-    "Material",
-    "Lohn",
-    "Maschine",
-    "Fremdleistung",
-    "Entsorgung",
-    "Gemeinkosten",
-    "Risiko",
-    "Gewinn",
-    "EP final",
-    "Gesamt",
-    "Preisaufbau",
-    "RiskLevel",
-    "Status",
-    "Confidence",
-    "Warnung",
-    "KI-Begründung",
-  ];
+  "PosNr",
+  "Kurztext",
+  "Langtext",
+  "Einheit",
+  "Menge",
+  "Material",
+  "Lohn",
+  "Maschine",
+  "Fremdleistung",
+  "Entsorgung",
+  "Gemeinkosten",
+  "Risiko",
+  "Gewinn",
+  "EP final",
+  "Gesamt",
+  "Preisaufbau",
+  "RiskLevel",
+  "Status",
+  "Confidence",
+  "Warnung",
+  "KI-Begründung"];
+
 
   const lines = rows.map((r) =>
-    [
-      r.posNr,
-      r.kurztext,
-      r.langtext,
-      r.einheit,
-      r.menge,
-      r.materialCost,
-      r.laborCost,
-      r.machineCost,
-      r.subcontractorCost,
-      r.disposalCost,
-      r.overheadCost,
-      r.riskCost,
-      r.profitCost,
-      getUnitPrice(r),
-      lineNet(r),
-      breakdownText(r),
-      r.riskLevel,
-      r.calculationStatus,
-      r.confidence,
-      r.warning,
-      r.aiReason,
-    ]
-      .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
-      .join(";")
+  [
+  r.posNr,
+  r.kurztext,
+  r.langtext,
+  r.einheit,
+  r.menge,
+  r.materialCost,
+  r.laborCost,
+  r.machineCost,
+  r.subcontractorCost,
+  r.disposalCost,
+  r.overheadCost,
+  r.riskCost,
+  r.profitCost,
+  getUnitPrice(r),
+  lineNet(r),
+  breakdownText(r),
+  r.riskLevel,
+  r.calculationStatus,
+  r.confidence,
+  r.warning,
+  r.aiReason].
+
+  map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).
+  join(";")
   );
 
   const blob = new Blob([[header.join(";"), ...lines].join("\n")], {
-    type: "text/csv;charset=utf-8",
+    type: "text/csv;charset=utf-8"
   });
   downloadBlob(blob, "ki-kalkulation-elite.csv");
 }
 
 function exportXlsx(
-  rows: EliteRow[],
-  chapterTotals: Record<string, any>,
-  summary: any,
-  offer: OfferData
-) {
+rows: EliteRow[],
+chapterTotals: Record<string, any>,
+summary: any,
+offer: OfferData)
+{
   const wsRows = XLSX.utils.json_to_sheet(
     rows.map((r) => ({
       Kapitel: getChapter(r.posNr),
@@ -10046,23 +10818,23 @@ function exportXlsx(
       Status: r.calculationStatus,
       Confidence: r.confidence,
       Warnung: r.warning,
-      KI_Begruendung: r.aiReason,
+      KI_Begruendung: r.aiReason
     }))
   );
 
   const wsBreakdown = XLSX.utils.json_to_sheet(
     rows.flatMap((r) =>
-      (r.priceBreakdown || []).map((line) => ({
-        PosNr: r.posNr,
-        Kurztext: r.kurztext,
-        Gruppe: line.group,
-        Bezeichnung: line.name,
-        Einheit: line.unit,
-        Menge: line.qty,
-        Preis: line.price,
-        Gesamt: line.total,
-        Hinweis: line.note || "",
-      }))
+    (r.priceBreakdown || []).map((line) => ({
+      PosNr: r.posNr,
+      Kurztext: r.kurztext,
+      Gruppe: line.group,
+      Bezeichnung: line.name,
+      Einheit: line.unit,
+      Menge: line.qty,
+      Preis: line.price,
+      Gesamt: line.total,
+      Hinweis: line.note || ""
+    }))
     )
   );
 
@@ -10071,22 +10843,22 @@ function exportXlsx(
       Kapitel: chapter,
       Netto: t.afterChapterMarkup,
       Risiko: t.risk,
-      Gewinn: t.profit,
+      Gewinn: t.profit
     }))
   );
 
   const wsSummary = XLSX.utils.json_to_sheet([
-    { Kennzahl: "Angebot", Wert: offer.number },
-    { Kennzahl: "Netto", Wert: summary.net },
-    { Kennzahl: "Brutto", Wert: summary.gross },
-    { Kennzahl: "Direkte Kosten", Wert: summary.directCost },
-    { Kennzahl: "Risikopuffer", Wert: summary.riskSum },
-    { Kennzahl: "Gewinn", Wert: summary.profitSum },
-    { Kennzahl: "Marge %", Wert: summary.marginPct },
-    { Kennzahl: "Ø Confidence", Wert: summary.avgConfidence },
-    { Kennzahl: "Hochrisiko", Wert: summary.highRisk },
-    { Kennzahl: "Kritisch", Wert: summary.critical },
-  ]);
+  { Kennzahl: "Angebot", Wert: offer.number },
+  { Kennzahl: "Netto", Wert: summary.net },
+  { Kennzahl: "Brutto", Wert: summary.gross },
+  { Kennzahl: "Direkte Kosten", Wert: summary.directCost },
+  { Kennzahl: "Risikopuffer", Wert: summary.riskSum },
+  { Kennzahl: "Gewinn", Wert: summary.profitSum },
+  { Kennzahl: "Marge %", Wert: summary.marginPct },
+  { Kennzahl: "Ø Confidence", Wert: summary.avgConfidence },
+  { Kennzahl: "Hochrisiko", Wert: summary.highRisk },
+  { Kennzahl: "Kritisch", Wert: summary.critical }]
+  );
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, wsRows, "Elite-Kalkulation");
@@ -10096,6 +10868,7 @@ function exportXlsx(
 
   XLSX.writeFile(wb, `Elite_Kalkulation_${safeFileName(offer.number)}.xlsx`);
 }
+
 
 async function exportPdf(opts: {
   projectKey: string;
@@ -10108,9 +10881,11 @@ async function exportPdf(opts: {
   company: CompanyData;
   mwst: number;
   globalMarkup: number;
-}) {
+  delivery?: boolean;
+}): Promise<any> {
   const {
     projectKey,
+    projectTitle,
     rows,
     summary,
     offer,
@@ -10118,115 +10893,95 @@ async function exportPdf(opts: {
     company,
     mwst,
     globalMarkup,
+    delivery
   } = opts;
 
-  const payload = {
-    title: "Angebot",
-    project: {
-      id: projectKey,
-      code: projectKey,
-      number: projectKey,
-      name: "KI-Kalkulation",
-      client: client.name,
-      auftraggeber: client.name,
-      address: client.address,
-      adresse: client.address,
-      location: offer.place,
-      place: offer.place,
-    },
-    recipient: {
-      name: client.name,
-      client: client.name,
-      auftraggeber: client.name,
-      address: client.address,
-      adresse: client.address,
-      city: "",
-      ort: "",
-    },
-    company: {
-      name: company.name,
-      address: company.address,
-      phone: company.phone,
-      email: company.email,
-      logoUrl: company.logoUrl,
-    },
-    options: {
-      offerNumber: offer.number,
-      number: offer.number,
-      city: offer.place,
-      place: offer.place,
-      dateISO: new Date().toISOString().slice(0, 10),
-      payment: offer.notes,
+  const response = await fetch(apiUrl("/api/pdf/kalkulation-ki"), {
+    method: "POST",
+    credentials: "include",
+    headers: authJsonHeaders(),
+    body: JSON.stringify({
+      projectKey,
+      projectTitle,
+
+      project: {
+        id: projectKey,
+        code: projectKey,
+        name: projectTitle,
+        client: client?.name || "",
+        auftraggeber: client?.name || "",
+        clientAddress: client?.address || ""
+      },
+
+      offerNo: offer?.number || "",
+      angebotNr: offer?.number || "",
+
+      offer: {
+        number: offer?.number || "",
+        place: offer?.place || "",
+        notes: offer?.notes || ""
+      },
+
+      client: {
+        name: client?.name || "",
+        address: client?.address || ""
+      },
+
+      company,
+      rows,
+      summary,
+      totals: summary,
       mwst,
-      showWatermark: false,
-      colorHeader: true,
-      showTableHeader: true,
-      showChapterRows: true,
-      showPriceBreakdown: true,
-    },
-    rows: rows.map((r) => ({
-      id: r.id,
-      posNr: r.posNr,
-      lvPos: r.posNr,
-      text: r.kurztext,
-      kurztext: r.kurztext,
-      title: r.kurztext,
-      langtext: r.langtext,
-      priceBreakdown: r.priceBreakdown || [],
-      bemerkung: [
-        r.bemerkung,
-        breakdownText(r) ? `Preisaufbau:\n${breakdownText(r)}` : "",
-        r.aiReason ? `KI-Begründung: ${r.aiReason}` : "",
-        r.warning ? `Warnung: ${r.warning}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      einheit: r.einheit,
-      unit: r.einheit,
-      menge: n(r.menge),
-      qty: n(r.menge),
-      preis: getUnitPrice(r),
-      ep: getUnitPrice(r),
-      rabatt: n(r.rabatt),
-      zeilen: lineNet(r),
-      total: lineNet(r),
-      riskLevel: r.riskLevel,
-      calculationStatus: r.calculationStatus,
-      confidence: r.confidence,
-      source: "ki",
-    })),
-    totals: {
-      netto: summary.net,
-      subtotal: summary.net - summary.globalMarkupValue,
-      aufschlag: globalMarkup,
-      aufschlagWert: summary.globalMarkupValue,
-      mwst,
-      steuer: summary.tax,
-      brutto: summary.gross,
-      directCost: summary.directCost,
-      riskSum: summary.riskSum,
-      profitSum: summary.profitSum,
-    },
+      globalMarkup,
+
+      options: {
+        city: offer?.place || "",
+        dateISO: new Date().toISOString()
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(
+      detail ||
+      `RLC PDF Core Fehler: HTTP ${response.status}`
+    );
+  }
+
+  const blob = await response.blob();
+
+  if (!blob.size) {
+    throw new Error("RLC PDF Core hat eine leere PDF-Datei geliefert.");
+  }
+
+  const filename =
+  `KI_Angebot_${safeFileName(offer?.number || projectKey || "Projekt")}.pdf`;
+
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(
+      ...bytes.subarray(i, i + chunkSize)
+    );
+  }
+
+  const result = {
+    blob,
+    name: filename,
+    base64: btoa(binary)
   };
 
-  try {
-    const res = await fetch(apiUrl("/api/pdf/kalkulation-ki"), {
-      method: "POST",
-      credentials: "include",
-      headers: authJsonHeaders(),
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) throw new Error(`Server PDF Fehler (${res.status})`);
-
-    const blob = await res.blob();
-    downloadBlob(blob, `KI_Angebot_${safeFileName(offer.number)}.pdf`);
-  } catch {
-exportPdfLocal(opts);
+  if (!delivery) {
+    downloadBlob(blob, filename);
   }
+
+  return result;
 }
 
-function exportPdfLocal(opts: {
+async function exportPdfLocal(opts: {
   projectKey: string;
   projectTitle: string;
   rows: EliteRow[];
@@ -10239,7 +10994,7 @@ function exportPdfLocal(opts: {
   globalMarkup: number;
 }) {
   const { projectKey, rows, summary, offer, client, company, globalMarkup } =
-    opts;
+  opts;
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -10279,7 +11034,7 @@ function exportPdfLocal(opts: {
   doc.text(`Kunde: ${client.name || "—"}`, marginX + 75, 63);
   doc.text(`Ort: ${offer.place || "—"}`, marginX + 75, 69);
   doc.text(`Datum: ${new Date().toLocaleDateString("de-DE")}`, pageW - marginX, 63, {
-    align: "right",
+    align: "right"
   });
 
   const kpiY = 82;
@@ -10288,13 +11043,13 @@ function exportPdfLocal(opts: {
   const gap = 5;
 
   const kpis = [
-    ["Netto", money(summary.net)],
-    ["MwSt", money(summary.tax)],
-    ["Brutto", money(summary.gross)],
-    ["Direkte Kosten", money(summary.directCost)],
-    ["Risiko", money(summary.riskSum)],
-    ["Gewinn", money(summary.profitSum)],
-  ];
+  ["Netto", money(summary.net)],
+  ["MwSt", money(summary.tax)],
+  ["Brutto", money(summary.gross)],
+  ["Direkte Kosten", money(summary.directCost)],
+  ["Risiko", money(summary.riskSum)],
+  ["Gewinn", money(summary.profitSum)]];
+
 
   kpis.forEach(([labelText, value], i) => {
     const x = marginX + i * (boxW + gap);
@@ -10318,44 +11073,44 @@ function exportPdfLocal(opts: {
     margin: { left: marginX, right: marginX },
     theme: "grid",
     head: [
-      [
-        "Pos.",
-        "Leistungsbeschreibung / Preisaufbau",
-        "ME",
-        "Menge",
-        "EP",
-        "Gesamt",
-        "Risiko",
-        "Status",
-      ],
-    ],
+    [
+    "Pos.",
+    "Leistungsbeschreibung / Preisaufbau",
+    "ME",
+    "Menge",
+    "EP",
+    "Gesamt",
+    "Risiko",
+    "Status"]],
+
+
     body: rows.map((r) => [
-      r.posNr || "—",
-      [
-        r.kurztext || "—",
-        r.langtext ? `\n${r.langtext}` : "",
-        breakdownText(r) ? `\n\nPreisaufbau:\n${breakdownText(r)}` : "",
-        r.aiReason ? `\n\nKI: ${r.aiReason}` : "",
-      ].join(""),
-      r.einheit || "—",
-      qty(r.menge),
-      money(getUnitPrice(r)),
-      money(lineNet(r)),
-      riskLabel(r.riskLevel),
-      statusLabel(r.calculationStatus),
-    ]),
+    r.posNr || "—",
+    [
+    r.kurztext || "—",
+    r.langtext ? `\n${r.langtext}` : "",
+    breakdownText(r) ? `\n\nPreisaufbau:\n${breakdownText(r)}` : "",
+    r.aiReason ? `\n\nKI: ${r.aiReason}` : ""].
+    join(""),
+    r.einheit || "—",
+    qty(r.menge),
+    money(getUnitPrice(r)),
+    money(lineNet(r)),
+    riskLabel(r.riskLevel),
+    statusLabel(r.calculationStatus)]
+    ),
     styles: {
       font: "helvetica",
       fontSize: 6.8,
       cellPadding: 1.7,
       overflow: "linebreak",
       lineColor: [226, 232, 240],
-      lineWidth: 0.1,
+      lineWidth: 0.1
     },
     headStyles: {
       fillColor: [30, 58, 138],
       textColor: [255, 255, 255],
-      fontStyle: "bold",
+      fontStyle: "bold"
     },
     columnStyles: {
       0: { cellWidth: 22 },
@@ -10365,8 +11120,8 @@ function exportPdfLocal(opts: {
       4: { cellWidth: 26, halign: "right" },
       5: { cellWidth: 28, halign: "right" },
       6: { cellWidth: 22 },
-      7: { cellWidth: 24 },
-    },
+      7: { cellWidth: 24 }
+    }
   });
 
   const finalY = (doc as any).lastAutoTable?.finalY || 150;
@@ -10376,7 +11131,7 @@ function exportPdfLocal(opts: {
   doc.setTextColor(71, 85, 105);
   doc.text(`Globaler Aufschlag: ${globalMarkup}%`, marginX, finalY + 10);
   doc.text(offer.notes || "", marginX, finalY + 16, {
-    maxWidth: pageW - marginX * 2,
+    maxWidth: pageW - marginX * 2
   });
 
   const pages = doc.getNumberOfPages();
@@ -10390,11 +11145,11 @@ function exportPdfLocal(opts: {
     doc.setTextColor(100, 116, 139);
     doc.text("RLC Bausoftware · KI-Kalkulation", marginX, pageH - 8);
     doc.text(`Seite ${i}/${pages}`, pageW - marginX, pageH - 8, {
-      align: "right",
+      align: "right"
     });
   }
 
-  doc.save(`KI_Angebot_${safeFileName(offer.number)}.pdf`);
+  return await outputPdfBlobWithCompanyHeader(doc);
 }
 
 function exportUrkalkulationPdfLocal(opts: {
@@ -10408,7 +11163,7 @@ function exportUrkalkulationPdfLocal(opts: {
   globalMarkup: number;
   selectedAuftrag?: Auftrag | null;
 }) {
-    const {
+  const {
     projectKey,
     projectTitle,
     rows,
@@ -10417,7 +11172,7 @@ function exportUrkalkulationPdfLocal(opts: {
     client,
     company,
     globalMarkup,
-    selectedAuftrag,
+    selectedAuftrag
   } = opts;
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
@@ -10428,16 +11183,16 @@ function exportUrkalkulationPdfLocal(opts: {
   const now = new Date().toLocaleDateString("de-DE");
 
   function effectiveBreakdown(r: EliteRow): PriceBreakdownLine[] {
-    return r.priceBreakdown?.length
-      ? r.priceBreakdown
-      : buildAutomaticPriceBreakdown(r);
+    return r.priceBreakdown?.length ?
+    r.priceBreakdown :
+    buildAutomaticPriceBreakdown(r);
   }
 
   function sumGroup(r: EliteRow, groups: PriceBreakdownGroup[]): number {
     return round2(
-      effectiveBreakdown(r)
-        .filter((x) => groups.includes(x.group))
-        .reduce((s, x) => s + n(x.total), 0)
+      effectiveBreakdown(r).
+      filter((x) => groups.includes(x.group)).
+      reduce((s, x) => s + n(x.total), 0)
     );
   }
 
@@ -10487,9 +11242,9 @@ function exportUrkalkulationPdfLocal(opts: {
     }
 
     return Array.from(map.values()).sort((a, b) =>
-      String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
-        numeric: true,
-      })
+    String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
+      numeric: true
+    })
     );
   }
 
@@ -10507,9 +11262,9 @@ function exportUrkalkulationPdfLocal(opts: {
   const pdfNet = round2(pdfBaseNet + pdfMarkupValue);
 
   const taxRate =
-    n(summary.net) > 0 && n(summary.tax) > 0
-      ? round2((n(summary.tax) / n(summary.net)) * 100)
-      : 19;
+  n(summary.net) > 0 && n(summary.tax) > 0 ?
+  round2(n(summary.tax) / n(summary.net) * 100) :
+  19;
 
   const pdfTax = round2(pdfNet * (taxRate / 100));
   const pdfGross = round2(pdfNet + pdfTax);
@@ -10523,13 +11278,13 @@ function exportUrkalkulationPdfLocal(opts: {
     directCost: round2(
       pdfRows.reduce(
         (sum, r) =>
-          sum +
-          n(r.menge) *
-            (sumGroup(r, ["Personal"]) +
-              sumGroup(r, ["Maschinen", "LKW / Transport"]) +
-              sumGroup(r, ["Material"]) +
-              sumGroup(r, ["Fremdleistung"]) +
-              sumGroup(r, ["Entsorgung"])),
+        sum +
+        n(r.menge) * (
+        sumGroup(r, ["Personal"]) +
+        sumGroup(r, ["Maschinen", "LKW / Transport"]) +
+        sumGroup(r, ["Material"]) +
+        sumGroup(r, ["Fremdleistung"]) +
+        sumGroup(r, ["Entsorgung"])),
         0
       )
     ),
@@ -10538,7 +11293,7 @@ function exportUrkalkulationPdfLocal(opts: {
     ),
     profitSum: round2(
       pdfRows.reduce((sum, r) => sum + sumGroup(r, ["Gewinn"]) * n(r.menge), 0)
-    ),
+    )
   };
 
   function totalByGroup(groups: PriceBreakdownGroup[]): number {
@@ -10560,10 +11315,10 @@ function exportUrkalkulationPdfLocal(opts: {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text(
-  `Urkalkulation${selectedAuftrag?.name ? " · " + selectedAuftrag.name : ""}`,
-  mx,
-  8
-);
+      `Urkalkulation${selectedAuftrag?.name ? " · " + selectedAuftrag.name : ""}`,
+      mx,
+      8
+    );
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.8);
@@ -10610,7 +11365,7 @@ function exportUrkalkulationPdfLocal(opts: {
     doc.setFont("helvetica", "normal");
 
     doc.text(projectTitle || projectKey || "—", mx + 30, y0 + 6, {
-      maxWidth: 68,
+      maxWidth: 68
     });
 
     doc.text(client.name || "—", mx + 135, y0 + 6, { maxWidth: 55 });
@@ -10637,11 +11392,11 @@ function exportUrkalkulationPdfLocal(opts: {
   const materialTotal = totalByGroup(["Material"]);
   const subcontractorTotal = totalByGroup(["Fremdleistung"]);
   const sonstigeTotal = totalByGroup([
-    "Entsorgung",
-    "Gemeinkosten",
-    "Risiko",
-    "Gewinn",
-  ]);
+  "Entsorgung",
+  "Gemeinkosten",
+  "Risiko",
+  "Gewinn"]
+  );
 
   autoTable(doc, {
     startY: 62,
@@ -10649,53 +11404,53 @@ function exportUrkalkulationPdfLocal(opts: {
     theme: "grid",
     tableWidth: pageW - mx * 2,
     head: [
-      [
-        "Zusammenstellung",
-        "Lohn",
-        "Geräte",
-        "Stoffe",
-        "Fremdleistung",
-        "Sonstiges",
-        "Netto",
-      ],
-    ],
+    [
+    "Zusammenstellung",
+    "Lohn",
+    "Geräte",
+    "Stoffe",
+    "Fremdleistung",
+    "Sonstiges",
+    "Netto"]],
+
+
     body: [
-      [
-        "Einzelkosten der Teilleistungen",
-        money(personalTotal),
-        money(machineTotal),
-        money(materialTotal),
-        money(subcontractorTotal),
-        money(sonstigeTotal),
-        money(pdfBaseNet),
-      ],
-      [
-        `Zuschlag / Aufschlag ${globalMarkup}%`,
-        "",
-        "",
-        "",
-        "",
-        "",
-        money(pdfSummary.globalMarkupValue || 0),
-      ],
-      ["Gesamtsumme netto", "", "", "", "", "", money(pdfSummary.net)],
-      ["MwSt", "", "", "", "", "", money(pdfSummary.tax || 0)],
-      ["Gesamtsumme brutto", "", "", "", "", "", money(pdfSummary.gross || 0)],
-    ],
+    [
+    "Einzelkosten der Teilleistungen",
+    money(personalTotal),
+    money(machineTotal),
+    money(materialTotal),
+    money(subcontractorTotal),
+    money(sonstigeTotal),
+    money(pdfBaseNet)],
+
+    [
+    `Zuschlag / Aufschlag ${globalMarkup}%`,
+    "",
+    "",
+    "",
+    "",
+    "",
+    money(pdfSummary.globalMarkupValue || 0)],
+
+    ["Gesamtsumme netto", "", "", "", "", "", money(pdfSummary.net)],
+    ["MwSt", "", "", "", "", "", money(pdfSummary.tax || 0)],
+    ["Gesamtsumme brutto", "", "", "", "", "", money(pdfSummary.gross || 0)]],
+
     styles: {
       font: "helvetica",
       fontSize: 5.5,
       cellPadding: 0.9,
       lineWidth: 0.06,
       lineColor: [90, 90, 90],
-      textColor: [0, 0, 0],
+      textColor: [0, 0, 0]
     },
     headStyles: {
       fillColor: [215, 215, 215],
       textColor: [0, 0, 0],
       fontStyle: "bold",
       lineColor: [70, 70, 70],
-      lineWidth: 0.08,
+      lineWidth: 0.08
     },
     columnStyles: {
       0: { cellWidth: 75 },
@@ -10704,50 +11459,50 @@ function exportUrkalkulationPdfLocal(opts: {
       3: { halign: "right" },
       4: { halign: "right" },
       5: { halign: "right" },
-      6: { halign: "right", fontStyle: "bold" },
-    },
+      6: { halign: "right", fontStyle: "bold" }
+    }
   });
 
   const y = (doc as any).lastAutoTable?.finalY || 85;
 
   autoTable(doc, {
-  startY: y + 5,
-  margin: { left: mx, right: mx, top: 61 },
-  theme: "grid",
-  tableWidth: pageW - mx * 2,
-  showHead: "everyPage",
-  head: [
+    startY: y + 5,
+    margin: { left: mx, right: mx, top: 61 },
+    theme: "grid",
+    tableWidth: pageW - mx * 2,
+    showHead: "everyPage",
+    head: [
     [
-      "OZ",
-      "Leistungsbeschreibung",
-      "ML",
-      "ZG",
-      "Faktor",
-      "Divisor",
-      "ME",
-      "Lohnstd.",
-      "Lohn-Betr.",
-      "Gerät",
-      "Stoffe",
-      "Fremd",
-      "Sonst.",
-      "EKT",
-      "EP",
-      "GP",
-    ],
-  ],
-  body: pdfRows.flatMap((r) => {
-    const menge = n(r.menge);
-    const ep = getUnitPrice(r);
+    "OZ",
+    "Leistungsbeschreibung",
+    "ML",
+    "ZG",
+    "Faktor",
+    "Divisor",
+    "ME",
+    "Lohnstd.",
+    "Lohn-Betr.",
+    "Gerät",
+    "Stoffe",
+    "Fremd",
+    "Sonst.",
+    "EKT",
+    "EP",
+    "GP"]],
 
-    const lohn = sumGroup(r, ["Personal"]);
-    const geraet = sumGroup(r, ["Maschinen", "LKW / Transport"]);
-    const stoffe = sumGroup(r, ["Material"]);
-    const fremd = sumGroup(r, ["Fremdleistung"]);
-    const sonst = sumGroup(r, ["Entsorgung", "Gemeinkosten", "Risiko", "Gewinn"]);
-    const ekt = lohn + geraet + stoffe + fremd + sonst;
 
-    const main = [
+    body: pdfRows.flatMap((r) => {
+      const menge = n(r.menge);
+      const ep = getUnitPrice(r);
+
+      const lohn = sumGroup(r, ["Personal"]);
+      const geraet = sumGroup(r, ["Maschinen", "LKW / Transport"]);
+      const stoffe = sumGroup(r, ["Material"]);
+      const fremd = sumGroup(r, ["Fremdleistung"]);
+      const sonst = sumGroup(r, ["Entsorgung", "Gemeinkosten", "Risiko", "Gewinn"]);
+      const ekt = lohn + geraet + stoffe + fremd + sonst;
+
+      const main = [
       r.posNr || "—",
       `${r.kurztext || "—"}${r.langtext ? "\n" + r.langtext : ""}`,
       qty(menge),
@@ -10763,21 +11518,21 @@ function exportUrkalkulationPdfLocal(opts: {
       money(sonst),
       money(ekt),
       money(ep),
-      money(lineNet(r)),
-    ];
+      money(lineNet(r))];
 
-    const detailRows = effectiveBreakdown(r).map((b) => {
-      const isLohn = b.group === "Personal";
-      const isGeraet = b.group === "Maschinen" || b.group === "LKW / Transport";
-      const isStoffe = b.group === "Material";
-      const isFremd = b.group === "Fremdleistung";
-      const isSonst = ["Entsorgung", "Gemeinkosten", "Risiko", "Gewinn"].includes(
-        b.group
-      );
 
-      const bLohnStd = isLohn ? round2(n(b.total) / 55) : 0;
+      const detailRows = effectiveBreakdown(r).map((b) => {
+        const isLohn = b.group === "Personal";
+        const isGeraet = b.group === "Maschinen" || b.group === "LKW / Transport";
+        const isStoffe = b.group === "Material";
+        const isFremd = b.group === "Fremdleistung";
+        const isSonst = ["Entsorgung", "Gemeinkosten", "Risiko", "Gewinn"].includes(
+          b.group
+        );
 
-      return [
+        const bLohnStd = isLohn ? round2(n(b.total) / 55) : 0;
+
+        return [
         "",
         `   ${b.group} - ${b.name}${b.note ? " · " + b.note : ""}`,
         qty(b.qty),
@@ -10793,88 +11548,88 @@ function exportUrkalkulationPdfLocal(opts: {
         isSonst ? money(b.total) : "",
         money(b.total),
         "",
-        "",
-      ];
-    });
+        ""];
 
-    return [main, ...detailRows];
-  }),
-  styles: {
-    font: "helvetica",
-    fontSize: 4.05,
-    cellPadding: 0.38,
-    overflow: "linebreak",
-    lineWidth: 0.04,
-    lineColor: [105, 105, 105],
-    textColor: [0, 0, 0],
-    minCellHeight: 2.8,
-  },
-  headStyles: {
-    fillColor: [218, 218, 218],
-    textColor: [0, 0, 0],
-    fontStyle: "bold",
-    halign: "center",
-    valign: "middle",
-    lineWidth: 0.055,
-    lineColor: [65, 65, 65],
-    minCellHeight: 3.2,
-  },
-  bodyStyles: {
-    valign: "top",
-  },
-  columnStyles: {
-    0: { cellWidth: 12, halign: "center" },
-    1: { cellWidth: 72 },
-    2: { cellWidth: 10, halign: "right" },
-    3: { cellWidth: 7, halign: "center" },
-    4: { cellWidth: 10, halign: "right" },
-    5: { cellWidth: 10, halign: "right" },
-    6: { cellWidth: 8, halign: "center" },
-    7: { cellWidth: 11, halign: "right" },
-    8: { cellWidth: 13, halign: "right" },
-    9: { cellWidth: 13, halign: "right" },
-    10: { cellWidth: 13, halign: "right" },
-    11: { cellWidth: 12, halign: "right" },
-    12: { cellWidth: 12, halign: "right" },
-    13: { cellWidth: 13, halign: "right", fontStyle: "bold" },
-    14: { cellWidth: 12, halign: "right", fontStyle: "bold" },
-    15: { cellWidth: 14, halign: "right", fontStyle: "bold" },
-  },
-  didParseCell: (data) => {
-    if (data.section !== "body") return;
+      });
 
-    const raw = data.row.raw as any[];
-    const oz = String(raw?.[0] || "").trim();
-    const isMainRow = Boolean(oz);
+      return [main, ...detailRows];
+    }),
+    styles: {
+      font: "helvetica",
+      fontSize: 4.05,
+      cellPadding: 0.38,
+      overflow: "linebreak",
+      lineWidth: 0.04,
+      lineColor: [105, 105, 105],
+      textColor: [0, 0, 0],
+      minCellHeight: 2.8
+    },
+    headStyles: {
+      fillColor: [218, 218, 218],
+      textColor: [0, 0, 0],
+      fontStyle: "bold",
+      halign: "center",
+      valign: "middle",
+      lineWidth: 0.055,
+      lineColor: [65, 65, 65],
+      minCellHeight: 3.2
+    },
+    bodyStyles: {
+      valign: "top"
+    },
+    columnStyles: {
+      0: { cellWidth: 12, halign: "center" },
+      1: { cellWidth: 72 },
+      2: { cellWidth: 10, halign: "right" },
+      3: { cellWidth: 7, halign: "center" },
+      4: { cellWidth: 10, halign: "right" },
+      5: { cellWidth: 10, halign: "right" },
+      6: { cellWidth: 8, halign: "center" },
+      7: { cellWidth: 11, halign: "right" },
+      8: { cellWidth: 13, halign: "right" },
+      9: { cellWidth: 13, halign: "right" },
+      10: { cellWidth: 13, halign: "right" },
+      11: { cellWidth: 12, halign: "right" },
+      12: { cellWidth: 12, halign: "right" },
+      13: { cellWidth: 13, halign: "right", fontStyle: "bold" },
+      14: { cellWidth: 12, halign: "right", fontStyle: "bold" },
+      15: { cellWidth: 14, halign: "right", fontStyle: "bold" }
+    },
+    didParseCell: (data) => {
+      if (data.section !== "body") return;
 
-    if (isMainRow) {
-      data.cell.styles.fillColor = [246, 246, 246];
+      const raw = data.row.raw as any[];
+      const oz = String(raw?.[0] || "").trim();
+      const isMainRow = Boolean(oz);
 
-      if (data.column.index === 0 || data.column.index >= 13) {
-        data.cell.styles.fontStyle = "bold";
+      if (isMainRow) {
+        data.cell.styles.fillColor = [246, 246, 246];
+
+        if (data.column.index === 0 || data.column.index >= 13) {
+          data.cell.styles.fontStyle = "bold";
+        }
+
+        if (data.column.index === 1) {
+          data.cell.styles.fontStyle = "normal";
+          data.cell.styles.fontSize = 4.2;
+        }
+      } else {
+        data.cell.styles.fillColor = [255, 255, 255];
+
+        if (data.column.index === 1) {
+          data.cell.styles.fontStyle = "normal";
+          data.cell.styles.fontSize = 4.2;
+        }
+
+        if (data.column.index === 13) {
+          data.cell.styles.fontStyle = "bold";
+        }
       }
-
-      if (data.column.index === 1) {
-  data.cell.styles.fontStyle = "normal";
-  data.cell.styles.fontSize = 4.2;
-}
-    } else {
-      data.cell.styles.fillColor = [255, 255, 255];
-
-      if (data.column.index === 1) {
-  data.cell.styles.fontStyle = "normal";
-  data.cell.styles.fontSize = 4.2;
-}
-
-      if (data.column.index === 13) {
-        data.cell.styles.fontStyle = "bold";
-      }
+    },
+    didDrawPage: () => {
+      drawHeader();
     }
-  },
-  didDrawPage: () => {
-    drawHeader();
-  },
-});
+  });
 
   let finalY = (doc as any).lastAutoTable?.finalY || 150;
 
@@ -10891,29 +11646,29 @@ function exportUrkalkulationPdfLocal(opts: {
     tableWidth: 125,
     head: [["Kontrollsummen", "Wert"]],
     body: [
-      ["Anzahl Positionen", String(pdfRows.length)],
-      ["Direkte Kosten", money(pdfSummary.directCost || 0)],
-      ["Risikoanteil", money(pdfSummary.riskSum || 0)],
-      ["Gewinnanteil", money(pdfSummary.profitSum || 0)],
-      ["Netto", money(pdfSummary.net || 0)],
-      ["Brutto", money(pdfSummary.gross || 0)],
-    ],
+    ["Anzahl Positionen", String(pdfRows.length)],
+    ["Direkte Kosten", money(pdfSummary.directCost || 0)],
+    ["Risikoanteil", money(pdfSummary.riskSum || 0)],
+    ["Gewinnanteil", money(pdfSummary.profitSum || 0)],
+    ["Netto", money(pdfSummary.net || 0)],
+    ["Brutto", money(pdfSummary.gross || 0)]],
+
     styles: {
       font: "helvetica",
       fontSize: 5.7,
       cellPadding: 0.9,
       lineWidth: 0.06,
-      lineColor: [90, 90, 90],
+      lineColor: [90, 90, 90]
     },
     headStyles: {
       fillColor: [215, 215, 215],
       textColor: [0, 0, 0],
-      fontStyle: "bold",
+      fontStyle: "bold"
     },
     columnStyles: {
       0: { cellWidth: 70 },
-      1: { cellWidth: 55, halign: "right", fontStyle: "bold" },
-    },
+      1: { cellWidth: 55, halign: "right", fontStyle: "bold" }
+    }
   });
 
   const pages = doc.getNumberOfPages();
@@ -10929,7 +11684,7 @@ function exportUrkalkulationPdfLocal(opts: {
     doc.text(`Seite ${i}/${pages}`, pageW - mx, pageH - 4, { align: "right" });
   }
 
-  doc.save(`Urkalkulation_${safeFileName(offer.number || projectKey)}.pdf`);
+  saveRlcPdfWithCompanyHeader(doc, `Urkalkulation_${safeFileName(offer.number || projectKey)}.pdf`);
 }
 /* ================= STYLES ================= */
 
@@ -10937,16 +11692,23 @@ const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
   padding: 16,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflowX: "hidden",
+  fontSize: 12,
+  lineHeight: 1.3
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -10954,31 +11716,31 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
-  fontSize: 30,
-  fontWeight: 900,
+  fontSize: 17,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.88,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.9,
+  opacity: 0.9
 };
 
 const quickActionsCard: React.CSSProperties = {
@@ -10986,13 +11748,13 @@ const quickActionsCard: React.CSSProperties = {
   border: "1px solid #DDE7F5",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
+  boxShadow: "0 8px 24px rgba(15,23,42,0.05)"
 };
 
 const quickActionsGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const quickActionButton: React.CSSProperties = {
@@ -11001,28 +11763,28 @@ const quickActionButton: React.CSSProperties = {
   borderRadius: 14,
   padding: 14,
   textAlign: "left",
-  minHeight: 96,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  minHeight: 72,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const quickActionTitle: React.CSSProperties = {
   fontSize: 14,
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0F172A",
-  marginBottom: 6,
+  marginBottom: 6
 };
 
 const quickActionText: React.CSSProperties = {
   fontSize: 12,
   lineHeight: 1.45,
   color: "#64748B",
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -11030,58 +11792,58 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
-  fontSize: 22,
+  fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const kiAssistantBox: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "54px minmax(0,1fr)",
   gap: 12,
-  alignItems: "start",
+  alignItems: "start"
 };
 
 const kiAvatar: React.CSSProperties = {
   width: 54,
   height: 54,
   borderRadius: 18,
-  background: "linear-gradient(135deg,#2563EB,#1E3A8A)",
+  background: "linear-gradient(135deg,#146EF5,#1E3A8A)",
   color: "#FFFFFF",
   display: "grid",
   placeItems: "center",
-  fontWeight: 900,
-  boxShadow: "0 12px 30px rgba(37,99,235,0.28)",
+  fontWeight: 700,
+  boxShadow: "0 12px 30px rgba(37,99,235,0.28)"
 };
 
 const kiBubble: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "linear-gradient(180deg,#EFF6FF,#FFFFFF)",
+  border: "1px solid #BED6FF",
+  background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
   color: "#1E3A8A",
   borderRadius: 18,
   padding: 16,
   boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
   display: "grid",
-  gap: 10,
+  gap: 10
 };
 
 const kiBubbleTop: React.CSSProperties = {
@@ -11090,30 +11852,30 @@ const kiBubbleTop: React.CSSProperties = {
   gap: 12,
   alignItems: "center",
   color: "#0F172A",
-  fontSize: 15,
+  fontSize: 15
 };
 
 const kiStatus: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
+  border: "1px solid #BED6FF",
   background: "#FFFFFF",
-  color: "#1D4ED8",
+  color: "#0B5BD3",
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kiText: React.CSSProperties = {
   fontSize: 14,
   lineHeight: 1.55,
   color: "#1E3A8A",
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const kiQuickFacts: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const kiQuickFact: React.CSSProperties = {
@@ -11123,24 +11885,61 @@ const kiQuickFact: React.CSSProperties = {
   borderRadius: 999,
   padding: "5px 9px",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const card: React.CSSProperties = {
   background: "#FFFFFF",
+  minWidth: 0,
+  maxWidth: "100%",
+  boxSizing: "border-box",
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sideCard: React.CSSProperties = {
   ...card,
-  alignSelf: "start",
-  position: "sticky",
-  top: 12,
-  maxHeight: "calc(100vh - 24px)",
-  overflow: "auto",
+  alignSelf: "stretch",
+  position: "relative",
+  width: "100%",
+  minWidth: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+  scrollMarginTop: 16
+};
+
+const selectedDetailHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  flexWrap: "wrap",
+  paddingBottom: 12,
+  marginBottom: 12,
+  borderBottom: "1px solid #E2E8F0"
+};
+
+const selectedDetailEyebrow: React.CSSProperties = {
+  marginBottom: 4,
+  color: "#146EF5",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.05em",
+  textTransform: "uppercase"
+};
+
+const selectedDetailPosition: React.CSSProperties = {
+  maxWidth: 620,
+  padding: "8px 11px",
+  border: "1px solid #BED6FF",
+  borderRadius: 10,
+  background: "#EAF2FF",
+  color: "#1E3A8A",
+  fontSize: 12,
+  fontWeight: 700,
+  overflowWrap: "anywhere"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -11149,47 +11948,47 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const formGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const label: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const input: React.CSSProperties = {
   border: "1px solid #D1D5DB",
   borderRadius: 10,
-  padding: "9px 11px",
+  padding: "6px 8px",
   fontSize: 13,
   width: "100%",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const smallInput: React.CSSProperties = {
   ...input,
   width: 76,
-  padding: "7px 9px",
+  padding: "7px 9px"
 };
 
 const cellInput: React.CSSProperties = {
@@ -11198,13 +11997,13 @@ const cellInput: React.CSSProperties = {
   padding: "6px 8px",
   fontSize: 12,
   background: "#FFFFFF",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const chapterGrid: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const chapterBox: React.CSSProperties = {
@@ -11212,7 +12011,7 @@ const chapterBox: React.CSSProperties = {
   borderRadius: 12,
   padding: 12,
   minWidth: 250,
-  background: "#F8FAFC",
+  background: "#F8FAFC"
 };
 
 const chapterInputs: React.CSSProperties = {
@@ -11220,25 +12019,25 @@ const chapterInputs: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "auto 80px auto 80px",
   alignItems: "center",
-  gap: 8,
+  gap: 8
 };
 
 const tiny: React.CSSProperties = {
   marginTop: 8,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const muted: React.CSSProperties = {
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 
 const exportRow: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const filterRow: React.CSSProperties = {
@@ -11246,7 +12045,7 @@ const filterRow: React.CSSProperties = {
   gap: 8,
   flexWrap: "wrap",
   alignItems: "center",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const btnFilter: React.CSSProperties = {
@@ -11254,90 +12053,90 @@ const btnFilter: React.CSSProperties = {
   background: "#FFFFFF",
   color: "#334155",
   borderRadius: 999,
-  padding: "7px 11px",
+  padding: "5px 8px",
   fontSize: 12,
-  fontWeight: 900,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const btnFilterActive: React.CSSProperties = {
   ...btnFilter,
-  border: "1px solid #2563EB",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #146EF5",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const filterMeta: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
-  marginLeft: "auto",
+  fontWeight: 700,
+  marginLeft: "auto"
 };
 
 const tableWrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 1120,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 9px",
+  padding: "7px 7px",
   fontSize: 12,
   color: "#475569",
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const td: React.CSSProperties = {
-  padding: "8px 9px",
+  padding: "6px 7px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const chapterRow: React.CSSProperties = {
   ...td,
   background: "#EAF2FF",
   color: "#1E3A8A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const btnBase: React.CSSProperties = {
   border: "1px solid #D1D5DB",
   borderRadius: 10,
-  padding: "9px 13px",
-  fontSize: 13,
-  fontWeight: 800,
+  padding: "5px 8px",
+  fontSize: 12,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnMini: React.CSSProperties = {
@@ -11347,9 +12146,9 @@ const btnMini: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  marginTop: 8,
+  marginTop: 8
 };
 
 const btnDangerMini: React.CSSProperties = {
@@ -11359,8 +12158,8 @@ const btnDangerMini: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -11371,100 +12170,100 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeOk: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #BBF7D0",
   background: "#F0FDF4",
-  color: "#15803D",
+  color: "#15803D"
 };
 
 const badgeWarn: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FDE68A",
   background: "#FFFBEB",
-  color: "#B45309",
+  color: "#B45309"
 };
 
 const badgeInfo: React.CSSProperties = {
   ...badgeNeutral,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const badgeCritical: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const problemText: React.CSSProperties = {
   fontSize: 12,
   color: "#334155",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const sideTitle: React.CSSProperties = {
   marginTop: 4,
   fontSize: 15,
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0F172A",
-  lineHeight: 1.35,
+  lineHeight: 1.35
 };
 
 const sideBadges: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const separator: React.CSSProperties = {
   height: 1,
-  background: "#E5E7EB",
+  background: "#E5E7EB"
 };
 
 const detailValue: React.CSSProperties = {
   marginTop: 4,
   color: "#0F172A",
-  fontWeight: 700,
-  fontSize: 13,
+  fontWeight: 600,
+  fontSize: 13
 };
 
 const compactInfoGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-  gap: 10,
+  gap: 10
 };
 
 const costGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2,minmax(0,1fr))",
   gap: 8,
-  marginTop: 10,
+  marginTop: 10
 };
 
 const costBox: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   background: "#F8FAFC",
   borderRadius: 10,
-  padding: 9,
+  padding: 9
 };
 
 const costLabel: React.CSSProperties = {
   fontSize: 11,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const costValue: React.CSSProperties = {
   marginTop: 3,
   fontSize: 13,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const warningBox: React.CSSProperties = {
@@ -11475,46 +12274,46 @@ const warningBox: React.CSSProperties = {
   padding: 10,
   fontSize: 13,
   lineHeight: 1.45,
-  whiteSpace: "pre-wrap",
+  whiteSpace: "pre-wrap"
 };
 
 const reasonBox: React.CSSProperties = {
   border: "1px solid #DBEAFE",
-  background: "#EFF6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 12,
   padding: 10,
   fontSize: 13,
   lineHeight: 1.45,
-  whiteSpace: "pre-wrap",
+  whiteSpace: "pre-wrap"
 };
 
 const detailsSummary: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 13,
   color: "#0F172A",
-  fontWeight: 900,
-  padding: "8px 0",
+  fontWeight: 700,
+  padding: "8px 0"
 };
 
 const knowledgeList: React.CSSProperties = {
   display: "grid",
   gap: 8,
-  marginTop: 6,
+  marginTop: 6
 };
 
 const knowledgeItem: React.CSSProperties = {
   border: "1px solid #DBEAFE",
-  background: "#EFF6FF",
+  background: "#EAF2FF",
   borderRadius: 12,
-  padding: 10,
+  padding: 10
 };
 
 const knowledgeTitle: React.CSSProperties = {
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0F172A",
-  lineHeight: 1.3,
+  lineHeight: 1.3
 };
 
 const breakdownHeader: React.CSSProperties = {
@@ -11524,20 +12323,20 @@ const breakdownHeader: React.CSSProperties = {
   alignItems: "center",
   flexWrap: "wrap",
   marginBottom: 8,
-  fontSize: 13,
+  fontSize: 13
 };
 
 const miniTableWrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
   borderRadius: 10,
-  marginBottom: 8,
+  marginBottom: 8
 };
 
 const miniTable: React.CSSProperties = {
   width: "100%",
   minWidth: 720,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const miniTh: React.CSSProperties = {
@@ -11547,22 +12346,22 @@ const miniTh: React.CSSProperties = {
   color: "#475569",
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const miniTd: React.CSSProperties = {
   padding: "6px",
   borderBottom: "1px solid #F1F5F9",
   fontSize: 11,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const miniTdRight: React.CSSProperties = {
   ...miniTd,
   textAlign: "right",
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const miniInput: React.CSSProperties = {
@@ -11572,19 +12371,19 @@ const miniInput: React.CSSProperties = {
   fontSize: 11,
   width: "100%",
   boxSizing: "border-box",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const miniEmpty: React.CSSProperties = {
   padding: 10,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const auftragTabs: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const auftragTab: React.CSSProperties = {
@@ -11594,22 +12393,22 @@ const auftragTab: React.CSSProperties = {
   borderRadius: 999,
   padding: "8px 12px",
   fontSize: 13,
-  fontWeight: 900,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const auftragTabActive: React.CSSProperties = {
   ...auftragTab,
-  border: "1px solid #2563EB",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #146EF5",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const urkalkulationSummary: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(3,minmax(0,1fr))",
   gap: 8,
-  marginBottom: 10,
+  marginBottom: 10
 };
 
 const urkBox: React.CSSProperties = {
@@ -11618,37 +12417,41 @@ const urkBox: React.CSSProperties = {
   borderRadius: 10,
   padding: 9,
   display: "grid",
-  gap: 3,
+  gap: 3
 };
 
 const urkBoxStrong: React.CSSProperties = {
   ...urkBox,
-  border: "1px solid #2563EB",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #146EF5",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const urkLabel: React.CSSProperties = {
   fontSize: 11,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const calcEditorGrid: React.CSSProperties = {
   display: "grid",
+  gridTemplateColumns: "minmax(0,1fr)",
   gap: 16,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0
 };
 
 const bottomCalcGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0,1fr) 420px",
   gap: 16,
-  alignItems: "start",
+  alignItems: "start"
 };
 
 const selectedPositionBar: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 12,
   padding: "10px 12px",
@@ -11657,14 +12460,14 @@ const selectedPositionBar: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 12,
   flexWrap: "wrap",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const resourceToolbar: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0,1fr) 130px auto",
   gap: 8,
-  marginBottom: 10,
+  marginBottom: 10
 };
 
 const resourceList: React.CSSProperties = {
@@ -11675,7 +12478,7 @@ const resourceList: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 10,
   padding: 6,
-  background: "#F8FAFC",
+  background: "#F8FAFC"
 };
 
 const resourceItem: React.CSSProperties = {
@@ -11684,26 +12487,26 @@ const resourceItem: React.CSSProperties = {
   borderRadius: 9,
   padding: 9,
   textAlign: "left",
-  cursor: "pointer",
+  cursor: "pointer"
 };
 
 const resourceTitle: React.CSSProperties = {
   fontSize: 12,
-  fontWeight: 900,
-  color: "#0F172A",
+  fontWeight: 700,
+  color: "#0F172A"
 };
 
 const resourceMeta: React.CSSProperties = {
   marginTop: 3,
   fontSize: 11,
   color: "#64748B",
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const auftragSummaryBox: React.CSSProperties = {
   marginTop: 12,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 12,
   padding: "10px 12px",
@@ -11712,7 +12515,7 @@ const auftragSummaryBox: React.CSSProperties = {
   gap: 12,
   flexWrap: "wrap",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const pagerBar: React.CSSProperties = {
@@ -11723,13 +12526,13 @@ const pagerBar: React.CSSProperties = {
   marginLeft: "auto",
   fontSize: 12,
   color: "#475569",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const compactHeroCard: React.CSSProperties = {
   ...heroCard,
   padding: 18,
-  gap: 12,
+  gap: 12
 };
 
 const compactHeroTop: React.CSSProperties = {
@@ -11737,18 +12540,18 @@ const compactHeroTop: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "flex-start",
   gap: 16,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const compactHeroTitleWrap: React.CSSProperties = {
   display: "grid",
-  gap: 4,
+  gap: 4
 };
 
 const compactTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 24,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const compactSubtitle: React.CSSProperties = {
@@ -11756,32 +12559,32 @@ const compactSubtitle: React.CSSProperties = {
   maxWidth: 820,
   opacity: 0.86,
   lineHeight: 1.45,
-  fontSize: 13,
+  fontSize: 13
 };
 
 const compactHeroActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  justifyContent: "flex-end",
+  justifyContent: "flex-end"
 };
 
 const compactActionBar: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const kiPanel: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "linear-gradient(180deg,#EFF6FF,#FFFFFF)",
+  border: "1px solid #BED6FF",
+  background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
   color: "#1E3A8A",
   borderRadius: 16,
   padding: 14,
   boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
   display: "grid",
-  gap: 10,
+  gap: 10
 };
 
 const kiPanelClosed: React.CSSProperties = {
@@ -11794,7 +12597,7 @@ const kiPanelClosed: React.CSSProperties = {
   alignItems: "center",
   gap: 12,
   flexWrap: "wrap",
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kiPanelTop: React.CSSProperties = {
@@ -11802,13 +12605,13 @@ const kiPanelTop: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 12,
   alignItems: "flex-start",
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const kiPanelTitle: React.CSSProperties = {
   color: "#0F172A",
   fontSize: 15,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kiPanelSubtitle: React.CSSProperties = {
@@ -11816,20 +12619,20 @@ const kiPanelSubtitle: React.CSSProperties = {
   color: "#1E3A8A",
   fontSize: 13,
   lineHeight: 1.45,
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const kiPanelActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  justifyContent: "flex-end",
+  justifyContent: "flex-end"
 };
 
 const kiFactsCompact: React.CSSProperties = {
   display: "flex",
   gap: 6,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const kiFactCompact: React.CSSProperties = {
@@ -11839,12 +12642,12 @@ const kiFactCompact: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 8px",
   fontSize: 11,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const auftragCardCompact: React.CSSProperties = {
   ...card,
-  padding: 14,
+  padding: 14
 };
 
 const auftragHeaderCompact: React.CSSProperties = {
@@ -11853,12 +12656,12 @@ const auftragHeaderCompact: React.CSSProperties = {
   gap: 12,
   alignItems: "center",
   flexWrap: "wrap",
-  marginBottom: 10,
+  marginBottom: 10
 };
 
 const auftragSummaryCompact: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 12,
   padding: "8px 10px",
@@ -11867,12 +12670,12 @@ const auftragSummaryCompact: React.CSSProperties = {
   gap: 12,
   flexWrap: "wrap",
   fontSize: 12,
-  fontWeight: 800,
-  marginBottom: 10,
+  fontWeight: 700,
+  marginBottom: 10
 };
 
 const lvMenuWrap: React.CSSProperties = {
-  position: "relative",
+  position: "relative"
 };
 
 const lvMenuButton: React.CSSProperties = {
@@ -11880,7 +12683,7 @@ const lvMenuButton: React.CSSProperties = {
   listStyle: "none",
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
+  gap: 6
 };
 
 const lvMenuPanel: React.CSSProperties = {
@@ -11895,7 +12698,7 @@ const lvMenuPanel: React.CSSProperties = {
   padding: 6,
   boxShadow: "0 16px 40px rgba(15,23,42,0.16)",
   display: "grid",
-  gap: 4,
+  gap: 4
 };
 
 const lvMenuItem: React.CSSProperties = {
@@ -11906,114 +12709,118 @@ const lvMenuItem: React.CSSProperties = {
   padding: "9px 10px",
   textAlign: "left",
   fontSize: 13,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const lvTableWrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
   borderRadius: 12,
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 
 const lvStickyHeader: React.CSSProperties = {
-  position: "sticky",
-  top: 0,
-  zIndex: 200,
-  display: "grid",
-  gridTemplateColumns: "70px 220px 120px minmax(420px, 1fr) 110px 80px 130px 150px 130px 130px 110px 120px",
-  alignItems: "center",
-  gap: 0,
-  padding: "9px 10px",
-  background: "#F8FAFC",
-  borderTop: "1px solid #E5E7EB",
-  borderBottom: "1px solid #E5E7EB",
-  color: "#475569",
-  fontSize: 11,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  display: "none"
 };
 const lvTable: React.CSSProperties = {
   width: "100%",
-  minWidth: 980,
-  borderCollapse: "collapse",
+  maxWidth: "100%",
+  tableLayout: "fixed",
+  borderCollapse: "collapse"
 };
 
 const lvTh: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 5,
   textAlign: "left",
-  padding: "9px 10px",
-  fontSize: 11,
+  padding: "4px 4px",
+  fontSize: 9.5,
   color: "#475569",
   background: "#F8FAFC",
-  borderBottom: "1px solid #E5E7EB",
-  whiteSpace: "nowrap",
-  fontWeight: 900,
+  borderBottom: "1px solid #DDE3EC",
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
+  lineHeight: 1.05,
+  fontWeight: 700
 };
 
 const lvThRight: React.CSSProperties = {
   ...lvTh,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const lvRow: React.CSSProperties = {
   background: "#FFFFFF",
-  cursor: "pointer",
+  cursor: "pointer"
 };
 
 const lvRowSelected: React.CSSProperties = {
-  background: "#EAF2FF",
+  background: "#EAF2FF"
 };
 
 const lvRowCritical: React.CSSProperties = {
-  background: "#FEF2F2",
+  background: "#FEF2F2"
 };
 
 const lvRowWarning: React.CSSProperties = {
-  background: "#FFFBEB",
+  background: "#FFFBEB"
 };
 
 const lvRowStructure: React.CSSProperties = {
   background: "#F8FAFC",
   color: "#64748B",
-  fontStyle: "italic",
+  fontStyle: "italic"
 };
 
 const lvTd: React.CSSProperties = {
-  padding: "7px 10px",
-  fontSize: 12,
-  borderBottom: "1px solid #F1F5F9",
+  padding: "4px 4px",
+  fontSize: 10.5,
+  lineHeight: 1.15,
+  borderBottom: "1px solid #EEF2F7",
   verticalAlign: "middle",
+  minWidth: 0,
+  overflow: "hidden",
+  overflowWrap: "anywhere"
 };
 
 const lvTextTd: React.CSSProperties = {
   ...lvTd,
-  minWidth: 360,
+  minWidth: 280
 };
 
 const lvTdRight: React.CSSProperties = {
   ...lvTd,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const lvSelect: React.CSSProperties = {
   ...cellInput,
-  width: 155,
-  padding: "6px 7px",
+  width: 142,
+  minHeight: 28,
+  height: 28,
+  padding: "3px 5px",
+  fontSize: 10.5,
+  lineHeight: 1.1
 };
 
 const lvPosInput: React.CSSProperties = {
   ...cellInput,
-  width: 92,
+  width: 84,
+  minHeight: 28,
+  height: 28,
+  padding: "3px 5px",
+  fontSize: 10.5
 };
 
 const lvKurztextInput: React.CSSProperties = {
   ...cellInput,
   width: "100%",
   minWidth: 330,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const lvLangPreview: React.CSSProperties = {
@@ -12021,39 +12828,51 @@ const lvLangPreview: React.CSSProperties = {
   fontSize: 11,
   color: "#64748B",
   lineHeight: 1.35,
-  maxWidth: 680,
+  maxWidth: 680
 };
 
 const lvMiniWarning: React.CSSProperties = {
-  marginTop: 4,
-  fontSize: 11,
+  marginTop: 2,
+  fontSize: 9,
   color: "#B45309",
-  lineHeight: 1.35,
-  fontWeight: 700,
+  lineHeight: 1.15,
+  fontWeight: 650
 };
 
 const lvPriceCompareInline: React.CSSProperties = {
-  marginTop: 6,
-  fontSize: 11,
+  marginTop: 2,
+  fontSize: 9.5,
   color: "#1E3A8A",
-  fontWeight: 900,
-  lineHeight: 1.35,
+  fontWeight: 700,
+  lineHeight: 1.1
 };
 const lvNumberInput: React.CSSProperties = {
   ...cellInput,
-  width: 82,
-  textAlign: "right",
+  width: 66,
+  minHeight: 28,
+  height: 28,
+  padding: "3px 5px",
+  fontSize: 10.5,
+  textAlign: "right"
 };
 
 const lvUnitInput: React.CSSProperties = {
   ...cellInput,
-  width: 62,
+  width: 54,
+  minHeight: 28,
+  height: 28,
+  padding: "3px 5px",
+  fontSize: 10.5
 };
 
 const lvPriceInput: React.CSSProperties = {
   ...cellInput,
-  width: 92,
-  textAlign: "right",
+  width: 82,
+  minHeight: 28,
+  height: 28,
+  padding: "3px 5px",
+  fontSize: 10.5,
+  textAlign: "right"
 };
 
 const pagerBarCompact: React.CSSProperties = {
@@ -12065,17 +12884,17 @@ const pagerBarCompact: React.CSSProperties = {
   marginTop: 12,
   fontSize: 12,
   color: "#475569",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const heroCardCompact: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 16,
   padding: 18,
   display: "grid",
   gap: 12,
-  boxShadow: "0 10px 28px rgba(15,23,42,0.16)",
+  boxShadow: "0 10px 28px rgba(15,23,42,0.16)"
 };
 
 const heroTopLine: React.CSSProperties = {
@@ -12083,13 +12902,13 @@ const heroTopLine: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "flex-start",
   gap: 16,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const titleCompact: React.CSSProperties = {
-  margin: "3px 0",
+  color: "#FFFFFF", margin: "3px 0",
   fontSize: 26,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitleCompact: React.CSSProperties = {
@@ -12097,7 +12916,7 @@ const subtitleCompact: React.CSSProperties = {
   maxWidth: 900,
   fontSize: 13,
   opacity: 0.9,
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const heroMetaCompact: React.CSSProperties = {
@@ -12108,7 +12927,7 @@ const heroMetaCompact: React.CSSProperties = {
   padding: "10px 12px",
   display: "grid",
   gap: 3,
-  fontSize: 12,
+  fontSize: 12
 };
 
 const heroStatus: React.CSSProperties = {
@@ -12117,14 +12936,14 @@ const heroStatus: React.CSSProperties = {
   borderRadius: 10,
   padding: "8px 10px",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const compactToolbar: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const compactActionPanel: React.CSSProperties = {
@@ -12132,20 +12951,20 @@ const compactActionPanel: React.CSSProperties = {
   border: "1px solid #DDE7F5",
   borderRadius: 14,
   padding: 14,
-  boxShadow: "0 4px 14px rgba(15,23,42,0.05)",
+  boxShadow: "0 4px 14px rgba(15,23,42,0.05)"
 };
 
 const compactActionHeader: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 12,
-  marginBottom: 10,
+  marginBottom: 10
 };
 
 const compactActionGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(175px,1fr))",
-  gap: 8,
+  gap: 8
 };
 
 const compactActionButton: React.CSSProperties = {
@@ -12157,12 +12976,12 @@ const compactActionButton: React.CSSProperties = {
   minHeight: 72,
   cursor: "pointer",
   display: "grid",
-  gap: 4,
+  gap: 4
 };
 
 const compactOrderCard: React.CSSProperties = {
   ...card,
-  padding: 14,
+  padding: 14
 };
 
 const orderHead: React.CSSProperties = {
@@ -12171,12 +12990,12 @@ const orderHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 10,
+  marginBottom: 10
 };
 
 const auftragSummaryBoxCompact: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 10,
   padding: "8px 10px",
@@ -12185,30 +13004,30 @@ const auftragSummaryBoxCompact: React.CSSProperties = {
   gap: 10,
   flexWrap: "wrap",
   fontSize: 12,
-  fontWeight: 800,
-  marginBottom: 8,
+  fontWeight: 700,
+  marginBottom: 8
 };
 
 const auftragTabsCompact: React.CSSProperties = {
   display: "flex",
   gap: 7,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const grid4Compact: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 10,
+  gap: 10
 };
 
 const kiAssistantPanel: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "linear-gradient(180deg,#EFF6FF,#FFFFFF)",
+  border: "1px solid #BED6FF",
+  background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
   borderRadius: 14,
   padding: 14,
   display: "grid",
   gap: 10,
-  boxShadow: "0 6px 18px rgba(37,99,235,0.08)",
+  boxShadow: "0 6px 18px rgba(37,99,235,0.08)"
 };
 
 const kiPanelHeader: React.CSSProperties = {
@@ -12216,24 +13035,24 @@ const kiPanelHeader: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 12,
   alignItems: "center",
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const kiPanelTitleWrap: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 10,
+  gap: 10
 };
 
 const kiAvatarSmall: React.CSSProperties = {
   width: 38,
   height: 38,
   borderRadius: 12,
-  background: "linear-gradient(135deg,#2563EB,#1E3A8A)",
+  background: "linear-gradient(135deg,#146EF5,#1E3A8A)",
   color: "#FFFFFF",
   display: "grid",
   placeItems: "center",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 
@@ -12241,25 +13060,25 @@ const kiPanelSub: React.CSSProperties = {
   marginTop: 2,
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const kiPanelText: React.CSSProperties = {
   fontSize: 13,
   lineHeight: 1.45,
   color: "#1E3A8A",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const kiQuickFactsCompact: React.CSSProperties = {
   display: "flex",
   gap: 7,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const kiOpenButton: React.CSSProperties = {
   ...btnSecondary,
-  justifySelf: "start",
+  justifySelf: "start"
 };
 
 
@@ -12277,34 +13096,34 @@ const kiOpenButton: React.CSSProperties = {
 const kiDrawerTitleWrap: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 10,
+  gap: 10
 };
 
 const kiDrawerAvatar: React.CSSProperties = {
   width: 46,
   height: 46,
   borderRadius: 16,
-  background: "linear-gradient(145deg,#2563EB,#1E40AF)",
+  background: "linear-gradient(145deg,#146EF5,#1E40AF)",
   color: "#FFFFFF",
   display: "grid",
   placeItems: "center",
-  fontSize: 22,
-  fontWeight: 900,
-  boxShadow: "0 12px 28px rgba(37,99,235,0.26)",
+  fontSize: 17,
+  fontWeight: 700,
+  boxShadow: "0 12px 28px rgba(37,99,235,0.26)"
 };
 
 
 
 
 const kiDrawerMessage: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "linear-gradient(180deg,#EFF6FF,#FFFFFF)",
+  border: "1px solid #BED6FF",
+  background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
   color: "#1E3A8A",
   borderRadius: 16,
   padding: 13,
   fontSize: 13,
   lineHeight: 1.55,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const kiDrawerHint: React.CSSProperties = {
@@ -12314,20 +13133,20 @@ const kiDrawerHint: React.CSSProperties = {
   borderRadius: 14,
   padding: 11,
   fontSize: 12,
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const kiDrawerStats: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-  gap: 8,
+  gap: 8
 };
 
 const lvDropdownBox: React.CSSProperties = {
   border: "1px solid #D7E3F5",
   borderRadius: 14,
   background: "#FFFFFF",
-  overflow: "hidden",
+  overflow: "hidden"
 };
 
 const lvDropdownSummary: React.CSSProperties = {
@@ -12341,20 +13160,26 @@ const lvDropdownSummary: React.CSSProperties = {
   alignItems: "center",
   gap: 12,
   fontSize: 13,
-  fontWeight: 900,
-  color: "#0F172A",
+  fontWeight: 700,
+  color: "#0F172A"
 };
 
 const lvDropdownHint: React.CSSProperties = {
   fontSize: 11,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const lvTableScroll: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
   maxHeight: 520,
   overflowY: "auto",
-  overflowX: "auto",
+  overflowX: "hidden",
+  boxSizing: "border-box",
+  WebkitOverflowScrolling: "touch"
 };
 
 const priceCompareCard: React.CSSProperties = {
@@ -12362,17 +13187,17 @@ const priceCompareCard: React.CSSProperties = {
   border: "1px solid #DDE7F5",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const priceCompareBadge: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3",
   borderRadius: 999,
-  padding: "7px 11px",
+  padding: "5px 8px",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const priceCompareTableWrap: React.CSSProperties = {
@@ -12380,13 +13205,13 @@ const priceCompareTableWrap: React.CSSProperties = {
   overflowY: "auto",
   maxHeight: 285,
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const priceCompareTable: React.CSSProperties = {
   width: "100%",
   minWidth: 1120,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const priceCompareTh: React.CSSProperties = {
@@ -12397,40 +13222,40 @@ const priceCompareTh: React.CSSProperties = {
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700,
   position: "sticky",
   top: 0,
-  zIndex: 2,
+  zIndex: 2
 };
 
 const priceCompareThRight: React.CSSProperties = {
   ...priceCompareTh,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const priceCompareTr: React.CSSProperties = {
   cursor: "pointer",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const priceCompareTd: React.CSSProperties = {
   padding: "8px 10px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const priceCompareTdStrong: React.CSSProperties = {
   ...priceCompareTd,
-  fontWeight: 900,
-  color: "#0F172A",
+  fontWeight: 700,
+  color: "#0F172A"
 };
 
 const priceCompareTdRight: React.CSSProperties = {
   ...priceCompareTd,
   textAlign: "right",
   whiteSpace: "nowrap",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 
@@ -12623,7 +13448,7 @@ const rlcActionProgressWrap: React.CSSProperties = {
   borderRadius: 14,
   border: "1px solid rgba(191,219,254,0.95)",
   background: "rgba(239,246,255,0.98)",
-  boxShadow: "0 8px 22px rgba(15,23,42,0.08)",
+  boxShadow: "0 8px 22px rgba(15,23,42,0.08)"
 };
 
 const rlcActionProgressTop: React.CSSProperties = {
@@ -12632,137 +13457,18 @@ const rlcActionProgressTop: React.CSSProperties = {
   gap: 12,
   fontSize: 13,
   color: "#0F172A",
-  marginBottom: 8,
+  marginBottom: 8
 };
 
 const rlcActionProgressTrack: React.CSSProperties = {
   height: 10,
   borderRadius: 999,
   background: "#DBEAFE",
-  overflow: "hidden",
+  overflow: "hidden"
 };
 
 const rlcActionProgressFill: React.CSSProperties = {
   height: "100%",
   borderRadius: 999,
-  transition: "width 420ms ease",
+  transition: "width 420ms ease"
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

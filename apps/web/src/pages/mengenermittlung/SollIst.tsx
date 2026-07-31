@@ -1,12 +1,13 @@
-import { API_BASE, apiUrl } from "../../lib/apiBase";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { apiUrl } from "../../lib/apiBase";
 import React, {
   useCallback,
   useEffect,
   useMemo,
   useRef,
-  useState,
-} from "react";
+  useState } from
+"react";
 import { useProject } from "../../store/useProject";
+import MengPageHeader from "./MengPageHeader";
 
 /* ========== tipi ========== */
 interface Row {
@@ -32,17 +33,18 @@ type ParsedItem = {
   ep?: number | string;
 };
 
-type HistoryEntry = {
+type HistorySnapshot = {
   ts: number;
   count: number;
+  rows: Row[];
 };
 
 /* ========== util ========== */
 const fmtEUR = (v: number) => `€ ${isFinite(v) ? v.toFixed(2) : "0.00"}`;
 const toNum = (v: any) =>
-  typeof v === "number"
-    ? v
-    : Number(String(v ?? "").replace(",", ".").trim()) || 0;
+typeof v === "number" ?
+v :
+Number(String(v ?? "").replace(",", ".").trim()) || 0;
 
 
 
@@ -67,7 +69,7 @@ function fromAufmassJson(rows: AufmassJsonRow[]): Row[] {
     unit: String(r.unit ?? "m"),
     soll: Number(r.soll ?? 0),
     ist: Number(r.ist ?? 0),
-    ep: Number(r.ep ?? 0),
+    ep: Number(r.ep ?? 0)
   }));
 }
 
@@ -78,14 +80,14 @@ function toAufmassJson(rows: Row[]): AufmassJsonRow[] {
     unit: String(r.unit ?? "m"),
     soll: Number(r.soll ?? 0),
     ist: Number(r.ist ?? 0),
-    ep: Number(r.ep ?? 0),
+    ep: Number(r.ep ?? 0)
   }));
 }
 
 function byPosAsc(a: Row, b: Row) {
   return String(a.pos ?? "").localeCompare(String(b.pos ?? ""), "de-DE", {
     numeric: true,
-    sensitivity: "base",
+    sensitivity: "base"
   });
 }
 
@@ -105,7 +107,7 @@ function mergeServerRowsByPos(a: AufmassJsonRow[], b: AufmassJsonRow[]): Aufmass
         unit: String(r?.unit ?? "m"),
         soll: Number(r?.soll ?? 0),
         ist: Number(r?.ist ?? 0),
-        ep: Number(r?.ep ?? 0),
+        ep: Number(r?.ep ?? 0)
       });
       return;
     }
@@ -128,92 +130,103 @@ function mergeServerRowsByPos(a: AufmassJsonRow[], b: AufmassJsonRow[]): Aufmass
 
 async function fetchRowsForKey(key: string): Promise<AufmassJsonRow[]> {
   if (!safeTrim(key)) return [];
-  const url = `${API_BASE}/aufmass/aufmass/${encodeURIComponent(key)}`;
+  const url = apiUrl(`/api/aufmass/soll-ist/${encodeURIComponent(key)}`);
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json().catch(() => ({}));
-  return Array.isArray(data?.rows) ? (data.rows as AufmassJsonRow[]) : [];
+  return Array.isArray(data?.rows) ? data.rows as AufmassJsonRow[] : [];
 }
 
 /* ========== piccolo grafico SVG (nessuna dipendenza) ========== */
-function SollIstChart({ rows }: { rows: Row[] }) {
-  const W = 920;
+function SollIstChart({ rows }: {rows: Row[];}) {
   const H = 220;
-  const PAD = 30;
+  const PAD = 34;
+  const groupWidth = 34;
+  const W = Math.max(920, PAD * 2 + rows.length * groupWidth);
 
-  const data = rows.map((r) => ({ soll: r.soll, ist: r.ist, label: r.pos }));
-  const maxV = Math.max(1, ...data.map((d) => Math.max(d.soll, d.ist)));
-  const barW = Math.max(8, (W - PAD * 2) / Math.max(data.length, 1) - 6);
+  const data = rows.map((row) => {
+    const localMax = Math.max(1, Math.abs(row.soll), Math.abs(row.ist));
+    return {
+      label: row.pos,
+      soll: row.soll,
+      ist: row.ist,
+      sollRatio: Math.abs(row.soll) / localMax,
+      istRatio: Math.abs(row.ist) / localMax
+    };
+  });
 
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      width="100%"
+      width={W}
       height={H}
       role="img"
-      aria-label="Soll-Ist Balkendiagramm"
-    >
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#ccc" />
-      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#ccc" />
+      aria-label="Soll-Ist Vergleich je Position in relativer Darstellung">
+      
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#cbd5e1" />
+      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#cbd5e1" />
 
-      {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-        const y = H - PAD - (H - PAD * 2) * t;
-        const v = (maxV * t).toFixed(0);
+      {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const y = H - PAD - (H - PAD * 2) * ratio;
         return (
-          <g key={t}>
-            <line x1={PAD} x2={W - PAD} y1={y} y2={y} stroke="#f1f1f1" />
-            <text x={6} y={y + 4} fontSize="10" fill="#777">
-              {v}
+          <g key={ratio}>
+            <line x1={PAD} x2={W - PAD} y1={y} y2={y} stroke="#eef2f7" />
+            <text x={4} y={y + 4} fontSize="10" fill="#64748b">
+              {Math.round(ratio * 100)} %
             </text>
-          </g>
-        );
+          </g>);
+
       })}
 
-      {data.map((d, i) => {
-        const x0 = PAD + i * (barW * 2 + 6) + 2;
-        const hSoll = (H - PAD * 2) * (d.soll / maxV);
-        const hIst = (H - PAD * 2) * (d.ist / maxV);
+      {data.map((item, index) => {
+        const x0 = PAD + index * groupWidth + 5;
+        const barWidth = 10;
+        const availableHeight = H - PAD * 2;
+        const hSoll = availableHeight * item.sollRatio;
+        const hIst = availableHeight * item.istRatio;
+
         return (
-          <g key={i}>
+          <g key={`${item.label}-${index}`}>
+            <title>{`${item.label}: Soll ${item.soll}, Ist ${item.ist}`}</title>
             <rect
               x={x0}
               y={H - PAD - hSoll}
-              width={barW}
+              width={barWidth}
               height={hSoll}
-              fill="#9ec5fe"
-            />
+              fill="#9ec5fe" />
+            
             <rect
-              x={x0 + barW}
+              x={x0 + barWidth + 2}
               y={H - PAD - hIst}
-              width={barW}
+              width={barWidth}
               height={hIst}
-              fill="#f3a7a7"
-            />
+              fill="#f3a7a7" />
+            
             <text
-              x={x0 + barW}
-              y={H - 8}
+              x={x0 + barWidth}
+              y={H - 9}
               fontSize="9"
               textAnchor="middle"
-              fill="#444"
-            >
-              {d.label}
+              fill="#475569">
+              
+              {item.label}
             </text>
-          </g>
-        );
+          </g>);
+
       })}
 
-      <g transform={`translate(${W - 170},${PAD - 8})`}>
+      <g transform={`translate(${W - 175},${PAD - 9})`}>
         <rect x={0} y={0} width={12} height={12} fill="#9ec5fe" />
-        <text x={18} y={10} fontSize="12" fill="#333">
+        <text x={18} y={10} fontSize="12" fill="#334155">
           Soll
         </text>
         <rect x={70} y={0} width={12} height={12} fill="#f3a7a7" />
-        <text x={88} y={10} fontSize="12" fill="#333">
+        <text x={88} y={10} fontSize="12" fill="#334155">
           Ist
         </text>
       </g>
-    </svg>
-  );
+    </svg>);
+
 }
 
 /* ========== componente principale ========== */
@@ -223,7 +236,7 @@ export default function SollIst() {
   const getSelectedProject = projectStore?.getSelectedProject;
 
   const selectedProject =
-    typeof getSelectedProject === "function" ? getSelectedProject() : null;
+  typeof getSelectedProject === "function" ? getSelectedProject() : null;
 
   const project = currentProject || selectedProject || null;
 
@@ -231,40 +244,20 @@ export default function SollIst() {
   const projectCode: string | undefined = project?.code;
   const projectKey: string | undefined = projectCode || projectId || undefined;
 
-  const storageKey: string | null = projectKey ? `sollist-${projectKey}` : null;
-  const historyStorageKey: string | null = projectKey
-    ? `sollist-history-${projectKey}`
-    : null;
+  const storageKey: string | null = projectKey ? `sollist:${projectKey}` : null;
+  const legacyStorageKey: string | null = projectKey ? `sollist-${projectKey}` : null;
+  const historyStorageKey: string | null = projectKey ?
+  `sollist-snapshots:${projectKey}` :
+  null;
 
   const [rows, setRows] = useState<Row[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [history, setHistory] = useState<HistorySnapshot[]>([]);
   const [busy, setBusy] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   const fileAufmassRef = useRef<HTMLInputElement>(null);
   const filePdfRef = useRef<HTMLInputElement>(null);
   const fileJsonRef = useRef<HTMLInputElement>(null);
-
-  /* ========== LOAD da localStorage per progetto ========== */
-  useEffect(() => {
-    if (!storageKey) return;
-
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (raw) {
-        const parsed: Row[] = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setRows(parsed);
-          return;
-        }
-      }
-    } catch {
-      // ignora
-    }
-
-    setRows([
-      { pos: "001.001", text: "Neue Position", unit: "m", soll: 0, ist: 0, ep: 0 },
-    ]);
-  }, [storageKey]);
 
   /* ========== LOAD history locale ========== */
   useEffect(() => {
@@ -276,7 +269,15 @@ export default function SollIst() {
         return;
       }
       const parsed = JSON.parse(raw);
-      setHistory(Array.isArray(parsed) ? (parsed as HistoryEntry[]) : []);
+      const snapshots = Array.isArray(parsed) ?
+      parsed.filter(
+        (item): item is HistorySnapshot =>
+        Boolean(item) &&
+        typeof item.ts === "number" &&
+        Array.isArray(item.rows)
+      ) :
+      [];
+      setHistory(snapshots.slice(0, 5));
     } catch {
       setHistory([]);
     }
@@ -284,61 +285,133 @@ export default function SollIst() {
 
   /* ========== SAVE su localStorage ========== */
   useEffect(() => {
-    if (!storageKey) return;
+    if (!storageKey || !hydrated) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(rows));
-    } catch {
-      // ignore
+      if (legacyStorageKey) window.localStorage.removeItem(legacyStorageKey);
+    } catch (error) {
+      console.warn("Soll/Ist: lokaler Speicher konnte nicht aktualisiert werden", error);
     }
-  }, [rows, storageKey]);
+  }, [hydrated, legacyStorageKey, rows, storageKey]);
 
   /* ========== SAVE history locale ========== */
   useEffect(() => {
     if (!historyStorageKey) return;
     try {
-      window.localStorage.setItem(historyStorageKey, JSON.stringify(history));
-    } catch {
-      // ignore
+      window.localStorage.setItem(
+        historyStorageKey,
+        JSON.stringify(history.slice(0, 5))
+      );
+    } catch (error) {
+      console.warn("Soll/Ist: lokale Snapshots konnten nicht gespeichert werden", error);
     }
   }, [history, historyStorageKey]);
 
   /* ========== LOAD / SAVE su SERVER (STESSO FILE di AufmassEditor) ========== */
 
   const loadFromServer = useCallback(async () => {
-    if (!projectKey && !projectId) return;
+    if (!projectKey && !projectId) {
+      setRows([]);
+      setHydrated(true);
+      return;
+    }
+
+    const loadLocalFallback = (): Row[] => {
+      try {
+        const raw =
+        storageKey ?
+        window.localStorage.getItem(storageKey) || (
+        legacyStorageKey ?
+        window.localStorage.getItem(legacyStorageKey) :
+        null) :
+        null;
+
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed as Row[] : [];
+      } catch {
+        return [];
+      }
+    };
 
     try {
       setBusy(true);
+      setHydrated(false);
 
-      const byCode =
-        projectCode ? await fetchRowsForKey(projectCode) : [];
+      const byCode = projectCode ? await fetchRowsForKey(projectCode) : [];
       const byId =
-        projectId && projectId !== projectCode
-          ? await fetchRowsForKey(projectId)
-          : [];
+      projectId && projectId !== projectCode ?
+      await fetchRowsForKey(projectId) :
+      [];
 
       const serverRows =
-        byCode.length && !byId.length
-          ? byCode
-          : !byCode.length && byId.length
-          ? byId
-          : mergeServerRowsByPos(byCode, byId);
+      byCode.length && !byId.length ?
+      byCode :
+      !byCode.length && byId.length ?
+      byId :
+      mergeServerRowsByPos(byCode, byId);
 
-      if (serverRows.length) {
-        setRows(fromAufmassJson(serverRows));
+      if (serverRows.length > 0) {
+        const loadedRows = fromAufmassJson(serverRows);
+        setRows(loadedRows);
 
         setHistory((prev) => {
-          const snap = { ts: Date.now(), count: serverRows.length };
-          return [snap, ...prev].slice(0, 20);
+          const snapshot: HistorySnapshot = {
+            ts: Date.now(),
+            count: loadedRows.length,
+            rows: loadedRows.map((row) => ({ ...row }))
+          };
+          return [snapshot, ...prev].slice(0, 5);
         });
+
+        setHydrated(true);
+        return;
       }
+
+      const fallbackRows = loadLocalFallback();
+      setRows(
+        fallbackRows.length ?
+        fallbackRows :
+        [
+        {
+          pos: "001.001",
+          text: "Neue Position",
+          unit: "m",
+          soll: 0,
+          ist: 0,
+          ep: 0
+        }]
+
+      );
+      setHydrated(true);
     } catch (err) {
       console.error(err);
-      alert("Aufmaßdaten vom Server laden fehlgeschlagen.");
+
+      const fallbackRows = loadLocalFallback();
+      setRows(
+        fallbackRows.length ?
+        fallbackRows :
+        [
+        {
+          pos: "001.001",
+          text: "Neue Position",
+          unit: "m",
+          soll: 0,
+          ist: 0,
+          ep: 0
+        }]
+
+      );
+      setHydrated(true);
     } finally {
       setBusy(false);
     }
-  }, [projectCode, projectId, projectKey]);
+  }, [
+  legacyStorageKey,
+  projectCode,
+  projectId,
+  projectKey,
+  storageKey]
+  );
 
   useEffect(() => {
     if (!projectKey && !projectId) return;
@@ -357,11 +430,11 @@ export default function SollIst() {
       setBusy(true);
 
       const post = async (key: string) => {
-        const url = `${API_BASE}/aufmass/aufmass/${encodeURIComponent(key)}`;
+        const url = apiUrl(`/api/aufmass/soll-ist/${encodeURIComponent(key)}`);
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rows: payloadRows }),
+          body: JSON.stringify({ rows: payloadRows })
         });
         if (!res.ok) throw new Error(`API ${url} -> HTTP ${res.status}`);
       };
@@ -377,8 +450,12 @@ export default function SollIst() {
       }
 
       setHistory((prev) => {
-        const snap = { ts: Date.now(), count: rows.length };
-        return [snap, ...prev].slice(0, 20);
+        const snapshot: HistorySnapshot = {
+          ts: Date.now(),
+          count: rows.length,
+          rows: rows.map((row) => ({ ...row }))
+        };
+        return [snapshot, ...prev].slice(0, 5);
       });
     } catch (err) {
       console.error(err);
@@ -394,31 +471,42 @@ export default function SollIst() {
   const sumDiff = useMemo(() => sumSoll - sumIst, [sumSoll, sumIst]);
   const sumEUR = useMemo(() => rows.reduce((a, r) => a + r.ist * r.ep, 0), [rows]);
 
+  const suspiciousRows = useMemo(
+    () =>
+    rows.filter((row) => {
+      const unit = safeTrim(row.unit).toLowerCase();
+      const isLumpSum = ["psch", "pausch", "pauschal"].includes(unit);
+      const overrun = row.soll > 0 && row.ist > row.soll * 2;
+      return isLumpSum && overrun;
+    }),
+    [rows]
+  );
+
   /* ========== mutazioni riga ========== */
   const updateRow = (i: number, patch: Partial<Row>) =>
-    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r));
 
   const addRow = () =>
-    setRows((prev) => [
-      ...prev,
-      {
-        pos: `001.${String(prev.length + 1).padStart(3, "0")}`,
-        text: "Neue Position",
-        unit: "m",
-        soll: 0,
-        ist: 0,
-        ep: 0,
-      },
-    ]);
+  setRows((prev) => [
+  ...prev,
+  {
+    pos: `001.${String(prev.length + 1).padStart(3, "0")}`,
+    text: "Neue Position",
+    unit: "m",
+    soll: 0,
+    ist: 0,
+    ep: 0
+  }]
+  );
 
   const delRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
 
   /* ========== helper CSV (Aufmaß-Datei) ========== */
   function parseCsvWithHeader(text: string): ParsedItem[] {
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
+    const lines = text.
+    split(/\r?\n/).
+    map((l) => l.trim()).
+    filter(Boolean);
     if (!lines.length) return [];
 
     const sep = lines[0].includes(";") ? ";" : ",";
@@ -430,15 +518,15 @@ export default function SollIst() {
       const item: ParsedItem = {};
       header.forEach((h, idx) => {
         const v = cols[idx];
-        if (/^pos/.test(h)) item.pos = v;
-        else if (/kurz|beschr|text/.test(h)) {
+        if (/^pos/.test(h)) item.pos = v;else
+        if (/kurz|beschr|text/.test(h)) {
           item.descr = v;
           item.kurztext = v;
           item.text = v;
-        } else if (/einheit|unit/.test(h)) item.unit = v;
-        else if (/lv|soll/.test(h)) item.qty = v;
-        else if (/ist|abgerechnet/.test(h)) item.ist = v;
-        else if (/ep|preis/.test(h)) item.ep = v;
+        } else if (/einheit|unit/.test(h)) item.unit = v;else
+        if (/lv|soll/.test(h)) item.qty = v;else
+        if (/ist|abgerechnet/.test(h)) item.ist = v;else
+        if (/ep|preis/.test(h)) item.ep = v;
       });
       return item;
     });
@@ -459,11 +547,11 @@ export default function SollIst() {
       const mapped: Row[] = items.map((it, idx) => ({
         pos: it.pos || `AUF.${String(idx + 1).padStart(3, "0")}`,
         text:
-          it.descr || it.kurztext || it.text || it.type || "Aufmaß-Position",
+        it.descr || it.kurztext || it.text || it.type || "Aufmaß-Position",
         unit: it.unit || it.einheit || "m",
         soll: toNum(it.qty ?? 0),
         ist: toNum(it.ist ?? 0),
-        ep: toNum(it.ep ?? 0),
+        ep: toNum(it.ep ?? 0)
       }));
 
       setRows(mapped.length ? mapped : rows);
@@ -494,7 +582,7 @@ export default function SollIst() {
 
       for (const key of candidateKeys) {
         try {
-          const url = `${API_BASE}/project-lv/${encodeURIComponent(key)}`;
+          const url = apiUrl(`/api/project-lv/${encodeURIComponent(key)}`);
           const res = await fetch(url);
           if (!res.ok) throw new Error(`API ${url} -> HTTP ${res.status}`);
           payload = await res.json();
@@ -519,15 +607,15 @@ export default function SollIst() {
         unit: it.unit || it.einheit || it.Einheit || "m",
         soll: toNum(
           it.quantity ??
-            it.qty ??
-            it.menge ??
-            it.lvMenge ??
-            it.soll ??
-            it.Soll ??
-            0
+          it.qty ??
+          it.menge ??
+          it.lvMenge ??
+          it.soll ??
+          it.Soll ??
+          0
         ),
         ist: 0,
-        ep: toNum(it.ep ?? it.einzelpreis ?? it.preis ?? 0),
+        ep: toNum(it.ep ?? it.einzelpreis ?? it.preis ?? 0)
       }));
 
       setRows((prev) => {
@@ -541,7 +629,7 @@ export default function SollIst() {
               text: m.text || ex.text,
               unit: m.unit || ex.unit,
               soll: m.soll,
-              ep: m.ep || ex.ep,
+              ep: m.ep || ex.ep
             });
           } else {
             map.set(m.pos, m);
@@ -553,8 +641,8 @@ export default function SollIst() {
       console.error(err);
       alert(
         `LV-Import fehlgeschlagen. Prüfe /api/project-lv/:projectId.\nDetails: ${
-          err?.message || ""
-        }`
+        err?.message || ""}`
+
       );
     } finally {
       setBusy(false);
@@ -575,7 +663,7 @@ export default function SollIst() {
       fd.append("note", "Soll-Ist Import");
       fd.append("scale", "1");
 
-      const url = `${API_BASE}/import/parse`;
+      const url = apiUrl("/api/import/parse");
       const res = await fetch(url, { method: "POST", body: fd });
       if (!res.ok) throw new Error(`Import API ${res.status}`);
       const data = await res.json();
@@ -587,7 +675,7 @@ export default function SollIst() {
         unit: it.unit || "m",
         soll: toNum(it.qty ?? 0),
         ist: 0,
-        ep: 0,
+        ep: 0
       }));
 
       setRows((prev) => [...prev, ...mapped].sort(byPosAsc));
@@ -639,32 +727,38 @@ export default function SollIst() {
 
   /* ========== stili ========== */
   const tdStyle: React.CSSProperties = {
-    padding: "6px 8px",
-    borderBottom: "1px solid var(--line)",
-    fontSize: 13,
+    padding: "8px 10px",
+    borderBottom: "1px solid #eef2f7",
+    color: "#0f172a",
+    verticalAlign: "top"
   };
   const thStyle: React.CSSProperties = {
-    ...tdStyle,
+    padding: "9px 10px",
+    borderBottom: "1px solid #e5eaf3",
+    background: "#f8fafc",
+    color: "#475569",
     fontWeight: 700,
-    background: "#f7f7f7",
+    textAlign: "left",
+    whiteSpace: "nowrap"
   };
   const inp: React.CSSProperties = {
     border: "1px solid var(--line)",
     borderRadius: 6,
     padding: "4px 6px",
-    fontSize: 13,
+    fontSize: 13
   };
 
   /* ========== render ========== */
   return (
-    <div className="card" style={{ padding: 16 }}>
-      <h2 style={{ marginTop: 0 }}>Aufmaßvergleich · Soll–Ist</h2>
+    <div className="card rlc-migrated-pages-mengenermittlung-sollist-tsx-1357">
+      <MengPageHeader title="Soll/Ist Vergleich" subtitle="Vergleicht LV-Sollmengen mit erfassten Aufmaßmengen und zeigt Abweichungen." />
+      <h2 className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1358">Aufmaßvergleich · Soll–Ist</h2>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+      <div className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1359">
         <button className="btn" onClick={addRow} disabled={busy}>
           + Zeile
         </button>
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1360" />
         <button className="btn" onClick={pickAufmassFile} disabled={busy}>
           Aus Aufmaß laden
         </button>
@@ -674,10 +768,10 @@ export default function SollIst() {
         <button className="btn" onClick={pickPdfFile} disabled={busy}>
           Import aus PDF
         </button>
-        <button className="btn" onClick={loadFromServer} disabled={busy || (!projectKey && !projectId)}>
+        <button className="btn" onClick={loadFromServer} disabled={busy || !projectKey && !projectId}>
           Vom Server laden
         </button>
-        <button className="btn" onClick={saveToServer} disabled={busy || (!projectKey && !projectId)}>
+        <button className="btn" onClick={saveToServer} disabled={busy || !projectKey && !projectId}>
           Speichern
         </button>
         <button className="btn" onClick={pickJsonFile} disabled={busy}>
@@ -688,42 +782,61 @@ export default function SollIst() {
           ref={fileAufmassRef}
           type="file"
           accept=".csv,text/csv,application/vnd.ms-excel"
-          style={{ display: "none" }}
-          onChange={onPickAufmassFile}
-        />
+
+          onChange={onPickAufmassFile} className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1361" />
+        
         <input
           ref={filePdfRef}
           type="file"
           accept="application/pdf"
-          style={{ display: "none" }}
-          onChange={onPickPdfFile}
-        />
+
+          onChange={onPickPdfFile} className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1362" />
+        
         <input
           ref={fileJsonRef}
           type="file"
           accept="application/json,.json"
-          style={{ display: "none" }}
-          onChange={onPickJsonFile}
-        />
+
+          onChange={onPickJsonFile} className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1363" />
+        
       </div>
 
-      <div className="card" style={{ padding: 10, marginBottom: 12 }}>
+      {suspiciousRows.length > 0 &&
+      <div
+        className="card rlc-migrated-pages-mengenermittlung-sollist-tsx-1364">
+
+
+
+
+
+
+
+
+        
+          Plausibilitätsprüfung: {suspiciousRows.length} Pauschalposition(en) mit
+          Ist-Menge über 200 % des Solls. Bitte prüfen: {
+        suspiciousRows.map((row) => row.pos).join(", ")
+        }.
+        </div>
+      }
+
+      <div className="card rlc-migrated-pages-mengenermittlung-sollist-tsx-1365">
         <SollIstChart rows={rows} />
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="card rlc-migrated-pages-mengenermittlung-sollist-tsx-1366">
+        <table className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1367">
           <thead>
             <tr>
-              <th style={thStyle}>Pos.</th>
-              <th style={thStyle}>Beschreibung</th>
-              <th style={thStyle}>Einheit</th>
-              <th style={thStyle}>LV (Soll)</th>
-              <th style={thStyle}>Ist (Abgerechnet)</th>
-              <th style={thStyle}>Differenz (Soll–Ist)</th>
-              <th style={thStyle}>EP (€)</th>
-              <th style={thStyle}>Gesamt (€)</th>
-              <th style={thStyle}>Aktion</th>
+              <th className={rlcClass(null, thStyle)}>Pos.</th>
+              <th className={rlcClass(null, thStyle)}>Beschreibung</th>
+              <th className={rlcClass(null, thStyle)}>Einheit</th>
+              <th className={rlcClass(null, thStyle)}>LV (Soll)</th>
+              <th className={rlcClass(null, thStyle)}>Ist (Abgerechnet)</th>
+              <th className={rlcClass(null, thStyle)}>Differenz (Soll–Ist)</th>
+              <th className={rlcClass(null, thStyle)}>EP (€)</th>
+              <th className={rlcClass(null, thStyle)}>Gesamt (€)</th>
+              <th className={rlcClass(null, thStyle)}>Aktion</th>
             </tr>
           </thead>
           <tbody>
@@ -732,117 +845,112 @@ export default function SollIst() {
               const total = r.ist * r.ep;
               return (
                 <tr key={r.pos + i}>
-                  <td style={tdStyle}>{r.pos}</td>
-                  <td style={tdStyle}>
-                    <input
-                      style={{ ...inp, width: "100%" }}
-                      value={r.text}
-                      onChange={(e) => updateRow(i, { text: e.target.value })}
-                    />
+                  <td className={rlcClass(null, tdStyle)}>{r.pos}</td>
+                  <td className={rlcClass(null, tdStyle)}>
+                    <input className={rlcClass(null,
+                    { ...inp, width: "100%" })}
+                    value={r.text}
+                    onChange={(e) => updateRow(i, { text: e.target.value })} />
+                    
                   </td>
-                  <td style={tdStyle}>
-                    <input
-                      style={{ ...inp, width: 60 }}
-                      value={r.unit}
-                      onChange={(e) => updateRow(i, { unit: e.target.value })}
-                    />
+                  <td className={rlcClass(null, tdStyle)}>
+                    <input className={rlcClass(null,
+                    { ...inp, width: 60 })}
+                    value={r.unit}
+                    onChange={(e) => updateRow(i, { unit: e.target.value })} />
+                    
                   </td>
-                  <td style={tdStyle}>
+                  <td className={rlcClass(null, tdStyle)}>
                     <input
                       type="number"
-                      step="0.01"
-                      style={{ ...inp, width: 110 }}
+                      step="0.01" className={rlcClass(null,
+                      { ...inp, width: 110 })}
                       value={r.soll}
-                      onChange={(e) => updateRow(i, { soll: Number(e.target.value) })}
-                    />
+                      onChange={(e) => updateRow(i, { soll: Number(e.target.value) })} />
+                    
                   </td>
-                  <td style={tdStyle}>
+                  <td className={rlcClass(null, tdStyle)}>
                     <input
                       type="number"
-                      step="0.01"
-                      style={{ ...inp, width: 110 }}
+                      step="0.01" className={rlcClass(null,
+                      { ...inp, width: 110 })}
                       value={r.ist}
-                      onChange={(e) => updateRow(i, { ist: Number(e.target.value) })}
-                    />
+                      onChange={(e) => updateRow(i, { ist: Number(e.target.value) })} />
+                    
                   </td>
-                  <td style={{ ...tdStyle, fontWeight: 700 }}>
+                  <td className={rlcClass(null, { ...tdStyle, fontWeight: 600 })}>
                     {diff.toLocaleString(undefined, { maximumFractionDigits: 3 })}
                   </td>
-                  <td style={tdStyle}>
+                  <td className={rlcClass(null, tdStyle)}>
                     <input
                       type="number"
-                      step="0.01"
-                      style={{ ...inp, width: 100 }}
+                      step="0.01" className={rlcClass(null,
+                      { ...inp, width: 100 })}
                       value={r.ep}
-                      onChange={(e) => updateRow(i, { ep: Number(e.target.value) })}
-                    />
+                      onChange={(e) => updateRow(i, { ep: Number(e.target.value) })} />
+                    
                   </td>
-                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{fmtEUR(total)}</td>
-                  <td style={tdStyle}>
+                  <td className={rlcClass(null, { ...tdStyle, whiteSpace: "nowrap" })}>{fmtEUR(total)}</td>
+                  <td className={rlcClass(null, tdStyle)}>
                     <button className="btn" onClick={() => delRow(i)}>
                       Löschen
                     </button>
                   </td>
-                </tr>
-              );
+                </tr>);
+
             })}
           </tbody>
           <tfoot>
             <tr>
-              <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>
+              <td className={rlcClass(null, { ...tdStyle, fontWeight: 600 })} colSpan={3}>
                 Summen
               </td>
-              <td style={{ ...tdStyle, fontWeight: 700 }}>
+              <td className={rlcClass(null, { ...tdStyle, fontWeight: 600 })}>
                 {sumSoll.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </td>
-              <td style={{ ...tdStyle, fontWeight: 700 }}>
+              <td className={rlcClass(null, { ...tdStyle, fontWeight: 600 })}>
                 {sumIst.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </td>
-              <td style={{ ...tdStyle, fontWeight: 700 }}>
+              <td className={rlcClass(null, { ...tdStyle, fontWeight: 600 })}>
                 {sumDiff.toLocaleString(undefined, { maximumFractionDigits: 2 })}
               </td>
-              <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={2}>
+              <td className={rlcClass(null, { ...tdStyle, fontWeight: 600 })} colSpan={2}>
                 {fmtEUR(sumEUR)}
               </td>
-              <td style={tdStyle}></td>
+              <td className={rlcClass(null, tdStyle)}></td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      <div className="card" style={{ marginTop: 12, padding: 10 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Verlauf</div>
-        {!projectKey && !projectId && (
-          <div style={{ fontSize: 13 }}>
+      <div className="card rlc-migrated-pages-mengenermittlung-sollist-tsx-1368">
+        <div className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1369">Verlauf</div>
+        {!projectKey && !projectId &&
+        <div className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1370">
             Kein Projekt gewählt. Verlauf steht erst nach Projektauswahl zur Verfügung.
           </div>
-        )}
-        {(projectKey || projectId) && history.length === 0 && (
-          <div style={{ fontSize: 13 }}>
+        }
+        {(projectKey || projectId) && history.length === 0 &&
+        <div className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1371">
             Noch keine gespeicherten Stände. Mit <b>Speichern</b> wird ein Snapshot erzeugt.
           </div>
-        )}
-        {(projectKey || projectId) && history.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {history.map((h) => (
-              <button
-                key={h.ts}
-                className="btn"
-                style={{ fontSize: 11, padding: "4px 8px" }}
-                onClick={loadFromServer}
-              >
+        }
+        {(projectKey || projectId) && history.length > 0 &&
+        <div className="rlc-migrated-pages-mengenermittlung-sollist-tsx-1372">
+            {history.map((h) =>
+          <button
+            key={h.ts}
+            className="btn rlc-migrated-pages-mengenermittlung-sollist-tsx-1373"
+
+            onClick={() => setRows(h.rows.map((row) => ({ ...row })))}
+            title="Diesen lokalen Stand wiederherstellen">
+            
                 {new Date(h.ts).toLocaleString()} · {h.count} Pos.
               </button>
-            ))}
+          )}
           </div>
-        )}
+        }
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-
-

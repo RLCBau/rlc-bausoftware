@@ -389,7 +389,7 @@ const RegieMobileSchema = z.object({
   submittedAt: z.number().nullable().optional(),
   rejectionReason: z.string().nullable().optional(),
   createdAt: z.number().optional(),
-});
+}).passthrough();
 
 function looksLocalUri(u?: string) {
   const s = String(u || "");
@@ -898,6 +898,7 @@ router.get(
             savedAt: stats.mtime.toISOString(),
             pdfUrl,
             reportId,
+            reportType: meta.reportType || "REGIE",
             fsKey,
           };
         })

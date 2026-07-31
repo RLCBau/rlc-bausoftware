@@ -1,4 +1,4 @@
-﻿// apps/web/src/pages/kalkulation/angebot.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/angebot.tsx
 import React, { useEffect, useMemo, useState } from "react";
 
 import { runRlcAction } from "../../lib/rlcProgress";
@@ -8,6 +8,10 @@ import PageHeader from "../../components/PageHeader";
 import { API_BASE } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 import { LV, type LVPos } from "./store.lv";
+import {
+  openPdfBlobPreview,
+  reservePdfPreview } from
+"../../lib/pdf/companyPdfHeader";
 
 type PdfOptions = {
   city: string;
@@ -20,6 +24,24 @@ type PdfOptions = {
   showChapterRows: boolean;
   includeNachtraege: boolean;
   nachtragMode: "alle" | "beauftragt";
+};
+
+type ChapterAdjustment = {
+  rabatt: number;
+  markup: number;
+};
+
+type ChapterAdjustmentMap = Record<string, ChapterAdjustment>;
+
+type ChapterSummary = {
+  chapter: string;
+  rawNetto: number;
+  rabatt: number;
+  rabattValue: number;
+  afterRabatt: number;
+  markup: number;
+  markupValue: number;
+  finalNetto: number;
 };
 
 type ProjectLike = {
@@ -62,28 +84,28 @@ type AngebotNachtragOnlyBuffer = {
 };
 
 type PreviewRow =
-  | {
-      kind: "row";
-      row: LVPos;
-      chapter?: string;
-    }
-  | {
-      kind: "nachtrag";
-      row: NachtragRow;
-      chapter?: string;
-    }
-  | {
-      kind: "chapter";
-      id: string;
-      chapter: string;
-      title: string;
-      netto: number;
-    }
-  | {
-      kind: "nachtrag-title";
-      id: string;
-      netto: number;
-    };
+{
+  kind: "row";
+  row: LVPos;
+  chapter?: string;
+} |
+{
+  kind: "nachtrag";
+  row: NachtragRow;
+  chapter?: string;
+} |
+{
+  kind: "chapter";
+  id: string;
+  chapter: string;
+  title: string;
+  netto: number;
+} |
+{
+  kind: "nachtrag-title";
+  id: string;
+  netto: number;
+};
 
 type OfferSnapshot = {
   version: "angebot-v4";
@@ -96,6 +118,8 @@ type OfferSnapshot = {
   };
   rows: LVPos[];
   nachtraege: NachtragRow[];
+  chapterAdjustments?: ChapterAdjustmentMap;
+  chapterSummaries?: ChapterSummary[];
   totals: {
     lvNetto: number;
     nachtragNetto: number;
@@ -128,9 +152,9 @@ function n(value: unknown, fallback = 0): number {
   const raw = String(value ?? "").trim();
   if (!raw) return fallback;
 
-  const normalized = raw.includes(",")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw.replace(/\s/g, "");
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw.replace(/\s/g, "");
 
   const x = typeof value === "number" ? value : Number(normalized);
   return Number.isFinite(x) ? x : fallback;
@@ -143,13 +167,13 @@ function round2(value: number): number {
 function money(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(n(value));
 }
 
 function num(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 3
   }).format(n(value));
 }
 
@@ -160,13 +184,13 @@ function csvCell(value: unknown): string {
 function getAuthToken(): string {
   try {
     const directKeys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of directKeys) {
       const value = localStorage.getItem(key);
@@ -182,23 +206,23 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-        //
-      }
-    }
-  } catch {
-    //
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 function authHeaders(extra?: Record<string, string>): HeadersInit {
@@ -206,19 +230,19 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
 
   return {
     ...(extra || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
 function getCurrentProject(projectCtx: any): ProjectLike | null {
   const project =
-    projectCtx?.currentProject ??
-    projectCtx?.project ??
-    projectCtx?.selectedProject ??
-    projectCtx?.current ??
-    (typeof projectCtx?.getCurrentProject === "function"
-      ? projectCtx.getCurrentProject()
-      : null);
+  projectCtx?.currentProject ??
+  projectCtx?.project ??
+  projectCtx?.selectedProject ??
+  projectCtx?.current ?? (
+  typeof projectCtx?.getCurrentProject === "function" ?
+  projectCtx.getCurrentProject() :
+  null);
 
   return project || null;
 }
@@ -226,15 +250,15 @@ function getCurrentProject(projectCtx: any): ProjectLike | null {
 function getProjectKey(project: ProjectLike | null, projectCtx: any): string {
   return String(
     project?.code ??
-      project?.number ??
-      project?.projektnummer ??
-      projectCtx?.projectCode ??
-      project?.id ??
-      projectCtx?.projectId ??
-      ""
-  )
-    .trim()
-    .toUpperCase();
+    project?.number ??
+    project?.projektnummer ??
+    projectCtx?.projectCode ??
+    project?.id ??
+    projectCtx?.projectId ??
+    ""
+  ).
+  trim().
+  toUpperCase();
 }
 
 function getProjectPid(project: ProjectLike | null, projectKey: string): string {
@@ -268,6 +292,19 @@ function rowNet(row: LVPos): number {
   return round2(n(row.menge) * n(row.preis));
 }
 
+function normalizeChapterAdjustments(value: unknown): ChapterAdjustmentMap {
+  if (!value || typeof value !== "object") return {};
+
+  const out: ChapterAdjustmentMap = {};
+  for (const [chapter, raw] of Object.entries(value as Record<string, any>)) {
+    out[String(chapter)] = {
+      rabatt: n(raw?.rabatt, 0),
+      markup: n(raw?.markup, 0)
+    };
+  }
+  return out;
+}
+
 function nachtragNet(row: NachtragRow): number {
   return round2(n(row.mengeDelta) * n(row.preis));
 }
@@ -290,7 +327,7 @@ function normalizeNachtrag(row: any): NachtragRow {
     mengeDelta: n(row?.mengeDelta ?? row?.qty ?? row?.menge),
     preis: n(row?.preis ?? row?.ep ?? row?.finalUnitPrice),
     status: String(row?.status || "Entwurf"),
-    begruendung: String(row?.begruendung || row?.note || row?.hint || ""),
+    begruendung: String(row?.begruendung || row?.note || row?.hint || "")
   };
 }
 
@@ -331,9 +368,9 @@ function lvRowToOfferExport(row: LVPos) {
     bauverfahren: (row as any).bauverfahren || "",
     warning: (row as any).warning || "",
     aiReason: (row as any).aiReason || "",
-    priceBreakdown: Array.isArray((row as any).priceBreakdown)
-      ? (row as any).priceBreakdown
-      : [],
+    priceBreakdown: Array.isArray((row as any).priceBreakdown) ?
+    (row as any).priceBreakdown :
+    []
   };
 }
 function loadNachtraegeForProject(pid: string, projectKey: string): NachtragRow[] {
@@ -361,9 +398,9 @@ function loadNachtragOnlyBuffer(projectKey: string): AngebotNachtragOnlyBuffer |
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as AngebotNachtragOnlyBuffer;
-    const rows = Array.isArray(parsed?.rows)
-      ? parsed.rows.map(normalizeNachtrag)
-      : [];
+    const rows = Array.isArray(parsed?.rows) ?
+    parsed.rows.map(normalizeNachtrag) :
+    [];
 
     if (!rows.length) return null;
 
@@ -377,7 +414,7 @@ function loadNachtragOnlyBuffer(projectKey: string): AngebotNachtragOnlyBuffer |
     return {
       ...parsed,
       rows,
-      mwst: n(parsed.mwst, 19),
+      mwst: n(parsed.mwst, 19)
     };
   } catch {
     return null;
@@ -397,7 +434,7 @@ function buildDefaultOptions(project: ProjectLike | null): PdfOptions {
     showTableHeader: true,
     showChapterRows: true,
     includeNachtraege: true,
-    nachtragMode: "alle",
+    nachtragMode: "alle"
   };
 }
 
@@ -417,11 +454,11 @@ function loadSavedOptions(project: ProjectLike | null): PdfOptions {
       dateISO: parsed?.dateISO || todayIso(),
       city: parsed?.city ?? base.city,
       includeNachtraege:
-        typeof parsed?.includeNachtraege === "boolean"
-          ? parsed.includeNachtraege
-          : true,
+      typeof parsed?.includeNachtraege === "boolean" ?
+      parsed.includeNachtraege :
+      true,
       nachtragMode:
-        parsed?.nachtragMode === "beauftragt" ? "beauftragt" : "alle",
+      parsed?.nachtragMode === "beauftragt" ? "beauftragt" : "alle"
     };
   } catch {
     return buildDefaultOptions(project);
@@ -429,21 +466,23 @@ function loadSavedOptions(project: ProjectLike | null): PdfOptions {
 }
 
 function makeSnapshot(
-  projectKey: string,
-  project: ProjectLike | null,
-  opts: PdfOptions,
-  rows: LVPos[],
-  nachtraege: NachtragRow[],
-  totals: {
-    lvNetto: number;
-    nachtragNetto: number;
-    netto: number;
-    mwst: number;
-    steuer: number;
-    brutto: number;
-  },
-  mode: "full" | "nachtrag-only"
-): OfferSnapshot {
+projectKey: string,
+project: ProjectLike | null,
+opts: PdfOptions,
+rows: LVPos[],
+nachtraege: NachtragRow[],
+chapterAdjustments: ChapterAdjustmentMap,
+chapterSummaries: ChapterSummary[],
+totals: {
+  lvNetto: number;
+  nachtragNetto: number;
+  netto: number;
+  mwst: number;
+  steuer: number;
+  brutto: number;
+},
+mode: "full" | "nachtrag-only")
+: OfferSnapshot {
   return {
     version: "angebot-v4",
     meta: {
@@ -451,11 +490,13 @@ function makeSnapshot(
       savedAt: new Date().toISOString(),
       options: opts,
       project,
-      mode,
+      mode
     },
     rows,
     nachtraege,
-    totals,
+    chapterAdjustments,
+    chapterSummaries,
+    totals
   };
 }
 
@@ -489,9 +530,9 @@ function forceDownloadText(text: string, filename: string, mime: string) {
 }
 
 function safeFileName(value: string): string {
-  return String(value || "Angebot")
-    .replace(/[^\w.-]+/g, "_")
-    .replace(/_+/g, "_");
+  return String(value || "Angebot").
+  replace(/[^\w.-]+/g, "_").
+  replace(/_+/g, "_");
 }
 
 export default function AngebotPage() {
@@ -507,16 +548,18 @@ export default function AngebotPage() {
 
   const searchMode = new URLSearchParams(location.search).get("mode");
   const [nachtragOnlyBuffer, setNachtragOnlyBuffer] =
-    useState<AngebotNachtragOnlyBuffer | null>(() =>
-      loadNachtragOnlyBuffer(projectKey)
-    );
+  useState<AngebotNachtragOnlyBuffer | null>(() =>
+  loadNachtragOnlyBuffer(projectKey)
+  );
 
   const isNachtragOnlyMode =
-    searchMode === "nachtrag-only" && !!nachtragOnlyBuffer?.rows?.length;
+  searchMode === "nachtrag-only" && !!nachtragOnlyBuffer?.rows?.length;
 
   const [rows, setRows] = useState<LVPos[]>(() => LV.list());
+  const [chapterAdjustments, setChapterAdjustments] =
+  useState<ChapterAdjustmentMap>({});
   const [nachtraege, setNachtraege] = useState<NachtragRow[]>(() =>
-    loadNachtraegeForProject(pid, projectKey)
+  loadNachtraegeForProject(pid, projectKey)
   );
   const [opts, setOpts] = useState<PdfOptions>(() => {
     const base = loadSavedOptions(project);
@@ -527,7 +570,7 @@ export default function AngebotPage() {
         ...base,
         mwst: n(buffer.mwst, base.mwst),
         includeNachtraege: true,
-        nachtragMode: "alle",
+        nachtragMode: "alle"
       };
     }
 
@@ -595,15 +638,63 @@ export default function AngebotPage() {
 
     return nachtraege;
   }, [
-    isNachtragOnlyMode,
-    nachtragOnlyBuffer,
-    nachtraege,
-    opts.includeNachtraege,
-    opts.nachtragMode,
-  ]);
+  isNachtragOnlyMode,
+  nachtragOnlyBuffer,
+  nachtraege,
+  opts.includeNachtraege,
+  opts.nachtragMode]
+  );
+
+  const chapterTotals = useMemo(() => {
+    const map: Record<string, number> = {};
+
+    for (const row of offerRows) {
+      const ch = getChapter(row.posNr);
+      map[ch] = round2((map[ch] || 0) + rowNet(row));
+    }
+
+    return map;
+  }, [offerRows]);
+
+  useEffect(() => {
+    setChapterAdjustments((prev) => {
+      const next: ChapterAdjustmentMap = {};
+      for (const chapter of Object.keys(chapterTotals)) {
+        next[chapter] = prev[chapter] || { rabatt: 0, markup: 0 };
+      }
+      return next;
+    });
+  }, [chapterTotals]);
+
+  const chapterSummaries = useMemo<ChapterSummary[]>(() => {
+    return Object.entries(chapterTotals).
+    sort(([a], [b]) => a.localeCompare(b, "de", { numeric: true })).
+    map(([chapter, rawNetto]) => {
+      const adjustment = chapterAdjustments[chapter] || { rabatt: 0, markup: 0 };
+      const rabatt = n(adjustment.rabatt, 0);
+      const markup = n(adjustment.markup, 0);
+      const rabattValue = round2(rawNetto * (rabatt / 100));
+      const afterRabatt = round2(rawNetto - rabattValue);
+      const markupValue = round2(afterRabatt * (markup / 100));
+      const finalNetto = round2(afterRabatt + markupValue);
+
+      return {
+        chapter,
+        rawNetto,
+        rabatt,
+        rabattValue,
+        afterRabatt,
+        markup,
+        markupValue,
+        finalNetto
+      };
+    });
+  }, [chapterTotals, chapterAdjustments]);
 
   const totals = useMemo(() => {
-    const lvNetto = round2(offerRows.reduce((sum, row) => sum + rowNet(row), 0));
+    const lvNetto = round2(
+      chapterSummaries.reduce((sum, chapter) => sum + chapter.finalNetto, 0)
+    );
     const nachtragNetto = round2(
       activeNachtraege.reduce((sum, row) => sum + nachtragNet(row), 0)
     );
@@ -617,31 +708,20 @@ export default function AngebotPage() {
       netto,
       mwst: n(opts.mwst),
       steuer,
-      brutto,
+      brutto
     };
-  }, [offerRows, activeNachtraege, opts.mwst]);
-
-  const chapterTotals = useMemo(() => {
-    const map: Record<string, number> = {};
-
-    for (const row of offerRows) {
-      const ch = getChapter(row.posNr);
-      map[ch] = round2((map[ch] || 0) + rowNet(row));
-    }
-
-    return map;
-  }, [offerRows]);
+  }, [chapterSummaries, activeNachtraege, opts.mwst]);
 
   const previewRows = useMemo<PreviewRow[]>(() => {
     const out: PreviewRow[] = [];
 
     if (!opts.showChapterRows) {
       offerRows.forEach((row) =>
-        out.push({
-          kind: "row",
-          row,
-          chapter: getChapter(row.posNr),
-        })
+      out.push({
+        kind: "row",
+        row,
+        chapter: getChapter(row.posNr)
+      })
       );
     } else {
       let currentChapter = "";
@@ -656,14 +736,17 @@ export default function AngebotPage() {
             id: `chapter-${ch}-${out.length}`,
             chapter: ch,
             title: `Kapitel ${ch} – Zwischensumme`,
-            netto: chapterTotals[ch] || 0,
+            netto:
+            chapterSummaries.find((summary) => summary.chapter === ch)?.finalNetto ||
+            chapterTotals[ch] ||
+            0
           });
         }
 
         out.push({
           kind: "row",
           row,
-          chapter: ch,
+          chapter: ch
         });
       }
     }
@@ -672,26 +755,27 @@ export default function AngebotPage() {
       out.push({
         kind: "nachtrag-title",
         id: "nachtrag-title",
-        netto: totals.nachtragNetto,
+        netto: totals.nachtragNetto
       });
 
       activeNachtraege.forEach((row) =>
-        out.push({
-          kind: "nachtrag",
-          row,
-          chapter: "NT",
-        })
+      out.push({
+        kind: "nachtrag",
+        row,
+        chapter: "NT"
+      })
       );
     }
 
     return out;
   }, [
-    offerRows,
-    opts.showChapterRows,
-    chapterTotals,
-    activeNachtraege,
-    totals.nachtragNetto,
-  ]);
+  offerRows,
+  opts.showChapterRows,
+  chapterTotals,
+  chapterSummaries,
+  activeNachtraege,
+  totals.nachtragNetto]
+  );
 
   const quality = useMemo(() => {
     const priced = offerRows.filter((r) => n(r.preis) > 0).length;
@@ -701,8 +785,8 @@ export default function AngebotPage() {
       priced,
       withQty,
       total: offerRows.length,
-      pricedPct: offerRows.length ? Math.round((priced / offerRows.length) * 100) : 0,
-      qtyPct: offerRows.length ? Math.round((withQty / offerRows.length) * 100) : 0,
+      pricedPct: offerRows.length ? Math.round(priced / offerRows.length * 100) : 0,
+      qtyPct: offerRows.length ? Math.round(withQty / offerRows.length * 100) : 0
     };
   }, [offerRows]);
 
@@ -718,11 +802,13 @@ export default function AngebotPage() {
       opts,
       offerRows,
       activeNachtraege,
+      chapterAdjustments,
+      chapterSummaries,
       totals,
       isNachtragOnlyMode ? "nachtrag-only" : "full"
     );
 
-    
+
     try {
       localStorage.setItem(
         "rlc_kalkulation_angebot_handoff_v1",
@@ -734,9 +820,9 @@ export default function AngebotPage() {
           summary: snapshot.totals,
           offer: {
             number: `ANG-${projectKey}-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
-            clientName: "",
+            clientName: ""
           },
-          savedAt: new Date().toISOString(),
+          savedAt: new Date().toISOString()
         })
       );
 
@@ -749,7 +835,7 @@ export default function AngebotPage() {
           method: "POST",
           credentials: "include",
           headers: authHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify(snapshot),
+          body: JSON.stringify(snapshot)
         }
       );
 
@@ -792,13 +878,24 @@ export default function AngebotPage() {
         {
           method: "GET",
           credentials: "include",
-          headers: authHeaders(),
+          headers: authHeaders()
         }
       );
 
       const json = await response.json().catch(() => null);
 
-      if (response.status === 404 || !json?.exists) {
+      const serverSnapshots = Array.isArray(json) ? json : null;
+      const serverSnapshot = serverSnapshots ?
+      [...serverSnapshots].sort((a: any, b: any) => {
+        const timeOf = (value: any) =>
+        typeof value === "number" ? value : Date.parse(String(value || "")) || 0;
+        const ta = timeOf(a?.updatedAt || a?.meta?.savedAt || a?.createdAt);
+        const tb = timeOf(b?.updatedAt || b?.meta?.savedAt || b?.createdAt);
+        return tb - ta;
+      })[0] :
+      json?.data || json?.snapshot || json;
+
+      if (response.status === 404 || serverSnapshots && !serverSnapshots.length) {
         const raw = localStorage.getItem(localBackupKey(projectKey));
         if (!raw) {
           setStatus("Kein Speicherstand gefunden");
@@ -815,7 +912,7 @@ export default function AngebotPage() {
         return;
       }
 
-      applySnapshot(json?.data || json?.snapshot || json);
+      applySnapshot(serverSnapshot);
       setStatus("Angebot geladen");
       setTimeout(() => setStatus(""), 2200);
     } catch {
@@ -832,7 +929,19 @@ export default function AngebotPage() {
   }
 
   function applySnapshot(snapshot: any) {
-    const loadedRows = Array.isArray(snapshot?.rows) ? snapshot.rows : [];
+    const loadedRows = Array.isArray(snapshot?.rows) ?
+    snapshot.rows.map((row: any, index: number) => ({
+      ...row,
+      id: String(row?.id || `${snapshot?.id || "angebot"}-${index + 1}`),
+      posNr: String(row?.posNr || row?.pos || index + 1),
+      kurztext: String(row?.kurztext || row?.text || row?.beschreibung || ""),
+      langtext: String(row?.langtext || row?.text || row?.beschreibung || ""),
+      einheit: String(row?.einheit || row?.unit || ""),
+      menge: n(row?.menge ?? row?.quantity ?? row?.qty, 0),
+      preis: n(row?.preis ?? row?.ep ?? row?.price, 0),
+      source: row?.source || "manual"
+    })) :
+    [];
     const loadedOptions = snapshot?.meta?.options || snapshot?.options;
 
     if (loadedRows.length) {
@@ -844,11 +953,17 @@ export default function AngebotPage() {
       setNachtraege(snapshot.nachtraege.map(normalizeNachtrag));
     }
 
+    setChapterAdjustments(
+      normalizeChapterAdjustments(
+        snapshot?.chapterAdjustments || snapshot?.meta?.chapterAdjustments
+      )
+    );
+
     if (loadedOptions) {
       setOpts((prev) => ({
         ...prev,
         ...loadedOptions,
-        mwst: n(loadedOptions.mwst, prev.mwst),
+        mwst: n(loadedOptions.mwst, prev.mwst)
       }));
     }
   }
@@ -873,7 +988,7 @@ export default function AngebotPage() {
       Begruendung: "",
       Waehrung: row.waehrung || "EUR",
       Quelle: row.source || "",
-      Confidence: row.confidence ?? "",
+      Confidence: row.confidence ?? ""
     }));
 
     const nachtragRows = activeNachtraege.map((row) => ({
@@ -890,30 +1005,40 @@ export default function AngebotPage() {
       Begruendung: row.begruendung || "",
       Waehrung: "EUR",
       Quelle: "Nachtrag",
-      Confidence: "",
+      Confidence: ""
     }));
 
-    const chapterRows = Object.entries(chapterTotals).map(([chapter, netto]) => ({
-      Kapitel: chapter,
-      Netto: netto,
+    const chapterRows = chapterSummaries.map((summary) => ({
+      Kapitel: summary.chapter,
+      Netto_vor_Anpassung: summary.rawNetto,
+      Rabatt_Prozent: summary.rabatt,
+      Rabatt_Euro: summary.rabattValue,
+      Netto_nach_Rabatt: summary.afterRabatt,
+      Aufschlag_Prozent: summary.markup,
+      Aufschlag_Euro: summary.markupValue,
+      Netto_final: summary.finalNetto
     }));
 
     const summaryRows = [
-      { Kennzahl: "Modus", Wert: isNachtragOnlyMode ? "Nur Nachtrag" : "Vollständiges Angebot" },
-      { Kennzahl: "Projekt", Wert: projectKey },
-      { Kennzahl: "Projektname", Wert: projectName },
-      { Kennzahl: "Auftraggeber", Wert: projectClient },
-      { Kennzahl: "Ort", Wert: opts.city },
-      { Kennzahl: "Datum", Wert: opts.dateISO },
-      { Kennzahl: "LV Netto", Wert: totals.lvNetto },
-      { Kennzahl: "Nachträge Netto", Wert: totals.nachtragNetto },
-      { Kennzahl: "Netto Gesamt", Wert: totals.netto },
-      { Kennzahl: "MwSt %", Wert: totals.mwst },
-      { Kennzahl: "MwSt €", Wert: totals.steuer },
-      { Kennzahl: "Brutto", Wert: totals.brutto },
-      { Kennzahl: "LV Positionen", Wert: offerRows.length },
-      { Kennzahl: "Nachträge", Wert: activeNachtraege.length },
-    ];
+    { Kennzahl: "Modus", Wert: isNachtragOnlyMode ? "Nur Nachtrag" : "Vollständiges Angebot" },
+    { Kennzahl: "Projekt", Wert: projectKey },
+    { Kennzahl: "Projektname", Wert: projectName },
+    { Kennzahl: "Auftraggeber", Wert: projectClient },
+    { Kennzahl: "Ort", Wert: opts.city },
+    { Kennzahl: "Datum", Wert: opts.dateISO },
+    {
+      Kennzahl: "LV Netto vor Kapitelanpassungen",
+      Wert: round2(Object.values(chapterTotals).reduce((sum, value) => sum + value, 0))
+    },
+    { Kennzahl: "LV Netto nach Kapitelanpassungen", Wert: totals.lvNetto },
+    { Kennzahl: "Nachträge Netto", Wert: totals.nachtragNetto },
+    { Kennzahl: "Netto Gesamt", Wert: totals.netto },
+    { Kennzahl: "MwSt %", Wert: totals.mwst },
+    { Kennzahl: "MwSt €", Wert: totals.steuer },
+    { Kennzahl: "Brutto", Wert: totals.brutto },
+    { Kennzahl: "LV Positionen", Wert: offerRows.length },
+    { Kennzahl: "Nachträge", Wert: activeNachtraege.length }];
+
 
     const wb = XLSX.utils.book_new();
 
@@ -943,7 +1068,7 @@ export default function AngebotPage() {
 
     const data = XLSX.write(wb, {
       bookType: "xlsx",
-      type: "array",
+      type: "array"
     });
 
     const prefix = isNachtragOnlyMode ? "Nachtrag_Angebot" : "Angebot";
@@ -951,7 +1076,7 @@ export default function AngebotPage() {
 
     downloadBlob(
       new Blob([data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       }),
       filename
     );
@@ -961,43 +1086,49 @@ export default function AngebotPage() {
   }
 
   async function exportPDF() {
+    const prefix = isNachtragOnlyMode ? "Nachtrag_Angebot" : "Angebot";
+    const pdfFileName = `${prefix}_${safeFileName(projectKey || opts.dateISO)}.pdf`;
+    const preview = reservePdfPreview(pdfFileName);
+
     try {
       const offerExportRows = [
-        ...offerRows.map(lvRowToOfferExport),
-        ...activeNachtraege.map((row) => ({
-          typ: "Nachtrag",
-          posNr: row.posNr,
-          text: row.kurztext,
-          kurztext: row.kurztext,
-          langtext: row.langtext || "",
-          einheit: row.einheit,
-          menge: n(row.mengeDelta),
-          preis: n(row.preis),
-          zeilen: nachtragNet(row),
-          status: row.status || "Entwurf",
-          begruendung: row.begruendung || "",
-        })),
-      ];
+      ...offerRows.map(lvRowToOfferExport),
+      ...activeNachtraege.map((row) => ({
+        typ: "Nachtrag",
+        posNr: row.posNr,
+        text: row.kurztext,
+        kurztext: row.kurztext,
+        langtext: row.langtext || "",
+        einheit: row.einheit,
+        menge: n(row.mengeDelta),
+        preis: n(row.preis),
+        zeilen: nachtragNet(row),
+        status: row.status || "Entwurf",
+        begruendung: row.begruendung || ""
+      }))];
+
 
       const payload = {
         title: isNachtragOnlyMode ? "Nachtragsangebot" : "Angebot",
         mode: isNachtragOnlyMode ? "nachtrag-only" : "full",
-        project: project
-          ? {
-              id: project.id,
-              code: project.code || project.number || project.projektnummer,
-              number: project.number || project.code || project.projektnummer,
-              name: projectName,
-              client: projectClient,
-              location: getProjectPlace(project),
-            }
-          : null,
+        project: project ?
+        {
+          id: project.id,
+          code: project.code || project.number || project.projektnummer,
+          number: project.number || project.code || project.projektnummer,
+          name: projectName,
+          client: projectClient,
+          location: getProjectPlace(project)
+        } :
+        null,
         options: {
           ...opts,
-          mwst: totals.mwst,
+          mwst: totals.mwst
         },
         rows: offerExportRows,
         lvRows: offerRows.map(lvRowToOfferExport),
+        chapterAdjustments,
+        chapterSummaries,
         nachtraege: activeNachtraege.map((row) => ({
           posNr: row.posNr,
           text: row.kurztext,
@@ -1008,16 +1139,16 @@ export default function AngebotPage() {
           preis: n(row.preis),
           zeilen: nachtragNet(row),
           status: row.status || "Entwurf",
-          begruendung: row.begruendung || "",
+          begruendung: row.begruendung || ""
         })),
-        totals,
+        totals
       };
 
       const response = await fetch(apiUrl("/api/pdf/angebot"), {
         method: "POST",
         credentials: "include",
         headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -1026,13 +1157,9 @@ export default function AngebotPage() {
       }
 
       const blob = await response.blob();
-      const prefix = isNachtragOnlyMode ? "Nachtrag_Angebot" : "Angebot";
-
-      downloadBlob(
-        blob,
-        `${prefix}_${safeFileName(projectKey || opts.dateISO)}.pdf`
-      );
+      openPdfBlobPreview(blob, pdfFileName, preview);
     } catch (e: any) {
+      if (preview && !preview.closed) preview.close();
       alert(`PDF Export fehlgeschlagen: ${e?.message || e}`);
     }
   }
@@ -1044,36 +1171,36 @@ export default function AngebotPage() {
     }
 
     const header =
-      "Typ;PosNr;Kurztext;Langtext;Einheit;Menge;EP netto;Zeilen netto;Status;Begründung";
+    "Typ;PosNr;Kurztext;Langtext;Einheit;Menge;EP netto;Zeilen netto;Status;Begründung";
 
     const lvLines = offerRows.map((row) =>
-      [
-        "LV",
-        csvCell(row.posNr || ""),
-        csvCell(row.kurztext || ""),
-        csvCell(row.langtext || ""),
-        csvCell(row.einheit || ""),
-        String(n(row.menge)).replace(".", ","),
-        String(n(row.preis)).replace(".", ","),
-        String(rowNet(row)).replace(".", ","),
-        "",
-        "",
-      ].join(";")
+    [
+    "LV",
+    csvCell(row.posNr || ""),
+    csvCell(row.kurztext || ""),
+    csvCell(row.langtext || ""),
+    csvCell(row.einheit || ""),
+    String(n(row.menge)).replace(".", ","),
+    String(n(row.preis)).replace(".", ","),
+    String(rowNet(row)).replace(".", ","),
+    "",
+    ""].
+    join(";")
     );
 
     const ntLines = activeNachtraege.map((row) =>
-      [
-        "Nachtrag",
-        csvCell(row.posNr || ""),
-        csvCell(row.kurztext || ""),
-        csvCell(row.langtext || ""),
-        csvCell(row.einheit || ""),
-        String(n(row.mengeDelta)).replace(".", ","),
-        String(n(row.preis)).replace(".", ","),
-        String(nachtragNet(row)).replace(".", ","),
-        csvCell(row.status || ""),
-        csvCell(row.begruendung || ""),
-      ].join(";")
+    [
+    "Nachtrag",
+    csvCell(row.posNr || ""),
+    csvCell(row.kurztext || ""),
+    csvCell(row.langtext || ""),
+    csvCell(row.einheit || ""),
+    String(n(row.mengeDelta)).replace(".", ","),
+    String(n(row.preis)).replace(".", ","),
+    String(nachtragNet(row)).replace(".", ","),
+    csvCell(row.status || ""),
+    csvCell(row.begruendung || "")].
+    join(";")
     );
 
     const prefix = isNachtragOnlyMode ? "Nachtrag_Angebot" : "Angebot";
@@ -1082,7 +1209,7 @@ export default function AngebotPage() {
 
     downloadBlob(
       new Blob([csv], {
-        type: "text/csv;charset=utf-8",
+        type: "text/csv;charset=utf-8"
       }),
       filename
     );
@@ -1114,9 +1241,9 @@ export default function AngebotPage() {
     if (ntOhneMenge) problems.push(`Nachträge ohne Menge: ${ntOhneMenge}.`);
     if (ntOhnePreis) problems.push(`Nachträge ohne EP: ${ntOhnePreis}.`);
 
-    const result = problems.length
-      ? `KI-Prüfung: ${problems.join(" ")}`
-      : "KI-Prüfung: Angebot ist plausibel. PDF/Excel/CSV können erzeugt werden.";
+    const result = problems.length ?
+    `KI-Prüfung: ${problems.join(" ")}` :
+    "KI-Prüfung: Angebot ist plausibel. PDF/Excel/CSV können erzeugt werden.";
 
     setStatus(result);
     setKiStatus(result);
@@ -1152,9 +1279,9 @@ export default function AngebotPage() {
       return next;
     });
 
-    const result = changed
-      ? "Fehlende Angebotsdaten wurden ergänzt."
-      : "Keine fehlenden Angebotsdaten erkannt.";
+    const result = changed ?
+    "Fehlende Angebotsdaten wurden ergänzt." :
+    "Keine fehlenden Angebotsdaten erkannt.";
 
     setStatus(result);
     setKiStatus(result);
@@ -1162,7 +1289,7 @@ export default function AngebotPage() {
 
   useEffect(() => {
     function handleAngebotCommand(event: Event) {
-      const detail = (event as CustomEvent<{ action?: string }>).detail;
+      const detail = (event as CustomEvent<{action?: string;}>).detail;
       const action = String(detail?.action || "").trim();
 
       if (!action) return;
@@ -1252,7 +1379,7 @@ export default function AngebotPage() {
 
   useEffect(() => {
     function handleAngebotCommand(event: Event) {
-      const detail = (event as CustomEvent<{ action?: string }>).detail;
+      const detail = (event as CustomEvent<{action?: string;}>).detail;
       const action = String(detail?.action || "").trim();
 
       if (!action) return;
@@ -1301,9 +1428,9 @@ export default function AngebotPage() {
         if (n(opts.mwst) <= 0) issues.push("MwSt fehlt");
         if (!String(opts.payment || "").trim()) issues.push("Zahlungsbedingungen fehlen");
 
-        const result = issues.length
-          ? `KI-Prüfung: ${issues.join(" · ")}`
-          : "KI-Prüfung: Angebot ist plausibel.";
+        const result = issues.length ?
+        `KI-Prüfung: ${issues.join(" · ")}` :
+        "KI-Prüfung: Angebot ist plausibel.";
 
         setStatus(result);
         setKiStatus(result);
@@ -1340,9 +1467,9 @@ export default function AngebotPage() {
           return next;
         });
 
-        const result = changes.length
-          ? `KI hat geändert: ${changes.join(" · ")}`
-          : "KI: Keine fehlenden Angebotsdaten gefunden.";
+        const result = changes.length ?
+        `KI hat geändert: ${changes.join(" · ")}` :
+        "KI: Keine fehlenden Angebotsdaten gefunden.";
 
         setStatus(result);
         setKiStatus(result);
@@ -1359,7 +1486,7 @@ export default function AngebotPage() {
 
   useEffect(() => {
     function handleAngebotCommand(event: Event) {
-      const detail = (event as CustomEvent<{ action?: string }>).detail;
+      const detail = (event as CustomEvent<{action?: string;}>).detail;
       const action = String(detail?.action || "").trim();
 
       if (!action) return;
@@ -1433,9 +1560,9 @@ export default function AngebotPage() {
         });
 
         setStatus(
-          changes.length
-            ? `KI hat Angebotsdaten ergänzt: ${changes.join(" · ")}`
-            : "KI-Prüfung: Keine fehlenden Angebotsdaten gefunden."
+          changes.length ?
+          `KI hat Angebotsdaten ergänzt: ${changes.join(" · ")}` :
+          "KI-Prüfung: Keine fehlenden Angebotsdaten gefunden."
         );
         return;
       }
@@ -1453,9 +1580,9 @@ export default function AngebotPage() {
         }
 
         setStatus(
-          issues.length
-            ? `KI-Prüfung: ${issues.join(" · ")}`
-            : "KI-Prüfung: Angebot ist plausibel."
+          issues.length ?
+          `KI-Prüfung: ${issues.join(" · ")}` :
+          "KI-Prüfung: Angebot ist plausibel."
         );
       }
     }
@@ -1466,326 +1593,401 @@ export default function AngebotPage() {
       window.removeEventListener("rlc:angebot-command", handleAngebotCommand);
     };
   }, [
-    opts,
-    project,
-    nachtraege,
-    isNachtragOnlyMode,
-    hasExportRows,
-    exportPDF,
-    exportXLSX,
-    exportCSV,
-    saveSnapshotToServer,
-    loadSnapshotFromServer,
-    refreshAll,
-  ]);
+  opts,
+  project,
+  nachtraege,
+  isNachtragOnlyMode,
+  hasExportRows,
+  exportPDF,
+  exportXLSX,
+  exportCSV,
+  saveSnapshotToServer,
+  loadSnapshotFromServer,
+  refreshAll]
+  );
 
 
   return (
-    <div style={page}>
+    <div className={rlcClass(null, page)}>
       <PageHeader
         breadcrumb="RLC Module / Kalkulation"
         title={isNachtragOnlyMode ? "Nachtragsangebot erstellen" : "Angebot / Export"}
         subtitle={
-          isNachtragOnlyMode
-            ? "Angebotsausgabe nur für ausgewählte Nachtragspositionen."
-            : "Angebot aus aktueller RLC-KI-Kalkulation, LV und Nachträgen erstellen."
-        }
-      />
+        isNachtragOnlyMode ?
+        "Angebotsausgabe nur für ausgewählte Nachtragspositionen." :
+        "Angebot aus aktueller RLC-KI-Kalkulation, LV und Nachträgen erstellen."
+        } />
+      
 
-      {isNachtragOnlyMode ? (
-        <section style={modeCard}>
+      {isNachtragOnlyMode ?
+      <section className={rlcClass(null, modeCard)}>
           <div>
             <b>Nachtragsangebot aktiv</b>
-            <div style={modeText}>
+            <div className={rlcClass(null, modeText)}>
               Es werden nur die aus Nachträge ausgewählten Positionen angeboten.
               LV-Hauptpositionen sind in diesem Modus bewusst ausgeblendet.
             </div>
           </div>
 
-          <div style={heroActions}>
-            <button style={btnPrimary} onClick={exportPDF} disabled={!hasExportRows}>
+          <div className={rlcClass(null, heroActions)}>
+            <button className={rlcClass(null, btnPrimary)} onClick={exportPDF} disabled={!hasExportRows}>
               Nachtragsangebot PDF
             </button>
-            <button style={btnSecondary} onClick={clearNachtragOnlyMode}>
+            <button className={rlcClass(null, btnSecondary)} onClick={clearNachtragOnlyMode}>
               Vollständiges Angebot öffnen
             </button>
           </div>
-        </section>
-      ) : null}
+        </section> :
+      null}
 
-      <section style={heroCard}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>
-            {isNachtragOnlyMode
-              ? "Nachtragsangebot · PDF / Excel / CSV"
-              : "Angebot · PDF / Excel / Nachträge / Server"}
+          <div className={rlcClass(null, eyebrow)}>
+            {isNachtragOnlyMode ?
+            "Nachtragsangebot · PDF / Excel / CSV" :
+            "Angebot · PDF / Excel / Nachträge / Server"}
           </div>
-          <h1 style={title}>
+          <h1 className={rlcClass(null, title)}>
             {isNachtragOnlyMode ? "Nachtragsangebot" : "Angebotsausgabe"}
           </h1>
-          <p style={subtitle}>
-            {isNachtragOnlyMode
-              ? "Dieses Angebot enthält ausschließlich die ausgewählten Nachtragspositionen."
-              : "Das Angebot wird aus der aktuellen RLC-KI-Kalkulation und den vorhandenen Nachträgen erzeugt."}
+          <p className={rlcClass(null, subtitle)}>
+            {isNachtragOnlyMode ?
+            "Dieses Angebot enthält ausschließlich die ausgewählten Nachtragspositionen." :
+            "Das Angebot wird aus der aktuellen RLC-KI-Kalkulation und den vorhandenen Nachträgen erzeugt."}
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button style={btnPrimary} onClick={exportPDF} disabled={!hasExportRows}>
+        <div className={rlcClass(null, heroActions)}>
+          <button className={rlcClass(null, btnPrimary)} onClick={exportPDF} disabled={!hasExportRows}>
             PDF erzeugen
           </button>
-          <button style={btnSecondary} onClick={exportXLSX} disabled={!hasExportRows}>
+          <button className={rlcClass(null, btnSecondary)} onClick={exportXLSX} disabled={!hasExportRows}>
             Excel exportieren
           </button>
-          <button style={btnSecondary} onClick={exportCSV} disabled={!hasExportRows}>
+          <button className={rlcClass(null, btnSecondary)} onClick={exportCSV} disabled={!hasExportRows}>
             CSV exportieren
           </button>
-          <button
-            style={btnSecondary}
-            onClick={saveSnapshotToServer}
-            disabled={serverBusy || !projectKey}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={saveSnapshotToServer}
+          disabled={serverBusy || !projectKey}>
+            
             Speichern
           </button>
-          <button
-            style={btnSecondary}
-            onClick={loadSnapshotFromServer}
-            disabled={serverBusy || !projectKey}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          onClick={loadSnapshotFromServer}
+          disabled={serverBusy || !projectKey}>
+            
             Laden
           </button>
-          <button style={btnSecondary} onClick={refreshAll}>
+          <button className={rlcClass(null, btnSecondary)} onClick={refreshAll}>
             Neu laden
           </button>
-          {isNachtragOnlyMode ? (
-            <button style={btnSecondary} onClick={clearNachtragOnlyMode}>
+          {isNachtragOnlyMode ?
+          <button className={rlcClass(null, btnSecondary)} onClick={clearNachtragOnlyMode}>
               Komplettes Angebot
-            </button>
-          ) : null}
+            </button> :
+          null}
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectKey || "—"}</b>
           {projectName ? <span> · {projectName}</span> : null}
           {status ? <span> · {status}</span> : null}
         </div>
       </section>
 
-      <section style={grid4}>
-        <KpiCard label="LV Netto" value={money(totals.lvNetto)} sub={`${offerRows.length} Positionen`} />
+      <section className={rlcClass(null, grid4)}>
+        <KpiCard label="LV Netto angepasst" value={money(totals.lvNetto)} sub={`${offerRows.length} Positionen`} />
         <KpiCard
           label="Nachträge Netto"
           value={money(totals.nachtragNetto)}
           sub={
-            isNachtragOnlyMode
-              ? `${activeNachtraege.length} ausgewählt`
-              : `${activeNachtraege.length}/${nachtraege.length} aktiv`
-          }
-        />
+          isNachtragOnlyMode ?
+          `${activeNachtraege.length} ausgewählt` :
+          `${activeNachtraege.length}/${nachtraege.length} aktiv`
+          } />
+        
         <KpiCard label="Netto Gesamt" value={money(totals.netto)} />
         <KpiCard label="Brutto Gesamt" value={money(totals.brutto)} sub={`${totals.mwst}% MwSt`} />
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Angebotsdaten</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Angebotsdaten</h2>
+            <div className={rlcClass(null, sectionText)}>
               Diese Angaben werden für PDF, Excel und Server-Snapshot verwendet.
             </div>
           </div>
 
-          <div style={projectBadge}>
-            {projectKey ? (
-              <>
+          <div className={rlcClass(null, projectBadge)}>
+            {projectKey ?
+            <>
                 <b>{projectKey}</b>
                 {projectName ? <span>— {projectName}</span> : null}
-              </>
-            ) : (
-              "kein Projekt gewählt"
-            )}
+              </> :
+
+            "kein Projekt gewählt"
+            }
           </div>
         </div>
 
-        <div style={formGrid}>
+        <div className={rlcClass(null, formGrid)}>
           <Field label="Ort">
-            <input
-              style={input}
-              value={opts.city}
-              onChange={(e) => setOpts((v) => ({ ...v, city: e.target.value }))}
-              placeholder="München"
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={opts.city}
+            onChange={(e) => setOpts((v) => ({ ...v, city: e.target.value }))}
+            placeholder="München" />
+            
           </Field>
 
           <Field label="Datum">
             <input
-              type="date"
-              style={input}
+              type="date" className={rlcClass(null,
+              input)}
               value={opts.dateISO}
               onChange={(e) =>
-                setOpts((v) => ({ ...v, dateISO: e.target.value || todayIso() }))
-              }
-            />
+              setOpts((v) => ({ ...v, dateISO: e.target.value || todayIso() }))
+              } />
+            
           </Field>
 
           <Field label="MwSt %">
             <input
-              type="number"
-              style={input}
+              type="number" className={rlcClass(null,
+              input)}
               value={opts.mwst}
               onChange={(e) =>
-                setOpts((v) => ({ ...v, mwst: n(e.target.value, 0) }))
-              }
-            />
+              setOpts((v) => ({ ...v, mwst: n(e.target.value, 0) }))
+              } />
+            
           </Field>
 
           <Field label="Positionen">
-            <input
-              style={inputMuted}
-              value={`${offerRows.length} LV / ${activeNachtraege.length} Nachträge`}
-              readOnly
-            />
+            <input className={rlcClass(null,
+            inputMuted)}
+            value={`${offerRows.length} LV / ${activeNachtraege.length} Nachträge`}
+            readOnly />
+            
           </Field>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="rlc-migrated-pages-kalkulation-angebot-tsx-849">
           <Field label="Zahlungsbedingungen / Notizen">
-            <textarea
-              style={{ ...input, minHeight: 76 }}
-              value={opts.payment}
-              onChange={(e) =>
-                setOpts((v) => ({ ...v, payment: e.target.value }))
-              }
-            />
+            <textarea className={rlcClass(null,
+            { ...input, minHeight: 76 })}
+            value={opts.payment}
+            onChange={(e) =>
+            setOpts((v) => ({ ...v, payment: e.target.value }))
+            } />
+            
           </Field>
         </div>
 
-        <div style={checkRow}>
-          {!isNachtragOnlyMode ? (
-            <>
-              <label style={checkLabel}>
+        <div className={rlcClass(null, checkRow)}>
+          {!isNachtragOnlyMode ?
+          <>
+              <label className={rlcClass(null, checkLabel)}>
                 <input
-                  type="checkbox"
-                  checked={opts.includeNachtraege}
-                  onChange={(e) =>
-                    setOpts((v) => ({ ...v, includeNachtraege: e.target.checked }))
-                  }
-                />
+                type="checkbox"
+                checked={opts.includeNachtraege}
+                onChange={(e) =>
+                setOpts((v) => ({ ...v, includeNachtraege: e.target.checked }))
+                } />
+              
                 Nachträge im Angebot einbeziehen
               </label>
 
-              <label style={checkLabel}>
+              <label className={rlcClass(null, checkLabel)}>
                 <span>Nachträge:</span>
-                <select
-                  style={smallSelect}
-                  value={opts.nachtragMode}
-                  onChange={(e) =>
-                    setOpts((v) => ({
-                      ...v,
-                      nachtragMode:
-                        e.target.value === "beauftragt" ? "beauftragt" : "alle",
-                    }))
-                  }
-                >
+                <select className={rlcClass(null,
+              smallSelect)}
+              value={opts.nachtragMode}
+              onChange={(e) =>
+              setOpts((v) => ({
+                ...v,
+                nachtragMode:
+                e.target.value === "beauftragt" ? "beauftragt" : "alle"
+              }))
+              }>
+                
                   <option value="alle">Alle Entwürfe + Beauftragte</option>
                   <option value="beauftragt">Nur Beauftragte</option>
                 </select>
               </label>
-            </>
-          ) : null}
+            </> :
+          null}
 
-          <label style={checkLabel}>
+          <label className={rlcClass(null, checkLabel)}>
             <input
               type="checkbox"
               checked={opts.showWatermark}
               onChange={(e) =>
-                setOpts((v) => ({ ...v, showWatermark: e.target.checked }))
-              }
-            />
+              setOpts((v) => ({ ...v, showWatermark: e.target.checked }))
+              } />
+            
             Watermark „Powered by OpenAI“
           </label>
 
-          <label style={checkLabel}>
+          <label className={rlcClass(null, checkLabel)}>
             <input
               type="checkbox"
               checked={opts.colorHeader}
               onChange={(e) =>
-                setOpts((v) => ({ ...v, colorHeader: e.target.checked }))
-              }
-            />
+              setOpts((v) => ({ ...v, colorHeader: e.target.checked }))
+              } />
+            
             Farbiger Tabellenkopf
           </label>
 
-          <label style={checkLabel}>
+          <label className={rlcClass(null, checkLabel)}>
             <input
               type="checkbox"
               checked={opts.showTableHeader}
               onChange={(e) =>
-                setOpts((v) => ({ ...v, showTableHeader: e.target.checked }))
-              }
-            />
+              setOpts((v) => ({ ...v, showTableHeader: e.target.checked }))
+              } />
+            
             Tabellenkopf anzeigen
           </label>
 
-          <label style={checkLabel}>
+          <label className={rlcClass(null, checkLabel)}>
             <input
               type="checkbox"
               checked={opts.showChapterRows}
               onChange={(e) =>
-                setOpts((v) => ({ ...v, showChapterRows: e.target.checked }))
-              }
-            />
+              setOpts((v) => ({ ...v, showChapterRows: e.target.checked }))
+              } />
+            
             Kapitel-Zwischensummen
           </label>
         </div>
-        {kiStatus ? (
-          <div style={kiBox}>
+        {kiStatus ?
+        <div className={rlcClass(null, kiBox)}>
             <b>KI-Protokoll</b>
-            <div style={kiText}>{kiStatus}</div>
-          </div>
-        ) : null}
+            <div className={rlcClass(null, kiText)}>{kiStatus}</div>
+          </div> :
+        null}
 
 
-        <div style={buttonRow}>
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/lv-import")}>
+        <div className={rlcClass(null, buttonRow)}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/lv-import")}>
             LV / Positionen
           </button>
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/mit-ki")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/mit-ki")}>
             Kalkulation
           </button>
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/nachtraege")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/nachtraege")}>
             Nachträge
           </button>
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/gaeb")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/gaeb")}>
             GAEB
           </button>
         </div>
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      {!isNachtragOnlyMode && chapterSummaries.length ?
+      <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
+            <div>
+              <h2 className={rlcClass(null, sectionTitle)}>Kapitelrabatt / Aufschlag</h2>
+              <div className={rlcClass(null, sectionText)}>
+                Rabatt und Aufschlag werden je Kapitel berechnet, im Server-Snapshot gespeichert
+                und im Angebots-PDF ausgewiesen.
+              </div>
+            </div>
+          </div>
+
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, table)}>
+              <thead>
+                <tr>
+                  <th className={rlcClass(null, th)}>Kapitel</th>
+                  <th className={rlcClass(null, thRight)}>Netto vorher</th>
+                  <th className={rlcClass(null, thRight)}>Rabatt %</th>
+                  <th className={rlcClass(null, thRight)}>Rabatt €</th>
+                  <th className={rlcClass(null, thRight)}>Aufschlag %</th>
+                  <th className={rlcClass(null, thRight)}>Aufschlag €</th>
+                  <th className={rlcClass(null, thRight)}>Netto final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chapterSummaries.map((summary) =>
+              <tr key={`chapter-adjustment-${summary.chapter}`}>
+                    <td className={rlcClass(null, tdStrong)}>Kapitel {summary.chapter}</td>
+                    <td className={rlcClass(null, tdRight)}>{money(summary.rawNetto)}</td>
+                    <td className={rlcClass(null, tdRight)}>
+                      <input
+                    type="number"
+                    step="0.1" className={rlcClass(null,
+                    chapterNumberInput)}
+                    value={summary.rabatt}
+                    onChange={(e) =>
+                    setChapterAdjustments((prev) => ({
+                      ...prev,
+                      [summary.chapter]: {
+                        ...(prev[summary.chapter] || { rabatt: 0, markup: 0 }),
+                        rabatt: n(e.target.value, 0)
+                      }
+                    }))
+                    } />
+                  
+                    </td>
+                    <td className={rlcClass(null, tdRight)}>− {money(summary.rabattValue)}</td>
+                    <td className={rlcClass(null, tdRight)}>
+                      <input
+                    type="number"
+                    step="0.1" className={rlcClass(null,
+                    chapterNumberInput)}
+                    value={summary.markup}
+                    onChange={(e) =>
+                    setChapterAdjustments((prev) => ({
+                      ...prev,
+                      [summary.chapter]: {
+                        ...(prev[summary.chapter] || { rabatt: 0, markup: 0 }),
+                        markup: n(e.target.value, 0)
+                      }
+                    }))
+                    } />
+                  
+                    </td>
+                    <td className={rlcClass(null, tdRight)}>+ {money(summary.markupValue)}</td>
+                    <td className={rlcClass(null, tdRightBold)}>{money(summary.finalNetto)}</td>
+                  </tr>
+              )}
+              </tbody>
+            </table>
+          </div>
+        </section> :
+      null}
+
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Angebotsvorschau</h2>
-            <div style={sectionText}>
-              {isNachtragOnlyMode
-                ? "Vorschau nur der ausgewählten Nachtragspositionen."
-                : "Kompakte Vorschau aus LV, RLC-KI-Kalkulation und Nachträgen. Änderungen erfolgen in LV / Positionen, Kalkulation oder Nachträge."}
+            <h2 className={rlcClass(null, sectionTitle)}>Angebotsvorschau</h2>
+            <div className={rlcClass(null, sectionText)}>
+              {isNachtragOnlyMode ?
+              "Vorschau nur der ausgewählten Nachtragspositionen." :
+              "Kompakte Vorschau aus LV, RLC-KI-Kalkulation und Nachträgen. Änderungen erfolgen in LV / Positionen, Kalkulation oder Nachträge."}
             </div>
           </div>
         </div>
 
-        <div style={tableWrap}>
-          <table style={table}>
+        <div className={rlcClass(null, tableWrap)}>
+          <table className={rlcClass(null, table)}>
             <thead>
               <tr>
-                <th style={th}>Typ</th>
-                <th style={th}>Kap.</th>
-                <th style={th}>PosNr</th>
-                <th style={th}>Kurztext</th>
-                <th style={th}>ME</th>
-                <th style={thRight}>Menge</th>
-                <th style={thRight}>EP netto</th>
-                <th style={thRight}>Zeilen-Netto</th>
+                <th className={rlcClass(null, th)}>Typ</th>
+                <th className={rlcClass(null, th)}>Kap.</th>
+                <th className={rlcClass(null, th)}>PosNr</th>
+                <th className={rlcClass(null, th)}>Kurztext</th>
+                <th className={rlcClass(null, th)}>ME</th>
+                <th className={rlcClass(null, thRight)}>Menge</th>
+                <th className={rlcClass(null, thRight)}>EP netto</th>
+                <th className={rlcClass(null, thRight)}>Zeilen-Netto</th>
               </tr>
             </thead>
 
@@ -1794,22 +1996,22 @@ export default function AngebotPage() {
                 if (item.kind === "chapter") {
                   return (
                     <tr key={item.id}>
-                      <td colSpan={8} style={chapterRow}>
+                      <td colSpan={8} className={rlcClass(null, chapterRow)}>
                         Kapitel {item.chapter} · Zwischensumme: {money(item.netto)}
                       </td>
-                    </tr>
-                  );
+                    </tr>);
+
                 }
 
                 if (item.kind === "nachtrag-title") {
                   return (
                     <tr key={item.id}>
-                      <td colSpan={8} style={nachtragChapterRow}>
+                      <td colSpan={8} className={rlcClass(null, nachtragChapterRow)}>
                         {isNachtragOnlyMode ? "Nachtragsangebot" : "Nachträge"} · Zwischensumme:{" "}
                         {money(item.netto)}
                       </td>
-                    </tr>
-                  );
+                    </tr>);
+
                 }
 
                 if (item.kind === "nachtrag") {
@@ -1817,116 +2019,116 @@ export default function AngebotPage() {
 
                   return (
                     <tr key={`nt-${row.id}`}>
-                      <td style={td}>
-                        <span style={badgeNachtrag}>Nachtrag</span>
+                      <td className={rlcClass(null, td)}>
+                        <span className={rlcClass(null, badgeNachtrag)}>Nachtrag</span>
                       </td>
-                      <td style={td}>NT</td>
-                      <td style={td}>{row.posNr}</td>
-                      <td style={tdText}>
-                        <div style={{ fontWeight: 800 }}>{row.kurztext || "—"}</div>
-                        {row.langtext ? <div style={smallMuted}>{row.langtext}</div> : null}
-                        {row.begruendung ? (
-                          <div style={smallWarn}>Begründung: {row.begruendung}</div>
-                        ) : null}
+                      <td className={rlcClass(null, td)}>NT</td>
+                      <td className={rlcClass(null, td)}>{row.posNr}</td>
+                      <td className={rlcClass(null, tdText)}>
+                        <div className="rlc-migrated-pages-kalkulation-angebot-tsx-850">{row.kurztext || "—"}</div>
+                        {row.langtext ? <div className={rlcClass(null, smallMuted)}>{row.langtext}</div> : null}
+                        {row.begruendung ?
+                        <div className={rlcClass(null, smallWarn)}>Begründung: {row.begruendung}</div> :
+                        null}
                       </td>
-                      <td style={td}>{row.einheit}</td>
-                      <td style={tdRight}>{num(row.mengeDelta)}</td>
-                      <td style={tdRight}>{money(row.preis)}</td>
-                      <td style={tdRightBold}>{money(nachtragNet(row))}</td>
-                    </tr>
-                  );
+                      <td className={rlcClass(null, td)}>{row.einheit}</td>
+                      <td className={rlcClass(null, tdRight)}>{num(row.mengeDelta)}</td>
+                      <td className={rlcClass(null, tdRight)}>{money(row.preis)}</td>
+                      <td className={rlcClass(null, tdRightBold)}>{money(nachtragNet(row))}</td>
+                    </tr>);
+
                 }
 
                 const row = item.row;
 
                 return (
                   <tr key={row.id}>
-                    <td style={td}>
-                      <span style={badgeLv}>LV</span>
+                    <td className={rlcClass(null, td)}>
+                      <span className={rlcClass(null, badgeLv)}>LV</span>
                     </td>
-                    <td style={td}>{item.chapter}</td>
-                    <td style={td}>{row.posNr}</td>
-                    <td style={tdText}>
-                      <div style={{ fontWeight: 800 }}>{row.kurztext || "—"}</div>
-                      {row.langtext ? <div style={smallMuted}>{row.langtext}</div> : null}
+                    <td className={rlcClass(null, td)}>{item.chapter}</td>
+                    <td className={rlcClass(null, td)}>{row.posNr}</td>
+                    <td className={rlcClass(null, tdText)}>
+                      <div className="rlc-migrated-pages-kalkulation-angebot-tsx-851">{row.kurztext || "—"}</div>
+                      {row.langtext ? <div className={rlcClass(null, smallMuted)}>{row.langtext}</div> : null}
                     </td>
-                    <td style={td}>{row.einheit}</td>
-                    <td style={tdRight}>{num(row.menge)}</td>
-                    <td style={tdRight}>{money(row.preis)}</td>
-                    <td style={tdRightBold}>{money(rowNet(row))}</td>
-                  </tr>
-                );
+                    <td className={rlcClass(null, td)}>{row.einheit}</td>
+                    <td className={rlcClass(null, tdRight)}>{num(row.menge)}</td>
+                    <td className={rlcClass(null, tdRight)}>{money(row.preis)}</td>
+                    <td className={rlcClass(null, tdRightBold)}>{money(rowNet(row))}</td>
+                  </tr>);
+
               })}
 
-              {!offerRows.length && !activeNachtraege.length ? (
-                <tr>
-                  <td colSpan={8} style={{ ...td, color: "#64748B" }}>
+              {!offerRows.length && !activeNachtraege.length ?
+              <tr>
+                  <td colSpan={8} className={rlcClass(null, { ...td, color: "#64748B" })}>
                     Kein LV und keine aktiven Nachträge vorhanden. Bitte zuerst Positionen importieren, in der Kalkulation berechnen oder Nachträge übernehmen.
                   </td>
-                </tr>
-              ) : null}
+                </tr> :
+              null}
             </tbody>
           </table>
         </div>
       </section>
 
-      <section style={totalsBar}>
-        <div style={sumBox}>
-          <div style={sumLabel}>LV Netto</div>
-          <div style={sumValue}>{money(totals.lvNetto)}</div>
+      <section className={rlcClass(null, totalsBar)}>
+        <div className={rlcClass(null, sumBox)}>
+          <div className={rlcClass(null, sumLabel)}>LV Netto</div>
+          <div className={rlcClass(null, sumValue)}>{money(totals.lvNetto)}</div>
         </div>
-        <div style={sumBox}>
-          <div style={sumLabel}>Nachträge Netto</div>
-          <div style={sumValue}>{money(totals.nachtragNetto)}</div>
+        <div className={rlcClass(null, sumBox)}>
+          <div className={rlcClass(null, sumLabel)}>Nachträge Netto</div>
+          <div className={rlcClass(null, sumValue)}>{money(totals.nachtragNetto)}</div>
         </div>
-        <div style={sumBox}>
-          <div style={sumLabel}>Gesamt Netto</div>
-          <div style={sumValue}>{money(totals.netto)}</div>
+        <div className={rlcClass(null, sumBox)}>
+          <div className={rlcClass(null, sumLabel)}>Gesamt Netto</div>
+          <div className={rlcClass(null, sumValue)}>{money(totals.netto)}</div>
         </div>
-        <div style={sumBox}>
-          <div style={sumLabel}>MwSt</div>
-          <div style={sumValue}>{money(totals.steuer)}</div>
+        <div className={rlcClass(null, sumBox)}>
+          <div className={rlcClass(null, sumLabel)}>MwSt</div>
+          <div className={rlcClass(null, sumValue)}>{money(totals.steuer)}</div>
         </div>
-        <div style={sumBoxStrong}>
-          <div style={sumLabel}>Gesamt Brutto</div>
-          <div style={sumValue}>{money(totals.brutto)}</div>
+        <div className={rlcClass(null, sumBoxStrong)}>
+          <div className={rlcClass(null, sumLabel)}>Gesamt Brutto</div>
+          <div className={rlcClass(null, sumValue)}>{money(totals.brutto)}</div>
         </div>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 function Field({
   label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={labelStyle}>{label}</span>
+    <label className="rlc-migrated-pages-kalkulation-angebot-tsx-852">
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
 function KpiCard({
   label,
   value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+  sub
+
+
+
+
+}: {label: string;value: string;sub?: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 /* ================= STYLES ================= */
@@ -1934,25 +2136,25 @@ function KpiCard({
 
 const kiBox: React.CSSProperties = {
   marginTop: 14,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 14,
   padding: 12,
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const kiText: React.CSSProperties = {
   marginTop: 5,
   whiteSpace: "pre-wrap",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const modeCard: React.CSSProperties = {
@@ -1965,23 +2167,23 @@ const modeCard: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 14,
   alignItems: "center",
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const modeText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -1989,37 +2191,37 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.85,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.9,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92,
+  opacity: 0.92
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -2027,28 +2229,28 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const card: React.CSSProperties = {
@@ -2056,7 +2258,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -2065,32 +2267,32 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const formGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const input: React.CSSProperties = {
@@ -2101,13 +2303,13 @@ const input: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const inputMuted: React.CSSProperties = {
   ...input,
   background: "#F8FAFC",
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const smallSelect: React.CSSProperties = {
@@ -2116,14 +2318,14 @@ const smallSelect: React.CSSProperties = {
   padding: "7px 9px",
   fontSize: 13,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const checkRow: React.CSSProperties = {
   display: "flex",
   gap: 14,
   flexWrap: "wrap",
-  marginTop: 12,
+  marginTop: 12
 };
 
 const checkLabel: React.CSSProperties = {
@@ -2132,14 +2334,14 @@ const checkLabel: React.CSSProperties = {
   alignItems: "center",
   fontSize: 13,
   color: "#334155",
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const buttonRow: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  marginTop: 14,
+  marginTop: 14
 };
 
 const btnBase: React.CSSProperties = {
@@ -2147,22 +2349,22 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const projectBadge: React.CSSProperties = {
@@ -2175,19 +2377,31 @@ const projectBadge: React.CSSProperties = {
   alignItems: "center",
   whiteSpace: "nowrap",
   fontSize: 13,
+  color: "#0F172A"
+};
+
+const chapterNumberInput: React.CSSProperties = {
+  width: 86,
+  border: "1px solid #CBD5E1",
+  borderRadius: 9,
+  padding: "7px 8px",
+  textAlign: "right",
+  fontSize: 13,
+  fontWeight: 700,
   color: "#0F172A",
+  background: "#FFFFFF"
 };
 
 const tableWrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
-  minWidth: 1080,
+  minWidth: 1080
 };
 
 const th: React.CSSProperties = {
@@ -2198,50 +2412,55 @@ const th: React.CSSProperties = {
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const thRight: React.CSSProperties = {
   ...th,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const td: React.CSSProperties = {
   padding: "8px 9px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "top",
+  verticalAlign: "top"
+};
+
+const tdStrong: React.CSSProperties = {
+  ...td,
+  fontWeight: 700
 };
 
 const tdText: React.CSSProperties = {
   ...td,
-  minWidth: 280,
+  minWidth: 280
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const tdRightBold: React.CSSProperties = {
   ...tdRight,
-  fontWeight: 900,
-  color: "#0F172A",
+  fontWeight: 700,
+  color: "#0F172A"
 };
 
 const chapterRow: React.CSSProperties = {
   ...td,
   background: "#EAF2FF",
   color: "#1E3A8A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const nachtragChapterRow: React.CSSProperties = {
   ...td,
   background: "#FFF7ED",
   color: "#C2410C",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const smallMuted: React.CSSProperties = {
@@ -2252,7 +2471,7 @@ const smallMuted: React.CSSProperties = {
   maxWidth: 560,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
+  textOverflow: "ellipsis"
 };
 
 const smallWarn: React.CSSProperties = {
@@ -2263,32 +2482,32 @@ const smallWarn: React.CSSProperties = {
   maxWidth: 560,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
+  textOverflow: "ellipsis"
 };
 
 const badgeLv: React.CSSProperties = {
   display: "inline-flex",
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3",
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeNachtrag: React.CSSProperties = {
   ...badgeLv,
   border: "1px solid #FED7AA",
   background: "#FFF7ED",
-  color: "#C2410C",
+  color: "#C2410C"
 };
 
 const totalsBar: React.CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
   gap: 12,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const sumBox: React.CSSProperties = {
@@ -2296,51 +2515,26 @@ const sumBox: React.CSSProperties = {
   borderRadius: 14,
   padding: "12px 16px",
   minWidth: 190,
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const sumBoxStrong: React.CSSProperties = {
   ...sumBox,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF"
 };
 
 const sumLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const sumValue: React.CSSProperties = {
   marginTop: 5,
   fontSize: 18,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

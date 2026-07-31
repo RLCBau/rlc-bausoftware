@@ -1,4 +1,4 @@
-// apps/web/src/pages/ki/Sprachsteuerung.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Sprachsteuerung.tsx
 
 import React, { useMemo, useState } from "react";
 import { useProject } from "../../store/useProject";
@@ -7,14 +7,14 @@ const shell = {
   maxWidth: 900,
   margin: "0 auto",
   padding: "12px 16px",
-  fontFamily: "Inter,system-ui,Arial",
+  fontFamily: "Inter,system-ui,Arial"
 } as const;
 
 const card = {
   border: "1px solid #e5e7eb",
   borderRadius: 10,
   padding: 16,
-  background: "#fff",
+  background: "#fff"
 } as const;
 
 const input = {
@@ -22,7 +22,7 @@ const input = {
   padding: "8px 10px",
   border: "1px solid #cbd5e1",
   borderRadius: 8,
-  fontSize: 14,
+  fontSize: 14
 } as const;
 
 const btn = {
@@ -31,7 +31,7 @@ const btn = {
   background: "#fff",
   borderRadius: 8,
   fontSize: 13,
-  cursor: "pointer",
+  cursor: "pointer"
 } as const;
 
 type SprachAction = {
@@ -79,13 +79,13 @@ export default function Sprachsteuerung() {
       const res = await fetch("/api/ki/sprachsteuerung", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           projectId: projectId || "",
           projectCode: projectCode || "",
-          text: text.trim(),
-        }),
+          text: text.trim()
+        })
       });
 
       if (!res.ok) {
@@ -114,124 +114,119 @@ export default function Sprachsteuerung() {
 
     if (a.type === "nachtrag") {
       const url =
-        `/kalkulation/nachtraege?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
-        `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
+      `/kalkulation/nachtraege?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
+      `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
       window.location.href = url;
       return;
     }
 
     if (a.type === "lv") {
       const url =
-        `/kalkulation/lv?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
-        `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
+      `/kalkulation/lv?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
+      `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
       window.location.href = url;
       return;
     }
 
     if (a.type === "regie") {
       const url =
-        `/ki/regie-auto?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
-        `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
+      `/ki/regie-auto?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
+      `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
       window.location.href = url;
       return;
     }
   }
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h2>Sprachsteuerung</h2>
 
-      <div style={card}>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-sprach-tsx-1092">
           Projekt: {effectiveProject || "—"}
         </div>
 
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="gesprochenes Kommando…"
-          style={input}
-        />
+          placeholder="gesprochenes Kommando…" className={rlcClass(null,
+          input)} />
+        
 
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button style={btn} onClick={() => void simulate()} disabled={loading}>
+        <div className="rlc-migrated-pages-ki-sprach-tsx-1093">
+          <button className={rlcClass(null, btn)} onClick={() => void simulate()} disabled={loading}>
             {loading ? "Analysiere..." : "Befehl auswerten"}
           </button>
         </div>
 
-        {error && (
-          <div style={{ marginTop: 10, color: "#b91c1c" }}>
+        {error &&
+        <div className="rlc-migrated-pages-ki-sprach-tsx-1094">
             {error}
           </div>
-        )}
+        }
       </div>
 
-      <div style={{ ...card, marginTop: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Erkannte Eingaben</h3>
+      <div className={rlcClass(null, { ...card, marginTop: 16 })}>
+        <h3 className="rlc-migrated-pages-ki-sprach-tsx-1095">Erkannte Eingaben</h3>
 
-        {!rows.length && !loading && (
-          <div style={{ color: "#6b7280" }}>Noch keine Eingaben verarbeitet.</div>
-        )}
+        {!rows.length && !loading &&
+        <div className="rlc-migrated-pages-ki-sprach-tsx-1096">Noch keine Eingaben verarbeitet.</div>
+        }
 
-        {!!rows.length && (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {rows.map((r, i) => (
-              <li key={`${r}-${i}`} style={{ marginBottom: 6 }}>
+        {!!rows.length &&
+        <ul className="rlc-migrated-pages-ki-sprach-tsx-1097">
+            {rows.map((r, i) =>
+          <li key={`${r}-${i}`} className="rlc-migrated-pages-ki-sprach-tsx-1098">
                 {r}
               </li>
-            ))}
+          )}
           </ul>
-        )}
+        }
       </div>
 
-      {(!!actions.length || !!summary) && (
-        <div style={{ ...card, marginTop: 16 }}>
-          <h3 style={{ marginTop: 0 }}>KI-Auswertung</h3>
+      {(!!actions.length || !!summary) &&
+      <div className={rlcClass(null, { ...card, marginTop: 16 })}>
+          <h3 className="rlc-migrated-pages-ki-sprach-tsx-1099">KI-Auswertung</h3>
 
-          {summary && (
-            <div style={{ marginBottom: 12, whiteSpace: "pre-wrap" }}>
+          {summary &&
+        <div className="rlc-migrated-pages-ki-sprach-tsx-1100">
               {summary}
             </div>
-          )}
+        }
 
-          {!!actions.length && (
-            <div style={{ display: "grid", gap: 8 }}>
-              {actions.map((a, i) => (
-                <div
-                  key={`${a.type}-${a.label}-${i}`}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                    padding: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                  }}
-                >
+          {!!actions.length &&
+        <div className="rlc-migrated-pages-ki-sprach-tsx-1101">
+              {actions.map((a, i) =>
+          <div
+            key={`${a.type}-${a.label}-${i}`} className="rlc-migrated-pages-ki-sprach-tsx-1102">
+
+
+
+
+
+
+
+
+
+            
                   <div>
-                    <div style={{ fontWeight: 600 }}>{a.label}</div>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    <div className="rlc-migrated-pages-ki-sprach-tsx-1103">{a.label}</div>
+                    <div className="rlc-migrated-pages-ki-sprach-tsx-1104">
                       Typ: {a.type}
                     </div>
                   </div>
 
-                  {a.type !== "unknown" && (
-                    <button style={btn} onClick={() => runAction(a)}>
+                  {a.type !== "unknown" &&
+            <button className={rlcClass(null, btn)} onClick={() => runAction(a)}>
                       Öffnen →
                     </button>
-                  )}
+            }
                 </div>
-              ))}
-            </div>
           )}
+            </div>
+        }
         </div>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
-
-
-
-
-

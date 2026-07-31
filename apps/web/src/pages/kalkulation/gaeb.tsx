@@ -1,4 +1,4 @@
-﻿// apps/web/src/pages/kalkulation/gaeb.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/gaeb.tsx
 import React, { useEffect, useMemo, useState } from "react";
 
 import { runRlcAction } from "../../lib/rlcProgress";
@@ -14,71 +14,71 @@ import { KalkulationsDatenbank } from "./kalkulationsDatenbank";
 
 
 type Fmt =
-  | "GAEB90"
-  | "GAEB2000"
-  | "GAEBXML"
-  | "DA"
-  | "X80"
-  | "X81"
-  | "X82"
-  | "X83"
-  | "X84"
-  | "X85"
-  | "X86"
-  | "X89"
-  | "X94"
-  | "X31"
-  | "DA11"
-  | "D81"
-  | "D82"
-  | "D83"
-  | "D84"
-  | "D85"
-  | "D86"
-  | "P81"
-  | "P82"
-  | "P83"
-  | "P84"
-  | "P85"
-  | "P86"
-  | "P94"
-  | "XML";
+"GAEB90" |
+"GAEB2000" |
+"GAEBXML" |
+"DA" |
+"X80" |
+"X81" |
+"X82" |
+"X83" |
+"X84" |
+"X85" |
+"X86" |
+"X89" |
+"X94" |
+"X31" |
+"DA11" |
+"D81" |
+"D82" |
+"D83" |
+"D84" |
+"D85" |
+"D86" |
+"P81" |
+"P82" |
+"P83" |
+"P84" |
+"P85" |
+"P86" |
+"P94" |
+"XML";
 
 type FilterMode =
-  | "alle"
-  | "fehler"
-  | "neu"
-  | "vorhanden"
-  | "posNrFehlt"
-  | "einheitFehlt"
-  | "mengeFehlt"
-  | "doppelte";
+"alle" |
+"fehler" |
+"neu" |
+"vorhanden" |
+"posNrFehlt" |
+"einheitFehlt" |
+"mengeFehlt" |
+"doppelte";
 
 type GaebMode =
-  | "x80"
-  | "x81"
-  | "x82"
-  | "x83"
-  | "x84"
-  | "x85"
-  | "x86"
-  | "x89"
-  | "x94"
-  | "x31"
-  | "da11"
-  | "d81"
-  | "d82"
-  | "d83"
-  | "d84"
-  | "d85"
-  | "d86"
-  | "p81"
-  | "p82"
-  | "p83"
-  | "p84"
-  | "p85"
-  | "p86"
-  | "p94";
+"x80" |
+"x81" |
+"x82" |
+"x83" |
+"x84" |
+"x85" |
+"x86" |
+"x89" |
+"x94" |
+"x31" |
+"da11" |
+"d81" |
+"d82" |
+"d83" |
+"d84" |
+"d85" |
+"d86" |
+"p81" |
+"p82" |
+"p83" |
+"p84" |
+"p85" |
+"p86" |
+"p94";
 
 type IssueType = "error" | "warning";
 
@@ -160,93 +160,93 @@ type ExportTarget = {
   fallbackFormat?: Fmt;
 };
 
-const EXPORT_FAMILY_TABS: { key: ExportFamilyKey; label: string }[] = [
-  { key: "xml", label: "GAEB XML" },
-  { key: "gaeb2000", label: "GAEB 2000" },
-  { key: "gaeb90", label: "GAEB 90" },
-  { key: "da", label: "Aufmaß / REB" },
-];
+const EXPORT_FAMILY_TABS: {key: ExportFamilyKey;label: string;}[] = [
+{ key: "xml", label: "GAEB XML" },
+{ key: "gaeb2000", label: "GAEB 2000" },
+{ key: "gaeb90", label: "GAEB 90" },
+{ key: "da", label: "Aufmaß / REB" }];
+
 
 const EXPORT_FORMAT_ROWS: ExportFormatRow[] = [
-  {
-    family: "xml",
-    code: "X83",
-    title: "Angebotsaufforderung / Ausschreibung",
-    description: "Projektbezogener Export für Ausschreibungsdaten.",
-    kind: "project",
-    projectMode: "x83",
-  },
-  {
-    family: "xml",
-    code: "X84",
-    title: "Angebotsabgabe",
-    description: "Projektbezogener Export für Angebotsabgabe mit Preisen.",
-    kind: "project",
-    projectMode: "x84",
-  },
-  {
-    family: "xml",
-    code: "X80–X86 / X89 / X94",
-    title: "GAEB XML 3.x",
-    description: "Weitere XML-Austauschphasen über Legacy-/Server-Export.",
-    kind: "legacy",
-    legacyFormat: "GAEBXML",
-  },
-  {
-    family: "gaeb2000",
-    code: "P81–P86 / P94",
-    title: "GAEB 2000",
-    description: "Klassische GAEB-2000-Formate für Import/Export.",
-    kind: "legacy",
-    legacyFormat: "GAEB2000",
-  },
-  {
-    family: "gaeb90",
-    code: "D81–D86",
-    title: "GAEB 90",
-    description: "Ältere GAEB-90-Formate für Bestandssysteme.",
-    kind: "legacy",
-    legacyFormat: "GAEB90",
-  },
-  {
-    family: "da",
-    code: "DA11 / X31",
-    title: "Aufmaß / REB",
-    description: "Aufmaß- und Abrechnungsdaten, soweit serverseitig unterstützt.",
-    kind: "legacy",
-    legacyFormat: "DA",
-  },
-];
+{
+  family: "xml",
+  code: "X83",
+  title: "Angebotsaufforderung / Ausschreibung",
+  description: "Projektbezogener Export für Ausschreibungsdaten.",
+  kind: "project",
+  projectMode: "x83"
+},
+{
+  family: "xml",
+  code: "X84",
+  title: "Angebotsabgabe",
+  description: "Projektbezogener Export für Angebotsabgabe mit Preisen.",
+  kind: "project",
+  projectMode: "x84"
+},
+{
+  family: "xml",
+  code: "X80–X86 / X89 / X94",
+  title: "GAEB XML 3.x",
+  description: "Weitere XML-Austauschphasen über Legacy-/Server-Export.",
+  kind: "legacy",
+  legacyFormat: "GAEBXML"
+},
+{
+  family: "gaeb2000",
+  code: "P81–P86 / P94",
+  title: "GAEB 2000",
+  description: "Klassische GAEB-2000-Formate für Import/Export.",
+  kind: "legacy",
+  legacyFormat: "GAEB2000"
+},
+{
+  family: "gaeb90",
+  code: "D81–D86",
+  title: "GAEB 90",
+  description: "Ältere GAEB-90-Formate für Bestandssysteme.",
+  kind: "legacy",
+  legacyFormat: "GAEB90"
+},
+{
+  family: "da",
+  code: "DA11 / X31",
+  title: "Aufmaß / REB",
+  description: "Aufmaß- und Abrechnungsdaten, soweit serverseitig unterstützt.",
+  kind: "legacy",
+  legacyFormat: "DA"
+}];
+
 
 const EXPORT_TARGETS: ExportTarget[] = [
-  { mode: "x80", label: "X80", description: "Universelle LV-Daten", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x81", label: "X81", description: "Leistungsbeschreibung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x82", label: "X82", description: "Kostenanschlag", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x83", label: "X83", description: "Angebotsaufforderung / Ausschreibung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x84", label: "X84", description: "Angebotsabgabe", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x85", label: "X85", description: "Nebenangebot", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x86", label: "X86", description: "Auftragserteilung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x89", label: "X89", description: "Rechnung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-  { mode: "x94", label: "X94", description: "Nachtrag / Austauschphase", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x80", label: "X80", description: "Universelle LV-Daten", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x81", label: "X81", description: "Leistungsbeschreibung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x82", label: "X82", description: "Kostenanschlag", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x83", label: "X83", description: "Angebotsaufforderung / Ausschreibung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x84", label: "X84", description: "Angebotsabgabe", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x85", label: "X85", description: "Nebenangebot", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x86", label: "X86", description: "Auftragserteilung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x89", label: "X89", description: "Rechnung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x94", label: "X94", description: "Nachtrag / Austauschphase", group: "GAEB XML", fallbackFormat: "GAEBXML" },
 
-  { mode: "p81", label: "P81", description: "GAEB 2000 Leistungsbeschreibung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-  { mode: "p82", label: "P82", description: "GAEB 2000 Kostenanschlag", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-  { mode: "p83", label: "P83", description: "GAEB 2000 Angebotsaufforderung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-  { mode: "p84", label: "P84", description: "GAEB 2000 Angebotsabgabe", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-  { mode: "p85", label: "P85", description: "GAEB 2000 Nebenangebot", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-  { mode: "p86", label: "P86", description: "GAEB 2000 Auftragserteilung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-  { mode: "p94", label: "P94", description: "GAEB 2000 Nachtrag / Austausch", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p81", label: "P81", description: "GAEB 2000 Leistungsbeschreibung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p82", label: "P82", description: "GAEB 2000 Kostenanschlag", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p83", label: "P83", description: "GAEB 2000 Angebotsaufforderung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p84", label: "P84", description: "GAEB 2000 Angebotsabgabe", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p85", label: "P85", description: "GAEB 2000 Nebenangebot", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p86", label: "P86", description: "GAEB 2000 Auftragserteilung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p94", label: "P94", description: "GAEB 2000 Nachtrag / Austausch", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
 
-  { mode: "d81", label: "D81", description: "GAEB 90 Leistungsbeschreibung", group: "GAEB 90", fallbackFormat: "GAEB90" },
-  { mode: "d82", label: "D82", description: "GAEB 90 Kostenanschlag", group: "GAEB 90", fallbackFormat: "GAEB90" },
-  { mode: "d83", label: "D83", description: "GAEB 90 Angebotsaufforderung", group: "GAEB 90", fallbackFormat: "GAEB90" },
-  { mode: "d84", label: "D84", description: "GAEB 90 Angebotsabgabe", group: "GAEB 90", fallbackFormat: "GAEB90" },
-  { mode: "d85", label: "D85", description: "GAEB 90 Nebenangebot", group: "GAEB 90", fallbackFormat: "GAEB90" },
-  { mode: "d86", label: "D86", description: "GAEB 90 Auftragserteilung", group: "GAEB 90", fallbackFormat: "GAEB90" },
+{ mode: "d81", label: "D81", description: "GAEB 90 Leistungsbeschreibung", group: "GAEB 90", fallbackFormat: "GAEB90" },
+{ mode: "d82", label: "D82", description: "GAEB 90 Kostenanschlag", group: "GAEB 90", fallbackFormat: "GAEB90" },
+{ mode: "d83", label: "D83", description: "GAEB 90 Angebotsaufforderung", group: "GAEB 90", fallbackFormat: "GAEB90" },
+{ mode: "d84", label: "D84", description: "GAEB 90 Angebotsabgabe", group: "GAEB 90", fallbackFormat: "GAEB90" },
+{ mode: "d85", label: "D85", description: "GAEB 90 Nebenangebot", group: "GAEB 90", fallbackFormat: "GAEB90" },
+{ mode: "d86", label: "D86", description: "GAEB 90 Auftragserteilung", group: "GAEB 90", fallbackFormat: "GAEB90" },
 
-  { mode: "x31", label: "X31", description: "Aufmaß / Mengenermittlung GAEB XML", group: "Aufmaß / REB", fallbackFormat: "DA" },
-  { mode: "da11", label: "DA11", description: "REB-Aufmaß / DA11", group: "Aufmaß / REB", fallbackFormat: "DA" },
-];
+{ mode: "x31", label: "X31", description: "Aufmaß / Mengenermittlung GAEB XML", group: "Aufmaß / REB", fallbackFormat: "DA" },
+{ mode: "da11", label: "DA11", description: "REB-Aufmaß / DA11", group: "Aufmaß / REB", fallbackFormat: "DA" }];
+
 
 const ME_SUGGEST: Record<string, string> = {
   qm: "m²",
@@ -274,14 +274,14 @@ const ME_SUGGEST: Record<string, string> = {
   "m^3": "m³",
   km: "km",
   pauschal: "PS",
-  ps: "PS",
+  ps: "PS"
 };
 
 const ACCEPT_TYPES =
-  ".D81,.D82,.D83,.D84,.D85,.D86," +
-  ".P81,.P82,.P83,.P84,.P85,.P86,.P94," +
-  ".X80,.X81,.X82,.X83,.X84,.X85,.X86,.X89,.X94,.XML," +
-  ".DA11,.X31";
+".D81,.D82,.D83,.D84,.D85,.D86," +
+".P81,.P82,.P83,.P84,.P85,.P86,.P94," +
+".X80,.X81,.X82,.X83,.X84,.X85,.X86,.X89,.X94,.XML," +
+".DA11,.X31";
 
 const GAEB_IMPORT_STORAGE_PREFIX = "rlc_gaeb_import_v1";
 
@@ -301,13 +301,13 @@ function apiUrl(path: string): string {
 function getAuthToken(): string {
   try {
     const directKeys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of directKeys) {
       const value = localStorage.getItem(key);
@@ -323,23 +323,23 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-        //
-      }
-    }
-  } catch {
-    //
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
@@ -347,7 +347,7 @@ function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
 
   return {
     ...(extra || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -355,27 +355,27 @@ function toFiniteNumber(value: unknown, fallback = 0): number {
   if (value === null || value === undefined || value === "") return fallback;
 
   const n =
-    typeof value === "number"
-      ? value
-      : Number(String(value).replace(",", ".").trim());
+  typeof value === "number" ?
+  value :
+  Number(String(value).replace(",", ".").trim());
 
   return Number.isFinite(n) ? n : fallback;
 }
 
 function norm(value: unknown): string {
-  return String(value ?? "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(value ?? "").
+  toLowerCase().
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/[^\p{L}\p{N}]+/gu, " ").
+  replace(/\s+/g, " ").
+  trim();
 }
 
 function gaebImportStorageKey(projectCode: string): string {
-  return `${GAEB_IMPORT_STORAGE_PREFIX}:${String(projectCode || "no-project")
-    .trim()
-    .toUpperCase()}`;
+  return `${GAEB_IMPORT_STORAGE_PREFIX}:${String(projectCode || "no-project").
+  trim().
+  toUpperCase()}`;
 }
 
 function firstArray(...values: unknown[]): any[] {
@@ -411,9 +411,9 @@ function extractImportRows(json: any): any[] {
 
 function textOf(el: Element | null | undefined): string {
   if (!el) return "";
-  return String(el.textContent || "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(el.textContent || "").
+  replace(/\s+/g, " ").
+  trim();
 }
 
 function firstElementByLocalName(root: Element | Document, names: string[]): Element | null {
@@ -479,85 +479,209 @@ function parseGaebXmlFallback(xmlText: string, fileName: string): Detect {
     throw new Error("GAEB XML konnte im Browser nicht gelesen werden.");
   }
 
-  const itemNodes = elementsByLocalName(doc, "Item");
+  function cleanOzPart(value: unknown): string {
+    return String(value ?? "").
+    trim().
+    replace(/\s+/g, "").
+    replace(/_/g, ".").
+    replace(/^\.+|\.+$/g, "");
+  }
 
-  const rows: ImportedRow[] = itemNodes
-    .map((item, index) => {
-      const rNoPartNodes = elementsByLocalName(item, "RNoPart")
-        .map((x) => textOf(x))
-        .filter(Boolean);
+  function attrByLocalName(el: Element, names: string[]): string {
+    for (const name of names) {
+      const direct = el.getAttribute(name);
+      if (direct && direct.trim()) return direct.trim();
 
-      const posNr =
-        rNoPartNodes.join(".") ||
-        childTextByLocalName(item, ["RNo"]) ||
-        childTextByLocalName(item, ["ItemNo"]) ||
-        String(index + 1).padStart(3, "0");
+      for (const attr of Array.from(el.attributes)) {
+        if (attr.localName === name && attr.value.trim()) {
+          return attr.value.trim();
+        }
+      }
+    }
 
-      const outlineText =
-        deepTextByLocalName(item, ["OutlineText"]) ||
-        deepTextByLocalName(item, ["ShortText"]) ||
-        deepTextByLocalName(item, ["TextOutl"]);
+    return "";
+  }
 
-      const detailTxt =
-        deepTextByLocalName(item, ["DetailTxt"]) ||
-        deepTextByLocalName(item, ["LongText"]) ||
-        deepTextByLocalName(item, ["TextComplement"]) ||
-        deepTextByLocalName(item, ["Text"]);
+  function directChildText(root: Element, names: string[]): string {
+    for (const child of Array.from(root.children)) {
+      if (names.includes(child.localName)) {
+        const value = textOf(child);
+        if (value) return value;
+      }
+    }
 
-      const qtyRaw =
-        deepTextByLocalName(item, ["Qty"]) ||
-        deepTextByLocalName(item, ["Quantity"]) ||
-        deepTextByLocalName(item, ["QtySplit"]);
+    return "";
+  }
 
-      const unitRaw =
-        deepTextByLocalName(item, ["QU"]) ||
-        deepTextByLocalName(item, ["Unit"]) ||
-        deepTextByLocalName(item, ["ME"]);
+  type GaebOzSpec = {type: string;length: number;numeric: boolean;};
 
-      const epRaw =
-        deepTextByLocalName(item, ["UP"]) ||
-        deepTextByLocalName(item, ["UnitPrice"]) ||
-        deepTextByLocalName(item, ["EP"]);
+  function readGaebOzBreakdown(): GaebOzSpec[] {
+    /*
+     * GAEB XML speichert jeden Aufbauabschnitt in einem eigenen
+     * <BoQBkdn>-Element. Beispiel: zwei BoQLevel, Item und Index.
+     */
+    return elementsByLocalName(doc, "BoQBkdn").
+    map((breakdown) => {
+      const type = directChildText(breakdown, ["Type"]);
+      const length = Number(directChildText(breakdown, ["Length"]) || 0);
+      const num = directChildText(breakdown, ["Num"]);
 
-      const totalRaw =
-        deepTextByLocalName(item, ["IT"]) ||
-        deepTextByLocalName(item, ["Total"]) ||
-        deepTextByLocalName(item, ["GB"]);
-
-      const menge = parseGaebNumber(qtyRaw);
-      const preis = parseGaebNumber(epRaw);
-      const gesamt = totalRaw
-        ? parseGaebNumber(totalRaw)
-        : Number((menge * preis).toFixed(2));
+      if (!type || !Number.isFinite(length) || length <= 0) return null;
 
       return {
-        posNr: posNr.trim(),
-        parentPosNr: "",
-        kurztext: outlineText || detailTxt.slice(0, 120) || `Position ${posNr}`,
-        langtext: detailTxt || outlineText || `Position ${posNr}`,
-        bemerkung: "",
-        einheit: normalizeGaebUnit(unitRaw),
-        menge,
-        preis,
-        gesamt,
-        waehrung: "EUR",
-        confidence: 0.75,
-      };
-    })
-    .filter((r) => r.posNr || r.kurztext || r.langtext);
+        type,
+        length,
+        numeric: !/^(no|false|0|nein)$/i.test(num)
+      } as GaebOzSpec;
+    }).
+    filter((spec): spec is GaebOzSpec => spec !== null);
+  }
+
+  const ozBreakdown = readGaebOzBreakdown();
+  const categorySpecs = ozBreakdown.filter((spec) => spec.type === "BoQLevel");
+  const itemSpec = ozBreakdown.find((spec) => spec.type === "Item");
+  const indexSpec = ozBreakdown.find((spec) => spec.type === "Index");
+
+  function formatOzPart(value: string, spec?: GaebOzSpec): string {
+    const clean = cleanOzPart(value);
+    if (!clean || !spec?.length) return clean;
+    if (spec.numeric && /^\d+$/.test(clean)) return clean.padStart(spec.length, "0");
+    return clean;
+  }
+
+  function buildGaebOz(item: Element, fallbackNo: number): {
+    posNr: string;
+    parentPosNr: string;
+  } {
+    const categoryParts: string[] = [];
+    let current: Element | null = item.parentElement;
+
+    while (current) {
+      if (current.localName === "BoQCtgy") {
+        const part = cleanOzPart(
+          attrByLocalName(current, ["RNoPart", "RNo", "Nr", "No"]) ||
+          directChildText(current, ["RNoPart", "RNo", "Nr", "No"])
+        );
+
+        if (part) categoryParts.unshift(part);
+      }
+
+      current = current.parentElement;
+    }
+
+    const itemPart = cleanOzPart(
+      attrByLocalName(item, [
+      "RNoPart",
+      "RNo",
+      "ItemNumber",
+      "PositionNumber",
+      "OZ",
+      "Nr",
+      "No"]
+      ) ||
+      directChildText(item, [
+      "RNoPart",
+      "RNo",
+      "ItemNumber",
+      "PositionNumber",
+      "OZ",
+      "Nr",
+      "No"]
+      )
+    );
+
+    const indexPart = cleanOzPart(
+      attrByLocalName(item, ["RNoIndex"]) ||
+      directChildText(item, ["RNoIndex"])
+    );
+
+    const formattedCategories = categoryParts.map((part, index) =>
+    formatOzPart(part, categorySpecs[index])
+    );
+
+    const parentPosNr = formattedCategories.join(".");
+    const parts = [...formattedCategories];
+
+    if (itemPart) parts.push(formatOzPart(itemPart, itemSpec));
+    if (indexPart) parts.push(formatOzPart(indexPart, indexSpec));
+
+    return {
+      posNr: parts.join(".") || String(fallbackNo).padStart(3, "0"),
+      parentPosNr
+    };
+  }
+
+  const itemNodes = elementsByLocalName(doc, "Item");
+
+  const rows: ImportedRow[] = itemNodes.
+  map((item, index) => {
+    const { posNr, parentPosNr } = buildGaebOz(item, index + 1);
+
+    const outlineText =
+    deepTextByLocalName(item, ["OutlineText"]) ||
+    deepTextByLocalName(item, ["ShortText"]) ||
+    deepTextByLocalName(item, ["TextOutl"]);
+
+    const detailTxt =
+    deepTextByLocalName(item, ["DetailTxt"]) ||
+    deepTextByLocalName(item, ["LongText"]) ||
+    deepTextByLocalName(item, ["TextComplement"]) ||
+    deepTextByLocalName(item, ["Text"]);
+
+    const qtyRaw =
+    deepTextByLocalName(item, ["Qty"]) ||
+    deepTextByLocalName(item, ["Quantity"]) ||
+    deepTextByLocalName(item, ["QtySplit"]);
+
+    const unitRaw =
+    deepTextByLocalName(item, ["QU"]) ||
+    deepTextByLocalName(item, ["Unit"]) ||
+    deepTextByLocalName(item, ["ME"]);
+
+    const epRaw =
+    deepTextByLocalName(item, ["UP"]) ||
+    deepTextByLocalName(item, ["UnitPrice"]) ||
+    deepTextByLocalName(item, ["EP"]);
+
+    const totalRaw =
+    deepTextByLocalName(item, ["IT"]) ||
+    deepTextByLocalName(item, ["Total"]) ||
+    deepTextByLocalName(item, ["GB"]);
+
+    const menge = parseGaebNumber(qtyRaw);
+    const preis = parseGaebNumber(epRaw);
+    const gesamt = totalRaw ?
+    parseGaebNumber(totalRaw) :
+    Number((menge * preis).toFixed(2));
+
+    return {
+      posNr,
+      parentPosNr,
+      kurztext: outlineText || detailTxt.slice(0, 120) || `Position ${posNr}`,
+      langtext: detailTxt || outlineText || `Position ${posNr}`,
+      bemerkung: "",
+      einheit: normalizeGaebUnit(unitRaw),
+      menge,
+      preis,
+      gesamt,
+      waehrung: "EUR",
+      confidence: 0.95
+    };
+  }).
+  filter((r) => r.posNr || r.kurztext || r.langtext);
 
   return {
     format: normalizeFormat(undefined, fileName),
     name: fileName,
     count: rows.length,
-    rows,
+    rows
   };
 }
 
 function normalizeFormat(value: unknown, fileName?: string): Fmt {
-  const raw = String(value || fileName?.split(".").pop() || "GAEBXML")
-    .replace(/^\./, "")
-    .toUpperCase();
+  const raw = String(value || fileName?.split(".").pop() || "GAEBXML").
+  replace(/^\./, "").
+  toUpperCase();
 
   if (raw === "XML") return "XML";
   if (raw === "GAEB90") return "GAEB90";
@@ -585,52 +709,52 @@ function normalizeGaebUnit(value: unknown): string {
   return ME_SUGGEST[key] || raw;
 }
 function mapImportedRows(rawRows: any[]): ImportedRow[] {
-  return rawRows
-    .map((r: any) => {
-      const menge = toFiniteNumber(
-        r?.menge ?? r?.quantity ?? r?.qty ?? r?.amount,
-        0
-      );
+  return rawRows.
+  map((r: any) => {
+    const menge = toFiniteNumber(
+      r?.menge ?? r?.quantity ?? r?.qty ?? r?.amount,
+      0
+    );
 
-      const preis = toFiniteNumber(
-        r?.preis ?? r?.ep ?? r?.einzelpreis ?? r?.unitPrice,
-        0
-      );
+    const preis = toFiniteNumber(
+      r?.preis ?? r?.ep ?? r?.einzelpreis ?? r?.unitPrice,
+      0
+    );
 
-      const hasGesamt =
-        r?.gesamt !== undefined ||
-        r?.total !== undefined ||
-        r?.betrag !== undefined ||
-        r?.sum !== undefined;
+    const hasGesamt =
+    r?.gesamt !== undefined ||
+    r?.total !== undefined ||
+    r?.betrag !== undefined ||
+    r?.sum !== undefined;
 
-      const gesamt = hasGesamt
-        ? toFiniteNumber(r?.gesamt ?? r?.total ?? r?.betrag ?? r?.sum, 0)
-        : Number((menge * preis).toFixed(2));
+    const gesamt = hasGesamt ?
+    toFiniteNumber(r?.gesamt ?? r?.total ?? r?.betrag ?? r?.sum, 0) :
+    Number((menge * preis).toFixed(2));
 
-      return {
-        posNr: String(
-          r?.posNr ??
-            r?.pos ??
-            r?.position ??
-            r?.positionNo ??
-            r?.positionsnummer ??
-            ""
-        ).trim(),
-        parentPosNr: String(r?.parentPosNr ?? r?.parentPos ?? r?.parent ?? "").trim(),
-        kurztext: String(r?.kurztext ?? r?.shortText ?? r?.text ?? r?.title ?? "").trim(),
-        langtext: String(
-          r?.langtext ?? r?.longText ?? r?.description ?? r?.beschreibung ?? ""
-        ).trim(),
-        bemerkung: String(r?.bemerkung ?? r?.note ?? r?.remark ?? "").trim(),
-        einheit: normalizeGaebUnit(r?.einheit ?? r?.unit ?? r?.me ?? r?.ME ?? ""),
-        menge,
-        preis,
-        gesamt,
-        waehrung: String(r?.waehrung ?? r?.currency ?? "EUR").trim(),
-        confidence: toFiniteNumber(r?.confidence, 0),
-      };
-    })
-    .filter((r) => r.posNr || r.kurztext || r.langtext);
+    return {
+      posNr: String(
+        r?.posNr ??
+        r?.pos ??
+        r?.position ??
+        r?.positionNo ??
+        r?.positionsnummer ??
+        ""
+      ).trim(),
+      parentPosNr: String(r?.parentPosNr ?? r?.parentPos ?? r?.parent ?? "").trim(),
+      kurztext: String(r?.kurztext ?? r?.shortText ?? r?.text ?? r?.title ?? "").trim(),
+      langtext: String(
+        r?.langtext ?? r?.longText ?? r?.description ?? r?.beschreibung ?? ""
+      ).trim(),
+      bemerkung: String(r?.bemerkung ?? r?.note ?? r?.remark ?? "").trim(),
+      einheit: normalizeGaebUnit(r?.einheit ?? r?.unit ?? r?.me ?? r?.ME ?? ""),
+      menge,
+      preis,
+      gesamt,
+      waehrung: String(r?.waehrung ?? r?.currency ?? "EUR").trim(),
+      confidence: toFiniteNumber(r?.confidence, 0)
+    };
+  }).
+  filter((r) => r.posNr || r.kurztext || r.langtext);
 }
 
 function saveGaebImportToLocal(projectCode: string, det: Detect | null) {
@@ -641,14 +765,14 @@ function saveGaebImportToLocal(projectCode: string, det: Detect | null) {
       gaebImportStorageKey(projectCode),
       JSON.stringify({
         ...det,
-        savedAt: new Date().toISOString(),
+        savedAt: new Date().toISOString()
       })
     );
   } catch {
-    //
-  }
-}
 
+
+    //
+  }}
 function loadGaebImportFromLocal(projectCode: string): Detect | null {
   try {
     const raw = localStorage.getItem(gaebImportStorageKey(projectCode));
@@ -663,7 +787,7 @@ function loadGaebImportFromLocal(projectCode: string): Detect | null {
       format: normalizeFormat(parsed.format),
       name: String(parsed.name || "Gespeicherter GAEB-Import"),
       count: Number(parsed.count || rows.length || 0),
-      rows,
+      rows
     };
   } catch {
     return null;
@@ -674,10 +798,10 @@ function clearGaebImportFromLocal(projectCode: string) {
   try {
     localStorage.removeItem(gaebImportStorageKey(projectCode));
   } catch {
-    //
-  }
-}
 
+
+    //
+  }}
 function normalizeIssues(items: unknown, fallbackType: IssueType): GaebIssue[] {
   if (!Array.isArray(items)) return [];
 
@@ -688,19 +812,19 @@ function normalizeIssues(items: unknown, fallbackType: IssueType): GaebIssue[] {
     field: String(it?.field ?? it?.path ?? ""),
     message: String(it?.message ?? it?.reason ?? it?.error ?? ""),
     reason: String(it?.reason ?? it?.message ?? ""),
-    code: String(it?.code ?? ""),
+    code: String(it?.code ?? "")
   }));
 }
 
 function getCurrentProjectFromSources(projectCtx: any): ProjectLike | null {
   const ctxProject =
-    projectCtx?.currentProject ??
-    projectCtx?.current ??
-    projectCtx?.selectedProject ??
-    projectCtx?.project ??
-    (typeof projectCtx?.getCurrentProject === "function"
-      ? projectCtx.getCurrentProject()
-      : null);
+  projectCtx?.currentProject ??
+  projectCtx?.current ??
+  projectCtx?.selectedProject ??
+  projectCtx?.project ?? (
+  typeof projectCtx?.getCurrentProject === "function" ?
+  projectCtx.getCurrentProject() :
+  null);
 
   if (ctxProject) return ctxProject as ProjectLike;
 
@@ -713,32 +837,32 @@ function getCurrentProjectFromSources(projectCtx: any): ProjectLike | null {
 }
 
 function getProjectCode(project: ProjectLike | null): string {
-  return String(project?.code ?? project?.number ?? project?.projektnummer ?? "")
-    .trim()
-    .toUpperCase();
+  return String(project?.code ?? project?.number ?? project?.projektnummer ?? "").
+  trim().
+  toUpperCase();
 }
 
 function exportPreviewCSV(rows: ImportedRow[]) {
   const head =
-    "PosNr;ParentPosNr;Kurztext;Langtext;Bemerkung;ME;Menge;EP;Gesamt;Waehrung;Confidence";
+  "PosNr;ParentPosNr;Kurztext;Langtext;Bemerkung;ME;Menge;EP;Gesamt;Waehrung;Confidence";
 
-  const body = rows
-    .map((r) =>
-      [
-        r.posNr ?? "",
-        r.parentPosNr ?? "",
-        JSON.stringify(r.kurztext ?? ""),
-        JSON.stringify(r.langtext ?? ""),
-        JSON.stringify(r.bemerkung ?? ""),
-        r.einheit ?? "",
-        r.menge ?? "",
-        r.preis ?? "",
-        r.gesamt ?? "",
-        r.waehrung ?? "EUR",
-        r.confidence ?? "",
-      ].join(";")
-    )
-    .join("\n");
+  const body = rows.
+  map((r) =>
+  [
+  r.posNr ?? "",
+  r.parentPosNr ?? "",
+  JSON.stringify(r.kurztext ?? ""),
+  JSON.stringify(r.langtext ?? ""),
+  JSON.stringify(r.bemerkung ?? ""),
+  r.einheit ?? "",
+  r.menge ?? "",
+  r.preis ?? "",
+  r.gesamt ?? "",
+  r.waehrung ?? "EUR",
+  r.confidence ?? ""].
+  join(";")
+  ).
+  join("\n");
 
   const csv = `${head}\n${body}`;
   const url = URL.createObjectURL(
@@ -758,15 +882,15 @@ function exportPreviewCSV(rows: ImportedRow[]) {
 async function downloadBlobFromResponse(response: Response, fallbackName: string) {
   const blob = await response.blob();
   const disposition =
-    response.headers.get("content-disposition") ||
-    response.headers.get("Content-Disposition") ||
-    "";
+  response.headers.get("content-disposition") ||
+  response.headers.get("Content-Disposition") ||
+  "";
 
   let filename = fallbackName;
 
   const match =
-    disposition.match(/filename\*=UTF-8''([^;]+)/i) ||
-    disposition.match(/filename="?([^"]+)"?/i);
+  disposition.match(/filename\*=UTF-8''([^;]+)/i) ||
+  disposition.match(/filename="?([^"]+)"?/i);
 
   if (match?.[1]) {
     try {
@@ -791,7 +915,7 @@ function fmtNumber(v: unknown): string {
   const num = toFiniteNumber(v, 0);
   return num.toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 }
 
@@ -833,14 +957,14 @@ function enrichPriceRowsWithLvBase(priceRows: ImportedRow[], baseRows: LVPos[]):
       menge: toFiniteNumber(r.menge, 0) > 0 ? r.menge : mengeBase,
       preis: ep,
       gesamt,
-      waehrung: r.waehrung || base.waehrung || "EUR",
+      waehrung: r.waehrung || base.waehrung || "EUR"
     };
   });
 }
 function rowHasLocalError(row: ImportedRow, issue?: RowIssue): boolean {
   const hasPos = String(row.posNr || "").trim();
   const hasText =
-    String(row.kurztext || "").trim() || String(row.langtext || "").trim();
+  String(row.kurztext || "").trim() || String(row.langtext || "").trim();
   const hasUnit = String(row.einheit || "").trim();
   const menge = toFiniteNumber(row.menge, 0);
 
@@ -849,11 +973,11 @@ function rowHasLocalError(row: ImportedRow, issue?: RowIssue): boolean {
     !hasPos ||
     !hasText ||
     !hasUnit ||
-    menge <= 0
-  );
+    menge <= 0);
+
 }
 
-function fixImportedRow(row: ImportedRow): { row: ImportedRow; changed: boolean; changes: string[] } {
+function fixImportedRow(row: ImportedRow): {row: ImportedRow;changed: boolean;changes: string[];} {
   const next: ImportedRow = { ...row };
   const changes: string[] = [];
   const pos = String(next.posNr || "").trim();
@@ -907,9 +1031,9 @@ function formatBadgeByFmt(fmt: Fmt | string): React.CSSProperties {
     bg = "#F0FDF4";
     border = "#BBF7D0";
   } else if (raw === "GAEB2000" || raw.startsWith("P")) {
-    color = "#1D4ED8";
-    bg = "#EFF6FF";
-    border = "#BFDBFE";
+    color = "#0B5BD3";
+    bg = "#EAF2FF";
+    border = "#BED6FF";
   } else if (raw === "GAEBXML" || raw === "XML" || raw.startsWith("X")) {
     color = "#7C3AED";
     bg = "#F5F3FF";
@@ -922,11 +1046,11 @@ function formatBadgeByFmt(fmt: Fmt | string): React.CSSProperties {
     borderRadius: 999,
     padding: "6px 12px",
     fontSize: 12,
-    fontWeight: 800,
+    fontWeight: 700,
     color,
     background: bg,
     border: `1px solid ${border}`,
-    whiteSpace: "nowrap",
+    whiteSpace: "nowrap"
   };
 }
 
@@ -951,20 +1075,20 @@ function gaebFilterLabel(filter: FilterMode): string {
 
 function statusBox(info: string): React.CSSProperties {
   const isError =
-    info.startsWith("Fehler") ||
-    info.startsWith("Export-Fehler") ||
-    info.startsWith("Validierungs-Fehler") ||
-    info.includes("Server-Fehler") ||
-    info.includes("blockiert");
+  info.startsWith("Fehler") ||
+  info.startsWith("Export-Fehler") ||
+  info.startsWith("Validierungs-Fehler") ||
+  info.includes("Server-Fehler") ||
+  info.includes("blockiert");
 
   const isSuccess =
-    info.includes("erfolgreich") ||
-    info.includes("valide") ||
-    info.includes("gespeichert") ||
-    info.includes("übernommen") ||
-    info.includes("erstellt") ||
-    info.includes("wiederhergestellt") ||
-    info.includes("korrigiert");
+  info.includes("erfolgreich") ||
+  info.includes("valide") ||
+  info.includes("gespeichert") ||
+  info.includes("übernommen") ||
+  info.includes("erstellt") ||
+  info.includes("wiederhergestellt") ||
+  info.includes("korrigiert");
 
   return {
     padding: "11px 13px",
@@ -973,50 +1097,50 @@ function statusBox(info: string): React.CSSProperties {
     background: isError ? "#FEF2F2" : isSuccess ? "#F0FDF4" : "#F8FAFC",
     color: isError ? "#B91C1C" : isSuccess ? "#15803D" : "#475569",
     fontSize: 13,
-    fontWeight: 700,
+    fontWeight: 600
   };
 }
 
-function IssueTable({ rows }: { rows: GaebIssue[] }) {
+function IssueTable({ rows }: {rows: GaebIssue[];}) {
   return (
-    <div style={tableWrap}>
-      <table style={{ ...table, minWidth: 860 }}>
+    <div className={rlcClass(null, tableWrap)}>
+      <table className={rlcClass(null, { ...table, minWidth: 860 })}>
         <thead>
           <tr>
-            <th style={th}>Pos.</th>
-            <th style={th}>Typ</th>
-            <th style={th}>Feld</th>
-            <th style={th}>Meldung</th>
+            <th className={rlcClass(null, th)}>Pos.</th>
+            <th className={rlcClass(null, th)}>Typ</th>
+            <th className={rlcClass(null, th)}>Feld</th>
+            <th className={rlcClass(null, th)}>Meldung</th>
           </tr>
         </thead>
 
         <tbody>
-          {rows.map((row, i) => (
-            <tr key={`${row.posNr || row.position || "issue"}-${i}`}>
-              <td style={td}>{row.position || row.posNr || "—"}</td>
-              <td style={td}>
-                <span style={badgeStyle(String(row.type) === "warning" ? "warn" : "error")}>
+          {rows.map((row, i) =>
+          <tr key={`${row.posNr || row.position || "issue"}-${i}`}>
+              <td className={rlcClass(null, td)}>{row.position || row.posNr || "—"}</td>
+              <td className={rlcClass(null, td)}>
+                <span className={rlcClass(null, badgeStyle(String(row.type) === "warning" ? "warn" : "error"))}>
                   {String(row.type || "error")}
                 </span>
               </td>
-              <td style={td}>{row.field || "—"}</td>
-              <td style={td}>{row.message || row.reason || row.code || "—"}</td>
+              <td className={rlcClass(null, td)}>{row.field || "—"}</td>
+              <td className={rlcClass(null, td)}>{row.message || row.reason || row.code || "—"}</td>
             </tr>
-          ))}
+          )}
         </tbody>
       </table>
-    </div>
-  );
+    </div>);
+
 }
 
-function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KpiCard({ label, value, sub }: {label: string;value: string;sub?: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 type DisplayRow = {
@@ -1189,8 +1313,8 @@ export default function GaebPage() {
     return (
       visibleExportRows.find((row) => String(row.code) === String(selectedExportCode)) ||
       visibleExportRows[0] ||
-      null
-    );
+      null);
+
   }, [visibleExportRows, selectedExportCode]);
 
   useEffect(() => {
@@ -1201,13 +1325,13 @@ export default function GaebPage() {
   }, [visibleExportRows, selectedExportCode]);
 
   function persistCurrentImport(nextRows: ImportedRow[], customInfo?: string) {
-    const nextDet: Detect | null = det
-      ? {
-          ...det,
-          rows: nextRows,
-          count: nextRows.length,
-        }
-      : null;
+    const nextDet: Detect | null = det ?
+    {
+      ...det,
+      rows: nextRows,
+      count: nextRows.length
+    } :
+    null;
 
     setDet(nextDet);
     setSelectedRows({});
@@ -1222,16 +1346,16 @@ export default function GaebPage() {
   function toggleVisibleSelection() {
     const next: Record<string, boolean> = { ...selectedRows };
     const allSelected =
-      filteredPreview.length > 0 &&
-      filteredPreview.every(({ row, originalIndex }) => {
-        return !!next[importedRowKey(row, originalIndex)];
-      });
+    filteredPreview.length > 0 &&
+    filteredPreview.every(({ row, originalIndex }) => {
+      return !!next[importedRowKey(row, originalIndex)];
+    });
 
     filteredPreview.forEach(({ row, originalIndex }) => {
       const key = importedRowKey(row, originalIndex);
 
-      if (allSelected) delete next[key];
-      else next[key] = true;
+      if (allSelected) delete next[key];else
+      next[key] = true;
     });
 
     setSelectedRows(next);
@@ -1282,9 +1406,9 @@ export default function GaebPage() {
   }
 
   function deleteImportedRowsFromLv(visibleOnly = false) {
-    const indexes = visibleOnly
-      ? filteredPreview.map((x) => x.originalIndex)
-      : (det?.rows ?? []).map((_, idx) => idx);
+    const indexes = visibleOnly ?
+    filteredPreview.map((x) => x.originalIndex) :
+    (det?.rows ?? []).map((_, idx) => idx);
 
     deleteRowsByOriginalIndexes(
       indexes,
@@ -1322,19 +1446,19 @@ export default function GaebPage() {
     const preis = toFiniteNumber(preisRaw, 0);
 
     const nextRows = det.rows.map((row, idx) =>
-      idx === originalIndex
-        ? {
-            ...row,
-            posNr: posNr.trim(),
-            kurztext: kurztext.trim(),
-            langtext: langtext.trim(),
-            einheit: einheit.trim(),
-            menge,
-            preis,
-            gesamt: Number((menge * preis).toFixed(2)),
-            waehrung: row.waehrung || "EUR",
-          }
-        : row
+    idx === originalIndex ?
+    {
+      ...row,
+      posNr: posNr.trim(),
+      kurztext: kurztext.trim(),
+      langtext: langtext.trim(),
+      einheit: einheit.trim(),
+      menge,
+      preis,
+      gesamt: Number((menge * preis).toFixed(2)),
+      waehrung: row.waehrung || "EUR"
+    } :
+    row
     );
 
     persistCurrentImport(nextRows, `Position ${posNr.trim() || originalIndex + 1} bearbeitet.`);
@@ -1365,9 +1489,9 @@ export default function GaebPage() {
 
     persistCurrentImport(
       nextRows,
-      changedCount > 0
-        ? `${changedCount} GAEB-Position(en) automatisch korrigiert. Danach bitte erneut am Server speichern und X83/X84 prüfen.`
-        : "Keine automatisch korrigierbaren GAEB-Fehler gefunden."
+      changedCount > 0 ?
+      `${changedCount} GAEB-Position(en) automatisch korrigiert. Danach bitte erneut am Server speichern und X83/X84 prüfen.` :
+      "Keine automatisch korrigierbaren GAEB-Fehler gefunden."
     );
 
     window.dispatchEvent(
@@ -1375,8 +1499,8 @@ export default function GaebPage() {
         detail: {
           title: "GAEB-Fehler automatisch korrigiert",
           changes: log.slice(0, 50),
-          warnings: log.length > 50 ? [`${log.length - 50} weitere Korrekturen nicht angezeigt.`] : [],
-        },
+          warnings: log.length > 50 ? [`${log.length - 50} weitere Korrekturen nicht angezeigt.`] : []
+        }
       })
     );
   }
@@ -1443,7 +1567,7 @@ export default function GaebPage() {
           confidence: 0.98,
           kiHinweis: "Aus GAEB X84 als Firmen-Baseline übernommen.",
           parameter: {
-            einheit: String(row.einheit || "").trim(),
+            einheit: String(row.einheit || "").trim()
           },
           kosten: {
             material: 0,
@@ -1456,21 +1580,21 @@ export default function GaebPage() {
             risiko: 0,
             gewinn: 0,
             epNetto: ep,
-            gpNetto: gp,
+            gpNetto: gp
           },
           ressourcen: [
-            {
-              id: `x84-${projectCode}-${posNr}-ep`,
-              typ: "sonstiges",
-              bezeichnung: "X84 Firmenpreis",
-              kurztext: String(row.kurztext || "").trim(),
-              beschreibung: String(row.langtext || "").trim(),
-              einheit: String(row.einheit || "").trim(),
-              menge: 1,
-              einzelpreis: ep,
-              gesamtpreis: ep,
-            },
-          ],
+          {
+            id: `x84-${projectCode}-${posNr}-ep`,
+            typ: "sonstiges",
+            bezeichnung: "X84 Firmenpreis",
+            kurztext: String(row.kurztext || "").trim(),
+            beschreibung: String(row.langtext || "").trim(),
+            einheit: String(row.einheit || "").trim(),
+            menge: 1,
+            einzelpreis: ep,
+            gesamtpreis: ep
+          }]
+
         };
       });
 
@@ -1514,7 +1638,7 @@ export default function GaebPage() {
           posNrFehlt: "posNrFehlt",
           einheitFehlt: "einheitFehlt",
           mengeFehlt: "mengeFehlt",
-          doppelte: "doppelte",
+          doppelte: "doppelte"
         };
 
         const nextFilter = map[filter];
@@ -1546,7 +1670,7 @@ export default function GaebPage() {
           mengeFehlt: "mengeFehlt",
           doppelte: "doppelte",
           vorhanden: "vorhanden",
-          neu: "neu",
+          neu: "neu"
         };
 
         const nextFilter = map[filter];
@@ -1593,115 +1717,115 @@ export default function GaebPage() {
   }, [nav, projectCode, det, filteredPreview, selectedImportedRows, rowIssues]);
 
   async function onUpload(file: File) {
-  setBusy(true);
-  setInfo("Datei wird verarbeitet …");
-  setGaebResult(null);
-  setDet(null);
-  setOpenRows({});
-  setSelectedRows({});
-
-  try {
-    const code = projectCode.trim().toUpperCase();
-    if (!code) throw new Error("Projektcode fehlt.");
-
-    let browserFallback: Detect | null = null;
+    setBusy(true);
+    setInfo("Datei wird verarbeitet …");
+    setGaebResult(null);
+    setDet(null);
+    setOpenRows({});
+    setSelectedRows({});
 
     try {
-      const txt = await file.text();
-      if (
+      const code = projectCode.trim().toUpperCase();
+      if (!code) throw new Error("Projektcode fehlt.");
+
+      let browserFallback: Detect | null = null;
+
+      try {
+        const txt = await file.text();
+        if (
         txt.includes("<GAEB") ||
         txt.includes("<BoQ") ||
         txt.includes("<Item") ||
-        txt.includes("RNoPart")
-      ) {
-        browserFallback = parseGaebXmlFallback(txt, file.name);
-      }
-    } catch {
-      browserFallback = null;
-    }
-
-    const form = new FormData();
-    form.append("file", file);
-
-    let serverJson: any = null;
-    let serverOk = false;
-    let serverError = "";
-
-    try {
-      const response = await fetch(
-        apiUrl(`/api/project-lv/${encodeURIComponent(code)}/import-file`),
+        txt.includes("RNoPart"))
         {
-          method: "POST",
-          body: form,
-          credentials: "include",
-          headers: withAuthHeaders(),
+          browserFallback = parseGaebXmlFallback(txt, file.name);
         }
+      } catch {
+        browserFallback = null;
+      }
+
+      const form = new FormData();
+      form.append("file", file);
+
+      let serverJson: any = null;
+      let serverOk = false;
+      let serverError = "";
+
+      try {
+        const response = await fetch(
+          apiUrl(`/api/project-lv/${encodeURIComponent(code)}/import-file`),
+          {
+            method: "POST",
+            body: form,
+            credentials: "include",
+            headers: withAuthHeaders()
+          }
+        );
+
+        serverJson = await response.json().catch(() => null);
+        serverOk = response.ok && !!serverJson;
+
+        if (!serverOk) {
+          serverError = serverJson?.error || "GAEB-Import am Server fehlgeschlagen.";
+        }
+      } catch (e: any) {
+        serverError = e?.message || "GAEB-Import am Server fehlgeschlagen.";
+      }
+
+      const detectedFormat = normalizeFormat(
+        serverJson?.format ?? serverJson?.detectedType ?? serverJson?.type,
+        file.name
       );
 
-      serverJson = await response.json().catch(() => null);
-      serverOk = response.ok && !!serverJson;
+      const rawRows = serverJson ? extractImportRows(serverJson) : [];
+      const mappedRows = mapImportedRows(rawRows);
 
-      if (!serverOk) {
-        serverError = serverJson?.error || "GAEB-Import am Server fehlgeschlagen.";
-      }
-    } catch (e: any) {
-      serverError = e?.message || "GAEB-Import am Server fehlgeschlagen.";
-    }
+      let nextDet: Detect;
 
-    const detectedFormat = normalizeFormat(
-      serverJson?.format ?? serverJson?.detectedType ?? serverJson?.type,
-      file.name
-    );
+      function importQuality(rows: ImportedRow[]): number {
+        const seen = new Set<string>();
+        let score = 0;
 
-    const rawRows = serverJson ? extractImportRows(serverJson) : [];
-    const mappedRows = mapImportedRows(rawRows);
+        for (const r of rows) {
+          const pos = String(r.posNr || "").trim();
+          const text = String(r.kurztext || r.langtext || "").trim();
+          const unit = String(r.einheit || "").trim();
+          const qty = toFiniteNumber(r.menge, 0);
 
-    let nextDet: Detect;
+          if (pos) score += 3;
+          if (/^\d+(?:\.\d+)*$/.test(pos)) score += 3;
+          if (text.length >= 3) score += 5;
+          if (unit) score += 2;
+          if (qty > 0) score += 2;
 
-    function importQuality(rows: ImportedRow[]): number {
-      const seen = new Set<string>();
-      let score = 0;
+          if (!pos) score -= 10;
+          if (!text) score -= 10;
+          if (!unit) score -= 4;
+          if (qty <= 0) score -= 4;
 
-      for (const r of rows) {
-        const pos = String(r.posNr || "").trim();
-        const text = String(r.kurztext || r.langtext || "").trim();
-        const unit = String(r.einheit || "").trim();
-        const qty = toFiniteNumber(r.menge, 0);
+          if (seen.has(pos) && pos) score -= 8;
+          if (pos) seen.add(pos);
 
-        if (pos) score += 3;
-        if (/^\d+(?:\.\d+)*$/.test(pos)) score += 3;
-        if (text.length >= 3) score += 5;
-        if (unit) score += 2;
-        if (qty > 0) score += 2;
+          // GAEB-Fehlerbild: Preis/Zahl als Kurztext oder Position
+          if (/^[\d.,]+$/.test(text)) score -= 12;
+          if (/^[\d.,]+$/.test(pos) && !/^\d{3,}$/.test(pos)) score -= 8;
 
-        if (!pos) score -= 10;
-        if (!text) score -= 10;
-        if (!unit) score -= 4;
-        if (qty <= 0) score -= 4;
+          // GAEB-X84 Fehlerbild vom Server:
+          // "Position 001" ist nur Platzhalter, kein echter Kurztext.
+          if (/^position\s+\d+$/i.test(text)) score -= 25;
 
-        if (seen.has(pos) && pos) score -= 8;
-        if (pos) seen.add(pos);
+          // Preis vorhanden, aber Menge 0 und kein echter Text = sehr wahrscheinlich falsch gelesen.
+          const ep = toFiniteNumber(r.preis, 0);
+          if (ep > 0 && qty <= 0 && /^position\s+\d+$/i.test(text)) score -= 25;
+        }
 
-        // GAEB-Fehlerbild: Preis/Zahl als Kurztext oder Position
-        if (/^[\d.,]+$/.test(text)) score -= 12;
-        if (/^[\d.,]+$/.test(pos) && !/^\d{3,}$/.test(pos)) score -= 8;
-
-        // GAEB-X84 Fehlerbild vom Server:
-        // "Position 001" ist nur Platzhalter, kein echter Kurztext.
-        if (/^position\s+\d+$/i.test(text)) score -= 25;
-
-        // Preis vorhanden, aber Menge 0 und kein echter Text = sehr wahrscheinlich falsch gelesen.
-        const ep = toFiniteNumber(r.preis, 0);
-        if (ep > 0 && qty <= 0 && /^position\s+\d+$/i.test(text)) score -= 25;
+        return score;
       }
 
-      return score;
-    }
+      const serverQuality = importQuality(mappedRows);
+      const fallbackQuality = browserFallback ? importQuality(browserFallback.rows) : -999999;
 
-    const serverQuality = importQuality(mappedRows);
-    const fallbackQuality = browserFallback ? importQuality(browserFallback.rows) : -999999;
-
-    const serverLooksBroken =
+      const serverLooksBroken =
       mappedRows.some((r) => {
         const text = String(r.kurztext || r.langtext || "").trim();
         const unit = String(r.einheit || "").trim();
@@ -1710,91 +1834,91 @@ export default function GaebPage() {
 
         return (
           /^[\d.,]+$/.test(text) ||
-          (!text && !unit && qty <= 0) ||
-          (ep > 0 && qty <= 0 && !unit)
-        );
+          !text && !unit && qty <= 0 ||
+          ep > 0 && qty <= 0 && !unit);
+
       });
 
-    const fallbackIsBetter =
+      const fallbackIsBetter =
       !!browserFallback &&
-      browserFallback.rows.length > 0 &&
-      (
-        !serverOk ||
-        mappedRows.length === 0 ||
-        serverLooksBroken ||
-        fallbackQuality > serverQuality ||
-        browserFallback.rows.length > mappedRows.length * 1.4
-      );
+      browserFallback.rows.length > 0 && (
 
-    if (fallbackIsBetter && browserFallback) {
-      nextDet = browserFallback;
+      !serverOk ||
+      mappedRows.length === 0 ||
+      serverLooksBroken ||
+      fallbackQuality > serverQuality ||
+      browserFallback.rows.length > mappedRows.length * 1.4);
 
-      setInfo(
-        serverOk
-          ? `Import erfolgreich: ${browserFallback.format} • ${browserFallback.rows.length.toLocaleString(
-              "de-DE"
-            )} Positionen. Browser-Parser gewählt, weil Server nur ${mappedRows.length.toLocaleString(
-              "de-DE"
-            )} Positionen sauber gelesen hat.`
-          : `Import über Browser-Fallback erfolgreich: ${browserFallback.format} • ${browserFallback.rows.length.toLocaleString(
-              "de-DE"
-            )} Positionen. Servermeldung: ${serverError || "keine Positionsdaten vom Server"}`
-      );
-    } else if (serverOk && mappedRows.length > 0) {
-      nextDet = {
-        format: detectedFormat,
-        name: file.name,
-        count: mappedRows.length,
-        rows: mappedRows,
-      };
 
-      setInfo(
-        `Import erfolgreich: ${detectedFormat} • ${mappedRows.length.toLocaleString(
-          "de-DE"
-        )} Positionen.`
-      );
-    } else {
-      throw new Error(
-        serverError ||
-          `${detectedFormat} erkannt, aber weder Server noch Browser-Fallback konnten Positionsdaten lesen.`
-      );
-    }
-    const fmtUpper = String(nextDet.format || "").toUpperCase();
+      if (fallbackIsBetter && browserFallback) {
+        nextDet = browserFallback;
 
-    if (fmtUpper === "X84") {
-      const baseRows = LV.list();
-      const enrichedRows = enrichPriceRowsWithLvBase(nextDet.rows, baseRows);
-
-      const enrichedCount = enrichedRows.filter((r) => !isPlaceholderText(r.kurztext)).length;
-
-      nextDet = {
-        ...nextDet,
-        rows: enrichedRows,
-        count: enrichedRows.length,
-      };
-
-      if (enrichedCount > 0) {
         setInfo(
-          `Import erfolgreich: X84 • ${enrichedRows.length.toLocaleString(
+          serverOk ?
+          `Import erfolgreich: ${browserFallback.format} • ${browserFallback.rows.length.toLocaleString(
             "de-DE"
-          )} Preispositionen. Texte/Mengen aus vorhandenem LV ergänzt: ${enrichedCount.toLocaleString("de-DE")}.`
+          )} Positionen. Browser-Parser gewählt, weil Server nur ${mappedRows.length.toLocaleString(
+            "de-DE"
+          )} Positionen sauber gelesen hat.` :
+          `Import über Browser-Fallback erfolgreich: ${browserFallback.format} • ${browserFallback.rows.length.toLocaleString(
+            "de-DE"
+          )} Positionen. Servermeldung: ${serverError || "keine Positionsdaten vom Server"}`
+        );
+      } else if (serverOk && mappedRows.length > 0) {
+        nextDet = {
+          format: detectedFormat,
+          name: file.name,
+          count: mappedRows.length,
+          rows: mappedRows
+        };
+
+        setInfo(
+          `Import erfolgreich: ${detectedFormat} • ${mappedRows.length.toLocaleString(
+            "de-DE"
+          )} Positionen.`
         );
       } else {
-        setInfo(
-          `X84 enthält hauptsächlich Preise ohne LV-Texte. Bitte zuerst X81/X83 importieren und speichern, danach X84 erneut importieren.`
+        throw new Error(
+          serverError ||
+          `${detectedFormat} erkannt, aber weder Server noch Browser-Fallback konnten Positionsdaten lesen.`
         );
       }
-    }
+      const fmtUpper = String(nextDet.format || "").toUpperCase();
 
-    setDet(nextDet);
-    saveGaebImportToLocal(code, nextDet);
-  } catch (e: any) {
-    setDet(null);
-    setInfo(`Fehler: ${e?.message || e}`);
-  } finally {
-    setBusy(false);
+      if (fmtUpper === "X84") {
+        const baseRows = LV.list();
+        const enrichedRows = enrichPriceRowsWithLvBase(nextDet.rows, baseRows);
+
+        const enrichedCount = enrichedRows.filter((r) => !isPlaceholderText(r.kurztext)).length;
+
+        nextDet = {
+          ...nextDet,
+          rows: enrichedRows,
+          count: enrichedRows.length
+        };
+
+        if (enrichedCount > 0) {
+          setInfo(
+            `Import erfolgreich: X84 • ${enrichedRows.length.toLocaleString(
+              "de-DE"
+            )} Preispositionen. Texte/Mengen aus vorhandenem LV ergänzt: ${enrichedCount.toLocaleString("de-DE")}.`
+          );
+        } else {
+          setInfo(
+            `X84 enthält hauptsächlich Preise ohne LV-Texte. Bitte zuerst X81/X83 importieren und speichern, danach X84 erneut importieren.`
+          );
+        }
+      }
+
+      setDet(nextDet);
+      saveGaebImportToLocal(code, nextDet);
+    } catch (e: any) {
+      setDet(null);
+      setInfo(`Fehler: ${e?.message || e}`);
+    } finally {
+      setBusy(false);
+    }
   }
-}
 
   async function upsertToLV(rows: ImportedRow[]) {
     setBusy(true);
@@ -1813,9 +1937,9 @@ export default function GaebPage() {
       const menge = Number(row.menge || 0);
       const preis = row.preis != null ? Number(row.preis) : undefined;
       const gesamt =
-        row.gesamt != null
-          ? Number(row.gesamt)
-          : Number((toFiniteNumber(menge, 0) * toFiniteNumber(preis, 0)).toFixed(2));
+      row.gesamt != null ?
+      Number(row.gesamt) :
+      Number((toFiniteNumber(menge, 0) * toFiniteNumber(preis, 0)).toFixed(2));
 
       if (existing) {
         LV.upsert({
@@ -1831,16 +1955,16 @@ export default function GaebPage() {
           gesamt,
           waehrung: row.waehrung || existing.waehrung || "EUR",
           confidence: row.confidence != null ? Number(row.confidence) : existing.confidence,
-          source: existing.source || "gaeb",
+          source: existing.source || "gaeb"
         } as LVPos);
 
         updated++;
       } else {
         LV.upsert({
           id:
-            typeof crypto !== "undefined" && "randomUUID" in crypto
-              ? crypto.randomUUID()
-              : `gaeb-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          typeof crypto !== "undefined" && "randomUUID" in crypto ?
+          crypto.randomUUID() :
+          `gaeb-${Date.now()}-${Math.random().toString(16).slice(2)}`,
           posNr,
           parentPosNr: row.parentPosNr || "",
           kurztext: row.kurztext || "",
@@ -1852,7 +1976,7 @@ export default function GaebPage() {
           gesamt,
           waehrung: row.waehrung || "EUR",
           confidence: row.confidence != null ? Number(row.confidence) : undefined,
-          source: "gaeb",
+          source: "gaeb"
         } as LVPos);
 
         inserted++;
@@ -1869,20 +1993,20 @@ export default function GaebPage() {
       return;
     }
 
-    const payloadItems = rows
-      .filter((r) => String(r.posNr ?? "").trim())
-      .map((r) => ({
-        pos: String(r.posNr ?? "").trim(),
-        parentPos: String(r.parentPosNr ?? "").trim(),
-        text: String(r.kurztext ?? "").trim(),
-        langtext: String(r.langtext ?? "").trim(),
-        bemerkung: String(r.bemerkung ?? "").trim(),
-        unit: String(r.einheit ?? "").trim(),
-        quantity: Number(r.menge ?? 0),
-        ep: r.preis == null || !Number.isFinite(Number(r.preis)) ? null : Number(r.preis),
-        total: r.gesamt == null || !Number.isFinite(Number(r.gesamt)) ? null : Number(r.gesamt),
-        currency: r.waehrung || "EUR",
-      }));
+    const payloadItems = rows.
+    filter((r) => String(r.posNr ?? "").trim()).
+    map((r) => ({
+      pos: String(r.posNr ?? "").trim(),
+      parentPos: String(r.parentPosNr ?? "").trim(),
+      text: String(r.kurztext ?? "").trim(),
+      langtext: String(r.langtext ?? "").trim(),
+      bemerkung: String(r.bemerkung ?? "").trim(),
+      unit: String(r.einheit ?? "").trim(),
+      quantity: Number(r.menge ?? 0),
+      ep: r.preis == null || !Number.isFinite(Number(r.preis)) ? null : Number(r.preis),
+      total: r.gesamt == null || !Number.isFinite(Number(r.gesamt)) ? null : Number(r.gesamt),
+      currency: r.waehrung || "EUR"
+    }));
 
     if (!payloadItems.length) {
       setInfo("Keine importierbaren Positionen gefunden. Server-Speicherung wurde nicht ausgeführt.");
@@ -1898,8 +2022,8 @@ export default function GaebPage() {
         body: JSON.stringify({
           title: `LV ${code}`,
           currency: "EUR",
-          items: payloadItems,
-        }),
+          items: payloadItems
+        })
       });
 
       const json = await response.json().catch(() => ({}));
@@ -1929,7 +2053,7 @@ export default function GaebPage() {
         method: "POST",
         credentials: "include",
         headers: withAuthHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ format, rows }),
+        body: JSON.stringify({ format, rows })
       });
 
       if (!response.ok) {
@@ -1955,11 +2079,11 @@ export default function GaebPage() {
       {
         method: "POST",
         credentials: "include",
-        headers: withAuthHeaders(),
+        headers: withAuthHeaders()
       }
     );
 
-    const json = await response.json().catch(() => ({} as any));
+    const json = await response.json().catch(() => ({}) as any);
 
     if (!response.ok) throw new Error(json?.error || `Validierung ${mode.toUpperCase()} fehlgeschlagen`);
 
@@ -1973,7 +2097,7 @@ export default function GaebPage() {
       warnings,
       errorCount: Number(json?.errorCount ?? errors.length ?? 0),
       warningCount: Number(json?.warningCount ?? warnings.length ?? 0),
-      valid: Boolean(json?.valid ?? json?.ok),
+      valid: Boolean(json?.valid ?? json?.ok)
     };
   }
 
@@ -1986,9 +2110,9 @@ export default function GaebPage() {
       setGaebResult(result);
 
       setInfo(
-        result.valid
-          ? `GAEB ${mode.toUpperCase()} ist valide.`
-          : `GAEB ${mode.toUpperCase()} ist nicht valide. Fehler: ${result.errorCount || 0}, Warnungen: ${result.warningCount || 0}.`
+        result.valid ?
+        `GAEB ${mode.toUpperCase()} ist valide.` :
+        `GAEB ${mode.toUpperCase()} ist nicht valide. Fehler: ${result.errorCount || 0}, Warnungen: ${result.warningCount || 0}.`
       );
     } catch (e: any) {
       setGaebResult({
@@ -1997,7 +2121,7 @@ export default function GaebPage() {
         errorCount: 1,
         warningCount: 0,
         errors: [{ type: "error", field: "system", message: e?.message || "Unbekannter Validierungsfehler" }],
-        warnings: [],
+        warnings: []
       });
 
       setInfo(`Validierungs-Fehler: ${e?.message || e}`);
@@ -2025,7 +2149,7 @@ export default function GaebPage() {
       const response = await fetch(apiUrl(`/api/project-lv/${encodeURIComponent(code)}/export/gaeb/${mode}`), {
         method: "GET",
         credentials: "include",
-        headers: withAuthHeaders(),
+        headers: withAuthHeaders()
       });
 
       if (!response.ok) {
@@ -2060,12 +2184,12 @@ export default function GaebPage() {
       warningCount: 1,
       errors: [],
       warnings: [
-        {
-          type: "warning",
-          field: "export",
-          message: `${row.code}: Für dieses Format ist aktuell keine separate Projektvalidierung aktiv. Export läuft über Legacy-/Server-Export.`,
-        },
-      ],
+      {
+        type: "warning",
+        field: "export",
+        message: `${row.code}: Für dieses Format ist aktuell keine separate Projektvalidierung aktiv. Export läuft über Legacy-/Server-Export.`
+      }]
+
     });
 
     setInfo(`${row.code}: Keine separate Projektprüfung notwendig. Export kann gestartet werden.`);
@@ -2074,13 +2198,13 @@ export default function GaebPage() {
   async function handleExportRow(row: ExportFormatRow) {
     if (row.projectMode) {
       const target =
-        EXPORT_TARGETS.find((x) => x.mode === row.projectMode) || {
-          mode: row.projectMode,
-          label: row.code,
-          description: row.description,
-          group: "GAEB XML" as const,
-          fallbackFormat: "GAEBXML" as Fmt,
-        };
+      EXPORT_TARGETS.find((x) => x.mode === row.projectMode) || {
+        mode: row.projectMode,
+        label: row.code,
+        description: row.description,
+        group: "GAEB XML" as const,
+        fallbackFormat: "GAEBXML" as Fmt
+      };
 
       await handleProjectExport(target);
       return;
@@ -2095,280 +2219,280 @@ export default function GaebPage() {
   }
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC GAEB-Schnittstelle</div>
-          <h1 style={title}>GAEB Import / Export</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC GAEB-Schnittstelle</div>
+          <h1 className={rlcClass(null, title)}>GAEB Import / Export</h1>
+          <p className={rlcClass(null, subtitle)}>
             Zentrale GAEB- und Aufmaß-Schnittstelle für X80–X86, X89, X94,
             P81–P86, D81–D86, X31 und DA11.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <label style={btnHeroSecondary}>
+        <div className={rlcClass(null, heroActions)}>
+          <label className={rlcClass(null, btnHeroSecondary)}>
             GAEB-Datei auswählen
             <input
               type="file"
               accept={ACCEPT_TYPES}
-              style={{ display: "none" }}
+
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) void onUpload(file);
                 e.currentTarget.value = "";
               }}
-              disabled={busy}
-            />
+              disabled={busy} className="rlc-migrated-pages-kalkulation-gaeb-tsx-861" />
+            
           </label>
 
           <button
-            type="button"
-            style={btnHeroPrimary}
+            type="button" className={rlcClass(null,
+            btnHeroPrimary)}
             disabled={!det || busy}
-            onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}
-          >
+            onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
+            
             Speichern am Server
           </button>
 
-          <button type="button" style={btnHeroSecondary} onClick={() => void runRlcAction("gaeb-autofix", "GAEB Fehler korrigieren", () => autoFixGaebErrors())} disabled={!det}>
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => void runRlcAction("gaeb-autofix", "GAEB Fehler korrigieren", () => autoFixGaebErrors())} disabled={!det}>
             Fehler korrigieren
           </button>
 
-          <button type="button" style={btnHeroSecondary} onClick={() => nav("/kalkulation/lv-import")}>
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => nav("/kalkulation/lv-import")}>
             LV öffnen
           </button>
 
-          <button type="button" style={btnHeroSecondary} onClick={() => nav("/kalkulation/mit-ki")}>
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => nav("/kalkulation/mit-ki")}>
             KI öffnen
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectCode || "—"}</b>
-          {det ? (
-            <span>
+          {det ?
+          <span>
               {" "}
               · Datei: <b>{det.name}</b>
-            </span>
-          ) : null}
-          {gaebHasResult ? (
-            <span>
+            </span> :
+          null}
+          {gaebHasResult ?
+          <span>
               {" "}
               · Status: <b>{gaebIsValid ? "valide" : "nicht valide"}</b>
-            </span>
-          ) : null}
+            </span> :
+          null}
         </div>
       </section>
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <KpiCard label="LV Positionen" value={String(lvRows.length)} />
         <KpiCard label="Importierte Positionen" value={String(importedTotal)} />
         <KpiCard label="Lokale Fehler" value={String(counts.localErrors)} />
         <KpiCard label="Server-Fehler" value={String(validationErrors)} sub={gaebHasResult ? "aus letzter Validierung" : "noch nicht validiert"} />
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Projektbezogener Export</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Projektbezogener Export</h2>
+            <div className={rlcClass(null, sectionText)}>
               GAEB-/REB-Export kompakt über Auswahlmenü. X83 und X84 werden projektbezogen geprüft,
               ältere Formate laufen über die passende Legacy-/Fallback-Route.
             </div>
           </div>
 
-          <div style={badgeStyle(gaebIsValid ? "success" : gaebHasResult ? "error" : "neutral")}>
-            {gaebHasResult ? (gaebIsValid ? "Export freigegeben" : "Prüfung offen / Fehler") : "Nicht geprüft"}
+          <div className={rlcClass(null, badgeStyle(gaebIsValid ? "success" : gaebHasResult ? "error" : "neutral"))}>
+            {gaebHasResult ? gaebIsValid ? "Export freigegeben" : "Prüfung offen / Fehler" : "Nicht geprüft"}
           </div>
         </div>
 
-        <div style={gaebDropdownShell}>
-          <div style={gaebSelectorGrid}>
-            <label style={gaebSelectLabel}>
+        <div className={rlcClass(null, gaebDropdownShell)}>
+          <div className={rlcClass(null, gaebSelectorGrid)}>
+            <label className={rlcClass(null, gaebSelectLabel)}>
               Formatfamilie
-              <select
-                style={gaebSelect}
-                value={activeExportFamily}
-                onChange={(e) => setActiveExportFamily(e.target.value as ExportFamilyKey)}
-              >
-                {EXPORT_FAMILY_TABS.map((tab) => (
-                  <option key={tab.key} value={tab.key}>
+              <select className={rlcClass(null,
+              gaebSelect)}
+              value={activeExportFamily}
+              onChange={(e) => setActiveExportFamily(e.target.value as ExportFamilyKey)}>
+                
+                {EXPORT_FAMILY_TABS.map((tab) =>
+                <option key={tab.key} value={tab.key}>
                     {tab.label}
                   </option>
-                ))}
+                )}
               </select>
             </label>
 
-            <label style={gaebSelectLabel}>
+            <label className={rlcClass(null, gaebSelectLabel)}>
               Ausgabeformat
-              <select
-                style={gaebSelect}
-                value={selectedExportRow?.code || ""}
-                onChange={(e) => setSelectedExportCode(e.target.value)}
-              >
-                {visibleExportRows.map((row) => (
-                  <option key={row.code} value={row.code}>
+              <select className={rlcClass(null,
+              gaebSelect)}
+              value={selectedExportRow?.code || ""}
+              onChange={(e) => setSelectedExportCode(e.target.value)}>
+                
+                {visibleExportRows.map((row) =>
+                <option key={row.code} value={row.code}>
                     {row.code.toUpperCase()} · {row.description}
                   </option>
-                ))}
+                )}
               </select>
             </label>
 
-            <div style={selectedFormatBox}>
-              <div style={selectedFormatCode}>{selectedExportRow?.code?.toUpperCase() || "—"}</div>
-              <div style={selectedFormatText}>{selectedExportRow?.description || "Kein Format gewählt"}</div>
+            <div className={rlcClass(null, selectedFormatBox)}>
+              <div className={rlcClass(null, selectedFormatCode)}>{selectedExportRow?.code?.toUpperCase() || "—"}</div>
+              <div className={rlcClass(null, selectedFormatText)}>{selectedExportRow?.description || "Kein Format gewählt"}</div>
             </div>
           </div>
 
-          <div style={gaebMainActions}>
+          <div className={rlcClass(null, gaebMainActions)}>
             <button
-              type="button"
-              style={buttonBase}
+              type="button" className={rlcClass(null,
+              buttonBase)}
               disabled={!selectedExportRow || !!gaebBusy}
-              onClick={() => selectedExportRow && void handleValidateRow(selectedExportRow)}
-            >
+              onClick={() => selectedExportRow && void handleValidateRow(selectedExportRow)}>
+              
               Prüfen
             </button>
 
             <button
-              type="button"
-              style={buttonPrimary}
+              type="button" className={rlcClass(null,
+              buttonPrimary)}
               disabled={!selectedExportRow || !!gaebBusy}
-              onClick={() => selectedExportRow && void handleExportRow(selectedExportRow)}
-            >
+              onClick={() => selectedExportRow && void handleExportRow(selectedExportRow)}>
+              
               Export
             </button>
           </div>
 
-          <details style={formatDetailsBox}>
-            <summary style={formatDetailsSummary}>Weitere Formate dieser Familie anzeigen</summary>
+          <details className={rlcClass(null, formatDetailsBox)}>
+            <summary className={rlcClass(null, formatDetailsSummary)}>Weitere Formate dieser Familie anzeigen</summary>
 
-            <div style={formatCompactList}>
-              {visibleExportRows.map((row) => (
-                <button
-                  key={row.code}
-                  type="button"
-                  style={String(row.code) === String(selectedExportRow?.code) ? formatCompactItemActive : formatCompactItem}
-                  onClick={() => setSelectedExportCode(String(row.code))}
-                >
+            <div className={rlcClass(null, formatCompactList)}>
+              {visibleExportRows.map((row) =>
+              <button
+                key={row.code}
+                type="button" className={rlcClass(null,
+                String(row.code) === String(selectedExportRow?.code) ? formatCompactItemActive : formatCompactItem)}
+                onClick={() => setSelectedExportCode(String(row.code))}>
+                
                   <b>{row.code.toUpperCase()}</b>
                   <span>{row.description}</span>
                 </button>
-              ))}
+              )}
             </div>
           </details>
         </div>
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Import & Weiterverarbeitung</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Import & Weiterverarbeitung</h2>
+            <div className={rlcClass(null, sectionText)}>
               GAEB-Datei einlesen, Vorschau prüfen, Positionen bearbeiten, Fehler korrigieren und am Server speichern.
             </div>
           </div>
         </div>
 
-        <div style={actionGrid}>
-          <div style={actionCard}>
-            <div style={actionTitle}>1. Datei importieren</div>
-            <div style={actionText}>Unterstützt werden GAEB XML, GAEB 2000, GAEB 90, DA11 und X31.</div>
+        <div className={rlcClass(null, actionGrid)}>
+          <div className={rlcClass(null, actionCard)}>
+            <div className={rlcClass(null, actionTitle)}>1. Datei importieren</div>
+            <div className={rlcClass(null, actionText)}>Unterstützt werden GAEB XML, GAEB 2000, GAEB 90, DA11 und X31.</div>
 
-            <div style={buttonRow}>
-              <label style={buttonPrimary}>
+            <div className={rlcClass(null, buttonRow)}>
+              <label className={rlcClass(null, buttonPrimary)}>
                 Datei auswählen
                 <input
                   type="file"
                   accept={ACCEPT_TYPES}
-                  style={{ display: "none" }}
+
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) void onUpload(file);
                     e.currentTarget.value = "";
                   }}
-                  disabled={busy}
-                />
+                  disabled={busy} className="rlc-migrated-pages-kalkulation-gaeb-tsx-862" />
+                
               </label>
             </div>
           </div>
 
-          <div style={actionCard}>
-            <div style={actionTitle}>2. Prüfen / Korrigieren</div>
-            <div style={actionText}>
+          <div className={rlcClass(null, actionCard)}>
+            <div className={rlcClass(null, actionTitle)}>2. Prüfen / Korrigieren</div>
+            <div className={rlcClass(null, actionText)}>
               Fehlende Kurztexte, Langtexte, Einheiten und Mengen werden direkt bearbeitet oder automatisch ergänzt.
             </div>
 
-            <div style={buttonRow}>
-              <button type="button" style={buttonPrimary} disabled={!det} onClick={() => void runRlcAction("gaeb-autofix", "GAEB Fehler korrigieren", () => autoFixGaebErrors())}>
+            <div className={rlcClass(null, buttonRow)}>
+              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det} onClick={() => void runRlcAction("gaeb-autofix", "GAEB Fehler korrigieren", () => autoFixGaebErrors())}>
                 GAEB-Fehler automatisch korrigieren
               </button>
 
-              <button type="button" style={buttonBase} disabled={!det} onClick={() => setFilterMode("fehler")}>
+              <button type="button" className={rlcClass(null, buttonBase)} disabled={!det} onClick={() => setFilterMode("fehler")}>
                 Fehler anzeigen
               </button>
 
-              <button type="button" style={buttonBase} disabled={selectedCount <= 0} onClick={deleteSelectedImportedRowsFromLv}>
+              <button type="button" className={rlcClass(null, buttonBase)} disabled={selectedCount <= 0} onClick={deleteSelectedImportedRowsFromLv}>
                 Auswahl löschen ({selectedCount})
               </button>
             </div>
           </div>
 
-          <div style={actionCard}>
-            <div style={actionTitle}>3. Speichern / Weiterarbeiten</div>
-            <div style={actionText}>Import bleibt lokal erhalten und kann gezielt gespeichert oder entfernt werden.</div>
+          <div className={rlcClass(null, actionCard)}>
+            <div className={rlcClass(null, actionTitle)}>3. Speichern / Weiterarbeiten</div>
+            <div className={rlcClass(null, actionText)}>Import bleibt lokal erhalten und kann gezielt gespeichert oder entfernt werden.</div>
 
-            <div style={buttonRow}>
-              <button type="button" style={buttonPrimary} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
+            <div className={rlcClass(null, buttonRow)}>
+              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
                 Speichern am Server
               </button>
 
               <button
-                type="button"
-                style={buttonPrimary}
+                type="button" className={rlcClass(null,
+                buttonPrimary)}
                 disabled={!det || busy}
-                onClick={() => void transferX84PricesToDatabase()}
-              >
+                onClick={() => void transferX84PricesToDatabase()}>
+                
                 X84 in Datenbank
               </button>
-              <button type="button" style={buttonBase} disabled={!det} onClick={() => det && exportPreviewCSV(det.rows)}>
+              <button type="button" className={rlcClass(null, buttonBase)} disabled={!det} onClick={() => det && exportPreviewCSV(det.rows)}>
                 Vorschau CSV
               </button>
 
-              <button type="button" style={buttonBase} onClick={() => nav("/kalkulation/lv-import")}>
+              <button type="button" className={rlcClass(null, buttonBase)} onClick={() => nav("/kalkulation/lv-import")}>
                 LV bearbeiten
               </button>
 
-              <button type="button" style={buttonBase} onClick={() => nav("/kalkulation/mit-ki")}>
+              <button type="button" className={rlcClass(null, buttonBase)} onClick={() => nav("/kalkulation/mit-ki")}>
                 KI-Kalkulation
               </button>
             </div>
           </div>
         </div>
 
-        <div style={{ marginTop: 14 }}>
-          <div style={statusBox(info)}>
+        <div className="rlc-migrated-pages-kalkulation-gaeb-tsx-863">
+          <div className={rlcClass(null, statusBox(info))}>
             {busy || gaebBusy ? "Bitte warten …" : info || "Noch keine Datei importiert."}
           </div>
         </div>
       </section>
 
-      {det ? (
-        <>
-          <section style={card}>
-            <div style={sectionHead}>
+      {det ?
+      <>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>Importübersicht</h2>
-                <div style={sectionText}>Datei, erkanntes Format, Anzahl Positionen und automatische Prüfhilfen.</div>
+                <h2 className={rlcClass(null, sectionTitle)}>Importübersicht</h2>
+                <div className={rlcClass(null, sectionText)}>Datei, erkanntes Format, Anzahl Positionen und automatische Prüfhilfen.</div>
               </div>
 
-              <div style={formatBadgeByFmt(det.format)}>
+              <div className={rlcClass(null, formatBadgeByFmt(det.format))}>
                 {det.format} · {det.count.toLocaleString("de-DE")} Positionen
               </div>
             </div>
 
-            <div style={grid5}>
+            <div className={rlcClass(null, grid5)}>
               <KpiCard label="Datei" value={det.name} />
               <KpiCard label="Fehler lokal" value={String(counts.localErrors)} />
               <KpiCard label="Leer PosNr" value={String(counts.leer)} />
@@ -2377,221 +2501,221 @@ export default function GaebPage() {
               <KpiCard label="ME-Vorschläge" value={String(counts.suggest)} />
             </div>
 
-            <div style={filterRow}>
-              <button type="button" style={filterMode === "alle" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("alle")}>
+            <div className={rlcClass(null, filterRow)}>
+              <button type="button" className={rlcClass(null, filterMode === "alle" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("alle")}>
                 Alle
               </button>
 
-              <button type="button" style={filterMode === "fehler" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("fehler")}>
+              <button type="button" className={rlcClass(null, filterMode === "fehler" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("fehler")}>
                 Fehler
               </button>
 
-              <button type="button" style={filterMode === "neu" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("neu")}>
+              <button type="button" className={rlcClass(null, filterMode === "neu" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("neu")}>
                 Nur neue
               </button>
 
-              <button type="button" style={filterMode === "vorhanden" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("vorhanden")}>
+              <button type="button" className={rlcClass(null, filterMode === "vorhanden" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("vorhanden")}>
                 Bereits im LV
               </button>
 
-              <button type="button" style={filterMode === "posNrFehlt" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("posNrFehlt")}>
+              <button type="button" className={rlcClass(null, filterMode === "posNrFehlt" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("posNrFehlt")}>
                 PosNr fehlt
               </button>
 
-              <button type="button" style={filterMode === "einheitFehlt" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("einheitFehlt")}>
+              <button type="button" className={rlcClass(null, filterMode === "einheitFehlt" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("einheitFehlt")}>
                 Einheit fehlt / falsch
               </button>
 
-              <button type="button" style={filterMode === "mengeFehlt" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("mengeFehlt")}>
+              <button type="button" className={rlcClass(null, filterMode === "mengeFehlt" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("mengeFehlt")}>
                 Menge fehlt
               </button>
 
-              <button type="button" style={filterMode === "doppelte" ? buttonPrimary : buttonBase} onClick={() => setFilterMode("doppelte")}>
+              <button type="button" className={rlcClass(null, filterMode === "doppelte" ? buttonPrimary : buttonBase)} onClick={() => setFilterMode("doppelte")}>
                 Doppelte / Konflikte
               </button>
 
-              <button type="button" style={buttonBase} disabled={!filteredPreview.length} onClick={toggleVisibleSelection}>
+              <button type="button" className={rlcClass(null, buttonBase)} disabled={!filteredPreview.length} onClick={toggleVisibleSelection}>
                 Sichtbare auswählen / abwählen
               </button>
 
               <button
-                type="button"
-                style={selectedCount > 0 ? dangerButton : buttonBase}
-                disabled={selectedCount <= 0}
-                onClick={deleteSelectedImportedRowsFromLv}
-              >
+              type="button" className={rlcClass(null,
+              selectedCount > 0 ? dangerButton : buttonBase)}
+              disabled={selectedCount <= 0}
+              onClick={deleteSelectedImportedRowsFromLv}>
+              
                 Auswahl löschen ({selectedCount})
               </button>
 
-              <button type="button" style={buttonPrimary} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-autofix", "GAEB Fehler korrigieren", () => autoFixGaebErrors())}>
+              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-autofix", "GAEB Fehler korrigieren", () => autoFixGaebErrors())}>
                 Fehler korrigieren
               </button>
 
-              <button type="button" style={buttonPrimary} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
+              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
                 Speichern am Server
               </button>
 
-              <button type="button" style={buttonBase} disabled={!det} onClick={() => void runRlcAction("gaeb-clear-import", "GAEB Import entfernen", () => clearCurrentImport())}>
+              <button type="button" className={rlcClass(null, buttonBase)} disabled={!det} onClick={() => void runRlcAction("gaeb-clear-import", "GAEB Import entfernen", () => clearCurrentImport())}>
                 Import aus Ansicht entfernen
               </button>
             </div>
           </section>
 
-          <section style={card}>
-            <div style={sectionHead}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>Vorschau importierte Positionen</h2>
-                <div style={sectionText}>Maximal 500 Zeilen. Jede Position kann einzeln ausgewählt und bearbeitet werden.</div>
+                <h2 className={rlcClass(null, sectionTitle)}>Vorschau importierte Positionen</h2>
+                <div className={rlcClass(null, sectionText)}>Maximal 500 Zeilen. Jede Position kann einzeln ausgewählt und bearbeitet werden.</div>
               </div>
             </div>
 
-            <div style={tableWrap}>
-              <table style={{ ...table, minWidth: 1580 }}>
+            <div className={rlcClass(null, tableWrap)}>
+              <table className={rlcClass(null, { ...table, minWidth: 1580 })}>
                 <thead>
                   <tr>
-                    <th style={th}>Auswahl</th>
-                    <th style={th}>PosNr</th>
-                    <th style={th}>Kurztext</th>
-                    <th style={th}>Langtext</th>
-                    <th style={th}>ME</th>
-                    <th style={thRight}>Menge</th>
-                    <th style={thRight}>EP</th>
-                    <th style={thRight}>Gesamt</th>
-                    <th style={th}>Hinweise</th>
-                    <th style={th}>Aktion</th>
+                    <th className={rlcClass(null, th)}>Auswahl</th>
+                    <th className={rlcClass(null, th)}>PosNr</th>
+                    <th className={rlcClass(null, th)}>Kurztext</th>
+                    <th className={rlcClass(null, th)}>Langtext</th>
+                    <th className={rlcClass(null, th)}>ME</th>
+                    <th className={rlcClass(null, thRight)}>Menge</th>
+                    <th className={rlcClass(null, thRight)}>EP</th>
+                    <th className={rlcClass(null, thRight)}>Gesamt</th>
+                    <th className={rlcClass(null, th)}>Hinweise</th>
+                    <th className={rlcClass(null, th)}>Aktion</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {filteredPreview.map(({ row, originalIndex }, i) => {
-                    const issue = rowIssues[originalIndex] || {};
-                    const open = !!openRows[originalIndex];
-                    const selectKey = importedRowKey(row, originalIndex);
-                    const selected = !!selectedRows[selectKey];
-                    const hasError = rowHasLocalError(row, issue);
+                  const issue = rowIssues[originalIndex] || {};
+                  const open = !!openRows[originalIndex];
+                  const selectKey = importedRowKey(row, originalIndex);
+                  const selected = !!selectedRows[selectKey];
+                  const hasError = rowHasLocalError(row, issue);
 
-                    const bg = hasError
-                      ? "#FFF5F5"
-                      : issue.dupInFile
-                      ? "#FFF9E8"
-                      : issue.existsInLV
-                      ? "#F6FAFF"
-                      : i % 2
-                      ? "#FCFCFC"
-                      : "#FFFFFF";
+                  const bg = hasError ?
+                  "#FFF5F5" :
+                  issue.dupInFile ?
+                  "#FFF9E8" :
+                  issue.existsInLV ?
+                  "#F6FAFF" :
+                  i % 2 ?
+                  "#FCFCFC" :
+                  "#FFFFFF";
 
-                    return (
-                      <tr key={`${row.posNr || "row"}-${originalIndex}-${i}`} style={{ background: bg }}>
-                        <td style={td}>
+                  return (
+                    <tr key={`${row.posNr || "row"}-${originalIndex}-${i}`} className={rlcClass(null, { background: bg })}>
+                        <td className={rlcClass(null, td)}>
                           <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={(e) =>
-                              setSelectedRows((s) => ({
-                                ...s,
-                                [selectKey]: e.target.checked,
-                              }))
-                            }
-                          />
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(e) =>
+                          setSelectedRows((s) => ({
+                            ...s,
+                            [selectKey]: e.target.checked
+                          }))
+                          } />
+                        
                         </td>
 
-                        <td style={tdStrong}>{row.posNr ?? ""}</td>
-                        <td style={td}>{row.kurztext ?? ""}</td>
+                        <td className={rlcClass(null, tdStrong)}>{row.posNr ?? ""}</td>
+                        <td className={rlcClass(null, td)}>{row.kurztext ?? ""}</td>
 
-                        <td style={td}>
-                          {row.langtext ? (
-                            <>
-                              <button type="button" style={textButton} onClick={() => setOpenRows((s) => ({ ...s, [originalIndex]: !open }))}>
+                        <td className={rlcClass(null, td)}>
+                          {row.langtext ?
+                        <>
+                              <button type="button" className={rlcClass(null, textButton)} onClick={() => setOpenRows((s) => ({ ...s, [originalIndex]: !open }))}>
                                 {open ? "Langtext ausblenden" : "Langtext anzeigen"}
                               </button>
 
-                              {open ? <div style={longTextBox}>{String(row.langtext)}</div> : null}
-                            </>
-                          ) : (
-                            <span style={{ color: "#94A3B8" }}>—</span>
-                          )}
+                              {open ? <div className={rlcClass(null, longTextBox)}>{String(row.langtext)}</div> : null}
+                            </> :
+
+                        <span className="rlc-migrated-pages-kalkulation-gaeb-tsx-864">—</span>
+                        }
                         </td>
 
-                        <td style={td}>
+                        <td className={rlcClass(null, td)}>
                           {row.einheit ?? ""}
-                          {issue.meSuggest ? (
-                            <span style={{ ...miniBadge, marginLeft: 6 }}>ME → {issue.meSuggest}</span>
-                          ) : null}
+                          {issue.meSuggest ?
+                        <span className={rlcClass(null, { ...miniBadge, marginLeft: 6 })}>ME → {issue.meSuggest}</span> :
+                        null}
                         </td>
 
-                        <td style={tdRight}>{row.menge != null ? fmtNumber(row.menge) : ""}</td>
-                        <td style={tdRight}>{row.preis != null ? fmtNumber(row.preis) : ""}</td>
-                        <td style={tdRight}>{row.gesamt != null ? fmtNumber(row.gesamt) : ""}</td>
+                        <td className={rlcClass(null, tdRight)}>{row.menge != null ? fmtNumber(row.menge) : ""}</td>
+                        <td className={rlcClass(null, tdRight)}>{row.preis != null ? fmtNumber(row.preis) : ""}</td>
+                        <td className={rlcClass(null, tdRight)}>{row.gesamt != null ? fmtNumber(row.gesamt) : ""}</td>
 
-                        <td style={td}>
-                          {issue.empty ? <span style={badgeError}>PosNr leer</span> : null}
-                          {hasError ? <span style={{ ...badgeError, marginLeft: 6 }}>Fehler</span> : null}
-                          {issue.dupInFile ? <span style={{ ...badgeWarn, marginLeft: 6 }}>Duplikat Datei</span> : null}
-                          {issue.existsInLV ? <span style={{ ...badgeNeutral, marginLeft: 6 }}>im LV vorhanden</span> : null}
-                          {!hasError && !issue.dupInFile && !issue.existsInLV ? <span style={badgeOk}>Neu</span> : null}
+                        <td className={rlcClass(null, td)}>
+                          {issue.empty ? <span className={rlcClass(null, badgeError)}>PosNr leer</span> : null}
+                          {hasError ? <span className={rlcClass(null, { ...badgeError, marginLeft: 6 })}>Fehler</span> : null}
+                          {issue.dupInFile ? <span className={rlcClass(null, { ...badgeWarn, marginLeft: 6 })}>Duplikat Datei</span> : null}
+                          {issue.existsInLV ? <span className={rlcClass(null, { ...badgeNeutral, marginLeft: 6 })}>im LV vorhanden</span> : null}
+                          {!hasError && !issue.dupInFile && !issue.existsInLV ? <span className={rlcClass(null, badgeOk)}>Neu</span> : null}
                         </td>
 
-                        <td style={td}>
-                          <button type="button" style={smallButton} onClick={() => editImportedRow(originalIndex)}>
+                        <td className={rlcClass(null, td)}>
+                          <button type="button" className={rlcClass(null, smallButton)} onClick={() => editImportedRow(originalIndex)}>
                             Bearbeiten
                           </button>
                         </td>
-                      </tr>
-                    );
-                  })}
+                      </tr>);
 
-                  {!filteredPreview.length ? (
-                    <tr>
-                      <td colSpan={10} style={{ padding: 16, color: "#64748B" }}>
+                })}
+
+                  {!filteredPreview.length ?
+                <tr>
+                      <td colSpan={10} className="rlc-migrated-pages-kalkulation-gaeb-tsx-865">
                         Keine Daten in der aktuellen Filteransicht.
                       </td>
-                    </tr>
-                  ) : null}
+                    </tr> :
+                null}
                 </tbody>
               </table>
             </div>
           </section>
-        </>
-      ) : null}
+        </> :
+      null}
 
-      {gaebHasResult ? (
-        <section id="rlc-gaeb-pruefergebnis" style={card}>
-          <div style={sectionHead}>
+      {gaebHasResult ?
+      <section id="rlc-gaeb-pruefergebnis" className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>Prüfergebnis {gaebResult?.mode ? `(${gaebResult.mode.toUpperCase()})` : ""}</h2>
-              <div style={sectionText}>Fehler und Warnungen aus der projektbezogenen GAEB-Prüfung.</div>
+              <h2 className={rlcClass(null, sectionTitle)}>Prüfergebnis {gaebResult?.mode ? `(${gaebResult.mode.toUpperCase()})` : ""}</h2>
+              <div className={rlcClass(null, sectionText)}>Fehler und Warnungen aus der projektbezogenen GAEB-Prüfung.</div>
             </div>
 
-            <div style={badgeStyle(gaebIsValid ? "success" : "error")}>
+            <div className={rlcClass(null, badgeStyle(gaebIsValid ? "success" : "error"))}>
               {gaebIsValid ? "Export freigegeben" : "Export blockiert"}
             </div>
           </div>
 
-          {!gaebErrors.length && !gaebWarnings.length ? (
-            <div style={{ color: gaebIsValid ? "#15803D" : "#64748B", fontWeight: 700 }}>
+          {!gaebErrors.length && !gaebWarnings.length ?
+        <div className={rlcClass(null, { color: gaebIsValid ? "#15803D" : "#64748B", fontWeight: 600 })}>
               {gaebIsValid ? "Keine Fehler gefunden. Export ist freigegeben." : "Keine Detaildaten vorhanden."}
-            </div>
-          ) : (
-            <>
-              {gaebErrors.length ? (
-                <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontWeight: 800, color: "#B91C1C", marginBottom: 8 }}>Fehler ({gaebErrors.length})</div>
-                  <IssueTable rows={gaebErrors} />
-                </div>
-              ) : null}
+            </div> :
 
-              {gaebWarnings.length ? (
-                <div>
-                  <div style={{ fontWeight: 800, color: "#B45309", marginBottom: 8 }}>Warnungen ({gaebWarnings.length})</div>
+        <>
+              {gaebErrors.length ?
+          <div className="rlc-migrated-pages-kalkulation-gaeb-tsx-866">
+                  <div className="rlc-migrated-pages-kalkulation-gaeb-tsx-867">Fehler ({gaebErrors.length})</div>
+                  <IssueTable rows={gaebErrors} />
+                </div> :
+          null}
+
+              {gaebWarnings.length ?
+          <div>
+                  <div className="rlc-migrated-pages-kalkulation-gaeb-tsx-868">Warnungen ({gaebWarnings.length})</div>
                   <IssueTable rows={gaebWarnings} />
-                </div>
-              ) : null}
+                </div> :
+          null}
             </>
-          )}
-        </section>
-      ) : null}
-    </div>
-  );
+        }
+        </section> :
+      null}
+    </div>);
+
 }
 
 /* ===================== STYLES ===================== */
@@ -2599,14 +2723,14 @@ export default function GaebPage() {
 const page: React.CSSProperties = { display: "grid", gap: 16, padding: 16 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
   boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
-  overflow: "hidden",
+  overflow: "hidden"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -2614,21 +2738,21 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.82,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
-  lineHeight: 1.1,
+  fontWeight: 700,
+  lineHeight: 1.1
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.9,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap" };
@@ -2637,13 +2761,13 @@ const heroMeta: React.CSSProperties = { fontSize: 13, opacity: 0.92 };
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const grid5: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -2652,25 +2776,25 @@ const kpiCard: React.CSSProperties = {
   borderRadius: 16,
   padding: 16,
   boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-  minWidth: 0,
+  minWidth: 0
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700,
   overflow: "hidden",
   textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const kpiSub: React.CSSProperties = { marginTop: 3, fontSize: 12, color: "#64748B" };
@@ -2680,7 +2804,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -2689,41 +2813,41 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.5,
+  lineHeight: 1.5
 };
 
 const actionGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-  gap: 14,
+  gap: 14
 };
 
 const actionCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 14,
   padding: 14,
-  background: "#F8FAFC",
+  background: "#F8FAFC"
 };
 
 const actionTitle: React.CSSProperties = {
   fontSize: 14,
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0F172A",
-  marginBottom: 6,
+  marginBottom: 6
 };
 
 const actionText: React.CSSProperties = { fontSize: 13, color: "#64748B", lineHeight: 1.5 };
@@ -2738,41 +2862,41 @@ const buttonBase: React.CSSProperties = {
   background: "#FFFFFF",
   color: "#0F172A",
   cursor: "pointer",
-  fontWeight: 800,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const buttonPrimary: React.CSSProperties = {
   ...buttonBase,
-  background: "#2563EB",
-  border: "1px solid #1D4ED8",
-  color: "#FFFFFF",
+  background: "#146EF5",
+  border: "1px solid #0B5BD3",
+  color: "#FFFFFF"
 };
 
 const dangerButton: React.CSSProperties = {
   ...buttonBase,
   background: "#DC2626",
   border: "1px solid #DC2626",
-  color: "#FFFFFF",
+  color: "#FFFFFF"
 };
 
 const smallButton: React.CSSProperties = {
   ...buttonBase,
   padding: "7px 10px",
-  fontSize: 12,
+  fontSize: 12
 };
 
 const btnHeroPrimary: React.CSSProperties = {
   ...buttonPrimary,
   padding: "11px 16px",
-  boxShadow: "0 10px 20px rgba(37,99,235,0.22)",
+  boxShadow: "0 10px 20px rgba(37,99,235,0.22)"
 };
 
 const btnHeroSecondary: React.CSSProperties = {
   ...buttonBase,
   padding: "11px 16px",
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const filterRow: React.CSSProperties = { marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" };
@@ -2781,7 +2905,7 @@ const tableWrap: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 12,
   overflow: "auto",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse" };
@@ -2791,12 +2915,12 @@ const th: React.CSSProperties = {
   padding: "10px 10px",
   borderBottom: "1px solid #E5E7EB",
   background: "#F8FAFC",
-  fontWeight: 900,
+  fontWeight: 700,
   whiteSpace: "nowrap",
   fontSize: 12,
   color: "#475569",
   textTransform: "uppercase",
-  letterSpacing: "0.02em",
+  letterSpacing: "0.02em"
 };
 
 const thRight: React.CSSProperties = { ...th, textAlign: "right" };
@@ -2806,10 +2930,10 @@ const td: React.CSSProperties = {
   borderBottom: "1px solid #F1F5F9",
   verticalAlign: "top",
   fontSize: 13,
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
-const tdStrong: React.CSSProperties = { ...td, fontWeight: 800, whiteSpace: "nowrap" };
+const tdStrong: React.CSSProperties = { ...td, fontWeight: 700, whiteSpace: "nowrap" };
 const tdRight: React.CSSProperties = { ...td, textAlign: "right", whiteSpace: "nowrap" };
 
 const miniBadge: React.CSSProperties = {
@@ -2819,9 +2943,9 @@ const miniBadge: React.CSSProperties = {
   borderRadius: 999,
   padding: "3px 8px",
   fontSize: 11,
-  fontWeight: 800,
+  fontWeight: 700,
   background: "#FFFFFF",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -2833,38 +2957,38 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "6px 12px",
   fontSize: 12,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const badgeOk: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #BBF7D0",
   background: "#F0FDF4",
-  color: "#15803D",
+  color: "#15803D"
 };
 
 const badgeWarn: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FDE68A",
   background: "#FFFBEB",
-  color: "#B45309",
+  color: "#B45309"
 };
 
 const badgeError: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const textButton: React.CSSProperties = {
   border: "none",
   background: "transparent",
   padding: 0,
-  color: "#2563EB",
+  color: "#146EF5",
   cursor: "pointer",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const longTextBox: React.CSSProperties = {
@@ -2875,7 +2999,7 @@ const longTextBox: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 10,
   padding: 10,
-  background: "#F8FAFC",
+  background: "#F8FAFC"
 };
 
 const gaebDropdownShell: React.CSSProperties = {
@@ -2884,22 +3008,22 @@ const gaebDropdownShell: React.CSSProperties = {
   borderRadius: 16,
   padding: 14,
   display: "grid",
-  gap: 14,
+  gap: 14
 };
 
 const gaebSelectorGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "220px minmax(280px,1fr) minmax(220px,320px)",
   gap: 12,
-  alignItems: "end",
+  alignItems: "end"
 };
 
 const gaebSelectLabel: React.CSSProperties = {
   display: "grid",
   gap: 6,
   fontSize: 12,
-  fontWeight: 900,
-  color: "#64748B",
+  fontWeight: 700,
+  color: "#64748B"
 };
 
 const gaebSelect: React.CSSProperties = {
@@ -2909,30 +3033,30 @@ const gaebSelect: React.CSSProperties = {
   borderRadius: 12,
   padding: "10px 12px",
   fontSize: 14,
-  fontWeight: 800,
+  fontWeight: 700,
   width: "100%",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const selectedFormatBox: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   borderRadius: 14,
   padding: "10px 12px",
-  minHeight: 46,
+  minHeight: 46
 };
 
 const selectedFormatCode: React.CSSProperties = {
   fontSize: 18,
-  fontWeight: 900,
-  color: "#1D4ED8",
+  fontWeight: 700,
+  color: "#0B5BD3"
 };
 
 const selectedFormatText: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  fontWeight: 800,
-  color: "#475569",
+  fontWeight: 700,
+  color: "#475569"
 };
 
 const gaebMainActions: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap" };
@@ -2941,16 +3065,16 @@ const formatDetailsBox: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   background: "#FFFFFF",
   borderRadius: 14,
-  overflow: "hidden",
+  overflow: "hidden"
 };
 
 const formatDetailsSummary: React.CSSProperties = {
   cursor: "pointer",
   padding: "11px 13px",
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0F172A",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const formatCompactList: React.CSSProperties = {
@@ -2958,7 +3082,7 @@ const formatCompactList: React.CSSProperties = {
   padding: 10,
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 8,
+  gap: 8
 };
 
 const formatCompactItem: React.CSSProperties = {
@@ -2970,35 +3094,12 @@ const formatCompactItem: React.CSSProperties = {
   display: "grid",
   gap: 3,
   cursor: "pointer",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const formatCompactItemActive: React.CSSProperties = {
   ...formatCompactItem,
-  border: "1px solid #2563EB",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #146EF5",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

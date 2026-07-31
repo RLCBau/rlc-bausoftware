@@ -1,17 +1,6 @@
-﻿// apps/mobile/src/screens/AngebotListScreen.tsx
+// apps/mobile/src/screens/AngebotListScreen.tsx
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  FlatList,
-  SafeAreaView,
-  Alert,
-  Platform,
-  TextInput,
-  Linking,
-} from "react-native";
+import { View, Text, Pressable, FlatList, SafeAreaView, Alert, Platform, TextInput, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -19,13 +8,10 @@ import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import * as XLSX from "xlsx";
 import { RootStackParamList } from "../navigation/types";
-import { COLORS } from "../ui/theme";
+import { COLORS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
-
 type Props = NativeStackScreenProps<RootStackParamList, "AngebotList">;
-
 type AngebotStatus = "Entwurf" | "Gesendet" | "Angenommen" | "Abgelehnt";
-
 type AngebotRow = {
   id: string;
   pos: string;
@@ -34,98 +20,73 @@ type AngebotRow = {
   quantity: string;
   ep: string;
 };
-
 type AngebotDoc = {
   id: string;
   projectId: string;
   projectCode: string;
   title?: string;
-
   angebotNr: string;
   angebotTitle: string;
   status: AngebotStatus;
-
   customerName: string;
   customerAddress: string;
   customerEmail: string;
   customerPhone: string;
-
   baustelle: string;
   datum: string;
   validUntil: string;
-
   rabattPct: string;
   zuschlagPct: string;
   mwstPct: string;
-
   note: string;
   rows: AngebotRow[];
-
   createdAt: string | number;
   updatedAt: string | number;
 };
-
 const OFFER_STORAGE_PREFIX = "rlc_angebot_list:";
-const ANGEBOT_STATUSES: AngebotStatus[] = [
-  "Entwurf",
-  "Gesendet",
-  "Angenommen",
-  "Abgelehnt",
-];
-
+const ANGEBOT_STATUSES: AngebotStatus[] = ["Entwurf", "Gesendet", "Angenommen", "Abgelehnt"];
 function offerListKey(projectCode: string) {
   return `${OFFER_STORAGE_PREFIX}${projectCode}`;
 }
-
 function normalizeStatus(v: any): AngebotStatus {
   return ANGEBOT_STATUSES.includes(v) ? v : "Entwurf";
 }
-
 function normalizeOfferDoc(input: any): AngebotDoc {
   return {
     id: String(input?.id || ""),
     projectId: String(input?.projectId || ""),
     projectCode: String(input?.projectCode || ""),
     title: input?.title ? String(input.title) : undefined,
-
     angebotNr: String(input?.angebotNr || ""),
     angebotTitle: String(input?.angebotTitle || "Angebot"),
     status: normalizeStatus(input?.status),
-
     customerName: String(input?.customerName || ""),
     customerAddress: String(input?.customerAddress || ""),
     customerEmail: String(input?.customerEmail || ""),
     customerPhone: String(input?.customerPhone || ""),
-
     baustelle: String(input?.baustelle || ""),
     datum: String(input?.datum || ""),
     validUntil: String(input?.validUntil || ""),
-
     rabattPct: String(input?.rabattPct ?? "0"),
     zuschlagPct: String(input?.zuschlagPct ?? "0"),
     mwstPct: String(input?.mwstPct ?? "19"),
-
     note: String(input?.note || ""),
     rows: Array.isArray(input?.rows) ? input.rows : [],
-
     createdAt: input?.createdAt || new Date().toISOString(),
-    updatedAt: input?.updatedAt || new Date().toISOString(),
+    updatedAt: input?.updatedAt || new Date().toISOString()
   };
 }
-
 function toNum(v: string | number | null | undefined) {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(",", "."));
   return Number.isFinite(n) ? n : 0;
 }
-
 function fmtMoney(v: number) {
   return v.toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 }
-
 function calcNetto(rows: AngebotRow[]) {
   return rows.reduce((sum, r) => {
     const qty = toNum(r.quantity);
@@ -133,19 +94,16 @@ function calcNetto(rows: AngebotRow[]) {
     return sum + qty * ep;
   }, 0);
 }
-
 function calcRabattValue(doc: AngebotDoc) {
   const netto = calcNetto(doc.rows);
-  return (netto * toNum(doc.rabattPct)) / 100;
+  return netto * toNum(doc.rabattPct) / 100;
 }
-
 function calcZuschlagValue(doc: AngebotDoc) {
   const netto = calcNetto(doc.rows);
   const rabattValue = calcRabattValue(doc);
   const afterRabatt = netto - rabattValue;
-  return (afterRabatt * toNum(doc.zuschlagPct)) / 100;
+  return afterRabatt * toNum(doc.zuschlagPct) / 100;
 }
-
 function calcNettoFinal(doc: AngebotDoc) {
   const netto = calcNetto(doc.rows);
   const rabattValue = calcRabattValue(doc);
@@ -153,44 +111,55 @@ function calcNettoFinal(doc: AngebotDoc) {
   const zuschlagValue = calcZuschlagValue(doc);
   return afterRabatt + zuschlagValue;
 }
-
 function calcMwstValue(doc: AngebotDoc) {
   const nettoFinal = calcNettoFinal(doc);
-  return (nettoFinal * toNum(doc.mwstPct)) / 100;
+  return nettoFinal * toNum(doc.mwstPct) / 100;
 }
-
 function calcBrutto(doc: AngebotDoc) {
   return calcNettoFinal(doc) + calcMwstValue(doc);
 }
-
 function getStatusBadgeStyle(status: AngebotStatus) {
   switch (status) {
     case "Entwurf":
-      return { bg: COLORS.card2, border: COLORS.border, text: COLORS.text };
+      return {
+        bg: COLORS.card2,
+        border: COLORS.border,
+        text: COLORS.text
+      };
     case "Gesendet":
-      return { bg: COLORS.accentSoft, border: COLORS.border, text: COLORS.accent };
+      return {
+        bg: COLORS.accentSoft,
+        border: COLORS.border,
+        text: COLORS.accent
+      };
     case "Angenommen":
-      return { bg: COLORS.successBg, border: COLORS.successSoft, text: COLORS.success };
+      return {
+        bg: COLORS.successBg,
+        border: COLORS.successSoft,
+        text: COLORS.success
+      };
     case "Abgelehnt":
-      return { bg: COLORS.dangerBg, border: COLORS.danger, text: COLORS.danger };
+      return {
+        bg: COLORS.dangerBg,
+        border: COLORS.danger,
+        text: COLORS.danger
+      };
     default:
-      return { bg: COLORS.card2, border: COLORS.border, text: COLORS.text };
+      return {
+        bg: COLORS.card2,
+        border: COLORS.border,
+        text: COLORS.text
+      };
   }
 }
-
 function parseTime(v?: string | number) {
   if (typeof v === "number") return v;
   const t = Date.parse(String(v || ""));
   return Number.isFinite(t) ? t : 0;
 }
-
 function sanitizeFileName(v: string) {
-  return String(v || "angebot")
-    .trim()
-    .replace(/[\\/:*?"<>|]/g, "_")
-    .replace(/\s+/g, "_");
+  return String(v || "angebot").trim().replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
 }
-
 async function exportOfferPdf(item: AngebotDoc) {
   const netto = calcNetto(item.rows || []);
   const rabattValue = calcRabattValue(item);
@@ -198,9 +167,7 @@ async function exportOfferPdf(item: AngebotDoc) {
   const nettoFinal = calcNettoFinal(item);
   const mwstValue = calcMwstValue(item);
   const brutto = calcBrutto(item);
-
   const fileBase = sanitizeFileName(item.angebotNr || item.angebotTitle || "angebot");
-
   const out = await buildDocumentPdf({
     type: "ANGEBOT",
     projectCode: item.projectCode,
@@ -213,9 +180,9 @@ async function exportOfferPdf(item: AngebotDoc) {
       name: item.customerName || "",
       address: item.customerAddress || "",
       email: item.customerEmail || "",
-      phone: item.customerPhone || "",
+      phone: item.customerPhone || ""
     },
-    rows: (item.rows || []).map((r) => {
+    rows: (item.rows || []).map(r => {
       const qty = toNum(r.quantity);
       const ep = toNum(r.ep);
       return {
@@ -224,7 +191,7 @@ async function exportOfferPdf(item: AngebotDoc) {
         unit: r.unit || "",
         qty,
         ep,
-        gp: qty * ep,
+        gp: qty * ep
       };
     }),
     totals: {
@@ -235,25 +202,17 @@ async function exportOfferPdf(item: AngebotDoc) {
       zuschlagValue,
       mwstPct: toNum(item.mwstPct),
       mwstValue,
-      brutto,
+      brutto
     },
-    extraBlocks: [
-      {
-        title: "Projekt",
-        lines: [
-          `Baustelle: ${item.baustelle || item.title || "-"}`,
-          `Projektcode: ${item.projectCode || "-"}`,
-          `Gültig bis: ${item.validUntil || "-"}`,
-        ],
-      },
-    ],
+    extraBlocks: [{
+      title: "Projekt",
+      lines: [`Baustelle: ${item.baustelle || item.title || "-"}`, `Projektcode: ${item.projectCode || "-"}`, `Gültig bis: ${item.validUntil || "-"}`]
+    }],
     note: item.note || "",
-    shareAfterCreate: false,
+    shareAfterCreate: false
   });
-
   return out;
 }
-
 async function exportOfferExcel(item: AngebotDoc) {
   const netto = calcNetto(item.rows || []);
   const rabattValue = calcRabattValue(item);
@@ -261,8 +220,7 @@ async function exportOfferExcel(item: AngebotDoc) {
   const nettoFinal = calcNettoFinal(item);
   const mwstValue = calcMwstValue(item);
   const brutto = calcBrutto(item);
-
-  const rows = (item.rows || []).map((r) => {
+  const rows = (item.rows || []).map(r => {
     const qty = toNum(r.quantity);
     const ep = toNum(r.ep);
     return {
@@ -271,238 +229,214 @@ async function exportOfferExcel(item: AngebotDoc) {
       Einheit: r.unit || "",
       Menge: qty,
       EP: ep,
-      GP: qty * ep,
+      GP: qty * ep
     };
   });
-
-  const summary = [
-    { Feld: "Angebotsnummer", Wert: item.angebotNr || "" },
-    { Feld: "Angebotstitel", Wert: item.angebotTitle || "" },
-    { Feld: "Status", Wert: item.status || "" },
-    { Feld: "Kunde", Wert: item.customerName || "" },
-    { Feld: "Adresse", Wert: item.customerAddress || "" },
-    { Feld: "E-Mail", Wert: item.customerEmail || "" },
-    { Feld: "Telefon", Wert: item.customerPhone || "" },
-    { Feld: "Baustelle", Wert: item.baustelle || "" },
-    { Feld: "Datum", Wert: item.datum || "" },
-    { Feld: "Gültig bis", Wert: item.validUntil || "" },
-    { Feld: "Rabatt %", Wert: toNum(item.rabattPct) },
-    { Feld: "Rabatt Wert", Wert: rabattValue },
-    { Feld: "Zuschlag %", Wert: toNum(item.zuschlagPct) },
-    { Feld: "Zuschlag Wert", Wert: zuschlagValue },
-    { Feld: "MwSt %", Wert: toNum(item.mwstPct) },
-    { Feld: "Netto", Wert: netto },
-    { Feld: "Netto gesamt", Wert: nettoFinal },
-    { Feld: "MwSt Wert", Wert: mwstValue },
-    { Feld: "Brutto", Wert: brutto },
-    { Feld: "Bemerkung", Wert: item.note || "" },
-  ];
-
+  const summary = [{
+    Feld: "Angebotsnummer",
+    Wert: item.angebotNr || ""
+  }, {
+    Feld: "Angebotstitel",
+    Wert: item.angebotTitle || ""
+  }, {
+    Feld: "Status",
+    Wert: item.status || ""
+  }, {
+    Feld: "Kunde",
+    Wert: item.customerName || ""
+  }, {
+    Feld: "Adresse",
+    Wert: item.customerAddress || ""
+  }, {
+    Feld: "E-Mail",
+    Wert: item.customerEmail || ""
+  }, {
+    Feld: "Telefon",
+    Wert: item.customerPhone || ""
+  }, {
+    Feld: "Baustelle",
+    Wert: item.baustelle || ""
+  }, {
+    Feld: "Datum",
+    Wert: item.datum || ""
+  }, {
+    Feld: "Gültig bis",
+    Wert: item.validUntil || ""
+  }, {
+    Feld: "Rabatt %",
+    Wert: toNum(item.rabattPct)
+  }, {
+    Feld: "Rabatt Wert",
+    Wert: rabattValue
+  }, {
+    Feld: "Zuschlag %",
+    Wert: toNum(item.zuschlagPct)
+  }, {
+    Feld: "Zuschlag Wert",
+    Wert: zuschlagValue
+  }, {
+    Feld: "MwSt %",
+    Wert: toNum(item.mwstPct)
+  }, {
+    Feld: "Netto",
+    Wert: netto
+  }, {
+    Feld: "Netto gesamt",
+    Wert: nettoFinal
+  }, {
+    Feld: "MwSt Wert",
+    Wert: mwstValue
+  }, {
+    Feld: "Brutto",
+    Wert: brutto
+  }, {
+    Feld: "Bemerkung",
+    Wert: item.note || ""
+  }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Positionen");
-  XLSX.utils.book_append_sheet(
-    wb,
-    XLSX.utils.json_to_sheet(summary),
-    "Zusammenfassung"
-  );
-
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Zusammenfassung");
   const base64 = XLSX.write(wb, {
     type: "base64",
-    bookType: "xlsx",
+    bookType: "xlsx"
   });
-
   const fileName = `${sanitizeFileName(item.angebotNr || item.angebotTitle || "angebot")}.xlsx`;
   const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
-
   await FileSystem.writeAsStringAsync(uri, base64, {
-    encoding: FileSystem.EncodingType.Base64,
+    encoding: FileSystem.EncodingType.Base64
   });
-
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
     await Sharing.shareAsync(uri, {
-      mimeType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       dialogTitle: fileName,
-      UTI: "org.openxmlformats.spreadsheetml.sheet",
+      UTI: "org.openxmlformats.spreadsheetml.sheet"
     });
   } else {
     Alert.alert("Excel exportiert", uri);
   }
 }
-
-export default function AngebotListScreen({ route, navigation }: Props) {
-  const { projectId, projectCode: routeProjectCode, title } = route.params;
+export default function AngebotListScreen({
+  route,
+  navigation
+}: Props) {
+  const {
+    projectId,
+    projectCode: routeProjectCode,
+    title
+  } = route.params;
   const projectCode = String(routeProjectCode || projectId || "").trim();
-
   const [items, setItems] = useState<AngebotDoc[]>([]);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
-
   useLayoutEffect(() => {
-    navigation.setOptions({ title: "Angebote" });
+    navigation.setOptions({
+      title: "Angebote"
+    });
   }, [navigation]);
-
   const load = useCallback(async () => {
     try {
       setBusy(true);
       const raw = await AsyncStorage.getItem(offerListKey(projectCode));
       const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
       const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc);
-
       list.sort((a, b) => {
         const ta = parseTime(a.updatedAt || a.createdAt);
         const tb = parseTime(b.updatedAt || b.createdAt);
         return tb - ta;
       });
-
       setItems(list);
-
       await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(list));
     } catch (e: any) {
-      Alert.alert(
-        "Angebote",
-        String(e?.message || "Angebote konnten nicht geladen werden")
-      );
+      Alert.alert("Angebote", String(e?.message || "Angebote konnten nicht geladen werden"));
     } finally {
       setBusy(false);
     }
   }, [projectCode]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load])
-  );
-
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
   async function deleteItem(id: string) {
     try {
       const raw = await AsyncStorage.getItem(offerListKey(projectCode));
       const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
       const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc);
-      const next = list.filter((x) => x.id !== id);
+      const next = list.filter(x => x.id !== id);
       await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(next));
       setItems(next);
     } catch (e: any) {
-      Alert.alert(
-        "Fehler",
-        String(e?.message || "Angebot konnte nicht gelöscht werden")
-      );
+      Alert.alert("Fehler", String(e?.message || "Angebot konnte nicht gelöscht werden"));
     }
   }
-
   function confirmDelete(id: string) {
-    Alert.alert("Angebot löschen", "Möchtest du dieses Angebot wirklich löschen?", [
-      { text: "Abbrechen", style: "cancel" },
-      {
-        text: "Löschen",
-        style: "destructive",
-        onPress: () => void deleteItem(id),
-      },
-    ]);
+    Alert.alert("Angebot löschen", "Möchtest du dieses Angebot wirklich löschen?", [{
+      text: "Abbrechen",
+      style: "cancel"
+    }, {
+      text: "Löschen",
+      style: "destructive",
+      onPress: () => void deleteItem(id)
+    }]);
   }
-
   async function onPdf(item: AngebotDoc) {
     try {
       setBusy(true);
       const out: any = await exportOfferPdf(item);
       const pdfUri = String(out?.pdfUri || out?.uri || "").trim();
-
       if (!pdfUri) {
         throw new Error("PDF wurde erstellt, aber kein pdfUri zurückgegeben.");
       }
-
       const raw = await AsyncStorage.getItem(offerListKey(projectCode));
       const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
       const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc);
-      const next = list.map((x) =>
-        String(x.id) === String(item.id)
-          ? ({ ...x, pdfUri, updatedAt: new Date().toISOString() } as any)
-          : x
-      );
-
+      const next = list.map(x => String(x.id) === String(item.id) ? {
+        ...x,
+        pdfUri,
+        updatedAt: new Date().toISOString()
+      } as any : x);
       await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(next));
       setItems(next);
-
-      await Linking.openURL(pdfUri);
+      navigation.navigate("PdfViewer", {
+        uri: pdfUri,
+        title: item.angebotTitle || item.angebotNr || "Angebot",
+        projectId,
+        projectCode,
+        documentType: "ANGEBOT"
+      });
     } catch (e: any) {
       Alert.alert("PDF Export", String(e?.message || "PDF Export fehlgeschlagen"));
     } finally {
       setBusy(false);
     }
   }
-
   async function onExcel(item: AngebotDoc) {
     try {
       setBusy(true);
       await exportOfferExcel(item);
     } catch (e: any) {
-      Alert.alert(
-        "Excel Export",
-        String(e?.message || "Excel Export fehlgeschlagen")
-      );
+      Alert.alert("Excel Export", String(e?.message || "Excel Export fehlgeschlagen"));
     } finally {
       setBusy(false);
     }
   }
-
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return items;
-
-    return items.filter((it) => {
+    return items.filter(it => {
       const netto = calcNetto(it.rows || []);
       const brutto = calcBrutto(it);
-
-      const hay = [
-        it.angebotNr,
-        it.angebotTitle,
-        it.status,
-        it.customerName,
-        it.baustelle,
-        it.datum,
-        it.validUntil,
-        fmtMoney(netto),
-        fmtMoney(brutto),
-      ]
-        .join(" ")
-        .toLowerCase();
-
+      const hay = [it.angebotNr, it.angebotTitle, it.status, it.customerName, it.baustelle, it.datum, it.validUntil, fmtMoney(netto), fmtMoney(brutto)].join(" ").toLowerCase();
       return hay.includes(term);
     });
   }, [items, q]);
-
-  const totalBrutto = useMemo(
-    () => filtered.reduce((sum, it) => sum + calcBrutto(it), 0),
-    [filtered]
-  );
-
-  const totalAccepted = useMemo(
-    () => filtered.filter((x) => x.status === "Angenommen").length,
-    [filtered]
-  );
-
-  const totalRows = useMemo(
-    () =>
-      filtered.reduce(
-        (sum, it) => sum + (Array.isArray(it.rows) ? it.rows.length : 0),
-        0
-      ),
-    [filtered]
-  );
-
-  return (
-    <SafeAreaView style={s.safe}>
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={s.wrap}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
+  const totalBrutto = useMemo(() => filtered.reduce((sum, it) => sum + calcBrutto(it), 0), [filtered]);
+  const totalAccepted = useMemo(() => filtered.filter(x => x.status === "Angenommen").length, [filtered]);
+  const totalRows = useMemo(() => filtered.reduce((sum, it) => sum + (Array.isArray(it.rows) ? it.rows.length : 0), 0), [filtered]);
+  return <SafeAreaView style={s.safe}>
+      <FlatList data={filtered} keyExtractor={item => item.id} contentContainerStyle={s.wrap} showsVerticalScrollIndicator={false} ListHeaderComponent={<View>
             <View style={s.hero}>
               <View style={s.heroTop}>
-                <View style={{ flex: 1 }}>
+                <View style={s._inline1}>
                   <Text style={s.eyebrow}>RLC Bausoftware</Text>
                   <Text style={s.title}>Angebote</Text>
                   <Text style={s.sub}>
@@ -510,17 +444,14 @@ export default function AngebotListScreen({ route, navigation }: Props) {
                   </Text>
                 </View>
 
-                <Pressable
-                  style={[s.kiBtn, { display: "none" }]}
-                  onPress={() =>
-                    navigation.navigate("SupportChat", {
-                      projectId,
-                      projectCode,
-                      title: "RLC KI",
-                      screen: "AngebotList",
-                    })
-                  }
-                >
+                <Pressable style={[s.kiBtn, {
+            display: "none"
+          }]} onPress={() => navigation.navigate("SupportChat", {
+            projectId,
+            projectCode,
+            title: "RLC KI",
+            screen: "AngebotList"
+          })}>
                   <Text style={s.kiBtnTxt}>RLC KI</Text>
                 </Pressable>
               </View>
@@ -536,16 +467,11 @@ export default function AngebotListScreen({ route, navigation }: Props) {
             </View>
 
             <View style={s.panel}>
-              <Pressable
-                style={s.primaryBtn}
-                onPress={() =>
-                  navigation.navigate("AngebotEditor", {
-                    projectId,
-                    projectCode,
-                    title,
-                  })
-                }
-              >
+              <Pressable style={s.primaryBtn} onPress={() => navigation.navigate("AngebotEditor", {
+          projectId,
+          projectCode,
+          title
+        })}>
                 <Text style={s.primaryBtnTxt}>+ Neues Angebot</Text>
               </Pressable>
 
@@ -555,15 +481,7 @@ export default function AngebotListScreen({ route, navigation }: Props) {
                 </Text>
               </Pressable>
 
-              <TextInput
-                value={q}
-                onChangeText={setQ}
-                placeholder="Suchen (Nr., Titel, Status, Kunde, Baustelle)…"
-                placeholderTextColor={COLORS.sub}
-                style={s.search}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
+              <TextInput value={q} onChangeText={setQ} placeholder="Suchen (Nr., Titel, Status, Kunde, Baustelle)…" placeholderTextColor={COLORS.sub} style={s.search} autoCorrect={false} autoCapitalize="none" />
 
               <View style={s.metrics}>
                 <Metric label="Angebote" value={String(filtered.length)} />
@@ -571,7 +489,9 @@ export default function AngebotListScreen({ route, navigation }: Props) {
                 <Metric label="Positionen" value={String(totalRows)} />
               </View>
 
-              <View style={[s.metrics, { marginTop: 10 }]}>
+              <View style={[s.metrics, {
+          marginTop: 10
+        }]}>
                 <Metric label="Brutto gesamt" value={`${fmtMoney(totalBrutto)} €`} />
               </View>
 
@@ -579,15 +499,13 @@ export default function AngebotListScreen({ route, navigation }: Props) {
                 {filtered.length ? `Angebote (${filtered.length})` : "Keine Angebote"}
               </Text>
             </View>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const netto = calcNetto(item.rows || []);
-          const brutto = calcBrutto(item);
-          const badge = getStatusBadgeStyle(item.status);
-
-          return (
-            <View style={s.card}>
+          </View>} renderItem={({
+      item
+    }) => {
+      const netto = calcNetto(item.rows || []);
+      const brutto = calcBrutto(item);
+      const badge = getStatusBadgeStyle(item.status);
+      return <View style={s.card}>
               <View style={s.cardTop}>
                 <View style={s.cardTextWrap}>
                   <Text style={s.cardNr}>{item.angebotNr || "—"}</Text>
@@ -595,13 +513,13 @@ export default function AngebotListScreen({ route, navigation }: Props) {
                     {item.angebotTitle?.trim() || "Angebot"}
                   </Text>
 
-                  <View
-                    style={[
-                      s.statusBadge,
-                      { backgroundColor: badge.bg, borderColor: badge.border },
-                    ]}
-                  >
-                    <Text style={[s.statusBadgeTxt, { color: badge.text }]}>
+                  <View style={[s.statusBadge, {
+              backgroundColor: badge.bg,
+              borderColor: badge.border
+            }]}>
+                    <Text style={[s.statusBadgeTxt, {
+                color: badge.text
+              }]}>
                       {item.status}
                     </Text>
                   </View>
@@ -627,25 +545,16 @@ export default function AngebotListScreen({ route, navigation }: Props) {
               </View>
 
               <View style={s.exportRow}>
-                <Pressable
-                  style={[s.smallActionBtn, s.pdfBtn, busy && s.disabled]}
-                  onPress={() => void onPdf(item)}
-                  disabled={busy}
-                >
+                <Pressable style={[s.smallActionBtn, s.pdfBtn, busy && s.disabled]} onPress={() => void onPdf(item)} disabled={busy}>
                   <Text style={s.smallActionBtnTxtLight}>PDF</Text>
                 </Pressable>
 
-                <Pressable
-                  style={[s.smallActionBtn, s.excelBtn, busy && s.disabled]}
-                  onPress={() => void onExcel(item)}
-                  disabled={busy}
-                >
+                <Pressable style={[s.smallActionBtn, s.excelBtn, busy && s.disabled]} onPress={() => void onExcel(item)} disabled={busy}>
                   <Text style={s.smallActionBtnTxt}>Excel</Text>
                 </Pressable>
               </View>
 
-              {item.status === "Angenommen" ? (
-                <>
+              {item.status === "Angenommen" ? <>
                   <View style={s.flowBox}>
                     <Text style={s.flowTitle}>Weiterer Ablauf</Text>
                     <Text style={s.flowText}>
@@ -655,136 +564,98 @@ export default function AngebotListScreen({ route, navigation }: Props) {
                   </View>
 
                   <View style={s.actionRow}>
-                    <Pressable
-                      style={[s.actionBtn, s.editBtn]}
-                      onPress={() =>
-                        navigation.navigate("AngebotEditor", {
-                          projectId,
-                          projectCode,
-                          title,
-                          angebotId: item.id,
-                        })
-                      }
-                    >
+                    <Pressable style={[s.actionBtn, s.editBtn]} onPress={() => navigation.navigate("AngebotEditor", {
+              projectId,
+              projectCode,
+              title,
+              angebotId: item.id
+            })}>
                       <Text style={s.editBtnTxt}>Bearbeiten</Text>
                     </Pressable>
 
-                    <Pressable
-                      style={[s.actionBtn, s.mengenBtn]}
-                      onPress={() =>
-                        navigation.navigate("MengenEditor", {
-                          projectId,
-                          projectCode,
-                          title: "Mengenermittlung",
-                          angebotId: item.id,
-                        })
-                      }
-                    >
+                    <Pressable style={[s.actionBtn, s.mengenBtn]} onPress={() => navigation.navigate("MengenEditor", {
+              projectId,
+              projectCode,
+              title: "Mengenermittlung",
+              angebotId: item.id
+            })}>
                       <Text style={s.invoiceBtnTxt}>Mengen</Text>
                     </Pressable>
                   </View>
 
                   <View style={s.actionRow}>
-                    <Pressable
-                      style={[s.actionBtn, s.invoiceBtn]}
-                      onPress={() =>
-                        navigation.navigate("RechnungEditor", {
-                          projectId,
-                          projectCode,
-                          title: "Rechnung",
-                          fromAngebotId: item.id,
-                        })
-                      }
-                    >
+                    <Pressable style={[s.actionBtn, s.invoiceBtn]} onPress={() => navigation.navigate("RechnungEditor", {
+              projectId,
+              projectCode,
+              title: "Rechnung",
+              fromAngebotId: item.id
+            })}>
                       <Text style={s.invoiceBtnTxt}>Rechnung</Text>
                     </Pressable>
 
-                    <Pressable
-                      style={[s.actionBtn, s.deleteBtn]}
-                      onPress={() => confirmDelete(item.id)}
-                    >
+                    <Pressable style={[s.actionBtn, s.deleteBtn]} onPress={() => confirmDelete(item.id)}>
                       <Text style={s.deleteBtnTxt}>Löschen</Text>
                     </Pressable>
                   </View>
-                </>
-              ) : (
-                <View style={s.actionRow}>
-                  <Pressable
-                    style={[s.actionBtn, s.editBtn]}
-                    onPress={() =>
-                      navigation.navigate("AngebotEditor", {
-                        projectId,
-                        projectCode,
-                        title,
-                        angebotId: item.id,
-                      })
-                    }
-                  >
+                </> : <View style={s.actionRow}>
+                  <Pressable style={[s.actionBtn, s.editBtn]} onPress={() => navigation.navigate("AngebotEditor", {
+            projectId,
+            projectCode,
+            title,
+            angebotId: item.id
+          })}>
                     <Text style={s.editBtnTxt}>Bearbeiten</Text>
                   </Pressable>
 
-                  <Pressable
-                    style={[s.actionBtn, s.deleteBtn]}
-                    onPress={() => confirmDelete(item.id)}
-                  >
+                  <Pressable style={[s.actionBtn, s.deleteBtn]} onPress={() => confirmDelete(item.id)}>
                     <Text style={s.deleteBtnTxt}>Löschen</Text>
                   </Pressable>
-                </View>
-              )}
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={s.emptyWrap}>
+                </View>}
+            </View>;
+    }} ListEmptyComponent={<View style={s.emptyWrap}>
             <Text style={s.emptyText}>
-              {q.trim()
-                ? "Keine passenden Angebote gefunden."
-                : "Noch keine Angebote vorhanden."}
+              {q.trim() ? "Keine passenden Angebote gefunden." : "Noch keine Angebote vorhanden."}
             </Text>
-          </View>
-        }
-      />
-    </SafeAreaView>
-  );
+          </View>} />
+    </SafeAreaView>;
 }
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={s.metricBox}>
+function Metric({
+  label,
+  value
+}: {
+  label: string;
+  value: string;
+}) {
+  return <View style={s.metricBox}>
       <Text style={s.metricLabel}>{label}</Text>
       <Text style={s.metricValue}>{value}</Text>
-    </View>
-  );
+    </View>;
 }
-
-const s = StyleSheet.create({
+const s = createRlcStyles("AngebotListScreen", {
   safe: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   wrap: {
-    padding: 16,
+    padding: 14,
     paddingBottom: 30,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   hero: {
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 14,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14
   },
-
   heroTop: {
     flexDirection: "row",
     gap: 12,
-    alignItems: "flex-start",
+    alignItems: "flex-start"
   },
-
-  kiBtn: { display: "none",
+  kiBtn: {
+    display: "none",
     minHeight: 42,
     paddingHorizontal: 14,
     borderRadius: 12,
@@ -792,61 +663,54 @@ const s = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.card2,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "center"
   },
-
   kiBtnTxt: {
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 13
   },
-
   eyebrow: {
     color: COLORS.accentDark,
     fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0.3,
+    fontWeight: "600",
+    letterSpacing: 0.3
   },
-
   title: {
     marginTop: 8,
-    fontSize: 30,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontSize: 18,
+    lineHeight: 27,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   sub: {
     marginTop: 8,
     color: COLORS.sub,
-    fontWeight: "700",
-    lineHeight: 20,
+    fontWeight: "600",
+    lineHeight: 20
   },
-
   badgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    marginTop: 14,
+    marginTop: 14
   },
-
   badge: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   badgeTxt: {
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 12,
+    fontWeight: "600",
+    fontSize: 12
   },
-
   panel: {
     marginBottom: 14,
-    borderRadius: 20,
+    borderRadius: 14,
     padding: 15,
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -856,30 +720,32 @@ const s = StyleSheet.create({
         shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: {
+          width: 0,
+          height: 6
+        }
       },
-      android: { elevation: 2 },
-      default: {},
-    }),
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
   },
-
   primaryBtn: {
-    minHeight: 48,
+    minHeight: 44,
     borderRadius: 14,
     backgroundColor: COLORS.accent,
     borderWidth: 1,
     borderColor: COLORS.accent,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 14
   },
-
   primaryBtnTxt: {
     color: COLORS.textLight,
-    fontWeight: "900",
-    fontSize: 15,
+    fontWeight: "600",
+    fontSize: 15
   },
-
   secondaryBtn: {
     minHeight: 46,
     borderRadius: 14,
@@ -889,14 +755,12 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
-    marginTop: 10,
+    marginTop: 10
   },
-
   secondaryBtnTxt: {
     color: COLORS.text,
-    fontWeight: "900",
+    fontWeight: "600"
   },
-
   search: {
     marginTop: 12,
     minHeight: 46,
@@ -907,19 +771,17 @@ const s = StyleSheet.create({
     color: COLORS.text,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    fontWeight: "700",
+    fontWeight: "600"
   },
-
   sectionTitle: {
     marginTop: 14,
-    fontWeight: "900",
+    fontWeight: "600",
     color: COLORS.text,
-    fontSize: 16,
+    fontSize: 16
   },
-
   card: {
     marginBottom: 14,
-    borderRadius: 20,
+    borderRadius: 14,
     padding: 15,
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -929,97 +791,88 @@ const s = StyleSheet.create({
         shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: {
+          width: 0,
+          height: 6
+        }
       },
-      android: { elevation: 2 },
-      default: {},
-    }),
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
   },
-
   cardTop: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "flex-start"
   },
-
   cardTextWrap: {
-    flex: 1,
+    flex: 1
   },
-
   cardNr: {
     color: COLORS.accentDark,
-    fontWeight: "900",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 13
   },
-
   cardTitle: {
     marginTop: 6,
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 22,
+    fontWeight: "600",
+    fontSize: 18
   },
-
   statusBadge: {
     alignSelf: "flex-start",
     marginTop: 10,
     minHeight: 30,
-    borderRadius: 999,
+    borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 10,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "center"
   },
-
   statusBadgeTxt: {
-    fontWeight: "900",
-    fontSize: 12,
+    fontWeight: "600",
+    fontSize: 12
   },
-
   cardSub: {
     marginTop: 6,
     color: COLORS.sub,
-    fontWeight: "700",
-    lineHeight: 18,
+    fontWeight: "600",
+    lineHeight: 18
   },
-
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginVertical: 12,
+    marginVertical: 12
   },
-
   metrics: {
     flexDirection: "row",
-    gap: 10,
+    gap: 10
   },
-
   metricBox: {
     flex: 1,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card2,
     borderRadius: 14,
-    padding: 10,
+    padding: 10
   },
-
   metricLabel: {
     fontSize: 11,
-    fontWeight: "900",
-    color: COLORS.sub,
+    fontWeight: "600",
+    color: COLORS.sub
   },
-
   metricValue: {
     marginTop: 4,
     fontSize: 14,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   exportRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 12,
+    marginTop: 12
   },
-
   smallActionBtn: {
     flex: 1,
     minHeight: 42,
@@ -1027,57 +880,48 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
-    borderWidth: 1,
+    borderWidth: 1
   },
-
   pdfBtn: {
     backgroundColor: COLORS.accentDark,
-    borderColor: COLORS.accentDark,
+    borderColor: COLORS.accentDark
   },
-
   excelBtn: {
     backgroundColor: COLORS.card2,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   smallActionBtnTxt: {
     color: COLORS.text,
-    fontWeight: "900",
+    fontWeight: "600"
   },
-
   smallActionBtnTxtLight: {
     color: COLORS.textLight,
-    fontWeight: "900",
+    fontWeight: "600"
   },
-
   flowBox: {
     marginTop: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     padding: 10,
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   flowTitle: {
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 13
   },
-
   flowText: {
     color: COLORS.sub,
-    fontWeight: "700",
+    fontWeight: "600",
     marginTop: 4,
-    lineHeight: 18,
+    lineHeight: 18
   },
-
   actionRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 14,
+    marginTop: 14
   },
-
   actionBtn: {
     flex: 1,
     minHeight: 46,
@@ -1085,71 +929,50 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
-    borderWidth: 1,
+    borderWidth: 1
   },
-
   editBtn: {
     backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent
   },
-
   editBtnTxt: {
     color: COLORS.textLight,
-    fontWeight: "900",
+    fontWeight: "600"
   },
-
   mengenBtn: {
     backgroundColor: COLORS.warning,
-    borderColor: COLORS.warning,
+    borderColor: COLORS.warning
   },
-
   invoiceBtn: {
     backgroundColor: COLORS.accentDark,
-    borderColor: COLORS.accentDark,
+    borderColor: COLORS.accentDark
   },
-
   invoiceBtnTxt: {
     color: COLORS.textLight,
-    fontWeight: "900",
+    fontWeight: "600"
   },
-
   deleteBtn: {
     backgroundColor: COLORS.card2,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   deleteBtnTxt: {
     color: COLORS.text,
-    fontWeight: "900",
+    fontWeight: "600"
   },
-
   emptyWrap: {
     paddingTop: 28,
-    paddingHorizontal: 16,
+    paddingHorizontal: 16
   },
-
   emptyText: {
     color: COLORS.sub,
     textAlign: "center",
-    fontWeight: "800",
-    lineHeight: 20,
+    fontWeight: "600",
+    lineHeight: 20
   },
-
   disabled: {
-    opacity: 0.6,
+    opacity: 0.6
   },
+  _inline1: {
+    flex: 1
+  }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-

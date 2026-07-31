@@ -13,43 +13,43 @@ type Item = {
 };
 
 const items: Item[] = [
-  {
-    title: "Automatische LV-Erstellung",
-    desc: "KI generiert automatisch Positionen aus Beschreibung oder Projekt.",
-    path: "/ki/auto-lv",
-    icon: "📄",
-  },
-  {
-    title: "Vorschläge & Optimierungen",
-    desc: "Preise, Materialien und Geräte intelligent optimieren.",
-    path: "/ki/vorschlaege",
-    icon: "💡",
-  },
-  {
-    title: "Nachtragserkennung",
-    desc: "Abweichungen zwischen LV und Angebot automatisch erkennen.",
-    path: "/ki/nachtraege",
-    icon: "⚠️",
-  },
-  {
-    title: "LV-Analyse",
-    desc: "Mengen-, Preis- und Plausibilitätsprüfung.",
-    path: "/ki/analyse",
-    icon: "📊",
-  },
-  {
-    title: "Fotoerkennung",
-    desc: "Baustellenbilder analysieren (Rohre, Graben, Materialien).",
-    path: "/ki/fotoerkennung",
-    icon: "📷",
-  },
-  {
-    title: "Sprachsteuerung",
-    desc: "Regieberichte per Sprache diktieren und automatisch erstellen.",
-    path: "/ki/sprachsteuerung",
-    icon: "🎤",
-  },
-];
+{
+  title: "Automatische LV-Erstellung",
+  desc: "KI generiert automatisch Positionen aus Beschreibung oder Projekt.",
+  path: "/ki/auto-lv",
+  icon: "📄"
+},
+{
+  title: "Vorschläge & Optimierungen",
+  desc: "Preise, Materialien und Geräte intelligent optimieren.",
+  path: "/ki/vorschlaege",
+  icon: "💡"
+},
+{
+  title: "Nachtragserkennung",
+  desc: "Abweichungen zwischen LV und Angebot automatisch erkennen.",
+  path: "/kalkulation/nachtraege",
+  icon: "⚠️"
+},
+{
+  title: "LV-Analyse",
+  desc: "Mengen-, Preis- und Plausibilitätsprüfung.",
+  path: "/ki/bewertung-analyse",
+  icon: "📊"
+},
+{
+  title: "Fotoerkennung",
+  desc: "Baustellenbilder analysieren (Rohre, Graben, Materialien).",
+  path: "/ki/fotoerkennung",
+  icon: "📷"
+},
+{
+  title: "Sprachsteuerung",
+  desc: "Regieberichte per Sprache diktieren und automatisch erstellen.",
+  path: "/ki/sprachsteuerung",
+  icon: "🎤"
+}];
+
 
 export default function KIUebersicht() {
   const nav = useNavigate();
@@ -59,52 +59,47 @@ export default function KIUebersicht() {
       <PageHeader
         breadcrumb="RLC Module / KI"
         title="🤖 KI – Übersicht"
-        subtitle="Künstliche Intelligenz unterstützt Sie bei Analyse, Automatisierung und Optimierung."
-      />
+        subtitle="Künstliche Intelligenz unterstützt Sie bei Analyse, Automatisierung und Optimierung." />
+      
 
       {/* GRID MODULE */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-          gap: 12,
-        }}
-      >
-        {items.map((it) => (
-          <Card
-            key={it.path}
-            style={{
-              cursor: "pointer",
-              transition: "0.2s",
-            }}
-            onClick={() => nav(it.path)}
-          >
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 20 }}>
+      <div className="rlc-migrated-pages-ki-uebersicht-tsx-1052">
+
+
+
+
+
+        
+        {items.map((it) =>
+        <Card
+          key={it.path}
+          style={{
+            cursor: "pointer",
+            transition: "0.2s"
+          }}
+          onClick={() => nav(it.path)}>
+          
+            <div className="rlc-migrated-pages-ki-uebersicht-tsx-1053">
+              <div className="rlc-migrated-pages-ki-uebersicht-tsx-1054">
                 {it.icon} <b>{it.title}</b>
               </div>
-              <div style={{ fontSize: 13, opacity: 0.75 }}>
+              <div className="rlc-migrated-pages-ki-uebersicht-tsx-1055">
                 {it.desc}
               </div>
             </div>
           </Card>
-        ))}
+        )}
       </div>
 
       {/* INFO */}
       <Card>
-        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+        <div className="rlc-migrated-pages-ki-uebersicht-tsx-1056">
           <b>Hinweis:</b><br />
           Die KI-Module arbeiten direkt mit Ihren Projektdaten (LV, Regie,
           Fotos, Angebote). Alle Ergebnisse können sofort weiterverarbeitet
           werden (Kalkulation, Abrechnung, Nachträge).
         </div>
       </Card>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

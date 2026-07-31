@@ -1,17 +1,17 @@
-// apps/web/src/pages/kalkulation/project.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/project.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Projects, type Project } from "./projectStore";
 import { setCurrentProjectId } from "../../utils/project";
 
 type ModuleTarget =
-  | "manuell"
-  | "ki"
-  | "gaeb"
-  | "angebot"
-  | "vergleich"
-  | "preise"
-  | "nachtraege";
+"manuell" |
+"ki" |
+"gaeb" |
+"angebot" |
+"vergleich" |
+"preise" |
+"nachtraege";
 
 function safeId(): string {
   try {
@@ -22,10 +22,10 @@ function safeId(): string {
 }
 
 function normalizeProjectNumber(value: string): string {
-  return String(value || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "-");
+  return String(value || "").
+  trim().
+  toUpperCase().
+  replace(/\s+/g, "-");
 }
 
 function getProjectCode(p: Project): string {
@@ -45,7 +45,7 @@ function asNumericProjectId(p: Project): number {
 
   let h = 0;
   for (let i = 0; i < basis.length; i += 1) {
-    h = ((h << 5) - h + basis.charCodeAt(i)) | 0;
+    h = (h << 5) - h + basis.charCodeAt(i) | 0;
   }
 
   return Math.abs(h % 9000000) + 1000000;
@@ -58,7 +58,7 @@ function formatDate(value: unknown): string {
   return new Intl.DateTimeFormat("de-DE", {
     day: "2-digit",
     month: "2-digit",
-    year: "numeric",
+    year: "numeric"
   }).format(d);
 }
 
@@ -67,17 +67,17 @@ function projectMatches(p: Project, q: string): boolean {
   if (!s) return true;
 
   const hay = [
-    p.number,
-    (p as any).code,
-    p.name,
-    p.client,
-    p.location,
-    (p as any).place,
-    (p as any).ort,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  p.number,
+  (p as any).code,
+  p.name,
+  p.client,
+  p.location,
+  (p as any).place,
+  (p as any).ort].
+
+  filter(Boolean).
+  join(" ").
+  toLowerCase();
 
   return hay.includes(s);
 }
@@ -142,7 +142,7 @@ export default function ProjektPage() {
     return {
       total: rows.length,
       filtered: filtered.length,
-      active: selectedProject ? getProjectCode(selectedProject) : "—",
+      active: selectedProject ? getProjectCode(selectedProject) : "—"
     };
   }, [rows, filtered.length, selectedProject]);
 
@@ -200,7 +200,7 @@ export default function ProjektPage() {
       name,
       client,
       location,
-      createdAt: existing?.createdAt || new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString()
     } as Project);
 
     Projects.setCurrent(item.id);
@@ -231,7 +231,7 @@ export default function ProjektPage() {
 
   function exportJSON() {
     const blob = new Blob([Projects.exportJSON()], {
-      type: "application/json;charset=utf-8",
+      type: "application/json;charset=utf-8"
     });
 
     const url = URL.createObjectURL(blob);
@@ -265,45 +265,45 @@ export default function ProjektPage() {
   }
 
   return (
-    <div style={page}>
-      <section style={hero}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", hero)}>
         <div>
-          <div style={eyebrow}>RLC Bausoftware · Kalkulation</div>
-          <h1 style={title}>Projekt auswählen</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Bausoftware · Kalkulation</div>
+          <h1 className={rlcClass(null, title)}>Projekt auswählen</h1>
+          <p className={rlcClass(null, subtitle)}>
             Projekt anlegen, aktivieren und direkt in Manuell, KI, GAEB,
             Preise, Nachträge oder Angebotsanalyse weiterarbeiten.
           </p>
         </div>
 
-        <div style={heroStats}>
+        <div className={rlcClass(null, heroStats)}>
           <Kpi label="Projekte" value={String(stats.total)} />
           <Kpi label="Treffer" value={String(stats.filtered)} />
           <Kpi label="Aktiv" value={stats.active} />
         </div>
       </section>
 
-      {info ? <div style={infoBox}>{info}</div> : null}
+      {info ? <div className={rlcClass(null, infoBox)}>{info}</div> : null}
 
-      <div style={layout}>
-        <section style={card}>
-          <div style={sectionHead}>
+      <div className={rlcClass(null, layout)}>
+        <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>Projektliste</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>Projektliste</h2>
+              <div className={rlcClass(null, sectionText)}>
                 Wähle ein Projekt aus und öffne direkt das gewünschte Modul.
               </div>
             </div>
 
-            <div style={toolbar}>
+            <div className={rlcClass(null, toolbar)}>
               <input
                 placeholder="Suche: Name / BaustellenNr / Kunde / Ort"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
-                style={searchInput}
-              />
+                onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+                searchInput)} />
+              
 
-              <button type="button" style={btnSecondary} onClick={exportJSON}>
+              <button type="button" className={rlcClass(null, btnSecondary)} onClick={exportJSON}>
                 Export
               </button>
 
@@ -311,7 +311,7 @@ export default function ProjektPage() {
                 ref={fileRef}
                 type="file"
                 accept="application/json,.json"
-                style={{ display: "none" }}
+
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
@@ -321,30 +321,30 @@ export default function ProjektPage() {
                   r.readAsText(f, "utf-8");
 
                   e.currentTarget.value = "";
-                }}
-              />
+                }} className="rlc-migrated-pages-kalkulation-project-tsx-932" />
+              
 
               <button
-                type="button"
-                style={btnSecondary}
-                onClick={() => fileRef.current?.click()}
-              >
+                type="button" className={rlcClass(null,
+                btnSecondary)}
+                onClick={() => fileRef.current?.click()}>
+                
                 Import
               </button>
             </div>
           </div>
 
-          <div style={tableWrap}>
-            <table style={table}>
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, table)}>
               <thead>
                 <tr>
-                  <th style={th}>Status</th>
-                  <th style={th}>BaustellenNr</th>
-                  <th style={th}>Projektname</th>
-                  <th style={th}>Kunde</th>
-                  <th style={th}>Ort</th>
-                  <th style={th}>Erstellt</th>
-                  <th style={th}>Aktionen</th>
+                  <th className={rlcClass(null, th)}>Status</th>
+                  <th className={rlcClass(null, th)}>BaustellenNr</th>
+                  <th className={rlcClass(null, th)}>Projektname</th>
+                  <th className={rlcClass(null, th)}>Kunde</th>
+                  <th className={rlcClass(null, th)}>Ort</th>
+                  <th className={rlcClass(null, th)}>Erstellt</th>
+                  <th className={rlcClass(null, th)}>Aktionen</th>
                 </tr>
               </thead>
 
@@ -355,235 +355,235 @@ export default function ProjektPage() {
 
                   return (
                     <tr
-                      key={p.id}
-                      style={{
-                        background: active ? "#EFF6FF" : "#FFFFFF",
-                      }}
-                    >
-                      <td style={td}>
-                        <span style={active ? badgeActive : badgeNeutral}>
+                      key={p.id} className={rlcClass(null,
+                      {
+                        background: active ? "#EAF2FF" : "#FFFFFF"
+                      })}>
+                      
+                      <td className={rlcClass(null, td)}>
+                        <span className={rlcClass(null, active ? badgeActive : badgeNeutral)}>
                           {active ? "Aktiv" : "—"}
                         </span>
                       </td>
 
-                      <td style={tdStrong}>{code || "—"}</td>
-                      <td style={td}>{p.name || "—"}</td>
-                      <td style={td}>{p.client || "—"}</td>
-                      <td style={td}>{p.location || "—"}</td>
-                      <td style={td}>{formatDate((p as any).createdAt)}</td>
+                      <td className={rlcClass(null, tdStrong)}>{code || "—"}</td>
+                      <td className={rlcClass(null, td)}>{p.name || "—"}</td>
+                      <td className={rlcClass(null, td)}>{p.client || "—"}</td>
+                      <td className={rlcClass(null, td)}>{p.location || "—"}</td>
+                      <td className={rlcClass(null, td)}>{formatDate((p as any).createdAt)}</td>
 
-                      <td style={td}>
-                        <div style={buttonGroup}>
+                      <td className={rlcClass(null, td)}>
+                        <div className={rlcClass(null, buttonGroup)}>
                           <button
-                            type="button"
-                            style={active ? btnPrimarySmall : btnSecondarySmall}
-                            onClick={() => selectProject(p)}
-                          >
+                            type="button" className={rlcClass(null,
+                            active ? btnPrimarySmall : btnSecondarySmall)}
+                            onClick={() => selectProject(p)}>
+                            
                             Aktivieren
                           </button>
 
                           <button
-                            type="button"
-                            style={btnSecondarySmall}
-                            onClick={() => openProject(p, "manuell")}
-                          >
+                            type="button" className={rlcClass(null,
+                            btnSecondarySmall)}
+                            onClick={() => openProject(p, "manuell")}>
+                            
                             Manuell
                           </button>
 
                           <button
-                            type="button"
-                            style={btnPrimarySmall}
-                            onClick={() => openProject(p, "ki")}
-                          >
+                            type="button" className={rlcClass(null,
+                            btnPrimarySmall)}
+                            onClick={() => openProject(p, "ki")}>
+                            
                             KI
                           </button>
 
                           <button
-                            type="button"
-                            style={btnSecondarySmall}
-                            onClick={() => openProject(p, "gaeb")}
-                          >
+                            type="button" className={rlcClass(null,
+                            btnSecondarySmall)}
+                            onClick={() => openProject(p, "gaeb")}>
+                            
                             GAEB
                           </button>
 
                           <button
-                            type="button"
-                            style={btnSecondarySmall}
-                            onClick={() => openProject(p, "angebot")}
-                          >
+                            type="button" className={rlcClass(null,
+                            btnSecondarySmall)}
+                            onClick={() => openProject(p, "angebot")}>
+                            
                             Angebot
                           </button>
 
                           <button
-                            type="button"
-                            style={btnSecondarySmall}
-                            onClick={() => openProject(p, "vergleich")}
-                          >
+                            type="button" className={rlcClass(null,
+                            btnSecondarySmall)}
+                            onClick={() => openProject(p, "vergleich")}>
+                            
                             Analyse
                           </button>
 
                           <button
-                            type="button"
-                            style={btnDangerSmall}
-                            onClick={() => del(p)}
-                          >
+                            type="button" className={rlcClass(null,
+                            btnDangerSmall)}
+                            onClick={() => del(p)}>
+                            
                             Löschen
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  );
+                    </tr>);
+
                 })}
 
-                {!filtered.length ? (
-                  <tr>
-                    <td colSpan={7} style={emptyCell}>
+                {!filtered.length ?
+                <tr>
+                    <td colSpan={7} className={rlcClass(null, emptyCell)}>
                       Keine Projekte gefunden.
                     </td>
-                  </tr>
-                ) : null}
+                  </tr> :
+                null}
               </tbody>
             </table>
           </div>
         </section>
 
-        <aside style={sideCard}>
-          <div style={sectionHead}>
+        <aside className={rlcClass(null, sideCard)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>Projekt erstellen</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>Projekt erstellen</h2>
+              <div className={rlcClass(null, sectionText)}>
                 Neues Projekt lokal anlegen und direkt als aktives Projekt setzen.
               </div>
             </div>
           </div>
 
-          <form onSubmit={create} style={form}>
+          <form onSubmit={create} className={rlcClass(null, form)}>
             <Field label="BaustellenNummer *" hint="z. B. BA-2026-001">
               <input
                 name="number"
                 required
                 placeholder="BA-2026-001"
                 pattern="[A-Za-z0-9_.-]+"
-                title="Nur Buchstaben, Ziffern, -, _, ."
-                style={input}
-              />
+                title="Nur Buchstaben, Ziffern, -, _, ." className={rlcClass(null,
+                input)} />
+              
             </Field>
 
             <Field label="Projektname *" hint="Kurze, eindeutige Bezeichnung">
               <input
                 name="name"
                 required
-                placeholder="Erneuerung TWL BA III/IV"
-                style={input}
-              />
+                placeholder="Erneuerung TWL BA III/IV" className={rlcClass(null,
+                input)} />
+              
             </Field>
 
             <Field label="Auftraggeber">
               <input
                 name="client"
-                placeholder="Gemeinde / Auftraggeber"
-                style={input}
-              />
+                placeholder="Gemeinde / Auftraggeber" className={rlcClass(null,
+                input)} />
+              
             </Field>
 
             <Field label="Ort">
-              <input name="location" placeholder="Ort / Baustelle" style={input} />
+              <input name="location" placeholder="Ort / Baustelle" className={rlcClass(null, input)} />
             </Field>
 
-            <div style={formActions}>
-              <button type="submit" style={btnPrimary}>
+            <div className={rlcClass(null, formActions)}>
+              <button type="submit" className={rlcClass(null, btnPrimary)}>
                 Projekt anlegen
               </button>
 
-              <button type="button" style={btnSecondary} onClick={suggestNumber}>
+              <button type="button" className={rlcClass(null, btnSecondary)} onClick={suggestNumber}>
                 Nummer vorschlagen
               </button>
             </div>
           </form>
 
-          <div style={currentBox}>
-            <div style={currentLabel}>Aktuelles Projekt</div>
+          <div className={rlcClass(null, currentBox)}>
+            <div className={rlcClass(null, currentLabel)}>Aktuelles Projekt</div>
 
-            {selectedProject ? (
-              <>
-                <div style={currentTitle}>
+            {selectedProject ?
+            <>
+                <div className={rlcClass(null, currentTitle)}>
                   {getProjectCode(selectedProject)} — {selectedProject.name}
                 </div>
 
-                <div style={currentSub}>
+                <div className={rlcClass(null, currentSub)}>
                   {selectedProject.client || "Kein Auftraggeber"} ·{" "}
                   {selectedProject.location || "Kein Ort"}
                 </div>
 
-                <div style={quickActions}>
+                <div className={rlcClass(null, quickActions)}>
                   <button
-                    type="button"
-                    style={btnSecondarySmall}
-                    onClick={() => openProject(selectedProject, "manuell")}
-                  >
+                  type="button" className={rlcClass(null,
+                  btnSecondarySmall)}
+                  onClick={() => openProject(selectedProject, "manuell")}>
+                  
                     Manuell
                   </button>
 
                   <button
-                    type="button"
-                    style={btnPrimarySmall}
-                    onClick={() => openProject(selectedProject, "ki")}
-                  >
+                  type="button" className={rlcClass(null,
+                  btnPrimarySmall)}
+                  onClick={() => openProject(selectedProject, "ki")}>
+                  
                     KI
                   </button>
 
                   <button
-                    type="button"
-                    style={btnSecondarySmall}
-                    onClick={() => openProject(selectedProject, "gaeb")}
-                  >
+                  type="button" className={rlcClass(null,
+                  btnSecondarySmall)}
+                  onClick={() => openProject(selectedProject, "gaeb")}>
+                  
                     GAEB
                   </button>
 
                   <button
-                    type="button"
-                    style={btnSecondarySmall}
-                    onClick={() => openProject(selectedProject, "nachtraege")}
-                  >
+                  type="button" className={rlcClass(null,
+                  btnSecondarySmall)}
+                  onClick={() => openProject(selectedProject, "nachtraege")}>
+                  
                     Nachträge
                   </button>
                 </div>
-              </>
-            ) : (
-              <div style={muted}>Kein Projekt ausgewählt.</div>
-            )}
+              </> :
+
+            <div className={rlcClass(null, muted)}>Kein Projekt ausgewählt.</div>
+            }
           </div>
         </aside>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value }: {label: string;value: string;}) {
   return (
-    <div style={kpi}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-    </div>
-  );
+    <div className={rlcClass(null, kpi)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+    </div>);
+
 }
 
 function Field({
   label,
   hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+
+}: {label: string;hint?: string;children: React.ReactNode;}) {
   return (
-    <label style={field}>
-      <span style={labelStyle}>{label}</span>
+    <label className={rlcClass(null, field)}>
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
       {children}
-      {hint ? <small style={hintStyle}>{hint}</small> : null}
-    </label>
-  );
+      {hint ? <small className={rlcClass(null, hintStyle)}>{hint}</small> : null}
+    </label>);
+
 }
 
 /* ===================== STYLES ===================== */
@@ -591,11 +591,11 @@ function Field({
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const hero: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
@@ -603,7 +603,7 @@ const hero: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 18,
   flexWrap: "wrap",
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -611,58 +611,58 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 760,
   opacity: 0.88,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroStats: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(3,minmax(95px,1fr))",
   gap: 10,
-  minWidth: 320,
+  minWidth: 320
 };
 
 const kpi: React.CSSProperties = {
   background: "rgba(255,255,255,0.10)",
   border: "1px solid rgba(255,255,255,0.18)",
   borderRadius: 14,
-  padding: 12,
+  padding: 12
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 11,
   opacity: 0.78,
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 4,
   fontSize: 18,
-  fontWeight: 900,
+  fontWeight: 700,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
+  textOverflow: "ellipsis"
 };
 
 const layout: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0,2fr) 390px",
   gap: 16,
-  alignItems: "start",
+  alignItems: "start"
 };
 
 const card: React.CSSProperties = {
@@ -670,13 +670,13 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sideCard: React.CSSProperties = {
   ...card,
   position: "sticky",
-  top: 12,
+  top: 12
 };
 
 const sectionHead: React.CSSProperties = {
@@ -685,28 +685,28 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const toolbar: React.CSSProperties = {
   display: "flex",
   gap: 8,
   alignItems: "center",
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const searchInput: React.CSSProperties = {
@@ -715,19 +715,19 @@ const searchInput: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 11px",
   fontSize: 13,
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const tableWrap: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 12,
-  overflow: "auto",
+  overflow: "auto"
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
-  minWidth: 1050,
+  minWidth: 1050
 };
 
 const th: React.CSSProperties = {
@@ -738,7 +738,7 @@ const th: React.CSSProperties = {
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const td: React.CSSProperties = {
@@ -746,25 +746,25 @@ const td: React.CSSProperties = {
   fontSize: 13,
   color: "#0F172A",
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdStrong: React.CSSProperties = {
   ...td,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const emptyCell: React.CSSProperties = {
   padding: 18,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const buttonGroup: React.CSSProperties = {
   display: "flex",
   gap: 6,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const btnBase: React.CSSProperties = {
@@ -772,36 +772,36 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnPrimarySmall: React.CSSProperties = {
   ...btnPrimary,
   padding: "6px 9px",
   fontSize: 12,
-  borderRadius: 8,
+  borderRadius: 8
 };
 
 const btnSecondarySmall: React.CSSProperties = {
   ...btnSecondary,
   padding: "6px 9px",
   fontSize: 12,
-  borderRadius: 8,
+  borderRadius: 8
 };
 
 const btnDangerSmall: React.CSSProperties = {
@@ -811,29 +811,29 @@ const btnDangerSmall: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const form: React.CSSProperties = {
   display: "grid",
-  gap: 12,
+  gap: 12
 };
 
 const field: React.CSSProperties = {
   display: "grid",
-  gap: 5,
+  gap: 5
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const hintStyle: React.CSSProperties = {
   fontSize: 11,
-  color: "#94A3B8",
+  color: "#94A3B8"
 };
 
 const input: React.CSSProperties = {
@@ -842,14 +842,14 @@ const input: React.CSSProperties = {
   padding: "9px 11px",
   fontSize: 13,
   width: "100%",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const formActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  marginTop: 4,
+  marginTop: 4
 };
 
 const currentBox: React.CSSProperties = {
@@ -857,36 +857,36 @@ const currentBox: React.CSSProperties = {
   padding: 14,
   border: "1px solid #DBEAFE",
   borderRadius: 14,
-  background: "#EFF6FF",
+  background: "#EAF2FF"
 };
 
 const currentLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#1E3A8A",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const currentTitle: React.CSSProperties = {
   marginTop: 6,
   color: "#0F172A",
   fontSize: 15,
-  fontWeight: 900,
-  lineHeight: 1.35,
+  fontWeight: 700,
+  lineHeight: 1.35
 };
 
 const currentSub: React.CSSProperties = {
   marginTop: 4,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const quickActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  marginTop: 12,
+  marginTop: 12
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -897,14 +897,14 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeActive: React.CSSProperties = {
   ...badgeNeutral,
-  border: "1px solid #BFDBFE",
+  border: "1px solid #BED6FF",
   background: "#DBEAFE",
-  color: "#1D4ED8",
+  color: "#0B5BD3"
 };
 
 const infoBox: React.CSSProperties = {
@@ -914,10 +914,10 @@ const infoBox: React.CSSProperties = {
   borderRadius: 12,
   padding: "10px 12px",
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const muted: React.CSSProperties = {
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };

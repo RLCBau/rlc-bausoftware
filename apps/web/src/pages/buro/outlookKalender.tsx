@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { CalendarDB } from "./store.calendar";
 import { CalEvent } from "./types";
 
@@ -7,26 +7,26 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 export default function OutlookKalender() {
@@ -117,35 +117,35 @@ export default function OutlookKalender() {
   }, [filtered]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, padding: 10 }}>
+    <div className="rlc-migrated-pages-buro-outlookkalender-tsx-580">
       <div
-        className="card"
-        style={{ padding: "8px 10px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-      >
+        className="card rlc-migrated-pages-buro-outlookkalender-tsx-581">
+
+        
         <button className="btn" onClick={() => openForm()}>
           + Neuer Termin
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-outlookkalender-tsx-582" />
 
         <input
           placeholder="Suche Titel / Ort / Projekt…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 280 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 280 })} />
+        
 
         <select
           value={proj}
-          onChange={(e) => setProj(e.target.value)}
-          style={{ ...inp, width: 160 }}
-        >
+          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 160 })}>
+          
           <option value="">Alle Projekte</option>
-          {projects.map((p) => (
-            <option key={p} value={p}>
+          {projects.map((p) =>
+          <option key={p} value={p}>
               {p}
             </option>
-          ))}
+          )}
         </select>
 
         <button className="btn" onClick={importICS}>
@@ -159,31 +159,31 @@ export default function OutlookKalender() {
         </button>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="card rlc-migrated-pages-buro-outlookkalender-tsx-583">
+        <table className="rlc-migrated-pages-buro-outlookkalender-tsx-584">
           <thead>
             <tr>
-              <th style={th}>Beginn</th>
-              <th style={th}>Ende</th>
-              <th style={th}>Titel</th>
-              <th style={th}>Projekt</th>
-              <th style={th}>Ort</th>
-              <th style={th}>Teilnehmer</th>
-              <th style={th}></th>
+              <th className={rlcClass(null, th)}>Beginn</th>
+              <th className={rlcClass(null, th)}>Ende</th>
+              <th className={rlcClass(null, th)}>Titel</th>
+              <th className={rlcClass(null, th)}>Projekt</th>
+              <th className={rlcClass(null, th)}>Ort</th>
+              <th className={rlcClass(null, th)}>Teilnehmer</th>
+              <th className={rlcClass(null, th)}></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((ev) => (
-              <tr key={ev.id}>
-                <td style={td}>{fmt(ev.start)}</td>
-                <td style={td}>{fmt(ev.end)}</td>
-                <td style={td}>
+            {filtered.map((ev) =>
+            <tr key={ev.id}>
+                <td className={rlcClass(null, td)}>{fmt(ev.start)}</td>
+                <td className={rlcClass(null, td)}>{fmt(ev.end)}</td>
+                <td className={rlcClass(null, td)}>
                   <b>{ev.title}</b>
                 </td>
-                <td style={td}>{ev.projectId || "—"}</td>
-                <td style={td}>{ev.location || "—"}</td>
-                <td style={td}>{(ev.attendees ?? []).join(", ") || "—"}</td>
-                <td style={{ ...td, whiteSpace: "nowrap" }}>
+                <td className={rlcClass(null, td)}>{ev.projectId || "—"}</td>
+                <td className={rlcClass(null, td)}>{ev.location || "—"}</td>
+                <td className={rlcClass(null, td)}>{(ev.attendees ?? []).join(", ") || "—"}</td>
+                <td className={rlcClass(null, { ...td, whiteSpace: "nowrap" })}>
                   <button className="btn" onClick={() => openForm(ev)}>
                     Bearbeiten
                   </button>
@@ -192,90 +192,90 @@ export default function OutlookKalender() {
                   </button>
                 </td>
               </tr>
-            ))}
+            )}
 
-            {filtered.length === 0 && (
-              <tr>
-                <td style={{ ...td, opacity: 0.6 }} colSpan={7}>
+            {filtered.length === 0 &&
+            <tr>
+                <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={7}>
                   Keine Termine.
                 </td>
               </tr>
-            )}
+            }
           </tbody>
         </table>
       </div>
 
-      {showForm && (
-        <Modal onClose={() => setShowForm(false)}>
-          <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 120px 1fr", gap: 10 }}>
-            <label style={lbl}>Titel</label>
-            <input
-              style={inp}
-              value={draft.title}
-              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-            />
+      {showForm &&
+      <Modal onClose={() => setShowForm(false)}>
+          <div className="rlc-migrated-pages-buro-outlookkalender-tsx-585">
+            <label className={rlcClass(null, lbl)}>Titel</label>
+            <input className={rlcClass(null,
+          inp)}
+          value={draft.title}
+          onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+          
 
-            <label style={lbl}>Projekt-ID</label>
-            <input
-              style={inp}
-              value={draft.projectId ?? ""}
-              onChange={(e) => setDraft({ ...draft, projectId: e.target.value })}
-            />
+            <label className={rlcClass(null, lbl)}>Projekt-ID</label>
+            <input className={rlcClass(null,
+          inp)}
+          value={draft.projectId ?? ""}
+          onChange={(e) => setDraft({ ...draft, projectId: e.target.value })} />
+          
 
-            <label style={lbl}>Beginn</label>
-            <input
-              style={inp}
-              type="datetime-local"
-              value={toLocalInput(draft.start)}
-              onChange={(e) => setDraft({ ...draft, start: fromLocalInput(e.target.value) })}
-            />
+            <label className={rlcClass(null, lbl)}>Beginn</label>
+            <input className={rlcClass(null,
+          inp)}
+          type="datetime-local"
+          value={toLocalInput(draft.start)}
+          onChange={(e) => setDraft({ ...draft, start: fromLocalInput(e.target.value) })} />
+          
 
-            <label style={lbl}>Ende</label>
-            <input
-              style={inp}
-              type="datetime-local"
-              value={toLocalInput(draft.end)}
-              onChange={(e) => setDraft({ ...draft, end: fromLocalInput(e.target.value) })}
-            />
+            <label className={rlcClass(null, lbl)}>Ende</label>
+            <input className={rlcClass(null,
+          inp)}
+          type="datetime-local"
+          value={toLocalInput(draft.end)}
+          onChange={(e) => setDraft({ ...draft, end: fromLocalInput(e.target.value) })} />
+          
 
-            <label style={lbl}>Ort</label>
-            <input
-              style={inp}
-              value={draft.location ?? ""}
-              onChange={(e) => setDraft({ ...draft, location: e.target.value })}
-            />
+            <label className={rlcClass(null, lbl)}>Ort</label>
+            <input className={rlcClass(null,
+          inp)}
+          value={draft.location ?? ""}
+          onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
+          
 
-            <label style={lbl}>Teilnehmer</label>
-            <input
-              style={inp}
-              placeholder="mail1@..., mail2@..."
-              value={(draft.attendees ?? []).join(", ")}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  attendees: e.target.value
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
+            <label className={rlcClass(null, lbl)}>Teilnehmer</label>
+            <input className={rlcClass(null,
+          inp)}
+          placeholder="mail1@..., mail2@..."
+          value={(draft.attendees ?? []).join(", ")}
+          onChange={(e) =>
+          setDraft({
+            ...draft,
+            attendees: e.target.value.
+            split(",").
+            map((s) => s.trim()).
+            filter(Boolean)
+          })
+          } />
+          
 
-            <label style={lbl}>Beschreibung</label>
-            <textarea
-              style={{ ...inp, gridColumn: "1 / -1", minHeight: 100 }}
-              value={draft.notes ?? ""}
-              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-            />
+            <label className={rlcClass(null, lbl)}>Beschreibung</label>
+            <textarea className={rlcClass(null,
+          { ...inp, gridColumn: "1 / -1", minHeight: 100 })}
+          value={draft.notes ?? ""}
+          onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
+          
 
-            <div
-              style={{
-                gridColumn: "1 / -1",
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 8,
-              }}
-            >
+            <div className="rlc-migrated-pages-buro-outlookkalender-tsx-586">
+
+
+
+
+
+
+            
               <button className="btn" onClick={() => setShowForm(false)}>
                 Abbrechen
               </button>
@@ -285,9 +285,9 @@ export default function OutlookKalender() {
             </div>
           </div>
         </Modal>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
 
 /* ==== Utils ==== */
@@ -331,39 +331,34 @@ function downloadBlob(text: string, name: string, type: string) {
 
 function Modal({
   children,
-  onClose,
-}: {
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
+  onClose
+
+
+
+}: {children: React.ReactNode;onClose: () => void;}) {
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.35)",
-        display: "grid",
-        placeItems: "center",
-        zIndex: 9999,
-      }}
-    >
+    <div className="rlc-migrated-pages-buro-outlookkalender-tsx-587">
+
+
+
+
+
+
+
+
+      
       <div
-        className="card"
-        style={{
-          padding: 20,
-          minWidth: 480,
-          maxWidth: 900,
-          background: "#fff",
-          borderRadius: 8,
-        }}
-      >
+        className="card rlc-migrated-pages-buro-outlookkalender-tsx-588">
+
+
+
+
+
+
+
+        
         {children}
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

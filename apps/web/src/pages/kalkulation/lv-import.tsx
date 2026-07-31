@@ -1,8 +1,8 @@
-﻿// apps/web/src/pages/kalkulation/lv-import.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // RLC Bausoftware · apps/web/src/pages/kalkulation/lv-import.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { runRlcAction } from "../../lib/rlcProgress";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { API_BASE } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 import { LV, type LVPos } from "./store.lv";
@@ -24,16 +24,23 @@ type ProjectLike = {
 
 type ViewMode = "liste" | "editor";
 
+type LvSelectionRequest = {
+  projectCode: string;
+  positionId: string;
+  positionNumber: string;
+  shortText: string;
+};
+
 type LvQualityFilter =
-  | "alle"
-  | "kritisch"
-  | "warning"
-  | "epFehlt"
-  | "einheitFehlt"
-  | "mengeFehlt"
-  | "kurztextFehlt"
-  | "langtextFehlt"
-  | "doppelte";
+"alle" |
+"kritisch" |
+"warning" |
+"epFehlt" |
+"einheitFehlt" |
+"mengeFehlt" |
+"kurztextFehlt" |
+"langtextFehlt" |
+"doppelte";
 
 function apiUrl(path: string): string {
   const base = String(API_BASE || "").replace(/\/+$/, "");
@@ -44,13 +51,13 @@ function apiUrl(path: string): string {
 function getAuthToken(): string {
   try {
     const directKeys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of directKeys) {
       const value = localStorage.getItem(key);
@@ -66,23 +73,23 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-        //
-      }
-    }
-  } catch {
-    //
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
@@ -90,19 +97,19 @@ function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
 
   return {
     ...(extra || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
 function getCurrentProjectFromSources(projectCtx: any): ProjectLike | null {
   const ctxProject =
-    projectCtx?.currentProject ??
-    projectCtx?.current ??
-    projectCtx?.selectedProject ??
-    projectCtx?.project ??
-    (typeof projectCtx?.getCurrentProject === "function"
-      ? projectCtx.getCurrentProject()
-      : null);
+  projectCtx?.currentProject ??
+  projectCtx?.current ??
+  projectCtx?.selectedProject ??
+  projectCtx?.project ?? (
+  typeof projectCtx?.getCurrentProject === "function" ?
+  projectCtx.getCurrentProject() :
+  null);
 
   if (ctxProject) return ctxProject as ProjectLike;
 
@@ -114,13 +121,144 @@ function getCurrentProjectFromSources(projectCtx: any): ProjectLike | null {
 }
 
 function getProjectCode(project: ProjectLike | null): string {
-  return String(project?.code ?? project?.number ?? project?.projektnummer ?? "")
-    .trim()
-    .toUpperCase();
+  return String(project?.code ?? project?.number ?? project?.projektnummer ?? "").
+  trim().
+  toUpperCase();
 }
 
 function getProjectName(project: ProjectLike | null): string {
   return String(project?.name ?? project?.projectName ?? project?.projektname ?? "").trim();
+}
+
+function normalizedLookupText(value: unknown): string {
+  return String(value ?? "").
+  trim().
+  toLocaleLowerCase("de-DE").
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/\s+/g, " ");
+}
+
+function normalizedPositionParts(value: unknown): string[] {
+  return String(value ?? "").
+  trim().
+  toLocaleLowerCase("de-DE").
+  split(/[^a-z0-9]+/i).
+  filter(Boolean).
+  map((part) => {
+    if (!/^\d+$/.test(part)) return part;
+    const normalized = part.replace(/^0+(?=\d)/, "");
+    return normalized || "0";
+  });
+}
+
+function rowMeta(row: LVPos): any {
+  return (row as any)?.meta || {};
+}
+
+function rowIdentityValues(row: LVPos): string[] {
+  const meta = rowMeta(row);
+  return [
+  row.id,
+  meta?.id,
+  meta?.positionId,
+  meta?.lvPositionId,
+  meta?.uuid,
+  meta?.sourcePositionId].
+
+  map((item) => normalizedLookupText(item)).
+  filter(Boolean);
+}
+
+function rowPositionValues(row: LVPos): string[] {
+  const meta = rowMeta(row);
+  return [
+  row.posNr,
+  meta?.fullPositionNumber,
+  meta?.lvPositionNumber,
+  meta?.gaebOz,
+  meta?.positionOz,
+  meta?.outlineNumber,
+  meta?.positionNumber,
+  meta?.positionNo,
+  meta?.posNr,
+  meta?.pos,
+  meta?.oz].
+
+  map((item) => String(item ?? "").trim()).
+  filter(Boolean);
+}
+
+function resolveRequestedLvRow(
+candidateRows: LVPos[],
+request: LvSelectionRequest)
+: {row: LVPos | null;ambiguous: boolean;} {
+  const requestedId = normalizedLookupText(request.positionId);
+  const requestedText = normalizedLookupText(request.shortText);
+  const requestedParts = normalizedPositionParts(request.positionNumber);
+
+  if (requestedId) {
+    const idMatch = candidateRows.find((row) =>
+    rowIdentityValues(row).includes(requestedId)
+    );
+    if (idMatch) return { row: idMatch, ambiguous: false };
+  }
+
+  if (requestedParts.length) {
+    const exactPositionMatches = candidateRows.filter((row) =>
+    rowPositionValues(row).some((item) => {
+      const parts = normalizedPositionParts(item);
+      return (
+        parts.length === requestedParts.length &&
+        parts.every((part, index) => part === requestedParts[index]));
+
+    })
+    );
+
+    if (exactPositionMatches.length === 1) {
+      return { row: exactPositionMatches[0], ambiguous: false };
+    }
+
+    if (exactPositionMatches.length > 1 && requestedText) {
+      const textMatch = exactPositionMatches.find(
+        (row) => normalizedLookupText(row.kurztext) === requestedText
+      );
+      if (textMatch) return { row: textMatch, ambiguous: false };
+    }
+
+    const requestedLastPart = requestedParts[requestedParts.length - 1];
+    const suffixMatches = candidateRows.filter((row) =>
+    rowPositionValues(row).some((item) => {
+      const parts = normalizedPositionParts(item);
+      return parts.length > 0 && parts[parts.length - 1] === requestedLastPart;
+    })
+    );
+
+    if (suffixMatches.length === 1) {
+      return { row: suffixMatches[0], ambiguous: false };
+    }
+
+    if (suffixMatches.length > 1 && requestedText) {
+      const textMatch = suffixMatches.find(
+        (row) => normalizedLookupText(row.kurztext) === requestedText
+      );
+      if (textMatch) return { row: textMatch, ambiguous: false };
+    }
+
+    if (exactPositionMatches.length > 1 || suffixMatches.length > 1) {
+      return { row: null, ambiguous: true };
+    }
+  }
+
+  if (requestedText) {
+    const textMatches = candidateRows.filter(
+      (row) => normalizedLookupText(row.kurztext) === requestedText
+    );
+    if (textMatches.length === 1) return { row: textMatches[0], ambiguous: false };
+    if (textMatches.length > 1) return { row: null, ambiguous: true };
+  }
+
+  return { row: null, ambiguous: false };
 }
 
 function toNumber(value: unknown): number {
@@ -129,9 +267,9 @@ function toNumber(value: unknown): number {
   const raw = String(value ?? "").trim();
   if (!raw) return 0;
 
-  const normalized = raw.includes(",")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw.replace(/\s/g, "");
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw.replace(/\s/g, "");
 
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -144,23 +282,23 @@ function round2(value: number): number {
 function fmtCurrency(v: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(toNumber(v));
 }
 
 function fmtNumber(v: unknown): string {
   return toNumber(v).toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 3
   });
 }
 
 function esc(s: string): string {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(s ?? "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;");
 }
 
 function lineTotal(row: LVPos): number {
@@ -195,25 +333,25 @@ function makeLvRow(patch?: Partial<LVPos>): LVPos {
     menge,
     preis,
     gesamt:
-      patch?.gesamt === undefined || patch?.gesamt === null
-        ? round2(menge * preis)
-        : toNumber(patch.gesamt),
+    patch?.gesamt === undefined || patch?.gesamt === null ?
+    round2(menge * preis) :
+    toNumber(patch.gesamt),
     waehrung: String(patch?.waehrung ?? "EUR"),
     confidence: patch?.confidence,
     source: patch?.source ?? "manual",
     createdAt: patch?.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   } as LVPos;
 }
 
 function lvTextKey(row: LVPos): string {
-  return String(`${row.kurztext || ""} ${row.langtext || ""}`)
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9äöüß]+/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(`${row.kurztext || ""} ${row.langtext || ""}`).
+  toLowerCase().
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/[^a-z0-9äöüß]+/gi, " ").
+  replace(/\s+/g, " ").
+  trim();
 }
 
 function getLvDuplicateGroups(rows: LVPos[]): LVPos[][] {
@@ -224,11 +362,11 @@ function getLvDuplicateGroups(rows: LVPos[]): LVPos[][] {
     if (text.length < 8) continue;
 
     const key = [
-      text.slice(0, 140),
-      String(row.einheit || "").trim().toLowerCase(),
-      round2(toNumber(row.menge)),
-      round2(toNumber(row.preis)),
-    ].join("|");
+    text.slice(0, 140),
+    String(row.einheit || "").trim().toLowerCase(),
+    round2(toNumber(row.menge)),
+    round2(toNumber(row.preis))].
+    join("|");
 
     const list = map.get(key) || [];
     list.push(row);
@@ -240,13 +378,13 @@ function getLvDuplicateGroups(rows: LVPos[]): LVPos[][] {
 
 function lvRowScore(row: LVPos): number {
   return (
-    (String(row.posNr || "").trim() ? 10 : 0) +
-    (String(row.kurztext || "").trim() ? 10 : 0) +
-    (String(row.langtext || "").trim() ? 8 : 0) +
-    (String(row.einheit || "").trim() ? 6 : 0) +
-    (toNumber(row.menge) > 0 ? 10 : 0) +
-    (toNumber(row.preis) > 0 ? 10 : 0)
-  );
+    (String(row.posNr || "").trim() ? 10 : 0) + (
+    String(row.kurztext || "").trim() ? 10 : 0) + (
+    String(row.langtext || "").trim() ? 8 : 0) + (
+    String(row.einheit || "").trim() ? 6 : 0) + (
+    toNumber(row.menge) > 0 ? 10 : 0) + (
+    toNumber(row.preis) > 0 ? 10 : 0));
+
 }
 
 function suggestUnit(row: LVPos): string {
@@ -256,45 +394,45 @@ function suggestUnit(row: LVPos): string {
   const text = lvTextKey(row);
 
   if (
-    text.includes("aushub") ||
-    text.includes("boden") ||
-    text.includes("verfull") ||
-    text.includes("verfüll") ||
-    text.includes("kies") ||
-    text.includes("schotter") ||
-    text.includes("beton")
-  ) {
+  text.includes("aushub") ||
+  text.includes("boden") ||
+  text.includes("verfull") ||
+  text.includes("verfüll") ||
+  text.includes("kies") ||
+  text.includes("schotter") ||
+  text.includes("beton"))
+  {
     return "m³";
   }
 
   if (
-    text.includes("asphalt") ||
-    text.includes("pflaster") ||
-    text.includes("fläche") ||
-    text.includes("flache") ||
-    text.includes("tragschicht") ||
-    text.includes("deckschicht")
-  ) {
+  text.includes("asphalt") ||
+  text.includes("pflaster") ||
+  text.includes("fläche") ||
+  text.includes("flache") ||
+  text.includes("tragschicht") ||
+  text.includes("deckschicht"))
+  {
     return "m²";
   }
 
   if (
-    text.includes("rohr") ||
-    text.includes("leitung") ||
-    text.includes("kabel") ||
-    text.includes("speedpipe") ||
-    text.includes("trasse")
-  ) {
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("kabel") ||
+  text.includes("speedpipe") ||
+  text.includes("trasse"))
+  {
     return "m";
   }
 
   if (
-    text.includes("schacht") ||
-    text.includes("anschluss") ||
-    text.includes("bogen") ||
-    text.includes("muffe") ||
-    text.includes("abzweig")
-  ) {
+  text.includes("schacht") ||
+  text.includes("anschluss") ||
+  text.includes("bogen") ||
+  text.includes("muffe") ||
+  text.includes("abzweig"))
+  {
     return "St";
   }
 
@@ -368,49 +506,74 @@ function statusLabel(status: "ok" | "warning" | "critical"): string {
 function KpiCard({
   label,
   value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+  sub
+
+
+
+
+}: {label: string;value: string;sub?: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 function Field({
   label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={labelStyle}>{label}</span>
+    <label className="rlc-migrated-pages-kalkulation-lv-import-tsx-912">
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
 export default function LVImportPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const fileRef = useRef<HTMLInputElement>(null);
+  const selectedItemRef = useRef<HTMLButtonElement>(null);
   const projectCtx: any = useProject();
 
+  const selectionRequest = useMemo<LvSelectionRequest>(() => {
+    const params = new URLSearchParams(location.search);
+    return {
+      projectCode: String(params.get("projectCode") || "").trim().toUpperCase(),
+      positionId: String(params.get("positionId") || "").trim(),
+      positionNumber: String(
+        params.get("positionNumber") || params.get("posNr") || ""
+      ).trim(),
+      shortText: String(params.get("shortText") || "").trim()
+    };
+  }, [location.search]);
+
   const currentProject = getCurrentProjectFromSources(projectCtx);
-  const projectCode = getProjectCode(currentProject);
-  const projectName = getProjectName(currentProject);
+  const contextProjectCode = getProjectCode(currentProject);
+  const projectCode = selectionRequest.projectCode || contextProjectCode;
+  const projectName =
+  !selectionRequest.projectCode || selectionRequest.projectCode === contextProjectCode ?
+  getProjectName(currentProject) :
+  "";
+  const canUseLocalFallback =
+  !selectionRequest.projectCode || selectionRequest.projectCode === contextProjectCode;
+  const hasRequestedPosition = Boolean(
+    selectionRequest.positionId ||
+    selectionRequest.positionNumber ||
+    selectionRequest.shortText
+  );
 
   const [rows, setRows] = useState<LVPos[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [mwst, setMwst] = useState<number>(() =>
-    Number(localStorage.getItem(MWST_KEY) ?? 19)
+  Number(localStorage.getItem(MWST_KEY) ?? 19)
   );
   const [info, setInfo] = useState("");
   const [syncBusy, setSyncBusy] = useState(false);
@@ -422,10 +585,207 @@ export default function LVImportPage() {
   const [kiLog, setKiLog] = useState<string[]>([]);
 
   useEffect(() => {
-    const list = LV.list();
-    setRows(list);
-    setSelectedId(list[0]?.id || "");
-  }, []);
+    let cancelled = false;
+
+    async function loadLv() {
+      const localRows = LV.list();
+
+      if (!projectCode) {
+        if (!cancelled) {
+          const selection = resolveRequestedLvRow(localRows, selectionRequest);
+          setRows(localRows);
+          setSelectedId(selection.row?.id || localRows[0]?.id || "");
+        }
+        return;
+      }
+
+      try {
+        setInfo("Lade Projekt-LV vom Server …");
+
+        const response = await fetch(
+          apiUrl(`/api/projects/${encodeURIComponent(projectCode)}/lv`),
+          {
+            method: "GET",
+            credentials: "include",
+            headers: withAuthHeaders({
+              Accept: "application/json"
+            })
+          }
+        );
+
+        const raw = await response.text();
+
+        let payload: any = {};
+        try {
+          payload = raw ? JSON.parse(raw) : {};
+        } catch {
+          payload = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error ||
+            payload?.message ||
+            `LV konnte nicht geladen werden: HTTP ${response.status}`
+          );
+        }
+
+        const source =
+        payload?.items ??
+        payload?.rows ??
+        payload?.positions ??
+        payload?.lv?.items ??
+        payload?.lv?.rows ??
+        payload?.data?.items ??
+        payload?.data?.rows ??
+        payload?.data?.positions ??
+        payload?.data ??
+        payload;
+
+        const serverRows: LVPos[] = Array.isArray(source) ?
+        source.map((item: any, index: number) => ({
+          id: String(
+            item?.id ||
+            item?.positionId ||
+            item?.uuid ||
+            `${projectCode}-${index + 1}`
+          ),
+          posNr: String(
+            item?.fullPositionNumber ||
+            item?.lvPositionNumber ||
+            item?.gaebOz ||
+            item?.positionOz ||
+            item?.outlineNumber ||
+            item?.posNr ||
+            item?.positionNumber ||
+            item?.positionNo ||
+            item?.pos ||
+            item?.oz ||
+            ""
+          ),
+          parentPosNr: String(item?.parentPosNr || item?.parentPos || ""),
+          sortIndex:
+          item?.sortIndex === undefined ? index : Number(item.sortIndex),
+          kurztext: String(
+            item?.kurztext ||
+            item?.shortText ||
+            item?.shorttext ||
+            item?.text ||
+            item?.description ||
+            ""
+          ),
+          langtext: String(
+            item?.langtext ||
+            item?.longText ||
+            item?.longtext ||
+            item?.descriptionLong ||
+            ""
+          ),
+          bemerkung: String(item?.bemerkung || item?.note || ""),
+          einheit: String(
+            item?.einheit ||
+            item?.unit ||
+            item?.me ||
+            ""
+          ),
+          menge: toNumber(
+            item?.menge ??
+            item?.quantity ??
+            item?.qty ??
+            0
+          ),
+          preis: toNumber(
+            item?.preis ??
+            item?.unitPrice ??
+            item?.unitPriceNet ??
+            item?.ep ??
+            0
+          ),
+          gesamt: toNumber(
+            item?.gesamt ??
+            item?.total ??
+            item?.totalNet ??
+            item?.gp ??
+            0
+          ),
+          waehrung: String(item?.waehrung || item?.currency || "EUR"),
+          source: "import",
+          createdAt: item?.createdAt,
+          updatedAt: item?.updatedAt,
+          meta: item
+        })) :
+        [];
+
+        if (cancelled) return;
+
+        if (serverRows.length > 0) {
+          const storedRows = LV.setAll(serverRows);
+          const selection = resolveRequestedLvRow(storedRows, selectionRequest);
+          setRows(storedRows);
+          setSelectedId(selection.row?.id || storedRows[0]?.id || "");
+          setInfo(
+            hasRequestedPosition ?
+            selection.row ?
+            `Marktbeobachtung: Position ${selection.row.posNr || "ohne Nummer"} im Projekt ${projectCode} geöffnet.` :
+            selection.ambiguous ?
+            `Marktbeobachtung: Mehrere passende Positionen in ${projectCode} gefunden. Bitte über die Suche eingrenzen.` :
+            `Marktbeobachtung: Die gemeldete Position wurde im LV von ${projectCode} nicht gefunden.` :
+            `${storedRows.length} LV-Positionen vom Server geladen.`
+          );
+          return;
+        }
+
+        const fallbackRows = canUseLocalFallback ? localRows : [];
+        const selection = resolveRequestedLvRow(fallbackRows, selectionRequest);
+        setRows(fallbackRows);
+        setSelectedId(selection.row?.id || fallbackRows[0]?.id || "");
+        setInfo(
+          hasRequestedPosition ?
+          selection.row ?
+          `Marktbeobachtung: Position ${selection.row.posNr || "ohne Nummer"} im lokalen LV geöffnet.` :
+          `Marktbeobachtung: Die gemeldete Position wurde im LV von ${projectCode} nicht gefunden.` :
+          fallbackRows.length ?
+          "Keine Server-LV gefunden. Lokaler Stand geladen." :
+          "Für dieses Projekt wurde kein LV gefunden."
+        );
+      } catch (error: any) {
+        if (cancelled) return;
+
+        const fallbackRows = canUseLocalFallback ? localRows : [];
+        const selection = resolveRequestedLvRow(fallbackRows, selectionRequest);
+        setRows(fallbackRows);
+        setSelectedId(selection.row?.id || fallbackRows[0]?.id || "");
+        setInfo(
+          hasRequestedPosition && !canUseLocalFallback ?
+          `Das Projekt-LV ${projectCode} konnte nicht vom Server geladen werden.` :
+          error?.message ||
+          "LV konnte nicht vom Server geladen werden."
+        );
+      }
+    }
+
+    void loadLv();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+  projectCode,
+  selectionRequest,
+  hasRequestedPosition,
+  canUseLocalFallback]
+  );
+
+  useEffect(() => {
+    if (!hasRequestedPosition || !selectedId) return;
+    const frame = window.requestAnimationFrame(() => {
+      selectedItemRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "smooth"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hasRequestedPosition, selectedId]);
 
   useEffect(() => {
     localStorage.setItem(MWST_KEY, String(mwst || 0));
@@ -449,7 +809,7 @@ export default function LVImportPage() {
       mengeFehlt: rows.filter((r) => toNumber(r.menge) <= 0).length,
       kurztextFehlt: rows.filter((r) => !String(r.kurztext || "").trim()).length,
       langtextFehlt: rows.filter((r) => !String(r.langtext || "").trim()).length,
-      doppelte: duplicateGroups.reduce((sum, g) => sum + Math.max(0, g.length - 1), 0),
+      doppelte: duplicateGroups.reduce((sum, g) => sum + Math.max(0, g.length - 1), 0)
     };
   }, [rows, duplicateGroups]);
 
@@ -469,8 +829,8 @@ export default function LVImportPage() {
       if (!q) return true;
 
       const hay = `${r.posNr || ""} ${r.kurztext || ""} ${r.langtext || ""} ${
-        r.einheit || ""
-      } ${r.source || ""}`.toLowerCase();
+      r.einheit || ""} ${
+      r.source || ""}`.toLowerCase();
 
       return hay.includes(q);
     });
@@ -492,9 +852,9 @@ export default function LVImportPage() {
       brutto: round2(brutto),
       priced,
       total: rows.length,
-      coverage: rows.length ? Math.round((priced / rows.length) * 100) : 0,
+      coverage: rows.length ? Math.round(priced / rows.length * 100) : 0,
       critical,
-      warning,
+      warning
     };
   }, [rows, mwst]);
 
@@ -515,7 +875,7 @@ export default function LVImportPage() {
   function saveRow(row: LVPos) {
     const next = makeLvRow({
       ...row,
-      gesamt: round2(toNumber(row.menge) * toNumber(row.preis)),
+      gesamt: round2(toNumber(row.menge) * toNumber(row.preis))
     });
 
     LV.upsert(next);
@@ -537,7 +897,7 @@ export default function LVImportPage() {
       menge: 1,
       preis: 0,
       waehrung: "EUR",
-      source: "manual",
+      source: "manual"
     });
 
     LV.upsert(row);
@@ -553,7 +913,7 @@ export default function LVImportPage() {
       ...selectedRow,
       id: safeUuid(),
       posNr: `${selectedRow.posNr || ""}.Kopie`,
-      source: "manual",
+      source: "manual"
     });
 
     LV.upsert(copy);
@@ -614,60 +974,60 @@ export default function LVImportPage() {
 
   function exportXLSX() {
     const xmlHeader =
-      `<?xml version="1.0"?>` +
-      `<?mso-application progid="Excel.Sheet"?>` +
-      `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
-      `xmlns:o="urn:schemas-microsoft-com:office:office" ` +
-      `xmlns:x="urn:schemas-microsoft-com:office:excel" ` +
-      `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
+    `<?xml version="1.0"?>` +
+    `<?mso-application progid="Excel.Sheet"?>` +
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
+    `xmlns:o="urn:schemas-microsoft-com:office:office" ` +
+    `xmlns:x="urn:schemas-microsoft-com:office:excel" ` +
+    `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
 
     const sheetOpen = `<Worksheet ss:Name="LV"><Table>`;
 
     const headRow =
-      `<Row>` +
-      [
-        "PosNr",
-        "Kurztext",
-        "Langtext",
-        "Bemerkung",
-        "Einheit",
-        "Menge",
-        "EP netto",
-        "Gesamt",
-        "Währung",
-        "Quelle",
-      ]
-        .map((h) => `<Cell><Data ss:Type="String">${esc(h)}</Data></Cell>`)
-        .join("") +
-      `</Row>`;
+    `<Row>` +
+    [
+    "PosNr",
+    "Kurztext",
+    "Langtext",
+    "Bemerkung",
+    "Einheit",
+    "Menge",
+    "EP netto",
+    "Gesamt",
+    "Währung",
+    "Quelle"].
 
-    const body = rows
-      .map((r) => {
-        const total = lineTotal(r);
+    map((h) => `<Cell><Data ss:Type="String">${esc(h)}</Data></Cell>`).
+    join("") +
+    `</Row>`;
 
-        return (
-          `<Row>` +
-          `<Cell><Data ss:Type="String">${esc(r.posNr || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.kurztext || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.langtext || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.bemerkung || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.einheit || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${toNumber(r.menge)}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${toNumber(r.preis)}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${toNumber(total)}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.waehrung || "EUR")}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.source || "manual")}</Data></Cell>` +
-          `</Row>`
-        );
-      })
-      .join("");
+    const body = rows.
+    map((r) => {
+      const total = lineTotal(r);
+
+      return (
+        `<Row>` +
+        `<Cell><Data ss:Type="String">${esc(r.posNr || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.kurztext || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.langtext || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.bemerkung || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.einheit || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="Number">${toNumber(r.menge)}</Data></Cell>` +
+        `<Cell><Data ss:Type="Number">${toNumber(r.preis)}</Data></Cell>` +
+        `<Cell><Data ss:Type="Number">${toNumber(total)}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.waehrung || "EUR")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.source || "manual")}</Data></Cell>` +
+        `</Row>`);
+
+    }).
+    join("");
 
     const xml =
-      xmlHeader +
-      sheetOpen +
-      headRow +
-      body +
-      `</Table></Worksheet></Workbook>`;
+    xmlHeader +
+    sheetOpen +
+    headRow +
+    body +
+    `</Table></Worksheet></Workbook>`;
 
     const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
     const url = URL.createObjectURL(blob);
@@ -698,23 +1058,23 @@ export default function LVImportPage() {
 
     const sourceRows = customRows ?? LV.list();
 
-    const payloadItems = sourceRows
-      .filter((r) => String(r.posNr ?? "").trim() || String(r.kurztext ?? "").trim())
-      .map((r) => ({
-        pos: String(r.posNr ?? "").trim(),
-        parentPos: String(r.parentPosNr ?? "").trim(),
-        text: String(r.kurztext ?? "").trim(),
-        langtext: String(r.langtext ?? "").trim(),
-        bemerkung: String(r.bemerkung ?? "").trim(),
-        unit: String(r.einheit ?? "").trim(),
-        quantity: Number(r.menge ?? 0),
-        ep:
-          r.preis === null || r.preis === undefined || !Number.isFinite(Number(r.preis))
-            ? null
-            : Number(r.preis),
-        total: Number.isFinite(lineTotal(r)) ? lineTotal(r) : null,
-        currency: r.waehrung || "EUR",
-      }));
+    const payloadItems = sourceRows.
+    filter((r) => String(r.posNr ?? "").trim() || String(r.kurztext ?? "").trim()).
+    map((r) => ({
+      pos: String(r.posNr ?? "").trim(),
+      parentPos: String(r.parentPosNr ?? "").trim(),
+      text: String(r.kurztext ?? "").trim(),
+      langtext: String(r.langtext ?? "").trim(),
+      bemerkung: String(r.bemerkung ?? "").trim(),
+      unit: String(r.einheit ?? "").trim(),
+      quantity: Number(r.menge ?? 0),
+      ep:
+      r.preis === null || r.preis === undefined || !Number.isFinite(Number(r.preis)) ?
+      null :
+      Number(r.preis),
+      total: Number.isFinite(lineTotal(r)) ? lineTotal(r) : null,
+      currency: r.waehrung || "EUR"
+    }));
 
     if (!payloadItems.length) {
       setInfo("Keine gültigen LV-Zeilen für die Server-Speicherung vorhanden.");
@@ -731,13 +1091,13 @@ export default function LVImportPage() {
           method: "POST",
           credentials: "include",
           headers: withAuthHeaders({
-            "Content-Type": "application/json",
+            "Content-Type": "application/json"
           }),
           body: JSON.stringify({
             title: `LV ${code}`,
             currency: "EUR",
-            items: payloadItems,
-          }),
+            items: payloadItems
+          })
         }
       );
 
@@ -828,7 +1188,7 @@ export default function LVImportPage() {
         return makeLvRow({
           ...row,
           ...patch,
-          gesamt: round2(toNumber(row.menge) * toNumber(row.preis)),
+          gesamt: round2(toNumber(row.menge) * toNumber(row.preis))
         });
       });
 
@@ -868,7 +1228,7 @@ export default function LVImportPage() {
 
   useEffect(() => {
     function handleLvCommand(event: Event) {
-      const detail = (event as CustomEvent<{ filter?: LvQualityFilter; action?: string }>).detail;
+      const detail = (event as CustomEvent<{filter?: LvQualityFilter;action?: string;}>).detail;
       if (!detail) return;
 
       if (detail.filter) {
@@ -908,12 +1268,12 @@ export default function LVImportPage() {
   const selectedStatus = selectedRow ? rowStatus(selectedRow) : "critical";
 
   return (
-    <div style={page}>
+    <div className={rlcClass(null, page)}>
       <input
         ref={fileRef}
         type="file"
         accept=".csv,text/csv"
-        style={{ display: "none" }}
+
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (!file) return;
@@ -923,473 +1283,474 @@ export default function LVImportPage() {
           reader.readAsText(file, "utf-8");
 
           e.currentTarget.value = "";
-        }}
-      />
+        }} className="rlc-migrated-pages-kalkulation-lv-import-tsx-913" />
+      
 
-      <section style={heroCard}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Leistungsverzeichnis</div>
-          <h1 style={title}>LV / Positionen</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Leistungsverzeichnis</div>
+          <h1 className={rlcClass(null, title)}>LV / Positionen</h1>
+          <p className={rlcClass(null, subtitle)}>
             Kompakte LV-Verwaltung: importieren, prüfen, bearbeiten und direkt in Kalkulation, GAEB oder Angebot weitergeben.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button type="button" style={btnHeroPrimary} onClick={addRow}>
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnHeroPrimary)} onClick={addRow}>
             + Position
           </button>
 
-          <button type="button" style={btnHeroSecondary} onClick={() => fileRef.current?.click()}>
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => fileRef.current?.click()}>
             CSV importieren
           </button>
 
           <button
-            type="button"
-            style={btnHeroSecondary}
+            type="button" className={rlcClass(null,
+            btnHeroSecondary)}
             onClick={() => void syncRowsToServer(rows)}
-            disabled={syncBusy || rows.length === 0}
-          >
+            disabled={syncBusy || rows.length === 0}>
+            
             {syncBusy ? "Speichert …" : "Server speichern"}
           </button>
 
           <button
-            type="button"
-            style={btnHeroSecondary}
+            type="button" className={rlcClass(null,
+            btnHeroSecondary)}
             onClick={() =>
-              navigate(
-                `/kalkulation/gaeb${
-                  projectCode ? `?projectCode=${encodeURIComponent(projectCode)}` : ""
-                }`
-              )
-            }
-          >
+            navigate(
+              `/kalkulation/gaeb${
+              projectCode ? `?projectCode=${encodeURIComponent(projectCode)}` : ""}`
+
+            )
+            }>
+            
             GAEB
           </button>
 
-          <button type="button" style={btnHeroSecondary} onClick={() => navigate("/kalkulation/mit-ki")}>
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => navigate("/kalkulation/mit-ki")}>
             Kalkulation mit KI
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectCode || "—"}</b>
           {projectName ? <span> · <b>{projectName}</b></span> : null}
           {info ? <span> · {info}</span> : null}
         </div>
       </section>
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <KpiCard label="Netto" value={fmtCurrency(totals.netto)} />
         <KpiCard label="Brutto" value={fmtCurrency(totals.brutto)} />
         <KpiCard label="Positionen" value={String(totals.total)} sub={`${totals.coverage}% mit EP`} />
         <KpiCard label="Prüfung" value={String(totals.critical + totals.warning)} sub={`${totals.critical} fehlt · ${totals.warning} prüfen`} />
       </section>
 
-      <section style={compactToolbar}>
-        <div style={toolbarLeft}>
+      <section className={rlcClass(null, compactToolbar)}>
+        <div className={rlcClass(null, toolbarLeft)}>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={searchInput}
-            placeholder="LV durchsuchen: PosNr, Kurztext, Langtext, ME…"
-          />
+            onChange={(e) => setQuery(e.target.value)} className={rlcClass(null,
+            searchInput)}
+            placeholder="LV durchsuchen: PosNr, Kurztext, Langtext, ME…" />
+          
 
-          <div style={mwstBox}>
+          <div className={rlcClass(null, mwstBox)}>
             <span>MwSt</span>
             <input
               type="number"
               value={mwst}
-              onChange={(e) => setMwst(Number(e.target.value || 0))}
-              style={mwstInput}
-            />
+              onChange={(e) => setMwst(Number(e.target.value || 0))} className={rlcClass(null,
+              mwstInput)} />
+            
             <span>%</span>
           </div>
         </div>
 
-        <div style={toolbarButtons}>
-          <button type="button" style={buttonBase} onClick={pasteRows}>
+        <div className={rlcClass(null, toolbarButtons)}>
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={pasteRows}>
             Einfügen
           </button>
 
-          <button type="button" style={buttonBase} onClick={exportCSV}>
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={exportCSV}>
             CSV
           </button>
 
-          <button type="button" style={buttonBase} onClick={exportXLSX}>
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={exportXLSX}>
             XLSX
           </button>
 
-          <button type="button" style={buttonBase} onClick={autoPosNr}>
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={autoPosNr}>
             Auto-Nr.
           </button>
 
           <button
-            type="button"
-            style={viewMode === "editor" ? buttonPrimary : buttonBase}
-            onClick={() => setViewMode("editor")}
-          >
+            type="button" className={rlcClass(null,
+            viewMode === "editor" ? buttonPrimary : buttonBase)}
+            onClick={() => setViewMode("editor")}>
+            
             Editor
           </button>
 
           <button
-            type="button"
-            style={viewMode === "liste" ? buttonPrimary : buttonBase}
-            onClick={() => setViewMode("liste")}
-          >
+            type="button" className={rlcClass(null,
+            viewMode === "liste" ? buttonPrimary : buttonBase)}
+            onClick={() => setViewMode("liste")}>
+            
             Liste
           </button>
 
-          <button type="button" style={buttonDanger} onClick={clearAll}>
+          <button type="button" className={rlcClass(null, buttonDanger)} onClick={clearAll}>
             Leeren
           </button>
         </div>
       </section>
 
-      <section style={qualityPanel}>
-        <div style={qualityTop}>
+      <section className={rlcClass(null, qualityPanel)}>
+        <div className={rlcClass(null, qualityTop)}>
           <div>
             <b>LV-KI Prüfung</b>
-            <div style={qualitySub}>
+            <div className={rlcClass(null, qualitySub)}>
               Filter, Datenprüfung, automatische Ergänzung und Änderungsprotokoll.
             </div>
           </div>
 
-          <div style={qualityActions}>
-            <button type="button" style={qualityFilter === "alle" ? chipActive : chip} onClick={() => applyLvFilter("alle")}>
+          <div className={rlcClass(null, qualityActions)}>
+            <button type="button" className={rlcClass(null, qualityFilter === "alle" ? chipActive : chip)} onClick={() => applyLvFilter("alle")}>
               Alle {qualityStats.total}
             </button>
-            <button type="button" style={qualityFilter === "kritisch" ? chipActive : chip} onClick={() => applyLvFilter("kritisch")}>
+            <button type="button" className={rlcClass(null, qualityFilter === "kritisch" ? chipActive : chip)} onClick={() => applyLvFilter("kritisch")}>
               Kritisch {qualityStats.critical}
             </button>
-            <button type="button" style={qualityFilter === "warning" ? chipActive : chip} onClick={() => applyLvFilter("warning")}>
+            <button type="button" className={rlcClass(null, qualityFilter === "warning" ? chipActive : chip)} onClick={() => applyLvFilter("warning")}>
               Prüfen {qualityStats.warning}
             </button>
-            <button type="button" style={qualityFilter === "epFehlt" ? chipActive : chip} onClick={() => applyLvFilter("epFehlt")}>
+            <button type="button" className={rlcClass(null, qualityFilter === "epFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("epFehlt")}>
               EP fehlt {qualityStats.epFehlt}
             </button>
-            <button type="button" style={qualityFilter === "einheitFehlt" ? chipActive : chip} onClick={() => applyLvFilter("einheitFehlt")}>
+            <button type="button" className={rlcClass(null, qualityFilter === "einheitFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("einheitFehlt")}>
               Einheit fehlt {qualityStats.einheitFehlt}
             </button>
-            <button type="button" style={qualityFilter === "mengeFehlt" ? chipActive : chip} onClick={() => applyLvFilter("mengeFehlt")}>
+            <button type="button" className={rlcClass(null, qualityFilter === "mengeFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("mengeFehlt")}>
               Menge fehlt {qualityStats.mengeFehlt}
             </button>
-            <button type="button" style={qualityFilter === "langtextFehlt" ? chipActive : chip} onClick={() => applyLvFilter("langtextFehlt")}>
+            <button type="button" className={rlcClass(null, qualityFilter === "langtextFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("langtextFehlt")}>
               Langtext fehlt {qualityStats.langtextFehlt}
             </button>
-            <button type="button" style={qualityFilter === "doppelte" ? chipActive : chip} onClick={() => applyLvFilter("doppelte")}>
+            <button type="button" className={rlcClass(null, qualityFilter === "doppelte" ? chipActive : chip)} onClick={() => applyLvFilter("doppelte")}>
               Doppelte {qualityStats.doppelte}
             </button>
           </div>
         </div>
 
-        <div style={qualityActions}>
-          <button type="button" style={buttonPrimary} onClick={fixMissingFields}>
+        <div className={rlcClass(null, qualityActions)}>
+          <button type="button" className={rlcClass(null, buttonPrimary)} onClick={fixMissingFields}>
             Fehlende Daten automatisch ergänzen
           </button>
 
-          <button type="button" style={buttonBase} onClick={deleteDuplicateLvRows}>
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={deleteDuplicateLvRows}>
             Doppelte bereinigen
           </button>
 
-          <button type="button" style={buttonBase} onClick={() => void syncRowsToServer(rows)}>
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={() => void syncRowsToServer(rows)}>
             Server speichern
           </button>
         </div>
 
-        {kiWorking || kiLog.length ? (
-          <div style={kiProtocolBox}>
-            <div style={protocolHead}>
+        {kiWorking || kiLog.length ?
+        <div className={rlcClass(null, kiProtocolBox)}>
+            <div className={rlcClass(null, protocolHead)}>
               <b>KI-Protokoll</b>
               <span>{kiWorking ? `${kiProgress}%` : "abgeschlossen"}</span>
             </div>
 
-            <div style={progressTrack}>
-              <div style={{ ...progressFill, width: `${kiWorking ? kiProgress : 100}%` }} />
+            <div className={rlcClass(null, progressTrack)}>
+              <div className={rlcClass(null, { ...progressFill, width: `${kiWorking ? kiProgress : 100}%` })} />
             </div>
 
-            <div style={protocolList}>
-              {kiLog.slice(0, 8).map((line, idx) => (
-                <div key={`${line}-${idx}`} style={line.startsWith("⚠") ? protocolWarn : protocolOk}>
+            <div className={rlcClass(null, protocolList)}>
+              {kiLog.slice(0, 8).map((line, idx) =>
+            <div key={`${line}-${idx}`} className={rlcClass(null, line.startsWith("⚠") ? protocolWarn : protocolOk)}>
                   {line}
                 </div>
-              ))}
+            )}
             </div>
-          </div>
-        ) : null}
+          </div> :
+        null}
       </section>
 
-      {info ? <div style={statusBox(info)}>{info}</div> : null}
+      {info ? <div className={rlcClass(null, statusBox(info))}>{info}</div> : null}
 
-      {viewMode === "editor" ? (
-        <section style={mainLayout}>
-          <aside style={listCard}>
-            <div style={listHeader}>
+      {viewMode === "editor" ?
+      <section className={rlcClass(null, mainLayout)}>
+          <aside className={rlcClass(null, listCard)}>
+            <div className={rlcClass(null, listHeader)}>
               <div>
-                <h2 style={sectionTitle}>LV-Positionen</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>LV-Positionen</h2>
+                <div className={rlcClass(null, sectionText)}>
                   {filteredRows.length.toLocaleString("de-DE")} von {rows.length.toLocaleString("de-DE")}
                 </div>
               </div>
             </div>
 
-            <div style={positionList}>
+            <div className={rlcClass(null, positionList)}>
               {filteredRows.map((r) => {
-                const active = r.id === selectedId;
-                const status = rowStatus(r);
+              const active = r.id === selectedId;
+              const status = rowStatus(r);
 
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    style={{
-                      ...positionItem,
-                      ...(active ? positionItemActive : {}),
-                    }}
-                    onClick={() => setSelectedId(r.id)}
-                  >
-                    <div style={positionTop}>
+              return (
+                <button
+                  key={r.id}
+                  ref={active ? selectedItemRef : undefined}
+                  type="button" className={rlcClass(null,
+                  {
+                    ...positionItem,
+                    ...(active ? positionItemActive : {})
+                  })}
+                  onClick={() => setSelectedId(r.id)}>
+                  
+                    <div className={rlcClass(null, positionTop)}>
                       <b>{r.posNr || "—"}</b>
-                      <span style={statusBadge(status)}>{statusLabel(status)}</span>
+                      <span className={rlcClass(null, statusBadge(status))}>{statusLabel(status)}</span>
                     </div>
 
-                    <div style={positionText}>{r.kurztext || "Ohne Kurztext"}</div>
+                    <div className={rlcClass(null, positionText)}>{r.kurztext || "Ohne Kurztext"}</div>
 
-                    <div style={positionMeta}>
+                    <div className={rlcClass(null, positionMeta)}>
                       {fmtNumber(r.menge)} {r.einheit || "ME"} · EP {fmtCurrency(r.preis || 0)} · GP {fmtCurrency(lineTotal(r))}
                     </div>
-                  </button>
-                );
-              })}
+                  </button>);
 
-              {!filteredRows.length ? (
-                <div style={emptyState}>Keine LV-Position vorhanden.</div>
-              ) : null}
+            })}
+
+              {!filteredRows.length ?
+            <div className={rlcClass(null, emptyState)}>Keine LV-Position vorhanden.</div> :
+            null}
             </div>
           </aside>
 
-          <main style={editorCard}>
-            {selectedRow ? (
-              <>
-                <div style={editorHead}>
+          <main className={rlcClass(null, editorCard)}>
+            {selectedRow ?
+          <>
+                <div className={rlcClass(null, editorHead)}>
                   <div>
-                    <h2 style={sectionTitle}>Position bearbeiten</h2>
-                    <div style={sectionText}>
+                    <h2 className={rlcClass(null, sectionTitle)}>Position bearbeiten</h2>
+                    <div className={rlcClass(null, sectionText)}>
                       {selectedRow.posNr || "Neue Position"} · {selectedRow.kurztext || "Ohne Kurztext"}
                     </div>
                   </div>
 
-                  <div style={editorActions}>
-                    <span style={statusBadge(selectedStatus)}>{statusLabel(selectedStatus)}</span>
+                  <div className={rlcClass(null, editorActions)}>
+                    <span className={rlcClass(null, statusBadge(selectedStatus))}>{statusLabel(selectedStatus)}</span>
 
-                    <button type="button" style={buttonBase} onClick={duplicateSelected}>
+                    <button type="button" className={rlcClass(null, buttonBase)} onClick={duplicateSelected}>
                       Duplizieren
                     </button>
 
-                    <button type="button" style={buttonDanger} onClick={() => deleteRow(selectedRow.id)}>
+                    <button type="button" className={rlcClass(null, buttonDanger)} onClick={() => deleteRow(selectedRow.id)}>
                       Löschen
                     </button>
                   </div>
                 </div>
 
-                <div style={formGrid}>
+                <div className={rlcClass(null, formGrid)}>
                   <Field label="Positionsnummer">
                     <input
-                      value={selectedRow.posNr || ""}
-                      onChange={(e) => patchSelected({ posNr: e.target.value })}
-                      style={inputStyle}
-                      placeholder="z.B. 01.0010"
-                    />
+                  value={selectedRow.posNr || ""}
+                  onChange={(e) => patchSelected({ posNr: e.target.value })} className={rlcClass(null,
+                  inputStyle)}
+                  placeholder="z.B. 01.0010" />
+                
                   </Field>
 
                   <Field label="Einheit">
                     <input
-                      value={selectedRow.einheit || ""}
-                      onChange={(e) => patchSelected({ einheit: e.target.value })}
-                      style={inputStyle}
-                      placeholder="m / m² / m³ / St"
-                    />
+                  value={selectedRow.einheit || ""}
+                  onChange={(e) => patchSelected({ einheit: e.target.value })} className={rlcClass(null,
+                  inputStyle)}
+                  placeholder="m / m² / m³ / St" />
+                
                   </Field>
 
                   <Field label="Menge">
                     <input
-                      type="number"
-                      value={selectedRow.menge ?? 0}
-                      onChange={(e) =>
-                        patchSelected({
-                          menge: toNumber(e.target.value),
-                          gesamt: round2(toNumber(e.target.value) * toNumber(selectedRow.preis)),
-                        })
-                      }
-                      style={inputStyle}
-                    />
+                  type="number"
+                  value={selectedRow.menge ?? 0}
+                  onChange={(e) =>
+                  patchSelected({
+                    menge: toNumber(e.target.value),
+                    gesamt: round2(toNumber(e.target.value) * toNumber(selectedRow.preis))
+                  })
+                  } className={rlcClass(null,
+                  inputStyle)} />
+                
                   </Field>
 
                   <Field label="EP netto">
                     <input
-                      type="number"
-                      value={selectedRow.preis ?? 0}
-                      onChange={(e) =>
-                        patchSelected({
-                          preis: toNumber(e.target.value),
-                          gesamt: round2(toNumber(selectedRow.menge) * toNumber(e.target.value)),
-                        })
-                      }
-                      style={inputStyle}
-                    />
+                  type="number"
+                  value={selectedRow.preis ?? 0}
+                  onChange={(e) =>
+                  patchSelected({
+                    preis: toNumber(e.target.value),
+                    gesamt: round2(toNumber(selectedRow.menge) * toNumber(e.target.value))
+                  })
+                  } className={rlcClass(null,
+                  inputStyle)} />
+                
                   </Field>
                 </div>
 
-                <div style={formGrid2}>
+                <div className={rlcClass(null, formGrid2)}>
                   <Field label="Kurztext">
                     <input
-                      value={selectedRow.kurztext || ""}
-                      onChange={(e) => patchSelected({ kurztext: e.target.value })}
-                      style={inputStyle}
-                      placeholder="Kurze Leistungsbeschreibung"
-                    />
+                  value={selectedRow.kurztext || ""}
+                  onChange={(e) => patchSelected({ kurztext: e.target.value })} className={rlcClass(null,
+                  inputStyle)}
+                  placeholder="Kurze Leistungsbeschreibung" />
+                
                   </Field>
 
-                  <div style={sumBox}>
-                    <div style={sumLabel}>Gesamt netto</div>
-                    <div style={sumValue}>{fmtCurrency(lineTotal(selectedRow))}</div>
+                  <div className={rlcClass(null, sumBox)}>
+                    <div className={rlcClass(null, sumLabel)}>Gesamt netto</div>
+                    <div className={rlcClass(null, sumValue)}>{fmtCurrency(lineTotal(selectedRow))}</div>
                   </div>
                 </div>
 
-                <div style={{ marginTop: 12 }}>
+                <div className="rlc-migrated-pages-kalkulation-lv-import-tsx-914">
                   <Field label="Langtext">
                     <textarea
-                      value={selectedRow.langtext || ""}
-                      onChange={(e) => patchSelected({ langtext: e.target.value })}
-                      style={largeTextArea}
-                      placeholder="Ausführliche Leistungsbeschreibung, Nebenleistungen, Abrechnung, technische Anforderungen…"
-                    />
+                  value={selectedRow.langtext || ""}
+                  onChange={(e) => patchSelected({ langtext: e.target.value })} className={rlcClass(null,
+                  largeTextArea)}
+                  placeholder="Ausführliche Leistungsbeschreibung, Nebenleistungen, Abrechnung, technische Anforderungen…" />
+                
                   </Field>
                 </div>
 
-                <div style={{ marginTop: 12 }}>
+                <div className="rlc-migrated-pages-kalkulation-lv-import-tsx-915">
                   <Field label="Bemerkung / interne Notiz">
                     <textarea
-                      value={selectedRow.bemerkung || ""}
-                      onChange={(e) => patchSelected({ bemerkung: e.target.value })}
-                      style={noteTextArea}
-                      placeholder="Optionale Bemerkung"
-                    />
+                  value={selectedRow.bemerkung || ""}
+                  onChange={(e) => patchSelected({ bemerkung: e.target.value })} className={rlcClass(null,
+                  noteTextArea)}
+                  placeholder="Optionale Bemerkung" />
+                
                   </Field>
                 </div>
 
-                <div style={bottomActions}>
+                <div className={rlcClass(null, bottomActions)}>
                   <button
-                    type="button"
-                    style={buttonPrimary}
-                    onClick={() => navigate("/kalkulation/rezepte")}
-                  >
+                type="button" className={rlcClass(null,
+                buttonPrimary)}
+                onClick={() => navigate("/kalkulation/rezepte")}>
+                
                     Urkalkulation / Rezept erstellen
                   </button>
 
                   <button
-                    type="button"
-                    style={buttonBase}
-                    onClick={() => navigate("/kalkulation/mit-ki")}
-                  >
+                type="button" className={rlcClass(null,
+                buttonBase)}
+                onClick={() => navigate("/kalkulation/mit-ki")}>
+                
                     Zur KI-Kalkulation
                   </button>
 
                   <button
-                    type="button"
-                    style={buttonBase}
-                    onClick={() => navigate("/kalkulation/angebot")}
-                  >
+                type="button" className={rlcClass(null,
+                buttonBase)}
+                onClick={() => navigate("/kalkulation/angebot")}>
+                
                     Angebot
                   </button>
                 </div>
-              </>
-            ) : (
-              <div style={emptyState}>Keine Position gewählt.</div>
-            )}
+              </> :
+
+          <div className={rlcClass(null, emptyState)}>Keine Position gewählt.</div>
+          }
           </main>
-        </section>
-      ) : (
-        <section style={card}>
-          <div style={sectionHead}>
+        </section> :
+
+      <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>LV-Kompaktliste</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>LV-Kompaktliste</h2>
+              <div className={rlcClass(null, sectionText)}>
                 Schnelle Übersicht. Für Langtext und Details bitte Editor verwenden.
               </div>
             </div>
           </div>
 
-          <div style={tableWrap}>
-            <table style={table}>
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, table)}>
               <thead>
                 <tr>
-                  <th style={th}>Status</th>
-                  <th style={th}>Position</th>
-                  <th style={th}>Kurztext</th>
-                  <th style={th}>ME</th>
-                  <th style={thRight}>Menge</th>
-                  <th style={thRight}>EP</th>
-                  <th style={thRight}>GP</th>
-                  <th style={th}>Quelle</th>
-                  <th style={th}>Aktion</th>
+                  <th className={rlcClass(null, th)}>Status</th>
+                  <th className={rlcClass(null, th)}>Position</th>
+                  <th className={rlcClass(null, th)}>Kurztext</th>
+                  <th className={rlcClass(null, th)}>ME</th>
+                  <th className={rlcClass(null, thRight)}>Menge</th>
+                  <th className={rlcClass(null, thRight)}>EP</th>
+                  <th className={rlcClass(null, thRight)}>GP</th>
+                  <th className={rlcClass(null, th)}>Quelle</th>
+                  <th className={rlcClass(null, th)}>Aktion</th>
                 </tr>
               </thead>
 
               <tbody>
                 {filteredRows.map((r) => {
-                  const status = rowStatus(r);
+                const status = rowStatus(r);
 
-                  return (
-                    <tr key={r.id}>
-                      <td style={td}>
-                        <span style={statusBadge(status)}>{statusLabel(status)}</span>
+                return (
+                  <tr key={r.id}>
+                      <td className={rlcClass(null, td)}>
+                        <span className={rlcClass(null, statusBadge(status))}>{statusLabel(status)}</span>
                       </td>
 
-                      <td style={td}>
+                      <td className={rlcClass(null, td)}>
                         <b>{r.posNr || "—"}</b>
                       </td>
 
-                      <td style={td}>{r.kurztext || "—"}</td>
-                      <td style={td}>{r.einheit || "—"}</td>
-                      <td style={tdRight}>{fmtNumber(r.menge)}</td>
-                      <td style={tdRight}>{fmtCurrency(r.preis || 0)}</td>
-                      <td style={{ ...tdRight, fontWeight: 900 }}>{fmtCurrency(lineTotal(r))}</td>
+                      <td className={rlcClass(null, td)}>{r.kurztext || "—"}</td>
+                      <td className={rlcClass(null, td)}>{r.einheit || "—"}</td>
+                      <td className={rlcClass(null, tdRight)}>{fmtNumber(r.menge)}</td>
+                      <td className={rlcClass(null, tdRight)}>{fmtCurrency(r.preis || 0)}</td>
+                      <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>{fmtCurrency(lineTotal(r))}</td>
 
-                      <td style={td}>
-                        <span style={badgeNeutral}>{r.source || "manual"}</span>
+                      <td className={rlcClass(null, td)}>
+                        <span className={rlcClass(null, badgeNeutral)}>{r.source || "manual"}</span>
                       </td>
 
-                      <td style={td}>
+                      <td className={rlcClass(null, td)}>
                         <button
-                          type="button"
-                          style={buttonBase}
-                          onClick={() => {
-                            setSelectedId(r.id);
-                            setViewMode("editor");
-                          }}
-                        >
+                        type="button" className={rlcClass(null,
+                        buttonBase)}
+                        onClick={() => {
+                          setSelectedId(r.id);
+                          setViewMode("editor");
+                        }}>
+                        
                           Öffnen
                         </button>
                       </td>
-                    </tr>
-                  );
-                })}
+                    </tr>);
 
-                {!filteredRows.length ? (
-                  <tr>
-                    <td colSpan={9} style={{ padding: 16, color: "#64748B" }}>
+              })}
+
+                {!filteredRows.length ?
+              <tr>
+                    <td colSpan={9} className="rlc-migrated-pages-kalkulation-lv-import-tsx-916">
                       Keine LV-Positionen vorhanden.
                     </td>
-                  </tr>
-                ) : null}
+                  </tr> :
+              null}
               </tbody>
             </table>
           </div>
         </section>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
 
 /* ===================== STYLES ===================== */
@@ -1402,26 +1763,26 @@ const qualityPanel: React.CSSProperties = {
   padding: 14,
   display: "grid",
   gap: 12,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const qualityTop: React.CSSProperties = {
   display: "grid",
-  gap: 10,
+  gap: 10
 };
 
 const qualitySub: React.CSSProperties = {
   marginTop: 3,
   color: "#64748B",
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const qualityActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const chip: React.CSSProperties = {
@@ -1431,24 +1792,24 @@ const chip: React.CSSProperties = {
   borderRadius: 999,
   padding: "7px 11px",
   fontSize: 12,
-  fontWeight: 900,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const chipActive: React.CSSProperties = {
   ...chip,
-  border: "1px solid #2563EB",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #146EF5",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const kiProtocolBox: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   borderRadius: 14,
   padding: 12,
   display: "grid",
-  gap: 9,
+  gap: 9
 };
 
 const protocolHead: React.CSSProperties = {
@@ -1456,26 +1817,26 @@ const protocolHead: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 8,
   color: "#0F172A",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const progressTrack: React.CSSProperties = {
   height: 9,
   borderRadius: 999,
   background: "#DBEAFE",
-  overflow: "hidden",
+  overflow: "hidden"
 };
 
 const progressFill: React.CSSProperties = {
   height: "100%",
   borderRadius: 999,
-  background: "linear-gradient(90deg,#2563EB,#22C55E)",
-  transition: "width 220ms ease",
+  background: "linear-gradient(90deg,#146EF5,#22C55E)",
+  transition: "width 220ms ease"
 };
 
 const protocolList: React.CSSProperties = {
   display: "grid",
-  gap: 6,
+  gap: 6
 };
 
 const protocolOk: React.CSSProperties = {
@@ -1485,30 +1846,30 @@ const protocolOk: React.CSSProperties = {
   borderRadius: 10,
   padding: "7px 9px",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const protocolWarn: React.CSSProperties = {
   ...protocolOk,
   border: "1px solid #FDE68A",
   background: "#FFFBEB",
-  color: "#92400E",
+  color: "#92400E"
 };
 
 const page: React.CSSProperties = {
   display: "grid",
   gap: 14,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 20,
   display: "grid",
   gap: 12,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -1516,38 +1877,38 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.82,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 28,
-  fontWeight: 900,
-  lineHeight: 1.1,
+  fontWeight: 700,
+  lineHeight: 1.1
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 940,
   opacity: 0.9,
-  lineHeight: 1.5,
+  lineHeight: 1.5
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92,
+  opacity: 0.92
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -1556,31 +1917,31 @@ const kpiCard: React.CSSProperties = {
   borderRadius: 16,
   padding: 14,
   boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-  minWidth: 0,
+  minWidth: 0
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 21,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700,
   overflow: "hidden",
   textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const compactToolbar: React.CSSProperties = {
@@ -1593,7 +1954,7 @@ const compactToolbar: React.CSSProperties = {
   gap: 12,
   flexWrap: "wrap",
   alignItems: "center",
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const toolbarLeft: React.CSSProperties = {
@@ -1601,14 +1962,14 @@ const toolbarLeft: React.CSSProperties = {
   gap: 10,
   alignItems: "center",
   flex: "1 1 420px",
-  minWidth: 280,
+  minWidth: 280
 };
 
 const toolbarButtons: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const searchInput: React.CSSProperties = {
@@ -1619,7 +1980,7 @@ const searchInput: React.CSSProperties = {
   padding: "10px 12px",
   background: "#FFFFFF",
   color: "#111827",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const mwstBox: React.CSSProperties = {
@@ -1632,7 +1993,7 @@ const mwstBox: React.CSSProperties = {
   padding: "7px 9px",
   color: "#475569",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const mwstInput: React.CSSProperties = {
@@ -1641,20 +2002,20 @@ const mwstInput: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 7px",
   fontSize: 13,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const statusBox = (info: string): React.CSSProperties => {
   const isError =
-    info.startsWith("Fehler") ||
-    info.startsWith("Server-Fehler") ||
-    info.includes("fehlgeschlagen");
+  info.startsWith("Fehler") ||
+  info.startsWith("Server-Fehler") ||
+  info.includes("fehlgeschlagen");
 
   const isSuccess =
-    info.includes("gespeichert") ||
-    info.includes("importiert") ||
-    info.includes("exportiert") ||
-    info.includes("erstellt");
+  info.includes("gespeichert") ||
+  info.includes("importiert") ||
+  info.includes("exportiert") ||
+  info.includes("erstellt");
 
   return {
     padding: "11px 13px",
@@ -1663,7 +2024,7 @@ const statusBox = (info: string): React.CSSProperties => {
     background: isError ? "#FEF2F2" : isSuccess ? "#F0FDF4" : "#F8FAFC",
     color: isError ? "#B91C1C" : isSuccess ? "#15803D" : "#475569",
     fontSize: 13,
-    fontWeight: 700,
+    fontWeight: 600
   };
 };
 
@@ -1671,7 +2032,7 @@ const mainLayout: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "390px minmax(0,1fr)",
   gap: 14,
-  alignItems: "start",
+  alignItems: "start"
 };
 
 const card: React.CSSProperties = {
@@ -1679,7 +2040,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const listCard: React.CSSProperties = {
@@ -1689,18 +2050,20 @@ const listCard: React.CSSProperties = {
   maxHeight: "calc(100vh - 24px)",
   overflow: "hidden",
   display: "grid",
-  gridTemplateRows: "auto minmax(0,1fr)",
+  gridTemplateRows: "auto minmax(0,1fr)"
 };
 
 const listHeader: React.CSSProperties = {
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const positionList: React.CSSProperties = {
   display: "grid",
+  gridAutoRows: "max-content",
+  alignContent: "start",
   gap: 8,
   overflow: "auto",
-  paddingRight: 4,
+  paddingRight: 4
 };
 
 const positionItem: React.CSSProperties = {
@@ -1710,39 +2073,50 @@ const positionItem: React.CSSProperties = {
   background: "#FFFFFF",
   borderRadius: 12,
   padding: 10,
+  minHeight: 92,
+  height: "auto",
+  maxHeight: "none",
+  overflow: "visible",
+  alignSelf: "stretch",
   cursor: "pointer",
   textAlign: "left",
-  color: "#0F172A",
+  whiteSpace: "normal",
+  color: "#0F172A"
 };
 
 const positionItemActive: React.CSSProperties = {
-  borderColor: "#2563EB",
-  background: "#EFF6FF",
+  borderColor: "#146EF5",
+  background: "#EAF2FF"
 };
 
 const positionTop: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 8,
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const positionText: React.CSSProperties = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
+  overflow: "hidden",
+  minHeight: 35,
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   lineHeight: 1.35,
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const positionMeta: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  lineHeight: 1.4,
+  lineHeight: 1.4
 };
 
 const editorCard: React.CSSProperties = {
   ...card,
-  minWidth: 0,
+  minWidth: 0
 };
 
 const editorHead: React.CSSProperties = {
@@ -1751,40 +2125,40 @@ const editorHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 14,
+  marginBottom: 14
 };
 
 const editorActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const formGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1.1fr 0.7fr 0.7fr 0.7fr",
-  gap: 12,
+  gap: 12
 };
 
 const formGrid2: React.CSSProperties = {
@@ -1792,7 +2166,7 @@ const formGrid2: React.CSSProperties = {
   gridTemplateColumns: "minmax(0,1fr) 220px",
   gap: 12,
   marginTop: 12,
-  alignItems: "end",
+  alignItems: "end"
 };
 
 const inputStyle: React.CSSProperties = {
@@ -1803,7 +2177,7 @@ const inputStyle: React.CSSProperties = {
   padding: "10px 12px",
   background: "#FFFFFF",
   color: "#111827",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const largeTextArea: React.CSSProperties = {
@@ -1811,7 +2185,7 @@ const largeTextArea: React.CSSProperties = {
   minHeight: 180,
   resize: "vertical",
   fontFamily: "inherit",
-  lineHeight: 1.5,
+  lineHeight: 1.5
 };
 
 const noteTextArea: React.CSSProperties = {
@@ -1819,28 +2193,28 @@ const noteTextArea: React.CSSProperties = {
   minHeight: 78,
   resize: "vertical",
   fontFamily: "inherit",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const sumBox: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   borderRadius: 12,
-  padding: "10px 12px",
+  padding: "10px 12px"
 };
 
 const sumLabel: React.CSSProperties = {
   fontSize: 12,
-  color: "#1D4ED8",
-  fontWeight: 900,
-  textTransform: "uppercase",
+  color: "#0B5BD3",
+  fontWeight: 700,
+  textTransform: "uppercase"
 };
 
 const sumValue: React.CSSProperties = {
   marginTop: 5,
   fontSize: 20,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const bottomActions: React.CSSProperties = {
@@ -1848,7 +2222,7 @@ const bottomActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  justifyContent: "flex-end",
+  justifyContent: "flex-end"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -1857,20 +2231,20 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const tableWrap: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 12,
   overflow: "auto",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 1120,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -1878,17 +2252,17 @@ const th: React.CSSProperties = {
   padding: "10px 10px",
   borderBottom: "1px solid #E5E7EB",
   background: "#F8FAFC",
-  fontWeight: 900,
+  fontWeight: 700,
   whiteSpace: "nowrap",
   fontSize: 12,
   color: "#475569",
   textTransform: "uppercase",
-  letterSpacing: "0.02em",
+  letterSpacing: "0.02em"
 };
 
 const thRight: React.CSSProperties = {
   ...th,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const td: React.CSSProperties = {
@@ -1896,13 +2270,13 @@ const td: React.CSSProperties = {
   borderBottom: "1px solid #F1F5F9",
   verticalAlign: "middle",
   fontSize: 13,
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const buttonBase: React.CSSProperties = {
@@ -1913,35 +2287,35 @@ const buttonBase: React.CSSProperties = {
   background: "#FFFFFF",
   color: "#0F172A",
   cursor: "pointer",
-  fontWeight: 800,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const buttonPrimary: React.CSSProperties = {
   ...buttonBase,
-  background: "#2563EB",
-  border: "1px solid #1D4ED8",
-  color: "#FFFFFF",
+  background: "#146EF5",
+  border: "1px solid #0B5BD3",
+  color: "#FFFFFF"
 };
 
 const buttonDanger: React.CSSProperties = {
   ...buttonBase,
   background: "#FEF2F2",
   border: "1px solid #FECACA",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const btnHeroPrimary: React.CSSProperties = {
   ...buttonPrimary,
   padding: "10px 15px",
-  boxShadow: "0 10px 20px rgba(37,99,235,0.22)",
+  boxShadow: "0 10px 20px rgba(37,99,235,0.22)"
 };
 
 const btnHeroSecondary: React.CSSProperties = {
   ...buttonBase,
   padding: "10px 15px",
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -1953,8 +2327,8 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "5px 9px",
   fontSize: 12,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 function statusBadge(status: "ok" | "warning" | "critical"): React.CSSProperties {
@@ -1963,7 +2337,7 @@ function statusBadge(status: "ok" | "warning" | "critical"): React.CSSProperties
       ...badgeNeutral,
       border: "1px solid #BBF7D0",
       background: "#F0FDF4",
-      color: "#15803D",
+      color: "#15803D"
     };
   }
 
@@ -1972,7 +2346,7 @@ function statusBadge(status: "ok" | "warning" | "critical"): React.CSSProperties
       ...badgeNeutral,
       border: "1px solid #FDE68A",
       background: "#FFFBEB",
-      color: "#B45309",
+      color: "#B45309"
     };
   }
 
@@ -1980,7 +2354,7 @@ function statusBadge(status: "ok" | "warning" | "critical"): React.CSSProperties
     ...badgeNeutral,
     border: "1px solid #FECACA",
     background: "#FEF2F2",
-    color: "#B91C1C",
+    color: "#B91C1C"
   };
 }
 
@@ -1990,11 +2364,5 @@ const emptyState: React.CSSProperties = {
   borderRadius: 12,
   padding: 14,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
-
-
-
-
-
-

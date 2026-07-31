@@ -329,6 +329,19 @@ router.post("/angebot", async (req: any, res) => {
     const project = body.project || {};
     const options = body.options || {};
     const rows = cleanOfferRows(Array.isArray(body.rows) ? body.rows : []);
+    const chapterSummaries = Array.isArray(body.chapterSummaries)
+      ? body.chapterSummaries
+          .map((row: any) => ({
+            chapter: s(row?.chapter || "—"),
+            rawNetto: n(row?.rawNetto),
+            rabatt: n(row?.rabatt),
+            rabattValue: n(row?.rabattValue),
+            markup: n(row?.markup),
+            markupValue: n(row?.markupValue),
+            finalNetto: n(row?.finalNetto),
+          }))
+          .filter((row: any) => row.chapter)
+      : [];
     const totals = body.totals || {};
 
     const projectCode = s(project.code || project.number || project.id || "Projekt");
@@ -393,6 +406,37 @@ router.post("/angebot", async (req: any, res) => {
           money(ep),
           money(total),
         ]);
+      }
+
+      const adjustedChapters = chapterSummaries.filter(
+        (row: any) => Math.abs(row.rabatt) > 1e-9 || Math.abs(row.markup) > 1e-9
+      );
+
+      if (adjustedChapters.length) {
+        ensurePage(doc, 110);
+        doc.moveDown(0.8);
+        doc.font("Helvetica-Bold").fontSize(11).fillColor("#0F172A");
+        doc.text("Kapitelrabatte / Aufschläge", 56, doc.y, { width: 484 });
+        doc.y += 18;
+
+        const adjustmentCols = [
+          { label: "Kapitel", x: 56, w: 58 },
+          { label: "Netto vorher", x: 122, w: 92, align: "right" },
+          { label: "Rabatt", x: 222, w: 84, align: "right" },
+          { label: "Aufschlag", x: 314, w: 92, align: "right" },
+          { label: "Netto final", x: 414, w: 126, align: "right" },
+        ];
+
+        tableHeader(doc, adjustmentCols);
+        for (const row of adjustedChapters) {
+          rowLine(doc, adjustmentCols, [
+            row.chapter,
+            money(row.rawNetto),
+            `${num(row.rabatt, 2)}% · -${money(row.rabattValue)}`,
+            `${num(row.markup, 2)}% · +${money(row.markupValue)}`,
+            money(row.finalNetto),
+          ]);
+        }
       }
 
       doc.moveDown(1.0);

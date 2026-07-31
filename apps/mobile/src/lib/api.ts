@@ -473,8 +473,7 @@ function isPublicEndpoint(path: string) {
   return (
     p.startsWith("/api/auth/") ||
     p === "/api/health" ||
-    p === "/health" ||
-    p.startsWith("/api/license/")
+    p === "/health"
   );
 }
 
@@ -2745,35 +2744,27 @@ export const api = {
 
   async submitTagesberichtInbox(projectIdOrCode: string, payload: any) {
     const projectKey = await resolveProjectCode(projectIdOrCode);
-    return request<any>(tagesberichtSubmitEndpoint(), {
+    return request<any>(regieSubmitEndpoint(), {
       method: "POST",
       body: JSON.stringify({
         ...(payload || {}),
         projectId: projectKey,
         projectCode: projectKey,
+        reportType: "TAGESBERICHT",
       }),
     });
   },
 
   async tagesberichtInboxList(projectIdOrCode: string) {
-  const projectKey = await resolveProjectCode(projectIdOrCode);
-
-  const candidates = [
-    tagesberichtInboxListEndpoint(projectKey),
-    tagesberichtInboxListEndpointPlural(projectKey),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, { method: "GET" });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht inbox list failed");
+    const projectKey = await resolveProjectCode(projectIdOrCode);
+    const result = await request<any>(
+      `/api/regie/inbox/list?projectId=${encodeURIComponent(projectKey)}`,
+      { method: "GET" }
+    );
+    const items = Array.isArray(result?.items)
+      ? result.items.filter((item: any) => item?.reportType === "TAGESBERICHT")
+      : [];
+    return { ...result, items };
 },
 
   async tagesberichtReject(
@@ -2789,25 +2780,10 @@ export const api = {
     reason,
   };
 
-  const candidates = [
-    tagesberichtInboxRejectEndpoint(),
-    tagesberichtInboxRejectEndpointPlural(),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht reject failed");
+  return request<any>("/api/regie/inbox/reject", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 },
 
    async commitTagesbericht(projectIdOrCode: string, payload: any) {
@@ -2842,23 +2818,10 @@ export const api = {
 
 async tagesberichtInboxRead(projectIdOrCode: string, docId: string) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
-
-  const candidates = [
-    tagesberichtInboxReadEndpoint(projectKey, docId),
-    tagesberichtInboxReadEndpointPlural(projectKey, docId),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, { method: "GET" });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht inbox read failed");
+  return request<any>(
+    `/api/regie/inbox/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
+    { method: "GET" }
+  );
 },
 
 async tagesberichtApprove(
@@ -2874,25 +2837,10 @@ async tagesberichtApprove(
     approvedBy: approvedBy || undefined,
   };
 
-  const candidates = [
-    tagesberichtInboxApproveEndpoint(),
-    tagesberichtInboxApproveEndpointPlural(),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht approve failed");
+  return request<any>("/api/regie/inbox/approve", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 },
 
   async pushTagesberichtToServer(projectIdOrCode: string, row: any) {

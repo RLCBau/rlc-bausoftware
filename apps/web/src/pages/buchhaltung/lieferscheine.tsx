@@ -5,10 +5,10 @@ import type { Lieferschein } from "./types";
 import "./styles.css";
 
 const eur = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -17,7 +17,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -63,7 +63,7 @@ export default function LieferscheineKosten() {
       kosten: safeNumber(x.kosten ?? x.betrag ?? 0),
       projekt: safeTrim(x.projekt),
       projectId: safeTrim(x.projectId),
-      projectCode: safeTrim(x.projectCode),
+      projectCode: safeTrim(x.projectCode)
     })) as Lieferschein[];
   }, [ls]);
 
@@ -72,16 +72,16 @@ export default function LieferscheineKosten() {
 
     const hasProjectInfo = normalizedLs.some(
       (x: any) =>
-        safeTrim(x.projectCode) || safeTrim(x.projectId) || safeTrim(x.projekt)
+      safeTrim(x.projectCode) || safeTrim(x.projectId) || safeTrim(x.projekt)
     );
 
     if (!hasProjectInfo) return normalizedLs;
 
     return normalizedLs.filter((x: any) => {
-      return [x.projectCode, x.projectId, x.projekt]
-        .map((v) => safeTrim(v))
-        .filter(Boolean)
-        .includes(activeProjectKey);
+      return [x.projectCode, x.projectId, x.projekt].
+      map((v) => safeTrim(v)).
+      filter(Boolean).
+      includes(activeProjectKey);
     });
   }, [normalizedLs, activeProjectKey]);
 
@@ -116,18 +116,18 @@ export default function LieferscheineKosten() {
       const qq = q.trim().toLowerCase();
       arr = arr.filter((x: any) => {
         const hay = [
-          x.nummer,
-          x.datum,
-          x.kostenstelle,
-          x.lieferant,
-          String(x.kosten ?? ""),
-          x.projectCode,
-          x.projectId,
-          x.projekt,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
+        x.nummer,
+        x.datum,
+        x.kostenstelle,
+        x.lieferant,
+        String(x.kosten ?? ""),
+        x.projectCode,
+        x.projectId,
+        x.projekt].
+
+        filter(Boolean).
+        join(" ").
+        toLowerCase();
 
         return hay.includes(qq);
       });
@@ -171,7 +171,7 @@ export default function LieferscheineKosten() {
       kosten: 0,
       lieferant: "",
       ...(activeProjectId ? { projectId: activeProjectId } : {}),
-      ...(activeProjectCode ? { projectCode: activeProjectCode } : {}),
+      ...(activeProjectCode ? { projectCode: activeProjectCode } : {})
     };
 
     setLs((prev: Lieferschein[]) => [item, ...prev]);
@@ -179,17 +179,17 @@ export default function LieferscheineKosten() {
 
   const update = (id: string, patch: Partial<Lieferschein>) => {
     setLs((prev: Lieferschein[]) =>
-      prev.map((x) =>
-        x.id === id
-          ? {
-              ...x,
-              ...patch,
-              ...(patch.kosten !== undefined
-                ? { kosten: safeNumber(patch.kosten, 0) }
-                : {}),
-            }
-          : x
-      )
+    prev.map((x) =>
+    x.id === id ?
+    {
+      ...x,
+      ...patch,
+      ...(patch.kosten !== undefined ?
+      { kosten: safeNumber(patch.kosten, 0) } :
+      {})
+    } :
+    x
+    )
     );
   };
 
@@ -206,7 +206,7 @@ export default function LieferscheineKosten() {
       Lieferant: x.lieferant || "",
       Kosten: safeNumber(x.kosten, 0).toFixed(2),
       Projektcode: x.projectCode || "",
-      ProjektID: x.projectId || "",
+      ProjektID: x.projectId || ""
     }));
 
     downloadCSV(rows, "lieferscheine_kosten.csv");
@@ -217,14 +217,14 @@ export default function LieferscheineKosten() {
       <div className="bh-header-row">
         <div>
           <h2>Lieferscheine (Kosten)</h2>
-          <div className="bh-note" style={{ marginTop: 4 }}>
-            {activeProjectKey ? (
-              <>
+          <div className="bh-note rlc-migrated-pages-buchhaltung-lieferscheine-tsx-237">
+            {activeProjectKey ?
+            <>
                 Aktuelles Projekt: <b>{activeProjectKey}</b>
-              </>
-            ) : (
-              "Kein Projekt ausgewählt"
-            )}
+              </> :
+
+            "Kein Projekt ausgewählt"
+            }
           </div>
         </div>
 
@@ -235,8 +235,8 @@ export default function LieferscheineKosten() {
           <button
             className="bh-btn ghost"
             onClick={exportCSV}
-            disabled={!filtered.length}
-          >
+            disabled={!filtered.length}>
+            
             Export CSV
           </button>
         </div>
@@ -248,29 +248,29 @@ export default function LieferscheineKosten() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Nummer / Lieferant / Kostenstelle…"
-          />
+            placeholder="Nummer / Lieferant / Kostenstelle…" />
+          
         </div>
 
         <div>
           <label>Kostenstelle</label>
           <select value={ks} onChange={(e) => setKs(e.target.value)}>
-            {kostenstellen.map((x) => (
-              <option key={x} value={x}>
+            {kostenstellen.map((x) =>
+            <option key={x} value={x}>
                 {x === "ALL" ? "Alle" : x}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
         <div>
           <label>Lieferant</label>
           <select value={lieferant} onChange={(e) => setLieferant(e.target.value)}>
-            {lieferanten.map((x) => (
-              <option key={x} value={x}>
+            {lieferanten.map((x) =>
+            <option key={x} value={x}>
                 {x === "ALL" ? "Alle" : x}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
@@ -285,7 +285,7 @@ export default function LieferscheineKosten() {
         </div>
 
         <div className="bh-filters-right">
-          <div style={{ fontWeight: 700, paddingTop: 22 }}>Summe: {eur(totalSum)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-238">Summe: {eur(totalSum)} €</div>
         </div>
       </div>
 
@@ -301,75 +301,75 @@ export default function LieferscheineKosten() {
               <th>Datum</th>
               <th>Kostenstelle</th>
               <th>Lieferant</th>
-              <th style={{ textAlign: "right" }}>Kosten (€)</th>
+              <th className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-239">Kosten (€)</th>
               <th>Aktion</th>
             </tr>
           </thead>
 
           <tbody>
-            {filtered.map((x: any) => (
-              <tr key={x.id}>
+            {filtered.map((x: any) =>
+            <tr key={x.id}>
                 <td>
                   <input
-                    value={x.nummer || ""}
-                    onChange={(e) => update(x.id, { nummer: e.target.value })}
-                    style={{ width: 160 }}
-                  />
-                </td>
+                  value={x.nummer || ""}
+                  onChange={(e) => update(x.id, { nummer: e.target.value })} className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-240" />
 
-                <td>
-                  <input
-                    value={x.datum || ""}
-                    onChange={(e) => update(x.id, { datum: e.target.value })}
-                    style={{ width: 140 }}
-                  />
+                
                 </td>
 
                 <td>
                   <input
-                    value={x.kostenstelle || ""}
-                    onChange={(e) => update(x.id, { kostenstelle: e.target.value })}
-                    style={{ width: 220 }}
-                  />
+                  value={x.datum || ""}
+                  onChange={(e) => update(x.id, { datum: e.target.value })} className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-241" />
+
+                
                 </td>
 
                 <td>
                   <input
-                    value={x.lieferant || ""}
-                    onChange={(e) => update(x.id, { lieferant: e.target.value })}
-                    style={{ width: 220 }}
-                  />
+                  value={x.kostenstelle || ""}
+                  onChange={(e) => update(x.id, { kostenstelle: e.target.value })} className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-242" />
+
+                
                 </td>
 
-                <td style={{ textAlign: "right" }}>
+                <td>
                   <input
-                    value={String(safeNumber(x.kosten, 0))}
-                    onChange={(e) =>
-                      update(x.id, { kosten: safeNumber(e.target.value, 0) })
-                    }
-                    style={{ width: 140, textAlign: "right" }}
-                  />
+                  value={x.lieferant || ""}
+                  onChange={(e) => update(x.id, { lieferant: e.target.value })} className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-243" />
+
+                
                 </td>
 
-                <td style={{ whiteSpace: "nowrap" }}>
+                <td className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-244">
+                  <input
+                  value={String(safeNumber(x.kosten, 0))}
+                  onChange={(e) =>
+                  update(x.id, { kosten: safeNumber(e.target.value, 0) })
+                  } className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-245" />
+
+                
+                </td>
+
+                <td className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-246">
                   <button className="bh-btn ghost" onClick={() => remove(x.id)}>
                     Löschen
                   </button>
                 </td>
               </tr>
-            ))}
+            )}
 
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", color: "#777" }}>
+            {filtered.length === 0 &&
+            <tr>
+                <td colSpan={6} className="rlc-migrated-pages-buchhaltung-lieferscheine-tsx-247">
                   Keine Lieferscheine im aktuellen Filter.
                 </td>
               </tr>
-            )}
+            }
           </tbody>
         </table>
 
-        <div className="bh-note" style={{ marginTop: 10 }}>
+        <div className="bh-note rlc-migrated-pages-buchhaltung-lieferscheine-tsx-248">
           Hinweis: Diese Seite nutzt aktuell den Buchhaltung-Store{" "}
           <code>useLieferscheine()</code> (Key: <code>rlc_bh_lieferscheine</code>).
           Später sollte sie mit derselben Lieferschein-Logik wie mobile/server
@@ -377,8 +377,8 @@ export default function LieferscheineKosten() {
           Daten zugreifen.
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function downloadCSV(rows: Record<string, any>[], filename: string) {
@@ -389,11 +389,11 @@ function downloadCSV(rows: Record<string, any>[], filename: string) {
 
   const headers = Object.keys(rows[0]);
   const csv = [
-    headers.join(";"),
-    ...rows.map((r) =>
-      headers.map((h) => `"${String(r[h] ?? "").replace(/"/g, '""')}"`).join(";")
-    ),
-  ].join("\n");
+  headers.join(";"),
+  ...rows.map((r) =>
+  headers.map((h) => `"${String(r[h] ?? "").replace(/"/g, '""')}"`).join(";")
+  )].
+  join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
@@ -411,8 +411,3 @@ function cryptoRandomId() {
   } catch {}
   return `id_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 }
-
-
-
-
-

@@ -1,3 +1,4 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 // apps/web/src/pages/kalkulation/lvOhnePreis.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,9 +10,9 @@ import { useProject } from "../../store/useProject";
 type ExportFormat = "csv" | "pdf" | "gaeb-x83" | "gaeb-x84";
 
 const API =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "";
+(import.meta as any)?.env?.VITE_API_URL ||
+(import.meta as any)?.env?.VITE_BACKEND_URL ||
+"";
 
 function apiUrl(path: string): string {
   const cleanApi = String(API || "").replace(/\/+$/, "");
@@ -22,13 +23,13 @@ function apiUrl(path: string): string {
 function getAuthToken(): string {
   try {
     const keys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of keys) {
       const value = localStorage.getItem(key);
@@ -44,22 +45,22 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
+
         //
-      }
-    }
+      }}
   } catch {
+
     //
   }
-
   return "";
 }
 
@@ -68,7 +69,7 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
 
   return {
     ...(extra || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -79,8 +80,8 @@ function getCurrentProject(projectCtx: any): any {
     projectCtx?.selectedProject ||
     projectCtx?.current ||
     projectCtx ||
-    null
-  );
+    null);
+
 }
 
 function getProjectKey(projectCtx: any): string {
@@ -88,14 +89,14 @@ function getProjectKey(projectCtx: any): string {
 
   return String(
     p?.code ||
-      p?.projectCode ||
-      p?.number ||
-      p?.projektnummer ||
-      p?.id ||
-      ""
-  )
-    .trim()
-    .toUpperCase();
+    p?.projectCode ||
+    p?.number ||
+    p?.projektnummer ||
+    p?.id ||
+    ""
+  ).
+  trim().
+  toUpperCase();
 }
 
 function getProjectName(projectCtx: any): string {
@@ -123,9 +124,9 @@ function csvEscape(value: unknown): string {
 
 function n(value: unknown): number {
   const x =
-    typeof value === "number"
-      ? value
-      : Number(String(value ?? "").replace(",", ".").trim());
+  typeof value === "number" ?
+  value :
+  Number(String(value ?? "").replace(",", ".").trim());
 
   return Number.isFinite(x) ? x : 0;
 }
@@ -133,15 +134,15 @@ function n(value: unknown): number {
 function fmtNumber(value: unknown, digits = 3): string {
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
+    maximumFractionDigits: digits
   }).format(n(value));
 }
 
 function safeFileName(value: string): string {
-  return String(value || "Projekt")
-    .replace(/[^\w.-]+/g, "_")
-    .replace(/_+/g, "_")
-    .slice(0, 120);
+  return String(value || "Projekt").
+  replace(/[^\w.-]+/g, "_").
+  replace(/_+/g, "_").
+  slice(0, 120);
 }
 
 function todayDE(): string {
@@ -149,29 +150,29 @@ function todayDE(): string {
 }
 
 function cleanRows(rows: LVPos[]): LVPos[] {
-  return rows
-    .filter((r) => {
-      const pos = String(r.posNr || "").trim();
-      const text = String(r.kurztext || r.langtext || "").trim();
-      const unit = String(r.einheit || "").trim();
-      const qty = n(r.menge);
+  return rows.
+  filter((r) => {
+    const pos = String(r.posNr || "").trim();
+    const text = String(r.kurztext || r.langtext || "").trim();
+    const unit = String(r.einheit || "").trim();
+    const qty = n(r.menge);
 
-      if (!pos && !text && !unit && qty === 0) return false;
-      if (pos.toUpperCase().startsWith("BA-")) return false;
+    if (!pos && !text && !unit && qty === 0) return false;
+    if (pos.toUpperCase().startsWith("BA-")) return false;
 
-      return true;
-    })
-    .map((r) => ({
-      ...r,
-      posNr: String(r.posNr || "").trim(),
-      kurztext: String(r.kurztext || "").trim(),
-      langtext: String(r.langtext || "").trim(),
-      bemerkung: String(r.bemerkung || "").trim(),
-      einheit: String(r.einheit || "").trim(),
-      menge: n(r.menge),
-      preis: 0,
-      gesamt: 0,
-    }));
+    return true;
+  }).
+  map((r) => ({
+    ...r,
+    posNr: String(r.posNr || "").trim(),
+    kurztext: String(r.kurztext || "").trim(),
+    langtext: String(r.langtext || "").trim(),
+    bemerkung: String(r.bemerkung || "").trim(),
+    einheit: String(r.einheit || "").trim(),
+    menge: n(r.menge),
+    preis: 0,
+    gesamt: 0
+  }));
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -184,27 +185,27 @@ function downloadBlob(blob: Blob, filename: string) {
 
 function downloadCsv(rows: LVPos[], projectKey: string) {
   const header = [
-    "Position",
-    "ParentPosition",
-    "Kurztext",
-    "Langtext",
-    "Bemerkung",
-    "ME",
-    "Menge",
-    "EP_Manuell",
-  ];
+  "Position",
+  "ParentPosition",
+  "Kurztext",
+  "Langtext",
+  "Bemerkung",
+  "ME",
+  "Menge",
+  "EP_Manuell"];
+
 
   const body = rows.map((r) =>
-    [
-      csvEscape(r.posNr),
-      csvEscape(r.parentPosNr || ""),
-      csvEscape(r.kurztext),
-      csvEscape(r.langtext || ""),
-      csvEscape(r.bemerkung || ""),
-      csvEscape(r.einheit),
-      csvEscape(fmtNumber(r.menge)),
-      "",
-    ].join(";")
+  [
+  csvEscape(r.posNr),
+  csvEscape(r.parentPosNr || ""),
+  csvEscape(r.kurztext),
+  csvEscape(r.langtext || ""),
+  csvEscape(r.bemerkung || ""),
+  csvEscape(r.einheit),
+  csvEscape(fmtNumber(r.menge)),
+  ""].
+  join(";")
   );
 
   const csv = [header.join(";"), ...body].join("\n");
@@ -216,30 +217,30 @@ function downloadCsv(rows: LVPos[], projectKey: string) {
 }
 
 function xmlEscape(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(value ?? "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;");
 }
 
 function buildGaebXml(
-  rows: LVPos[],
-  projectKey: string,
-  projectName: string,
-  mode: "x83" | "x84"
-) {
+rows: LVPos[],
+projectKey: string,
+projectName: string,
+mode: "x83" | "x84")
+{
   const phase = mode.toUpperCase();
 
-  const positions = rows
-    .map((r, i) => {
-      const pos = xmlEscape(r.posNr || String(i + 1).padStart(3, "0"));
-      const short = xmlEscape(r.kurztext || "Position ohne Kurztext");
-      const long = xmlEscape(r.langtext || r.bemerkung || "");
-      const unit = xmlEscape(r.einheit || "m");
-      const qty = String(n(r.menge)).replace(",", ".");
+  const positions = rows.
+  map((r, i) => {
+    const pos = xmlEscape(r.posNr || String(i + 1).padStart(3, "0"));
+    const short = xmlEscape(r.kurztext || "Position ohne Kurztext");
+    const long = xmlEscape(r.langtext || r.bemerkung || "");
+    const unit = xmlEscape(r.einheit || "m");
+    const qty = String(n(r.menge)).replace(",", ".");
 
-      return `
+    return `
       <Item ID="${pos}">
         <ItemNo>${pos}</ItemNo>
         <Qty>${qty}</Qty>
@@ -257,8 +258,8 @@ function buildGaebXml(
           </CompleteText>
         </Description>
       </Item>`;
-    })
-    .join("");
+  }).
+  join("");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <GAEB DA="${phase}">
@@ -279,16 +280,16 @@ function buildGaebXml(
 }
 
 async function exportGaebViaServer(
-  rows: LVPos[],
-  projectKey: string,
-  projectName: string,
-  mode: "x83" | "x84"
-) {
+rows: LVPos[],
+projectKey: string,
+projectName: string,
+mode: "x83" | "x84")
+{
   const payload = {
     project: {
       code: projectKey,
       number: projectKey,
-      name: projectName,
+      name: projectName
     },
     rows: rows.map((r) => ({
       id: r.id,
@@ -303,12 +304,12 @@ async function exportGaebViaServer(
       ep: 0,
       gesamt: 0,
       total: 0,
-      waehrung: "EUR",
+      waehrung: "EUR"
     })),
     options: {
       withoutPrices: true,
-      mode,
-    },
+      mode
+    }
   };
 
   try {
@@ -318,8 +319,8 @@ async function exportGaebViaServer(
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         format: mode.toUpperCase(),
-        ...payload,
-      }),
+        ...payload
+      })
     });
 
     if (!res.ok) {
@@ -338,16 +339,16 @@ async function exportGaebViaServer(
 }
 
 function exportPdf(
-  rows: LVPos[],
-  projectKey: string,
-  projectName: string,
-  client: string,
-  place: string
-) {
+rows: LVPos[],
+projectKey: string,
+projectName: string,
+client: string,
+place: string)
+{
   const doc = new jsPDF({
     unit: "mm",
     format: "a4",
-    orientation: "portrait",
+    orientation: "portrait"
   });
 
   const pageW = doc.internal.pageSize.getWidth();
@@ -390,10 +391,10 @@ function exportPdf(
   doc.setFontSize(9.5);
   doc.setTextColor(51, 65, 85);
   doc.text("Export ohne Einheitspreise und Gesamtpreise", pageW - marginX, 48, {
-    align: "right",
+    align: "right"
   });
   doc.text("Spalte „EP / Preis“ ist für handschriftliche Preise vorgesehen.", pageW - marginX, 55, {
-    align: "right",
+    align: "right"
   });
 
   autoTable(doc, {
@@ -402,18 +403,18 @@ function exportPdf(
     theme: "grid",
     head: [["Pos.", "Leistungsbeschreibung", "ME", "Menge", "EP / Preis"]],
     body: rows.map((r) => [
-      r.posNr || "—",
-      [
-        r.kurztext || "—",
-        r.langtext ? `\n${r.langtext}` : "",
-        r.bemerkung ? `\nBemerkung: ${r.bemerkung}` : "",
-      ]
-        .filter(Boolean)
-        .join(""),
-      r.einheit || "—",
-      fmtNumber(r.menge),
-      "",
-    ]),
+    r.posNr || "—",
+    [
+    r.kurztext || "—",
+    r.langtext ? `\n${r.langtext}` : "",
+    r.bemerkung ? `\nBemerkung: ${r.bemerkung}` : ""].
+
+    filter(Boolean).
+    join(""),
+    r.einheit || "—",
+    fmtNumber(r.menge),
+    ""]
+    ),
     styles: {
       font: "helvetica",
       fontSize: 7.8,
@@ -422,29 +423,29 @@ function exportPdf(
       lineColor: [215, 224, 235],
       lineWidth: 0.12,
       minCellHeight: 9.5,
-      textColor: [15, 23, 42],
+      textColor: [15, 23, 42]
     },
     headStyles: {
       fillColor: [239, 246, 255],
       textColor: [30, 58, 138],
       fontStyle: "bold",
-      minCellHeight: 10,
+      minCellHeight: 10
     },
     alternateRowStyles: {
-      fillColor: [250, 252, 255],
+      fillColor: [250, 252, 255]
     },
     columnStyles: {
       0: { cellWidth: 24 },
       1: { cellWidth: 94 },
       2: { cellWidth: 16, halign: "center" },
       3: { cellWidth: 24, halign: "right" },
-      4: { cellWidth: 34, halign: "left" },
+      4: { cellWidth: 34, halign: "left" }
     },
     didDrawPage: () => {
       doc.setDrawColor(218, 226, 236);
       doc.setLineWidth(0.25);
       doc.rect(8, 8, pageW - 16, pageH - 16);
-    },
+    }
   });
 
   const pages = doc.getNumberOfPages();
@@ -459,7 +460,7 @@ function exportPdf(
     );
   }
 
-  doc.save(`LV_ohne_Preise_${safeFileName(projectKey)}.pdf`);
+  saveRlcPdfWithCompanyHeader(doc, `LV_ohne_Preise_${safeFileName(projectKey)}.pdf`);
 }
 
 export default function LVOhnePreis() {
@@ -495,8 +496,8 @@ export default function LVOhnePreis() {
 
     return rows.filter((r) => {
       const hay = `${r.posNr || ""} ${r.kurztext || ""} ${r.langtext || ""} ${
-        r.einheit || ""
-      }`.toLowerCase();
+      r.einheit || ""}`.
+      toLowerCase();
 
       return hay.includes(q);
     });
@@ -548,84 +549,84 @@ export default function LVOhnePreis() {
   }
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Ausschreibung / LV</div>
-          <h1 style={title}>LV ohne Preise exportieren</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Ausschreibung / LV</div>
+          <h1 className={rlcClass(null, title)}>LV ohne Preise exportieren</h1>
+          <p className={rlcClass(null, subtitle)}>
             Erstellt ein professionelles Leistungsverzeichnis ohne Einheitspreise
             und Gesamtpreise. Im PDF wird zusätzlich eine leere Preisspalte für
             handschriftliche Eintragungen ausgegeben.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <select
-            style={select}
-            value={format}
-            onChange={(e) => setFormat(e.target.value as ExportFormat)}
-          >
+        <div className={rlcClass(null, heroActions)}>
+          <select className={rlcClass(null,
+          select)}
+          value={format}
+          onChange={(e) => setFormat(e.target.value as ExportFormat)}>
+            
             <option value="pdf">PDF ohne Preise + Preisspalte</option>
             <option value="csv">CSV ohne Preise</option>
             <option value="gaeb-x83">GAEB X83 ohne Preise</option>
             <option value="gaeb-x84">GAEB X84 ohne Preise</option>
           </select>
 
-          <button style={btnPrimary} onClick={exportNow} disabled={!filtered.length}>
+          <button className={rlcClass(null, btnPrimary)} onClick={exportNow} disabled={!filtered.length}>
             Export erstellen
           </button>
 
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/lv-import")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/lv-import")}>
             ⇢ LV bearbeiten
           </button>
 
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/gaeb")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/gaeb")}>
             ⇢ GAEB Modul
           </button>
 
-          <button style={btnSecondary} onClick={() => navigate("/kalkulation/angebot")}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/angebot")}>
             ⇢ Angebot
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectKey || "—"}</b>
           {projectName ? <span> · {projectName}</span> : null}
           {status ? <span> · {status}</span> : null}
         </div>
       </section>
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <Kpi label="Positionen gesamt" value={String(totals.positions)} />
         <Kpi label="Mit Menge" value={String(totals.withQty)} />
         <Kpi label="Mit Kurztext" value={String(totals.withShortText)} />
         <Kpi
           label="Ohne Text"
           value={String(totals.withoutText)}
-          danger={totals.withoutText > 0}
-        />
+          danger={totals.withoutText > 0} />
+        
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Export-Einstellungen</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Export-Einstellungen</h2>
+            <div className={rlcClass(null, sectionText)}>
               Preise werden nicht exportiert. Im PDF bleibt rechts eine freie
               Spalte „EP / Preis“ zum manuellen Ausfüllen.
             </div>
           </div>
 
-          <input
-            style={searchInput}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Suche PosNr / Text / ME…"
-          />
+          <input className={rlcClass(null,
+          searchInput)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Suche PosNr / Text / ME…" />
+          
         </div>
 
-        <div style={infoGrid}>
+        <div className={rlcClass(null, infoGrid)}>
           <Info label="Format" value={format.toUpperCase()} />
           <Info label="Exportiert" value={`${filtered.length} von ${rows.length}`} />
           <Info label="Langtexte" value={String(totals.withLongText)} />
@@ -633,88 +634,88 @@ export default function LVOhnePreis() {
         </div>
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Export-Vorschau</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Export-Vorschau</h2>
+            <div className={rlcClass(null, sectionText)}>
               Vorschau des LV ohne Preise. Die PDF-Ausgabe enthält zusätzlich
               eine leere Preisspalte.
             </div>
           </div>
         </div>
 
-        <div style={tableWrap}>
-          <table style={table}>
+        <div className={rlcClass(null, tableWrap)}>
+          <table className={rlcClass(null, table)}>
             <thead>
               <tr>
-                <th style={th}>Pos.</th>
-                <th style={th}>Kurztext</th>
-                <th style={th}>Langtext</th>
-                <th style={th}>ME</th>
-                <th style={thRight}>Menge</th>
-                <th style={th}>EP / Preis</th>
+                <th className={rlcClass(null, th)}>Pos.</th>
+                <th className={rlcClass(null, th)}>Kurztext</th>
+                <th className={rlcClass(null, th)}>Langtext</th>
+                <th className={rlcClass(null, th)}>ME</th>
+                <th className={rlcClass(null, thRight)}>Menge</th>
+                <th className={rlcClass(null, th)}>EP / Preis</th>
               </tr>
             </thead>
 
             <tbody>
-              {filtered.map((r, i) => (
-                <tr
-                  key={r.id || `${r.posNr}-${i}`}
-                  style={{ background: i % 2 ? "#FCFCFC" : "#FFFFFF" }}
-                >
-                  <td style={tdStrong}>{r.posNr || "—"}</td>
-                  <td style={td}>{r.kurztext || "—"}</td>
-                  <td style={tdMuted}>
+              {filtered.map((r, i) =>
+              <tr
+                key={r.id || `${r.posNr}-${i}`} className={rlcClass(null,
+                { background: i % 2 ? "#FCFCFC" : "#FFFFFF" })}>
+                
+                  <td className={rlcClass(null, tdStrong)}>{r.posNr || "—"}</td>
+                  <td className={rlcClass(null, td)}>{r.kurztext || "—"}</td>
+                  <td className={rlcClass(null, tdMuted)}>
                     {r.langtext ? String(r.langtext).slice(0, 220) : "—"}
                   </td>
-                  <td style={td}>{r.einheit || "—"}</td>
-                  <td style={tdRight}>{fmtNumber(r.menge)}</td>
-                  <td style={tdMuted}>leer für Handschrift</td>
+                  <td className={rlcClass(null, td)}>{r.einheit || "—"}</td>
+                  <td className={rlcClass(null, tdRight)}>{fmtNumber(r.menge)}</td>
+                  <td className={rlcClass(null, tdMuted)}>leer für Handschrift</td>
                 </tr>
-              ))}
+              )}
 
-              {!filtered.length ? (
-                <tr>
-                  <td colSpan={6} style={{ ...td, color: "#64748B" }}>
+              {!filtered.length ?
+              <tr>
+                  <td colSpan={6} className={rlcClass(null, { ...td, color: "#64748B" })}>
                     Kein LV vorhanden oder kein Treffer im Filter.
                   </td>
-                </tr>
-              ) : null}
+                </tr> :
+              null}
             </tbody>
           </table>
         </div>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 function Kpi({
   label,
   value,
-  danger,
-}: {
-  label: string;
-  value: string;
-  danger?: boolean;
-}) {
+  danger
+
+
+
+
+}: {label: string;value: string;danger?: boolean;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={{ ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" }}>
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({ label, value }: {label: string;value: string;}) {
   return (
-    <div style={infoBox}>
-      <div style={infoLabel}>{label}</div>
-      <div style={infoValue}>{value}</div>
-    </div>
-  );
+    <div className={rlcClass(null, infoBox)}>
+      <div className={rlcClass(null, infoLabel)}>{label}</div>
+      <div className={rlcClass(null, infoValue)}>{value}</div>
+    </div>);
+
 }
 
 /* ================= STYLES ================= */
@@ -722,17 +723,17 @@ function Info({ label, value }: { label: string; value: string }) {
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -740,37 +741,37 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 920,
   opacity: 0.88,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.9,
+  opacity: 0.9
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -778,21 +779,21 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const card: React.CSSProperties = {
@@ -800,7 +801,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -809,21 +810,21 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const searchInput: React.CSSProperties = {
@@ -832,7 +833,7 @@ const searchInput: React.CSSProperties = {
   padding: "9px 11px",
   fontSize: 13,
   width: 280,
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const select: React.CSSProperties = {
@@ -840,9 +841,9 @@ const select: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnBase: React.CSSProperties = {
@@ -850,61 +851,61 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const infoGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-  gap: 10,
+  gap: 10
 };
 
 const infoBox: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   background: "#F8FAFC",
   borderRadius: 12,
-  padding: 12,
+  padding: 12
 };
 
 const infoLabel: React.CSSProperties = {
   fontSize: 11,
   color: "#64748B",
-  fontWeight: 900,
-  textTransform: "uppercase",
+  fontWeight: 700,
+  textTransform: "uppercase"
 };
 
 const infoValue: React.CSSProperties = {
   marginTop: 4,
   fontSize: 14,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const tableWrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 1080,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -915,31 +916,31 @@ const th: React.CSSProperties = {
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const thRight: React.CSSProperties = {
   ...th,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const td: React.CSSProperties = {
   padding: "8px 9px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdStrong: React.CSSProperties = {
   ...td,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const tdMuted: React.CSSProperties = {
@@ -948,5 +949,5 @@ const tdMuted: React.CSSProperties = {
   maxWidth: 420,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
+  textOverflow: "ellipsis"
 };

@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 
 /* ================= STYLE ================= */
 
@@ -7,7 +7,7 @@ const shell = {
   margin: "0 auto",
   padding: "12px 16px 40px",
   fontFamily: "Inter,system-ui,Arial",
-  color: "#0f172a",
+  color: "#0f172a"
 } as const;
 
 const qa = {
@@ -15,7 +15,7 @@ const qa = {
   borderRadius: 8,
   padding: 12,
   margin: "10px 0",
-  background: "#fff",
+  background: "#fff"
 } as const;
 
 const q = { fontWeight: 600, marginBottom: 4 } as const;
@@ -32,7 +32,7 @@ const supportBtn = {
   padding: "12px 18px",
   fontWeight: 600,
   cursor: "pointer",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
 } as const;
 
 /* ================= COMPONENT ================= */
@@ -43,69 +43,64 @@ export default function FAQ() {
   };
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h2>FAQ</h2>
 
-      <div style={qa}>
-        <div style={q}>Wie funktionieren Mengen-Formeln?</div>
-        <div style={a}>
+      <div className={rlcClass(null, qa)}>
+        <div className={rlcClass(null, q)}>Wie funktionieren Mengen-Formeln?</div>
+        <div className={rlcClass(null, a)}>
           Es werden einfache mathematische Ausdrücke unterstützt, z. B.:
           <br />
           <code>10*2+5</code>, <code>(12+8)/2</code>
         </div>
       </div>
 
-      <div style={qa}>
-        <div style={q}>Was passiert mit meinen Daten?</div>
-        <div style={a}>
+      <div className={rlcClass(null, qa)}>
+        <div className={rlcClass(null, q)}>Was passiert mit meinen Daten?</div>
+        <div className={rlcClass(null, a)}>
           Aktuell werden alle Daten lokal im Browser gespeichert (LocalStorage).
           Beim Löschen des Browser-Caches gehen die Daten verloren.
         </div>
       </div>
 
-      <div style={qa}>
-        <div style={q}>Welche Exportmöglichkeiten gibt es?</div>
-        <div style={a}>
+      <div className={rlcClass(null, qa)}>
+        <div className={rlcClass(null, q)}>Welche Exportmöglichkeiten gibt es?</div>
+        <div className={rlcClass(null, a)}>
           Aktuell verfügbar: CSV, SVG, JSON.
           <br />
           Geplant: GAEB, DXF, DWG, PDF (erweitert).
         </div>
       </div>
 
-      <div style={qa}>
-        <div style={q}>Unterstützt das System mehrere Benutzer?</div>
-        <div style={a}>
+      <div className={rlcClass(null, qa)}>
+        <div className={rlcClass(null, q)}>Unterstützt das System mehrere Benutzer?</div>
+        <div className={rlcClass(null, a)}>
           Aktuell: Single-User (lokal).
           <br />
           Geplant: Multi-User mit Rollenverwaltung (Cloud-Version).
         </div>
       </div>
 
-      <div style={qa}>
-        <div style={q}>Funktioniert die Software auch mobil?</div>
-        <div style={a}>
+      <div className={rlcClass(null, qa)}>
+        <div className={rlcClass(null, q)}>Funktioniert die Software auch mobil?</div>
+        <div className={rlcClass(null, a)}>
           Ja. Die Mobile-App (iOS & Android) unterstützt Regieberichte,
           Lieferscheine, Fotos und Offline-Synchronisation.
         </div>
       </div>
 
-      <div style={qa}>
-        <div style={q}>Ist meine Verbindung sicher?</div>
-        <div style={a}>
+      <div className={rlcClass(null, qa)}>
+        <div className={rlcClass(null, q)}>Ist meine Verbindung sicher?</div>
+        <div className={rlcClass(null, a)}>
           Ja. Die Cloud-Version nutzt HTTPS (SSL/TLS), Reverse Proxy (Nginx)
           sowie serverseitige Sicherheitsmechanismen.
         </div>
       </div>
 
       {/* SUPPORT BUTTON */}
-      <button style={supportBtn} onClick={openSupport}>
+      <button className={rlcClass(null, supportBtn)} onClick={openSupport}>
         Support Chat
       </button>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

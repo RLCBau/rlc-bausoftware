@@ -1,57 +1,32 @@
-﻿// apps/mobile/src/screens/CompanyOfflineSetupScreen.tsx
+// apps/mobile/src/screens/CompanyOfflineSetupScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Alert,
-  Image,
-  ScrollView,
-  Platform,
-  SafeAreaView,
-  KeyboardAvoidingView,
-} from "react-native";
+import { View, Text, TextInput, Pressable, Alert, Image, ScrollView, Platform, SafeAreaView, KeyboardAvoidingView } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
-import { COLORS } from "../ui/theme";
-
-import {
-  getCompanyHeaderCached,
-  getCompanyLogoUriCached,
-  setCompanyBrandingOffline,
-} from "../lib/companyCache";
-
+import { COLORS, createRlcStyles } from "../ui/theme";
+import { getCompanyHeaderCached, getCompanyLogoUriCached, setCompanyBrandingOffline } from "../lib/companyCache";
 type Props = NativeStackScreenProps<RootStackParamList, "CompanyOfflineSetup">;
-
-export default function CompanyOfflineSetupScreen({ navigation }: Props) {
+export default function CompanyOfflineSetupScreen({
+  navigation
+}: Props) {
   const [busy, setBusy] = useState(false);
-
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-
   const [logoUri, setLogoUri] = useState<string | null>(null);
-
-  const headerObj = useMemo(
-    () => ({
-      name: name.trim(),
-      address: address.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-    }),
-    [name, address, phone, email]
-  );
-
+  const headerObj = useMemo(() => ({
+    name: name.trim(),
+    address: address.trim(),
+    phone: phone.trim(),
+    email: email.trim()
+  }), [name, address, phone, email]);
   useEffect(() => {
     (async () => {
       try {
         const h = await getCompanyHeaderCached();
         const l = await getCompanyLogoUriCached();
-
         if (h?.name) setName(String(h.name));
         if (h?.address) setAddress(String(h.address));
         if (h?.phone) setPhone(String(h.phone));
@@ -62,7 +37,6 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
       }
     })();
   }, []);
-
   const pickLogo = useCallback(async () => {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -70,73 +44,51 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
         Alert.alert("Berechtigung", "Bitte Fotos-Berechtigung erlauben.");
         return;
       }
-
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
-        allowsEditing: true,
+        allowsEditing: true
       });
-
       if (res.canceled) return;
-
       const uri = res.assets?.[0]?.uri;
       if (!uri) return;
-
       setLogoUri(uri);
     } catch (e: any) {
       Alert.alert("Logo", e?.message || String(e));
     }
   }, []);
-
   const validate = useCallback(() => {
     if (!headerObj.name) return "Firmenname fehlt.";
     if (!headerObj.email) return "E-Mail fehlt.";
     return null;
   }, [headerObj]);
-
   const saveOffline = useCallback(async () => {
     const err = validate();
     if (err) {
       Alert.alert("Fehlt", err);
       return;
     }
-
     setBusy(true);
     try {
-      const { logoUri: persisted } = await setCompanyBrandingOffline({
+      const {
+        logoUri: persisted
+      } = await setCompanyBrandingOffline({
         header: headerObj,
-        logoUri,
+        logoUri
       });
-
-      Alert.alert(
-        "Gespeichert",
-        `Firmendaten wurden lokal gespeichert${persisted ? "." : " (ohne Logo)."}`,
-        [
-          {
-            text: "OK",
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+      Alert.alert("Gespeichert", `Firmendaten wurden lokal gespeichert${persisted ? "." : " (ohne Logo)."}`, [{
+        text: "OK",
+        onPress: () => navigation.goBack()
+      }]);
     } catch (e: any) {
       Alert.alert("Speichern", e?.message || String(e));
     } finally {
       setBusy(false);
     }
   }, [headerObj, logoUri, navigation, validate]);
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          style={styles.bg}
-          contentContainerStyle={styles.wrap}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+  return <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView style={styles._inline1} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView style={styles.bg} contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.headerCard}>
             <View style={styles.headerRow}>
               <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
@@ -160,71 +112,35 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
             <Text style={styles.sectionTitle}>Firmendaten</Text>
 
             <Text style={styles.label}>Firmenname *</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Firmenname"
-              placeholderTextColor={COLORS.sub}
-              style={styles.input}
-            />
+            <TextInput value={name} onChangeText={setName} placeholder="Firmenname" placeholderTextColor={COLORS.sub} style={styles.input} />
 
             <Text style={styles.label}>Adresse</Text>
-            <TextInput
-              value={address}
-              onChangeText={setAddress}
-              placeholder="Straße, PLZ Ort"
-              placeholderTextColor={COLORS.sub}
-              style={[styles.input, styles.inputMultiline]}
-              multiline
-              textAlignVertical="top"
-            />
+            <TextInput value={address} onChangeText={setAddress} placeholder="Straße, PLZ Ort" placeholderTextColor={COLORS.sub} style={[styles.input, styles.inputMultiline]} multiline textAlignVertical="top" />
 
             <Text style={styles.label}>Telefon</Text>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Telefon"
-              placeholderTextColor={COLORS.sub}
-              style={styles.input}
-              keyboardType={
-                Platform.OS === "ios" ? "numbers-and-punctuation" : "phone-pad"
-              }
-            />
+            <TextInput value={phone} onChangeText={setPhone} placeholder="Telefon" placeholderTextColor={COLORS.sub} style={styles.input} keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "phone-pad"} />
 
             <Text style={styles.label}>E-Mail *</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="E-Mail Firma"
-              placeholderTextColor={COLORS.sub}
-              style={styles.input}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
+            <TextInput value={email} onChangeText={setEmail} placeholder="E-Mail Firma" placeholderTextColor={COLORS.sub} style={styles.input} autoCapitalize="none" keyboardType="email-address" />
           </View>
 
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Logo</Text>
 
-            {logoUri ? (
-              <View style={styles.logoRow}>
-                <Image source={{ uri: logoUri }} style={styles.logo} />
-                <View style={{ flex: 1 }}>
+            {logoUri ? <View style={styles.logoRow}>
+                <Image source={{
+              uri: logoUri
+            }} style={styles.logo} />
+                <View style={styles._inline2}>
                   <Text style={styles.small} numberOfLines={2}>
                     {logoUri}
                   </Text>
 
-                  <Pressable
-                    onPress={() => setLogoUri(null)}
-                    style={styles.btnGhost}
-                  >
+                  <Pressable onPress={() => setLogoUri(null)} style={styles.btnGhost}>
                     <Text style={styles.btnGhostText}>Logo entfernen</Text>
                   </Pressable>
                 </View>
-              </View>
-            ) : (
-              <Text style={styles.small}>Kein Logo gewählt.</Text>
-            )}
+              </View> : <Text style={styles.small}>Kein Logo gewählt.</Text>}
 
             <Pressable onPress={pickLogo} style={styles.btnSecondary}>
               <Text style={styles.btnSecondaryText}>Logo auswählen</Text>
@@ -232,11 +148,7 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.ctaWrap}>
-            <Pressable
-              disabled={busy}
-              onPress={saveOffline}
-              style={[styles.btnPrimary, busy && styles.btnDisabled]}
-            >
+            <Pressable disabled={busy} onPress={saveOffline} style={[styles.btnPrimary, busy && styles.btnDisabled]}>
               <Text style={styles.btnPrimaryText}>
                 {busy ? "Speichere..." : "Offline speichern"}
               </Text>
@@ -248,94 +160,81 @@ export default function CompanyOfflineSetupScreen({ navigation }: Props) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+    </SafeAreaView>;
 }
-
-const styles = StyleSheet.create({
+const styles = createRlcStyles("CompanyOfflineSetupScreen", {
   safe: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   bg: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   wrap: {
-    paddingBottom: 28,
+    paddingBottom: 28
   },
-
   headerCard: {
     marginHorizontal: 16,
     marginTop: 10,
     marginBottom: 8,
-    padding: 16,
-    borderRadius: 22,
+    padding: 14,
+    borderRadius: 14,
     backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 8
   },
-
   headerSpacer: {
-    flex: 1,
+    flex: 1
   },
-
   backBtn: {
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   backTxt: {
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 13
   },
-
   eyebrow: {
     color: COLORS.accentDark,
     fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 0.3,
+    fontWeight: "600",
+    letterSpacing: 0.3
   },
-
   eyebrowSub: {
     marginTop: 2,
     color: COLORS.sub,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600"
   },
-
   h1: {
     marginTop: 10,
-    fontSize: 30,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontSize: 18,
+    lineHeight: 27,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   p: {
     marginTop: 10,
     color: COLORS.sub,
     lineHeight: 18,
-    fontWeight: "700",
+    fontWeight: "600"
   },
-
   card: {
     marginHorizontal: 16,
     marginTop: 12,
-    borderRadius: 20,
+    borderRadius: 14,
     padding: 15,
     backgroundColor: COLORS.card,
     borderWidth: 1,
@@ -345,68 +244,69 @@ const styles = StyleSheet.create({
         shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: {
+          width: 0,
+          height: 6
+        }
       },
-      android: { elevation: 2 },
-      default: {},
-    }),
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
   },
-
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "600",
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: 4
   },
-
   label: {
     color: COLORS.text,
-    fontWeight: "800",
+    fontWeight: "600",
     marginBottom: 6,
     marginTop: 10,
-    fontSize: 12,
+    fontSize: 12
   },
-
   input: {
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: Platform.select({ ios: 12, android: 10, default: 10 }),
+    paddingVertical: Platform.select({
+      ios: 12,
+      android: 10,
+      default: 10
+    }),
     color: COLORS.text,
     backgroundColor: COLORS.inputBg,
-    fontWeight: "800",
-    fontSize: 14,
+    fontWeight: "600",
+    fontSize: 14
   },
-
   inputMultiline: {
-    minHeight: 76,
+    minHeight: 44
   },
-
   logoRow: {
     flexDirection: "row",
     gap: 12,
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 10
   },
-
   logo: {
     width: 64,
     height: 64,
     borderRadius: 14,
     backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   small: {
     color: COLORS.sub,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 18,
-    marginTop: 8,
+    marginTop: 8
   },
-
   btnSecondary: {
     marginTop: 14,
     borderWidth: 1,
@@ -414,14 +314,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: "center",
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   btnSecondaryText: {
     color: COLORS.text,
-    fontWeight: "800",
+    fontWeight: "600"
   },
-
   btnGhost: {
     marginTop: 8,
     paddingVertical: 7,
@@ -430,48 +328,44 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   btnGhostText: {
     color: COLORS.text,
-    fontWeight: "700",
-    fontSize: 12,
+    fontWeight: "600",
+    fontSize: 12
   },
-
   ctaWrap: {
     marginTop: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 16
   },
-
   btnPrimary: {
     backgroundColor: COLORS.accent,
     borderColor: COLORS.accent,
     borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 13,
-    alignItems: "center",
+    alignItems: "center"
   },
-
   btnPrimaryText: {
     color: COLORS.textLight,
-    fontWeight: "900",
-    fontSize: 14,
+    fontWeight: "600",
+    fontSize: 14
   },
-
   btnDisabled: {
-    opacity: 0.6,
+    opacity: 0.6
   },
-
   hint: {
     marginTop: 10,
     color: COLORS.sub,
     fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
+    fontWeight: "600",
+    lineHeight: 18
   },
+  _inline1: {
+    flex: 1
+  },
+  _inline2: {
+    flex: 1
+  }
 });
-
-
-
-

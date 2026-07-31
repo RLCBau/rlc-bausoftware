@@ -1,6 +1,8 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 import React, { useEffect, useMemo, useState } from "react";
 import "./styles.css";
 import { useProject } from "../../store/useProject";
+import { apiUrl } from "../../lib/apiBase";
 
 type AufmassRow = {
   id: string;
@@ -28,7 +30,7 @@ type RechnungPos = {
 };
 
 type Rechnung = {
-  id: number;
+  id: number | string;
   nr: string;
   datum: string;
   faellig?: string;
@@ -49,10 +51,10 @@ type Status = "ALL" | "OPEN" | "PART" | "PAID";
 const RECHNUNG_STORAGE_KEY = "rlc_rechnungen_v1";
 
 const fmt = (n: number) =>
-  Number(n || 0).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+Number(n || 0).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 const brutto = (r: Rechnung) => safeNumber(r.netto) * (1 + safeNumber(r.mwstPct) / 100);
 const offen = (r: Rechnung) => Math.max(0, brutto(r) - safeNumber(r.gezahlt));
@@ -83,7 +85,7 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -92,7 +94,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -101,13 +103,13 @@ function escapeHtml(str: string) {
   return String(str ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
@@ -146,6 +148,51 @@ function saveRechnungen(rows: Rechnung[]) {
   localStorage.setItem(RECHNUNG_STORAGE_KEY, JSON.stringify(rows));
 }
 
+function authHeaders(): Record<string, string> {
+  for (const key of ["rlc_token", "token", "authToken", "accessToken", "rlc_auth_token"]) {
+    const token = localStorage.getItem(key) || sessionStorage.getItem(key);
+    if (token?.trim()) return { Authorization: `Bearer ${token.trim()}` };
+  }
+  return {};
+}
+
+function normalizeServerRechnung(row: any, index: number): Rechnung {
+  const positionsRaw = Array.isArray(row?.positions) ?
+  row.positions :
+  Array.isArray(row?.rows) ?
+  row.rows :
+  [];
+  const positions = positionsRaw.map((p: any, i: number) => {
+    const qty = safeNumber(p?.qty ?? p?.quantity ?? p?.menge, 0);
+    const ep = safeNumber(p?.ep ?? p?.price, 0);
+    const factor = safeNumber(p?.factor, 1) || 1;
+    return {
+      ...p,
+      id: safeTrim(p?.id || `${row?.id || index}-${i + 1}`),
+      pos: safeTrim(p?.pos || p?.position || i + 1),
+      text: safeTrim(p?.text || p?.beschreibung || p?.kurztext),
+      unit: safeTrim(p?.unit || p?.einheit),
+      qty,
+      ep,
+      factor,
+      total: safeNumber(p?.total, qty * ep * factor)
+    };
+  });
+
+  return {
+    ...row,
+    id: row?.id ?? index + 1,
+    nr: safeTrim(row?.nr || row?.rechnungNr),
+    datum: safeTrim(row?.datum || row?.date),
+    kunde: safeTrim(row?.kunde || row?.customerName),
+    netto: safeNumber(row?.netto, positions.reduce((sum: number, p: any) => sum + p.total, 0)),
+    mwstPct: safeNumber(row?.mwstPct ?? row?.mwst, 19),
+    gezahlt: safeNumber(row?.gezahlt, 0),
+    typ: (["ABSCHLAG", "SCHLUSS"].includes(String(row?.typ)) ? row.typ : "RECHNUNG") as Rechnung["typ"],
+    positions
+  };
+}
+
 function nextRechnungNr(rows: Rechnung[]) {
   const year = new Date().getFullYear();
   const nextId = rows.length ? Math.max(...rows.map((r) => safeNumber(r.id))) + 1 : 1;
@@ -153,24 +200,24 @@ function nextRechnungNr(rows: Rechnung[]) {
 }
 
 function aufmassToPositions(rows: AufmassRow[]): RechnungPos[] {
-  return rows
-    .filter((r) => safeNumber(r.ist, 0) > 0)
-    .map((r) => {
-      const factor = safeNumber(r.factor, 1) || 1;
-      const qty = safeNumber(r.ist, 0);
-      const ep = safeNumber(r.ep, 0);
-      return {
-        id: safeTrim(r.id),
-        pos: safeTrim(r.pos),
-        text: safeTrim(r.text),
-        unit: safeTrim(r.unit) || "m",
-        qty,
-        ep,
-        factor,
-        total: qty * ep * factor,
-        note: safeTrim(r.note),
-      };
-    });
+  return rows.
+  filter((r) => safeNumber(r.ist, 0) > 0).
+  map((r) => {
+    const factor = safeNumber(r.factor, 1) || 1;
+    const qty = safeNumber(r.ist, 0);
+    const ep = safeNumber(r.ep, 0);
+    return {
+      id: safeTrim(r.id),
+      pos: safeTrim(r.pos),
+      text: safeTrim(r.text),
+      unit: safeTrim(r.unit) || "m",
+      qty,
+      ep,
+      factor,
+      total: qty * ep * factor,
+      note: safeTrim(r.note)
+    };
+  });
 }
 
 function printableInvoiceHTML(r: Rechnung) {
@@ -178,10 +225,10 @@ function printableInvoiceHTML(r: Rechnung) {
   const mwst = b - r.netto;
   const of = offen(r);
 
-  const posRows = r.positions.length
-    ? r.positions
-        .map(
-          (p) => `
+  const posRows = r.positions.length ?
+  r.positions.
+  map(
+    (p) => `
         <tr>
           <td>${escapeHtml(p.pos)}</td>
           <td>${escapeHtml(p.text)}</td>
@@ -192,9 +239,9 @@ function printableInvoiceHTML(r: Rechnung) {
           <td class="right">${fmt(p.total)}</td>
         </tr>
       `
-        )
-        .join("")
-    : `<tr><td colspan="7" class="muted">Keine Positionen vorhanden.</td></tr>`;
+  ).
+  join("") :
+  `<tr><td colspan="7" class="muted">Keine Positionen vorhanden.</td></tr>`;
 
   return `
 <!doctype html><html><head>
@@ -251,11 +298,11 @@ function printableInvoiceHTML(r: Rechnung) {
 }
 
 function printableReportHTML(list: Rechnung[]) {
-  const rows = list
-    .map((r) => {
-      const b = brutto(r);
-      const of = offen(r);
-      return `<tr>
+  const rows = list.
+  map((r) => {
+    const b = brutto(r);
+    const of = offen(r);
+    return `<tr>
       <td>${escapeHtml(r.nr)}</td>
       <td>${escapeHtml(r.datum)}</td>
       <td>${escapeHtml(r.kunde)}</td>
@@ -267,8 +314,8 @@ function printableReportHTML(list: Rechnung[]) {
       <td class="right">${fmt(of)}</td>
       <td>${labelOf(statusOf(r))}</td>
     </tr>`;
-    })
-    .join("");
+  }).
+  join("");
 
   const totals = list.reduce(
     (acc, r) => {
@@ -349,9 +396,9 @@ function openPrint(html: string) {
 
 async function downloadSinglePDF(r: Rechnung) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
-  ]);
+  import("html2canvas"),
+  import("jspdf")]
+  );
 
   const wrapper = document.createElement("div");
   wrapper.style.position = "fixed";
@@ -376,7 +423,7 @@ async function downloadSinglePDF(r: Rechnung) {
   const x = (pageW - w) / 2;
   const y = (pageH - h) / 2;
   pdf.addImage(imgData, "PNG", x, y, w, h);
-  pdf.save(`${r.nr}.pdf`);
+  saveRlcPdfWithCompanyHeader(pdf, `${r.nr}.pdf`);
 }
 
 async function downloadAllPDF(list: Rechnung[]) {
@@ -386,9 +433,9 @@ async function downloadAllPDF(list: Rechnung[]) {
   }
 
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-    import("html2canvas"),
-    import("jspdf"),
-  ]);
+  import("html2canvas"),
+  import("jspdf")]
+  );
 
   const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
 
@@ -419,31 +466,31 @@ async function downloadAllPDF(list: Rechnung[]) {
     pdf.addImage(imgData, "PNG", x, y, w, h);
   }
 
-  pdf.save("Rechnungen.pdf");
+  saveRlcPdfWithCompanyHeader(pdf, "Rechnungen.pdf");
 }
 
-function StatusChip({ value }: { value: Exclude<Status, "ALL"> }) {
-  const map: Record<Exclude<Status, "ALL">, { bg: string; fg: string; label: string }> = {
+function StatusChip({ value }: {value: Exclude<Status, "ALL">;}) {
+  const map: Record<Exclude<Status, "ALL">, {bg: string;fg: string;label: string;}> = {
     OPEN: { bg: "#fdecea", fg: "#b02a1a", label: "Offen" },
     PART: { bg: "#fff7e6", fg: "#9a6700", label: "Teilbezahlt" },
-    PAID: { bg: "#eafaf1", fg: "#0a6c3e", label: "Bezahlt" },
+    PAID: { bg: "#eafaf1", fg: "#0a6c3e", label: "Bezahlt" }
   };
 
   const c = map[value];
 
   return (
-    <span
-      style={{
-        background: c.bg,
-        color: c.fg,
-        padding: "3px 8px",
-        borderRadius: 999,
-        fontSize: 12,
-      }}
-    >
+    <span className={rlcClass(null,
+    {
+      background: c.bg,
+      color: c.fg,
+      padding: "3px 8px",
+      borderRadius: 999,
+      fontSize: 12
+    })}>
+      
       {c.label}
-    </span>
-  );
+    </span>);
+
 }
 
 export default function Rechnungen() {
@@ -452,17 +499,18 @@ export default function Rechnungen() {
 
   const projectId = safeTrim(project?.id);
   const projectCode = safeTrim(project?.code);
+  const projectKey = projectCode || projectId;
   const projectName = safeTrim(project?.name);
   const customerName = safeTrim((project as any)?.client) || "Neuer Kunde";
 
   const [rows, setRows] = useState<Rechnung[]>(() => loadRechnungen());
+  const [serverReady, setServerReady] = useState(false);
+  const [aufmassRows, setAufmassRows] = useState<AufmassRow[]>([]);
   const [mwstDefault, setMwstDefault] = useState<number>(19);
 
-  const currentAufmassRows = useMemo(() => loadAufmass(projectId), [projectId]);
-
   const currentPositions = useMemo(
-    () => aufmassToPositions(currentAufmassRows),
-    [currentAufmassRows]
+    () => aufmassToPositions(aufmassRows),
+    [aufmassRows]
   );
 
   const currentNetto = useMemo(
@@ -471,13 +519,80 @@ export default function Rechnungen() {
   );
 
   useEffect(() => {
+    let cancelled = false;
+    setServerReady(false);
+    if (!projectKey) {
+      setRows(loadRechnungen());
+      setAufmassRows(loadAufmass(projectId));
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void Promise.all([
+    fetch(apiUrl(`/api/kalkulation/rechnung/${encodeURIComponent(projectKey)}`), {
+      credentials: "include",
+      headers: { Accept: "application/json", ...authHeaders() }
+    }),
+    fetch(apiUrl(`/api/aufmass/aufmass/${encodeURIComponent(projectKey)}`), {
+      credentials: "include",
+      headers: { Accept: "application/json", ...authHeaders() }
+    })]
+    ).then(async ([rechnungResponse, aufmassResponse]) => {
+      if (cancelled) return;
+      const rechnungJson = await rechnungResponse.json().catch(() => []);
+      const aufmassJson = await aufmassResponse.json().catch(() => []);
+
+      if (rechnungResponse.ok && Array.isArray(rechnungJson)) {
+        const normalized = rechnungJson.map(normalizeServerRechnung);
+        setRows(normalized);
+        saveRechnungen(normalized);
+      } else {
+        setRows(loadRechnungen());
+      }
+
+      const serverAufmass = Array.isArray(aufmassJson) ?
+      aufmassJson :
+      Array.isArray(aufmassJson?.items) ?
+      aufmassJson.items :
+      [];
+      setAufmassRows(
+        aufmassResponse.ok && serverAufmass.length ? serverAufmass : loadAufmass(projectId || projectKey)
+      );
+      setServerReady(rechnungResponse.ok && Array.isArray(rechnungJson));
+    }).catch(() => {
+      if (cancelled) return;
+      setRows(loadRechnungen());
+      setAufmassRows(loadAufmass(projectId || projectKey));
+      setServerReady(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, projectKey]);
+
+  useEffect(() => {
     saveRechnungen(rows);
-  }, [rows]);
+    if (!serverReady || !projectKey) return;
+
+    const timer = window.setTimeout(() => {
+      void fetch(apiUrl(`/api/kalkulation/rechnung/${encodeURIComponent(projectKey)}/replace`), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ items: rows })
+      });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [rows, projectKey, serverReady]);
 
   const filteredProjectRows = useMemo(() => {
-    if (!projectId) return rows;
-    return rows.filter((r) => safeTrim(r.projectId) === projectId);
-  }, [rows, projectId]);
+    if (!projectKey) return rows;
+    return rows.filter(
+      (r) => safeTrim(r.projectId) === projectId || safeTrim(r.projectCode) === projectCode
+    );
+  }, [rows, projectId, projectCode, projectKey]);
 
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
   const [kunde, setKunde] = useState<string>("ALL");
@@ -550,15 +665,15 @@ export default function Rechnungen() {
         mwstPct: mwstDefault,
         gezahlt: 0,
         hinweis:
-          typ === "ABSCHLAG"
-            ? `Abschlagsrechnung aus Aufmaß (${projectCode || projectName})`
-            : typ === "SCHLUSS"
-            ? `Schlussrechnung aus Aufmaß (${projectCode || projectName})`
-            : `Rechnung aus Aufmaß (${projectCode || projectName})`,
+        typ === "ABSCHLAG" ?
+        `Abschlagsrechnung aus Aufmaß (${projectCode || projectName})` :
+        typ === "SCHLUSS" ?
+        `Schlussrechnung aus Aufmaß (${projectCode || projectName})` :
+        `Rechnung aus Aufmaß (${projectCode || projectName})`,
         typ,
         projectId,
         projectCode,
-        positions: currentPositions,
+        positions: currentPositions
       };
 
       return [...prev, newRow];
@@ -569,22 +684,22 @@ export default function Rechnungen() {
     setRows((prev) => {
       const nextId = prev.length ? Math.max(...prev.map((x) => safeNumber(x.id))) + 1 : 1;
       return [
-        ...prev,
-        {
-          ...r,
-          id: nextId,
-          nr: nextRechnungNr(prev),
-          datum: new Date().toLocaleDateString("de-DE"),
-        },
-      ];
+      ...prev,
+      {
+        ...r,
+        id: nextId,
+        nr: nextRechnungNr(prev),
+        datum: new Date().toLocaleDateString("de-DE")
+      }];
+
     });
   };
 
-  const remove = (id: number) => {
+  const remove = (id: Rechnung["id"]) => {
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const update = <K extends keyof Rechnung>(i: number, key: K, val: Rechnung[K]) => {
+  const update = <K extends keyof Rechnung,>(i: number, key: K, val: Rechnung[K]) => {
     setRows((prev) => {
       const copy = [...prev];
       if (!copy[i]) return prev;
@@ -619,18 +734,18 @@ export default function Rechnungen() {
       Gezahlt: fmt(r.gezahlt || 0),
       Offen: fmt(offen(r)),
       Status: labelOf(statusOf(r)),
-      Hinweis: r.hinweis || "",
+      Hinweis: r.hinweis || ""
     }));
 
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.join(";"),
-      ...data.map((row) =>
-        headers
-          .map((h) => `"${String((row as Record<string, unknown>)[h] ?? "").replace(/"/g, '""')}"`)
-          .join(";")
-      ),
-    ].join("\n");
+    headers.join(";"),
+    ...data.map((row) =>
+    headers.
+    map((h) => `"${String((row as Record<string, unknown>)[h] ?? "").replace(/"/g, '""')}"`).
+    join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -643,21 +758,21 @@ export default function Rechnungen() {
 
   const printSinglePDF = (r: Rechnung) => openPrint(printableInvoiceHTML(r));
   const printAllPDF = (useFiltered: boolean) =>
-    openPrint(printableReportHTML(useFiltered ? filtered : filteredProjectRows));
+  openPrint(printableReportHTML(useFiltered ? filtered : filteredProjectRows));
 
   return (
     <div className="bh-page">
       <div className="bh-header-row">
         <div>
           <h2>Rechnungen / Abschläge</h2>
-          <div className="bh-note" style={{ marginTop: 4 }}>
-            {projectCode ? (
-              <>
+          <div className="bh-note rlc-migrated-pages-buchhaltung-rechnungen-tsx-262">
+            {projectCode ?
+            <>
                 Projekt: <b>{projectCode}</b> {projectName ? `— ${projectName}` : ""}
-              </>
-            ) : (
-              "Kein Projekt ausgewählt"
-            )}
+              </> :
+
+            "Kein Projekt ausgewählt"
+            }
           </div>
         </div>
 
@@ -709,11 +824,11 @@ export default function Rechnungen() {
         <div>
           <label>Kunde</label>
           <select value={kunde} onChange={(e) => setKunde(e.target.value)}>
-            {kundenListe.map((k) => (
-              <option key={k} value={k}>
+            {kundenListe.map((k) =>
+            <option key={k} value={k}>
                 {k === "ALL" ? "Alle" : k}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
@@ -733,44 +848,44 @@ export default function Rechnungen() {
             type="number"
             step="0.1"
             value={mwstDefault}
-            onChange={(e) => setMwstDefault(safeNumber(e.target.value, 19))}
-            style={{ width: 100 }}
-          />
+            onChange={(e) => setMwstDefault(safeNumber(e.target.value, 19))} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-263" />
+
+          
         </div>
       </div>
 
-      <div className="bh-note" style={{ marginBottom: 10 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-rechnungen-tsx-264">
         Aktuelles Aufmaß: <b>{currentPositions.length}</b> abrechenbare Position(en) · Netto aktuell:{" "}
         <b>{fmt(currentNetto)} €</b>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 10,
-          marginBottom: 14,
-        }}
-      >
+      <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-265">
+
+
+
+
+
+
+        
         <div className="bh-card">
           <div className="bh-note">Netto</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.netto)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-266">{fmt(totals.netto)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">MwSt</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.mwstSum)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-267">{fmt(totals.mwstSum)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">Brutto</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.brut)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-268">{fmt(totals.brut)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">Gezahlt</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.gez)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-269">{fmt(totals.gez)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">Offen</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.off)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-270">{fmt(totals.off)} €</div>
         </div>
       </div>
 
@@ -800,15 +915,15 @@ export default function Rechnungen() {
             return (
               <tr key={r.id}>
                 <td>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-271">
                     <button className="bh-btn ghost" onClick={() => duplicate(r)}>
                       Duplizieren
                     </button>
                     <button
-                      className="bh-btn"
-                      style={{ background: "#e74c3c" }}
-                      onClick={() => remove(r.id)}
-                    >
+                      className="bh-btn rlc-migrated-pages-buchhaltung-rechnungen-tsx-272"
+
+                      onClick={() => remove(r.id)}>
+                      
                       Löschen
                     </button>
                   </div>
@@ -819,8 +934,8 @@ export default function Rechnungen() {
                 <td>
                   <select
                     value={r.typ}
-                    onChange={(e) => update(idx, "typ", e.target.value as Rechnung["typ"])}
-                  >
+                    onChange={(e) => update(idx, "typ", e.target.value as Rechnung["typ"])}>
+                    
                     <option value="RECHNUNG">Rechnung</option>
                     <option value="ABSCHLAG">Abschlag</option>
                     <option value="SCHLUSS">Schluss</option>
@@ -831,27 +946,27 @@ export default function Rechnungen() {
                   <input
                     type="text"
                     value={r.datum}
-                    onChange={(e) => update(idx, "datum", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(idx, "datum", e.target.value)} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-273" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.faellig || ""}
-                    onChange={(e) => update(idx, "faellig", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(idx, "faellig", e.target.value)} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-274" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.kunde}
-                    onChange={(e) => update(idx, "kunde", e.target.value)}
-                    style={{ minWidth: 160 }}
-                  />
+                    onChange={(e) => update(idx, "kunde", e.target.value)} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-275" />
+
+                  
                 </td>
 
                 <td>
@@ -859,9 +974,9 @@ export default function Rechnungen() {
                     type="number"
                     step="0.01"
                     value={r.netto}
-                    onChange={(e) => update(idx, "netto", safeNumber(e.target.value, 0))}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(idx, "netto", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-276" />
+
+                  
                 </td>
 
                 <td>
@@ -869,9 +984,9 @@ export default function Rechnungen() {
                     type="number"
                     step="0.1"
                     value={r.mwstPct}
-                    onChange={(e) => update(idx, "mwstPct", safeNumber(e.target.value, 19))}
-                    style={{ width: 80 }}
-                  />
+                    onChange={(e) => update(idx, "mwstPct", safeNumber(e.target.value, 19))} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-277" />
+
+                  
                 </td>
 
                 <td>{fmt(brutto(r))}</td>
@@ -881,19 +996,19 @@ export default function Rechnungen() {
                     type="number"
                     step="0.01"
                     value={r.gezahlt}
-                    onChange={(e) => update(idx, "gezahlt", safeNumber(e.target.value, 0))}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(idx, "gezahlt", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-278" />
+
+                  
                 </td>
 
-                <td style={{ fontWeight: 600 }}>{fmt(offen(r))}</td>
+                <td className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-279">{fmt(offen(r))}</td>
 
                 <td>
                   <StatusChip value={statusOf(r)} />
                 </td>
 
                 <td>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-280">
                     <button className="bh-btn ghost" onClick={() => printSinglePDF(r)}>
                       PDF
                     </button>
@@ -902,28 +1017,23 @@ export default function Rechnungen() {
                     </button>
                   </div>
                 </td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {!filtered.length && (
-            <tr>
-              <td colSpan={13} style={{ padding: 16, color: "#666" }}>
+          {!filtered.length &&
+          <tr>
+              <td colSpan={13} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-281">
                 Keine Rechnungen für die aktuelle Auswahl gefunden.
               </td>
             </tr>
-          )}
+          }
         </tbody>
       </table>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-rechnungen-tsx-282">
         Flow aktiv: <b>Angebot → Aufmaß/Mengenermittlung → Rechnung</b>
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

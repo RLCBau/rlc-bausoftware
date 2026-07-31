@@ -1,3 +1,4 @@
+import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 import React, { useMemo, useState } from "react";
 import "./styles.css";
 
@@ -23,10 +24,10 @@ type Zeitraum = "ALL" | "30" | "60" | "90" | "THIS_MONTH" | "YTD";
    HELPERS
    ========================= */
 const fmt = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -35,7 +36,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -44,13 +45,13 @@ function escapeHtml(s: unknown) {
   return String(s ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
@@ -75,7 +76,7 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 function csvEscape(v: unknown) {
   return `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -88,62 +89,62 @@ export default function Kassenbuch() {
   const [anfangsbestand, setAnfangsbestand] = useState<number>(500.0);
 
   const [rows, setRows] = useState<Buchung[]>([
-    {
-      id: 1,
-      datum: "01.10.2025",
-      beleg: "K-0001",
-      text: "Kassenstart",
-      kategorie: "Sonstiges",
-      methode: "Kasse",
-      einnahme: 500,
-      ausgabe: 0,
-      mwstPct: 0,
-    },
-    {
-      id: 2,
-      datum: "15.10.2025",
-      beleg: "RE-2025-102",
-      text: "Barverkauf Schachtabdeckung",
-      kategorie: "Erlöse",
-      methode: "Kasse",
-      einnahme: 180,
-      ausgabe: 0,
-      mwstPct: 19,
-    },
-    {
-      id: 3,
-      datum: "20.10.2025",
-      beleg: "B-009",
-      text: "Büromaterial (Quittung)",
-      kategorie: "Büro",
-      methode: "Kasse",
-      einnahme: 0,
-      ausgabe: 36.5,
-      mwstPct: 19,
-    },
-    {
-      id: 4,
-      datum: "28.10.2025",
-      beleg: "T-117",
-      text: "Parkgebühren",
-      kategorie: "Transport",
-      methode: "Kasse",
-      einnahme: 0,
-      ausgabe: 8,
-      mwstPct: 0,
-    },
-    {
-      id: 5,
-      datum: "30.10.2025",
-      beleg: "U-221",
-      text: "Bar-Einzahlung auf Bank",
-      kategorie: "Transfer",
-      methode: "Kasse",
-      einnahme: 0,
-      ausgabe: 200,
-      mwstPct: 0,
-    },
-  ]);
+  {
+    id: 1,
+    datum: "01.10.2025",
+    beleg: "K-0001",
+    text: "Kassenstart",
+    kategorie: "Sonstiges",
+    methode: "Kasse",
+    einnahme: 500,
+    ausgabe: 0,
+    mwstPct: 0
+  },
+  {
+    id: 2,
+    datum: "15.10.2025",
+    beleg: "RE-2025-102",
+    text: "Barverkauf Schachtabdeckung",
+    kategorie: "Erlöse",
+    methode: "Kasse",
+    einnahme: 180,
+    ausgabe: 0,
+    mwstPct: 19
+  },
+  {
+    id: 3,
+    datum: "20.10.2025",
+    beleg: "B-009",
+    text: "Büromaterial (Quittung)",
+    kategorie: "Büro",
+    methode: "Kasse",
+    einnahme: 0,
+    ausgabe: 36.5,
+    mwstPct: 19
+  },
+  {
+    id: 4,
+    datum: "28.10.2025",
+    beleg: "T-117",
+    text: "Parkgebühren",
+    kategorie: "Transport",
+    methode: "Kasse",
+    einnahme: 0,
+    ausgabe: 8,
+    mwstPct: 0
+  },
+  {
+    id: 5,
+    datum: "30.10.2025",
+    beleg: "U-221",
+    text: "Bar-Einzahlung auf Bank",
+    kategorie: "Transfer",
+    methode: "Kasse",
+    einnahme: 0,
+    ausgabe: 200,
+    mwstPct: 0
+  }]
+  );
 
   /* --------- FILTRI --------- */
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
@@ -188,22 +189,22 @@ export default function Kassenbuch() {
     if (query.trim()) {
       const q = query.toLowerCase().trim();
       arr = arr.filter((r) =>
-        [
-          r.text,
-          r.beleg || "",
-          r.kategorie || "",
-          r.kostenstelle || "",
-          r.methode,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
+      [
+      r.text,
+      r.beleg || "",
+      r.kategorie || "",
+      r.kostenstelle || "",
+      r.methode].
+
+      join(" ").
+      toLowerCase().
+      includes(q)
       );
     }
 
     arr.sort(
       (a, b) =>
-        parseDate(a.datum).getTime() - parseDate(b.datum).getTime() || a.id - b.id
+      parseDate(a.datum).getTime() - parseDate(b.datum).getTime() || a.id - b.id
     );
 
     return arr;
@@ -235,39 +236,39 @@ export default function Kassenbuch() {
     const nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1;
 
     setRows((prev) => [
-      ...prev,
-      {
-        id: nextId,
-        datum: new Date().toLocaleDateString("de-DE"),
-        beleg: "",
-        text: "Neue Buchung",
-        kategorie: "",
-        kostenstelle: "",
-        methode: "Kasse",
-        einnahme: 0,
-        ausgabe: 0,
-        mwstPct: 0,
-      },
-    ]);
+    ...prev,
+    {
+      id: nextId,
+      datum: new Date().toLocaleDateString("de-DE"),
+      beleg: "",
+      text: "Neue Buchung",
+      kategorie: "",
+      kostenstelle: "",
+      methode: "Kasse",
+      einnahme: 0,
+      ausgabe: 0,
+      mwstPct: 0
+    }]
+    );
   };
 
   const duplicate = (r: Buchung) => {
     const nextId = rows.length ? Math.max(...rows.map((x) => x.id)) + 1 : 1;
     setRows((prev) => [
-      ...prev,
-      {
-        ...r,
-        id: nextId,
-        beleg: r.beleg ? `${r.beleg}-K` : "",
-      },
-    ]);
+    ...prev,
+    {
+      ...r,
+      id: nextId,
+      beleg: r.beleg ? `${r.beleg}-K` : ""
+    }]
+    );
   };
 
   const remove = (id: number) => {
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const update = <K extends keyof Buchung>(i: number, key: K, val: Buchung[K]) => {
+  const update = <K extends keyof Buchung,>(i: number, key: K, val: Buchung[K]) => {
     setRows((prev) => {
       const c = [...prev];
       if (!c[i]) return prev;
@@ -275,9 +276,9 @@ export default function Kassenbuch() {
       c[i] = {
         ...c[i],
         [key]:
-          key === "einnahme" || key === "ausgabe" || key === "mwstPct"
-            ? safeNumber(val, 0)
-            : val,
+        key === "einnahme" || key === "ausgabe" || key === "mwstPct" ?
+        safeNumber(val, 0) :
+        val
       };
 
       return c;
@@ -295,7 +296,7 @@ export default function Kassenbuch() {
       Methode: r.methode,
       Einnahme: fmt(r.einnahme || 0),
       Ausgabe: fmt(r.ausgabe || 0),
-      MwStPct: r.mwstPct ?? 0,
+      MwStPct: r.mwstPct ?? 0
     }));
 
     if (!data.length) {
@@ -305,11 +306,11 @@ export default function Kassenbuch() {
 
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.map(csvEscape).join(";"),
-      ...data.map((row) =>
-        headers.map((h) => csvEscape((row as Record<string, unknown>)[h])).join(";")
-      ),
-    ].join("\n");
+    headers.map(csvEscape).join(";"),
+    ...data.map((row) =>
+    headers.map((h) => csvEscape((row as Record<string, unknown>)[h])).join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -367,7 +368,7 @@ export default function Kassenbuch() {
     const y = (pageH - h) / 2;
 
     pdf.addImage(img, "PNG", x, y, w, h);
-    pdf.save(useFiltered ? "Kassenbuch_gefiltert.pdf" : "Kassenbuch_alle.pdf");
+    saveRlcPdfWithCompanyHeader(pdf, useFiltered ? "Kassenbuch_gefiltert.pdf" : "Kassenbuch_alle.pdf");
   };
 
   function buildLedgerNode(list: Buchung[], start: number) {
@@ -429,11 +430,11 @@ export default function Kassenbuch() {
         <div>
           <label>Kategorie</label>
           <select value={kategorie} onChange={(e) => setKategorie(e.target.value)}>
-            {kategorienListe.map((k) => (
-              <option key={k} value={k}>
+            {kategorienListe.map((k) =>
+            <option key={k} value={k}>
                 {k === "ALL" ? "Alle" : k}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
@@ -454,8 +455,8 @@ export default function Kassenbuch() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Text / Beleg / Kostenstelle"
-          />
+            placeholder="Text / Beleg / Kostenstelle" />
+          
         </div>
 
         <div>
@@ -464,8 +465,8 @@ export default function Kassenbuch() {
             type="number"
             step="0.01"
             value={anfangsbestand}
-            onChange={(e) => setAnfangsbestand(safeNumber(e.target.value, 0))}
-          />
+            onChange={(e) => setAnfangsbestand(safeNumber(e.target.value, 0))} />
+          
         </div>
       </div>
 
@@ -487,11 +488,11 @@ export default function Kassenbuch() {
         </thead>
 
         <tbody>
-          <tr style={{ background: "#fafafa" }}>
-            <td colSpan={10} style={{ textAlign: "right", fontWeight: 600 }}>
+          <tr className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-210">
+            <td colSpan={10} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-211">
               Anfangsbestand
             </td>
-            <td className="right" style={{ fontWeight: 700 }}>
+            <td className="right rlc-migrated-pages-buchhaltung-kassenbuch-tsx-212">
               {fmt(anfangsbestand)}
             </td>
           </tr>
@@ -503,15 +504,15 @@ export default function Kassenbuch() {
             return (
               <tr key={r.id}>
                 <td>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-213">
                     <button className="bh-btn ghost" onClick={() => duplicate(r)}>
                       Duplizieren
                     </button>
                     <button
-                      className="bh-btn"
-                      style={{ background: "#e74c3c" }}
-                      onClick={() => remove(r.id)}
-                    >
+                      className="bh-btn rlc-migrated-pages-buchhaltung-kassenbuch-tsx-214"
+
+                      onClick={() => remove(r.id)}>
+                      
                       Löschen
                     </button>
                   </div>
@@ -521,52 +522,52 @@ export default function Kassenbuch() {
                   <input
                     type="text"
                     value={r.datum}
-                    onChange={(e) => update(i, "datum", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(i, "datum", e.target.value)} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-215" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.beleg || ""}
-                    onChange={(e) => update(i, "beleg", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(i, "beleg", e.target.value)} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-216" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.text}
-                    onChange={(e) => update(i, "text", e.target.value)}
-                    style={{ minWidth: 200 }}
-                  />
+                    onChange={(e) => update(i, "text", e.target.value)} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-217" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.kategorie || ""}
-                    onChange={(e) => update(i, "kategorie", e.target.value)}
-                    style={{ minWidth: 140 }}
-                  />
+                    onChange={(e) => update(i, "kategorie", e.target.value)} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-218" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.kostenstelle || ""}
-                    onChange={(e) => update(i, "kostenstelle", e.target.value)}
-                    style={{ minWidth: 140 }}
-                  />
+                    onChange={(e) => update(i, "kostenstelle", e.target.value)} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-219" />
+
+                  
                 </td>
 
                 <td>
                   <select
                     value={r.methode}
-                    onChange={(e) => update(i, "methode", e.target.value as Buchung["methode"])}
-                  >
+                    onChange={(e) => update(i, "methode", e.target.value as Buchung["methode"])}>
+                    
                     <option value="Kasse">Kasse</option>
                     <option value="Bank">Bank</option>
                     <option value="Karte">Karte</option>
@@ -579,9 +580,9 @@ export default function Kassenbuch() {
                     type="number"
                     step="0.01"
                     value={r.einnahme}
-                    onChange={(e) => update(i, "einnahme", safeNumber(e.target.value, 0))}
-                    style={{ width: 120, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(i, "einnahme", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-220" />
+
+                  
                 </td>
 
                 <td className="right">
@@ -589,9 +590,9 @@ export default function Kassenbuch() {
                     type="number"
                     step="0.01"
                     value={r.ausgabe}
-                    onChange={(e) => update(i, "ausgabe", safeNumber(e.target.value, 0))}
-                    style={{ width: 120, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(i, "ausgabe", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-221" />
+
+                  
                 </td>
 
                 <td className="right">
@@ -599,28 +600,28 @@ export default function Kassenbuch() {
                     type="number"
                     step="0.1"
                     value={r.mwstPct ?? 0}
-                    onChange={(e) => update(i, "mwstPct", safeNumber(e.target.value, 0))}
-                    style={{ width: 90, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(i, "mwstPct", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-222" />
+
+                  
                 </td>
 
-                <td className="right" style={{ fontWeight: 600 }}>
+                <td className="right rlc-migrated-pages-buchhaltung-kassenbuch-tsx-223">
                   {fmt(saldo)}
                 </td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={11} style={{ textAlign: "center", color: "#777", padding: 14 }}>
+          {filtered.length === 0 &&
+          <tr>
+              <td colSpan={11} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-224">
                 Keine Buchungen im aktuellen Filter.
               </td>
             </tr>
-          )}
+          }
 
-          <tr style={{ background: "#fafafa", fontWeight: 600 }}>
-            <td colSpan={7} style={{ textAlign: "right" }}>
+          <tr className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-225">
+            <td colSpan={7} className="rlc-migrated-pages-buchhaltung-kassenbuch-tsx-226">
               Summe (gefiltert):
             </td>
             <td className="right">{fmt(totals.ein)}</td>
@@ -631,11 +632,11 @@ export default function Kassenbuch() {
         </tbody>
       </table>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-kassenbuch-tsx-227">
         *Demo – verbinde il Kassenbuch all’API del progetto per persistenza e Audit (User, Zeitstempel).
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* =========================
@@ -648,11 +649,11 @@ function printableLedgerHTML(list: Buchung[], start: number) {
 
   let saldo = safeNumber(start);
 
-  const body = arr
-    .map((r) => {
-      saldo += safeNumber(r.einnahme) - safeNumber(r.ausgabe);
+  const body = arr.
+  map((r) => {
+    saldo += safeNumber(r.einnahme) - safeNumber(r.ausgabe);
 
-      return `<tr>
+    return `<tr>
         <td>${escapeHtml(r.datum)}</td>
         <td>${escapeHtml(r.beleg || "")}</td>
         <td>${escapeHtml(r.text)}</td>
@@ -664,8 +665,8 @@ function printableLedgerHTML(list: Buchung[], start: number) {
         <td class="right">${typeof r.mwstPct === "number" ? safeNumber(r.mwstPct).toFixed(1) : ""}</td>
         <td class="right">${fmt(saldo)}</td>
       </tr>`;
-    })
-    .join("");
+  }).
+  join("");
 
   return `<!doctype html><html><head><meta charset="utf-8"/><title>Kassenbuch</title>
 <style>
@@ -699,8 +700,3 @@ tfoot td{font-weight:700; background:#f7f7f7}
 function ledgerInnerHTML(list: Buchung[], start: number) {
   return printableLedgerHTML(list, start);
 }
-
-
-
-
-

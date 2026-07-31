@@ -1,37 +1,18 @@
-﻿// apps/mobile/src/screens/LvReadOnlyScreen.tsx
+// apps/mobile/src/screens/LvReadOnlyScreen.tsx
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  FlatList,
-  Alert,
-  Platform,
-  SafeAreaView,
-  KeyboardAvoidingView,
-} from "react-native";
+import { View, Text, TextInput, Pressable, FlatList, Alert, Platform, SafeAreaView, KeyboardAvoidingView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { getSession, SessionRole } from "../storage/session";
-import {
-  resolveProjectCode,
-  looksLikeProjectCode,
-  request,
-  api,
-} from "../lib/api";
+import { resolveProjectCode, looksLikeProjectCode, request, api } from "../lib/api";
 import { getAuthMode, type AuthMode } from "../lib/auth";
 import * as Sharing from "expo-sharing";
-import { COLORS } from "../ui/theme";
-
+import { COLORS, createRlcStyles } from "../ui/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "LvReadOnly">;
-
 type LvItem = {
   id?: string;
-
   position?: string;
   kurztext?: string;
   langtext?: string;
@@ -40,16 +21,13 @@ type LvItem = {
   einzelpreis?: number;
   gesamt?: number;
   kategorie?: string;
-
   pos?: string;
   text?: string;
   unit?: string;
   quantity?: number;
   ep?: number;
 };
-
 type FilterMode = "ALL" | "POS" | "KURZ" | "LANG";
-
 type CacheMeta = {
   ts?: number;
   version?: string;
@@ -60,7 +38,6 @@ type CacheMeta = {
   offline?: boolean;
   fileName?: string;
 };
-
 type CacheCandidate = {
   key: string;
   list: LvItem[];
@@ -68,33 +45,19 @@ type CacheCandidate = {
   raw: any;
   score: number;
 };
-
 function canLvRead(role?: SessionRole) {
-  return (
-    String(role) === "BAULEITER" ||
-    String(role) === "KALKULATOR" ||
-    String(role) === "BUERO" ||
-    String(role) === "POLIER" ||
-    String(role) === "KALKULATOR"
-  );
+  return String(role) === "BAULEITER" || String(role) === "KALKULATOR" || String(role) === "BUERO" || String(role) === "POLIER" || String(role) === "KALKULATOR";
 }
-
 function toNum(v: any): number | undefined {
   if (v === null || v === undefined || v === "") return undefined;
   const normalized = String(v).replace(",", ".").trim();
   const n = Number(normalized);
   return Number.isFinite(n) ? n : undefined;
 }
-
 function mapLvItem(raw: any): LvItem {
   const quantity = toNum(raw?.quantity ?? raw?.menge);
   const ep = toNum(raw?.ep ?? raw?.einzelpreis);
-  const gesamt =
-    toNum(raw?.gesamt) ??
-    (typeof quantity === "number" && typeof ep === "number"
-      ? Number((quantity * ep).toFixed(2))
-      : undefined);
-
+  const gesamt = toNum(raw?.gesamt) ?? (typeof quantity === "number" && typeof ep === "number" ? Number((quantity * ep).toFixed(2)) : undefined);
   return {
     id: raw?.id ? String(raw.id) : undefined,
     position: raw?.position ?? raw?.pos ?? undefined,
@@ -109,125 +72,63 @@ function mapLvItem(raw: any): LvItem {
     einzelpreis: ep,
     ep,
     gesamt,
-    kategorie: raw?.kategorie ?? undefined,
+    kategorie: raw?.kategorie ?? undefined
   };
 }
-
 function fmtNum(v: any): string {
   if (v === null || v === undefined) return "—";
   const n = Number(v);
   if (!Number.isFinite(n)) return "—";
   return n.toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 }
-
 function normalizeProjectRef(v: unknown): string {
   return String(v || "").trim();
 }
-
 function buildProjectRefs(projectId: unknown, projectCode: unknown): string[] {
   const id = normalizeProjectRef(projectId);
   const code = normalizeProjectRef(projectCode);
-
   const refs = [code, id].filter(Boolean);
   return Array.from(new Set(refs));
 }
-
 function buildCacheKeys(projectId: unknown, projectCode: unknown): string[] {
   const refs = buildProjectRefs(projectId, projectCode);
-
-  const keys = refs.flatMap((ref) => [
-    `rlc.project.lv.${ref}`,
-    `rlc_lv_cache:${ref}`,
-    `rlc_mobile_lv_cache:${ref}`,
-    `lv_cache:${ref}`,
-    `project_lv_cache:${ref}`,
-    `rlc_project_lv:${ref}`,
-    `rlc_lv_readonly_cache:${ref}`,
-    `rlc_lv_payload:${ref}`,
-    `rlc_lv_last_import:${ref}`,
-  ]);
-
+  const keys = refs.flatMap(ref => [`rlc.project.lv.${ref}`, `rlc_lv_cache:${ref}`, `rlc_mobile_lv_cache:${ref}`, `lv_cache:${ref}`, `project_lv_cache:${ref}`, `rlc_project_lv:${ref}`, `rlc_lv_readonly_cache:${ref}`, `rlc_lv_payload:${ref}`, `rlc_lv_last_import:${ref}`]);
   return Array.from(new Set(keys));
 }
-
 function extractListRaw(data: any): any[] {
   if (Array.isArray(data?.items)) return data.items;
   if (Array.isArray(data?.positions)) return data.positions;
   if (Array.isArray(data?.rows)) return data.rows;
   if (Array.isArray(data?.data)) return data.data;
-
   if (data?.lv) {
     if (Array.isArray(data.lv?.items)) return data.lv.items;
     if (Array.isArray(data.lv?.positions)) return data.lv.positions;
     if (Array.isArray(data.lv?.rows)) return data.lv.rows;
     if (Array.isArray(data.lv?.data)) return data.lv.data;
   }
-
   if (Array.isArray(data)) return data;
-
   return [];
 }
-
 function extractMeta(data: any): CacheMeta {
-  const ts =
-    typeof data?.ts === "number"
-      ? data.ts
-      : data?.savedAt
-      ? Date.parse(String(data.savedAt))
-      : data?.lv?.savedAt
-      ? Date.parse(String(data.lv.savedAt))
-      : undefined;
-
+  const ts = typeof data?.ts === "number" ? data.ts : data?.savedAt ? Date.parse(String(data.savedAt)) : data?.lv?.savedAt ? Date.parse(String(data.lv.savedAt)) : undefined;
   return {
     ts: Number.isFinite(ts as number) ? ts : undefined,
-    version:
-      data?.version != null
-        ? String(data.version)
-        : data?.lv?.version != null
-        ? String(data.lv.version)
-        : undefined,
-    sourceType:
-      data?.sourceType != null
-        ? String(data.sourceType)
-        : data?.lv?.sourceType != null
-        ? String(data.lv.sourceType)
-        : undefined,
-    title:
-      typeof data?.title === "string"
-        ? data.title
-        : typeof data?.lv?.title === "string"
-        ? data.lv.title
-        : undefined,
-    currency:
-      typeof data?.currency === "string"
-        ? data.currency
-        : typeof data?.lv?.currency === "string"
-        ? data.lv.currency
-        : undefined,
-    savedAt:
-      typeof data?.savedAt === "string"
-        ? data.savedAt
-        : typeof data?.lv?.savedAt === "string"
-        ? data.lv.savedAt
-        : undefined,
+    version: data?.version != null ? String(data.version) : data?.lv?.version != null ? String(data.lv.version) : undefined,
+    sourceType: data?.sourceType != null ? String(data.sourceType) : data?.lv?.sourceType != null ? String(data.lv.sourceType) : undefined,
+    title: typeof data?.title === "string" ? data.title : typeof data?.lv?.title === "string" ? data.lv.title : undefined,
+    currency: typeof data?.currency === "string" ? data.currency : typeof data?.lv?.currency === "string" ? data.lv.currency : undefined,
+    savedAt: typeof data?.savedAt === "string" ? data.savedAt : typeof data?.lv?.savedAt === "string" ? data.lv.savedAt : undefined,
     offline: !!data?.offline,
-    fileName:
-      typeof data?.fileName === "string"
-        ? data.fileName
-        : typeof data?.lv?.fileName === "string"
-        ? data.lv.fileName
-        : undefined,
+    fileName: typeof data?.fileName === "string" ? data.fileName : typeof data?.lv?.fileName === "string" ? data.lv.fileName : undefined
   };
 }
-
 function scoreCacheCandidate(list: LvItem[], meta: CacheMeta, raw: any): number {
   const itemCount = list.length;
   const ts = typeof meta?.ts === "number" ? meta.ts : 0;
   const sourceType = String(meta?.sourceType || "").toUpperCase();
-
   let score = 0;
 
   // priorità massima: cache con elementi
@@ -250,83 +151,71 @@ function scoreCacheCandidate(list: LvItem[], meta: CacheMeta, raw: any): number 
   if ((raw?.lv || raw?.items || raw?.positions || raw?.rows) && itemCount === 0) {
     score += 100;
   }
-
   return score;
 }
-
 async function findBestCache(projectId: unknown, projectCode: unknown) {
   const keys = buildCacheKeys(projectId, projectCode);
   const candidates: CacheCandidate[] = [];
-
   for (const key of keys) {
     try {
       const rawText = await AsyncStorage.getItem(key);
       if (!rawText) continue;
-
       const data = JSON.parse(rawText);
       const listRaw = extractListRaw(data);
       const list = listRaw.map(mapLvItem);
       const meta = extractMeta(data);
       const score = scoreCacheCandidate(list, meta, data);
-
       candidates.push({
         key,
         list,
         meta,
         raw: data,
-        score,
+        score
       });
     } catch {}
   }
-
   if (!candidates.length) return null;
-
   candidates.sort((a, b) => b.score - a.score);
   return candidates[0];
 }
-
-export default function LvReadOnlyScreen({ route, navigation }: Props) {
-  const { projectId, title, projectCode: routeProjectCode } = route.params as any;
-
+export default function LvReadOnlyScreen({
+  route,
+  navigation
+}: Props) {
+  const {
+    projectId,
+    title,
+    projectCode: routeProjectCode
+  } = route.params as any;
   useLayoutEffect(() => {
-    navigation.setOptions({ title: title || "LV" });
+    navigation.setOptions({
+      title: title || "LV"
+    });
   }, [title, navigation]);
-
   const [mode, setMode] = useState<AuthMode>("NUR_APP");
   const canServer = useMemo(() => mode === "SERVER_SYNC", [mode]);
-
-  const [projectCode, setProjectCode] = useState<string>(
-    String(routeProjectCode || "").trim()
-  );
-
+  const [projectCode, setProjectCode] = useState<string>(String(routeProjectCode || "").trim());
   const effectiveProjectKey = useMemo(() => {
     const c = String(projectCode || "").trim();
     return looksLikeProjectCode(c) ? c : String(projectId || "").trim();
   }, [projectCode, projectId]);
-
   const [q, setQ] = useState("");
   const [items, setItems] = useState<LvItem[]>([]);
   const [meta, setMeta] = useState<CacheMeta | null>(null);
   const [busy, setBusy] = useState(false);
-
   const [role, setRole] = useState<SessionRole | undefined>(undefined);
   const [filterMode, setFilterMode] = useState<FilterMode>("ALL");
   const [openId, setOpenId] = useState<string | null>(null);
-
   const allowed = useMemo(() => canLvRead(role), [role]);
-
   async function ensureProjectCodeValue(): Promise<string> {
     if (!canServer) return String(projectCode || "").trim();
-
     const current = String(projectCode || "").trim();
     if (looksLikeProjectCode(current)) return current;
-
     const routeCode = String(routeProjectCode || "").trim();
     if (looksLikeProjectCode(routeCode)) {
       setProjectCode(routeCode);
       return routeCode;
     }
-
     try {
       const pk = await resolveProjectCode(projectId);
       if (looksLikeProjectCode(pk)) {
@@ -334,23 +223,18 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
         return pk;
       }
     } catch {}
-
     return "";
   }
-
   async function loadCache() {
     try {
       const found = await findBestCache(projectId, projectCode || routeProjectCode);
-
       if (!found) {
         setItems([]);
         setMeta(null);
         return;
       }
-
       const list = found.list;
       const parsedMeta = found.meta;
-
       const syncPayload = {
         ts: parsedMeta?.ts || Date.now(),
         version: parsedMeta?.version || "1",
@@ -360,16 +244,10 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
         offline: parsedMeta?.offline,
         savedAt: parsedMeta?.savedAt,
         fileName: parsedMeta?.fileName,
-        items: list,
+        items: list
       };
-
       const syncKeys = buildCacheKeys(projectId, projectCode || routeProjectCode);
-      await Promise.all(
-        syncKeys
-          .filter((k) => k.startsWith("rlc.project.lv."))
-          .map((k) => AsyncStorage.setItem(k, JSON.stringify(syncPayload)))
-      );
-
+      await Promise.all(syncKeys.filter(k => k.startsWith("rlc.project.lv.")).map(k => AsyncStorage.setItem(k, JSON.stringify(syncPayload))));
       setItems(list);
       setMeta(parsedMeta);
       setOpenId(null);
@@ -378,70 +256,44 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
       setMeta(null);
     }
   }
-
   async function refreshFromServer(showAlert = false) {
     if (!allowed) {
       if (showAlert) {
-        Alert.alert(
-          "LV",
-          "Kein Zugriff. LV ist nur für Bauleiter, Büro, Kalkulator und Polier sichtbar."
-        );
+        Alert.alert("LV", "Kein Zugriff. LV ist nur für Bauleiter, Büro, Kalkulator und Polier sichtbar.");
       }
       return;
     }
-
     if (!canServer) {
       if (showAlert) {
-        Alert.alert(
-          "LV (Offline)",
-          "Du bist im Modus „Ohne Server“. Server-Refresh ist deaktiviert."
-        );
+        Alert.alert("LV (Offline)", "Du bist im Modus „Ohne Server“. Server-Refresh ist deaktiviert.");
       }
       return;
     }
-
     const finalKey = await ensureProjectCodeValue();
-
     if (!looksLikeProjectCode(finalKey)) {
       if (showAlert) {
         Alert.alert("LV", "Projekt-Code (BA-YYYY-...) konnte nicht ermittelt werden.");
       }
       return;
     }
-
     setBusy(true);
     try {
-      const json = await request<any>(
-        `/api/project-lv/${encodeURIComponent(finalKey)}`,
-        { method: "GET" }
-      );
-
+      const json = await request<any>(`/api/project-lv/${encodeURIComponent(finalKey)}`, {
+        method: "GET"
+      });
       const listRaw = extractListRaw(json);
       const list: LvItem[] = listRaw.map(mapLvItem);
-
       const payload = {
         ts: Date.now(),
-        version: String(
-          json?.header?.version ?? json?.version ?? json?.lvVersion ?? "1"
-        ),
+        version: String(json?.header?.version ?? json?.version ?? json?.lvVersion ?? "1"),
         sourceType: "server",
-        title:
-          json?.header?.title ??
-          json?.title ??
-          json?.lv?.title ??
-          "Leistungsverzeichnis",
+        title: json?.header?.title ?? json?.title ?? json?.lv?.title ?? "Leistungsverzeichnis",
         currency: json?.currency ?? json?.lv?.currency ?? "EUR",
         offline: false,
-        items: list,
+        items: list
       };
-
       const keys = buildCacheKeys(projectId, finalKey);
-      await Promise.all(
-        keys
-          .filter((k) => k.startsWith("rlc.project.lv.") || k.startsWith("rlc_lv_cache:"))
-          .map((k) => AsyncStorage.setItem(k, JSON.stringify(payload)))
-      );
-
+      await Promise.all(keys.filter(k => k.startsWith("rlc.project.lv.") || k.startsWith("rlc_lv_cache:")).map(k => AsyncStorage.setItem(k, JSON.stringify(payload))));
       setItems(list);
       setMeta({
         ts: payload.ts,
@@ -449,10 +301,9 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
         sourceType: payload.sourceType,
         title: payload.title,
         currency: payload.currency,
-        offline: false,
+        offline: false
       });
       setOpenId(null);
-
       if (showAlert) {
         Alert.alert("LV", "LV wurde vom Server geladen und Cache aktualisiert.");
       }
@@ -465,83 +316,74 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
       setBusy(false);
     }
   }
-
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-
-      (async () => {
-        const m = await getAuthMode().catch(() => "NUR_APP" as AuthMode);
-        if (cancelled) return;
-        setMode(m);
-
-        const s =
-          (await getSession(effectiveProjectKey)) || (await getSession(projectId));
-        if (cancelled) return;
-        setRole(s?.role);
-
-        await loadCache();
-        if (cancelled) return;
-
-        if (m === "SERVER_SYNC") {
-          await refreshFromServer(false);
-        }
-      })();
-
-      return () => {
-        cancelled = true;
-      };
-    }, [projectId, effectiveProjectKey, routeProjectCode])
-  );
-
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    (async () => {
+      const m = await getAuthMode().catch(() => "NUR_APP" as AuthMode);
+      if (cancelled) return;
+      setMode(m);
+      const s = (await getSession(effectiveProjectKey)) || (await getSession(projectId));
+      if (cancelled) return;
+      setRole(s?.role);
+      await loadCache();
+      if (cancelled) return;
+      if (m === "SERVER_SYNC") {
+        await refreshFromServer(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, effectiveProjectKey, routeProjectCode]));
   async function downloadLv() {
     await refreshFromServer(true);
   }
-
   async function handleExport(type: "excel" | "pdf" | "gaeb") {
     if (!allowed) {
       Alert.alert("Export", "Kein Zugriff auf LV-Export.");
       return;
     }
-
     if (!canServer) {
       Alert.alert("Export", "Nur im Server-Modus möglich.");
       return;
     }
-
     let finalKey = effectiveProjectKey;
-
     if (!looksLikeProjectCode(finalKey)) {
       const resolved = await ensureProjectCodeValue();
       if (looksLikeProjectCode(resolved)) {
         finalKey = resolved;
       }
     }
-
     if (!looksLikeProjectCode(finalKey)) {
       Alert.alert("Export", "Projekt-Code fehlt.");
       return;
     }
-
     setBusy(true);
     try {
-      const { uri, filename, mimeType } = await api.exportLvToFile(finalKey, type);
-
+      const {
+        uri,
+        filename,
+        mimeType
+      } = await api.exportLvToFile(finalKey, type);
+      if (type === "pdf") {
+        navigation.navigate("PdfViewer", {
+          uri,
+          title: filename || `Leistungsverzeichnis ${finalKey}`,
+          projectId: String(projectId || finalKey),
+          projectCode: finalKey,
+          documentType: "LEISTUNGSVERZEICHNIS"
+        });
+        return;
+      }
       const canShareNow = await Sharing.isAvailableAsync();
       if (!canShareNow) {
         Alert.alert("Export OK", `${filename}\n\nGespeichert unter:\n${uri}`);
         return;
       }
-
       await Sharing.shareAsync(uri, {
         mimeType,
         dialogTitle: filename,
-        UTI:
-          type === "excel"
-            ? "org.openxmlformats.spreadsheetml.sheet"
-            : type === "pdf"
-            ? "com.adobe.pdf"
-            : "public.xml",
+        UTI: type === "excel" ? "org.openxmlformats.spreadsheetml.sheet" : "public.xml"
       });
     } catch (e: any) {
       Alert.alert("Export Fehler", String(e?.message || e || "Export fehlgeschlagen"));
@@ -549,49 +391,36 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
       setBusy(false);
     }
   }
-
   const filtered = useMemo(() => {
     const sTerm = q.trim().toLowerCase();
     if (!sTerm) return items;
-
-    return items.filter((it) => {
+    return items.filter(it => {
       const p = String(it.position || it.pos || "").toLowerCase();
       const k = String(it.kurztext || it.text || "").toLowerCase();
       const l = String(it.langtext || "").toLowerCase();
-
       if (filterMode === "POS") return p.includes(sTerm);
       if (filterMode === "KURZ") return k.includes(sTerm);
       if (filterMode === "LANG") return l.includes(sTerm);
-
       return p.includes(sTerm) || k.includes(sTerm) || l.includes(sTerm);
     });
   }, [q, items, filterMode]);
-
   const cacheInfo = useMemo(() => {
     const t = meta?.ts ? new Date(meta.ts).toLocaleString() : "nicht vorhanden";
     const v = meta?.version ? ` • v${meta.version}` : "";
     const src = meta?.sourceType ? ` • ${String(meta.sourceType).toUpperCase()}` : "";
     return `Cache: ${t}${v}${src}`;
   }, [meta]);
-
   const codeLine = useMemo(() => {
     const c = looksLikeProjectCode(projectCode) ? projectCode : "";
     return c ? c : "—";
   }, [projectCode]);
-
   const subtitleInfo = useMemo(() => {
     if (!meta) return null;
-    const parts = [
-      meta.title ? `Titel: ${meta.title}` : null,
-      meta.fileName ? `Datei: ${meta.fileName}` : null,
-      meta.currency ? `Währung: ${meta.currency}` : null,
-    ].filter(Boolean);
+    const parts = [meta.title ? `Titel: ${meta.title}` : null, meta.fileName ? `Datei: ${meta.fileName}` : null, meta.currency ? `Währung: ${meta.currency}` : null].filter(Boolean);
     return parts.join(" • ");
   }, [meta]);
-
   if (!allowed) {
-    return (
-      <SafeAreaView style={s.safe}>
+    return <SafeAreaView style={s.safe}>
         <View style={s.bg}>
           <View style={s.centerWrap}>
             <View style={s.lockCard}>
@@ -608,27 +437,12 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
             </View>
           </View>
         </View>
-      </SafeAreaView>
-    );
+      </SafeAreaView>;
   }
-
-  return (
-    <SafeAreaView style={s.safe}>
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+  return <SafeAreaView style={s.safe}>
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={s.bg}>
-          <FlatList
-            data={filtered}
-            keyExtractor={(it, idx) =>
-              (it.id || it.position || it.pos || String(idx)) + ":" + idx
-            }
-            contentContainerStyle={s.listPad}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={
-              <View style={s.headerWrap}>
+          <FlatList data={filtered} keyExtractor={(it, idx) => (it.id || it.position || it.pos || String(idx)) + ":" + idx} contentContainerStyle={s.listPad} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} ListHeaderComponent={<View style={s.headerWrap}>
                 <View style={s.headerCard}>
                   <View style={s.hRow}>
                     <View style={s.accentBarDark} />
@@ -666,55 +480,38 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
                 <View style={s.panel}>
                   <Text style={s.metaSmall}>{cacheInfo}</Text>
 
-                  {!canServer ? (
-                    <View style={s.offlineWarn}>
+                  {!canServer ? <View style={s.offlineWarn}>
                       <Text style={s.offlineWarnTitle}>Ohne Server</Text>
                       <Text style={s.offlineWarnText}>
                         In diesem Modus wird nichts vom Server geladen. Angezeigt wird der lokal gespeicherte LV-Cache.
                       </Text>
-                    </View>
-                  ) : null}
+                    </View> : null}
 
                   <View style={s.actionsWrap}>
-                    <Pressable
-                      style={[s.btnFull, s.btnSecondary, { opacity: 0.95 }]}
-                      onPress={() =>
-                        navigation.navigate("LvImport", {
-                          projectId,
-                          projectCode,
-                          title,
-                        })
-                      }
-                    >
+                    <Pressable style={[s.btnFull, s.btnSecondary, {
+                opacity: 0.95
+              }]} onPress={() => navigation.navigate("LvImport", {
+                projectId,
+                projectCode,
+                title
+              })}>
                       <Text style={s.btnSecondaryTxt}>LV importieren</Text>
                     </Pressable>
 
                     <View style={s.actionsRow}>
-                      <Pressable
-                        style={[
-                          s.btn,
-                          s.btnPrimary,
-                          (busy || !canServer) && s.disabledBtn,
-                        ]}
-                        onPress={downloadLv}
-                        disabled={busy || !canServer}
-                      >
+                      <Pressable style={[s.btn, s.btnPrimary, (busy || !canServer) && s.disabledBtn]} onPress={downloadLv} disabled={busy || !canServer}>
                         <Text style={s.btnPrimaryTxt}>
                           {busy ? "Lädt..." : "LV Download (Server)"}
                         </Text>
                       </Pressable>
 
-                      <Pressable
-                        style={[s.btn, s.btnSecondary, busy && s.disabledBtn]}
-                        onPress={() => {
-                          if (canServer) {
-                            refreshFromServer(true);
-                          } else {
-                            loadCache();
-                          }
-                        }}
-                        disabled={busy}
-                      >
+                      <Pressable style={[s.btn, s.btnSecondary, busy && s.disabledBtn]} onPress={() => {
+                  if (canServer) {
+                    refreshFromServer(true);
+                  } else {
+                    loadCache();
+                  }
+                }} disabled={busy}>
                         <Text style={s.btnSecondaryTxt}>
                           {canServer ? "Server neu laden" : "Cache laden"}
                         </Text>
@@ -722,106 +519,47 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
                     </View>
 
                     <View style={s.actionsRow}>
-                      <Pressable
-                        style={[
-                          s.btn,
-                          s.btnSecondary,
-                          (busy || !canServer) && s.disabledBtn,
-                        ]}
-                        onPress={() => handleExport("excel")}
-                        disabled={busy || !canServer}
-                      >
+                      <Pressable style={[s.btn, s.btnSecondary, (busy || !canServer) && s.disabledBtn]} onPress={() => handleExport("excel")} disabled={busy || !canServer}>
                         <Text style={s.btnSecondaryTxt}>Excel</Text>
                       </Pressable>
 
-                      <Pressable
-                        style={[
-                          s.btn,
-                          s.btnSecondary,
-                          (busy || !canServer) && s.disabledBtn,
-                        ]}
-                        onPress={() => handleExport("pdf")}
-                        disabled={busy || !canServer}
-                      >
+                      <Pressable style={[s.btn, s.btnSecondary, (busy || !canServer) && s.disabledBtn]} onPress={() => handleExport("pdf")} disabled={busy || !canServer}>
                         <Text style={s.btnSecondaryTxt}>PDF</Text>
                       </Pressable>
 
-                      <Pressable
-                        style={[
-                          s.btn,
-                          s.btnSecondary,
-                          (busy || !canServer) && s.disabledBtn,
-                        ]}
-                        onPress={() => handleExport("gaeb")}
-                        disabled={busy || !canServer}
-                      >
+                      <Pressable style={[s.btn, s.btnSecondary, (busy || !canServer) && s.disabledBtn]} onPress={() => handleExport("gaeb")} disabled={busy || !canServer}>
                         <Text style={s.btnSecondaryTxt}>GAEB</Text>
                       </Pressable>
                     </View>
                   </View>
 
                   <View style={s.chipsRow}>
-                    <FilterChip
-                      label="Alles"
-                      active={filterMode === "ALL"}
-                      onPress={() => setFilterMode("ALL")}
-                    />
-                    <FilterChip
-                      label="Position"
-                      active={filterMode === "POS"}
-                      onPress={() => setFilterMode("POS")}
-                    />
-                    <FilterChip
-                      label="Kurztext"
-                      active={filterMode === "KURZ"}
-                      onPress={() => setFilterMode("KURZ")}
-                    />
-                    <FilterChip
-                      label="Langtext"
-                      active={filterMode === "LANG"}
-                      onPress={() => setFilterMode("LANG")}
-                    />
+                    <FilterChip label="Alles" active={filterMode === "ALL"} onPress={() => setFilterMode("ALL")} />
+                    <FilterChip label="Position" active={filterMode === "POS"} onPress={() => setFilterMode("POS")} />
+                    <FilterChip label="Kurztext" active={filterMode === "KURZ"} onPress={() => setFilterMode("KURZ")} />
+                    <FilterChip label="Langtext" active={filterMode === "LANG"} onPress={() => setFilterMode("LANG")} />
                   </View>
 
-                  <TextInput
-                    value={q}
-                    onChangeText={setQ}
-                    placeholder="Suchen (Position, Kurztext, Langtext)…"
-                    style={s.search}
-                    placeholderTextColor={COLORS.sub}
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                    blurOnSubmit={false}
-                  />
+                  <TextInput value={q} onChangeText={setQ} placeholder="Suchen (Position, Kurztext, Langtext)…" style={s.search} placeholderTextColor={COLORS.sub} autoCorrect={false} autoCapitalize="none" blurOnSubmit={false} />
 
                   <Text style={s.sectionTitle}>
                     {items.length ? `Positionen (${filtered.length})` : "Keine Daten"}
                   </Text>
                 </View>
-              </View>
-            }
-            renderItem={({ item, index }) => {
-              const key = item.id || item.position || item.pos || String(index);
-              const isOpen = openId === key;
-
-              const pos = item.pos ?? item.position ?? "—";
-              const kurz = item.text ?? item.kurztext ?? "—";
-              const lang = item.langtext ?? "";
-              const unit = item.unit ?? item.einheit ?? "";
-              const menge = item.quantity ?? item.menge;
-              const ep = item.ep ?? item.einzelpreis;
-              const gp =
-                typeof item.gesamt === "number"
-                  ? item.gesamt
-                  : typeof menge === "number" && typeof ep === "number"
-                  ? Number((menge * ep).toFixed(2))
-                  : undefined;
-
-              return (
-                <Pressable
-                  style={[s.card, isOpen && s.cardOpen]}
-                  onPress={() => setOpenId(isOpen ? null : key)}
-                >
+              </View>} renderItem={({
+          item,
+          index
+        }) => {
+          const key = item.id || item.position || item.pos || String(index);
+          const isOpen = openId === key;
+          const pos = item.pos ?? item.position ?? "—";
+          const kurz = item.text ?? item.kurztext ?? "—";
+          const lang = item.langtext ?? "";
+          const unit = item.unit ?? item.einheit ?? "";
+          const menge = item.quantity ?? item.menge;
+          const ep = item.ep ?? item.einzelpreis;
+          const gp = typeof item.gesamt === "number" ? item.gesamt : typeof menge === "number" && typeof ep === "number" ? Number((menge * ep).toFixed(2)) : undefined;
+          return <Pressable style={[s.card, isOpen && s.cardOpen]} onPress={() => setOpenId(isOpen ? null : key)}>
                   <View style={s.cardTop}>
                     <View style={s.cardTextWrap}>
                       <Text style={s.pos}>
@@ -838,22 +576,15 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
                     </View>
                   </View>
 
-                  {isOpen ? (
-                    <>
-                      {item.kategorie ? (
-                        <View style={s.katRow}>
+                  {isOpen ? <>
+                      {item.kategorie ? <View style={s.katRow}>
                           <Text style={s.katLabel}>Kategorie</Text>
                           <Text style={s.katValue}>{item.kategorie}</Text>
-                        </View>
-                      ) : null}
+                        </View> : null}
 
                       <View style={s.div} />
 
-                      {lang ? (
-                        <Text style={s.lang}>{lang}</Text>
-                      ) : (
-                        <Text style={s.langEmpty}>Kein Langtext vorhanden.</Text>
-                      )}
+                      {lang ? <Text style={s.lang}>{lang}</Text> : <Text style={s.langEmpty}>Kein Langtext vorhanden.</Text>}
 
                       <View style={s.div} />
 
@@ -864,185 +595,152 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
                       </View>
 
                       <Text style={s.tapHint}>Tippen zum Zuklappen</Text>
-                    </>
-                  ) : (
-                    <Text style={s.tapHint}>Tippen für Details</Text>
-                  )}
-                </Pressable>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={s.emptyWrap}>
+                    </> : <Text style={s.tapHint}>Tippen für Details</Text>}
+                </Pressable>;
+        }} ListEmptyComponent={<View style={s.emptyWrap}>
                 <Text style={s.empty}>
-                  {items.length === 0
-                    ? canServer
-                      ? "Kein LV im Cache. Einmal vom Server laden oder importieren."
-                      : "Kein LV im Cache. Bitte importieren oder Cache laden."
-                    : "Keine Treffer."}
+                  {items.length === 0 ? canServer ? "Kein LV im Cache. Einmal vom Server laden oder importieren." : "Kein LV im Cache. Bitte importieren oder Cache laden." : "Keine Treffer."}
                 </Text>
-              </View>
-            }
-          />
+              </View>} />
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+    </SafeAreaView>;
 }
-
 function FilterChip({
   label,
   active,
-  onPress,
+  onPress
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
 }) {
-  return (
-    <Pressable onPress={onPress} style={[s.chip, active && s.chipActive]}>
+  return <Pressable onPress={onPress} style={[s.chip, active && s.chipActive]}>
       <Text style={[s.chipTxt, active && s.chipTxtActive]}>{label}</Text>
-    </Pressable>
-  );
+    </Pressable>;
 }
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={s.metricBox}>
+function Metric({
+  label,
+  value
+}: {
+  label: string;
+  value: string;
+}) {
+  return <View style={s.metricBox}>
       <Text style={s.metricLabel}>{label}</Text>
       <Text style={s.metricValue}>{value}</Text>
-    </View>
-  );
+    </View>;
 }
-
-const s = StyleSheet.create({
+const s = createRlcStyles("LvReadOnlyScreen", {
   flex: {
-    flex: 1,
+    flex: 1
   },
-
   safe: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   bg: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   listPad: {
-    paddingBottom: 26,
+    paddingBottom: 26
   },
-
   headerWrap: {
-    paddingBottom: 10,
+    paddingBottom: 10
   },
-
   headerCard: {
     marginHorizontal: 16,
     marginTop: 10,
-    padding: 16,
-    borderRadius: 22,
+    padding: 14,
+    borderRadius: 14,
     backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   hRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 12
   },
-
   accentBarDark: {
     width: 8,
     height: 46,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
+    borderRadius: 14,
+    backgroundColor: COLORS.accent
   },
-
   headerTextWrap: {
-    flex: 1,
+    flex: 1
   },
-
   brandTop: {
     color: COLORS.accentDark,
     fontSize: 13,
-    fontWeight: "900",
-    letterSpacing: 0.3,
+    fontWeight: "600",
+    letterSpacing: 0.3
   },
-
   brandSub: {
     color: COLORS.sub,
     marginTop: 2,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600"
   },
-
   h1: {
     marginTop: 8,
-    fontSize: 30,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontSize: 18,
+    lineHeight: 27,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   hSub: {
     marginTop: 6,
-    fontWeight: "800",
+    fontWeight: "600",
     color: COLORS.sub,
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 18
   },
-
   hSubStrong: {
-    fontWeight: "900",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   hSub2: {
     marginTop: 6,
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.sub,
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 18
   },
-
   badgeRow: {
     flexDirection: "row",
     gap: 10,
     marginTop: 14,
-    flexWrap: "wrap",
+    flexWrap: "wrap"
   },
-
   badge: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   badgeOk: {
     borderColor: COLORS.accent,
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   badgeTxt: {
-    fontWeight: "900",
+    fontWeight: "600",
     color: COLORS.text,
-    fontSize: 12,
+    fontSize: 12
   },
-
   badgeTxtStrong: {
-    fontWeight: "900",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   panel: {
     marginTop: 12,
     marginHorizontal: 16,
     backgroundColor: COLORS.card,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -1051,50 +749,48 @@ const s = StyleSheet.create({
         shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: {
+          width: 0,
+          height: 6
+        }
       },
-      android: { elevation: 2 },
-      default: {},
-    }),
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
   },
-
   metaSmall: {
     fontSize: 12,
     color: COLORS.sub,
-    fontWeight: "800",
+    fontWeight: "600"
   },
-
   offlineWarn: {
     marginTop: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card2,
     borderRadius: 14,
-    padding: 12,
+    padding: 12
   },
-
   offlineWarnTitle: {
-    fontWeight: "900",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   offlineWarnText: {
     marginTop: 6,
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.sub,
-    lineHeight: 19,
+    lineHeight: 19
   },
-
   actionsWrap: {
     marginTop: 12,
-    gap: 10,
+    gap: 10
   },
-
   actionsRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 10
   },
-
   btn: {
     flex: 1,
     borderRadius: 14,
@@ -1102,9 +798,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 46,
+    minHeight: 46
   },
-
   btnFull: {
     width: "100%",
     borderRadius: 14,
@@ -1112,70 +807,59 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 46,
+    minHeight: 46
   },
-
   btnPrimary: {
     backgroundColor: COLORS.accent,
     borderWidth: 1,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent
   },
-
   btnPrimaryTxt: {
     color: COLORS.textLight,
-    fontWeight: "900",
+    fontWeight: "600",
     fontSize: 13,
-    textAlign: "center",
+    textAlign: "center"
   },
-
   btnSecondary: {
     backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   btnSecondaryTxt: {
     color: COLORS.text,
-    fontWeight: "900",
+    fontWeight: "600",
     fontSize: 13,
-    textAlign: "center",
+    textAlign: "center"
   },
-
   disabledBtn: {
-    opacity: 0.55,
+    opacity: 0.55
   },
-
   chipsRow: {
     flexDirection: "row",
     gap: 8,
     marginTop: 12,
-    flexWrap: "wrap",
+    flexWrap: "wrap"
   },
-
   chip: {
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 999,
+    borderRadius: 14,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   chipActive: {
     backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent
   },
-
   chipTxt: {
-    fontWeight: "900",
+    fontWeight: "600",
     color: COLORS.text,
-    fontSize: 12,
+    fontSize: 12
   },
-
   chipTxtActive: {
-    color: COLORS.textLight,
+    color: COLORS.textLight
   },
-
   search: {
     marginTop: 12,
     borderWidth: 1,
@@ -1184,22 +868,20 @@ const s = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    fontWeight: "800",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   sectionTitle: {
     marginTop: 14,
-    fontWeight: "900",
+    fontWeight: "600",
     color: COLORS.text,
-    fontSize: 15,
+    fontSize: 15
   },
-
   card: {
     marginTop: 12,
     marginHorizontal: 16,
     backgroundColor: COLORS.card,
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -1208,46 +890,44 @@ const s = StyleSheet.create({
         shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: {
+          width: 0,
+          height: 6
+        }
       },
-      android: { elevation: 2 },
-      default: {},
-    }),
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
   },
-
   cardOpen: {
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent
   },
-
   cardTop: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: 10
   },
-
   cardTextWrap: {
-    flex: 1,
+    flex: 1
   },
-
   pos: {
-    fontWeight: "900",
+    fontWeight: "600",
     fontSize: 16,
-    color: COLORS.text,
+    color: COLORS.text
   },
-
   unit: {
-    fontWeight: "800",
+    fontWeight: "600",
     color: COLORS.sub,
-    fontSize: 13,
+    fontSize: 13
   },
-
   kurz: {
     marginTop: 6,
-    fontWeight: "800",
+    fontWeight: "600",
     color: COLORS.text,
-    lineHeight: 19,
+    lineHeight: 19
   },
-
   chev: {
     width: 34,
     height: 34,
@@ -1256,109 +936,93 @@ const s = StyleSheet.create({
     borderColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   chevTxt: {
-    fontWeight: "900",
+    fontWeight: "600",
     fontSize: 18,
-    color: COLORS.accentDark,
+    color: COLORS.accentDark
   },
-
   katRow: {
-    marginTop: 12,
+    marginTop: 12
   },
-
   katLabel: {
     fontSize: 12,
-    fontWeight: "900",
-    color: COLORS.sub,
+    fontWeight: "600",
+    color: COLORS.sub
   },
-
   katValue: {
     marginTop: 4,
     fontSize: 13,
-    fontWeight: "800",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   div: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginTop: 12,
+    marginTop: 12
   },
-
   lang: {
     marginTop: 12,
     color: COLORS.text,
     lineHeight: 19,
-    fontWeight: "700",
+    fontWeight: "600"
   },
-
   langEmpty: {
     marginTop: 12,
     color: COLORS.sub,
-    fontWeight: "700",
-    fontStyle: "italic",
+    fontWeight: "600",
+    fontStyle: "italic"
   },
-
   metrics: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 12,
+    marginTop: 12
   },
-
   metricBox: {
     flex: 1,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.card2,
     borderRadius: 14,
-    padding: 10,
+    padding: 10
   },
-
   metricLabel: {
     fontSize: 11,
-    fontWeight: "900",
-    color: COLORS.sub,
+    fontWeight: "600",
+    color: COLORS.sub
   },
-
   metricValue: {
     marginTop: 4,
     fontSize: 14,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   tapHint: {
     marginTop: 10,
     color: COLORS.sub,
-    fontWeight: "800",
-    fontSize: 12,
+    fontWeight: "600",
+    fontSize: 12
   },
-
   emptyWrap: {
     paddingTop: 24,
-    paddingHorizontal: 16,
+    paddingHorizontal: 16
   },
-
   empty: {
     color: COLORS.sub,
     textAlign: "center",
-    fontWeight: "800",
-    lineHeight: 20,
+    fontWeight: "600",
+    lineHeight: 20
   },
-
   centerWrap: {
     flex: 1,
-    padding: 16,
-    justifyContent: "center",
+    padding: 14,
+    justifyContent: "center"
   },
-
   lockCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
     ...Platform.select({
@@ -1366,50 +1030,44 @@ const s = StyleSheet.create({
         shadowColor: COLORS.text,
         shadowOpacity: 0.06,
         shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: {
+          width: 0,
+          height: 6
+        }
       },
-      android: { elevation: 2 },
-      default: {},
-    }),
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
   },
-
   lockHead: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
-    gap: 10,
+    gap: 10
   },
-
   accentBar: {
     width: 6,
     height: 22,
     borderRadius: 6,
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.accent
   },
-
   lockTitle: {
     fontSize: 18,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   lockText: {
     marginTop: 8,
     color: COLORS.text,
-    fontWeight: "700",
-    lineHeight: 20,
+    fontWeight: "600",
+    lineHeight: 20
   },
-
   lockText2: {
     marginTop: 6,
     color: COLORS.sub,
-    fontWeight: "700",
-    lineHeight: 19,
-  },
+    fontWeight: "600",
+    lineHeight: 19
+  }
 });
-
-
-
-
-
-

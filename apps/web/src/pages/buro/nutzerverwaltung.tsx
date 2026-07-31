@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { apiUrl } from "../../lib/apiBase";
 
 type CompanyDto = {
@@ -55,6 +55,40 @@ type InviteDto = {
   status: string;
 };
 
+
+type MobileLicenseDto = {
+  id: string;
+  code: string;
+  role: string;
+  employeeName?: string;
+  employeeEmail?: string;
+  deviceName?: string;
+  deviceId?: string;
+  status: "FREE" | "ACTIVE" | "BLOCKED";
+  createdAt: string;
+  activatedAt?: string;
+  expiresAt?: string;
+};
+
+
+type MobileLicenseListResponse = {
+  ok: boolean;
+  mobileLicenses?: MobileLicenseDto[];
+  seats?: {
+    subscriptionActive: boolean;
+    used: number;
+    limit: number;
+    available: number;
+  };
+  error?: string;
+};
+
+type MobileLicenseMutationResponse = {
+  ok: boolean;
+  mobileLicense?: MobileLicenseDto;
+  error?: string;
+};
+
 type DashboardResponse = {
   ok: boolean;
   company: CompanyDto | null;
@@ -79,44 +113,52 @@ type InviteCreateResponse = {
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 12px",
-  borderBottom: "1px solid var(--line)",
-  fontSize: 13,
-  whiteSpace: "nowrap",
+  padding: "11px 12px",
+  borderBottom: "1px solid #dbe4ef",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#334155",
+  background: "#f8fafc",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
-  padding: "8px 12px",
-  borderBottom: "1px solid var(--line)",
+  padding: "10px 12px",
+  borderBottom: "1px solid #e7edf5",
   fontSize: 13,
   verticalAlign: "middle",
+  color: "#1e293b"
 };
 
 const inp: React.CSSProperties = {
-  border: "1px solid var(--line)",
-  borderRadius: 8,
-  padding: "8px 10px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 10,
+  padding: "9px 11px",
   fontSize: 13,
   width: "100%",
   boxSizing: "border-box",
   background: "#fff",
+  color: "#0f172a",
+  outline: "none"
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.8,
-  fontWeight: 600,
+  color: "#475569",
+  fontWeight: 700
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
-  fontSize: 16,
-  fontWeight: 800,
+  fontSize: 17,
+  fontWeight: 700,
+  color: "#0f172a",
+  letterSpacing: "-0.01em"
 };
 
 const muted: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.75,
+  color: "#64748b"
 };
 
 const badge = (bg: string, color = "#111827"): React.CSSProperties => ({
@@ -126,18 +168,41 @@ const badge = (bg: string, color = "#111827"): React.CSSProperties => ({
   padding: "4px 8px",
   borderRadius: 999,
   fontSize: 12,
-  fontWeight: 700,
+  fontWeight: 600,
   background: bg,
-  color,
+  color
 });
+
+
+const sectionCard: React.CSSProperties = {
+  background: "#ffffff",
+  border: "1px solid #dbe4ef",
+  borderRadius: 16,
+  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+  overflow: "hidden"
+};
+
+const sectionHeader: React.CSSProperties = {
+  padding: "14px 16px",
+  borderBottom: "1px solid #e2e8f0",
+  background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)"
+};
+
+const statCard: React.CSSProperties = {
+  border: "1px solid #dbe4ef",
+  borderRadius: 14,
+  padding: 14,
+  background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+  boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)"
+};
 
 function getToken(): string {
   try {
     return (
       localStorage.getItem("rlc_token") ||
       JSON.parse(localStorage.getItem("rlc_auth") || "{}")?.token ||
-      ""
-    );
+      "");
+
   } catch {
     return "";
   }
@@ -149,7 +214,7 @@ function authHeaders(extra?: Record<string, string>) {
     "Content-Type": "application/json",
     Accept: "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(extra || {}),
+    ...(extra || {})
   };
 }
 
@@ -163,7 +228,7 @@ function fmtDate(v?: string | null) {
 function statusStyle(status?: string) {
   switch (String(status || "").toUpperCase()) {
     case "PENDING":
-      return badge("#eff6ff", "#1d4ed8");
+      return badge("#eaf2ff", "#0b5bd3");
     case "USED_UP":
       return badge("#fef3c7", "#92400e");
     case "EXPIRED":
@@ -177,14 +242,62 @@ function statusStyle(status?: string) {
   }
 }
 
-const ROLE_OPTIONS = [
-  "ADMIN",
-  "BAULEITER",
-  "MITARBEITER",
-  "KALKULATOR",
-  "BUCHHALTUNG",
-  "GAST",
-];
+const WEB_ROLE_OPTIONS = [
+"ADMIN",
+"BAULEITER",
+"MITARBEITER",
+"KALKULATOR",
+"BUCHHALTUNG",
+"GAST"];
+
+
+const MOBILE_ROLE_OPTIONS = [
+"BAULEITER",
+"POLIER",
+"VORARBEITER",
+"FAHRER",
+"MASCHINIST",
+"VERMESSER",
+"MITARBEITER"];
+
+
+function webRoleLabel(role: string) {
+  return role === "MITARBEITER" ? "VERMESSUNG / TECHNIKER" : role;
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+    typeof reader.result === "string" ?
+    resolve(reader.result) :
+    reject(new Error("Logo konnte nicht gelesen werden."));
+    reader.onerror = () => reject(reader.error || new Error("Logo konnte nicht gelesen werden."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function persistSharedCompanyProfile(company: CompanyDto | null, logoDataUrl?: string | null) {
+  if (!company) return;
+
+  const profile = {
+    name: company.name || "",
+    companyName: company.name || "",
+    firmenname: company.name || "",
+    address: company.address || "",
+    street: company.address || "",
+    phone: company.phone || "",
+    email: company.email || "",
+    logoDataUrl: logoDataUrl || undefined,
+    logo: logoDataUrl || undefined,
+    code: company.code || "",
+    updatedAt: new Date().toISOString()
+  };
+
+  localStorage.setItem("rlc_company_profile", JSON.stringify(profile));
+  localStorage.setItem("rlc_company", JSON.stringify(profile));
+  localStorage.setItem("companyProfile", JSON.stringify(profile));
+}
 
 export default function Nutzerverwaltung() {
   const [loading, setLoading] = React.useState(true);
@@ -202,7 +315,7 @@ export default function Nutzerverwaltung() {
   const [seats, setSeats] = React.useState<SeatsDto>({
     used: 0,
     limit: 0,
-    available: 0,
+    available: 0
   });
   const [members, setMembers] = React.useState<MemberDto[]>([]);
   const [invites, setInvites] = React.useState<InviteDto[]>([]);
@@ -211,15 +324,50 @@ export default function Nutzerverwaltung() {
     name: "",
     address: "",
     phone: "",
-    email: "",
+    email: ""
   });
 
   const [inviteEmail, setInviteEmail] = React.useState("");
   const [inviteRole, setInviteRole] = React.useState("MITARBEITER");
 
+  const [mobileLicenses, setMobileLicenses] = React.useState<MobileLicenseDto[]>([]);
+  const [mobileSeatInfo, setMobileSeatInfo] = React.useState({
+    subscriptionActive: false,
+    used: 0,
+    limit: 0,
+    available: 0
+  });
+  const [mobileRole, setMobileRole] = React.useState("BAULEITER");
+  const [mobileEmployeeName, setMobileEmployeeName] = React.useState("");
+  const [mobileEmployeeEmail, setMobileEmployeeEmail] = React.useState("");
+  const [mobileDeviceName, setMobileDeviceName] = React.useState("");
+
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   const [logoUrl, setLogoUrl] = React.useState<string | null>(null);
+
+  const loadMobileLicensesFromServer = React.useCallback(async () => {
+    const res = await fetch(apiUrl("/api/company/mobile-licenses"), {
+      method: "GET",
+      headers: authHeaders()
+    });
+
+    const data = (await res.json().catch(() => null)) as MobileLicenseListResponse | null;
+
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || "Mobile-Lizenzen konnten nicht geladen werden.");
+    }
+
+    setMobileLicenses(data.mobileLicenses ?? []);
+    setMobileSeatInfo(
+      data.seats ?? {
+        subscriptionActive: false,
+        used: 0,
+        limit: 0,
+        available: 0
+      }
+    );
+  }, []);
 
   const loadDashboard = React.useCallback(async () => {
     setLoading(true);
@@ -228,7 +376,7 @@ export default function Nutzerverwaltung() {
     try {
       const res = await fetch(apiUrl("/api/company/admin/dashboard"), {
         method: "GET",
-        headers: authHeaders(),
+        headers: authHeaders()
       });
 
       const data = (await res.json().catch(() => null)) as DashboardResponse | null;
@@ -242,60 +390,78 @@ export default function Nutzerverwaltung() {
       setSeats(data.seats ?? { used: 0, limit: 0, available: 0 });
       setMembers(data.members ?? []);
       setInvites(data.invites ?? []);
+      await loadMobileLicensesFromServer();
+      persistSharedCompanyProfile(data.company ?? null);
 
       setForm({
         name: data.company?.name || "",
         address: data.company?.address || "",
         phone: data.company?.phone || "",
-        email: data.company?.email || "",
+        email: data.company?.email || ""
       });
     } catch (err: any) {
       setError(err?.message || "Dashboard konnte nicht geladen werden.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadMobileLicensesFromServer]);
 
   React.useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
 
   React.useEffect(() => {
-  let alive = true;
-  let objectUrl: string | null = null;
+    let alive = true;
+    let objectUrl: string | null = null;
 
-  async function loadLogo() {
-    if (!company?.logoPath) {
-      setLogoUrl(null);
-      return;
-    }
-
-    try {
-      const token = getToken();
-      const res = await fetch(apiUrl("/api/company/logo"), {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-
-      if (!res.ok) {
-        throw new Error("Logo konnte nicht geladen werden.");
+    async function loadLogo() {
+      if (!company?.logoPath) {
+        setLogoUrl(null);
+        return;
       }
 
-      const blob = await res.blob();
-      objectUrl = URL.createObjectURL(blob);
+      try {
+        const token = getToken();
+        const res = await fetch(apiUrl("/api/company/logo"), {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined
+        });
 
-      if (alive) setLogoUrl(objectUrl);
-    } catch {
-      if (alive) setLogoUrl(null);
+        if (!res.ok) {
+          throw new Error("Logo konnte nicht geladen werden.");
+        }
+
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+
+        if (alive) {
+          setLogoUrl(objectUrl);
+          try {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () =>
+              typeof reader.result === "string" ?
+              resolve(reader.result) :
+              reject(new Error("Logo konnte nicht gelesen werden."));
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(blob);
+            });
+            persistSharedCompanyProfile(company, dataUrl);
+          } catch {
+            persistSharedCompanyProfile(company);
+          }
+        }
+      } catch {
+        if (alive) setLogoUrl(null);
+      }
     }
-  }
 
-  loadLogo();
+    loadLogo();
 
-  return () => {
-    alive = false;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-  };
-}, [company?.logoPath]);
+    return () => {
+      alive = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [company?.logoPath]);
 
   async function saveHeader() {
     setSaving(true);
@@ -306,7 +472,7 @@ export default function Nutzerverwaltung() {
       const res = await fetch(apiUrl("/api/company/admin/header"), {
         method: "PATCH",
         headers: authHeaders(),
-        body: JSON.stringify(form),
+        body: JSON.stringify(form)
       });
 
       const data = (await res.json().catch(() => null)) as HeaderPatchResponse | null;
@@ -316,7 +482,8 @@ export default function Nutzerverwaltung() {
       }
 
       setCompany(data.company);
-      setInfo("Firmendaten gespeichert.");
+      persistSharedCompanyProfile(data.company, logoUrl?.startsWith("data:image/") ? logoUrl : null);
+      setInfo("Firmendaten gespeichert und für alle PDF-Module bereitgestellt.");
     } catch (err: any) {
       setError(err?.message || "Firmendaten konnten nicht gespeichert werden.");
     } finally {
@@ -330,6 +497,7 @@ export default function Nutzerverwaltung() {
     setInfo(null);
 
     try {
+      const logoDataUrl = await fileToDataUrl(file);
       const token = getToken();
       const fd = new FormData();
       fd.append("file", file);
@@ -337,7 +505,7 @@ export default function Nutzerverwaltung() {
       const res = await fetch(apiUrl("/api/company/admin/logo"), {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: fd,
+        body: fd
       });
 
       const data = (await res.json().catch(() => null)) as HeaderPatchResponse | null;
@@ -347,7 +515,9 @@ export default function Nutzerverwaltung() {
       }
 
       setCompany(data.company);
-      setInfo("Logo erfolgreich hochgeladen.");
+      setLogoUrl(logoDataUrl);
+      persistSharedCompanyProfile(data.company, logoDataUrl);
+      setInfo("Logo erfolgreich hochgeladen und für alle PDF-Module gespeichert.");
     } catch (err: any) {
       setError(err?.message || "Logo konnte nicht hochgeladen werden.");
     } finally {
@@ -363,26 +533,32 @@ export default function Nutzerverwaltung() {
     try {
       const body = {
         email: inviteEmail.trim() || undefined,
-        role: inviteRole,
+        role: inviteRole
       };
 
       const res = await fetch(apiUrl("/api/company/invites"), {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       });
 
       const data = (await res.json().catch(() => null)) as InviteCreateResponse | null;
 
       if (!res.ok || !data?.ok || !data.invite) {
-        throw new Error(data?.error || "Einladungscode konnte nicht erstellt werden.");
+        const apiError = String(data?.error || "");
+        if (apiError.toLowerCase().includes("invalid role")) {
+          throw new Error(
+            "Ungültige Web-Rolle. Für Web-Einladungen sind nur ADMIN, BAULEITER, VERMESSUNG / TECHNIKER, KALKULATOR, BUCHHALTUNG und GAST erlaubt."
+          );
+        }
+        throw new Error(apiError || "Web-Einladungscode konnte nicht erstellt werden.");
       }
 
       setInfo(`Einladungscode erstellt: ${data.invite.code}`);
       setInviteEmail("");
       await loadDashboard();
     } catch (err: any) {
-      setError(err?.message || "Einladungscode konnte nicht erstellt werden.");
+      setError(err?.message || "Web-Einladungscode konnte nicht erstellt werden.");
     } finally {
       setBusyInvite(false);
     }
@@ -395,21 +571,21 @@ export default function Nutzerverwaltung() {
     try {
       const res = await fetch(apiUrl(`/api/company/invites/deactivate/${id}`), {
         method: "POST",
-        headers: authHeaders(),
+        headers: authHeaders()
       });
 
       const data = (await res.json().catch(() => null)) as
-        | { ok?: boolean; error?: string }
-        | null;
+      {ok?: boolean;error?: string;} |
+      null;
 
       if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || "Einladung konnte nicht deaktiviert werden.");
+        throw new Error(data?.error || "Web-Einladung konnte nicht deaktiviert werden.");
       }
 
-      setInfo("Einladung deaktiviert.");
+      setInfo("Web-Einladung deaktiviert.");
       await loadDashboard();
     } catch (err: any) {
-      setError(err?.message || "Einladung konnte nicht deaktiviert werden.");
+      setError(err?.message || "Web-Einladung konnte nicht deaktiviert werden.");
     }
   }
 
@@ -423,13 +599,13 @@ export default function Nutzerverwaltung() {
         headers: authHeaders(),
         body: JSON.stringify({
           active: patch.active,
-          role: patch.companyRole,
-        }),
+          role: patch.companyRole
+        })
       });
 
       const data = (await res.json().catch(() => null)) as
-        | { ok?: boolean; error?: string }
-        | null;
+      {ok?: boolean;error?: string;} |
+      null;
 
       if (!res.ok || !data?.ok) {
         throw new Error(data?.error || "Mitglied konnte nicht aktualisiert werden.");
@@ -441,27 +617,195 @@ export default function Nutzerverwaltung() {
     }
   }
 
+  async function createMobileLicense() {
+    setError(null);
+    setInfo(null);
+
+    try {
+      const res = await fetch(apiUrl("/api/company/mobile-licenses"), {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          role: mobileRole,
+          employeeName: mobileEmployeeName.trim() || undefined,
+          employeeEmail: mobileEmployeeEmail.trim() || undefined,
+          deviceName: mobileDeviceName.trim() || undefined
+        })
+      });
+
+      const data = (await res.json().catch(() => null)) as MobileLicenseMutationResponse | null;
+
+      if (!res.ok || !data?.ok || !data.mobileLicense) {
+        const apiError = String(data?.error || "");
+        if (apiError === "MOBILE_SEAT_LIMIT_REACHED") {
+          throw new Error("Keine freie Mobile-Lizenz verfügbar.");
+        }
+        throw new Error(apiError || "Mobile-Aktivierungscode konnte nicht erstellt werden.");
+      }
+
+      setMobileEmployeeName("");
+      setMobileEmployeeEmail("");
+      setMobileDeviceName("");
+      setInfo(`Mobile-Aktivierungscode erstellt: ${data.mobileLicense.code}`);
+      await loadMobileLicensesFromServer();
+    } catch (err: any) {
+      setError(err?.message || "Mobile-Aktivierungscode konnte nicht erstellt werden.");
+    }
+  }
+
+  async function patchMobileLicense(
+  id: string,
+  patch: Partial<MobileLicenseDto>)
+  {
+    setError(null);
+    setInfo(null);
+
+    try {
+      const res = await fetch(apiUrl(`/api/company/mobile-licenses/${id}`), {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(patch)
+      });
+
+      const data = (await res.json().catch(() => null)) as MobileLicenseMutationResponse | null;
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Mobile-Lizenz konnte nicht aktualisiert werden.");
+      }
+
+      await loadMobileLicensesFromServer();
+    } catch (err: any) {
+      setError(err?.message || "Mobile-Lizenz konnte nicht aktualisiert werden.");
+    }
+  }
+
+  async function removeMobileLicense(id: string) {
+    if (!window.confirm("Mobile-Lizenzcode wirklich löschen?")) return;
+
+    setError(null);
+    setInfo(null);
+
+    try {
+      const res = await fetch(apiUrl(`/api/company/mobile-licenses/${id}`), {
+        method: "DELETE",
+        headers: authHeaders()
+      });
+
+      const data = (await res.json().catch(() => null)) as
+      {ok?: boolean;error?: string;} |
+      null;
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || "Mobile-Lizenz konnte nicht gelöscht werden.");
+      }
+
+      setInfo("Mobile-Lizenz gelöscht.");
+      await loadMobileLicensesFromServer();
+    } catch (err: any) {
+      setError(err?.message || "Mobile-Lizenz konnte nicht gelöscht werden.");
+    }
+  }
+
+  async function copyMobileCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setInfo(`Code kopiert: ${code}`);
+      setError(null);
+    } catch {
+      setInfo(code);
+    }
+  }
+
+
   return (
-    <div style={{ display: "grid", gap: 12, padding: 10 }}>
-      <div
-        className="card"
-        style={{
-          padding: "10px 12px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-355">
+      <style>{`
+        .rlc-admin-grid {
+          display: grid;
+          gap: 16px;
+        }
+
+        .rlc-admin-two {
+          display: grid;
+          grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+          gap: 16px;
+        }
+
+        .rlc-admin-invite {
+          display: grid;
+          grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+          gap: 16px;
+        }
+
+        .rlc-admin-mobile-form {
+          display: grid;
+          grid-template-columns: 150px minmax(160px, 1fr) minmax(180px, 1fr) minmax(160px, 1fr) auto;
+          gap: 10px;
+          align-items: end;
+        }
+
+        .rlc-admin-table-wrap {
+          overflow: auto;
+        }
+
+        .rlc-admin-table tbody tr:hover {
+          background: #f8fbff;
+        }
+
+        @media (max-width: 1100px) {
+          .rlc-admin-two,
+          .rlc-admin-invite {
+            grid-template-columns: 1fr;
+          }
+
+          .rlc-admin-mobile-form {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .rlc-admin-mobile-form {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="rlc-page-hero rlc-page-hero--split">
+
+
+
+
+
+
+
+
+
+
+
+
+        
         <div>
-          <div style={sectionTitle}>Firma, Team & Web-Lizenzen</div>
-          <div style={muted}>
-            Firmenprofil, Logo, Lizenzübersicht, Mitarbeiter und Einladungscodes.
+          <div className="rlc-page-hero__eyebrow">
+
+
+
+
+
+
+
+
+            
+            RLC Unternehmenszentrale
+          </div>
+          <h1 className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-358">
+            Firma, Team & Lizenzen
+          </h1>
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-359">
+            Firmendaten, Web- und Mobile-Lizenzen, Mitarbeiter und Aktivierungscodes zentral verwalten.
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-360">
           <button className="btn" onClick={loadDashboard} disabled={loading}>
             Aktualisieren
           </button>
@@ -471,135 +815,135 @@ export default function Nutzerverwaltung() {
         </div>
       </div>
 
-      {error ? (
-        <div
-          className="card"
-          style={{
-            padding: 12,
-            border: "1px solid #fecaca",
-            background: "#fef2f2",
-            color: "#b91c1c",
-          }}
-        >
+      {error ?
+      <div className={rlcClass(null,
+      {
+        ...sectionCard,
+        padding: 13,
+        border: "1px solid #fecaca",
+        background: "#fff7f7",
+        color: "#b91c1c"
+      })}>
+        
           {error}
-        </div>
-      ) : null}
+        </div> :
+      null}
 
-      {info ? (
-        <div
-          className="card"
-          style={{
-            padding: 12,
-            border: "1px solid #bfdbfe",
-            background: "#eff6ff",
-            color: "#1d4ed8",
-          }}
-        >
+      {info ?
+      <div className={rlcClass(null,
+      {
+        ...sectionCard,
+        padding: 13,
+        border: "1px solid #bed6ff",
+        background: "#eaf2ff",
+        color: "#0b5bd3"
+      })}>
+        
           {info}
-        </div>
-      ) : null}
+        </div> :
+      null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.05fr 0.95fr", gap: 12 }}>
-        <div className="card" style={{ padding: 12 }}>
-          <div style={{ ...sectionTitle, marginBottom: 12 }}>Firmendaten</div>
+      <div className="rlc-admin-two">
+        <div className={rlcClass(null, { ...sectionCard, padding: 16 })}>
+          <div className={rlcClass(null, { ...sectionTitle, marginBottom: 14 })}>Firmendaten</div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 10 }}>
-            <label style={lbl}>Firmenname</label>
-            <input
-              style={inp}
-              value={form.name}
-              onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}
-            />
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-361">
+            <label className={rlcClass(null, lbl)}>Firmenname</label>
+            <input className={rlcClass(null,
+            inp)}
+            value={form.name}
+            onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))} />
+            
 
-            <label style={lbl}>Adresse</label>
-            <input
-              style={inp}
-              value={form.address}
-              onChange={(e) => setForm((v) => ({ ...v, address: e.target.value }))}
-            />
+            <label className={rlcClass(null, lbl)}>Adresse</label>
+            <input className={rlcClass(null,
+            inp)}
+            value={form.address}
+            onChange={(e) => setForm((v) => ({ ...v, address: e.target.value }))} />
+            
 
-            <label style={lbl}>Telefon</label>
-            <input
-              style={inp}
-              value={form.phone}
-              onChange={(e) => setForm((v) => ({ ...v, phone: e.target.value }))}
-            />
+            <label className={rlcClass(null, lbl)}>Telefon</label>
+            <input className={rlcClass(null,
+            inp)}
+            value={form.phone}
+            onChange={(e) => setForm((v) => ({ ...v, phone: e.target.value }))} />
+            
 
-            <label style={lbl}>E-Mail</label>
-            <input
-              style={inp}
-              value={form.email}
-              onChange={(e) => setForm((v) => ({ ...v, email: e.target.value }))}
-            />
+            <label className={rlcClass(null, lbl)}>E-Mail</label>
+            <input className={rlcClass(null,
+            inp)}
+            value={form.email}
+            onChange={(e) => setForm((v) => ({ ...v, email: e.target.value }))} />
+            
 
-            <label style={lbl}>Firmencode</label>
-            <div style={{ display: "flex", alignItems: "center", fontSize: 13 }}>
+            <label className={rlcClass(null, lbl)}>Firmencode</label>
+            <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-362">
               <b>{company?.code || "—"}</b>
             </div>
 
-            <label style={lbl}>Firmenlogo</label>
-            <div style={{ display: "grid", gap: 10 }}>
-              {logoUrl ? (
-                <div
-                  style={{
-                    border: "1px solid var(--line)",
-                    borderRadius: 10,
-                    padding: 12,
-                    background: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    minHeight: 110,
-                  }}
-                >
+            <label className={rlcClass(null, lbl)}>Firmenlogo</label>
+            <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-363">
+              {logoUrl ?
+              <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-364">
+
+
+
+
+
+
+
+
+
+
+                
                   <img
-                    src={logoUrl}
-                    alt="Firmenlogo"
-                    style={{
-                      maxHeight: 80,
-                      maxWidth: 260,
-                      objectFit: "contain",
-                    }}
-                  />
-                </div>
-              ) : (
-                <div
-                  style={{
-                    border: "1px dashed var(--line)",
-                    borderRadius: 10,
-                    padding: 12,
-                    background: "#fafafa",
-                    minHeight: 110,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 13,
-                    opacity: 0.75,
-                  }}
-                >
+                  src={logoUrl}
+                  alt="Firmenlogo" className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-365" />
+
+
+
+
+
+                
+                </div> :
+
+              <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-366">
+
+
+
+
+
+
+
+
+
+
+
+
+                
                   Noch kein Firmenlogo eingefügt.
                 </div>
-              )}
+              }
 
-              <div
-                style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-              >
+              <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-367">
+
+                
                 <input
                   ref={fileRef}
                   type="file"
                   accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                  style={{ display: "none" }}
+
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) uploadLogo(f);
                     if (fileRef.current) fileRef.current.value = "";
-                  }}
-                />
+                  }} className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-368" />
+                
                 <button
                   className="btn"
                   onClick={() => fileRef.current?.click()}
-                  disabled={busyLogo}
-                >
+                  disabled={busyLogo}>
+                  
                   {busyLogo ? "Logo wird hochgeladen..." : "Logo einfügen"}
                 </button>
               </div>
@@ -607,229 +951,401 @@ export default function Nutzerverwaltung() {
           </div>
         </div>
 
-        <div className="card" style={{ padding: 12 }}>
-          <div style={{ ...sectionTitle, marginBottom: 12 }}>Lizenzübersicht</div>
+        <div className={rlcClass(null, { ...sectionCard, padding: 16 })}>
+          <div className={rlcClass(null, { ...sectionTitle, marginBottom: 14 })}>Lizenzübersicht</div>
 
-          <div style={{ display: "grid", gap: 10 }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: 10,
-              }}
-            >
-              <div
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: 10,
-                  padding: 12,
-                  background: "#fafafa",
-                }}
-              >
-                <div style={muted}>Web-Lizenzen gekauft</div>
-                <div style={{ fontSize: 26, fontWeight: 800 }}>
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-369">
+            <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-370">
+
+
+
+
+
+              
+              <div className={rlcClass(null,
+              statCard)}>
+                
+                <div className={rlcClass(null, muted)}>Web-Lizenzen gekauft</div>
+                <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-371">
                   {subscription?.webSeatsPurchased ?? 0}
                 </div>
               </div>
 
-              <div
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: 10,
-                  padding: 12,
-                  background: "#fafafa",
-                }}
-              >
-                <div style={muted}>Benutzt</div>
-                <div style={{ fontSize: 26, fontWeight: 800 }}>{seats.used ?? 0}</div>
+              <div className={rlcClass(null,
+              statCard)}>
+                
+                <div className={rlcClass(null, muted)}>Benutzt</div>
+                <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-372">{seats.used ?? 0}</div>
               </div>
 
-              <div
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: 10,
-                  padding: 12,
-                  background: "#fafafa",
-                }}
-              >
-                <div style={muted}>Frei</div>
-                <div style={{ fontSize: 26, fontWeight: 800 }}>
+              <div className={rlcClass(null,
+              statCard)}>
+                
+                <div className={rlcClass(null, muted)}>Frei</div>
+                <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-373">
                   {seats.available ?? 0}
                 </div>
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8 }}>
-              <div style={lbl}>Status</div>
+            <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-374">
+              <div className={rlcClass(null, lbl)}>Status</div>
               <div>{subscription?.active ? "Aktiv" : "Inaktiv"}</div>
 
-              <div style={lbl}>Plan</div>
+              <div className={rlcClass(null, lbl)}>Plan</div>
               <div>{subscription?.plan || "—"}</div>
 
-              <div style={lbl}>Zeitraum Ende</div>
+              <div className={rlcClass(null, lbl)}>Zeitraum Ende</div>
               <div>{fmtDate(subscription?.currentPeriodEnd)}</div>
 
-              <div style={lbl}>Mobile-Lizenzen</div>
+              <div className={rlcClass(null, lbl)}>Mobile-Lizenzen</div>
               <div>{subscription?.mobileSeatsPurchased ?? 0}</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "0.95fr 1.05fr", gap: 12 }}>
-        <div className="card" style={{ padding: 12 }}>
-          <div style={{ ...sectionTitle, marginBottom: 12 }}>Einladungscode erzeugen</div>
+      <div className={rlcClass(null,
+      {
+        ...sectionCard,
+        padding: 14,
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 12
+      })}>
+        
+        <div>
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-375">Web-Einladungscode</div>
+          <div className={rlcClass(null, { ...muted, marginTop: 3 })}>
+            Erstellt einen Benutzerzugang für die RLC-Web-Anwendung.
+          </div>
+        </div>
+        <div>
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-376">Mobile-Aktivierungscode</div>
+          <div className={rlcClass(null, { ...muted, marginTop: 3 })}>
+            Aktiviert eine RLC-Mobile-Lizenz für Rolle, Mitarbeiter und Gerät.
+          </div>
+        </div>
+      </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 10 }}>
-            <label style={lbl}>E-Mail</label>
-            <input
-              style={inp}
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="optional@firma.de"
-            />
+      <div className="rlc-admin-invite">
+        <div className={rlcClass(null, { ...sectionCard, padding: 16 })}>
+          <div className={rlcClass(null, { ...sectionTitle, marginBottom: 14 })}>Web-Einladungscode erzeugen</div>
 
-            <label style={lbl}>Rolle</label>
-            <select
-              style={inp}
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value)}
-            >
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-377">
+            <label className={rlcClass(null, lbl)}>E-Mail</label>
+            <input className={rlcClass(null,
+            inp)}
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder="optional@firma.de" />
+            
+
+            <label className={rlcClass(null, lbl)}>Rolle</label>
+            <select className={rlcClass(null,
+            inp)}
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value)}>
+              
+              {WEB_ROLE_OPTIONS.map((r) =>
+              <option key={r} value={r}>
+                  {webRoleLabel(r)}
                 </option>
-              ))}
+              )}
             </select>
           </div>
 
-          <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-378">
             <button className="btn primary" onClick={createInvite} disabled={busyInvite}>
-              {busyInvite ? "Erstellt..." : "Code erstellen"}
+              {busyInvite ? "Erstellt..." : "Web-Code erstellen"}
             </button>
           </div>
 
-          <div style={{ ...muted, marginTop: 12 }}>
-            Den erzeugten Code gibst du dem Mitarbeiter. Er registriert sich
-            sich damit direkt im Login-Bereich.
+          <div className={rlcClass(null, { ...muted, marginTop: 12 })}>
+            Dieser Code ist nur für den Web-Zugang. Der Mitarbeiter registriert sich damit im RLC-Web-Login.
           </div>
         </div>
 
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <div style={{ padding: 12, borderBottom: "1px solid var(--line)" }}>
-            <div style={sectionTitle}>Einladungen</div>
+        <div className={rlcClass(null, sectionCard)}>
+          <div className={rlcClass(null, sectionHeader)}>
+            <div className={rlcClass(null, sectionTitle)}>Web-Einladungen</div>
+            <div className={rlcClass(null, { ...muted, marginTop: 3 })}>
+              Web-Benutzerzugänge vorbereiten und verwalten.
+            </div>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="rlc-admin-table rlc-migrated-pages-buro-nutzerverwaltung-tsx-379">
             <thead>
               <tr>
-                <th style={th}>Code</th>
-                <th style={th}>E-Mail</th>
-                <th style={th}>Rolle</th>
-                <th style={th}>Status</th>
-                <th style={th}>Gültig bis</th>
-                <th style={th}>Aktion</th>
+                <th className={rlcClass(null, th)}>Code</th>
+                <th className={rlcClass(null, th)}>E-Mail</th>
+                <th className={rlcClass(null, th)}>Rolle</th>
+                <th className={rlcClass(null, th)}>Status</th>
+                <th className={rlcClass(null, th)}>Gültig bis</th>
+                <th className={rlcClass(null, th)}>Aktion</th>
               </tr>
             </thead>
             <tbody>
-              {invites.length === 0 ? (
-                <tr>
-                  <td style={{ ...td, opacity: 0.7 }} colSpan={6}>
-                    Keine Einladungen vorhanden.
+              {invites.length === 0 ?
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.7 })} colSpan={6}>
+                    Keine Web-Einladungen vorhanden.
                   </td>
-                </tr>
-              ) : (
-                invites.map((i) => (
-                  <tr key={i.id}>
-                    <td style={{ ...td, fontFamily: "monospace", fontWeight: 700 }}>
+                </tr> :
+
+              invites.map((i) =>
+              <tr key={i.id}>
+                    <td className={rlcClass(null, { ...td, fontFamily: "monospace", fontWeight: 600 })}>
                       {i.code}
                     </td>
-                    <td style={td}>{i.email || "—"}</td>
-                    <td style={td}>{i.role}</td>
-                    <td style={td}>
-                      <span style={statusStyle(i.status)}>{i.status}</span>
+                    <td className={rlcClass(null, td)}>{i.email || "—"}</td>
+                    <td className={rlcClass(null, td)}>{i.role}</td>
+                    <td className={rlcClass(null, td)}>
+                      <span className={rlcClass(null, statusStyle(i.status))}>{i.status}</span>
                     </td>
-                    <td style={td}>{fmtDate(i.expiresAt)}</td>
-                    <td style={td}>
+                    <td className={rlcClass(null, td)}>{fmtDate(i.expiresAt)}</td>
+                    <td className={rlcClass(null, td)}>
                       <button
-                        className="btn"
-                        onClick={() => deactivateInvite(i.id)}
-                        disabled={!i.isActive || i.status !== "PENDING"}
-                      >
+                    className="btn"
+                    onClick={() => deactivateInvite(i.id)}
+                    disabled={!i.isActive || i.status !== "PENDING"}>
+                    
                         Deaktivieren
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
+              )
+              }
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: "auto" }}>
-        <div style={{ padding: 12, borderBottom: "1px solid var(--line)" }}>
-          <div style={sectionTitle}>Mitglieder der Firma</div>
+      <div className="card rlc-migrated-pages-buro-nutzerverwaltung-tsx-380">
+        <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-381">
+
+
+
+
+
+
+
+
+          
+          <div>
+            <div className={rlcClass(null, sectionTitle)}>Mobile-Lizenzen & Mobile-Aktivierungscodes</div>
+            <div className={rlcClass(null, muted)}>
+              Rollenbezogene Codes für Bauleiter, Polier, Fahrer, Maschinist,
+              Vermesser und Mitarbeiter.
+            </div>
+          </div>
+
+          <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-382">
+            <span className={rlcClass(null, badge("#eaf2ff", "#0b5bd3"))}>
+              Gekauft: {mobileSeatInfo.limit}
+            </span>
+            <span className={rlcClass(null, badge("#dcfce7", "#166534"))}>
+              Aktiv: {mobileLicenses.filter((item) => item.status === "ACTIVE").length}
+            </span>
+            <span className={rlcClass(null, badge("#f3f4f6", "#374151"))}>
+              Frei: {mobileSeatInfo.available}
+            </span>
+          </div>
         </div>
 
-        {loading ? (
-          <div style={{ padding: 12, opacity: 0.75 }}>Lädt...</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="rlc-admin-mobile-form rlc-migrated-pages-buro-nutzerverwaltung-tsx-383">
+          <label className={rlcClass(null, lbl)}>
+            Rolle
+            <select className={rlcClass(null,
+            { ...inp, marginTop: 4 })}
+            value={mobileRole}
+            onChange={(e) => setMobileRole(e.target.value)}>
+              
+              {MOBILE_ROLE_OPTIONS.map((role) =>
+              <option key={role} value={role}>
+                  {role}
+                </option>
+              )}
+            </select>
+          </label>
+
+          <label className={rlcClass(null, lbl)}>
+            Mitarbeiter
+            <input className={rlcClass(null,
+            { ...inp, marginTop: 4 })}
+            value={mobileEmployeeName}
+            onChange={(e) => setMobileEmployeeName(e.target.value)}
+            placeholder="optional" />
+            
+          </label>
+
+          <label className={rlcClass(null, lbl)}>
+            E-Mail
+            <input className={rlcClass(null,
+            { ...inp, marginTop: 4 })}
+            value={mobileEmployeeEmail}
+            onChange={(e) => setMobileEmployeeEmail(e.target.value)}
+            placeholder="optional@firma.de" />
+            
+          </label>
+
+          <label className={rlcClass(null, lbl)}>
+            Gerät
+            <input className={rlcClass(null,
+            { ...inp, marginTop: 4 })}
+            value={mobileDeviceName}
+            onChange={(e) => setMobileDeviceName(e.target.value)}
+            placeholder="z. B. Tablet 03" />
+            
+          </label>
+
+          <button className="btn primary" onClick={createMobileLicense}>
+            Mobile-Web-Code erstellen
+          </button>
+        </div>
+
+        <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-384">
+          <table className="rlc-admin-table rlc-migrated-pages-buro-nutzerverwaltung-tsx-385">
             <thead>
               <tr>
-                <th style={th}>Name</th>
-                <th style={th}>E-Mail</th>
-                <th style={th}>Rolle</th>
-                <th style={th}>Aktiv</th>
-                <th style={th}>Bestätigt</th>
-                <th style={th}>Aktion</th>
+                <th className={rlcClass(null, th)}>Code</th>
+                <th className={rlcClass(null, th)}>Rolle</th>
+                <th className={rlcClass(null, th)}>Mitarbeiter</th>
+                <th className={rlcClass(null, th)}>Gerät</th>
+                <th className={rlcClass(null, th)}>Status</th>
+                <th className={rlcClass(null, th)}>Erstellt</th>
+                <th className={rlcClass(null, th)}>Aktion</th>
               </tr>
             </thead>
             <tbody>
-              {members.length === 0 ? (
-                <tr>
-                  <td style={{ ...td, opacity: 0.7 }} colSpan={6}>
-                    Keine Mitglieder vorhanden.
+              {mobileLicenses.length === 0 ?
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.7 })} colSpan={7}>
+                    Noch keine Mobile-Lizenzcodes erstellt.
                   </td>
-                </tr>
-              ) : (
-                members.map((m) => (
-                  <tr key={m.id}>
-                    <td style={td}>{m.name || "—"}</td>
-                    <td style={td}>{m.email}</td>
-                    <td style={td}>
-                      <select
-                        style={{ ...inp, minWidth: 160 }}
-                        value={m.companyRole}
-                        onChange={(e) =>
-                          updateMember(m.userId, { companyRole: e.target.value })
-                        }
-                      >
-                        {ROLE_OPTIONS.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
+                </tr> :
+
+              mobileLicenses.map((item) =>
+              <tr key={item.id}>
+                    <td className={rlcClass(null, { ...td, fontFamily: "monospace", fontWeight: 700 })}>
+                      {item.code}
+                    </td>
+                    <td className={rlcClass(null, td)}>{item.role}</td>
+                    <td className={rlcClass(null, td)}>
+                      <div>{item.employeeName || "—"}</div>
+                      <div className={rlcClass(null, muted)}>{item.employeeEmail || ""}</div>
+                    </td>
+                    <td className={rlcClass(null, td)}>{item.deviceName || "—"}</td>
+                    <td className={rlcClass(null, td)}>
+                      <select className={rlcClass(null,
+                  { ...inp, minWidth: 120 })}
+                  value={item.status}
+                  onChange={(e) =>
+                  patchMobileLicense(item.id, {
+                    status: e.target.value as MobileLicenseDto["status"]
+                  })
+                  }>
+                    
+                        <option value="FREE">FREI</option>
+                        <option value="ACTIVE">AKTIV</option>
+                        <option value="BLOCKED">GESPERRT</option>
                       </select>
                     </td>
-                    <td style={td}>{m.active ? "Ja" : "Nein"}</td>
-                    <td style={td}>{m.emailVerifiedAt ? "Ja" : "Nein"}</td>
-                    <td style={td}>
+                    <td className={rlcClass(null, td)}>{fmtDate(item.createdAt)}</td>
+                    <td className={rlcClass(null, td)}>
+                      <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-386">
+                        <button className="btn" onClick={() => copyMobileCode(item.code)}>
+                          Kopieren
+                        </button>
+                        <button
+                      className="btn"
+                      onClick={() =>
+                      patchMobileLicense(item.id, {
+                        status: item.status === "BLOCKED" ? "FREE" : "BLOCKED"
+                      })
+                      }>
+                      
+                          {item.status === "BLOCKED" ? "Freigeben" : "Sperren"}
+                        </button>
+                        <button className="btn" onClick={() => removeMobileLicense(item.id)}>
+                          Löschen
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+              )
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className={rlcClass(null, sectionCard)}>
+        <div className={rlcClass(null, sectionHeader)}>
+          <div className={rlcClass(null, sectionTitle)}>Mitglieder der Firma</div>
+          <div className={rlcClass(null, { ...muted, marginTop: 3 })}>
+            Rollen, Aktivstatus und Zugriffsrechte zentral steuern.
+          </div>
+        </div>
+
+        {loading ?
+        <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-387">Lädt...</div> :
+
+        <table className="rlc-admin-table rlc-migrated-pages-buro-nutzerverwaltung-tsx-388">
+            <thead>
+              <tr>
+                <th className={rlcClass(null, th)}>Name</th>
+                <th className={rlcClass(null, th)}>E-Mail</th>
+                <th className={rlcClass(null, th)}>Rolle</th>
+                <th className={rlcClass(null, th)}>Aktiv</th>
+                <th className={rlcClass(null, th)}>Bestätigt</th>
+                <th className={rlcClass(null, th)}>Aktion</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.length === 0 ?
+            <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.7 })} colSpan={6}>
+                    Keine Mitglieder vorhanden.
+                  </td>
+                </tr> :
+
+            members.map((m) =>
+            <tr key={m.id}>
+                    <td className={rlcClass(null, td)}>{m.name || "—"}</td>
+                    <td className={rlcClass(null, td)}>{m.email}</td>
+                    <td className={rlcClass(null, td)}>
+                      <select className={rlcClass(null,
+                { ...inp, minWidth: 160 })}
+                value={m.companyRole}
+                onChange={(e) =>
+                updateMember(m.userId, { companyRole: e.target.value })
+                }>
+                  
+                        {WEB_ROLE_OPTIONS.map((r) =>
+                  <option key={r} value={r}>
+                            {webRoleLabel(r)}
+                          </option>
+                  )}
+                      </select>
+                    </td>
+                    <td className={rlcClass(null, td)}>{m.active ? "Ja" : "Nein"}</td>
+                    <td className={rlcClass(null, td)}>{m.emailVerifiedAt ? "Ja" : "Nein"}</td>
+                    <td className={rlcClass(null, td)}>
                       <button
-                        className="btn"
-                        onClick={() => updateMember(m.userId, { active: !m.active })}
-                      >
+                  className="btn"
+                  onClick={() => updateMember(m.userId, { active: !m.active })}>
+                  
                         {m.active ? "Deaktivieren" : "Aktivieren"}
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
+            )
+            }
             </tbody>
           </table>
-        )}
+        }
       </div>
-    </div>
-  );
+    </div>);
+
 }

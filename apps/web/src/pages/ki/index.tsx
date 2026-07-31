@@ -1,4 +1,4 @@
-// apps/web/src/pages/ki/index.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/index.tsx
 
 import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
@@ -6,7 +6,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 const shell: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "260px 1fr",
-  height: "calc(100vh - 0px)",
+  height: "calc(100vh - 0px)"
 };
 
 const aside: React.CSSProperties = {
@@ -14,12 +14,12 @@ const aside: React.CSSProperties = {
   padding: 10,
   fontFamily: "Inter, system-ui, Arial",
   fontSize: 13,
-  background: "#fff",
+  background: "#fff"
 };
 
 const main: React.CSSProperties = {
   overflow: "auto",
-  background: "#f8fafc",
+  background: "#f8fafc"
 };
 
 const item: React.CSSProperties = {
@@ -28,33 +28,33 @@ const item: React.CSSProperties = {
   margin: "4px 6px",
   borderRadius: 6,
   color: "#0f172a",
-  textDecoration: "none",
+  textDecoration: "none"
 };
 
 const title: React.CSSProperties = {
   margin: "14px 6px 8px",
   color: "#334155",
-  fontWeight: 700,
+  fontWeight: 600,
   fontSize: 12,
   textTransform: "uppercase",
-  letterSpacing: 0.4,
+  letterSpacing: 0.4
 };
 
 export default function KIIndex() {
   const loc = useLocation();
 
   const is = (p: string): React.CSSProperties =>
-    loc.pathname === p
-      ? {
-          background: "#f1f5f9",
-          fontWeight: 600,
-        }
-      : {};
+  loc.pathname === p ?
+  {
+    background: "#f1f5f9",
+    fontWeight: 600
+  } :
+  {};
 
   return (
-    <div style={shell}>
-      <aside style={aside}>
-        <div style={title}>KI</div>
+    <div className={rlcClass(null, shell)}>
+      <aside className={rlcClass(null, aside)}>
+        <div className={rlcClass(null, title)}>KI</div>
 
         <Link style={{ ...item, ...is("/ki") }} to="/ki">
           Übersicht
@@ -101,14 +101,9 @@ export default function KIIndex() {
         </Link>
       </aside>
 
-      <main style={main}>
+      <main className={rlcClass(null, main)}>
         <Outlet />
       </main>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

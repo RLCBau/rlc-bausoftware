@@ -1,6 +1,16 @@
-﻿// apps/mobile/src/lib/exporters/offlineExport.ts
+// apps/mobile/src/lib/exporters/offlineExport.ts
 import * as Print from "expo-print";
 import { moveExportFile, writeExportTextFile, type ExportKind } from "../exportStorage";
+import {
+  exportRegiePdfToProject,
+  exportLieferscheinPdfToProject,
+  exportPhotosPdfToProject,
+} from "./projectExport";
+import {
+  RLC_PDF_FONT_STACK,
+  loadRlcPdfBranding,
+  renderRlcPdfCompanyHeader,
+} from "./pdfBranding";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -16,7 +26,7 @@ function safe(s: any) {
  * Minimal HTML template (placeholder).
  * Quando mi mandi i PDF generator del server, lo facciamo 1:1.
  */
-function buildHtml(kind: ExportKind, ctx: any) {
+function buildHtml(kind: ExportKind, ctx: any, companyHeaderHtml: string) {
   const title = kind.toUpperCase();
   const project = safe(ctx?.projectTitle || ctx?.title || ctx?.projectCode || ctx?.projectId);
 
@@ -32,13 +42,14 @@ function buildHtml(kind: ExportKind, ctx: any) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial; padding: 18px; }
+body { font-family: ${RLC_PDF_FONT_STACK}; padding: 18px; color:#0f172a; }
 h1 { margin: 0 0 6px 0; font-size: 18px; }
 h2 { margin: 0 0 14px 0; font-size: 12px; color: #555; font-weight: 600; }
 table { border-collapse: collapse; width: 100%; font-size: 12px; }
 </style>
 </head>
 <body>
+  ${companyHeaderHtml}
   <h1>${title}</h1>
   <h2>${project}</h2>
   <table>${rows}</table>
@@ -70,15 +81,35 @@ export async function exportOfflineDoc(opts: {
   const now = new Date();
   const date = ymd(now);
 
+  // Centralized local PDF path for NUR_APP: use the same specialized builders
+  // used as the mobile PDF Core fallback instead of the legacy generic table.
+  if (opts.kind === "regie" || opts.kind === "lieferschein" || opts.kind === "photos") {
+    const common = {
+      projectFsKey: opts.projectFsKey,
+      projectTitle: opts.projectTitle,
+      row: opts.doc,
+      filenameHint: `${opts.kind}_${safe(opts.projectFsKey)}_${date}`,
+    };
+    const out = opts.kind === "regie"
+      ? await exportRegiePdfToProject(common as any)
+      : opts.kind === "lieferschein"
+      ? await exportLieferscheinPdfToProject(common as any)
+      : await exportPhotosPdfToProject(common as any);
+    return { pdf: { uri: out.pdfUri, name: out.fileName } };
+  }
+
   const idPart = safe(opts.doc?.id || opts.doc?.docId || "").slice(0, 18);
   const baseName = `${opts.kind}_${safe(opts.projectFsKey)}_${date}${idPart ? "_" + idPart : ""}`;
+
+  const branding = await loadRlcPdfBranding();
+  const companyHeaderHtml = renderRlcPdfCompanyHeader(branding);
 
   const html = buildHtml(opts.kind, {
     ...opts.doc,
     projectTitle: opts.projectTitle,
     projectCode: opts.projectFsKey,
     createdAt: opts.doc?.createdAt || now.toISOString(),
-  });
+  }, companyHeaderHtml);
 
   // 1) PDF (temp)
   const printed = await Print.printToFileAsync({

@@ -35,7 +35,7 @@ export async function readPdfText(file: File): Promise<string> {
       data: array,
       useWorkerFetch: false,
       isEvalSupported: false,
-    });
+    } as any);
 
     const doc = await loadingTask.promise;
 

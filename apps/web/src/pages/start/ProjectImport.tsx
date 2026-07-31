@@ -35,14 +35,14 @@ export default function ProjectImport({ onImported }: Props) {
         throw new Error("Bitte eine .json oder .zip Datei auswählen.");
       }
 
-      const endpoint = isJson
-        ? apiUrl("/api/import/project-json")
-        : apiUrl("/api/import/project-zip");
+      const endpoint = isJson ?
+      apiUrl("/api/import/project-json") :
+      apiUrl("/api/import/project-zip");
 
       const r = await fetch(endpoint, {
         method: "POST",
         body: fd,
-        credentials: "include",
+        credentials: "include"
       });
 
       const j = await r.json().catch(() => null);
@@ -63,13 +63,13 @@ export default function ProjectImport({ onImported }: Props) {
   };
 
   return (
-    <div style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+    <div className="rlc-migrated-pages-start-projectimport-tsx-1562">
       <button
         type="button"
         onClick={openPicker}
-        disabled={busy}
-        style={{ padding: "8px 14px", borderRadius: 6, cursor: "pointer" }}
-      >
+        disabled={busy} className="rlc-migrated-pages-start-projectimport-tsx-1563">
+
+        
         {busy ? "Importiere..." : "Import"}
       </button>
 
@@ -77,22 +77,12 @@ export default function ProjectImport({ onImported }: Props) {
         ref={inputRef}
         type="file"
         accept=".json,.zip,application/json,application/zip"
-        onChange={onPick}
-        style={{ display: "none" }}
-      />
+        onChange={onPick} className="rlc-migrated-pages-start-projectimport-tsx-1564" />
+
+      
 
       {busy && <span>⏳ Import läuft...</span>}
       {msg && <span>{msg}</span>}
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-
-
-
-
-
-

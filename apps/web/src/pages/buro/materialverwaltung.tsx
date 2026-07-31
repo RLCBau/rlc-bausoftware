@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { MaterialDB } from "./store.material";
 import { MaterialItem, MatMove, MatAttachment } from "./types";
 
@@ -7,35 +7,35 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 function getMoveWhen(m: MatMove): string {
   const v =
-    (m as any).when ??
-    (m as any).date ??
-    (m as any).createdAt ??
-    (m as any).timestamp ??
-    "";
+  (m as any).when ??
+  (m as any).date ??
+  (m as any).createdAt ??
+  (m as any).timestamp ??
+  "";
   return String(v || "");
 }
 
@@ -76,9 +76,9 @@ export default function Materialverwaltung() {
 
   const projects = React.useMemo(
     () =>
-      Array.from(
-        new Set(all.map((m) => m.projectId).filter(Boolean))
-      ) as string[],
+    Array.from(
+      new Set(all.map((m) => m.projectId).filter(Boolean))
+    ) as string[],
     [all]
   );
 
@@ -121,7 +121,7 @@ export default function Materialverwaltung() {
         dir,
         qty,
         projectId: sel.projectId || "",
-        note: "",
+        note: ""
       };
 
       MaterialDB.addMove(sel.id, rawMove as unknown as MatMove);
@@ -206,24 +206,24 @@ export default function Materialverwaltung() {
   }, [sel]);
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateRows: "auto 1fr",
-        gap: 10,
-        padding: 10,
-      }}
-    >
+    <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-559">
+
+
+
+
+
+
+      
       <div
-        className="card"
-        style={{
-          padding: "8px 10px",
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
+        className="card rlc-migrated-pages-buro-materialverwaltung-tsx-560">
+
+
+
+
+
+
+
+        
         <button className="btn" onClick={add}>
           + Artikel
         </button>
@@ -231,35 +231,35 @@ export default function Materialverwaltung() {
           Löschen
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-561" />
 
         <input
           placeholder="Suche Name / Code / Projekt…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 280 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 280 })} />
+        
 
         <select
           value={proj}
-          onChange={(e) => setProj(e.target.value)}
-          style={{ ...inp, width: 160 }}
-        >
+          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 160 })}>
+          
           <option value="">Alle Projekte</option>
-          {projects.map((p) => (
-            <option key={p} value={p}>
+          {projects.map((p) =>
+          <option key={p} value={p}>
               {p}
             </option>
-          ))}
+          )}
         </select>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <label className="rlc-migrated-pages-buro-materialverwaltung-tsx-562">
           <input
             type="checkbox"
             checked={onlyLow}
-            onChange={(e) => setOnlyLow(e.target.checked)}
-          />
-          <span style={{ fontSize: 13 }}>nur Unterbestand</span>
+            onChange={(e) => setOnlyLow(e.target.checked)} />
+          
+          <span className="rlc-migrated-pages-buro-materialverwaltung-tsx-563">nur Unterbestand</span>
         </label>
 
         <button className="btn" onClick={importCSV}>
@@ -276,26 +276,26 @@ export default function Materialverwaltung() {
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(520px,48vw) 1fr",
-          gap: 10,
-          minHeight: "60vh",
-        }}
-      >
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-564">
+
+
+
+
+
+
+        
+        <div className="card rlc-migrated-pages-buro-materialverwaltung-tsx-565">
+          <table className="rlc-migrated-pages-buro-materialverwaltung-tsx-566">
             <thead>
               <tr>
-                <th style={th}>Name</th>
-                <th style={th}>Code</th>
-                <th style={th}>Projekt</th>
-                <th style={th}>Ort</th>
-                <th style={th}>Einheit</th>
-                <th style={th}>Bestand</th>
-                <th style={th}>min</th>
-                <th style={th}>Preis Netto</th>
+                <th className={rlcClass(null, th)}>Name</th>
+                <th className={rlcClass(null, th)}>Code</th>
+                <th className={rlcClass(null, th)}>Projekt</th>
+                <th className={rlcClass(null, th)}>Ort</th>
+                <th className={rlcClass(null, th)}>Einheit</th>
+                <th className={rlcClass(null, th)}>Bestand</th>
+                <th className={rlcClass(null, th)}>min</th>
+                <th className={rlcClass(null, th)}>Preis Netto</th>
               </tr>
             </thead>
             <tbody>
@@ -305,136 +305,136 @@ export default function Materialverwaltung() {
                 return (
                   <tr
                     key={it.id}
-                    onClick={() => setSelId(it.id)}
-                    style={{
+                    onClick={() => setSelId(it.id)} className={rlcClass(null,
+                    {
                       cursor: "pointer",
-                      background: sel?.id === it.id ? "#f1f5ff" : undefined,
-                    }}
-                  >
-                    <td style={td}>
+                      background: sel?.id === it.id ? "#f1f5ff" : undefined
+                    })}>
+                    
+                    <td className={rlcClass(null, td)}>
                       <b>{it.name}</b>
                     </td>
-                    <td style={td}>{it.code || "—"}</td>
-                    <td style={td}>{it.projectId || "—"}</td>
-                    <td style={td}>{it.location || "—"}</td>
-                    <td style={td}>{it.unit || "—"}</td>
-                    <td style={{ ...td, color: low ? "#c03" : undefined }}>
+                    <td className={rlcClass(null, td)}>{it.code || "—"}</td>
+                    <td className={rlcClass(null, td)}>{it.projectId || "—"}</td>
+                    <td className={rlcClass(null, td)}>{it.location || "—"}</td>
+                    <td className={rlcClass(null, td)}>{it.unit || "—"}</td>
+                    <td className={rlcClass(null, { ...td, color: low ? "#c03" : undefined })}>
                       {it.stock ?? 0}
                     </td>
-                    <td style={td}>{it.minStock ?? 0}</td>
-                    <td style={td}>
-                      {typeof it.priceNet === "number"
-                        ? `${it.priceNet.toFixed(2)} €`
-                        : "—"}
+                    <td className={rlcClass(null, td)}>{it.minStock ?? 0}</td>
+                    <td className={rlcClass(null, td)}>
+                      {typeof it.priceNet === "number" ?
+                      `${it.priceNet.toFixed(2)} €` :
+                      "—"}
                     </td>
-                  </tr>
-                );
+                  </tr>);
+
               })}
 
-              {filtered.length === 0 && (
-                <tr>
-                  <td style={{ ...td, opacity: 0.6 }} colSpan={8}>
+              {filtered.length === 0 &&
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={8}>
                     Keine Artikel.
                   </td>
                 </tr>
-              )}
+              }
             </tbody>
           </table>
         </div>
 
         <div
-          className="card"
+          className="card rlc-migrated-pages-buro-materialverwaltung-tsx-567"
           onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          style={{ padding: 12 }}
-        >
-          {!sel ? (
-            <div style={{ opacity: 0.7 }}>
+          onDrop={onDrop}>
+
+          
+          {!sel ?
+          <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-568">
               Links Artikel wählen oder neu anlegen.
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "130px 1fr 130px 1fr",
-                gap: 10,
-              }}
-            >
-              <label style={lbl}>Name</label>
-              <input
-                style={inp}
-                value={sel.name}
-                onChange={(e) => up({ name: e.target.value })}
-              />
+            </div> :
 
-              <label style={lbl}>Code (Barcode/RFID)</label>
-              <input
-                style={inp}
-                value={sel.code ?? ""}
-                onChange={(e) => up({ code: e.target.value })}
-              />
+          <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-569">
 
-              <label style={lbl}>Projekt-ID</label>
-              <input
-                style={inp}
-                value={sel.projectId ?? ""}
-                onChange={(e) => up({ projectId: e.target.value })}
-              />
 
-              <label style={lbl}>Ort/Lager</label>
-              <input
-                style={inp}
-                value={sel.location ?? ""}
-                onChange={(e) => up({ location: e.target.value })}
-              />
 
-              <label style={lbl}>Einheit</label>
-              <input
-                style={inp}
-                value={sel.unit ?? ""}
-                onChange={(e) => up({ unit: e.target.value })}
-              />
 
-              <label style={lbl}>Bestand</label>
-              <input
-                type="number"
-                style={inp}
-                value={sel.stock ?? 0}
-                onChange={(e) => up({ stock: Number(e.target.value) || 0 })}
-              />
 
-              <label style={lbl}>Mindestbestand</label>
-              <input
-                type="number"
-                style={inp}
-                value={sel.minStock ?? 0}
-                onChange={(e) => up({ minStock: Number(e.target.value) || 0 })}
-              />
+            
+              <label className={rlcClass(null, lbl)}>Name</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.name}
+            onChange={(e) => up({ name: e.target.value })} />
+            
 
-              <label style={lbl}>Preis Netto (€)</label>
-              <input
-                type="number"
-                step="0.01"
-                style={inp}
-                value={sel.priceNet ?? 0}
-                onChange={(e) => up({ priceNet: Number(e.target.value) || 0 })}
-              />
+              <label className={rlcClass(null, lbl)}>Code (Barcode/RFID)</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.code ?? ""}
+            onChange={(e) => up({ code: e.target.value })} />
+            
 
-              <label style={lbl}>Lieferant</label>
-              <input
-                style={inp}
-                value={sel.supplier ?? ""}
-                onChange={(e) => up({ supplier: e.target.value })}
-              />
+              <label className={rlcClass(null, lbl)}>Projekt-ID</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.projectId ?? ""}
+            onChange={(e) => up({ projectId: e.target.value })} />
+            
 
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "flex",
-                  gap: 8,
-                  justifyContent: "flex-end",
-                }}
-              >
+              <label className={rlcClass(null, lbl)}>Ort/Lager</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.location ?? ""}
+            onChange={(e) => up({ location: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Einheit</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.unit ?? ""}
+            onChange={(e) => up({ unit: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Bestand</label>
+              <input
+              type="number" className={rlcClass(null,
+              inp)}
+              value={sel.stock ?? 0}
+              onChange={(e) => up({ stock: Number(e.target.value) || 0 })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Mindestbestand</label>
+              <input
+              type="number" className={rlcClass(null,
+              inp)}
+              value={sel.minStock ?? 0}
+              onChange={(e) => up({ minStock: Number(e.target.value) || 0 })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Preis Netto (€)</label>
+              <input
+              type="number"
+              step="0.01" className={rlcClass(null,
+              inp)}
+              value={sel.priceNet ?? 0}
+              onChange={(e) => up({ priceNet: Number(e.target.value) || 0 })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Lieferant</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.supplier ?? ""}
+            onChange={(e) => up({ supplier: e.target.value })} />
+            
+
+              <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-570">
+
+
+
+
+
+
+              
                 <button className="btn" onClick={() => move("IN")}>
                   + Eingang
                 </button>
@@ -446,136 +446,136 @@ export default function Materialverwaltung() {
                 </button>
               </div>
 
-              <label style={{ ...lbl, gridColumn: "1 / -1" }}>
+              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>
                 Bewegungen
               </label>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-571">
+                <table className="rlc-migrated-pages-buro-materialverwaltung-tsx-572">
                   <thead>
                     <tr>
-                      <th style={th}>Datum</th>
-                      <th style={th}>Typ</th>
-                      <th style={th}>Menge</th>
-                      <th style={th}>Projekt</th>
-                      <th style={th}>Notiz</th>
+                      <th className={rlcClass(null, th)}>Datum</th>
+                      <th className={rlcClass(null, th)}>Typ</th>
+                      <th className={rlcClass(null, th)}>Menge</th>
+                      <th className={rlcClass(null, th)}>Projekt</th>
+                      <th className={rlcClass(null, th)}>Notiz</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(sel.moves || [])
-                      .slice()
-                      .sort(
-                        (a, b) =>
-                          new Date(getMoveWhen(b)).getTime() -
-                          new Date(getMoveWhen(a)).getTime()
-                      )
-                      .map((m) => (
-                        <tr key={m.id}>
-                          <td style={td}>
-                            {getMoveWhen(m)
-                              ? new Date(getMoveWhen(m)).toLocaleString()
-                              : "—"}
+                    {(sel.moves || []).
+                  slice().
+                  sort(
+                    (a, b) =>
+                    new Date(getMoveWhen(b)).getTime() -
+                    new Date(getMoveWhen(a)).getTime()
+                  ).
+                  map((m) =>
+                  <tr key={m.id}>
+                          <td className={rlcClass(null, td)}>
+                            {getMoveWhen(m) ?
+                      new Date(getMoveWhen(m)).toLocaleString() :
+                      "—"}
                           </td>
-                          <td style={td}>{m.dir}</td>
-                          <td style={td}>{m.qty}</td>
-                          <td style={td}>{m.projectId || "—"}</td>
-                          <td style={td}>{m.note || "—"}</td>
+                          <td className={rlcClass(null, td)}>{m.dir}</td>
+                          <td className={rlcClass(null, td)}>{m.qty}</td>
+                          <td className={rlcClass(null, td)}>{m.projectId || "—"}</td>
+                          <td className={rlcClass(null, td)}>{m.note || "—"}</td>
                         </tr>
-                      ))}
+                  )}
 
-                    {(sel.moves || []).length === 0 && (
-                      <tr>
-                        <td style={{ ...td, opacity: 0.6 }} colSpan={5}>
+                    {(sel.moves || []).length === 0 &&
+                  <tr>
+                        <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={5}>
                           Keine Bewegungen.
                         </td>
                       </tr>
-                    )}
+                  }
                   </tbody>
                 </table>
               </div>
 
-              <label style={{ ...lbl, gridColumn: "1 / -1" }}>
+              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>
                 Dokumente / Bilder (Drag&amp;Drop)
               </label>
+              <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-573">
+
+
+
+
+
+
+              
+                {(sel.attachments || []).map((a) =>
               <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-                  gap: 8,
-                }}
-              >
-                {(sel.attachments || []).map((a) => (
-                  <div
-                    key={a.id}
-                    style={{
-                      border: "1px solid var(--line)",
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      background: "#fff",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "6px 8px",
-                        fontSize: 12,
-                        display: "flex",
-                        gap: 8,
-                        alignItems: "center",
-                      }}
-                    >
+                key={a.id} className="rlc-migrated-pages-buro-materialverwaltung-tsx-574">
+
+
+
+
+
+
+                
+                    <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-575">
+
+
+
+
+
+
+
+                  
                       <b
-                        style={{
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={a.name}
-                      >
+
+
+
+
+
+                    title={a.name} className="rlc-migrated-pages-buro-materialverwaltung-tsx-576">
+                    
                         {a.name}
                       </b>
-                      <div style={{ flex: 1 }} />
+                      <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-577" />
                       <button className="btn" onClick={() => open(a)}>
                         Öffnen
                       </button>
                     </div>
 
-                    {(a.mime || "").startsWith("image/") && (
-                      <img
-                        src={a.dataURL}
-                        alt={a.name}
-                        style={{
-                          width: "100%",
-                          height: "auto",
-                          display: "block",
-                        }}
-                      />
-                    )}
-                  </div>
-                ))}
+                    {(a.mime || "").startsWith("image/") &&
+                <img
+                  src={a.dataURL}
+                  alt={a.name} className="rlc-migrated-pages-buro-materialverwaltung-tsx-578" />
 
-                {(sel.attachments || []).length === 0 && (
-                  <div style={{ opacity: 0.6 }}>Keine Anhänge.</div>
-                )}
+
+
+
+
+
+                }
+                  </div>
+              )}
+
+                {(sel.attachments || []).length === 0 &&
+              <div className="rlc-migrated-pages-buro-materialverwaltung-tsx-579">Keine Anhänge.</div>
+              }
               </div>
             </div>
-          )}
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function escapeHtml(s: string) {
   return s.replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[m]!
   );
 }
 
@@ -597,8 +597,3 @@ function download(type: string, name: string, data: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-
-
-
-

@@ -1,11 +1,11 @@
-// apps/web/src/pages/start/project.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/start/project.tsx
 import React, {
   ChangeEvent,
   FormEvent,
   useEffect,
   useMemo,
-  useState,
-} from "react";
+  useState } from
+"react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
@@ -13,8 +13,8 @@ import {
   createProject as apiCreateProject,
   deleteProject,
   fetchProjects,
-  importProjectZip,
-} from "../../api/projects";
+  importProjectZip } from
+"../../api/projects";
 
 /* ========= API ========= */
 
@@ -95,8 +95,8 @@ function isProjectItem(value: unknown): value is ProjectItem {
   return (
     typeof v.id === "string" &&
     typeof v.code === "string" &&
-    typeof v.name === "string"
-  );
+    typeof v.name === "string");
+
 }
 
 function extractCreatedProject(value: unknown): ProjectItem | undefined {
@@ -123,7 +123,7 @@ function fmtDate(value?: string): string {
   return d.toLocaleDateString("de-DE", {
     day: "2-digit",
     month: "2-digit",
-    year: "numeric",
+    year: "numeric"
   });
 }
 
@@ -164,7 +164,7 @@ const ProjectStartPage: React.FC = () => {
     code: computeNextProjectCode([]),
     name: "Neues Projekt",
     client: "",
-    place: "",
+    place: ""
   });
 
   function saveRecent(projectId: string) {
@@ -173,18 +173,18 @@ const ProjectStartPage: React.FC = () => {
       setRecentIds(next);
       localStorage.setItem(RECENT_KEY, JSON.stringify(next));
     } catch {
+
       //
-    }
-  }
+    }}
 
   function setCurrentEverywhere(p: ProjectItem) {
     try {
       const g = globalThis as any;
       g.__RLC_CURRENT_PROJECT = p;
     } catch {
+
       //
     }
-
     try {
       projectCtx?.setCurrentProject?.(p);
       projectCtx?.setCurrentProjectId?.(p.id);
@@ -202,9 +202,9 @@ const ProjectStartPage: React.FC = () => {
         g.__RLC_CURRENT_PROJECT = null;
       }
     } catch {
+
       //
     }
-
     try {
       if (projectCtx?.currentProject?.id === id) {
         projectCtx?.setCurrentProject?.(null);
@@ -214,9 +214,9 @@ const ProjectStartPage: React.FC = () => {
         projectCtx?.setCurrentProjectId?.(null);
       }
     } catch {
+
       //
-    }
-  }
+    }}
 
   async function loadList() {
     try {
@@ -231,7 +231,7 @@ const ProjectStartPage: React.FC = () => {
 
       setNewForm((prev) => ({
         ...prev,
-        code: computeNextProjectCode(list),
+        code: computeNextProjectCode(list)
       }));
     } catch (e: any) {
       console.error(e);
@@ -255,8 +255,8 @@ const ProjectStartPage: React.FC = () => {
         normalizeText(p.code).includes(q) ||
         normalizeText(p.name).includes(q) ||
         normalizeText(p.client).includes(q) ||
-        normalizeText(p.place).includes(q)
-      );
+        normalizeText(p.place).includes(q));
+
     });
   }, [projects, search]);
 
@@ -278,7 +278,7 @@ const ProjectStartPage: React.FC = () => {
       visible: filteredProjects.length,
       recent: recentProjects.length,
       withClient,
-      withPlace,
+      withPlace
     };
   }, [projects, filteredProjects, recentProjects]);
 
@@ -316,7 +316,7 @@ const ProjectStartPage: React.FC = () => {
 
       const fd = new FormData();
       const blob = new Blob([JSON.stringify(project)], {
-        type: "application/json",
+        type: "application/json"
       });
 
       fd.append("file", blob, "project.json");
@@ -325,7 +325,7 @@ const ProjectStartPage: React.FC = () => {
         method: "POST",
         headers: { Accept: "application/json" },
         body: fd,
-        credentials: "include",
+        credentials: "include"
       });
 
       const json = await res.json().catch(() => null);
@@ -382,7 +382,7 @@ const ProjectStartPage: React.FC = () => {
         code: newForm.code.trim(),
         name: newForm.name.trim(),
         client: newForm.client.trim(),
-        place: newForm.place.trim(),
+        place: newForm.place.trim()
       };
 
       if (!payload.code) throw new Error("Projektnummer fehlt.");
@@ -413,9 +413,9 @@ const ProjectStartPage: React.FC = () => {
   }
 
   async function handleDeleteProject(
-    p: ProjectItem,
-    ev: React.MouseEvent<HTMLButtonElement>
-  ) {
+  p: ProjectItem,
+  ev: React.MouseEvent<HTMLButtonElement>)
+  {
     ev.stopPropagation();
 
     if (!window.confirm(`Projekt "${p.code}" wirklich löschen?`)) return;
@@ -432,9 +432,9 @@ const ProjectStartPage: React.FC = () => {
       try {
         localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
       } catch {
+
         //
       }
-
       await loadList();
     } catch (e: any) {
       console.error(e);
@@ -445,59 +445,59 @@ const ProjectStartPage: React.FC = () => {
   }
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Projektzentrale</div>
-          <h1 style={heroTitle}>Projekt auswählen</h1>
-          <p style={heroText}>
+          <div className={rlcClass(null, eyebrow)}>RLC Projektzentrale</div>
+          <h1 className={rlcClass(null, heroTitle)}>Projekt auswählen</h1>
+          <p className={rlcClass(null, heroText)}>
             Bestehendes Projekt öffnen, neues Projekt anlegen oder Projektdateien
             sauber importieren.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button type="button" style={btnPrimaryHero} onClick={() => void loadList()}>
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnPrimaryHero)} onClick={() => void loadList()}>
             {loading ? "Lädt..." : "Projekte neu laden"}
           </button>
 
           <button
-            type="button"
-            style={btnSecondaryHero}
+            type="button" className={rlcClass(null,
+            btnSecondaryHero)}
             onClick={() => {
               const target = document.getElementById("create-project-card");
               target?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-          >
+            }}>
+            
             Neues Projekt
           </button>
 
           <button
-            type="button"
-            style={btnSecondaryHero}
+            type="button" className={rlcClass(null,
+            btnSecondaryHero)}
             onClick={() => {
               const target = document.getElementById("import-project-card");
               target?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-          >
+            }}>
+            
             Import
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekte: <b>{stats.total}</b> · Sichtbar: <b>{stats.visible}</b> · Zuletzt
           geöffnet: <b>{stats.recent}</b>
         </div>
       </section>
 
-      {(error || createError) ? (
-        <div style={errorBox}>
+      {error || createError ?
+      <div className={rlcClass(null, errorBox)}>
           {error ? <div>Fehler: {error}</div> : null}
           {createError ? <div>{createError}</div> : null}
-        </div>
-      ) : null}
+        </div> :
+      null}
 
-      <section style={kpiGrid}>
+      <section className={rlcClass(null, kpiGrid)}>
         <Kpi label="Projekte" value={String(stats.total)} />
         <Kpi label="Suchtreffer" value={String(stats.visible)} />
         <Kpi label="Zuletzt geöffnet" value={String(stats.recent)} />
@@ -505,61 +505,61 @@ const ProjectStartPage: React.FC = () => {
         <Kpi label="Mit Ort" value={String(stats.withPlace)} />
       </section>
 
-      <section style={layoutGrid}>
-        <div style={mainStack}>
-          <section style={card}>
-            <div style={sectionHead}>
+      <section className={rlcClass(null, layoutGrid)}>
+        <div className={rlcClass(null, mainStack)}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>Projekt suchen & öffnen</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>Projekt suchen & öffnen</h2>
+                <div className={rlcClass(null, sectionText)}>
                   Schnell suchen, zuletzt verwendete Projekte öffnen oder aus der Liste wählen.
                 </div>
               </div>
 
               <button
-                type="button"
-                style={btnSecondary}
+                type="button" className={rlcClass(null,
+                btnSecondary)}
                 onClick={() => void loadList()}
-                disabled={loading}
-              >
+                disabled={loading}>
+                
                 {loading ? "Lädt..." : "Neu laden"}
               </button>
             </div>
 
-            <div style={searchGrid}>
+            <div className={rlcClass(null, searchGrid)}>
               <div>
                 <FieldLabel>Projekt suchen</FieldLabel>
                 <input
                   type="text"
                   placeholder="Nach Projektnummer, Name, Kunde oder Ort suchen..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  style={searchInput}
-                />
+                  onChange={(e) => setSearch(e.target.value)} className={rlcClass(null,
+                  searchInput)} />
+                
               </div>
 
               <div>
                 <FieldLabel>Schnellwahl</FieldLabel>
-                <div style={quickSelectRow}>
+                <div className={rlcClass(null, quickSelectRow)}>
                   <select
                     value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(e.target.value)}
-                    style={input}
-                  >
+                    onChange={(e) => setSelectedProjectId(e.target.value)} className={rlcClass(null,
+                    input)}>
+                    
                     <option value="">Projekt auswählen...</option>
-                    {filteredProjects.map((p) => (
-                      <option key={p.id} value={p.id}>
+                    {filteredProjects.map((p) =>
+                    <option key={p.id} value={p.id}>
                         {p.code} — {p.name}
                       </option>
-                    ))}
+                    )}
                   </select>
 
                   <button
-                    type="button"
-                    style={btnPrimary}
+                    type="button" className={rlcClass(null,
+                    btnPrimary)}
                     disabled={!selectedProject}
-                    onClick={() => selectedProject && handleOpenProject(selectedProject)}
-                  >
+                    onClick={() => selectedProject && handleOpenProject(selectedProject)}>
+                    
                     Öffnen
                   </button>
                 </div>
@@ -567,134 +567,134 @@ const ProjectStartPage: React.FC = () => {
             </div>
           </section>
 
-          {recentProjects.length > 0 ? (
-            <section style={card}>
-              <div style={sectionHead}>
+          {recentProjects.length > 0 ?
+          <section className={rlcClass(null, card)}>
+              <div className={rlcClass(null, sectionHead)}>
                 <div>
-                  <h2 style={sectionTitle}>Zuletzt geöffnet</h2>
-                  <div style={sectionText}>Direkter Zugriff auf die letzten Projekte.</div>
+                  <h2 className={rlcClass(null, sectionTitle)}>Zuletzt geöffnet</h2>
+                  <div className={rlcClass(null, sectionText)}>Direkter Zugriff auf die letzten Projekte.</div>
                 </div>
               </div>
 
-              <div style={recentGrid}>
-                {recentProjects.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    style={recentCard}
-                    onClick={() => handleOpenProject(p)}
-                  >
+              <div className={rlcClass(null, recentGrid)}>
+                {recentProjects.map((p) =>
+              <button
+                key={p.id}
+                type="button" className={rlcClass(null,
+                recentCard)}
+                onClick={() => handleOpenProject(p)}>
+                
                     <div>
-                      <div style={projectCode}>{p.code}</div>
-                      <div style={projectName}>{p.name}</div>
-                      <div style={projectSub}>
+                      <div className={rlcClass(null, projectCode)}>{p.code}</div>
+                      <div className={rlcClass(null, projectName)}>{p.name}</div>
+                      <div className={rlcClass(null, projectSub)}>
                         {p.client || "—"} {p.place ? `· ${p.place}` : ""}
                       </div>
                     </div>
 
-                    <span style={openPill}>Öffnen</span>
+                    <span className={rlcClass(null, openPill)}>Öffnen</span>
                   </button>
-                ))}
+              )}
               </div>
-            </section>
-          ) : null}
+            </section> :
+          null}
 
-          <section style={card}>
-            <div style={sectionHead}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>Alle Projekte</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>Alle Projekte</h2>
+                <div className={rlcClass(null, sectionText)}>
                   Vollständige Projektliste mit Öffnen- und Löschen-Aktion.
                 </div>
               </div>
             </div>
 
-            <div style={tableWrap}>
-              <div style={tableHeader}>
+            <div className={rlcClass(null, tableWrap)}>
+              <div className={rlcClass(null, tableHeader)}>
                 <div>Projekt-Nr.</div>
                 <div>Name</div>
                 <div>Auftraggeber</div>
                 <div>Ort / Aktionen</div>
               </div>
 
-              <div style={scrollList}>
-                {!filteredProjects.length ? (
-                  <div style={emptyCell}>Keine Projekte gefunden.</div>
-                ) : null}
+              <div className={rlcClass(null, scrollList)}>
+                {!filteredProjects.length ?
+                <div className={rlcClass(null, emptyCell)}>Keine Projekte gefunden.</div> :
+                null}
 
                 {filteredProjects.map((p, idx) => {
                   const isHovered = hoveredRowId === p.id;
 
                   return (
                     <div
-                      key={p.id}
-                      style={{
+                      key={p.id} className={rlcClass(null,
+                      {
                         ...tableRow,
                         background: idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC",
-                        ...(isHovered ? tableRowHover : {}),
-                      }}
+                        ...(isHovered ? tableRowHover : {})
+                      })}
                       onMouseEnter={() => setHoveredRowId(p.id)}
-                      onMouseLeave={() => setHoveredRowId(null)}
-                    >
-                      <div style={projectCode}>{p.code}</div>
+                      onMouseLeave={() => setHoveredRowId(null)}>
+                      
+                      <div className={rlcClass(null, projectCode)}>{p.code}</div>
 
                       <div>
                         <b>{p.name}</b>
-                        <div style={tiny}>Erstellt: {fmtDate(p.createdAt)}</div>
+                        <div className={rlcClass(null, tiny)}>Erstellt: {fmtDate(p.createdAt)}</div>
                       </div>
 
                       <div>{p.client || "—"}</div>
 
-                      <div style={rowActions}>
+                      <div className={rlcClass(null, rowActions)}>
                         <span>{p.place || "—"}</span>
 
-                        <div style={buttonRow}>
+                        <div className={rlcClass(null, buttonRow)}>
                           <button
-                            type="button"
-                            style={btnSecondarySmall}
-                            onClick={() => handleOpenProject(p)}
-                          >
+                            type="button" className={rlcClass(null,
+                            btnSecondarySmall)}
+                            onClick={() => handleOpenProject(p)}>
+                            
                             Öffnen
                           </button>
 
                           <button
-                            type="button"
-                            style={btnDangerSmall}
+                            type="button" className={rlcClass(null,
+                            btnDangerSmall)}
                             onClick={(ev) => handleDeleteProject(p, ev)}
-                            disabled={deletingId === p.id}
-                          >
+                            disabled={deletingId === p.id}>
+                            
                             {deletingId === p.id ? "Lösche..." : "Löschen"}
                           </button>
                         </div>
                       </div>
-                    </div>
-                  );
+                    </div>);
+
                 })}
               </div>
             </div>
           </section>
         </div>
 
-        <aside style={sideStack}>
-          <section id="create-project-card" style={card}>
-            <div style={sectionHead}>
+        <aside className={rlcClass(null, sideStack)}>
+          <section id="create-project-card" className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>Projekt erstellen</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>Projekt erstellen</h2>
+                <div className={rlcClass(null, sectionText)}>
                   Neues Projekt direkt mit Projektnummer, Name, Kunde und Ort anlegen.
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleCreateProject} style={formStack}>
+            <form onSubmit={handleCreateProject} className={rlcClass(null, formStack)}>
               <Field label="Projektnummer">
                 <input
                   type="text"
                   name="code"
                   value={newForm.code}
-                  onChange={handleNewChange}
-                  style={input}
-                />
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
               </Field>
 
               <Field label="Projektname">
@@ -702,9 +702,9 @@ const ProjectStartPage: React.FC = () => {
                   type="text"
                   name="name"
                   value={newForm.name}
-                  onChange={handleNewChange}
-                  style={input}
-                />
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
               </Field>
 
               <Field label="Kunde / Auftraggeber">
@@ -712,9 +712,9 @@ const ProjectStartPage: React.FC = () => {
                   type="text"
                   name="client"
                   value={newForm.client}
-                  onChange={handleNewChange}
-                  style={input}
-                />
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
               </Field>
 
               <Field label="Ort">
@@ -722,31 +722,31 @@ const ProjectStartPage: React.FC = () => {
                   type="text"
                   name="place"
                   value={newForm.place}
-                  onChange={handleNewChange}
-                  style={input}
-                />
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
               </Field>
 
-              <button type="submit" style={btnPrimaryFull} disabled={creating}>
+              <button type="submit" className={rlcClass(null, btnPrimaryFull)} disabled={creating}>
                 {creating ? "Wird angelegt..." : "Projekt anlegen"}
               </button>
             </form>
           </section>
 
-          <section id="import-project-card" style={card}>
-            <div style={sectionHead}>
+          <section id="import-project-card" className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>Projekt importieren</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>Projekt importieren</h2>
+                <div className={rlcClass(null, sectionText)}>
                   project.json oder vollständiges Projekt-ZIP einlesen.
                 </div>
               </div>
             </div>
 
-            <div style={importBlock}>
+            <div className={rlcClass(null, importBlock)}>
               <div>
-                <div style={importTitle}>project.json importieren</div>
-                <div style={sectionText}>
+                <div className={rlcClass(null, importTitle)}>project.json importieren</div>
+                <div className={rlcClass(null, sectionText)}>
                   Exportierte Projektdatei wieder einlesen.
                 </div>
               </div>
@@ -754,24 +754,24 @@ const ProjectStartPage: React.FC = () => {
               <input
                 type="file"
                 accept=".json,application/json"
-                onChange={handleJsonFileChange}
-                style={fileInput}
-              />
+                onChange={handleJsonFileChange} className={rlcClass(null,
+                fileInput)} />
+              
 
               <button
-                type="button"
-                style={btnPrimary}
+                type="button" className={rlcClass(null,
+                btnPrimary)}
                 onClick={handleImportJson}
-                disabled={!jsonFile}
-              >
+                disabled={!jsonFile}>
+                
                 Import JSON
               </button>
             </div>
 
-            <div style={importBlock}>
+            <div className={rlcClass(null, importBlock)}>
               <div>
-                <div style={importTitle}>Projekt-ZIP importieren</div>
-                <div style={sectionText}>
+                <div className={rlcClass(null, importTitle)}>Projekt-ZIP importieren</div>
+                <div className={rlcClass(null, sectionText)}>
                   Komplettes Projektarchiv inklusive Dateien einlesen.
                 </div>
               </div>
@@ -779,75 +779,75 @@ const ProjectStartPage: React.FC = () => {
               <input
                 type="file"
                 accept=".zip,application/zip"
-                onChange={handleZipFileChange}
-                style={fileInput}
-              />
+                onChange={handleZipFileChange} className={rlcClass(null,
+                fileInput)} />
+              
 
               <button
-                type="button"
-                style={btnPrimary}
+                type="button" className={rlcClass(null,
+                btnPrimary)}
                 onClick={handleImportZip}
-                disabled={!zipFile}
-              >
+                disabled={!zipFile}>
+                
                 Import ZIP
               </button>
             </div>
           </section>
         </aside>
       </section>
-    </div>
-  );
+    </div>);
+
 };
 
 export default ProjectStartPage;
 
 /* ========= UI ========= */
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value }: {label: string;value: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+    </div>);
+
 }
 
 function Field({
   label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={fieldWrap}>
-      <span style={labelStyle}>{label}</span>
+    <label className={rlcClass(null, fieldWrap)}>
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div style={labelStyle}>{children}</div>;
+function FieldLabel({ children }: {children: React.ReactNode;}) {
+  return <div className={rlcClass(null, labelStyle)}>{children}</div>;
 }
 
 /* ========= Styles ========= */
 
 const page: React.CSSProperties = {
   display: "grid",
-  gap: 16,
-  padding: 16,
+  gap: 14,
+  padding: "2px 0 16px"
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(125deg, #0B5BD3 0%, #146EF5 58%, #24B4FF 100%)",
   color: "#FFFFFF",
-  borderRadius: 18,
-  padding: 26,
+  borderRadius: 12,
+  padding: "20px 22px",
   display: "grid",
-  gap: 16,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
-  overflow: "hidden",
+  gap: 13,
+  boxShadow: "0 8px 24px rgba(20,110,245,0.16)",
+  overflow: "hidden"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -855,14 +855,14 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.78,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const heroTitle: React.CSSProperties = {
-  margin: "4px 0",
-  fontSize: 34,
+  color: "#FFFFFF", margin: "4px 0",
+  fontSize: 29,
   lineHeight: 1.1,
-  fontWeight: 950,
+  fontWeight: 700
 };
 
 const heroText: React.CSSProperties = {
@@ -870,18 +870,18 @@ const heroText: React.CSSProperties = {
   maxWidth: 920,
   opacity: 0.88,
   lineHeight: 1.55,
-  fontSize: 15,
+  fontSize: 15
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.9,
+  opacity: 0.9
 };
 
 const errorBox: React.CSSProperties = {
@@ -891,63 +891,64 @@ const errorBox: React.CSSProperties = {
   borderRadius: 14,
   padding: "12px 14px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const kpiGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
-  gap: 12,
+  gap: 8
 };
 
 const kpiCard: React.CSSProperties = {
   background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
-  borderRadius: 16,
-  padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  border: "0",
+  borderBottom: "2px solid #BED6FF",
+  borderRadius: 0,
+  padding: "12px 10px",
+  boxShadow: "none"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
-  fontSize: 24,
+  fontSize: 21,
   color: "#0F172A",
-  fontWeight: 950,
+  fontWeight: 700
 };
 
 const layoutGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0,1.45fr) 420px",
-  gap: 16,
-  alignItems: "start",
+  gap: 14,
+  alignItems: "start"
 };
 
 const mainStack: React.CSSProperties = {
   display: "grid",
-  gap: 16,
-  minWidth: 0,
+  gap: 14,
+  minWidth: 0
 };
 
 const sideStack: React.CSSProperties = {
   display: "grid",
-  gap: 16,
-  minWidth: 0,
+  gap: 14,
+  minWidth: 0
 };
 
 const card: React.CSSProperties = {
   background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
-  borderRadius: 16,
-  padding: 18,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  border: "1px solid #DDE5F0",
+  borderRadius: 10,
+  padding: 16,
+  boxShadow: "none"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -956,38 +957,38 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 14,
+  marginBottom: 14
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   color: "#0F172A",
   fontSize: 18,
-  fontWeight: 950,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   color: "#64748B",
   fontSize: 13,
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const searchGrid: React.CSSProperties = {
   display: "grid",
-  gap: 12,
+  gap: 12
 };
 
 const fieldWrap: React.CSSProperties = {
   display: "grid",
-  gap: 5,
+  gap: 5
 };
 
 const labelStyle: React.CSSProperties = {
   marginBottom: 5,
   color: "#334155",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const input: React.CSSProperties = {
@@ -999,75 +1000,76 @@ const input: React.CSSProperties = {
   color: "#0F172A",
   padding: "10px 12px",
   fontSize: 13,
-  outline: "none",
+  outline: "none"
 };
 
 const searchInput: React.CSSProperties = {
   ...input,
   padding: "12px 13px",
-  fontSize: 14,
+  fontSize: 14
 };
 
 const quickSelectRow: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(0,1fr) auto",
   gap: 8,
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const recentGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 10,
+  gap: 10
 };
 
 const recentCard: React.CSSProperties = {
-  border: "1px solid #E5E7EB",
-  background: "#F8FAFC",
-  borderRadius: 14,
-  padding: 13,
+  border: "0",
+  borderBottom: "1px solid #DDE5F0",
+  background: "#FFFFFF",
+  borderRadius: 0,
+  padding: "11px 2px",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: 10,
   textAlign: "left",
   color: "#0F172A",
-  cursor: "pointer",
+  cursor: "pointer"
 };
 
 const projectCode: React.CSSProperties = {
   color: "#0F172A",
-  fontWeight: 950,
+  fontWeight: 700
 };
 
 const projectName: React.CSSProperties = {
   marginTop: 2,
   color: "#0F172A",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const projectSub: React.CSSProperties = {
   marginTop: 3,
   color: "#64748B",
   fontSize: 12,
-  fontWeight: 600,
+  fontWeight: 600
 };
 
 const openPill: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3",
   borderRadius: 999,
   padding: "6px 10px",
   fontSize: 12,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const tableWrap: React.CSSProperties = {
   overflow: "hidden",
-  border: "1px solid #E5E7EB",
-  borderRadius: 14,
+  border: "1px solid #DDE5F0",
+  borderRadius: 10
 };
 
 const tableHeader: React.CSSProperties = {
@@ -1078,14 +1080,14 @@ const tableHeader: React.CSSProperties = {
   background: "#F8FAFC",
   color: "#64748B",
   fontSize: 12,
-  fontWeight: 950,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const scrollList: React.CSSProperties = {
   maxHeight: 470,
-  overflowY: "auto",
+  overflowY: "auto"
 };
 
 const tableRow: React.CSSProperties = {
@@ -1097,19 +1099,19 @@ const tableRow: React.CSSProperties = {
   borderTop: "1px solid #E5E7EB",
   color: "#0F172A",
   fontSize: 13,
-  transition: "all 120ms ease",
+  transition: "all 120ms ease"
 };
 
 const tableRowHover: React.CSSProperties = {
-  background: "#EFF6FF",
-  boxShadow: "inset 0 0 0 1px #BFDBFE",
+  background: "#F5F8FF",
+  boxShadow: "inset 3px 0 0 #146EF5"
 };
 
 const tiny: React.CSSProperties = {
   marginTop: 3,
   color: "#64748B",
   fontSize: 11,
-  fontWeight: 600,
+  fontWeight: 600
 };
 
 const rowActions: React.CSSProperties = {
@@ -1117,25 +1119,25 @@ const rowActions: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const buttonRow: React.CSSProperties = {
   display: "flex",
   gap: 6,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const emptyCell: React.CSSProperties = {
   padding: 16,
   color: "#64748B",
   fontSize: 13,
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const formStack: React.CSSProperties = {
   display: "grid",
-  gap: 12,
+  gap: 12
 };
 
 const importBlock: React.CSSProperties = {
@@ -1143,55 +1145,55 @@ const importBlock: React.CSSProperties = {
   paddingTop: 14,
   marginTop: 14,
   display: "grid",
-  gap: 10,
+  gap: 10
 };
 
 const importTitle: React.CSSProperties = {
   color: "#0F172A",
-  fontWeight: 950,
-  fontSize: 14,
+  fontWeight: 700,
+  fontSize: 14
 };
 
 const fileInput: React.CSSProperties = {
   fontSize: 12,
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnBase: React.CSSProperties = {
   border: "1px solid #D1D5DB",
-  borderRadius: 11,
-  padding: "10px 14px",
+  borderRadius: 8,
+  padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnPrimaryFull: React.CSSProperties = {
   ...btnPrimary,
   width: "100%",
-  justifyContent: "center",
+  justifyContent: "center"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnPrimaryHero: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
-  padding: "11px 16px",
+  border: "1px solid #FFFFFF",
+  background: "#FFFFFF",
+  color: "#0B5BD3",
+  padding: "11px 16px"
 };
 
 const btnSecondaryHero: React.CSSProperties = {
@@ -1199,19 +1201,19 @@ const btnSecondaryHero: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.55)",
   background: "rgba(255,255,255,0.90)",
   color: "#0F172A",
-  padding: "11px 16px",
+  padding: "11px 16px"
 };
 
 const btnSecondarySmall: React.CSSProperties = {
   ...btnSecondary,
   padding: "7px 10px",
   borderRadius: 9,
-  fontSize: 12,
+  fontSize: 12
 };
 
 const btnDangerSmall: React.CSSProperties = {
   ...btnSecondarySmall,
   border: "1px solid #FCA5A5",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };

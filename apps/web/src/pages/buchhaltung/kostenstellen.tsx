@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React, { useMemo, useState } from "react";
 import "./styles.css";
 
 /* =========================
@@ -19,10 +19,10 @@ type Kostenstelle = {
    HELPERS
    ========================= */
 const fmt = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -31,7 +31,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -40,18 +40,18 @@ function escapeHtml(str: string) {
   return String(str ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
 const pct = (a: number, b: number) =>
-  b > 0 ? (a / b) * 100 : 0;
+b > 0 ? a / b * 100 : 0;
 
 function csvEscape(v: unknown) {
   return `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -62,47 +62,47 @@ function csvEscape(v: unknown) {
    ========================= */
 export default function Kostenstellenstruktur() {
   const [rows, setRows] = useState<Kostenstelle[]>([
-    {
-      id: 1,
-      code: "KS-01",
-      bezeichnung: "Erdarbeiten",
-      hauptbereich: "Baugrube",
-      budget: 80000,
-      istKosten: 60000,
-    },
-    {
-      id: 2,
-      code: "KS-02",
-      bezeichnung: "Leitungen / Rohrbau",
-      hauptbereich: "Tiefbau",
-      budget: 65000,
-      istKosten: 42000,
-    },
-    {
-      id: 3,
-      code: "KS-03",
-      bezeichnung: "Straßenbau / Asphalt",
-      hauptbereich: "Oberbau",
-      budget: 72000,
-      istKosten: 74000,
-    },
-    {
-      id: 4,
-      code: "KS-04",
-      bezeichnung: "Materiallager / Zwischenlager",
-      hauptbereich: "Logistik",
-      budget: 15000,
-      istKosten: 9000,
-    },
-    {
-      id: 5,
-      code: "KS-05",
-      bezeichnung: "Vermessung & Dokumentation",
-      hauptbereich: "Vermessung",
-      budget: 10000,
-      istKosten: 3000,
-    },
-  ]);
+  {
+    id: 1,
+    code: "KS-01",
+    bezeichnung: "Erdarbeiten",
+    hauptbereich: "Baugrube",
+    budget: 80000,
+    istKosten: 60000
+  },
+  {
+    id: 2,
+    code: "KS-02",
+    bezeichnung: "Leitungen / Rohrbau",
+    hauptbereich: "Tiefbau",
+    budget: 65000,
+    istKosten: 42000
+  },
+  {
+    id: 3,
+    code: "KS-03",
+    bezeichnung: "Straßenbau / Asphalt",
+    hauptbereich: "Oberbau",
+    budget: 72000,
+    istKosten: 74000
+  },
+  {
+    id: 4,
+    code: "KS-04",
+    bezeichnung: "Materiallager / Zwischenlager",
+    hauptbereich: "Logistik",
+    budget: 15000,
+    istKosten: 9000
+  },
+  {
+    id: 5,
+    code: "KS-05",
+    bezeichnung: "Vermessung & Dokumentation",
+    hauptbereich: "Vermessung",
+    budget: 10000,
+    istKosten: 3000
+  }]
+  );
 
   const [bereich, setBereich] = useState<string>("ALL");
 
@@ -112,7 +112,7 @@ export default function Kostenstellenstruktur() {
   );
 
   const filtered = useMemo(
-    () => (bereich === "ALL" ? rows : rows.filter((r) => r.hauptbereich === bereich)),
+    () => bereich === "ALL" ? rows : rows.filter((r) => r.hauptbereich === bereich),
     [rows, bereich]
   );
 
@@ -127,27 +127,27 @@ export default function Kostenstellenstruktur() {
     const nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1;
 
     setRows((prev) => [
-      ...prev,
-      {
-        id: nextId,
-        code: `KS-${String(nextId).padStart(2, "0")}`,
-        bezeichnung: "Neue Kostenstelle",
-        hauptbereich: "Allgemein",
-        budget: 0,
-        istKosten: 0,
-      },
-    ]);
+    ...prev,
+    {
+      id: nextId,
+      code: `KS-${String(nextId).padStart(2, "0")}`,
+      bezeichnung: "Neue Kostenstelle",
+      hauptbereich: "Allgemein",
+      budget: 0,
+      istKosten: 0
+    }]
+    );
   };
 
   const remove = (id: number) => {
     setRows((prev) => prev.filter((r) => r.id !== id));
   };
 
-  const update = <K extends keyof Kostenstelle>(
-    i: number,
-    key: K,
-    val: Kostenstelle[K]
-  ) => {
+  const update = <K extends keyof Kostenstelle,>(
+  i: number,
+  key: K,
+  val: Kostenstelle[K]) =>
+  {
     setRows((prev) => {
       const c = [...prev];
       if (!c[i]) return prev;
@@ -155,9 +155,9 @@ export default function Kostenstellenstruktur() {
       c[i] = {
         ...c[i],
         [key]:
-          key === "budget" || key === "istKosten"
-            ? safeNumber(val, 0)
-            : val,
+        key === "budget" || key === "istKosten" ?
+        safeNumber(val, 0) :
+        val
       };
 
       return c;
@@ -179,24 +179,24 @@ export default function Kostenstellenstruktur() {
       Budget: fmt(r.budget),
       IstKosten: fmt(r.istKosten),
       Abweichung: fmt(safeNumber(r.budget) - safeNumber(r.istKosten)),
-      Prozent: `${fmt(pct(safeNumber(r.istKosten), safeNumber(r.budget)))} %`,
+      Prozent: `${fmt(pct(safeNumber(r.istKosten), safeNumber(r.budget)))} %`
     }));
 
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.map(csvEscape).join(";"),
-      ...data.map((d) =>
-        headers.map((h) => csvEscape((d as Record<string, unknown>)[h])).join(";")
-      ),
-    ].join("\n");
+    headers.map(csvEscape).join(";"),
+    ...data.map((d) =>
+    headers.map((h) => csvEscape((d as Record<string, unknown>)[h])).join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     const href = URL.createObjectURL(blob);
     a.href = href;
-    a.download = useFiltered
-      ? "kostenstellen_gefiltert.csv"
-      : "kostenstellen_alle.csv";
+    a.download = useFiltered ?
+    "kostenstellen_gefiltert.csv" :
+    "kostenstellen_alle.csv";
     a.click();
     URL.revokeObjectURL(href);
   };
@@ -219,7 +219,7 @@ export default function Kostenstellenstruktur() {
   }
 
   const printAllPDF = (useFiltered: boolean) =>
-    openPrint(printableHTML(useFiltered ? filtered : rows));
+  openPrint(printableHTML(useFiltered ? filtered : rows));
 
   /* =========================
      RENDER
@@ -251,11 +251,11 @@ export default function Kostenstellenstruktur() {
         <div>
           <label>Hauptbereich</label>
           <select value={bereich} onChange={(e) => setBereich(e.target.value)}>
-            {bereiche.map((b) => (
-              <option key={b} value={b}>
+            {bereiche.map((b) =>
+            <option key={b} value={b}>
                 {b === "ALL" ? "Alle" : b}
               </option>
-            ))}
+            )}
           </select>
         </div>
       </div>
@@ -295,18 +295,18 @@ export default function Kostenstellenstruktur() {
                   <input
                     type="text"
                     value={r.bezeichnung}
-                    onChange={(e) => update(i, "bezeichnung", e.target.value)}
-                    style={{ minWidth: 180 }}
-                  />
+                    onChange={(e) => update(i, "bezeichnung", e.target.value)} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-228" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.hauptbereich}
-                    onChange={(e) => update(i, "hauptbereich", e.target.value)}
-                    style={{ minWidth: 140 }}
-                  />
+                    onChange={(e) => update(i, "hauptbereich", e.target.value)} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-229" />
+
+                  
                 </td>
 
                 <td>
@@ -314,9 +314,9 @@ export default function Kostenstellenstruktur() {
                     type="number"
                     step="0.01"
                     value={r.budget}
-                    onChange={(e) => update(i, "budget", safeNumber(e.target.value, 0))}
-                    style={{ width: 120, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(i, "budget", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-230" />
+
+                  
                 </td>
 
                 <td>
@@ -324,69 +324,69 @@ export default function Kostenstellenstruktur() {
                     type="number"
                     step="0.01"
                     value={r.istKosten}
-                    onChange={(e) => update(i, "istKosten", safeNumber(e.target.value, 0))}
-                    style={{ width: 120, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(i, "istKosten", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-231" />
+
+                  
                 </td>
 
-                <td
-                  className="right"
-                  style={{
+                <td className={rlcClass(
+                  "right",
+                  {
                     color: abw < 0 ? "#c0392b" : "#2c3e50",
-                    fontWeight: 600,
-                  }}
-                >
+                    fontWeight: 600
+                  })}>
+                  
                   {fmt(abw)}
                 </td>
 
                 <td>
-                  <div
-                    style={{
-                      width: 120,
-                      position: "relative",
-                      height: 8,
-                      background: "#eee",
+                  <div className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-232">
+
+
+
+
+
+
+
+                    
+                    <div className={rlcClass(null,
+                    {
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      height: "100%",
+                      width: `${Math.min(per, 100)}%`,
+                      background: farbe,
                       borderRadius: 4,
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        height: "100%",
-                        width: `${Math.min(per, 100)}%`,
-                        background: farbe,
-                        borderRadius: 4,
-                        transition: "width .3s",
-                      }}
-                    ></div>
+                      transition: "width .3s"
+                    })}>
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      textAlign: "center",
-                      color: farbe,
-                      fontWeight: 600,
-                    }}
-                  >
+                  <div className={rlcClass(null,
+                  {
+                    fontSize: 12,
+                    textAlign: "center",
+                    color: farbe,
+                    fontWeight: 600
+                  })}>
+                    
                     {fmt(per)} %
                   </div>
                 </td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={8} style={{ textAlign: "center", color: "#777", padding: 14 }}>
+          {filtered.length === 0 &&
+          <tr>
+              <td colSpan={8} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-233">
                 Keine Kostenstellen im aktuellen Filter.
               </td>
             </tr>
-          )}
+          }
 
-          <tr style={{ background: "#fafafa", fontWeight: 600 }}>
-            <td colSpan={4} style={{ textAlign: "right" }}>
+          <tr className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-234">
+            <td colSpan={4} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-235">
               Summe (gefiltert):
             </td>
             <td className="right">{fmt(totals.bud)}</td>
@@ -397,20 +397,20 @@ export default function Kostenstellenstruktur() {
         </tbody>
       </table>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-kostenstellen-tsx-236">
         *Demo-Daten · Integrierbar mit Kalkulation/Abrechnung → automatische Befüllung per Projekt-ID.
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* =========================
    PRINTABLE HTML
    ========================= */
 function printableHTML(list: Kostenstelle[]) {
-  const body = list
-    .map(
-      (r) => `
+  const body = list.
+  map(
+    (r) => `
     <tr>
       <td>${escapeHtml(r.code)}</td>
       <td>${escapeHtml(r.bezeichnung)}</td>
@@ -420,8 +420,8 @@ function printableHTML(list: Kostenstelle[]) {
       <td style="text-align:right">${fmt(safeNumber(r.budget) - safeNumber(r.istKosten))}</td>
       <td style="text-align:right">${fmt(pct(safeNumber(r.istKosten), safeNumber(r.budget)))} %</td>
     </tr>`
-    )
-    .join("");
+  ).
+  join("");
 
   const totalBudget = list.reduce((a, r) => a + safeNumber(r.budget), 0);
   const totalIst = list.reduce((a, r) => a + safeNumber(r.istKosten), 0);
@@ -455,8 +455,3 @@ function printableHTML(list: Kostenstelle[]) {
   <div style="margin-top:10px;color:#555">Erstellt am ${new Date().toLocaleString("de-DE")}</div>
   </body></html>`;
 }
-
-
-
-
-

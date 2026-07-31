@@ -1,0 +1,9011 @@
+/* Generated central migration of former JSX inline styles. */
+.rlc-migrated-app-tsx-1 {
+  padding: 24px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.rlc-migrated-app-tsx-2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+  flex-wrap: nowrap;
+}
+
+.rlc-migrated-app-tsx-3 {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 100000;
+  min-width: 260px;
+  max-width: 360px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  background: #FFFFFF;
+  border: 1px solid var(--rlc-border);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(15,23,42,0.12);
+}
+
+.rlc-migrated-app-tsx-4 {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.rlc-migrated-app-tsx-5 {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #F9FAFB;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-app-tsx-6 {
+  font-weight: 600;
+}
+
+.rlc-migrated-app-tsx-7 {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  align-items: center;
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--rlc-border);
+  border-radius: 0;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.05);
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-app-tsx-8 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--rlc-text);
+  line-height: 1;
+}
+
+.rlc-migrated-app-tsx-9 {
+  display: block;
+}
+
+.rlc-migrated-app-tsx-10 {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.rlc-migrated-components-pageheader-tsx-11 {
+  margin-bottom: 16px;
+}
+
+.rlc-migrated-components-pageheader-tsx-12 {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+  margin-bottom: 4px;
+}
+
+.rlc-migrated-components-pageheader-tsx-13 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.rlc-migrated-components-pageheader-tsx-14 {
+  font-size: 14px;
+  color: var(--text-muted, #6b7280);
+  margin-top: 4px;
+}
+
+.rlc-migrated-components-section-tsx-15 {
+  min-width: 0;
+}
+
+.rlc-migrated-components-section-tsx-16 {
+  min-width: 0;
+}
+
+.rlc-migrated-components-section-tsx-17 {
+  min-width: 0;
+}
+
+.rlc-migrated-components-section-tsx-18 {
+  min-width: 0;
+}
+
+.rlc-migrated-components-sidebar-tsx-19 {
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-components-sidebar-tsx-20 {
+  padding: 8px;
+}
+
+.rlc-migrated-components-sidebar-tsx-21 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-components-sidebar-tsx-22 {
+  font-size: 16px;
+}
+
+.rlc-migrated-components-sidebar-tsx-23 {
+  font-weight: 600;
+}
+
+.rlc-migrated-components-sidebar-tsx-24 {
+  padding: 8px;
+}
+
+.rlc-migrated-components-sidebar-tsx-25 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-components-sidebar-tsx-26 {
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-components-sidebar-tsx-27 {
+  width: 22px;
+  text-align: center;
+}
+
+.rlc-migrated-components-sidebar-tsx-28 {
+  font-size: 16px;
+}
+
+.rlc-migrated-components-sidebar-tsx-29 {
+  font-weight: 600;
+}
+
+.rlc-migrated-components-sidebar-tsx-30 {
+  padding: 8px;
+}
+
+.rlc-migrated-components-sidebar-tsx-31 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-components-sidebar-tsx-32 {
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-33 {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-34 {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-35 {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 1400;
+  border: 1px solid #0B2F7F;
+  border-radius: 999px;
+  background: linear-gradient(135deg,#0B2F7F,#1765ED);
+  color: #fff;
+  padding: 11px 16px;
+  font-weight: 700;
+  box-shadow: 0 16px 34px rgba(11,47,127,.25);
+  cursor: pointer;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-36 {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15,23,42,.52);
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-37 {
+  width: min(860px,96vw);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 30px 80px rgba(15,23,42,.35);
+  border: 1px solid #dbe4f0;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-38 {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 20px;
+  color: #fff;
+  background: linear-gradient(110deg,#0B2F7F,#1765ED);
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-39 {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.88;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-40 {
+  margin: 4px 0 0;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-41 {
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-42 {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.35);
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-43 {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-44 {
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #9f1239;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-45 {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-46 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-47 {
+  margin-top: 9px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-48 {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 10px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-49 {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-50 {
+  margin: 0;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-51 {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-52 {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-53 {
+  padding: 11px;
+  border-radius: 10px;
+  background: #eaf2ff;
+  color: #0b5bd3;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-54 {
+  padding: 11px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-55 {
+  padding: 11px;
+  border-radius: 10px;
+  background: #fff1f2;
+  color: #991b1b;
+}
+
+.rlc-migrated-components-documents-documentmanager-tsx-56 {
+  display: none;
+}
+
+.rlc-migrated-pages-auth-login-tsx-57 {
+  height: 72px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-58 {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-59 {
+  margin-top: 18px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-60 {
+  margin-top: 18px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-61 {
+  margin-top: 14px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-62 {
+  margin-top: 14px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-63 {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-64 {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #eaf2ff;
+  border: 1px solid #bed6ff;
+  color: #0b5bd3;
+  font-size: 14px;
+}
+
+.rlc-migrated-pages-auth-login-tsx-65 {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-66 {
+  padding: 16px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-67 {
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-68 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-69 {
+  padding: 16px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-70 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-71 {
+  margin-top: 12px;
+  color: #991B1B;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-72 {
+  margin-top: 12px;
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-73 {
+  padding: 16px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-74 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-75 {
+  color: #888;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-76 {
+  margin: 6px 0 0 0;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-77 {
+  color: #666;
+  margin-top: 6px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-78 {
+  color: #888;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-79 {
+  font-family: monospace;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-81 {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #FECACA;
+  background: #FEF2F2;
+  color: #991B1B;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-82 {
+  margin-top: 14px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-83 {
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 220px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-84 {
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-85 {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-86 {
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 220px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-87 {
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-88 {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-89 {
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 220px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-90 {
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-91 {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-92 {
+  margin-top: 14px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-93 {
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-94 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-95 {
+  font-size: 13px;
+  color: #555;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-96 {
+  margin-left: 6px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  width: 280px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-97 {
+  font-size: 13px;
+  color: #555;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-98 {
+  margin-left: 6px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-99 {
+  font-size: 13px;
+  color: #555;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-100 {
+  margin-left: 6px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-101 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-102 {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-103 {
+  background: #fafafa;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-104 {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-105 {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-106 {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-107 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-108 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-109 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-110 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-111 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-112 {
+  width: 120px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-113 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-114 {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-115 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-116 {
+  width: 90px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-117 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-118 {
+  width: 110px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-119 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-120 {
+  width: 110px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-121 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-122 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-123 {
+  padding: 14px;
+  color: #777;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-124 {
+  padding: 16px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-125 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-126 {
+  color: #888;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-127 {
+  margin: 6px 0 0 0;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-128 {
+  color: #666;
+  margin-top: 6px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-129 {
+  color: #888;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-130 {
+  font-family: monospace;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-131 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-132 {
+  font-weight: 600;
+  border: 1px solid #2b7;
+  background: #eafff4;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-133 {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #FECACA;
+  background: #FEF2F2;
+  color: #991B1B;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-134 {
+  margin-top: 14px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-135 {
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 220px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-136 {
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-137 {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-138 {
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 12px;
+  min-width: 220px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-139 {
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-140 {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-141 {
+  margin-top: 14px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-142 {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-143 {
+  background: #fafafa;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-144 {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-145 {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-146 {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-147 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-148 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-149 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-150 {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-151 {
+  text-align: right;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-152 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-153 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-154 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-155 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-156 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-157 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-158 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-159 {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-160 {
+  padding: 12px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-161 {
+  padding: 14px;
+  color: #777;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-162 {
+  margin-top: 10px;
+  color: #777;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-163 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-164 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-165 {
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-166 {
+  padding: 8px 0 10px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  border-bottom: 1px solid var(--rlc-border);
+}
+
+.rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-167 {
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-168 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-169 {
+  text-align: center;
+  color: #777;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-170 {
+  text-align: center;
+  color: #777;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenuebersicht-tsx-171 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-172 {
+  align-self: end;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-173 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-174 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-175 {
+  min-width: 200px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-176 {
+  width: 100px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-177 {
+  width: 100px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-178 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-179 {
+  text-align: center;
+  color: #777;
+  padding: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-180 {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-181 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-datev-tsx-182 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-183 {
+  display: none;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-184 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-185 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-186 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-187 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-188 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-189 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-190 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-191 {
+  background: #e74c3c;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-192 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-193 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-194 {
+  min-width: 160px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-195 {
+  min-width: 140px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-196 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-197 {
+  width: 80px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-198 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-199 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-200 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-201 {
+  padding: 16px;
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-202 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-203 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-204 {
+  background: #fff;
+  width: 85vw;
+  height: 85vh;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-205 {
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-206 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-207 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-208 {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.rlc-migrated-pages-buchhaltung-eingang-tsx-209 {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #111;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-210 {
+  background: #fafafa;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-211 {
+  text-align: right;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-212 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-213 {
+  display: flex;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-214 {
+  background: #e74c3c;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-215 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-216 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-217 {
+  min-width: 200px;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-218 {
+  min-width: 140px;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-219 {
+  min-width: 140px;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-220 {
+  width: 120px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-221 {
+  width: 120px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-222 {
+  width: 90px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-223 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-224 {
+  text-align: center;
+  color: #777;
+  padding: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-225 {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-226 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-kassenbuch-tsx-227 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-228 {
+  min-width: 180px;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-229 {
+  min-width: 140px;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-230 {
+  width: 120px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-231 {
+  width: 120px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-232 {
+  width: 120px;
+  position: relative;
+  height: 8px;
+  background: #eee;
+  border-radius: 4px;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-233 {
+  text-align: center;
+  color: #777;
+  padding: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-234 {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-235 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-kostenstellen-tsx-236 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-237 {
+  margin-top: 4px;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-238 {
+  font-weight: 600;
+  padding-top: 22px;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-239 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-240 {
+  width: 160px;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-241 {
+  width: 140px;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-242 {
+  width: 220px;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-243 {
+  width: 220px;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-244 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-245 {
+  width: 140px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-246 {
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-247 {
+  text-align: center;
+  color: #777;
+}
+
+.rlc-migrated-pages-buchhaltung-lieferscheine-tsx-248 {
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-249 {
+  background: #f39c12;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-250 {
+  align-self: end;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-251 {
+  width: 36px;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-252 {
+  width: 110px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-253 {
+  width: 90px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-254 {
+  width: 80px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-255 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-256 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-257 {
+  background: #f39c12;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-258 {
+  text-align: center;
+  color: #777;
+  padding: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-259 {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-260 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-mahnwesen-tsx-261 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-262 {
+  margin-top: 4px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-263 {
+  width: 100px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-264 {
+  margin-bottom: 10px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-265 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-266 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-267 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-268 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-269 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-270 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-271 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-272 {
+  background: #e74c3c;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-273 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-274 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-275 {
+  min-width: 160px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-276 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-277 {
+  width: 80px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-278 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-279 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-280 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-281 {
+  padding: 16px;
+  color: #666;
+}
+
+.rlc-migrated-pages-buchhaltung-rechnungen-tsx-282 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-283 {
+  display: none;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-284 {
+  align-self: end;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-285 {
+  background: #e74c3c;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-286 {
+  min-width: 180px;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-287 {
+  width: 140px;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-288 {
+  width: 140px;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-289 {
+  text-align: center;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-290 {
+  text-align: center;
+  color: #777;
+  padding: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-291 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-292 {
+  background: #fff;
+  width: 85vw;
+  height: 85vh;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-293 {
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #ccc;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-294 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-295 {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.rlc-migrated-pages-buchhaltung-reports-tsx-296 {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-297 {
+  background: #e74c3c;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-298 {
+  width: 100px;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-299 {
+  width: 120px;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-300 {
+  min-width: 200px;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-301 {
+  width: 100px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-302 {
+  text-align: center;
+  color: #777;
+  padding: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-303 {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-304 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-305 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-306 {
+  margin-top: 20px;
+}
+
+.rlc-migrated-pages-buchhaltung-ust-tsx-307 {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-308 {
+  background: #e74c3c;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-309 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-310 {
+  min-width: 160px;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-311 {
+  width: 120px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-312 {
+  min-width: 220px;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-313 {
+  text-align: center;
+  color: #777;
+  padding: 14px;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-314 {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-315 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-buchhaltung-zahlungen-tsx-316 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-317 {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 30px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-318 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-319 {
+  margin: 0 0 4px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-320 {
+  color: #64748b;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-321 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-322 {
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #991b1b;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-323 {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-324 {
+  display: grid;
+  gap: 5px;
+  max-width: 260px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-325 {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-326 {
+  border: 1px solid #dbe4f0;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-327 {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 16px;
+  border: 0;
+  background: #f8fbff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-328 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-329 {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-330 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-331 {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-332 {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-333 {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-334 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-335 {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-336 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-337 {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-338 {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-339 {
+  padding: 18px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-340 {
+  border: 1px solid #dbe4f0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-341 {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-342 {
+  color: #64748b;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-343 {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-344 {
+  display: block;
+  width: 100%;
+  height: 760px;
+  border: 0;
+  background: #f1f5f9;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-345 {
+  padding: 24px 28px;
+  border-radius: 20px;
+  background: linear-gradient(110deg,#102f85 0%,#1450c4 58%,#1765ed 100%);
+  color: #fff;
+  box-shadow: 0 18px 40px rgba(15,47,133,.16);
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-346 {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-347 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-348 {
+  margin-top: 8px;
+  font-weight: 600;
+  opacity: 0.94;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-349 {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-350 {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-351 {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-352 {
+  padding: 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-353 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-bautagebuch-tsx-354 {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-355 {
+  display: grid;
+  gap: 16px;
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-356 {
+  border-radius: 18px;
+  padding: 20px 22px;
+  background: linear-gradient(135deg, #0f2d6b 0%, #0b5bd3 58%, #146ef5 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 34px rgba(29, 78, 216, 0.20);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-357 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  opacity: 0.82;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-358 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-359 {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-360 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-361 {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-362 {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-363 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-364 {
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 110px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-365 {
+  max-height: 80px;
+  max-width: 260px;
+  object-fit: contain;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-366 {
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fafafa;
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-367 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-368 {
+  display: none;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-369 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-370 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-371 {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-372 {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-373 {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-374 {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-375 {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-376 {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-377 {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-378 {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-379 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-380 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-381 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-382 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-383 {
+  margin-bottom: 14px;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-384 {
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-385 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-386 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-387 {
+  padding: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-buro-nutzerverwaltung-tsx-388 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-projektaktefotos-tsx-389 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-projektaktefotos-tsx-390 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-projektaktefotos-tsx-391 {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rlc-migrated-pages-buro-projektaktefotos-tsx-392 {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.rlc-migrated-pages-buro-projektaktefotos-tsx-393 {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-394 {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 30px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-395 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-396 {
+  margin: 0 0 4px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-397 {
+  color: #64748b;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-398 {
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-399 {
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #991b1b;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-400 {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-401 {
+  display: grid;
+  grid-template-columns: minmax(180px,240px) minmax(280px,1fr);
+  gap: 14px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-402 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-403 {
+  margin-top: 5px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-404 {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-405 {
+  padding: 18px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-406 {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #dbe4f0;
+  border-radius: 16px;
+  background: #fff;
+  min-width: 0;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-407 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-408 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-409 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-410 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-411 {
+  display: grid;
+  grid-template-columns: 90px 90px 90px 100px minmax(140px,1fr) minmax(140px,1fr) minmax(180px,1.4fr);
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-412 {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-413 {
+  background: #0f4cbd;
+  color: #fff;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-414 {
+  background: #166534;
+  color: #fff;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-415 {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-416 {
+  min-width: 0;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-417 {
+  border: 1px solid #dbe4f0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-418 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-419 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-420 {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-421 {
+  display: block;
+  width: 100%;
+  height: 760px;
+  border: 0;
+  background: #f1f5f9;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-422 {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-423 {
+  padding: 24px 28px;
+  border-radius: 20px;
+  background: linear-gradient(110deg,#102f85 0%,#1450c4 58%,#1765ed 100%);
+  color: #fff;
+  box-shadow: 0 18px 40px rgba(15,47,133,.16);
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-424 {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-425 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-426 {
+  margin-top: 8px;
+  font-weight: 600;
+  opacity: 0.94;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-427 {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #bed6ff;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-428 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-429 {
+  color: #0f4cbd;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-430 {
+  margin: 3px 0 0;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-431 {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-432 {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-433 {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-434 {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-435 {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-436 {
+  padding: 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-437 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-buro-tagesberichte-tsx-438 {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-439 {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-440 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-441 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-442 {
+  display: grid;
+  grid-template-columns: minmax(420px, 44vw) 1fr;
+  gap: 10px;
+  min-height: 52vh;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-443 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-444 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-445 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-446 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-447 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-bauzeitenplan-tsx-448 {
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-449 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-450 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  height: 100%;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-451 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-452 {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-453 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-454 {
+  min-width: 60px;
+  text-align: center;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-455 {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: auto;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-456 {
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-457 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-458 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-459 {
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-460 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-461 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-462 {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+  margin: 0 6px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-463 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-464 {
+  width: 1px;
+  height: 24px;
+  background: var(--line);
+  margin: 0 6px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-465 {
+  display: grid;
+  grid-template-columns: 1fr min(42vw, 640px);
+  gap: 10px;
+  min-height: 60vh;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-466 {
+  display: grid;
+  grid-template-rows: minmax(200px, 40vh) auto auto;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-467 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-468 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-469 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-470 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-471 {
+  display: grid;
+  grid-template-columns: 150px 1fr 150px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-472 {
+  grid-column: 1 / -1;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-473 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-474 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-475 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-476 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-477 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-478 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-479 {
+  opacity: 0.7;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-480 {
+  opacity: 0.7;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-481 {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-482 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-483 {
+  padding: 12px;
+  min-height: 300px;
+}
+
+.rlc-migrated-pages-buro-dokumente-tsx-484 {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-485 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-486 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-487 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-488 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-489 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-490 {
+  display: grid;
+  grid-template-columns: minmax(380px, 44vw) 1fr;
+  gap: 10px;
+  min-height: 60vh;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-491 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-492 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-493 {
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-494 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-495 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-496 {
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-497 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-498 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-499 {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: auto;
+  background: #fff;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-500 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-501 {
+  padding: 8px 10px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-502 {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-503 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-504 {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-505 {
+  font-size: 13px;
+  margin: 2px 0 6px 0;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-506 {
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-507 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-508 {
+  display: grid;
+  grid-template-columns: 80px 1fr 40px 1fr;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-509 {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-510 {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-511 {
+  padding: 6px 8px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-512 {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-513 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-514 {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.rlc-migrated-pages-buro-kommunikation-tsx-515 {
+  width: 100%;
+  height: 200px;
+  border: 0;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-516 {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-517 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-518 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-519 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-520 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-521 {
+  display: grid;
+  grid-template-columns: minmax(520px,48vw) 1fr;
+  gap: 10px;
+  min-height: 60vh;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-522 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-523 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-524 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-525 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-526 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-527 {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-528 {
+  padding: 8px 10px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-529 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-530 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-531 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-532 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-533 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr 120px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-534 {
+  grid-column: 1 / -1;
+}
+
+.rlc-migrated-pages-buro-lager-tsx-535 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-536 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-537 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-538 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-539 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-540 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-541 {
+  display: grid;
+  grid-template-columns: minmax(520px,48vw) 1fr;
+  gap: 10px;
+  min-height: 60vh;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-542 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-543 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-544 {
+  margin-left: 6px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-545 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-546 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-547 {
+  display: grid;
+  grid-template-columns: 130px 1fr 130px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-548 {
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-549 {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-550 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-551 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-552 {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(180px,1fr));
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-553 {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-554 {
+  padding: 6px 8px;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-555 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-556 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-557 {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.rlc-migrated-pages-buro-maschinenverwaltung-tsx-558 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-559 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-560 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-561 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-562 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-563 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-564 {
+  display: grid;
+  grid-template-columns: minmax(520px,48vw) 1fr;
+  gap: 10px;
+  min-height: 60vh;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-565 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-566 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-567 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-568 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-569 {
+  display: grid;
+  grid-template-columns: 130px 1fr 130px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-570 {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-571 {
+  grid-column: 1 / -1;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-572 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-573 {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(180px,1fr));
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-574 {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-575 {
+  padding: 6px 8px;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-576 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-577 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-578 {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.rlc-migrated-pages-buro-materialverwaltung-tsx-579 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-580 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-581 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-582 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-583 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-584 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-585 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-586 {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-587 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+
+.rlc-migrated-pages-buro-outlookkalender-tsx-588 {
+  padding: 20px;
+  min-width: 480px;
+  max-width: 900px;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-589 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-590 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-591 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-592 {
+  display: grid;
+  grid-template-columns: minmax(460px, 48vw) 1fr;
+  gap: 10px;
+  min-height: 60vh;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-593 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-594 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-595 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-596 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-597 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-598 {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-599 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-600 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-601 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-602 {
+  margin-left: 8px;
+  color: #c03;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-603 {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(180px,1fr));
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-604 {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-605 {
+  padding: 6px 8px;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-606 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-607 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-608 {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.rlc-migrated-pages-buro-personalverwaltung-tsx-609 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-610 {
+  padding: 0;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-611 {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-612 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-613 {
+  display: grid;
+  grid-template-rows: minmax(220px, 44vh) auto;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-614 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-615 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-616 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-617 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-projekte-tsx-618 {
+  display: grid;
+  grid-template-columns: 150px 1fr 150px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-619 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-620 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-621 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-622 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-623 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-624 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-625 {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-626 {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: #fafafa;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-627 {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-ressourcenplanung-tsx-628 {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-629 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-630 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-631 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-632 {
+  display: grid;
+  grid-template-columns: minmax(520px,48vw) 1fr;
+  gap: 10px;
+  min-height: 60vh;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-633 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-634 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-635 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-636 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-637 {
+  display: grid;
+  grid-template-columns: 130px 1fr 130px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-638 {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(180px,1fr));
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-639 {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-640 {
+  padding: 6px 8px;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-641 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-642 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-643 {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.rlc-migrated-pages-buro-sicherheit-tsx-644 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-tasks-tsx-645 {
+  padding: 6px 8px;
+  font-size: 13px;
+  min-width: 280px;
+}
+
+.rlc-migrated-pages-buro-tasks-tsx-646 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-buro-tasks-tsx-647 {
+  padding: 6px 10px;
+}
+
+.rlc-migrated-pages-buro-tasks-tsx-648 {
+  margin-right: 6px;
+}
+
+.rlc-migrated-pages-buro-tasks-tsx-649 {
+  margin-right: 6px;
+}
+
+.rlc-migrated-pages-buro-uebergabe-tsx-650 {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-uebergabe-tsx-651 {
+  padding: 8px 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-buro-uebergabe-tsx-652 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-buro-uebergabe-tsx-653 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-buro-uebergabe-tsx-654 {
+  overflow: auto;
+}
+
+.rlc-migrated-pages-buro-vertraege-tsx-655 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-buro-vertraege-tsx-656 {
+  width: 100%;
+  height: 100%;
+}
+
+.rlc-migrated-pages-buro-vertraege-tsx-657 {
+  width: 100%;
+}
+
+.rlc-migrated-pages-buro-vertraege-tsx-658 {
+  padding: 10px;
+}
+
+.rlc-migrated-pages-buro-vertraege-tsx-659 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-660 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-661 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-662 {
+  display: grid;
+  gap: 14px;
+  align-items: start;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-663 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-664 {
+  display: grid;
+  gap: 10px;
+  height: 100%;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-665 {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-666 {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-667 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-668 {
+  padding: 14px;
+  text-align: center;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-669 {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-670 {
+  display: grid;
+  gap: 14px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-671 {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 14px;
+  align-items: start;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-672 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-673 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-674 {
+  display: grid;
+  gap: 14px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-675 {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 14px;
+  align-items: start;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-676 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-677 {
+  margin-left: 6px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-678 {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-679 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-680 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-681 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-682 {
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-683 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-684 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-685 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-686 {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-687 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-688 {
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-689 {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #0b1220;
+  color: #e5e7eb;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.rlc-migrated-pages-cad-cadviewe2r-tsx-690 {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-691 {
+  min-width: 0;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-692 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-693 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-694 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-695 {
+  display: none;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-696 {
+  display: grid;
+  grid-template-columns: 260px minmax(420px, 1fr) 330px;
+  gap: 10px;
+  min-height: 700px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-697 {
+  padding: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-698 {
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-699 {
+  max-height: 560px;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-700 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-701 {
+  max-height: 610px;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-702 {
+  max-height: 610px;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-703 {
+  padding: 0 10px 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-704 {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-705 {
+  display: flex;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-706 {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #cbd5e1;
+  text-align: center;
+  padding: 30px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-707 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-708 {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-709 {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 190px;
+  height: 125px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.28);
+  background: rgba(15,23,42,0.88);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-710 {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-711 {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  min-height: 30px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(15,23,42,0.82);
+  color: #dbeafe;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-712 {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  min-height: 30px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(15,23,42,0.82);
+  color: #dbeafe;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-713 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-714 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-715 {
+  margin-top: 8px;
+  max-height: 180px;
+  overflow: auto;
+  border-radius: 8px;
+  padding: 9px;
+  background: #111827;
+  color: #d1d5db;
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-716 {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-717 {
+  display: grid;
+  gap: 7px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-718 {
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-719 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-720 {
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-721 {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-722 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-723 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-724 {
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-725 {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-726 {
+  height: 280px;
+  display: grid;
+  place-items: center;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-727 {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-728 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-729 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-730 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-cad-cadviewer-tsx-731 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-732 {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #343a46;
+  background: #11161f;
+  color: #e7e9ee;
+  box-sizing: border-box;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-733 {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 16px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-734 {
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #2d3036;
+  background: #141821;
+  color: #e7e9ee;
+  border-radius: 12px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-735 {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-736 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-737 {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-738 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-739 {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-740 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-741 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-742 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-743 {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-744 {
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-745 {
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-746 {
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-747 {
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-748 {
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-cad-cadwithmap-tsx-749 {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-cad-asbuild-tsx-750 {
+  margin: 4px 0 12px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-cad-asbuild-tsx-751 {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-752 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-753 {
+  width: min(1100px, 96vw);
+  height: min(82vh, 900px);
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-754 {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-755 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-756 {
+  padding: 12px;
+  flex: 1;
+  overflow: auto;
+  background: #f4f6f8;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-757 {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.35;
+  outline: none;
+  background: white;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-758 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-759 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-760 {
+  width: min(1400px, 96vw);
+  height: min(90vh, 980px);
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-761 {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-762 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-763 {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-764 {
+  flex: 1;
+  overflow: auto;
+  background: #f4f6f8;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-765 {
+  padding: 18px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-766 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-767 {
+  margin: 0;
+  flex: 1;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-768 {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-769 {
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-770 {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-771 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-772 {
+  display: none;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-773 {
+  opacity: 0.85;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-774 {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-775 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-776 {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-777 {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-778 {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-779 {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-780 {
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-781 {
+  display: grid;
+  grid-template-columns: 1.65fr 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-782 {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  overflow: auto;
+  height: 78vh;
+  min-height: 520px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-783 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-784 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-785 {
+  cursor: default;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-786 {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-787 {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  height: 78vh;
+  min-height: 520px;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-788 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-789 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-790 {
+  width: 100%;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-791 {
+  width: 100%;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-792 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-793 {
+  margin-top: 10px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-794 {
+  margin-top: 12px;
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-795 {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-796 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-797 {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-798 {
+  padding: 12px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-799 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-800 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-801 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-802 {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-803 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-804 {
+  margin-top: 12px;
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-805 {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-806 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-807 {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-808 {
+  padding: 12px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-809 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-810 {
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-811 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-812 {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-813 {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-814 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-cad-pdfviewer-tsx-815 {
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: default;
+}
+
+.rlc-migrated-pages-info-hilfe-tsx-816 {
+  color: #334155;
+}
+
+.rlc-migrated-pages-info-support-tsx-817 {
+  margin: 0 0 8px;
+}
+
+.rlc-migrated-pages-info-support-tsx-818 {
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.rlc-migrated-pages-info-support-tsx-819 {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-info-updates-tsx-820 {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rlc-migrated-pages-kalkulation-importpage-tsx-821 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-manuell-tsx-822 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-manuell-tsx-823 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-manuell-tsx-824 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-manuell-tsx-825 {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-manuell-tsx-826 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-827 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-828 {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-829 {
+  width: min(720px, 100%);
+  border-radius: 22px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  padding: 24px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-830 {
+  font-size: 12px;
+  font-weight: 700;
+  color: #146EF5;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-831 {
+  margin: 8px 0 8px;
+  font-size: 24px;
+  color: #0F172A;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-832 {
+  margin: 0 0 18px;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-833 {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-834 {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  z-index: 10000;
+  border-radius: 22px;
+  background: #FFFFFF;
+  border: 1px solid #D8E2F0;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  padding: 20px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-835 {
+  font-size: 12px;
+  font-weight: 700;
+  color: #146EF5;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-836 {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-837 {
+  margin-top: 8px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-838 {
+  margin-top: 12px;
+  height: 10px;
+  border-radius: 999px;
+  background: #E5E7EB;
+  overflow: hidden;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-839 {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #64748B;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-840 {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-841 {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-842 {
+  font-size: 12px;
+  color: #64748B;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-843 {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-844 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-845 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-recipes-tsx-846 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-versionsvergleich-tsx-847 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-versionsvergleich-tsx-848 {
+  flex: 1;
+  min-width: 0;
+}
+
+.rlc-migrated-pages-kalkulation-angebot-tsx-849 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-angebot-tsx-850 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-kalkulation-angebot-tsx-851 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-kalkulation-angebot-tsx-852 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-aufschlag-tsx-853 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-aufschlag-tsx-854 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-crm-tsx-855 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-crm-tsx-856 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-crm-tsx-857 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-crm-tsx-858 {
+  margin-top: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-crm-tsx-859 {
+  margin-top: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-crm-tsx-860 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-861 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-862 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-863 {
+  margin-top: 14px;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-864 {
+  color: #94A3B8;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-865 {
+  padding: 16px;
+  color: #64748B;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-866 {
+  margin-bottom: 16px;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-867 {
+  font-weight: 700;
+  color: #B91C1C;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-kalkulation-gaeb-tsx-868 {
+  font-weight: 700;
+  color: #B45309;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-869 {
+  margin-top: 18px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-870 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-871 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #10204a;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-872 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-873 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid #d7dde8;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-874 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-875 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-876 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-877 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-878 {
+  width: 3%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-879 {
+  width: 12%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-880 {
+  width: 8%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-881 {
+  width: 30%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-882 {
+  width: 6%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-883 {
+  width: 5%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-884 {
+  width: 8%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-885 {
+  width: 9%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-886 {
+  width: 7%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-887 {
+  width: 7%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-888 {
+  width: 5%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-889 {
+  width: 7%;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-890 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-891 {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #93C5FD;
+  background: #EAF2FF;
+  border-radius: 12px;
+  color: #1E3A8A;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-892 {
+  margin-top: 4px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-893 {
+  margin-top: 4px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-894 {
+  margin-top: 4px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-895 {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #1E40AF;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-896 {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #0B5BD3;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-897 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-898 {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-899 {
+  font-size: 11px;
+  color: #B91C1C;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-900 {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-901 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-902 {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-903 {
+  width: 100%;
+  min-width: 860px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-904 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-905 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-906 {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-907 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-908 {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-909 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationsdatenbankpage-tsx-910 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-kalkulationsdatenbankpage-tsx-911 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-lv-import-tsx-912 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-lv-import-tsx-913 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-lv-import-tsx-914 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-lv-import-tsx-915 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-lv-import-tsx-916 {
+  padding: 16px;
+  color: #64748B;
+}
+
+.rlc-migrated-pages-kalkulation-lvupload-tsx-917 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-nachtraege-tsx-918 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-nachtraege-tsx-919 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-920 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-921 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-922 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-923 {
+  opacity: 0.7;
+  margin-left: 6px;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-924 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-925 {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-926 {
+  border: 1px solid #D7E3F5;
+  border-radius: 14px;
+  padding: 12px;
+  background: #FFFFFF;
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-927 {
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-928 {
+  color: #475569;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-929 {
+  color: #92400E;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-930 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-kalkulation-preise-tsx-931 {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-migrated-pages-kalkulation-project-tsx-932 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-vergleich-tsx-933 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-vergleich-tsx-934 {
+  display: none;
+}
+
+.rlc-migrated-pages-kalkulation-vergleich-tsx-935 {
+  display: grid;
+  gap: 5px;
+  min-width: 220px;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-936 {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-937 {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-938 {
+  margin-top: 10px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-939 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-940 {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-941 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-942 {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-943 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-944 {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-945 {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-946 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-947 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-948 {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-949 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-950 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-951 {
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-952 {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-953 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-954 {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.rlc-migrated-pages-ki-autoabrechnung-tsx-955 {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-956 {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-957 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-958 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-959 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-960 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-961 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-962 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-963 {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-964 {
+  border-top: 1px dashed var(--line);
+  margin-top: 12px;
+  padding-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-965 {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-966 {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-967 {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-968 {
+  margin-top: 8px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-969 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-970 {
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-971 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-972 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-973 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-974 {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-975 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-976 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-977 {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-978 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-979 {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-980 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-981 {
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-982 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-983 {
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-984 {
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-ki-bewertunganalyse-tsx-985 {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-986 {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-987 {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-988 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-989 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-990 {
+  font-size: 12px;
+  opacity: 0.8;
+  width: 90px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-991 {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-992 {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-993 {
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-994 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-995 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-996 {
+  margin: 4px 0 8px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-997 {
+  background: #f7f7f7;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-998 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-999 {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-1000 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-1001 {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-1002 {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-1003 {
+  position: relative;
+  width: 100%;
+  max-width: 960px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-1004 {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-ki-fotoerkennung-tsx-1005 {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.rlc-migrated-pages-ki-maengel-tsx-1006 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rlc-migrated-pages-ki-maengel-tsx-1007 {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-maengel-tsx-1008 {
+  margin-top: 10px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-maengel-tsx-1009 {
+  display: flex;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-ki-maengel-tsx-1010 {
+  display: flex;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-ki-maengel-tsx-1011 {
+  padding: 10px;
+  color: #777;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1012 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1013 {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1014 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1015 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1016 {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1017 {
+  margin-top: 10px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1018 {
+  padding: 8px;
+  color: #777;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1019 {
+  margin-top: 8px;
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1020 {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1021 {
+  width: 260px;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1022 {
+  position: relative;
+  height: 18px;
+  flex: 1;
+  background: #f7f7f7;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1023 {
+  width: 180px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1024 {
+  margin-top: 16px;
+}
+
+.rlc-migrated-pages-ki-optimierung-tsx-1025 {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1026 {
+  display: flex;
+  gap: 16px;
+  margin-top: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1027 {
+  margin-left: auto;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1028 {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1029 {
+  margin-top: 10px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1030 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1031 {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1032 {
+  border: 1px solid #ddd;
+  padding: 8px;
+  width: 180px;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1033 {
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1034 {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1035 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1036 {
+  padding: 8px;
+  color: #777;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1037 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1038 {
+  padding: 8px;
+  color: #777;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1039 {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1040 {
+  margin-left: auto;
+}
+
+.rlc-migrated-pages-ki-regieauto-tsx-1041 {
+  color: #b00;
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1042 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1043 {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1044 {
+  margin-left: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1045 {
+  margin-left: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1046 {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1047 {
+  position: relative;
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1048 {
+  width: 100%;
+  min-height: 160px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1049 {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  font-size: 12px;
+  color: #16a34a;
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1050 {
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-sprachsteuerung-tsx-1051 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-ki-uebersicht-tsx-1052 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(260px,1fr));
+  gap: 12px;
+}
+
+.rlc-migrated-pages-ki-uebersicht-tsx-1053 {
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-ki-uebersicht-tsx-1054 {
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-ki-uebersicht-tsx-1055 {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-ki-uebersicht-tsx-1056 {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1057 {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1058 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1059 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1060 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1061 {
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 6px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1062 {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1063 {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1064 {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1065 {
+  font-size: 12px;
+  margin-left: auto;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1066 {
+  color: #b91c1c;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1067 {
+  color: #475569;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1068 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1069 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1070 {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1071 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1072 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1073 {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1074 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1075 {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1076 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-ki-widersprueche-tsx-1077 {
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-ki-analyse-tsx-1078 {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-analyse-tsx-1079 {
+  margin-top: 10px;
+  color: #b91c1c;
+}
+
+.rlc-migrated-pages-ki-foto-tsx-1080 {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-ki-foto-tsx-1081 {
+  margin-top: 10px;
+  color: #b91c1c;
+}
+
+.rlc-migrated-pages-ki-foto-tsx-1082 {
+  margin-top: 16px;
+}
+
+.rlc-migrated-pages-ki-foto-tsx-1083 {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.rlc-migrated-pages-ki-foto-tsx-1084 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-foto-tsx-1085 {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rlc-migrated-pages-ki-foto-tsx-1086 {
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-ki-nachtraege-tsx-1087 {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-ki-nachtraege-tsx-1088 {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-ki-nachtraege-tsx-1089 {
+  margin-top: 10px;
+  color: #b91c1c;
+}
+
+.rlc-migrated-pages-ki-nachtraege-tsx-1090 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-nachtraege-tsx-1091 {
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1092 {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1093 {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1094 {
+  margin-top: 10px;
+  color: #b91c1c;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1095 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1096 {
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1097 {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1098 {
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1099 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1100 {
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1101 {
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1102 {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1103 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-ki-sprach-tsx-1104 {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1105 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1106 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1107 {
+  text-align: right;
+  color: #64748B;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1108 {
+  border: 1px solid #E5EAF3;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #F8FAFC;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1109 {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1110 {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1111 {
+  min-width: 260px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1112 {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1113 {
+  font-size: 12px;
+  color: #64748B;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1114 {
+  padding: 0.9rem 1rem;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1115 {
+  padding: 0.9rem 1rem;
+  font-size: 13px;
+  color: #B91C1C;
+  background: #FEF2F2;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1116 {
+  padding: 0.9rem 1rem;
+  font-size: 13px;
+  color: #64748B;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1117 {
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1118 {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1119 {
+  cursor: pointer;
+  background: #FFFFFF;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1120 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1121 {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #D9E2F1;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.97);
+  box-shadow: 0 -8px 24px rgba(15,23,42,0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1122 {
+  color: #047857;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1123 {
+  color: #B45309;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1124 {
+  color: #64748B;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1125 {
+  color: #B91C1C;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1126 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1127 {
+  display: grid;
+  grid-template-columns: 210px minmax(280px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1128 {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1129 {
+  border: 1px solid #D9E2F1;
+  border-radius: 10px;
+  background: #F8FAFC;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1130 {
+  cursor: pointer;
+  padding: 6px 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #0B5BD3;
+  user-select: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1131 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 520px;
+  gap: 10px;
+  padding: 8px;
+  border-top: 1px solid #E2E8F0;
+  background: #FFFFFF;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1132 {
+  max-height: 145px;
+  overflow: auto;
+  display: grid;
+  gap: 5px;
+  padding-right: 4px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1133 {
+  color: #64748B;
+  font-size: 11px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1134 {
+  display: grid;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1135 {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #0B5BD3;
+  background: #EAF2FF;
+  border: 1px solid #BED6FF;
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1136 {
+  display: grid;
+  grid-template-columns: 140px 80px minmax(150px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1137 {
+  min-width: 260px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1138 {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1139 {
+  font-size: 12px;
+  color: #64748B;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1140 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1141 {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 2050px;
+  font-size: 10.5px;
+  table-layout: fixed;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1142 {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: 100%;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #0F172A;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1143 {
+  width: 15px;
+  color: #146EF5;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1144 {
+  padding: 0;
+  background: #F8FAFC;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1145 {
+  padding: 10px 16px 14px 52px;
+  border-bottom: 1px solid #D9E2F1;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1146 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1147 {
+  font-weight: 700;
+  color: #0B5BD3;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1148 {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #D9E2F1;
+  background: #FFFFFF;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1149 {
+  width: 100%;
+  min-width: 2200px;
+  border-collapse: collapse;
+  background: #FFFFFF;
+  table-layout: fixed;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1150 {
+  border-radius: 16px;
+  border: 1px solid #DDE7F5;
+  padding: 0;
+  background: #FFFFFF;
+  box-shadow: 0 8px 24px rgba(15,23,42,0.045);
+  overflow: hidden;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1151 {
+  padding: 14px 18px;
+  border-bottom: 1px solid #E5EAF3;
+  background: #F8FAFC;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1152 {
+  font-size: 12.5px;
+  color: #64748B;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1153 {
+  opacity: 0.7;
+  padding: 18px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1154 {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1155 {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1156 {
+  font-size: 10px;
+  color: #64748B;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1157 {
+  display: grid;
+  grid-template-columns: 90px minmax(90px, 130px) 90px minmax(90px, 130px) 95px minmax(100px, 150px) 95px minmax(100px, 150px);
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1158 {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1159 {
+  display: grid;
+  grid-template-columns: minmax(380px, 1fr) minmax(420px, 1.1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1160 {
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1161 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1162 {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1163 {
+  font-size: 12px;
+  color: #64748B;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1164 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1165 {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1166 {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1167 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1168 {
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1169 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1170 {
+  border: 1px solid #D9E2F1;
+  border-radius: 12px;
+  overflow: auto;
+  background: #FFFFFF;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1171 {
+  width: 100%;
+  min-width: 1960px;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1172 {
+  background: #F8FAFC;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1173 {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1174 {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1175 {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1176 {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1177 {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1178 {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1179 {
+  text-align: right;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1180 {
+  text-align: right;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1181 {
+  text-align: right;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1182 {
+  text-align: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #E5EAF3;
+  font-size: 12px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1183 {
+  padding: 8px 10px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1184 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  min-width: 180px;
+  line-height: 1.4;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1185 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1186 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  min-width: 260px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1187 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  min-width: 160px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1188 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1189 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  min-width: 240px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1190 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1191 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1192 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1193 {
+  padding: 10px 12px;
+  border-bottom: 1px solid #EDF2F7;
+  vertical-align: top;
+  text-align: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1194 {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1195 {
+  padding: 14px 12px;
+  color: #64748B;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1196 {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1197 {
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 22px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1198 {
+  color: #64748B;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1199 {
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1200 {
+  border: 1px solid #D9E2F1;
+  border-radius: 11px;
+  background: #F8FAFC;
+  padding: 9px;
+  display: grid;
+  grid-template-columns: 105px 1fr 100px 110px 115px;
+  gap: 8px;
+  align-items: end;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1201 {
+  display: grid;
+  grid-template-columns: 90px 90px minmax(150px, 210px) minmax(240px, 1fr) minmax(145px, 180px) 90px;
+  gap: 8px;
+  align-items: start;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1202 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 8px;
+  border: 1px solid #D9E2F1;
+  border-radius: 11px;
+  background: #F8FAFC;
+  padding: 9px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1203 {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1204 {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1205 {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1206 {
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1207 {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1208 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1209 {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
+  gap: 10px;
+  align-items: center;
+  border-top: 1px solid #E5EAF3;
+  padding-top: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1210 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1211 {
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1212 {
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1213 {
+  color: #64748B;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1214 {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12px;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1215 {
+  color: #64748B;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1216 {
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1217 {
+  font-weight: 700;
+  margin-bottom: 10px;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1218 {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12px;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1219 {
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1220 {
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1221 {
+  padding: 16px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1222 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1223 {
+  width: min(1040px, 96vw);
+  max-height: 92vh;
+  background: white;
+  border-radius: 12px;
+  overflow: auto;
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.25);
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1224 {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1225 {
+  font-weight: 700;
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1226 {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1227 {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1228 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1229 {
+  width: min(1200px, 95vw);
+  height: min(85vh, 900px);
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1230 {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1231 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1232 {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1233 {
+  flex: 1;
+  overflow: auto;
+  background: #f4f6f8;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1234 {
+  padding: 18px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1235 {
+  margin-bottom: 14px;
+  padding: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1236 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1237 {
+  margin-top: 0;
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1238 {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff7f7;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1239 {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1240 {
+  padding: 10px;
+  min-height: 180px;
+  position: relative;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1241 {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1242 {
+  flex: 1;
+  opacity: 0.85;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1243 {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1244 {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 4px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1245 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1246 {
+  display: grid;
+  grid-template-columns: 120px 1fr 120px 1fr;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1247 {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1248 {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1249 {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1250 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1251 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1252 {
+  width: 100%;
+  height: 320px;
+  border: 0;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1253 {
+  height: 320px;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1254 {
+  max-width: 100%;
+  max-height: 300px;
+  width: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1255 {
+  width: 100%;
+  height: 320px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1256 {
+  opacity: 0.6;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1257 {
+  margin-top: 12px;
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1258 {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1259 {
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1260 {
+  margin-top: 6px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1261 {
+  padding: 12px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1262 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1263 {
+  margin-top: 12px;
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1264 {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1265 {
+  font-weight: 600;
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1266 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1267 {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1268 {
+  padding: 0 12px 12px;
+  opacity: 0.75;
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1269 {
+  padding: 12px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1270 {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1271 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1272 {
+  display: flex;
+  align-items: center;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1273 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1274 {
+  margin-top: 3px;
+  max-width: 280px;
+  color: #64748b;
+  font-size: 11px;
+  white-space: normal;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1275 {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+  max-width: 240px;
+  white-space: normal;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1276 {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1277 {
+  flex: 1;
+  min-width: 380px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1278 {
+  opacity: 0.55;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1279 {
+  padding: 6px 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1280 {
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1281 {
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1282 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1283 {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1284 {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1285 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-autoki-tsx-1286 {
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: default;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1287 {
+  display: grid;
+  gap: 16px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1288 {
+  display: grid;
+  grid-template-columns: minmax(360px, 460px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1289 {
+  padding: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1290 {
+  margin: 0 0 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1291 {
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1292 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1293 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1294 {
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1295 {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1296 {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1297 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1298 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1299 {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1300 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1301 {
+  display: flex;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1302 {
+  display: flex;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1303 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1304 {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1305 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1306 {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1307 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1308 {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1309 {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1310 {
+  margin-top: 9px;
+  font-size: 12px;
+  color: #166534;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1311 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1312 {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1313 {
+  margin-top: 9px;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1314 {
+  margin: 14px 0;
+  border-color: #e2e8f0;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1315 {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1316 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1317 {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1318 {
+  padding: 0;
+  overflow: hidden;
+  min-height: 650px;
+}
+
+.rlc-migrated-pages-mengenermittlung-gpszuweisung-tsx-1319 {
+  width: 100%;
+  height: 78vh;
+  min-height: 650px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1320 {
+  margin-bottom: 4px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1321 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1322 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1323 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1324 {
+  font-size: 12px;
+  color: var(--regie-muted);
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1325 {
+  margin: 12px 16px 0;
+  padding: 8px 10px;
+  border: 1px solid #b7e4c7;
+  background: #f0fff5;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1326 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1327 {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1328 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1329 {
+  color: #b42318;
+  padding: 0 16px 14px;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1330 {
+  font-size: 12px;
+  color: var(--regie-muted);
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1331 {
+  min-height: 180px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1332 {
+  min-height: 180px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1333 {
+  min-height: 180px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1334 {
+  font-size: 12px;
+  color: var(--regie-muted);
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1335 {
+  width: 105px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1336 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1337 {
+  width: 115px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1338 {
+  width: 190px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1339 {
+  width: 150px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1340 {
+  width: 65px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1341 {
+  width: 130px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1342 {
+  width: 140px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1343 {
+  width: 75px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1344 {
+  width: 70px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1345 {
+  width: 115px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1346 {
+  width: 260px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1347 {
+  width: 110px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1348 {
+  width: 245px;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1349 {
+  text-align: center;
+  padding: 24px;
+  color: var(--regie-muted);
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1350 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1351 {
+  text-align: right;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1352 {
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1353 {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1354 {
+  width: 38px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--regie-line);
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1355 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.68);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+
+.rlc-migrated-pages-mengenermittlung-regieberichte-tsx-1356 {
+  max-width: 96vw;
+  max-height: 94vh;
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.45);
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1357 {
+  padding: 16px;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1358 {
+  margin-top: 0;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1359 {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1360 {
+  flex: 1;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1361 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1362 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1363 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1364 {
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1365 {
+  padding: 10px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1366 {
+  padding: 0;
+  overflow: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1367 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1368 {
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1369 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1370 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1371 {
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1372 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-sollist-tsx-1373 {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-abrechnungskreise-tsx-1374 {
+  margin: 4px 0 12px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-mengenermittlung-abrechnungskreise-tsx-1375 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-abrechnungskreise-tsx-1376 {
+  overflow: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-abrechnungskreise-tsx-1377 {
+  text-align: right;
+  font-weight: 600;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1378 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1379 {
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1380 {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1381 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1382 {
+  margin-top: 14px;
+  border: 1px solid #dce5f2;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1383 {
+  width: 100%;
+  height: 420px;
+  display: block;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1384 {
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  display: block;
+  background: #f8fafc;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1385 {
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1386 {
+  margin-top: 16px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1387 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1388 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1389 {
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1390 {
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1391 {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1392 {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 14px;
+  border: 1px solid #dce5f2;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1393 {
+  width: 100%;
+  height: 110px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1394 {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 10px;
+  display: block;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1395 {
+  height: 110px;
+  display: grid;
+  place-items: center;
+  background: #f8fafc;
+  border-radius: 10px;
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1396 {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1397 {
+  color: #0f172a;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1398 {
+  margin-top: 8px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1399 {
+  margin-top: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1400 {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15,23,42,0.42);
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1401 {
+  width: min(480px, 100%);
+  border-radius: 20px;
+  padding: 20px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15,23,42,0.28);
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1402 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1403 {
+  color: #475569;
+  line-height: 1.55;
+}
+
+.rlc-migrated-pages-mengenermittlung-bilder-tsx-1404 {
+  margin-top: 18px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1405 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1406 {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1407 {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1408 {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1409 {
+  display: flex;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1410 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1411 {
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1412 {
+  overflow-x: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1413 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1414 {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1415 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1416 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1417 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1418 {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1419 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1420 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1421 {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1422 {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15,23,42,0.42);
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1423 {
+  width: min(480px, 100%);
+  border-radius: 20px;
+  padding: 20px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15,23,42,0.28);
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1424 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1425 {
+  color: #475569;
+  line-height: 1.55;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1426 {
+  margin-top: 18px;
+  text-align: right;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1427 {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1428 {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1429 {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1430 {
+  overflow-x: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1431 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1432 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1433 {
+  border: 1px solid #dce5f2;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1434 {
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+.rlc-migrated-pages-mengenermittlung-historie-tsx-1435 {
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1436 {
+  display: grid;
+  gap: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1437 {
+  margin-bottom: 4px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1438 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1439 {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1440 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1441 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1442 {
+  border-color: #e1a6a0;
+  color: #a1261d;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1443 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1444 {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1445 {
+  width: 210px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1446 {
+  padding: 0;
+  overflow: hidden;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1447 {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1448 {
+  margin: 0;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1449 {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1450 {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1451 {
+  padding: 18px;
+  display: grid;
+  gap: 18px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1452 {
+  min-height: 118px;
+  resize: vertical;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1453 {
+  min-height: 118px;
+  resize: vertical;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1454 {
+  margin-top: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1455 {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1456 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1457 {
+  width: 90px;
+  height: 90px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface-2, #f5f7fb);
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1458 {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1459 {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: 11px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1460 {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border-radius: 8px;
+  border: 0;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1461 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1462 {
+  display: none;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1463 {
+  color: crimson;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1464 {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1465 {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1466 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1467 {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1468 {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1469 {
+  width: 100%;
+  height: 430px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1470 {
+  height: 430px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1471 {
+  padding: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1472 {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1473 {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1474 {
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1475 {
+  color: var(--muted);
+  padding: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1476 {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1477 {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1478 {
+  padding: 0;
+  overflow: hidden;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1479 {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1480 {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1481 {
+  overflow-x: auto;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1482 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1483 {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1484 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+  padding: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1485 {
+  width: min(520px, 98vw);
+  padding: 14px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1486 {
+  width: 100%;
+  min-height: 120px;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1487 {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1488 {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1489 {
+  max-width: 96vw;
+  max-height: 96vh;
+  border-radius: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1490 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1491 {
+  color: #0B2F7F;
+  font-size: 13px;
+  letter-spacing: .02em;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1492 {
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1493 {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1494 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1495 {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1496 {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1497 {
+  padding: 24px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1498 {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 28px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1499 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1500 {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1501 {
+  margin: 5px 0;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1502 {
+  color: #64748b;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1503 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1504 {
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1505 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1506 {
+  color: #b45309;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1507 {
+  color: #475569;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1508 {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1509 {
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1510 {
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1511 {
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1512 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1513 {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1514 {
+  margin: 4px 0 0;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1515 {
+  display: grid;
+  gap: 8px;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1516 {
+  width: 100%;
+  min-height: 430px;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  background: white;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1517 {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1518 {
+  font-size: 13px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.rlc-migrated-pages-mobile-pruefung-tsx-1519 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1520 {
+  display: grid;
+  gap: 18px;
+  padding: 4px 0 28px;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1521 {
+  margin: 12px 0 6px;
+  font-size: 30px;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1522 {
+  max-width: 900px;
+  line-height: 1.55;
+  opacity: 0.94;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1523 {
+  margin-top: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1524 {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1525 {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1526 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1527 {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1528 {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1529 {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1530 {
+  font-size: 11px;
+  color: #92400e;
+  line-height: 1.35;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1531 {
+  margin-top: auto;
+  color: #0b5bd3;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1532 {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 7px 8px;
+  background: #f8fafc;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1533 {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1534 {
+  margin-top: 2px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1535 {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1536 {
+  margin-top: 7px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.rlc-migrated-pages-mobile-uebersicht-tsx-1537 {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1538 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 22px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1539 {
+  padding: 8px 0 18px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1540 {
+  padding: 34px 0 6px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1541 {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1542 {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 20px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1543 {
+  padding: 34px 0 6px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1544 {
+  margin-bottom: 14px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1545 {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1546 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1547 {
+  padding: 34px 0 6px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1548 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1549 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1550 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1551 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1552 {
+  padding: 34px 0 60px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1553 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 22px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1554 {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1555 {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1556 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 24px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1557 {
+  margin: 0;
+  color: rgba(255,255,255,0.78);
+  line-height: 1.7;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1558 {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-migrated-pages-site-pricingpage-tsx-1559 {
+  margin-top: 22px;
+}
+
+.rlc-migrated-pages-start-importprojectjson-tsx-1560 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-start-importprojectjson-tsx-1561 {
+  display: none;
+}
+
+.rlc-migrated-pages-start-projectimport-tsx-1562 {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rlc-migrated-pages-start-projectimport-tsx-1563 {
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rlc-migrated-pages-start-projectimport-tsx-1564 {
+  display: none;
+}
+
+.rlc-migrated-pages-start-startseite-tsx-1565 {
+  width: 160px;
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-pages-start-projektuebersicht-tsx-1566 {
+  margin-top: 14px;
+}
+
+.rlc-migrated-shared-placeholder-tsx-1567 {
+  text-align: center;
+  padding: 24px;
+}
+
+.rlc-migrated-shared-placeholder-tsx-1568 {
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-shared-placeholder-tsx-1569 {
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-ui-datasheet-tsx-1570 {
+  overflow-x: auto;
+}
+
+.rlc-migrated-ui-datasheet-tsx-1571 {
+  width: 90px;
+}
+
+.rlc-migrated-ui-datasheet-tsx-1572 {
+  text-align: center;
+}
+
+.rlc-migrated-ui-datasheet-tsx-1573 {
+  font-weight: 600;
+}
+
+.rlc-migrated-ui-sidebar-tsx-1574 {
+  width: 300px;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.rlc-migrated-ui-sidebar-tsx-1575 {
+  margin-bottom: 16px;
+}
+
+.rlc-migrated-ui-sidebar-tsx-1576 {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.rlc-migrated-ui-sidebar-tsx-1577 {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.rlc-migrated-ui-sidebar-tsx-1578 {
+  margin-bottom: 6px;
+}
+
+.rlc-migrated-ui-kit-tsx-1579 {
+  margin-bottom: 12px;
+}
+
+.rlc-migrated-ui-kit-tsx-1580 {
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}

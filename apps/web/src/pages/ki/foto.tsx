@@ -1,4 +1,4 @@
-// apps/web/src/pages/ki/Foto.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Foto.tsx
 
 import React, { useMemo, useState } from "react";
 import { useProject } from "../../store/useProject";
@@ -7,18 +7,18 @@ const shell = {
   maxWidth: 900,
   margin: "0 auto",
   padding: "12px 16px",
-  fontFamily: "Inter,system-ui,Arial",
+  fontFamily: "Inter,system-ui,Arial"
 } as const;
 
 const card = {
   border: "1px solid #e5e7eb",
   borderRadius: 10,
   padding: 16,
-  background: "#fff",
+  background: "#fff"
 } as const;
 
 const input = {
-  margin: "8px 0",
+  margin: "8px 0"
 } as const;
 
 const btn = {
@@ -27,12 +27,12 @@ const btn = {
   background: "#fff",
   borderRadius: 8,
   fontSize: 13,
-  cursor: "pointer",
+  cursor: "pointer"
 } as const;
 
 const muted = {
   color: "#6b7280",
-  fontSize: 13,
+  fontSize: 13
 } as const;
 
 type KiPhotoResponse = {
@@ -87,7 +87,7 @@ export default function Foto() {
 
       const uploadRes = await fetch("/api/ki/vision-files", {
         method: "POST",
-        body: fd,
+        body: fd
       });
 
       if (!uploadRes.ok) {
@@ -99,15 +99,15 @@ export default function Foto() {
       const suggestRes = await fetch("/api/ki/photos/suggest", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           projectId: projectId || "",
           projectCode: projectCode || "",
           files: Array.isArray(uploadData?.files) ? uploadData.files : undefined,
           fileId: uploadData?.fileId,
-          fileName: file.name,
-        }),
+          fileName: file.name
+        })
       });
 
       if (!suggestRes.ok) {
@@ -116,18 +116,18 @@ export default function Foto() {
 
       const data: KiPhotoResponse = await suggestRes.json();
 
-      const lines = Array.isArray(data?.items)
-        ? data.items
-        : Array.isArray(data?.result)
-        ? data.result
-        : Array.isArray(data?.suggestions)
-        ? data.suggestions
-        : typeof data?.text === "string"
-        ? data.text
-            .split("\n")
-            .map((x) => x.trim())
-            .filter(Boolean)
-        : [];
+      const lines = Array.isArray(data?.items) ?
+      data.items :
+      Array.isArray(data?.result) ?
+      data.result :
+      Array.isArray(data?.suggestions) ?
+      data.suggestions :
+      typeof data?.text === "string" ?
+      data.text.
+      split("\n").
+      map((x) => x.trim()).
+      filter(Boolean) :
+      [];
 
       setResult(lines);
     } catch (e: any) {
@@ -138,73 +138,68 @@ export default function Foto() {
   }
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h2>Fotoerkennung (KI)</h2>
 
-      <div style={card}>
-        <div style={muted}>Projekt: {effectiveProject || "—"}</div>
+      <div className={rlcClass(null, card)}>
+        <div className={rlcClass(null, muted)}>Projekt: {effectiveProject || "—"}</div>
 
         <input
           type="file"
-          accept="image/*"
-          style={input}
-          onChange={handleFile}
-        />
+          accept="image/*" className={rlcClass(null,
+          input)}
+          onChange={handleFile} />
+        
 
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button style={btn} onClick={() => void runRecognition()} disabled={!file || loading}>
+        <div className="rlc-migrated-pages-ki-foto-tsx-1080">
+          <button className={rlcClass(null, btn)} onClick={() => void runRecognition()} disabled={!file || loading}>
             {loading ? "Erkenne..." : "Foto analysieren"}
           </button>
         </div>
 
-        {error && (
-          <div style={{ marginTop: 10, color: "#b91c1c" }}>
+        {error &&
+        <div className="rlc-migrated-pages-ki-foto-tsx-1081">
             {error}
           </div>
-        )}
+        }
 
-        {file && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ ...muted, marginBottom: 8 }}>
+        {file &&
+        <div className="rlc-migrated-pages-ki-foto-tsx-1082">
+            <div className={rlcClass(null, { ...muted, marginBottom: 8 })}>
               Datei: <strong>{file.name}</strong>
             </div>
 
             <img
-              src={previewUrl}
-              alt="Vorschau"
-              style={{
-                maxWidth: "100%",
-                maxHeight: 320,
-                borderRadius: 8,
-                border: "1px solid #e5e7eb",
-              }}
-            />
+            src={previewUrl}
+            alt="Vorschau" className="rlc-migrated-pages-ki-foto-tsx-1083" />
+
+
+
+
+
+
+          
           </div>
-        )}
+        }
       </div>
 
-      <div style={{ ...card, marginTop: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Ergebnis</h3>
+      <div className={rlcClass(null, { ...card, marginTop: 16 })}>
+        <h3 className="rlc-migrated-pages-ki-foto-tsx-1084">Ergebnis</h3>
 
-        {!result.length && !loading && (
-          <div style={muted}>Noch keine Analyse durchgeführt.</div>
-        )}
+        {!result.length && !loading &&
+        <div className={rlcClass(null, muted)}>Noch keine Analyse durchgeführt.</div>
+        }
 
-        {!!result.length && (
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {result.map((r, i) => (
-              <li key={`${r}-${i}`} style={{ marginBottom: 6 }}>
+        {!!result.length &&
+        <ul className="rlc-migrated-pages-ki-foto-tsx-1085">
+            {result.map((r, i) =>
+          <li key={`${r}-${i}`} className="rlc-migrated-pages-ki-foto-tsx-1086">
                 {r}
               </li>
-            ))}
+          )}
           </ul>
-        )}
+        }
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

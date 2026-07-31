@@ -9,14 +9,14 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const lbl: React.CSSProperties = { fontSize: 13, opacity: 0.8 };
@@ -25,7 +25,7 @@ const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 /* ================= TYPES ================= */
@@ -73,9 +73,9 @@ export default function Dokumente() {
 
   /* ================= SAFE HELPERS ================= */
 
-  const getStatus = () => ((sel as any)?.status as string) || "Entwurf";
-  const getSigs = () => ((sel as any)?.signatures as Sig[]) || [];
-  const getHist = () => ((sel as any)?.history as Hist[]) || [];
+  const getStatus = () => (sel as any)?.status as string || "Entwurf";
+  const getSigs = () => (sel as any)?.signatures as Sig[] || [];
+  const getHist = () => (sel as any)?.history as Hist[] || [];
 
   const patch = (p: Partial<Dokument> & any) => {
     if (!sel) return;
@@ -83,7 +83,7 @@ export default function Dokumente() {
     DocsDB.upsert({
       ...sel,
       ...p,
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     });
 
     refresh();
@@ -114,12 +114,12 @@ export default function Dokumente() {
   /* ================= VERSION ================= */
 
   const uploadNewVersion = async () =>
-    pickFile(async (f) => {
-      if (!sel) return;
-      await DocsDB.addVersion(sel.id, f);
-      addHist("status", `Neue Version: ${f.name}`);
-      refresh();
-    });
+  pickFile(async (f) => {
+    if (!sel) return;
+    await DocsDB.addVersion(sel.id, f);
+    addHist("status", `Neue Version: ${f.name}`);
+    refresh();
+  });
 
   const onDrop = async (ev: React.DragEvent) => {
     ev.preventDefault();
@@ -144,7 +144,7 @@ export default function Dokumente() {
       id: crypto.randomUUID(),
       when: Date.now(),
       type,
-      message,
+      message
     };
 
     patch({ history: [rec, ...hist] });
@@ -155,15 +155,15 @@ export default function Dokumente() {
   const filtered = React.useMemo(() => {
     return all.filter((d) => {
       const s = (
-        d.title +
-        " " +
-        (d.tags ?? []).join(" ")
-      ).toLowerCase();
+      d.title +
+      " " +
+      (d.tags ?? []).join(" ")).
+      toLowerCase();
 
       const okQ = !q || s.includes(q.toLowerCase());
       const okT =
-        !tagFilter ||
-        (d.tags ?? []).map((t) => t.toLowerCase()).includes(tagFilter.toLowerCase());
+      !tagFilter ||
+      (d.tags ?? []).map((t) => t.toLowerCase()).includes(tagFilter.toLowerCase());
 
       return okQ && okT;
     });
@@ -171,48 +171,48 @@ export default function Dokumente() {
 
   const allTags = React.useMemo(
     () =>
-      Array.from(
-        new Set(all.flatMap((d) => d.tags ?? []))
-      ).sort(),
+    Array.from(
+      new Set(all.flatMap((d) => d.tags ?? []))
+    ).sort(),
     [all]
   );
 
   /* ================= PREVIEW ================= */
 
   const renderPreview = (v?: DocVersion) => {
-    if (!v) return <div style={{ opacity: 0.6 }}>Keine Vorschau.</div>;
+    if (!v) return <div className="rlc-migrated-pages-buro-vertraege-tsx-655">Keine Vorschau.</div>;
 
     const isPDF = (v.mime || "").includes("pdf");
     const isImg = (v.mime || "").startsWith("image/");
 
-    return isPDF ? (
-      <iframe src={v.dataURL} style={{ width: "100%", height: "100%" }} />
-    ) : isImg ? (
-      <img src={v.dataURL} style={{ width: "100%" }} />
-    ) : (
-      <div>Keine Vorschau verfügbar</div>
-    );
+    return isPDF ?
+    <iframe src={v.dataURL} className="rlc-migrated-pages-buro-vertraege-tsx-656" /> :
+    isImg ?
+    <img src={v.dataURL} className="rlc-migrated-pages-buro-vertraege-tsx-657" /> :
+
+    <div>Keine Vorschau verfügbar</div>;
+
   };
 
   /* ================= UI ================= */
 
   return (
-    <div style={{ padding: 10 }}>
+    <div className="rlc-migrated-pages-buro-vertraege-tsx-658">
       <button onClick={addDoc}>+ Dokument</button>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+      <div className="rlc-migrated-pages-buro-vertraege-tsx-659">
         <div>
-          {filtered.map((d) => (
-            <div key={d.id} onClick={() => setSelId(d.id)}>
+          {filtered.map((d) =>
+          <div key={d.id} onClick={() => setSelId(d.id)}>
               {d.title}
             </div>
-          ))}
+          )}
         </div>
 
         <div>{renderPreview(cur)}</div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UTILS ================= */
@@ -226,8 +226,3 @@ function pickFile(onPick: (f: File) => void) {
   };
   i.click();
 }
-
-
-
-
-

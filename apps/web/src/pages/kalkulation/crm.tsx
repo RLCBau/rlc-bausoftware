@@ -1,4 +1,5 @@
-﻿// apps/web/src/pages/kalkulation/crm.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+// apps/web/src/pages/kalkulation/crm.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { apiUrl } from "../../lib/apiBase";
 import { useNavigate } from "react-router-dom";
@@ -9,11 +10,11 @@ import { useProject } from "../../store/useProject";
 /* ================= TYPES ================= */
 
 type OfferStatus =
-  | "Offen"
-  | "Abgegeben"
-  | "Nachverhandlung"
-  | "Zuschlag"
-  | "Abgelehnt";
+"Offen" |
+"Abgegeben" |
+"Nachverhandlung" |
+"Zuschlag" |
+"Abgelehnt";
 
 type OfferSource = "manual" | "angebot" | "ki" | "manuell";
 
@@ -39,29 +40,29 @@ type Offer = {
 };
 
 type SortBy =
-  | "datum"
-  | "betragBrutto"
-  | "projectCode"
-  | "kunde"
-  | "status"
-  | "wahrscheinlichkeit"
-  | "followUp";
+"datum" |
+"betragBrutto" |
+"projectCode" |
+"kunde" |
+"status" |
+"wahrscheinlichkeit" |
+"followUp";
 
 type SortDir = "asc" | "desc";
 
 type FollowUpFilter =
-  | "Alle"
-  | "Offen"
-  | "Überfällig"
-  | "Heute"
-  | "7 Tage"
-  | "Ohne Follow-up";
+"Alle" |
+"Offen" |
+"Überfällig" |
+"Heute" |
+"7 Tage" |
+"Ohne Follow-up";
 
 type QuickFilter =
-  | "Alle"
-  | "Ohne Kontakt"
-  | "Ohne nächste Aktion"
-  | "Ohne PDF / Link";
+"Alle" |
+"Ohne Kontakt" |
+"Ohne nächste Aktion" |
+"Ohne PDF / Link";
 
 type ProjectLike = {
   id?: string;
@@ -88,28 +89,28 @@ const LEGACY_STORE_KEY = "rlc_crm_angebote_v2";
 const ANGEBOT_HANDOFF_KEY = "rlc_kalkulation_angebot_handoff_v1";
 
 const STATUS_OPTIONS: OfferStatus[] = [
-  "Offen",
-  "Abgegeben",
-  "Nachverhandlung",
-  "Zuschlag",
-  "Abgelehnt",
-];
+"Offen",
+"Abgegeben",
+"Nachverhandlung",
+"Zuschlag",
+"Abgelehnt"];
+
 
 const FOLLOW_UP_FILTERS: FollowUpFilter[] = [
-  "Alle",
-  "Offen",
-  "Überfällig",
-  "Heute",
-  "7 Tage",
-  "Ohne Follow-up",
-];
+"Alle",
+"Offen",
+"Überfällig",
+"Heute",
+"7 Tage",
+"Ohne Follow-up"];
+
 
 const QUICK_FILTERS: QuickFilter[] = [
-  "Alle",
-  "Ohne Kontakt",
-  "Ohne nächste Aktion",
-  "Ohne PDF / Link",
-];
+"Alle",
+"Ohne Kontakt",
+"Ohne nächste Aktion",
+"Ohne PDF / Link"];
+
 
 /* ================= HELPERS ================= */
 
@@ -123,9 +124,9 @@ function safeId(): string {
 
 function n(value: unknown, fallback = 0): number {
   const raw = String(value ?? "").trim();
-  const normalized = raw.includes(",")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw;
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw;
 
   const x = typeof value === "number" ? value : Number(normalized);
   return Number.isFinite(x) ? x : fallback;
@@ -134,7 +135,7 @@ function n(value: unknown, fallback = 0): number {
 function money(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(n(value));
 }
 
@@ -150,11 +151,11 @@ function addDaysISO(days: number): string {
 
 function getProject(projectCtx: any): ProjectLike | null {
   const p =
-    projectCtx?.project ||
-    projectCtx?.currentProject ||
-    projectCtx?.selectedProject ||
-    projectCtx?.current ||
-    projectCtx;
+  projectCtx?.project ||
+  projectCtx?.currentProject ||
+  projectCtx?.selectedProject ||
+  projectCtx?.current ||
+  projectCtx;
 
   if (!p || typeof p !== "object") return null;
   return p as ProjectLike;
@@ -163,10 +164,10 @@ function getProject(projectCtx: any): ProjectLike | null {
 function getProjectCode(project: ProjectLike | null): string {
   return String(
     project?.code ||
-      project?.number ||
-      project?.projektnummer ||
-      project?.id ||
-      ""
+    project?.number ||
+    project?.projektnummer ||
+    project?.id ||
+    ""
   ).trim();
 }
 
@@ -208,14 +209,14 @@ function normalizeOffer(row: Partial<Offer> & any): Offer {
     pdfUrl: String(row.pdfUrl || ""),
     source: row.source || "manual",
     createdAt: String(row.createdAt || new Date().toISOString()),
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 
 function loadOffers(): Offer[] {
   try {
     const raw =
-      localStorage.getItem(STORE_KEY) || localStorage.getItem(LEGACY_STORE_KEY);
+    localStorage.getItem(STORE_KEY) || localStorage.getItem(LEGACY_STORE_KEY);
 
     const parsed = JSON.parse(raw || "[]");
     if (!Array.isArray(parsed)) return [];
@@ -232,26 +233,26 @@ function saveOffers(rows: Offer[]) {
 
 function getCrmAuthHeaders(extra: Record<string, string> = {}) {
   const token =
-    localStorage.getItem("rlc_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("authToken") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("rlc_token") ||
-    sessionStorage.getItem("token") ||
-    "";
+  localStorage.getItem("rlc_token") ||
+  localStorage.getItem("token") ||
+  localStorage.getItem("authToken") ||
+  localStorage.getItem("accessToken") ||
+  sessionStorage.getItem("rlc_token") ||
+  sessionStorage.getItem("token") ||
+  "";
 
   return {
     ...extra,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
 function extractServerOffers(data: any): Offer[] {
   const raw =
-    data?.data?.items ||
-    data?.items ||
-    data?.snapshot?.data?.items ||
-    [];
+  data?.data?.items ||
+  data?.items ||
+  data?.snapshot?.data?.items ||
+  [];
 
   return Array.isArray(raw) ? raw.map(normalizeOffer) : [];
 }
@@ -264,7 +265,7 @@ function findLatestAngebotSnapshot(projectCode?: string): string | null {
     if (exact) return exact;
   }
 
-  const candidates: { raw: string; savedAt: string }[] = [];
+  const candidates: {raw: string;savedAt: string;}[] = [];
 
   for (let i = 0; i < localStorage.length; i += 1) {
     const key = localStorage.key(i) || "";
@@ -277,7 +278,7 @@ function findLatestAngebotSnapshot(projectCode?: string): string | null {
       const parsed = JSON.parse(raw);
       candidates.push({
         raw,
-        savedAt: String(parsed?.meta?.savedAt || parsed?.savedAt || ""),
+        savedAt: String(parsed?.meta?.savedAt || parsed?.savedAt || "")
       });
     } catch {
       candidates.push({ raw, savedAt: "" });
@@ -358,47 +359,47 @@ function csvCell(value: unknown): string {
 
 function exportCsv(rows: Offer[]) {
   const header = [
-    "AngebotNr",
-    "ProjectCode",
-    "ProjectName",
-    "Kunde",
-    "Netto",
-    "Brutto",
-    "Datum",
-    "Status",
-    "Wahrscheinlichkeit",
-    "FollowUp",
-    "NaechsteAktion",
-    "Kontakt",
-    "Notiz",
-    "PDF",
-    "Quelle",
-  ];
+  "AngebotNr",
+  "ProjectCode",
+  "ProjectName",
+  "Kunde",
+  "Netto",
+  "Brutto",
+  "Datum",
+  "Status",
+  "Wahrscheinlichkeit",
+  "FollowUp",
+  "NaechsteAktion",
+  "Kontakt",
+  "Notiz",
+  "PDF",
+  "Quelle"];
+
 
   const lines = rows.map((r) =>
-    [
-      r.angebotNr,
-      r.projectCode,
-      r.projectName,
-      r.kunde,
-      r.betragNetto,
-      r.betragBrutto,
-      r.datum,
-      r.status,
-      r.wahrscheinlichkeit,
-      r.followUp,
-      r.nextAction,
-      r.kontakt,
-      r.notiz,
-      r.pdfUrl,
-      r.source,
-    ]
-      .map(csvCell)
-      .join(";")
+  [
+  r.angebotNr,
+  r.projectCode,
+  r.projectName,
+  r.kunde,
+  r.betragNetto,
+  r.betragBrutto,
+  r.datum,
+  r.status,
+  r.wahrscheinlichkeit,
+  r.followUp,
+  r.nextAction,
+  r.kontakt,
+  r.notiz,
+  r.pdfUrl,
+  r.source].
+
+  map(csvCell).
+  join(";")
   );
 
   const blob = new Blob([[header.join(";"), ...lines].join("\n")], {
-    type: "text/csv;charset=utf-8",
+    type: "text/csv;charset=utf-8"
   });
 
   const a = document.createElement("a");
@@ -470,14 +471,14 @@ function buildRiskAnalysis(rows: Offer[]): CrmRiskResult {
     title: "Angebotsanalyse abgeschlossen",
     changes,
     warnings,
-    unchanged,
+    unchanged
   };
 }
 
 function emitKiStart(text: string) {
   window.dispatchEvent(
     new CustomEvent("rlc:ki-action-start", {
-      detail: { title: text, text, progress: 12 },
+      detail: { title: text, text, progress: 12 }
     })
   );
 }
@@ -485,7 +486,7 @@ function emitKiStart(text: string) {
 function emitKiProgress(text: string, progress: number) {
   window.dispatchEvent(
     new CustomEvent("rlc:ki-action-progress", {
-      detail: { text, progress },
+      detail: { text, progress }
     })
   );
 }
@@ -493,7 +494,7 @@ function emitKiProgress(text: string, progress: number) {
 function emitKiResult(result: CrmRiskResult) {
   window.dispatchEvent(
     new CustomEvent("rlc:ki-action-result", {
-      detail: result,
+      detail: result
     })
   );
 }
@@ -549,13 +550,13 @@ function exportPdfReport(rows: Offer[], totals: any) {
   const kpiW = (pageW - marginX * 2 - kpiGap * 5) / 6;
 
   const kpis: [string, string][] = [
-    ["Angebote", String(totals.count)],
-    ["Volumen gesamt", money(totals.total)],
-    ["Offen", money(totals.sumOpen)],
-    ["Gewichtet", money(totals.weighted)],
-    ["Zuschlag", money(totals.sumWon)],
-    ["Quote", `${totals.quote}%`],
-  ];
+  ["Angebote", String(totals.count)],
+  ["Volumen gesamt", money(totals.total)],
+  ["Offen", money(totals.sumOpen)],
+  ["Gewichtet", money(totals.weighted)],
+  ["Zuschlag", money(totals.sumWon)],
+  ["Quote", `${totals.quote}%`]];
+
 
   kpis.forEach(([label, value], index) => {
     const x = marginX + index * (kpiW + kpiGap);
@@ -573,16 +574,16 @@ function exportPdfReport(rows: Offer[], totals: any) {
     doc.setFontSize(10);
     doc.setTextColor(15, 23, 42);
     doc.text(String(value), x + 4, kpiY + 16, {
-      maxWidth: kpiW - 8,
+      maxWidth: kpiW - 8
     });
   });
 
   const statusCounts = STATUS_OPTIONS.map((status) => ({
     status,
     count: rows.filter((r) => r.status === status).length,
-    total: rows
-      .filter((r) => r.status === status)
-      .reduce((sum, r) => sum + n(r.betragBrutto), 0),
+    total: rows.
+    filter((r) => r.status === status).
+    reduce((sum, r) => sum + n(r.betragBrutto), 0)
   }));
 
   const statusY = 99;
@@ -629,29 +630,29 @@ function exportPdfReport(rows: Offer[], totals: any) {
     tableWidth: pageW - marginX * 2,
     theme: "grid",
     head: [
-      [
-        "Angebot",
-        "Projekt",
-        "Kunde",
-        "Netto",
-        "Brutto",
-        "Datum",
-        "Status",
-        "Chance",
-        "Follow-up / Aktion",
-      ],
-    ],
+    [
+    "Angebot",
+    "Projekt",
+    "Kunde",
+    "Netto",
+    "Brutto",
+    "Datum",
+    "Status",
+    "Chance",
+    "Follow-up / Aktion"]],
+
+
     body: rows.map((r) => [
-      r.angebotNr || "—",
-      `${r.projectCode || "—"}${r.projectName ? "\n" + r.projectName : ""}`,
-      r.kunde || "—",
-      money(r.betragNetto),
-      money(r.betragBrutto),
-      fmtDate(r.datum),
-      r.status,
-      `${r.wahrscheinlichkeit}%`,
-      [followUpLabel(r), r.nextAction || r.notiz || ""].filter(Boolean).join("\n"),
-    ]),
+    r.angebotNr || "—",
+    `${r.projectCode || "—"}${r.projectName ? "\n" + r.projectName : ""}`,
+    r.kunde || "—",
+    money(r.betragNetto),
+    money(r.betragBrutto),
+    fmtDate(r.datum),
+    r.status,
+    `${r.wahrscheinlichkeit}%`,
+    [followUpLabel(r), r.nextAction || r.notiz || ""].filter(Boolean).join("\n")]
+    ),
     styles: {
       font: "helvetica",
       fontSize: 7.2,
@@ -660,7 +661,7 @@ function exportPdfReport(rows: Offer[], totals: any) {
       valign: "top",
       lineColor: [210, 218, 230],
       lineWidth: 0.15,
-      textColor: [15, 23, 42],
+      textColor: [15, 23, 42]
     },
     headStyles: {
       fillColor: [30, 64, 175],
@@ -669,10 +670,10 @@ function exportPdfReport(rows: Offer[], totals: any) {
       fontSize: 7.4,
       cellPadding: 1.8,
       lineColor: [30, 64, 175],
-      lineWidth: 0.15,
+      lineWidth: 0.15
     },
     alternateRowStyles: {
-      fillColor: [248, 250, 252],
+      fillColor: [248, 250, 252]
     },
     columnStyles: {
       0: { cellWidth: 25 },
@@ -683,7 +684,7 @@ function exportPdfReport(rows: Offer[], totals: any) {
       5: { cellWidth: 21 },
       6: { cellWidth: 24 },
       7: { cellWidth: 16, halign: "right" },
-      8: { cellWidth: 52 },
+      8: { cellWidth: 52 }
     },
     didParseCell: (data) => {
       if (data.section === "body" && data.column.index === 6) {
@@ -709,7 +710,7 @@ function exportPdfReport(rows: Offer[], totals: any) {
           data.cell.styles.fontStyle = "bold";
         }
       }
-    },
+    }
   });
 
   const pages = doc.getNumberOfPages();
@@ -726,11 +727,11 @@ function exportPdfReport(rows: Offer[], totals: any) {
 
     doc.text("RLC Bausoftware · Angebotsverfolgung", marginX, pageH - 8);
     doc.text(`Seite ${i}/${pages}`, pageW - marginX, pageH - 8, {
-      align: "right",
+      align: "right"
     });
   }
 
-  doc.save("Angebotsverfolgung_Report.pdf");
+  saveRlcPdfWithCompanyHeader(doc, "Angebotsverfolgung_Report.pdf");
 }
 
 /* ================= COMPONENT ================= */
@@ -768,14 +769,14 @@ export default function CRMAngebotsverfolgungPage() {
     nextAction: "",
     kontakt: "",
     notiz: "",
-    pdfUrl: "",
+    pdfUrl: ""
   });
 
   useEffect(() => {
     saveOffers(offers);
   }, [offers]);
 
-  
+
   async function saveOffersToServer() {
     try {
       setInfo("Speichere Angebotsverfolgung auf Server …");
@@ -791,9 +792,9 @@ export default function CRMAngebotsverfolgungPage() {
               items: offers.map(normalizeOffer),
               savedAt: new Date().toISOString(),
               projectCode: currentProjectCode,
-              projectName: currentProjectName,
-            },
-          }),
+              projectName: currentProjectName
+            }
+          })
         }
       );
 
@@ -819,7 +820,7 @@ export default function CRMAngebotsverfolgungPage() {
         {
           method: "GET",
           credentials: "include",
-          headers: getCrmAuthHeaders(),
+          headers: getCrmAuthHeaders()
         }
       );
 
@@ -846,12 +847,12 @@ export default function CRMAngebotsverfolgungPage() {
       setInfo(`Server-Laden fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
     }
   }
-useEffect(() => {
+  useEffect(() => {
     setForm((prev) => ({
       ...prev,
       projectCode: prev.projectCode || currentProjectCode,
       projectName: prev.projectName || currentProjectName,
-      kunde: prev.kunde || currentProjectClient,
+      kunde: prev.kunde || currentProjectClient
     }));
   }, [currentProjectCode, currentProjectName, currentProjectClient]);
 
@@ -871,18 +872,18 @@ useEffect(() => {
 
       if (followUpFilter === "Offen" && isClosed(offer.status)) return false;
       if (
-        followUpFilter === "Überfällig" &&
-        !(diff != null && diff < 0 && !isClosed(offer.status))
-      ) {
+      followUpFilter === "Überfällig" &&
+      !(diff != null && diff < 0 && !isClosed(offer.status)))
+      {
         return false;
       }
       if (followUpFilter === "Heute" && !(diff === 0 && !isClosed(offer.status))) {
         return false;
       }
       if (
-        followUpFilter === "7 Tage" &&
-        !(diff != null && diff >= 0 && diff <= 7 && !isClosed(offer.status))
-      ) {
+      followUpFilter === "7 Tage" &&
+      !(diff != null && diff >= 0 && diff <= 7 && !isClosed(offer.status)))
+      {
         return false;
       }
       if (followUpFilter === "Ohne Follow-up" && offer.followUp) return false;
@@ -894,19 +895,19 @@ useEffect(() => {
       if (!q) return true;
 
       const hay = [
-        offer.angebotNr,
-        offer.projectCode,
-        offer.projectName,
-        offer.kunde,
-        offer.status,
-        offer.kontakt,
-        offer.nextAction,
-        offer.notiz,
-        offer.betragNetto,
-        offer.betragBrutto,
-      ]
-        .join(" ")
-        .toLowerCase();
+      offer.angebotNr,
+      offer.projectCode,
+      offer.projectName,
+      offer.kunde,
+      offer.status,
+      offer.kontakt,
+      offer.nextAction,
+      offer.notiz,
+      offer.betragNetto,
+      offer.betragBrutto].
+
+      join(" ").
+      toLowerCase();
 
       return hay.includes(q);
     });
@@ -933,15 +934,15 @@ useEffect(() => {
         return sortDir === "asc" ? av - bv : bv - av;
       }
 
-      return sortDir === "asc"
-        ? String(av).localeCompare(String(bv), "de", {
-            numeric: true,
-            sensitivity: "base",
-          })
-        : String(bv).localeCompare(String(av), "de", {
-            numeric: true,
-            sensitivity: "base",
-          });
+      return sortDir === "asc" ?
+      String(av).localeCompare(String(bv), "de", {
+        numeric: true,
+        sensitivity: "base"
+      }) :
+      String(bv).localeCompare(String(av), "de", {
+        numeric: true,
+        sensitivity: "base"
+      });
     });
 
     return result;
@@ -960,17 +961,17 @@ useEffect(() => {
   const actionTargetRows = selectedOffers.length ? selectedOffers : filtered.slice(0, 1);
 
   const totals = useMemo(() => {
-    const sumOpen = filtered
-      .filter((offer) => offer.status !== "Zuschlag" && offer.status !== "Abgelehnt")
-      .reduce((sum, offer) => sum + offer.betragBrutto, 0);
+    const sumOpen = filtered.
+    filter((offer) => offer.status !== "Zuschlag" && offer.status !== "Abgelehnt").
+    reduce((sum, offer) => sum + offer.betragBrutto, 0);
 
-    const sumWon = filtered
-      .filter((offer) => offer.status === "Zuschlag")
-      .reduce((sum, offer) => sum + offer.betragBrutto, 0);
+    const sumWon = filtered.
+    filter((offer) => offer.status === "Zuschlag").
+    reduce((sum, offer) => sum + offer.betragBrutto, 0);
 
-    const sumLost = filtered
-      .filter((offer) => offer.status === "Abgelehnt")
-      .reduce((sum, offer) => sum + offer.betragBrutto, 0);
+    const sumLost = filtered.
+    filter((offer) => offer.status === "Abgelehnt").
+    reduce((sum, offer) => sum + offer.betragBrutto, 0);
 
     const total = filtered.reduce((sum, offer) => sum + offer.betragBrutto, 0);
     const wonCount = filtered.filter((offer) => offer.status === "Zuschlag").length;
@@ -987,13 +988,13 @@ useEffect(() => {
 
     const weighted = filtered.reduce(
       (sum, offer) =>
-        isClosed(offer.status)
-          ? sum
-          : sum + offer.betragBrutto * (offer.wahrscheinlichkeit / 100),
+      isClosed(offer.status) ?
+      sum :
+      sum + offer.betragBrutto * (offer.wahrscheinlichkeit / 100),
       0
     );
 
-    const quote = filtered.length ? Math.round((wonCount / filtered.length) * 100) : 0;
+    const quote = filtered.length ? Math.round(wonCount / filtered.length * 100) : 0;
 
     return {
       count: filtered.length,
@@ -1004,7 +1005,7 @@ useEffect(() => {
       quote,
       overdue,
       due7,
-      weighted,
+      weighted
     };
   }, [filtered]);
 
@@ -1013,9 +1014,9 @@ useEffect(() => {
 
     try {
       const raw =
-        findLatestAngebotSnapshot(currentProjectCode) ||
-        localStorage.getItem(ANGEBOT_HANDOFF_KEY) ||
-        sessionStorage.getItem("kalkulation:lastDraft");
+      findLatestAngebotSnapshot(currentProjectCode) ||
+      localStorage.getItem(ANGEBOT_HANDOFF_KEY) ||
+      sessionStorage.getItem("kalkulation:lastDraft");
 
       if (!raw) {
         setInfo("Keine Angebotsdaten gefunden. Erst ein Angebot erzeugen oder übergeben.");
@@ -1030,29 +1031,29 @@ useEffect(() => {
       const metaProject = meta.project || {};
 
       const angebotNr =
-        offerData.number ||
-        data.angebotNr ||
-        data.offerNo ||
-        `ANG-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+      offerData.number ||
+      data.angebotNr ||
+      data.offerNo ||
+      `ANG-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
 
       const imported: Offer = normalizeOffer({
         id: `angebot-${angebotNr}`,
         angebotNr,
         projectCode: meta.projectKey || data.projectKey || data.projectCode || currentProjectCode,
         projectName:
-          metaProject.name ||
-          metaProject.projectName ||
-          metaProject.projektname ||
-          data.projectName ||
-          currentProjectName ||
-          "",
+        metaProject.name ||
+        metaProject.projectName ||
+        metaProject.projektname ||
+        data.projectName ||
+        currentProjectName ||
+        "",
         kunde:
-          offerData.clientName ||
-          offerData.kunde ||
-          data.client?.name ||
-          data.kunde ||
-          currentProjectClient ||
-          "",
+        offerData.clientName ||
+        offerData.kunde ||
+        data.client?.name ||
+        data.kunde ||
+        currentProjectClient ||
+        "",
         betragNetto: n(summary.netto ?? summary.net ?? totals.netto),
         betragBrutto: n(summary.brutto ?? summary.gross ?? totals.brutto),
         datum: String(meta.savedAt || "").slice(0, 10) || todayISO(),
@@ -1064,11 +1065,11 @@ useEffect(() => {
         notiz: "Automatisch aus Angebot übernommen.",
         pdfUrl: String(data.pdfUrl || data.fileUrl || data.offerPdfUrl || ""),
         source:
-          data.source === "ki"
-            ? "ki"
-            : data.source === "manuell"
-            ? "manuell"
-            : "angebot",
+        data.source === "ki" ?
+        "ki" :
+        data.source === "manuell" ?
+        "manuell" :
+        "angebot"
       });
 
       const withoutDuplicate = offers.filter(
@@ -1084,7 +1085,7 @@ useEffect(() => {
         projectName: imported.projectName,
         kunde: imported.kunde,
         betragNetto: imported.betragNetto,
-        betragBrutto: imported.betragBrutto,
+        betragBrutto: imported.betragBrutto
       }));
 
       setInfo(`Angebot ${imported.angebotNr} wurde übernommen.`);
@@ -1105,7 +1106,7 @@ useEffect(() => {
       betragNetto: netto,
       betragBrutto: brutto,
       source: "manual",
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     });
 
     persist([item, ...offers]);
@@ -1124,7 +1125,7 @@ useEffect(() => {
       nextAction: "",
       kontakt: "",
       notiz: "",
-      pdfUrl: "",
+      pdfUrl: ""
     });
 
     setInfo("Angebot wurde hinzugefügt.");
@@ -1133,7 +1134,7 @@ useEffect(() => {
   function updateOffer(id: string, patch: Partial<Offer>) {
     persist(
       offers.map((offer) =>
-        offer.id === id ? normalizeOffer({ ...offer, ...patch }) : offer
+      offer.id === id ? normalizeOffer({ ...offer, ...patch }) : offer
       )
     );
   }
@@ -1146,9 +1147,9 @@ useEffect(() => {
 
     persist(
       offers.map((offer) =>
-        ids.includes(offer.id)
-          ? normalizeOffer({ ...offer, ...patch, updatedAt: new Date().toISOString() })
-          : offer
+      ids.includes(offer.id) ?
+      normalizeOffer({ ...offer, ...patch, updatedAt: new Date().toISOString() }) :
+      offer
       )
     );
   }
@@ -1180,20 +1181,20 @@ useEffect(() => {
       projectKey: offer.projectCode,
       offer: {
         number: offer.angebotNr,
-        clientName: offer.kunde,
+        clientName: offer.kunde
       },
       summary: {
         netto: offer.betragNetto,
-        brutto: offer.betragBrutto,
-      },
+        brutto: offer.betragBrutto
+      }
     };
 
     sessionStorage.setItem("kalkulation:lastDraft", JSON.stringify(payload));
 
     navigate(
       `/kalkulation/angebot${
-        offer.projectCode ? `?projectCode=${encodeURIComponent(offer.projectCode)}` : ""
-      }`
+      offer.projectCode ? `?projectCode=${encodeURIComponent(offer.projectCode)}` : ""}`
+
     );
   }
 
@@ -1271,7 +1272,7 @@ useEffect(() => {
       const ids = actionTargetRows.map((x) => x.id);
       updateMany(ids, {
         followUp: addDaysISO(7),
-        nextAction: "Angebot nachfassen",
+        nextAction: "Angebot nachfassen"
       });
       setInfo(`${ids.length} Angebot(e) mit Follow-up in 7 Tagen vorbereitet.`);
       return;
@@ -1283,7 +1284,7 @@ useEffect(() => {
         status: "Nachverhandlung",
         followUp: addDaysISO(7),
         nextAction: "Nachverhandlung / Rückmeldung prüfen",
-        notiz: `Nachgefasst am ${fmtDate(todayISO())}.`,
+        notiz: `Nachgefasst am ${fmtDate(todayISO())}.`
       });
       setInfo(`${ids.length} Angebot(e) als nachgefasst markiert.`);
       return;
@@ -1294,7 +1295,7 @@ useEffect(() => {
       updateMany(ids, {
         status: "Zuschlag",
         wahrscheinlichkeit: 100,
-        nextAction: "Auftrag vorbereiten / Projektübergabe",
+        nextAction: "Auftrag vorbereiten / Projektübergabe"
       });
       setInfo(`${ids.length} Angebot(e) als gewonnen markiert.`);
       return;
@@ -1305,7 +1306,7 @@ useEffect(() => {
       updateMany(ids, {
         status: "Abgelehnt",
         wahrscheinlichkeit: 0,
-        nextAction: "Absagegrund dokumentieren",
+        nextAction: "Absagegrund dokumentieren"
       });
       setInfo(`${ids.length} Angebot(e) als verloren markiert.`);
       return;
@@ -1353,62 +1354,62 @@ useEffect(() => {
   }, [filtered, offers, selectedOffers, actionTargetRows, totals]);
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Modul · Angebotsverfolgung</div>
-          <h1 style={title}>Angebotsverfolgung</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Modul · Angebotsverfolgung</div>
+          <h1 className={rlcClass(null, title)}>Angebotsverfolgung</h1>
+          <p className={rlcClass(null, subtitle)}>
             Angebote übernehmen, Status verfolgen, Follow-ups planen und Zuschläge auswerten.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button type="button" style={btnPrimary} onClick={importFromAngebot}>
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={importFromAngebot}>
             Aus Angebot übernehmen
           </button>
-          <button type="button" style={btnSecondary} onClick={saveOffersToServer} disabled={!offers.length}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={saveOffersToServer} disabled={!offers.length}>
             Server speichern
           </button>
 
-          <button type="button" style={btnSecondary} onClick={loadOffersFromServer}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={loadOffersFromServer}>
             Server laden
           </button>
 
-          <button type="button" style={btnSecondary} onClick={selectVisible} disabled={!filtered.length}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={selectVisible} disabled={!filtered.length}>
             Sichtbare auswählen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={clearSelection} disabled={!selectedIds.length}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={clearSelection} disabled={!selectedIds.length}>
             Auswahl löschen ({selectedIds.length})
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => runRiskAnalysis(filtered)} disabled={!filtered.length}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => runRiskAnalysis(filtered)} disabled={!filtered.length}>
             Risikoanalyse
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => exportCsv(filtered)} disabled={!filtered.length}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => exportCsv(filtered)} disabled={!filtered.length}>
             CSV exportieren
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => exportPdfReport(filtered, totals)} disabled={!filtered.length}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => exportPdfReport(filtered, totals)} disabled={!filtered.length}>
             PDF-Report
           </button>
 
-          <button type="button" style={btnDanger} onClick={clearAll} disabled={!offers.length}>
+          <button type="button" className={rlcClass(null, btnDanger)} onClick={clearAll} disabled={!offers.length}>
             Alles löschen
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{currentProjectCode || "—"}</b>
           {currentProjectName ? <span> · {currentProjectName}</span> : null}
         </div>
       </section>
 
-      {info ? <div style={infoBox}>{info}</div> : null}
+      {info ? <div className={rlcClass(null, infoBox)}>{info}</div> : null}
 
-      <section style={kpiGrid}>
+      <section className={rlcClass(null, kpiGrid)}>
         <Kpi label="Angebote" value={String(totals.count)} />
         <Kpi label="Ausgewählt" value={String(selectedIds.length)} />
         <Kpi label="Volumen gesamt" value={money(totals.total)} />
@@ -1421,49 +1422,49 @@ useEffect(() => {
         <Kpi label="Erfolgsquote" value={`${totals.quote}%`} />
       </section>
 
-      <form onSubmit={addOffer} style={card}>
-        <div style={sectionHead}>
+      <form onSubmit={addOffer} className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Neues Angebot erfassen</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Neues Angebot erfassen</h2>
+            <div className={rlcClass(null, sectionText)}>
               Für manuelle Einträge oder Angebote, die nicht automatisch aus der Kalkulation kommen.
             </div>
           </div>
         </div>
 
-        <div style={formGrid}>
+        <div className={rlcClass(null, formGrid)}>
           <Field label="Angebot Nr.">
             <input
               required
               value={form.angebotNr || ""}
-              onChange={(e) => setForm({ ...form, angebotNr: e.target.value })}
-              style={input}
-            />
+              onChange={(e) => setForm({ ...form, angebotNr: e.target.value })} className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Projekt-Nr.">
             <input
               value={form.projectCode || ""}
-              onChange={(e) => setForm({ ...form, projectCode: e.target.value })}
-              style={input}
-            />
+              onChange={(e) => setForm({ ...form, projectCode: e.target.value })} className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Projektname">
             <input
               value={form.projectName || ""}
-              onChange={(e) => setForm({ ...form, projectName: e.target.value })}
-              style={input}
-            />
+              onChange={(e) => setForm({ ...form, projectName: e.target.value })} className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Kunde / Auftraggeber">
             <input
               required
               value={form.kunde || ""}
-              onChange={(e) => setForm({ ...form, kunde: e.target.value })}
-              style={input}
-            />
+              onChange={(e) => setForm({ ...form, kunde: e.target.value })} className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Netto">
@@ -1472,14 +1473,14 @@ useEffect(() => {
               step="0.01"
               value={form.betragNetto ?? 0}
               onChange={(e) =>
-                setForm({
-                  ...form,
-                  betragNetto: n(e.target.value),
-                  betragBrutto: n(e.target.value) * 1.19,
-                })
-              }
-              style={input}
-            />
+              setForm({
+                ...form,
+                betragNetto: n(e.target.value),
+                betragBrutto: n(e.target.value) * 1.19
+              })
+              } className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Brutto">
@@ -1488,32 +1489,32 @@ useEffect(() => {
               step="0.01"
               value={form.betragBrutto ?? 0}
               onChange={(e) =>
-                setForm({ ...form, betragBrutto: n(e.target.value) })
-              }
-              style={input}
-            />
+              setForm({ ...form, betragBrutto: n(e.target.value) })
+              } className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Datum">
             <input
               type="date"
               value={form.datum || todayISO()}
-              onChange={(e) => setForm({ ...form, datum: e.target.value })}
-              style={input}
-            />
+              onChange={(e) => setForm({ ...form, datum: e.target.value })} className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Status">
             <select
               value={form.status || "Offen"}
               onChange={(e) =>
-                setForm({ ...form, status: e.target.value as OfferStatus })
-              }
-              style={input}
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status}>{status}</option>
-              ))}
+              setForm({ ...form, status: e.target.value as OfferStatus })
+              } className={rlcClass(null,
+              input)}>
+              
+              {STATUS_OPTIONS.map((status) =>
+              <option key={status}>{status}</option>
+              )}
             </select>
           </Field>
 
@@ -1524,123 +1525,123 @@ useEffect(() => {
               max={100}
               value={form.wahrscheinlichkeit ?? 50}
               onChange={(e) =>
-                setForm({ ...form, wahrscheinlichkeit: n(e.target.value) })
-              }
-              style={input}
-            />
+              setForm({ ...form, wahrscheinlichkeit: n(e.target.value) })
+              } className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Follow-up">
             <input
               type="date"
               value={form.followUp || ""}
-              onChange={(e) => setForm({ ...form, followUp: e.target.value })}
-              style={input}
-            />
+              onChange={(e) => setForm({ ...form, followUp: e.target.value })} className={rlcClass(null,
+              input)} />
+            
           </Field>
 
           <Field label="Kontakt">
             <input
               value={form.kontakt || ""}
-              onChange={(e) => setForm({ ...form, kontakt: e.target.value })}
-              style={input}
-              placeholder="Name / Telefon / E-Mail"
-            />
+              onChange={(e) => setForm({ ...form, kontakt: e.target.value })} className={rlcClass(null,
+              input)}
+              placeholder="Name / Telefon / E-Mail" />
+            
           </Field>
 
           <Field label="PDF / Link">
             <input
               value={form.pdfUrl || ""}
-              onChange={(e) => setForm({ ...form, pdfUrl: e.target.value })}
-              style={input}
-              placeholder="Optional: PDF-Link"
-            />
+              onChange={(e) => setForm({ ...form, pdfUrl: e.target.value })} className={rlcClass(null,
+              input)}
+              placeholder="Optional: PDF-Link" />
+            
           </Field>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="rlc-migrated-pages-kalkulation-crm-tsx-855">
           <Field label="Nächste Aktion">
             <input
               value={form.nextAction || ""}
-              onChange={(e) => setForm({ ...form, nextAction: e.target.value })}
-              style={input}
-              placeholder="z.B. Kunde anrufen, Angebot nachfassen, Preis prüfen..."
-            />
+              onChange={(e) => setForm({ ...form, nextAction: e.target.value })} className={rlcClass(null,
+              input)}
+              placeholder="z.B. Kunde anrufen, Angebot nachfassen, Preis prüfen..." />
+            
           </Field>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div className="rlc-migrated-pages-kalkulation-crm-tsx-856">
           <Field label="Notiz">
             <textarea
               value={form.notiz || ""}
-              onChange={(e) => setForm({ ...form, notiz: e.target.value })}
-              style={{ ...input, minHeight: 70 }}
-              placeholder="Follow-up, Gesprächsnotiz, Besonderheiten..."
-            />
+              onChange={(e) => setForm({ ...form, notiz: e.target.value })} className={rlcClass(null,
+              { ...input, minHeight: 70 })}
+              placeholder="Follow-up, Gesprächsnotiz, Besonderheiten..." />
+            
           </Field>
         </div>
 
-        <div style={{ marginTop: 12 }}>
-          <button type="submit" style={btnPrimary}>
+        <div className="rlc-migrated-pages-kalkulation-crm-tsx-857">
+          <button type="submit" className={rlcClass(null, btnPrimary)}>
             Angebot hinzufügen
           </button>
         </div>
       </form>
 
-      <section style={card}>
-        <div style={toolbar}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, toolbar)}>
           <input
             placeholder="Suche nach Angebot, Projekt, Kunde, Status, Kontakt, Aktion oder Betrag…"
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            style={searchInput}
-          />
+            onChange={(e) => setFilter(e.target.value)} className={rlcClass(null,
+            searchInput)} />
+          
 
-          <div style={toolbarRight}>
+          <div className={rlcClass(null, toolbarRight)}>
             <select
               value={statusFilter}
               onChange={(e) =>
-                setStatusFilter(e.target.value as OfferStatus | "Alle")
-              }
-              style={select}
-            >
+              setStatusFilter(e.target.value as OfferStatus | "Alle")
+              } className={rlcClass(null,
+              select)}>
+              
               <option value="Alle">Alle Status</option>
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
+              {STATUS_OPTIONS.map((status) =>
+              <option key={status} value={status}>
                   {status}
                 </option>
-              ))}
+              )}
             </select>
 
             <select
               value={followUpFilter}
-              onChange={(e) => setFollowUpFilter(e.target.value as FollowUpFilter)}
-              style={select}
-            >
-              {FOLLOW_UP_FILTERS.map((x) => (
-                <option key={x} value={x}>
+              onChange={(e) => setFollowUpFilter(e.target.value as FollowUpFilter)} className={rlcClass(null,
+              select)}>
+              
+              {FOLLOW_UP_FILTERS.map((x) =>
+              <option key={x} value={x}>
                   {x}
                 </option>
-              ))}
+              )}
             </select>
 
             <select
               value={quickFilter}
-              onChange={(e) => setQuickFilter(e.target.value as QuickFilter)}
-              style={select}
-            >
-              {QUICK_FILTERS.map((x) => (
-                <option key={x} value={x}>
+              onChange={(e) => setQuickFilter(e.target.value as QuickFilter)} className={rlcClass(null,
+              select)}>
+              
+              {QUICK_FILTERS.map((x) =>
+              <option key={x} value={x}>
                   {x}
                 </option>
-              ))}
+              )}
             </select>
 
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortBy)}
-              style={select}
-            >
+              onChange={(e) => setSortBy(e.target.value as SortBy)} className={rlcClass(null,
+              select)}>
+              
               <option value="datum">Datum</option>
               <option value="followUp">Follow-up</option>
               <option value="betragBrutto">Betrag</option>
@@ -1652,80 +1653,80 @@ useEffect(() => {
 
             <select
               value={sortDir}
-              onChange={(e) => setSortDir(e.target.value as SortDir)}
-              style={select}
-            >
+              onChange={(e) => setSortDir(e.target.value as SortDir)} className={rlcClass(null,
+              select)}>
+              
               <option value="desc">Absteigend</option>
               <option value="asc">Aufsteigend</option>
             </select>
           </div>
         </div>
 
-        {selectedIds.length ? (
-          <div style={bulkBar}>
+        {selectedIds.length ?
+        <div className={rlcClass(null, bulkBar)}>
             <b>{selectedIds.length} Angebot(e) ausgewählt</b>
 
             <button
-              type="button"
-              style={btnMini}
-              onClick={() =>
-                updateMany(selectedIds, {
-                  followUp: addDaysISO(7),
-                  nextAction: "Angebot nachfassen",
-                })
-              }
-            >
+            type="button" className={rlcClass(null,
+            btnMini)}
+            onClick={() =>
+            updateMany(selectedIds, {
+              followUp: addDaysISO(7),
+              nextAction: "Angebot nachfassen"
+            })
+            }>
+            
               Follow-up +7 Tage
             </button>
 
             <button
-              type="button"
-              style={btnMini}
-              onClick={() =>
-                updateMany(selectedIds, {
-                  status: "Nachverhandlung",
-                  nextAction: "Nachverhandlung / Rückmeldung prüfen",
-                })
-              }
-            >
+            type="button" className={rlcClass(null,
+            btnMini)}
+            onClick={() =>
+            updateMany(selectedIds, {
+              status: "Nachverhandlung",
+              nextAction: "Nachverhandlung / Rückmeldung prüfen"
+            })
+            }>
+            
               Nachverhandlung
             </button>
 
             <button
-              type="button"
-              style={btnMini}
-              onClick={() =>
-                updateMany(selectedIds, {
-                  status: "Zuschlag",
-                  wahrscheinlichkeit: 100,
-                  nextAction: "Auftrag vorbereiten / Projektübergabe",
-                })
-              }
-            >
+            type="button" className={rlcClass(null,
+            btnMini)}
+            onClick={() =>
+            updateMany(selectedIds, {
+              status: "Zuschlag",
+              wahrscheinlichkeit: 100,
+              nextAction: "Auftrag vorbereiten / Projektübergabe"
+            })
+            }>
+            
               Zuschlag
             </button>
 
             <button
-              type="button"
-              style={btnDangerMini}
-              onClick={() =>
-                updateMany(selectedIds, {
-                  status: "Abgelehnt",
-                  wahrscheinlichkeit: 0,
-                  nextAction: "Absagegrund dokumentieren",
-                })
-              }
-            >
+            type="button" className={rlcClass(null,
+            btnDangerMini)}
+            onClick={() =>
+            updateMany(selectedIds, {
+              status: "Abgelehnt",
+              wahrscheinlichkeit: 0,
+              nextAction: "Absagegrund dokumentieren"
+            })
+            }>
+            
               Abgelehnt
             </button>
-          </div>
-        ) : null}
+          </div> :
+        null}
 
-        <div style={tableWrap}>
-          <table style={table}>
+        <div className={rlcClass(null, tableWrap)}>
+          <table className={rlcClass(null, table)}>
             <thead>
               <tr>
-                <th style={th}>
+                <th className={rlcClass(null, th)}>
                   <input
                     type="checkbox"
                     checked={filtered.length > 0 && filtered.every((o) => selected[o.id])}
@@ -1735,196 +1736,196 @@ useEffect(() => {
                       } else {
                         clearSelection();
                       }
-                    }}
-                  />
+                    }} />
+                  
                 </th>
-                <th style={th}>Angebot</th>
-                <th style={th}>Projekt</th>
-                <th style={th}>Kunde</th>
-                <th style={thRight}>Netto</th>
-                <th style={thRight}>Brutto</th>
-                <th style={th}>Datum</th>
-                <th style={th}>Status</th>
-                <th style={thRight}>Chance</th>
-                <th style={th}>Follow-up</th>
-                <th style={th}>Nächste Aktion</th>
-                <th style={th}>Kontakt / Notiz</th>
-                <th style={th}>Aktion</th>
+                <th className={rlcClass(null, th)}>Angebot</th>
+                <th className={rlcClass(null, th)}>Projekt</th>
+                <th className={rlcClass(null, th)}>Kunde</th>
+                <th className={rlcClass(null, thRight)}>Netto</th>
+                <th className={rlcClass(null, thRight)}>Brutto</th>
+                <th className={rlcClass(null, th)}>Datum</th>
+                <th className={rlcClass(null, th)}>Status</th>
+                <th className={rlcClass(null, thRight)}>Chance</th>
+                <th className={rlcClass(null, th)}>Follow-up</th>
+                <th className={rlcClass(null, th)}>Nächste Aktion</th>
+                <th className={rlcClass(null, th)}>Kontakt / Notiz</th>
+                <th className={rlcClass(null, th)}>Aktion</th>
               </tr>
             </thead>
 
             <tbody>
-              {filtered.map((offer, i) => (
-                <tr
-                  key={offer.id}
-                  style={{ background: i % 2 ? "#FCFCFC" : "#FFFFFF" }}
-                >
-                  <td style={td}>
+              {filtered.map((offer, i) =>
+              <tr
+                key={offer.id} className={rlcClass(null,
+                { background: i % 2 ? "#FCFCFC" : "#FFFFFF" })}>
+                
+                  <td className={rlcClass(null, td)}>
                     <input
-                      type="checkbox"
-                      checked={!!selected[offer.id]}
-                      onChange={(e) =>
-                        setSelected((prev) => ({
-                          ...prev,
-                          [offer.id]: e.target.checked,
-                        }))
-                      }
-                    />
+                    type="checkbox"
+                    checked={!!selected[offer.id]}
+                    onChange={(e) =>
+                    setSelected((prev) => ({
+                      ...prev,
+                      [offer.id]: e.target.checked
+                    }))
+                    } />
+                  
                   </td>
 
-                  <td style={tdStrong}>
+                  <td className={rlcClass(null, tdStrong)}>
                     {offer.angebotNr || "—"}
-                    <div style={tiny}>Quelle: {offer.source}</div>
-                    {offer.pdfUrl ? <div style={tinyOk}>PDF vorhanden</div> : null}
+                    <div className={rlcClass(null, tiny)}>Quelle: {offer.source}</div>
+                    {offer.pdfUrl ? <div className={rlcClass(null, tinyOk)}>PDF vorhanden</div> : null}
                   </td>
 
-                  <td style={td}>
+                  <td className={rlcClass(null, td)}>
                     <b>{offer.projectCode || "—"}</b>
-                    <div style={tiny}>{offer.projectName || "—"}</div>
+                    <div className={rlcClass(null, tiny)}>{offer.projectName || "—"}</div>
                   </td>
 
-                  <td style={td}>{offer.kunde || "—"}</td>
-                  <td style={tdRight}>{money(offer.betragNetto)}</td>
-                  <td style={tdRight}>{money(offer.betragBrutto)}</td>
-                  <td style={td}>{fmtDate(offer.datum)}</td>
+                  <td className={rlcClass(null, td)}>{offer.kunde || "—"}</td>
+                  <td className={rlcClass(null, tdRight)}>{money(offer.betragNetto)}</td>
+                  <td className={rlcClass(null, tdRight)}>{money(offer.betragBrutto)}</td>
+                  <td className={rlcClass(null, td)}>{fmtDate(offer.datum)}</td>
 
-                  <td style={td}>
+                  <td className={rlcClass(null, td)}>
                     <select
-                      value={offer.status}
-                      onChange={(e) =>
-                        updateOffer(offer.id, {
-                          status: e.target.value as OfferStatus,
-                        })
-                      }
-                      style={smallSelect}
-                    >
-                      {STATUS_OPTIONS.map((status) => (
-                        <option key={status}>{status}</option>
-                      ))}
+                    value={offer.status}
+                    onChange={(e) =>
+                    updateOffer(offer.id, {
+                      status: e.target.value as OfferStatus
+                    })
+                    } className={rlcClass(null,
+                    smallSelect)}>
+                    
+                      {STATUS_OPTIONS.map((status) =>
+                    <option key={status}>{status}</option>
+                    )}
                     </select>
-                    <div style={{ marginTop: 5 }}>
-                      <span style={statusStyle(offer.status)}>{offer.status}</span>
+                    <div className="rlc-migrated-pages-kalkulation-crm-tsx-858">
+                      <span className={rlcClass(null, statusStyle(offer.status))}>{offer.status}</span>
                     </div>
                   </td>
 
-                  <td style={tdRight}>
+                  <td className={rlcClass(null, tdRight)}>
                     <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={offer.wahrscheinlichkeit}
-                      onChange={(e) =>
-                        updateOffer(offer.id, {
-                          wahrscheinlichkeit: n(e.target.value),
-                        })
-                      }
-                      style={chanceInput}
-                    />
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={offer.wahrscheinlichkeit}
+                    onChange={(e) =>
+                    updateOffer(offer.id, {
+                      wahrscheinlichkeit: n(e.target.value)
+                    })
+                    } className={rlcClass(null,
+                    chanceInput)} />
+                  
                     %
                   </td>
 
-                  <td style={td}>
+                  <td className={rlcClass(null, td)}>
                     <input
-                      type="date"
-                      value={offer.followUp || ""}
-                      onChange={(e) =>
-                        updateOffer(offer.id, { followUp: e.target.value })
-                      }
-                      style={dateInput}
-                    />
-                    <div style={{ marginTop: 5 }}>
-                      <span style={followUpStyle(offer)}>
+                    type="date"
+                    value={offer.followUp || ""}
+                    onChange={(e) =>
+                    updateOffer(offer.id, { followUp: e.target.value })
+                    } className={rlcClass(null,
+                    dateInput)} />
+                  
+                    <div className="rlc-migrated-pages-kalkulation-crm-tsx-859">
+                      <span className={rlcClass(null, followUpStyle(offer))}>
                         {followUpLabel(offer)}
                       </span>
                     </div>
                   </td>
 
-                  <td style={td}>
+                  <td className={rlcClass(null, td)}>
                     <textarea
-                      value={offer.nextAction}
-                      onChange={(e) =>
-                        updateOffer(offer.id, { nextAction: e.target.value })
-                      }
-                      placeholder="Nächste Aktion"
-                      style={miniTextarea}
-                    />
+                    value={offer.nextAction}
+                    onChange={(e) =>
+                    updateOffer(offer.id, { nextAction: e.target.value })
+                    }
+                    placeholder="Nächste Aktion" className={rlcClass(null,
+                    miniTextarea)} />
+                  
                   </td>
 
-                  <td style={td}>
+                  <td className={rlcClass(null, td)}>
                     <input
-                      value={offer.kontakt}
-                      onChange={(e) =>
-                        updateOffer(offer.id, { kontakt: e.target.value })
-                      }
-                      placeholder="Kontakt"
-                      style={miniInput}
-                    />
+                    value={offer.kontakt}
+                    onChange={(e) =>
+                    updateOffer(offer.id, { kontakt: e.target.value })
+                    }
+                    placeholder="Kontakt" className={rlcClass(null,
+                    miniInput)} />
+                  
                     <textarea
-                      value={offer.notiz}
-                      onChange={(e) =>
-                        updateOffer(offer.id, { notiz: e.target.value })
-                      }
-                      placeholder="Notiz"
-                      style={miniTextarea}
-                    />
+                    value={offer.notiz}
+                    onChange={(e) =>
+                    updateOffer(offer.id, { notiz: e.target.value })
+                    }
+                    placeholder="Notiz" className={rlcClass(null,
+                    miniTextarea)} />
+                  
                     <input
-                      value={offer.pdfUrl}
-                      onChange={(e) =>
-                        updateOffer(offer.id, { pdfUrl: e.target.value })
-                      }
-                      placeholder="PDF-Link optional"
-                      style={miniInputLast}
-                    />
+                    value={offer.pdfUrl}
+                    onChange={(e) =>
+                    updateOffer(offer.id, { pdfUrl: e.target.value })
+                    }
+                    placeholder="PDF-Link optional" className={rlcClass(null,
+                    miniInputLast)} />
+                  
                   </td>
 
-                  <td style={td}>
-                    <div style={actionCol}>
+                  <td className={rlcClass(null, td)}>
+                    <div className={rlcClass(null, actionCol)}>
                       <button
-                        type="button"
-                        style={btnMini}
-                        onClick={() => openOffer(offer)}
-                      >
+                      type="button" className={rlcClass(null,
+                      btnMini)}
+                      onClick={() => openOffer(offer)}>
+                      
                         Angebot öffnen
                       </button>
 
                       <button
-                        type="button"
-                        style={btnMini}
-                        onClick={() =>
-                          updateOffer(offer.id, {
-                            followUp: addDaysISO(7),
-                            nextAction: "Angebot nachfassen",
-                          })
-                        }
-                      >
+                      type="button" className={rlcClass(null,
+                      btnMini)}
+                      onClick={() =>
+                      updateOffer(offer.id, {
+                        followUp: addDaysISO(7),
+                        nextAction: "Angebot nachfassen"
+                      })
+                      }>
+                      
                         Follow-up +7
                       </button>
 
                       <button
-                        type="button"
-                        style={btnDangerMini}
-                        onClick={() => deleteOffer(offer.id)}
-                      >
+                      type="button" className={rlcClass(null,
+                      btnDangerMini)}
+                      onClick={() => deleteOffer(offer.id)}>
+                      
                         Löschen
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )}
 
-              {!filtered.length ? (
-                <tr>
-                  <td colSpan={13} style={emptyCell}>
+              {!filtered.length ?
+              <tr>
+                  <td colSpan={13} className={rlcClass(null, emptyCell)}>
                     Noch keine Angebote vorhanden. Erstelle ein Angebot in der Kalkulation oder übernimm es über „Aus Angebot übernehmen“.
                   </td>
-                </tr>
-              ) : null}
+                </tr> :
+              null}
             </tbody>
           </table>
         </div>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UI ================= */
@@ -1932,35 +1933,35 @@ useEffect(() => {
 function Kpi({
   label,
   value,
-  danger,
-}: {
-  label: string;
-  value: string;
-  danger?: boolean;
-}) {
+  danger
+
+
+
+
+}: {label: string;value: string;danger?: boolean;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={{ ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" }}>
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function Field({
   label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={labelStyle}>{label}</span>
+    <label className="rlc-migrated-pages-kalkulation-crm-tsx-860">
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
 /* ================= STYLES ================= */
@@ -1968,17 +1969,17 @@ function Field({
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -1986,47 +1987,47 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.88,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.9,
+  opacity: 0.9
 };
 
 const infoBox: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 12,
   padding: "10px 12px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const kpiGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -2034,22 +2035,22 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const card: React.CSSProperties = {
@@ -2057,7 +2058,7 @@ const card: React.CSSProperties = {
   borderRadius: 16,
   padding: 16,
   background: "#FFFFFF",
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -2066,34 +2067,34 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const formGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
   gap: 10,
-  alignItems: "end",
+  alignItems: "end"
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const input: React.CSSProperties = {
@@ -2102,7 +2103,7 @@ const input: React.CSSProperties = {
   borderRadius: 10,
   fontSize: 13,
   width: "100%",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const toolbar: React.CSSProperties = {
@@ -2111,19 +2112,19 @@ const toolbar: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   marginBottom: 12,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const toolbarRight: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const searchInput: React.CSSProperties = {
   ...input,
   width: 480,
-  maxWidth: "100%",
+  maxWidth: "100%"
 };
 
 const select: React.CSSProperties = {
@@ -2131,12 +2132,12 @@ const select: React.CSSProperties = {
   border: "1px solid #D1D5DB",
   borderRadius: 10,
   background: "#FFFFFF",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const smallSelect: React.CSSProperties = {
   ...select,
-  width: 145,
+  width: 145
 };
 
 const btnBase: React.CSSProperties = {
@@ -2144,29 +2145,29 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnDanger: React.CSSProperties = {
   ...btnBase,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const btnMini: React.CSSProperties = {
@@ -2176,16 +2177,16 @@ const btnMini: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnDangerMini: React.CSSProperties = {
   ...btnMini,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const bulkBar: React.CSSProperties = {
@@ -2193,25 +2194,25 @@ const bulkBar: React.CSSProperties = {
   gap: 8,
   alignItems: "center",
   flexWrap: "wrap",
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 12,
   padding: 10,
   marginBottom: 12,
-  fontSize: 13,
+  fontSize: 13
 };
 
 const tableWrap: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 12,
-  overflow: "auto",
+  overflow: "auto"
 };
 
 const table: React.CSSProperties = {
   borderCollapse: "collapse",
   width: "100%",
-  minWidth: 1840,
+  minWidth: 1840
 };
 
 const th: React.CSSProperties = {
@@ -2221,13 +2222,13 @@ const th: React.CSSProperties = {
   background: "#F8FAFC",
   fontSize: 12,
   color: "#475569",
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const thRight: React.CSSProperties = {
   ...th,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const td: React.CSSProperties = {
@@ -2235,33 +2236,33 @@ const td: React.CSSProperties = {
   borderBottom: "1px solid #F1F5F9",
   fontSize: 13,
   color: "#0F172A",
-  verticalAlign: "top",
+  verticalAlign: "top"
 };
 
 const tdStrong: React.CSSProperties = {
   ...td,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
   whiteSpace: "nowrap",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const tiny: React.CSSProperties = {
   marginTop: 3,
   fontSize: 11,
   color: "#64748B",
-  fontWeight: 600,
+  fontWeight: 600
 };
 
 const tinyOk: React.CSSProperties = {
   marginTop: 3,
   fontSize: 11,
   color: "#15803D",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const chanceInput: React.CSSProperties = {
@@ -2272,7 +2273,7 @@ const chanceInput: React.CSSProperties = {
   width: 62,
   textAlign: "right",
   boxSizing: "border-box",
-  marginRight: 4,
+  marginRight: 4
 };
 
 const dateInput: React.CSSProperties = {
@@ -2281,7 +2282,7 @@ const dateInput: React.CSSProperties = {
   padding: "6px 8px",
   fontSize: 12,
   width: 130,
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const miniInput: React.CSSProperties = {
@@ -2291,12 +2292,12 @@ const miniInput: React.CSSProperties = {
   fontSize: 12,
   width: "100%",
   boxSizing: "border-box",
-  marginBottom: 6,
+  marginBottom: 6
 };
 
 const miniInputLast: React.CSSProperties = {
   ...miniInput,
-  marginBottom: 0,
+  marginBottom: 0
 };
 
 const miniTextarea: React.CSSProperties = {
@@ -2304,19 +2305,19 @@ const miniTextarea: React.CSSProperties = {
   minHeight: 48,
   resize: "vertical",
   marginBottom: 6,
-  fontFamily: "inherit",
+  fontFamily: "inherit"
 };
 
 const actionCol: React.CSSProperties = {
   display: "flex",
   gap: 6,
-  flexDirection: "column",
+  flexDirection: "column"
 };
 
 const emptyCell: React.CSSProperties = {
   padding: 14,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -2327,51 +2328,33 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeOk: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #BBF7D0",
   background: "#F0FDF4",
-  color: "#15803D",
+  color: "#15803D"
 };
 
 const badgeBlue: React.CSSProperties = {
   ...badgeNeutral,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const badgeWarn: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FDE68A",
   background: "#FFFBEB",
-  color: "#B45309",
+  color: "#B45309"
 };
 
 const badgeCritical: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

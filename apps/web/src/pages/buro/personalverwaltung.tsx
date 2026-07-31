@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { PersonalDB } from "./store.personal";
 import { RlcEmployee, EmpCert, EmpAttachment } from "./types";
 
@@ -7,26 +7,26 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 export default function Personalverwaltung() {
@@ -98,7 +98,7 @@ export default function Personalverwaltung() {
     const c: EmpCert = {
       id: crypto.randomUUID(),
       name: "",
-      validUntil: new Date().toISOString(),
+      validUntil: new Date().toISOString()
     };
     up({ certs: [c, ...(sel.certs || [])] });
   }, [sel, up]);
@@ -157,11 +157,11 @@ export default function Personalverwaltung() {
   }, [refresh]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, padding: 10 }}>
+    <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-589">
       <div
-        className="card"
-        style={{ padding: "8px 10px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-      >
+        className="card rlc-migrated-pages-buro-personalverwaltung-tsx-590">
+
+        
         <button className="btn" onClick={add}>
           + Mitarbeiter
         </button>
@@ -169,26 +169,26 @@ export default function Personalverwaltung() {
           Löschen
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-591" />
 
         <input
           placeholder="Suche Name / Rolle / Projekt…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 280 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 280 })} />
+        
 
         <select
           value={proj}
-          onChange={(e) => setProj(e.target.value)}
-          style={{ ...inp, width: 160 }}
-        >
+          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 160 })}>
+          
           <option value="">Alle Projekte</option>
-          {projects.map((p) => (
-            <option key={p} value={p}>
+          {projects.map((p) =>
+          <option key={p} value={p}>
               {p}
             </option>
-          ))}
+          )}
         </select>
 
         <button className="btn" onClick={importCSV}>
@@ -205,24 +205,24 @@ export default function Personalverwaltung() {
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(460px, 48vw) 1fr",
-          gap: 10,
-          minHeight: "60vh",
-        }}
-      >
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-592">
+
+
+
+
+
+
+        
+        <div className="card rlc-migrated-pages-buro-personalverwaltung-tsx-593">
+          <table className="rlc-migrated-pages-buro-personalverwaltung-tsx-594">
             <thead>
               <tr>
-                <th style={th}>Name</th>
-                <th style={th}>Rolle</th>
-                <th style={th}>E-Mail</th>
-                <th style={th}>Std.-Satz</th>
-                <th style={th}>Projekte</th>
-                <th style={th}>Abläufe</th>
+                <th className={rlcClass(null, th)}>Name</th>
+                <th className={rlcClass(null, th)}>Rolle</th>
+                <th className={rlcClass(null, th)}>E-Mail</th>
+                <th className={rlcClass(null, th)}>Std.-Satz</th>
+                <th className={rlcClass(null, th)}>Projekte</th>
+                <th className={rlcClass(null, th)}>Abläufe</th>
               </tr>
             </thead>
             <tbody>
@@ -236,309 +236,309 @@ export default function Personalverwaltung() {
                 return (
                   <tr
                     key={e.id}
-                    onClick={() => setSelId(e.id)}
-                    style={{
+                    onClick={() => setSelId(e.id)} className={rlcClass(null,
+                    {
                       cursor: "pointer",
-                      background: sel?.id === e.id ? "#f1f5ff" : undefined,
-                    }}
-                  >
-                    <td style={td}>
+                      background: sel?.id === e.id ? "#f1f5ff" : undefined
+                    })}>
+                    
+                    <td className={rlcClass(null, td)}>
                       <b>{e.name}</b>
                     </td>
-                    <td style={td}>{e.role || "—"}</td>
-                    <td style={td}>{e.email || "—"}</td>
-                    <td style={td}>
-                      {typeof e.hourlyRate === "number"
-                        ? `${e.hourlyRate.toFixed(2)} €`
-                        : "—"}
+                    <td className={rlcClass(null, td)}>{e.role || "—"}</td>
+                    <td className={rlcClass(null, td)}>{e.email || "—"}</td>
+                    <td className={rlcClass(null, td)}>
+                      {typeof e.hourlyRate === "number" ?
+                      `${e.hourlyRate.toFixed(2)} €` :
+                      "—"}
                     </td>
-                    <td style={td}>{(e.projects || []).join(", ") || "—"}</td>
-                    <td style={td}>{warn ? `⚠️ ${exp} Tg.` : "—"}</td>
-                  </tr>
-                );
+                    <td className={rlcClass(null, td)}>{(e.projects || []).join(", ") || "—"}</td>
+                    <td className={rlcClass(null, td)}>{warn ? `⚠️ ${exp} Tg.` : "—"}</td>
+                  </tr>);
+
               })}
 
-              {filtered.length === 0 && (
-                <tr>
-                  <td style={{ ...td, opacity: 0.6 }} colSpan={6}>
+              {filtered.length === 0 &&
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={6}>
                     Keine Mitarbeiter.
                   </td>
                 </tr>
-              )}
+              }
             </tbody>
           </table>
         </div>
 
         <div
-          className="card"
+          className="card rlc-migrated-pages-buro-personalverwaltung-tsx-595"
           onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          style={{ padding: 12 }}
-        >
-          {!sel ? (
-            <div style={{ opacity: 0.7 }}>Links Mitarbeiter wählen oder neu anlegen.</div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "120px 1fr 120px 1fr",
-                gap: 10,
-              }}
-            >
-              <label style={lbl}>Name</label>
-              <input
-                style={inp}
-                value={sel.name}
-                onChange={(e) => up({ name: e.target.value })}
-              />
+          onDrop={onDrop}>
 
-              <label style={lbl}>Rolle</label>
-              <input
-                style={inp}
-                value={sel.role ?? ""}
-                onChange={(e) => up({ role: e.target.value })}
-              />
+          
+          {!sel ?
+          <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-596">Links Mitarbeiter wählen oder neu anlegen.</div> :
 
-              <label style={lbl}>E-Mail</label>
-              <input
-                style={inp}
-                value={sel.email ?? ""}
-                onChange={(e) => up({ email: e.target.value })}
-              />
+          <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-597">
 
-              <label style={lbl}>Telefon</label>
-              <input
-                style={inp}
-                value={sel.phone ?? ""}
-                onChange={(e) => up({ phone: e.target.value })}
-              />
 
-              <label style={lbl}>Kostenstelle</label>
-              <input
-                style={inp}
-                value={sel.costCenter ?? ""}
-                onChange={(e) => up({ costCenter: e.target.value })}
-              />
 
-              <label style={lbl}>Std.-Satz (€)</label>
-              <input
-                type="number"
-                step="0.01"
-                style={inp}
-                value={sel.hourlyRate ?? 0}
-                onChange={(e) => up({ hourlyRate: Number(e.target.value) || 0 })}
-              />
 
-              <label style={lbl}>Projekte</label>
-              <input
-                style={inp}
-                placeholder="P001, P002"
-                value={(sel.projects ?? []).join(", ")}
-                onChange={(e) =>
-                  up({
-                    projects: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-              />
 
-              <label style={lbl}>Anstellung</label>
-              <select
-                style={inp}
-                value={sel.employmentType ?? "Vollzeit"}
-                onChange={(e) => up({ employmentType: e.target.value as any })}
-              >
+            
+              <label className={rlcClass(null, lbl)}>Name</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.name}
+            onChange={(e) => up({ name: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Rolle</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.role ?? ""}
+            onChange={(e) => up({ role: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>E-Mail</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.email ?? ""}
+            onChange={(e) => up({ email: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Telefon</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.phone ?? ""}
+            onChange={(e) => up({ phone: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Kostenstelle</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.costCenter ?? ""}
+            onChange={(e) => up({ costCenter: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Std.-Satz (€)</label>
+              <input
+              type="number"
+              step="0.01" className={rlcClass(null,
+              inp)}
+              value={sel.hourlyRate ?? 0}
+              onChange={(e) => up({ hourlyRate: Number(e.target.value) || 0 })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Projekte</label>
+              <input className={rlcClass(null,
+            inp)}
+            placeholder="P001, P002"
+            value={(sel.projects ?? []).join(", ")}
+            onChange={(e) =>
+            up({
+              projects: e.target.value.
+              split(",").
+              map((s) => s.trim()).
+              filter(Boolean)
+            })
+            } />
+            
+
+              <label className={rlcClass(null, lbl)}>Anstellung</label>
+              <select className={rlcClass(null,
+            inp)}
+            value={sel.employmentType ?? "Vollzeit"}
+            onChange={(e) => up({ employmentType: e.target.value as any })}>
+              
                 <option>Vollzeit</option>
                 <option>Teilzeit</option>
                 <option>Werkvertrag</option>
                 <option>Praktikum</option>
               </select>
 
-              <label style={lbl}>Vertragsbeginn</label>
+              <label className={rlcClass(null, lbl)}>Vertragsbeginn</label>
               <input
-                type="date"
-                style={inp}
-                value={toDateInput(sel.contractStart)}
-                onChange={(e) => up({ contractStart: fromDateInput(e.target.value) })}
-              />
+              type="date" className={rlcClass(null,
+              inp)}
+              value={toDateInput(sel.contractStart)}
+              onChange={(e) => up({ contractStart: fromDateInput(e.target.value) })} />
+            
 
-              <label style={lbl}>Vertragsende</label>
+              <label className={rlcClass(null, lbl)}>Vertragsende</label>
               <input
-                type="date"
-                style={inp}
-                value={toDateInput(sel.contractEnd)}
-                onChange={(e) => up({ contractEnd: fromDateInput(e.target.value) })}
-              />
+              type="date" className={rlcClass(null,
+              inp)}
+              value={toDateInput(sel.contractEnd)}
+              onChange={(e) => up({ contractEnd: fromDateInput(e.target.value) })} />
+            
 
-              <label style={lbl}>Urlaub (gesamt)</label>
+              <label className={rlcClass(null, lbl)}>Urlaub (gesamt)</label>
               <input
-                type="number"
-                style={inp}
-                value={sel.vacationTotal ?? 25}
-                onChange={(e) => up({ vacationTotal: Number(e.target.value) || 0 })}
-              />
+              type="number" className={rlcClass(null,
+              inp)}
+              value={sel.vacationTotal ?? 25}
+              onChange={(e) => up({ vacationTotal: Number(e.target.value) || 0 })} />
+            
 
-              <label style={lbl}>Urlaub (genommen)</label>
+              <label className={rlcClass(null, lbl)}>Urlaub (genommen)</label>
               <input
-                type="number"
-                style={inp}
-                value={sel.vacationTaken ?? 0}
-                onChange={(e) => up({ vacationTaken: Number(e.target.value) || 0 })}
-              />
+              type="number" className={rlcClass(null,
+              inp)}
+              value={sel.vacationTaken ?? 0}
+              onChange={(e) => up({ vacationTaken: Number(e.target.value) || 0 })} />
+            
 
-              <label style={{ ...lbl, gridColumn: "1 / -1" }}>
+              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>
                 Zertifikate &amp; Schulungen
               </label>
-              <div style={{ gridColumn: "1 / -1", display: "grid", gap: 6 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-598">
+                <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-599">
                   <button className="btn" onClick={addCert}>
                     + Zertifikat
                   </button>
-                  <small style={{ opacity: 0.7 }}>
+                  <small className="rlc-migrated-pages-buro-personalverwaltung-tsx-600">
                     Warnung bei Ablauf &lt;= 30 Tage
                   </small>
                 </div>
 
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <table className="rlc-migrated-pages-buro-personalverwaltung-tsx-601">
                   <thead>
                     <tr>
-                      <th style={th}>Bezeichnung</th>
-                      <th style={th}>gültig bis</th>
-                      <th style={th}></th>
+                      <th className={rlcClass(null, th)}>Bezeichnung</th>
+                      <th className={rlcClass(null, th)}>gültig bis</th>
+                      <th className={rlcClass(null, th)}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {(sel.certs || []).map((c) => {
-                      const d = expWarn(c.validUntil);
-                      const warn = d !== null && d <= 30;
+                    const d = expWarn(c.validUntil);
+                    const warn = d !== null && d <= 30;
 
-                      return (
-                        <tr
-                          key={c.id}
-                          style={{ background: warn ? "#fff3f0" : undefined }}
-                        >
-                          <td style={td}>
-                            <input
-                              style={{ ...inp, width: "100%" }}
-                              value={c.name}
-                              onChange={(e) =>
-                                up({
-                                  certs: (sel.certs || []).map((x) =>
-                                    x.id === c.id ? { ...c, name: e.target.value } : x
-                                  ),
-                                })
-                              }
-                            />
+                    return (
+                      <tr
+                        key={c.id} className={rlcClass(null,
+                        { background: warn ? "#fff3f0" : undefined })}>
+                        
+                          <td className={rlcClass(null, td)}>
+                            <input className={rlcClass(null,
+                          { ...inp, width: "100%" })}
+                          value={c.name}
+                          onChange={(e) =>
+                          up({
+                            certs: (sel.certs || []).map((x) =>
+                            x.id === c.id ? { ...c, name: e.target.value } : x
+                            )
+                          })
+                          } />
+                          
                           </td>
-                          <td style={td}>
+                          <td className={rlcClass(null, td)}>
                             <input
-                              type="date"
-                              style={inp}
-                              value={toDateInput(c.validUntil)}
-                              onChange={(e) =>
-                                up({
-                                  certs: (sel.certs || []).map((x) =>
-                                    x.id === c.id
-                                      ? { ...c, validUntil: fromDateInput(e.target.value) }
-                                      : x
-                                  ),
-                                })
-                              }
-                            />
-                            {warn && (
-                              <span style={{ marginLeft: 8, color: "#c03" }}>
+                            type="date" className={rlcClass(null,
+                            inp)}
+                            value={toDateInput(c.validUntil)}
+                            onChange={(e) =>
+                            up({
+                              certs: (sel.certs || []).map((x) =>
+                              x.id === c.id ?
+                              { ...c, validUntil: fromDateInput(e.target.value) } :
+                              x
+                              )
+                            })
+                            } />
+                          
+                            {warn &&
+                          <span className="rlc-migrated-pages-buro-personalverwaltung-tsx-602">
                                 ⚠ {d} Tg
                               </span>
-                            )}
+                          }
                           </td>
-                          <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          <td className={rlcClass(null, { ...td, whiteSpace: "nowrap" })}>
                             <button className="btn" onClick={() => delCert(c.id)}>
                               Entfernen
                             </button>
                           </td>
-                        </tr>
-                      );
-                    })}
+                        </tr>);
 
-                    {(sel.certs || []).length === 0 && (
-                      <tr>
-                        <td style={{ ...td, opacity: 0.6 }} colSpan={3}>
+                  })}
+
+                    {(sel.certs || []).length === 0 &&
+                  <tr>
+                        <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={3}>
                           Keine Zertifikate.
                         </td>
                       </tr>
-                    )}
+                  }
                   </tbody>
                 </table>
               </div>
 
-              <label style={{ ...lbl, gridColumn: "1 / -1" }}>
+              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>
                 Dokumente (Drag&amp;Drop hier)
               </label>
+              <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-603">
+
+
+
+
+
+
+              
+                {(sel.attachments || []).map((a) =>
               <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-                  gap: 8,
-                }}
-              >
-                {(sel.attachments || []).map((a) => (
-                  <div
-                    key={a.id}
-                    style={{
-                      border: "1px solid var(--line)",
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      background: "#fff",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "6px 8px",
-                        fontSize: 12,
-                        display: "flex",
-                        gap: 8,
-                        alignItems: "center",
-                      }}
-                    >
+                key={a.id} className="rlc-migrated-pages-buro-personalverwaltung-tsx-604">
+
+
+
+
+
+
+                
+                    <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-605">
+
+
+
+
+
+
+
+                  
                       <b
-                        style={{
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={a.name}
-                      >
+
+
+
+
+
+                    title={a.name} className="rlc-migrated-pages-buro-personalverwaltung-tsx-606">
+                    
                         {a.name}
                       </b>
-                      <div style={{ flex: 1 }} />
+                      <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-607" />
                       <button className="btn" onClick={() => open(a)}>
                         Öffnen
                       </button>
                     </div>
 
-                    {(a.mime || "").startsWith("image/") && (
-                      <img
-                        src={a.dataURL}
-                        alt={a.name}
-                        style={{ width: "100%", height: "auto", display: "block" }}
-                      />
-                    )}
-                  </div>
-                ))}
+                    {(a.mime || "").startsWith("image/") &&
+                <img
+                  src={a.dataURL}
+                  alt={a.name} className="rlc-migrated-pages-buro-personalverwaltung-tsx-608" />
 
-                {(sel.attachments || []).length === 0 && (
-                  <div style={{ opacity: 0.6 }}>Keine Anhänge.</div>
-                )}
+
+                }
+                  </div>
+              )}
+
+                {(sel.attachments || []).length === 0 &&
+              <div className="rlc-migrated-pages-buro-personalverwaltung-tsx-609">Keine Anhänge.</div>
+              }
               </div>
             </div>
-          )}
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* utils */
@@ -577,8 +577,3 @@ function download(type: string, name: string, data: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-
-
-
-

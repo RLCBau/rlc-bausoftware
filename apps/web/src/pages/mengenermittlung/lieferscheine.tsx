@@ -1,26 +1,26 @@
-import { API_BASE, apiUrl } from "../../lib/apiBase";
-// apps/web/src/pages/mengenermittlung/Lieferscheine.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/mengenermittlung/Lieferscheine.tsx
 import React from "react";
 import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 import { useProject } from "../../store/useProject";
 import { useNavigate } from "react-router-dom";
+import MengPageHeader from "./MengPageHeader";
 
 /* ===== Tipi ===== */
-type Datei = { id: string; name: string; url: string; type: string };
+type Datei = {id: string;name: string;url: string;type: string;};
 
 type WorkflowStatus = "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT";
 
 type LsRow = {
-  id?: string;
+  id?: string; // docId
   projectId: string;
 
-  date?: string;
+  date?: string; // yyyy-mm-dd
   lieferscheinNummer?: string;
 
-  supplier?: string;
-  site?: string;
-  driver?: string;
+  supplier?: string; // Lieferant
+  site?: string; // Baustelle
+  driver?: string; // Fahrer
   material?: string;
   quantity?: number;
   unit?: string;
@@ -28,11 +28,11 @@ type LsRow = {
   kostenstelle?: string;
   lvItemPos?: string | null;
 
-  comment?: string;
-  bemerkungen?: string;
+  comment?: string; // Beschreibung / Text
+  bemerkungen?: string; // Feld "Bemerkungen" im PDF
 
-  photos?: Datei[];
-  attachments?: Datei[];
+  photos?: Datei[]; // UI field
+  attachments?: Datei[]; // server field (compat)
 
   workflowStatus?: WorkflowStatus;
   submittedAt?: number | null;
@@ -54,40 +54,113 @@ type LsHistoryItem = {
 
 /* ===== Utils ===== */
 const rid = () =>
-  // @ts-ignore
-  crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+// @ts-ignore
+crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
 const STATE_STORAGE_KEY = "rlc-lieferscheine-state-v3";
 
+const API_ORIGIN =
+(import.meta as any)?.env?.VITE_BACKEND_URL ||
+(import.meta as any)?.env?.VITE_API_ORIGIN ||
+"https://api.rlcbausoftware.com";
 
-const PROJECTS_BASE = `${String(API_BASE).replace(/\/$/, "")}/projects`;
+const API_BASE = `${String(API_ORIGIN).replace(/\/$/, "")}/api`;
+const PROJECTS_BASE = `${String(API_ORIGIN).replace(/\/$/, "")}/projects`;
+
+function authHeaders(): Record<string, string> {
+  const keys = [
+  "rlc_token",
+  "token",
+  "authToken",
+  "accessToken",
+  "rlc_auth_token",
+  "rlc.auth.token",
+  "rlc_mobile_token"];
+
+
+  for (const key of keys) {
+    const token = localStorage.getItem(key) || sessionStorage.getItem(key);
+    if (token?.trim()) return { Authorization: `Bearer ${token.trim()}` };
+  }
+
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      const raw = storage.getItem("rlc_auth");
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const token = parsed?.token || parsed?.accessToken;
+      if (token) return { Authorization: `Bearer ${String(token).trim()}` };
+    } catch {
+
+
+      // Alte ungültige Auth-Daten ignorieren.
+    }}
+  return {};
+}
+
+function apiUrl(pathOrUrl: string) {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  const normalized = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  return `${API_BASE}${normalized}`;
+}
+
+function publicUrl(pathOrUrl: string) {
+  if (/^(https?:\/\/|blob:|data:|file:)/i.test(pathOrUrl)) return pathOrUrl;
+  const normalized = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  return `${String(API_ORIGIN).replace(/\/$/, "")}${normalized}`;
+}
+
+async function readApiPayload(res: Response): Promise<any> {
+  const text = await res.text().catch(() => "");
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+  const res = await fetch(apiUrl(path), {
+    credentials: "include",
     ...init,
-  });
-  if (!res.ok) {
-    let txt = "";
-    try {
-      txt = await res.text();
-    } catch {
-      /* ignore */
+    headers: {
+      Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...authHeaders(),
+      ...((init?.headers || {}) as Record<string, string>)
     }
-    throw new Error(txt || `${res.status} ${res.statusText}`);
+  });
+  const payload = await readApiPayload(res);
+  if (!res.ok || payload?.ok === false) {
+    const detail =
+    typeof payload === "string" ?
+    payload :
+    payload?.message || payload?.error || `HTTP ${res.status}`;
+    throw new Error(detail);
   }
-  const text = await res.text().catch(() => "");
-  return (text ? JSON.parse(text) : null) as T;
+  return payload as T;
 }
 
 async function apiForm<T>(path: string, fd: FormData): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { method: "POST", body: fd });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(txt || `${res.status} ${res.statusText}`);
+  const res = await fetch(apiUrl(path), {
+    method: "POST",
+    body: fd,
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      ...authHeaders()
+    }
+  });
+  const payload = await readApiPayload(res);
+  if (!res.ok || payload?.ok === false) {
+    const detail =
+    typeof payload === "string" ?
+    payload :
+    payload?.message || payload?.error || `HTTP ${res.status}`;
+    throw new Error(detail);
   }
-  const text = await res.text().catch(() => "");
-  return (text ? JSON.parse(text) : null) as T;
+  return payload as T;
 }
 
 function today() {
@@ -96,9 +169,9 @@ function today() {
 
 function num(v: any) {
   const n = Number(v);
-  return Number.isFinite(n)
-    ? n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-    : "";
+  return Number.isFinite(n) ?
+  n.toLocaleString(undefined, { maximumFractionDigits: 2 }) :
+  "";
 }
 
 function msg(e: any) {
@@ -112,15 +185,16 @@ function guessType(name: string) {
   const ext = name.split(".").pop()?.toLowerCase();
   if (!ext) return "application/octet-stream";
   if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif"].includes(ext))
-    return `image/${ext === "jpg" ? "jpeg" : ext}`;
+  return `image/${ext === "jpg" ? "jpeg" : ext}`;
   if (ext === "pdf") return "application/pdf";
   return "application/octet-stream";
 }
 
+/** URL → dataURL (JPEG), se possibile */
 async function urlToDataURL(
-  url: string,
-  preferType = "image/jpeg"
-): Promise<string | null> {
+url: string,
+preferType = "image/jpeg")
+: Promise<string | null> {
   try {
     const res = await fetch(url);
     const blob = await res.blob();
@@ -151,7 +225,7 @@ async function urlToDataURL(
 async function readPdfText(file: File): Promise<string> {
   const pdfjsLib: any = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
   const array = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjsLib.getDocument({ data: array }).promise;
@@ -166,19 +240,19 @@ async function readPdfText(file: File): Promise<string> {
 }
 
 /* ===== Parser semplice Lieferschein dal testo ===== */
-function parseLsFromText(txt: string, defaults: { projectId: string }): LsRow[] {
+function parseLsFromText(txt: string, defaults: {projectId: string;}): LsRow[] {
   const date = (
-    txt.match(
-      /Datum[:\s]*([0-9]{2}\.[0-9]{2}\.[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i
-    )?.[1] ?? today()
-  ).replace(/(\d{2})\.(\d{2})\.(\d{4})/, "$3-$2-$1");
+  txt.match(
+    /Datum[:\s]*([0-9]{2}\.[0-9]{2}\.[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})/i
+  )?.[1] ?? today()).
+  replace(/(\d{2})\.(\d{2})\.(\d{4})/, "$3-$2-$1");
 
   const supplier =
-    txt.match(/(Lieferant|Firma)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
+  txt.match(/(Lieferant|Firma)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
   const site =
-    txt.match(/(Baustelle|Projekt)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
+  txt.match(/(Baustelle|Projekt)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
   const driver =
-    txt.match(/(Fahrer|Driver)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
+  txt.match(/(Fahrer|Driver)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
 
   const material = txt.match(/Material[:\s]*([^\n]+)/i)?.[1]?.trim();
   const qty = Number(
@@ -188,35 +262,35 @@ function parseLsFromText(txt: string, defaults: { projectId: string }): LsRow[] 
     )
   );
   const unit =
-    txt.match(/(Einheit|Unit)[:\s]*([A-Za-zÄÖÜäöüß]+)/i)?.[2]?.trim() ?? "";
+  txt.match(/(Einheit|Unit)[:\s]*([A-Za-zÄÖÜäöüß]+)/i)?.[2]?.trim() ?? "";
 
   const comment =
-    txt.match(/(Bemerkung|Hinweis|Notiz)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
+  txt.match(/(Bemerkung|Hinweis|Notiz)[:\s]*([^\n]+)/i)?.[2]?.trim() ?? "";
 
   const lvPos =
-    txt.match(/(LV[\s-]*Pos|Pos\.?)[:\s]*([A-Za-z0-9.\-]+)/i)?.[2]?.trim() ??
-    null;
+  txt.match(/(LV[\s-]*Pos|Pos\.?)[:\s]*([A-Za-z0-9.\-]+)/i)?.[2]?.trim() ??
+  null;
 
   const lsNr =
-    txt.match(/(Lieferschein[-\s]*Nr\.?|Nr\.)[:\s]*([A-Za-z0-9\-\/]+)/i)?.[2]?.trim() ??
-    "";
+  txt.match(/(Lieferschein[-\s]*Nr\.?|Nr\.)[:\s]*([A-Za-z0-9\-\/]+)/i)?.[2]?.trim() ??
+  "";
 
   return [
-    {
-      projectId: defaults.projectId,
-      date,
-      supplier,
-      site,
-      driver,
-      material,
-      quantity: qty,
-      unit,
-      comment,
-      lvItemPos: lvPos,
-      lieferscheinNummer: lsNr,
-      workflowStatus: "DRAFT",
-    },
-  ];
+  {
+    projectId: defaults.projectId,
+    date,
+    supplier,
+    site,
+    driver,
+    material,
+    quantity: qty,
+    unit,
+    comment,
+    lvItemPos: lvPos,
+    lieferscheinNummer: lsNr,
+    workflowStatus: "DRAFT"
+  }];
+
 }
 
 function normalizeStatus(s?: any): WorkflowStatus {
@@ -226,7 +300,7 @@ function normalizeStatus(s?: any): WorkflowStatus {
 
   if (u === "FREIGEGEBEN" || u.includes("FREIG") || u.includes("APPROV")) return "FREIGEGEBEN";
   if (u === "EINGEREICHT" || u.includes("EINGEREICH") || u.includes("SUBMIT") || u.includes("REVIEW"))
-    return "EINGEREICHT";
+  return "EINGEREICHT";
   if (u === "ABGELEHNT" || u.includes("ABLEHN") || u.includes("REJECT")) return "ABGELEHNT";
   if (u === "DRAFT" || u === "ENTWURF" || u.includes("DRAFT") || u.includes("ENTWURF")) return "DRAFT";
 
@@ -238,12 +312,12 @@ function normalizeServerRow(r: any, projectId: string): LsRow {
   const attRaw = Array.isArray(r?.attachments) ? r.attachments : [];
 
   const mapped = (list: any[]) =>
-    list.map((ph: any) => ({
-      id: String(ph?.id || rid()),
-      name: String(ph?.name || ph?.originalname || "Datei"),
-      type: String(ph?.type || guessType(String(ph?.name || "file"))),
-      url: String(ph?.url || ph?.publicUrl || ""),
-    }));
+  list.map((ph: any) => ({
+    id: String(ph?.id || rid()),
+    name: String(ph?.name || ph?.originalname || "Datei"),
+    type: String(ph?.type || guessType(String(ph?.name || "file"))),
+    url: String(ph?.url || ph?.publicUrl || "")
+  }));
 
   const photos = mapped(photosRaw.length ? photosRaw : attRaw);
 
@@ -254,7 +328,7 @@ function normalizeServerRow(r: any, projectId: string): LsRow {
     date: r?.date ? String(r.date).slice(0, 10) : undefined,
     workflowStatus: normalizeStatus(r?.workflowStatus),
     photos,
-    attachments: photos,
+    attachments: photos
   };
 }
 
@@ -266,22 +340,27 @@ export default function Lieferscheine() {
   const selectedProject = getSelectedProject();
   const navigate = useNavigate();
 
+  // IMPORTANT: use FS-key if available (BA-....)
   const [projectId, setProjectId] = React.useState<string>(
-    selectedProject?.code || (selectedProject?.id as string | undefined) || ""
+    selectedProject?.code || selectedProject?.id as string | undefined || ""
   );
 
+  // ✅ Routes laut App.tsx
   const PATH_BUERO = "/buro/projekte";
   const PATH_BUCHHALTUNG = "/buchhaltung/kostenuebersicht";
+
 
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = React.useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
 
+  // server-driven lists
   const [inboxRows, setInboxRows] = React.useState<LsRow[]>([]);
   const [freigegebenRows, setFreigegebenRows] = React.useState<LsRow[]>([]);
   const [history, setHistory] = React.useState<LsHistoryItem[]>([]);
 
+  // selection/edit form
   const [tab, setTab] = React.useState<Tab>("INBOX");
   const [selKey, setSelKey] = React.useState<string | null>(null);
 
@@ -289,43 +368,55 @@ export default function Lieferscheine() {
     projectId: projectId || "",
     date: today(),
     photos: [],
-    workflowStatus: "DRAFT",
+    workflowStatus: "DRAFT"
   });
 
+  // reject modal
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [rejectText, setRejectText] = React.useState("");
 
+  // upload staging (browser)
   const [pendingUploadFiles, setPendingUploadFiles] = React.useState<FileList | null>(null);
 
+  // FINAL preview (single loaded history file)
   const [finalPreview, setFinalPreview] = React.useState<{
     date: string;
     filename: string;
     rows: LsRow[];
   } | null>(null);
 
+  // keep form.projectId coherent
   React.useEffect(() => {
     setForm((p) => ({ ...p, projectId }));
   }, [projectId]);
 
+  /* ===== persist small UI state only ===== */
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem(STATE_STORAGE_KEY);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as { projectId?: string; tab?: Tab };
+      const parsed = JSON.parse(raw) as {projectId?: string;tab?: Tab;};
       if (parsed.projectId) setProjectId(parsed.projectId);
       if (parsed.tab) setTab(parsed.tab);
     } catch {
-      /* ignore */
-    }
+
+      /* ignore */}
   }, []);
 
   React.useEffect(() => {
     try {
       localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify({ projectId, tab }));
     } catch {
-      /* ignore */
-    }
+
+      /* ignore */}
   }, [projectId, tab]);
+
+  /* ============================================================
+     LOADERS
+     - Inbox:     /ls/inbox/list
+     - Freig.:    /ls/freigegeben/list  (fallback se non esiste)
+     - History:   /ls/list
+     ============================================================ */
 
   const loadInbox = React.useCallback(async () => {
     if (!projectId) {
@@ -334,9 +425,9 @@ export default function Lieferscheine() {
     }
     const res = await api<any>(`/ls/inbox/list?projectId=${encodeURIComponent(projectId)}`);
     const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
-    const normalized = items
-      .map((r: any) => normalizeServerRow(r, projectId))
-      .filter((r: LsRow) => !!r.id);
+    const normalized = items.
+    map((r: any) => normalizeServerRow(r, projectId)).
+    filter((r: LsRow) => !!r.id);
 
     const inbox = normalized.filter((r: LsRow) => {
       const st = normalizeStatus(r.workflowStatus);
@@ -353,27 +444,29 @@ export default function Lieferscheine() {
       return;
     }
 
+    // 1) Try dedicated endpoint (recommended)
     try {
       const res = await api<any>(`/ls/freigegeben/list?projectId=${encodeURIComponent(projectId)}`);
       const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
-      const normalized = items
-        .map((r: any) => normalizeServerRow(r, projectId))
-        .filter((r: LsRow) => !!r.id)
-        .map((r: LsRow) => ({ ...r, workflowStatus: "FREIGEGEBEN" as WorkflowStatus }));
+      const normalized = items.
+      map((r: any) => normalizeServerRow(r, projectId)).
+      filter((r: LsRow) => !!r.id).
+      map((r: LsRow) => ({ ...r, workflowStatus: "FREIGEGEBEN" as WorkflowStatus }));
 
       normalized.sort((a: LsRow, b: LsRow) => String(b.date || "").localeCompare(String(a.date || "")));
       setFreigegebenRows(normalized);
       return;
     } catch (e) {
-      /* fallback */
-    }
 
+
+      // fallthrough to fallback
+    } // 2) Fallback: if server keeps approved items inside inbox/list
     try {
       const res = await api<any>(`/ls/inbox/list?projectId=${encodeURIComponent(projectId)}`);
       const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
-      const normalized = items
-        .map((r: any) => normalizeServerRow(r, projectId))
-        .filter((r: LsRow) => !!r.id);
+      const normalized = items.
+      map((r: any) => normalizeServerRow(r, projectId)).
+      filter((r: LsRow) => !!r.id);
 
       const freig = normalized.filter((r: LsRow) => normalizeStatus(r.workflowStatus) === "FREIGEGEBEN");
       freig.sort((a: LsRow, b: LsRow) => String(b.date || "").localeCompare(String(a.date || "")));
@@ -389,7 +482,7 @@ export default function Lieferscheine() {
       return;
     }
     try {
-      const res = await api<{ ok: boolean; items: LsHistoryItem[] }>(
+      const res = await api<{ok: boolean;items: LsHistoryItem[];}>(
         `/ls/list?projectId=${encodeURIComponent(projectId)}`
       );
       setHistory(res?.items || []);
@@ -403,7 +496,7 @@ export default function Lieferscheine() {
   }, [loadInbox, loadFreigegeben, loadHistory]);
 
   React.useEffect(() => {
-    void loadAll();
+    loadAll();
   }, [loadAll]);
 
   function setField<K extends keyof LsRow>(k: K, v: LsRow[K]) {
@@ -432,7 +525,7 @@ export default function Lieferscheine() {
       rejectReason: null,
       submittedAt: null,
       approvedAt: null,
-      rejectedAt: null,
+      rejectedAt: null
     });
     setPendingUploadFiles(null);
   }
@@ -460,18 +553,20 @@ export default function Lieferscheine() {
       submittedAt: r.submittedAt ?? null,
       approvedAt: r.approvedAt ?? null,
       rejectedAt: r.rejectedAt ?? null,
-      rejectReason: r.rejectReason ?? null,
+      rejectReason: r.rejectReason ?? null
     });
     setPendingUploadFiles(null);
   }
 
-  async function submitInboxCreate(base: LsRow): Promise<{ docId: string }> {
+  /* ===== API: server workflow ===== */
+
+  async function submitInboxCreate(base: LsRow): Promise<{docId: string;}> {
     const payload = {
       ...base,
       projectId,
       projectCode: projectId,
       workflowStatus: normalizeStatus(base.workflowStatus),
-      date: String(base.date || today()).slice(0, 10),
+      date: String(base.date || today()).slice(0, 10)
     };
     const res = await api<any>(`/ls`, { method: "POST", body: JSON.stringify(payload) });
     const docId = String(res?.docId || res?.id || "").trim();
@@ -506,7 +601,7 @@ export default function Lieferscheine() {
         workflowStatus: "EINGEREICHT" as WorkflowStatus,
         submittedAt: form.submittedAt || now,
         photos: undefined,
-        attachments: undefined,
+        attachments: undefined
       };
 
       await updateInboxMeta(docId, nextMeta, null);
@@ -529,11 +624,12 @@ export default function Lieferscheine() {
 
       await api<any>(`/ls/inbox/approve`, {
         method: "POST",
-        body: JSON.stringify({ projectId, docId }),
+        body: JSON.stringify({ projectId, docId })
       });
 
       await loadAll();
-      setTab("FREIGEGEBEN");
+      clearForm();
+      setTab("INBOX");
     } catch (e: any) {
       setError(msg(e));
     } finally {
@@ -558,7 +654,7 @@ export default function Lieferscheine() {
 
       await api<any>(`/ls/inbox/reject`, {
         method: "POST",
-        body: JSON.stringify({ projectId, docId, reason }),
+        body: JSON.stringify({ projectId, docId, reason })
       });
 
       await loadAll();
@@ -582,9 +678,10 @@ export default function Lieferscheine() {
         ...form,
         projectId,
         date: String(form.date || today()).slice(0, 10),
-        workflowStatus: normalizeStatus(form.workflowStatus) || "DRAFT",
+        workflowStatus: normalizeStatus(form.workflowStatus) || "DRAFT"
       };
 
+      // create new doc
       if (!base.id) {
         const { docId } = await submitInboxCreate(base);
 
@@ -593,7 +690,7 @@ export default function Lieferscheine() {
           id: docId,
           projectId,
           projectCode: projectId,
-          workflowStatus: base.workflowStatus,
+          workflowStatus: base.workflowStatus
         };
 
         await updateInboxMeta(
@@ -610,6 +707,7 @@ export default function Lieferscheine() {
         return;
       }
 
+      // update existing doc
       const docId = String(base.id);
       const meta = {
         ...base,
@@ -617,7 +715,7 @@ export default function Lieferscheine() {
         projectId,
         projectCode: projectId,
         workflowStatus: base.workflowStatus,
-        rejectReason: base.rejectReason ?? null,
+        rejectReason: base.rejectReason ?? null
       };
 
       await updateInboxMeta(docId, meta, pendingUploadFiles);
@@ -632,27 +730,34 @@ export default function Lieferscheine() {
     }
   }
 
+  /* ===== Freigegeben -> Final (Historie) =====
+     Expect server endpoint: POST /api/ls/save
+     Suggested payload: { projectId }
+     Optionally: { projectId, rows } if your server needs it
+  */
   async function saveFreigegebenToFinal() {
     if (!projectId) return alert("Bitte Projekt-ID eingeben.");
     try {
       setError(null);
       setLoading(true);
 
+      // try with rows (more robust)
       await api<any>(`/ls/save`, {
         method: "POST",
         body: JSON.stringify({
           projectId,
-          rows: freigegebenRows,
-        }),
+          rows: freigegebenRows
+        })
       });
 
       await loadHistory();
       alert("Freigegeben gespeichert (Final/Historie aktualisiert).");
     } catch (e1: any) {
+      // fallback without rows if server expects only projectId
       try {
         await api<any>(`/ls/save`, {
           method: "POST",
-          body: JSON.stringify({ projectId }),
+          body: JSON.stringify({ projectId })
         });
         await loadHistory();
         alert("Freigegeben gespeichert (Final/Historie aktualisiert).");
@@ -664,6 +769,7 @@ export default function Lieferscheine() {
     }
   }
 
+  /* ===== Commit ONE Freigegeben -> Final (move single doc) ===== */
   async function commitOneFreigegebenToFinal(row: LsRow) {
     if (!projectId) return alert("Bitte Projekt-ID eingeben.");
     const docId = String(row.id || form.id || "");
@@ -673,6 +779,7 @@ export default function Lieferscheine() {
       setError(null);
       setLoading(true);
 
+      // 1) Save meta (use FORM as "latest edits" if currently editing same doc)
       const meta = {
         ...form,
         id: docId,
@@ -680,25 +787,30 @@ export default function Lieferscheine() {
         projectCode: projectId,
         workflowStatus: "FREIGEGEBEN" as WorkflowStatus,
         photos: undefined,
-        attachments: undefined,
+        attachments: undefined
       };
 
       await updateInboxMeta(docId, meta, pendingUploadFiles);
       setPendingUploadFiles(null);
 
+      // 2) Commit/move single file if endpoint exists
       try {
         await api(`/ls/freigegeben/commit`, {
           method: "POST",
-          body: JSON.stringify({ projectId, docId }),
+          body: JSON.stringify({ projectId, docId })
         });
       } catch {
+        // fallback: save with rows (server might only implement /ls/save)
         await api<any>(`/ls/save`, {
           method: "POST",
-          body: JSON.stringify({ projectId, rows: [normalizeServerRow(meta, projectId)] }),
+          body: JSON.stringify({ projectId, rows: [normalizeServerRow(meta, projectId)] })
         });
       }
 
+      // 3) Reload lists + history
       await loadAll();
+
+      // 4) Go to Final
       setTab("FINAL");
       alert("Gespeichert und nach Final verschoben.");
     } catch (e: any) {
@@ -724,9 +836,9 @@ export default function Lieferscheine() {
       const data = await res.json();
 
       let loadedRows: LsRow[] = [];
-      if (Array.isArray((data as any).rows)) loadedRows = (data as any).rows as LsRow[];
-      else if ((data as any).items && Array.isArray((data as any).items.lieferscheine))
-        loadedRows = (data as any).items.lieferscheine as LsRow[];
+      if (Array.isArray((data as any).rows)) loadedRows = (data as any).rows as LsRow[];else
+      if ((data as any).items && Array.isArray((data as any).items.lieferscheine))
+      loadedRows = (data as any).items.lieferscheine as LsRow[];
 
       if (!loadedRows.length) {
         const obj: any = data;
@@ -739,14 +851,14 @@ export default function Lieferscheine() {
 
       const d = (data as any).date?.slice(0, 10) || item.date?.slice(0, 10) || today();
 
-      const list = loadedRows
-        .map((r) => normalizeServerRow(r, projectId))
-        .map((r) => ({
-          ...r,
-          projectId,
-          date: (r.date || d).slice(0, 10),
-          workflowStatus: "FREIGEGEBEN" as WorkflowStatus,
-        }));
+      const list = loadedRows.
+      map((r) => normalizeServerRow(r, projectId)).
+      map((r) => ({
+        ...r,
+        projectId,
+        date: (r.date || d).slice(0, 10),
+        workflowStatus: "FREIGEGEBEN" as WorkflowStatus
+      }));
 
       setPdfUrl((data as any).pdfUrl ?? item.pdfUrl ?? null);
 
@@ -759,7 +871,7 @@ export default function Lieferscheine() {
     }
   }
 
-  function linkToAufmassLocal(args: { projectId: string; lvPos: string | null; lsId: string }) {
+  function linkToAufmassLocal(args: {projectId: string;lvPos: string | null;lsId: string;}) {
     if (!args.lvPos) return;
     const key = "aufmass-links";
     const map = JSON.parse(localStorage.getItem(key) || "{}");
@@ -771,7 +883,7 @@ export default function Lieferscheine() {
 
   function transferToAufmassEditor() {
     const source =
-      tab === "INBOX" ? inboxRows : tab === "FREIGEGEBEN" ? freigegebenRows : finalPreview?.rows || [];
+    tab === "INBOX" ? inboxRows : tab === "FREIGEGEBEN" ? freigegebenRows : finalPreview?.rows || [];
 
     if (!projectId || !source.length) return alert("Projekt und mindestens eine Zeile erforderlich.");
 
@@ -807,7 +919,7 @@ export default function Lieferscheine() {
           ...pr,
           projectId,
           date: String(pr.date || today()).slice(0, 10),
-          workflowStatus: "DRAFT",
+          workflowStatus: "DRAFT"
         };
 
         const { docId } = await submitInboxCreate(base);
@@ -817,7 +929,7 @@ export default function Lieferscheine() {
           id: docId,
           projectId,
           projectCode: projectId,
-          workflowStatus: "DRAFT",
+          workflowStatus: "DRAFT"
         };
 
         const fd = new FormData();
@@ -855,7 +967,7 @@ export default function Lieferscheine() {
       "LV-Pos": r.lvItemPos ?? "",
       Text: r.comment ?? "",
       Status: normalizeStatus(r.workflowStatus),
-      ID: r.id ?? "",
+      ID: r.id ?? ""
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -863,234 +975,54 @@ export default function Lieferscheine() {
     XLSX.writeFile(wb, `Lieferscheine_${projectId || "ohneProjekt"}.xlsx`);
   }
 
-  function safeText(doc: jsPDF, text: string, x: number, y: number, maxW: number) {
-    if (!text) return;
-    const lines = doc.splitTextToSize(String(text), maxW);
-    doc.text(lines, x, y);
+  async function requestServerPdf(list: LsRow[], preview: boolean) {
+    const rows = list.length ? list : [form];
+    const payload = {
+      ...form,
+      projectId,
+      projectCode: projectId,
+      projectName: selectedProject?.name || selectedProject?.code || projectId,
+      date: String(form.date || rows[0]?.date || today()).slice(0, 10),
+      rows,
+      attachments: form.photos || form.attachments || [],
+      photos: form.photos || form.attachments || []
+    };
+
+    const result = await api<{
+      ok: boolean;
+      pdfUrl: string;
+      fileName: string;
+    }>(`/ls/preview`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    const absolute = publicUrl(result.pdfUrl);
+    setPdfUrl(absolute);
+
+    if (!preview) {
+      window.open(absolute, "_blank", "noopener,noreferrer");
+    }
+
+    return result;
   }
 
   async function exportPdf(list: LsRow[], preview = false) {
-    if (!list.length) return alert("Keine Einträge zum Exportieren.");
-
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-    const pageW = doc.internal.pageSize.getWidth();
-    const margin = 10;
-    const lineW = 0.2;
-    const labelFont = 8;
-    const valueFont = 8;
-
-    doc.setLineWidth(lineW);
-    doc.setFont("helvetica", "normal");
-
-    const projectIdForBauNr = projectId || list[0].projectId || "";
-    const baustelleName = selectedProject?.name || selectedProject?.code || projectIdForBauNr;
-    const exportDate = (form.date || list[0]?.date || today()).slice(0, 10);
-
-    const chunkSize = 6;
-    const totalPages = Math.ceil(list.length / chunkSize);
-
-    for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-      if (pageIndex > 0) doc.addPage();
-
-      const pageRows = list.slice(pageIndex * chunkSize, (pageIndex + 1) * chunkSize);
-      const headerRow = pageRows[0] || list[0];
-
-      const headTop = margin;
-      const headH = 32;
-      const leftW = 55;
-      const rightW = 55;
-      const midW = pageW - margin * 2 - leftW - rightW;
-      const leftX = margin;
-      const midX = leftX + leftW;
-      const rightX = midX + midW;
-
-      doc.rect(leftX, headTop, leftW + midW + rightW, headH);
-
-      doc.rect(leftX, headTop, leftW, headH);
-      doc.setFontSize(labelFont + 1);
-      doc.text("Lieferschein", leftX + leftW / 2, headTop + headH / 2, { align: "center" });
-      doc.setFontSize(labelFont);
-
-      doc.rect(midX, headTop, midW, headH);
-      const midInnerX = midX + 6;
-      let lineY = headTop + 10;
-
-      doc.text("Baustelle:", midInnerX, lineY);
-      doc.setFontSize(valueFont);
-      safeText(doc, baustelleName || "-", midInnerX + 22, lineY, midW - 6 - 22);
-      doc.setFontSize(labelFont);
-      doc.line(midInnerX + 20, lineY + 1.5, midX + midW - 6, lineY + 1.5);
-      lineY += 10;
-
-      doc.text("Lieferant:", midInnerX, lineY);
-      doc.setFontSize(valueFont);
-      safeText(doc, headerRow.supplier || "-", midInnerX + 22, lineY, midW - 6 - 22);
-      doc.setFontSize(labelFont);
-      doc.line(midInnerX + 20, lineY + 1.5, midX + midW - 6, lineY + 1.5);
-
-      doc.rect(rightX, headTop, rightW, headH);
-      const fieldH = headH / 3;
-      let fy = headTop;
-
-      const drawRightField = (label: string, value?: string) => {
-        doc.rect(rightX, fy, rightW, fieldH);
-        doc.setFontSize(labelFont);
-        doc.text(label, rightX + rightW / 2, fy + 4, { align: "center" });
-        if (value) {
-          doc.setFontSize(valueFont);
-          doc.text(value, rightX + rightW / 2, fy + fieldH - 2, { align: "center" });
-        }
-        fy += fieldH;
-      };
-
-      drawRightField("Bau-Nr.", projectIdForBauNr || "");
-      drawRightField("LS-Nr.", headerRow.lieferscheinNummer || "");
-      drawRightField("Datum", (headerRow.date || exportDate || today()).slice(0, 10));
-
-      let curY = headTop + headH + 8;
-      const tableTop = curY;
-      const tableW = pageW - margin * 2;
-      const headerH = 7;
-      const rowH = 9;
-      const tableH = rowH * 6;
-
-      doc.rect(margin, tableTop, tableW, headerH + tableH);
-
-      const colKosten = tableW * 0.1;
-      const colLieferant = tableW * 0.22;
-      const colBaustelle = tableW * 0.2;
-      const colMaterial = tableW * 0.2;
-      const colMenge = tableW * 0.1;
-      const colBem = tableW - (colKosten + colLieferant + colBaustelle + colMaterial + colMenge);
-
-      let colX = margin;
-      const drawCol = (w: number, label: string) => {
-        doc.rect(colX, tableTop, w, headerH + tableH);
-        doc.setFontSize(labelFont);
-        doc.text(label, colX + w / 2, tableTop + 4, { align: "center" });
-        colX += w;
-      };
-
-      drawCol(colKosten, "Kostenstelle");
-      drawCol(colLieferant, "Lieferant / Fahrer");
-      drawCol(colBaustelle, "Baustelle");
-      drawCol(colMaterial, "Material");
-      drawCol(colMenge, "Menge / Einheit");
-      drawCol(colBem, "Bemerkungen");
-
-      const mainRowYStart = tableTop + headerH;
-
-      for (let i = 0; i <= 6; i++) {
-        const y = mainRowYStart + i * rowH;
-        doc.line(margin, y, margin + tableW, y);
-      }
-
-      doc.setFontSize(valueFont);
-
-      pageRows.forEach((r, idx) => {
-        if (idx >= 6) return;
-
-        const baseY = mainRowYStart + idx * rowH;
-        const textY = baseY + 6.2;
-
-        const mengeStr =
-          r.quantity != null && r.quantity !== 0 ? `${num(r.quantity)} ${r.unit || ""}`.trim() : "";
-
-        let txCol = margin + 2;
-
-        if (r.kostenstelle) safeText(doc, r.kostenstelle, txCol, textY, colKosten - 4);
-        txCol += colKosten;
-
-        const lfText = [r.supplier || "", r.driver || ""].filter(Boolean).join(" / ");
-        if (lfText) safeText(doc, lfText, txCol + 2, textY, colLieferant - 4);
-        txCol += colLieferant;
-
-        if (r.site) safeText(doc, r.site, txCol + 2, textY, colBaustelle - 4);
-        txCol += colBaustelle;
-
-        if (r.material) safeText(doc, r.material, txCol + 2, textY, colMaterial - 4);
-        txCol += colMaterial;
-
-        if (mengeStr) doc.text(mengeStr, txCol + colMenge / 2, textY, { align: "center" });
-        txCol += colMenge;
-
-        if (r.comment) safeText(doc, r.comment, txCol + 2, textY, colBem - 4);
-      });
-
-      curY = tableTop + headerH + tableH + 8;
-
-      const fotoBoxH = 55;
-      const fotoBoxW = tableW * 0.58;
-      const bemerkW = tableW - fotoBoxW;
-      const fotoX = margin;
-      const bemerkX = margin + fotoBoxW;
-
-      doc.rect(fotoX, curY, fotoBoxW, fotoBoxH);
-      doc.rect(bemerkX, curY, bemerkW, fotoBoxH);
-      doc.setFontSize(labelFont);
-      doc.text("Fotodokumentation", fotoX + 2, curY + 5);
-      doc.text("Bemerkungen", bemerkX + 2, curY + 5);
-
-      if (headerRow.bemerkungen) {
-        doc.setFontSize(valueFont);
-        safeText(doc, headerRow.bemerkungen, bemerkX + 2, curY + 11, bemerkW - 4);
-        doc.setFontSize(labelFont);
-      }
-
-      const firstImg =
-        pageRows.flatMap((r) => r.photos || r.attachments || []).find((p) => isImg(p.type)) || null;
-
-      if (firstImg) {
-        const dataUrl = await urlToDataURL(firstImg.url, "image/jpeg");
-        if (dataUrl) {
-          const imgMargin = 6;
-          const imgW = fotoBoxW - imgMargin * 2;
-          const imgH = fotoBoxH - imgMargin * 2 - 6;
-          doc.addImage(dataUrl, "JPEG", fotoX + imgMargin, curY + imgMargin + 4, imgW, imgH);
-        }
-      }
+    try {
+      setError(null);
+      setLoading(true);
+      if (pendingUploadFiles?.length) await saveToServerDraft();
+      await requestServerPdf(list.length ? list : [form], preview);
+    } catch (e: any) {
+      setError(msg(e));
+      alert(`PDF konnte nicht erstellt werden: ${msg(e)}`);
+    } finally {
+      setLoading(false);
     }
-
-    const fileName = `Lieferscheine_${exportDate}_${projectId || "ohneProjekt"}.pdf`;
-
-    if (preview) {
-      const blob = doc.output("blob");
-      const url = URL.createObjectURL(blob);
-      setPdfUrl(url);
-      return;
-    }
-
-    doc.save(fileName);
   }
 
-  async function exportRowPdf(row: LsRow, projectName?: string | null) {
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-    const margin = 10;
-
-    const projectIdForBauNr = projectId || row.projectId || "";
-    const baustelleName = projectName || selectedProject?.name || selectedProject?.code || projectIdForBauNr;
-    const exportDate = (row.date || form.date || today()).slice(0, 10);
-
-    doc.setFontSize(12);
-    doc.text("Lieferschein", margin, margin + 6);
-
-    doc.setFontSize(9);
-    doc.text(`Bau-Nr.: ${projectIdForBauNr}`, margin, margin + 14);
-    doc.text(`Baustelle: ${baustelleName}`, margin, margin + 19);
-    doc.text(`LS-Nr.: ${row.lieferscheinNummer || "-"}`, margin, margin + 24);
-    doc.text(`Datum: ${exportDate}`, margin, margin + 29);
-
-    doc.text(`Lieferant: ${row.supplier || "-"}`, margin, margin + 37);
-    doc.text(`Fahrer: ${row.driver || "-"}`, margin, margin + 42);
-    doc.text(`Material: ${row.material || "-"}`, margin, margin + 47);
-    doc.text(`Menge: ${(row.quantity ?? 0).toString()} ${row.unit || ""}`.trim(), margin, margin + 52);
-    doc.text(`Kostenstelle: ${row.kostenstelle || "-"}`, margin, margin + 57);
-    doc.text(`LV-Pos: ${row.lvItemPos || "-"}`, margin, margin + 62);
-
-    const fileName = `Lieferschein_${exportDate}_${projectIdForBauNr || "ohneProjekt"}_${row.id || "row"}.pdf`;
-    doc.save(fileName);
+  async function exportRowPdf(row: LsRow, _projectName?: string | null) {
+    await requestServerPdf([row], false);
   }
 
   function addPhotos(files: FileList | null) {
@@ -1102,13 +1034,13 @@ export default function Lieferscheine() {
       id: rid(),
       name: f.name,
       url: URL.createObjectURL(f),
-      type: f.type || guessType(f.name),
+      type: f.type || guessType(f.name)
     }));
 
     setForm((p) => ({
       ...p,
       photos: [...(p.photos || []), ...arr],
-      attachments: [...(p.attachments || []), ...arr],
+      attachments: [...(p.attachments || []), ...arr]
     }));
   }
 
@@ -1116,783 +1048,636 @@ export default function Lieferscheine() {
     setForm((p) => ({
       ...p,
       photos: (p.photos || []).filter((ph) => ph.id !== id),
-      attachments: (p.attachments || []).filter((ph) => ph.id !== id),
+      attachments: (p.attachments || []).filter((ph) => ph.id !== id)
     }));
   }
 
-  const activeList: LsRow[] =
-    tab === "INBOX" ? inboxRows : tab === "FREIGEGEBEN" ? freigegebenRows : finalPreview?.rows || [];
+  const selectedInbox = inboxRows.find(
+    (item) => String(item.id || "") === String(form.id || "")
+  );
+  const selectedStatus = normalizeStatus(selectedInbox?.workflowStatus || form.workflowStatus);
+  const canApprove = Boolean(form.id && selectedStatus === "EINGEREICHT");
 
-  const rightTitle =
-    tab === "INBOX" ? "Inbox" : tab === "FREIGEGEBEN" ? "Freigegeben" : "Final (Historie)";
+  async function approveCurrent() {
+    if (!form.id) return alert("Bitte zuerst einen Inbox-Lieferschein öffnen.");
+    try {
+      setLoading(true);
+      setError(null);
+      await saveToServerDraft();
+      await approveRowServer({ ...form, id: form.id, workflowStatus: "EINGEREICHT" });
+    } catch (e: any) {
+      setError(msg(e));
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const rightCount =
-    tab === "INBOX" ? inboxRows.length : tab === "FREIGEGEBEN" ? freigegebenRows.length : history.length;
-
-  const canEditFinal = (_r: LsRow) => true;
-
-  function openAndEditFromFinal(r: LsRow) {
-    selectRow(r);
-    setTab("FREIGEGEBEN");
+  function rejectCurrent() {
+    if (!form.id) return alert("Bitte zuerst einen Inbox-Lieferschein öffnen.");
+    requestReject({ ...form, id: form.id });
   }
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <h2 className="page-title" style={{ marginBottom: 4 }}>
-            Lieferscheine
-          </h2>
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            Inbox → Freigabe → Final (Historie).
-          </p>
-        </div>
+    <div className="page rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1436">
+      <style>{`
+        .ls-form-grid {
+          display: grid;
+          grid-template-columns: repeat(12, minmax(0, 1fr));
+          gap: 12px;
+        }
 
-        <div
-          className="page-header-actions"
-          style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-        >
+        .ls-form-grid > *,
+        .ls-description-grid > * {
+          min-width: 0;
+        }
+
+        .ls-general-grid > *:nth-child(1),
+        .ls-general-grid > *:nth-child(2) {
+          grid-column: span 2;
+        }
+
+        .ls-general-grid > *:nth-child(3) {
+          grid-column: span 5;
+        }
+
+        .ls-general-grid > *:nth-child(4) {
+          grid-column: span 3;
+        }
+
+        .ls-delivery-grid > *:nth-child(1) {
+          grid-column: span 3;
+        }
+
+        .ls-delivery-grid > *:nth-child(2) {
+          grid-column: span 2;
+        }
+
+        .ls-delivery-grid > *:nth-child(3) {
+          grid-column: span 3;
+        }
+
+        .ls-delivery-grid > *:nth-child(4),
+        .ls-delivery-grid > *:nth-child(5) {
+          grid-column: span 1;
+        }
+
+        .ls-delivery-grid > *:nth-child(6) {
+          grid-column: span 2;
+        }
+
+        .ls-description-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+        }
+
+        @media (max-width: 1100px) {
+          .ls-general-grid > *,
+          .ls-delivery-grid > * {
+            grid-column: span 6 !important;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .ls-general-grid > *,
+          .ls-delivery-grid > * {
+            grid-column: 1 / -1 !important;
+          }
+
+          .ls-description-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <MengPageHeader
+        title="Lieferscheine"
+        subtitle="Mobile → Inbox → Prüfung → Freigeben → Verwaltung" />
+
+      <div
+        className="card rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1439">
+
+
+
+
+
+
+
+
+        
+        <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1440">
+          <strong>Inbox (Eingereicht) • {inboxRows.length}</strong>
           <button className="btn" onClick={() => navigate(PATH_BUERO)} disabled={!projectId}>
-            Büro / Verwaltung
+            Verwaltung
           </button>
-
-          <button className="btn" onClick={() => navigate(PATH_BUCHHALTUNG)} disabled={!projectId}>
-            Buchhaltung
+          <button className="btn" onClick={loadAll} disabled={loading || !projectId}>
+            Aktualisieren
           </button>
+        </div>
 
-          <button className="btn" onClick={transferToAufmassEditor} disabled={!activeList.length || !projectId}>
-            Ins Aufmaßeditor übertragen
+        <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1441">
+          <button
+
+            onClick={approveCurrent}
+            disabled={!canApprove || loading} className={rlcClass("btn",
+              {
+                background: canApprove ? "#1546B8" : undefined,
+                color: canApprove ? "#fff" : undefined
+              })}>
+            
+            Freigeben
           </button>
+          <button
+            className="btn rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1442"
+            onClick={rejectCurrent}
+            disabled={!canApprove || loading}>
 
-          <button className="btn" onClick={() => loadHistory()} disabled={!projectId}>
-            Final aktualisieren
+            
+            Ablehnen
           </button>
+          <label className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1443">
+            <span className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1444">Projekt-ID</span>
+            <input
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1445" />
 
-          <button className="btn" onClick={() => loadAll()} disabled={!projectId}>
-            Inbox/Freigabe aktualisieren
-          </button>
-
-          {tab === "FREIGEGEBEN" && (
-            <button
-              className="btn"
-              onClick={saveFreigegebenToFinal}
-              disabled={!projectId || !freigegebenRows.length || loading}
-            >
-              Speichern → Final
-            </button>
-          )}
+            
+          </label>
         </div>
       </div>
 
-      <div
-        className="card"
-        style={{
-          padding: 8,
-          marginBottom: 10,
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <TabBtn active={tab === "INBOX"} onClick={() => setTab("INBOX")} label={`Inbox (${inboxRows.length})`} />
-        <TabBtn
-          active={tab === "FREIGEGEBEN"}
-          onClick={() => setTab("FREIGEGEBEN")}
-          label={`Freigegeben (${freigegebenRows.length})`}
-        />
-        <TabBtn active={tab === "FINAL"} onClick={() => setTab("FINAL")} label={`Final (Historie) (${history.length})`} />
-        {tab === "FINAL" && (
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>
-            Final zeigt nur gespeicherte (freigegebene) Dateien.
-          </span>
-        )}
-      </div>
+      <div className="card rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1446">
+        <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1447">
 
-      <div
-        className="page-body"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(290px, 330px) 1fr",
-          gap: 16,
-          alignItems: "flex-start",
-        }}
-      >
-        <div className="card" style={{ padding: 10 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 6 }}>Lieferschein erfassen</h3>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 6 }}>
-            <L label="Projekt-ID">
-              <input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="z. B. BA-2025-001" />
-            </L>
 
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Datum" style={{ flex: 1 }}>
-                <input type="date" value={form.date ?? ""} onChange={(e) => setField("date", e.target.value)} />
-              </L>
-              <L label="LS-Nr." style={{ width: 120 }}>
-                <input
-                  value={form.lieferscheinNummer ?? ""}
-                  onChange={(e) => setField("lieferscheinNummer", e.target.value)}
-                  placeholder="z. B. LS-001"
-                />
-              </L>
+
+
+
+
+
+          
+          <div>
+            <h3 className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1448">Büro-Bearbeitung</h3>
+            <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1449">
+              Mobile-Dokument laden – prüfen, bearbeiten und direkt in Verwaltung freigeben.
             </div>
+          </div>
+          <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1450">
+            {form.material || form.comment ? "1 Position(en)" : "0 Position(en)"}
+          </div>
+        </div>
 
-            <L label="Lieferant">
-              <input value={form.supplier ?? ""} onChange={(e) => setField("supplier", e.target.value)} />
-            </L>
+        <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1451">
+          <FormSection title="ALLGEMEINE INFORMATIONEN">
+            <div className="ls-form-grid ls-general-grid">
+              <Field label="Datum">
+                <input type="date" value={form.date || ""} onChange={(e) => setField("date", e.target.value)} />
+              </Field>
+              <Field label="LS-Nr.">
+                <input
+                  value={form.lieferscheinNummer || ""}
+                  onChange={(e) => setField("lieferscheinNummer", e.target.value)}
+                  placeholder="z. B. LS-001" />
+                
+              </Field>
+              <Field label="Lieferant / Anschrift">
+                <input value={form.supplier || ""} onChange={(e) => setField("supplier", e.target.value)} />
+              </Field>
+              <Field label="Kostenstelle">
+                <input value={form.kostenstelle || ""} onChange={(e) => setField("kostenstelle", e.target.value)} />
+              </Field>
+            </div>
+          </FormSection>
 
-            <L label="Baustelle">
-              <input value={form.site ?? ""} onChange={(e) => setField("site", e.target.value)} />
-            </L>
-
-            <L label="Fahrer">
-              <input value={form.driver ?? ""} onChange={(e) => setField("driver", e.target.value)} />
-            </L>
-
-            <L label="Material">
-              <input value={form.material ?? ""} onChange={(e) => setField("material", e.target.value)} />
-            </L>
-
-            <div style={{ display: "flex", gap: 6 }}>
-              <L label="Menge" style={{ flex: 1 }}>
+          <FormSection title="LIEFERUNG UND ZUORDNUNG">
+            <div className="ls-form-grid ls-delivery-grid">
+              <Field label="Baustelle / Lieferort">
+                <input value={form.site || ""} onChange={(e) => setField("site", e.target.value)} />
+              </Field>
+              <Field label="Fahrer / Fahrzeug">
+                <input value={form.driver || ""} onChange={(e) => setField("driver", e.target.value)} />
+              </Field>
+              <Field label="Material / Leistung">
+                <input value={form.material || ""} onChange={(e) => setField("material", e.target.value)} />
+              </Field>
+              <Field label="Menge">
                 <input
                   type="number"
-                  step="0.01"
+                  step="any"
                   value={form.quantity ?? 0}
-                  onChange={(e) => setField("quantity", Number(e.target.value))}
-                />
-              </L>
-              <L label="Einheit" style={{ width: 100 }}>
-                <input value={form.unit ?? ""} onChange={(e) => setField("unit", e.target.value)} />
-              </L>
+                  onChange={(e) => setField("quantity", Number(e.target.value || 0))} />
+                
+              </Field>
+              <Field label="Einheit">
+                <input value={form.unit || ""} onChange={(e) => setField("unit", e.target.value)} />
+              </Field>
+              <Field label="LV-Position">
+                <input value={form.lvItemPos || ""} onChange={(e) => setField("lvItemPos", e.target.value)} />
+              </Field>
+            </div>
+          </FormSection>
+
+          <FormSection title="BESCHREIBUNG UND DOKUMENTATION">
+            <div className="ls-description-grid">
+              <Field label="Beschreibung">
+                <textarea
+                  value={form.comment || ""}
+                  onChange={(e) => setField("comment", e.target.value)}
+                  placeholder="Material, Lieferung und Besonderheiten" className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1452" />
+
+                
+              </Field>
+              <Field label="Bemerkungen">
+                <textarea
+                  value={form.bemerkungen || ""}
+                  onChange={(e) => setField("bemerkungen", e.target.value)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1453" />
+
+                
+              </Field>
             </div>
 
-            <L label="Kostenstelle">
-              <input
-                value={form.kostenstelle ?? ""}
-                onChange={(e) => setField("kostenstelle", e.target.value)}
-                placeholder="z. B. 100-BA-01"
-              />
-            </L>
+            <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1454">
+              <Field label="Foto / Anhang">
+                <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1455">
+                  <input
+                    id="lsPhotosUnified"
+                    type="file"
+                    multiple
+                    accept="image/*,application/pdf"
+                    onChange={(e) => addPhotos(e.target.files)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1456" />
 
-            <L label="LV-Position">
-              <input
-                value={String(form.lvItemPos ?? "")}
-                onChange={(e) => setField("lvItemPos", e.target.value)}
-                placeholder="z. B. 001.002"
-              />
-            </L>
+                  
+                  <label htmlFor="lsPhotosUnified" className="btn">
+                    Dateien wählen
+                  </label>
+                  {(form.photos || []).map((photo) =>
+                  <div
+                    key={photo.id} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1457">
 
-            <L label="Text / Beschreibung" full>
-              <textarea
-                value={form.comment ?? ""}
-                onChange={(e) => setField("comment", e.target.value)}
-                style={{ height: 70, resize: "vertical" }}
-                placeholder="z. B. 2 Fahrten, Zufahrt Nord…"
-              />
-            </L>
 
-            <L label="Bemerkungen (PDF-Feld unten)" full>
-              <textarea
-                value={form.bemerkungen ?? ""}
-                onChange={(e) => setField("bemerkungen", e.target.value)}
-                style={{ height: 60, resize: "vertical" }}
-                placeholder="Bemerkungen für das Feld im Lieferschein-PDF…"
-              />
-            </L>
 
-            <L label="Foto/Anhang (Bilder & PDF)">
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <input
-                  id="lsPhotos"
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf,.heic,.heif"
-                  onChange={(e) => addPhotos(e.target.files)}
-                  style={{ display: "none" }}
-                />
-                <label htmlFor="lsPhotos" className="btn">
-                  Dateien wählen
-                </label>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {(form.photos || form.attachments || []).map((ph) => (
-                    <div
-                      key={ph.id}
-                      style={{
-                        position: "relative",
-                        border: "1px solid var(--line)",
-                        borderRadius: 10,
-                        overflow: "hidden",
-                        width: 90,
-                        height: 90,
-                        background: "#fafafa",
-                      }}
-                    >
-                      {isImg(ph.type) ? (
-                        <img
-                          src={ph.url}
-                          alt={ph.name}
-                          onClick={() => setPreviewUrl(ph.url)}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
-                        />
-                      ) : isPdf(ph.type) ? (
-                        <a
-                          href={ph.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display: "grid",
-                            placeItems: "center",
-                            width: "100%",
-                            height: "100%",
-                            fontSize: 12,
-                            textDecoration: "underline",
-                          }}
-                        >
-                          {ph.name}
-                        </a>
-                      ) : (
-                        <a
-                          href={ph.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display: "grid",
-                            placeItems: "center",
-                            width: "100%",
-                            height: "100%",
-                            fontSize: 11,
-                          }}
-                        >
-                          FILE
-                        </a>
-                      )}
 
+
+
+
+
+                    
+                      {isImg(photo.type) ?
+                    <img
+                      src={publicUrl(photo.url)}
+                      alt={photo.name}
+                      onClick={() => setPreviewUrl(publicUrl(photo.url))} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1458" /> :
+
+
+
+                    <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1459">
+                          PDF
+                        </div>
+                    }
                       <button
-                        onClick={() => removePhoto(ph.id)}
-                        className="btn"
-                        style={{ position: "absolute", top: 4, right: 4, padding: "0 6px" }}
-                      >
-                        ✕
+                      type="button"
+                      onClick={() => removePhoto(photo.id)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1460">
+
+                      
+                        ×
                       </button>
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            </L>
-
-            <div style={{ display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
-              <button className="btn" onClick={saveToServerDraft} disabled={loading}>
-                {form.id ? "Änderungen speichern" : "Eintrag anlegen"}
-              </button>
-              <button className="btn" onClick={clearForm} disabled={loading}>
-                Formular leeren
-              </button>
+              </Field>
             </div>
+          </FormSection>
 
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-              <button className="btn" onClick={() => exportXlsx(activeList)} disabled={loading}>
-                Export XLSX
-              </button>
-              <button className="btn" onClick={() => exportPdf(activeList, false)} disabled={loading}>
-                Export PDF
-              </button>
-              <button className="btn" onClick={() => exportPdf(activeList, true)} disabled={loading}>
-                PDF Vorschau
-              </button>
-            </div>
-
-            <button className="btn" style={{ marginTop: 4 }} onClick={submitRowServer} disabled={!form.id || !projectId || loading}>
-              Einreichen (Inbox)
+          <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1461">
+            <button className="btn" onClick={saveToServerDraft} disabled={loading || !projectId}>
+              Entwurf speichern
             </button>
+            <button className="btn" onClick={submitRowServer} disabled={loading || !form.id || !projectId}>
+              Einreichen
+            </button>
+            <button className="btn" onClick={clearForm} disabled={loading}>
+              Formular leeren
+            </button>
+            <button className="btn" onClick={() => exportXlsx(inboxRows)} disabled={!inboxRows.length || loading}>
+              Export XLSX
+            </button>
+            <button className="btn" onClick={() => exportPdf([form], true)} disabled={!projectId || loading}>
+              PDF Vorschau
+            </button>
+            <button className="btn" onClick={() => exportPdf([form], false)} disabled={!projectId || loading}>
+              PDF exportieren
+            </button>
+            <input
+              id="lsImportUnified"
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => importPdfLs(e.target.files)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1462" />
 
-            <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-              <input
-                id="lsImport"
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => importPdfLs(e.target.files)}
-                style={{ display: "none" }}
-              />
-              <label htmlFor="lsImport" className="btn">
-                Import PDF
-              </label>
-
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                Estrae: Datum, Lieferant, Baustelle, Fahrer, Material, Menge, Einheit, Pos.
-              </span>
-            </div>
-
-            {error && <div style={{ color: "crimson", marginTop: 4 }}>{error}</div>}
-            {loading && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Lade…</div>}
+            
+            <label htmlFor="lsImportUnified" className="btn">
+              Import PDF
+            </label>
           </div>
+
+          {error && <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1463">{error}</div>}
+          {loading && <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1464">RLC arbeitet…</div>}
+        </div>
+      </div>
+
+      <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1465">
+        <div className="card rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1466">
+          <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1467">
+            <strong>PDF Vorschau</strong>
+            <span className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1468">
+              {pdfUrl ? "RLC PDF Core" : "Noch kein PDF geladen"}
+            </span>
+          </div>
+          {pdfUrl ?
+          <iframe
+            src={pdfUrl}
+            title="Lieferschein PDF Vorschau" className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1469" /> :
+
+
+
+          <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1470">
+
+
+
+
+
+
+
+
+            
+              Lieferschein wählen oder PDF Vorschau erzeugen…
+            </div>
+          }
         </div>
 
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 10, alignItems: "stretch" }}>
-            <div className="card" style={{ padding: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <strong>PDF Vorschau</strong>
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>{pdfUrl ? "" : "Noch kein PDF geladen"}</span>
-              </div>
-
-              {pdfUrl ? (
-                <iframe
-                  src={pdfUrl}
-                  style={{
-                    width: "100%",
-                    height: 230,
-                    border: "1px solid var(--line)",
-                    borderRadius: 8,
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    height: 230,
-                    border: "1px dashed var(--line)",
-                    borderRadius: 8,
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: 12,
-                    color: "var(--muted)",
-                  }}
-                >
-                  Lieferschein wählen oder erzeugen…
-                </div>
-              )}
-            </div>
-
-            <div className="card" style={{ padding: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <strong>{rightTitle}</strong>
-                <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                  {rightCount} {tab === "FINAL" ? "Datei(en)" : "Eintrag(e)"}
-                </span>
-              </div>
-
-              <div style={{ maxHeight: 230, overflowY: "auto", paddingRight: 4 }}>
-                {tab === "FINAL" ? (
-                  history.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 2px" }}>
-                      Noch keine freigegebenen Lieferscheine gespeichert.
-                    </div>
-                  ) : (
-                    history.map((h) => (
-                      <div
-                        key={h.filename}
-                        style={{
-                          padding: "6px 4px",
-                          borderBottom: "1px solid var(--line)",
-                          display: "flex",
-                          gap: 6,
-                          alignItems: "flex-start",
-                        }}
-                      >
-                        <div style={{ flex: 1, fontSize: 12 }}>
-                          <div style={{ fontWeight: 600 }}>
-                            {h.date}{" "}
-                            {h.savedAt
-                              ? `, ${new Date(h.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                              : ""}
-                          </div>
-                          <div style={{ color: "var(--muted)", marginTop: 2 }}>{h.rows} Position(en)</div>
-                        </div>
-
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => loadSavedLsItem(h)}>
-                            Laden
-                          </button>
-                          {h.pdfUrl && (
-                            <a
-                              className="btn"
-                              style={{ fontSize: 11, padding: "2px 6px", textAlign: "center" }}
-                              href={h.pdfUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              PDF
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )
-                ) : activeList.length === 0 ? (
-                  <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 2px" }}>Keine Einträge.</div>
-                ) : (
-                  activeList.map((r, idx) => (
-                    <div
-                      key={r.id ?? `r-${idx}`}
-                      style={{
-                        padding: "6px 4px",
-                        borderBottom: "1px solid var(--line)",
-                        display: "flex",
-                        gap: 6,
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <div style={{ flex: 1, fontSize: 12 }}>
-                        <div style={{ fontWeight: 600 }}>
-                          {(r.date || "").slice(0, 10)} {r.lieferscheinNummer ? `– ${r.lieferscheinNummer}` : ""}
-                        </div>
-                        <div style={{ color: "var(--muted)", marginTop: 2 }}>
-                          {(r.supplier || "-")} {r.material ? `• ${r.material}` : ""}
-                        </div>
-                      </div>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <button className="btn" style={{ fontSize: 11, padding: "2px 6px" }} onClick={() => selectRow(r)}>
-                          Bearbeiten
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+        <div className="card rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1471">
+          <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1472">
+            <strong>Inbox (Eingereicht)</strong>
+            <span className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1473">{inboxRows.length} Eintrag(e)</span>
           </div>
+          <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1474">
+            {inboxRows.length === 0 ?
+            <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1475">Keine Lieferscheine in der Inbox.</div> :
 
-          <div className="card" style={{ padding: 0 }}>
+            inboxRows.map((row) =>
             <div
-              style={{
-                padding: "8px 10px",
-                borderBottom: "1px solid var(--line)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 14 }}>
-                {tab === "INBOX" ? "Inbox" : tab === "FREIGEGEBEN" ? "Freigegeben" : "Final (Preview)"}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                {tab === "FINAL"
-                  ? finalPreview
-                    ? `${finalPreview.rows.length} Position(en)`
-                    : "Keine Datei geladen"
-                  : `${activeList.length} Eintrag(e)`}
-              </div>
-            </div>
+              key={row.id} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1476">
 
-            {tab === "FINAL" && !finalPreview ? (
-              <div style={{ padding: 12, fontSize: 12, color: "var(--muted)" }}>
-                Wähle eine Datei in der Historie rechts oben („Laden“), um den Inhalt anzuzeigen.
-              </div>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <Th>Datum</Th>
-                      <Th>LS-Nr.</Th>
-                      <Th>Lieferant</Th>
-                      <Th>Baustelle</Th>
-                      <Th>Fahrer</Th>
-                      <Th>Material</Th>
-                      <Th>Menge</Th>
-                      <Th>Einheit</Th>
-                      <Th>Kostenstelle</Th>
-                      <Th>LV-Pos</Th>
-                      <Th>Status</Th>
-                      <Th>Text</Th>
-                      <Th></Th>
-                    </tr>
-                  </thead>
 
-                  <tbody>
-                    {activeList.length === 0 ? (
-                      <tr>
-                        <Td colSpan={13} style={{ textAlign: "center" }}>
-                          {projectId ? "Keine Einträge" : "Projekt-ID eingeben"}
-                        </Td>
-                      </tr>
-                    ) : (
-                      activeList.map((r, i) => (
-                        <tr
-                          key={r.id ?? `ls-${i}`}
-                          style={{
-                            background: selKey != null && String(selKey) === String(r.id) ? "rgba(0,0,0,0.04)" : undefined,
-                          }}
-                        >
-                          <Td>{r.date}</Td>
-                          <Td>{r.lieferscheinNummer}</Td>
-                          <Td>{r.supplier}</Td>
-                          <Td>{r.site}</Td>
-                          <Td>{r.driver}</Td>
-                          <Td>{r.material}</Td>
-                          <Td style={{ textAlign: "right", whiteSpace: "nowrap" }}>{num(r.quantity)}</Td>
-                          <Td>{r.unit}</Td>
-                          <Td>{r.kostenstelle}</Td>
-                          <Td>{r.lvItemPos ?? ""}</Td>
-                          <Td>{normalizeStatus(r.workflowStatus)}</Td>
-                          <Td style={{ maxWidth: 320, whiteSpace: "pre-wrap" }}>{r.comment}</Td>
 
-                          <Td>
-                            {tab === "FINAL" ? (
-                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                <button
-                                  className="btn"
-                                  onClick={() => exportRowPdf(r, selectedProject?.name)}
-                                  style={{ fontSize: 11, padding: "2px 6px" }}
-                                >
-                                  PDF
-                                </button>
 
-                                {canEditFinal(r) && (
-                                  <button
-                                    className="btn"
-                                    onClick={() => openAndEditFromFinal(r)}
-                                    style={{ fontSize: 11, padding: "2px 6px" }}
-                                  >
-                                    Öffnen &amp; bearbeiten
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                <button className="btn" onClick={() => selectRow(r)} style={{ fontSize: 11, padding: "2px 6px" }}>
-                                  Bearbeiten
-                                </button>
 
-                                {tab === "INBOX" && normalizeStatus(r.workflowStatus) === "DRAFT" && (
-                                  <button
-                                    className="btn"
-                                    onClick={() => {
-                                      selectRow(r);
-                                      setTimeout(() => {
-                                        void submitRowServer();
-                                      }, 0);
-                                    }}
-                                    style={{ fontSize: 11, padding: "2px 6px" }}
-                                    disabled={loading}
-                                  >
-                                    Einreichen
-                                  </button>
-                                )}
 
-                                {tab === "INBOX" && normalizeStatus(r.workflowStatus) === "EINGEREICHT" && (
-                                  <>
-                                    <button
-                                      className="btn"
-                                      onClick={() => {
-                                        void approveRowServer(r);
-                                      }}
-                                      style={{ fontSize: 11, padding: "2px 6px" }}
-                                      disabled={loading}
-                                    >
-                                      Freigeben
-                                    </button>
-                                    <button
-                                      className="btn"
-                                      onClick={() => requestReject(r)}
-                                      style={{ fontSize: 11, padding: "2px 6px" }}
-                                      disabled={loading}
-                                    >
-                                      Ablehnen
-                                    </button>
-                                  </>
-                                )}
 
-                                {tab === "INBOX" && normalizeStatus(r.workflowStatus) === "ABGELEHNT" && (
-                                  <button
-                                    className="btn"
-                                    onClick={() => {
-                                      selectRow(r);
-                                      setTimeout(() => {
-                                        void submitRowServer();
-                                      }, 0);
-                                    }}
-                                    style={{ fontSize: 11, padding: "2px 6px" }}
-                                    disabled={loading}
-                                  >
-                                    Erneut einreichen
-                                  </button>
-                                )}
-
-                                {tab === "FREIGEGEBEN" && (
-                                  <>
-                                    <button
-                                      className="btn"
-                                      onClick={() => selectRow(r)}
-                                      style={{ fontSize: 11, padding: "2px 6px" }}
-                                      disabled={loading}
-                                    >
-                                      Öffnen
-                                    </button>
-
-                                    <button
-                                      className="btn"
-                                      onClick={() => {
-                                        void commitOneFreigegebenToFinal(r);
-                                      }}
-                                      style={{ fontSize: 11, padding: "2px 6px" }}
-                                      disabled={loading}
-                                    >
-                                      Änderungen speichern
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </Td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              
+                  <div>
+                    <strong>{row.date || "—"} · {row.lieferscheinNummer || "ohne LS-Nr."}</strong>
+                    <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1477">
+                      {row.supplier || "—"} · {row.material || "—"} · {normalizeStatus(row.workflowStatus)}
+                    </div>
+                  </div>
+                  <button className="btn" onClick={() => selectRow(row)}>
+                    Öffnen
+                  </button>
+                </div>
+            )
+            }
           </div>
         </div>
       </div>
 
-      {rejectOpen && (
-        <div
-          onClick={() => setRejectOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.45)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 9999,
-            padding: 12,
-          }}
-        >
-          <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "min(520px, 98vw)", padding: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Ablehnen – Grund</div>
+      <div className="card rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1478">
+        <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1479">
+
+
+
+
+
+
+          
+          <strong>Verwaltung · freigegebene Lieferscheine</strong>
+          <span className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1480">{history.length} Dokument(e)</span>
+        </div>
+        <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1481">
+          <table className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1482">
+            <thead>
+              <tr>
+                <Th>Datum</Th>
+                <Th>Dokument</Th>
+                <Th>Positionen</Th>
+                <Th>Gespeichert</Th>
+                <Th>Aktion</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.length === 0 ?
+              <tr><Td colSpan={5} style={{ textAlign: "center" }}>Noch keine freigegebenen Lieferscheine.</Td></tr> :
+
+              history.map((item) =>
+              <tr key={item.filename}>
+                    <Td>{item.date}</Td>
+                    <Td>{item.filename}</Td>
+                    <Td>{item.rows}</Td>
+                    <Td>{item.savedAt ? new Date(item.savedAt).toLocaleString("de-DE") : "—"}</Td>
+                    <Td>
+                      <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1483">
+                        <button className="btn" onClick={() => loadSavedLsItem(item)}>Laden</button>
+                        {item.pdfUrl &&
+                    <a className="btn" href={publicUrl(item.pdfUrl)} target="_blank" rel="noreferrer">PDF</a>
+                    }
+                      </div>
+                    </Td>
+                  </tr>
+              )
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {rejectOpen &&
+      <div
+        onClick={() => setRejectOpen(false)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1484">
+
+
+
+
+
+
+
+
+
+        
+          <div onClick={(e) => e.stopPropagation()} className="card rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1485">
+            <strong>Ablehnen – Grund</strong>
             <textarea
-              value={rejectText}
-              onChange={(e) => setRejectText(e.target.value)}
-              style={{ width: "100%", height: 110, resize: "vertical" }}
-              placeholder="Warum wird der Lieferschein abgelehnt?"
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-              <button className="btn" onClick={() => setRejectOpen(false)} disabled={loading}>
-                Abbrechen
-              </button>
-              <button className="btn" onClick={() => void confirmReject()} disabled={loading}>
-                Ablehnen
-              </button>
+            value={rejectText}
+            onChange={(e) => setRejectText(e.target.value)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1486" />
+
+          
+            <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1487">
+              <button className="btn" onClick={() => setRejectOpen(false)}>Abbrechen</button>
+              <button className="btn" onClick={confirmReject}>Ablehnen</button>
             </div>
           </div>
         </div>
-      )}
+      }
 
-      {previewUrl && (
-        <div
-          onClick={() => setPreviewUrl(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.6)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          <img
-            src={previewUrl}
-            style={{
-              maxWidth: "98vw",
-              maxHeight: "98vh",
-              borderRadius: 12,
-              boxShadow: "0 10px 30px rgba(0,0,0,.5)",
-            }}
-          />
+      {previewUrl &&
+      <div
+        onClick={() => setPreviewUrl(null)} className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1488">
+
+
+
+
+
+
+
+
+        
+          <img src={previewUrl} alt="Vorschau" className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1489" />
         </div>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
 
 /* ===== UI helpers ===== */
 
-function TabBtn(props: { active: boolean; label: string; onClick: () => void }) {
+function FormSection(props: React.PropsWithChildren<{title: string;}>) {
+  return (
+    <section>
+      <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1490">
+        <strong className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1491">
+          {props.title}
+        </strong>
+        <div className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1492" />
+      </div>
+      {props.children}
+    </section>);
+
+}
+
+function Field(props: React.PropsWithChildren<{label: string;}>) {
+  const controls = React.Children.map(props.children, (child) => {
+    if (!React.isValidElement(child)) return child;
+
+    const element = child as React.ReactElement<any>;
+
+    return React.cloneElement(element, {
+      style: {
+        width: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+        ...((element.props as any).style || {})
+      }
+    });
+  });
+
+  return (
+    <label className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1493">
+
+
+
+
+
+
+      
+      <span className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1494">
+
+
+
+
+
+        
+        {props.label}
+      </span>
+
+      {controls}
+    </label>);
+
+}
+
+function TabBtn(props: {active: boolean;label: string;onClick: () => void;}) {
   return (
     <button
-      className="btn"
-      onClick={props.onClick}
-      style={{
-        fontSize: 12,
-        padding: "4px 10px",
-        border: props.active ? "1px solid var(--text)" : undefined,
-        opacity: props.active ? 1 : 0.8,
-      }}
-    >
+
+      onClick={props.onClick} className={rlcClass("btn",
+        {
+          fontSize: 12,
+          padding: "4px 10px",
+          border: props.active ? "1px solid var(--text)" : undefined,
+          opacity: props.active ? 1 : 0.8
+        })}>
+      
       {props.label}
-    </button>
-  );
+    </button>);
+
 }
 
 function L(
-  props: React.PropsWithChildren<{
-    label: string;
-    full?: boolean;
-    style?: React.CSSProperties;
-  }>
-) {
+props: React.PropsWithChildren<{
+  label: string;
+  full?: boolean;
+  style?: React.CSSProperties;
+}>)
+{
   return (
-    <label
-      style={{
-        display: "grid",
-        gridTemplateColumns: props.full ? "1fr" : "110px 1fr",
-        gap: 4,
-        alignItems: "center",
-        ...props.style,
-      }}
-    >
-      <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.2 }}>{props.label}</span>
+    <label className={rlcClass(null,
+    {
+      display: "grid",
+      gridTemplateColumns: props.full ? "1fr" : "110px 1fr",
+      gap: 4,
+      alignItems: "center",
+      ...props.style
+    })}>
+      
+      <span className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1495">{props.label}</span>
       <div>{props.children}</div>
-    </label>
-  );
+    </label>);
+
 }
 
-function Th({ children }: { children?: React.ReactNode }) {
+function Th({ children }: {children: React.ReactNode;}) {
   return (
-    <th
-      style={{
-        textAlign: "left",
-        padding: "6px 8px",
-        borderBottom: "1px solid var(--line)",
-        fontSize: 12,
-        whiteSpace: "nowrap",
-      }}
-    >
+    <th className="rlc-migrated-pages-mengenermittlung-lieferscheine-tsx-1496">
+
+
+
+
+
+
+
+      
       {children}
-    </th>
-  );
+    </th>);
+
 }
 
 function Td(
-  props: React.TdHTMLAttributes<HTMLTableCellElement> & {
-    children?: React.ReactNode;
-  }
-) {
+props: React.TdHTMLAttributes<HTMLTableCellElement> & {
+  children?: React.ReactNode;
+})
+{
   const { children, style, ...rest } = props;
   return (
     <td
-      {...rest}
-      style={{
+      {...rest} className={rlcClass(null,
+      {
         padding: "6px 8px",
         borderBottom: "1px solid var(--line)",
         verticalAlign: "top",
         fontSize: 12,
-        ...style,
-      }}
-    >
+        ...style
+      })}>
+      
       {children}
-    </td>
-  );
+    </td>);
+
 }
-
-
-
-
-
-
-

@@ -1,9 +1,11 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 // apps/web/src/pages/ki/AbrechnungAuto.tsx
 
 import React from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProject } from "../../store/useProject";
+import { loadProjectLv } from "../../api/projectLvCompat";
 
 /* ======================= Types ======================= */
 
@@ -34,8 +36,8 @@ type BuchhaltungSaveBody = {
   quelle: string;
 };
 
-type ApiList<T> = { items: T[] };
-type ApiLV = { projectId: string; items: LVItem[] };
+type ApiList<T> = {items: T[];};
+type ApiLV = {projectId: string;items: LVItem[];};
 
 type ProjectLike = {
   id?: string;
@@ -48,12 +50,12 @@ const card: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 10,
   padding: 16,
-  background: "#fff",
+  background: "#fff"
 };
 
 const tbl: React.CSSProperties = {
   width: "100%",
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -61,46 +63,46 @@ const th: React.CSSProperties = {
   borderBottom: "1px solid #e5e7eb",
   background: "#f7f7f7",
   textAlign: "left",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid #eee",
   verticalAlign: "top",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const inp: React.CSSProperties = {
   border: "1px solid #d1d5db",
   borderRadius: 8,
   padding: "8px 10px",
-  fontSize: 14,
+  fontSize: 14
 };
 
 const shell: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 /* ======================= Utils ======================= */
 
 const num = (v?: number | null, d = 2) =>
-  v == null || !Number.isFinite(v)
-    ? ""
-    : Number(v).toLocaleString("de-DE", {
-        minimumFractionDigits: d,
-        maximumFractionDigits: d,
-      });
+v == null || !Number.isFinite(v) ?
+"" :
+Number(v).toLocaleString("de-DE", {
+  minimumFractionDigits: d,
+  maximumFractionDigits: d
+});
 
 function toNumber(v: unknown, fallback = 0): number {
   const n =
-    typeof v === "number"
-      ? v
-      : typeof v === "string"
-      ? Number(v.replace(",", "."))
-      : Number(v);
+  typeof v === "number" ?
+  v :
+  typeof v === "string" ?
+  Number(v.replace(",", ".")) :
+  Number(v);
 
   return Number.isFinite(n) ? n : fallback;
 }
@@ -116,7 +118,7 @@ function normalizeLvItem(item: unknown): LVItem {
     menge: x.menge == null ? null : toNumber(x.menge, 0),
     preis: x.preis == null ? null : toNumber(x.preis, 0),
     quelle: x.quelle ? String(x.quelle) : undefined,
-    createdAt: Number(x.createdAt ?? Date.now()),
+    createdAt: Number(x.createdAt ?? Date.now())
   };
 }
 
@@ -127,7 +129,7 @@ function normalizeAbschlag(item: unknown): Abschlag {
     projectId: String(x.projectId ?? ""),
     nr: toNumber(x.nr, 0),
     datum: String(x.datum ?? ""),
-    betrag: toNumber(x.betrag, 0),
+    betrag: toNumber(x.betrag, 0)
   };
 }
 
@@ -145,7 +147,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
   const res = await fetch(url, {
     ...init,
-    headers,
+    headers
   });
 
   if (!res.ok) {
@@ -177,7 +179,7 @@ export default function AbrechnungAuto() {
   const [error, setError] = React.useState<string | null>(null);
 
   const effectiveProjectId =
-    projectIdInput.trim() || storeProjectId || projectCode || "";
+  projectIdInput.trim() || storeProjectId || projectCode || "";
 
   const canLoad = !!effectiveProjectId && !loading;
 
@@ -189,8 +191,8 @@ export default function AbrechnungAuto() {
       return (
         String(it.posNr || "").toLowerCase().includes(s) ||
         String(it.kurztext || "").toLowerCase().includes(s) ||
-        String(it.quelle || "").toLowerCase().includes(s)
-      );
+        String(it.quelle || "").toLowerCase().includes(s));
+
     });
   }, [lv, filterText]);
 
@@ -216,7 +218,7 @@ export default function AbrechnungAuto() {
   const sollBrutto = sollNetto + mwstSoll;
   const istBrutto = istNetto + mwstIst;
   const deckungsgrad =
-    sollNetto > 0 ? Math.round((istNetto / sollNetto) * 100) : 0;
+  sollNetto > 0 ? Math.round(istNetto / sollNetto * 100) : 0;
 
   /* ----------------------- Loaders ----------------------- */
 
@@ -226,14 +228,12 @@ export default function AbrechnungAuto() {
       return;
     }
 
-    const res = await api<ApiLV>(
-      `/api/lv/by-project/${encodeURIComponent(effectiveProjectId)}`
-    );
+    const res = await loadProjectLv(effectiveProjectId);
 
     setLV(
-      Array.isArray(res.items)
-        ? res.items.map(normalizeLvItem).slice().sort(sortLV)
-        : []
+      Array.isArray(res.items) ?
+      res.items.map(normalizeLvItem).slice().sort(sortLV) :
+      []
     );
   }
 
@@ -248,9 +248,9 @@ export default function AbrechnungAuto() {
     );
 
     setAbschlaege(
-      Array.isArray(res.items)
-        ? res.items.map(normalizeAbschlag).slice().sort((a, b) => a.nr - b.nr)
-        : []
+      Array.isArray(res.items) ?
+      res.items.map(normalizeAbschlag).slice().sort((a, b) => a.nr - b.nr) :
+      []
     );
   }
 
@@ -265,25 +265,25 @@ export default function AbrechnungAuto() {
 
     try {
       const [lvRes, abschlagRes] = await Promise.all([
-        api<ApiLV>(`/api/lv/by-project/${encodeURIComponent(effectiveProjectId)}`),
-        api<ApiList<Abschlag>>(
-          `/api/abrechnung/by-project/${encodeURIComponent(effectiveProjectId)}`
-        ),
-      ]);
+      loadProjectLv(effectiveProjectId),
+      api<ApiList<Abschlag>>(
+        `/api/abrechnung/by-project/${encodeURIComponent(effectiveProjectId)}`
+      )]
+      );
 
       setLV(
-        Array.isArray(lvRes.items)
-          ? lvRes.items.map(normalizeLvItem).slice().sort(sortLV)
-          : []
+        Array.isArray(lvRes.items) ?
+        lvRes.items.map(normalizeLvItem).slice().sort(sortLV) :
+        []
       );
 
       setAbschlaege(
-        Array.isArray(abschlagRes.items)
-          ? abschlagRes.items
-              .map(normalizeAbschlag)
-              .slice()
-              .sort((a, b) => a.nr - b.nr)
-          : []
+        Array.isArray(abschlagRes.items) ?
+        abschlagRes.items.
+        map(normalizeAbschlag).
+        slice().
+        sort((a, b) => a.nr - b.nr) :
+        []
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler beim Laden");
@@ -312,25 +312,25 @@ export default function AbrechnungAuto() {
     try {
       setError(null);
 
-      const res = await api<{ ok: boolean; item: Abschlag }>(
+      const res = await api<{ok: boolean;item: Abschlag;}>(
         `/api/abrechnung/save`,
         {
           method: "POST",
           body: JSON.stringify({
             projectId: effectiveProjectId,
-            betrag,
-          }),
+            betrag
+          })
         }
       );
 
       setAbschlaege((prev) =>
-        [...prev, normalizeAbschlag(res.item)].sort((a, b) => a.nr - b.nr)
+      [...prev, normalizeAbschlag(res.item)].sort((a, b) => a.nr - b.nr)
       );
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : "Abschlag konnte nicht gespeichert werden."
+        e instanceof Error ?
+        e.message :
+        "Abschlag konnte nicht gespeichert werden."
       );
     }
   }
@@ -345,9 +345,9 @@ export default function AbrechnungAuto() {
       setAbschlaege((prev) => prev.filter((x) => x.id !== a.id));
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : "Abschlag konnte nicht gelöscht werden."
+        e instanceof Error ?
+        e.message :
+        "Abschlag konnte nicht gelöscht werden."
       );
     }
   }
@@ -366,56 +366,56 @@ export default function AbrechnungAuto() {
     }
 
     const head = [
-      "ProjektID",
-      "Typ",
-      "PosNr",
-      "Kurztext",
-      "Einheit",
-      "Menge",
-      "EP",
-      "Quelle",
-      "Datum/Erstellt",
-      "BetragNetto",
-    ];
+    "ProjektID",
+    "Typ",
+    "PosNr",
+    "Kurztext",
+    "Einheit",
+    "Menge",
+    "EP",
+    "Quelle",
+    "Datum/Erstellt",
+    "BetragNetto"];
+
 
     const rows: (string | number)[][] = [];
 
     for (const r of lv) {
       rows.push([
-        effectiveProjectId,
-        "LV",
-        r.posNr || "",
-        r.kurztext || "",
-        r.einheit || "",
-        r.menge ?? "",
-        r.preis ?? "",
-        r.quelle || "",
-        new Date(r.createdAt).toLocaleDateString("de-DE"),
-        "",
-      ]);
+      effectiveProjectId,
+      "LV",
+      r.posNr || "",
+      r.kurztext || "",
+      r.einheit || "",
+      r.menge ?? "",
+      r.preis ?? "",
+      r.quelle || "",
+      new Date(r.createdAt).toLocaleDateString("de-DE"),
+      ""]
+      );
     }
 
     for (const a of abschlaege) {
       rows.push([
-        effectiveProjectId,
-        "Abschlag",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        a.datum,
-        a.betrag,
-      ]);
+      effectiveProjectId,
+      "Abschlag",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      a.datum,
+      a.betrag]
+      );
     }
 
     const csv = [
-      head.join(";"),
-      ...rows.map((r) =>
-        r.map((v) => String(v ?? "").replace(/;/g, ",")).join(";")
-      ),
-    ].join("\n");
+    head.join(";"),
+    ...rows.map((r) =>
+    r.map((v) => String(v ?? "").replace(/;/g, ",")).join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const link = document.createElement("a");
@@ -459,48 +459,48 @@ export default function AbrechnungAuto() {
       autoTable(doc, {
         startY: startY + 6,
         head: [
-          [
-            "Pos",
-            "Kurztext",
-            "Einheit",
-            "Menge",
-            "EP (netto)",
-            "Σ Position (netto)",
-            "Quelle",
-            "Erstellt am",
-          ],
-        ],
+        [
+        "Pos",
+        "Kurztext",
+        "Einheit",
+        "Menge",
+        "EP (netto)",
+        "Σ Position (netto)",
+        "Quelle",
+        "Erstellt am"]],
+
+
         body: lv.map((l) => {
           const preis = toNumber(l.preis, 0);
           const menge = l.menge != null ? toNumber(l.menge, 0) : null;
           const sum =
-            (menge != null ? menge * preis : preis) *
-            (1 + toNumber(aufschlag, 0) / 100);
+          (menge != null ? menge * preis : preis) * (
+          1 + toNumber(aufschlag, 0) / 100);
 
           return [
-            l.posNr || "—",
-            l.kurztext || "",
-            l.einheit || "—",
-            menge != null ? num(menge, 3) : "—",
-            num(preis),
-            num(sum),
-            l.quelle || "—",
-            new Date(l.createdAt).toLocaleDateString("de-DE"),
-          ];
+          l.posNr || "—",
+          l.kurztext || "",
+          l.einheit || "—",
+          menge != null ? num(menge, 3) : "—",
+          num(preis),
+          num(sum),
+          l.quelle || "—",
+          new Date(l.createdAt).toLocaleDateString("de-DE")];
+
         }),
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [20, 20, 20], textColor: 255 },
         columnStyles: {
           3: { halign: "right" },
           4: { halign: "right" },
-          5: { halign: "right" },
+          5: { halign: "right" }
         },
-        margin: { left: 14, right: 14 },
+        margin: { left: 14, right: 14 }
       });
 
       let y =
-        ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable
-          ?.finalY ?? startY + 6) + 8;
+      ((doc as jsPDF & {lastAutoTable?: {finalY?: number;};}).lastAutoTable?.
+      finalY ?? startY + 6) + 8;
 
       doc.setFontSize(12);
       doc.text("Abschlagsrechnungen", 14, y);
@@ -509,23 +509,23 @@ export default function AbrechnungAuto() {
         startY: y + 5,
         head: [["Nr", "Datum", "Netto (€)", "Brutto (€)"]],
         body: abschlaege.map((a) => [
-          a.nr,
-          a.datum,
-          num(a.betrag),
-          num(a.betrag * (1 + toNumber(mwst, 0) / 100)),
-        ]),
+        a.nr,
+        a.datum,
+        num(a.betrag),
+        num(a.betrag * (1 + toNumber(mwst, 0) / 100))]
+        ),
         styles: { fontSize: 9, cellPadding: 2 },
         headStyles: { fillColor: [230, 230, 230] },
         columnStyles: {
           2: { halign: "right" },
-          3: { halign: "right" },
+          3: { halign: "right" }
         },
-        margin: { left: 14, right: 14 },
+        margin: { left: 14, right: 14 }
       });
 
       y =
-        ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable
-          ?.finalY ?? y) + 8;
+      ((doc as jsPDF & {lastAutoTable?: {finalY?: number;};}).lastAutoTable?.
+      finalY ?? y) + 8;
 
       doc.setFontSize(12);
       doc.text(`MwSt: ${mwst}%   ·   Aufschlag: ${aufschlag}%`, 14, y);
@@ -546,26 +546,26 @@ export default function AbrechnungAuto() {
       y += 6;
       doc.text(`Differenz Netto (Ist − Soll): ${num(diffNetto)} €`, 14, y);
 
-      doc.save(`Abrechnung_${effectiveProjectId}.pdf`);
+      saveRlcPdfWithCompanyHeader(doc, `Abrechnung_${effectiveProjectId}.pdf`);
 
       if (andSendToBuchhaltung) {
         const body: BuchhaltungSaveBody = {
           projectId: effectiveProjectId,
           summeNetto: istNetto,
           summeBrutto: istBrutto,
-          quelle: "Abrechnung (Ist/Aggregat)",
+          quelle: "Abrechnung (Ist/Aggregat)"
         };
 
         try {
           await api<unknown>(`/api/buchhaltung/save`, {
             method: "POST",
-            body: JSON.stringify(body),
+            body: JSON.stringify(body)
           });
           window.alert("PDF exportiert und in Buchhaltung gespeichert ✅");
         } catch (e) {
           window.alert(
-            "PDF ok, aber Buchhaltung-Transfer fehlgeschlagen: " +
-              (e instanceof Error ? e.message : String(e))
+            "PDF ok, aber Buchhaltung-Transfer fehlgeschlagen: " + (
+            e instanceof Error ? e.message : String(e))
           );
         }
       }
@@ -577,76 +577,76 @@ export default function AbrechnungAuto() {
   /* ----------------------- Render ----------------------- */
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h1>Abrechnung – Automatik & Soll-Ist-Vergleich</h1>
 
-      <div style={card}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto auto auto auto",
-            gap: 12,
-            alignItems: "center",
-          }}
-        >
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-936">
+
+
+
+
+
+
+          
           <input
             placeholder="Projekt-ID oder Projektcode"
             value={projectIdInput}
-            onChange={(e) => setProjectIdInput(e.target.value)}
-            style={inp}
-          />
+            onChange={(e) => setProjectIdInput(e.target.value)} className={rlcClass(null,
+            inp)} />
+          
 
           <button
             className="btn"
             onClick={() => void loadLV()}
-            disabled={!canLoad}
-          >
+            disabled={!canLoad}>
+            
             LV laden
           </button>
 
           <button
             className="btn"
             onClick={() => void loadAbschlaege()}
-            disabled={!canLoad}
-          >
+            disabled={!canLoad}>
+            
             Abschläge laden
           </button>
 
           <button
             className="btn"
             onClick={() => void loadAll()}
-            disabled={!canLoad}
-          >
+            disabled={!canLoad}>
+            
             {loading ? "Lädt..." : "Alles laden"}
           </button>
 
           <button
             className="btn"
             onClick={() => void addAbschlag()}
-            disabled={!effectiveProjectId}
-          >
+            disabled={!effectiveProjectId}>
+            
             + Abschlag
           </button>
         </div>
 
-        <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+        <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-937">
           Aktiv: {effectiveProjectId || "kein Projekt gewählt"}
         </div>
 
-        {error && (
-          <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 13 }}>
+        {error &&
+        <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-938">
             {error}
           </div>
-        )}
+        }
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(6, 1fr)",
-            gap: 12,
-            marginTop: 12,
-          }}
-        >
+        <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-939">
+
+
+
+
+
+
+          
           <Kpi title="LV-Positionen">{lv.length}</Kpi>
           <Kpi title="Abschläge">{abschlaege.length}</Kpi>
           <Kpi title="Soll Netto (€)">
@@ -656,226 +656,221 @@ export default function AbrechnungAuto() {
             <b>{num(istNetto)}</b>
           </Kpi>
           <Kpi title="Δ Netto (Ist−Soll)">
-            <span style={{ color: diffNetto >= 0 ? "#065f46" : "#991b1b" }}>
+            <span className={rlcClass(null, { color: diffNetto >= 0 ? "#065f46" : "#991b1b" })}>
               {num(diffNetto)}
             </span>
           </Kpi>
           <Kpi title="Deckungsgrad">{deckungsgrad}%</Kpi>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
-            marginTop: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#6b7280" }}>MwSt</span>
+        <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-940">
+
+
+
+
+
+
+
+          
+          <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-941">
+            <span className="rlc-migrated-pages-ki-autoabrechnung-tsx-942">MwSt</span>
             <input
               type="number"
               value={mwst}
-              onChange={(e) => setMwst(toNumber(e.target.value, 0))}
-              style={{ ...inp, width: 90 }}
-            />
+              onChange={(e) => setMwst(toNumber(e.target.value, 0))} className={rlcClass(null,
+              { ...inp, width: 90 })} />
+            
             %
           </div>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#6b7280" }}>Aufschlag</span>
+          <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-943">
+            <span className="rlc-migrated-pages-ki-autoabrechnung-tsx-944">Aufschlag</span>
             <input
               type="number"
               value={aufschlag}
-              onChange={(e) => setAufschlag(toNumber(e.target.value, 0))}
-              style={{ ...inp, width: 90 }}
-            />
+              onChange={(e) => setAufschlag(toNumber(e.target.value, 0))} className={rlcClass(null,
+              { ...inp, width: 90 })} />
+            
             %
           </div>
 
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-945">
             <input
               placeholder="Filter (Pos/Kurztext/Quelle)"
               value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              style={{ ...inp, minWidth: 240 }}
-            />
+              onChange={(e) => setFilterText(e.target.value)} className={rlcClass(null,
+              { ...inp, minWidth: 240 })} />
+            
 
             <button
               className="btn"
               onClick={() => void exportPDF(true)}
-              disabled={!lv.length}
-            >
+              disabled={!lv.length}>
+              
               PDF & → Buchhaltung
             </button>
 
             <button
               className="btn"
               onClick={exportCSV}
-              disabled={!lv.length && !abschlaege.length}
-            >
+              disabled={!lv.length && !abschlaege.length}>
+              
               CSV Export
             </button>
           </div>
         </div>
       </div>
 
-      {!!lvFiltered.length && (
-        <div style={card}>
-          <h3 style={{ marginTop: 0 }}>
+      {!!lvFiltered.length &&
+      <div className={rlcClass(null, card)}>
+          <h3 className="rlc-migrated-pages-ki-autoabrechnung-tsx-946">
             LV-Positionen (gefiltert: {lvFiltered.length}/{lv.length})
           </h3>
 
-          <table style={tbl}>
+          <table className={rlcClass(null, tbl)}>
             <thead>
               <tr>
-                <th style={th}>Pos</th>
-                <th style={th}>Kurztext</th>
-                <th style={th}>Einheit</th>
-                <th style={th}>Menge</th>
-                <th style={th}>EP (netto)</th>
-                <th style={th}>Σ Position (netto)</th>
-                <th style={th}>Quelle</th>
-                <th style={th}>Erstellt am</th>
+                <th className={rlcClass(null, th)}>Pos</th>
+                <th className={rlcClass(null, th)}>Kurztext</th>
+                <th className={rlcClass(null, th)}>Einheit</th>
+                <th className={rlcClass(null, th)}>Menge</th>
+                <th className={rlcClass(null, th)}>EP (netto)</th>
+                <th className={rlcClass(null, th)}>Σ Position (netto)</th>
+                <th className={rlcClass(null, th)}>Quelle</th>
+                <th className={rlcClass(null, th)}>Erstellt am</th>
               </tr>
             </thead>
             <tbody>
               {lvFiltered.map((l) => {
-                const preis = toNumber(l.preis, 0);
-                const menge = l.menge != null ? toNumber(l.menge, 0) : null;
-                const sum =
-                  (menge != null ? menge * preis : preis) *
-                  (1 + toNumber(aufschlag, 0) / 100);
+              const preis = toNumber(l.preis, 0);
+              const menge = l.menge != null ? toNumber(l.menge, 0) : null;
+              const sum =
+              (menge != null ? menge * preis : preis) * (
+              1 + toNumber(aufschlag, 0) / 100);
 
-                return (
-                  <tr key={l.id}>
-                    <td style={td}>{l.posNr || "—"}</td>
-                    <td style={td}>{l.kurztext}</td>
-                    <td style={td}>{l.einheit || "—"}</td>
-                    <td style={{ ...td, textAlign: "right" }}>
+              return (
+                <tr key={l.id}>
+                    <td className={rlcClass(null, td)}>{l.posNr || "—"}</td>
+                    <td className={rlcClass(null, td)}>{l.kurztext}</td>
+                    <td className={rlcClass(null, td)}>{l.einheit || "—"}</td>
+                    <td className={rlcClass(null, { ...td, textAlign: "right" })}>
                       {menge != null ? num(menge, 3) : "—"}
                     </td>
-                    <td style={{ ...td, textAlign: "right" }}>{num(preis)}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{num(sum)}</td>
-                    <td style={td}>{l.quelle || "—"}</td>
-                    <td style={td}>
+                    <td className={rlcClass(null, { ...td, textAlign: "right" })}>{num(preis)}</td>
+                    <td className={rlcClass(null, { ...td, textAlign: "right" })}>{num(sum)}</td>
+                    <td className={rlcClass(null, td)}>{l.quelle || "—"}</td>
+                    <td className={rlcClass(null, td)}>
                       {new Date(l.createdAt).toLocaleDateString("de-DE")}
                     </td>
-                  </tr>
-                );
-              })}
+                  </tr>);
+
+            })}
             </tbody>
           </table>
         </div>
-      )}
+      }
 
-      {!!abschlaege.length && (
-        <div style={card}>
-          <h3 style={{ marginTop: 0 }}>Abschlagsrechnungen</h3>
+      {!!abschlaege.length &&
+      <div className={rlcClass(null, card)}>
+          <h3 className="rlc-migrated-pages-ki-autoabrechnung-tsx-947">Abschlagsrechnungen</h3>
 
-          <table style={tbl}>
+          <table className={rlcClass(null, tbl)}>
             <thead>
               <tr>
-                <th style={th}>Nr</th>
-                <th style={th}>Datum</th>
-                <th style={{ ...th, textAlign: "right" }}>Netto (€)</th>
-                <th style={{ ...th, textAlign: "right" }}>Brutto (€)</th>
-                <th style={th}></th>
+                <th className={rlcClass(null, th)}>Nr</th>
+                <th className={rlcClass(null, th)}>Datum</th>
+                <th className={rlcClass(null, { ...th, textAlign: "right" })}>Netto (€)</th>
+                <th className={rlcClass(null, { ...th, textAlign: "right" })}>Brutto (€)</th>
+                <th className={rlcClass(null, th)}></th>
               </tr>
             </thead>
             <tbody>
-              {abschlaege.map((a) => (
-                <tr key={a.id || `a-${a.nr}-${a.datum}`}>
-                  <td style={td}>{a.nr}</td>
-                  <td style={td}>{a.datum}</td>
-                  <td style={{ ...td, textAlign: "right" }}>{num(a.betrag)}</td>
-                  <td style={{ ...td, textAlign: "right" }}>
+              {abschlaege.map((a) =>
+            <tr key={a.id || `a-${a.nr}-${a.datum}`}>
+                  <td className={rlcClass(null, td)}>{a.nr}</td>
+                  <td className={rlcClass(null, td)}>{a.datum}</td>
+                  <td className={rlcClass(null, { ...td, textAlign: "right" })}>{num(a.betrag)}</td>
+                  <td className={rlcClass(null, { ...td, textAlign: "right" })}>
                     {num(a.betrag * (1 + toNumber(mwst, 0) / 100))}
                   </td>
-                  <td style={td}>
+                  <td className={rlcClass(null, td)}>
                     <button className="btn" onClick={() => void delAbschlag(a)}>
                       🗑️
                     </button>
                   </td>
                 </tr>
-              ))}
+            )}
             </tbody>
           </table>
 
-          <div style={{ marginTop: 8, fontWeight: 600 }}>
+          <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-948">
             Ist Netto: {num(istNetto)} € · Ist Brutto: {num(istBrutto)} €
           </div>
         </div>
-      )}
+      }
 
-      <div style={card}>
-        <h3 style={{ marginTop: 0 }}>Vergleich – Soll vs. Ist</h3>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 12,
-          }}
-        >
+      <div className={rlcClass(null, card)}>
+        <h3 className="rlc-migrated-pages-ki-autoabrechnung-tsx-949">Vergleich – Soll vs. Ist</h3>
+        <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-950">
+
+
+
+
+
+          
           <Box label="Soll Netto" value={`${num(sollNetto)} €`} />
           <Box label="Ist Netto" value={`${num(istNetto)} €`} />
           <Box
             label="Differenz Netto (Ist−Soll)"
             value={`${num(diffNetto)} €`}
-            color={diffNetto >= 0 ? "#065f46" : "#991b1b"}
-          />
+            color={diffNetto >= 0 ? "#065f46" : "#991b1b"} />
+          
           <Box label="Deckungsgrad" value={`${deckungsgrad}%`} />
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ======================= Small UI ======================= */
 
 function Kpi({
   title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {title: string;children: React.ReactNode;}) {
   return (
-    <div
-      style={{
-        border: "1px dashed #d1d5db",
-        borderRadius: 10,
-        padding: "10px 12px",
-        background: "#fafafa",
-      }}
-    >
-      <div style={{ fontSize: 12, color: "#6b7280" }}>{title}</div>
-      <div style={{ fontSize: 16, fontWeight: 700 }}>{children}</div>
-    </div>
-  );
+    <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-951">
+
+
+
+
+
+
+      
+      <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-952">{title}</div>
+      <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-953">{children}</div>
+    </div>);
+
 }
 
 function Box({
   label,
   value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-}) {
+  color
+
+
+
+
+}: {label: string;value: string;color?: string;}) {
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
-      <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: color || "inherit" }}>
+    <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-954">
+      <div className="rlc-migrated-pages-ki-autoabrechnung-tsx-955">{label}</div>
+      <div className={rlcClass(null, { fontSize: 18, fontWeight: 700, color: color || "inherit" })}>
         {value}
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

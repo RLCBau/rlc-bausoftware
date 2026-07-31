@@ -1,4 +1,4 @@
-// apps/web/src/pages/auth/Login.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/auth/Login.tsx
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiUrl } from "../../lib/apiBase";
@@ -34,19 +34,19 @@ type AuthResponse = {
 };
 
 const AUTH_KEYS = [
-  "rlc_token",
-  "token",
-  "authToken",
-  "accessToken",
-  "rlc.auth.token",
-  "rlc_mobile_token",
-] as const;
+"rlc_token",
+"token",
+"authToken",
+"accessToken",
+"rlc.auth.token",
+"rlc_mobile_token"] as
+const;
 
 function setAuth(
-  token: string,
-  user?: AuthUser | null,
-  company?: CompanyPayload | null
-) {
+token: string,
+user?: AuthUser | null,
+company?: CompanyPayload | null)
+{
   try {
     for (const key of AUTH_KEYS) localStorage.removeItem(key);
 
@@ -65,14 +65,14 @@ function setAuth(
       JSON.stringify({
         token,
         user: user ?? null,
-        company: company ?? null,
+        company: company ?? null
       })
     );
   } catch {
-    // ignore
-  }
-}
 
+
+    // ignore
+  }}
 function getRedirectTarget(state: unknown): string {
   const from = (state as any)?.from;
   if (typeof from === "string" && from.startsWith("/")) return from;
@@ -114,44 +114,44 @@ const shell: React.CSSProperties = {
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "1.15fr 0.85fr",
-  background: "linear-gradient(180deg,#eef4ff 0%, #f8fafc 100%)",
+  background: "linear-gradient(180deg,#eef4ff 0%, #f8fafc 100%)"
 };
 
 const left: React.CSSProperties = {
   padding: "56px 64px",
   display: "flex",
   flexDirection: "column",
-  justifyContent: "center",
+  justifyContent: "center"
 };
 
 const right: React.CSSProperties = {
   padding: "40px 48px",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
+  justifyContent: "center"
 };
 
 const logoRow: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 14,
-  marginBottom: 20,
+  marginBottom: 20
 };
 
 const title: React.CSSProperties = {
   margin: 0,
-  fontSize: 44,
+  fontSize: 36,
   lineHeight: 1.05,
-  fontWeight: 800,
-  color: "#0f172a",
+  fontWeight: 600,
+  color: "#0f172a"
 };
 
 const subtitle: React.CSSProperties = {
   marginTop: 18,
-  fontSize: 18,
+  fontSize: 16,
   lineHeight: 1.6,
   color: "#475569",
-  maxWidth: 760,
+  maxWidth: 760
 };
 
 const grid: React.CSSProperties = {
@@ -159,7 +159,7 @@ const grid: React.CSSProperties = {
   gridTemplateColumns: "repeat(2,minmax(220px,1fr))",
   gap: 14,
   marginTop: 28,
-  maxWidth: 820,
+  maxWidth: 820
 };
 
 const featureCard: React.CSSProperties = {
@@ -167,20 +167,20 @@ const featureCard: React.CSSProperties = {
   border: "1px solid #dbe4f0",
   borderRadius: 16,
   padding: "16px 18px",
-  boxShadow: "0 8px 24px rgba(15,23,42,0.05)",
+  boxShadow: "0 8px 24px rgba(15,23,42,0.05)"
 };
 
 const featureTitle: React.CSSProperties = {
   fontSize: 15,
-  fontWeight: 700,
+  fontWeight: 600,
   color: "#0f172a",
-  marginBottom: 6,
+  marginBottom: 6
 };
 
 const featureText: React.CSSProperties = {
   fontSize: 13,
   lineHeight: 1.55,
-  color: "#475569",
+  color: "#475569"
 };
 
 const loginCard: React.CSSProperties = {
@@ -188,78 +188,78 @@ const loginCard: React.CSSProperties = {
   maxWidth: 460,
   background: "#ffffff",
   border: "1px solid #dbe4f0",
-  borderRadius: 20,
-  padding: 24,
-  boxShadow: "0 20px 50px rgba(15,23,42,0.10)",
+  borderRadius: 14,
+  padding: 22,
+  boxShadow: "0 4px 18px rgba(15,23,42,0.06)"
 };
 
 const hLogin: React.CSSProperties = {
   margin: 0,
-  fontSize: 30,
-  lineHeight: 1.1,
-  fontWeight: 800,
-  color: "#0f172a",
+  fontSize: 26,
+  lineHeight: 1.2,
+  fontWeight: 600,
+  color: "#0f172a"
 };
 
 const loginSub: React.CSSProperties = {
   marginTop: 8,
   color: "#64748b",
-  fontSize: 14,
+  fontSize: 14
 };
 
 const label: React.CSSProperties = {
   display: "block",
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600,
   marginBottom: 6,
-  color: "#0f172a",
+  color: "#0f172a"
 };
 
 const input: React.CSSProperties = {
   width: "100%",
   border: "1px solid #cbd5e1",
-  borderRadius: 12,
-  padding: "12px 14px",
+  borderRadius: 10,
+  padding: "10px 12px",
   fontSize: 14,
   outline: "none",
   background: "#fff",
   color: "#0f172a",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const primaryBtn: React.CSSProperties = {
   width: "100%",
   border: 0,
-  borderRadius: 12,
-  padding: "12px 14px",
+  borderRadius: 10,
+  padding: "10px 12px",
   fontSize: 15,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  background: "#2563eb",
-  color: "#fff",
+  background: "#1769e0",
+  color: "#fff"
 };
 
 const secondaryBtn: React.CSSProperties = {
   width: "100%",
   border: "1px solid #cbd5e1",
-  borderRadius: 12,
-  padding: "12px 14px",
+  borderRadius: 10,
+  padding: "10px 12px",
   fontSize: 14,
   cursor: "pointer",
   background: "#fff",
-  color: "#0f172a",
+  color: "#0f172a"
 };
 
 const tabBtn = (active: boolean): React.CSSProperties => ({
   flex: 1,
-  border: active ? "1px solid #2563eb" : "1px solid #cbd5e1",
-  background: active ? "#eff6ff" : "#fff",
-  color: active ? "#1d4ed8" : "#0f172a",
+  border: active ? "1px solid #146ef5" : "1px solid #cbd5e1",
+  background: active ? "#eaf2ff" : "#fff",
+  color: active ? "#0b5bd3" : "#0f172a",
   borderRadius: 12,
   padding: "11px 12px",
   fontSize: 14,
-  fontWeight: 700,
-  cursor: "pointer",
+  fontWeight: 600,
+  cursor: "pointer"
 });
 
 const foot: React.CSSProperties = {
@@ -267,7 +267,7 @@ const foot: React.CSSProperties = {
   fontSize: 12,
   color: "#64748b",
   textAlign: "center",
-  lineHeight: 1.5,
+  lineHeight: 1.5
 };
 
 export default function Login() {
@@ -313,13 +313,13 @@ export default function Login() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json",
+          Accept: "application/json"
         },
         body: JSON.stringify({
           email: cleanEmail,
           password: cleanPassword,
-          mode: "SERVER_SYNC",
-        }),
+          mode: "SERVER_SYNC"
+        })
       });
 
       const data = (await res.json().catch(() => null)) as AuthResponse | null;
@@ -367,15 +367,15 @@ export default function Login() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json",
+          Accept: "application/json"
         },
         body: JSON.stringify({
           email: cleanEmail,
           password: cleanPassword,
           name: cleanName,
           inviteCode: cleanInviteCode || undefined,
-          mode: "SERVER_SYNC",
-        }),
+          mode: "SERVER_SYNC"
+        })
       });
 
       const data = (await res.json().catch(() => null)) as AuthResponse | null;
@@ -393,9 +393,9 @@ export default function Login() {
       }
 
       setInfo(
-        data.verificationSent
-          ? "Registrierung erfolgreich. Bitte bestätigen Sie jetzt Ihre E-Mail."
-          : "Registrierung erfolgreich. Bitte bestätigen Sie Ihre E-Mail."
+        data.verificationSent ?
+        "Registrierung erfolgreich. Bitte bestätigen Sie jetzt Ihre E-Mail." :
+        "Registrierung erfolgreich. Bitte bestätigen Sie Ihre E-Mail."
       );
       setMode("login");
     } catch (err: any) {
@@ -418,14 +418,14 @@ export default function Login() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "application/json",
+          Accept: "application/json"
         },
-        body: JSON.stringify({ email: cleanEmail }),
+        body: JSON.stringify({ email: cleanEmail })
       });
 
       const data = (await res.json().catch(() => null)) as
-        | { ok?: boolean; error?: string }
-        | null;
+      {ok?: boolean;error?: string;} |
+      null;
 
       if (!res.ok || data?.ok === false) {
         throw new Error(mapErrorMessage(data?.error || "Resend fehlgeschlagen"));
@@ -440,15 +440,15 @@ export default function Login() {
   }
 
   return (
-    <div style={shell}>
-      <div style={left}>
-        <div style={logoRow}>
-          <img src="/logo.svg" alt="RLC Logo" style={{ height: 72 }} />
+    <div className={rlcClass(null, shell)}>
+      <div className={rlcClass(null, left)}>
+        <div className={rlcClass(null, logoRow)}>
+          <img src="/logo.svg" alt="RLC Logo" className="rlc-migrated-pages-auth-login-tsx-57" />
         </div>
 
-        <h1 style={title}>RLC Bausoftware</h1>
+        <h1 className={rlcClass(null, title)}>RLC Bausoftware</h1>
 
-        <div style={subtitle}>
+        <div className={rlcClass(null, subtitle)}>
           Die intelligente <b>Bausoftware</b> mit <b>Web</b>, <b>Mobile App</b>{" "}
           und
           <b> Cloud</b>, um nicht nur zu dokumentieren, sondern einen großen
@@ -459,29 +459,29 @@ export default function Login() {
           <b> Projektlogik</b>.
         </div>
 
-        <div style={grid}>
-          <div style={featureCard}>
-            <div style={featureTitle}>Kalkulation & LV</div>
-            <div style={featureText}>
+        <div className={rlcClass(null, grid)}>
+          <div className={rlcClass(null, featureCard)}>
+            <div className={rlcClass(null, featureTitle)}>Kalkulation & LV</div>
+            <div className={rlcClass(null, featureText)}>
               Leistungsverzeichnis importieren, Preise pflegen, Angebote
               erstellen, Nachträge verwalten und Kalkulationsprozesse deutlich
               beschleunigen.
             </div>
           </div>
 
-          <div style={featureCard}>
-            <div style={featureTitle}>Mengenermittlung & Baustelle</div>
-            <div style={featureText}>
+          <div className={rlcClass(null, featureCard)}>
+            <div className={rlcClass(null, featureTitle)}>Mengenermittlung & Baustelle</div>
+            <div className={rlcClass(null, featureText)}>
               Aufmaß, Regieberichte, Lieferscheine, Soll-Ist-Vergleich und
               praktische Baustellenprozesse direkt im Projekt zusammenführen.
             </div>
           </div>
 
-          <div style={featureCard}>
-            <div style={featureTitle}>
+          <div className={rlcClass(null, featureCard)}>
+            <div className={rlcClass(null, featureTitle)}>
               Mobile App, Baustelle & Synchronisation
             </div>
-            <div style={featureText}>
+            <div className={rlcClass(null, featureText)}>
               Eine echte Bausoftware-App für die Baustelle: Regieberichte,
               Fotos, Lieferscheine, Mengenermittlung, Angebote und Rechnungen
               direkt mobil erfassen – offline nutzbar und mit dem Hauptsystem
@@ -489,9 +489,9 @@ export default function Login() {
             </div>
           </div>
 
-          <div style={featureCard}>
-            <div style={featureTitle}>KI-gestützte Kalkulation</div>
-            <div style={featureText}>
+          <div className={rlcClass(null, featureCard)}>
+            <div className={rlcClass(null, featureTitle)}>KI-gestützte Kalkulation</div>
+            <div className={rlcClass(null, featureText)}>
               KI mit echtem Praxisnutzen: Positionen, Mengen und Zusammenhänge
               intelligenter erkennen, Kalkulationen beschleunigen und manuelle
               Routinen des Kalkulators spürbar reduzieren.
@@ -500,160 +500,160 @@ export default function Login() {
         </div>
       </div>
 
-      <div style={right}>
-        <form
-          style={loginCard}
-          onSubmit={mode === "login" ? handleLogin : handleRegister}
-        >
-          <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+      <div className={rlcClass(null, right)}>
+        <form className={rlcClass(null,
+        loginCard)}
+        onSubmit={mode === "login" ? handleLogin : handleRegister}>
+          
+          <div className="rlc-migrated-pages-auth-login-tsx-58">
             <button
-              type="button"
-              style={tabBtn(mode === "login")}
+              type="button" className={rlcClass(null,
+              tabBtn(mode === "login"))}
               onClick={() => {
                 setMode("login");
                 setError(null);
                 setInfo(null);
-              }}
-            >
+              }}>
+              
               Anmelden
             </button>
             <button
-              type="button"
-              style={tabBtn(mode === "register")}
+              type="button" className={rlcClass(null,
+              tabBtn(mode === "register"))}
               onClick={() => {
                 setMode("register");
                 setError(null);
                 setInfo(null);
-              }}
-            >
+              }}>
+              
               Registrieren
             </button>
           </div>
 
-          <h2 style={hLogin}>
+          <h2 className={rlcClass(null, hLogin)}>
             {mode === "login" ? "Anmelden" : "Registrierung"}
           </h2>
-          <div style={loginSub}>
-            {mode === "login"
-              ? "Bitte mit Ihrem Server-Zugang einloggen."
-              : "Neuen Zugang erstellen und optional Einladungscode eingeben."}
+          <div className={rlcClass(null, loginSub)}>
+            {mode === "login" ?
+            "Bitte mit Ihrem Server-Zugang einloggen." :
+            "Neuen Zugang erstellen und optional Einladungscode eingeben."}
           </div>
 
-          {mode === "register" ? (
-            <div style={{ marginTop: 18 }}>
-              <label style={label}>Name</label>
-              <input
-                style={input}
-                type="text"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Vor- und Nachname"
-              />
-            </div>
-          ) : null}
+          {mode === "register" ?
+          <div className="rlc-migrated-pages-auth-login-tsx-59">
+              <label className={rlcClass(null, label)}>Name</label>
+              <input className={rlcClass(null,
+            input)}
+            type="text"
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Vor- und Nachname" />
+            
+            </div> :
+          null}
 
-          <div style={{ marginTop: 18 }}>
-            <label style={label}>E-Mail</label>
-            <input
-              style={input}
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="ihre@email.de"
-            />
+          <div className="rlc-migrated-pages-auth-login-tsx-60">
+            <label className={rlcClass(null, label)}>E-Mail</label>
+            <input className={rlcClass(null,
+            input)}
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ihre@email.de" />
+            
           </div>
 
-          <div style={{ marginTop: 14 }}>
-            <label style={label}>Passwort</label>
-            <input
-              style={input}
-              type="password"
-              autoComplete={
-                mode === "login" ? "current-password" : "new-password"
-              }
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Passwort"
-            />
+          <div className="rlc-migrated-pages-auth-login-tsx-61">
+            <label className={rlcClass(null, label)}>Passwort</label>
+            <input className={rlcClass(null,
+            input)}
+            type="password"
+            autoComplete={
+            mode === "login" ? "current-password" : "new-password"
+            }
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Passwort" />
+            
           </div>
 
-          {mode === "register" ? (
-            <div style={{ marginTop: 14 }}>
-              <label style={label}>Einladungscode der Firma</label>
-              <input
-                style={input}
-                type="text"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="z. B. RLC-7A3F-91BC"
-              />
-            </div>
-          ) : null}
+          {mode === "register" ?
+          <div className="rlc-migrated-pages-auth-login-tsx-62">
+              <label className={rlcClass(null, label)}>Einladungscode der Firma</label>
+              <input className={rlcClass(null,
+            input)}
+            type="text"
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+            placeholder="z. B. RLC-7A3F-91BC" />
+            
+            </div> :
+          null}
 
-          {error ? (
-            <div
-              style={{
-                marginTop: 14,
-                padding: "10px 12px",
-                borderRadius: 12,
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
-                color: "#b91c1c",
-                fontSize: 14,
-              }}
-            >
+          {error ?
+          <div className="rlc-migrated-pages-auth-login-tsx-63">
+
+
+
+
+
+
+
+
+
+            
               {error}
-            </div>
-          ) : null}
+            </div> :
+          null}
 
-          {info ? (
-            <div
-              style={{
-                marginTop: 14,
-                padding: "10px 12px",
-                borderRadius: 12,
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
-                color: "#1d4ed8",
-                fontSize: 14,
-              }}
-            >
+          {info ?
+          <div className="rlc-migrated-pages-auth-login-tsx-64">
+
+
+
+
+
+
+
+
+
+            
               {info}
-            </div>
-          ) : null}
+            </div> :
+          null}
 
-          <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
-            <button type="submit" style={primaryBtn} disabled={busy}>
-              {busy
-                ? mode === "login"
-                  ? "Anmeldung..."
-                  : "Registrierung..."
-                : mode === "login"
-                ? "Einloggen"
-                : "Registrieren"}
+          <div className="rlc-migrated-pages-auth-login-tsx-65">
+            <button type="submit" className={rlcClass(null, primaryBtn)} disabled={busy}>
+              {busy ?
+              mode === "login" ?
+              "Anmeldung..." :
+              "Registrierung..." :
+              mode === "login" ?
+              "Einloggen" :
+              "Registrieren"}
             </button>
 
-            {mode === "login" && canResend ? (
-              <button
-                type="button"
-                style={secondaryBtn}
-                onClick={handleResend}
-                disabled={busy}
-              >
+            {mode === "login" && canResend ?
+            <button
+              type="button" className={rlcClass(null,
+              secondaryBtn)}
+              onClick={handleResend}
+              disabled={busy}>
+              
                 Bestätigungs-E-Mail erneut senden
-              </button>
-            ) : null}
+              </button> :
+            null}
           </div>
 
-          <div style={foot}>
+          <div className={rlcClass(null, foot)}>
             RLC Bausoftware · Cloud · Web · Mobile App
             <br />
             Tiefbau · Hochbau · Planungsbüro · Vermessung
           </div>
         </form>
       </div>
-    </div>
-  );
+    </div>);
+
 }

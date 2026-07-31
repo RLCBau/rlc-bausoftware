@@ -1677,50 +1677,6 @@ ${JSON.stringify(current || {}, null, 2).slice(0, 6000)}
   }
 });
 
-router.post("/propose", async (req, res) => {
-  try {
-    if (!requireOpenAiKeyOrRespond(res)) return;
-
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "Text fehlt" });
-
-    const prompt = `Erzeuge LV-Positionen als JSON-Array (realistisch, deutsch).
-Antworte als JSON-Objekt mit Feld "items" (Array).
-Beispiel:
-{"items":[{"posNr":"01.001","kurztext":"Kabelgraben 60cm tief","einheit":"m","menge":120,"preis":12.5,"confidence":0.9}]}
-
-Beschreibung:
-${text}`;
-
-    const out = await ai.chat.completions.create({
-      model: pickTextModel(),
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-    });
-
-    let parsed: any = {};
-    try {
-      parsed = JSON.parse(out.choices[0].message?.content || "{}");
-    } catch {
-      parsed = {};
-    }
-
-    const items = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed?.items)
-      ? parsed.items
-      : Array.isArray(parsed?.positions)
-      ? parsed.positions
-      : [];
-
-    res.json({ items });
-  } catch (err: any) {
-    console.error("propose error:", err);
-    return res.status(500).json(openAiErrorPayload(err));
-  }
-});
-
 router.post("/voice-parse", async (req, res) => {
   try {
     if (!requireOpenAiKeyOrRespond(res)) return;

@@ -1,12 +1,14 @@
-﻿// apps/mobile/src/lib/exporters/bautagebuchPdfBuilder.ts
+import { renderMobilePdfViaServer } from "../mobilePdfCore";
+// apps/mobile/src/lib/exporters/bautagebuchPdfBuilder.ts
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Linking } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import {
-  getCompanyHeaderCached,
-  getCompanyLogoUriCached,
-} from "../companyCache";
+  RLC_PDF_FONT_STACK,
+  loadRlcPdfBranding,
+  renderRlcPdfCompanyHeader,
+} from "./pdfBranding";
 
 export type BautagebuchRow = {
   id: string;
@@ -105,38 +107,17 @@ async function logoUriToDataUri(uri?: string | null): Promise<string> {
 }
 
 function buildCoverHtml(params: {
-  companyName: string;
-  companyLine: string;
-  logoDataUri?: string;
+  companyHeaderHtml: string;
   projectTitle: string;
   projectFsKey: string;
   monthLabel?: string;
   rowCount: number;
 }) {
-  const {
-    companyName,
-    companyLine,
-    logoDataUri,
-    projectTitle,
-    projectFsKey,
-    monthLabel,
-    rowCount,
-  } = params;
+  const { companyHeaderHtml, projectTitle, projectFsKey, monthLabel, rowCount } = params;
 
   return `
     <section class="cover page-break">
-      <div class="cover-top">
-        ${
-          logoDataUri
-            ? `<img class="logo" src="${logoDataUri}" alt="logo" />`
-            : `<div class="logo-placeholder"></div>`
-        }
-        <div class="company-box">
-          <div class="company-name">${esc(companyName)}</div>
-          <div class="company-line">${esc(companyLine || "")}</div>
-        </div>
-      </div>
-
+      <div class="page-company-header">${companyHeaderHtml}</div>
       <div class="cover-main">
         <div class="cover-kicker">Baustellendokumentation</div>
         <h1>Bautagebuch</h1>
@@ -168,11 +149,12 @@ function buildCoverHtml(params: {
   `;
 }
 
-function buildDayHtml(row: BautagebuchRow, idx: number) {
+function buildDayHtml(row: BautagebuchRow, idx: number, companyHeaderHtml: string) {
   const weatherLine = [row.weather, row.temperature].filter(Boolean).join(" • ");
 
   return `
     <section class="day page-break">
+      <div class="page-company-header">${companyHeaderHtml}</div>
       <div class="day-head">
         <div>
           <div class="day-kicker">Tagesbericht ${idx + 1}</div>
@@ -227,26 +209,23 @@ function buildDayHtml(row: BautagebuchRow, idx: number) {
 
 function buildHtml(params: {
   companyName: string;
-  companyLine: string;
-  logoDataUri?: string;
+  companyHeaderHtml: string;
   projectTitle: string;
   projectFsKey: string;
   monthLabel?: string;
   rows: BautagebuchRow[];
 }) {
-  const { companyName, companyLine, logoDataUri, projectTitle, projectFsKey, monthLabel, rows } = params;
+  const { companyName, companyHeaderHtml, projectTitle, projectFsKey, monthLabel, rows } = params;
 
   const cover = buildCoverHtml({
-    companyName,
-    companyLine,
-    logoDataUri,
+    companyHeaderHtml,
     projectTitle,
     projectFsKey,
     monthLabel,
     rowCount: rows.length,
   });
 
-  const days = rows.map((r, i) => buildDayHtml(r, i)).join("");
+  const days = rows.map((r, i) => buildDayHtml(r, i, companyHeaderHtml)).join("");
 
   return `
   <!DOCTYPE html>
@@ -257,11 +236,11 @@ function buildHtml(params: {
       <style>
         @page {
           size: A4;
-          margin: 22mm 16mm 18mm 16mm;
+          margin: 14mm 16mm 18mm 16mm;
         }
 
         body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+          font-family: ${RLC_PDF_FONT_STACK};
           color: #0B1720;
           font-size: 12px;
           line-height: 1.45;
@@ -274,6 +253,32 @@ function buildHtml(params: {
         .page-break:last-child {
           page-break-after: auto;
         }
+
+        .page-company-header {
+          width: 100%;
+          margin: 0 0 10px 0;
+          page-break-inside: avoid;
+        }
+
+        .page-company-header > div {
+          width: 100%;
+          margin: 0 !important;
+        }
+
+        .global-footer {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: -12mm;
+          display: flex;
+          justify-content: space-between;
+          border-top: 1px solid #DDE7EF;
+          padding-top: 4px;
+          color: #64748B;
+          font-size: 8px;
+        }
+
+        .page-number::after { content: counter(page); }
 
         .cover-top {
           display: flex;
@@ -314,7 +319,7 @@ function buildHtml(params: {
         }
 
         .cover-main {
-          padding-top: 44px;
+          padding-top: 18px;
         }
 
         .cover-kicker {
@@ -450,6 +455,10 @@ function buildHtml(params: {
       </style>
     </head>
     <body>
+      <div class="global-footer">
+        <span>${esc(companyName || "RLC Bausoftware")} · ${esc(projectFsKey)}</span>
+        <span>Seite <span class="page-number"></span></span>
+      </div>
       ${cover}
       ${days}
     </body>
@@ -460,6 +469,18 @@ function buildHtml(params: {
 export async function buildBautagebuchPdf(
   input: BuildBautagebuchPdfInput
 ): Promise<BuildBautagebuchPdfResult> {
+  try {
+    const serverResult = await renderMobilePdfViaServer({
+      documentType: "BAUTAGEBUCH",
+      projectFsKey: input.projectFsKey,
+      fileName: String(input.filenameHint || `Bautagebuch_${input.projectFsKey}.pdf`),
+      payload: input,
+    });
+    return serverResult;
+  } catch (error: any) {
+    console.log("[RLC PDF CORE] Bautagebuch fallback lokal:", String(error?.message || error));
+  }
+
   const rows = sortRows(Array.isArray(input.rows) ? input.rows : []);
   if (!rows.length) {
     throw new Error("Keine Tagesberichte für den PDF-Export gefunden.");
@@ -467,28 +488,9 @@ export async function buildBautagebuchPdf(
 
   const date = ymdNow();
 
-  const companyHeader = await getCompanyHeaderCached().catch(() => null);
-  const logoUri = await getCompanyLogoUriCached().catch(() => null);
-  const logoDataUri = await logoUriToDataUri(logoUri);
-
-  const companyName =
-    String(
-      companyHeader?.name ||
-        companyHeader?.companyName ||
-        companyHeader?.title ||
-        companyHeader?.firma ||
-        companyHeader?.company ||
-        "RLC Bausoftware"
-    ).trim() || "RLC Bausoftware";
-
-  const companyLine = [
-    companyHeader?.address || companyHeader?.fullAddress || companyHeader?.anschrift || "",
-    companyHeader?.phone || companyHeader?.telefon || companyHeader?.tel || "",
-    companyHeader?.email || companyHeader?.mail || "",
-  ]
-    .map((x) => String(x || "").trim())
-    .filter(Boolean)
-    .join(" • ");
+  const branding = await loadRlcPdfBranding();
+  const companyName = branding.companyName;
+  const companyHeaderHtml = renderRlcPdfCompanyHeader(branding);
 
   const projectTitle = String(input.projectTitle || "Projekt").trim() || "Projekt";
   const fileName =
@@ -499,8 +501,7 @@ export async function buildBautagebuchPdf(
 
   const html = buildHtml({
     companyName,
-    companyLine,
-    logoDataUri,
+    companyHeaderHtml,
     projectTitle,
     projectFsKey: String(input.projectFsKey || "").trim(),
     monthLabel: String(input.monthLabel || "").trim() || undefined,

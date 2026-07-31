@@ -1,4 +1,4 @@
-// apps/web/src/pages/ki/RegieAuto.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/RegieAuto.tsx
 
 import React, { useMemo, useRef, useState } from "react";
 import { useProject } from "../../store/useProject";
@@ -51,14 +51,14 @@ type ProjectLike = {
 const shell: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 24,
+  padding: 24
 };
 
 const card: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   borderRadius: 10,
   padding: 16,
-  background: "#fff",
+  background: "#fff"
 };
 
 const input: React.CSSProperties = {
@@ -66,7 +66,7 @@ const input: React.CSSProperties = {
   borderRadius: 8,
   padding: "8px 10px",
   fontSize: 14,
-  width: "100%",
+  width: "100%"
 };
 
 const btn: React.CSSProperties = {
@@ -75,25 +75,25 @@ const btn: React.CSSProperties = {
   background: "#fff",
   borderRadius: 8,
   fontSize: 13,
-  cursor: "pointer",
+  cursor: "pointer"
 };
 
 const table: React.CSSProperties = {
   width: "100%",
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
   borderBottom: "1px solid #ccc",
   textAlign: "left",
   padding: 8,
-  background: "#f8fafc",
+  background: "#f8fafc"
 };
 
 const td: React.CSSProperties = {
   padding: 6,
   borderBottom: "1px solid #eee",
-  verticalAlign: "top",
+  verticalAlign: "top"
 };
 
 /** ===== Component ===== */
@@ -134,13 +134,13 @@ export default function RegieAuto() {
 
   const canGenerate = useMemo(
     () =>
-      effectiveProjectId.trim().length > 0 &&
-      (aufmass.length > 0 ||
-        scheine.length > 0 ||
-        !!personal.trim() ||
-        !!geraete.trim() ||
-        !!arbeitszeit.trim() ||
-        !!bemerkung.trim()),
+    effectiveProjectId.trim().length > 0 && (
+    aufmass.length > 0 ||
+    scheine.length > 0 ||
+    !!personal.trim() ||
+    !!geraete.trim() ||
+    !!arbeitszeit.trim() ||
+    !!bemerkung.trim()),
     [effectiveProjectId, aufmass, scheine, personal, geraete, arbeitszeit, bemerkung]
   );
 
@@ -164,22 +164,22 @@ export default function RegieAuto() {
 
       const res = await fetch("/api/ki/regie/upload", {
         method: "POST",
-        body: fd,
+        body: fd
       });
 
       if (!res.ok) throw new Error(await res.text());
 
       const data = (await res.json()) as UploadApiResponse;
 
-      const nextFiles = Array.isArray(data?.files)
-        ? data.files.map(normalizeUpload)
-        : [];
-      const nextAufmass = Array.isArray(data?.recognized?.aufmass)
-        ? data.recognized.aufmass.map(normalizeAufmass)
-        : [];
-      const nextScheine = Array.isArray(data?.recognized?.lieferscheine)
-        ? data.recognized.lieferscheine.map(normalizeLieferschein)
-        : [];
+      const nextFiles = Array.isArray(data?.files) ?
+      data.files.map(normalizeUpload) :
+      [];
+      const nextAufmass = Array.isArray(data?.recognized?.aufmass) ?
+      data.recognized.aufmass.map(normalizeAufmass) :
+      [];
+      const nextScheine = Array.isArray(data?.recognized?.lieferscheine) ?
+      data.recognized.lieferscheine.map(normalizeLieferschein) :
+      [];
 
       setUploads((p) => [...p, ...nextFiles]);
       setAufmass((p) => [...p, ...nextAufmass]);
@@ -209,8 +209,8 @@ export default function RegieAuto() {
           projectId: effectiveProjectId,
           projectCode: projectCode || "",
           date,
-          aufmass,
-        }),
+          aufmass
+        })
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -245,8 +245,8 @@ export default function RegieAuto() {
           meta: { personal, geraete, arbeitszeit, ort, wetter, bemerkung },
           aufmass,
           lieferscheine: scheine,
-          fotos: uploads.map((u) => u.url),
-        }),
+          fotos: uploads.map((u) => u.url)
+        })
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -281,8 +281,8 @@ export default function RegieAuto() {
           photos: uploads.map((u) => u.url),
           items: { aufmass, lieferscheine: scheine },
           meta: { personal, geraete, arbeitszeit, ort, wetter, bemerkung },
-          participants: { bauleiter: "", auftraggeber: "" },
-        }),
+          participants: { bauleiter: "", auftraggeber: "" }
+        })
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -299,76 +299,76 @@ export default function RegieAuto() {
   }
 
   /** ===== UI Helpers ===== */
-  const fmt = (v: unknown) => (v === undefined || v === null ? "" : String(v));
+  const fmt = (v: unknown) => v === undefined || v === null ? "" : String(v);
 
   function addAufmass() {
     setAufmass((r) => [
-      ...r,
-      {
-        id: `A_${Date.now()}`,
-        position: "",
-        kurztext: "",
-        einheit: "m",
-        menge: 0,
-      },
-    ]);
+    ...r,
+    {
+      id: `A_${Date.now()}`,
+      position: "",
+      kurztext: "",
+      einheit: "m",
+      menge: 0
+    }]
+    );
   }
 
   function addSchein() {
     setScheine((r) => [
-      ...r,
-      {
-        id: `L_${Date.now()}`,
-        lieferant: "",
-        datum: date,
-        menge: 0,
-        einheit: "stk",
-      },
-    ]);
+    ...r,
+    {
+      id: `L_${Date.now()}`,
+      lieferant: "",
+      datum: date,
+      menge: 0,
+      einheit: "stk"
+    }]
+    );
   }
 
   function updateAufmass(i: number, patch: Partial<RecognizedAufmass>) {
     setAufmass((rows) =>
-      rows.map((r, idx) =>
-        idx === i ? normalizeAufmass({ ...r, ...patch }) : r
-      )
+    rows.map((r, idx) =>
+    idx === i ? normalizeAufmass({ ...r, ...patch }) : r
+    )
     );
   }
 
   function updateSchein(i: number, patch: Partial<RecognizedLieferschein>) {
     setScheine((rows) =>
-      rows.map((r, idx) =>
-        idx === i ? normalizeLieferschein({ ...r, ...patch }) : r
-      )
+    rows.map((r, idx) =>
+    idx === i ? normalizeLieferschein({ ...r, ...patch }) : r
+    )
     );
   }
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h1>Regieberichte automatisch generieren</h1>
 
-      <div style={card}>
-        <div
-          style={{ display: "flex", gap: 16, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}
-        >
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-regieauto-tsx-1026">
+
+          
           <label>
             Projekt-ID:&nbsp;
-            <input
-              style={input}
-              value={projectInput}
-              onChange={(e) => setProjectInput(e.target.value)}
-              placeholder="P-2025-001"
-            />
+            <input className={rlcClass(null,
+            input)}
+            value={projectInput}
+            onChange={(e) => setProjectInput(e.target.value)}
+            placeholder="P-2025-001" />
+            
           </label>
 
           <label>
             Datum:&nbsp;
-            <input
-              style={input}
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <input className={rlcClass(null,
+            input)}
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)} />
+            
           </label>
 
           <input
@@ -376,317 +376,317 @@ export default function RegieAuto() {
             type="file"
             accept=".jpg,.jpeg,.png,.heic,.pdf"
             multiple
-            onChange={handleUpload}
-            style={{ marginLeft: "auto" }}
-          />
+            onChange={handleUpload} className="rlc-migrated-pages-ki-regieauto-tsx-1027" />
+
+          
         </div>
 
-        <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+        <div className="rlc-migrated-pages-ki-regieauto-tsx-1028">
           Aktiv: {effectiveProjectId || "kein Projekt gewählt"}
         </div>
 
-        {error && (
-          <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 13 }}>
+        {error &&
+        <div className="rlc-migrated-pages-ki-regieauto-tsx-1029">
             {error}
           </div>
-        )}
+        }
       </div>
 
-      <div style={{ ...card, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <input
-          style={input}
-          placeholder="Personal (Namen)"
-          value={personal}
-          onChange={(e) => setPersonal(e.target.value)}
-        />
-        <input
-          style={input}
-          placeholder="Geräte/Maschinen"
-          value={geraete}
-          onChange={(e) => setGeraete(e.target.value)}
-        />
-        <input
-          style={input}
-          placeholder="Arbeitszeit (z. B. 07:30–16:30, 8h)"
-          value={arbeitszeit}
-          onChange={(e) => setArbeitszeit(e.target.value)}
-        />
-        <input
-          style={input}
-          placeholder="Ort/Bereich"
-          value={ort}
-          onChange={(e) => setOrt(e.target.value)}
-        />
-        <input
-          style={input}
-          placeholder="Wetter"
-          value={wetter}
-          onChange={(e) => setWetter(e.target.value)}
-        />
-        <input
-          style={input}
-          placeholder="Bemerkung"
-          value={bemerkung}
-          onChange={(e) => setBemerkung(e.target.value)}
-        />
+      <div className={rlcClass(null, { ...card, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 })}>
+        <input className={rlcClass(null,
+        input)}
+        placeholder="Personal (Namen)"
+        value={personal}
+        onChange={(e) => setPersonal(e.target.value)} />
+        
+        <input className={rlcClass(null,
+        input)}
+        placeholder="Geräte/Maschinen"
+        value={geraete}
+        onChange={(e) => setGeraete(e.target.value)} />
+        
+        <input className={rlcClass(null,
+        input)}
+        placeholder="Arbeitszeit (z. B. 07:30–16:30, 8h)"
+        value={arbeitszeit}
+        onChange={(e) => setArbeitszeit(e.target.value)} />
+        
+        <input className={rlcClass(null,
+        input)}
+        placeholder="Ort/Bereich"
+        value={ort}
+        onChange={(e) => setOrt(e.target.value)} />
+        
+        <input className={rlcClass(null,
+        input)}
+        placeholder="Wetter"
+        value={wetter}
+        onChange={(e) => setWetter(e.target.value)} />
+        
+        <input className={rlcClass(null,
+        input)}
+        placeholder="Bemerkung"
+        value={bemerkung}
+        onChange={(e) => setBemerkung(e.target.value)} />
+        
       </div>
 
-      {uploads.length > 0 && (
-        <div style={card}>
-          <h3 style={{ margin: 0 }}>Fotos / Belege</h3>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
-            {uploads.map((f) => (
-              <div
-                key={f.fileId}
-                style={{ border: "1px solid #ddd", padding: 8, width: 180, borderRadius: 8 }}
-              >
-                <div style={{ fontSize: 12, color: "#555", marginBottom: 6 }}>{f.fileId}</div>
-                {/\.(pdf)$/i.test(f.url) ? (
-                  <a href={f.url} target="_blank" rel="noopener noreferrer">
+      {uploads.length > 0 &&
+      <div className={rlcClass(null, card)}>
+          <h3 className="rlc-migrated-pages-ki-regieauto-tsx-1030">Fotos / Belege</h3>
+          <div className="rlc-migrated-pages-ki-regieauto-tsx-1031">
+            {uploads.map((f) =>
+          <div
+            key={f.fileId} className="rlc-migrated-pages-ki-regieauto-tsx-1032">
+
+            
+                <div className="rlc-migrated-pages-ki-regieauto-tsx-1033">{f.fileId}</div>
+                {/\.(pdf)$/i.test(f.url) ?
+            <a href={f.url} target="_blank" rel="noopener noreferrer">
                     Öffnen
-                  </a>
-                ) : (
-                  <img
-                    src={f.url}
-                    alt=""
-                    style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 6 }}
-                  />
-                )}
+                  </a> :
+
+            <img
+              src={f.url}
+              alt="" className="rlc-migrated-pages-ki-regieauto-tsx-1034" />
+
+
+            }
               </div>
-            ))}
+          )}
           </div>
         </div>
-      )}
+      }
 
-      <div style={card}>
-        <h3 style={{ margin: 0 }}>Erkannte / manuelle Aufmaß-Positionen</h3>
-        <button onClick={addAufmass} style={{ ...btn, marginTop: 8, marginBottom: 8 }}>
+      <div className={rlcClass(null, card)}>
+        <h3 className="rlc-migrated-pages-ki-regieauto-tsx-1035">Erkannte / manuelle Aufmaß-Positionen</h3>
+        <button onClick={addAufmass} className={rlcClass(null, { ...btn, marginTop: 8, marginBottom: 8 })}>
           Zeile hinzufügen
         </button>
 
-        <table style={table}>
+        <table className={rlcClass(null, table)}>
           <thead>
             <tr>
-              {["Pos.", "Kurztext", "Einh.", "Menge", "Kommentar"].map((h) => (
-                <th key={h} style={th}>
+              {["Pos.", "Kurztext", "Einh.", "Menge", "Kommentar"].map((h) =>
+              <th key={h} className={rlcClass(null, th)}>
                   {h}
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {aufmass.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: 8, color: "#777" }}>
-                  Keine Positionen.
-                </td>
-              </tr>
-            )}
-
-            {aufmass.map((r, i) => (
-              <tr key={r.id}>
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={fmt(r.position)}
-                    onChange={(e) => updateAufmass(i, { position: e.target.value })}
-                  />
-                </td>
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={fmt(r.kurztext)}
-                    onChange={(e) => updateAufmass(i, { kurztext: e.target.value })}
-                  />
-                </td>
-                <td style={{ ...td, width: 90 }}>
-                  <input
-                    style={input}
-                    value={fmt(r.einheit)}
-                    onChange={(e) => updateAufmass(i, { einheit: e.target.value })}
-                  />
-                </td>
-                <td style={{ ...td, width: 120 }}>
-                  <input
-                    style={input}
-                    type="number"
-                    step="0.001"
-                    value={r.menge ?? 0}
-                    onChange={(e) =>
-                      updateAufmass(i, { menge: safeNumber(e.target.value, 0) })
-                    }
-                  />
-                </td>
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={fmt(r.kommentar)}
-                    onChange={(e) => updateAufmass(i, { kommentar: e.target.value })}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={card}>
-        <h3 style={{ margin: 0 }}>Lieferscheine</h3>
-        <button onClick={addSchein} style={{ ...btn, marginTop: 8, marginBottom: 8 }}>
-          Zeile hinzufügen
-        </button>
-
-        <table style={table}>
-          <thead>
-            <tr>
-              {["Lieferant", "Datum", "Material", "Menge", "Einh.", "Preis", "Kostenstelle", "Beleg"].map(
-                (h) => (
-                  <th key={h} style={th}>
-                    {h}
-                  </th>
-                )
               )}
             </tr>
           </thead>
           <tbody>
-            {scheine.length === 0 && (
-              <tr>
-                <td colSpan={8} style={{ padding: 8, color: "#777" }}>
-                  Keine Lieferscheine.
+            {aufmass.length === 0 &&
+            <tr>
+                <td colSpan={5} className="rlc-migrated-pages-ki-regieauto-tsx-1036">
+                  Keine Positionen.
+                </td>
+              </tr>
+            }
+
+            {aufmass.map((r, i) =>
+            <tr key={r.id}>
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(r.position)}
+                onChange={(e) => updateAufmass(i, { position: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(r.kurztext)}
+                onChange={(e) => updateAufmass(i, { kurztext: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, { ...td, width: 90 })}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(r.einheit)}
+                onChange={(e) => updateAufmass(i, { einheit: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, { ...td, width: 120 })}>
+                  <input className={rlcClass(null,
+                input)}
+                type="number"
+                step="0.001"
+                value={r.menge ?? 0}
+                onChange={(e) =>
+                updateAufmass(i, { menge: safeNumber(e.target.value, 0) })
+                } />
+                
+                </td>
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(r.kommentar)}
+                onChange={(e) => updateAufmass(i, { kommentar: e.target.value })} />
+                
                 </td>
               </tr>
             )}
-
-            {scheine.map((s, i) => (
-              <tr key={s.id}>
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={fmt(s.lieferant)}
-                    onChange={(e) => updateSchein(i, { lieferant: e.target.value })}
-                  />
-                </td>
-                <td style={{ ...td, width: 150 }}>
-                  <input
-                    style={input}
-                    type="date"
-                    value={fmt(s.datum)}
-                    onChange={(e) => updateSchein(i, { datum: e.target.value })}
-                  />
-                </td>
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={fmt(s.material)}
-                    onChange={(e) => updateSchein(i, { material: e.target.value })}
-                  />
-                </td>
-                <td style={{ ...td, width: 120 }}>
-                  <input
-                    style={input}
-                    type="number"
-                    step="0.001"
-                    value={s.menge ?? 0}
-                    onChange={(e) =>
-                      updateSchein(i, { menge: safeNumber(e.target.value, 0) })
-                    }
-                  />
-                </td>
-                <td style={{ ...td, width: 90 }}>
-                  <input
-                    style={input}
-                    value={fmt(s.einheit)}
-                    onChange={(e) => updateSchein(i, { einheit: e.target.value })}
-                  />
-                </td>
-                <td style={{ ...td, width: 120 }}>
-                  <input
-                    style={input}
-                    type="number"
-                    step="0.01"
-                    value={s.preis ?? 0}
-                    onChange={(e) =>
-                      updateSchein(i, { preis: safeNumber(e.target.value, 0) })
-                    }
-                  />
-                </td>
-                <td style={td}>
-                  <input
-                    style={input}
-                    value={fmt(s.kostenstelle)}
-                    onChange={(e) => updateSchein(i, { kostenstelle: e.target.value })}
-                  />
-                </td>
-                <td style={td}>
-                  {s.belegUrl ? (
-                    <a href={s.belegUrl} target="_blank" rel="noopener noreferrer">
-                      Öffnen
-                    </a>
-                  ) : (
-                    "-"
-                  )}
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <button style={btn} disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+      <div className={rlcClass(null, card)}>
+        <h3 className="rlc-migrated-pages-ki-regieauto-tsx-1037">Lieferscheine</h3>
+        <button onClick={addSchein} className={rlcClass(null, { ...btn, marginTop: 8, marginBottom: 8 })}>
+          Zeile hinzufügen
+        </button>
+
+        <table className={rlcClass(null, table)}>
+          <thead>
+            <tr>
+              {["Lieferant", "Datum", "Material", "Menge", "Einh.", "Preis", "Kostenstelle", "Beleg"].map(
+                (h) =>
+                <th key={h} className={rlcClass(null, th)}>
+                    {h}
+                  </th>
+
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {scheine.length === 0 &&
+            <tr>
+                <td colSpan={8} className="rlc-migrated-pages-ki-regieauto-tsx-1038">
+                  Keine Lieferscheine.
+                </td>
+              </tr>
+            }
+
+            {scheine.map((s, i) =>
+            <tr key={s.id}>
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(s.lieferant)}
+                onChange={(e) => updateSchein(i, { lieferant: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, { ...td, width: 150 })}>
+                  <input className={rlcClass(null,
+                input)}
+                type="date"
+                value={fmt(s.datum)}
+                onChange={(e) => updateSchein(i, { datum: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(s.material)}
+                onChange={(e) => updateSchein(i, { material: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, { ...td, width: 120 })}>
+                  <input className={rlcClass(null,
+                input)}
+                type="number"
+                step="0.001"
+                value={s.menge ?? 0}
+                onChange={(e) =>
+                updateSchein(i, { menge: safeNumber(e.target.value, 0) })
+                } />
+                
+                </td>
+                <td className={rlcClass(null, { ...td, width: 90 })}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(s.einheit)}
+                onChange={(e) => updateSchein(i, { einheit: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, { ...td, width: 120 })}>
+                  <input className={rlcClass(null,
+                input)}
+                type="number"
+                step="0.01"
+                value={s.preis ?? 0}
+                onChange={(e) =>
+                updateSchein(i, { preis: safeNumber(e.target.value, 0) })
+                } />
+                
+                </td>
+                <td className={rlcClass(null, td)}>
+                  <input className={rlcClass(null,
+                input)}
+                value={fmt(s.kostenstelle)}
+                onChange={(e) => updateSchein(i, { kostenstelle: e.target.value })} />
+                
+                </td>
+                <td className={rlcClass(null, td)}>
+                  {s.belegUrl ?
+                <a href={s.belegUrl} target="_blank" rel="noopener noreferrer">
+                      Öffnen
+                    </a> :
+
+                "-"
+                }
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rlc-migrated-pages-ki-regieauto-tsx-1039">
+        <button className={rlcClass(null, btn)} disabled={uploading} onClick={() => fileInputRef.current?.click()}>
           {uploading ? "Erkenne..." : "Weitere Fotos/Belege hochladen"}
         </button>
 
-        <button
-          style={btn}
-          onClick={commitToMengenermittlung}
-          disabled={!effectiveProjectId || aufmass.length === 0 || busy}
-        >
+        <button className={rlcClass(null,
+        btn)}
+        onClick={commitToMengenermittlung}
+        disabled={!effectiveProjectId || aufmass.length === 0 || busy}>
+          
           In Mengenermittlung übernehmen
         </button>
 
-        <button
-          style={btn}
-          onClick={saveRegieJson}
-          disabled={!effectiveProjectId || busy}
-        >
+        <button className={rlcClass(null,
+        btn)}
+        onClick={saveRegieJson}
+        disabled={!effectiveProjectId || busy}>
+          
           Als Regiebericht speichern
         </button>
 
-        <button
-          style={btn}
-          disabled={!canGenerate || generating}
-          onClick={generatePDF}
-        >
+        <button className={rlcClass(null,
+        btn)}
+        disabled={!canGenerate || generating}
+        onClick={generatePDF}>
+          
           {generating ? "Generiere..." : "Regiebericht generieren (PDF)"}
         </button>
 
-        {pdfUrl && (
-          <a
-            href={pdfUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ marginLeft: "auto" }}
-          >
+        {pdfUrl &&
+        <a
+          href={pdfUrl}
+          target="_blank"
+          rel="noopener noreferrer" className="rlc-migrated-pages-ki-regieauto-tsx-1040">
+
+          
             PDF öffnen
           </a>
-        )}
+        }
       </div>
 
-      {!effectiveProjectId.trim() && (
-        <div style={{ color: "#b00" }}>⚠️ Projekt-ID eintragen.</div>
-      )}
-    </div>
-  );
+      {!effectiveProjectId.trim() &&
+      <div className="rlc-migrated-pages-ki-regieauto-tsx-1041">⚠️ Projekt-ID eintragen.</div>
+      }
+    </div>);
+
 }
 
 function safeNumber(v: unknown, fallback = 0): number {
   const n =
-    typeof v === "number"
-      ? v
-      : typeof v === "string"
-      ? Number(v.replace(",", "."))
-      : Number(v);
+  typeof v === "number" ?
+  v :
+  typeof v === "string" ?
+  Number(v.replace(",", ".")) :
+  Number(v);
 
   return Number.isFinite(n) ? n : fallback;
 }
@@ -696,7 +696,7 @@ function normalizeUpload(u: unknown): UploadResult {
   return {
     fileId: String(x.fileId || crypto.randomUUID()),
     url: String(x.url || ""),
-    ocrText: x.ocrText ? String(x.ocrText) : undefined,
+    ocrText: x.ocrText ? String(x.ocrText) : undefined
   };
 }
 
@@ -708,7 +708,7 @@ function normalizeAufmass(a: unknown): RecognizedAufmass {
     kurztext: x.kurztext ? String(x.kurztext) : "",
     einheit: x.einheit ? String(x.einheit) : "",
     menge: safeNumber(x.menge, 0),
-    kommentar: x.kommentar ? String(x.kommentar) : "",
+    kommentar: x.kommentar ? String(x.kommentar) : ""
   };
 }
 
@@ -723,11 +723,6 @@ function normalizeLieferschein(s: unknown): RecognizedLieferschein {
     einheit: x.einheit ? String(x.einheit) : "",
     preis: safeNumber(x.preis, 0),
     kostenstelle: x.kostenstelle ? String(x.kostenstelle) : "",
-    belegUrl: x.belegUrl ? String(x.belegUrl) : "",
+    belegUrl: x.belegUrl ? String(x.belegUrl) : ""
   };
 }
-
-
-
-
-

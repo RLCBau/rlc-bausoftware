@@ -1,8 +1,10 @@
-// apps/web/src/pages/ki/Widersprueche.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Widersprueche.tsx
 
 import React from "react";
 import * as XLSX from "xlsx";
 import { useProject } from "../../store/useProject";
+import { apiUrl } from "../../lib/apiBase";
+import { saveProjectLvPosition } from "../../api/projectLvCompat";
 
 /* ================== Tipi ================== */
 type Row = {
@@ -14,13 +16,13 @@ type Row = {
 };
 
 type DiffType =
-  | "match"
-  | "text_diff"
-  | "unit_diff"
-  | "qty_diff"
-  | "price_diff"
-  | "missing_in_offer"
-  | "missing_in_lv";
+"match" |
+"text_diff" |
+"unit_diff" |
+"qty_diff" |
+"price_diff" |
+"missing_in_offer" |
+"missing_in_lv";
 
 type DiffRow = {
   posNr: string;
@@ -32,42 +34,61 @@ type DiffRow = {
 
 /* ================== UI helpers ================== */
 const card: React.CSSProperties = {
-  border: "1px solid var(--line)",
-  borderRadius: 10,
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
   padding: 16,
-  background: "#fff",
+  background: "#FFFFFF",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const inp: React.CSSProperties = {
-  border: "1px solid var(--line)",
-  borderRadius: 8,
-  padding: "8px 10px",
-  fontSize: 14,
+  border: "1px solid #D1D5DB",
+  borderRadius: 10,
+  padding: "9px 11px",
+  fontSize: 13,
+  color: "#0F172A",
+  background: "#FFFFFF"
+};
+
+const button: React.CSSProperties = {
+  border: "1px solid #CBD5E1",
+  borderRadius: 10,
+  padding: "9px 12px",
+  background: "#FFFFFF",
+  color: "#0F172A",
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const tbl: React.CSSProperties = {
   width: "100%",
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "8px 10px",
-  borderBottom: "1px solid var(--line)",
+  padding: "10px 12px",
+  borderBottom: "1px solid #CBD5E1",
   whiteSpace: "nowrap",
-  background: "#f7f7f7",
+  background: "#F8FAFC",
+  color: "#334155",
+  fontSize: 12,
+  fontWeight: 700
 };
 
 const td: React.CSSProperties = {
-  padding: "6px 10px",
-  borderBottom: "1px solid #f0f0f0",
+  padding: "9px 12px",
+  borderBottom: "1px solid #E5E7EB",
   verticalAlign: "top",
+  color: "#0F172A",
+  fontSize: 13
 };
 
 function num(n?: number) {
-  return Number.isFinite(n)
-    ? (n as number).toLocaleString("de-DE", { maximumFractionDigits: 3 })
-    : "";
+  return Number.isFinite(n) ?
+  (n as number).toLocaleString("de-DE", { maximumFractionDigits: 3 }) :
+  "";
 }
 
 function toNumber(v: unknown) {
@@ -91,6 +112,25 @@ function toNumber(v: unknown) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function authHeaders(extra?: Record<string, string>): HeadersInit {
+  let token = "";
+  try {
+    token =
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    localStorage.getItem("accessToken") ||
+    localStorage.getItem("rlc_token") ||
+    "";
+  } catch {
+
+
+    // Browser-Speicher nicht verfügbar
+  }return {
+    ...(extra || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers || {});
   if (!headers.has("Content-Type") && init?.body) {
@@ -99,7 +139,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 
   const res = await fetch(url, {
     ...init,
-    headers,
+    headers
   });
 
   if (!res.ok) throw new Error(await res.text());
@@ -110,9 +150,9 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
 function normalizeHeader(h: string) {
   const s = h.trim().toLowerCase();
   if (/^pos/.test(s) || s === "position" || s === "positionsnummer" || s === "nr")
-    return "posNr";
+  return "posNr";
   if (/kurz|kurztext|bezeichnung|beschreibung|langtext/.test(s))
-    return "kurztext";
+  return "kurztext";
   if (/einheit|me|unit/.test(s)) return "einheit";
   if (/menge|qty|anzahl|mengen?/.test(s)) return "menge";
   if (/^ep$|einheitspreis|preis/.test(s)) return "ep";
@@ -125,7 +165,7 @@ function normalizeRow(r: Partial<Row>): Row {
     kurztext: String(r.kurztext || "").trim(),
     einheit: String(r.einheit || "").trim(),
     menge: toNumber(r.menge),
-    ep: toNumber(r.ep),
+    ep: toNumber(r.ep)
   };
 }
 
@@ -144,7 +184,7 @@ function rowFromObj(o: Record<string, any>): Row | null {
     kurztext: m.kurztext,
     einheit: m.einheit,
     menge: m.menge,
-    ep: m.ep,
+    ep: m.ep
   });
 }
 
@@ -154,7 +194,7 @@ async function readXlsxOrCsv(file: File): Promise<Row[]> {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json<Record<string, any>>(ws, {
     raw: false,
-    defval: "",
+    defval: ""
   });
 
   const rows: Row[] = [];
@@ -183,7 +223,7 @@ function compare(lv: Row[], angebot: Row[]): DiffRow[] {
         lv: L,
         angebot: null,
         type: "missing_in_offer",
-        details: ["Im Angebot fehlt diese Position."],
+        details: ["Im Angebot fehlt diese Position."]
       });
       continue;
     }
@@ -194,7 +234,7 @@ function compare(lv: Row[], angebot: Row[]): DiffRow[] {
         lv: null,
         angebot: A,
         type: "missing_in_lv",
-        details: ["Im LV fehlt diese Position."],
+        details: ["Im LV fehlt diese Position."]
       });
       continue;
     }
@@ -235,7 +275,7 @@ function compare(lv: Row[], angebot: Row[]): DiffRow[] {
       lv: L!,
       angebot: A!,
       type,
-      details,
+      details
     });
   }
 
@@ -248,7 +288,7 @@ function badge(t: DiffType) {
     borderRadius: 999,
     fontSize: 12,
     fontWeight: 600,
-    display: "inline-block",
+    display: "inline-block"
   };
 
   const map: Record<DiffType, React.CSSProperties> = {
@@ -258,7 +298,7 @@ function badge(t: DiffType) {
     qty_diff: { background: "#fef9c3", color: "#a16207" },
     price_diff: { background: "#e0e7ff", color: "#3730a3" },
     missing_in_offer: { background: "#fee2e2", color: "#991b1b" },
-    missing_in_lv: { background: "#fae8ff", color: "#6b21a8" },
+    missing_in_lv: { background: "#fae8ff", color: "#6b21a8" }
   };
 
   const style = { ...base, ...(map[t] || {}) };
@@ -270,35 +310,36 @@ function badge(t: DiffType) {
     qty_diff: "Menge",
     price_diff: "Preis",
     missing_in_offer: "Fehlt im Angebot",
-    missing_in_lv: "Fehlt im LV",
+    missing_in_lv: "Fehlt im LV"
   };
 
-  return <span style={style}>{label[t]}</span>;
+  return <span className={rlcClass(null, style)}>{label[t]}</span>;
 }
 
 /* ================== Component ================== */
-export default function Widersprueche() {
+export default function Widersprueche({ embedded = false }: {embedded?: boolean;}) {
   const projectCtx = useProject() as any;
 
   const storeProjectId =
-    projectCtx?.projectId ||
-    projectCtx?.currentProjectId ||
-    projectCtx?.currentProject?.id ||
-    "";
+  projectCtx?.projectId ||
+  projectCtx?.currentProjectId ||
+  projectCtx?.currentProject?.id ||
+  "";
 
   const projectCode =
-    projectCtx?.projectCode ||
-    projectCtx?.currentProject?.code ||
-    "";
+  projectCtx?.projectCode ||
+  projectCtx?.currentProject?.code ||
+  "";
 
   const [projectInput, setProjectInput] = React.useState("");
   const [lv, setLV] = React.useState<Row[]>([]);
   const [ag, setAG] = React.useState<Row[]>([]);
   const [diffs, setDiffs] = React.useState<DiffRow[]>([]);
   const [error, setError] = React.useState<string | null>(null);
+  const [serverStatus, setServerStatus] = React.useState("");
 
   const effectiveProjectId =
-    projectInput.trim() || storeProjectId || projectCode || "";
+  projectInput.trim() || storeProjectId || projectCode || "";
 
   async function onLoadLV(files: FileList | null) {
     if (!files || !files[0]) return;
@@ -347,12 +388,12 @@ export default function Widersprueche() {
       Angebot_Einheit: d.angebot?.einheit ?? "",
       Angebot_Menge: d.angebot?.menge ?? "",
       Angebot_EP: d.angebot?.ep ?? "",
-      Details: d.details.join(" | "),
+      Details: d.details.join(" | ")
     }));
 
     const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(data), {
       FS: ";",
-      RS: "\n",
+      RS: "\n"
     });
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -377,14 +418,14 @@ export default function Widersprueche() {
       menge: prefill.menge ?? "",
       ep: prefill.ep ?? "",
       posNr: prefill.posNr ?? "",
-      grund: "KI: Widerspruch/Abweichung erkannt",
+      grund: "KI: Widerspruch/Abweichung erkannt"
     };
 
     const url =
-      `/kalkulation/nachtraege?projectId=${encodeURIComponent(
-        effectiveProjectId
-      )}` +
-      `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
+    `/kalkulation/nachtraege?projectId=${encodeURIComponent(
+      effectiveProjectId
+    )}` +
+    `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
 
     window.location.href = url;
   }
@@ -404,17 +445,11 @@ export default function Widersprueche() {
       einheit: r.einheit,
       menge: r.menge ?? null,
       preis: r.ep ?? null,
-      quelle: "KI-Vergleich",
+      quelle: "KI-Vergleich"
     };
 
     try {
-      const res = await api<{ ok: boolean; count?: number; updated?: boolean }>(
-        "/api/lv/update",
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await saveProjectLvPosition(effectiveProjectId, payload);
 
       alert(
         `✅ LV aktualisiert (${res.updated ? "vorhandene Position" : "neu hinzugefügt"})`
@@ -424,171 +459,234 @@ export default function Widersprueche() {
     }
   }
 
-  return (
-    <div style={{ display: "grid", gap: 16, padding: 16 }}>
-      <h1>Widersprüche im LV/Angebot</h1>
+  async function saveReportToServer() {
+    if (!effectiveProjectId) {
+      setServerStatus("Kein Projekt gewählt.");
+      return;
+    }
 
-      <div style={card}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+    try {
+      setServerStatus("Speichere Prüfung auf Server …");
+      const res = await fetch(
+        apiUrl(`/api/kalkulation/storage/angebotspruefung/${encodeURIComponent(effectiveProjectId)}/save`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({
+            data: {
+              projectId: effectiveProjectId,
+              lv,
+              angebot: ag,
+              diffs,
+              savedAt: new Date().toISOString()
+            }
+          })
+        }
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+      setServerStatus("Prüfung auf Server gespeichert.");
+    } catch (e: any) {
+      setServerStatus(`Server-Speichern fehlgeschlagen: ${e?.message || e}`);
+    }
+  }
+
+  async function loadReportFromServer() {
+    if (!effectiveProjectId) {
+      setServerStatus("Kein Projekt gewählt.");
+      return;
+    }
+
+    try {
+      setServerStatus("Lade Prüfung vom Server …");
+      const res = await fetch(
+        apiUrl(`/api/kalkulation/storage/angebotspruefung/${encodeURIComponent(effectiveProjectId)}`),
+        { credentials: "include", headers: authHeaders() }
+      );
+      const json = await res.json().catch(() => null);
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+      const data = json?.data || {};
+      setLV(Array.isArray(data.lv) ? data.lv.map(normalizeRow) : []);
+      setAG(Array.isArray(data.angebot) ? data.angebot.map(normalizeRow) : []);
+      setDiffs(Array.isArray(data.diffs) ? data.diffs : []);
+      setServerStatus(json?.exists ? "Prüfung vom Server geladen." : "Keine gespeicherte Prüfung gefunden.");
+    } catch (e: any) {
+      setServerStatus(`Server-Laden fehlgeschlagen: ${e?.message || e}`);
+    }
+  }
+
+  return (
+    <div className="rlc-migrated-pages-ki-widersprueche-tsx-1057">
+      {!embedded ? <h1>Widersprüche im LV/Angebot</h1> : null}
+
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-widersprueche-tsx-1058">
           <div>
-            <div style={{ marginBottom: 6, fontSize: 13, color: "var(--muted)" }}>
+            <div className="rlc-migrated-pages-ki-widersprueche-tsx-1059">
               Projekt-ID
             </div>
-            <input
-              style={{ ...inp, width: "100%" }}
-              value={projectInput}
-              onChange={(e) => setProjectInput(e.target.value)}
-              placeholder="z. B. BA-2025-834"
-            />
+            <input className={rlcClass(null,
+            { ...inp, width: "100%" })}
+            value={projectInput}
+            onChange={(e) => setProjectInput(e.target.value)}
+            placeholder="z. B. BA-2025-834" />
+            
           </div>
           <div />
           <div>
-            <div style={{ marginBottom: 6, fontSize: 13, color: "var(--muted)" }}>
+            <div className="rlc-migrated-pages-ki-widersprueche-tsx-1060">
               LV (CSV/XLSX)
             </div>
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
-              onChange={(e) => onLoadLV(e.target.files)}
-            />
-            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
-              Colonne consigliate: <code>PosNr, Kurztext, Einheit, Menge, EP</code>
+              onChange={(e) => onLoadLV(e.target.files)} />
+            
+            <div className="rlc-migrated-pages-ki-widersprueche-tsx-1061">
+              Empfohlene Spalten: <code>PosNr, Kurztext, Einheit, Menge, EP</code>
             </div>
           </div>
           <div>
-            <div style={{ marginBottom: 6, fontSize: 13, color: "var(--muted)" }}>
+            <div className="rlc-migrated-pages-ki-widersprueche-tsx-1062">
               Angebot (CSV/XLSX)
             </div>
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
-              onChange={(e) => onLoadAG(e.target.files)}
-            />
+              onChange={(e) => onLoadAG(e.target.files)} />
+            
           </div>
         </div>
 
-        <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>
+        <div className="rlc-migrated-pages-ki-widersprueche-tsx-1063">
           Aktiv: {effectiveProjectId || "kein Projekt gewählt"}
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button className="btn" onClick={runCompare} disabled={!lv.length || !ag.length}>
+        <div className="rlc-migrated-pages-ki-widersprueche-tsx-1064">
+          <button className={rlcClass(null, button)} onClick={runCompare} disabled={!lv.length || !ag.length}>
             Vergleichen
           </button>
-          <button className="btn" onClick={exportCSV} disabled={!diffs.length}>
+          <button className={rlcClass(null, button)} onClick={exportCSV} disabled={!diffs.length}>
             Report exportieren (CSV)
           </button>
-          <div style={{ fontSize: 12, marginLeft: "auto", opacity: 0.75 }}>
+          <button className={rlcClass(null, button)} onClick={saveReportToServer} disabled={!diffs.length || !effectiveProjectId}>
+            Server speichern
+          </button>
+          <button className={rlcClass(null, button)} onClick={loadReportFromServer} disabled={!effectiveProjectId}>
+            Server laden
+          </button>
+          <div className="rlc-migrated-pages-ki-widersprueche-tsx-1065">
             Geladen: LV {lv.length} Pos. • Angebot {ag.length} Pos.
           </div>
         </div>
 
-        {error && <div style={{ color: "#b91c1c", marginTop: 8 }}>{error}</div>}
+        {error && <div className="rlc-migrated-pages-ki-widersprueche-tsx-1066">{error}</div>}
+        {serverStatus ? <div className="rlc-migrated-pages-ki-widersprueche-tsx-1067">{serverStatus}</div> : null}
       </div>
 
-      {!!diffs.length && (
-        <div style={card}>
-          <h3 style={{ marginTop: 0 }}>Erkannte Widersprüche</h3>
-          <table style={tbl}>
+      {!!diffs.length &&
+      <div className={rlcClass(null, card)}>
+          <h3 className="rlc-migrated-pages-ki-widersprueche-tsx-1068">Erkannte Widersprüche</h3>
+          <table className={rlcClass(null, tbl)}>
             <thead>
               <tr>
-                <th style={th}>Pos</th>
-                <th style={th}>Typ</th>
-                <th style={th}>LV</th>
-                <th style={th}>Angebot</th>
-                <th style={th}>Details</th>
-                <th style={th}></th>
+                <th className={rlcClass(null, th)}>Pos</th>
+                <th className={rlcClass(null, th)}>Typ</th>
+                <th className={rlcClass(null, th)}>LV</th>
+                <th className={rlcClass(null, th)}>Angebot</th>
+                <th className={rlcClass(null, th)}>Details</th>
+                <th className={rlcClass(null, th)}></th>
               </tr>
             </thead>
             <tbody>
               {diffs.map((d, i) => {
-                const nachtragBase = d.angebot ?? d.lv;
-                const canCreateNachtrag =
-                  (d.type === "missing_in_lv" ||
-                    d.type === "text_diff" ||
-                    d.type === "unit_diff" ||
-                    d.type === "qty_diff" ||
-                    d.type === "price_diff") &&
-                  !!nachtragBase;
+              const nachtragBase = d.angebot ?? d.lv;
+              const canCreateNachtrag =
+              (d.type === "missing_in_lv" ||
+              d.type === "text_diff" ||
+              d.type === "unit_diff" ||
+              d.type === "qty_diff" ||
+              d.type === "price_diff") &&
+              !!nachtragBase;
 
-                const canUpdateLv =
-                  d.type !== "missing_in_offer" && d.angebot != null;
+              const canUpdateLv =
+              d.type !== "missing_in_offer" && d.angebot != null;
 
-                return (
-                  <tr key={`${d.posNr}-${i}`}>
-                    <td style={{ ...td, fontWeight: 600 }}>{d.posNr}</td>
-                    <td style={td}>{badge(d.type)}</td>
-                    <td style={td}>
-                      {d.lv ? (
-                        <>
-                          <div style={{ fontWeight: 600 }}>{d.lv.kurztext}</div>
-                          <div style={{ fontSize: 12, opacity: 0.8 }}>
+              return (
+                <tr key={`${d.posNr}-${i}`}>
+                    <td className={rlcClass(null, { ...td, fontWeight: 600 })}>{d.posNr}</td>
+                    <td className={rlcClass(null, td)}>{badge(d.type)}</td>
+                    <td className={rlcClass(null, td)}>
+                      {d.lv ?
+                    <>
+                          <div className="rlc-migrated-pages-ki-widersprueche-tsx-1069">{d.lv.kurztext}</div>
+                          <div className="rlc-migrated-pages-ki-widersprueche-tsx-1070">
                             {d.lv.einheit} · Menge {num(d.lv.menge)} · EP {num(d.lv.ep)}
                           </div>
-                        </>
-                      ) : (
-                        <span style={{ opacity: 0.6 }}>—</span>
-                      )}
+                        </> :
+
+                    <span className="rlc-migrated-pages-ki-widersprueche-tsx-1071">—</span>
+                    }
                     </td>
-                    <td style={td}>
-                      {d.angebot ? (
-                        <>
-                          <div style={{ fontWeight: 600 }}>{d.angebot.kurztext}</div>
-                          <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    <td className={rlcClass(null, td)}>
+                      {d.angebot ?
+                    <>
+                          <div className="rlc-migrated-pages-ki-widersprueche-tsx-1072">{d.angebot.kurztext}</div>
+                          <div className="rlc-migrated-pages-ki-widersprueche-tsx-1073">
                             {d.angebot.einheit} · Menge {num(d.angebot.menge)} · EP {num(d.angebot.ep)}
                           </div>
-                        </>
-                      ) : (
-                        <span style={{ opacity: 0.6 }}>—</span>
-                      )}
+                        </> :
+
+                    <span className="rlc-migrated-pages-ki-widersprueche-tsx-1074">—</span>
+                    }
                     </td>
-                    <td style={td}>
-                      <ul style={{ margin: 0, paddingLeft: 18 }}>
-                        {d.details.map((x, k) => (
-                          <li key={k} style={{ fontSize: 13 }}>
+                    <td className={rlcClass(null, td)}>
+                      <ul className="rlc-migrated-pages-ki-widersprueche-tsx-1075">
+                        {d.details.map((x, k) =>
+                      <li key={k} className="rlc-migrated-pages-ki-widersprueche-tsx-1076">
                             {x}
                           </li>
-                        ))}
+                      )}
                       </ul>
                     </td>
-                    <td style={td}>
-                      <div style={{ display: "grid", gap: 6 }}>
-                        {canCreateNachtrag && nachtragBase && (
-                          <button
-                            className="btn"
-                            onClick={() => gotoNachtrag(nachtragBase)}
-                          >
+                    <td className={rlcClass(null, td)}>
+                      <div className="rlc-migrated-pages-ki-widersprueche-tsx-1077">
+                        {canCreateNachtrag && nachtragBase &&
+                      <button className={rlcClass(null,
+                      button)}
+                      onClick={() => gotoNachtrag(nachtragBase)}>
+                        
                             → Nachtrag erstellen
                           </button>
-                        )}
+                      }
 
                         {(() => {
-  const angebotRow = d.angebot ?? undefined;
-  if (d.type === "missing_in_offer" || !angebotRow) return null;
+                        const angebotRow = d.angebot ?? undefined;
+                        if (d.type === "missing_in_offer" || !angebotRow) return null;
 
-  return (
-    <button
-      className="btn"
-      onClick={() => updateLV(angebotRow)}
-    >
+                        return (
+                          <button className={rlcClass(null,
+                          button)}
+                          onClick={() => updateLV(angebotRow)}>
+                            
       → LV aktualisieren
-    </button>
-  );
-})()}
+    </button>);
+
+                      })()}
                       </div>
                     </td>
-                  </tr>
-                );
-              })}
+                  </tr>);
+
+            })}
             </tbody>
           </table>
         </div>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
-
-
-
-
-

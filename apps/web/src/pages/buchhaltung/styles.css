@@ -1,15 +1,15 @@
 .bh-shell {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 16px;
-  padding: 16px;
+  grid-template-columns: 240px 1fr;
+  gap: 14px;
+  padding: 0;
 }
 
 .bh-left {
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
+  border: 1px solid var(--rlc-border, #dde5f0);
+  border-radius: var(--rlc-radius, 10px);
   padding: 12px;
-  background: #fafafa;
+  background: var(--rlc-surface, #fff);
 }
 
 .bh-left h1 {
@@ -33,27 +33,27 @@
 }
 
 .bh-link:hover {
-  background: #f3f4f6;
-  border-color: #dcdfe4;
+  background: var(--rlc-primary-faint, #f5f8ff);
+  border-color: var(--rlc-border-strong, #bed6ff);
 }
 
 .bh-link.active {
-  background: #0d1117;
-  color: #fff;
-  border-color: #0d1117;
+  background: var(--rlc-primary-soft, #eaf2ff);
+  color: var(--rlc-primary-hover, #0b5bd3);
+  border-color: var(--rlc-border-strong, #bed6ff);
 }
 
 .bh-right {
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
-  background: #fff;
-  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .bh-page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .bh-header-row {
@@ -79,12 +79,13 @@
 
 .bh-btn {
   appearance: none;
-  border: 1px solid #111827;
-  background: #111827;
+  border: 1px solid var(--rlc-primary, #146ef5);
+  background: var(--rlc-primary, #146ef5);
   color: #fff;
   border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: 8px 11px;
+  min-height: 36px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
@@ -101,12 +102,20 @@
 
 .bh-btn.ghost {
   background: #fff;
-  color: #111827;
-  border: 1px solid #d1d5db;
+  color: var(--rlc-text, #172033);
+  border: 1px solid var(--rlc-border, #dde5f0);
 }
 
 .bh-btn.ghost:hover {
-  background: #f9fafb;
+  background: var(--rlc-primary-faint, #f5f8ff);
+  border-color: var(--rlc-border-strong, #bed6ff);
+  color: var(--rlc-primary-hover, #0b5bd3);
+}
+
+.bh-btn.ghost.active {
+  background: var(--rlc-primary-soft, #eaf2ff) !important;
+  border-color: var(--rlc-border-strong, #bed6ff) !important;
+  color: var(--rlc-primary-hover, #0b5bd3);
 }
 
 .bh-filters {
@@ -134,8 +143,9 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
-  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rlc-muted, #6d7890);
 }
 
 .bh-form input,
@@ -148,10 +158,10 @@
 .bh-table select,
 .bh-table textarea {
   padding: 8px 10px;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
+  border: 1px solid var(--rlc-border, #dde5f0);
+  border-radius: 8px;
   background: #fff;
-  color: #111827;
+  color: var(--rlc-text, #172033);
   font: inherit;
 }
 
@@ -165,32 +175,36 @@
 .bh-table select:focus,
 .bh-table textarea:focus {
   outline: none;
-  border-color: #94a3b8;
-  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+  border-color: var(--rlc-primary, #146ef5);
+  box-shadow: 0 0 0 3px rgba(20, 110, 245, 0.13);
 }
 
 .bh-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   margin-top: 10px;
   background: #fff;
 }
 
 .bh-table th,
 .bh-table td {
-  border: 1px solid #e5e5e5;
-  padding: 8px;
+  border: 0;
+  border-bottom: 1px solid var(--rlc-border, #dde5f0);
+  padding: 9px 10px;
   text-align: left;
   vertical-align: middle;
 }
 
 .bh-table thead th {
-  background: #f8fafc;
-  font-weight: 700;
+  background: var(--rlc-primary-faint, #f5f8ff);
+  color: var(--rlc-muted, #6d7890);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .bh-table tbody tr:hover {
-  background: #fcfcfd;
+  background: var(--rlc-primary-faint, #f5f8ff);
 }
 
 .bh-table .right,
@@ -206,20 +220,21 @@
 }
 
 .bh-card {
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
-  background: #fbfbfb;
-  padding: 12px;
+  border: 0;
+  border-bottom: 2px solid var(--rlc-border-strong, #bed6ff);
+  border-radius: 0;
+  background: #fff;
+  padding: 11px 8px;
 }
 
 .bh-card .k {
-  font-size: 12px;
-  color: #666;
+  font-size: 11px;
+  color: var(--rlc-muted, #6d7890);
 }
 
 .bh-card .v {
-  font-weight: 700;
-  font-size: 20px;
+  font-weight: 600;
+  font-size: 18px;
 }
 
 .bh-card .s {
@@ -229,8 +244,8 @@
 }
 
 .bh-panel {
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
+  border: 1px solid var(--rlc-border, #dde5f0);
+  border-radius: var(--rlc-radius, 10px);
   background: #fff;
   padding: 12px;
 }
@@ -255,8 +270,8 @@
 }
 
 .bh-note {
-  font-size: 13px;
-  color: #6b7280;
+  font-size: 12px;
+  color: var(--rlc-muted, #6d7890);
 }
 
 .bh-text-muted {

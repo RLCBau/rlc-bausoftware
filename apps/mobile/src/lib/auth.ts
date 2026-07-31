@@ -6,6 +6,7 @@ import * as SecureStore from "expo-secure-store";
  * ============================================================ */
 
 const TOKEN_KEY = "auth_token"; // ✅ token solo per SERVER_SYNC
+const SERVER_TOKEN_KEY = "auth_token_server_sync";
 const AUTH_STATE_KEY_BASE = "rlc_mobile_auth_state_v1";
 const AUTH_MODE_KEY = "rlc_mobile_auth_mode_v1"; // ✅ per ricordare l'ultima modalità usata
 
@@ -101,6 +102,17 @@ export async function setToken(token: string) {
   } catch {
     // ignore
   }
+
+  // NUR_APP usa un token local:... per il proprio login, ma non deve
+  // distruggere l'ultima sessione server valida necessaria al PDF Core.
+  if (!t.startsWith("local:") && t.split(".").length === 3) {
+    await AsyncStorage.setItem(SERVER_TOKEN_KEY, t);
+    try {
+      await SecureStore.setItemAsync(SERVER_TOKEN_KEY, t);
+    } catch {
+      // AsyncStorage rimane il fallback.
+    }
+  }
 }
 
 export async function getToken(): Promise<string> {
@@ -120,6 +132,36 @@ export async function getTokenOrNull(): Promise<string | null> {
   return t ? t : null;
 }
 
+/**
+ * Token esclusivo per chiamate online condivise tra SERVER_SYNC e NUR_APP
+ * (per esempio /api/pdf/mobile-render). Non restituisce mai token local:...
+ */
+export async function getServerToken(): Promise<string> {
+  try {
+    const secure = normalizeToken(
+      await SecureStore.getItemAsync(SERVER_TOKEN_KEY)
+    );
+    if (secure && !secure.startsWith("local:")) return secure;
+  } catch {
+    // fallback sotto
+  }
+
+  try {
+    const stored = normalizeToken(
+      await AsyncStorage.getItem(SERVER_TOKEN_KEY)
+    );
+    if (stored && !stored.startsWith("local:")) return stored;
+  } catch {
+    // fallback sotto
+  }
+
+  const current = normalizeToken(await getToken());
+  if (current && !current.startsWith("local:") && current.split(".").length === 3) {
+    return current;
+  }
+  return "";
+}
+
 export async function hasToken(): Promise<boolean> {
   const t = await getToken();
   return !!normalizeToken(t);
@@ -133,6 +175,17 @@ export async function clearToken() {
   }
   try {
     await AsyncStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+
+  try {
+    await AsyncStorage.removeItem(SERVER_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    await SecureStore.deleteItemAsync(SERVER_TOKEN_KEY);
   } catch {
     // ignore
   }

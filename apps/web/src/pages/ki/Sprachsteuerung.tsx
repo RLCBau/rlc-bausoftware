@@ -1,4 +1,4 @@
-// apps/web/src/pages/ki/Sprachsteuerung.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Sprachsteuerung.tsx
 
 import React from "react";
 import { useProject } from "../../store/useProject";
@@ -46,7 +46,7 @@ declare global {
 
 const shell: React.CSSProperties = {
   display: "grid",
-  gap: 16,
+  gap: 16
 };
 
 const card: React.CSSProperties = {
@@ -55,14 +55,14 @@ const card: React.CSSProperties = {
   padding: 16,
   background: "#fff",
   display: "grid",
-  gap: 12,
+  gap: 12
 };
 
 const input: React.CSSProperties = {
   border: "1px solid #cbd5e1",
   borderRadius: 8,
   padding: "8px 10px",
-  fontSize: 14,
+  fontSize: 14
 };
 
 export default function Sprachsteuerung() {
@@ -80,7 +80,7 @@ export default function Sprachsteuerung() {
   const [finalText, setFinalText] = React.useState("");
   const [projectInput, setProjectInput] = React.useState("");
   const [date, setDate] = React.useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
+  new Date().toISOString().slice(0, 10)
   );
   const [error, setError] = React.useState<string | null>(null);
 
@@ -140,15 +140,15 @@ export default function Sprachsteuerung() {
       for (let i = evt.resultIndex; i < evt.results.length; i++) {
         const res = evt.results[i];
         const txt = res?.[0]?.transcript || "";
-        if (res.isFinal) finalChunk += txt;
-        else interimChunk += txt;
+        if (res.isFinal) finalChunk += txt;else
+        interimChunk += txt;
       }
 
       if (interimChunk) setInterim(interimChunk.trim());
 
       if (finalChunk) {
         setFinalText((old) =>
-          (old + (old ? " " : "") + finalChunk.trim()).trim()
+        (old + (old ? " " : "") + finalChunk.trim()).trim()
         );
         setInterim("");
       }
@@ -209,7 +209,7 @@ export default function Sprachsteuerung() {
   }, [resetRecognition]);
 
   const composedText =
-    finalText + (interim ? (finalText ? " " : "") + interim : "");
+  finalText + (interim ? (finalText ? " " : "") + interim : "");
 
   async function saveAndOpenRegie() {
     try {
@@ -231,14 +231,14 @@ export default function Sprachsteuerung() {
           text: finalText.trim(),
           projectId: effectiveProjectId,
           projectCode: projectCode || "",
-          date,
-        }),
+          date
+        })
       });
 
       if (!res.ok) throw new Error(await res.text());
 
       const data = (await res.json()) as {
-        saved?: { id?: string };
+        saved?: {id?: string;};
       };
 
       sessionStorage.setItem("regie:openProjectId", effectiveProjectId);
@@ -288,8 +288,8 @@ export default function Sprachsteuerung() {
           text: finalText.trim(),
           projectId: effectiveProjectId,
           projectCode: projectCode || "",
-          date,
-        }),
+          date
+        })
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -301,8 +301,8 @@ export default function Sprachsteuerung() {
 
       const doSave = window.confirm(
         "Gefundene Daten:\n\n" +
-          JSON.stringify(data.item, null, 2) +
-          "\n\nSoll der Eintrag gespeichert werden?"
+        JSON.stringify(data.item, null, 2) +
+        "\n\nSoll der Eintrag gespeichert werden?"
       );
 
       if (!doSave) return;
@@ -314,8 +314,8 @@ export default function Sprachsteuerung() {
           ...(typeof data.item === "object" && data.item ? data.item : {}),
           projectId: effectiveProjectId,
           projectCode: projectCode || "",
-          date,
-        }),
+          date
+        })
       });
 
       if (!save.ok) throw new Error(await save.text());
@@ -330,122 +330,122 @@ export default function Sprachsteuerung() {
   }
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h1>Sprachsteuerung (Regieberichte diktieren)</h1>
 
-      <div style={card}>
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <label style={{ fontSize: 13, color: "var(--muted)" }}>Sprache</label>
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1042">
+
+
+
+
+
+
+          
+          <label className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1043">Sprache</label>
           <select
             value={lang}
-            onChange={(e) => setLang(e.target.value)}
-            style={{ ...input, width: 180 }}
-          >
+            onChange={(e) => setLang(e.target.value)} className={rlcClass(null,
+            { ...input, width: 180 })}>
+            
             <option value="de-DE">Deutsch (de-DE)</option>
             <option value="it-IT">Italiano (it-IT)</option>
             <option value="en-US">English (en-US)</option>
           </select>
 
-          <label
-            style={{ marginLeft: 16, fontSize: 13, color: "var(--muted)" }}
-          >
+          <label className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1044">
+
+            
             Projekt-ID
           </label>
           <input
             value={projectInput}
             onChange={(e) => setProjectInput(e.target.value)}
-            placeholder="z. B. BA-2025-834"
-            style={{ ...input, flex: 1, minWidth: 160 }}
-          />
+            placeholder="z. B. BA-2025-834" className={rlcClass(null,
+            { ...input, flex: 1, minWidth: 160 })} />
+          
 
-          <label
-            style={{ marginLeft: 16, fontSize: 13, color: "var(--muted)" }}
-          >
+          <label className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1045">
+
+            
             Datum
           </label>
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={{ ...input, width: 150 }}
-          />
+            onChange={(e) => setDate(e.target.value)} className={rlcClass(null,
+            { ...input, width: 150 })} />
+          
 
-          {!listening ? (
-            <button className="btn" onClick={start} title="Start">
+          {!listening ?
+          <button className="btn" onClick={start} title="Start">
               🎙️ Start
-            </button>
-          ) : (
-            <button className="btn" onClick={stop} title="Stop">
+            </button> :
+
+          <button className="btn" onClick={stop} title="Stop">
               ⏹️ Stop
             </button>
-          )}
+          }
         </div>
 
-        <div style={{ fontSize: 12, color: "#6b7280" }}>
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1046">
           Aktiv: {effectiveProjectId || "kein Projekt gewählt"}
         </div>
 
-        <div style={{ position: "relative" }}>
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1047">
           <textarea
             value={composedText}
             onChange={(e) => {
               setFinalText(e.target.value);
               setInterim("");
             }}
-            placeholder="gesprochenes Kommando…"
-            style={{
-              width: "100%",
-              minHeight: 160,
-              padding: 12,
-              border: "1px solid var(--line)",
-              borderRadius: 8,
-              fontSize: 14,
-            }}
-          />
-          {listening && (
-            <div
-              style={{
-                position: "absolute",
-                right: 12,
-                top: 12,
-                fontSize: 12,
-                color: "#16a34a",
-              }}
-            >
+            placeholder="gesprochenes Kommando…" className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1048" />
+
+
+
+
+
+
+
+
+          
+          {listening &&
+          <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1049">
+
+
+
+
+
+
+
+            
               ● recording
             </div>
-          )}
+          }
         </div>
 
-        {error && <div style={{ color: "#b91c1c", fontSize: 13 }}>{error}</div>}
+        {error && <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1050">{error}</div>}
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1051">
           <button
             className="btn"
             onClick={parseWithKI}
-            disabled={!finalText.trim()}
-          >
+            disabled={!finalText.trim()}>
+            
             KI-Parsing
           </button>
           <button
             className="btn"
             onClick={saveAndOpenRegie}
-            disabled={!effectiveProjectId || !finalText.trim()}
-          >
+            disabled={!effectiveProjectId || !finalText.trim()}>
+            
             ➜ Als Regiebericht speichern & öffnen
           </button>
           <button
             className="btn"
             onClick={openRegie}
-            disabled={!effectiveProjectId}
-          >
+            disabled={!effectiveProjectId}>
+            
             Regieberichte öffnen
           </button>
           <button
@@ -454,17 +454,12 @@ export default function Sprachsteuerung() {
               setFinalText("");
               setInterim("");
               setError(null);
-            }}
-          >
+            }}>
+            
             Leeren
           </button>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

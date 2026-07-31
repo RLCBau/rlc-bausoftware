@@ -1,11 +1,13 @@
-﻿// apps/mobile/src/lib/exporters/documentPdfBuilder.ts
+import { renderMobilePdfViaServer } from "../mobilePdfCore";
+// apps/mobile/src/lib/exporters/documentPdfBuilder.ts
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import {
-  getCompanyHeaderCached,
-  getCompanyLogoUriCached,
-} from "../companyCache";
+  RLC_PDF_FONT_STACK,
+  loadRlcPdfBranding,
+  renderRlcPdfCompanyHeader,
+} from "./pdfBranding";
 
 export type PdfDocType =
   | "ANGEBOT"
@@ -149,8 +151,6 @@ function renderHeader(params: {
   type: PdfDocType;
   title: string;
   subTitle?: string;
-  logoDataUri?: string;
-  company?: any;
   docNo?: string;
   date?: string;
   period?: string;
@@ -160,8 +160,6 @@ function renderHeader(params: {
     type,
     title,
     subTitle,
-    logoDataUri,
-    company,
     docNo,
     date,
     period,
@@ -180,51 +178,32 @@ function renderHeader(params: {
       : "RECHNUNG";
 
   return `
-    <div style="border-bottom:1px solid #d8e1ea;padding-bottom:10px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-        <div style="flex:1;">
-          <div style="font-size:22px;font-weight:800;letter-spacing:0.2px;color:#0f172a;line-height:1.1;">
-            ${esc(title || docTypeLabel)}
-          </div>
-          ${
-            subTitle
-              ? `<div style="margin-top:3px;font-size:10px;color:#64748b;font-weight:600;">${esc(
-                  subTitle
-                )}</div>`
-              : ""
-          }
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:22px;font-weight:800;letter-spacing:0.1px;color:#0f172a;line-height:1.1;">
+          ${esc(title || docTypeLabel)}
         </div>
         ${
-          logoDataUri
-            ? `<img src="${logoDataUri}" style="max-width:100px;max-height:46px;object-fit:contain;" />`
+          subTitle
+            ? `<div style="margin-top:3px;font-size:10px;color:#64748b;font-weight:600;">${esc(
+                subTitle
+              )}</div>`
             : ""
         }
       </div>
-
-      <div style="display:flex;justify-content:space-between;gap:16px;margin-top:10px;">
-        <div style="flex:1;font-size:10px;line-height:1.4;color:#0f172a;">
-          <div style="font-size:12px;font-weight:800;margin-bottom:3px;">
-            ${company?.name ? esc(company.name) : "Firma"}
-          </div>
-          ${company?.address ? `<div>${esc(company.address)}</div>` : ""}
-          ${company?.phone ? `<div>Tel: ${esc(company.phone)}</div>` : ""}
-          ${company?.email ? `<div>E-Mail: ${esc(company.email)}</div>` : ""}
-        </div>
-
-        <div style="min-width:210px;font-size:10px;line-height:1.4;color:#0f172a;text-align:right;">
-          ${docNo ? `<div><strong>Nr:</strong> ${esc(docNo)}</div>` : ""}
-          ${date ? `<div><strong>Datum:</strong> ${esc(date)}</div>` : ""}
-          ${
-            period
-              ? `<div><strong>Leistungszeitraum:</strong> ${esc(period)}</div>`
-              : ""
-          }
-          ${
-            projectCode
-              ? `<div><strong>Projektcode:</strong> ${esc(projectCode)}</div>`
-              : ""
-          }
-        </div>
+      <div style="min-width:210px;font-size:10px;line-height:1.4;color:#0f172a;text-align:right;">
+        ${docNo ? `<div><strong>Nr:</strong> ${esc(docNo)}</div>` : ""}
+        ${date ? `<div><strong>Datum:</strong> ${esc(date)}</div>` : ""}
+        ${
+          period
+            ? `<div><strong>Leistungszeitraum:</strong> ${esc(period)}</div>`
+            : ""
+        }
+        ${
+          projectCode
+            ? `<div><strong>Projektcode:</strong> ${esc(projectCode)}</div>`
+            : ""
+        }
       </div>
     </div>
   `;
@@ -544,20 +523,27 @@ function renderSignature(type: PdfDocType) {
   `;
 }
 
+function renderPageFooter(projectCode: string, company?: any) {
+  return `
+    <div class="pdf-page-footer">
+      <span>${esc(company?.name || "RLC Bausoftware")} · ${esc(projectCode || "Projekt")}</span>
+      <span>Seite <span class="pdf-page-number"></span></span>
+    </div>
+  `;
+}
+
 function renderClassicSchlussrechnung(params: {
   input: BuildDocumentPdfInput;
   company?: any;
-  logoDataUri?: string;
+  brandingHeaderHtml?: string;
 }) {
-  const { input, company, logoDataUri } = params;
+  const { input, company, brandingHeaderHtml } = params;
   const totals = input.totals || {};
 
   const headerHtml = renderHeader({
     type: input.type,
     title: input.title,
     subTitle: input.subTitle,
-    logoDataUri,
-    company,
     docNo: input.docNo,
     date: input.date,
     period: input.period,
@@ -570,6 +556,7 @@ function renderClassicSchlussrechnung(params: {
   const bankHtml = renderBank(input.bank);
   const noteHtml = renderNote(input.note);
   const signatureHtml = renderSignature(input.type);
+  const footerHtml = renderPageFooter(input.projectCode, company);
 
   const netto = Number(totals.netto || 0);
   const mwstValue = Number(totals.mwstValue || 0);
@@ -615,15 +602,39 @@ function renderClassicSchlussrechnung(params: {
         <style>
           @page {
             size: A4;
-            margin: 14mm 12mm;
+            margin: 12mm 12mm 18mm;
           }
           html, body {
             margin: 0;
             padding: 0;
           }
+          .pdf-page-header {
+            position: static;
+            display: block;
+            width: 100%;
+            height: auto;
+            margin: 0 0 10px 0;
+          }
+          .pdf-page-footer {
+            position: fixed;
+            bottom: -12mm;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #d8e1ea;
+            padding-top: 4px;
+            color: #64748b;
+            font-size: 8px;
+          }
+          .pdf-page-number::after { content: counter(page); }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
         </style>
       </head>
-      <body style="font-family:Arial,Helvetica,sans-serif;padding:18px 20px;color:#0B1720;font-size:10px;background:#ffffff;">
+      <body style="font-family:${RLC_PDF_FONT_STACK};color:#0B1720;font-size:10px;background:#ffffff;">
+        <div class="pdf-page-header">${brandingHeaderHtml}</div>
+        ${footerHtml}
         ${headerHtml}
         ${customerHtml}
         ${extraBlocksHtml}
@@ -638,6 +649,7 @@ function renderClassicSchlussrechnung(params: {
 }
 
 function buildStandardHtml(params: {
+  companyHeaderHtml: string;
   headerHtml: string;
   customerHtml: string;
   extraBlocksHtml: string;
@@ -646,6 +658,7 @@ function buildStandardHtml(params: {
   bankHtml: string;
   noteHtml: string;
   signatureHtml: string;
+  footerHtml: string;
 }) {
   return `
     <html>
@@ -654,15 +667,39 @@ function buildStandardHtml(params: {
         <style>
           @page {
             size: A4;
-            margin: 14mm 12mm;
+            margin: 12mm 12mm 18mm;
           }
           html, body {
             margin: 0;
             padding: 0;
           }
+          .pdf-page-header {
+            position: static;
+            display: block;
+            width: 100%;
+            height: auto;
+            margin: 0 0 10px 0;
+          }
+          .pdf-page-footer {
+            position: fixed;
+            bottom: -12mm;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #d8e1ea;
+            padding-top: 4px;
+            color: #64748b;
+            font-size: 8px;
+          }
+          .pdf-page-number::after { content: counter(page); }
+          table { page-break-inside: auto; }
+          tr { page-break-inside: avoid; page-break-after: auto; }
         </style>
       </head>
-      <body style="font-family:Arial,Helvetica,sans-serif;padding:18px 20px;color:#0B1720;font-size:10px;background:#ffffff;">
+      <body style="font-family:${RLC_PDF_FONT_STACK};color:#0B1720;font-size:10px;background:#ffffff;">
+        <div class="pdf-page-header">${params.companyHeaderHtml}</div>
+        ${params.footerHtml}
         ${params.headerHtml}
         ${params.customerHtml}
         ${params.extraBlocksHtml}
@@ -677,9 +714,24 @@ function buildStandardHtml(params: {
 }
 
 export async function buildDocumentPdf(input: BuildDocumentPdfInput) {
-  const company = await getCompanyHeaderCached().catch(() => null);
-  const logoUri = await getCompanyLogoUriCached().catch(() => "");
-  const logoDataUri = await toDataUri(logoUri);
+  try {
+    const serverResult = await renderMobilePdfViaServer({
+      documentType: input.type,
+      projectFsKey: input.projectCode,
+      fileName: input.fileName,
+      payload: input,
+    });
+    return { pdfUri: serverResult.pdfUri, html: "" };
+  } catch (error: any) {
+    console.log(
+      "[RLC PDF CORE] Zentraler Renderer nicht verfügbar, lokaler Core:",
+      String(error?.message || error)
+    );
+  }
+
+  const branding = await loadRlcPdfBranding();
+  const company = branding.company;
+  const brandingHeaderHtml = renderRlcPdfCompanyHeader(branding);
 
   let html = "";
 
@@ -687,16 +739,14 @@ export async function buildDocumentPdf(input: BuildDocumentPdfInput) {
     html = renderClassicSchlussrechnung({
       input,
       company,
-      logoDataUri,
+      brandingHeaderHtml,
     });
   } else {
     const headerHtml = renderHeader({
       type: input.type,
       title: input.title,
       subTitle: input.subTitle,
-      logoDataUri,
-      company,
-      docNo: input.docNo,
+        docNo: input.docNo,
       date: input.date,
       period: input.period,
       projectCode: input.projectCode,
@@ -709,8 +759,10 @@ export async function buildDocumentPdf(input: BuildDocumentPdfInput) {
     const bankHtml = renderBank(input.bank);
     const noteHtml = renderNote(input.note);
     const signatureHtml = renderSignature(input.type);
+    const footerHtml = renderPageFooter(input.projectCode, company);
 
     html = buildStandardHtml({
+      companyHeaderHtml: brandingHeaderHtml,
       headerHtml,
       customerHtml,
       extraBlocksHtml,
@@ -719,6 +771,7 @@ export async function buildDocumentPdf(input: BuildDocumentPdfInput) {
       bankHtml,
       noteHtml,
       signatureHtml,
+      footerHtml,
     });
   }
 
@@ -752,4 +805,3 @@ export async function buildDocumentPdf(input: BuildDocumentPdfInput) {
     html,
   };
 }
-

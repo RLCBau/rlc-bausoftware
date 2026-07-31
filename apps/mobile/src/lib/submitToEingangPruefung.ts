@@ -1,5 +1,8 @@
 ﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { queueAdd } from "./offlineQueue";
+import { syncAll } from "./sync";
+
 export type EingangDocType =
   | "REGIE"
   | "LIEFERSCHEIN"
@@ -9,6 +12,7 @@ export type EingangDocType =
   | "ANGEBOT"
   | "RECHNUNG"
   | "MENGENERMITTLUNG"
+  | "ABSCHLAGSRECHNUNG"
   | "KALKULATION";
 
 export type EingangStatus =
@@ -39,6 +43,8 @@ function keyFor(type: EingangDocType, projectKey: string) {
       return `rlc_mobile_inbox_rechnung:${k}`;
     case "MENGENERMITTLUNG":
       return `rlc_mobile_inbox_mengen:${k}`;
+    case "ABSCHLAGSRECHNUNG":
+      return `rlc_mobile_inbox_abschlag:${k}`;
     case "KALKULATION":
       return `rlc_mobile_inbox_kalkulation:${k}`;
     default:
@@ -107,6 +113,26 @@ export async function submitToEingangPruefung(params: {
     updatedAt: now,
     sourceScreen: params.sourceScreen || doc?.sourceScreen || type,
   };
+
+  const modeRaw =
+    (await AsyncStorage.getItem("rlc_mobile_mode")) ||
+    (await AsyncStorage.getItem("rlc_app_mode_v1")) ||
+    "SERVER_SYNC";
+
+  if (modeRaw !== "NUR_APP") {
+    const kind = type === "FOTO" ? "PHOTO_NOTE" : type;
+    await queueAdd({
+      kind: kind as any,
+      projectId: projectKey,
+      payload: { row },
+    } as any);
+
+    // Best effort: senza rete il documento rimane PENDING nella coda.
+    try {
+      await syncAll({ projectCode: projectKey });
+    } catch {}
+    return row;
+  }
 
   const primaryKey = keyFor(type, projectKey);
   const allKey = `rlc_mobile_inbox_all:${projectKey}`;

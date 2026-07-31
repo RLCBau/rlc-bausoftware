@@ -94,7 +94,7 @@ function resolveTargetDir(projectId: string, ctxRaw?: string) {
 
 /**
  * =========================================================
- * ✅ INBOX PATHS (Eingang/Prüfung)
+ * âœ… INBOX PATHS (Eingang/PrÃ¼fung)
  *   projects/<BA>/eingangspruefung/fotos/...
  * =========================================================
  */
@@ -141,7 +141,7 @@ function makeInboxMainPublicUrl(
 
 /**
  * =========================================================
- * ✅ FINAL (after commit): public URLs
+ * âœ… FINAL (after commit): public URLs
  * =========================================================
  */
 function makeFinalPublicUrl(projectId: string, docId: string, fileName: string) {
@@ -227,7 +227,7 @@ function makePublicUrl(projectId: string, fileName: string) {
 
 /**
  * =========================================================
- * ✅ MOBILE COMPAT (Eingang/Prüfung)
+ * âœ… MOBILE COMPAT (Eingang/PrÃ¼fung)
  * =========================================================
  */
 function inferMimeFromName(nameOrUrl: string) {
@@ -253,7 +253,7 @@ function toFileMetaFromInboxFile(f: any) {
 }
 
 function decorateInboxItem(projectId: string, it: any) {
-  const mainMeta = it?.main ? toFileMetaFromInboxFile(it.main) : null; // ✅ FIX: no duplicate
+  const mainMeta = it?.main ? toFileMetaFromInboxFile(it.main) : null; // âœ… FIX: no duplicate
   const fileMetas = Array.isArray(it?.files)
     ? it.files.map(toFileMetaFromInboxFile).filter(Boolean)
     : [];
@@ -335,7 +335,7 @@ const notesUpload = multer({
 
 /**
  * =========================================================
- * ✅ Multer (INBOX notes upload)
+ * âœ… Multer (INBOX notes upload)
  * - saves to: projects/<BA>/eingangspruefung/fotos/<docId>/... and .../files/
  * =========================================================
  */
@@ -383,6 +383,15 @@ router.get("/projects/:projectId/fotos", (req, res) => {
 });
 
 /* ---- Einzelnes Foto ausliefern (legacy) ---- */
+router.get("/projects/:projectId/fotos/notes", (req, res) => {
+  const { projectId } = req.params;
+  if (!projectId) {
+    return res.status(400).json({ error: "projectId fehlt" });
+  }
+
+  const list = readNotes(projectId);
+  return res.json({ ok: true, items: list });
+});
 router.get("/projects/:projectId/fotos/:file", (req, res) => {
   const { projectId, file } = req.params;
   if (!projectId || !file) {
@@ -464,7 +473,7 @@ router.post("/projects/:projectId/fotos", upload.single("file"), (req, res) => {
   res.json(entry);
 });
 
-/* ---- Foto + Meta löschen (legacy) ---- */
+/* ---- Foto + Meta lÃ¶schen (legacy) ---- */
 router.delete("/projects/:projectId/fotos/:id", (req, res) => {
   const { projectId, id } = req.params;
   if (!projectId || !id) return res.status(400).json({ error: "projectId oder id fehlt" });
@@ -488,17 +497,9 @@ router.delete("/projects/:projectId/fotos/:id", (req, res) => {
 });
 
 /* =========================================================
- * ✅ NEW: PHOTOS / NOTES (FINAL – projects/<BA>/fotos/... )
+ * âœ… NEW: PHOTOS / NOTES (FINAL â€“ projects/<BA>/fotos/... )
  * =========================================================
  */
-
-router.get("/projects/:projectId/fotos/notes", (req, res) => {
-  const { projectId } = req.params;
-  if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
-
-  const list = readNotes(projectId);
-  res.json({ ok: true, items: list });
-});
 
 router.post(
   "/projects/:projectId/fotos/notes",
@@ -580,7 +581,7 @@ router.post(
 );
 
 /* =========================================================
- * ✅ INBOX (Eingang/Prüfung) – Photos/Notes
+ * âœ… INBOX (Eingang/PrÃ¼fung) â€“ Photos/Notes
  * =========================================================
  */
 
@@ -628,7 +629,7 @@ router.post("/inbox/submit", express.json(), (req, res) => {
   return res.json({ ok: true, projectId, docId });
 });
 
-// UPLOAD -> salva main + files[] in Eingang/Prüfung
+// UPLOAD -> salva main + files[] in Eingang/PrÃ¼fung
 router.post(
   "/inbox/upload",
   inboxNotesUpload.fields([{ name: "main", maxCount: 1 },{ name: "files", maxCount: 50 },{ name: "file", maxCount: 50 },{ name: "photos", maxCount: 50 },{ name: "attachments", maxCount: 50 }]),
@@ -806,6 +807,22 @@ function commitInboxDoc(projectId: string, docIdRaw: string) {
 
   return finalEntry;
 }
+
+// Einheitlicher Workflow-Endpunkt für die Web-Übersicht.
+// Freigegebene Fotos sind zugleich dauerhaft in der Projektakte registriert.
+router.get("/freigegeben/list", (req, res) => {
+  const projectId = String(req.query?.projectId || req.query?.projectCode || "").trim();
+  if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+  const items = readNotes(projectId);
+  return res.json({ ok: true, projectId, items, count: items.length });
+});
+
+router.get("/final/list", (req, res) => {
+  const projectId = String(req.query?.projectId || req.query?.projectCode || "").trim();
+  if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+  const items = readNotes(projectId);
+  return res.json({ ok: true, projectId, items, count: items.length });
+});
 
 router.post("/inbox/approve", express.json(), (req, res) => {
   try {

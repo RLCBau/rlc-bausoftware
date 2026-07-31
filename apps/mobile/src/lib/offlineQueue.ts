@@ -172,6 +172,20 @@ export type QueueItem =
         // esteso
         row?: any;
       };
+    })
+  | (QueueItemBase & {
+      kind:
+        | "BAUTAGEBUCH"
+        | "ANGEBOT"
+        | "MENGENERMITTLUNG"
+        | "ABSCHLAGSRECHNUNG"
+        | "RECHNUNG"
+        | "KALKULATION"
+        | "OUTLIER_REPORT";
+      payload: {
+        row?: any;
+        [key: string]: any;
+      };
     });
 
 const KEY = "rlc.queue.v2";

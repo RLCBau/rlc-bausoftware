@@ -1,15 +1,15 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import L from "leaflet";
 // @ts-ignore
 import "leaflet.gridlayer.googlemutant";
 import "leaflet/dist/leaflet.css";
 
-export type LatLng = { lat: number; lng: number };
+export type LatLng = {lat: number;lng: number;};
 
 export type GeoShape =
-  | { type: "points"; pts: LatLng[] }
-  | { type: "line"; pts: LatLng[] }
-  | { type: "polygon"; pts: LatLng[] };
+{type: "points";pts: LatLng[];} |
+{type: "line";pts: LatLng[];} |
+{type: "polygon";pts: LatLng[];};
 
 type Props = {
   initialCenter?: LatLng;
@@ -37,27 +37,27 @@ const cardStyle: React.CSSProperties = {
   overflow: "hidden",
   border: "1px solid #e5e7eb",
   borderRadius: 12,
-  background: "#fff",
+  background: "#fff"
 };
 
 const hintStyle: React.CSSProperties = {
   padding: 10,
   fontSize: 12,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
   function CadGeoMap(
-    {
-      initialCenter = { lat: 48.14, lng: 11.58 },
-      initialZoom = 12,
-      shape = null,
-      autoFit = true,
-      onMapClick,
-      height = "75vh",
-    },
-    ref
-  ) {
+  {
+    initialCenter = { lat: 48.14, lng: 11.58 },
+    initialZoom = 12,
+    shape = null,
+    autoFit = true,
+    onMapClick,
+    height = "75vh"
+  },
+  ref)
+  {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const mapRef = React.useRef<L.Map | null>(null);
     const geomLayerRef = React.useRef<L.LayerGroup | null>(null);
@@ -77,7 +77,7 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
       const map = L.map(container, {
         zoomControl: true,
         preferCanvas: true,
-        maxZoom: 22,
+        maxZoom: 22
       }).setView([initialCenter.lat, initialCenter.lng], initialZoom);
 
       const osm = L.tileLayer(
@@ -85,7 +85,7 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
         {
           maxZoom: 19,
           attribution: "© OpenStreetMap",
-          crossOrigin: true,
+          crossOrigin: true
         }
       ).addTo(map);
 
@@ -99,13 +99,13 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
           tiled: true,
           maxZoom: 21,
           attribution: "© Bayerische Vermessungsverwaltung",
-          crossOrigin: true,
+          crossOrigin: true
         }
       );
 
       const baseLayers: Record<string, L.Layer> = {
         OSM: osm,
-        "Bayern Luftbild (WMS)": bayernLuftbild,
+        "Bayern Luftbild (WMS)": bayernLuftbild
       };
 
       try {
@@ -114,12 +114,12 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
           baseLayers["Google Road"] = (L as any).gridLayer.googleMutant({
             type: "roadmap",
             maxZoom: 21,
-            apiKey: key,
+            apiKey: key
           });
           baseLayers["Google Sat"] = (L as any).gridLayer.googleMutant({
             type: "satellite",
             maxZoom: 21,
-            apiKey: key,
+            apiKey: key
           });
         }
       } catch (e) {
@@ -136,7 +136,7 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
           tiled: true,
           maxZoom: 21,
           attribution: "© Bayerische Vermessungsverwaltung (ALKIS® OpenData)",
-          crossOrigin: true,
+          crossOrigin: true
         }
       );
 
@@ -150,13 +150,13 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
           tiled: true,
           maxZoom: 21,
           attribution: "© Bayerische Vermessungsverwaltung (ALKIS® OpenData)",
-          crossOrigin: true,
+          crossOrigin: true
         }
       );
 
       const overlays: Record<string, L.Layer> = {
         "Flurkarte / Parzellen (WMS)": overlayParzellen,
-        "Grenzen (WMS)": overlayGrenzen,
+        "Grenzen (WMS)": overlayGrenzen
       };
 
       L.control.layers(baseLayers, overlays).addTo(map);
@@ -233,9 +233,9 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
             );
             map.fitBounds(bounds, { padding: [30, 30] });
           } catch {
+
             // ignore
-          }
-        }
+          }}
       },
       [autoFit, clearGeom]
     );
@@ -259,7 +259,7 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
           allowTaint: false,
           backgroundColor: "#ffffff",
           scale: 2,
-          logging: false,
+          logging: false
         });
 
         return canvas.toDataURL("image/png");
@@ -284,30 +284,25 @@ export const CadGeoMap = React.forwardRef<CadGeoMapHandle, Props>(
         },
         clear: () => setLocalShape(null),
         exportSnapshotPngDataUrl,
-        setShape: (s) => setLocalShape(s),
+        setShape: (s) => setLocalShape(s)
       }),
       [localShape, exportSnapshotPngDataUrl]
     );
 
     return (
-      <div style={cardStyle}>
+      <div className={rlcClass(null, cardStyle)}>
         <div
-          ref={containerRef}
-          style={{
+          ref={containerRef} className={rlcClass(null,
+          {
             width: "100%",
-            height,
-          }}
-        />
-        <div style={hintStyle}>
+            height
+          })} />
+        
+        <div className={rlcClass(null, hintStyle)}>
           Hinweis: Bei aktivem Google-Layer kann der Snapshot leer oder schwarz
           sein (CORS). Für sichere Exporte besser OSM/WMS verwenden.
         </div>
-      </div>
-    );
+      </div>);
+
   }
 );
-
-
-
-
-

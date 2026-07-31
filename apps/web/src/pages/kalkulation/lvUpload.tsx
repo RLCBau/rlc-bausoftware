@@ -1,4 +1,4 @@
-// apps/web/src/pages/kalkulation/lvUpload.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/lvUpload.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../../lib/apiBase";
@@ -58,13 +58,13 @@ function apiUrl(path: string): string {
 function getAuthToken(): string {
   try {
     const keys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of keys) {
       const v = localStorage.getItem(key);
@@ -79,23 +79,23 @@ function getAuthToken(): string {
       try {
         const j = JSON.parse(raw);
         const token =
-          j?.token ??
-          j?.accessToken ??
-          j?.authToken ??
-          j?.jwt ??
-          j?.data?.token ??
-          j?.data?.accessToken;
+        j?.token ??
+        j?.accessToken ??
+        j?.authToken ??
+        j?.jwt ??
+        j?.data?.token ??
+        j?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-        //
-      }
-    }
-  } catch {
-    //
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 function authHeaders(extra?: Record<string, string>): HeadersInit {
@@ -103,7 +103,7 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
 
   return {
     ...(extra || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
@@ -113,8 +113,8 @@ function getProject(ctx: any): ProjectLike | null {
     ctx?.project ||
     ctx?.selectedProject ||
     ctx?.current ||
-    null
-  );
+    null);
+
 }
 
 function getProjectKey(ctx: any): string {
@@ -122,26 +122,26 @@ function getProjectKey(ctx: any): string {
 
   return String(
     p?.code ||
-      p?.projectCode ||
-      p?.number ||
-      ctx?.projectCode ||
-      p?.id ||
-      ctx?.projectId ||
-      ctx?.id ||
-      ""
-  )
-    .trim()
-    .toUpperCase();
+    p?.projectCode ||
+    p?.number ||
+    ctx?.projectCode ||
+    p?.id ||
+    ctx?.projectId ||
+    ctx?.id ||
+    ""
+  ).
+  trim().
+  toUpperCase();
 }
 
 function safeNumber(v: unknown): number {
   if (v === null || v === undefined || v === "") return 0;
 
-  const s = String(v)
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/\.(?=\d{3}(?:[.,]|$))/g, "")
-    .replace(",", ".");
+  const s = String(v).
+  trim().
+  replace(/\s/g, "").
+  replace(/\.(?=\d{3}(?:[.,]|$))/g, "").
+  replace(",", ".");
 
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
@@ -151,7 +151,7 @@ function round2(v: number): number {
   return Math.round((v + Number.EPSILON) * 100) / 100;
 }
 
-function evalFormula(expr: string): { value: number; error?: string } {
+function evalFormula(expr: string): {value: number;error?: string;} {
   const raw = String(expr || "").trim();
   if (!raw) return { value: 0 };
 
@@ -167,9 +167,9 @@ function evalFormula(expr: string): { value: number; error?: string } {
     const value = Function(`"use strict"; return (${s});`)();
     const n = Number(value);
 
-    return Number.isFinite(n)
-      ? { value: n }
-      : { value: 0, error: "Formel ergibt keine Zahl" };
+    return Number.isFinite(n) ?
+    { value: n } :
+    { value: 0, error: "Formel ergibt keine Zahl" };
   } catch {
     return { value: 0, error: "Formel konnte nicht berechnet werden" };
   }
@@ -209,7 +209,7 @@ function roundForUnit(v: number, einheit: string): number {
 function fmtMoney(v: number): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(Number(v || 0));
 }
 
@@ -218,15 +218,15 @@ function fmtQty(v: number, e: string): string {
   const low = unit.toLowerCase();
 
   const dec =
-    low === "stk" || low === "stück" || low === "ps"
-      ? 0
-      : low === "m³" || low === "m3"
-      ? 3
-      : 2;
+  low === "stk" || low === "stück" || low === "ps" ?
+  0 :
+  low === "m³" || low === "m3" ?
+  3 :
+  2;
 
   return `${Number(v || 0).toLocaleString("de-DE", {
     minimumFractionDigits: dec,
-    maximumFractionDigits: dec,
+    maximumFractionDigits: dec
   })} ${unit}`;
 }
 
@@ -273,11 +273,11 @@ function csvEscape(v: unknown): string {
 }
 
 function normalizeHeader(v: unknown): string {
-  return String(v ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[_-]/g, "");
+  return String(v ?? "").
+  trim().
+  toLowerCase().
+  replace(/\s+/g, "").
+  replace(/[_-]/g, "");
 }
 
 function importCsvText(text: string): LVRow[] {
@@ -289,14 +289,14 @@ function importCsvText(text: string): LVRow[] {
 
   const first = parseCsvLine(lines[0]).map(normalizeHeader);
   const hasHeader =
-    first.includes("position") ||
-    first.includes("posnr") ||
-    first.includes("positionsnummer") ||
-    first.includes("kurztext") ||
-    first.includes("langtext") ||
-    first.includes("einheit") ||
-    first.includes("menge") ||
-    first.includes("ep");
+  first.includes("position") ||
+  first.includes("posnr") ||
+  first.includes("positionsnummer") ||
+  first.includes("kurztext") ||
+  first.includes("langtext") ||
+  first.includes("einheit") ||
+  first.includes("menge") ||
+  first.includes("ep");
 
   const idx = (names: string[]) => first.findIndex((h) => names.includes(h));
 
@@ -309,29 +309,29 @@ function importCsvText(text: string): LVRow[] {
 
   const body = hasHeader ? lines.slice(1) : lines;
 
-  return body
-    .map((line) => {
-      const c = parseCsvLine(line);
+  return body.
+  map((line) => {
+    const c = parseCsvLine(line);
 
-      return {
-        id: uid(),
-        position: c[iPos >= 0 ? iPos : 0] || "",
-        kurztext: c[iKurz >= 0 ? iKurz : 1] || "",
-        langtext: c[iLang >= 0 ? iLang : -1] || "",
-        einheit: c[iEin >= 0 ? iEin : 2] || "m",
-        menge: c[iMenge >= 0 ? iMenge : 3] || "0",
-        ep: safeNumber(c[iEp >= 0 ? iEp : 4]),
-      };
-    })
-    .filter(
-      (r) =>
-        r.position ||
-        r.kurztext ||
-        r.langtext ||
-        r.einheit ||
-        r.menge ||
-        r.ep
-    );
+    return {
+      id: uid(),
+      position: c[iPos >= 0 ? iPos : 0] || "",
+      kurztext: c[iKurz >= 0 ? iKurz : 1] || "",
+      langtext: c[iLang >= 0 ? iLang : -1] || "",
+      einheit: c[iEin >= 0 ? iEin : 2] || "m",
+      menge: c[iMenge >= 0 ? iMenge : 3] || "0",
+      ep: safeNumber(c[iEp >= 0 ? iEp : 4])
+    };
+  }).
+  filter(
+    (r) =>
+    r.position ||
+    r.kurztext ||
+    r.langtext ||
+    r.einheit ||
+    r.menge ||
+    r.ep
+  );
 }
 
 function toLvPos(r: ParsedRow): LVPos {
@@ -350,7 +350,7 @@ function toLvPos(r: ParsedRow): LVPos {
     confidence: undefined,
     source: "manual",
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 
@@ -366,11 +366,11 @@ function downloadBlob(blob: Blob, name: string) {
 }
 
 function escapeXml(s: string) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(s ?? "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;");
 }
 
 export default function LVUpload() {
@@ -381,15 +381,15 @@ export default function LVUpload() {
 
   const [projectKey, setProjectKey] = useState<string>(() => {
     return (
-      activeProjectKey ||
-      localStorage.getItem(CURRENT_KEY) ||
-      "BA-2026-DEMO"
-    ).toUpperCase();
+    activeProjectKey ||
+    localStorage.getItem(CURRENT_KEY) ||
+    "BA-2026-DEMO").
+    toUpperCase();
   });
 
   const [rows, setRows] = useState<LVRow[]>([]);
   const [mwst, setMwst] = useState<number>(() =>
-    Number(localStorage.getItem(MWST_KEY) || 19)
+  Number(localStorage.getItem(MWST_KEY) || 19)
   );
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -435,7 +435,7 @@ export default function LVUpload() {
         einheitNorm,
         mengeNum,
         zeilenpreis,
-        error: formula.error,
+        error: formula.error
       };
     });
   }, [rows]);
@@ -452,21 +452,21 @@ export default function LVUpload() {
 
   function addRow() {
     setRows((prev) => [
-      ...prev,
-      {
-        id: uid(),
-        position: "",
-        kurztext: "",
-        langtext: "",
-        einheit: "m",
-        menge: "0",
-        ep: 0,
-      },
-    ]);
+    ...prev,
+    {
+      id: uid(),
+      position: "",
+      kurztext: "",
+      langtext: "",
+      einheit: "m",
+      menge: "0",
+      ep: 0
+    }]
+    );
   }
 
   function updateRow(id: string, patch: Partial<LVRow>) {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, ...patch } : r));
   }
 
   function deleteRow(id: string) {
@@ -483,15 +483,15 @@ export default function LVUpload() {
     let n = 1;
 
     setRows((prev) =>
-      prev.map((r) => {
-        const existing = String(r.position || "").trim();
-        if (existing) return r;
+    prev.map((r) => {
+      const existing = String(r.position || "").trim();
+      if (existing) return r;
 
-        const next = `01.${String(n).padStart(4, "0")}`;
-        n += 1;
+      const next = `01.${String(n).padStart(4, "0")}`;
+      n += 1;
 
-        return { ...r, position: next };
-      })
+      return { ...r, position: next };
+    })
     );
   }
 
@@ -518,22 +518,22 @@ export default function LVUpload() {
 
   function exportCsv() {
     const header =
-      "Position;Kurztext;Langtext;Einheit;Menge_Formel;Menge_Berechnet;EP;Zeilenpreis";
+    "Position;Kurztext;Langtext;Einheit;Menge_Formel;Menge_Berechnet;EP;Zeilenpreis";
 
-    const body = parsedRows
-      .map((r) =>
-        [
-          csvEscape(r.position),
-          csvEscape(r.kurztext),
-          csvEscape(r.langtext),
-          csvEscape(r.einheitNorm),
-          csvEscape(r.menge),
-          csvEscape(r.mengeNum),
-          csvEscape(r.ep),
-          csvEscape(r.zeilenpreis),
-        ].join(";")
-      )
-      .join("\n");
+    const body = parsedRows.
+    map((r) =>
+    [
+    csvEscape(r.position),
+    csvEscape(r.kurztext),
+    csvEscape(r.langtext),
+    csvEscape(r.einheitNorm),
+    csvEscape(r.menge),
+    csvEscape(r.mengeNum),
+    csvEscape(r.ep),
+    csvEscape(r.zeilenpreis)].
+    join(";")
+    ).
+    join("\n");
 
     downloadBlob(
       new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8" }),
@@ -543,57 +543,57 @@ export default function LVUpload() {
 
   function exportXlsx() {
     const xmlHeader =
-      `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>` +
-      `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
-      `xmlns:o="urn:schemas-microsoft-com:office:office" ` +
-      `xmlns:x="urn:schemas-microsoft-com:office:excel" ` +
-      `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
+    `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>` +
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
+    `xmlns:o="urn:schemas-microsoft-com:office:office" ` +
+    `xmlns:x="urn:schemas-microsoft-com:office:excel" ` +
+    `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
 
     const headRow =
-      `<Row>` +
-      [
-        "Position",
-        "Kurztext",
-        "Langtext",
-        "Einheit",
-        "Menge",
-        "EP",
-        "Zeilenpreis",
-      ]
-        .map((h) => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`)
-        .join("") +
-      `</Row>`;
+    `<Row>` +
+    [
+    "Position",
+    "Kurztext",
+    "Langtext",
+    "Einheit",
+    "Menge",
+    "EP",
+    "Zeilenpreis"].
 
-    const body = parsedRows
-      .map(
-        (r) =>
-          `<Row>` +
-          `<Cell><Data ss:Type="String">${escapeXml(r.position)}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${escapeXml(r.kurztext)}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${escapeXml(r.langtext)}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${escapeXml(r.einheitNorm)}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${r.mengeNum}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${r.ep}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${r.zeilenpreis}</Data></Cell>` +
-          `</Row>`
-      )
-      .join("");
+    map((h) => `<Cell><Data ss:Type="String">${escapeXml(h)}</Data></Cell>`).
+    join("") +
+    `</Row>`;
+
+    const body = parsedRows.
+    map(
+      (r) =>
+      `<Row>` +
+      `<Cell><Data ss:Type="String">${escapeXml(r.position)}</Data></Cell>` +
+      `<Cell><Data ss:Type="String">${escapeXml(r.kurztext)}</Data></Cell>` +
+      `<Cell><Data ss:Type="String">${escapeXml(r.langtext)}</Data></Cell>` +
+      `<Cell><Data ss:Type="String">${escapeXml(r.einheitNorm)}</Data></Cell>` +
+      `<Cell><Data ss:Type="Number">${r.mengeNum}</Data></Cell>` +
+      `<Cell><Data ss:Type="Number">${r.ep}</Data></Cell>` +
+      `<Cell><Data ss:Type="Number">${r.zeilenpreis}</Data></Cell>` +
+      `</Row>`
+    ).
+    join("");
 
     const foot =
-      `<Row><Cell><Data ss:Type="String">Netto</Data></Cell><Cell/><Cell/><Cell/><Cell/><Cell/>` +
-      `<Cell><Data ss:Type="Number">${totals.netto}</Data></Cell></Row>` +
-      `<Row><Cell><Data ss:Type="String">MwSt %</Data></Cell><Cell/><Cell/><Cell/><Cell/><Cell/>` +
-      `<Cell><Data ss:Type="Number">${mwst}</Data></Cell></Row>` +
-      `<Row><Cell><Data ss:Type="String">Brutto</Data></Cell><Cell/><Cell/><Cell/><Cell/><Cell/>` +
-      `<Cell><Data ss:Type="Number">${totals.brutto}</Data></Cell></Row>`;
+    `<Row><Cell><Data ss:Type="String">Netto</Data></Cell><Cell/><Cell/><Cell/><Cell/><Cell/>` +
+    `<Cell><Data ss:Type="Number">${totals.netto}</Data></Cell></Row>` +
+    `<Row><Cell><Data ss:Type="String">MwSt %</Data></Cell><Cell/><Cell/><Cell/><Cell/><Cell/>` +
+    `<Cell><Data ss:Type="Number">${mwst}</Data></Cell></Row>` +
+    `<Row><Cell><Data ss:Type="String">Brutto</Data></Cell><Cell/><Cell/><Cell/><Cell/><Cell/>` +
+    `<Cell><Data ss:Type="Number">${totals.brutto}</Data></Cell></Row>`;
 
     const xml =
-      xmlHeader +
-      `<Worksheet ss:Name="LV"><Table>` +
-      headRow +
-      body +
-      foot +
-      `</Table></Worksheet></Workbook>`;
+    xmlHeader +
+    `<Worksheet ss:Name="LV"><Table>` +
+    headRow +
+    body +
+    foot +
+    `</Table></Worksheet></Workbook>`;
 
     downloadBlob(
       new Blob([xml], { type: "application/vnd.ms-excel" }),
@@ -628,8 +628,8 @@ export default function LVUpload() {
         einheit: r.einheit,
         menge: r.menge,
         preis: r.preis ?? 0,
-        confidence: r.confidence,
-      })),
+        confidence: r.confidence
+      }))
     });
 
     setStatus(`In KI übergeben: ${mapped.length.toLocaleString("de-DE")} Positionen.`);
@@ -652,16 +652,16 @@ export default function LVUpload() {
       return;
     }
 
-    const items = parsedRows
-      .filter((r) => r.position || r.kurztext || r.langtext)
-      .map((r) => ({
-        pos: r.position,
-        text: r.kurztext,
-        langtext: r.langtext,
-        unit: r.einheitNorm,
-        quantity: r.mengeNum,
-        ep: r.ep,
-      }));
+    const items = parsedRows.
+    filter((r) => r.position || r.kurztext || r.langtext).
+    map((r) => ({
+      pos: r.position,
+      text: r.kurztext,
+      langtext: r.langtext,
+      unit: r.einheitNorm,
+      quantity: r.mengeNum,
+      ep: r.ep
+    }));
 
     try {
       setBusy(true);
@@ -676,8 +676,8 @@ export default function LVUpload() {
           body: JSON.stringify({
             title: `LV ${projectKey}`,
             currency: "EUR",
-            items,
-          }),
+            items
+          })
         }
       );
 
@@ -701,262 +701,262 @@ export default function LVUpload() {
   }
 
   return (
-    <div style={page}>
-      <section style={hero}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", hero)}>
         <div>
-          <div style={eyebrow}>RLC Kalkulation</div>
-          <h1 style={title}>LV hochladen / erstellen</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Kalkulation</div>
+          <h1 className={rlcClass(null, title)}>LV hochladen / erstellen</h1>
+          <p className={rlcClass(null, subtitle)}>
             Leistungsverzeichnis manuell erfassen, CSV importieren, Mengenformeln berechnen
             und direkt an Manuell, KI, Angebot oder Server übergeben.
           </p>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectKey || "—"}</b>
-          {activeProject?.name || activeProject?.projectName ? (
-            <span> · {activeProject.name || activeProject.projectName}</span>
-          ) : null}
+          {activeProject?.name || activeProject?.projectName ?
+          <span> · {activeProject.name || activeProject.projectName}</span> :
+          null}
         </div>
       </section>
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <Kpi label="Positionen" value={String(parsedRows.length)} />
         <Kpi label="Fehler Formeln" value={String(errorsCount)} />
         <Kpi label="Netto" value={fmtMoney(totals.netto)} />
         <Kpi label="Brutto" value={fmtMoney(totals.brutto)} />
       </section>
 
-      <section style={card}>
-        <div style={toolbar}>
-          <label style={fieldInline}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, toolbar)}>
+          <label className={rlcClass(null, fieldInline)}>
             Projektcode
-            <input
-              style={{ ...input, width: 210 }}
-              value={projectKey}
-              onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
-              placeholder="BA-2026-DEMO"
-            />
+            <input className={rlcClass(null,
+            { ...input, width: 210 })}
+            value={projectKey}
+            onChange={(e) => setProjectKey(e.target.value.toUpperCase())}
+            placeholder="BA-2026-DEMO" />
+            
           </label>
 
-          <label style={buttonSecondary}>
+          <label className={rlcClass(null, buttonSecondary)}>
             CSV Import
             <input
               ref={fileRef}
               type="file"
               accept=".csv,text/csv"
-              style={{ display: "none" }}
+
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) importCsv(f);
                 if (fileRef.current) fileRef.current.value = "";
-              }}
-            />
+              }} className="rlc-migrated-pages-kalkulation-lvupload-tsx-917" />
+            
           </label>
 
-          <button style={buttonSecondary} onClick={pasteBulk}>
+          <button className={rlcClass(null, buttonSecondary)} onClick={pasteBulk}>
             Zeilen einfügen
           </button>
 
-          <button style={buttonSecondary} onClick={exportCsv} disabled={!rows.length}>
+          <button className={rlcClass(null, buttonSecondary)} onClick={exportCsv} disabled={!rows.length}>
             CSV
           </button>
 
-          <button style={buttonSecondary} onClick={exportXlsx} disabled={!rows.length}>
+          <button className={rlcClass(null, buttonSecondary)} onClick={exportXlsx} disabled={!rows.length}>
             XLS
           </button>
 
-          <button style={buttonSecondary} onClick={addRow}>
+          <button className={rlcClass(null, buttonSecondary)} onClick={addRow}>
             + Zeile
           </button>
 
-          <button style={buttonSecondary} onClick={autoNumber} disabled={!rows.length}>
+          <button className={rlcClass(null, buttonSecondary)} onClick={autoNumber} disabled={!rows.length}>
             Auto-Position
           </button>
 
-          <label style={fieldInline}>
+          <label className={rlcClass(null, fieldInline)}>
             MwSt %
             <input
-              type="number"
-              style={{ ...input, width: 80 }}
+              type="number" className={rlcClass(null,
+              { ...input, width: 80 })}
               value={mwst}
-              onChange={(e) => setMwst(safeNumber(e.target.value))}
-            />
+              onChange={(e) => setMwst(safeNumber(e.target.value))} />
+            
           </label>
 
-          <button style={buttonDanger} onClick={clearAll} disabled={!rows.length}>
+          <button className={rlcClass(null, buttonDanger)} onClick={clearAll} disabled={!rows.length}>
             Alles löschen
           </button>
         </div>
 
-        <div style={toolbar}>
-          <button style={buttonPrimary} onClick={sendToManuell} disabled={!rows.length}>
+        <div className={rlcClass(null, toolbar)}>
+          <button className={rlcClass(null, buttonPrimary)} onClick={sendToManuell} disabled={!rows.length}>
             → Kalkulation manuell
           </button>
 
-          <button style={buttonPrimary} onClick={sendToKi} disabled={!rows.length}>
+          <button className={rlcClass(null, buttonPrimary)} onClick={sendToKi} disabled={!rows.length}>
             → Kalkulation mit KI
           </button>
 
-          <button style={buttonPrimary} onClick={sendToAngebot} disabled={!rows.length}>
+          <button className={rlcClass(null, buttonPrimary)} onClick={sendToAngebot} disabled={!rows.length}>
             → Angebot
           </button>
 
-          <button
-            style={buttonServer}
-            onClick={saveToServer}
-            disabled={busy || !rows.length || !projectKey}
-          >
+          <button className={rlcClass(null,
+          buttonServer)}
+          onClick={saveToServer}
+          disabled={busy || !rows.length || !projectKey}>
+            
             {busy ? "Speichere …" : "Server speichern"}
           </button>
 
-          {status ? <div style={statusBox}>{status}</div> : null}
+          {status ? <div className={rlcClass(null, statusBox)}>{status}</div> : null}
         </div>
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>LV-Positionen</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>LV-Positionen</h2>
+            <div className={rlcClass(null, sectionText)}>
               Mengen können als Formel eingegeben werden, z. B. <b>12*3+5/2</b>.
             </div>
           </div>
         </div>
 
-        <div style={tableWrap}>
-          <table style={table}>
+        <div className={rlcClass(null, tableWrap)}>
+          <table className={rlcClass(null, table)}>
             <thead>
               <tr>
-                <th style={th}>Position</th>
-                <th style={th}>Kurztext</th>
-                <th style={th}>Langtext</th>
-                <th style={th}>ME</th>
-                <th style={th}>Menge / Formel</th>
-                <th style={th}>Menge berechnet</th>
-                <th style={th}>EP netto</th>
-                <th style={th}>Zeilenpreis</th>
-                <th style={th}></th>
+                <th className={rlcClass(null, th)}>Position</th>
+                <th className={rlcClass(null, th)}>Kurztext</th>
+                <th className={rlcClass(null, th)}>Langtext</th>
+                <th className={rlcClass(null, th)}>ME</th>
+                <th className={rlcClass(null, th)}>Menge / Formel</th>
+                <th className={rlcClass(null, th)}>Menge berechnet</th>
+                <th className={rlcClass(null, th)}>EP netto</th>
+                <th className={rlcClass(null, th)}>Zeilenpreis</th>
+                <th className={rlcClass(null, th)}></th>
               </tr>
             </thead>
 
             <tbody>
-              {parsedRows.map((r) => (
-                <tr
-                  key={r.id}
-                  style={{
-                    background: r.error ? "#FEF2F2" : "#FFFFFF",
-                  }}
-                >
-                  <td style={td}>
-                    <input
-                      style={{ ...cellInput, width: 110 }}
-                      value={r.position}
-                      onChange={(e) => updateRow(r.id, { position: e.target.value })}
-                    />
+              {parsedRows.map((r) =>
+              <tr
+                key={r.id} className={rlcClass(null,
+                {
+                  background: r.error ? "#FEF2F2" : "#FFFFFF"
+                })}>
+                
+                  <td className={rlcClass(null, td)}>
+                    <input className={rlcClass(null,
+                  { ...cellInput, width: 110 })}
+                  value={r.position}
+                  onChange={(e) => updateRow(r.id, { position: e.target.value })} />
+                  
                   </td>
 
-                  <td style={td}>
-                    <input
-                      style={{ ...cellInput, width: "100%" }}
-                      value={r.kurztext}
-                      onChange={(e) => updateRow(r.id, { kurztext: e.target.value })}
-                    />
+                  <td className={rlcClass(null, td)}>
+                    <input className={rlcClass(null,
+                  { ...cellInput, width: "100%" })}
+                  value={r.kurztext}
+                  onChange={(e) => updateRow(r.id, { kurztext: e.target.value })} />
+                  
                   </td>
 
-                  <td style={td}>
-                    <input
-                      style={{ ...cellInput, width: "100%" }}
-                      value={r.langtext}
-                      onChange={(e) => updateRow(r.id, { langtext: e.target.value })}
-                    />
+                  <td className={rlcClass(null, td)}>
+                    <input className={rlcClass(null,
+                  { ...cellInput, width: "100%" })}
+                  value={r.langtext}
+                  onChange={(e) => updateRow(r.id, { langtext: e.target.value })} />
+                  
                   </td>
 
-                  <td style={td}>
-                    <input
-                      style={{ ...cellInput, width: 64 }}
-                      value={r.einheit}
-                      onChange={(e) => updateRow(r.id, { einheit: e.target.value })}
-                    />
+                  <td className={rlcClass(null, td)}>
+                    <input className={rlcClass(null,
+                  { ...cellInput, width: 64 })}
+                  value={r.einheit}
+                  onChange={(e) => updateRow(r.id, { einheit: e.target.value })} />
+                  
                   </td>
 
-                  <td style={td}>
-                    <input
-                      style={{
-                        ...cellInput,
-                        width: 140,
-                        borderColor: r.error ? "#FCA5A5" : "#E5E7EB",
-                      }}
-                      value={r.menge}
-                      onChange={(e) => updateRow(r.id, { menge: e.target.value })}
-                      title={r.error || "Mengenformel"}
-                    />
-                    {r.error ? <div style={errorText}>{r.error}</div> : null}
+                  <td className={rlcClass(null, td)}>
+                    <input className={rlcClass(null,
+                  {
+                    ...cellInput,
+                    width: 140,
+                    borderColor: r.error ? "#FCA5A5" : "#E5E7EB"
+                  })}
+                  value={r.menge}
+                  onChange={(e) => updateRow(r.id, { menge: e.target.value })}
+                  title={r.error || "Mengenformel"} />
+                  
+                    {r.error ? <div className={rlcClass(null, errorText)}>{r.error}</div> : null}
                   </td>
 
-                  <td style={tdRight}>{fmtQty(r.mengeNum, r.einheitNorm)}</td>
+                  <td className={rlcClass(null, tdRight)}>{fmtQty(r.mengeNum, r.einheitNorm)}</td>
 
-                  <td style={tdRight}>
+                  <td className={rlcClass(null, tdRight)}>
                     <input
-                      type="number"
-                      step="0.01"
-                      style={{ ...cellInput, width: 90, textAlign: "right" }}
-                      value={r.ep}
-                      onChange={(e) => updateRow(r.id, { ep: safeNumber(e.target.value) })}
-                    />
+                    type="number"
+                    step="0.01" className={rlcClass(null,
+                    { ...cellInput, width: 90, textAlign: "right" })}
+                    value={r.ep}
+                    onChange={(e) => updateRow(r.id, { ep: safeNumber(e.target.value) })} />
+                  
                   </td>
 
-                  <td style={{ ...tdRight, fontWeight: 900 }}>
+                  <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>
                     {fmtMoney(r.zeilenpreis)}
                   </td>
 
-                  <td style={td}>
-                    <button style={buttonMiniDanger} onClick={() => deleteRow(r.id)}>
+                  <td className={rlcClass(null, td)}>
+                    <button className={rlcClass(null, buttonMiniDanger)} onClick={() => deleteRow(r.id)}>
                       Löschen
                     </button>
                   </td>
                 </tr>
-              ))}
+              )}
 
-              {!parsedRows.length ? (
-                <tr>
-                  <td colSpan={9} style={{ ...td, color: "#64748B", padding: 18 }}>
+              {!parsedRows.length ?
+              <tr>
+                  <td colSpan={9} className={rlcClass(null, { ...td, color: "#64748B", padding: 18 })}>
                     Noch keine LV-Zeilen vorhanden. Importiere eine CSV oder füge manuell eine Zeile hinzu.
                   </td>
-                </tr>
-              ) : null}
+                </tr> :
+              null}
             </tbody>
           </table>
         </div>
       </section>
 
-      <section style={totalsBar}>
-        <div style={sumBox}>
-          <div style={sumLabel}>Netto</div>
-          <div style={sumValue}>{fmtMoney(totals.netto)}</div>
+      <section className={rlcClass(null, totalsBar)}>
+        <div className={rlcClass(null, sumBox)}>
+          <div className={rlcClass(null, sumLabel)}>Netto</div>
+          <div className={rlcClass(null, sumValue)}>{fmtMoney(totals.netto)}</div>
         </div>
 
-        <div style={sumBox}>
-          <div style={sumLabel}>MwSt</div>
-          <div style={sumValue}>{fmtMoney(totals.steuer)}</div>
+        <div className={rlcClass(null, sumBox)}>
+          <div className={rlcClass(null, sumLabel)}>MwSt</div>
+          <div className={rlcClass(null, sumValue)}>{fmtMoney(totals.steuer)}</div>
         </div>
 
-        <div style={sumBox}>
-          <div style={sumLabel}>Brutto</div>
-          <div style={sumValue}>{fmtMoney(totals.brutto)}</div>
+        <div className={rlcClass(null, sumBox)}>
+          <div className={rlcClass(null, sumLabel)}>Brutto</div>
+          <div className={rlcClass(null, sumValue)}>{fmtMoney(totals.brutto)}</div>
         </div>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value }: {label: string;value: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+    </div>);
+
 }
 
 /* ================= STYLES ================= */
@@ -964,17 +964,17 @@ function Kpi({ label, value }: { label: string; value: string }) {
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const hero: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 12,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -982,31 +982,31 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.82,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: 0,
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 860,
   opacity: 0.9,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92,
+  opacity: 0.92
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -1014,22 +1014,22 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const card: React.CSSProperties = {
@@ -1037,14 +1037,14 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const toolbar: React.CSSProperties = {
   display: "flex",
   gap: 10,
   alignItems: "center",
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const fieldInline: React.CSSProperties = {
@@ -1053,7 +1053,7 @@ const fieldInline: React.CSSProperties = {
   gap: 8,
   fontSize: 13,
   color: "#475569",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const input: React.CSSProperties = {
@@ -1062,7 +1062,7 @@ const input: React.CSSProperties = {
   padding: "8px 10px",
   fontSize: 13,
   background: "#FFFFFF",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const buttonBase: React.CSSProperties = {
@@ -1070,36 +1070,36 @@ const buttonBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const buttonSecondary: React.CSSProperties = {
   ...buttonBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const buttonPrimary: React.CSSProperties = {
   ...buttonBase,
-  background: "#2563EB",
-  borderColor: "#2563EB",
-  color: "#FFFFFF",
+  background: "#146EF5",
+  borderColor: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const buttonServer: React.CSSProperties = {
   ...buttonBase,
   background: "#0F766E",
   borderColor: "#0F766E",
-  color: "#FFFFFF",
+  color: "#FFFFFF"
 };
 
 const buttonDanger: React.CSSProperties = {
   ...buttonBase,
   background: "#FEF2F2",
   borderColor: "#FECACA",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const buttonMiniDanger: React.CSSProperties = {
@@ -1109,8 +1109,8 @@ const buttonMiniDanger: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const statusBox: React.CSSProperties = {
@@ -1120,7 +1120,7 @@ const statusBox: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   color: "#475569",
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const sectionHead: React.CSSProperties = {
@@ -1129,32 +1129,32 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const tableWrap: React.CSSProperties = {
   overflowX: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 1180,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -1164,20 +1164,20 @@ const th: React.CSSProperties = {
   color: "#475569",
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "8px 9px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const cellInput: React.CSSProperties = {
@@ -1186,21 +1186,21 @@ const cellInput: React.CSSProperties = {
   padding: "6px 8px",
   fontSize: 12,
   background: "#FFFFFF",
-  boxSizing: "border-box",
+  boxSizing: "border-box"
 };
 
 const errorText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 11,
   color: "#B91C1C",
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const totalsBar: React.CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
   gap: 12,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const sumBox: React.CSSProperties = {
@@ -1208,20 +1208,20 @@ const sumBox: React.CSSProperties = {
   borderRadius: 16,
   padding: "14px 16px",
   minWidth: 220,
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const sumLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const sumValue: React.CSSProperties = {
   marginTop: 5,
   fontSize: 18,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };

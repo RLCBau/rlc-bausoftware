@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React, { useMemo, useState } from "react";
 import "./styles.css";
 
 /* =========================
@@ -20,10 +20,10 @@ type Zeitraum = "ALL" | "30" | "60" | "90" | "THIS_MONTH" | "YTD";
    HELPERS
    ========================= */
 const fmt = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -32,7 +32,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -41,13 +41,13 @@ function escapeHtml(str: string) {
   return String(str ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
@@ -72,41 +72,41 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 /* =========================
    COMPONENT
    ========================= */
 export default function USt() {
   const [buchungen, setBuchungen] = useState<Buchung[]>([
-    {
-      id: 1,
-      typ: "Einnahme",
-      datum: "28.10.2025",
-      beleg: "R-2025-104",
-      text: "Erlös Rohrbau",
-      netto: 4200,
-      steuersatz: 19,
-    },
-    {
-      id: 2,
-      typ: "Ausgabe",
-      datum: "25.10.2025",
-      beleg: "E-2025-081",
-      text: "Materiallieferung DN200",
-      netto: 1000,
-      steuersatz: 19,
-    },
-    {
-      id: 3,
-      typ: "Einnahme",
-      datum: "15.10.2025",
-      beleg: "R-2025-099",
-      text: "Asphaltarbeiten",
-      netto: 3000,
-      steuersatz: 7,
-    },
-  ]);
+  {
+    id: 1,
+    typ: "Einnahme",
+    datum: "28.10.2025",
+    beleg: "R-2025-104",
+    text: "Erlös Rohrbau",
+    netto: 4200,
+    steuersatz: 19
+  },
+  {
+    id: 2,
+    typ: "Ausgabe",
+    datum: "25.10.2025",
+    beleg: "E-2025-081",
+    text: "Materiallieferung DN200",
+    netto: 1000,
+    steuersatz: 19
+  },
+  {
+    id: 3,
+    typ: "Einnahme",
+    datum: "15.10.2025",
+    beleg: "R-2025-099",
+    text: "Asphaltarbeiten",
+    netto: 3000,
+    steuersatz: 7
+  }]
+  );
 
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
 
@@ -138,15 +138,15 @@ export default function USt() {
 
   /* === Berechnung nach Steuersatz === */
   const gruppen = useMemo(() => {
-    const bySatz: Record<number, { ein: number; aus: number }> = {};
+    const bySatz: Record<number, {ein: number;aus: number;}> = {};
 
     for (const b of filtered) {
       const satz = safeNumber(b.steuersatz, 0);
       const netto = safeNumber(b.netto, 0);
 
       const g = bySatz[satz] || { ein: 0, aus: 0 };
-      if (b.typ === "Einnahme") g.ein += netto;
-      else g.aus += netto;
+      if (b.typ === "Einnahme") g.ein += netto;else
+      g.aus += netto;
 
       bySatz[satz] = g;
     }
@@ -166,19 +166,19 @@ export default function USt() {
 
   const sumUSt = useMemo(
     () =>
-      Object.entries(gruppen).reduce(
-        (s, [satz, g]) => s + (safeNumber(satz) / 100) * g.ein,
-        0
-      ),
+    Object.entries(gruppen).reduce(
+      (s, [satz, g]) => s + safeNumber(satz) / 100 * g.ein,
+      0
+    ),
     [gruppen]
   );
 
   const sumVSt = useMemo(
     () =>
-      Object.entries(gruppen).reduce(
-        (s, [satz, g]) => s + (safeNumber(satz) / 100) * g.aus,
-        0
-      ),
+    Object.entries(gruppen).reduce(
+      (s, [satz, g]) => s + safeNumber(satz) / 100 * g.aus,
+      0
+    ),
     [gruppen]
   );
 
@@ -189,37 +189,37 @@ export default function USt() {
     const id = Math.max(0, ...buchungen.map((b) => b.id)) + 1;
 
     setBuchungen((p) => [
-      ...p,
-      {
-        id,
-        typ: "Einnahme",
-        datum: new Date().toLocaleDateString("de-DE"),
-        beleg: "",
-        text: "",
-        netto: 0,
-        steuersatz: 19,
-      },
-    ]);
+    ...p,
+    {
+      id,
+      typ: "Einnahme",
+      datum: new Date().toLocaleDateString("de-DE"),
+      beleg: "",
+      text: "",
+      netto: 0,
+      steuersatz: 19
+    }]
+    );
   };
 
   const remove = (id: number) => {
     setBuchungen((p) => p.filter((b) => b.id !== id));
   };
 
-  const update = <K extends keyof Buchung>(id: number, key: K, val: Buchung[K]) =>
-    setBuchungen((p) =>
-      p.map((b) =>
-        b.id === id
-          ? {
-              ...b,
-              [key]:
-                key === "netto" || key === "steuersatz"
-                  ? safeNumber(val, 0)
-                  : val,
-            }
-          : b
-      )
-    );
+  const update = <K extends keyof Buchung,>(id: number, key: K, val: Buchung[K]) =>
+  setBuchungen((p) =>
+  p.map((b) =>
+  b.id === id ?
+  {
+    ...b,
+    [key]:
+    key === "netto" || key === "steuersatz" ?
+    safeNumber(val, 0) :
+    val
+  } :
+  b
+  )
+  );
 
   /* === EXPORT CSV === */
   const exportCSV = () => {
@@ -230,7 +230,7 @@ export default function USt() {
       Text: b.text,
       Netto: fmt(b.netto),
       Steuersatz: `${safeNumber(b.steuersatz)}%`,
-      "USt/VSt": fmt(safeNumber(b.netto) * (safeNumber(b.steuersatz) / 100)),
+      "USt/VSt": fmt(safeNumber(b.netto) * (safeNumber(b.steuersatz) / 100))
     }));
 
     if (!rows.length) {
@@ -240,13 +240,13 @@ export default function USt() {
 
     const header = Object.keys(rows[0]);
     const csv = [
-      header.join(";"),
-      ...rows.map((row) =>
-        header
-          .map((h) => `"${String((row as Record<string, unknown>)[h] ?? "").replace(/"/g, '""')}"`)
-          .join(";")
-      ),
-    ].join("\n");
+    header.join(";"),
+    ...rows.map((row) =>
+    header.
+    map((h) => `"${String((row as Record<string, unknown>)[h] ?? "").replace(/"/g, '""')}"`).
+    join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -324,23 +324,23 @@ export default function USt() {
         </thead>
 
         <tbody>
-          {filtered.map((b) => (
-            <tr key={b.id}>
+          {filtered.map((b) =>
+          <tr key={b.id}>
               <td>
                 <button
-                  className="bh-btn"
-                  style={{ background: "#e74c3c" }}
-                  onClick={() => remove(b.id)}
-                >
+                className="bh-btn rlc-migrated-pages-buchhaltung-ust-tsx-297"
+
+                onClick={() => remove(b.id)}>
+                
                   Löschen
                 </button>
               </td>
 
               <td>
                 <select
-                  value={b.typ}
-                  onChange={(e) => update(b.id, "typ", e.target.value as Buchung["typ"])}
-                >
+                value={b.typ}
+                onChange={(e) => update(b.id, "typ", e.target.value as Buchung["typ"])}>
+                
                   <option value="Einnahme">Einnahme</option>
                   <option value="Ausgabe">Ausgabe</option>
                 </select>
@@ -348,46 +348,46 @@ export default function USt() {
 
               <td>
                 <input
-                  type="text"
-                  value={b.datum}
-                  onChange={(e) => update(b.id, "datum", e.target.value)}
-                  style={{ width: 100 }}
-                />
+                type="text"
+                value={b.datum}
+                onChange={(e) => update(b.id, "datum", e.target.value)} className="rlc-migrated-pages-buchhaltung-ust-tsx-298" />
+
+              
               </td>
 
               <td>
                 <input
-                  type="text"
-                  value={b.beleg}
-                  onChange={(e) => update(b.id, "beleg", e.target.value)}
-                  style={{ width: 120 }}
-                />
+                type="text"
+                value={b.beleg}
+                onChange={(e) => update(b.id, "beleg", e.target.value)} className="rlc-migrated-pages-buchhaltung-ust-tsx-299" />
+
+              
               </td>
 
               <td>
                 <input
-                  type="text"
-                  value={b.text}
-                  onChange={(e) => update(b.id, "text", e.target.value)}
-                  style={{ minWidth: 200 }}
-                />
+                type="text"
+                value={b.text}
+                onChange={(e) => update(b.id, "text", e.target.value)} className="rlc-migrated-pages-buchhaltung-ust-tsx-300" />
+
+              
               </td>
 
               <td>
                 <input
-                  type="number"
-                  step="0.01"
-                  value={b.netto}
-                  onChange={(e) => update(b.id, "netto", safeNumber(e.target.value, 0))}
-                  style={{ width: 100, textAlign: "right" }}
-                />
+                type="number"
+                step="0.01"
+                value={b.netto}
+                onChange={(e) => update(b.id, "netto", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-ust-tsx-301" />
+
+              
               </td>
 
               <td>
                 <select
-                  value={b.steuersatz}
-                  onChange={(e) => update(b.id, "steuersatz", safeNumber(e.target.value, 0))}
-                >
+                value={b.steuersatz}
+                onChange={(e) => update(b.id, "steuersatz", safeNumber(e.target.value, 0))}>
+                
                   <option value={19}>19%</option>
                   <option value={7}>7%</option>
                   <option value={0}>0%</option>
@@ -398,32 +398,32 @@ export default function USt() {
                 {fmt(safeNumber(b.netto) * (safeNumber(b.steuersatz) / 100))}
               </td>
             </tr>
-          ))}
+          )}
 
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={8} style={{ textAlign: "center", color: "#777", padding: 14 }}>
+          {filtered.length === 0 &&
+          <tr>
+              <td colSpan={8} className="rlc-migrated-pages-buchhaltung-ust-tsx-302">
                 Keine Buchungen im aktuellen Zeitraum.
               </td>
             </tr>
-          )}
+          }
 
-          <tr style={{ background: "#fafafa", fontWeight: 600 }}>
+          <tr className="rlc-migrated-pages-buchhaltung-ust-tsx-303">
             <td colSpan={4} />
-            <td style={{ textAlign: "right" }}>Summe Netto:</td>
+            <td className="rlc-migrated-pages-buchhaltung-ust-tsx-304">Summe Netto:</td>
             <td className="right">{fmt(sumEin + sumAus)}</td>
-            <td style={{ textAlign: "right" }}>Saldo USt:</td>
-            <td
-              className="right"
-              style={{ color: diff >= 0 ? "#27ae60" : "#e74c3c" }}
-            >
+            <td className="rlc-migrated-pages-buchhaltung-ust-tsx-305">Saldo USt:</td>
+            <td className={rlcClass(
+              "right",
+              { color: diff >= 0 ? "#27ae60" : "#e74c3c" })}>
+              
               {fmt(diff)}
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div style={{ marginTop: 20 }}>
+      <div className="rlc-migrated-pages-buchhaltung-ust-tsx-306">
         <h3>USt / Vorsteuer nach Steuersatz</h3>
         <table className="bh-table">
           <thead>
@@ -438,25 +438,25 @@ export default function USt() {
           </thead>
 
           <tbody>
-            {Object.entries(gruppen)
-              .sort((a, b) => safeNumber(b[0]) - safeNumber(a[0]))
-              .map(([satz, g]) => {
-                const ust = g.ein * (safeNumber(satz) / 100);
-                const vst = g.aus * (safeNumber(satz) / 100);
+            {Object.entries(gruppen).
+            sort((a, b) => safeNumber(b[0]) - safeNumber(a[0])).
+            map(([satz, g]) => {
+              const ust = g.ein * (safeNumber(satz) / 100);
+              const vst = g.aus * (safeNumber(satz) / 100);
 
-                return (
-                  <tr key={satz}>
+              return (
+                <tr key={satz}>
                     <td>{satz}%</td>
                     <td className="right">{fmt(g.ein)}</td>
                     <td className="right">{fmt(ust)}</td>
                     <td className="right">{fmt(g.aus)}</td>
                     <td className="right">{fmt(vst)}</td>
                     <td className="right">{fmt(ust - vst)}</td>
-                  </tr>
-                );
-              })}
+                  </tr>);
 
-            <tr style={{ background: "#fafafa", fontWeight: 600 }}>
+            })}
+
+            <tr className="rlc-migrated-pages-buchhaltung-ust-tsx-307">
               <td>Gesamt</td>
               <td className="right">{fmt(sumEin)}</td>
               <td className="right">{fmt(sumUSt)}</td>
@@ -467,24 +467,24 @@ export default function USt() {
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* =========================
    PRINTABLE HTML
    ========================= */
 function printableHTML(
-  list: Buchung[],
-  gruppen: Record<number, { ein: number; aus: number }>,
-  ust: number,
-  vst: number,
-  diff: number
-) {
-  const body = list
-    .map(
-      (b) =>
-        `<tr>
+list: Buchung[],
+gruppen: Record<number, {ein: number;aus: number;}>,
+ust: number,
+vst: number,
+diff: number)
+{
+  const body = list.
+  map(
+    (b) =>
+    `<tr>
           <td>${escapeHtml(b.datum)}</td>
           <td>${escapeHtml(b.typ)}</td>
           <td>${escapeHtml(b.beleg)}</td>
@@ -493,17 +493,17 @@ function printableHTML(
           <td>${safeNumber(b.steuersatz)}%</td>
           <td style="text-align:right">${fmt(safeNumber(b.netto) * (safeNumber(b.steuersatz) / 100))}</td>
         </tr>`
-    )
-    .join("");
+  ).
+  join("");
 
-  const gruppenRows = Object.entries(gruppen)
-    .sort((a, b) => safeNumber(b[0]) - safeNumber(a[0]))
-    .map(([satz, g]) => {
-      const gUst = g.ein * (safeNumber(satz) / 100);
-      const gVst = g.aus * (safeNumber(satz) / 100);
-      const saldo = gUst - gVst;
+  const gruppenRows = Object.entries(gruppen).
+  sort((a, b) => safeNumber(b[0]) - safeNumber(a[0])).
+  map(([satz, g]) => {
+    const gUst = g.ein * (safeNumber(satz) / 100);
+    const gVst = g.aus * (safeNumber(satz) / 100);
+    const saldo = gUst - gVst;
 
-      return `<tr>
+    return `<tr>
         <td>${satz}%</td>
         <td style="text-align:right">${fmt(g.ein)}</td>
         <td style="text-align:right">${fmt(gUst)}</td>
@@ -511,8 +511,8 @@ function printableHTML(
         <td style="text-align:right">${fmt(gVst)}</td>
         <td style="text-align:right">${fmt(saldo)}</td>
       </tr>`;
-    })
-    .join("");
+  }).
+  join("");
 
   return `<!doctype html><html><head><meta charset="utf-8"/><title>USt Übersicht</title>
   <style>
@@ -556,12 +556,12 @@ function printableHTML(
       <tr>
         <td><b>Gesamt</b></td>
         <td style="text-align:right"><b>${fmt(
-          Object.values(gruppen).reduce((s, g) => s + g.ein, 0)
-        )}</b></td>
+    Object.values(gruppen).reduce((s, g) => s + g.ein, 0)
+  )}</b></td>
         <td style="text-align:right"><b>${fmt(ust)}</b></td>
         <td style="text-align:right"><b>${fmt(
-          Object.values(gruppen).reduce((s, g) => s + g.aus, 0)
-        )}</b></td>
+    Object.values(gruppen).reduce((s, g) => s + g.aus, 0)
+  )}</b></td>
         <td style="text-align:right"><b>${fmt(vst)}</b></td>
         <td style="text-align:right"><b>${fmt(diff)}</b></td>
       </tr>
@@ -573,8 +573,3 @@ function printableHTML(
   )}</div>
   </body></html>`;
 }
-
-
-
-
-

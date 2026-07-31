@@ -24,7 +24,7 @@ export default function ImportProjectJson({ onImported }: Props) {
 
     const isJsonName = /\.json$/i.test(f.name);
     const isJsonType =
-      f.type === "application/json" || f.type === "text/json";
+    f.type === "application/json" || f.type === "text/json";
 
     if (!isJsonName && !isJsonType) {
       window.alert("Bitte eine gültige project.json auswählen.");
@@ -41,7 +41,7 @@ export default function ImportProjectJson({ onImported }: Props) {
       const res = await fetch(apiUrl("/api/import/project-json"), {
         method: "POST",
         body: fd,
-        credentials: "include",
+        credentials: "include"
       });
 
       const json = await res.json().catch(() => null);
@@ -54,8 +54,8 @@ export default function ImportProjectJson({ onImported }: Props) {
 
       window.alert(
         `Import erfolgreich: ${
-          json?.imported?.name || json?.project?.name || f.name
-        }`
+        json?.imported?.name || json?.project?.name || f.name}`
+
       );
     } catch (err: any) {
       console.error("Import error:", err);
@@ -69,14 +69,14 @@ export default function ImportProjectJson({ onImported }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+    <div className="rlc-migrated-pages-start-importprojectjson-tsx-1560">
       <input
         ref={fileRef}
         type="file"
         accept=".json,application/json"
-        style={{ display: "none" }}
-        onChange={handleFile}
-      />
+
+        onChange={handleFile} className="rlc-migrated-pages-start-importprojectjson-tsx-1561" />
+      
 
       <button type="button" onClick={handleChoose} disabled={busy}>
         {busy ? "Importiere..." : "Import project.json"}
@@ -85,16 +85,6 @@ export default function ImportProjectJson({ onImported }: Props) {
       <small>
         Unterstützt: Datei <code>project.json</code>
       </small>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-
-
-
-
-
-

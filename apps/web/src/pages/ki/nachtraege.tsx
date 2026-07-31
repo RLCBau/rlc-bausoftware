@@ -1,4 +1,4 @@
-// apps/web/src/pages/ki/Nachtraege.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Nachtraege.tsx
 
 import React, { useMemo, useState } from "react";
 import { useProject } from "../../store/useProject";
@@ -7,14 +7,14 @@ const shell = {
   maxWidth: 1000,
   margin: "0 auto",
   padding: "12px 16px",
-  fontFamily: "Inter,system-ui,Arial",
+  fontFamily: "Inter,system-ui,Arial"
 } as const;
 
 const card = {
   border: "1px solid #e5e7eb",
   borderRadius: 10,
   padding: 16,
-  background: "#fff",
+  background: "#fff"
 } as const;
 
 const input = {
@@ -23,7 +23,7 @@ const input = {
   borderRadius: 6,
   padding: "8px 10px",
   margin: "6px 0",
-  fontSize: 14,
+  fontSize: 14
 } as const;
 
 const btn = {
@@ -32,34 +32,34 @@ const btn = {
   background: "#fff",
   borderRadius: 8,
   fontSize: 13,
-  cursor: "pointer",
+  cursor: "pointer"
 } as const;
 
 const table = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: 13,
-  marginTop: 12,
+  marginTop: 12
 } as const;
 
 const thtd = {
   border: "1px solid #e2e8f0",
   padding: "6px 8px",
-  verticalAlign: "top" as const,
+  verticalAlign: "top" as const
 } as const;
 
 const head = {
   ...thtd,
   background: "#f8fafc",
-  fontWeight: 600,
+  fontWeight: 600
 } as const;
 
 type DiffType =
-  | "qty_diff"
-  | "price_diff"
-  | "text_diff"
-  | "missing_in_offer"
-  | "missing_in_lv";
+"qty_diff" |
+"price_diff" |
+"text_diff" |
+"missing_in_offer" |
+"missing_in_lv";
 
 type DiffRow = {
   posNr: string;
@@ -105,14 +105,14 @@ export default function Nachtraege() {
       const res = await fetch("/api/ki/nachtraege-check", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           projectId: projectId || "",
           projectCode: projectCode || "",
           lvText: lv.trim(),
-          angebotText: off.trim(),
-        }),
+          angebotText: off.trim()
+        })
       });
 
       if (!res.ok) {
@@ -120,11 +120,11 @@ export default function Nachtraege() {
       }
 
       const data: ApiResponse = await res.json();
-      const rows = Array.isArray(data?.diffs)
-        ? data.diffs
-        : Array.isArray(data?.items)
-        ? data.items
-        : [];
+      const rows = Array.isArray(data?.diffs) ?
+      data.diffs :
+      Array.isArray(data?.items) ?
+      data.items :
+      [];
 
       setDiffs(rows);
       setSummary(data?.summary || "");
@@ -141,101 +141,101 @@ export default function Nachtraege() {
       projectCode: projectCode || "",
       posNr: d.posNr,
       kurztext: d.angebotText || d.lvText || "",
-      grund: `KI Nachtragserkennung: ${d.details}`,
+      grund: `KI Nachtragserkennung: ${d.details}`
     };
 
     const url =
-      `/kalkulation/nachtraege?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
-      `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
+    `/kalkulation/nachtraege?projectId=${encodeURIComponent(projectId || effectiveProject)}` +
+    `&prefill=${encodeURIComponent(JSON.stringify(payload))}`;
 
     window.location.href = url;
   }
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h2>Nachtragserkennung</h2>
 
-      <div style={card}>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-nachtraege-tsx-1087">
           Projekt: {effectiveProject || "—"}
         </div>
 
-        <textarea
-          style={{ ...input, height: 120 }}
-          value={lv}
-          onChange={(e) => setLv(e.target.value)}
-          placeholder="LV-Text"
-        />
+        <textarea className={rlcClass(null,
+        { ...input, height: 120 })}
+        value={lv}
+        onChange={(e) => setLv(e.target.value)}
+        placeholder="LV-Text" />
+        
 
-        <textarea
-          style={{ ...input, height: 120 }}
-          value={off}
-          onChange={(e) => setOff(e.target.value)}
-          placeholder="Angebot-Text"
-        />
+        <textarea className={rlcClass(null,
+        { ...input, height: 120 })}
+        value={off}
+        onChange={(e) => setOff(e.target.value)}
+        placeholder="Angebot-Text" />
+        
 
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button style={btn} onClick={() => void check()} disabled={loading}>
+        <div className="rlc-migrated-pages-ki-nachtraege-tsx-1088">
+          <button className={rlcClass(null, btn)} onClick={() => void check()} disabled={loading}>
             {loading ? "Vergleiche..." : "Vergleichen"}
           </button>
         </div>
 
-        {error && (
-          <div style={{ marginTop: 10, color: "#b91c1c" }}>
+        {error &&
+        <div className="rlc-migrated-pages-ki-nachtraege-tsx-1089">
             {error}
           </div>
-        )}
+        }
       </div>
 
-      <div style={{ ...card, marginTop: 16 }}>
-        <h3 style={{ marginTop: 0 }}>Ergebnis</h3>
+      <div className={rlcClass(null, { ...card, marginTop: 16 })}>
+        <h3 className="rlc-migrated-pages-ki-nachtraege-tsx-1090">Ergebnis</h3>
 
-        {summary && (
-          <div style={{ marginBottom: 12, whiteSpace: "pre-wrap" }}>
+        {summary &&
+        <div className="rlc-migrated-pages-ki-nachtraege-tsx-1091">
             {summary}
           </div>
-        )}
+        }
 
-        <table style={table}>
+        <table className={rlcClass(null, table)}>
           <thead>
             <tr>
-              <th style={head}>Pos</th>
-              <th style={head}>Typ</th>
-              <th style={head}>LV</th>
-              <th style={head}>Angebot</th>
-              <th style={head}>Details</th>
-              <th style={head}>Aktion</th>
+              <th className={rlcClass(null, head)}>Pos</th>
+              <th className={rlcClass(null, head)}>Typ</th>
+              <th className={rlcClass(null, head)}>LV</th>
+              <th className={rlcClass(null, head)}>Angebot</th>
+              <th className={rlcClass(null, head)}>Details</th>
+              <th className={rlcClass(null, head)}>Aktion</th>
             </tr>
           </thead>
 
           <tbody>
-            {diffs.map((d, i) => (
-              <tr key={`${d.posNr}-${d.type}-${i}`}>
-                <td style={thtd}>{d.posNr}</td>
-                <td style={thtd}>{labelForType(d.type)}</td>
-                <td style={thtd}>{d.lvText || "—"}</td>
-                <td style={thtd}>{d.angebotText || "—"}</td>
-                <td style={thtd}>{d.details}</td>
-                <td style={thtd}>
-                  <button style={btn} onClick={() => gotoNachtrag(d)}>
+            {diffs.map((d, i) =>
+            <tr key={`${d.posNr}-${d.type}-${i}`}>
+                <td className={rlcClass(null, thtd)}>{d.posNr}</td>
+                <td className={rlcClass(null, thtd)}>{labelForType(d.type)}</td>
+                <td className={rlcClass(null, thtd)}>{d.lvText || "—"}</td>
+                <td className={rlcClass(null, thtd)}>{d.angebotText || "—"}</td>
+                <td className={rlcClass(null, thtd)}>{d.details}</td>
+                <td className={rlcClass(null, thtd)}>
+                  <button className={rlcClass(null, btn)} onClick={() => gotoNachtrag(d)}>
                     Nachtrag erstellen →
                   </button>
                 </td>
               </tr>
-            ))}
+            )}
 
-            {!diffs.length && !loading && (
-              <tr>
-                <td colSpan={6} style={{ ...thtd, color: "#6b7280" }}>
+            {!diffs.length && !loading &&
+            <tr>
+                <td colSpan={6} className={rlcClass(null, { ...thtd, color: "#6b7280" })}>
                   Noch keine Abweichungen erkannt.
                 </td>
               </tr>
-            )}
+            }
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function labelForType(t: DiffType) {
@@ -254,8 +254,3 @@ function labelForType(t: DiffType) {
       return t;
   }
 }
-
-
-
-
-

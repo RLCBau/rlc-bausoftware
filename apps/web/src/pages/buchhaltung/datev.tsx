@@ -41,10 +41,10 @@ type Stammdatensatz = {
    HELPERS
    ========================= */
 const fmt = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -53,7 +53,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -62,13 +62,13 @@ function escapeHtml(str: string) {
   return String(str ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
@@ -93,7 +93,7 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 function csvEscape(v: unknown) {
   return `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -104,47 +104,47 @@ function csvEscape(v: unknown) {
    ========================= */
 export default function DATEV() {
   const [rows, setRows] = useState<JournalRow[]>([
-    {
-      id: 1,
-      quelle: "Rechnungen",
-      belegNr: "R-2025-102",
-      buchungsdatum: "30.10.2025",
-      belegdatum: "30.10.2025",
-      text: "Erlöse Rohrbau",
-      debitor: "10001",
-      konto: "8400",
-      gegenkonto: "1200",
-      betrag: 5355.0,
-      ustSchluessel: "3",
-      kost1: "KS-02",
-    },
-    {
-      id: 2,
-      quelle: "Eingangsrechnungen",
-      belegNr: "E-2025-077",
-      buchungsdatum: "28.10.2025",
-      belegdatum: "27.10.2025",
-      text: "Material Rohr DN200",
-      kreditor: "70021",
-      konto: "3400",
-      gegenkonto: "1200",
-      betrag: -1240.5,
-      ustSchluessel: "8",
-      kost1: "KS-01",
-    },
-    {
-      id: 3,
-      quelle: "Kassenbuch",
-      belegNr: "K-0009",
-      buchungsdatum: "25.10.2025",
-      belegdatum: "25.10.2025",
-      text: "Büromaterial bar",
-      konto: "4920",
-      gegenkonto: "1000",
-      betrag: -36.5,
-      ustSchluessel: "8",
-    },
-  ]);
+  {
+    id: 1,
+    quelle: "Rechnungen",
+    belegNr: "R-2025-102",
+    buchungsdatum: "30.10.2025",
+    belegdatum: "30.10.2025",
+    text: "Erlöse Rohrbau",
+    debitor: "10001",
+    konto: "8400",
+    gegenkonto: "1200",
+    betrag: 5355.0,
+    ustSchluessel: "3",
+    kost1: "KS-02"
+  },
+  {
+    id: 2,
+    quelle: "Eingangsrechnungen",
+    belegNr: "E-2025-077",
+    buchungsdatum: "28.10.2025",
+    belegdatum: "27.10.2025",
+    text: "Material Rohr DN200",
+    kreditor: "70021",
+    konto: "3400",
+    gegenkonto: "1200",
+    betrag: -1240.5,
+    ustSchluessel: "8",
+    kost1: "KS-01"
+  },
+  {
+    id: 3,
+    quelle: "Kassenbuch",
+    belegNr: "K-0009",
+    buchungsdatum: "25.10.2025",
+    belegdatum: "25.10.2025",
+    text: "Büromaterial bar",
+    konto: "4920",
+    gegenkonto: "1000",
+    betrag: -36.5,
+    ustSchluessel: "8"
+  }]
+  );
 
   const [kontenplan, setKontenplan] = useState<Kontenplan>("SKR03");
   const [quelle, setQuelle] = useState<JournalQuelle | "ALL">("ALL");
@@ -155,30 +155,30 @@ export default function DATEV() {
   const [standardKasse, setStandardKasse] = useState("1000");
 
   const [debitoren] = useState<Stammdatensatz[]>([
-    {
-      nr: "10001",
-      name: "Muster GmbH",
-      plz: "80331",
-      ort: "München",
-      strasse: "Hauptstr. 1",
-      land: "DE",
-      email: "info@muster.de",
-      konto: kontenplan === "SKR03" ? "10000" : "120000",
-    },
-  ]);
+  {
+    nr: "10001",
+    name: "Muster GmbH",
+    plz: "80331",
+    ort: "München",
+    strasse: "Hauptstr. 1",
+    land: "DE",
+    email: "info@muster.de",
+    konto: kontenplan === "SKR03" ? "10000" : "120000"
+  }]
+  );
 
   const [kreditoren] = useState<Stammdatensatz[]>([
-    {
-      nr: "70021",
-      name: "Bauhandel AG",
-      plz: "90402",
-      ort: "Nürnberg",
-      strasse: "Industriepark 5",
-      land: "DE",
-      email: "office@bauhandel.de",
-      konto: kontenplan === "SKR03" ? "70000" : "160000",
-    },
-  ]);
+  {
+    nr: "70021",
+    name: "Bauhandel AG",
+    plz: "90402",
+    ort: "Nürnberg",
+    strasse: "Industriepark 5",
+    land: "DE",
+    email: "office@bauhandel.de",
+    konto: kontenplan === "SKR03" ? "70000" : "160000"
+  }]
+  );
 
   const filtered = useMemo(() => {
     let arr = rows.slice();
@@ -208,19 +208,19 @@ export default function DATEV() {
     if (query.trim()) {
       const q = query.toLowerCase().trim();
       arr = arr.filter((r) =>
-        [
-          r.text,
-          r.belegNr,
-          r.konto,
-          r.gegenkonto,
-          r.debitor,
-          r.kreditor,
-          r.kost1,
-          r.kost2,
-        ]
-          .map((x) => safeTrim(x).toLowerCase())
-          .join(" ")
-          .includes(q)
+      [
+      r.text,
+      r.belegNr,
+      r.konto,
+      r.gegenkonto,
+      r.debitor,
+      r.kreditor,
+      r.kost1,
+      r.kost2].
+
+      map((x) => safeTrim(x).toLowerCase()).
+      join(" ").
+      includes(q)
       );
     }
 
@@ -252,14 +252,14 @@ export default function DATEV() {
         ustSchluessel: safeTrim(r.ustSchluessel),
         kost1: safeTrim(r.kost1),
         kost2: safeTrim(r.kost2),
-        betrag: safeNumber(r.betrag, 0),
+        betrag: safeNumber(r.betrag, 0)
       };
     });
 
     arr.sort(
       (a, b) =>
-        parseDE(b.buchungsdatum).getTime() - parseDE(a.buchungsdatum).getTime() ||
-        b.id - a.id
+      parseDE(b.buchungsdatum).getTime() - parseDE(a.buchungsdatum).getTime() ||
+      b.id - a.id
     );
 
     return arr;
@@ -267,30 +267,30 @@ export default function DATEV() {
 
   const totals = useMemo(() => {
     const sum = filtered.reduce((s, r) => s + safeNumber(r.betrag), 0);
-    const soll = filtered
-      .filter((r) => safeNumber(r.betrag) < 0)
-      .reduce((s, r) => s + Math.abs(safeNumber(r.betrag)), 0);
-    const haben = filtered
-      .filter((r) => safeNumber(r.betrag) > 0)
-      .reduce((s, r) => s + safeNumber(r.betrag), 0);
+    const soll = filtered.
+    filter((r) => safeNumber(r.betrag) < 0).
+    reduce((s, r) => s + Math.abs(safeNumber(r.betrag)), 0);
+    const haben = filtered.
+    filter((r) => safeNumber(r.betrag) > 0).
+    reduce((s, r) => s + safeNumber(r.betrag), 0);
 
     return { sum, soll, haben };
   }, [filtered]);
 
-  const update = <K extends keyof JournalRow>(id: number, key: K, val: JournalRow[K]) =>
-    setRows((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              [key]:
-                key === "betrag"
-                  ? safeNumber(val, 0)
-                  : val,
-            }
-          : r
-      )
-    );
+  const update = <K extends keyof JournalRow,>(id: number, key: K, val: JournalRow[K]) =>
+  setRows((prev) =>
+  prev.map((r) =>
+  r.id === id ?
+  {
+    ...r,
+    [key]:
+    key === "betrag" ?
+    safeNumber(val, 0) :
+    val
+  } :
+  r
+  )
+  );
 
   const exportBuchungsstapelCSV = (useFiltered: boolean) => {
     const list = useFiltered ? filtered : rows;
@@ -300,19 +300,19 @@ export default function DATEV() {
     }
 
     const header = [
-      "Umsatz (ohne Soll/Haben-Kz)",
-      "Soll/Haben-Kennzeichen",
-      "Konto",
-      "Gegenkonto",
-      "BU-Schlüssel",
-      "Buchungsdatum",
-      "Belegfeld1",
-      "Belegdatum",
-      "Buchungstext",
-      "KOST1",
-      "KOST2",
-      "Belegkreis",
-    ];
+    "Umsatz (ohne Soll/Haben-Kz)",
+    "Soll/Haben-Kennzeichen",
+    "Konto",
+    "Gegenkonto",
+    "BU-Schlüssel",
+    "Buchungsdatum",
+    "Belegfeld1",
+    "Belegdatum",
+    "Buchungstext",
+    "KOST1",
+    "KOST2",
+    "Belegkreis"];
+
 
     const toRow = (r: JournalRow) => {
       const shk = safeNumber(r.betrag) < 0 ? "S" : "H";
@@ -320,31 +320,31 @@ export default function DATEV() {
 
       const konto = safeTrim(r.konto);
       const geg =
-        safeTrim(r.gegenkonto) ||
-        (r.quelle === "Rechnungen"
-          ? safeTrim(r.debitor) || (kontenplan === "SKR03" ? "10000" : "120000")
-          : r.quelle === "Eingangsrechnungen"
-          ? safeTrim(r.kreditor) || (kontenplan === "SKR03" ? "70000" : "160000")
-          : r.quelle === "Kassenbuch"
-          ? standardKasse
-          : standardBank);
+      safeTrim(r.gegenkonto) || (
+      r.quelle === "Rechnungen" ?
+      safeTrim(r.debitor) || (kontenplan === "SKR03" ? "10000" : "120000") :
+      r.quelle === "Eingangsrechnungen" ?
+      safeTrim(r.kreditor) || (kontenplan === "SKR03" ? "70000" : "160000") :
+      r.quelle === "Kassenbuch" ?
+      standardKasse :
+      standardBank);
 
       const bu = safeTrim(r.ustSchluessel);
 
       return [
-        betragAbs.toFixed(2).replace(".", ","),
-        shk,
-        konto,
-        geg,
-        bu,
-        safeTrim(r.buchungsdatum),
-        safeTrim(r.belegNr),
-        safeTrim(r.belegdatum),
-        safeTrim(r.text),
-        safeTrim(r.kost1),
-        safeTrim(r.kost2),
-        safeTrim(belegkreis),
-      ];
+      betragAbs.toFixed(2).replace(".", ","),
+      shk,
+      konto,
+      geg,
+      bu,
+      safeTrim(r.buchungsdatum),
+      safeTrim(r.belegNr),
+      safeTrim(r.belegdatum),
+      safeTrim(r.text),
+      safeTrim(r.kost1),
+      safeTrim(r.kost2),
+      safeTrim(belegkreis)];
+
     };
 
     const csv = [header.map(csvEscape).join(";"), ...list.map((r) => toRow(r).map(csvEscape).join(";"))].join("\n");
@@ -366,35 +366,35 @@ export default function DATEV() {
     }
 
     const header = [
-      "Nr",
-      "Name",
-      "Straße",
-      "PLZ",
-      "Ort",
-      "Land",
-      "E-Mail",
-      "USt-ID",
-      "Sammelkonto",
-    ];
+    "Nr",
+    "Name",
+    "Straße",
+    "PLZ",
+    "Ort",
+    "Land",
+    "E-Mail",
+    "USt-ID",
+    "Sammelkonto"];
+
 
     const csv = [
-      header.map(csvEscape).join(";"),
-      ...src.map((s) =>
-        [
-          s.nr,
-          s.name,
-          s.strasse || "",
-          s.plz || "",
-          s.ort || "",
-          s.land || "",
-          s.email || "",
-          s.ustId || "",
-          s.konto || "",
-        ]
-          .map(csvEscape)
-          .join(";")
-      ),
-    ].join("\n");
+    header.map(csvEscape).join(";"),
+    ...src.map((s) =>
+    [
+    s.nr,
+    s.name,
+    s.strasse || "",
+    s.plz || "",
+    s.ort || "",
+    s.land || "",
+    s.email || "",
+    s.ustId || "",
+    s.konto || ""].
+
+    map(csvEscape).
+    join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -425,8 +425,8 @@ export default function DATEV() {
   const printPreview = (useFiltered: boolean) => {
     const list = useFiltered ? filtered : rows;
 
-    const body = list
-      .map((r) => `
+    const body = list.
+    map((r) => `
         <tr>
           <td>${escapeHtml(r.quelle)}</td>
           <td>${escapeHtml(r.belegNr)}</td>
@@ -439,8 +439,8 @@ export default function DATEV() {
           <td>${escapeHtml(r.kost1 || "")}</td>
           <td>${escapeHtml(r.text || "")}</td>
         </tr>
-      `)
-      .join("");
+      `).
+    join("");
 
     const html = `<!doctype html><html><head><meta charset="utf-8"/><title>DATEV Preview</title>
     <style>
@@ -522,8 +522,8 @@ export default function DATEV() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Beleg / Text / Konto"
-          />
+            placeholder="Beleg / Text / Konto" />
+          
         </div>
 
         <div>
@@ -541,7 +541,7 @@ export default function DATEV() {
           <input type="text" value={standardKasse} onChange={(e) => setStandardKasse(e.target.value)} />
         </div>
 
-        <div style={{ alignSelf: "end", fontWeight: 600 }}>
+        <div className="rlc-migrated-pages-buchhaltung-datev-tsx-172">
           Soll: {fmt(totals.soll)} € · Haben: {fmt(totals.haben)} € · Δ {fmt(totals.haben - totals.soll)} €
         </div>
       </div>
@@ -575,47 +575,47 @@ export default function DATEV() {
                   <input
                     type="text"
                     value={r.buchungsdatum}
-                    onChange={(e) => update(r.id, "buchungsdatum", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(r.id, "buchungsdatum", e.target.value)} className="rlc-migrated-pages-buchhaltung-datev-tsx-173" />
+
+                  
                 </td>
                 <td>
                   <input
                     type="text"
                     value={r.belegdatum}
-                    onChange={(e) => update(r.id, "belegdatum", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(r.id, "belegdatum", e.target.value)} className="rlc-migrated-pages-buchhaltung-datev-tsx-174" />
+
+                  
                 </td>
                 <td>
                   <input
                     type="text"
                     value={r.text}
-                    onChange={(e) => update(r.id, "text", e.target.value)}
-                    style={{ minWidth: 200 }}
-                  />
+                    onChange={(e) => update(r.id, "text", e.target.value)} className="rlc-migrated-pages-buchhaltung-datev-tsx-175" />
+
+                  
                 </td>
                 <td>
                   <input
                     type="text"
                     value={r.konto || ""}
-                    onChange={(e) => update(r.id, "konto", e.target.value)}
-                    style={{ width: 100 }}
-                  />
+                    onChange={(e) => update(r.id, "konto", e.target.value)} className="rlc-migrated-pages-buchhaltung-datev-tsx-176" />
+
+                  
                 </td>
                 <td>
                   <input
                     type="text"
                     value={r.gegenkonto || ""}
-                    onChange={(e) => update(r.id, "gegenkonto", e.target.value)}
-                    style={{ width: 100 }}
-                  />
+                    onChange={(e) => update(r.id, "gegenkonto", e.target.value)} className="rlc-migrated-pages-buchhaltung-datev-tsx-177" />
+
+                  
                 </td>
                 <td>
                   <select
                     value={r.ustSchluessel || ""}
-                    onChange={(e) => update(r.id, "ustSchluessel", e.target.value)}
-                  >
+                    onChange={(e) => update(r.id, "ustSchluessel", e.target.value)}>
+                    
                     <option value="">—</option>
                     <option value="3">3 · 19% USt</option>
                     <option value="2">2 · 7% USt</option>
@@ -628,26 +628,26 @@ export default function DATEV() {
                   <input
                     type="text"
                     value={r.kost1 || ""}
-                    onChange={(e) => update(r.id, "kost1", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(r.id, "kost1", e.target.value)} className="rlc-migrated-pages-buchhaltung-datev-tsx-178" />
+
+                  
                 </td>
                 <td className="right">{fmt(Math.abs(safeNumber(r.betrag)))}</td>
                 <td>{shk}</td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={11} style={{ textAlign: "center", color: "#777", padding: 14 }}>
+          {filtered.length === 0 &&
+          <tr>
+              <td colSpan={11} className="rlc-migrated-pages-buchhaltung-datev-tsx-179">
                 Keine Buchungen im aktuellen Filter.
               </td>
             </tr>
-          )}
+          }
 
-          <tr style={{ background: "#fafafa", fontWeight: 600 }}>
-            <td colSpan={9} style={{ textAlign: "right" }}>
+          <tr className="rlc-migrated-pages-buchhaltung-datev-tsx-180">
+            <td colSpan={9} className="rlc-migrated-pages-buchhaltung-datev-tsx-181">
               Summe (gefiltert):
             </td>
             <td className="right">{fmt(filtered.reduce((s, r) => s + Math.abs(safeNumber(r.betrag)), 0))}</td>
@@ -656,14 +656,9 @@ export default function DATEV() {
         </tbody>
       </table>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-datev-tsx-182">
         *CSV-Layout semplificato per import. Mappa avanzata (EXTF, Feldlängen, Zeichensatz, Kopfzeile) integrabile su richiesta.
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

@@ -1,3 +1,4 @@
+import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader, outputPdfBlobWithCompanyHeader as outputRlcPdfBlobWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 // apps/web/src/utils/pdf/printPdf.ts
 import { jsPDF } from "jspdf";
 
@@ -5,7 +6,7 @@ export async function printJsPdf(
   doc: jsPDF,
   fileName = "document.pdf"
 ): Promise<void> {
-  const blob = doc.output("blob");
+  const blob = await outputRlcPdfBlobWithCompanyHeader(doc);
   const url = URL.createObjectURL(blob);
 
   let timer: number | null = null;
@@ -24,7 +25,7 @@ export async function printJsPdf(
     const win = window.open(url, "_blank");
 
     if (!win) {
-      doc.save(fileName);
+      saveRlcPdfWithCompanyHeader(doc, fileName);
       revokeLater(2000);
       return;
     }
@@ -57,7 +58,7 @@ export async function printJsPdf(
       revokeLater(15000);
     }, 20000);
   } catch {
-    doc.save(fileName);
+    saveRlcPdfWithCompanyHeader(doc, fileName);
     revokeLater(2000);
   }
 }

@@ -1,4 +1,4 @@
-﻿import React from "react";
+import { rlcClass } from "../ui/rlcRuntimeStyle";import React from "react";
 import type { RlcProgressPayload } from "../lib/rlcProgress";
 
 type Active = {
@@ -48,7 +48,7 @@ export default function RlcGlobalProgress() {
       id: id || prev?.id || "rlc-action",
       label: label || prev?.label || "Aktion",
       progress: 100,
-      status,
+      status
     }));
 
     hideRef.current = window.setTimeout(() => setActive(null), status === "success" ? 1200 : 2400);
@@ -92,34 +92,34 @@ export default function RlcGlobalProgress() {
   const progress = Math.max(0, Math.min(100, Math.round(active.progress)));
 
   return (
-    <div style={wrap}>
-      <div style={top}>
+    <div className={rlcClass(null, wrap)}>
+      <div className={rlcClass(null, top)}>
         <b>
-          {active.status === "running"
-            ? "RLC arbeitet…"
-            : active.status === "success"
-              ? "Abgeschlossen"
-              : "Fehler"}
+          {active.status === "running" ?
+          "RLC arbeitet…" :
+          active.status === "success" ?
+          "Abgeschlossen" :
+          "Fehler"}
         </b>
         <span>{active.label} · {progress}%</span>
       </div>
 
-      <div style={track}>
-        <div
-          style={{
-            ...fill,
-            width: `${progress}%`,
-            background:
-              active.status === "error"
-                ? "linear-gradient(90deg,#DC2626,#EF4444)"
-                : active.status === "success"
-                  ? "linear-gradient(90deg,#16A34A,#22C55E)"
-                  : "linear-gradient(90deg,#2563EB,#60A5FA)",
-          }}
-        />
+      <div className={rlcClass(null, track)}>
+        <div className={rlcClass(null,
+        {
+          ...fill,
+          width: `${progress}%`,
+          background:
+          active.status === "error" ?
+          "linear-gradient(90deg,#DC2626,#EF4444)" :
+          active.status === "success" ?
+          "linear-gradient(90deg,#16A34A,#22C55E)" :
+          "linear-gradient(90deg,#146EF5,#60A5FA)"
+        })} />
+        
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 const wrap: React.CSSProperties = {
@@ -133,7 +133,7 @@ const wrap: React.CSSProperties = {
   borderRadius: 16,
   border: "1px solid rgba(191,219,254,0.95)",
   background: "rgba(239,246,255,0.98)",
-  boxShadow: "0 18px 45px rgba(15,23,42,0.20)",
+  boxShadow: "0 18px 45px rgba(15,23,42,0.20)"
 };
 
 const top: React.CSSProperties = {
@@ -142,19 +142,18 @@ const top: React.CSSProperties = {
   gap: 12,
   fontSize: 13,
   color: "#0F172A",
-  marginBottom: 8,
+  marginBottom: 8
 };
 
 const track: React.CSSProperties = {
   height: 10,
   borderRadius: 999,
   background: "#DBEAFE",
-  overflow: "hidden",
+  overflow: "hidden"
 };
 
 const fill: React.CSSProperties = {
   height: "100%",
   borderRadius: 999,
-  transition: "width 420ms ease",
+  transition: "width 420ms ease"
 };
-

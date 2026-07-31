@@ -1,10 +1,15 @@
-// apps/web/src/pages/mengenermittlung/AutoKI.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/mengenermittlung/AutoKI.tsx
 import { API_BASE, apiUrl } from "../../lib/apiBase";
+import MengPageHeader from "./MengPageHeader";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../../store/useProject";
 
 /** ===================== Types ===================== */
+type WorkflowMode = "BESTEHENDES_LV" | "NEUE_KALKULATION";
+
+type CandidateStatus = "LV_MATCH" | "NEUE_POSITION" | "NACHTRAG" | "PRUEFEN";
+
 type Det = {
   id: string;
   pos: string;
@@ -14,8 +19,22 @@ type Det = {
   qty: number;
   layer?: string;
   source?: string;
-  poly?: { x: number; y: number }[];
-  box?: { x: number; y: number; w: number; h: number };
+  poly?: {x: number;y: number;}[];
+  box?: {x: number;y: number;w: number;h: number;};
+  candidateStatus?: CandidateStatus;
+  confidence?: number;
+  matchReason?: string;
+  matchedLvPos?: string;
+  matchedLvText?: string;
+  aiConfidence?: number;
+  matchConfidence?: number;
+};
+
+type LvReference = {
+  id: string;
+  pos: string;
+  text: string;
+  unit: string;
 };
 
 type DetectBox = {
@@ -32,6 +51,8 @@ type PhotoPosition = {
   kurztext: string;
   einheit?: string;
   qty?: number | null;
+  confidence?: number;
+  evidence?: string;
   typ?: "sichtbar" | "implizit";
   status?: "bestehend" | "nachtrag";
 };
@@ -49,9 +70,10 @@ type AutoKiFile = {
   savedAt: string;
   projectIdOrCode: string;
   fsKey: string;
+  workflowMode?: WorkflowMode;
   note?: string;
   scale?: string;
-  sourceFile?: { name?: string; type?: string; size?: number } | null;
+  sourceFile?: {name?: string;type?: string;size?: number;} | null;
   preview?: string | null;
   boxes?: DetectBox[];
   extras?: ExtraRow[];
@@ -60,7 +82,7 @@ type AutoKiFile = {
   items: Det[];
 };
 
-type HistorySnap = { ts: number; count: number; note?: string; source?: string };
+type HistorySnap = {ts: number;count: number;note?: string;source?: string;};
 
 /* ===================== API ===================== */
 
@@ -83,7 +105,7 @@ function lsLoad(key: string): AutoKiFile | null {
     const raw = localStorage.getItem(LS_KEY(key));
     if (!raw) return null;
     const obj = JSON.parse(raw);
-    return obj && typeof obj === "object" ? (obj as AutoKiFile) : null;
+    return obj && typeof obj === "object" ? obj as AutoKiFile : null;
   } catch {
     return null;
   }
@@ -120,6 +142,7 @@ function buildLocalPayload(args: {
   note: string;
   scale: string;
   file: File | null;
+  workflowMode?: WorkflowMode;
   result: {
     items: Det[];
     preview?: string | null;
@@ -130,22 +153,23 @@ function buildLocalPayload(args: {
   };
   msg?: string;
 }): AutoKiFile {
-  const { projectKey, note, scale, file, result } = args;
+  const { projectKey, note, scale, file, result, workflowMode } = args;
   return {
     savedAt: new Date().toISOString(),
     projectIdOrCode: projectKey,
     fsKey: projectKey,
+    workflowMode,
     note,
     scale,
-    sourceFile: file
-      ? { name: file.name, type: file.type || undefined, size: file.size || undefined }
-      : null,
+    sourceFile: file ?
+    { name: file.name, type: file.type || undefined, size: file.size || undefined } :
+    null,
     preview: result.preview ?? null,
     boxes: result.boxes ?? [],
     extras: result.extras ?? [],
     summary: result.summary ?? "",
     positions: result.positions ?? [],
-    items: result.items ?? [],
+    items: result.items ?? []
   };
 }
 
@@ -175,36 +199,164 @@ async function fetchTextSafe(res: Response) {
   }
 }
 
+function getAutoKiAuthHeaders(): Record<string, string> {
+  const keys = [
+  "rlc_token",
+  "token",
+  "authToken",
+  "accessToken",
+  "rlc.auth.token",
+  "rlc_mobile_token",
+  "rlc_auth_token",
+  "rlc_access_token"];
+
+
+  for (const key of keys) {
+    const token =
+    localStorage.getItem(key) ||
+    sessionStorage.getItem(key);
+
+    if (token?.trim()) {
+      return { Authorization: `Bearer ${token.trim()}` };
+    }
+  }
+
+  try {
+    const raw =
+    localStorage.getItem("auth") ||
+    localStorage.getItem("rlc_auth") ||
+    localStorage.getItem("user");
+
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const token =
+      parsed?.token ||
+      parsed?.accessToken ||
+      parsed?.authToken ||
+      parsed?.jwt ||
+      parsed?.data?.token ||
+      parsed?.data?.accessToken ||
+      parsed?.user?.token ||
+      parsed?.user?.accessToken;
+
+      if (typeof token === "string" && token.trim()) {
+        return { Authorization: `Bearer ${token.trim()}` };
+      }
+    }
+  } catch {
+
+
+    // Keine gespeicherten Auth-Daten.
+  }return {};
+}
+
 async function fetchFirstOk(
-  urls: string[],
-  init?: RequestInit
-): Promise<{ url: string; res: Response }> {
+urls: string[],
+init?: RequestInit)
+: Promise<{url: string;res: Response;}> {
   let lastErr: any = null;
+
   for (const u of urls) {
     try {
-      const r = await fetch(u, init);
+      const headers = new Headers(init?.headers || {});
+      const authHeaders = getAutoKiAuthHeaders();
+
+      for (const [key, value] of Object.entries(authHeaders)) {
+        headers.set(key, value);
+      }
+
+      const r = await fetch(u, {
+        ...init,
+        credentials: "include",
+        headers
+      });
+
       if (r.ok) return { url: u, res: r };
+
       const t = await fetchTextSafe(r);
       lastErr = new Error(t || `HTTP ${r.status} (${u})`);
     } catch (e: any) {
       lastErr = e;
     }
   }
+
   throw lastErr || new Error("Failed to fetch");
 }
 
 /* ===================== PDF -> PNG (Frontend) ===================== */
+
+/**
+ * PDF.js uses a few very new JavaScript collection helpers.
+ * Some Chrome/Chromium versions do not expose them yet.
+ * Install small standards-compatible shims before importing pdfjs-dist.
+ */
+function ensurePdfJsRuntimeSupport() {
+  const uint8Proto = Uint8Array.prototype as Uint8Array & {
+    toHex?: () => string;
+  };
+
+  if (typeof uint8Proto.toHex !== "function") {
+    Object.defineProperty(Uint8Array.prototype, "toHex", {
+      configurable: true,
+      writable: true,
+      value: function toHex(this: Uint8Array): string {
+        let out = "";
+        for (let i = 0; i < this.length; i += 1) {
+          out += this[i].toString(16).padStart(2, "0");
+        }
+        return out;
+      }
+    });
+  }
+
+  const mapProto = Map.prototype as Map<any, any> & {
+    getOrInsert?: (key: any, value: any) => any;
+    getOrInsertComputed?: (key: any, callback: (key: any) => any) => any;
+  };
+
+  if (typeof mapProto.getOrInsert !== "function") {
+    Object.defineProperty(Map.prototype, "getOrInsert", {
+      configurable: true,
+      writable: true,
+      value: function getOrInsert(this: Map<any, any>, key: any, value: any) {
+        if (this.has(key)) return this.get(key);
+        this.set(key, value);
+        return value;
+      }
+    });
+  }
+
+  if (typeof mapProto.getOrInsertComputed !== "function") {
+    Object.defineProperty(Map.prototype, "getOrInsertComputed", {
+      configurable: true,
+      writable: true,
+      value: function getOrInsertComputed(
+      this: Map<any, any>,
+      key: any,
+      callback: (key: any) => any)
+      {
+        if (this.has(key)) return this.get(key);
+        const value = callback(key);
+        this.set(key, value);
+        return value;
+      }
+    });
+  }
+}
+
 async function pdfFirstPageToPng(
-  file: File,
-  desiredScale = 3.5,
-  maxPixels = 18_000_000
-): Promise<{ blob: Blob; dataUrl: string }> {
+file: File,
+desiredScale = 3.5,
+maxPixels = 18_000_000)
+: Promise<{blob: Blob;dataUrl: string;}> {
+  ensurePdfJsRuntimeSupport();
+
   const buf = await file.arrayBuffer();
   const pdfjs: any = await import("pdfjs-dist");
 
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buf),
-    disableWorker: true,
+    disableWorker: true
   });
 
   const pdf = await loadingTask.promise;
@@ -228,13 +380,13 @@ async function pdfFirstPageToPng(
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
 
-  await page
-    .render({
-      canvas,
-      canvasContext: ctx,
-      viewport,
-    } as any)
-    .promise;
+  await page.
+  render({
+    canvas,
+    canvasContext: ctx,
+    viewport
+  } as any).
+  promise;
 
   const blob: Blob = await new Promise((resolve, reject) => {
     canvas.toBlob((b) => {
@@ -261,9 +413,9 @@ function safeBaseName(name: string) {
 function parseQuality(scaleStr: string) {
   const s = String(scaleStr || "").trim();
   const num = Number(
-    s
-      .replace(",", ".")
-      .replace(/[^0-9.]/g, "")
+    s.
+    replace(",", ".").
+    replace(/[^0-9.]/g, "")
   );
   if (!Number.isFinite(num) || num <= 0) return 2.5;
   if (num > 20) return 2.5;
@@ -282,7 +434,7 @@ async function dataUrlToImage(dataUrl: string): Promise<HTMLImageElement> {
 
 async function canvasToPngBlob(cvs: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    cvs.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
+    cvs.toBlob((b) => b ? resolve(b) : reject(new Error("toBlob failed")), "image/png");
   });
 }
 
@@ -290,7 +442,7 @@ async function makeTilesFromDataUrl(args: {
   dataUrl: string;
   tileMax: number;
   overlap: number;
-}): Promise<Array<{ blob: Blob; name: string; ix: number; iy: number; cols: number; rows: number }>> {
+}): Promise<Array<{blob: Blob;name: string;ix: number;iy: number;cols: number;rows: number;}>> {
   const { dataUrl, tileMax, overlap } = args;
   const img = await dataUrlToImage(dataUrl);
 
@@ -301,7 +453,7 @@ async function makeTilesFromDataUrl(args: {
   const cols = Math.ceil((W - overlap) / step);
   const rows = Math.ceil((H - overlap) / step);
 
-  const out: Array<{ blob: Blob; name: string; ix: number; iy: number; cols: number; rows: number }> = [];
+  const out: Array<{blob: Blob;name: string;ix: number;iy: number;cols: number;rows: number;}> = [];
 
   for (let iy = 0; iy < rows; iy++) {
     for (let ix = 0; ix < cols; ix++) {
@@ -325,7 +477,7 @@ async function makeTilesFromDataUrl(args: {
         ix,
         iy,
         cols,
-        rows,
+        rows
       });
     }
   }
@@ -356,7 +508,7 @@ function loadAufmassLocal(projectUuid: string): AufmassLVRowLocal[] {
     const raw = localStorage.getItem(aufmassLocalKey(projectUuid));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as AufmassLVRowLocal[]) : [];
+    return Array.isArray(parsed) ? parsed as AufmassLVRowLocal[] : [];
   } catch {
     return [];
   }
@@ -395,14 +547,18 @@ function normalizeLoadedPayload(projectKeyFallback: string, json: any): AutoKiFi
   }
 
   if (json && typeof json === "object" && json.ok) {
-    const items = Array.isArray(json.items) ? (json.items as Det[]) : [];
-    const boxes = Array.isArray(json.boxes) ? (json.boxes as DetectBox[]) : [];
-    const extras = Array.isArray(json.extras) ? (json.extras as ExtraRow[]) : [];
-    const positions = Array.isArray(json.positions) ? (json.positions as PhotoPosition[]) : [];
+    const items = Array.isArray(json.items) ? json.items as Det[] : [];
+    const boxes = Array.isArray(json.boxes) ? json.boxes as DetectBox[] : [];
+    const extras = Array.isArray(json.extras) ? json.extras as ExtraRow[] : [];
+    const positions = Array.isArray(json.positions) ? json.positions as PhotoPosition[] : [];
     const payload: AutoKiFile = {
       savedAt: String(json.savedAt || new Date().toISOString()),
       projectIdOrCode: String(json.projectIdOrCode || json.projectKey || projectKeyFallback),
       fsKey: String(json.fsKey || json.projectKey || projectKeyFallback),
+      workflowMode:
+      json.workflowMode === "NEUE_KALKULATION" ?
+      "NEUE_KALKULATION" :
+      "BESTEHENDES_LV",
       note: String(json.note ?? ""),
       scale: String(json.scale ?? "2.5"),
       sourceFile: json.sourceFile ?? null,
@@ -411,7 +567,7 @@ function normalizeLoadedPayload(projectKeyFallback: string, json: any): AutoKiFi
       extras,
       summary: String(json.summary ?? ""),
       positions,
-      items,
+      items
     };
     if (!payload.preview && !payload.items?.length && !payload.boxes?.length && !payload.positions?.length) {
       return null;
@@ -436,21 +592,234 @@ function uniqUnitsFromItems(items: Det[]) {
   return Array.from(s);
 }
 
+
+/* ===================== LV MATCHING / FREIGABE ===================== */
+
+function normalizeMatchText(value: unknown): string {
+  return String(value ?? "").
+  toLowerCase().
+  normalize("NFD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/ß/g, "ss").
+  replace(/[^a-z0-9]+/g, " ").
+  trim();
+}
+
+const MATCH_STOP_TOKENS = new Set([
+"lange",
+"laenge",
+"flache",
+"flaeche",
+"menge",
+"bereich",
+"oben",
+"unten",
+"links",
+"rechts",
+"plan",
+"position",
+"arbeiten",
+"arbeit",
+"verlegung",
+"herstellen",
+"meter",
+"stuck",
+"stueck"]
+);
+
+function matchTokens(value: unknown): Set<string> {
+  return new Set(
+    normalizeMatchText(value).
+    split(/\s+/).
+    filter(
+      (token) => token.length >= 3 && !MATCH_STOP_TOKENS.has(token)
+    )
+  );
+}
+
+function textSimilarity(a: unknown, b: unknown): number {
+  const left = matchTokens(a);
+  const right = matchTokens(b);
+  if (!left.size || !right.size) return 0;
+
+  let intersection = 0;
+  for (const token of left) {
+    if (right.has(token)) intersection += 1;
+  }
+
+  const union = new Set([...left, ...right]).size;
+  return union ? intersection / union : 0;
+}
+
+function normalizeUnit(value: unknown): string {
+  return String(value ?? "").
+  trim().
+  toLowerCase().
+  replace("²", "2").
+  replace("³", "3").
+  replace(/\s+/g, "");
+}
+
+function readLvReferences(keys: string[]): LvReference[] {
+  const storageKeys = Array.from(
+    new Set(
+      keys.flatMap((key) => [
+      `rlc_lv_data_v1:${key}`,
+      `rlc_gaeb_import_v1:${key}`,
+      `RLC_AUFMASS_${key}`]
+      )
+    )
+  );
+
+  for (const storageKey of storageKeys) {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const source = Array.isArray(parsed) ?
+      parsed :
+      Array.isArray(parsed?.rows) ?
+      parsed.rows :
+      Array.isArray(parsed?.items) ?
+      parsed.items :
+      [];
+
+      const rows: LvReference[] = source.
+      map((row: any, index: number) => ({
+        id: String(row?.id ?? row?.uuid ?? `${storageKey}-${index}`),
+        pos: String(
+          row?.pos ??
+          row?.posNr ??
+          row?.position ??
+          row?.positionsnummer ??
+          ""
+        ).trim(),
+        text: String(
+          row?.text ??
+          row?.kurztext ??
+          row?.Kurztext ??
+          row?.description ??
+          ""
+        ).trim(),
+        unit: String(row?.unit ?? row?.einheit ?? row?.Einheit ?? "").trim()
+      })).
+      filter((row: LvReference) => row.pos || row.text);
+
+      if (rows.length) return rows;
+    } catch {
+
+
+      // Nächsten kompatiblen Projektspeicher prüfen.
+    }}
+  return [];
+}
+
+function isSyntheticPosition(value: unknown): boolean {
+  const pos = String(value ?? "").trim().toUpperCase();
+  return /^(?:AUTO|FOTO|FILE|NA|NACH|NT)\./.test(pos);
+}
+
+function matchCandidateToLv(
+candidate: Det,
+lvRows: LvReference[])
+: {
+  match: LvReference | null;
+  confidence: number;
+  reason: string;
+} {
+  const candidatePos = String(candidate.pos || "").trim();
+  const exact = !isSyntheticPosition(candidatePos) ?
+  lvRows.find((row) => {
+    const rowPos = String(row.pos || "").trim();
+    return (
+      rowPos &&
+      !isSyntheticPosition(rowPos) &&
+      rowPos === candidatePos);
+
+  }) :
+  undefined;
+
+  if (exact) {
+    return {
+      match: exact,
+      confidence: 1,
+      reason: "Exakte LV-Positionsnummer"
+    };
+  }
+
+  let best: LvReference | null = null;
+  let bestScore = 0;
+  let bestTextScore = 0;
+  let bestUnitScore = 0;
+
+  for (const row of lvRows) {
+    if (isSyntheticPosition(row.pos)) continue;
+
+    const textScore = textSimilarity(candidate.descr, row.text);
+    const unitScore =
+    normalizeUnit(candidate.unit) &&
+    normalizeUnit(candidate.unit) === normalizeUnit(row.unit) ?
+    1 :
+    0;
+
+    const score = textScore * 0.82 + unitScore * 0.18;
+    if (score > bestScore) {
+      best = row;
+      bestScore = score;
+      bestTextScore = textScore;
+      bestUnitScore = unitScore;
+    }
+  }
+
+  // Eine identische Einheit allein darf niemals einen LV-Treffer erzeugen.
+  // Es muss eine belastbare textliche Übereinstimmung vorliegen.
+  if (!best || bestTextScore < 0.45 || bestScore < 0.5) {
+    return {
+      match: null,
+      confidence: Math.min(0.49, bestScore),
+      reason: "Keine ausreichend ähnliche LV-Position gefunden"
+    };
+  }
+
+  const reason =
+  bestUnitScore > 0 ?
+  `Kurztext ähnlich (${Math.round(bestTextScore * 100)} %) und Einheit identisch` :
+  `Kurztext ähnlich (${Math.round(bestTextScore * 100)} %), Einheit prüfen`;
+
+  return {
+    match: best,
+    confidence: Math.min(0.95, bestScore),
+    reason
+  };
+}
+
+function confidenceLabel(value: number): string {
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)} %`;
+}
+
 /* ===================== VALIDATION ===================== */
 
-type PosKind = "LV" | "AUTO" | "FOTO" | "EMPTY" | "OTHER";
+type PosKind = "LV" | "AUTO" | "FOTO" | "NACHTRAG" | "EMPTY" | "OTHER";
 
 function posKind(posRaw: string): PosKind {
-  const pos = String(posRaw || "").trim();
+  const pos = String(posRaw || "").trim().toUpperCase();
+
   if (!pos) return "EMPTY";
-  if (/^\d{3}\.\d{3}$/i.test(pos)) return "LV";
-  if (/^AUTO\.\d{3}$/i.test(pos)) return "AUTO";
-  if (/^FOTO\.\d{3}$/i.test(pos)) return "FOTO";
+
+  if (/^(?:NA|NACH|NT)\.\d{1,4}$/.test(pos)) return "NACHTRAG";
+  if (/^AUTO\.\d{1,4}$/.test(pos)) return "AUTO";
+  if (/^FOTO\.\d{1,4}$/.test(pos)) return "FOTO";
+
+  // Numerische LV-Positionen:
+  // 001 / 01.01 / 001.001 / 01.01.001 usw.
+  if (/^\d{1,4}(?:\.\d{1,4}){0,4}$/.test(pos)) return "LV";
+
   return "OTHER";
 }
 
 function isPosAccepted(kind: PosKind) {
-  return kind === "LV" || kind === "AUTO" || kind === "FOTO";
+  return kind === "LV" || kind === "AUTO" || kind === "FOTO" || kind === "NACHTRAG";
 }
 
 function rowIssues(d: Det) {
@@ -458,7 +827,7 @@ function rowIssues(d: Det) {
   const pk = posKind(d.pos);
 
   if (pk === "EMPTY") issues.push("Pos. fehlt");
-  if (pk === "OTHER") issues.push("Pos. Format ungültig (erwartet 001.001 / AUTO.001 / FOTO.001)");
+  if (pk === "OTHER") issues.push("Pos. Format ungültig (z. B. 01.01 / 001.001 / AUTO.001 / FOTO.001 / NA.01)");
 
   const descr = String(d.descr || "").trim();
   if (!descr) issues.push("Beschreibung fehlt");
@@ -477,6 +846,7 @@ function badgeLabel(pk: PosKind) {
   if (pk === "LV") return "LV";
   if (pk === "AUTO") return "AUTO";
   if (pk === "FOTO") return "FOTO";
+  if (pk === "NACHTRAG") return "NACHTRAG";
   if (pk === "EMPTY") return "FEHLT";
   return "UNGÜLTIG";
 }
@@ -489,16 +859,17 @@ function badgeStyle(pk: PosKind): React.CSSProperties {
     padding: "2px 6px",
     borderRadius: 999,
     fontSize: 11,
-    fontWeight: 800,
+    fontWeight: 700,
     letterSpacing: 0.2,
     border: "1px solid rgba(0,0,0,0.12)",
     marginLeft: 8,
-    whiteSpace: "nowrap",
+    whiteSpace: "nowrap"
   };
 
   if (pk === "LV") return { ...base, background: "rgba(46,204,113,0.16)" };
   if (pk === "AUTO") return { ...base, background: "rgba(52,152,219,0.14)" };
   if (pk === "FOTO") return { ...base, background: "rgba(155,89,182,0.14)" };
+  if (pk === "NACHTRAG") return { ...base, background: "rgba(249,115,22,0.16)" };
   if (pk === "EMPTY") return { ...base, background: "rgba(231,76,60,0.16)" };
   return { ...base, background: "rgba(231,76,60,0.22)" };
 }
@@ -508,7 +879,7 @@ function inputStyleByIssues(base: React.CSSProperties, issues: string[]): React.
   return {
     ...base,
     border: "1px solid rgba(231,76,60,0.55)",
-    background: "rgba(231,76,60,0.06)",
+    background: "rgba(231,76,60,0.06)"
   };
 }
 
@@ -527,12 +898,13 @@ export default function AutoKI() {
   const projectCode: string = (project?.code || "").trim();
   const projectId: string = (project?.id || "").trim();
 
-  const keyCandidates = React.useMemo(() => {
-    const arr = [projectCode, projectId].filter((x) => !!x);
-    return Array.from(new Set(arr));
-  }, [projectCode, projectId]);
+  const projectKey: string | null =
+  projectCode || projectId || null;
 
-  const projectKey: string | null = keyCandidates[0] ?? null;
+  const keyCandidates = React.useMemo(
+    () => projectKey ? [projectKey] : [],
+    [projectKey]
+  );
 
   const effectiveKey = React.useMemo(() => {
     return projectKey || getLastKey() || null;
@@ -566,10 +938,101 @@ export default function AutoKI() {
 
   const [editMode, setEditMode] = React.useState(false);
   const [itemsTouched, setItemsTouched] = React.useState(false);
+  const [workflowMode, setWorkflowMode] =
+  React.useState<WorkflowMode>("BESTEHENDES_LV");
+  const [approvedIds, setApprovedIds] = React.useState<Set<string>>(
+    () => new Set()
+  );
+  const [lvReferences, setLvReferences] = React.useState<LvReference[]>([]);
 
-  const [descrModalOpen, setDescrModalOpen] = React.useState(false);
-  const [descrModalRowId, setDescrModalRowId] = React.useState<string | null>(null);
-  const [descrModalValue, setDescrModalValue] = React.useState<string>("");
+  const [candidateModalOpen, setCandidateModalOpen] = React.useState(false);
+  const [candidateModalRowId, setCandidateModalRowId] = React.useState<string | null>(null);
+  const [candidateDraft, setCandidateDraft] = React.useState<Det | null>(null);
+
+  React.useEffect(() => {
+    setLvReferences(readLvReferences(keyCandidates));
+  }, [keyCandidates]);
+
+  React.useEffect(() => {
+    setApprovedIds(new Set());
+  }, [workflowMode]);
+
+  const candidateItems = React.useMemo<Det[]>(() => {
+    return (result.items || []).map((item) => {
+      if (workflowMode === "NEUE_KALKULATION") {
+        const backendStatus = String(
+          (result.positions || []).find(
+            (position) =>
+            String(position.id || "").trim() === String(item.pos || "").trim()
+          )?.status || ""
+        ).toLowerCase();
+
+        return {
+          ...item,
+          candidateStatus:
+          backendStatus === "nachtrag" ? "NACHTRAG" : "NEUE_POSITION",
+          confidence:
+          typeof item.confidence === "number" ? item.confidence : 0.75,
+          matchReason:
+          item.matchReason ||
+          "Aus Plan/Foto erkannt; technische Prüfung vor Übernahme erforderlich"
+        };
+      }
+
+      const matched = matchCandidateToLv(item, lvReferences);
+      return {
+        ...item,
+        candidateStatus: matched.match ? "LV_MATCH" : "PRUEFEN",
+        aiConfidence:
+        typeof item.aiConfidence === "number" ?
+        item.aiConfidence :
+        typeof item.confidence === "number" ?
+        item.confidence :
+        0,
+        matchConfidence: matched.confidence,
+        confidence:
+        typeof item.aiConfidence === "number" ?
+        item.aiConfidence :
+        typeof item.confidence === "number" ?
+        item.confidence :
+        0,
+        matchReason: `${matched.reason}${
+        item.matchReason ? ` · KI-Nachweis: ${item.matchReason}` : ""}`,
+
+        matchedLvPos: matched.match?.pos,
+        matchedLvText: matched.match?.text
+      };
+    });
+  }, [result.items, result.positions, workflowMode, lvReferences]);
+
+  const approvedCandidates = React.useMemo(
+    () => candidateItems.filter((item) => approvedIds.has(item.id)),
+    [candidateItems, approvedIds]
+  );
+
+  const toggleApproved = React.useCallback((id: string) => {
+    setApprovedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);else
+      next.add(id);
+      return next;
+    });
+  }, []);
+
+  const approveAllValid = React.useCallback(() => {
+    const next = new Set<string>();
+    for (const item of candidateItems) {
+      const issues = rowIssues(item).issues;
+      const hasHardIssue = issues.some(
+        (issue) =>
+        issue.includes("fehlt") ||
+        issue.includes("ungültig") ||
+        issue.includes("< 0")
+      );
+      if (!hasHardIssue) next.add(item.id);
+    }
+    setApprovedIds(next);
+  }, [candidateItems, workflowMode]);
 
   const resetLocalPreview = React.useCallback(() => {
     if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
@@ -587,12 +1050,13 @@ export default function AutoKI() {
         note,
         scale,
         file,
-        result,
+        workflowMode,
+        result
       });
       const merged: AutoKiFile = { ...payload, ...(partial || {}) };
       lsSave(effectiveKey, merged);
     },
-    [effectiveKey, note, scale, file, result]
+    [effectiveKey, note, scale, file, workflowMode, result]
   );
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -613,10 +1077,11 @@ export default function AutoKI() {
         extras: [],
         positions: [],
         items: prev.items || [],
-        preview: null,
+        preview: null
       }));
 
       setItemsTouched(false);
+      setApprovedIds(new Set());
 
       if (effectiveKey) {
         setLastKey(effectiveKey);
@@ -631,8 +1096,8 @@ export default function AutoKI() {
             boxes: [],
             extras: [],
             summary: "",
-            positions: [],
-          },
+            positions: []
+          }
         });
         lsSave(effectiveKey, tmpPayload);
       }
@@ -659,10 +1124,11 @@ export default function AutoKI() {
         extras: [],
         positions: [],
         items: prev.items || [],
-        preview: null,
+        preview: null
       }));
 
       setItemsTouched(false);
+      setApprovedIds(new Set());
 
       if (effectiveKey) {
         setLastKey(effectiveKey);
@@ -677,8 +1143,8 @@ export default function AutoKI() {
             boxes: [],
             extras: [],
             summary: "",
-            positions: [],
-          },
+            positions: []
+          }
         });
         lsSave(effectiveKey, tmpPayload);
       }
@@ -692,7 +1158,7 @@ export default function AutoKI() {
       score: 0.95,
       qty: p.qty == null ? undefined : Number(p.qty),
       unit: p.einheit || "",
-      box: undefined,
+      box: undefined
     })) as DetectBox[];
   }, []);
 
@@ -703,7 +1169,7 @@ export default function AutoKI() {
       lvPos: p.id || "",
       beschreibung: String(p.kurztext || ""),
       einheit: p.einheit || "",
-      menge: p.qty == null ? 0 : Number(p.qty),
+      menge: p.qty == null ? 0 : Number(p.qty)
     })) as ExtraRow[];
   }, []);
 
@@ -711,21 +1177,30 @@ export default function AutoKI() {
     return (positions || []).map((p, idx) => ({
       id: crypto.randomUUID(),
       pos:
-        p.id && String(p.id).trim()
-          ? String(p.id).trim()
-          : `AUTO.${String(idx + 1).padStart(3, "0")}`,
+      p.id && String(p.id).trim() ?
+      String(p.id).trim() :
+      `AUTO.${String(idx + 1).padStart(3, "0")}`,
       type: "COUNT" as const,
       descr: String(p.kurztext || ""),
       unit: String(p.einheit || ""),
       qty: p.qty == null ? 0 : Number(p.qty),
       layer: "",
       source: "image+openai",
+      confidence:
+      typeof p.confidence === "number" ?
+      Math.max(0, Math.min(1, p.confidence)) :
+      0,
+      aiConfidence:
+      typeof p.confidence === "number" ?
+      Math.max(0, Math.min(1, p.confidence)) :
+      0,
+      matchReason: String(p.evidence || "").trim()
     })) as Det[];
   }, []);
 
   const makeUrls = React.useCallback(
     (suffix: string) =>
-      keyCandidates.map((k) => `${AUTO_KI_BASE}${suffix.replace("{key}", encodeURIComponent(k))}`),
+    keyCandidates.map((k) => `${AUTO_KI_BASE}${suffix.replace("{key}", encodeURIComponent(k))}`),
     [keyCandidates]
   );
 
@@ -752,6 +1227,7 @@ export default function AutoKI() {
 
           setNote(String(local.note ?? ""));
           setScale(String(local.scale ?? "2.5"));
+          if (local.workflowMode) setWorkflowMode(local.workflowMode);
           resetLocalPreview();
 
           const itemsRaw = Array.isArray(local.items) ? local.items : [];
@@ -763,12 +1239,12 @@ export default function AutoKI() {
             msg: `Geladen (lokal) • ${new Date(local.savedAt).toLocaleString()}`,
             summary: String(local.summary ?? ""),
             boxes:
-              Array.isArray(local.boxes) && local.boxes.length ? local.boxes : boxesFromPositions,
+            Array.isArray(local.boxes) && local.boxes.length ? local.boxes : boxesFromPositions,
             extras:
-              Array.isArray(local.extras) && local.extras.length
-                ? local.extras
-                : extrasFromPositions,
-            positions,
+            Array.isArray(local.extras) && local.extras.length ?
+            local.extras :
+            extrasFromPositions,
+            positions
           });
 
           setItemsTouched(false);
@@ -782,6 +1258,7 @@ export default function AutoKI() {
 
       setNote(String(payload.note ?? ""));
       setScale(String(payload.scale ?? "2.5"));
+      if (payload.workflowMode) setWorkflowMode(payload.workflowMode);
       resetLocalPreview();
 
       const positions: PhotoPosition[] = Array.isArray(payload.positions) ? payload.positions : [];
@@ -789,7 +1266,7 @@ export default function AutoKI() {
       const extrasFromPositions = positions.length ? positionsToExtras(positions) : [];
 
       const itemsBase =
-        Array.isArray(payload.items) && payload.items.length ? payload.items : positionsToItems(positions);
+      Array.isArray(payload.items) && payload.items.length ? payload.items : positionsToItems(positions);
       const itemsNorm = normalizeAndReindexAutoPositions(itemsBase);
 
       setResult({
@@ -798,10 +1275,10 @@ export default function AutoKI() {
         msg: `Geladen vom Server (${new Date(payload.savedAt).toLocaleString()}) • ${url}`,
         summary: String(payload.summary ?? ""),
         boxes:
-          Array.isArray(payload.boxes) && payload.boxes.length ? payload.boxes : boxesFromPositions,
+        Array.isArray(payload.boxes) && payload.boxes.length ? payload.boxes : boxesFromPositions,
         extras:
-          Array.isArray(payload.extras) && payload.extras.length ? payload.extras : extrasFromPositions,
-        positions,
+        Array.isArray(payload.extras) && payload.extras.length ? payload.extras : extrasFromPositions,
+        positions
       });
 
       setItemsTouched(false);
@@ -837,8 +1314,8 @@ export default function AutoKI() {
           summary: String(local.summary ?? ""),
           boxes: Array.isArray(local.boxes) && local.boxes.length ? local.boxes : boxesFromPositions,
           extras:
-            Array.isArray(local.extras) && local.extras.length ? local.extras : extrasFromPositions,
-          positions,
+          Array.isArray(local.extras) && local.extras.length ? local.extras : extrasFromPositions,
+          positions
         });
 
         setItemsTouched(false);
@@ -851,15 +1328,15 @@ export default function AutoKI() {
       setServerBusy(false);
     }
   }, [
-    keyCandidates,
-    makeUrls,
-    resetLocalPreview,
-    positionsToBoxes,
-    positionsToExtras,
-    positionsToItems,
-    projectKey,
-    effectiveKey,
-  ]);
+  keyCandidates,
+  makeUrls,
+  resetLocalPreview,
+  positionsToBoxes,
+  positionsToExtras,
+  positionsToItems,
+  projectKey,
+  effectiveKey]
+  );
 
   const serverSaveAutoKi = React.useCallback(
     async (override?: {
@@ -880,34 +1357,36 @@ export default function AutoKI() {
       try {
         const itemsToSave = Array.isArray(override?.items) ? override!.items! : result.items;
         const previewToSave =
-          override && "preview" in override ? (override.preview ?? null) : (result.preview ?? null);
+        override && "preview" in override ? override.preview ?? null : result.preview ?? null;
         const boxesToSave = Array.isArray(override?.boxes) ? override!.boxes! : result.boxes ?? [];
         const extrasToSave = Array.isArray(override?.extras) ? override!.extras! : result.extras ?? [];
         const summaryToSave =
-          override && "summary" in override ? String(override.summary ?? "") : String(result.summary ?? "");
-        const positionsToSave = Array.isArray(override?.positions)
-          ? override!.positions!
-          : (result.positions ?? []);
+        override && "summary" in override ? String(override.summary ?? "") : String(result.summary ?? "");
+        const positionsToSave = Array.isArray(override?.positions) ?
+        override!.positions! :
+        result.positions ?? [];
 
         const payload = {
+          workflowMode,
           note,
           scale,
+          lvReferences: lvReferences.slice(0, 1500),
           preview: previewToSave,
-          sourceFile: file
-            ? { name: file.name, type: file.type || undefined, size: file.size || undefined }
-            : null,
+          sourceFile: file ?
+          { name: file.name, type: file.type || undefined, size: file.size || undefined } :
+          null,
           items: itemsToSave,
           boxes: boxesToSave,
           extras: extrasToSave,
           summary: summaryToSave,
-          positions: positionsToSave,
+          positions: positionsToSave
         };
 
         const urls = makeUrls("/{key}/save");
         const { res, url } = await fetchFirstOk(urls, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payload)
         });
 
         const data = await res.json().catch(() => ({}));
@@ -915,8 +1394,8 @@ export default function AutoKI() {
         setResult((prev) => ({
           ...prev,
           msg:
-            (override?.msg ? `${override.msg} • ` : "") +
-            `Gespeichert (Server) • ${data?.count ?? itemsToSave.length} Position(en) • ${url}`,
+          (override?.msg ? `${override.msg} • ` : "") +
+          `Gespeichert (Server) • ${data?.count ?? itemsToSave.length} Position(en) • ${url}`
         }));
 
         setHistory((prev) => {
@@ -924,7 +1403,7 @@ export default function AutoKI() {
             ts: Date.now(),
             count: itemsToSave.length,
             note: note || undefined,
-            source: file?.name || "auto-ki",
+            source: file?.name || "auto-ki"
           };
           return [snap, ...prev].slice(0, 20);
         });
@@ -940,8 +1419,8 @@ export default function AutoKI() {
             boxes: boxesToSave,
             extras: extrasToSave,
             summary: summaryToSave,
-            positions: positionsToSave,
-          },
+            positions: positionsToSave
+          }
         });
         const lk = projectKey || effectiveKey || keyCandidates[0];
         if (lk) {
@@ -963,7 +1442,19 @@ export default function AutoKI() {
         setServerBusy(false);
       }
     },
-    [keyCandidates, makeUrls, note, scale, file, projectKey, effectiveKey, draftSave, result]
+    [
+    keyCandidates,
+    makeUrls,
+    note,
+    scale,
+    file,
+    projectKey,
+    effectiveKey,
+    draftSave,
+    result,
+    workflowMode,
+    lvReferences]
+
   );
 
   React.useEffect(() => {
@@ -974,6 +1465,7 @@ export default function AutoKI() {
       const positions: PhotoPosition[] = Array.isArray(local.positions) ? local.positions : [];
       setNote(String(local.note ?? ""));
       setScale(String(local.scale ?? "2.5"));
+      if (local.workflowMode) setWorkflowMode(local.workflowMode);
 
       const itemsBase = Array.isArray(local.items) ? local.items : positionsToItems(positions);
       const itemsNorm = normalizeAndReindexAutoPositions(itemsBase);
@@ -985,7 +1477,7 @@ export default function AutoKI() {
         summary: String(local.summary ?? ""),
         boxes: Array.isArray(local.boxes) ? local.boxes : positionsToBoxes(positions),
         extras: Array.isArray(local.extras) ? local.extras : positionsToExtras(positions),
-        positions,
+        positions
       });
       setItemsTouched(false);
       setLastKey(effectiveKey);
@@ -1018,7 +1510,7 @@ export default function AutoKI() {
             ts: Number(h.ts),
             count: Number(h.count),
             note: h.note ? String(h.note) : undefined,
-            source: h.source ? String(h.source) : undefined,
+            source: h.source ? String(h.source) : undefined
           }))
         );
       }
@@ -1039,13 +1531,13 @@ export default function AutoKI() {
           unit: d.unit,
           ist: d.qty,
           source: "auto-ki",
-          type: d.type,
+          type: d.type
         }));
 
         const { res } = await fetchFirstOk(urls, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rows: rowsForHistory, note: note || "", source }),
+          body: JSON.stringify({ rows: rowsForHistory, note: note || "", source })
         });
 
         const data = await res.json().catch(() => ({}));
@@ -1055,7 +1547,7 @@ export default function AutoKI() {
               ts: Number(h.ts),
               count: Number(h.count),
               note: h.note ? String(h.note) : undefined,
-              source: h.source ? String(h.source) : undefined,
+              source: h.source ? String(h.source) : undefined
             }))
           );
         }
@@ -1084,18 +1576,18 @@ export default function AutoKI() {
   const addRow = React.useCallback(() => {
     const current = Array.isArray(result.items) ? result.items : [];
     const next: Det[] = [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        pos: "AUTO.000",
-        type: "COUNT",
-        descr: "",
-        unit: "m",
-        qty: 0,
-        layer: "",
-        source: "manuell",
-      },
-    ];
+    ...current,
+    {
+      id: crypto.randomUUID(),
+      pos: "AUTO.000",
+      type: "COUNT",
+      descr: "",
+      unit: "m",
+      qty: 0,
+      layer: "",
+      source: "manuell"
+    }];
+
     applyItems(next, true);
   }, [applyItems, result.items]);
 
@@ -1111,7 +1603,7 @@ export default function AutoKI() {
   const updateRow = React.useCallback(
     (id: string, patch: Partial<Det>) => {
       const current = Array.isArray(result.items) ? result.items : [];
-      const next = current.map((x) => (x.id === id ? { ...x, ...patch } : x));
+      const next = current.map((x) => x.id === id ? { ...x, ...patch } : x);
       applyItems(next, true);
     },
     [applyItems, result.items]
@@ -1124,7 +1616,7 @@ export default function AutoKI() {
   }, [result.items]);
 
   const validation = React.useMemo(() => {
-    const rows = result.items || [];
+    const rows = candidateItems;
     let invalid = 0;
     let warnings = 0;
     let ok = 0;
@@ -1134,19 +1626,19 @@ export default function AutoKI() {
       const accepted = isPosAccepted(pk);
       const hardIssues = issues.filter(
         (x) =>
-          x.includes("ungültig") ||
-          x.includes("fehlt") ||
-          x.includes("< 0") ||
-          x.includes("Menge ungültig")
+        x.includes("ungültig") ||
+        x.includes("fehlt") ||
+        x.includes("< 0") ||
+        x.includes("Menge ungültig")
       );
       const softWarn = accepted && (pk === "AUTO" || pk === "FOTO");
-      if (hardIssues.length > 0) invalid += 1;
-      else if (softWarn) warnings += 1;
-      else ok += 1;
+      if (hardIssues.length > 0) invalid += 1;else
+      if (softWarn) warnings += 1;else
+      ok += 1;
     });
 
     return { ok, warnings, invalid, total: rows.length };
-  }, [result.items]);
+  }, [candidateItems]);
 
   const exportToAufmassEditor = React.useCallback(async () => {
     if (!projectKey) {
@@ -1154,77 +1646,415 @@ export default function AutoKI() {
       return;
     }
 
-    setAufmassLastKey(String(projectId || projectKey || getAufmassLastKey() || "").trim() || projectKey);
+    if (!approvedCandidates.length) {
+      alert("Bitte zuerst mindestens einen Kandidaten freigeben.");
+      return;
+    }
 
-    const rowsFromItems = (result.items || []).map((d, idx) => ({
-      pos: String(d.pos || "").trim() || `AUTO.${String(idx + 1).padStart(3, "0")}`,
-      text: String(d.descr || "").trim(),
-      unit: String(d.unit || "").trim(),
-      qty: clampNum(d.qty, 0),
-    }));
-
-    const positions = Array.isArray(result.positions) ? result.positions : [];
-    const rowsFromPositions =
-      positions.map((p, idx) => ({
-        pos:
-          p.id && String(p.id).trim()
-            ? String(p.id).trim()
-            : `AUTO.${String(idx + 1).padStart(3, "0")}`,
-        text: String(p.kurztext || "").trim(),
-        unit: String(p.einheit || "").trim(),
-        qty: p.qty == null ? 0 : Number(p.qty),
-      })) || [];
-
-    const rows = (rowsFromItems.length ? rowsFromItems : rowsFromPositions).filter(
-      (r) => String(r.pos || "").trim() && String(r.text || "").trim().length > 0
-    );
+    const rows = approvedCandidates.
+    map((candidate, index) => ({
+      pos:
+      workflowMode === "BESTEHENDES_LV" ?
+      String(candidate.matchedLvPos || candidate.pos || "").trim() :
+      String(candidate.pos || "").trim() ||
+      `AUTO.${String(index + 1).padStart(3, "0")}`,
+      text: String(candidate.descr || candidate.matchedLvText || "").trim(),
+      unit: String(candidate.unit || "").trim(),
+      qty: clampNum(candidate.qty, 0),
+      source: String(candidate.source || "auto-ki"),
+      confidence: Number(candidate.confidence || 0),
+      matchReason: String(candidate.matchReason || "")
+    })).
+    filter((row) => row.pos && row.text);
 
     if (!rows.length) {
-      alert("Keine Positionen zum Export.");
+      alert("Keine freigegebenen Positionen zum Export.");
       return;
     }
 
     setServerBusy(true);
     try {
       draftSave();
-
-      const targets = Array.from(new Set([projectId, projectKey].filter(Boolean))) as string[];
-      if (targets.length) setAufmassLastKey(targets[0]);
-
-      for (const k of targets) {
-        const existing = loadAufmassLocal(k);
-
-        const imported: AufmassLVRowLocal[] = rows.map((r) => ({
-          id: crypto.randomUUID(),
-          pos: String(r.pos || "").trim(),
-          text: String(r.text || "").trim(),
-          unit: String(r.unit || "").trim() || "m",
-          ep: 0,
-          soll: 0,
-          formula: "",
-          ist: Number(r.qty || 0),
-          note: "Import aus AutoKI",
-          factor: 1,
-        }));
-
-        saveAufmassLocal(k, [...imported, ...existing]);
-      }
+      setAufmassLastKey(projectKey);
 
       const urls = makeUrls("/{key}/export-to-aufmass");
       await fetchFirstOk(urls, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({
+          projectKey,
+          workflowMode,
+          rows,
+          approvedOnly: true
+        })
       });
 
-      nav("/mengenermittlung/aufmasseditor");
-    } catch (e: any) {
-      console.error(e);
-      alert(`Export fehlgeschlagen: ${e?.message || "Failed to fetch"}`);
+      nav("/mengenermittlung/aufmasseditor?import=auto-ki");
+    } catch (error: any) {
+      console.error(error);
+      alert(`Export fehlgeschlagen: ${error?.message || "Failed to fetch"}`);
     } finally {
       setServerBusy(false);
     }
-  }, [projectKey, projectId, result.items, result.positions, makeUrls, nav, draftSave]);
+  }, [
+  projectKey,
+  approvedCandidates,
+  workflowMode,
+  makeUrls,
+  nav,
+  draftSave]
+  );
+
+  const exportToKalkulation = React.useCallback(async () => {
+    if (!projectKey) {
+      alert("Kein Projekt gewählt.");
+      return;
+    }
+
+    if (!approvedCandidates.length) {
+      alert("Bitte zuerst mindestens einen Kandidaten freigeben.");
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+
+    const newRows = approvedCandidates.map((candidate, index) => {
+      const rawPos = String(candidate.pos || "").trim();
+      const posNr = rawPos || `AUTO.${String(index + 1).padStart(3, "0")}`;
+      const kurztext = String(candidate.descr || "").trim();
+      const langtext = String(candidate.matchReason || "").trim();
+      const einheit = String(candidate.unit || "m").trim() || "m";
+      const menge = clampNum(candidate.qty, 0);
+
+      return {
+        id: String(candidate.id || "").trim() || crypto.randomUUID(),
+        pos: posNr,
+        posNr,
+        kurztext,
+        text: kurztext,
+        langtext,
+        einheit,
+        unit: einheit,
+        menge,
+        qty: menge,
+        ep: 0,
+        preis: 0,
+        unitPrice: 0,
+        finalUnitPrice: 0,
+        rlcKiUnitPrice: 0,
+        gp: 0,
+        gesamt: 0,
+        totalNet: 0,
+        rlcKiTotal: 0,
+        source: "auto-ki-plan-foto",
+        calculationStatus: "needs_review",
+        status: "needs_review",
+        riskLevel: "high",
+        warning:
+        "Neue Position aus KI-Mengenermittlung. Preis und Urkalkulation prüfen.",
+        pruefHinweis:
+        "Aus Plan-/Fotoanalyse übernommen. Noch nicht kalkuliert.",
+        aiReason: langtext || "Neue Position aus KI-Mengenermittlung",
+        confidence: Number(candidate.confidence || 0),
+        importedFromAutoKi: true,
+        importedAt: createdAt
+      };
+    });
+
+    const handoff = {
+      version: "auto-ki-kalkulation-handoff-v4",
+      projectKey,
+      projectId,
+      createdAt,
+      source: "AUTO_KI",
+      rows: newRows
+    };
+
+    setServerBusy(true);
+    try {
+      await fetchFirstOk(
+        [
+        apiUrl(
+          `/api/kalkulation/ki-handoff/${encodeURIComponent(projectKey)}`
+        )],
+
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(handoff)
+        }
+      );
+
+      localStorage.setItem(
+        "rlc_auto_ki_kalkulation_import_v1",
+        JSON.stringify(handoff)
+      );
+
+      nav(
+        `/kalkulation/mit-ki?from=auto-ki&projectId=${encodeURIComponent(
+          projectKey
+        )}`
+      );
+    } catch (error: any) {
+      console.error(error);
+      localStorage.setItem(
+        "rlc_auto_ki_kalkulation_import_v1",
+        JSON.stringify(handoff)
+      );
+      alert(
+        `Server-Handoff fehlgeschlagen. Lokaler Fallback wurde gespeichert.\n${
+        error?.message || "Failed to fetch"}`
+
+      );
+    } finally {
+      setServerBusy(false);
+    }
+  }, [projectKey, projectId, approvedCandidates, nav]);
+
+  const exportToNachtrag = React.useCallback(async () => {
+    if (!projectKey) {
+      alert("Kein Projekt gewählt.");
+      return;
+    }
+
+    if (!approvedCandidates.length) {
+      alert("Bitte zuerst mindestens einen Kandidaten freigeben.");
+      return;
+    }
+
+    const rows = approvedCandidates.map((candidate, index) => {
+      const rawPos = String(candidate.pos || "").trim();
+
+      const posNr =
+      /^(NA|NACH|NT)\.\d{2,4}$/i.test(rawPos) ?
+      rawPos.toUpperCase() :
+      `NA.${String(index + 1).padStart(2, "0")}`;
+
+      return {
+        id:
+        String(candidate.id || "").trim() ||
+        crypto.randomUUID(),
+        projectKey,
+        lvPos: posNr,
+        pos: posNr,
+        posNr,
+        number: "",
+        title: String(candidate.descr || "").trim(),
+        kurztext: String(candidate.descr || "").trim(),
+        langtext: String(candidate.matchReason || "").trim(),
+        unit: String(candidate.unit || "m").trim() || "m",
+        einheit: String(candidate.unit || "m").trim() || "m",
+        qty: clampNum(candidate.qty, 0),
+        mengeDelta: clampNum(candidate.qty, 0),
+        ep: 0,
+        preis: 0,
+        total: 0,
+        status: "offen",
+        note:
+        String(candidate.matchReason || "").trim() ||
+        "Aus KI-Mengenermittlung aus Plan / Foto",
+        begruendung:
+        String(candidate.matchReason || "").trim() ||
+        "Aus KI-Mengenermittlung aus Plan / Foto",
+        source: "AUTO_KI",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    });
+
+    setServerBusy(true);
+
+    try {
+      const endpoint = apiUrl(
+        `/api/verknuepfung/nachtraege/${encodeURIComponent(projectKey)}`
+      );
+
+      const getResponse = await fetch(endpoint, {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          ...getAutoKiAuthHeaders()
+        }
+      });
+
+      if (!getResponse.ok) {
+        const text = await getResponse.text().catch(() => "");
+        throw new Error(
+          text || `Nachträge laden: HTTP ${getResponse.status}`
+        );
+      }
+
+      const existingData = await getResponse.json().catch(() => ({}));
+      const existingItems = Array.isArray(existingData?.items) ?
+      existingData.items :
+      [];
+
+      const merged = [...existingItems];
+
+      for (const row of rows) {
+        const duplicateIndex = merged.findIndex((item: any) => {
+          const sameId =
+          String(item?.id || "").trim() &&
+          String(item?.id || "").trim() === String(row.id).trim();
+
+          const sameContent =
+          String(item?.lvPos || item?.posNr || item?.pos || "").
+          trim().
+          toLowerCase() ===
+          String(row.lvPos).trim().toLowerCase() &&
+          String(item?.title || item?.kurztext || "").
+          trim().
+          toLowerCase() ===
+          String(row.title).trim().toLowerCase();
+
+          return sameId || sameContent;
+        });
+
+        if (duplicateIndex >= 0) {
+          merged[duplicateIndex] = {
+            ...merged[duplicateIndex],
+            ...row,
+            id: merged[duplicateIndex]?.id || row.id,
+            number: merged[duplicateIndex]?.number || row.number,
+            createdAt:
+            merged[duplicateIndex]?.createdAt || row.createdAt
+          };
+        } else {
+          merged.push(row);
+        }
+      }
+
+      const putResponse = await fetch(endpoint, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAutoKiAuthHeaders()
+        },
+        body: JSON.stringify({ items: merged })
+      });
+
+      if (!putResponse.ok) {
+        const text = await putResponse.text().catch(() => "");
+        throw new Error(
+          text || `Nachträge speichern: HTTP ${putResponse.status}`
+        );
+      }
+
+      localStorage.removeItem("rlc:nachtrag-buffer");
+
+      nav(
+        `/kalkulation/nachtraege?from=auto-ki&projectId=${encodeURIComponent(
+          projectKey
+        )}`
+      );
+    } catch (error: any) {
+      console.error(error);
+
+      localStorage.setItem(
+        "rlc:nachtrag-buffer",
+        JSON.stringify({
+          projectId: projectKey,
+          projectKey,
+          createdAt: Date.now(),
+          source: "AUTO_KI",
+          rows
+        })
+      );
+
+      alert(
+        `Server-Übertragung fehlgeschlagen: ${
+        error?.message || "Unbekannter Fehler"}\nFallback wurde lokal gespeichert.`
+
+      );
+
+      nav(
+        `/kalkulation/nachtraege?from=auto-ki&projectId=${encodeURIComponent(
+          projectKey
+        )}`
+      );
+    } finally {
+      setServerBusy(false);
+    }
+  }, [projectKey, approvedCandidates, nav]);
+
+  const deleteAutoKiData = React.useCallback(async () => {
+    const confirmed = window.confirm(
+      "AutoKI-Daten, Vorschau und alte Prüfkandidaten für dieses Projekt löschen?"
+    );
+    if (!confirmed) return;
+
+    setServerBusy(true);
+    try {
+      resetLocalPreview();
+      setFile(null);
+      setNote("");
+      setScale("2.5");
+      setApprovedIds(new Set());
+      setItemsTouched(false);
+      setHistory([]);
+      setResult({
+        items: [],
+        preview: null,
+        msg: "",
+        boxes: [],
+        extras: [],
+        summary: "",
+        positions: []
+      });
+
+      const keys = Array.from(
+        new Set([effectiveKey, ...keyCandidates].filter(Boolean))
+      ) as string[];
+
+      for (const key of keys) {
+        try {
+          localStorage.removeItem(LS_KEY(key));
+        } catch {}
+      }
+
+      try {
+        localStorage.removeItem(LS_LAST);
+      } catch {}
+
+      if (keyCandidates.length) {
+        const urls = makeUrls("/{key}/save");
+        await fetchFirstOk(urls, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workflowMode,
+            note: "",
+            scale: "2.5",
+            lvReferences: [],
+            preview: null,
+            sourceFile: null,
+            items: [],
+            boxes: [],
+            extras: [],
+            summary: "",
+            positions: [],
+            deleted: true
+          })
+        });
+      }
+    } catch (error: any) {
+      console.error(error);
+      alert(
+        `Lokale Daten gelöscht. Server-Löschung fehlgeschlagen: ${
+        error?.message || "Failed to fetch"}`
+
+      );
+    } finally {
+      setServerBusy(false);
+    }
+  }, [
+  effectiveKey,
+  keyCandidates,
+  makeUrls,
+  resetLocalPreview,
+  workflowMode]
+  );
 
   const analyze = async () => {
     if (!file) {
@@ -1244,7 +2074,7 @@ export default function AutoKI() {
       let uploadName = file.name;
       let previewDataUrl: string | null = null;
 
-      let tiles: Array<{ blob: Blob; name: string; ix: number; iy: number; cols: number; rows: number }> = [];
+      let tiles: Array<{blob: Blob;name: string;ix: number;iy: number;cols: number;rows: number;}> = [];
 
       if (pdf) {
         const q = parseQuality(scale);
@@ -1259,14 +2089,23 @@ export default function AutoKI() {
           tiles = await makeTilesFromDataUrl({
             dataUrl: out.dataUrl,
             tileMax: 1800,
-            overlap: 80,
+            overlap: 80
           });
         } catch (e: any) {
           console.error(e);
+          setResult((prev) => ({
+            ...prev,
+            preview: null,
+            msg: "PDF-Rendering fehlgeschlagen. Es wurden keine KI-Kandidaten erzeugt.",
+            boxes: [],
+            extras: [],
+            summary: "",
+            positions: [],
+            items: []
+          }));
+          setApprovedIds(new Set());
           alert(`PDF → PNG fehlgeschlagen: ${e?.message || "unknown"}`);
-          uploadBlob = file;
-          uploadName = file.name;
-          tiles = [];
+          return;
         }
       } else if (file.type.startsWith("image/") || /\.(png|jpg|jpeg)$/i.test(file.name)) {
         try {
@@ -1284,7 +2123,7 @@ export default function AutoKI() {
           boxes: result.boxes ?? [],
           extras: result.extras ?? [],
           summary: result.summary ?? "",
-          positions: result.positions ?? [],
+          positions: result.positions ?? []
         };
         setResult(newState);
         draftSave();
@@ -1305,14 +2144,20 @@ export default function AutoKI() {
           fd.append("file", t.blob, t.name);
           fd.append("note", `${note}\n[TILE ${t.iy + 1}/${t.rows} x ${t.ix + 1}/${t.cols}]`);
           fd.append("scale", scale);
+          fd.append("workflowMode", workflowMode);
+          fd.append(
+            "lvReferences",
+            JSON.stringify(lvReferences.slice(0, 1500))
+          );
 
           const { res } = await fetchFirstOk(urls, { method: "POST", body: fd });
           const data = await res.json().catch(() => ({}));
 
           const summaryChunk: string = String(data?.summary ?? "");
-          if (summaryChunk) summaries.push(summaryChunk);
-
           const pos: PhotoPosition[] = Array.isArray(data?.positions) ? data.positions : [];
+          // Leere Rand-Tiles dürfen nicht die Gesamtzusammenfassung bestimmen.
+          if (summaryChunk && pos.length > 0) summaries.push(summaryChunk);
+
           const itemsChunk: Det[] = Array.isArray(data?.items) ? data.items : [];
           const boxesChunk: DetectBox[] = Array.isArray(data?.boxes) ? data.boxes : [];
           const extrasChunk: ExtraRow[] = Array.isArray(data?.extras) ? data.extras : [];
@@ -1344,16 +2189,16 @@ export default function AutoKI() {
         });
 
         const boxesFinal =
-          allBoxes.length > 0 ? allBoxes : positionsDedup.length ? positionsToBoxes(positionsDedup) : [];
+        allBoxes.length > 0 ? allBoxes : positionsDedup.length ? positionsToBoxes(positionsDedup) : [];
         const extrasFinal =
-          allExtras.length > 0 ? allExtras : positionsDedup.length ? positionsToExtras(positionsDedup) : [];
+        allExtras.length > 0 ? allExtras : positionsDedup.length ? positionsToExtras(positionsDedup) : [];
 
         const itemsFinal: Det[] =
-          itemsDedup.length > 0
-            ? itemsDedup
-            : positionsDedup.length > 0
-              ? positionsToItems(positionsDedup)
-              : [];
+        itemsDedup.length > 0 ?
+        itemsDedup :
+        positionsDedup.length > 0 ?
+        positionsToItems(positionsDedup) :
+        [];
 
         const finalPreview = previewDataUrl || null;
         const reindexedItems: Det[] = normalizeAndReindexAutoPositions(itemsFinal || []);
@@ -1365,13 +2210,14 @@ export default function AutoKI() {
           boxes: boxesFinal,
           extras: extrasFinal,
           summary: `Erkannte Positionen: ${positionsDedup.length} (dedupliziert)${
-            summaries.length ? ` • ${summaries[0]}` : ""
-          }`,
-          positions: positionsDedup,
+          summaries.length ? ` • ${summaries[0]}` : ""}`,
+
+          positions: positionsDedup
         };
 
         setResult(newState);
         setItemsTouched(false);
+        setApprovedIds(new Set());
         draftSave({ ...newState } as any);
 
         try {
@@ -1382,7 +2228,7 @@ export default function AutoKI() {
             extras: newState.extras ?? [],
             summary: newState.summary ?? "",
             positions: newState.positions ?? [],
-            msg: "Analyse",
+            msg: "Analyse"
           });
         } catch {}
 
@@ -1393,6 +2239,8 @@ export default function AutoKI() {
       fd.append("file", uploadBlob, uploadName);
       fd.append("note", note);
       fd.append("scale", scale);
+      fd.append("workflowMode", workflowMode);
+      fd.append("lvReferences", JSON.stringify(lvReferences.slice(0, 1500)));
 
       const { res, url } = await fetchFirstOk(urls, { method: "POST", body: fd });
 
@@ -1419,11 +2267,12 @@ export default function AutoKI() {
         boxes,
         extras,
         summary,
-        positions,
+        positions
       };
 
       setResult(newState);
       setItemsTouched(false);
+      setApprovedIds(new Set());
 
       draftSave({
         preview: finalPreview ?? null,
@@ -1431,7 +2280,7 @@ export default function AutoKI() {
         extras,
         summary,
         positions,
-        items,
+        items
       } as any);
 
       try {
@@ -1442,11 +2291,12 @@ export default function AutoKI() {
           extras,
           summary,
           positions,
-          msg: "Analyse",
+          msg: "Analyse"
         });
       } catch {}
     } catch (err: any) {
       console.error(err);
+      setApprovedIds(new Set());
       setResult({
         items: [],
         preview: null,
@@ -1454,7 +2304,7 @@ export default function AutoKI() {
         boxes: [],
         extras: [],
         summary: "",
-        positions: [],
+        positions: []
       });
       alert(`Analyse fehlgeschlagen: ${err?.message || "Failed to fetch"}`);
     } finally {
@@ -1487,17 +2337,17 @@ export default function AutoKI() {
 
       result.items.forEach((d) => {
         g.lineWidth = 2;
-        if (d.type === "AREA") g.strokeStyle = "#ff6b6b";
-        else if (d.type === "LINE") g.strokeStyle = "#4dabf7";
-        else g.strokeStyle = "#51cf66";
+        if (d.type === "AREA") g.strokeStyle = "#ff6b6b";else
+        if (d.type === "LINE") g.strokeStyle = "#4dabf7";else
+        g.strokeStyle = "#51cf66";
 
         if (d.poly && d.poly.length) {
           g.beginPath();
           d.poly.forEach((p, i) => {
             const x = p.x * ratio;
             const y = p.y * ratio;
-            if (i === 0) g.moveTo(x, y);
-            else g.lineTo(x, y);
+            if (i === 0) g.moveTo(x, y);else
+            g.lineTo(x, y);
           });
           if (d.type === "AREA") g.closePath();
           g.stroke();
@@ -1543,7 +2393,18 @@ export default function AutoKI() {
   }, [result.preview, result.items, result.boxes]);
 
   const showPdfPreview = localPreviewIsPdf && localPreviewUrl && !result.preview;
-  const sumQty = (result.boxes ?? []).reduce((a, b) => a + (b.qty ?? 0), 0);
+  const totalsByUnit = React.useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const box of result.boxes ?? []) {
+      const qty = Number(box.qty);
+      if (!Number.isFinite(qty)) continue;
+      const unit = String(box.unit || "ohne Einheit").trim() || "ohne Einheit";
+      totals.set(unit, (totals.get(unit) || 0) + qty);
+    }
+    return Array.from(totals.entries()).sort(([a], [b]) =>
+    a.localeCompare(b, "de")
+    );
+  }, [result.boxes]);
 
   const openPngInNewTab = () => {
     if (!result.preview) return;
@@ -1552,184 +2413,460 @@ export default function AutoKI() {
     if (w) w.document.write(`<img src="${result.preview}" style="max-width:100%;height:auto" />`);
   };
 
-  const openDescrModal = React.useCallback(
+  const openCandidateModal = React.useCallback(
     (rowId: string) => {
-      const row = (result.items || []).find((x) => x.id === rowId);
-      setDescrModalRowId(rowId);
-      setDescrModalValue(String(row?.descr ?? ""));
-      setDescrModalOpen(true);
+      const row = candidateItems.find((item) => item.id === rowId);
+      if (!row) return;
+      setCandidateModalRowId(rowId);
+      setCandidateDraft({ ...row });
+      setCandidateModalOpen(true);
     },
-    [result.items]
+    [candidateItems]
   );
 
-  const closeDescrModal = React.useCallback(() => {
-    setDescrModalOpen(false);
-    setDescrModalRowId(null);
-    setDescrModalValue("");
+  const closeCandidateModal = React.useCallback(() => {
+    setCandidateModalOpen(false);
+    setCandidateModalRowId(null);
+    setCandidateDraft(null);
   }, []);
 
-  const saveDescrModal = React.useCallback(() => {
-    if (!descrModalRowId) return;
-    updateRow(descrModalRowId, { descr: descrModalValue });
-    closeDescrModal();
-  }, [descrModalRowId, descrModalValue, updateRow, closeDescrModal]);
+  const saveCandidateModal = React.useCallback(() => {
+    if (!candidateModalRowId || !candidateDraft) return;
+
+    updateRow(candidateModalRowId, {
+      pos: candidateDraft.pos,
+      type: candidateDraft.type,
+      descr: candidateDraft.descr,
+      unit: candidateDraft.unit,
+      qty: clampNum(candidateDraft.qty, 0),
+      layer: candidateDraft.layer || "",
+      source: candidateDraft.source || "",
+      candidateStatus: candidateDraft.candidateStatus,
+      confidence: Math.max(0, Math.min(1, Number(candidateDraft.confidence || 0))),
+      matchReason: candidateDraft.matchReason || "",
+      matchedLvPos: candidateDraft.matchedLvPos || "",
+      matchedLvText: candidateDraft.matchedLvText || ""
+    });
+
+    closeCandidateModal();
+  }, [candidateModalRowId, candidateDraft, updateRow, closeCandidateModal]);
 
   React.useEffect(() => {
-    if (!descrModalOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeDescrModal();
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "enter") saveDescrModal();
+    if (!candidateModalOpen) return;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeCandidateModal();
+      if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key.toLowerCase() === "enter")
+      {
+        saveCandidateModal();
+      }
     };
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [descrModalOpen, closeDescrModal, saveDescrModal]);
+  }, [candidateModalOpen, closeCandidateModal, saveCandidateModal]);
 
   return (
-    <div className="card" style={{ padding: 16 }}>
-      {descrModalOpen ? (
-        <div
-          onClick={closeDescrModal}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 18,
-          }}
-        >
+    <div className="card rlc-migrated-pages-mengenermittlung-autoki-tsx-1221">
+      <MengPageHeader
+        title="KI-Mengenermittlung aus Plan / Foto"
+        subtitle="Arbeiten und Mengen erkennen, mit dem bestehenden LV abgleichen oder als Kandidaten für eine neue Kalkulation vorbereiten." />
+      
+      {candidateModalOpen && candidateDraft ?
+      <div
+        onClick={closeCandidateModal} className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1222">
+
+
+
+
+
+
+
+
+
+
+        
           <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "min(980px, 96vw)",
-              background: "white",
-              borderRadius: 12,
-              overflow: "hidden",
-              border: "1px solid rgba(0,0,0,0.12)",
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 18px 60px rgba(0,0,0,0.25)",
-            }}
-          >
-            <div
-              style={{
-                padding: 12,
-                borderBottom: "1px solid var(--line)",
-                display: "flex",
-                gap: 10,
-                alignItems: "center",
-              }}
-            >
-              <div style={{ fontWeight: 800, flex: 1 }}>Beschreibung bearbeiten</div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>Ctrl/⌘ + Enter = Speichern</div>
-              <button className="btn" type="button" onClick={closeDescrModal}>
+          onClick={(event) => event.stopPropagation()} className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1223">
+
+
+
+
+
+
+
+
+
+          
+            <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1224">
+
+
+
+
+
+
+
+
+
+
+
+            
+              <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1225">
+                KI-Kandidat vollständig bearbeiten
+              </div>
+              <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1226">
+                Ctrl/⌘ + Enter = Speichern
+              </div>
+              <button className="btn" type="button" onClick={closeCandidateModal}>
                 Schließen
               </button>
-              <button className="btn" type="button" onClick={saveDescrModal}>
+              <button className="btn" type="button" onClick={saveCandidateModal}>
                 Speichern
               </button>
             </div>
 
-            <div style={{ padding: 12 }}>
-              <textarea
-                value={descrModalValue}
-                onChange={(e) => setDescrModalValue(e.target.value)}
-                style={{
-                  ...inpBase,
-                  width: "100%",
-                  minHeight: 200,
-                  resize: "vertical",
-                  lineHeight: 1.35,
-                }}
-                placeholder="Beschreibung…"
-                autoFocus
-              />
+            <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1227">
+
+
+
+
+
+
+            
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Pos.-Nr.</span>
+                <input
+                value={candidateDraft.pos}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ? { ...current, pos: event.target.value } : current
+                )
+                } className={rlcClass(null,
+                modalInput)} />
+              
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Zuordnung</span>
+                <select
+                value={candidateDraft.candidateStatus || "PRUEFEN"}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ?
+                {
+                  ...current,
+                  candidateStatus: event.target.value as CandidateStatus
+                } :
+                current
+                )
+                } className={rlcClass(null,
+                modalInput)}>
+                
+                  <option value="LV_MATCH">LV-Match</option>
+                  <option value="PRUEFEN">Prüfen / freie Position</option>
+                  <option value="NACHTRAG">Nachtrag</option>
+                  <option value="NEUE_POSITION">Neue Kalkulationsposition</option>
+                </select>
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Typ</span>
+                <select
+                value={candidateDraft.type}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ?
+                { ...current, type: event.target.value as Det["type"] } :
+                current
+                )
+                } className={rlcClass(null,
+                modalInput)}>
+                
+                  <option value="COUNT">COUNT</option>
+                  <option value="LINE">LINE</option>
+                  <option value="AREA">AREA</option>
+                </select>
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Einheit</span>
+                <input
+                list="unit-list"
+                value={candidateDraft.unit}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ? { ...current, unit: event.target.value } : current
+                )
+                } className={rlcClass(null,
+                modalInput)} />
+              
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Menge</span>
+                <input
+                inputMode="decimal"
+                value={String(candidateDraft.qty ?? 0)}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ?
+                { ...current, qty: clampNum(event.target.value, 0) } :
+                current
+                )
+                } className={rlcClass(null,
+                modalInput)} />
+              
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Confidence (%)</span>
+                <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(Number(candidateDraft.confidence || 0) * 100)}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ?
+                {
+                  ...current,
+                  confidence: Math.max(
+                    0,
+                    Math.min(1, Number(event.target.value || 0) / 100)
+                  )
+                } :
+                current
+                )
+                } className={rlcClass(null,
+                modalInput)} />
+              
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>LV-Position</span>
+                <input
+                value={candidateDraft.matchedLvPos || ""}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ?
+                { ...current, matchedLvPos: event.target.value } :
+                current
+                )
+                } className={rlcClass(null,
+                modalInput)}
+                placeholder="z. B. 001.023" />
+              
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>LV-Kurztext</span>
+                <input
+                value={candidateDraft.matchedLvText || ""}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ?
+                { ...current, matchedLvText: event.target.value } :
+                current
+                )
+                } className={rlcClass(null,
+                modalInput)} />
+              
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Layer / Bereich</span>
+                <input
+                value={candidateDraft.layer || ""}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ? { ...current, layer: event.target.value } : current
+                )
+                } className={rlcClass(null,
+                modalInput)} />
+              
+              </label>
+
+              <label className={rlcClass(null, modalField)}>
+                <span className={rlcClass(null, modalLabel)}>Quelle</span>
+                <input
+                value={candidateDraft.source || ""}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ? { ...current, source: event.target.value } : current
+                )
+                } className={rlcClass(null,
+                modalInput)} />
+              
+              </label>
+
+              <label className={rlcClass(null, { ...modalField, gridColumn: "1 / -1" })}>
+                <span className={rlcClass(null, modalLabel)}>Beschreibung</span>
+                <textarea
+                value={candidateDraft.descr}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ? { ...current, descr: event.target.value } : current
+                )
+                } className={rlcClass(null,
+                { ...modalInput, minHeight: 150, resize: "vertical" })} />
+              
+              </label>
+
+              <label className={rlcClass(null, { ...modalField, gridColumn: "1 / -1" })}>
+                <span className={rlcClass(null, modalLabel)}>Match-Begründung / Prüfhinweis</span>
+                <textarea
+                value={candidateDraft.matchReason || ""}
+                onChange={(event) =>
+                setCandidateDraft((current) =>
+                current ?
+                { ...current, matchReason: event.target.value } :
+                current
+                )
+                } className={rlcClass(null,
+                { ...modalInput, minHeight: 90, resize: "vertical" })} />
+              
+              </label>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div> :
+      null}
 
-      {zoomOpen && result.preview && String(result.preview).startsWith("data:image/") ? (
-        <div
-          onClick={() => setZoomOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 18,
-          }}
-        >
+      {zoomOpen && result.preview && String(result.preview).startsWith("data:image/") ?
+      <div
+        onClick={() => setZoomOpen(false)} className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1228">
+
+
+
+
+
+
+
+
+
+
+        
           <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "min(1200px, 95vw)",
-              height: "min(85vh, 900px)",
-              background: "white",
-              borderRadius: 12,
-              overflow: "hidden",
-              border: "1px solid rgba(0,0,0,0.12)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div
-              style={{
-                padding: 10,
-                borderBottom: "1px solid var(--line)",
-                display: "flex",
-                gap: 10,
-                alignItems: "center",
-              }}
-            >
-              <div style={{ fontWeight: 700, flex: 1 }}>PNG Zoom</div>
-              <div style={{ fontSize: 12, opacity: 0.75 }}>Zoom</div>
+          onClick={(e) => e.stopPropagation()} className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1229">
+
+
+
+
+
+
+
+
+
+
+          
+            <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1230">
+
+
+
+
+
+
+
+            
+              <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1231">PNG Zoom</div>
+              <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1232">Zoom</div>
               <input
-                type="range"
-                min={1}
-                max={3}
-                step={0.05}
-                value={zoomScale}
-                onChange={(e) => setZoomScale(Number(e.target.value))}
-              />
+              type="range"
+              min={1}
+              max={3}
+              step={0.05}
+              value={zoomScale}
+              onChange={(e) => setZoomScale(Number(e.target.value))} />
+            
               <button className="btn" type="button" onClick={() => setZoomOpen(false)}>
                 Schließen
               </button>
             </div>
 
-            <div style={{ flex: 1, overflow: "auto", background: "#f4f6f8" }}>
-              <div style={{ padding: 18 }}>
+            <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1233">
+              <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1234">
                 <img
-                  src={result.preview}
-                  alt="Zoom"
-                  style={{
-                    transform: `scale(${zoomScale})`,
-                    transformOrigin: "top left",
-                    display: "block",
-                  }}
-                />
+                src={result.preview}
+                alt="Zoom" className={rlcClass(null,
+                {
+                  transform: `scale(${zoomScale})`,
+                  transformOrigin: "top left",
+                  display: "block"
+                })} />
+              
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div> :
+      null}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h2 style={{ marginTop: 0, marginBottom: 0, flex: 1 }}>
-          Automatisierte Mengenermittlung (z. B. KI aus Plan)
+      <div
+        className="card rlc-migrated-pages-mengenermittlung-autoki-tsx-1235">
+
+
+
+
+
+
+
+        
+        <button
+          type="button"
+          onClick={() => setWorkflowMode("BESTEHENDES_LV")} className={rlcClass(null,
+          {
+            ...workflowCard,
+            ...(workflowMode === "BESTEHENDES_LV" ?
+            workflowCardActive :
+            {})
+          })}>
+          
+          <strong>Aufmaß zu bestehendem LV</strong>
+          <span>
+            KI-Erkennungen werden mit den Positionen des aktuellen LV
+            abgeglichen. Nur manuell freigegebene Treffer gelangen in den
+            Aufmaß-Editor.
+          </span>
+          <small>
+            Geladene LV-Positionen: {lvReferences.length}
+          </small>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setWorkflowMode("NEUE_KALKULATION")} className={rlcClass(null,
+          {
+            ...workflowCard,
+            ...(workflowMode === "NEUE_KALKULATION" ?
+            workflowCardActive :
+            {})
+          })}>
+          
+          <strong>Neue Kalkulation aus Plan / Foto</strong>
+          <span>
+            KI erkennt Arbeiten, Längen, Flächen, Volumen und Stückzahlen als
+            neue Kalkulationskandidaten.
+          </span>
+          <small>
+            Übernahme erst nach manueller Prüfung und Freigabe.
+          </small>
+        </button>
+      </div>
+
+      <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1236">
+        <h2 className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1237">
+          {workflowMode === "BESTEHENDES_LV" ?
+          "Plan / Foto analysieren und mit LV abgleichen" :
+          "Plan / Foto analysieren und Kalkulationspositionen erzeugen"}
         </h2>
 
         <button
           className="btn"
           onClick={() => void serverLoadAutoKi()}
           disabled={!projectKey || serverBusy}
-          title={!projectKey ? "Kein Projekt (Server braucht Projekt)" : "Server laden (auto-ki.json)"}
-        >
+          title={!projectKey ? "Kein Projekt (Server braucht Projekt)" : "Server laden (auto-ki.json)"}>
+          
           {serverBusy ? "…" : "Vom Server laden"}
         </button>
 
@@ -1737,50 +2874,77 @@ export default function AutoKI() {
           className="btn"
           onClick={() => void serverSaveAutoKi()}
           disabled={!projectKey || serverBusy}
-          title={!projectKey ? "Kein Projekt (Server braucht Projekt)" : "Server speichern (auto-ki.json)"}
-        >
+          title={!projectKey ? "Kein Projekt (Server braucht Projekt)" : "Server speichern (auto-ki.json)"}>
+          
           {serverBusy ? "…" : "Speichern"}
         </button>
 
         <button
+          className="btn rlc-migrated-pages-mengenermittlung-autoki-tsx-1238"
+          type="button"
+          onClick={() => void deleteAutoKiData()}
+          disabled={serverBusy}
+          title="Alte AutoKI-Daten, Vorschau und Prüfkandidaten löschen">
+
+          
+          {serverBusy ? "…" : "Löschen"}
+        </button>
+
+        <button
           className="btn"
-          onClick={() => void exportToAufmassEditor()}
-          disabled={!projectKey || serverBusy}
-          title="Schreibt soll-ist.json und öffnet Aufmaß-Editor"
-        >
-          {serverBusy ? "…" : "→ Aufmaß-Editor"}
+          onClick={() =>
+          workflowMode === "BESTEHENDES_LV" ?
+          void exportToAufmassEditor() :
+          exportToKalkulation()
+          }
+          disabled={
+          !projectKey || serverBusy || approvedCandidates.length === 0
+          }
+          title={
+          approvedCandidates.length === 0 ?
+          "Zuerst Kandidaten freigeben" :
+          workflowMode === "BESTEHENDES_LV" ?
+          "Freigegebene Positionen in den Aufmaß-Editor übernehmen" :
+          "Freigegebene Kandidaten an die Kalkulation übergeben"
+          }>
+          
+          {serverBusy ?
+          "…" :
+          workflowMode === "BESTEHENDES_LV" ?
+          `→ Aufmaß-Editor (${approvedCandidates.length})` :
+          `→ Kalkulation (${approvedCandidates.length})`}
         </button>
       </div>
 
-      <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-        API: <code>{API_BASE || "(relative)"}</code> • Keys: <code>{keyCandidates.join(" | ") || "—"}</code> • LocalKey:{" "}
+      <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1239">
+        Modus: <b>{workflowMode === "BESTEHENDES_LV" ? "Bestehendes LV" : "Neue Kalkulation"}</b> • API: <code>{API_BASE || "(relative)"}</code> • Server-Key: <code>{projectKey || "—"}</code> • LocalKey:{" "}
         <code>{effectiveKey || "—"}</code>
       </div>
 
       <div
-        className="card"
+        className="card rlc-migrated-pages-mengenermittlung-autoki-tsx-1240"
         onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
-        style={{ padding: 10, minHeight: 180, position: "relative", marginTop: 10 }}
-      >
-        <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
-          <div style={{ flex: 1, opacity: 0.85 }}>
-            {file ? (
-              <>
+        onDrop={onDrop}>
+
+        
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1241">
+          <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1242">
+            {file ?
+            <>
                 <div>
                   <b>Ausgewählt:</b> {file.name}
                 </div>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>(Drag & Drop oder “Datei wählen”)</div>
-                {isPdfFile(file) ? (
-                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 4 }}>
+                <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1243">(Drag & Drop oder “Datei wählen”)</div>
+                {isPdfFile(file) ?
+              <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1244">
                     Hinweis: PDF wird als hochauflösendes PNG (Seite 1) gerendert und an die KI
                     gesendet. Zusätzlich wird es in Tiles zerlegt, damit mehr Positionen erkannt werden.
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div>Zieh eine Datei hierher (PDF/JPG/PNG) oder wähle eine Datei.</div>
-            )}
+                  </div> :
+              null}
+              </> :
+
+            <div>Zieh eine Datei hierher (PDF/JPG/PNG) oder wähle eine Datei.</div>
+            }
           </div>
 
           <div>
@@ -1791,9 +2955,9 @@ export default function AutoKI() {
               ref={fileInputRef}
               type="file"
               accept=".pdf,.jpg,.jpeg,.png"
-              style={{ display: "none" }}
-              onChange={onPick}
-            />
+
+              onChange={onPick} className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1245" />
+            
           </div>
 
           <div>
@@ -1808,123 +2972,207 @@ export default function AutoKI() {
               type="button"
               disabled={!projectKey || serverBusy}
               onClick={() => void snapshotAufmassHistory("auto-ki")}
-              title="Schreibt aufmass-history.json (Snapshot)"
-            >
+              title="Schreibt aufmass-history.json (Snapshot)">
+              
               Snapshot
             </button>
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 120px 1fr", gap: 10 }}>
-          <label style={{ fontSize: 13, opacity: 0.8 }}>Maßstab / Qualität</label>
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1246">
+          <label className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1247">Maßstab / Qualität</label>
           <input
             value={scale}
             onChange={(e) => setScale(e.target.value)}
-            onBlur={() => draftSave()}
-            style={{ ...inpBase, width: 140 }}
-          />
-          <label style={{ fontSize: 13, opacity: 0.8 }}>Sprachnotiz / Text</label>
+            onBlur={() => draftSave()} className={rlcClass(null,
+            { ...inpBase, width: 140 })} />
+          
+          <label className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1248">Sprachnotiz / Text</label>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             onBlur={() => draftSave()}
-            rows={2}
-            style={{ ...inpBase, width: "100%" }}
-          />
+            rows={2} className={rlcClass(null,
+            { ...inpBase, width: "100%" })} />
+          
         </div>
 
-        <div style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 8, padding: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <div style={{ fontWeight: 700, flex: 1 }}>Vorschau</div>
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1249">
+          <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1250">
+            <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1251">Vorschau</div>
 
-            {result.preview && String(result.preview).startsWith("data:image/") ? (
-              <>
+            {result.preview && String(result.preview).startsWith("data:image/") ?
+            <>
                 <button className="btn" type="button" onClick={() => setZoomOpen(true)}>
                   Zoom
                 </button>
                 <button className="btn" type="button" onClick={openPngInNewTab}>
                   PNG öffnen
                 </button>
-              </>
-            ) : null}
+              </> :
+            null}
           </div>
 
-          {showPdfPreview ? (
-            <iframe
-              title="PDF Vorschau"
-              src={localPreviewUrl as string}
-              style={{ width: "100%", height: 520, border: 0, borderRadius: 8 }}
-            />
-          ) : result.preview ? (
-            <canvas id="auto-canvas" style={{ width: "100%", maxHeight: 520 }} />
-          ) : localPreviewUrl ? (
-            <img
-              src={localPreviewUrl}
-              alt="Vorschau"
-              style={{ width: "100%", maxHeight: 520, objectFit: "contain", borderRadius: 8 }}
-            />
-          ) : (
-            <div style={{ opacity: 0.6 }}>Noch keine Vorschau.</div>
-          )}
+          {showPdfPreview ?
+          <iframe
+            title="PDF Vorschau"
+            src={localPreviewUrl as string} className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1252" /> :
+
+
+          result.preview ?
+          <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1253">
+
+
+
+
+
+
+
+
+            
+              <canvas
+              id="auto-canvas" className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1254" />
+
+            
+            </div> :
+          localPreviewUrl ?
+          <img
+            src={localPreviewUrl}
+            alt="Vorschau" className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1255" /> :
+
+
+
+
+
+
+
+
+
+          <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1256">Noch keine Vorschau.</div>
+          }
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12, padding: 0, overflow: "auto" }}>
-        <div style={{ padding: 12, borderBottom: "1px solid var(--line)" }}>
-          <div style={{ fontWeight: 700 }}>Vorschau (Ergebnisse der KI)</div>
-          {result.summary ? <div style={{ marginTop: 6, opacity: 0.75 }}>{result.summary}</div> : null}
+      <div className="card rlc-migrated-pages-mengenermittlung-autoki-tsx-1257">
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1258">
+          <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1259">Vorschau (Ergebnisse der KI)</div>
+          {result.summary ? <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1260">{result.summary}</div> : null}
         </div>
 
-        {!result.boxes || result.boxes.length === 0 ? (
-          <div style={{ padding: 12, fontSize: 13, opacity: 0.7 }}>
+        {!result.boxes || result.boxes.length === 0 ?
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1261">
             Noch keine KI-Bauteile erkannt (oder KI nicht verfügbar).
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          </div> :
+
+        <table className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1262">
             <thead>
               <tr>
-                <th style={th}>Bauteil</th>
-                <th style={th}>Sicherheit</th>
-                <th style={th}>Menge</th>
-                <th style={th}>Einheit</th>
+                <th className={rlcClass(null, th)}>Bauteil</th>
+                <th className={rlcClass(null, th)}>Sicherheit</th>
+                <th className={rlcClass(null, th)}>Menge</th>
+                <th className={rlcClass(null, th)}>Einheit</th>
               </tr>
             </thead>
             <tbody>
-              {result.boxes.map((b) => (
-                <tr key={b.id}>
-                  <td style={td}>{b.label}</td>
-                  <td style={td}>{prettyScore(b.score)}</td>
-                  <td style={td}>{b.qty ?? "-"}</td>
-                  <td style={td}>{b.unit ?? "-"}</td>
+              {result.boxes.map((b) =>
+            <tr key={b.id}>
+                  <td className={rlcClass(null, td)}>{b.label}</td>
+                  <td className={rlcClass(null, td)}>{prettyScore(b.score)}</td>
+                  <td className={rlcClass(null, td)}>{b.qty ?? "-"}</td>
+                  <td className={rlcClass(null, td)}>{b.unit ?? "-"}</td>
                 </tr>
-              ))}
+            )}
             </tbody>
             <tfoot>
-              <tr>
-                <td style={{ ...td, fontWeight: 700 }} colSpan={2}>
-                  Summe
-                </td>
-                <td style={{ ...td, fontWeight: 700 }}>{sumQty || "-"}</td>
-                <td style={{ ...td, fontWeight: 700 }}>–</td>
-              </tr>
+              {totalsByUnit.length ?
+            totalsByUnit.map(([unit, total], index) =>
+            <tr key={unit}>
+                    <td className={rlcClass(null, { ...td, fontWeight: 600 })} colSpan={2}>
+                      {index === 0 ? "Summen nach Einheit" : ""}
+                    </td>
+                    <td className={rlcClass(null, { ...td, fontWeight: 600 })}>
+                      {total.toLocaleString("de-DE", {
+                  maximumFractionDigits: 3
+                })}
+                    </td>
+                    <td className={rlcClass(null, { ...td, fontWeight: 600 })}>{unit}</td>
+                  </tr>
+            ) :
+
+            <tr>
+                  <td className={rlcClass(null, { ...td, fontWeight: 600 })} colSpan={2}>
+                    Summe
+                  </td>
+                  <td className={rlcClass(null, { ...td, fontWeight: 600 })}>–</td>
+                  <td className={rlcClass(null, { ...td, fontWeight: 600 })}>–</td>
+                </tr>
+            }
             </tfoot>
           </table>
-        )}
+        }
       </div>
 
-      <div className="card" style={{ marginTop: 12, padding: 0, overflow: "auto" }}>
-        <div
-          style={{
-            padding: 12,
-            borderBottom: "1px solid var(--line)",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <div style={{ fontWeight: 700, flex: 1 }}>Ergebnisse</div>
+      <div className="card rlc-migrated-pages-mengenermittlung-autoki-tsx-1263">
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1264">
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.85 }}>
+
+
+
+
+
+
+          
+          <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1265">
+            Prüfkandidaten
+          </div>
+
+          <button
+            className="btn"
+            type="button"
+            onClick={approveAllValid}
+            disabled={!candidateItems.length}>
+            
+            Gültige freigeben
+          </button>
+
+          <button
+            className="btn"
+            type="button"
+            onClick={() => void exportToAufmassEditor()}
+            disabled={!approvedCandidates.length || serverBusy}
+            title="Auch freie AUTO-Positionen können nach manueller Freigabe übertragen werden.">
+            
+            Ins AufmaßEditor übertragen ({approvedCandidates.length})
+          </button>
+
+          <button
+            className="btn"
+            type="button"
+            onClick={exportToNachtrag}
+            disabled={!approvedCandidates.length || serverBusy}>
+            
+            Nachtrag erstellen ({approvedCandidates.length})
+          </button>
+
+          <button
+            className="btn"
+            type="button"
+            onClick={exportToKalkulation}
+            disabled={!approvedCandidates.length || serverBusy}>
+            
+            In Kalkulation übertragen ({approvedCandidates.length})
+          </button>
+
+          <button
+            className="btn"
+            type="button"
+            onClick={() => setApprovedIds(new Set())}
+            disabled={!approvedIds.size}>
+            
+            Freigaben zurücksetzen
+          </button>
+
+          <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1266">
             <span title="OK (LV oder vollständig/valide)">OK: <b>{validation.ok}</b></span>
             <span title="Warnung (AUTO/FOTO Positionen)">Warn: <b>{validation.warnings}</b></span>
             <span title="Ungültig (fehlende/ungültige Felder)">Fehler: <b>{validation.invalid}</b></span>
@@ -1935,252 +3183,355 @@ export default function AutoKI() {
             className="btn"
             type="button"
             onClick={() => setEditMode((v) => !v)}
-            title="Bearbeiten ein/aus"
-          >
+            title="Bearbeiten ein/aus">
+            
             {editMode ? "Bearbeiten: AN" : "Bearbeiten: AUS"}
           </button>
 
-          {editMode ? (
-            <button className="btn" type="button" onClick={addRow} title="Neue Zeile hinzufügen">
+          {editMode ?
+          <button className="btn" type="button" onClick={addRow} title="Neue Zeile hinzufügen">
               + Zeile
-            </button>
-          ) : null}
+            </button> :
+          null}
 
-          {itemsTouched ? (
-            <div style={{ fontSize: 12, opacity: 0.7 }} title="Es gibt ungespeicherte lokale Änderungen.">
+          {itemsTouched ?
+          <div title="Es gibt ungespeicherte lokale Änderungen." className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1267">
               geändert
-            </div>
-          ) : null}
+            </div> :
+          null}
         </div>
 
-        {result.msg ? (
-          <div style={{ padding: "0 12px 12px", opacity: 0.75, fontSize: 13 }}>{result.msg}</div>
-        ) : null}
+        {result.msg ?
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1268">{result.msg}</div> :
+        null}
 
         <datalist id="unit-list">
-          {unitOptions.map((u) => (
-            <option value={u} key={u} />
-          ))}
+          {unitOptions.map((u) =>
+          <option value={u} key={u} />
+          )}
         </datalist>
 
-        {result.items.length === 0 ? (
-          <div style={{ padding: 12, fontSize: 13, opacity: 0.7 }}>Noch keine Ergebnisse.</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "auto" }}>
+        {candidateItems.length === 0 ?
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1269">Noch keine Ergebnisse.</div> :
+
+        <table className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1270">
             <thead>
               <tr>
-                <th style={th}>Pos.</th>
-                <th style={th}>Typ</th>
-                <th style={{ ...th, minWidth: 420 }}>Beschreibung</th>
-                <th style={th}>Einheit</th>
-                <th style={th}>Menge</th>
-                <th style={th}>Layer</th>
-                <th style={th}>Quelle</th>
-                <th style={th}></th>
+                <th className={rlcClass(null, th)}>Freigabe</th>
+                <th className={rlcClass(null, th)}>Pos.</th>
+                <th className={rlcClass(null, th)}>Zuordnung</th>
+                <th className={rlcClass(null, th)}>Confidence</th>
+                <th className={rlcClass(null, th)}>Typ</th>
+                <th className={rlcClass(null, { ...th, minWidth: 420 })}>Beschreibung</th>
+                <th className={rlcClass(null, th)}>Einheit</th>
+                <th className={rlcClass(null, th)}>Menge</th>
+                <th className={rlcClass(null, th)}>Layer</th>
+                <th className={rlcClass(null, th)}>Quelle</th>
+                <th className={rlcClass(null, th)}></th>
               </tr>
             </thead>
             <tbody>
-              {result.items.map((d) => {
-                const { pk, issues } = rowIssues(d);
-                const accepted = isPosAccepted(pk);
-                const showWarn = accepted && (pk === "AUTO" || pk === "FOTO");
-                const isInvalid =
-                  issues.length > 0 &&
-                  (pk === "EMPTY" ||
-                    pk === "OTHER" ||
-                    issues.some((x) => x.includes("fehlt") || x.includes("ungültig") || x.includes("< 0")));
+              {candidateItems.map((d) => {
+              const { pk, issues } = rowIssues(d);
+              const accepted = isPosAccepted(pk);
+              const showWarn = accepted && (pk === "AUTO" || pk === "FOTO");
+              const isInvalid =
+              issues.length > 0 && (
+              pk === "EMPTY" ||
+              pk === "OTHER" ||
+              issues.some((x) => x.includes("fehlt") || x.includes("ungültig") || x.includes("< 0")));
 
-                const cellTitle = issues.length
-                  ? issues.join(" • ")
-                  : showWarn
-                    ? "AUTO/FOTO Position – optional auf LV ändern"
-                    : "OK";
+              const cellTitle = issues.length ?
+              issues.join(" • ") :
+              showWarn ?
+              "AUTO/FOTO Position – optional auf LV ändern" :
+              "OK";
 
-                const posInputStyle = inputStyleByIssues(inpCell, issues.filter((x) => x.includes("Pos")));
-                const descrInputStyle = inputStyleByIssues(
-                  { ...descrArea, width: "100%" },
-                  issues.filter((x) => x.includes("Beschreibung"))
-                );
-                const unitInputStyle = inputStyleByIssues(inpCell, issues.filter((x) => x.includes("Einheit")));
-                const qtyInputStyle = inputStyleByIssues(inpCellRight, issues.filter((x) => x.includes("Menge")));
+              const posInputStyle = inputStyleByIssues(inpCell, issues.filter((x) => x.includes("Pos")));
+              const descrInputStyle = inputStyleByIssues(
+                { ...descrArea, width: "100%" },
+                issues.filter((x) => x.includes("Beschreibung"))
+              );
+              const unitInputStyle = inputStyleByIssues(inpCell, issues.filter((x) => x.includes("Einheit")));
+              const qtyInputStyle = inputStyleByIssues(inpCellRight, issues.filter((x) => x.includes("Menge")));
 
-                const rowStyle: React.CSSProperties = isInvalid
-                  ? { background: "rgba(231,76,60,0.04)" }
-                  : showWarn
-                    ? { background: "rgba(241,196,15,0.06)" }
-                    : {};
+              const rowStyle: React.CSSProperties = isInvalid ?
+              { background: "rgba(231,76,60,0.04)" } :
+              showWarn ?
+              { background: "rgba(241,196,15,0.06)" } :
+              {};
 
-                return (
-                  <tr key={d.id} style={rowStyle}>
-                    <td style={td} title={cellTitle}>
-                      {editMode ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <input
-                            value={d.pos}
-                            onChange={(e) => updateRow(d.id, { pos: e.target.value })}
-                            style={posInputStyle}
-                          />
-                          <span style={badgeStyle(pk)}>{badgeLabel(pk)}</span>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", alignItems: "center" }}>
-                          <span>{d.pos}</span>
-                          <span style={badgeStyle(pk)}>{badgeLabel(pk)}</span>
-                        </div>
-                      )}
+              return (
+                <tr
+                  key={d.id} className={rlcClass(null,
+                  {
+                    ...rowStyle,
+                    ...(approvedIds.has(d.id) ?
+                    { outline: "2px solid rgba(22,163,74,0.22)" } :
+                    {})
+                  })}>
+                  
+                    <td className={rlcClass(null, td)}>
+                      <input
+                      type="checkbox"
+                      checked={approvedIds.has(d.id)}
+                      onChange={() => toggleApproved(d.id)}
+                      aria-label={`Kandidat ${d.pos} freigeben`} />
+                    
                     </td>
 
-                    <td style={td}>
-                      {editMode ? (
-                        <select
-                          value={d.type}
-                          onChange={(e) => updateRow(d.id, { type: e.target.value as any })}
-                          style={selCell}
-                        >
+                    <td className={rlcClass(null, td)} title={cellTitle}>
+                      {editMode ?
+                    <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1271">
+                          <input
+                        value={d.pos}
+                        onChange={(e) => updateRow(d.id, { pos: e.target.value })} className={rlcClass(null,
+                        posInputStyle)} />
+                      
+                          <span className={rlcClass(null, badgeStyle(pk))}>{badgeLabel(pk)}</span>
+                        </div> :
+
+                    <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1272">
+                          <span>{d.pos}</span>
+                          <span className={rlcClass(null, badgeStyle(pk))}>{badgeLabel(pk)}</span>
+                        </div>
+                    }
+                    </td>
+
+                    <td className={rlcClass(null, td)}>
+                      <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1273">
+                        {d.candidateStatus === "LV_MATCH" ?
+                      `LV ${d.matchedLvPos || d.pos}` :
+                      d.candidateStatus === "NACHTRAG" ?
+                      "Nachtrag" :
+                      d.candidateStatus === "NEUE_POSITION" ?
+                      "Neue Position" :
+                      "Prüfen"}
+                      </div>
+                      <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1274">
+
+
+
+
+
+
+
+                      
+                        {d.matchedLvText || d.matchReason || "—"}
+                      </div>
+                    </td>
+
+                    <td className={rlcClass(null, td)}>
+                      <strong>
+                        {confidenceLabel(Number(d.confidence || 0))}
+                      </strong>
+                      <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1275">
+
+
+
+
+
+
+
+                      
+                        {d.matchReason || "Technisch prüfen"}
+                      </div>
+                    </td>
+
+                    <td className={rlcClass(null, td)}>
+                      {editMode ?
+                    <select
+                      value={d.type}
+                      onChange={(e) => updateRow(d.id, { type: e.target.value as any })} className={rlcClass(null,
+                      selCell)}>
+                      
                           <option value="COUNT">COUNT</option>
                           <option value="LINE">LINE</option>
                           <option value="AREA">AREA</option>
-                        </select>
-                      ) : (
-                        d.type
-                      )}
+                        </select> :
+
+                    d.type
+                    }
                     </td>
 
-                    <td style={td} title={issues.filter((x) => x.includes("Beschreibung")).join(" • ") || undefined}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <div style={{ flex: 1, minWidth: 380 }}>
-                          {editMode ? (
-                            <textarea
-                              value={d.descr}
-                              onChange={(e) => updateRow(d.id, { descr: e.target.value })}
-                              onInput={(e) => autoGrowTextArea(e.currentTarget)}
-                              onFocus={(e) => autoGrowTextArea(e.currentTarget)}
-                              rows={2}
-                              style={descrInputStyle}
-                              placeholder="Beschreibung…"
-                            />
-                          ) : (
-                            <div style={descrRead}>
-                              {d.descr || <span style={{ opacity: 0.55 }}>(leer)</span>}
+                    <td className={rlcClass(null, td)} title={issues.filter((x) => x.includes("Beschreibung")).join(" • ") || undefined}>
+                      <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1276">
+                        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1277">
+                          {editMode ?
+                        <textarea
+                          value={d.descr}
+                          onChange={(e) => updateRow(d.id, { descr: e.target.value })}
+                          onInput={(e) => autoGrowTextArea(e.currentTarget)}
+                          onFocus={(e) => autoGrowTextArea(e.currentTarget)}
+                          rows={2} className={rlcClass(null,
+                          descrInputStyle)}
+                          placeholder="Beschreibung…" /> :
+
+
+                        <div className={rlcClass(null, descrRead)}>
+                              {d.descr || <span className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1278">(leer)</span>}
                             </div>
-                          )}
+                        }
                         </div>
 
                         <button
-                          className="btn"
-                          type="button"
-                          title="Groß bearbeiten"
-                          onClick={() => openDescrModal(d.id)}
-                          style={{ padding: "6px 10px" }}
-                        >
+                        className="btn rlc-migrated-pages-mengenermittlung-autoki-tsx-1279"
+                        type="button"
+                        title="Alle Kandidatendaten bearbeiten"
+                        onClick={() => openCandidateModal(d.id)}>
+
+                        
                           ✎
                         </button>
                       </div>
                     </td>
 
-                    <td style={td} title={issues.filter((x) => x.includes("Einheit")).join(" • ") || undefined}>
-                      {editMode ? (
-                        <input
-                          list="unit-list"
-                          value={d.unit || ""}
-                          onChange={(e) => updateRow(d.id, { unit: e.target.value })}
-                          style={unitInputStyle}
-                          placeholder="m / m² / St ..."
-                        />
-                      ) : (
-                        d.unit
-                      )}
+                    <td className={rlcClass(null, td)} title={issues.filter((x) => x.includes("Einheit")).join(" • ") || undefined}>
+                      {editMode ?
+                    <input
+                      list="unit-list"
+                      value={d.unit || ""}
+                      onChange={(e) => updateRow(d.id, { unit: e.target.value })} className={rlcClass(null,
+                      unitInputStyle)}
+                      placeholder="m / m² / St ..." /> :
+
+
+                    d.unit
+                    }
                     </td>
 
-                    <td style={td} title={issues.filter((x) => x.includes("Menge")).join(" • ") || undefined}>
-                      {editMode ? (
-                        <input
-                          value={String(d.qty ?? 0)}
-                          onChange={(e) => updateRow(d.id, { qty: clampNum(e.target.value, 0) })}
-                          style={qtyInputStyle}
-                          inputMode="decimal"
-                        />
-                      ) : (
-                        Number(d.qty || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })
-                      )}
+                    <td className={rlcClass(null, td)} title={issues.filter((x) => x.includes("Menge")).join(" • ") || undefined}>
+                      {editMode ?
+                    <input
+                      value={String(d.qty ?? 0)}
+                      onChange={(e) => updateRow(d.id, { qty: clampNum(e.target.value, 0) })} className={rlcClass(null,
+                      qtyInputStyle)}
+                      inputMode="decimal" /> :
+
+
+                    Number(d.qty || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })
+                    }
                     </td>
 
-                    <td style={td}>
-                      {editMode ? (
-                        <input
-                          value={d.layer ?? ""}
-                          onChange={(e) => updateRow(d.id, { layer: e.target.value })}
-                          style={inpCell}
-                        />
-                      ) : (
-                        d.layer ?? "–"
-                      )}
+                    <td className={rlcClass(null, td)}>
+                      {editMode ?
+                    <input
+                      value={d.layer ?? ""}
+                      onChange={(e) => updateRow(d.id, { layer: e.target.value })} className={rlcClass(null,
+                      inpCell)} /> :
+
+
+                    d.layer ?? "–"
+                    }
                     </td>
 
-                    <td style={td}>
-                      {editMode ? (
-                        <input
-                          value={d.source ?? ""}
-                          onChange={(e) => updateRow(d.id, { source: e.target.value })}
-                          style={inpCell}
-                        />
-                      ) : (
-                        d.source ?? "–"
-                      )}
+                    <td className={rlcClass(null, td)}>
+                      {editMode ?
+                    <input
+                      value={d.source ?? ""}
+                      onChange={(e) => updateRow(d.id, { source: e.target.value })} className={rlcClass(null,
+                      inpCell)} /> :
+
+
+                    d.source ?? "–"
+                    }
                     </td>
 
-                    <td style={{ ...td, width: 44 }}>
-                      {editMode ? (
-                        <button className="btn" type="button" onClick={() => deleteRow(d.id)} title="Zeile löschen">
-                          🗑
-                        </button>
-                      ) : null}
+                    <td className={rlcClass(null, { ...td, width: 44 })}>
+                      {editMode ?
+                    <button className="btn" type="button" onClick={() => deleteRow(d.id)} title="Zeile löschen">
+                          🗑️
+                        </button> :
+                    null}
                     </td>
-                  </tr>
-                );
-              })}
+                  </tr>);
+
+            })}
             </tbody>
           </table>
-        )}
+        }
 
-        <div style={{ padding: 12, borderTop: "1px solid var(--line)", fontSize: 12, opacity: 0.75 }}>
-          <b>Validierung:</b> Pos.-Format akzeptiert: <code>001.001</code> (LV), <code>AUTO.001</code>,{" "}
-          <code>FOTO.001</code>. Fehlende Felder werden rot markiert. <code>AUTO/FOTO</code> sind Warnung (gelb),
-          weil du sie ggf. auf eine echte LV-Position ändern willst. Beschreibung kann inline (Textarea) oder über{" "}
-          <b>✎</b> groß bearbeitet werden.
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1280">
+          <b>Prüfregel:</b> Die KI liefert ausschließlich Kandidaten.
+          Confidence und LV-Zuordnung sind Entscheidungshilfen, keine automatische
+          Freigabe. Nur markierte Zeilen werden übernommen. Im Modus
+          <b> Bestehendes LV</b> werden ausschließlich bestätigte LV-Treffer an
+          den Aufmaß-Editor übergeben. Im Modus <b>Neue Kalkulation</b> werden
+          bestätigte neue Positionen als Kalkulationskandidaten gespeichert.
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12, padding: 10 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Verlauf</div>
-        {!projectKey ? (
-          <div style={{ fontSize: 13, opacity: 0.75 }}>
+      <div className="card rlc-migrated-pages-mengenermittlung-autoki-tsx-1281">
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1282">Verlauf</div>
+        {!projectKey ?
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1283">
             Kein Projekt gewählt (Server-Funktionen deaktiviert). Lokal wird trotzdem gespeichert.
-          </div>
-        ) : history.length === 0 ? (
-          <div style={{ fontSize: 13, opacity: 0.75 }}>
+          </div> :
+        history.length === 0 ?
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1284">
             Noch keine Stände. Mit <b>Speichern</b> wird ein Snapshot erzeugt.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {history.map((h) => (
-              <div
-                key={h.ts}
-                className="btn"
-                style={{ fontSize: 11, padding: "4px 8px", cursor: "default" }}
-                title={`${h.source ?? ""} ${h.note ?? ""}`.trim()}
-              >
+          </div> :
+
+        <div className="rlc-migrated-pages-mengenermittlung-autoki-tsx-1285">
+            {history.map((h) =>
+          <div
+            key={h.ts}
+            className="btn rlc-migrated-pages-mengenermittlung-autoki-tsx-1286"
+
+            title={`${h.source ?? ""} ${h.note ?? ""}`.trim()}>
+            
                 {new Date(h.ts).toLocaleString()} · {h.count} Pos.
               </div>
-            ))}
+          )}
           </div>
-        )}
+        }
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ===================== STYLES ===================== */
+
+const workflowCard: React.CSSProperties = {
+  display: "grid",
+  gap: 7,
+  textAlign: "left",
+  padding: 16,
+  border: "1px solid #d7e2f0",
+  borderRadius: 14,
+  background: "#ffffff",
+  color: "#0f172a",
+  cursor: "pointer",
+  boxShadow: "0 4px 14px rgba(15,23,42,0.04)"
+};
+
+const workflowCardActive: React.CSSProperties = {
+  borderColor: "#0f4ec9",
+  background: "#eaf2ff",
+  boxShadow: "0 0 0 3px rgba(15,78,201,0.12)"
+};
+
+const modalField: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6
+};
+
+const modalLabel: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#475569"
+};
+
+const modalInput: React.CSSProperties = {
+  width: "100%",
+  padding: "9px 10px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  background: "white",
+  fontSize: 13,
+  outline: "none"
+};
 
 const inpBase: React.CSSProperties = {
   padding: "8px 10px",
@@ -2188,24 +3539,24 @@ const inpBase: React.CSSProperties = {
   borderRadius: 8,
   outline: "none",
   background: "white",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "10px 12px",
-  fontSize: 12,
+  padding: "9px 10px",
+  borderBottom: "1px solid #e5eaf3",
+  background: "#f8fafc",
+  color: "#475569",
   fontWeight: 700,
-  borderBottom: "1px solid var(--line)",
-  background: "rgba(0,0,0,0.02)",
-  whiteSpace: "nowrap",
+  textAlign: "left",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
-  padding: "10px 12px",
-  fontSize: 13,
-  borderBottom: "1px solid var(--line)",
-  verticalAlign: "top",
+  padding: "8px 10px",
+  borderBottom: "1px solid #eef2f7",
+  color: "#0f172a",
+  verticalAlign: "top"
 };
 
 const inpCell: React.CSSProperties = {
@@ -2215,13 +3566,13 @@ const inpCell: React.CSSProperties = {
   borderRadius: 8,
   outline: "none",
   background: "white",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const inpCellRight: React.CSSProperties = {
   ...inpCell,
   width: 110,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const selCell: React.CSSProperties = {
@@ -2231,7 +3582,7 @@ const selCell: React.CSSProperties = {
   borderRadius: 8,
   outline: "none",
   background: "white",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const descrArea: React.CSSProperties = {
@@ -2243,7 +3594,7 @@ const descrArea: React.CSSProperties = {
   fontSize: 13,
   lineHeight: 1.35,
   resize: "vertical",
-  minHeight: 44,
+  minHeight: 44
 };
 
 const descrRead: React.CSSProperties = {
@@ -2251,5 +3602,5 @@ const descrRead: React.CSSProperties = {
   wordBreak: "break-word",
   lineHeight: 1.35,
   padding: "6px 2px",
-  minHeight: 44,
+  minHeight: 44
 };

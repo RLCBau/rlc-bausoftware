@@ -133,3 +133,47 @@ apps/web/kalkulation.ki.ts
 apps/server/src/routes/projectLv.ts.before_*
 apps/server/data/
 apps/server/apps/server/data/
+
+############################################################
+# RLC Local Backups / Archives
+############################################################
+_backup/
+_backups/
+_backup-*/
+_backup_*/
+_rlc_backups/
+_rlc_install_backups/
+backups/
+**/_archive_design_precedente/
+
+############################################################
+# RLC Generated Reports / Temporary Audit Files
+############################################################
+.rlc-design-system-*-report.txt
+**/RLC_DESIGN_SYSTEM_*_REPORT.md
+rlc-ki-audit-*.txt
+rlc-ki-flow-audit-*.txt
+rlc-ki-callgraph-*.txt
+rlc-ki-modules-*.txt
+rlc-ki-structure-*.txt
+rlc-position-editor-*.txt
+rlc-urkalkulation-*.txt
+rlc-web-explainability-*.txt
+web-build-log.txt
+
+############################################################
+# RLC Temporary Migration / Fix Scripts
+############################################################
+add-meng-page-headers-*.cjs
+clean-meng-page-bugs-*.cjs
+fix-aufmasseditor-*.cjs
+fix-mengenermittlung-*.cjs
+uniform-mengenermittlung-theme-*.cjs
+
+############################################################
+# Local CAD / LV Test Files
+############################################################
+apps/web/public/res/files/*.dxf
+apps/web/public/res/files/*.dwg
+apps/web/public/res/files/*.xlsx
+

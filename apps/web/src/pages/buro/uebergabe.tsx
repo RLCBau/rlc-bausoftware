@@ -1,11 +1,11 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { UebergabeDB } from "./store.uebergabe";
 import {
   HandoverDoc,
   HandoverItem,
   HandoverSign,
-  HandoverAttachment,
-} from "./types";
+  HandoverAttachment } from
+"./types";
 
 /* ================= STYLES ================= */
 
@@ -13,7 +13,7 @@ const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const lbl: React.CSSProperties = { fontSize: 12, opacity: 0.8 };
@@ -23,14 +23,14 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 /* ================= COMPONENT ================= */
@@ -58,12 +58,12 @@ export default function Uebergabe() {
   const filtered = React.useMemo(() => {
     return all.filter((d) => {
       const s = (
-        d.title +
-        " " +
-        (d.projectId ?? "") +
-        " " +
-        (d.client ?? "")
-      ).toLowerCase();
+      d.title +
+      " " + (
+      d.projectId ?? "") +
+      " " + (
+      d.client ?? "")).
+      toLowerCase();
 
       const okQ = !q || s.includes(q.toLowerCase());
       const okP = !proj || d.projectId === proj;
@@ -74,9 +74,9 @@ export default function Uebergabe() {
 
   const projects = React.useMemo(
     () =>
-      Array.from(
-        new Set(all.map((d) => d.projectId).filter(Boolean))
-      ) as string[],
+    Array.from(
+      new Set(all.map((d) => d.projectId).filter(Boolean))
+    ) as string[],
     [all]
   );
 
@@ -102,7 +102,7 @@ export default function Uebergabe() {
     const next = {
       ...sel,
       ...p,
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     };
 
     setSel(next);
@@ -119,7 +119,7 @@ export default function Uebergabe() {
       id: crypto.randomUUID(),
       text: "",
       status: "open",
-      note: "",
+      note: ""
     };
 
     up({ checklist: [it, ...(sel.checklist || [])] });
@@ -129,7 +129,7 @@ export default function Uebergabe() {
     if (!sel) return;
 
     up({
-      checklist: (sel.checklist || []).filter((i) => i.id !== id),
+      checklist: (sel.checklist || []).filter((i) => i.id !== id)
     });
   };
 
@@ -145,7 +145,7 @@ export default function Uebergabe() {
         role,
         name: "",
         when: new Date().toISOString(),
-        image: url,
+        image: url
       };
 
       const signs = { ...(sel.signs || {}) };
@@ -176,53 +176,53 @@ export default function Uebergabe() {
   /* ================= EXPORT ================= */
 
   const exportCSV = () =>
-    download(
-      "text/csv;charset=utf-8",
-      "uebergabe.csv",
-      UebergabeDB.exportCSV(filtered)
-    );
+  download(
+    "text/csv;charset=utf-8",
+    "uebergabe.csv",
+    UebergabeDB.exportCSV(filtered)
+  );
 
   const exportJSON = () =>
-    download(
-      "application/json",
-      "uebergabe_backup.json",
-      UebergabeDB.exportJSON()
-    );
+  download(
+    "application/json",
+    "uebergabe_backup.json",
+    UebergabeDB.exportJSON()
+  );
 
   const importJSON = () =>
-    pickFile(async (f) => {
-      const n = UebergabeDB.importJSON(await f.text());
-      alert(`Backup importiert: ${n}.`);
-      refresh();
-    });
+  pickFile(async (f) => {
+    const n = UebergabeDB.importJSON(await f.text());
+    alert(`Backup importiert: ${n}.`);
+    refresh();
+  });
 
   /* ================= UI ================= */
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, padding: 10 }}>
+    <div className="rlc-migrated-pages-buro-uebergabe-tsx-650">
       {/* Toolbar */}
-      <div className="card" style={{ padding: "8px 10px", display: "flex", gap: 8 }}>
+      <div className="card rlc-migrated-pages-buro-uebergabe-tsx-651">
         <button className="btn" onClick={add}>+ Protokoll</button>
         <button className="btn" onClick={del} disabled={!sel}>Löschen</button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-uebergabe-tsx-652" />
 
         <input
           placeholder="Suche…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 280 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 280 })} />
+        
 
         <select
           value={proj}
-          onChange={(e) => setProj(e.target.value)}
-          style={{ ...inp, width: 160 }}
-        >
+          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 160 })}>
+          
           <option value="">Alle Projekte</option>
-          {projects.map((p) => (
-            <option key={p}>{p}</option>
-          ))}
+          {projects.map((p) =>
+          <option key={p}>{p}</option>
+          )}
         </select>
 
         <button className="btn" onClick={exportCSV}>Export CSV</button>
@@ -231,39 +231,39 @@ export default function Uebergabe() {
       </div>
 
       {/* Layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <div className="rlc-migrated-pages-buro-uebergabe-tsx-653">
         {/* LISTA */}
-        <div className="card" style={{ overflow: "auto" }}>
-          {filtered.map((d) => (
-            <div
-              key={d.id}
-              onClick={() => setSel(d)}
-              style={{
-                padding: 10,
-                cursor: "pointer",
-                background: sel?.id === d.id ? "#eef2ff" : undefined,
-              }}
-            >
+        <div className="card rlc-migrated-pages-buro-uebergabe-tsx-654">
+          {filtered.map((d) =>
+          <div
+            key={d.id}
+            onClick={() => setSel(d)} className={rlcClass(null,
+            {
+              padding: 10,
+              cursor: "pointer",
+              background: sel?.id === d.id ? "#eef2ff" : undefined
+            })}>
+            
               <b>{d.title}</b> — {d.projectId || "—"}
             </div>
-          ))}
+          )}
         </div>
 
         {/* EDITOR */}
         <div className="card" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
-          {!sel ? (
-            <div>Kein Protokoll gewählt</div>
-          ) : (
-            <input
-              value={sel.title}
-              onChange={(e) => up({ title: e.target.value })}
-              style={inp}
-            />
-          )}
+          {!sel ?
+          <div>Kein Protokoll gewählt</div> :
+
+          <input
+            value={sel.title}
+            onChange={(e) => up({ title: e.target.value })} className={rlcClass(null,
+            inp)} />
+
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UTILS ================= */
@@ -301,8 +301,3 @@ function download(type: string, name: string, data: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-
-
-
-

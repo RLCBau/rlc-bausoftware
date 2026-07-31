@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   listDocuments,
   initDocument,
@@ -6,8 +6,8 @@ import {
   putToStorage,
   detectKind,
   getDocumentViewUrl,
-  type DocumentDto,
-} from "../../api/files";
+  type DocumentDto } from
+"../../api/files";
 import "./documents.css";
 
 type Props = {
@@ -25,17 +25,17 @@ type UploadItem = {
 };
 
 const prettyDate = (iso?: string | null) =>
-  iso
-    ? new Date(iso).toLocaleString(undefined, {
-        dateStyle: "short",
-        timeStyle: "short",
-      })
-    : "—";
+iso ?
+new Date(iso).toLocaleString(undefined, {
+  dateStyle: "short",
+  timeStyle: "short"
+}) :
+"—";
 
 function makeUploadId(file: File) {
-  return `${file.name}-${file.size}-${file.lastModified}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}`;
+  return `${file.name}-${file.size}-${file.lastModified}-${Math.random().
+  toString(36).
+  slice(2, 8)}`;
 }
 
 export default function DocumentManager({ projectId }: Props) {
@@ -43,7 +43,7 @@ export default function DocumentManager({ projectId }: Props) {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
-  const [preview, setPreview] = useState<{ url: string; name: string } | null>(
+  const [preview, setPreview] = useState<{url: string;name: string;} | null>(
     null
   );
 
@@ -79,14 +79,14 @@ export default function DocumentManager({ projectId }: Props) {
 
     return docs.filter(
       (d) =>
-        d.name.toLowerCase().includes(s) ||
-        String(d.kind).toLowerCase().includes(s)
+      d.name.toLowerCase().includes(s) ||
+      String(d.kind).toLowerCase().includes(s)
     );
   }, [docs, q]);
 
   function updateUpload(id: string, patch: Partial<UploadItem>) {
     setUploads((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...patch } : u))
+    prev.map((u) => u.id === id ? { ...u, ...patch } : u)
     );
   }
 
@@ -108,7 +108,7 @@ export default function DocumentManager({ projectId }: Props) {
       id: makeUploadId(file),
       file,
       progress: 0,
-      status: "wartend",
+      status: "wartend"
     }));
 
     setUploads((prev) => [...list, ...prev]);
@@ -137,11 +137,11 @@ export default function DocumentManager({ projectId }: Props) {
 
       tick = window.setInterval(() => {
         setUploads((prev) =>
-          prev.map((u) =>
-            u.id === id
-              ? { ...u, progress: Math.min(u.progress + 5, 90) }
-              : u
-          )
+        prev.map((u) =>
+        u.id === id ?
+        { ...u, progress: Math.min(u.progress + 5, 90) } :
+        u
+        )
         );
       }, 200);
 
@@ -154,7 +154,7 @@ export default function DocumentManager({ projectId }: Props) {
       updateUpload(id, {
         progress: 100,
         status: "fertig",
-        error: undefined,
+        error: undefined
       });
 
       await refresh();
@@ -165,7 +165,7 @@ export default function DocumentManager({ projectId }: Props) {
 
       updateUpload(id, {
         status: "fehler",
-        error: e?.message || String(e),
+        error: e?.message || String(e)
       });
     }
   }
@@ -195,30 +195,30 @@ export default function DocumentManager({ projectId }: Props) {
             ref={inputRef}
             type="file"
             multiple
-            onChange={onChooseFiles}
-            style={{ display: "none" }}
-          />
+            onChange={onChooseFiles} className="rlc-migrated-components-documents-documentmanager-tsx-56" />
+
+          
 
           <input
             className="search"
             placeholder="Suche (Name/Typ)…"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+            onChange={(e) => setQ(e.target.value)} />
+          
 
           <button
             type="button"
             className="btn"
-            onClick={() => inputRef.current?.click()}
-          >
+            onClick={() => inputRef.current?.click()}>
+            
             Dateien wählen
           </button>
 
           <button
             type="button"
             className="btn ghost"
-            onClick={() => void refresh()}
-          >
+            onClick={() => void refresh()}>
+            
             Aktualisieren
           </button>
         </div>
@@ -227,19 +227,19 @@ export default function DocumentManager({ projectId }: Props) {
       <div
         className="dropzone"
         onDragOver={(e) => e.preventDefault()}
-        onDrop={onDrop}
-      >
+        onDrop={onDrop}>
+        
         <span>Dateien hierher ziehen oder oben auswählen</span>
       </div>
 
-      {uploads.length > 0 && (
-        <div className="uploadlist">
-          {uploads.map((u) => (
-            <div key={u.id} className={`upload ${u.status}`}>
+      {uploads.length > 0 &&
+      <div className="uploadlist">
+          {uploads.map((u) =>
+        <div key={u.id} className={`upload ${u.status}`}>
               <div className="name">{u.file.name}</div>
 
               <div className="bar">
-                <div className="fill" style={{ width: `${u.progress}%` }} />
+                <div className={rlcClass("fill", { width: `${u.progress}%` })} />
               </div>
 
               <div className="status">
@@ -247,9 +247,9 @@ export default function DocumentManager({ projectId }: Props) {
                 {u.error ? `: ${u.error}` : ""}
               </div>
             </div>
-          ))}
+        )}
         </div>
-      )}
+      }
 
       <div className="table">
         <div className="thead">
@@ -260,46 +260,46 @@ export default function DocumentManager({ projectId }: Props) {
           <div>Aktion</div>
         </div>
 
-        {loading ? (
-          <div className="row muted">Lade…</div>
-        ) : filtered.length === 0 ? (
-          <div className="row muted">Keine Dokumente gefunden.</div>
-        ) : (
-          filtered.map((d) => (
-            <div key={d.id} className="row">
+        {loading ?
+        <div className="row muted">Lade…</div> :
+        filtered.length === 0 ?
+        <div className="row muted">Keine Dokumente gefunden.</div> :
+
+        filtered.map((d) =>
+        <div key={d.id} className="row">
               <div className="cell name">{d.name}</div>
               <div className="cell">{String(d.kind)}</div>
               <div className="cell">{d.versions?.length ?? 0}</div>
               <div className="cell">{prettyDate(d.updatedAt)}</div>
               <div className="cell">
                 <button
-                  type="button"
-                  className="btn small"
-                  onClick={() => void openPreview(d)}
-                >
+              type="button"
+              className="btn small"
+              onClick={() => void openPreview(d)}>
+              
                   Ansehen
                 </button>
               </div>
             </div>
-          ))
-        )}
+        )
+        }
       </div>
 
-      {preview && (
-        <div
-          className="modal"
-          onClick={() => setPreview(null)}
-          role="dialog"
-          aria-modal="true"
-        >
+      {preview &&
+      <div
+        className="modal"
+        onClick={() => setPreview(null)}
+        role="dialog"
+        aria-modal="true">
+        
           <div className="modal-body" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <div className="title">{preview.name}</div>
               <button
-                type="button"
-                className="btn small ghost"
-                onClick={() => setPreview(null)}
-              >
+              type="button"
+              className="btn small ghost"
+              onClick={() => setPreview(null)}>
+              
                 Schließen
               </button>
             </div>
@@ -307,12 +307,7 @@ export default function DocumentManager({ projectId }: Props) {
             <iframe title="preview" src={preview.url} className="frame" />
           </div>
         </div>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
-
-
-
-
-

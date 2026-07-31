@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -7,14 +7,20 @@ import { PROJECTS_ROOT } from "../lib/projectsRoot";
 const router = Router();
 
 const ALLOWED_MODULES = new Set([
+  "urkalkulation",
   "versionsvergleich",
   "angebotsanalyse",
+  "angebotspruefung",
+  "angebotsranking",
   "angebotsverfolgung",
 
-  // RLC-KI Kalkulation Snapshot für Web + Mobile
+  // RLC-KI Kalkulation Snapshot fÃ¼r Web + Mobile
   "ki",
   "kalkulation-mit-ki",
   "kalkulationMitKi",
+
+  // X84 Learning Approval: server-side persistence
+  "learning",
 ]);
 
 function isSafeKey(v: string) {
@@ -148,3 +154,5 @@ router.delete("/:moduleName/:projectKey", (req, res) => {
 });
 
 export default router;
+
+

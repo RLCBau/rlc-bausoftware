@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { BuroAPI } from "../../lib/buro/store";
 
 type Contract = {
@@ -31,31 +31,31 @@ const shell = {
   maxWidth: 1000,
   margin: "0 auto",
   padding: "12px 16px",
-  fontFamily: "Inter,system-ui,Arial",
+  fontFamily: "Inter,system-ui,Arial"
 } as const;
 
 const table = {
   width: "100%",
   borderCollapse: "collapse" as const,
-  fontSize: 13,
+  fontSize: 13
 } as const;
 
 const thtd = {
   border: "1px solid #e2e8f0",
-  padding: "6px 8px",
+  padding: "6px 8px"
 } as const;
 
 const head = {
   ...thtd,
   background: "#f8fafc",
-  fontWeight: 600,
+  fontWeight: 600
 } as const;
 
 const input = {
   width: "100%",
   border: "1px solid #cbd5e1",
   borderRadius: 6,
-  padding: "4px 6px",
+  padding: "4px 6px"
 } as const;
 
 const btn = {
@@ -64,7 +64,7 @@ const btn = {
   background: "#fff",
   borderRadius: 6,
   fontSize: 13,
-  cursor: "pointer",
+  cursor: "pointer"
 } as const;
 
 /* ================= HELPERS ================= */
@@ -93,30 +93,30 @@ export default function Vertrage() {
       partner: d.title || "",
       datum: toDateInput(v?.uploadedAt),
       wert: typeof v?.size === "number" ? v.size : 0,
-      projectId: d.projectId,
+      projectId: d.projectId
     };
   });
 
   const add = () => {
-  const created = BuroAPI.addDocument({
-    projectId: "",
-    tags: ["Vertrag"],
-    updatedAt: Date.now(),
-  } as any);
+    const created = BuroAPI.addDocument({
+      projectId: "",
+      tags: ["Vertrag"],
+      updatedAt: Date.now()
+    } as any);
 
-  if (created?.id) {
-    BuroAPI.updateDocument(
-      created.id,
-      {
-        ...(created as any),
-        title: "Neuer Vertrag",
-        projectId: "",
-        tags: ["Vertrag"],
-        updatedAt: Date.now(),
-      } as any
-    );
-  }
-};
+    if (created?.id) {
+      BuroAPI.updateDocument(
+        created.id,
+        {
+          ...(created as any),
+          title: "Neuer Vertrag",
+          projectId: "",
+          tags: ["Vertrag"],
+          updatedAt: Date.now()
+        } as any
+      );
+    }
+  };
 
   const upd = (id: string, patch: Partial<Contract>) => {
     const doc = docs.find((d) => d.id === id);
@@ -126,7 +126,7 @@ export default function Vertrage() {
       ...doc,
       title: patch.partner ?? doc.title ?? "",
       projectId: patch.projectId ?? doc.projectId,
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     };
 
     BuroAPI.updateDocument(id, updated);
@@ -137,89 +137,84 @@ export default function Vertrage() {
   };
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h2>Vertragsverwaltung</h2>
 
-      <button style={btn} onClick={add}>
+      <button className={rlcClass(null, btn)} onClick={add}>
         + Vertrag
       </button>
 
-      <table style={table}>
+      <table className={rlcClass(null, table)}>
         <thead>
           <tr>
-            <th style={head}>Partner</th>
-            <th style={head}>Datum</th>
-            <th style={head}>Wert (€)</th>
-            <th style={head}>Projekt</th>
-            <th style={head}>Aktion</th>
+            <th className={rlcClass(null, head)}>Partner</th>
+            <th className={rlcClass(null, head)}>Datum</th>
+            <th className={rlcClass(null, head)}>Wert (€)</th>
+            <th className={rlcClass(null, head)}>Projekt</th>
+            <th className={rlcClass(null, head)}>Aktion</th>
           </tr>
         </thead>
 
         <tbody>
-          {contracts.map((r) => (
-            <tr key={r.id}>
-              <td style={thtd}>
-                <input
-                  style={input}
-                  value={r.partner}
-                  onChange={(e) => upd(r.id, { partner: e.target.value })}
-                />
+          {contracts.map((r) =>
+          <tr key={r.id}>
+              <td className={rlcClass(null, thtd)}>
+                <input className={rlcClass(null,
+              input)}
+              value={r.partner}
+              onChange={(e) => upd(r.id, { partner: e.target.value })} />
+              
               </td>
 
-              <td style={thtd}>
-                <input
-                  style={input}
-                  type="date"
-                  value={r.datum}
-                  onChange={(e) => upd(r.id, { datum: e.target.value })}
-                />
+              <td className={rlcClass(null, thtd)}>
+                <input className={rlcClass(null,
+              input)}
+              type="date"
+              value={r.datum}
+              onChange={(e) => upd(r.id, { datum: e.target.value })} />
+              
               </td>
 
-              <td style={thtd}>
-                <input
-                  style={input}
-                  type="number"
-                  value={r.wert}
-                  onChange={(e) => upd(r.id, { wert: Number(e.target.value) })}
-                />
+              <td className={rlcClass(null, thtd)}>
+                <input className={rlcClass(null,
+              input)}
+              type="number"
+              value={r.wert}
+              onChange={(e) => upd(r.id, { wert: Number(e.target.value) })} />
+              
               </td>
 
-              <td style={thtd}>
-                <input
-                  style={input}
-                  value={r.projectId || ""}
-                  onChange={(e) => upd(r.id, { projectId: e.target.value })}
-                />
+              <td className={rlcClass(null, thtd)}>
+                <input className={rlcClass(null,
+              input)}
+              value={r.projectId || ""}
+              onChange={(e) => upd(r.id, { projectId: e.target.value })} />
+              
               </td>
 
-              <td style={thtd}>
-                <button
-                  style={{ ...btn, color: "#b91c1c" }}
-                  onClick={() => del(r.id)}
-                >
+              <td className={rlcClass(null, thtd)}>
+                <button className={rlcClass(null,
+              { ...btn, color: "#b91c1c" })}
+              onClick={() => del(r.id)}>
+                
                   Löschen
                 </button>
               </td>
             </tr>
-          ))}
+          )}
 
-          {contracts.length === 0 && (
-            <tr>
+          {contracts.length === 0 &&
+          <tr>
               <td
-                colSpan={5}
-                style={{ ...thtd, textAlign: "center", color: "#777" }}
-              >
+              colSpan={5} className={rlcClass(null,
+              { ...thtd, textAlign: "center", color: "#777" })}>
+              
                 Keine Verträge vorhanden
               </td>
             </tr>
-          )}
+          }
         </tbody>
       </table>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

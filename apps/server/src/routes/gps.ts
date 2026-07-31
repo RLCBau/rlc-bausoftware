@@ -51,13 +51,26 @@ function writeJson(p: string, data: any) {
   fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
 }
 
-type GpsPoint = { lat: number; lng: number; ts?: number };
+type GpsPoint = {
+  lat: number;
+  lng: number;
+  ts?: number;
+  name?: string;
+  code?: string;
+  easting?: number;
+  northing?: number;
+  height?: number;
+  sourceCrs?: string;
+};
 
 type Assignment = {
   id: string;
   projectId: string; // FS key, es. BA-2025-DEMO
   lvPosId: string; // DB LVPosition.id
   points: GpsPoint[];
+  measurements?: any[];
+  areas?: any[];
+  annotations?: any[];
   createdAt: number;
   lvPos?: any;
 };

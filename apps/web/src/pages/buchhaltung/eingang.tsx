@@ -1,8 +1,9 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 
 const capitalize = (s: string) =>
-  s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "";
+s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "";
 
 /* =========================
    TYPES
@@ -30,26 +31,26 @@ type Status = "ALL" | "OPEN" | "PART" | "PAID" | "OVERDUE";
    HELPERS
    ========================= */
 const fmt = (n: number) =>
-  Number(n || 0).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+Number(n || 0).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 const safeTrim = (v: unknown) => String(v ?? "").trim();
 
 const safeNumber = (v: unknown, fallback = 0) => {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 };
 
 const brutto = (r: Eingangsrechnung) =>
-  safeNumber(r.netto) * (1 + safeNumber(r.mwstPct) / 100);
+safeNumber(r.netto) * (1 + safeNumber(r.mwstPct) / 100);
 
 const offen = (r: Eingangsrechnung) =>
-  Math.max(0, brutto(r) - safeNumber(r.bezahlt));
+Math.max(0, brutto(r) - safeNumber(r.bezahlt));
 
 const parseDate = (s: string) => {
   if (!s) return new Date("1970-01-01");
@@ -69,12 +70,12 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 const today = () => new Date();
 
 const isOverdue = (r: Eingangsrechnung) =>
-  r.faellig ? parseDate(r.faellig) < today() && offen(r) > 0.01 : false;
+r.faellig ? parseDate(r.faellig) < today() && offen(r) > 0.01 : false;
 
 const statusOf = (r: Eingangsrechnung): Exclude<Status, "ALL"> => {
   if (isOverdue(r)) return "OVERDUE";
@@ -86,59 +87,59 @@ const statusOf = (r: Eingangsrechnung): Exclude<Status, "ALL"> => {
 };
 
 const escapeHtml = (str: string) =>
-  String(str ?? "").replace(
-    /[&<>"']/g,
-    (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
-  );
+String(str ?? "").replace(
+  /[&<>"']/g,
+  (m) =>
+  ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[m]!
+);
 
 /* =========================
    COMPONENT
    ========================= */
 export default function Eingangsrechnungen() {
   const [rows, setRows] = useState<Eingangsrechnung[]>([
-    {
-      id: 1,
-      belegnr: "E-2025-001",
-      datum: "18.10.2025",
-      faellig: "17.11.2025",
-      lieferant: "Schotter AG",
-      kostenstelle: "Erdarbeiten",
-      netto: 1800,
-      mwstPct: 19,
-      bezahlt: 0,
-      bemerkung: "Kies Lieferung",
-    },
-    {
-      id: 2,
-      belegnr: "E-2025-002",
-      datum: "12.10.2025",
-      faellig: "11.11.2025",
-      lieferant: "Rohre GmbH",
-      kostenstelle: "Leitungen",
-      netto: 2450,
-      mwstPct: 19,
-      bezahlt: 1000,
-      bemerkung: "KG-Rohre DN160",
-    },
-    {
-      id: 3,
-      belegnr: "E-2025-003",
-      datum: "28.10.2025",
-      faellig: "27.11.2025",
-      lieferant: "Spedition X",
-      kostenstelle: "Transport",
-      netto: 970,
-      mwstPct: 19,
-      bezahlt: 970,
-    },
-  ]);
+  {
+    id: 1,
+    belegnr: "E-2025-001",
+    datum: "18.10.2025",
+    faellig: "17.11.2025",
+    lieferant: "Schotter AG",
+    kostenstelle: "Erdarbeiten",
+    netto: 1800,
+    mwstPct: 19,
+    bezahlt: 0,
+    bemerkung: "Kies Lieferung"
+  },
+  {
+    id: 2,
+    belegnr: "E-2025-002",
+    datum: "12.10.2025",
+    faellig: "11.11.2025",
+    lieferant: "Rohre GmbH",
+    kostenstelle: "Leitungen",
+    netto: 2450,
+    mwstPct: 19,
+    bezahlt: 1000,
+    bemerkung: "KG-Rohre DN160"
+  },
+  {
+    id: 3,
+    belegnr: "E-2025-003",
+    datum: "28.10.2025",
+    faellig: "27.11.2025",
+    lieferant: "Spedition X",
+    kostenstelle: "Transport",
+    netto: 970,
+    mwstPct: 19,
+    bezahlt: 970
+  }]
+  );
 
   /* FILTRI */
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
@@ -153,11 +154,11 @@ export default function Eingangsrechnungen() {
 
   const kostenstellenListe = useMemo(
     () => [
-      "ALL",
-      ...Array.from(
-        new Set(rows.map((r) => safeTrim(r.kostenstelle) || "—").filter(Boolean))
-      ),
-    ],
+    "ALL",
+    ...Array.from(
+      new Set(rows.map((r) => safeTrim(r.kostenstelle) || "—").filter(Boolean))
+    )],
+
     [rows]
   );
 
@@ -213,20 +214,20 @@ export default function Eingangsrechnungen() {
     const nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1;
 
     setRows((prev) => [
-      ...prev,
-      {
-        id: nextId,
-        belegnr: `E-${year}-${String(nextId).padStart(3, "0")}`,
-        datum: new Date().toLocaleDateString("de-DE"),
-        faellig: "",
-        lieferant: "Neuer Lieferant",
-        kostenstelle: "",
-        netto: 0,
-        mwstPct: 19,
-        bezahlt: 0,
-        bemerkung: "",
-      },
-    ]);
+    ...prev,
+    {
+      id: nextId,
+      belegnr: `E-${year}-${String(nextId).padStart(3, "0")}`,
+      datum: new Date().toLocaleDateString("de-DE"),
+      faellig: "",
+      lieferant: "Neuer Lieferant",
+      kostenstelle: "",
+      netto: 0,
+      mwstPct: 19,
+      bezahlt: 0,
+      bemerkung: ""
+    }]
+    );
   };
 
   const duplicate = (r: Eingangsrechnung) => {
@@ -234,13 +235,13 @@ export default function Eingangsrechnungen() {
     const nextId = rows.length ? Math.max(...rows.map((x) => x.id)) + 1 : 1;
 
     setRows((prev) => [
-      ...prev,
-      {
-        ...r,
-        id: nextId,
-        belegnr: `E-${year}-${String(nextId).padStart(3, "0")}`,
-      },
-    ]);
+    ...prev,
+    {
+      ...r,
+      id: nextId,
+      belegnr: `E-${year}-${String(nextId).padStart(3, "0")}`
+    }]
+    );
   };
 
   const remove = (id: number) => {
@@ -255,11 +256,11 @@ export default function Eingangsrechnungen() {
     });
   };
 
-  const update = <K extends keyof Eingangsrechnung>(
-    i: number,
-    key: K,
-    val: Eingangsrechnung[K]
-  ) => {
+  const update = <K extends keyof Eingangsrechnung,>(
+  i: number,
+  key: K,
+  val: Eingangsrechnung[K]) =>
+  {
     setRows((prev) => {
       const copy = [...prev];
       if (!copy[i]) return prev;
@@ -331,19 +332,19 @@ export default function Eingangsrechnungen() {
       if (!copy.length) {
         const year = new Date().getFullYear();
         copy = [
-          {
-            id: 1,
-            belegnr: `E-${year}-001`,
-            datum: new Date().toLocaleDateString("de-DE"),
-            faellig: "",
-            lieferant: "Neuer Lieferant",
-            kostenstelle: "",
-            netto: 0,
-            mwstPct: 19,
-            bezahlt: 0,
-            bemerkung: "",
-          },
-        ];
+        {
+          id: 1,
+          belegnr: `E-${year}-001`,
+          datum: new Date().toLocaleDateString("de-DE"),
+          faellig: "",
+          lieferant: "Neuer Lieferant",
+          kostenstelle: "",
+          netto: 0,
+          mwstPct: 19,
+          bezahlt: 0,
+          bemerkung: ""
+        }];
+
         targetIndex = 0;
       }
 
@@ -359,7 +360,7 @@ export default function Eingangsrechnungen() {
         ...guess,
         anhangName: f.name,
         anhangUrl: url,
-        anhangMime: mime,
+        anhangMime: mime
       };
 
       if (!copy[targetIndex].belegnr) {
@@ -407,7 +408,7 @@ export default function Eingangsrechnungen() {
       Offen: fmt(offen(r)),
       Status: labelOf(statusOf(r)),
       Bemerkung: r.bemerkung || "",
-      Anhang: r.anhangName || "",
+      Anhang: r.anhangName || ""
     }));
 
     if (!data.length) {
@@ -417,23 +418,23 @@ export default function Eingangsrechnungen() {
 
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.join(";"),
-      ...data.map((row) =>
-        headers
-          .map((h) =>
-            `"${String((row as Record<string, unknown>)[h] ?? "").replace(/"/g, '""')}"`
-          )
-          .join(";")
-      ),
-    ].join("\n");
+    headers.join(";"),
+    ...data.map((row) =>
+    headers.
+    map((h) =>
+    `"${String((row as Record<string, unknown>)[h] ?? "").replace(/"/g, '""')}"`
+    ).
+    join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     const href = URL.createObjectURL(blob);
     a.href = href;
-    a.download = useFiltered
-      ? "eingangsrechnungen_gefiltert.csv"
-      : "eingangsrechnungen_alle.csv";
+    a.download = useFiltered ?
+    "eingangsrechnungen_gefiltert.csv" :
+    "eingangsrechnungen_alle.csv";
     a.click();
     URL.revokeObjectURL(href);
   };
@@ -459,7 +460,7 @@ export default function Eingangsrechnungen() {
 
   const printSinglePDF = (r: Eingangsrechnung) => openPrint(printableInvoiceHTML(r));
   const printAllPDF = (useFiltered: boolean) =>
-    openPrint(printableReportHTML(useFiltered ? filtered : rows));
+  openPrint(printableReportHTML(useFiltered ? filtered : rows));
 
   const downloadSinglePDF = async (r: Eingangsrechnung) => {
     const html2canvas = (await import("html2canvas")).default;
@@ -471,7 +472,7 @@ export default function Eingangsrechnungen() {
 
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
     drawCanvas(pdf, canvas);
-    pdf.save(`${r.belegnr}.pdf`);
+    saveRlcPdfWithCompanyHeader(pdf, `${r.belegnr}.pdf`);
   };
 
   const downloadAllPDF = async (useFiltered: boolean) => {
@@ -495,10 +496,10 @@ export default function Eingangsrechnungen() {
       drawCanvas(pdf, canvas);
     }
 
-    pdf.save(
-      useFiltered
-        ? "Eingangsrechnungen_gefiltert.pdf"
-        : "Eingangsrechnungen_alle.pdf"
+    saveRlcPdfWithCompanyHeader(pdf,
+    useFiltered ?
+    "Eingangsrechnungen_gefiltert.pdf" :
+    "Eingangsrechnungen_alle.pdf"
     );
   };
 
@@ -580,9 +581,9 @@ export default function Eingangsrechnungen() {
   }, [rows]);
 
   const isPdfPreview =
-    previewMime === "application/pdf" ||
-    previewName.toLowerCase().endsWith(".pdf") ||
-    previewUrl?.toLowerCase().includes(".pdf");
+  previewMime === "application/pdf" ||
+  previewName.toLowerCase().endsWith(".pdf") ||
+  previewUrl?.toLowerCase().includes(".pdf");
 
   /* ========= RENDER ========= */
   return (
@@ -621,12 +622,12 @@ export default function Eingangsrechnungen() {
         ref={fileInputRef}
         type="file"
         accept="application/pdf,image/*"
-        style={{ display: "none" }}
-        onChange={onBrowse}
-      />
+
+        onChange={onBrowse} className="rlc-migrated-pages-buchhaltung-eingang-tsx-183" />
+      
 
       <div
-        className="bh-dropzone"
+
         onDragEnter={(e) => {
           setHover(true);
           prevent(e);
@@ -636,18 +637,18 @@ export default function Eingangsrechnungen() {
           setHover(false);
           prevent(e);
         }}
-        onDrop={onDrop}
-        style={{
-          border: "1px dashed var(--border,#d0d7de)",
-          borderRadius: 8,
-          padding: 14,
-          marginBottom: 12,
-          background: hover ? "rgba(0,0,0,0.03)" : "transparent",
-          cursor: "pointer",
-        }}
+        onDrop={onDrop} className={rlcClass("bh-dropzone",
+          {
+            border: "1px dashed var(--border,#d0d7de)",
+            borderRadius: 8,
+            padding: 14,
+            marginBottom: 12,
+            background: hover ? "rgba(0,0,0,0.03)" : "transparent",
+            cursor: "pointer"
+          })}
         onClick={chooseFile}
-        title="PDF/Immagine – Trascina qui o clicca per scegliere"
-      >
+        title="PDF/Immagine – Trascina qui o clicca per scegliere">
+        
         📎 PDF/Immagine hier ablegen oder klicken, um den Beleg zu wählen
       </div>
 
@@ -667,22 +668,22 @@ export default function Eingangsrechnungen() {
         <div>
           <label>Lieferant</label>
           <select value={lieferant} onChange={(e) => setLieferant(e.target.value)}>
-            {lieferantenListe.map((k) => (
-              <option key={k} value={k}>
+            {lieferantenListe.map((k) =>
+            <option key={k} value={k}>
                 {k === "ALL" ? "Alle" : k}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
         <div>
           <label>Kostenstelle</label>
           <select value={kostenstelle} onChange={(e) => setKostenstelle(e.target.value)}>
-            {kostenstellenListe.map((k) => (
-              <option key={k} value={k}>
+            {kostenstellenListe.map((k) =>
+            <option key={k} value={k}>
                 {k === "ALL" ? "Alle" : k}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
@@ -698,33 +699,33 @@ export default function Eingangsrechnungen() {
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 10,
-          marginBottom: 14,
-        }}
-      >
+      <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-184">
+
+
+
+
+
+
+        
         <div className="bh-card">
           <div className="bh-note">Netto</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.netto)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-185">{fmt(totals.netto)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">MwSt</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.mwst)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-186">{fmt(totals.mwst)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">Brutto</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.brut)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-187">{fmt(totals.brut)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">Bezahlt</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.bez)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-188">{fmt(totals.bez)} €</div>
         </div>
         <div className="bh-card">
           <div className="bh-note">Offen</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.off)} €</div>
+          <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-189">{fmt(totals.off)} €</div>
         </div>
       </div>
 
@@ -755,15 +756,15 @@ export default function Eingangsrechnungen() {
             return (
               <tr key={r.id}>
                 <td>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-190">
                     <button className="bh-btn ghost" onClick={() => duplicate(r)}>
                       Duplizieren
                     </button>
                     <button
-                      className="bh-btn"
-                      style={{ background: "#e74c3c" }}
-                      onClick={() => remove(r.id)}
-                    >
+                      className="bh-btn rlc-migrated-pages-buchhaltung-eingang-tsx-191"
+
+                      onClick={() => remove(r.id)}>
+                      
                       Löschen
                     </button>
                   </div>
@@ -775,36 +776,36 @@ export default function Eingangsrechnungen() {
                   <input
                     type="text"
                     value={r.datum}
-                    onChange={(e) => update(i, "datum", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(i, "datum", e.target.value)} className="rlc-migrated-pages-buchhaltung-eingang-tsx-192" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.faellig || ""}
-                    onChange={(e) => update(i, "faellig", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(i, "faellig", e.target.value)} className="rlc-migrated-pages-buchhaltung-eingang-tsx-193" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.lieferant}
-                    onChange={(e) => update(i, "lieferant", e.target.value)}
-                    style={{ minWidth: 160 }}
-                  />
+                    onChange={(e) => update(i, "lieferant", e.target.value)} className="rlc-migrated-pages-buchhaltung-eingang-tsx-194" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.kostenstelle || ""}
-                    onChange={(e) => update(i, "kostenstelle", e.target.value)}
-                    style={{ minWidth: 140 }}
-                  />
+                    onChange={(e) => update(i, "kostenstelle", e.target.value)} className="rlc-migrated-pages-buchhaltung-eingang-tsx-195" />
+
+                  
                 </td>
 
                 <td>
@@ -812,9 +813,9 @@ export default function Eingangsrechnungen() {
                     type="number"
                     step="0.01"
                     value={r.netto}
-                    onChange={(e) => update(i, "netto", safeNumber(e.target.value, 0))}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(i, "netto", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-eingang-tsx-196" />
+
+                  
                 </td>
 
                 <td>
@@ -822,9 +823,9 @@ export default function Eingangsrechnungen() {
                     type="number"
                     step="0.1"
                     value={r.mwstPct}
-                    onChange={(e) => update(i, "mwstPct", safeNumber(e.target.value, 19))}
-                    style={{ width: 80 }}
-                  />
+                    onChange={(e) => update(i, "mwstPct", safeNumber(e.target.value, 19))} className="rlc-migrated-pages-buchhaltung-eingang-tsx-197" />
+
+                  
                 </td>
 
                 <td>{fmt(brutto(r))}</td>
@@ -834,32 +835,32 @@ export default function Eingangsrechnungen() {
                     type="number"
                     step="0.01"
                     value={r.bezahlt}
-                    onChange={(e) => update(i, "bezahlt", safeNumber(e.target.value, 0))}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(i, "bezahlt", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-eingang-tsx-198" />
+
+                  
                 </td>
 
-                <td style={{ fontWeight: 600 }}>{fmt(offen(r))}</td>
+                <td className="rlc-migrated-pages-buchhaltung-eingang-tsx-199">{fmt(offen(r))}</td>
 
                 <td>
                   <StatusChip value={statusOf(r)} />
                 </td>
 
                 <td>
-                  {r.anhangUrl ? (
-                    <button
-                      className="bh-btn ghost"
-                      onClick={() => openPreview(r.anhangUrl, r.anhangName, r.anhangMime)}
-                    >
+                  {r.anhangUrl ?
+                  <button
+                    className="bh-btn ghost"
+                    onClick={() => openPreview(r.anhangUrl, r.anhangName, r.anhangMime)}>
+                    
                       Ansehen
-                    </button>
-                  ) : (
-                    <span className="bh-text-muted">–</span>
-                  )}
+                    </button> :
+
+                  <span className="bh-text-muted">–</span>
+                  }
                 </td>
 
                 <td>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-200">
                     <button className="bh-btn ghost" onClick={() => printSinglePDF(r)}>
                       Print
                     </button>
@@ -868,119 +869,119 @@ export default function Eingangsrechnungen() {
                     </button>
                   </div>
                 </td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {!filtered.length && (
-            <tr>
-              <td colSpan={14} style={{ padding: 16, color: "#666" }}>
+          {!filtered.length &&
+          <tr>
+              <td colSpan={14} className="rlc-migrated-pages-buchhaltung-eingang-tsx-201">
                 Keine Eingangsrechnungen für die aktuelle Auswahl gefunden.
               </td>
             </tr>
-          )}
+          }
         </tbody>
       </table>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-eingang-tsx-202">
         *Demo – Upload salva solo in memoria. Per collegare davvero: invia <i>File</i> al
         backend (Projekt-ID), memorizza URL e metadati (Lieferant, Kostenstelle). Heuristica dal
         nome file: data, netto, kostenstelle, lieferant → compilati automaticamente.
       </div>
 
-      {previewUrl && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2000,
-          }}
-          onClick={closePreview}
-        >
+      {previewUrl &&
+      <div
+
+
+
+
+
+
+
+
+
+        onClick={closePreview} className="rlc-migrated-pages-buchhaltung-eingang-tsx-203">
+        
           <div
-            style={{
-              background: "#fff",
-              width: "85vw",
-              height: "85vh",
-              borderRadius: 8,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: 10,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                borderBottom: "1px solid #e5e7eb",
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{previewName || "Anhang"}</div>
+
+
+
+
+
+
+
+
+
+          onClick={(e) => e.stopPropagation()} className="rlc-migrated-pages-buchhaltung-eingang-tsx-204">
+          
+            <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-205">
+
+
+
+
+
+
+
+            
+              <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-206">{previewName || "Anhang"}</div>
               <button className="bh-btn" onClick={closePreview}>
                 Schließen
               </button>
             </div>
 
-            <div style={{ flex: 1 }}>
-              {isPdfPreview ? (
-                <iframe
-                  src={previewUrl}
-                  style={{ width: "100%", height: "100%", border: 0 }}
-                  title="Beleg PDF"
-                />
-              ) : (
-                <img
-                  src={previewUrl}
-                  alt="Beleg"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    background: "#111",
-                  }}
-                />
-              )}
+            <div className="rlc-migrated-pages-buchhaltung-eingang-tsx-207">
+              {isPdfPreview ?
+            <iframe
+              src={previewUrl}
+
+              title="Beleg PDF" className="rlc-migrated-pages-buchhaltung-eingang-tsx-208" /> :
+
+
+            <img
+              src={previewUrl}
+              alt="Beleg" className="rlc-migrated-pages-buchhaltung-eingang-tsx-209" />
+
+
+
+
+
+
+
+            }
             </div>
           </div>
         </div>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
 
 /* =========================
    UI SMALLS
    ========================= */
-function StatusChip({ value }: { value: Exclude<Status, "ALL"> }) {
-  const map: Record<Exclude<Status, "ALL">, { bg: string; fg: string; label: string }> = {
+function StatusChip({ value }: {value: Exclude<Status, "ALL">;}) {
+  const map: Record<Exclude<Status, "ALL">, {bg: string;fg: string;label: string;}> = {
     OPEN: { bg: "#fdecea", fg: "#b02a1a", label: "Offen" },
     PART: { bg: "#fff7e6", fg: "#9a6700", label: "Teilbezahlt" },
     PAID: { bg: "#eafaf1", fg: "#0a6c3e", label: "Bezahlt" },
-    OVERDUE: { bg: "#fdebd0", fg: "#8b4a00", label: "Überfällig" },
+    OVERDUE: { bg: "#fdebd0", fg: "#8b4a00", label: "Überfällig" }
   };
 
   const c = map[value];
 
   return (
-    <span
-      style={{
-        background: c.bg,
-        color: c.fg,
-        padding: "3px 8px",
-        borderRadius: 999,
-        fontSize: 12,
-      }}
-    >
+    <span className={rlcClass(null,
+    {
+      background: c.bg,
+      color: c.fg,
+      padding: "3px 8px",
+      borderRadius: 999,
+      fontSize: 12
+    })}>
+      
       {c.label}
-    </span>
-  );
+    </span>);
+
 }
 
 /* =========================
@@ -1006,33 +1007,33 @@ th,td{border-bottom:1px solid #ddd; padding:8px; text-align:left}
 <div class="head">
   <div><div class="logo">RLC Bausoftware</div><div class="muted">Buchhaltung · Eingangsrechnung</div></div>
   <div><b>Beleg:</b> ${escapeHtml(r.belegnr)}<br><b>Datum:</b> ${escapeHtml(r.datum)}${
-    r.faellig ? `<br><b>Fällig:</b> ${escapeHtml(r.faellig)}` : ""
-  }</div>
+  r.faellig ? `<br><b>Fällig:</b> ${escapeHtml(r.faellig)}` : ""}</div>
 </div>
-<div style="margin-top:10px"><b>Lieferant:</b> ${escapeHtml(r.lieferant)}</div>
+<div style="margin-top:10px"><b>Lieferant:</b> ${
+  escapeHtml(r.lieferant)}</div>
 ${
-  r.kostenstelle
-    ? `<div class="muted">Kostenstelle: ${escapeHtml(r.kostenstelle)}</div>`
-    : ""
-}
+  r.kostenstelle ?
+  `<div class="muted">Kostenstelle: ${escapeHtml(r.kostenstelle)}</div>` :
+  ""}
 ${
-  r.bemerkung
-    ? `<div class="muted" style="margin-top:4px">${escapeHtml(r.bemerkung)}</div>`
-    : ""
-}
+
+  r.bemerkung ?
+  `<div class="muted" style="margin-top:4px">${escapeHtml(r.bemerkung)}</div>` :
+  ""}
 <table>
   <thead><tr><th>Beschreibung</th><th class="right">Netto (€)</th><th class="right">MwSt (%)</th><th class="right">MwSt (€)</th><th class="right">Brutto (€)</th></tr></thead>
   <tbody>
-    <tr><td>${escapeHtml(r.bemerkung || "Material/Lieferung")}</td>
+    <tr><td>${
+  escapeHtml(r.bemerkung || "Material/Lieferung")}</td>
         <td class="right">${fmt(r.netto)}</td><td class="right">${fmt(
     r.mwstPct
   )}</td><td class="right">${fmt(mw)}</td><td class="right">${fmt(b)}</td></tr>
     <tr class="tot"><td colspan="4" class="right">Bezahlt</td><td class="right">${fmt(
-      r.bezahlt || 0
-    )}</td></tr>
+    r.bezahlt || 0
+  )}</td></tr>
     <tr class="tot"><td colspan="4" class="right">Offen</td><td class="right">${fmt(
-      of
-    )}</td></tr>
+    of
+  )}</td></tr>
   </tbody>
 </table>
 <div class="muted" style="margin-top:10px">Automatisch erstellt · ${new Date().toLocaleString(
@@ -1042,11 +1043,11 @@ ${
 }
 
 function printableReportHTML(list: Eingangsrechnung[]) {
-  const rows = list
-    .map((r) => {
-      const b = brutto(r);
-      const of = offen(r);
-      return `<tr>
+  const rows = list.
+  map((r) => {
+    const b = brutto(r);
+    const of = offen(r);
+    return `<tr>
         <td>${escapeHtml(r.belegnr)}</td>
         <td>${escapeHtml(r.datum)}</td>
         <td>${escapeHtml(r.lieferant)}</td>
@@ -1058,8 +1059,8 @@ function printableReportHTML(list: Eingangsrechnung[]) {
         <td class="right">${fmt(of)}</td>
         <td>${escapeHtml(labelOf(statusOf(r)))}</td>
       </tr>`;
-    })
-    .join("");
+  }).
+  join("");
 
   const totals = list.reduce(
     (a, r) => {
@@ -1105,13 +1106,13 @@ th,td{border-bottom:1px solid #ddd; padding:8px; text-align:left}
 }
 
 function labelOf(s: Exclude<ReturnType<typeof statusOf>, "ALL">) {
-  return s === "OPEN"
-    ? "Offen"
-    : s === "PART"
-    ? "Teilbezahlt"
-    : s === "PAID"
-    ? "Bezahlt"
-    : "Überfällig";
+  return s === "OPEN" ?
+  "Offen" :
+  s === "PART" ?
+  "Teilbezahlt" :
+  s === "PAID" ?
+  "Bezahlt" :
+  "Überfällig";
 }
 
 /* =========================
@@ -1136,8 +1137,3 @@ function suggestKostenstelle(lieferant: string) {
   if (/(straß|asphalt|pflaster)/.test(s)) return "Straßenbau";
   return "Material";
 }
-
-
-
-
-

@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { SafetyDB } from "./store.sicherheit";
 import { SafetyRecord, SafetyAttachment } from "./types";
 
@@ -6,7 +6,7 @@ const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const th: React.CSSProperties = {
@@ -14,19 +14,19 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 export default function Sicherheit() {
@@ -107,11 +107,11 @@ export default function Sicherheit() {
   }, [filtered]);
 
   return (
-    <div style={{ display: "grid", gridTemplateRows: "auto 1fr", gap: 10, padding: 10 }}>
+    <div className="rlc-migrated-pages-buro-sicherheit-tsx-629">
       <div
-        className="card"
-        style={{ padding: "8px 10px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
-      >
+        className="card rlc-migrated-pages-buro-sicherheit-tsx-630">
+
+        
         <button className="btn" onClick={add}>
           + Unterweisung
         </button>
@@ -119,37 +119,37 @@ export default function Sicherheit() {
           Löschen
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-sicherheit-tsx-631" />
 
         <input
           placeholder="Suche Titel / Person / Projekt…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 260 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 260 })} />
+        
 
         <button className="btn" onClick={exportCSV}>
           Export CSV
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(520px,48vw) 1fr",
-          gap: 10,
-          minHeight: "60vh",
-        }}
-      >
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="rlc-migrated-pages-buro-sicherheit-tsx-632">
+
+
+
+
+
+
+        
+        <div className="card rlc-migrated-pages-buro-sicherheit-tsx-633">
+          <table className="rlc-migrated-pages-buro-sicherheit-tsx-634">
             <thead>
               <tr>
-                <th style={th}>Titel</th>
-                <th style={th}>Person</th>
-                <th style={th}>Projekt</th>
-                <th style={th}>Datum</th>
-                <th style={th}>Nächste Unterweisung</th>
+                <th className={rlcClass(null, th)}>Titel</th>
+                <th className={rlcClass(null, th)}>Person</th>
+                <th className={rlcClass(null, th)}>Projekt</th>
+                <th className={rlcClass(null, th)}>Datum</th>
+                <th className={rlcClass(null, th)}>Nächste Unterweisung</th>
               </tr>
             </thead>
             <tbody>
@@ -159,162 +159,162 @@ export default function Sicherheit() {
                 return (
                   <tr
                     key={r.id}
-                    onClick={() => setSelId(r.id)}
-                    style={{
+                    onClick={() => setSelId(r.id)} className={rlcClass(null,
+                    {
                       cursor: "pointer",
-                      background: sel?.id === r.id ? "#f1f5ff" : undefined,
-                    }}
-                  >
-                    <td style={td}>
+                      background: sel?.id === r.id ? "#f1f5ff" : undefined
+                    })}>
+                    
+                    <td className={rlcClass(null, td)}>
                       <b>{r.title}</b>
                     </td>
-                    <td style={td}>{r.person || "—"}</td>
-                    <td style={td}>{r.project || "—"}</td>
-                    <td style={td}>{r.date ? fmt(r.date) : "—"}</td>
-                    <td style={{ ...td, color: warn ? "#c03" : undefined }}>
+                    <td className={rlcClass(null, td)}>{r.person || "—"}</td>
+                    <td className={rlcClass(null, td)}>{r.project || "—"}</td>
+                    <td className={rlcClass(null, td)}>{r.date ? fmt(r.date) : "—"}</td>
+                    <td className={rlcClass(null, { ...td, color: warn ? "#c03" : undefined })}>
                       {r.nextDate ? fmt(r.nextDate) : "—"}
                     </td>
-                  </tr>
-                );
+                  </tr>);
+
               })}
 
-              {filtered.length === 0 && (
-                <tr>
-                  <td style={{ ...td, opacity: 0.6 }} colSpan={5}>
+              {filtered.length === 0 &&
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={5}>
                     Keine Unterweisungen.
                   </td>
                 </tr>
-              )}
+              }
             </tbody>
           </table>
         </div>
 
         <div
-          className="card"
+          className="card rlc-migrated-pages-buro-sicherheit-tsx-635"
           onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-          style={{ padding: 12 }}
-        >
-          {!sel ? (
-            <div style={{ opacity: 0.7 }}>Links Unterweisung wählen oder neu anlegen.</div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "130px 1fr 130px 1fr",
-                gap: 10,
-              }}
-            >
-              <label style={lbl}>Titel</label>
+          onDrop={onDrop}>
+
+          
+          {!sel ?
+          <div className="rlc-migrated-pages-buro-sicherheit-tsx-636">Links Unterweisung wählen oder neu anlegen.</div> :
+
+          <div className="rlc-migrated-pages-buro-sicherheit-tsx-637">
+
+
+
+
+
+            
+              <label className={rlcClass(null, lbl)}>Titel</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.title}
+            onChange={(e) => up({ title: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Projekt</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.project ?? ""}
+            onChange={(e) => up({ project: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Person</label>
+              <input className={rlcClass(null,
+            inp)}
+            value={sel.person ?? ""}
+            onChange={(e) => up({ person: e.target.value })} />
+            
+
+              <label className={rlcClass(null, lbl)}>Datum</label>
               <input
-                style={inp}
-                value={sel.title}
-                onChange={(e) => up({ title: e.target.value })}
-              />
+              type="date" className={rlcClass(null,
+              inp)}
+              value={toDateInput(sel.date)}
+              onChange={(e) => up({ date: fromDateInput(e.target.value) })} />
+            
 
-              <label style={lbl}>Projekt</label>
+              <label className={rlcClass(null, lbl)}>Nächste Unterweisung</label>
               <input
-                style={inp}
-                value={sel.project ?? ""}
-                onChange={(e) => up({ project: e.target.value })}
-              />
+              type="date" className={rlcClass(null,
+              inp)}
+              value={toDateInput(sel.nextDate)}
+              onChange={(e) => up({ nextDate: fromDateInput(e.target.value) })} />
+            
 
-              <label style={lbl}>Person</label>
-              <input
-                style={inp}
-                value={sel.person ?? ""}
-                onChange={(e) => up({ person: e.target.value })}
-              />
+              <label className={rlcClass(null, lbl)}>Bemerkung</label>
+              <textarea className={rlcClass(null,
+            { ...inp, minHeight: 80, resize: "vertical", gridColumn: "1 / -1" })}
+            value={sel.notes ?? ""}
+            onChange={(e) => up({ notes: e.target.value })} />
+            
 
-              <label style={lbl}>Datum</label>
-              <input
-                type="date"
-                style={inp}
-                value={toDateInput(sel.date)}
-                onChange={(e) => up({ date: fromDateInput(e.target.value) })}
-              />
-
-              <label style={lbl}>Nächste Unterweisung</label>
-              <input
-                type="date"
-                style={inp}
-                value={toDateInput(sel.nextDate)}
-                onChange={(e) => up({ nextDate: fromDateInput(e.target.value) })}
-              />
-
-              <label style={lbl}>Bemerkung</label>
-              <textarea
-                style={{ ...inp, minHeight: 80, resize: "vertical", gridColumn: "1 / -1" }}
-                value={sel.notes ?? ""}
-                onChange={(e) => up({ notes: e.target.value })}
-              />
-
-              <label style={{ ...lbl, gridColumn: "1 / -1" }}>
+              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>
                 Dokumente / Fotos (Drag&amp;Drop)
               </label>
+              <div className="rlc-migrated-pages-buro-sicherheit-tsx-638">
+
+
+
+
+
+
+              
+                {(sel.attachments || []).map((a) =>
               <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))",
-                  gap: 8,
-                }}
-              >
-                {(sel.attachments || []).map((a) => (
-                  <div
-                    key={a.id}
-                    style={{
-                      border: "1px solid var(--line)",
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      background: "#fff",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "6px 8px",
-                        fontSize: 12,
-                        display: "flex",
-                        gap: 8,
-                        alignItems: "center",
-                      }}
-                    >
+                key={a.id} className="rlc-migrated-pages-buro-sicherheit-tsx-639">
+
+
+
+
+
+
+                
+                    <div className="rlc-migrated-pages-buro-sicherheit-tsx-640">
+
+
+
+
+
+
+
+                  
                       <b
-                        style={{
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                        title={a.name}
-                      >
+
+
+
+
+
+                    title={a.name} className="rlc-migrated-pages-buro-sicherheit-tsx-641">
+                    
                         {a.name}
                       </b>
-                      <div style={{ flex: 1 }} />
+                      <div className="rlc-migrated-pages-buro-sicherheit-tsx-642" />
                       <button className="btn" onClick={() => open(a)}>
                         Öffnen
                       </button>
                     </div>
 
-                    {(a.mime || "").startsWith("image/") && (
-                      <img
-                        src={a.dataURL}
-                        alt={a.name}
-                        style={{ width: "100%", height: "auto", display: "block" }}
-                      />
-                    )}
-                  </div>
-                ))}
+                    {(a.mime || "").startsWith("image/") &&
+                <img
+                  src={a.dataURL}
+                  alt={a.name} className="rlc-migrated-pages-buro-sicherheit-tsx-643" />
 
-                {(sel.attachments || []).length === 0 && (
-                  <div style={{ opacity: 0.6 }}>Keine Anhänge.</div>
-                )}
+
+                }
+                  </div>
+              )}
+
+                {(sel.attachments || []).length === 0 &&
+              <div className="rlc-migrated-pages-buro-sicherheit-tsx-644">Keine Anhänge.</div>
+              }
               </div>
             </div>
-          )}
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function fmt(iso?: string) {
@@ -346,8 +346,3 @@ function download(type: string, name: string, data: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-
-
-
-

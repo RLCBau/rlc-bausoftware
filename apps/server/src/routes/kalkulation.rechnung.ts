@@ -95,6 +95,27 @@ router.post("/:projectKey/save", (req, res) => {
   }
 });
 
+/* POST: ersetzt die vollständige Liste (Web-Sammelspeicherung) */
+router.post("/:projectKey/replace", (req, res) => {
+  try {
+    const { projectKey } = req.params;
+    const items = Array.isArray(req.body?.items) ? req.body.items : null;
+
+    if (!isSafeKey(projectKey)) {
+      return res.status(400).json({ error: "invalid projectKey" });
+    }
+    if (!items) {
+      return res.status(400).json({ error: "missing items" });
+    }
+
+    writeList(projectKey, items);
+    return res.json({ ok: true, count: items.length });
+  } catch (e) {
+    console.error("rechnung replace error", e);
+    return res.status(500).json({ error: "replace failed" });
+  }
+});
+
 /* DELETE */
 router.delete("/:projectKey/:id", (req, res) => {
   try {

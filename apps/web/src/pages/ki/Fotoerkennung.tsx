@@ -1,7 +1,8 @@
-// apps/web/src/pages/ki/Fotoerkennung.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Fotoerkennung.tsx
 
 import React from "react";
 import { useProject } from "../../store/useProject";
+import { saveProjectLvPosition } from "../../api/projectLvCompat";
 
 type Box = {
   id: string;
@@ -43,42 +44,42 @@ const card: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 10,
   padding: 16,
-  background: "#fff",
+  background: "#fff"
 };
 
 const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 8,
   padding: "8px 10px",
-  fontSize: 14,
+  fontSize: 14
 };
 
 const tbl: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   marginTop: 8,
-  background: "#fff",
+  background: "#fff"
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
   padding: 6,
-  borderBottom: "1px solid #e5e7eb",
+  borderBottom: "1px solid #e5e7eb"
 };
 
 const thC: React.CSSProperties = {
   ...th,
-  textAlign: "center",
+  textAlign: "center"
 };
 
 const td: React.CSSProperties = {
   padding: 6,
-  borderBottom: "1px solid #f0f0f0",
+  borderBottom: "1px solid #f0f0f0"
 };
 
 const tdC: React.CSSProperties = {
   ...td,
-  textAlign: "center",
+  textAlign: "center"
 };
 
 export default function Fotoerkennung() {
@@ -138,7 +139,7 @@ export default function Fotoerkennung() {
 
       const res = await fetch("/api/ki/photo-analyze", {
         method: "POST",
-        body: form,
+        body: form
       });
 
       if (!res.ok) {
@@ -150,7 +151,7 @@ export default function Fotoerkennung() {
       setResult({
         positions: Array.isArray(data?.positions) ? data.positions : [],
         boxes: Array.isArray(data?.boxes) ? data.boxes : [],
-        summary: typeof data?.summary === "string" ? data.summary : "",
+        summary: typeof data?.summary === "string" ? data.summary : ""
       });
     } catch (e) {
       console.error(e);
@@ -175,16 +176,10 @@ export default function Fotoerkennung() {
         posNr: p.match?.id || undefined,
         kurztext: p.match?.kurztext || p.kurztext,
         einheit: p.match?.einheit || p.einheit,
-        quelle: "Fotoerkennung",
+        quelle: "Fotoerkennung"
       };
 
-      const res = await fetch("/api/lv/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error(await res.text());
+      await saveProjectLvPosition(storeProjectId || effectiveProjectId, payload);
 
       window.alert(`'${payload.kurztext}' ins LV eingefügt ✅`);
     } catch (e) {
@@ -195,22 +190,22 @@ export default function Fotoerkennung() {
 
   function handleNachtrag(p: Position) {
     const url =
-      `/kalkulation/nachtraege?fromFoto=1` +
-      `&projectId=${encodeURIComponent(storeProjectId || effectiveProjectId)}` +
-      `&projectCode=${encodeURIComponent(projectCode || "")}` +
-      `&kurztext=${encodeURIComponent(p.kurztext)}` +
-      `&einheit=${encodeURIComponent(p.einheit)}`;
+    `/kalkulation/nachtraege?fromFoto=1` +
+    `&projectId=${encodeURIComponent(storeProjectId || effectiveProjectId)}` +
+    `&projectCode=${encodeURIComponent(projectCode || "")}` +
+    `&kurztext=${encodeURIComponent(p.kurztext)}` +
+    `&einheit=${encodeURIComponent(p.einheit)}`;
 
     window.location.href = url;
   }
 
   return (
-    <div style={{ display: "grid", gap: 16, padding: 16 }}>
+    <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-986">
       <h1>Fotoerkennung (Leistung/Material/Mengen)</h1>
 
-      <div style={card}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 12 }}>
-          <div style={{ display: "grid", gap: 10 }}>
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-987">
+          <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-988">
             <input
               type="file"
               accept="image/*"
@@ -218,151 +213,151 @@ export default function Fotoerkennung() {
                 setFile(e.target.files?.[0] || null);
                 setResult(null);
                 setError(null);
-              }}
-            />
+              }} />
+            
 
             <textarea
               placeholder="Notiz oder Beschreibung…"
               value={note}
-              onChange={(e) => setNote(e.target.value)}
-              style={{ ...inp, minHeight: 80 }}
-            />
+              onChange={(e) => setNote(e.target.value)} className={rlcClass(null,
+              { ...inp, minHeight: 80 })} />
+            
 
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <label style={{ fontSize: 12, opacity: 0.8, width: 90 }}>Projekt</label>
-              <input
-                style={{ ...inp, flex: 1 }}
-                placeholder="z. B. BA-2025-834"
-                value={projectInput}
-                onChange={(e) => setProjectInput(e.target.value)}
-              />
+            <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-989">
+              <label className="rlc-migrated-pages-ki-fotoerkennung-tsx-990">Projekt</label>
+              <input className={rlcClass(null,
+              { ...inp, flex: 1 })}
+              placeholder="z. B. BA-2025-834"
+              value={projectInput}
+              onChange={(e) => setProjectInput(e.target.value)} />
+              
             </div>
 
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
+            <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-991">
               Aktiv: {effectiveProjectId || "kein Projekt gewählt"}
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-992">
             <button className="btn" onClick={handleAnalyze} disabled={loading || !file}>
               {loading ? "Analysiere…" : "Foto analysieren"}
             </button>
 
-            {result && (
-              <button className="btn" onClick={() => setResult(null)}>
+            {result &&
+            <button className="btn" onClick={() => setResult(null)}>
                 Ergebnis zurücksetzen
               </button>
-            )}
+            }
           </div>
         </div>
 
-        {error && <div style={{ color: "#b91c1c", fontSize: 13 }}>{error}</div>}
+        {error && <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-993">{error}</div>}
       </div>
 
-      {previewUrl && (
-        <div style={card}>
-          <h3 style={{ margin: 0 }}>Vorschau</h3>
+      {previewUrl &&
+      <div className={rlcClass(null, card)}>
+          <h3 className="rlc-migrated-pages-ki-fotoerkennung-tsx-994">Vorschau</h3>
           <ImageWithBoxes src={previewUrl} boxes={result?.boxes || []} />
         </div>
-      )}
+      }
 
-      {result?.positions && (
-        <div style={card}>
-          <h3 style={{ margin: 0 }}>Erkannte LV-Positionen</h3>
-          <p style={{ margin: "4px 0 8px" }}>{result.summary || "—"}</p>
+      {result?.positions &&
+      <div className={rlcClass(null, card)}>
+          <h3 className="rlc-migrated-pages-ki-fotoerkennung-tsx-995">Erkannte LV-Positionen</h3>
+          <p className="rlc-migrated-pages-ki-fotoerkennung-tsx-996">{result.summary || "—"}</p>
 
-          <table style={tbl}>
+          <table className={rlcClass(null, tbl)}>
             <thead>
-              <tr style={{ background: "#f7f7f7" }}>
-                <th style={th}>Kurztext</th>
-                <th style={thC}>Einheit</th>
-                <th style={thC}>Typ</th>
-                <th style={thC}>Status</th>
-                <th style={th}>Match (falls vorhanden)</th>
-                <th style={thC}>Aktion</th>
+              <tr className="rlc-migrated-pages-ki-fotoerkennung-tsx-997">
+                <th className={rlcClass(null, th)}>Kurztext</th>
+                <th className={rlcClass(null, thC)}>Einheit</th>
+                <th className={rlcClass(null, thC)}>Typ</th>
+                <th className={rlcClass(null, thC)}>Status</th>
+                <th className={rlcClass(null, th)}>Match (falls vorhanden)</th>
+                <th className={rlcClass(null, thC)}>Aktion</th>
               </tr>
             </thead>
 
             <tbody>
-              {result.positions.map((p) => (
-                <tr key={p.id}>
-                  <td style={td}>{p.kurztext}</td>
+              {result.positions.map((p) =>
+            <tr key={p.id}>
+                  <td className={rlcClass(null, td)}>{p.kurztext}</td>
 
-                  <td style={tdC}>{p.einheit || "—"}</td>
+                  <td className={rlcClass(null, tdC)}>{p.einheit || "—"}</td>
 
-                  <td
-                    style={{
-                      ...tdC,
-                      color: p.typ === "implizit" ? "#92400e" : "#065f46",
-                    }}
-                  >
+                  <td className={rlcClass(null,
+              {
+                ...tdC,
+                color: p.typ === "implizit" ? "#92400e" : "#065f46"
+              })}>
+                
                     {p.typ}
                   </td>
 
-                  <td
-                    style={{
-                      ...tdC,
-                      fontWeight: 700,
-                      color: p.status === "bestehend" ? "#065f46" : "#9a3412",
-                    }}
-                  >
+                  <td className={rlcClass(null,
+              {
+                ...tdC,
+                fontWeight: 600,
+                color: p.status === "bestehend" ? "#065f46" : "#9a3412"
+              })}>
+                
                     {p.status}
                   </td>
 
-                  <td style={td}>
-                    {p.match ? (
-                      <>
-                        <div style={{ fontWeight: 600 }}>{p.match.kurztext}</div>
-                        <div style={{ opacity: 0.7, fontSize: 12 }}>
+                  <td className={rlcClass(null, td)}>
+                    {p.match ?
+                <>
+                        <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-998">{p.match.kurztext}</div>
+                        <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-999">
                           {p.match.einheit || "—"} · Score:{" "}
                           {Math.round((p.match.score || 0) * 100)}%
                         </div>
-                      </>
-                    ) : (
-                      <span style={{ opacity: 0.6 }}>—</span>
-                    )}
+                      </> :
+
+                <span className="rlc-migrated-pages-ki-fotoerkennung-tsx-1000">—</span>
+                }
                   </td>
 
-                  <td style={{ ...tdC, whiteSpace: "nowrap" }}>
-                    {p.status === "bestehend" ? (
-                      <button
-                        className="btn"
-                        style={{ fontSize: 12, padding: "4px 8px" }}
-                        onClick={() => handleAddToLV(p)}
-                      >
+                  <td className={rlcClass(null, { ...tdC, whiteSpace: "nowrap" })}>
+                    {p.status === "bestehend" ?
+                <button
+                  className="btn rlc-migrated-pages-ki-fotoerkennung-tsx-1001"
+
+                  onClick={() => handleAddToLV(p)}>
+                  
                         In LV einfügen
-                      </button>
-                    ) : (
-                      <button
-                        className="btn"
-                        style={{ fontSize: 12, padding: "4px 8px" }}
-                        onClick={() => handleNachtrag(p)}
-                      >
+                      </button> :
+
+                <button
+                  className="btn rlc-migrated-pages-ki-fotoerkennung-tsx-1002"
+
+                  onClick={() => handleNachtrag(p)}>
+                  
                         Nachtrag erstellen →
                       </button>
-                    )}
+                }
                   </td>
                 </tr>
-              ))}
+            )}
 
-              {result.positions.length === 0 && (
-                <tr>
-                  <td style={{ ...td, opacity: 0.6 }} colSpan={6}>
+              {result.positions.length === 0 &&
+            <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={6}>
                     Keine Positionen erkannt.
                   </td>
                 </tr>
-              )}
+            }
             </tbody>
           </table>
         </div>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
 
 /* ================== Image + Overlay ================== */
 
-function ImageWithBoxes({ src, boxes }: { src: string; boxes: Box[] }) {
+function ImageWithBoxes({ src, boxes }: {src: string;boxes: Box[];}) {
   const imgRef = React.useRef<HTMLImageElement | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
@@ -391,7 +386,7 @@ function ImageWithBoxes({ src, boxes }: { src: string; boxes: Box[] }) {
         const [x, y, w, h] = b.box || [0, 0, 0, 0];
 
         const normalized =
-          x <= 1 && y <= 1 && w <= 1 && h <= 1 && x >= 0 && y >= 0 && w >= 0 && h >= 0;
+        x <= 1 && y <= 1 && w <= 1 && h <= 1 && x >= 0 && y >= 0 && w >= 0 && h >= 0;
 
         const X = normalized ? x * cv.width : x;
         const Y = normalized ? y * cv.height : y;
@@ -432,31 +427,26 @@ function ImageWithBoxes({ src, boxes }: { src: string; boxes: Box[] }) {
   }, [boxes, src]);
 
   return (
-    <div style={{ position: "relative", width: "100%", maxWidth: 960 }}>
+    <div className="rlc-migrated-pages-ki-fotoerkennung-tsx-1003">
       <img
         ref={imgRef}
         src={src}
-        alt="preview"
-        style={{
-          width: "100%",
-          height: "auto",
-          display: "block",
-          borderRadius: 8,
-        }}
-      />
+        alt="preview" className="rlc-migrated-pages-ki-fotoerkennung-tsx-1004" />
+
+
+
+
+
+
+      
       <canvas
-        ref={canvasRef}
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-        }}
-      />
-    </div>
-  );
+        ref={canvasRef} className="rlc-migrated-pages-ki-fotoerkennung-tsx-1005" />
+
+
+
+
+
+      
+    </div>);
+
 }
-
-
-
-
-

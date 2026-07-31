@@ -127,6 +127,9 @@ export type RootStackParamList = {
   PdfViewer: {
     uri: string;
     title?: string;
+    projectId?: string;
+    projectCode?: string;
+    documentType?: string;
   };
 
   Anmelden: ProjectBaseParams;
@@ -249,7 +252,9 @@ export type RootStackParamList = {
     fromMengen?: boolean;
     mengenId?: string;
 
-    abschlagNr?: number;
+    abschlagNr?: number | string;
+    inboxSnapshot?: any;
+    fromInbox?: boolean;
   };
 
   /* =====================

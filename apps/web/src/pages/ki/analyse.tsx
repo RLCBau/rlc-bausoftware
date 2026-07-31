@@ -1,4 +1,4 @@
-// apps/web/src/pages/ki/Analyse.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Analyse.tsx
 
 import React, { useState } from "react";
 import { useProject } from "../../store/useProject";
@@ -9,7 +9,7 @@ const shell = {
   maxWidth: 900,
   margin: "0 auto",
   padding: "12px 16px",
-  fontFamily: "Inter,system-ui,Arial",
+  fontFamily: "Inter,system-ui,Arial"
 } as const;
 
 const btn = {
@@ -18,25 +18,25 @@ const btn = {
   background: "#fff",
   borderRadius: 6,
   fontSize: 13,
-  cursor: "pointer",
+  cursor: "pointer"
 } as const;
 
 const table = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: 13,
-  marginTop: 12,
+  marginTop: 12
 } as const;
 
 const thtd = {
   border: "1px solid #e2e8f0",
-  padding: "6px 8px",
+  padding: "6px 8px"
 } as const;
 
 const head = {
   ...thtd,
   background: "#f8fafc",
-  fontWeight: 600,
+  fontWeight: 600
 } as const;
 
 /* ================= TYPES ================= */
@@ -69,12 +69,12 @@ export default function Analyse() {
       const r = await fetch("/api/ki/analyse", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           projectId,
-          projectCode,
-        }),
+          projectCode
+        })
       });
 
       const data = await r.json();
@@ -84,13 +84,13 @@ export default function Analyse() {
       }
 
       // sicurezza dati
-      const rows: AnalyseRow[] = Array.isArray(data?.rows)
-        ? data.rows.map((r: any) => ({
-            pos: String(r.pos || "-"),
-            kosten: Number(r.kosten || 0),
-            risk: r.risk || "niedrig",
-          }))
-        : [];
+      const rows: AnalyseRow[] = Array.isArray(data?.rows) ?
+      data.rows.map((r: any) => ({
+        pos: String(r.pos || "-"),
+        kosten: Number(r.kosten || 0),
+        risk: r.risk || "niedrig"
+      })) :
+      [];
 
       setRes(rows);
     } catch (e: any) {
@@ -101,74 +101,69 @@ export default function Analyse() {
   };
 
   return (
-    <div style={shell}>
+    <div className={rlcClass(null, shell)}>
       <h2>LV-Analyse (KI)</h2>
 
-      <div style={{ marginBottom: 10, fontSize: 12, color: "#6b7280" }}>
+      <div className="rlc-migrated-pages-ki-analyse-tsx-1078">
         Projekt: {projectCode || projectId || "-"}
       </div>
 
-      <button style={btn} onClick={run} disabled={loading}>
+      <button className={rlcClass(null, btn)} onClick={run} disabled={loading}>
         {loading ? "Analysiert..." : "Analyse starten"}
       </button>
 
-      {error && (
-        <div style={{ marginTop: 10, color: "#b91c1c" }}>
+      {error &&
+      <div className="rlc-migrated-pages-ki-analyse-tsx-1079">
           {error}
         </div>
-      )}
+      }
 
-      <table style={table}>
+      <table className={rlcClass(null, table)}>
         <thead>
           <tr>
-            <th style={head}>Pos</th>
-            <th style={head}>Kosten (€)</th>
-            <th style={head}>Risiko</th>
+            <th className={rlcClass(null, head)}>Pos</th>
+            <th className={rlcClass(null, head)}>Kosten (€)</th>
+            <th className={rlcClass(null, head)}>Risiko</th>
           </tr>
         </thead>
 
         <tbody>
-          {res.map((r) => (
-            <tr key={r.pos}>
-              <td style={thtd}>{r.pos}</td>
+          {res.map((r) =>
+          <tr key={r.pos}>
+              <td className={rlcClass(null, thtd)}>{r.pos}</td>
 
-              <td style={thtd}>
+              <td className={rlcClass(null, thtd)}>
                 {r.kosten.toLocaleString("de-DE", {
-                  minimumFractionDigits: 2,
-                })}
+                minimumFractionDigits: 2
+              })}
               </td>
 
-              <td
-                style={{
-                  ...thtd,
-                  fontWeight: 600,
-                  color:
-                    r.risk === "hoch"
-                      ? "#b91c1c"
-                      : r.risk === "mittel"
-                      ? "#d97706"
-                      : "#065f46",
-                }}
-              >
+              <td className={rlcClass(null,
+            {
+              ...thtd,
+              fontWeight: 600,
+              color:
+              r.risk === "hoch" ?
+              "#b91c1c" :
+              r.risk === "mittel" ?
+              "#d97706" :
+              "#065f46"
+            })}>
+              
                 {r.risk}
               </td>
             </tr>
-          ))}
+          )}
 
-          {res.length === 0 && !loading && (
-            <tr>
-              <td colSpan={3} style={{ ...thtd, color: "#6b7280" }}>
+          {res.length === 0 && !loading &&
+          <tr>
+              <td colSpan={3} className={rlcClass(null, { ...thtd, color: "#6b7280" })}>
                 Noch keine Analyse durchgeführt.
               </td>
             </tr>
-          )}
+          }
         </tbody>
       </table>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

@@ -1,4 +1,4 @@
-﻿// apps/web/src/pages/kalkulation/KalkulationsDatenbankPage.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/KalkulationsDatenbankPage.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { runRlcAction } from "../../lib/rlcProgress";
@@ -12,8 +12,8 @@ import {
   type KalkulationsRessource,
   type KalkulationsParameter,
   type KalkulationsKosten,
-  type KalkulationsErfahrung,
-} from "./kalkulationsDatenbank";
+  type KalkulationsErfahrung } from
+"./kalkulationsDatenbank";
 
 /* ================= TYPES ================= */
 
@@ -21,22 +21,22 @@ type FilterQuelle = "alle" | KalkulationsQuelle;
 type FilterRisiko = "alle" | RisikoStufe;
 
 type DbQualityFilter =
-  | "alle"
-  | "epFehlt"
-  | "einheitFehlt"
-  | "ressourcenFehlen"
-  | "risikoHoch"
-  | "confidenceNiedrig"
-  | "dubletten";
+"alle" |
+"epFehlt" |
+"einheitFehlt" |
+"ressourcenFehlen" |
+"risikoHoch" |
+"confidenceNiedrig" |
+"dubletten";
 
 type SortKey =
-  | "updatedAt"
-  | "posNr"
-  | "kurztext"
-  | "epNetto"
-  | "gpNetto"
-  | "verwendungen"
-  | "confidence";
+"updatedAt" |
+"posNr" |
+"kurztext" |
+"epNetto" |
+"gpNetto" |
+"verwendungen" |
+"confidence";
 
 type ProjectLike = {
   id?: string;
@@ -50,34 +50,34 @@ type ProjectLike = {
 /* ================= CONSTANTS ================= */
 
 const QUELLEN: FilterQuelle[] = [
-  "alle",
-  "manual",
-  "ki",
-  "rezept",
-  "lv",
-  "import",
-  "nachtrag",
-  "server",
-];
+"alle",
+"manual",
+"ki",
+"rezept",
+"lv",
+"import",
+"nachtrag",
+"server"];
+
 
 const DB_LOAD_LIMIT = 200;
 const DB_TABLE_LIMIT = 10;
 const RISIKEN: FilterRisiko[] = [
-  "alle",
-  "niedrig",
-  "mittel",
-  "hoch",
-  "kritisch",
-];
+"alle",
+"niedrig",
+"mittel",
+"hoch",
+"kritisch"];
+
 
 const RESSOURCEN_TYPEN: Array<KalkulationsRessource["typ"]> = [
-  "personal",
-  "maschine",
-  "material",
-  "fremdleistung",
-  "entsorgung",
-  "sonstiges",
-];
+"personal",
+"maschine",
+"material",
+"fremdleistung",
+"entsorgung",
+"sonstiges"];
+
 
 /* ================= HELPERS ================= */
 
@@ -92,11 +92,11 @@ function safeId(): string {
 function n(value: unknown, fallback = 0): number {
   if (value === null || value === undefined || value === "") return fallback;
 
-  const raw = String(value)
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/\.(?=\d{3}(?:[.,]|$))/g, "")
-    .replace(",", ".");
+  const raw = String(value).
+  trim().
+  replace(/\s/g, "").
+  replace(/\.(?=\d{3}(?:[.,]|$))/g, "").
+  replace(",", ".");
 
   const parsed = typeof value === "number" ? value : Number(raw);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -109,14 +109,14 @@ function round2(value: number): number {
 function money(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(n(value));
 }
 
 function num(value: unknown, digits = 2): string {
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
+    maximumFractionDigits: digits
   }).format(n(value));
 }
 
@@ -130,7 +130,7 @@ function fmtDate(value?: string): string {
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
-    minute: "2-digit",
+    minute: "2-digit"
   }).format(d);
 }
 
@@ -143,10 +143,10 @@ function norm(value: unknown): string {
 }
 
 function downloadText(
-  text: string,
-  filename: string,
-  type = "text/plain;charset=utf-8"
-) {
+text: string,
+filename: string,
+type = "text/plain;charset=utf-8")
+{
   const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -160,11 +160,11 @@ function downloadText(
 
 function getProject(projectCtx: any): ProjectLike | null {
   const p =
-    projectCtx?.project ||
-    projectCtx?.currentProject ||
-    projectCtx?.selectedProject ||
-    projectCtx?.current ||
-    projectCtx;
+  projectCtx?.project ||
+  projectCtx?.currentProject ||
+  projectCtx?.selectedProject ||
+  projectCtx?.current ||
+  projectCtx;
 
   if (!p || typeof p !== "object") return null;
   return p as ProjectLike;
@@ -173,10 +173,10 @@ function getProject(projectCtx: any): ProjectLike | null {
 function getProjectCode(project: ProjectLike | null): string {
   return String(
     project?.code ||
-      project?.number ||
-      project?.projektnummer ||
-      project?.id ||
-      ""
+    project?.number ||
+    project?.projektnummer ||
+    project?.id ||
+    ""
   ).trim();
 }
 
@@ -208,8 +208,8 @@ function resourceTotal(r: Partial<KalkulationsRessource>): number {
 }
 
 function normalizeResource(
-  r: Partial<KalkulationsRessource>
-): KalkulationsRessource {
+r: Partial<KalkulationsRessource>)
+: KalkulationsRessource {
   return {
     id: String(r.id || safeId()),
     typ: r.typ || "sonstiges",
@@ -221,9 +221,9 @@ function normalizeResource(
     einzelpreis: n(r.einzelpreis),
     gesamtpreis: resourceTotal(r),
     leistungswert:
-      r.leistungswert === undefined ? undefined : n(r.leistungswert),
+    r.leistungswert === undefined ? undefined : n(r.leistungswert),
     leistungsEinheit: String(r.leistungsEinheit || ""),
-    bemerkung: String(r.bemerkung || ""),
+    bemerkung: String(r.bemerkung || "")
   };
 }
 
@@ -239,7 +239,7 @@ function emptyKosten(): KalkulationsKosten {
     risiko: 0,
     gewinn: 0,
     epNetto: 0,
-    gpNetto: 0,
+    gpNetto: 0
   };
 }
 
@@ -247,15 +247,15 @@ function entryDirectCost(entry: KalkulationsErfahrung): number {
   const k = entry.kosten || emptyKosten();
 
   const kostenSum =
-    n(k.material) +
-    n(k.lohn) +
-    n(k.maschinen) +
-    n(k.fremdleistung) +
-    n(k.entsorgung) +
-    n(k.transport) +
-    n(k.gemeinkosten) +
-    n(k.risiko) +
-    n(k.gewinn);
+  n(k.material) +
+  n(k.lohn) +
+  n(k.maschinen) +
+  n(k.fremdleistung) +
+  n(k.entsorgung) +
+  n(k.transport) +
+  n(k.gemeinkosten) +
+  n(k.risiko) +
+  n(k.gewinn);
 
   if (kostenSum > 0) return round2(kostenSum);
 
@@ -307,14 +307,14 @@ function toLvPos(entry: KalkulationsErfahrung): LVPos {
     waehrung: "EUR",
     confidence: entry.confidence,
     source: "manual",
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   } as unknown as LVPos;
 }
 
 function emptyEntry(
-  projectCode: string,
-  projectName: string
-): KalkulationsErfahrung {
+projectCode: string,
+projectName: string)
+: KalkulationsErfahrung {
   return KalkulationsDatenbank.upsert({
     id: safeId(),
     quelle: "manual",
@@ -340,7 +340,7 @@ function emptyEntry(
       verkehrssicherung: false,
       handarbeit: false,
       nachtarbeit: false,
-      erschwerteBedingungen: false,
+      erschwerteBedingungen: false
     },
     ressourcen: [],
     kosten: emptyKosten(),
@@ -349,15 +349,15 @@ function emptyEntry(
     kiHinweis: "",
     kalkulatorNotiz: "",
     tags: [],
-    verwendungen: 0,
+    verwendungen: 0
   });
 }
 
 function lvToEntry(
-  row: LVPos,
-  projektCode: string,
-  projektName: string
-): KalkulationsErfahrung {
+row: LVPos,
+projektCode: string,
+projektName: string)
+: KalkulationsErfahrung {
   return KalkulationsDatenbank.fromCalculatedPosition({
     quelle: "lv",
     projektCode,
@@ -369,7 +369,7 @@ function lvToEntry(
     menge: n(row.menge),
     finalUnitPrice: n(row.preis),
     totalNet: n(row.gesamt, n(row.menge) * n(row.preis)),
-    confidence: n(row.confidence, 0.6),
+    confidence: n(row.confidence, 0.6)
   });
 }
 
@@ -402,10 +402,10 @@ async function tryServerBulkUpsert(rows: KalkulationsErfahrung[]) {
   try {
     await api.bulkUpsertServer(rows);
   } catch {
-    // local fallback bleibt aktiv
-  }
-}
 
+
+    // local fallback bleibt aktiv
+  }}
 async function tryServerRemove(id: string) {
   const api = KalkulationsDatenbank as any;
   if (typeof api.removeServer !== "function") return;
@@ -413,10 +413,10 @@ async function tryServerRemove(id: string) {
   try {
     await api.removeServer(id);
   } catch {
-    // local fallback bleibt aktiv
-  }
-}
 
+
+    // local fallback bleibt aktiv
+  }}
 
 /* ================= GLOBAL KI / DATENBANK COMMANDS ================= */
 
@@ -431,47 +431,47 @@ function suggestUnit(entry: KalkulationsErfahrung): string {
   const text = textForUnit(entry);
 
   if (
-    text.includes("aushub") ||
-    text.includes("graben") ||
-    text.includes("boden") ||
-    text.includes("verfull") ||
-    text.includes("verfüll") ||
-    text.includes("kies") ||
-    text.includes("schotter") ||
-    text.includes("beton")
-  ) return "m³";
+  text.includes("aushub") ||
+  text.includes("graben") ||
+  text.includes("boden") ||
+  text.includes("verfull") ||
+  text.includes("verfüll") ||
+  text.includes("kies") ||
+  text.includes("schotter") ||
+  text.includes("beton"))
+  return "m³";
 
   if (
-    text.includes("pflaster") ||
-    text.includes("asphalt") ||
-    text.includes("fläche") ||
-    text.includes("flache") ||
-    text.includes("tragschicht") ||
-    text.includes("deckschicht")
-  ) return "m²";
+  text.includes("pflaster") ||
+  text.includes("asphalt") ||
+  text.includes("fläche") ||
+  text.includes("flache") ||
+  text.includes("tragschicht") ||
+  text.includes("deckschicht"))
+  return "m²";
 
   if (
-    text.includes("rohr") ||
-    text.includes("leitung") ||
-    text.includes("kabel") ||
-    text.includes("speedpipe") ||
-    text.includes("trasse")
-  ) return "m";
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("kabel") ||
+  text.includes("speedpipe") ||
+  text.includes("trasse"))
+  return "m";
 
   if (
-    text.includes("abfuhr") ||
-    text.includes("entsorgung") ||
-    text.includes("deponie")
-  ) return "t";
+  text.includes("abfuhr") ||
+  text.includes("entsorgung") ||
+  text.includes("deponie"))
+  return "t";
 
   if (
-    text.includes("schacht") ||
-    text.includes("bogen") ||
-    text.includes("abzweig") ||
-    text.includes("anschluss") ||
-    text.includes("stück") ||
-    text.includes("stk")
-  ) return "Stk";
+  text.includes("schacht") ||
+  text.includes("bogen") ||
+  text.includes("abzweig") ||
+  text.includes("anschluss") ||
+  text.includes("stück") ||
+  text.includes("stk"))
+  return "Stk";
 
   return "";
 }
@@ -479,22 +479,22 @@ function suggestUnit(entry: KalkulationsErfahrung): string {
 function kostenSum(k?: Partial<KalkulationsKosten>): number {
   return round2(
     n(k?.material) +
-      n(k?.lohn) +
-      n(k?.maschinen) +
-      n(k?.fremdleistung) +
-      n(k?.entsorgung) +
-      n(k?.transport) +
-      n(k?.gemeinkosten) +
-      n(k?.risiko) +
-      n(k?.gewinn)
+    n(k?.lohn) +
+    n(k?.maschinen) +
+    n(k?.fremdleistung) +
+    n(k?.entsorgung) +
+    n(k?.transport) +
+    n(k?.gemeinkosten) +
+    n(k?.risiko) +
+    n(k?.gewinn)
   );
 }
 
 function resourcesToKosten(
-  resources: KalkulationsRessource[],
-  menge: number,
-  old?: Partial<KalkulationsKosten>
-): KalkulationsKosten {
+resources: KalkulationsRessource[],
+menge: number,
+old?: Partial<KalkulationsKosten>)
+: KalkulationsKosten {
   const qty = Math.max(n(menge), 1);
 
   const unit = {
@@ -506,30 +506,30 @@ function resourcesToKosten(
     transport: 0,
     gemeinkosten: 0,
     risiko: n(old?.risiko),
-    gewinn: n(old?.gewinn),
+    gewinn: n(old?.gewinn)
   };
 
   for (const r of resources) {
     const value = n(r.einzelpreis) || n(r.gesamtpreis);
-    if (r.typ === "material") unit.material += value;
-    else if (r.typ === "personal") unit.lohn += value;
-    else if (r.typ === "maschine") unit.maschinen += value;
-    else if (r.typ === "fremdleistung") unit.fremdleistung += value;
-    else if (r.typ === "entsorgung") unit.entsorgung += value;
-    else if (r.typ === "transport") unit.transport += value;
-    else unit.gemeinkosten += value;
+    if (r.typ === "material") unit.material += value;else
+    if (r.typ === "personal") unit.lohn += value;else
+    if (r.typ === "maschine") unit.maschinen += value;else
+    if (r.typ === "fremdleistung") unit.fremdleistung += value;else
+    if (r.typ === "entsorgung") unit.entsorgung += value;else
+    if (r.typ === "transport") unit.transport += value;else
+    unit.gemeinkosten += value;
   }
 
   const epNetto = round2(
     unit.material +
-      unit.lohn +
-      unit.maschinen +
-      unit.fremdleistung +
-      unit.entsorgung +
-      unit.transport +
-      unit.gemeinkosten +
-      unit.risiko +
-      unit.gewinn
+    unit.lohn +
+    unit.maschinen +
+    unit.fremdleistung +
+    unit.entsorgung +
+    unit.transport +
+    unit.gemeinkosten +
+    unit.risiko +
+    unit.gewinn
   );
 
   return {
@@ -543,7 +543,7 @@ function resourcesToKosten(
     risiko: round2(unit.risiko * qty),
     gewinn: round2(unit.gewinn * qty),
     epNetto,
-    gpNetto: round2(epNetto * qty),
+    gpNetto: round2(epNetto * qty)
   };
 }
 
@@ -553,20 +553,20 @@ function buildResourcesFromKosten(entry: KalkulationsErfahrung): KalkulationsRes
   const unit = entry.einheit || suggestUnit(entry) || "EH";
 
   const candidates: Partial<KalkulationsRessource>[] = [
-    { typ: "material", bezeichnung: "Material", einheit: unit, menge: 1, einzelpreis: round2(n(k.material) / qty) },
-    { typ: "personal", bezeichnung: "Lohn / Personal", einheit: unit, menge: 1, einzelpreis: round2(n(k.lohn) / qty) },
-    { typ: "maschine", bezeichnung: "Maschinen", einheit: unit, menge: 1, einzelpreis: round2(n(k.maschinen) / qty) },
-    { typ: "transport", bezeichnung: "Transport", einheit: unit, menge: 1, einzelpreis: round2(n(k.transport) / qty) },
-    { typ: "fremdleistung", bezeichnung: "Fremdleistung", einheit: unit, menge: 1, einzelpreis: round2(n(k.fremdleistung) / qty) },
-    { typ: "entsorgung", bezeichnung: "Entsorgung", einheit: unit, menge: 1, einzelpreis: round2(n(k.entsorgung) / qty) },
-    { typ: "sonstiges", bezeichnung: "Gemeinkosten", einheit: unit, menge: 1, einzelpreis: round2(n(k.gemeinkosten) / qty) },
-    { typ: "sonstiges", bezeichnung: "Risiko", einheit: unit, menge: 1, einzelpreis: round2(n(k.risiko) / qty) },
-    { typ: "sonstiges", bezeichnung: "Gewinn", einheit: unit, menge: 1, einzelpreis: round2(n(k.gewinn) / qty) },
-  ];
+  { typ: "material", bezeichnung: "Material", einheit: unit, menge: 1, einzelpreis: round2(n(k.material) / qty) },
+  { typ: "personal", bezeichnung: "Lohn / Personal", einheit: unit, menge: 1, einzelpreis: round2(n(k.lohn) / qty) },
+  { typ: "maschine", bezeichnung: "Maschinen", einheit: unit, menge: 1, einzelpreis: round2(n(k.maschinen) / qty) },
+  { typ: "transport", bezeichnung: "Transport", einheit: unit, menge: 1, einzelpreis: round2(n(k.transport) / qty) },
+  { typ: "fremdleistung", bezeichnung: "Fremdleistung", einheit: unit, menge: 1, einzelpreis: round2(n(k.fremdleistung) / qty) },
+  { typ: "entsorgung", bezeichnung: "Entsorgung", einheit: unit, menge: 1, einzelpreis: round2(n(k.entsorgung) / qty) },
+  { typ: "sonstiges", bezeichnung: "Gemeinkosten", einheit: unit, menge: 1, einzelpreis: round2(n(k.gemeinkosten) / qty) },
+  { typ: "sonstiges", bezeichnung: "Risiko", einheit: unit, menge: 1, einzelpreis: round2(n(k.risiko) / qty) },
+  { typ: "sonstiges", bezeichnung: "Gewinn", einheit: unit, menge: 1, einzelpreis: round2(n(k.gewinn) / qty) }];
 
-  return candidates
-    .filter((r) => n(r.einzelpreis) > 0)
-    .map(normalizeResource);
+
+  return candidates.
+  filter((r) => n(r.einzelpreis) > 0).
+  map(normalizeResource);
 }
 
 function fallbackResourcesFromEp(entry: KalkulationsErfahrung): KalkulationsRessource[] {
@@ -585,26 +585,26 @@ function fallbackResourcesFromEp(entry: KalkulationsErfahrung): KalkulationsRess
   let gewinn = 0.07;
 
   if (text.includes("aushub") || text.includes("graben") || text.includes("boden")) {
-    material = 0.14; lohn = 0.28; maschine = 0.27; entsorgung = 0.10; gemeinkosten = 0.09; risiko = 0.04; gewinn = 0.08;
+    material = 0.14;lohn = 0.28;maschine = 0.27;entsorgung = 0.10;gemeinkosten = 0.09;risiko = 0.04;gewinn = 0.08;
   }
 
   if (text.includes("pflaster") || text.includes("asphalt")) {
-    material = 0.45; lohn = 0.18; maschine = 0.14; entsorgung = 0.04; gemeinkosten = 0.08; risiko = 0.03; gewinn = 0.08;
+    material = 0.45;lohn = 0.18;maschine = 0.14;entsorgung = 0.04;gemeinkosten = 0.08;risiko = 0.03;gewinn = 0.08;
   }
 
   if (text.includes("rohr") || text.includes("leitung") || text.includes("speedpipe") || text.includes("kabel")) {
-    material = 0.42; lohn = 0.24; maschine = 0.11; entsorgung = 0.02; gemeinkosten = 0.09; risiko = 0.04; gewinn = 0.08;
+    material = 0.42;lohn = 0.24;maschine = 0.11;entsorgung = 0.02;gemeinkosten = 0.09;risiko = 0.04;gewinn = 0.08;
   }
 
   return [
-    { typ: "material", bezeichnung: "Materialansatz", einheit: unit, menge: 1, einzelpreis: round2(ep * material) },
-    { typ: "personal", bezeichnung: "Lohn / Personal", einheit: unit, menge: 1, einzelpreis: round2(ep * lohn) },
-    { typ: "maschine", bezeichnung: "Maschinenansatz", einheit: unit, menge: 1, einzelpreis: round2(ep * maschine) },
-    { typ: "entsorgung", bezeichnung: "Entsorgung", einheit: unit, menge: 1, einzelpreis: round2(ep * entsorgung) },
-    { typ: "sonstiges", bezeichnung: "Gemeinkosten", einheit: unit, menge: 1, einzelpreis: round2(ep * gemeinkosten) },
-    { typ: "sonstiges", bezeichnung: "Risiko", einheit: unit, menge: 1, einzelpreis: round2(ep * risiko) },
-    { typ: "sonstiges", bezeichnung: "Gewinn", einheit: unit, menge: 1, einzelpreis: round2(ep * gewinn) },
-  ].filter((r) => n(r.einzelpreis) > 0).map((r) => normalizeResource(r as Partial<KalkulationsRessource>));
+  { typ: "material", bezeichnung: "Materialansatz", einheit: unit, menge: 1, einzelpreis: round2(ep * material) },
+  { typ: "personal", bezeichnung: "Lohn / Personal", einheit: unit, menge: 1, einzelpreis: round2(ep * lohn) },
+  { typ: "maschine", bezeichnung: "Maschinenansatz", einheit: unit, menge: 1, einzelpreis: round2(ep * maschine) },
+  { typ: "entsorgung", bezeichnung: "Entsorgung", einheit: unit, menge: 1, einzelpreis: round2(ep * entsorgung) },
+  { typ: "sonstiges", bezeichnung: "Gemeinkosten", einheit: unit, menge: 1, einzelpreis: round2(ep * gemeinkosten) },
+  { typ: "sonstiges", bezeichnung: "Risiko", einheit: unit, menge: 1, einzelpreis: round2(ep * risiko) },
+  { typ: "sonstiges", bezeichnung: "Gewinn", einheit: unit, menge: 1, einzelpreis: round2(ep * gewinn) }].
+  filter((r) => n(r.einzelpreis) > 0).map((r) => normalizeResource(r as Partial<KalkulationsRessource>));
 }
 
 function calculateConfidence(entry: KalkulationsErfahrung): number {
@@ -646,9 +646,9 @@ function dbDuplicateIds(rows: KalkulationsErfahrung[]): Set<string> {
   }
 
   return new Set(
-    Array.from(map.values())
-      .filter((g) => g.length > 1)
-      .flatMap((g) => g.map((x) => x.id))
+    Array.from(map.values()).
+    filter((g) => g.length > 1).
+    flatMap((g) => g.map((x) => x.id))
   );
 }
 
@@ -661,7 +661,7 @@ function dispatchKiProgress(detail: {
 }) {
   window.dispatchEvent(
     new CustomEvent("rlc:ki-progress", {
-      detail,
+      detail
     })
   );
 }
@@ -734,9 +734,9 @@ export default function KalkulationsDatenbankPage() {
 
     if (!button || button.disabled) return;
 
-    const label = String(button.innerText || button.textContent || "Aktion")
-      .replace(/\s+/g, " ")
-      .trim();
+    const label = String(button.innerText || button.textContent || "Aktion").
+    replace(/\s+/g, " ").
+    trim();
 
     setButtonFeedback(label ? `RLC arbeitet: ${label}` : "RLC arbeitet...");
     document.body.style.cursor = "progress";
@@ -768,7 +768,7 @@ export default function KalkulationsDatenbankPage() {
 
       showInfo(
         message ||
-          `Server-Datenbank geladen: ${page.total} Positionen · Seite ${pageNumber} von ${pageCount}`
+        `Server-Datenbank geladen: ${page.total} Positionen · Seite ${pageNumber} von ${pageCount}`
       );
       return;
     } catch {
@@ -866,15 +866,15 @@ export default function KalkulationsDatenbankPage() {
     }
 
     return [
-      { id: safeId(), typ: "material", bezeichnung: "Materialansatz", einheit: unit, menge: 1, einzelpreis: material, gesamtpreis: material },
-      { id: safeId(), typ: "personal", bezeichnung: "Lohn / Personal", einheit: unit, menge: 1, einzelpreis: lohn, gesamtpreis: lohn },
-      { id: safeId(), typ: "maschine", bezeichnung: "Maschinenansatz", einheit: unit, menge: 1, einzelpreis: maschine, gesamtpreis: maschine },
-      { id: safeId(), typ: "entsorgung", bezeichnung: "Entsorgung", einheit: unit, menge: 1, einzelpreis: entsorgung, gesamtpreis: entsorgung },
-      { id: safeId(), typ: "transport", bezeichnung: "Transport", einheit: unit, menge: 1, einzelpreis: transport, gesamtpreis: transport },
-      { id: safeId(), typ: "sonstiges", bezeichnung: "Gemeinkosten", einheit: unit, menge: 1, einzelpreis: gemein, gesamtpreis: gemein },
-      { id: safeId(), typ: "sonstiges", bezeichnung: "Risiko", einheit: unit, menge: 1, einzelpreis: risiko, gesamtpreis: risiko },
-      { id: safeId(), typ: "sonstiges", bezeichnung: "Gewinn", einheit: unit, menge: 1, einzelpreis: gewinn, gesamtpreis: gewinn },
-    ].filter((r) => n(r.einzelpreis) > 0).map((r) => normalizeResource(r as Partial<KalkulationsRessource>));
+    { id: safeId(), typ: "material", bezeichnung: "Materialansatz", einheit: unit, menge: 1, einzelpreis: material, gesamtpreis: material },
+    { id: safeId(), typ: "personal", bezeichnung: "Lohn / Personal", einheit: unit, menge: 1, einzelpreis: lohn, gesamtpreis: lohn },
+    { id: safeId(), typ: "maschine", bezeichnung: "Maschinenansatz", einheit: unit, menge: 1, einzelpreis: maschine, gesamtpreis: maschine },
+    { id: safeId(), typ: "entsorgung", bezeichnung: "Entsorgung", einheit: unit, menge: 1, einzelpreis: entsorgung, gesamtpreis: entsorgung },
+    { id: safeId(), typ: "transport", bezeichnung: "Transport", einheit: unit, menge: 1, einzelpreis: transport, gesamtpreis: transport },
+    { id: safeId(), typ: "sonstiges", bezeichnung: "Gemeinkosten", einheit: unit, menge: 1, einzelpreis: gemein, gesamtpreis: gemein },
+    { id: safeId(), typ: "sonstiges", bezeichnung: "Risiko", einheit: unit, menge: 1, einzelpreis: risiko, gesamtpreis: risiko },
+    { id: safeId(), typ: "sonstiges", bezeichnung: "Gewinn", einheit: unit, menge: 1, einzelpreis: gewinn, gesamtpreis: gewinn }].
+    filter((r) => n(r.einzelpreis) > 0).map((r) => normalizeResource(r as Partial<KalkulationsRessource>));
   }
 
   function applyDbFix(action: string) {
@@ -892,9 +892,9 @@ export default function KalkulationsDatenbankPage() {
           einheit: unit,
           parameter: {
             ...updated.parameter,
-            einheit: unit,
+            einheit: unit
           },
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         };
         changed += 1;
         report.push(`✓ Pos. ${entry.posNr || "—"} – Einheit ergänzt: leer → ${unit}.`);
@@ -906,7 +906,7 @@ export default function KalkulationsDatenbankPage() {
           updated = {
             ...updated,
             ressourcen: resources,
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           };
           changed += 1;
           report.push(`✓ Pos. ${entry.posNr || "—"} – Kostenaufbau automatisch erzeugt.`);
@@ -924,9 +924,9 @@ export default function KalkulationsDatenbankPage() {
             kosten: {
               ...updated.kosten,
               epNetto: ep,
-              gpNetto: gp,
+              gpNetto: gp
             },
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           };
           changed += 1;
           report.push(`✓ Pos. ${entry.posNr || "—"} – EP geändert: ${money(oldEp)} → ${money(ep)}.`);
@@ -935,13 +935,13 @@ export default function KalkulationsDatenbankPage() {
 
       if (action === "recalculateConfidence") {
         const score =
-          (String(updated.kurztext || "").trim() ? 0.18 : 0) +
-          (String(updated.langtext || "").trim() ? 0.16 : 0) +
-          (String(updated.einheit || "").trim() ? 0.12 : 0) +
-          (entryEp(updated) > 0 ? 0.20 : 0) +
-          (updated.ressourcen?.length ? 0.18 : 0) +
-          (n(updated.menge) > 0 ? 0.10 : 0) +
-          (updated.risiko === "niedrig" || updated.risiko === "mittel" ? 0.06 : 0);
+        (String(updated.kurztext || "").trim() ? 0.18 : 0) + (
+        String(updated.langtext || "").trim() ? 0.16 : 0) + (
+        String(updated.einheit || "").trim() ? 0.12 : 0) + (
+        entryEp(updated) > 0 ? 0.20 : 0) + (
+        updated.ressourcen?.length ? 0.18 : 0) + (
+        n(updated.menge) > 0 ? 0.10 : 0) + (
+        updated.risiko === "niedrig" || updated.risiko === "mittel" ? 0.06 : 0);
 
         const confidence = Math.max(0.35, Math.min(0.98, round2(score)));
         const oldConfidence = n(updated.confidence);
@@ -950,7 +950,7 @@ export default function KalkulationsDatenbankPage() {
           updated = {
             ...updated,
             confidence,
-            updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           };
           changed += 1;
           report.push(`✓ Pos. ${entry.posNr || "—"} – Confidence geändert: ${percent(oldConfidence)} → ${percent(confidence)}.`);
@@ -967,8 +967,8 @@ export default function KalkulationsDatenbankPage() {
           detail: {
             running: false,
             title: "Keine Änderung notwendig",
-            log: ["Keine passenden Einträge gefunden."],
-          },
+            log: ["Keine passenden Einträge gefunden."]
+          }
         })
       );
       return;
@@ -985,8 +985,8 @@ export default function KalkulationsDatenbankPage() {
         detail: {
           running: false,
           title: "Datenbank-Korrektur abgeschlossen",
-          log: report.slice(0, 30),
-        },
+          log: report.slice(0, 30)
+        }
       })
     );
 
@@ -996,8 +996,8 @@ export default function KalkulationsDatenbankPage() {
   const filtered = useMemo(() => {
     const q = norm(query);
 
-        const duplicateIds = qualityFilter === "dubletten" ? dbDuplicateIds(rows) : new Set<string>();
-let out = rows.filter((row) => {
+    const duplicateIds = qualityFilter === "dubletten" ? dbDuplicateIds(rows) : new Set<string>();
+    let out = rows.filter((row) => {
       if (quelle !== "alle" && row.quelle !== quelle) return false;
       if (risiko !== "alle" && row.risiko !== risiko) return false;
       if (gewerk !== "alle" && row.parameter?.gewerk !== gewerk) return false;
@@ -1016,22 +1016,22 @@ let out = rows.filter((row) => {
       if (!q) return true;
 
       const hay = [
-        row.projektCode,
-        row.projektName,
-        row.posNr,
-        row.kurztext,
-        row.langtext,
-        row.einheit,
-        row.parameter?.gewerk,
-        row.parameter?.leistungsart,
-        row.parameter?.bauverfahren,
-        row.parameter?.bodenklasse,
-        row.kiHinweis,
-        row.kalkulatorNotiz,
-        Array.isArray(row.tags) ? row.tags.join(" ") : "",
-      ]
-        .join(" ")
-        .toLowerCase();
+      row.projektCode,
+      row.projektName,
+      row.posNr,
+      row.kurztext,
+      row.langtext,
+      row.einheit,
+      row.parameter?.gewerk,
+      row.parameter?.leistungsart,
+      row.parameter?.bauverfahren,
+      row.parameter?.bodenklasse,
+      row.kiHinweis,
+      row.kalkulatorNotiz,
+      Array.isArray(row.tags) ? row.tags.join(" ") : ""].
+
+      join(" ").
+      toLowerCase();
 
       return hay.includes(q);
     });
@@ -1044,14 +1044,14 @@ let out = rows.filter((row) => {
       if (sortKey === "posNr") {
         return a.posNr.localeCompare(b.posNr, "de", {
           numeric: true,
-          sensitivity: "base",
+          sensitivity: "base"
         });
       }
 
       if (sortKey === "kurztext") {
         return a.kurztext.localeCompare(b.kurztext, "de", {
           numeric: true,
-          sensitivity: "base",
+          sensitivity: "base"
         });
       }
 
@@ -1066,27 +1066,27 @@ let out = rows.filter((row) => {
     return out;
   }, [rows, query, quelle, risiko, gewerk, sortKey, qualityFilter]);
 
-  
+
   const visibleRows = useMemo(
     () => filtered,
     [filtered]
   );
-const stats = useMemo(() => {
+  const stats = useMemo(() => {
     const total = rows.length;
     const used = rows.reduce((s, r) => s + n(r.verwendungen), 0);
     const highRisk = rows.filter(
       (r) => r.risiko === "hoch" || r.risiko === "kritisch"
     ).length;
-    const confidence = total
-      ? rows.reduce((s, r) => s + n(r.confidence), 0) / total
-      : 0;
+    const confidence = total ?
+    rows.reduce((s, r) => s + n(r.confidence), 0) / total :
+    0;
 
     return {
       total,
       filtered: filtered.length,
       used,
       highRisk,
-      confidence,
+      confidence
     };
   }, [rows, filtered.length]);
 
@@ -1177,7 +1177,7 @@ const stats = useMemo(() => {
     const saved = KalkulationsDatenbank.upsert({
       ...selected,
       ...patch,
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
 
     setRows(KalkulationsDatenbank.list());
@@ -1191,8 +1191,8 @@ const stats = useMemo(() => {
     updateSelected({
       parameter: {
         ...selected.parameter,
-        ...patch,
-      },
+        ...patch
+      }
     });
   }
 
@@ -1201,7 +1201,7 @@ const stats = useMemo(() => {
 
     const nextKosten: KalkulationsKosten = {
       ...selected.kosten,
-      ...patch,
+      ...patch
     };
 
     const epChanged = Object.prototype.hasOwnProperty.call(patch, "epNetto");
@@ -1212,7 +1212,7 @@ const stats = useMemo(() => {
     }
 
     updateSelected({
-      kosten: nextKosten,
+      kosten: nextKosten
     });
   }
 
@@ -1221,22 +1221,22 @@ const stats = useMemo(() => {
 
     updateSelected({
       ressourcen: [
-        ...selected.ressourcen,
-        {
-          id: safeId(),
-          typ: "material",
-          bezeichnung: "",
-          kurztext: "",
-          beschreibung: "",
-          einheit: selected.einheit || "St",
-          menge: 0,
-          einzelpreis: 0,
-          gesamtpreis: 0,
-          leistungswert: undefined,
-          leistungsEinheit: "",
-          bemerkung: "",
-        },
-      ],
+      ...selected.ressourcen,
+      {
+        id: safeId(),
+        typ: "material",
+        bezeichnung: "",
+        kurztext: "",
+        beschreibung: "",
+        einheit: selected.einheit || "St",
+        menge: 0,
+        einzelpreis: 0,
+        gesamtpreis: 0,
+        leistungswert: undefined,
+        leistungsEinheit: "",
+        bemerkung: ""
+      }]
+
     });
   }
 
@@ -1248,7 +1248,7 @@ const stats = useMemo(() => {
 
       return normalizeResource({
         ...r,
-        ...patch,
+        ...patch
       });
     });
 
@@ -1259,7 +1259,7 @@ const stats = useMemo(() => {
     if (!selected) return;
 
     updateSelected({
-      ressourcen: selected.ressourcen.filter((r) => r.id !== id),
+      ressourcen: selected.ressourcen.filter((r) => r.id !== id)
     });
   }
 
@@ -1276,7 +1276,7 @@ const stats = useMemo(() => {
 
   useEffect(() => {
     function handleGlobalDatenbankCommand(event: Event) {
-      const detail = (event as CustomEvent<{ filter?: string; action?: string }>).detail;
+      const detail = (event as CustomEvent<{filter?: string;action?: string;}>).detail;
       if (!detail) return;
 
       const filter = String(detail.filter || "");
@@ -1292,7 +1292,7 @@ const stats = useMemo(() => {
 
       window.scrollTo({
         top: 0,
-        behavior: "smooth",
+        behavior: "smooth"
       });
     }
 
@@ -1304,119 +1304,119 @@ const stats = useMemo(() => {
   }, [rows]);
 
   return (
-    <div style={page} onClickCapture={handleButtonFeedback}>
-      {buttonFeedback ? <div style={actionFeedback}>{buttonFeedback}</div> : null}
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)} onClickCapture={handleButtonFeedback}>
+      {buttonFeedback ? <div className={rlcClass(null, actionFeedback)}>{buttonFeedback}</div> : null}
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC KI · Erfahrungsdatenbank</div>
-          <h1 style={title}>KI-Kalkulationsdatenbank</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC KI · Erfahrungsdatenbank</div>
+          <h1 className={rlcClass(null, title)}>KI-Kalkulationsdatenbank</h1>
+          <p className={rlcClass(null, subtitle)}>
             Zentrale Wissensbasis für kalkulierte Positionen: Personal, Maschinen,
             Material, Transport, Bauverfahren, Risiken, Erfahrungswerte und EP-Netto
             für zukünftige KI-Kalkulationen.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button type="button" style={btnPrimary} onClick={addEntry}>
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={addEntry}>
             Neue Position
           </button>
 
           <button
-            type="button"
-            style={btnPrimary}
-            onClick={() => navigate("/kalkulation/datenbank/preise")}
-          >
+            type="button" className={rlcClass(null,
+            btnPrimary)}
+            onClick={() => navigate("/kalkulation/datenbank/preise")}>
+            
             Preise einfügen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={importFromLv}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={importFromLv}>
             Aus LV übernehmen
           </button>
 
-          <div style={serverPager}>
+          <div className={rlcClass(null, serverPager)}>
             <button
-              type="button"
-              style={btnSecondary}
+              type="button" className={rlcClass(null,
+              btnSecondary)}
               disabled={syncMode !== "server" || !serverHasPrev}
               onClick={() =>
-                void refreshFromServer(
-                  "",
-                  Math.max(serverOffset - serverLimit, 0)
-                )
-              }
-            >
+              void refreshFromServer(
+                "",
+                Math.max(serverOffset - serverLimit, 0)
+              )
+              }>
+              
               ◀ Vorherige Seite
             </button>
 
-            <div style={serverPagerInfo}>
+            <div className={rlcClass(null, serverPagerInfo)}>
               Datenbank-Server: {serverTotal || rows.length} Positionen · Seite{" "}
-              {serverTotal
-                ? Math.floor(serverOffset / serverLimit) + 1
-                : 1}{" "}
+              {serverTotal ?
+              Math.floor(serverOffset / serverLimit) + 1 :
+              1}{" "}
               von {serverTotal ? Math.max(1, Math.ceil(serverTotal / serverLimit)) : 1}
             </div>
 
             <button
-              type="button"
-              style={btnSecondary}
+              type="button" className={rlcClass(null,
+              btnSecondary)}
               disabled={syncMode !== "server" || !serverHasNext}
               onClick={() =>
-                void refreshFromServer("", serverOffset + serverLimit)
-              }
-            >
+              void refreshFromServer("", serverOffset + serverLimit)
+              }>
+              
               Nächste Seite ▶
             </button>
 
             <button
-              type="button"
-              style={btnSecondary}
-              onClick={() => void refreshFromServer("Datenbank synchronisiert.", 0)}
-            >
+              type="button" className={rlcClass(null,
+              btnSecondary)}
+              onClick={() => void refreshFromServer("Datenbank synchronisiert.", 0)}>
+              
               Server verbinden
             </button>
           </div>
 
           <button
-            type="button"
-            style={btnSecondary}
+            type="button" className={rlcClass(null,
+            btnSecondary)}
             onClick={exportCsv}
-            disabled={!rows.length}
-          >
+            disabled={!rows.length}>
+            
             CSV Export
           </button>
 
           <button
-            type="button"
-            style={btnSecondary}
+            type="button" className={rlcClass(null,
+            btnSecondary)}
             onClick={exportJson}
-            disabled={!rows.length}
-          >
+            disabled={!rows.length}>
+            
             JSON Export
           </button>
 
           <button
-            type="button"
-            style={btnSecondary}
-            onClick={() => importRef.current?.click()}
-          >
+            type="button" className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => importRef.current?.click()}>
+            
             JSON Import
           </button>
 
           <button
-            type="button"
-            style={btnSecondary}
-            onClick={() => navigate("/kalkulation/mit-ki")}
-          >
+            type="button" className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => navigate("/kalkulation/mit-ki")}>
+            
             Zur KI-Kalkulation
           </button>
 
           <button
-            type="button"
-            style={btnDanger}
+            type="button" className={rlcClass(null,
+            btnDanger)}
             onClick={clearAll}
-            disabled={!rows.length}
-          >
+            disabled={!rows.length}>
+            
             Lokal löschen
           </button>
 
@@ -1424,12 +1424,12 @@ const stats = useMemo(() => {
             ref={importRef}
             type="file"
             accept=".json,application/json"
-            style={{ display: "none" }}
-            onChange={(e) => importJsonFile(e.target.files?.[0])}
-          />
+
+            onChange={(e) => importJsonFile(e.target.files?.[0])} className="rlc-migrated-pages-kalkulation-kalkulationsdatenbankpage-tsx-910" />
+          
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectCode || "—"}</b>
           {projectName ? <span> · {projectName}</span> : null}
           <span> · Speicher: {syncMode === "server" ? "Server + Lokal" : "Lokal"}</span>
@@ -1437,95 +1437,95 @@ const stats = useMemo(() => {
         </div>
       </section>
 
-      <section style={grid6}>
+      <section className={rlcClass(null, grid6)}>
         <Kpi label="Einträge" value={String(stats.total)} sub={`${stats.filtered} sichtbar`} />
 
         <Kpi
           label="EP selezionato"
           value={selected ? money(entryEp(selected)) : "—"}
-          sub={selected ? selected.posNr : "nessuna posizione"}
-        />
+          sub={selected ? selected.posNr : "nessuna posizione"} />
+        
 
         <Kpi
           label="GP selezionato"
           value={selected ? money(entryGp(selected)) : "—"}
-          sub={selected ? `${num(selected.menge, 3)} ${selected.einheit}` : ""}
-        />
+          sub={selected ? `${num(selected.menge, 3)} ${selected.einheit}` : ""} />
+        
 
         <Kpi label="Verwendungen" value={String(selected?.verwendungen ?? 0)} />
 
         <Kpi
           label="Risiko"
           value={selected ? risikoLabel(selected.risiko) : "—"}
-          danger={selected?.risiko === "hoch" || selected?.risiko === "kritisch"}
-        />
+          danger={selected?.risiko === "hoch" || selected?.risiko === "kritisch"} />
+        
 
         <Kpi
           label="Confidence"
-          value={selected ? percent(selected.confidence) : "—"}
-        />
+          value={selected ? percent(selected.confidence) : "—"} />
+        
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Suche & Filter</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Suche & Filter</h2>
+            <div className={rlcClass(null, sectionText)}>
               Suche nach Position, Text, Gewerk, Bauverfahren, Bodenklasse,
               KI-Prüfhinweis oder Notiz.
             </div>
           </div>
         </div>
 
-        <div style={filterGrid}>
-          <input
-            style={input}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Intelligente Suche… PosNr, Kurztext, Langtext, Gewerk, Bauverfahren"
-          />
+        <div className={rlcClass(null, filterGrid)}>
+          <input className={rlcClass(null,
+          input)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Intelligente Suche… PosNr, Kurztext, Langtext, Gewerk, Bauverfahren" />
+          
 
-          <select
-            style={input}
-            value={quelle}
-            onChange={(e) => setQuelle(e.target.value as FilterQuelle)}
-          >
-            {QUELLEN.map((q) => (
-              <option key={q} value={q}>
+          <select className={rlcClass(null,
+          input)}
+          value={quelle}
+          onChange={(e) => setQuelle(e.target.value as FilterQuelle)}>
+            
+            {QUELLEN.map((q) =>
+            <option key={q} value={q}>
                 {q === "alle" ? "Alle Quellen" : quelleLabel(q)}
               </option>
-            ))}
+            )}
           </select>
 
-          <select
-            style={input}
-            value={risiko}
-            onChange={(e) => setRisiko(e.target.value as FilterRisiko)}
-          >
-            {RISIKEN.map((r) => (
-              <option key={r} value={r}>
+          <select className={rlcClass(null,
+          input)}
+          value={risiko}
+          onChange={(e) => setRisiko(e.target.value as FilterRisiko)}>
+            
+            {RISIKEN.map((r) =>
+            <option key={r} value={r}>
                 {r === "alle" ? "Alle Risiken" : risikoLabel(r)}
               </option>
-            ))}
+            )}
           </select>
 
-          <select
-            style={input}
-            value={gewerk}
-            onChange={(e) => setGewerk(e.target.value)}
-          >
-            {gewerke.map((g) => (
-              <option key={g} value={g}>
+          <select className={rlcClass(null,
+          input)}
+          value={gewerk}
+          onChange={(e) => setGewerk(e.target.value)}>
+            
+            {gewerke.map((g) =>
+            <option key={g} value={g}>
                 {g === "alle" ? "Alle Gewerke" : g}
               </option>
-            ))}
+            )}
           </select>
 
-          <select
-            style={input}
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-          >
+          <select className={rlcClass(null,
+          input)}
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as SortKey)}>
+            
             <option value="updatedAt">Sortierung: zuletzt geändert</option>
             <option value="posNr">Sortierung: PosNr</option>
             <option value="kurztext">Sortierung: Kurztext</option>
@@ -1538,80 +1538,80 @@ const stats = useMemo(() => {
       </section>
 
       
-        <div style={qualityBar}>
-          <button type="button" style={qualityFilter === "alle" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("alle")}>
+        <div className={rlcClass(null, qualityBar)}>
+          <button type="button" className={rlcClass(null, qualityFilter === "alle" ? btnFilterActive : btnFilter)} onClick={() => applyDbFilter("alle")}>
             Alle
           </button>
 
-          <button type="button" style={qualityFilter === "epFehlt" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("epFehlt")}>
+          <button type="button" className={rlcClass(null, qualityFilter === "epFehlt" ? btnFilterActive : btnFilter)} onClick={() => applyDbFilter("epFehlt")}>
             EP fehlt
           </button>
 
-          <button type="button" style={qualityFilter === "einheitFehlt" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("einheitFehlt")}>
+          <button type="button" className={rlcClass(null, qualityFilter === "einheitFehlt" ? btnFilterActive : btnFilter)} onClick={() => applyDbFilter("einheitFehlt")}>
             Einheit fehlt
           </button>
 
-          <button type="button" style={qualityFilter === "ressourcenFehlen" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("ressourcenFehlen")}>
+          <button type="button" className={rlcClass(null, qualityFilter === "ressourcenFehlen" ? btnFilterActive : btnFilter)} onClick={() => applyDbFilter("ressourcenFehlen")}>
             Kostenbestandteile fehlen
           </button>
 
-          <button type="button" style={qualityFilter === "risikoHoch" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("risikoHoch")}>
+          <button type="button" className={rlcClass(null, qualityFilter === "risikoHoch" ? btnFilterActive : btnFilter)} onClick={() => applyDbFilter("risikoHoch")}>
             Prüfung nötig
           </button>
 
-          <button type="button" style={qualityFilter === "confidenceNiedrig" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("confidenceNiedrig")}>
+          <button type="button" className={rlcClass(null, qualityFilter === "confidenceNiedrig" ? btnFilterActive : btnFilter)} onClick={() => applyDbFilter("confidenceNiedrig")}>
             Sicherheit niedrig
           </button>
 
-          <button type="button" style={qualityFilter === "dubletten" ? btnFilterActive : btnFilter} onClick={() => applyDbFilter("dubletten")}>
+          <button type="button" className={rlcClass(null, qualityFilter === "dubletten" ? btnFilterActive : btnFilter)} onClick={() => applyDbFilter("dubletten")}>
             Doppelte Preise prüfen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixEinheiten")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => applyDbFix("fixEinheiten")}>
             Einheiten automatisch ergänzen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixKostenaufbau")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => applyDbFix("fixKostenaufbau")}>
             Kostenbestandteile erstellen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => applyDbFix("fixEpAusKostenaufbau")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => applyDbFix("fixEpAusKostenaufbau")}>
             EP aus Bestandteilen berechnen
           </button>
 
-          <button type="button" style={btnSecondary} onClick={() => applyDbFix("recalculateConfidence")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => applyDbFix("recalculateConfidence")}>
             Sicherheit neu bewerten
           </button>
         </div>
 
-      <section style={mainGrid}>
-        <section style={card}>
-          <div style={sectionHead}>
+      <section className={rlcClass(null, mainGrid)}>
+        <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>Gespeicherte Kalkulationen</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>Gespeicherte Kalkulationen</h2>
+              <div className={rlcClass(null, sectionText)}>
                 Jede Position kann wiederverwendet, angepasst oder ins aktuelle LV
                 übernommen werden.
               </div>
             </div>
           </div>
 
-          <div style={tableWrap}>
-            <table style={table}>
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, table)}>
               <thead>
                 <tr>
-                  <th style={th}>PosNr</th>
-                  <th style={th}>Kurztext</th>
-                                    <th style={th}>Projekt</th>
-<th style={th}>Gewerk</th>
-                  <th style={th}>ME</th>
-                  <th style={thRight}>Menge</th>
-                  <th style={thRight}>EP netto</th>
-                  <th style={thRight}>GP netto</th>
-                  <th style={th}>Risiko</th>
-                  <th style={thRight}>Conf.</th>
-                  <th style={thRight}>Verw.</th>
-                  <th style={th}>Aktion</th>
+                  <th className={rlcClass(null, th)}>PosNr</th>
+                  <th className={rlcClass(null, th)}>Kurztext</th>
+                                    <th className={rlcClass(null, th)}>Projekt</th>
+<th className={rlcClass(null, th)}>Gewerk</th>
+                  <th className={rlcClass(null, th)}>ME</th>
+                  <th className={rlcClass(null, thRight)}>Menge</th>
+                  <th className={rlcClass(null, thRight)}>EP netto</th>
+                  <th className={rlcClass(null, thRight)}>GP netto</th>
+                  <th className={rlcClass(null, th)}>Risiko</th>
+                  <th className={rlcClass(null, thRight)}>Conf.</th>
+                  <th className={rlcClass(null, thRight)}>Verw.</th>
+                  <th className={rlcClass(null, th)}>Aktion</th>
                 </tr>
               </thead>
 
@@ -1621,95 +1621,95 @@ const stats = useMemo(() => {
 
                   return (
                     <tr
-                      key={row.id}
-                      style={{
-                        background: active ? "#EFF6FF" : i % 2 ? "#FCFCFC" : "#FFFFFF",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => setSelectedId(row.id)}
-                    >
-                      <td style={tdStrong}>{row.posNr || "—"}</td>
+                      key={row.id} className={rlcClass(null,
+                      {
+                        background: active ? "#EAF2FF" : i % 2 ? "#FCFCFC" : "#FFFFFF",
+                        cursor: "pointer"
+                      })}
+                      onClick={() => setSelectedId(row.id)}>
+                      
+                      <td className={rlcClass(null, tdStrong)}>{row.posNr || "—"}</td>
 
-                      <td style={tdText}>
+                      <td className={rlcClass(null, tdText)}>
                         <b>{row.kurztext || "Ohne Kurztext"}</b>
-                        <div style={tiny}>
+                        <div className={rlcClass(null, tiny)}>
                           {quelleLabel(row.quelle)} · {fmtDate(row.updatedAt)}
                         </div>
                       </td>
 
-                                            <td style={tdText}>
+                                            <td className={rlcClass(null, tdText)}>
                         <b>{row.projektCode || projectCode || "—"}</b>
-                        <div style={tiny}>{row.projektName || projectName || "Ohne Projektname"}</div>
+                        <div className={rlcClass(null, tiny)}>{row.projektName || projectName || "Ohne Projektname"}</div>
                       </td>
-<td style={td}>{row.parameter?.gewerk || "—"}</td>
-                      <td style={td}>{row.einheit || "—"}</td>
-                      <td style={tdRight}>{num(row.menge, 3)}</td>
-                      <td style={tdRight}>{money(entryEp(row))}</td>
-                      <td style={tdRight}>{money(entryGp(row))}</td>
+<td className={rlcClass(null, td)}>{row.parameter?.gewerk || "—"}</td>
+                      <td className={rlcClass(null, td)}>{row.einheit || "—"}</td>
+                      <td className={rlcClass(null, tdRight)}>{num(row.menge, 3)}</td>
+                      <td className={rlcClass(null, tdRight)}>{money(entryEp(row))}</td>
+                      <td className={rlcClass(null, tdRight)}>{money(entryGp(row))}</td>
 
-                      <td style={td}>
-                        <span style={riskStyle(row.risiko)}>
+                      <td className={rlcClass(null, td)}>
+                        <span className={rlcClass(null, riskStyle(row.risiko))}>
                           {risikoLabel(row.risiko)}
                         </span>
                       </td>
 
-                      <td style={tdRight}>{percent(row.confidence)}</td>
-                      <td style={tdRight}>{row.verwendungen}</td>
+                      <td className={rlcClass(null, tdRight)}>{percent(row.confidence)}</td>
+                      <td className={rlcClass(null, tdRight)}>{row.verwendungen}</td>
 
-                      <td style={td}>
-                        <div style={actionCol}>
+                      <td className={rlcClass(null, td)}>
+                        <div className={rlcClass(null, actionCol)}>
                           <button
-                            type="button"
-                            style={btnSecondary}
+                            type="button" className={rlcClass(null,
+                            btnSecondary)}
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate(`/kalkulation/datenbank/position/${row.id}`);
-                            }}
-                          >
+                            }}>
+                            
                             Position bearbeiten
                           </button>
                           <button
-                            type="button"
-                            style={btnMini}
+                            type="button" className={rlcClass(null,
+                            btnMini)}
                             onClick={(e) => {
                               e.stopPropagation();
                               copyToLv(row);
-                            }}
-                          >
+                            }}>
+                            
                             Ins LV
                           </button>
 
                           <button
-                            type="button"
-                            style={btnDangerMini}
+                            type="button" className={rlcClass(null,
+                            btnDangerMini)}
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteEntry(row.id);
-                            }}
-                          >
+                            }}>
+                            
                             Löschen
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  );
+                    </tr>);
+
                 })}
 
-                {!filtered.length ? (
-                  <tr>
-                    <td colSpan={12} style={emptyCell}>
+                {!filtered.length ?
+                <tr>
+                    <td colSpan={12} className={rlcClass(null, emptyCell)}>
                       Keine Kalkulationen gefunden. Lege einen Eintrag an oder
                       übernimm Positionen aus dem LV / der KI-Kalkulation.
                     </td>
-                  </tr>
-                ) : null}
+                  </tr> :
+                null}
               </tbody>
             </table>
           </div>
         </section>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= SMALL UI ================= */
@@ -1718,58 +1718,58 @@ function Kpi({
   label,
   value,
   sub,
-  danger,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  danger?: boolean;
-}) {
+  danger
+
+
+
+
+
+}: {label: string;value: string;sub?: string;danger?: boolean;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={{ ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" }}>
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 function Field({
   label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={labelStyle}>{label}</span>
+    <label className="rlc-migrated-pages-kalkulation-kalkulationsdatenbankpage-tsx-911">
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
 function Check({
   label,
   checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
+  onChange
+
+
+
+
+}: {label: string;checked: boolean;onChange: (checked: boolean) => void;}) {
   return (
-    <label style={checkLabel}>
+    <label className={rlcClass(null, checkLabel)}>
       <input
         type="checkbox"
         checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
+        onChange={(e) => onChange(e.target.checked)} />
+      
       {label}
-    </label>
-  );
+    </label>);
+
 }
 
 /* ================= STYLES ================= */
@@ -1780,7 +1780,7 @@ const qualityBar: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const btnFilter: React.CSSProperties = {
@@ -1790,15 +1790,15 @@ const btnFilter: React.CSSProperties = {
   borderRadius: 999,
   padding: "7px 11px",
   fontSize: 12,
-  fontWeight: 900,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const btnFilterActive: React.CSSProperties = {
   ...btnFilter,
-  border: "1px solid #2563EB",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #146EF5",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const serverPager: React.CSSProperties = {
@@ -1809,7 +1809,7 @@ const serverPager: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.25)",
   background: "rgba(255,255,255,0.08)",
   borderRadius: 16,
-  padding: 6,
+  padding: 6
 };
 
 const serverPagerInfo: React.CSSProperties = {
@@ -1818,37 +1818,37 @@ const serverPagerInfo: React.CSSProperties = {
   color: "#0F172A",
   borderRadius: 12,
   padding: "10px 14px",
-  fontWeight: 900,
-  fontSize: 13,
+  fontWeight: 700,
+  fontSize: 13
 };
 
 const actionFeedback: React.CSSProperties = {
   position: "sticky",
   top: 0,
   zIndex: 50,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
   borderRadius: 14,
   padding: "12px 16px",
-  fontWeight: 900,
-  boxShadow: "0 10px 24px rgba(15,23,42,0.10)",
+  fontWeight: 700,
+  boxShadow: "0 10px 24px rgba(15,23,42,0.10)"
 };
 
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -1856,37 +1856,37 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.9,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92,
+  opacity: 0.92
 };
 
 const grid6: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -1894,28 +1894,28 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const card: React.CSSProperties = {
@@ -1923,7 +1923,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -1932,27 +1932,27 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const filterGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "minmax(260px,1fr) 160px 150px 180px 220px",
-  gap: 10,
+  gap: 10
 };
 
 const input: React.CSSProperties = {
@@ -1962,19 +1962,19 @@ const input: React.CSSProperties = {
   fontSize: 13,
   width: "100%",
   boxSizing: "border-box",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const smallInput: React.CSSProperties = {
   ...input,
-  padding: "7px 9px",
+  padding: "7px 9px"
 };
 
 const mainGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr",
   gap: 16,
-  alignItems: "start",
+  alignItems: "start"
 };
 
 const sideCard: React.CSSProperties = {
@@ -1982,7 +1982,7 @@ const sideCard: React.CSSProperties = {
   position: "sticky",
   top: 12,
   maxHeight: "calc(100vh - 24px)",
-  overflow: "auto",
+  overflow: "auto"
 };
 
 const tableWrap: React.CSSProperties = {
@@ -1990,13 +1990,13 @@ const tableWrap: React.CSSProperties = {
   borderRadius: 14,
   overflowX: "auto",
   overflowY: "auto",
-  maxHeight: 720,
+  maxHeight: 720
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 1220,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -2007,12 +2007,12 @@ const th: React.CSSProperties = {
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const thRight: React.CSSProperties = {
   ...th,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const td: React.CSSProperties = {
@@ -2020,96 +2020,96 @@ const td: React.CSSProperties = {
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
   color: "#0F172A",
-  verticalAlign: "top",
+  verticalAlign: "top"
 };
 
 const tdStrong: React.CSSProperties = {
   ...td,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const tdText: React.CSSProperties = {
   ...td,
-  minWidth: 260,
+  minWidth: 260
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
   whiteSpace: "nowrap",
-  fontVariantNumeric: "tabular-nums",
+  fontVariantNumeric: "tabular-nums"
 };
 
 const tiny: React.CSSProperties = {
   marginTop: 3,
   fontSize: 11,
   color: "#64748B",
-  fontWeight: 600,
+  fontWeight: 600
 };
 
 const actionCol: React.CSSProperties = {
   display: "flex",
   gap: 6,
-  flexDirection: "column",
+  flexDirection: "column"
 };
 
 const detailStack: React.CSSProperties = {
   display: "grid",
-  gap: 14,
+  gap: 14
 };
 
 const advancedDetails: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   background: "#F8FAFC",
   borderRadius: 14,
-  padding: 14,
+  padding: 14
 };
 
 const advancedSummary: React.CSSProperties = {
   cursor: "pointer",
-  fontWeight: 900,
-  color: "#1D4ED8",
-  userSelect: "none",
+  fontWeight: 700,
+  color: "#0B5BD3",
+  userSelect: "none"
 };
 
 const advancedContent: React.CSSProperties = {
   marginTop: 14,
   display: "grid",
-  gap: 16,
+  gap: 16
 };
 const detailHeader: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 10,
-  alignItems: "flex-start",
+  alignItems: "flex-start"
 };
 
 const sideTitle: React.CSSProperties = {
   marginTop: 4,
   fontSize: 15,
-  fontWeight: 900,
+  fontWeight: 700,
   color: "#0F172A",
-  lineHeight: 1.35,
+  lineHeight: 1.35
 };
 
 const formGrid2: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-  gap: 10,
+  gap: 10
 };
 
 const formGrid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "70px 1fr 1fr 110px",
   gap: 8,
-  alignItems: "center",
+  alignItems: "center"
 };
 
 const checkGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2,minmax(0,1fr))",
-  gap: 8,
+  gap: 8
 };
 
 const checkLabel: React.CSSProperties = {
@@ -2118,36 +2118,36 @@ const checkLabel: React.CSSProperties = {
   alignItems: "center",
   fontSize: 12,
   color: "#334155",
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const label: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const subTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 14,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const separator: React.CSSProperties = {
   height: 1,
-  background: "#E5E7EB",
+  background: "#E5E7EB"
 };
 
 const resourceList: React.CSSProperties = {
   display: "grid",
-  gap: 10,
+  gap: 10
 };
 
 const resourceBox: React.CSSProperties = {
@@ -2156,13 +2156,13 @@ const resourceBox: React.CSSProperties = {
   borderRadius: 12,
   padding: 10,
   display: "grid",
-  gap: 8,
+  gap: 8
 };
 
 const resourceTop: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  justifyContent: "space-between",
+  justifyContent: "space-between"
 };
 
 const resourceTotalBox: React.CSSProperties = {
@@ -2171,20 +2171,20 @@ const resourceTotalBox: React.CSSProperties = {
   borderRadius: 10,
   padding: "8px 9px",
   fontSize: 12,
-  fontWeight: 900,
-  textAlign: "right",
+  fontWeight: 700,
+  textAlign: "right"
 };
 
 const footerActions: React.CSSProperties = {
   display: "flex",
   gap: 8,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const emptyCell: React.CSSProperties = {
   padding: 16,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const emptySmall: React.CSSProperties = {
@@ -2193,7 +2193,7 @@ const emptySmall: React.CSSProperties = {
   borderRadius: 12,
   padding: 12,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const btnBase: React.CSSProperties = {
@@ -2201,29 +2201,29 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnDanger: React.CSSProperties = {
   ...btnBase,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const btnMini: React.CSSProperties = {
@@ -2233,16 +2233,16 @@ const btnMini: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnDangerMini: React.CSSProperties = {
   ...btnMini,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -2253,92 +2253,33 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeOk: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #BBF7D0",
   background: "#F0FDF4",
-  color: "#15803D",
+  color: "#15803D"
 };
 
 const badgeWarn: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FDE68A",
   background: "#FFFBEB",
-  color: "#B45309",
+  color: "#B45309"
 };
 
 const badgeCritical: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const badgeCriticalDark: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #991B1B",
   background: "#7F1D1D",
-  color: "#FFFFFF",
+  color: "#FFFFFF"
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

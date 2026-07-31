@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React, { useMemo } from "react";
 import { loadDoc } from "../../lib/cad/store";
 
 const shell = {
@@ -6,26 +6,26 @@ const shell = {
   margin: "0 auto",
   padding: "12px 16px 40px",
   fontFamily: "Inter, system-ui, Arial",
-  color: "#0f172a",
+  color: "#0f172a"
 } as const;
 
 const table = {
   width: "100%",
   borderCollapse: "collapse" as const,
-  fontSize: 13,
+  fontSize: 13
 } as const;
 
 const thtd = {
   border: "1px solid #e2e8f0",
   padding: "8px 10px",
-  verticalAlign: "middle" as const,
+  verticalAlign: "middle" as const
 } as const;
 
 const head = {
   ...thtd,
   background: "#f8fafc",
-  fontWeight: 700,
-  textAlign: "left" as const,
+  fontWeight: 600,
+  textAlign: "left" as const
 } as const;
 
 type Vec2 = {
@@ -87,8 +87,8 @@ function isPolylineEntity(e: unknown): e is PolylineEntity {
   return (
     x.type === "polyline" &&
     Array.isArray(x.points) &&
-    x.points.every(isVec2)
-  );
+    x.points.every(isVec2));
+
 }
 
 function isLinearEntity(e: unknown): e is LineEntity | PolylineEntity {
@@ -124,12 +124,12 @@ export default function AsBuilt() {
 
   const res = useMemo(() => {
     const doc: CadDocLike =
-      rawDoc && typeof rawDoc === "object" ? (rawDoc as CadDocLike) : {};
+    rawDoc && typeof rawDoc === "object" ? rawDoc as CadDocLike : {};
 
     const layers: DocLayer[] = Array.isArray(doc.layers) ? doc.layers : [];
-    const entities: DocEntityLike[] = Array.isArray(doc.entities)
-      ? doc.entities
-      : [];
+    const entities: DocEntityLike[] = Array.isArray(doc.entities) ?
+    doc.entities :
+    [];
 
     const layerNameById = new Map<string, string>();
     for (const l of layers) {
@@ -157,78 +157,73 @@ export default function AsBuilt() {
       sollCount: soll.length,
       istCount: ist.length,
       linearSollCount: linearSoll.length,
-      linearIstCount: linearIst.length,
+      linearIstCount: linearIst.length
     };
   }, [rawDoc]);
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat("de-DE", {
-      maximumFractionDigits: 2,
-    }).format(n || 0);
+  new Intl.NumberFormat("de-DE", {
+    maximumFractionDigits: 2
+  }).format(n || 0);
 
   return (
-    <div style={shell}>
-      <h2 style={{ margin: "4px 0 12px", fontSize: 20, fontWeight: 700 }}>
+    <div className={rlcClass(null, shell)}>
+      <h2 className="rlc-migrated-pages-cad-asbuild-tsx-750">
         As-Built – Soll/Ist Vergleich
       </h2>
 
-      <table style={table}>
+      <table className={rlcClass(null, table)}>
         <thead>
           <tr>
-            <th style={head}>Kennzahl</th>
-            <th style={head}>Wert</th>
+            <th className={rlcClass(null, head)}>Kennzahl</th>
+            <th className={rlcClass(null, head)}>Wert</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td style={thtd}>Soll-Layer („0“)</td>
-            <td style={thtd}>{res.sollCount} Elemente</td>
+            <td className={rlcClass(null, thtd)}>Soll-Layer („0“)</td>
+            <td className={rlcClass(null, thtd)}>{res.sollCount} Elemente</td>
           </tr>
           <tr>
-            <td style={thtd}>Ist-Layer („Bestand“)</td>
-            <td style={thtd}>{res.istCount} Elemente</td>
+            <td className={rlcClass(null, thtd)}>Ist-Layer („Bestand“)</td>
+            <td className={rlcClass(null, thtd)}>{res.istCount} Elemente</td>
           </tr>
           <tr>
-            <td style={thtd}>Lineare Soll-Elemente</td>
-            <td style={thtd}>{res.linearSollCount}</td>
+            <td className={rlcClass(null, thtd)}>Lineare Soll-Elemente</td>
+            <td className={rlcClass(null, thtd)}>{res.linearSollCount}</td>
           </tr>
           <tr>
-            <td style={thtd}>Lineare Ist-Elemente</td>
-            <td style={thtd}>{res.linearIstCount}</td>
+            <td className={rlcClass(null, thtd)}>Lineare Ist-Elemente</td>
+            <td className={rlcClass(null, thtd)}>{res.linearIstCount}</td>
           </tr>
           <tr>
-            <td style={thtd}>Soll gesamt</td>
-            <td style={thtd}>{fmt(res.sumSoll)} m</td>
+            <td className={rlcClass(null, thtd)}>Soll gesamt</td>
+            <td className={rlcClass(null, thtd)}>{fmt(res.sumSoll)} m</td>
           </tr>
           <tr>
-            <td style={thtd}>Ist gesamt</td>
-            <td style={thtd}>{fmt(res.sumIst)} m</td>
+            <td className={rlcClass(null, thtd)}>Ist gesamt</td>
+            <td className={rlcClass(null, thtd)}>{fmt(res.sumIst)} m</td>
           </tr>
           <tr>
-            <td style={{ ...thtd, fontWeight: 700 }}>Δ Ist-Soll</td>
-            <td
-              style={{
-                ...thtd,
-                fontWeight: 700,
-                color: res.delta >= 0 ? "#065f46" : "#b91c1c",
-              }}
-            >
+            <td className={rlcClass(null, { ...thtd, fontWeight: 600 })}>Δ Ist-Soll</td>
+            <td className={rlcClass(null,
+            {
+              ...thtd,
+              fontWeight: 600,
+              color: res.delta >= 0 ? "#065f46" : "#b91c1c"
+            })}>
+              
               {fmt(res.delta)} m
             </td>
           </tr>
         </tbody>
       </table>
 
-      <p style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>
+      <p className="rlc-migrated-pages-cad-asbuild-tsx-751">
         Hinweis: Aktuell wird hier die Summenlänge nach Layer verglichen.
         Detaillierte Geometrie-Differenzen (Offset, Stations, Lageabweichung)
         können im nächsten Schritt ergänzt werden.
       </p>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

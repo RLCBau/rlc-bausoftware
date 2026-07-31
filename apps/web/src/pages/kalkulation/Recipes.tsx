@@ -1,3 +1,4 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 // apps/web/src/pages/kalkulation/Recipes.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import RlcKiDashboard from "../../components/rlc-ai/RlcKiDashboard";
@@ -14,38 +15,38 @@ import {
   getWorkTypeProfile,
   isForbiddenForWorkType,
   shouldForceLocalCalculation,
-  type WorkTypeKey,
-} from "./workTypeLibrary";
+  type WorkTypeKey } from
+"./workTypeLibrary";
 import {
   detectTechnicalPosition,
-  getTechnicalPositionCount,
-} from "./technicalPositionLibrary";
+  getTechnicalPositionCount } from
+"./technicalPositionLibrary";
 
 /* ================= TYPES ================= */
 
 type ResourceGroup =
-  | "Personal"
-  | "Maschinen"
-  | "LKW / Transport"
-  | "Material"
-  | "Entsorgung"
-  | "Fremdleistung"
-  | "Gemeinkosten"
-  | "Risiko"
-  | "Gewinn"
-  | "Zeit / Leistung"
-  | "Zuschläge";
+"Personal" |
+"Maschinen" |
+"LKW / Transport" |
+"Material" |
+"Entsorgung" |
+"Fremdleistung" |
+"Gemeinkosten" |
+"Risiko" |
+"Gewinn" |
+"Zeit / Leistung" |
+"Zuschläge";
 
 type PriceBreakdownGroup =
-  | "Personal"
-  | "Maschinen"
-  | "LKW / Transport"
-  | "Material"
-  | "Entsorgung"
-  | "Fremdleistung"
-  | "Gemeinkosten"
-  | "Risiko"
-  | "Gewinn";
+"Personal" |
+"Maschinen" |
+"LKW / Transport" |
+"Material" |
+"Entsorgung" |
+"Fremdleistung" |
+"Gemeinkosten" |
+"Risiko" |
+"Gewinn";
 
 type PriceBreakdownLine = {
   id: string;
@@ -205,76 +206,76 @@ const NACHTRAG_BUFFER_KEY = "rlc:nachtrag-buffer";
 /* ================= RESOURCE CATALOG ================= */
 
 const RESOURCE_CATALOG: ResourceItem[] = [
-  { id: "P-FACHARBEITER", group: "Personal", name: "Facharbeiter Tiefbau", unit: "h", defaultPrice: 52 },
-  { id: "P-HELFER", group: "Personal", name: "Bauhelfer", unit: "h", defaultPrice: 39 },
-  { id: "P-POLIER", group: "Personal", name: "Polier / Vorarbeiter", unit: "h", defaultPrice: 68 },
-  { id: "P-VERMESSER", group: "Personal", name: "Vermessungstechniker", unit: "h", defaultPrice: 72 },
-  { id: "P-BAULEITER", group: "Personal", name: "Bauleiter", unit: "h", defaultPrice: 82 },
+{ id: "P-FACHARBEITER", group: "Personal", name: "Facharbeiter Tiefbau", unit: "h", defaultPrice: 52 },
+{ id: "P-HELFER", group: "Personal", name: "Bauhelfer", unit: "h", defaultPrice: 39 },
+{ id: "P-POLIER", group: "Personal", name: "Polier / Vorarbeiter", unit: "h", defaultPrice: 68 },
+{ id: "P-VERMESSER", group: "Personal", name: "Vermessungstechniker", unit: "h", defaultPrice: 72 },
+{ id: "P-BAULEITER", group: "Personal", name: "Bauleiter", unit: "h", defaultPrice: 82 },
 
-  { id: "M-MINIBAGGER", group: "Maschinen", name: "Minibagger 2–3 t", unit: "h", defaultPrice: 48 },
-  { id: "M-BAGGER-8T", group: "Maschinen", name: "Bagger 8 t", unit: "h", defaultPrice: 78 },
-  { id: "M-BAGGER-15T", group: "Maschinen", name: "Bagger 15 t", unit: "h", defaultPrice: 108 },
-  { id: "M-BAGGER-22T", group: "Maschinen", name: "Bagger 22 t", unit: "h", defaultPrice: 132 },
-  { id: "M-RADLADER", group: "Maschinen", name: "Radlader", unit: "h", defaultPrice: 84 },
-  { id: "M-RUETTELPLATTE", group: "Maschinen", name: "Rüttelplatte", unit: "h", defaultPrice: 22 },
-  { id: "M-WALZE", group: "Maschinen", name: "Walze", unit: "h", defaultPrice: 58 },
-  { id: "M-FUGENSCHNEIDER", group: "Maschinen", name: "Fugenschneider", unit: "h", defaultPrice: 44 },
-  { id: "M-PFLASTERKNACKER", group: "Maschinen", name: "Pflasterknacker / Steinschneider", unit: "h", defaultPrice: 28 },
+{ id: "M-MINIBAGGER", group: "Maschinen", name: "Minibagger 2–3 t", unit: "h", defaultPrice: 48 },
+{ id: "M-BAGGER-8T", group: "Maschinen", name: "Bagger 8 t", unit: "h", defaultPrice: 78 },
+{ id: "M-BAGGER-15T", group: "Maschinen", name: "Bagger 15 t", unit: "h", defaultPrice: 108 },
+{ id: "M-BAGGER-22T", group: "Maschinen", name: "Bagger 22 t", unit: "h", defaultPrice: 132 },
+{ id: "M-RADLADER", group: "Maschinen", name: "Radlader", unit: "h", defaultPrice: 84 },
+{ id: "M-RUETTELPLATTE", group: "Maschinen", name: "Rüttelplatte", unit: "h", defaultPrice: 22 },
+{ id: "M-WALZE", group: "Maschinen", name: "Walze", unit: "h", defaultPrice: 58 },
+{ id: "M-FUGENSCHNEIDER", group: "Maschinen", name: "Fugenschneider", unit: "h", defaultPrice: 44 },
+{ id: "M-PFLASTERKNACKER", group: "Maschinen", name: "Pflasterknacker / Steinschneider", unit: "h", defaultPrice: 28 },
 
-  { id: "T-LKW-3A", group: "LKW / Transport", name: "LKW 3-Achser", unit: "h", defaultPrice: 98 },
-  { id: "T-LKW-4A", group: "LKW / Transport", name: "LKW 4-Achser", unit: "h", defaultPrice: 118 },
-  { id: "T-LKW-SATTEL", group: "LKW / Transport", name: "Sattelzug / Schubboden", unit: "h", defaultPrice: 135 },
-  { id: "T-TIEFLADER", group: "LKW / Transport", name: "Tieflader / Maschinentransport", unit: "pauschal", defaultPrice: 380 },
-  { id: "T-ANFAHRT", group: "LKW / Transport", name: "Anfahrt / Baustelleneinrichtung", unit: "km", defaultPrice: 2.9 },
+{ id: "T-LKW-3A", group: "LKW / Transport", name: "LKW 3-Achser", unit: "h", defaultPrice: 98 },
+{ id: "T-LKW-4A", group: "LKW / Transport", name: "LKW 4-Achser", unit: "h", defaultPrice: 118 },
+{ id: "T-LKW-SATTEL", group: "LKW / Transport", name: "Sattelzug / Schubboden", unit: "h", defaultPrice: 135 },
+{ id: "T-TIEFLADER", group: "LKW / Transport", name: "Tieflader / Maschinentransport", unit: "pauschal", defaultPrice: 380 },
+{ id: "T-ANFAHRT", group: "LKW / Transport", name: "Anfahrt / Baustelleneinrichtung", unit: "km", defaultPrice: 2.9 },
 
-  { id: "MAT-SAND", group: "Material", name: "Sand / Bettungsmaterial", unit: "m³", defaultPrice: 36 },
-  { id: "MAT-KIES", group: "Material", name: "Kies / Schotter 0/32", unit: "m³", defaultPrice: 44 },
-  { id: "MAT-FROSTSCHUTZ-032", group: "Material", name: "Frostschutzkies 0/32 liefern", unit: "m³", defaultPrice: 48 },
-  { id: "MAT-FROSTSCHUTZ-045", group: "Material", name: "Frostschutzmaterial 0/45 liefern", unit: "m³", defaultPrice: 52 },
-  { id: "MAT-ASPHALT", group: "Material", name: "Asphalttragschicht / Deckschicht", unit: "m²", defaultPrice: 48 },
-  { id: "MAT-SPEEDPIPE", group: "Material", name: "Speedpipe / Rohrverband", unit: "m", defaultPrice: 6.8 },
-  { id: "MAT-ROHR", group: "Material", name: "Rohrleitung / Kabelschutzrohr", unit: "m", defaultPrice: 14 },
-  { id: "MAT-WARNBAND", group: "Material", name: "Trassenwarnband", unit: "m", defaultPrice: 0.8 },
-  { id: "MAT-SCHACHT", group: "Material", name: "Schacht / Muffe / Formteil", unit: "St", defaultPrice: 220 },
+{ id: "MAT-SAND", group: "Material", name: "Sand / Bettungsmaterial", unit: "m³", defaultPrice: 36 },
+{ id: "MAT-KIES", group: "Material", name: "Kies / Schotter 0/32", unit: "m³", defaultPrice: 44 },
+{ id: "MAT-FROSTSCHUTZ-032", group: "Material", name: "Frostschutzkies 0/32 liefern", unit: "m³", defaultPrice: 48 },
+{ id: "MAT-FROSTSCHUTZ-045", group: "Material", name: "Frostschutzmaterial 0/45 liefern", unit: "m³", defaultPrice: 52 },
+{ id: "MAT-ASPHALT", group: "Material", name: "Asphalttragschicht / Deckschicht", unit: "m²", defaultPrice: 48 },
+{ id: "MAT-SPEEDPIPE", group: "Material", name: "Speedpipe / Rohrverband", unit: "m", defaultPrice: 6.8 },
+{ id: "MAT-ROHR", group: "Material", name: "Rohrleitung / Kabelschutzrohr", unit: "m", defaultPrice: 14 },
+{ id: "MAT-WARNBAND", group: "Material", name: "Trassenwarnband", unit: "m", defaultPrice: 0.8 },
+{ id: "MAT-SCHACHT", group: "Material", name: "Schacht / Muffe / Formteil", unit: "St", defaultPrice: 220 },
 
-  { id: "MAT-PFLASTER-BETON-6", group: "Material", name: "Betonpflaster 6 cm liefern", unit: "m²", defaultPrice: 30 },
-  { id: "MAT-PFLASTER-BETON-8", group: "Material", name: "Betonpflaster 8 cm liefern", unit: "m²", defaultPrice: 36 },
-  { id: "MAT-PFLASTER-BETON-10", group: "Material", name: "Betonpflaster 10 cm liefern", unit: "m²", defaultPrice: 42 },
-  { id: "MAT-PFLASTER-NATUR", group: "Material", name: "Natursteinpflaster liefern", unit: "m²", defaultPrice: 75 },
-  { id: "MAT-RASENGITTER", group: "Material", name: "Rasengitterstein Beton liefern", unit: "m²", defaultPrice: 38 },
-  { id: "MAT-SPLITT", group: "Material", name: "Splittbett 2/5", unit: "m³", defaultPrice: 54 },
-  { id: "MAT-FUGENSAND", group: "Material", name: "Fugensand / Brechsand", unit: "m²", defaultPrice: 3.2 },
-  { id: "MAT-BORD-TIEF", group: "Material", name: "Tiefbordstein liefern", unit: "m", defaultPrice: 18 },
-  { id: "MAT-BORD-HOCH", group: "Material", name: "Hochbordstein liefern", unit: "m", defaultPrice: 28 },
-  { id: "MAT-BORD-RUND", group: "Material", name: "Rundbordstein liefern", unit: "m", defaultPrice: 24 },
-  { id: "MAT-BETON-C20", group: "Material", name: "Beton C20/25 für Rückenstütze", unit: "m³", defaultPrice: 155 },
+{ id: "MAT-PFLASTER-BETON-6", group: "Material", name: "Betonpflaster 6 cm liefern", unit: "m²", defaultPrice: 30 },
+{ id: "MAT-PFLASTER-BETON-8", group: "Material", name: "Betonpflaster 8 cm liefern", unit: "m²", defaultPrice: 36 },
+{ id: "MAT-PFLASTER-BETON-10", group: "Material", name: "Betonpflaster 10 cm liefern", unit: "m²", defaultPrice: 42 },
+{ id: "MAT-PFLASTER-NATUR", group: "Material", name: "Natursteinpflaster liefern", unit: "m²", defaultPrice: 75 },
+{ id: "MAT-RASENGITTER", group: "Material", name: "Rasengitterstein Beton liefern", unit: "m²", defaultPrice: 38 },
+{ id: "MAT-SPLITT", group: "Material", name: "Splittbett 2/5", unit: "m³", defaultPrice: 54 },
+{ id: "MAT-FUGENSAND", group: "Material", name: "Fugensand / Brechsand", unit: "m²", defaultPrice: 3.2 },
+{ id: "MAT-BORD-TIEF", group: "Material", name: "Tiefbordstein liefern", unit: "m", defaultPrice: 18 },
+{ id: "MAT-BORD-HOCH", group: "Material", name: "Hochbordstein liefern", unit: "m", defaultPrice: 28 },
+{ id: "MAT-BORD-RUND", group: "Material", name: "Rundbordstein liefern", unit: "m", defaultPrice: 24 },
+{ id: "MAT-BETON-C20", group: "Material", name: "Beton C20/25 für Rückenstütze", unit: "m³", defaultPrice: 155 },
 
-  { id: "E-BODEN", group: "Entsorgung", name: "Bodenaushub entsorgen", unit: "t", defaultPrice: 34 },
-  { id: "E-ASPHALT", group: "Entsorgung", name: "Asphaltaufbruch entsorgen", unit: "t", defaultPrice: 58 },
-  { id: "E-BAUSCHUTT", group: "Entsorgung", name: "Bauschutt / Mischmaterial entsorgen", unit: "t", defaultPrice: 62 },
-  { id: "E-ALTPFLASTER", group: "Entsorgung", name: "Altpflaster / Bettungsmaterial entsorgen", unit: "t", defaultPrice: 44 },
+{ id: "E-BODEN", group: "Entsorgung", name: "Bodenaushub entsorgen", unit: "t", defaultPrice: 34 },
+{ id: "E-ASPHALT", group: "Entsorgung", name: "Asphaltaufbruch entsorgen", unit: "t", defaultPrice: 58 },
+{ id: "E-BAUSCHUTT", group: "Entsorgung", name: "Bauschutt / Mischmaterial entsorgen", unit: "t", defaultPrice: 62 },
+{ id: "E-ALTPFLASTER", group: "Entsorgung", name: "Altpflaster / Bettungsmaterial entsorgen", unit: "t", defaultPrice: 44 },
 
-  { id: "Z-LEISTUNG", group: "Zeit / Leistung", name: "Leistung / Produktivität", unit: "m/Tag", defaultPrice: 0 },
-  { id: "Z-BAUZEIT", group: "Zeit / Leistung", name: "Bauzeitansatz", unit: "Tag", defaultPrice: 0 },
+{ id: "Z-LEISTUNG", group: "Zeit / Leistung", name: "Leistung / Produktivität", unit: "m/Tag", defaultPrice: 0 },
+{ id: "Z-BAUZEIT", group: "Zeit / Leistung", name: "Bauzeitansatz", unit: "Tag", defaultPrice: 0 },
 
-  { id: "Z-GEMEINKOSTEN", group: "Zuschläge", name: "Baustellengemeinkosten", unit: "%", defaultPrice: 10 },
-  { id: "Z-RISIKO", group: "Zuschläge", name: "Risikozuschlag", unit: "%", defaultPrice: 6 },
-  { id: "Z-GEWINN", group: "Zuschläge", name: "Gewinnzuschlag", unit: "%", defaultPrice: 10 },
-];
+{ id: "Z-GEMEINKOSTEN", group: "Zuschläge", name: "Baustellengemeinkosten", unit: "%", defaultPrice: 10 },
+{ id: "Z-RISIKO", group: "Zuschläge", name: "Risikozuschlag", unit: "%", defaultPrice: 6 },
+{ id: "Z-GEWINN", group: "Zuschläge", name: "Gewinnzuschlag", unit: "%", defaultPrice: 10 }];
+
 
 const GROUPS: ResourceGroup[] = [
-  "Personal",
-  "Maschinen",
-  "LKW / Transport",
-  "Material",
-  "Entsorgung",
-  "Fremdleistung",
-  "Gemeinkosten",
-  "Risiko",
-  "Gewinn",
-  "Zeit / Leistung",
-  "Zuschläge",
-];
+"Personal",
+"Maschinen",
+"LKW / Transport",
+"Material",
+"Entsorgung",
+"Fremdleistung",
+"Gemeinkosten",
+"Risiko",
+"Gewinn",
+"Zeit / Leistung",
+"Zuschläge"];
+
 
 /* ================= HELPERS ================= */
 
@@ -290,9 +291,9 @@ function n(value: unknown, fallback = 0): number {
   const raw = String(value ?? "").trim();
   if (!raw) return fallback;
 
-  const normalized = raw.includes(",")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw.replace(/\s/g, "");
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw.replace(/\s/g, "");
 
   const x = typeof value === "number" ? value : Number(normalized);
   return Number.isFinite(x) ? x : fallback;
@@ -305,14 +306,14 @@ function round2(value: number): number {
 function money(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(n(value));
 }
 
 function num(value: unknown, digits = 2): string {
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
+    maximumFractionDigits: digits
   }).format(n(value));
 }
 
@@ -344,13 +345,13 @@ function apiUrl(path: string): string {
 function getAuthToken(): string {
   try {
     const keys = [
-      "token",
-      "authToken",
-      "accessToken",
-      "rlc_token",
-      "rlc_auth_token",
-      "rlc_access_token",
-    ];
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
 
     for (const key of keys) {
       const value = localStorage.getItem(key);
@@ -366,23 +367,23 @@ function getAuthToken(): string {
       try {
         const parsed = JSON.parse(raw);
         const token =
-          parsed?.token ??
-          parsed?.accessToken ??
-          parsed?.authToken ??
-          parsed?.jwt ??
-          parsed?.data?.token ??
-          parsed?.data?.accessToken;
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
 
         if (typeof token === "string" && token.trim()) return token.trim();
       } catch {
-        //
-      }
-    }
-  } catch {
-    //
-  }
 
-  return "";
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
 }
 
 async function postKiSuggest(projectCode: string, row: LVPos): Promise<any | null> {
@@ -394,21 +395,21 @@ async function postKiSuggest(projectCode: string, row: LVPos): Promise<any | nul
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: JSON.stringify({
         projectCode: projectCode || "NO_PROJECT",
         rows: [
-          {
-            id: row.id,
-            posNr: row.posNr,
-            kurztext: row.kurztext,
-            langtext: row.langtext,
-            einheit: row.einheit,
-            menge: row.menge,
-            preis: row.preis,
-          },
-        ],
+        {
+          id: row.id,
+          posNr: row.posNr,
+          kurztext: row.kurztext,
+          langtext: row.langtext,
+          einheit: row.einheit,
+          menge: row.menge,
+          preis: row.preis
+        }],
+
         options: {
           language: "de",
           sector: "Tiefbau/Hochbau",
@@ -416,9 +417,9 @@ async function postKiSuggest(projectCode: string, row: LVPos): Promise<any | nul
           includePriceBreakdown: true,
           useKalkulationsDatenbank: true,
           useOpenAIIfNoDatabaseHit: false,
-          forceRecalculate: true,
-        },
-      }),
+          forceRecalculate: true
+        }
+      })
     });
 
     const json = await res.json().catch(() => null);
@@ -436,21 +437,21 @@ async function postKiSuggest(projectCode: string, row: LVPos): Promise<any | nul
 }
 
 function normSearch(value: unknown): string {
-  return String(value ?? "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ß/g, "ss")
-    .trim();
+  return String(value ?? "").
+  toLowerCase().
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/ß/g, "ss").
+  trim();
 }
 
 function getProject(projectCtx: any): ProjectLike | null {
   const p =
-    projectCtx?.project ||
-    projectCtx?.currentProject ||
-    projectCtx?.selectedProject ||
-    projectCtx?.current ||
-    projectCtx;
+  projectCtx?.project ||
+  projectCtx?.currentProject ||
+  projectCtx?.selectedProject ||
+  projectCtx?.current ||
+  projectCtx;
 
   if (!p || typeof p !== "object") return null;
   return p as ProjectLike;
@@ -459,10 +460,10 @@ function getProject(projectCtx: any): ProjectLike | null {
 function getProjectKey(project: ProjectLike | null): string {
   return String(
     project?.code ||
-      project?.number ||
-      project?.projektnummer ||
-      project?.id ||
-      ""
+    project?.number ||
+    project?.projektnummer ||
+    project?.id ||
+    ""
   ).trim();
 }
 
@@ -489,60 +490,60 @@ function textSignature(row: LVPos | null): string {
   if (text.includes("rohr")) return "rohrleitung";
   if (text.includes("schacht")) return "schacht_setzen";
   if (
-    text.includes("pflaster") ||
-    text.includes("verbundstein") ||
-    text.includes("betonstein") ||
-    text.includes("naturstein")
-  ) {
+  text.includes("pflaster") ||
+  text.includes("verbundstein") ||
+  text.includes("betonstein") ||
+  text.includes("naturstein"))
+  {
     return "pflaster_verlegen";
   }
   if (text.includes("kabel")) return "kabel";
   if (text.includes("verfull") || text.includes("verfuell")) return "verfuellung";
 
-  return String(row?.kurztext || row?.posNr || "position")
-    .toLowerCase()
-    .replace(/[^a-z0-9äöüß]+/gi, "_")
-    .slice(0, 50);
+  return String(row?.kurztext || row?.posNr || "position").
+  toLowerCase().
+  replace(/[^a-z0-9äöüß]+/gi, "_").
+  slice(0, 50);
 }
 
 function inferUnitFromText(textValue: string): string {
   const text = normSearch(textValue);
 
   if (
-    text.includes("pflaster") ||
-    text.includes("asphalt") ||
-    text.includes("flache") ||
-    text.includes("rasengitter")
-  ) {
+  text.includes("pflaster") ||
+  text.includes("asphalt") ||
+  text.includes("flache") ||
+  text.includes("rasengitter"))
+  {
     return "m²";
   }
 
   if (
-    text.includes("aushub") ||
-    text.includes("boden") ||
-    text.includes("kies") ||
-    text.includes("schotter") ||
-    text.includes("frostschutz")
-  ) {
+  text.includes("aushub") ||
+  text.includes("boden") ||
+  text.includes("kies") ||
+  text.includes("schotter") ||
+  text.includes("frostschutz"))
+  {
     return "m³";
   }
 
   if (
-    text.includes("rohr") ||
-    text.includes("leitung") ||
-    text.includes("speedpipe") ||
-    text.includes("kabel") ||
-    text.includes("bord") ||
-    text.includes("randstein")
-  ) {
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("speedpipe") ||
+  text.includes("kabel") ||
+  text.includes("bord") ||
+  text.includes("randstein"))
+  {
     return "m";
   }
 
   if (
-    text.includes("schacht") ||
-    text.includes("muffe") ||
-    text.includes("abzweig")
-  ) {
+  text.includes("schacht") ||
+  text.includes("muffe") ||
+  text.includes("abzweig"))
+  {
     return "St";
   }
 
@@ -558,21 +559,21 @@ function inferGewerk(row: LVPos | null): string {
   if (text.includes("pflaster")) return "Straßenbau / Pflasterarbeiten";
   if (text.includes("bord") || text.includes("randstein")) return "Straßenbau / Bordsteinarbeiten";
   if (
-    text.includes("leitungsgraben") ||
-    text.includes("graben herstellen") ||
-    text.includes("kabelgraben") ||
-    text.includes("rohrgraben") ||
-    text.includes("trasse herstellen")
-  ) return "Tiefbau / Leitungsbau";
+  text.includes("leitungsgraben") ||
+  text.includes("graben herstellen") ||
+  text.includes("kabelgraben") ||
+  text.includes("rohrgraben") ||
+  text.includes("trasse herstellen"))
+  return "Tiefbau / Leitungsbau";
   if (text.includes("asphalt")) return "Straßenbau / Asphaltbau";
   if (text.includes("frostschutz")) return "Straßenbau / Tragschichten";
   if (text.includes("graben") || text.includes("aushub")) return "Tiefbau / Erdarbeiten";
   if (
-    text.includes("rohr") ||
-    text.includes("leitung") ||
-    text.includes("speedpipe") ||
-    text.includes("kabel")
-  ) {
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("speedpipe") ||
+  text.includes("kabel"))
+  {
     return "Tiefbau / Leitungsbau";
   }
   if (text.includes("schacht")) return "Tiefbau / Schachtbau";
@@ -600,12 +601,12 @@ function inferBauverfahren(row: LVPos | null, ctx: ContextValues): string {
   }
 
   if (
-    text.includes("leitungsgraben") ||
-    text.includes("graben herstellen") ||
-    text.includes("kabelgraben") ||
-    text.includes("rohrgraben") ||
-    text.includes("trasse herstellen")
-  ) {
+  text.includes("leitungsgraben") ||
+  text.includes("graben herstellen") ||
+  text.includes("kabelgraben") ||
+  text.includes("rohrgraben") ||
+  text.includes("trasse herstellen"))
+  {
     return "Leitungsgraben / Trasse herstellen mit Aushub, Leitungszone, Verfüllung, Verdichtung und Oberflächenbezug";
   }
 
@@ -634,11 +635,11 @@ function suggestLangtextForDraft(draft: DraftPosition, ctx: ContextValues): stri
   }
 
   if (
-    text.includes("pflaster") ||
-    text.includes("verbundstein") ||
-    text.includes("betonstein") ||
-    text.includes("naturstein")
-  ) {
+  text.includes("pflaster") ||
+  text.includes("verbundstein") ||
+  text.includes("betonstein") ||
+  text.includes("naturstein"))
+  {
     return `Pflasterfläche herstellen. Einschließlich Prüfen und Vorbereiten des Untergrundes, Herstellen beziehungsweise Ergänzen der Tragschicht, Herstellen und Feinplanieren der Bettung, Liefern und Verlegen der Pflastersteine im vereinbarten Verband, Schneiden von Rand- und Anschlussbereichen, höhengerechtem Anschluss an Bestand, Abrütteln der Pflasterfläche sowie Verfüllen der Fugen mit geeignetem Fugenmaterial. Einschließlich aller erforderlichen Nebenleistungen, Geräte, Personal, Material, Transport und Baustellenorganisation. Abrechnung nach tatsächlich ausgeführter Fläche in ${unit}.`;
   }
 
@@ -651,12 +652,12 @@ function suggestLangtextForDraft(draft: DraftPosition, ctx: ContextValues): stri
   }
 
   if (
-    text.includes("leitungsgraben") ||
-    text.includes("graben herstellen") ||
-    text.includes("kabelgraben") ||
-    text.includes("rohrgraben") ||
-    text.includes("trasse herstellen")
-  ) {
+  text.includes("leitungsgraben") ||
+  text.includes("graben herstellen") ||
+  text.includes("kabelgraben") ||
+  text.includes("rohrgraben") ||
+  text.includes("trasse herstellen"))
+  {
     return `Leitungsgraben beziehungsweise Trasse fachgerecht herstellen. Einschließlich Schneiden und Aufnehmen vorhandener Oberflächen soweit erforderlich, Aushub, Herstellen der Grabensohle, Sichern des Grabens, Herstellen der Leitungszone, Bettung, Warnband beziehungsweise Trassenkennzeichnung, Verfüllen und lagenweisem Verdichten nach technischem Erfordernis. Oberfläche und Wiederherstellung sind entsprechend der Positionsbeschreibung zu berücksichtigen. Abrechnung nach tatsächlich ausgeführter Länge beziehungsweise Menge in ${unit}.`;
   }
 
@@ -665,32 +666,32 @@ function suggestLangtextForDraft(draft: DraftPosition, ctx: ContextValues): stri
   }
 
   if (
-    text.includes("speedpipe") ||
-    text.includes("rohr") ||
-    text.includes("leitung") ||
-    text.includes("kabel")
-  ) {
+  text.includes("speedpipe") ||
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("kabel"))
+  {
     return `Leitung beziehungsweise Rohrsystem liefern und fachgerecht verlegen. Einschließlich Herstellen der Leitungszone, Bettung, Ausrichten, Einbauen, Warnband beziehungsweise Trassenkennzeichnung, fachgerechtem Anschluss sowie Verfüllen und Verdichten nach Erfordernis. Grabentiefe ca. ${ctx.depthM} m, Bodenklasse ${ctx.soilClass}. Abrechnung nach tatsächlich ausgeführter Länge in ${unit}.`;
   }
 
   if (
-    text.includes("aushub") ||
-    text.includes("graben") ||
-    text.includes("auskofferung") ||
-    text.includes("auskoffern") ||
-    text.includes("erdarbeiten") ||
-    text.includes("baugrube")
-  ) {
-    const soil = String(ctx.soilClass || "").toUpperCase().startsWith("BK")
-      ? String(ctx.soilClass)
-      : `BK ${ctx.soilClass}`;
+  text.includes("aushub") ||
+  text.includes("graben") ||
+  text.includes("auskofferung") ||
+  text.includes("auskoffern") ||
+  text.includes("erdarbeiten") ||
+  text.includes("baugrube"))
+  {
+    const soil = String(ctx.soilClass || "").toUpperCase().startsWith("BK") ?
+    String(ctx.soilClass) :
+    `BK ${ctx.soilClass}`;
 
     const extras = [
-      ctx.restricted ? "Ausführung bei eingeschränktem Arbeitsraum." : "",
-      ctx.groundwater ? "Erschwernisse durch Grundwasser sind zu berücksichtigen." : "",
-      ctx.asphalt ? "Asphaltflächen beziehungsweise befestigte Oberflächen sind im Arbeitsbereich betroffen." : "",
-      ctx.trafficControl ? "Verkehrssicherung und Sicherung der Arbeitsstelle sind einzukalkulieren." : "",
-    ].filter(Boolean).join(" ");
+    ctx.restricted ? "Ausführung bei eingeschränktem Arbeitsraum." : "",
+    ctx.groundwater ? "Erschwernisse durch Grundwasser sind zu berücksichtigen." : "",
+    ctx.asphalt ? "Asphaltflächen beziehungsweise befestigte Oberflächen sind im Arbeitsbereich betroffen." : "",
+    ctx.trafficControl ? "Verkehrssicherung und Sicherung der Arbeitsstelle sind einzukalkulieren." : ""].
+    filter(Boolean).join(" ");
 
     return `Auskofferung beziehungsweise Erdarbeiten fachgerecht ausführen. Einschließlich Lösen und Laden des Bodens, profilgerechtem Herstellen der Aushubfläche beziehungsweise Baugrube, seitlichem Lagern oder Abfahren des Aushubmaterials, Herstellen der erforderlichen Arbeitsräume, Sichern der Arbeitsstelle sowie aller Nebenleistungen für Personal, Geräte, Maschinen, Transport und Baustellenorganisation.
 
@@ -785,44 +786,44 @@ function libraryGroup(item: ExternalLibraryItem): ResourceGroup {
   );
 
   if (
-    text.includes("lohn") ||
-    text.includes("personal") ||
-    text.includes("arbeiter") ||
-    text.includes("facharbeiter") ||
-    text.includes("helfer") ||
-    text.includes("polier")
-  ) {
+  text.includes("lohn") ||
+  text.includes("personal") ||
+  text.includes("arbeiter") ||
+  text.includes("facharbeiter") ||
+  text.includes("helfer") ||
+  text.includes("polier"))
+  {
     return "Personal";
   }
 
   if (
-    text.includes("maschine") ||
-    text.includes("bagger") ||
-    text.includes("radlader") ||
-    text.includes("walze") ||
-    text.includes("ruttel") ||
-    text.includes("gerät") ||
-    text.includes("geraet")
-  ) {
+  text.includes("maschine") ||
+  text.includes("bagger") ||
+  text.includes("radlader") ||
+  text.includes("walze") ||
+  text.includes("ruttel") ||
+  text.includes("gerät") ||
+  text.includes("geraet"))
+  {
     return "Maschinen";
   }
 
   if (
-    text.includes("lkw") ||
-    text.includes("transport") ||
-    text.includes("tieflader") ||
-    text.includes("anfahrt")
-  ) {
+  text.includes("lkw") ||
+  text.includes("transport") ||
+  text.includes("tieflader") ||
+  text.includes("anfahrt"))
+  {
     return "LKW / Transport";
   }
 
   if (
-    text.includes("entsorgung") ||
-    text.includes("deponie") ||
-    text.includes("verwertung") ||
-    text.includes("boden entsorgen") ||
-    text.includes("aufbruch entsorgen")
-  ) {
+  text.includes("entsorgung") ||
+  text.includes("deponie") ||
+  text.includes("verwertung") ||
+  text.includes("boden entsorgen") ||
+  text.includes("aufbruch entsorgen"))
+  {
     return "Entsorgung";
   }
 
@@ -841,13 +842,13 @@ function libraryGroup(item: ExternalLibraryItem): ResourceGroup {
 
 function libraryResourceId(item: ExternalLibraryItem): string {
   const base =
-    libraryCode(item) ||
-    `${libraryTitle(item)}-${libraryUnit(item)}-${libraryPrice(item)}`;
+  libraryCode(item) ||
+  `${libraryTitle(item)}-${libraryUnit(item)}-${libraryPrice(item)}`;
 
-  return `LIB-${String(base)
-    .trim()
-    .replace(/[^a-zA-Z0-9_.-]+/g, "_")
-    .slice(0, 120)}`;
+  return `LIB-${String(base).
+  trim().
+  replace(/[^a-zA-Z0-9_.-]+/g, "_").
+  slice(0, 120)}`;
 }
 
 function recipeLineFromLibrary(item: ExternalLibraryItem): RecipeLine {
@@ -864,7 +865,7 @@ function recipeLineFromLibrary(item: ExternalLibraryItem): RecipeLine {
     qty: libraryQty(item),
     price: libraryPrice(item),
     note: item.source ? `Bibliothek: ${item.source}` : "Aus importierter Bibliothek",
-    aiSuggested: false,
+    aiSuggested: false
   };
 }
 
@@ -875,8 +876,8 @@ function isSurchargeLike(row: Partial<RecipeLine>): boolean {
     group === "Gemeinkosten" ||
     group === "Risiko" ||
     group === "Gewinn" ||
-    String(row.unit || "").trim() === "%"
-  );
+    String(row.unit || "").trim() === "%");
+
 }
 
 function lineTotal(row: RecipeLine): number {
@@ -886,16 +887,16 @@ function lineTotal(row: RecipeLine): number {
 
 function directTotal(lines: RecipeLine[]): number {
   return round2(
-    lines
-      .filter((r) => !isSurchargeLike(r))
-      .reduce((s, r) => s + lineTotal(r), 0)
+    lines.
+    filter((r) => !isSurchargeLike(r)).
+    reduce((s, r) => s + lineTotal(r), 0)
   );
 }
 
 function surchargePercent(lines: RecipeLine[]): number {
-  return lines
-    .filter((x) => x.group === "Zuschläge" && x.unit === "%")
-    .reduce((s, x) => s + n(x.price), 0);
+  return lines.
+  filter((x) => x.group === "Zuschläge" && x.unit === "%").
+  reduce((s, x) => s + n(x.price), 0);
 }
 
 function totalWithSurcharges(lines: RecipeLine[]): number {
@@ -920,7 +921,7 @@ function makeLine(resourceId: string, qty: number, note = "", aiSuggested = true
       qty,
       price: 0,
       note,
-      aiSuggested,
+      aiSuggested
     };
   }
 
@@ -933,7 +934,7 @@ function makeLine(resourceId: string, qty: number, note = "", aiSuggested = true
     qty,
     price: r.defaultPrice,
     note,
-    aiSuggested,
+    aiSuggested
   };
 }
 
@@ -944,7 +945,7 @@ function makeDefaultDraft(): DraftPosition {
     kurztext: "",
     langtext: "",
     einheit: "m",
-    menge: 1,
+    menge: 1
   };
 }
 
@@ -955,7 +956,7 @@ function draftFromLv(row: LVPos): DraftPosition {
     kurztext: String(row.kurztext || ""),
     langtext: String(row.langtext || ""),
     einheit: String(row.einheit || "m"),
-    menge: n(row.menge, 1),
+    menge: n(row.menge, 1)
   };
 }
 
@@ -972,7 +973,7 @@ function draftToLvPos(draft: DraftPosition): LVPos {
     waehrung: "EUR",
     source: "manual",
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   } as LVPos;
 }
 
@@ -1005,72 +1006,72 @@ function priceBreakdownGroupToResourceGroup(group: string): ResourceGroup {
 
 
 type RlcUrkalkulationFamily =
-  | "statik_berechnung"
-  | "besucherfuehrung"
-  | "naturschutz_auflagen"
-  | "vlies_geotextil"
-  | "rundholzlage"
-  | "kernbohrung"
-  | "hdd_start_zielgrube"
-  | "hdd_bohrung"
-  | "bentonit"
-  | "bohrprotokoll"
-  | "kompressor"
-  | "ueberdachung"
-  | "bitumen_anspruehen"
-  | "brunnen_aufschlussbohrung"
-  | "verbau_spundwand"
-  | "ramm_press_ruettel"
-  | "rohrvortrieb_einpressen"
-  | "nassbaggerarbeiten"
-  | "schlitzwand"
-  | "spritzbeton"
-  | "kampfmittel"
-  | "verkehrssicherung"
-  | "baulogistik"
-  | "abfallentsorgung"
-  | "abscheider_klaeranlage"
-  | "bahn_gleisbau"
-  | "abdichtung_bauwerk"
-  | "pflaster_bord_rinne"
-  | "asphalt_oberbau"
-  | "baustelle"
-  | "infrastruktur"
-  | "beweissicherung"
-  | "grenzstein"
-  | "bauschild"
-  | "beton_bauteile"
-  | "drainage"
-  | "spuelen_pruefen"
-  | "elektro_msr"
-  | "armaturen_zubehoer"
-  | "pumpstation"
-  | "hausanschluss"
-  | "mehr_minderpreis"
-  | "transport_montage"
-  | "dokumentation"
-  | "wartung_anleitung"
-  | "tuev_abnahme"
-  | "spreng_abstimmung"
-  | "haufwerk_zulage"
-  | "asphalt_trennen"
-  | "strassenaufbruch"
-  | "schachtbau"
-  | "mutterboden"
-  | "rodung"
-  | "aushub_zuschlag"
-  | "aushub"
-  | "verfuellung"
-  | "rohrleitung"
-  | "kabel"
-  | "oberflaeche"
-  | "wanderweg_wiederherstellen"
-  | "wasserhaltung"
-  | "zaunbau"
-  | "schutzmassnahme"
-  | "regie"
-  | "material"
-  | "unknown";
+"statik_berechnung" |
+"besucherfuehrung" |
+"naturschutz_auflagen" |
+"vlies_geotextil" |
+"rundholzlage" |
+"kernbohrung" |
+"hdd_start_zielgrube" |
+"hdd_bohrung" |
+"bentonit" |
+"bohrprotokoll" |
+"kompressor" |
+"ueberdachung" |
+"bitumen_anspruehen" |
+"brunnen_aufschlussbohrung" |
+"verbau_spundwand" |
+"ramm_press_ruettel" |
+"rohrvortrieb_einpressen" |
+"nassbaggerarbeiten" |
+"schlitzwand" |
+"spritzbeton" |
+"kampfmittel" |
+"verkehrssicherung" |
+"baulogistik" |
+"abfallentsorgung" |
+"abscheider_klaeranlage" |
+"bahn_gleisbau" |
+"abdichtung_bauwerk" |
+"pflaster_bord_rinne" |
+"asphalt_oberbau" |
+"baustelle" |
+"infrastruktur" |
+"beweissicherung" |
+"grenzstein" |
+"bauschild" |
+"beton_bauteile" |
+"drainage" |
+"spuelen_pruefen" |
+"elektro_msr" |
+"armaturen_zubehoer" |
+"pumpstation" |
+"hausanschluss" |
+"mehr_minderpreis" |
+"transport_montage" |
+"dokumentation" |
+"wartung_anleitung" |
+"tuev_abnahme" |
+"spreng_abstimmung" |
+"haufwerk_zulage" |
+"asphalt_trennen" |
+"strassenaufbruch" |
+"schachtbau" |
+"mutterboden" |
+"rodung" |
+"aushub_zuschlag" |
+"aushub" |
+"verfuellung" |
+"rohrleitung" |
+"kabel" |
+"oberflaeche" |
+"wanderweg_wiederherstellen" |
+"wasserhaltung" |
+"zaunbau" |
+"schutzmassnahme" |
+"regie" |
+"material" |
+"unknown";
 
 function detectRlcUrkalkulationFamily(row: LVPos): RlcUrkalkulationFamily {
   const t = normSearch(
@@ -1078,255 +1079,255 @@ function detectRlcUrkalkulationFamily(row: LVPos): RlcUrkalkulationFamily {
   );
 
   if (
-    t.includes("fremdleistung") ||
-    t.includes("subunternehmer") ||
-    t.includes("nachunternehmer") ||
-    t.includes("spezialfirma")
-  ) {
+  t.includes("fremdleistung") ||
+  t.includes("subunternehmer") ||
+  t.includes("nachunternehmer") ||
+  t.includes("spezialfirma"))
+  {
     return "unknown";
   }
 
   if (
-    t.includes("stundensaetze") ||
-    t.includes("stundensatz") ||
-    t.includes("baggerstunden") ||
-    t.includes("lkw-stunden") ||
-    t.includes("lkw stunden") ||
-    t.includes("radlader") ||
-    t.includes("motorflex") ||
-    t.includes("stromaggregat") ||
-    t.includes("fahrzeugkosten") ||
-    t.includes("verrechnungssaetze") ||
-    t.includes("verrechnungssatz")
-  ) {
+  t.includes("stundensaetze") ||
+  t.includes("stundensatz") ||
+  t.includes("baggerstunden") ||
+  t.includes("lkw-stunden") ||
+  t.includes("lkw stunden") ||
+  t.includes("radlader") ||
+  t.includes("motorflex") ||
+  t.includes("stromaggregat") ||
+  t.includes("fahrzeugkosten") ||
+  t.includes("verrechnungssaetze") ||
+  t.includes("verrechnungssatz"))
+  {
     return "regie";
   }
 
   if (
-    t.includes("bestandszeichnung") ||
-    t.includes("bestandszeichnungen") ||
-    t.includes("as-built") ||
-    t.includes("as built") ||
-    t.includes("aufmassdokumentation") ||
-    t.includes("aufmaßdokumentation") ||
-    t.includes("dokumentation") ||
-    t.includes("revisionsunterlagen") ||
-    t.includes("planunterlagen")
-  ) {
+  t.includes("bestandszeichnung") ||
+  t.includes("bestandszeichnungen") ||
+  t.includes("as-built") ||
+  t.includes("as built") ||
+  t.includes("aufmassdokumentation") ||
+  t.includes("aufmaßdokumentation") ||
+  t.includes("dokumentation") ||
+  t.includes("revisionsunterlagen") ||
+  t.includes("planunterlagen"))
+  {
     return "dokumentation";
   }
 
   if (
-    t.includes("baustelleneinrichtung") ||
-    t.includes("baustelle raeumen") ||
-    t.includes("bauzaun") ||
-    t.includes("baustellenabsicherung") ||
-    t.includes("baustellendokumentation") ||
-    t.includes("baustellenkoordination") ||
-    t.includes("verkehrssicherung") ||
-    t.includes("besucherfuehrung") ||
-    t.includes("zufahrt") ||
-    t.includes("baustrasse") ||
-    t.includes("lagerflaeche") ||
-    t.includes("ueberfahrt") ||
-    t.includes("besprechungsraum") ||
-    t.includes("abstimmung") ||
-    t.includes("dokumentation")
-  ) {
+  t.includes("baustelleneinrichtung") ||
+  t.includes("baustelle raeumen") ||
+  t.includes("bauzaun") ||
+  t.includes("baustellenabsicherung") ||
+  t.includes("baustellendokumentation") ||
+  t.includes("baustellenkoordination") ||
+  t.includes("verkehrssicherung") ||
+  t.includes("besucherfuehrung") ||
+  t.includes("zufahrt") ||
+  t.includes("baustrasse") ||
+  t.includes("lagerflaeche") ||
+  t.includes("ueberfahrt") ||
+  t.includes("besprechungsraum") ||
+  t.includes("abstimmung") ||
+  t.includes("dokumentation"))
+  {
     return "baustelle";
   }
 
   if (
-    t.includes("mutterboden") ||
-    t.includes("oberboden") ||
-    t.includes("humus") ||
-    t.includes("humusmiete") ||
-    t.includes("grasnarbe")
-  ) {
+  t.includes("mutterboden") ||
+  t.includes("oberboden") ||
+  t.includes("humus") ||
+  t.includes("humusmiete") ||
+  t.includes("grasnarbe"))
+  {
     return "mutterboden";
   }
 
   if (
-    t.includes("rodung") ||
-    t.includes("freimachen") ||
-    t.includes("bewuchs") ||
-    t.includes("straeucher") ||
-    t.includes("wurzeln") ||
-    t.includes("wurzelstoecke") ||
-    t.includes("stubben") ||
-    t.includes("baeume faellen")
-  ) {
+  t.includes("rodung") ||
+  t.includes("freimachen") ||
+  t.includes("bewuchs") ||
+  t.includes("straeucher") ||
+  t.includes("wurzeln") ||
+  t.includes("wurzelstoecke") ||
+  t.includes("stubben") ||
+  t.includes("baeume faellen"))
+  {
     return "rodung";
   }
 
   if (
-    t.includes("wasserhaltung") ||
-    t.includes("pumpenstunden") ||
-    t.includes("pumpe") ||
-    t.includes("grundwasser")
-  ) {
+  t.includes("wasserhaltung") ||
+  t.includes("pumpenstunden") ||
+  t.includes("pumpe") ||
+  t.includes("grundwasser"))
+  {
     return "wasserhaltung";
   }
 
   if (
-    t.includes("flaechen einzaeunen") ||
-    t.includes("flachen einzaunen") ||
-    t.includes("flächen einzäunen") ||
-    t.includes("einzaeunen") ||
-    t.includes("einzaunen") ||
-    t.includes("einzäunen") ||
-    t.includes("zaun herstellen") ||
-    t.includes("weidezaun herstellen") ||
-    t.includes("zaun setzen")
-  ) {
+  t.includes("flaechen einzaeunen") ||
+  t.includes("flachen einzaunen") ||
+  t.includes("flächen einzäunen") ||
+  t.includes("einzaeunen") ||
+  t.includes("einzaunen") ||
+  t.includes("einzäunen") ||
+  t.includes("zaun herstellen") ||
+  t.includes("weidezaun herstellen") ||
+  t.includes("zaun setzen"))
+  {
     return "zaunbau";
   }
 
   if (
-    t.includes("wanderweg") ||
-    t.includes("forststrasse") ||
-    t.includes("forststraße") ||
-    t.includes("kiesweg")
-  ) {
+  t.includes("wanderweg") ||
+  t.includes("forststrasse") ||
+  t.includes("forststraße") ||
+  t.includes("kiesweg"))
+  {
     return "wanderweg_wiederherstellen";
   }
 
   if (
-    t.includes("baum") ||
-    t.includes("schutzmassnahme") ||
-    t.includes("bohlenschutz") ||
-    t.includes("weidezaun") ||
-    t.includes("zaeune abbauen") ||
-    t.includes("zaun")
-  ) {
+  t.includes("baum") ||
+  t.includes("schutzmassnahme") ||
+  t.includes("bohlenschutz") ||
+  t.includes("weidezaun") ||
+  t.includes("zaeune abbauen") ||
+  t.includes("zaun"))
+  {
     return "schutzmassnahme";
   }
 
   if (
-    t.includes("rohrgrabenaushub") ||
-    t.includes("rohrgraben") ||
-    t.includes("leitungsgraben") ||
-    t.includes("kabelgraben") ||
-    t.includes("aushub") ||
-    t.includes("abtrag") ||
-    t.includes("boden loesen") ||
-    t.includes("bodenklasse") ||
-    t.includes("bd-kl") ||
-    t.includes("bd kl") ||
-    t.includes("fels") ||
-    t.includes("meissel") ||
-    t.includes("suchschlitz")
-  ) {
+  t.includes("rohrgrabenaushub") ||
+  t.includes("rohrgraben") ||
+  t.includes("leitungsgraben") ||
+  t.includes("kabelgraben") ||
+  t.includes("aushub") ||
+  t.includes("abtrag") ||
+  t.includes("boden loesen") ||
+  t.includes("bodenklasse") ||
+  t.includes("bd-kl") ||
+  t.includes("bd kl") ||
+  t.includes("fels") ||
+  t.includes("meissel") ||
+  t.includes("suchschlitz"))
+  {
     return "aushub";
   }
 
   if (
-    t.includes("verfuellen") ||
-    t.includes("verfuellung") ||
-    t.includes("verfuell") ||
-    t.includes("auffuellen") ||
-    t.includes("auffuell") ||
-    t.includes("einbauen") ||
-    t.includes("verdichten") ||
-    t.includes("planum") ||
-    t.includes("planie") ||
-    t.includes("flaechen auflockern") ||
-    t.includes("entwaesserungsrinne") ||
-    t.includes("entwaesserungsmulde") ||
-    t.includes("sauberkeitsschicht") ||
-    t.includes("mehr- oder mindertiefe") ||
-    t.includes("frostschutz") ||
-    t.includes("schotter") ||
-    t.includes("kies") ||
-    t.includes("sand") ||
-    t.includes("riesel") ||
-    t.includes("schroppen")
-  ) {
+  t.includes("verfuellen") ||
+  t.includes("verfuellung") ||
+  t.includes("verfuell") ||
+  t.includes("auffuellen") ||
+  t.includes("auffuell") ||
+  t.includes("einbauen") ||
+  t.includes("verdichten") ||
+  t.includes("planum") ||
+  t.includes("planie") ||
+  t.includes("flaechen auflockern") ||
+  t.includes("entwaesserungsrinne") ||
+  t.includes("entwaesserungsmulde") ||
+  t.includes("sauberkeitsschicht") ||
+  t.includes("mehr- oder mindertiefe") ||
+  t.includes("frostschutz") ||
+  t.includes("schotter") ||
+  t.includes("kies") ||
+  t.includes("sand") ||
+  t.includes("riesel") ||
+  t.includes("schroppen"))
+  {
     return "verfuellung";
   }
 
   if (
-    t.includes("rohrleitung") ||
-    t.includes("rohr verlegen") ||
-    t.includes("leitung verlegen") ||
-    t.includes("wasserleitung") ||
-    t.includes("druckleitung") ||
-    t.includes("kanal") ||
-    t.includes("schacht") ||
-    t.includes("formstueck") ||
-    t.includes("formstuecke") ||
-    t.includes("passstueck") ||
-    t.includes("passstuecke") ||
-    t.includes("boeschungsstueck") ||
-    t.includes("durchlass") ||
-    t.includes("ggg") ||
-    t.includes("pe-hd") ||
-    t.includes("pe hd") ||
-    t.includes("hydrant") ||
-    t.includes("schieber") ||
-    t.includes("armatur") ||
-    t.includes("isolierbinde") ||
-    t.includes("be- und entlueftungsrohr") ||
-    t.includes("entlueftungsrohr") ||
-    t.includes("spuelen und entkeimen")
-  ) {
+  t.includes("rohrleitung") ||
+  t.includes("rohr verlegen") ||
+  t.includes("leitung verlegen") ||
+  t.includes("wasserleitung") ||
+  t.includes("druckleitung") ||
+  t.includes("kanal") ||
+  t.includes("schacht") ||
+  t.includes("formstueck") ||
+  t.includes("formstuecke") ||
+  t.includes("passstueck") ||
+  t.includes("passstuecke") ||
+  t.includes("boeschungsstueck") ||
+  t.includes("durchlass") ||
+  t.includes("ggg") ||
+  t.includes("pe-hd") ||
+  t.includes("pe hd") ||
+  t.includes("hydrant") ||
+  t.includes("schieber") ||
+  t.includes("armatur") ||
+  t.includes("isolierbinde") ||
+  t.includes("be- und entlueftungsrohr") ||
+  t.includes("entlueftungsrohr") ||
+  t.includes("spuelen und entkeimen"))
+  {
     return "rohrleitung";
   }
 
   if (
-    t.includes("kabel") ||
-    t.includes("speedpipe") ||
-    t.includes("leerrohr") ||
-    t.includes("schutzrohr") ||
-    t.includes("kabelschutzrohr") ||
-    t.includes("schutzmatte") ||
-    t.includes("trassenwarnband") ||
-    t.includes("warnband") ||
-    t.includes("runddraht") ||
-    t.includes("erdleitung") ||
-    t.includes("stromanschlussantrag") ||
-    t.includes("warnanlage") ||
-    t.includes("endstopfen") ||
-    t.includes("doppelsteckmuffe") ||
-    t.includes("einzelzugabdichtung")
-  ) {
+  t.includes("kabel") ||
+  t.includes("speedpipe") ||
+  t.includes("leerrohr") ||
+  t.includes("schutzrohr") ||
+  t.includes("kabelschutzrohr") ||
+  t.includes("schutzmatte") ||
+  t.includes("trassenwarnband") ||
+  t.includes("warnband") ||
+  t.includes("runddraht") ||
+  t.includes("erdleitung") ||
+  t.includes("stromanschlussantrag") ||
+  t.includes("warnanlage") ||
+  t.includes("endstopfen") ||
+  t.includes("doppelsteckmuffe") ||
+  t.includes("einzelzugabdichtung"))
+  {
     return "kabel";
   }
 
   if (
-    t.includes("asphalt") ||
-    t.includes("pflaster") ||
-    t.includes("bordstein") ||
-    t.includes("belag") ||
-    t.includes("oberflaeche") ||
-    t.includes("decke") ||
-    t.includes("fraesen") ||
-    t.includes("schneiden") ||
-    t.includes("aufbruch") ||
-    t.includes("wasserbausteine")
-  ) {
+  t.includes("asphalt") ||
+  t.includes("pflaster") ||
+  t.includes("bordstein") ||
+  t.includes("belag") ||
+  t.includes("oberflaeche") ||
+  t.includes("decke") ||
+  t.includes("fraesen") ||
+  t.includes("schneiden") ||
+  t.includes("aufbruch") ||
+  t.includes("wasserbausteine"))
+  {
     return "oberflaeche";
   }
 
   if (
-    t.includes("material") ||
-    t.includes("liefern") ||
-    t.includes("zusaetzliche anreise") ||
-    t.includes("wartungs") ||
-    t.includes("bedienungsanleitung") ||
-    t.includes("tuev") ||
-    t.includes("ebb-abnahme") ||
-    t.includes("abnahme") ||
-    t.includes("bentonit") ||
-    t.includes("bohrung") ||
-    t.includes("bohrprotokoll") ||
-    t.includes("statische berechnung") ||
-    t.includes("ueberdachung") ||
-    t.includes("kompressorstunden") ||
-    t.includes("zulage") ||
-    t.includes("zuschlag") ||
-    t.includes("mehrpreis")
-  ) {
+  t.includes("material") ||
+  t.includes("liefern") ||
+  t.includes("zusaetzliche anreise") ||
+  t.includes("wartungs") ||
+  t.includes("bedienungsanleitung") ||
+  t.includes("tuev") ||
+  t.includes("ebb-abnahme") ||
+  t.includes("abnahme") ||
+  t.includes("bentonit") ||
+  t.includes("bohrung") ||
+  t.includes("bohrprotokoll") ||
+  t.includes("statische berechnung") ||
+  t.includes("ueberdachung") ||
+  t.includes("kompressorstunden") ||
+  t.includes("zulage") ||
+  t.includes("zuschlag") ||
+  t.includes("mehrpreis"))
+  {
     return "material";
   }
 
@@ -1365,15 +1366,15 @@ function detectRlcUrkalkulationFamilyV4(row: LVPos): RlcUrkalkulationFamily {
   if (hasAny(k, ["statische berechnung", "statischen berechnung", "statik", "standsicherheitsnachweis", "tragwerksplanung"])) return "statik_berechnung";
   if (hasAny(k, ["besucherführung", "besucherfuhrung", "besucherfuehrung", "besucher fuehrung", "besucher fuhrung", "besucher führung", "besucherinformation", "besucher information"])) return "besucherfuehrung";
   if (hasAny(k, ["naturschutz", "untere naturschutzbehörde", "untere naturschutzbehoerde", "vorgegebene bauzeiten", "bauzeiten", "bauabschnitte", "naturschutzauflage"])) return "naturschutz_auflagen";
-  if (hasAny(k, ["straßenbauvlies", "strassenbauvlies", "bauvlies", "geotextil", "filtervlies", "vlies"] )) return "vlies_geotextil";
-  if (hasAny(k, ["rundholzlage", "rundholz", "holzlage", "holzbohlen", "bohlenlage"] )) return "rundholzlage";
-  if (hasAny(k, ["kernbohrung", "kernbohrungen", "bohrkern", "wanddurchbruch", "deckendurchbruch"] )) return "kernbohrung";
+  if (hasAny(k, ["straßenbauvlies", "strassenbauvlies", "bauvlies", "geotextil", "filtervlies", "vlies"])) return "vlies_geotextil";
+  if (hasAny(k, ["rundholzlage", "rundholz", "holzlage", "holzbohlen", "bohlenlage"])) return "rundholzlage";
+  if (hasAny(k, ["kernbohrung", "kernbohrungen", "bohrkern", "wanddurchbruch", "deckendurchbruch"])) return "kernbohrung";
   if (hasAny(k, ["start-und zielgruben", "start- und zielgruben", "start-und zielgrube", "start- und zielgrube", "start und zielgrube", "startgrube", "zielgrube", "zielgruben"])) return "hdd_start_zielgrube";
-  if (hasAny(k, ["horizontalspülbohrung", "horizontalspuelbohrung", "horizontalspulbohrung", "hdd", "pilotbohrung", "spuelbohrung", "spülbohrung", "spulbohrung", "auflassene bohrung", "aufgelassene bohrung", "stillstandzeiten bei bohrung"] )) return "hdd_bohrung";
-  if (hasAny(k, ["bentonit", "bentonitver", "bentonitentsorgung", "betonit", "betonitver", "betonitentsorgung", "bohrspuelung", "bohrspülung", "bohrspulung"] )) return "bentonit";
-  if (hasAny(k, ["bohrprotokoll", "bohr protokoll", "protokoll bohrung", "bohrdokumentation"] )) return "bohrprotokoll";
-  if (hasAny(k, ["kompressorstunden", "kompressor", "druckluft"] )) return "kompressor";
-  if (hasAny(k, ["überdachung", "ueberdachung", "einstieg überdachung", "einstieg ueberdachung", "einhausung"] )) return "ueberdachung";
+  if (hasAny(k, ["horizontalspülbohrung", "horizontalspuelbohrung", "horizontalspulbohrung", "hdd", "pilotbohrung", "spuelbohrung", "spülbohrung", "spulbohrung", "auflassene bohrung", "aufgelassene bohrung", "stillstandzeiten bei bohrung"])) return "hdd_bohrung";
+  if (hasAny(k, ["bentonit", "bentonitver", "bentonitentsorgung", "betonit", "betonitver", "betonitentsorgung", "bohrspuelung", "bohrspülung", "bohrspulung"])) return "bentonit";
+  if (hasAny(k, ["bohrprotokoll", "bohr protokoll", "protokoll bohrung", "bohrdokumentation"])) return "bohrprotokoll";
+  if (hasAny(k, ["kompressorstunden", "kompressor", "druckluft"])) return "kompressor";
+  if (hasAny(k, ["überdachung", "ueberdachung", "einstieg überdachung", "einstieg ueberdachung", "einhausung"])) return "ueberdachung";
   if (hasAny(k, ["schichtenverbund", "unterlage reinigen", "vorhandene unterlage reinigen", "ansprühen", "anspruehen", "bitumenhaltigem bindemittel", "bitumen bindemittel", "rampenspritzgerät", "rampenspritzgeraet", "haftkleber", "bitumenemulsion"])) return "bitumen_anspruehen";
   if (hasAny(k, ["revisionsschacht", "revisionsschächte", "revisionsschaechte", "energieumwandlungsschacht", "energieumwandlungsschächte", "energieumwandlungsschaechte", "abdeckplatte", "ap-m"])) return "schachtbau";
   if (hasAny(k, ["wanderweg wiederherstellen", "wanderweg", "forststrasse", "forststraße", "kiesweg", "weg wiederherstellen"])) return "wanderweg_wiederherstellen";
@@ -1410,8 +1411,8 @@ function detectRlcUrkalkulationFamilyV4(row: LVPos): RlcUrkalkulationFamily {
   // Kurztext has priority. This prevents long Langtext references like Mutterboden, Baum or Aushub
   // from stealing the real family of Rohrgrabenaushub, Rohre, Kabel or Zulagen.
   const isAushubZuschlagKurztext =
-    hasAny(k, ["zuschlag", "zulage", "mehrpreis", "erschwerniszuschlag", "mehr- oder minderpreis", "mehr oder minderpreis"]) &&
-    hasAny(k, ["rohrgrabenaushub", "rohrgraben", "leitungsgraben", "kabelgraben", "aushub", "bd-kl", "bd kl", "bodenklasse", "fels", "meissel", "meißel"]);
+  hasAny(k, ["zuschlag", "zulage", "mehrpreis", "erschwerniszuschlag", "mehr- oder minderpreis", "mehr oder minderpreis"]) &&
+  hasAny(k, ["rohrgrabenaushub", "rohrgraben", "leitungsgraben", "kabelgraben", "aushub", "bd-kl", "bd kl", "bodenklasse", "fels", "meissel", "meißel"]);
 
   if (isAushubZuschlagKurztext) return "aushub_zuschlag";
   if (hasAny(k, ["rohrgrabenaushub", "rohrgraben", "leitungsgraben", "kabelgraben", "aushub", "bodenabtrag", "abtrag", "suchschlitz", "fels", "meissel", "meißel"])) return "aushub";
@@ -1443,14 +1444,14 @@ function createRlcFallbackUrkalkulation(row: LVPos, ctx: ContextValues): RecipeL
   const unit = row.einheit || "EH";
 
   const mk = (
-    group: ResourceGroup,
-    resourceId: string,
-    name: string,
-    lineUnit: string,
-    lineQty: number,
-    price: number,
-    note: string
-  ): RecipeLine => ({
+  group: ResourceGroup,
+  resourceId: string,
+  name: string,
+  lineUnit: string,
+  lineQty: number,
+  price: number,
+  note: string)
+  : RecipeLine => ({
     id: safeId(),
     group,
     resourceId,
@@ -1459,7 +1460,7 @@ function createRlcFallbackUrkalkulation(row: LVPos, ctx: ContextValues): RecipeL
     qty: round2(Math.max(lineQty, 0)),
     price: round2(Math.max(price, 0)),
     note,
-    aiSuggested: true,
+    aiSuggested: true
   });
 
   const dailyOutput = Math.max(n(ctx.dailyOutput), 60);
@@ -1816,24 +1817,24 @@ function createRlcFallbackUrkalkulation(row: LVPos, ctx: ContextValues): RecipeL
 function createRlcMinimalReviewUrkalkulation(row: LVPos): RecipeLine[] {
   const t = normSearch(`${row.posNr || ""} ${row.kurztext || ""} ${row.langtext || ""} ${row.einheit || ""}`);
   const external =
-    t.includes("tuev") ||
-    t.includes("abnahme") ||
-    t.includes("labor") ||
-    t.includes("kampfmittel") ||
-    t.includes("subunternehmer") ||
-    t.includes("nachunternehmer") ||
-    t.includes("fremdleistung") ||
-    t.includes("spezialfirma");
+  t.includes("tuev") ||
+  t.includes("abnahme") ||
+  t.includes("labor") ||
+  t.includes("kampfmittel") ||
+  t.includes("subunternehmer") ||
+  t.includes("nachunternehmer") ||
+  t.includes("fremdleistung") ||
+  t.includes("spezialfirma");
 
   const mk = (
-    group: ResourceGroup,
-    resourceId: string,
-    name: string,
-    unit: string,
-    qty: number,
-    price: number,
-    note: string
-  ): RecipeLine => ({
+  group: ResourceGroup,
+  resourceId: string,
+  name: string,
+  unit: string,
+  qty: number,
+  price: number,
+  note: string)
+  : RecipeLine => ({
     id: safeId(),
     group,
     resourceId,
@@ -1842,18 +1843,18 @@ function createRlcMinimalReviewUrkalkulation(row: LVPos): RecipeLine[] {
     qty: round2(Math.max(qty, 0)),
     price: round2(Math.max(price, 0)),
     note,
-    aiSuggested: true,
+    aiSuggested: true
   });
 
-  const base: RecipeLine[] = external
-    ? [
-        mk("Fremdleistung", "FL-PRUEFEN", "Externe Spezialleistung prüfen", row.einheit || "EH", 1, 100, "Spezial-/Prüfleistung aus LV-Text, Preis fachlich prüfen"),
-        mk("Personal", "P-KOORDINATION", "Koordination / Prüfung", "h", 0.25, 58, "Anfragen, Koordination, technische Kontrolle"),
-      ]
-    : [
-        mk("Personal", "P-KOORDINATION", "Tiefbau / Koordination", "h", 0.25, 54, "Mindestansatz für Ausführung/Koordination"),
-        mk("Material", "MAT-LV-PRUEFEN", "Material / Leistung gemäß LV prüfen", row.einheit || "EH", 1, 10, "Fallback: LV-Text fachlich prüfen"),
-      ];
+  const base: RecipeLine[] = external ?
+  [
+  mk("Fremdleistung", "FL-PRUEFEN", "Externe Spezialleistung prüfen", row.einheit || "EH", 1, 100, "Spezial-/Prüfleistung aus LV-Text, Preis fachlich prüfen"),
+  mk("Personal", "P-KOORDINATION", "Koordination / Prüfung", "h", 0.25, 58, "Anfragen, Koordination, technische Kontrolle")] :
+
+  [
+  mk("Personal", "P-KOORDINATION", "Tiefbau / Koordination", "h", 0.25, 54, "Mindestansatz für Ausführung/Koordination"),
+  mk("Material", "MAT-LV-PRUEFEN", "Material / Leistung gemäß LV prüfen", row.einheit || "EH", 1, 10, "Fallback: LV-Text fachlich prüfen")];
+
 
   base.push(mk("Zuschläge", "Z-GEMEINKOSTEN", "Baustellengemeinkosten", "%", 1, 10, "10 % Zuschlag"));
   base.push(mk("Zuschläge", "Z-RISIKO", "Risikozuschlag", "%", 1, 5, "5 % Zuschlag"));
@@ -1867,40 +1868,40 @@ function shouldNeverUseSingleFremdleistung(row: LVPos): boolean {
   return isRlcForceLocalUrkalkulation(row);
 }
 function recipeLinesFromServerPriceBreakdown(serverRow: any): RecipeLine[] {
-  const pb = Array.isArray(serverRow?.priceBreakdown)
-    ? serverRow.priceBreakdown
-    : [];
+  const pb = Array.isArray(serverRow?.priceBreakdown) ?
+  serverRow.priceBreakdown :
+  [];
 
   const menge = Math.max(n(serverRow?.menge, 1), 1);
 
-  return pb
-    .map((line: any) => {
-      const group = priceBreakdownGroupToResourceGroup(String(line?.group || "Material"));
-      const qtyPerUnit = Math.max(n(line?.qty, 1), 0.0001);
-      const price = n(line?.unitPrice ?? line?.price ?? line?.total);
+  return pb.
+  map((line: any) => {
+    const group = priceBreakdownGroupToResourceGroup(String(line?.group || "Material"));
+    const qtyPerUnit = Math.max(n(line?.qty, 1), 0.0001);
+    const price = n(line?.unitPrice ?? line?.price ?? line?.total);
 
-      return {
-        id: safeId(),
-        group,
-        resourceId: "",
-        name: normalizeText(line?.name) || "KI-Kostenansatz",
-        unit: normalizeText(line?.unit) || normalizeText(serverRow?.einheit) || "EH",
-        qty: round2(qtyPerUnit * menge),
-        price,
-        note:
-          normalizeText(line?.note) ||
-          `Server-KI / ${serverRow?.source || "openai"}`,
-        aiSuggested: true,
-      } as RecipeLine;
-    })
-    .filter((line: RecipeLine) => n(line.price) > 0);
+    return {
+      id: safeId(),
+      group,
+      resourceId: "",
+      name: normalizeText(line?.name) || "KI-Kostenansatz",
+      unit: normalizeText(line?.unit) || normalizeText(serverRow?.einheit) || "EH",
+      qty: round2(qtyPerUnit * menge),
+      price,
+      note:
+      normalizeText(line?.note) ||
+      `Server-KI / ${serverRow?.source || "openai"}`,
+      aiSuggested: true
+    } as RecipeLine;
+  }).
+  filter((line: RecipeLine) => n(line.price) > 0);
 }
 
 
 function cleanRecipeLinesByWorkType(
-  lines: RecipeLine[],
-  workType: WorkTypeKey
-): RecipeLine[] {
+lines: RecipeLine[],
+workType: WorkTypeKey)
+: RecipeLine[] {
   if (workType === "unknown") return lines;
 
   return lines.filter((line) => {
@@ -1909,7 +1910,7 @@ function cleanRecipeLinesByWorkType(
       group: line.group,
       resourceId: line.resourceId,
       name: line.name,
-      note: line.note,
+      note: line.note
     });
   });
 }
@@ -1920,12 +1921,12 @@ function dispatchWorkTypeAmbiguous(detection: ReturnType<typeof detectWorkType>)
     level: "warning",
     title: detection.title || "Leistung unklar",
     text:
-      detection.message ||
-      "Die Leistungsart ist zu ungenau. Bitte genauer beschreiben, was kalkuliert werden soll.",
+    detection.message ||
+    "Die Leistungsart ist zu ungenau. Bitte genauer beschreiben, was kalkuliert werden soll.",
     nextLabel: "Leistung klären",
     action: "focusPosition",
     autoOpen: false,
-    pulse: true,
+    pulse: true
   });
 }
 
@@ -1944,19 +1945,19 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
       posNr: row.posNr,
       kurztext: row.kurztext,
       family: rlcFamilyDirect,
-      count: directFallback.length,
+      count: directFallback.length
     });
     return directFallback;
   }
 
   const isMutterbodenAbtrag =
-    text.includes("mutterboden") ||
-    text.includes("oberboden") ||
-    text.includes("humus") ||
-    text.includes("humusmiete") ||
-    text.includes("grasnarbe") ||
-    ((text.includes("abtrag") || text.includes("boden abtragen") || text.includes("boden aufnehmen") || text.includes("boden lagern")) &&
-      (text.includes("oberboden") || text.includes("mutterboden") || text.includes("humus")));
+  text.includes("mutterboden") ||
+  text.includes("oberboden") ||
+  text.includes("humus") ||
+  text.includes("humusmiete") ||
+  text.includes("grasnarbe") ||
+  (text.includes("abtrag") || text.includes("boden abtragen") || text.includes("boden aufnehmen") || text.includes("boden lagern")) && (
+  text.includes("oberboden") || text.includes("mutterboden") || text.includes("humus"));
 
   if (isMutterbodenAbtrag) {
     const depthM = 0.15;
@@ -1965,95 +1966,95 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
     const disposalTons = round2(qtyM3 * 1.6);
 
     return [
-      {
-        id: safeId(),
-        group: "Personal",
-        resourceId: "P-FACHARBEITER-TIEFBAU",
-        name: "Facharbeiter Tiefbau",
-        unit: "h",
-        qty: 0.035,
-        price: 52,
-        note: "Mutterboden abtragen, einweisen, profilgerecht arbeiten",
-        aiSuggested: true,
-      },
-      {
-        id: safeId(),
-        group: "Maschinen",
-        resourceId: "M-BAGGER-8T",
-        name: "Bagger 8 t",
-        unit: "h",
-        qty: 0.030,
-        price: 78,
-        note: "Oberboden/Mutterboden abtragen und seitlich lagern",
-        aiSuggested: true,
-      },
-      {
-        id: safeId(),
-        group: "LKW / Transport",
-        resourceId: "LKW-4A",
-        name: "LKW 4-Achser",
-        unit: "h",
-        qty: 0.020,
-        price: 118,
-        note: "Transport innerhalb Baufeld / Lagerfläche",
-        aiSuggested: true,
-      },
-      {
-        id: safeId(),
-        group: "Entsorgung",
-        resourceId: "E-MUTTERBODEN-LAGERN",
-        name: "Mutterboden lagern / behandeln",
-        unit: "t",
-        qty: row.einheit === "m" ? round2(disposalTons / qty) : 1.6,
-        price: 12,
-        note: "Humushaltiges Material lagern bzw. verwerten",
-        aiSuggested: true,
-      },
-      {
-        id: safeId(),
-        group: "Zeit / Leistung",
-        resourceId: "Z-LEISTUNG",
-        name: "Leistung / Produktivität",
-        unit: "m/Tag",
-        qty: 80,
-        price: 0,
-        note: "Leistungsansatz für Mutterbodenabtrag",
-        aiSuggested: true,
-      },
-      {
-        id: safeId(),
-        group: "Zuschläge",
-        resourceId: "Z-GEMEINKOSTEN",
-        name: "Baustellengemeinkosten",
-        unit: "%",
-        qty: 1,
-        price: 10,
-        note: "10 % Zuschlag",
-        aiSuggested: true,
-      },
-      {
-        id: safeId(),
-        group: "Zuschläge",
-        resourceId: "Z-RISIKO",
-        name: "Risikozuschlag",
-        unit: "%",
-        qty: 1,
-        price: 5,
-        note: "Boden, Lagerung, Feuchte",
-        aiSuggested: true,
-      },
-      {
-        id: safeId(),
-        group: "Zuschläge",
-        resourceId: "Z-GEWINN",
-        name: "Gewinnzuschlag",
-        unit: "%",
-        qty: 1,
-        price: 10,
-        note: "Gewinnzuschlag",
-        aiSuggested: true,
-      },
-    ];
+    {
+      id: safeId(),
+      group: "Personal",
+      resourceId: "P-FACHARBEITER-TIEFBAU",
+      name: "Facharbeiter Tiefbau",
+      unit: "h",
+      qty: 0.035,
+      price: 52,
+      note: "Mutterboden abtragen, einweisen, profilgerecht arbeiten",
+      aiSuggested: true
+    },
+    {
+      id: safeId(),
+      group: "Maschinen",
+      resourceId: "M-BAGGER-8T",
+      name: "Bagger 8 t",
+      unit: "h",
+      qty: 0.030,
+      price: 78,
+      note: "Oberboden/Mutterboden abtragen und seitlich lagern",
+      aiSuggested: true
+    },
+    {
+      id: safeId(),
+      group: "LKW / Transport",
+      resourceId: "LKW-4A",
+      name: "LKW 4-Achser",
+      unit: "h",
+      qty: 0.020,
+      price: 118,
+      note: "Transport innerhalb Baufeld / Lagerfläche",
+      aiSuggested: true
+    },
+    {
+      id: safeId(),
+      group: "Entsorgung",
+      resourceId: "E-MUTTERBODEN-LAGERN",
+      name: "Mutterboden lagern / behandeln",
+      unit: "t",
+      qty: row.einheit === "m" ? round2(disposalTons / qty) : 1.6,
+      price: 12,
+      note: "Humushaltiges Material lagern bzw. verwerten",
+      aiSuggested: true
+    },
+    {
+      id: safeId(),
+      group: "Zeit / Leistung",
+      resourceId: "Z-LEISTUNG",
+      name: "Leistung / Produktivität",
+      unit: "m/Tag",
+      qty: 80,
+      price: 0,
+      note: "Leistungsansatz für Mutterbodenabtrag",
+      aiSuggested: true
+    },
+    {
+      id: safeId(),
+      group: "Zuschläge",
+      resourceId: "Z-GEMEINKOSTEN",
+      name: "Baustellengemeinkosten",
+      unit: "%",
+      qty: 1,
+      price: 10,
+      note: "10 % Zuschlag",
+      aiSuggested: true
+    },
+    {
+      id: safeId(),
+      group: "Zuschläge",
+      resourceId: "Z-RISIKO",
+      name: "Risikozuschlag",
+      unit: "%",
+      qty: 1,
+      price: 5,
+      note: "Boden, Lagerung, Feuchte",
+      aiSuggested: true
+    },
+    {
+      id: safeId(),
+      group: "Zuschläge",
+      resourceId: "Z-GEWINN",
+      name: "Gewinnzuschlag",
+      unit: "%",
+      qty: 1,
+      price: 10,
+      note: "Gewinnzuschlag",
+      aiSuggested: true
+    }];
+
   }
   const calcText = normSearch(`${row.posNr} ${row.kurztext}`);
 
@@ -2061,23 +2062,23 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
     posNr: row.posNr || "",
     kurztext: row.kurztext || "",
     langtext: row.langtext || "",
-    einheit: row.einheit || "",
+    einheit: row.einheit || ""
   });
 
-  const detectedWorkType = technicalPosition
-    ? {
-        key: technicalPosition.workType,
-        confidence: 0.99,
-        ambiguous: false,
-        title: technicalPosition.title,
-        message: `Technische Position erkannt: ${technicalPosition.title}`,
-      }
-    : detectWorkType({
-        posNr: row.posNr || "",
-        kurztext: row.kurztext || "",
-        langtext: row.langtext || "",
-        einheit: row.einheit || "",
-      });
+  const detectedWorkType = technicalPosition ?
+  {
+    key: technicalPosition.workType,
+    confidence: 0.99,
+    ambiguous: false,
+    title: technicalPosition.title,
+    message: `Technische Position erkannt: ${technicalPosition.title}`
+  } :
+  detectWorkType({
+    posNr: row.posNr || "",
+    kurztext: row.kurztext || "",
+    langtext: row.langtext || "",
+    einheit: row.einheit || ""
+  });
 
   if (detectedWorkType.ambiguous || detectedWorkType.key === "unknown") {
     const fallback = createRlcFallbackUrkalkulation(row, ctx);
@@ -2086,7 +2087,7 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
         posNr: row.posNr,
         kurztext: row.kurztext,
         family: detectRlcUrkalkulationFamilyV4(row),
-        count: fallback.length,
+        count: fallback.length
       });
       return fallback;
     }
@@ -2095,7 +2096,7 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
     console.warn("[Recipes KI] No technical family found. Using minimal review Urkalkulation.", {
       posNr: row.posNr,
       kurztext: row.kurztext,
-      count: minimal.length,
+      count: minimal.length
     });
     return minimal;
   }
@@ -2104,18 +2105,18 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
   const isPlanie = workType === "planie";
 
   const asphaltAmbiguous =
-    text.includes("asphalt") &&
-    !text.includes("herstellen") &&
-    !text.includes("wiederherstellen") &&
-    !text.includes("einbauen") &&
-    !text.includes("asphaltieren") &&
-    !text.includes("fras") &&
-    !text.includes("fräs") &&
-    !text.includes("abfräsen") &&
-    !text.includes("aufbruch") &&
-    !text.includes("ausbauen") &&
-    !text.includes("abbruch") &&
-    !text.includes("entfernen");
+  text.includes("asphalt") &&
+  !text.includes("herstellen") &&
+  !text.includes("wiederherstellen") &&
+  !text.includes("einbauen") &&
+  !text.includes("asphaltieren") &&
+  !text.includes("fras") &&
+  !text.includes("fräs") &&
+  !text.includes("abfräsen") &&
+  !text.includes("aufbruch") &&
+  !text.includes("ausbauen") &&
+  !text.includes("abbruch") &&
+  !text.includes("entfernen");
 
   if (asphaltAmbiguous) {
     dispatchActiveKiSuggestion({
@@ -2123,11 +2124,11 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
       level: "warning",
       title: "Asphalt-Leistung unklar",
       text:
-        "Ich erkenne Asphalt, aber nicht eindeutig ob Asphalt hergestellt, wiederhergestellt, gefräst, ausgebaut oder entsorgt werden soll. Bitte Kurztext präzisieren oder KI-Klärung starten.",
+      "Ich erkenne Asphalt, aber nicht eindeutig ob Asphalt hergestellt, wiederhergestellt, gefräst, ausgebaut oder entsorgt werden soll. Bitte Kurztext präzisieren oder KI-Klärung starten.",
       nextLabel: "Leistung klären",
       action: "clarifyWorkIntent",
       autoOpen: false,
-      pulse: true,
+      pulse: true
     });
 
     return [];
@@ -2135,18 +2136,18 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
 
 
   const depthFactor =
-    ctx.depthM >= 2.0 ? 1.55 : ctx.depthM >= 1.5 ? 1.32 : ctx.depthM >= 1.2 ? 1.14 : 1;
+  ctx.depthM >= 2.0 ? 1.55 : ctx.depthM >= 1.5 ? 1.32 : ctx.depthM >= 1.2 ? 1.14 : 1;
 
   const soilFactor =
-    ctx.soilClass === "7"
-      ? 1.55
-      : ctx.soilClass === "6"
-        ? 1.38
-        : ctx.soilClass === "5"
-          ? 1.24
-          : ctx.soilClass === "4"
-            ? 1.12
-            : 1;
+  ctx.soilClass === "7" ?
+  1.55 :
+  ctx.soilClass === "6" ?
+  1.38 :
+  ctx.soilClass === "5" ?
+  1.24 :
+  ctx.soilClass === "4" ?
+  1.12 :
+  1;
 
   const restrictionFactor = ctx.restricted ? 1.28 : 1;
   const waterFactor = ctx.groundwater ? 1.25 : 1;
@@ -2154,12 +2155,12 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
   const distanceFactor = ctx.distanceKm > 30 ? 1.08 : ctx.distanceKm > 15 ? 1.04 : 1;
 
   const factor =
-    depthFactor *
-    soilFactor *
-    restrictionFactor *
-    waterFactor *
-    trafficFactor *
-    distanceFactor;
+  depthFactor *
+  soilFactor *
+  restrictionFactor *
+  waterFactor *
+  trafficFactor *
+  distanceFactor;
 
   let dailyOutput = Math.max(n(ctx.dailyOutput), 1);
 
@@ -2168,34 +2169,34 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
   }
 
   if (dailyOutput <= 1) {
-    if (isPlanie) dailyOutput = 180;
-    else if (workType === "auffuellung") dailyOutput = 70;
-    else if (workType === "kies_tragschicht" || workType === "frostschutz") dailyOutput = 85;
-    else if (workType === "pflaster_verlegen") dailyOutput = 28;
-    else if (workType === "asphalt_fraesen") dailyOutput = 250;
-    else if (workType === "asphalt_herstellen") dailyOutput = 120;
-    else if (workType === "leitung_graben") dailyOutput = 35;
-    else if (workType === "bordstein") dailyOutput = 45;
-    else if (workType === "entsorgung") dailyOutput = 80;
-    else dailyOutput = 35;
+    if (isPlanie) dailyOutput = 180;else
+    if (workType === "auffuellung") dailyOutput = 70;else
+    if (workType === "kies_tragschicht" || workType === "frostschutz") dailyOutput = 85;else
+    if (workType === "pflaster_verlegen") dailyOutput = 28;else
+    if (workType === "asphalt_fraesen") dailyOutput = 250;else
+    if (workType === "asphalt_herstellen") dailyOutput = 120;else
+    if (workType === "leitung_graben") dailyOutput = 35;else
+    if (workType === "bordstein") dailyOutput = 45;else
+    if (workType === "entsorgung") dailyOutput = 80;else
+    dailyOutput = 35;
   }
 
   const days = Math.max(qty / dailyOutput, 0.15);
   const lines: RecipeLine[] = [];
 
   const isRohrgrabenTiefbau =
-    text.includes("rohrgrabenaushub") ||
-    text.includes("rohrgraben") ||
-    text.includes("leitungsgraben") ||
-    text.includes("grabentiefe") ||
-    text.includes("bodenklasse") ||
-    text.includes("bd-kl");
+  text.includes("rohrgrabenaushub") ||
+  text.includes("rohrgraben") ||
+  text.includes("leitungsgraben") ||
+  text.includes("grabentiefe") ||
+  text.includes("bodenklasse") ||
+  text.includes("bd-kl");
 
   if (isRohrgrabenTiefbau) {
     const depthFactor = ctx.depthM >= 2.5 ? 1.35 : ctx.depthM >= 1.5 ? 1.18 : 1.0;
-    const soilFactor = /bk\s*[5-7]|bd-kl\.\s*[5-7]|bodenklasse\s*[5-7]/i.test(`${row.kurztext} ${row.langtext}`)
-      ? 1.25
-      : 1.0;
+    const soilFactor = /bk\s*[5-7]|bd-kl\.\s*[5-7]|bodenklasse\s*[5-7]/i.test(`${row.kurztext} ${row.langtext}`) ?
+    1.25 :
+    1.0;
 
     const distanceFactor = Math.max(1, Math.min(1.35, 1 + n(ctx.distanceKm) / 120));
     const dailyOutput = Math.max(n(ctx.dailyOutput), ctx.depthM >= 2.5 ? 45 : 65);
@@ -2216,104 +2217,104 @@ function createKiSuggestion(row: LVPos, ctx: ContextValues): RecipeLine[] {
     return lines;
   }
 
-/* ✅ FIX: Planie/Feinplanum ist eine leichte Flächenleistung.
-   Nicht als Aushub, Kiestragschicht, Entsorgung oder m²-Stunden-Mix kalkulieren. */
-if (isPlanie) {
-  const planieDailyOutput = Math.max(n(ctx.dailyOutput), 180); // m²/Tag Default
-  const planieDays = Math.max(qty / planieDailyOutput, 0.12);
+  /* ✅ FIX: Planie/Feinplanum ist eine leichte Flächenleistung.
+     Nicht als Aushub, Kiestragschicht, Entsorgung oder m²-Stunden-Mix kalkulieren. */
+  if (isPlanie) {
+    const planieDailyOutput = Math.max(n(ctx.dailyOutput), 180); // m²/Tag Default
+    const planieDays = Math.max(qty / planieDailyOutput, 0.12);
 
-  lines.push(
-    makeLine(
-      "P-FACHARBEITER",
-      round2(Math.max(planieDays * 5.5 * factor, 2.5)),
-      "Planie / Feinplanum herstellen, Höhenkontrolle, Nacharbeiten"
-    )
-  );
-
-  lines.push(
-    makeLine(
-      "M-RADLADER",
-      round2(Math.max(planieDays * 2.2 * factor, 1.0)),
-      "Profilieren, Verteilen, Abziehen"
-    )
-  );
-
-  lines.push(
-    makeLine(
-      "M-WALZE",
-      round2(Math.max(planieDays * 1.5, 0.8)),
-      "Verdichtung / Nachverdichtung nach Erfordernis"
-    )
-  );
-
-  if (ctx.restricted) {
     lines.push(
       makeLine(
-        "P-HELFER",
-        round2(Math.max(planieDays * 2.0 * factor, 0.75)),
-        "Unterstützung bei eingeschränktem Arbeitsraum"
+        "P-FACHARBEITER",
+        round2(Math.max(planieDays * 5.5 * factor, 2.5)),
+        "Planie / Feinplanum herstellen, Höhenkontrolle, Nacharbeiten"
       )
     );
-  }
 
-  lines.push({ ...makeLine("Z-LEISTUNG", planieDailyOutput, "Leistung je Arbeitstag", true), price: 0 });
-  lines.push({ ...makeLine("Z-BAUZEIT", round2(planieDays), "rechnerische Bauzeit", true), price: 0 });
-  lines.push(makeLine("Z-GEMEINKOSTEN", 1, "Baustellengemeinkosten / Organisation", true));
-  lines.push(makeLine("Z-RISIKO", 1, ctx.groundwater ? "erhöht wegen Grundwasser / Erschwernis" : "normaler Risikopuffer", true));
-  lines.push(makeLine("Z-GEWINN", 1, "Gewinnzuschlag", true));
+    lines.push(
+      makeLine(
+        "M-RADLADER",
+        round2(Math.max(planieDays * 2.2 * factor, 1.0)),
+        "Profilieren, Verteilen, Abziehen"
+      )
+    );
 
-  // ✅ Sicherheitskorrektur: Planie/Feinplanum darf niemals Material-/Entsorgungs-/Transportaufbau bekommen.
-  // Planie ist keine Frostschutzschicht, keine Auskofferung und keine Entsorgung.
-  if (isPlanie) {
-    const cleaned = lines.filter((line) => {
-      const g = String(line.group || "");
-      const t = normSearch(`${line.name || ""} ${line.note || ""} ${line.resourceId || ""}`);
+    lines.push(
+      makeLine(
+        "M-WALZE",
+        round2(Math.max(planieDays * 1.5, 0.8)),
+        "Verdichtung / Nachverdichtung nach Erfordernis"
+      )
+    );
 
-      if (g === "Material") return false;
-      if (g === "Entsorgung") return false;
-      if (g === "LKW / Transport") return false;
-
-      if (t.includes("frostschutz")) return false;
-      if (t.includes("splitt")) return false;
-      if (t.includes("kies")) return false;
-      if (t.includes("aushub")) return false;
-      if (t.includes("auskoffer")) return false;
-      if (t.includes("entsorg")) return false;
-      if (t.includes("transport")) return false;
-
-      return true;
-    });
-
-    const hasPersonal = cleaned.some((x) => x.group === "Personal");
-    const hasMachine = cleaned.some((x) => x.group === "Maschinen");
-
-    if (!hasPersonal) {
-      cleaned.unshift(
+    if (ctx.restricted) {
+      lines.push(
         makeLine(
-          "P-FACHARBEITER",
-          round2(Math.max((qty / Math.max(n(ctx.dailyOutput), 180)) * 5.5, 2.5)),
-          "Planie / Feinplanum herstellen, Höhenkontrolle, Nacharbeiten"
+          "P-HELFER",
+          round2(Math.max(planieDays * 2.0 * factor, 0.75)),
+          "Unterstützung bei eingeschränktem Arbeitsraum"
         )
       );
     }
 
-    if (!hasMachine) {
-      cleaned.splice(
-        1,
-        0,
-        makeLine(
-          "M-RADLADER",
-          round2(Math.max((qty / Math.max(n(ctx.dailyOutput), 180)) * 2.2, 1.0)),
-          "Profilieren, Abziehen, leichte Nachverdichtung"
-        )
-      );
+    lines.push({ ...makeLine("Z-LEISTUNG", planieDailyOutput, "Leistung je Arbeitstag", true), price: 0 });
+    lines.push({ ...makeLine("Z-BAUZEIT", round2(planieDays), "rechnerische Bauzeit", true), price: 0 });
+    lines.push(makeLine("Z-GEMEINKOSTEN", 1, "Baustellengemeinkosten / Organisation", true));
+    lines.push(makeLine("Z-RISIKO", 1, ctx.groundwater ? "erhöht wegen Grundwasser / Erschwernis" : "normaler Risikopuffer", true));
+    lines.push(makeLine("Z-GEWINN", 1, "Gewinnzuschlag", true));
+
+    // ✅ Sicherheitskorrektur: Planie/Feinplanum darf niemals Material-/Entsorgungs-/Transportaufbau bekommen.
+    // Planie ist keine Frostschutzschicht, keine Auskofferung und keine Entsorgung.
+    if (isPlanie) {
+      const cleaned = lines.filter((line) => {
+        const g = String(line.group || "");
+        const t = normSearch(`${line.name || ""} ${line.note || ""} ${line.resourceId || ""}`);
+
+        if (g === "Material") return false;
+        if (g === "Entsorgung") return false;
+        if (g === "LKW / Transport") return false;
+
+        if (t.includes("frostschutz")) return false;
+        if (t.includes("splitt")) return false;
+        if (t.includes("kies")) return false;
+        if (t.includes("aushub")) return false;
+        if (t.includes("auskoffer")) return false;
+        if (t.includes("entsorg")) return false;
+        if (t.includes("transport")) return false;
+
+        return true;
+      });
+
+      const hasPersonal = cleaned.some((x) => x.group === "Personal");
+      const hasMachine = cleaned.some((x) => x.group === "Maschinen");
+
+      if (!hasPersonal) {
+        cleaned.unshift(
+          makeLine(
+            "P-FACHARBEITER",
+            round2(Math.max(qty / Math.max(n(ctx.dailyOutput), 180) * 5.5, 2.5)),
+            "Planie / Feinplanum herstellen, Höhenkontrolle, Nacharbeiten"
+          )
+        );
+      }
+
+      if (!hasMachine) {
+        cleaned.splice(
+          1,
+          0,
+          makeLine(
+            "M-RADLADER",
+            round2(Math.max(qty / Math.max(n(ctx.dailyOutput), 180) * 2.2, 1.0)),
+            "Profilieren, Abziehen, leichte Nachverdichtung"
+          )
+        );
+      }
+
+      return cleaned;
     }
 
-    return cleaned;
+    return cleanRecipeLinesByWorkType(lines, workType);
   }
-
-  return cleanRecipeLinesByWorkType(lines, workType);
-}
 
   if (false) {
     lines.push(makeLine("P-FACHARBEITER", round2(days * 8 * 0.45 * factor), "Planie / Feinplanum herstellen"));
@@ -2399,11 +2400,11 @@ if (isPlanie) {
   }
 
   if (workType === "bordstein") {
-    const mat = text.includes("hochbord")
-      ? "MAT-BORD-HOCH"
-      : text.includes("rundbord")
-        ? "MAT-BORD-RUND"
-        : "MAT-BORD-TIEF";
+    const mat = text.includes("hochbord") ?
+    "MAT-BORD-HOCH" :
+    text.includes("rundbord") ?
+    "MAT-BORD-RUND" :
+    "MAT-BORD-TIEF";
 
     lines.push(makeLine("P-FACHARBEITER", round2(days * 8 * 1.2 * factor), "Bordstein setzen"));
     lines.push(makeLine("P-HELFER", round2(days * 8 * 0.75 * factor), "Aushub, Beton, Ausrichten"));
@@ -2433,14 +2434,14 @@ if (isPlanie) {
       const name = normSearch(`${lines[i]?.name || ""} ${lines[i]?.note || ""}`);
 
       if (
-        g === "Material" ||
-        g === "Entsorgung" ||
-        g === "LKW / Transport" ||
-        name.includes("frostschutz") ||
-        name.includes("splitt") ||
-        name.includes("aushub") ||
-        name.includes("entsorg")
-      ) {
+      g === "Material" ||
+      g === "Entsorgung" ||
+      g === "LKW / Transport" ||
+      name.includes("frostschutz") ||
+      name.includes("splitt") ||
+      name.includes("aushub") ||
+      name.includes("entsorg"))
+      {
         lines.splice(i, 1);
       }
     }
@@ -2481,7 +2482,7 @@ if (isPlanie) {
       cleaned.unshift(
         makeLine(
           "P-FACHARBEITER",
-          round2(Math.max((qty / Math.max(n(ctx.dailyOutput), 180)) * 5.5, 2.5)),
+          round2(Math.max(qty / Math.max(n(ctx.dailyOutput), 180) * 5.5, 2.5)),
           "Planie / Feinplanum herstellen, Höhenkontrolle, Nacharbeiten"
         )
       );
@@ -2493,7 +2494,7 @@ if (isPlanie) {
         0,
         makeLine(
           "M-RADLADER",
-          round2(Math.max((qty / Math.max(n(ctx.dailyOutput), 180)) * 2.2, 1.0)),
+          round2(Math.max(qty / Math.max(n(ctx.dailyOutput), 180) * 2.2, 1.0)),
           "Profilieren, Abziehen, leichte Nachverdichtung"
         )
       );
@@ -2539,7 +2540,7 @@ function recipeCostTotals(lines: RecipeLine[], menge: number) {
   const profitPct = lines.filter((x) => x.resourceId === "Z-GEWINN").reduce((s, x) => s + n(x.price), 0);
 
   const surchargeBase =
-    materialTotal + laborTotal + machineTotal + transportTotal + disposalTotal + subcontractorTotal;
+  materialTotal + laborTotal + machineTotal + transportTotal + disposalTotal + subcontractorTotal;
 
   const overheadTotal = round2(directOverheadTotal + surchargeBase * (overheadPct / 100));
   const riskTotal = round2(directRiskTotal + surchargeBase * (riskPct / 100));
@@ -2567,7 +2568,7 @@ function recipeCostTotals(lines: RecipeLine[], menge: number) {
     transportCost: round2(transportTotal / qtyDivisor),
     overheadCost: round2(overheadTotal / qtyDivisor),
     riskCost: round2(riskTotal / qtyDivisor),
-    profitCost: round2(profitTotal / qtyDivisor),
+    profitCost: round2(profitTotal / qtyDivisor)
   };
 }
 
@@ -2576,26 +2577,26 @@ function buildPriceBreakdown(lines: RecipeLine[], row: LVPos | null): PriceBreak
   const totals = recipeCostTotals(lines, menge);
   const unit = row?.einheit || "EH";
 
-  const direct: PriceBreakdownLine[] = lines
-    .filter((line) => line.group !== "Zeit / Leistung" && line.group !== "Zuschläge")
-    .map((line) => {
-      const mapped = mapDirectGroup(line.group) || "Material";
-      const totalWholePosition = lineTotal(line);
-      const qtyPerUnit = round2(n(line.qty) / menge);
-      const totalPerUnit = round2(totalWholePosition / menge);
+  const direct: PriceBreakdownLine[] = lines.
+  filter((line) => line.group !== "Zeit / Leistung" && line.group !== "Zuschläge").
+  map((line) => {
+    const mapped = mapDirectGroup(line.group) || "Material";
+    const totalWholePosition = lineTotal(line);
+    const qtyPerUnit = round2(n(line.qty) / menge);
+    const totalPerUnit = round2(totalWholePosition / menge);
 
-      return {
-        id: safeId(),
-        group: mapped,
-        name: line.name,
-        unit: line.unit,
-        qty: qtyPerUnit,
-        price: n(line.price),
-        total: totalPerUnit,
-        note: line.note,
-      };
-    })
-    .filter((line) => line.total > 0);
+    return {
+      id: safeId(),
+      group: mapped,
+      name: line.name,
+      unit: line.unit,
+      qty: qtyPerUnit,
+      price: n(line.price),
+      total: totalPerUnit,
+      note: line.note
+    };
+  }).
+  filter((line) => line.total > 0);
 
   const hasDirectOverhead = direct.some((x) => x.group === "Gemeinkosten");
   const hasDirectRisk = direct.some((x) => x.group === "Risiko");
@@ -2610,7 +2611,7 @@ function buildPriceBreakdown(lines: RecipeLine[], row: LVPos | null): PriceBreak
       qty: 1,
       price: round2(totals.overheadTotal / menge),
       total: round2(totals.overheadTotal / menge),
-      note: "aus Zuschlag berechnet",
+      note: "aus Zuschlag berechnet"
     });
   }
 
@@ -2623,7 +2624,7 @@ function buildPriceBreakdown(lines: RecipeLine[], row: LVPos | null): PriceBreak
       qty: 1,
       price: round2(totals.riskTotal / menge),
       total: round2(totals.riskTotal / menge),
-      note: "aus Zuschlag berechnet",
+      note: "aus Zuschlag berechnet"
     });
   }
 
@@ -2636,7 +2637,7 @@ function buildPriceBreakdown(lines: RecipeLine[], row: LVPos | null): PriceBreak
       qty: 1,
       price: round2(totals.profitTotal / menge),
       total: round2(totals.profitTotal / menge),
-      note: "aus Zuschlag berechnet",
+      note: "aus Zuschlag berechnet"
     });
   }
 
@@ -2644,12 +2645,12 @@ function buildPriceBreakdown(lines: RecipeLine[], row: LVPos | null): PriceBreak
 }
 
 function breakdownText(lines: PriceBreakdownLine[]): string {
-  return lines
-    .map(
-      (line) =>
-        `${line.group}: ${line.name} · ${num(line.qty, 2)} ${line.unit} × ${money(line.price)} = ${money(line.total)}`
-    )
-    .join("\n");
+  return lines.
+  map(
+    (line) =>
+    `${line.group}: ${line.name} · ${num(line.qty, 2)} ${line.unit} × ${money(line.price)} = ${money(line.total)}`
+  ).
+  join("\n");
 }
 
 
@@ -2659,13 +2660,13 @@ function isGenericLangtext(value: unknown): boolean {
   if (!text) return true;
 
   const genericPhrases = [
-    "leistung fachgerecht ausfuhren",
-    "leistung fachgerecht ausführen",
-    "einschliesslich aller erforderlichen nebenleistungen",
-    "einschließlich aller erforderlichen nebenleistungen",
-    "material personal maschinen transport",
-    "baustellenorganisation dokumentation und abrechnung",
-  ];
+  "leistung fachgerecht ausfuhren",
+  "leistung fachgerecht ausführen",
+  "einschliesslich aller erforderlichen nebenleistungen",
+  "einschließlich aller erforderlichen nebenleistungen",
+  "material personal maschinen transport",
+  "baustellenorganisation dokumentation und abrechnung"];
+
 
   return genericPhrases.some((x) => text.includes(normSearch(x)));
 }
@@ -2681,18 +2682,18 @@ function isAmbiguousSmartDraft(draft: DraftPosition): boolean {
   if (words.length > 3) return false;
 
   const ambiguous = [
-    "asphalt",
-    "pflaster",
-    "kies",
-    "schotter",
-    "leitung",
-    "rohr",
-    "graben",
-    "planie",
-    "aushub",
-    "bordstein",
-    "frostschutz",
-  ];
+  "asphalt",
+  "pflaster",
+  "kies",
+  "schotter",
+  "leitung",
+  "rohr",
+  "graben",
+  "planie",
+  "aushub",
+  "bordstein",
+  "frostschutz"];
+
 
   return ambiguous.some((x) => text === x || text === `${x} herstellen`);
 }
@@ -2705,11 +2706,11 @@ function dispatchAmbiguousSmartDraft(draft: DraftPosition) {
     level: "warning",
     title: "Leistung präzisieren",
     text:
-      `"${text}" ist zu ungenau. Bitte genauer angeben, was gemeint ist, z. B. Asphalt fräsen, Asphalt herstellen, Asphalt aufnehmen, Asphalttragschicht, Asphaltdeckschicht, Pflaster verlegen, Kies einbauen, Leitung verlegen oder Graben herstellen.`,
+    `"${text}" ist zu ungenau. Bitte genauer angeben, was gemeint ist, z. B. Asphalt fräsen, Asphalt herstellen, Asphalt aufnehmen, Asphalttragschicht, Asphaltdeckschicht, Pflaster verlegen, Kies einbauen, Leitung verlegen oder Graben herstellen.`,
     nextLabel: "Positionsdaten prüfen",
     action: "focusPosition",
     autoOpen: false,
-    pulse: true,
+    pulse: true
   });
 }
 
@@ -2722,46 +2723,46 @@ function isAmbiguousSmartDraftHard(draft: DraftPosition): boolean {
 
   // Nur exakt zu kurze/generische Einzelbegriffe blockieren.
   const ambiguousExact = new Set([
-    "asphalt",
-    "pflaster",
-    "kies",
-    "schotter",
-    "leitung",
-    "rohr",
-    "graben",
-    "erde",
-    "boden",
-    "material",
-    "aushub",
-  ]);
+  "asphalt",
+  "pflaster",
+  "kies",
+  "schotter",
+  "leitung",
+  "rohr",
+  "graben",
+  "erde",
+  "boden",
+  "material",
+  "aushub"]
+  );
 
   if (ambiguousExact.has(kurz)) return true;
 
   // Diese Begriffe sind schon fachlich spezifisch genug und dürfen NICHT blockieren.
   const specificSignals = [
-    "asphalttragschicht",
-    "asphaltdeckschicht",
-    "asphaltbinderschicht",
-    "asphalt frasen",
-    "asphalt fräsen",
-    "asphalt herstellen",
-    "asphalt einbauen",
-    "asphalt aufnehmen",
-    "asphalt schneiden",
-    "asphalt wiederherstellen",
-    "pflaster aufnehmen",
-    "pflaster verlegen",
-    "pflaster herstellen",
-    "kiestragschicht",
-    "schottertragschicht",
-    "frostschutzschicht",
-    "planie herstellen",
-    "feinplanum herstellen",
-    "leitung verlegen",
-    "graben herstellen",
-    "rohrleitung verlegen",
-    "speedpipe verlegen",
-  ];
+  "asphalttragschicht",
+  "asphaltdeckschicht",
+  "asphaltbinderschicht",
+  "asphalt frasen",
+  "asphalt fräsen",
+  "asphalt herstellen",
+  "asphalt einbauen",
+  "asphalt aufnehmen",
+  "asphalt schneiden",
+  "asphalt wiederherstellen",
+  "pflaster aufnehmen",
+  "pflaster verlegen",
+  "pflaster herstellen",
+  "kiestragschicht",
+  "schottertragschicht",
+  "frostschutzschicht",
+  "planie herstellen",
+  "feinplanum herstellen",
+  "leitung verlegen",
+  "graben herstellen",
+  "rohrleitung verlegen",
+  "speedpipe verlegen"];
+
 
   if (specificSignals.some((x) => text.includes(normSearch(x)))) return false;
 
@@ -2799,7 +2800,7 @@ function dispatchAmbiguousSmartDraftHard(draft: DraftPosition) {
     nextLabel: "Positionsdaten prüfen",
     action: "focusPosition",
     autoOpen: false,
-    pulse: true,
+    pulse: true
   });
 }
 
@@ -2808,21 +2809,21 @@ function detectSmartWorkType(draft: DraftPosition): SmartWorkType {
 
 
   if (
-    text.includes("leitungsgraben") ||
-    text.includes("graben herstellen") ||
-    text.includes("kabelgraben") ||
-    text.includes("rohrgraben") ||
-    text.includes("trasse herstellen")
-  ) {
+  text.includes("leitungsgraben") ||
+  text.includes("graben herstellen") ||
+  text.includes("kabelgraben") ||
+  text.includes("rohrgraben") ||
+  text.includes("trasse herstellen"))
+  {
     return "leitung_graben";
   }
   if (
-    text.includes("leitungsgraben") ||
-    text.includes("graben herstellen") ||
-    text.includes("kabelgraben") ||
-    text.includes("rohrgraben") ||
-    text.includes("trasse herstellen")
-  ) {
+  text.includes("leitungsgraben") ||
+  text.includes("graben herstellen") ||
+  text.includes("kabelgraben") ||
+  text.includes("rohrgraben") ||
+  text.includes("trasse herstellen"))
+  {
     return "leitung_graben";
   }
 
@@ -2831,54 +2832,54 @@ function detectSmartWorkType(draft: DraftPosition): SmartWorkType {
   }
 
   if (
-    text.includes("auskofferung") ||
-    text.includes("auskoffern") ||
-    text.includes("aushub") ||
-    text.includes("baugrube") ||
-    text.includes("erdarbeiten")
-  ) {
+  text.includes("auskofferung") ||
+  text.includes("auskoffern") ||
+  text.includes("aushub") ||
+  text.includes("baugrube") ||
+  text.includes("erdarbeiten"))
+  {
     return "auskofferung";
   }
 
   if (
-    text.includes("planie") ||
-    text.includes("planum") ||
-    text.includes("feinplanum") ||
-    text.includes("untergrund profilieren") ||
-    text.includes("untergrund herstellen")
-  ) {
+  text.includes("planie") ||
+  text.includes("planum") ||
+  text.includes("feinplanum") ||
+  text.includes("untergrund profilieren") ||
+  text.includes("untergrund herstellen"))
+  {
     return "planie";
   }
 
   if (
-    text.includes("auffullung") ||
-    text.includes("auffüllung") ||
-    text.includes("verfullung") ||
-    text.includes("verfüllung") ||
-    text.includes("einbauen und verdichten") ||
-    text.includes("verfuellen") ||
-    text.includes("verfüllen")
-  ) {
+  text.includes("auffullung") ||
+  text.includes("auffüllung") ||
+  text.includes("verfullung") ||
+  text.includes("verfüllung") ||
+  text.includes("einbauen und verdichten") ||
+  text.includes("verfuellen") ||
+  text.includes("verfüllen"))
+  {
     return "auffuellung";
   }
 
   if (
-    text.includes("kies") ||
-    text.includes("schotter") ||
-    text.includes("tragschicht") ||
-    text.includes("frostschutz") ||
-    text.includes("mineralgemisch")
-  ) {
+  text.includes("kies") ||
+  text.includes("schotter") ||
+  text.includes("tragschicht") ||
+  text.includes("frostschutz") ||
+  text.includes("mineralgemisch"))
+  {
     return text.includes("frostschutz") ? "frostschutz" : "kies_tragschicht";
   }
 
   if (
-    text.includes("pflaster") ||
-    text.includes("verbundstein") ||
-    text.includes("betonstein") ||
-    text.includes("naturstein") ||
-    text.includes("rasengitter")
-  ) {
+  text.includes("pflaster") ||
+  text.includes("verbundstein") ||
+  text.includes("betonstein") ||
+  text.includes("naturstein") ||
+  text.includes("rasengitter"))
+  {
     return "pflaster_verlegen";
   }
 
@@ -2891,13 +2892,13 @@ function detectSmartWorkType(draft: DraftPosition): SmartWorkType {
   }
 
   if (
-    text.includes("leitung") ||
-    text.includes("rohr") ||
-    text.includes("speedpipe") ||
-    text.includes("kabel") ||
-    text.includes("graben") ||
-    text.includes("trasse")
-  ) {
+  text.includes("leitung") ||
+  text.includes("rohr") ||
+  text.includes("speedpipe") ||
+  text.includes("kabel") ||
+  text.includes("graben") ||
+  text.includes("trasse"))
+  {
     return "leitung_graben";
   }
 
@@ -2906,12 +2907,12 @@ function detectSmartWorkType(draft: DraftPosition): SmartWorkType {
   }
 
   if (
-    text.includes("entsorgung") ||
-    text.includes("abfahren") ||
-    text.includes("deponie") ||
-    text.includes("verwertung") ||
-    text.includes("aufbruch entsorgen")
-  ) {
+  text.includes("entsorgung") ||
+  text.includes("abfahren") ||
+  text.includes("deponie") ||
+  text.includes("verwertung") ||
+  text.includes("aufbruch entsorgen"))
+  {
     return "entsorgung";
   }
 
@@ -2924,20 +2925,20 @@ function buildSmartLocalLangtext(draft: DraftPosition, ctx: ContextValues): stri
   const title = String(draft.kurztext || "Leistung").trim();
   const workType = detectSmartWorkType(draft);
 
-  const soil = String(ctx.soilClass || "").trim()
-    ? `Bodenklasse BK ${ctx.soilClass}`
-    : "Bodenklasse gemäß örtlicher Feststellung";
+  const soil = String(ctx.soilClass || "").trim() ?
+  `Bodenklasse BK ${ctx.soilClass}` :
+  "Bodenklasse gemäß örtlicher Feststellung";
 
   const depth = n(ctx.depthM) > 0 ? `Ausführungstiefe / Grabentiefe ca. ${ctx.depthM} m.` : "";
   const distance = n(ctx.distanceKm) > 0 ? `Transportansatz / Entfernung zur Baustelle ca. ${ctx.distanceKm} km.` : "";
   const daily = n(ctx.dailyOutput) > 0 ? `Kalkulierter Leistungsansatz ca. ${ctx.dailyOutput} ${unit}/Tag.` : "";
 
   const extras = [
-    ctx.restricted ? "Eingeschränkter Arbeitsraum ist berücksichtigt." : "",
-    ctx.groundwater ? "Erschwernisse durch Grundwasser sind zu berücksichtigen." : "",
-    ctx.trafficControl ? "Verkehrssicherung und Baustellenabsicherung sind einzukalkulieren." : "",
-    ctx.asphalt ? "Asphaltflächen beziehungsweise gebundene Oberflächen sind betroffen." : "",
-  ].filter(Boolean).join(" ");
+  ctx.restricted ? "Eingeschränkter Arbeitsraum ist berücksichtigt." : "",
+  ctx.groundwater ? "Erschwernisse durch Grundwasser sind zu berücksichtigen." : "",
+  ctx.trafficControl ? "Verkehrssicherung und Baustellenabsicherung sind einzukalkulieren." : "",
+  ctx.asphalt ? "Asphaltflächen beziehungsweise gebundene Oberflächen sind betroffen." : ""].
+  filter(Boolean).join(" ");
 
   const params = [depth, soil + ".", distance, daily, extras].filter(Boolean).join(" ");
 
@@ -3044,21 +3045,21 @@ function getSmartLangtextAuthToken(): string {
       if (v && v.trim()) return v.trim();
     }
   } catch {
-    //
-  }
 
-  return "";
+
+    //
+  }return "";
 }
 
 async function tryServerSmartLangtext(
-  draft: DraftPosition,
-  ctx: ContextValues,
-  localFallback: string
-): Promise<string> {
+draft: DraftPosition,
+ctx: ContextValues,
+localFallback: string)
+: Promise<string> {
   const base = String(
-    ((import.meta as any)?.env?.VITE_API_URL as string | undefined) ||
-      ((import.meta as any)?.env?.VITE_BACKEND_URL as string | undefined) ||
-      ""
+    (import.meta as any)?.env?.VITE_API_URL as string | undefined ||
+    (import.meta as any)?.env?.VITE_BACKEND_URL as string | undefined ||
+    ""
   ).replace(/\/+$/, "");
 
   if (!base) return "";
@@ -3068,38 +3069,38 @@ async function tryServerSmartLangtext(
   const payload = {
     task: "generate_tiefbau_langtext",
     instruction:
-      "Erzeuge einen professionellen, positionsbezogenen deutschen Langtext für ein Tiefbau-Leistungsverzeichnis. Nicht generisch schreiben. Nutze Kurztext, Menge, Einheit und Ausführungsparameter.",
+    "Erzeuge einen professionellen, positionsbezogenen deutschen Langtext für ein Tiefbau-Leistungsverzeichnis. Nicht generisch schreiben. Nutze Kurztext, Menge, Einheit und Ausführungsparameter.",
     draft,
     context: ctx,
-    localFallback,
+    localFallback
   };
 
   const endpoints = [
-    "/api/kalkulation/ki/langtext",
-    "/api/ki/langtext",
-    "/api/support/chat",
-  ];
+  "/api/kalkulation/ki/langtext",
+  "/api/ki/langtext",
+  "/api/support/chat"];
+
 
   for (const endpoint of endpoints) {
     try {
       const body =
-        endpoint === "/api/support/chat"
-          ? {
-              message: `${payload.instruction}\n\nKurztext: ${draft.kurztext}\nEinheit: ${draft.einheit}\nMenge: ${draft.menge}\nTiefe: ${ctx.depthM} m\nBodenklasse: ${ctx.soilClass}\nEntfernung: ${ctx.distanceKm} km\nLeistung/Tag: ${ctx.dailyOutput}\n\nBitte nur den fertigen Langtext ausgeben.`,
-              page: "kalkulation-rezepte",
-              module: "Urkalkulation",
-              context: payload,
-            }
-          : payload;
+      endpoint === "/api/support/chat" ?
+      {
+        message: `${payload.instruction}\n\nKurztext: ${draft.kurztext}\nEinheit: ${draft.einheit}\nMenge: ${draft.menge}\nTiefe: ${ctx.depthM} m\nBodenklasse: ${ctx.soilClass}\nEntfernung: ${ctx.distanceKm} km\nLeistung/Tag: ${ctx.dailyOutput}\n\nBitte nur den fertigen Langtext ausgeben.`,
+        page: "kalkulation-rezepte",
+        module: "Urkalkulation",
+        context: payload
+      } :
+      payload;
 
       const res = await fetch(`${base}${endpoint}`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(body)
       });
 
       if (!res.ok) continue;
@@ -3107,19 +3108,19 @@ async function tryServerSmartLangtext(
       const json = await res.json().catch(() => null);
       const text = String(
         json?.langtext ||
-          json?.text ||
-          json?.answer ||
-          json?.message ||
-          json?.result ||
-          ""
+        json?.text ||
+        json?.answer ||
+        json?.message ||
+        json?.result ||
+        ""
       ).trim();
 
       if (text.length > 80 && !isGenericLangtext(text)) return text;
     } catch {
-      //
-    }
-  }
 
+
+      //
+    }}
   return "";
 }
 
@@ -3139,8 +3140,8 @@ function dispatchActiveKiSuggestion(detail: {
         ...detail,
         module: "kalkulation",
         pageKey: "kalkulation-rezepte",
-        eventName: "rlc:rezepte-command",
-      },
+        eventName: "rlc:rezepte-command"
+      }
     })
   );
 }
@@ -3181,19 +3182,19 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
   if (unit !== "m²" && unit !== "m2") return [];
 
   const hasComposite =
-    (text.includes("mit") || text.includes("inkl") || text.includes("einschl")) &&
-    (
-      text.includes("pflaster") ||
-      text.includes("planie") ||
-      text.includes("auskoffer") ||
-      text.includes("fsk") ||
-      text.includes("frostschutz") ||
-      text.includes("splitt") ||
-      text.includes("sandbett") ||
-      text.includes("bettung") ||
-      text.includes("aufnehmen") ||
-      text.includes("entsorgen")
-    );
+  (text.includes("mit") || text.includes("inkl") || text.includes("einschl")) && (
+
+  text.includes("pflaster") ||
+  text.includes("planie") ||
+  text.includes("auskoffer") ||
+  text.includes("fsk") ||
+  text.includes("frostschutz") ||
+  text.includes("splitt") ||
+  text.includes("sandbett") ||
+  text.includes("bettung") ||
+  text.includes("aufnehmen") ||
+  text.includes("entsorgen"));
+
 
   if (!hasComposite) return [];
 
@@ -3206,7 +3207,7 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "m²",
       menge: baseQty,
       preis: 18,
-      leistungsart: "pflaster_aufnehmen",
+      leistungsart: "pflaster_aufnehmen"
     });
   }
 
@@ -3217,7 +3218,7 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "t",
       menge: round2(baseQty * 0.22),
       preis: 44,
-      leistungsart: "pflaster_entsorgung",
+      leistungsart: "pflaster_entsorgung"
     });
   }
 
@@ -3228,7 +3229,7 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "t",
       menge: round2(baseQty * 0.09),
       preis: 44,
-      leistungsart: "bettung_entsorgung",
+      leistungsart: "bettung_entsorgung"
     });
   }
 
@@ -3242,7 +3243,7 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "m³",
       menge: m3,
       preis: 45,
-      leistungsart: "auskofferung",
+      leistungsart: "auskofferung"
     });
   }
 
@@ -3253,7 +3254,7 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "m²",
       menge: baseQty,
       preis: 4.5,
-      leistungsart: "planie",
+      leistungsart: "planie"
     });
   }
 
@@ -3266,7 +3267,7 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "m²",
       menge: baseQty,
       preis: round2(12 + cm * 0.75),
-      leistungsart: "frostschutz",
+      leistungsart: "frostschutz"
     });
   }
 
@@ -3279,17 +3280,17 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "m²",
       menge: baseQty,
       preis: round2(4 + cm * 0.7),
-      leistungsart: "splittbett",
+      leistungsart: "splittbett"
     });
   }
 
   const isPflasterRueckbau =
-    text.includes("aufnehmen") ||
-    text.includes("ausbauen") ||
-    text.includes("entfernen") ||
-    text.includes("abbrechen") ||
-    text.includes("entsorgen") ||
-    text.includes("abfahren");
+  text.includes("aufnehmen") ||
+  text.includes("ausbauen") ||
+  text.includes("entfernen") ||
+  text.includes("abbrechen") ||
+  text.includes("entsorgen") ||
+  text.includes("abfahren");
 
   if (text.includes("pflaster") && !isPflasterRueckbau) {
     out.push({
@@ -3298,7 +3299,7 @@ function detectCompositeSplitSuggestions(row: LVPos | DraftPosition | null): Com
       einheit: "m²",
       menge: baseQty,
       preis: 55,
-      leistungsart: "pflaster_verlegen",
+      leistungsart: "pflaster_verlegen"
     });
   }
 
@@ -3347,7 +3348,7 @@ function buildCompositeSplitLvRows(row: LVPos | DraftPosition, existing: LVPos[]
       aiReason: "Die ursprüngliche Position enthielt mehrere technische Leistungen. Diese wurden in prüfbare Einzelpositionen aufgeteilt.",
       priceBreakdown: [],
       createdAt: now,
-      updatedAt: now,
+      updatedAt: now
     } as LVPos;
   }).filter((p) => !existing.some((e) => String(e.posNr || "") === String(p.posNr || "")));
 }
@@ -3364,19 +3365,19 @@ function detectSurfaceFollowUp(row: LVPos | DraftPosition | null): SurfaceFollow
   const text = normSearch(`${row?.kurztext || ""} ${row?.langtext || ""}`);
 
   const isTrench =
-    text.includes("leitungsgraben") ||
-    text.includes("graben herstellen") ||
-    text.includes("kabelgraben") ||
-    text.includes("rohrgraben") ||
-    text.includes("trasse herstellen");
+  text.includes("leitungsgraben") ||
+  text.includes("graben herstellen") ||
+  text.includes("kabelgraben") ||
+  text.includes("rohrgraben") ||
+  text.includes("trasse herstellen");
 
   if (!isTrench) return null;
 
   const hasSurface =
-    text.includes("oberflache") ||
-    text.includes("oberfläche") ||
-    text.includes("belag") ||
-    text.includes("wiederherstellen");
+  text.includes("oberflache") ||
+  text.includes("oberfläche") ||
+  text.includes("belag") ||
+  text.includes("wiederherstellen");
 
   if (!hasSurface) return null;
 
@@ -3385,9 +3386,9 @@ function detectSurfaceFollowUp(row: LVPos | DraftPosition | null): SurfaceFollow
       surface: "asphalt",
       kurztext: "Asphaltfläche nach Leitungsgraben wiederherstellen",
       langtext:
-        "Asphaltfläche nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich Vorbereiten und Reinigen der Anschlusskanten, Herstellen des tragfähigen Untergrundes, Einbau der erforderlichen Asphaltschicht, Verdichtung, höhengerechtem Anschluss an Bestand sowie aller Nebenleistungen. Breite und Schichtaufbau sind projektbezogen zu prüfen.",
+      "Asphaltfläche nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich Vorbereiten und Reinigen der Anschlusskanten, Herstellen des tragfähigen Untergrundes, Einbau der erforderlichen Asphaltschicht, Verdichtung, höhengerechtem Anschluss an Bestand sowie aller Nebenleistungen. Breite und Schichtaufbau sind projektbezogen zu prüfen.",
       einheit: "m²",
-      preis: 65,
+      preis: 65
     };
   }
 
@@ -3396,9 +3397,9 @@ function detectSurfaceFollowUp(row: LVPos | DraftPosition | null): SurfaceFollow
       surface: "pflaster",
       kurztext: "Pflasterfläche nach Leitungsgraben wiederherstellen",
       langtext:
-        "Pflasterfläche nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich Herstellen beziehungsweise Ergänzen der Tragschicht, Splittbett, Verlegen der Pflastersteine, Schneiden und Anpassen, Abrütteln, Verfugen und höhengerechtem Anschluss an Bestand. Breite und vorhandenes Material sind projektbezogen zu prüfen.",
+      "Pflasterfläche nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich Herstellen beziehungsweise Ergänzen der Tragschicht, Splittbett, Verlegen der Pflastersteine, Schneiden und Anpassen, Abrütteln, Verfugen und höhengerechtem Anschluss an Bestand. Breite und vorhandenes Material sind projektbezogen zu prüfen.",
       einheit: "m²",
-      preis: 58,
+      preis: 58
     };
   }
 
@@ -3407,9 +3408,9 @@ function detectSurfaceFollowUp(row: LVPos | DraftPosition | null): SurfaceFollow
       surface: "schotter",
       kurztext: "Schotterfläche nach Leitungsgraben wiederherstellen",
       langtext:
-        "Schotter- beziehungsweise Kiesfläche nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich Liefern und Einbauen geeigneten Materials, profilgerechtem Verteilen, Verdichten und Anschluss an Bestand. Schichtdicke und Körnung sind projektbezogen zu prüfen.",
+      "Schotter- beziehungsweise Kiesfläche nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich Liefern und Einbauen geeigneten Materials, profilgerechtem Verteilen, Verdichten und Anschluss an Bestand. Schichtdicke und Körnung sind projektbezogen zu prüfen.",
       einheit: "m²",
-      preis: 28,
+      preis: 28
     };
   }
 
@@ -3418,9 +3419,9 @@ function detectSurfaceFollowUp(row: LVPos | DraftPosition | null): SurfaceFollow
       surface: "gruen",
       kurztext: "Grünfläche nach Leitungsgraben wiederherstellen",
       langtext:
-        "Grünfläche beziehungsweise Bankett nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich profilgerechtem Auffüllen, Andecken mit Oberboden, Planieren, Ansaat beziehungsweise Wiederherstellung nach örtlichem Erfordernis.",
+      "Grünfläche beziehungsweise Bankett nach Leitungsgraben fachgerecht wiederherstellen. Einschließlich profilgerechtem Auffüllen, Andecken mit Oberboden, Planieren, Ansaat beziehungsweise Wiederherstellung nach örtlichem Erfordernis.",
       einheit: "m²",
-      preis: 12,
+      preis: 12
     };
   }
 
@@ -3443,10 +3444,10 @@ function detectSurfaceWidthM(row: LVPos | DraftPosition | null): number {
   const text = normSearch(`${row?.kurztext || ""} ${row?.langtext || ""}`);
 
   const patterns = [
-    /(?:oberflache|oberfläche|belag|wiederherstellung|asphalt|pflaster).*?(?:breite|b)\s*(?:ca\.?\s*)?(\d+(?:[,.]\d+)?)\s*m/,
-    /(?:breite|b)\s*(?:ca\.?\s*)?(\d+(?:[,.]\d+)?)\s*m/,
-    /(\d+(?:[,.]\d+)?)\s*m\s*(?:breit|breite)/
-  ];
+  /(?:oberflache|oberfläche|belag|wiederherstellung|asphalt|pflaster).*?(?:breite|b)\s*(?:ca\.?\s*)?(\d+(?:[,.]\d+)?)\s*m/,
+  /(?:breite|b)\s*(?:ca\.?\s*)?(\d+(?:[,.]\d+)?)\s*m/,
+  /(\d+(?:[,.]\d+)?)\s*m\s*(?:breit|breite)/];
+
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -3513,21 +3514,21 @@ function buildSurfaceFollowUpLv(row: LVPos | DraftPosition, existing: LVPos[]): 
     bauverfahren: suggestion.kurztext,
     warning: `Automatisch erkannte Folgeposition. Menge wurde aus Grabenlänge × angenommener Oberflächenbreite ${detectSurfaceWidthM(row)} m berechnet. Bitte prüfen.`,
     aiReason:
-      "Die Hauptposition enthält eine Oberfläche im Bereich eines Leitungsgrabens. Deshalb wurde eine separate Wiederherstellungsposition vorgeschlagen.",
+    "Die Hauptposition enthält eine Oberfläche im Bereich eines Leitungsgrabens. Deshalb wurde eine separate Wiederherstellungsposition vorgeschlagen.",
     priceBreakdown: [
-      {
-        id: safeId(),
-        group: "Material",
-        name: suggestion.kurztext,
-        unit: suggestion.einheit,
-        qty: 1,
-        price: preis,
-        total: preis,
-        note: "Richtwert für automatische Folgeposition",
-      },
-    ],
+    {
+      id: safeId(),
+      group: "Material",
+      name: suggestion.kurztext,
+      unit: suggestion.einheit,
+      qty: 1,
+      price: preis,
+      total: preis,
+      note: "Richtwert für automatische Folgeposition"
+    }],
+
     createdAt: now,
-    updatedAt: now,
+    updatedAt: now
   } as LVPos;
 }
 
@@ -3538,9 +3539,9 @@ function exportCsv(lines: RecipeLine[], row: LVPos | null, total: number, ep: nu
   const header = ["Gruppe", "Ressource", "Einheit", "Menge", "Preis", "Gesamt", "Hinweis"];
 
   const body = lines.map((r) =>
-    [r.group, r.name, r.unit, String(r.qty).replace(".", ","), String(r.price).replace(".", ","), String(lineTotal(r)).replace(".", ","), r.note]
-      .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
-      .join(";")
+  [r.group, r.name, r.unit, String(r.qty).replace(".", ","), String(r.price).replace(".", ","), String(lineTotal(r)).replace(".", ","), r.note].
+  map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).
+  join(";")
   );
 
   body.push(["", "", "", "", "Gesamt", String(total).replace(".", ","), ""].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";"));
@@ -3548,7 +3549,7 @@ function exportCsv(lines: RecipeLine[], row: LVPos | null, total: number, ep: nu
   body.push(["", "", "", "", "Preisaufbau", breakdownText(priceBreakdown), ""].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";"));
 
   const blob = new Blob([[header.join(";"), ...body].join("\n")], {
-    type: "text/csv;charset=utf-8",
+    type: "text/csv;charset=utf-8"
   });
 
   const a = document.createElement("a");
@@ -3607,7 +3608,7 @@ function exportPdf(opts: {
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
   doc.text(`Position: ${row?.posNr || "—"} · ${row?.kurztext || "—"}`, marginX, 78, {
-    maxWidth: 180,
+    maxWidth: 180
   });
 
   doc.setFont("helvetica", "normal");
@@ -3625,27 +3626,27 @@ function exportPdf(opts: {
     theme: "grid",
     head: [["Gruppe", "Ressource", "ME", "Menge", "EP", "Gesamt", "Hinweis"]],
     body: lines.map((r) => [
-      r.group,
-      r.name,
-      r.unit,
-      r.unit === "%" ? "" : num(r.qty, 2),
-      r.unit === "%" ? `${num(r.price, 2)} %` : money(r.price),
-      r.unit === "%" ? "—" : money(lineTotal(r)),
-      r.note || "",
-    ]),
+    r.group,
+    r.name,
+    r.unit,
+    r.unit === "%" ? "" : num(r.qty, 2),
+    r.unit === "%" ? `${num(r.price, 2)} %` : money(r.price),
+    r.unit === "%" ? "—" : money(lineTotal(r)),
+    r.note || ""]
+    ),
     styles: {
       font: "helvetica",
       fontSize: 7.8,
       cellPadding: 1.8,
       overflow: "linebreak",
       lineColor: [226, 232, 240],
-      lineWidth: 0.1,
+      lineWidth: 0.1
     },
     headStyles: {
       fillColor: [239, 246, 255],
       textColor: [30, 58, 138],
-      fontStyle: "bold",
-    },
+      fontStyle: "bold"
+    }
   });
 
   const y1 = (doc as any).lastAutoTable?.finalY + 8 || 180;
@@ -3662,13 +3663,13 @@ function exportPdf(opts: {
       cellPadding: 1.7,
       overflow: "linebreak",
       lineColor: [226, 232, 240],
-      lineWidth: 0.1,
+      lineWidth: 0.1
     },
     headStyles: {
       fillColor: [240, 253, 244],
       textColor: [21, 128, 61],
-      fontStyle: "bold",
-    },
+      fontStyle: "bold"
+    }
   });
 
   const y = (doc as any).lastAutoTable?.finalY + 10 || 240;
@@ -3688,7 +3689,7 @@ function exportPdf(opts: {
   doc.text(money(total), 190, y + 9, { align: "right" });
   doc.text(money(ep), 190, y + 18, { align: "right" });
 
-  doc.save(`Rezeptkalkulation_${row?.posNr || "Position"}.pdf`);
+  saveRlcPdfWithCompanyHeader(doc, `Rezeptkalkulation_${row?.posNr || "Position"}.pdf`);
 }
 
 /* ================= COMPONENT ================= */
@@ -3728,7 +3729,7 @@ export default function Recipes() {
     groundwater: false,
     asphalt: false,
     trafficControl: false,
-    dailyOutput: 0,
+    dailyOutput: 0
   });
 
   const [lines, setLines] = useState<RecipeLine[]>([]);
@@ -3740,7 +3741,7 @@ export default function Recipes() {
   const [companyRecipes, setCompanyRecipes] = useState<CompanyRecipe[]>(() => loadCompanyRecipes());
 
   const [libraryRows, setLibraryRows] = useState<ExternalLibraryItem[]>(() =>
-    loadRecipeLibraryRows()
+  loadRecipeLibraryRows()
   );
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryGroupFilter, setLibraryGroupFilter] = useState<ResourceGroup | "Alle">("Alle");
@@ -3748,21 +3749,21 @@ export default function Recipes() {
   const selectedRow = useMemo<LVPos>(() => draftToLvPos(draftPos), [draftPos]);
 
   const resourceOptions = useMemo(() => {
-    const libOptions = libraryRows
-      .map((item) => {
-        const id = libraryResourceId(item);
-        const title = libraryTitle(item);
-        if (!title) return null;
+    const libOptions = libraryRows.
+    map((item) => {
+      const id = libraryResourceId(item);
+      const title = libraryTitle(item);
+      if (!title) return null;
 
-        return {
-          id,
-          label: `${libraryGroup(item)} · ${title}`,
-          group: libraryGroup(item),
-          source: "library" as const,
-          item,
-        };
-      })
-      .filter(Boolean) as Array<{
+      return {
+        id,
+        label: `${libraryGroup(item)} · ${title}`,
+        group: libraryGroup(item),
+        source: "library" as const,
+        item
+      };
+    }).
+    filter(Boolean) as Array<{
       id: string;
       label: string;
       group: ResourceGroup;
@@ -3775,7 +3776,7 @@ export default function Recipes() {
       label: `${item.group} · ${item.name}`,
       group: item.group,
       source: "catalog" as const,
-      item,
+      item
     }));
 
     const used = new Set<string>();
@@ -3806,29 +3807,29 @@ export default function Recipes() {
     if (!q) return lvRows;
 
     return lvRows.filter((r) =>
-      `${r.posNr || ""} ${r.kurztext || ""} ${r.langtext || ""}`.toLowerCase().includes(q)
+    `${r.posNr || ""} ${r.kurztext || ""} ${r.langtext || ""}`.toLowerCase().includes(q)
     );
   }, [lvRows, query]);
 
   const filteredLibraryRows = useMemo(() => {
     const q = normSearch(libraryQuery || draftPos.kurztext);
 
-    return libraryRows
-      .filter((item) => {
-        const g = libraryGroup(item);
-        if (libraryGroupFilter !== "Alle" && g !== libraryGroupFilter) return false;
-        if (!q) return true;
+    return libraryRows.
+    filter((item) => {
+      const g = libraryGroup(item);
+      if (libraryGroupFilter !== "Alle" && g !== libraryGroupFilter) return false;
+      if (!q) return true;
 
-        const hay = normSearch(
-          `${libraryCode(item)} ${libraryTitle(item)} ${item.category || ""} ${item.group || ""} ${libraryUnit(item)}`
-        );
+      const hay = normSearch(
+        `${libraryCode(item)} ${libraryTitle(item)} ${item.category || ""} ${item.group || ""} ${libraryUnit(item)}`
+      );
 
-        return q
-          .split(/\s+/)
-          .filter(Boolean)
-          .every((part) => hay.includes(part));
-      })
-      .slice(0, 200);
+      return q.
+      split(/\s+/).
+      filter(Boolean).
+      every((part) => hay.includes(part));
+    }).
+    slice(0, 200);
   }, [libraryRows, libraryQuery, libraryGroupFilter, draftPos.kurztext]);
 
   const summary = useMemo(() => {
@@ -3844,19 +3845,19 @@ export default function Recipes() {
       ep,
       gp: round2(n(selectedRow.menge) * ep),
       count: lines.length,
-      ai: lines.filter((x) => x.aiSuggested).length,
+      ai: lines.filter((x) => x.aiSuggested).length
     };
   }, [lines, selectedRow]);
 
-  const activeAuftragLabel = recipeContext.auftragName
-    ? `${recipeContext.auftragType === "unter" ? "Unterauftrag" : "Hauptauftrag"} · ${recipeContext.auftragName}`
-    : "Kein Auftrag-Kontext";
+  const activeAuftragLabel = recipeContext.auftragName ?
+  `${recipeContext.auftragType === "unter" ? "Unterauftrag" : "Hauptauftrag"} · ${recipeContext.auftragName}` :
+  "Kein Auftrag-Kontext";
 
   useEffect(() => {
     setInfo(
-      recipeContext.auftragName
-        ? `Position wird für ${activeAuftragLabel} erstellt.`
-        : "Neue Position wird ohne Auftrag-Kontext erstellt."
+      recipeContext.auftragName ?
+      `Position wird für ${activeAuftragLabel} erstellt.` :
+      "Neue Position wird ohne Auftrag-Kontext erstellt."
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -3911,9 +3912,9 @@ export default function Recipes() {
     setInfo("Neue Position vorbereitet. Bitte Positionsdaten ausfüllen.");
 
     window.setTimeout(() => {
-      document
-        .getElementById("rlc-recipes-position-data")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.
+      getElementById("rlc-recipes-position-data")?.
+      scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
   }
 
@@ -3953,7 +3954,7 @@ export default function Recipes() {
       recipeLines: nextLines,
       source: "recipes-auto-recalc-on-load",
       calculationStatus: "recipes_ready",
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     } as any);
 
     setLvRows(LV.list());
@@ -3967,7 +3968,7 @@ export default function Recipes() {
 
     if (isAmbiguousSmartDraftHard(draft)) {
       const message =
-        "KI gestoppt: Die Position ist zu ungenau. Bitte genauer beschreiben, z. B. Asphalt fräsen, Asphalttragschicht einbauen, Pflaster aufnehmen, Pflaster neu verlegen, Kiestragschicht herstellen, Auffüllung herstellen.";
+      "KI gestoppt: Die Position ist zu ungenau. Bitte genauer beschreiben, z. B. Asphalt fräsen, Asphalttragschicht einbauen, Pflaster aufnehmen, Pflaster neu verlegen, Kiestragschicht herstellen, Auffüllung herstellen.";
 
       setInfo(message);
 
@@ -3976,7 +3977,7 @@ export default function Recipes() {
         level: "warning",
         title: "Position zu ungenau",
         text:
-          `Der Kurztext ist zu allgemein. Ich kann daraus keine sichere Urkalkulation erstellen.
+        `Der Kurztext ist zu allgemein. Ich kann daraus keine sichere Urkalkulation erstellen.
 
 Mögliche gemeinte Leistungen:
 • Asphalt fräsen / abtragen
@@ -3991,7 +3992,7 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
         nextLabel: "Kurztext präzisieren",
         action: "focusKurztext",
         autoOpen: false,
-        pulse: true,
+        pulse: true
       });
 
       try {
@@ -4000,14 +4001,14 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
         );
         el?.focus();
       } catch {
-        //
-      }
 
-      return;
+
+        //
+      }return;
     }
 
     const localLangtext =
-      buildSmartLocalLangtext(draft, ctx) || suggestLangtextForDraft(draft, ctx);
+    buildSmartLocalLangtext(draft, ctx) || suggestLangtextForDraft(draft, ctx);
 
     let finalLangtext = localLangtext;
     let usedServerKi = false;
@@ -4022,18 +4023,18 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
         usedServerKi = true;
       }
     } catch {
-      //
-    }
 
-    setDraftPos({
+
+      //
+    }setDraftPos({
       ...draft,
-      langtext: finalLangtext,
+      langtext: finalLangtext
     });
 
     setInfo(
-      usedServerKi
-        ? "Langtext wurde über Server-KI fachlich erstellt."
-        : "Langtext wurde lokal fachlich erstellt."
+      usedServerKi ?
+      "Langtext wurde über Server-KI fachlich erstellt." :
+      "Langtext wurde lokal fachlich erstellt."
     );
 
     clearActiveKiSuggestion();
@@ -4046,13 +4047,13 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
     }
 
     const withText =
-      draftPos.langtext.trim().length > 10
-        ? draftPos
-        : {
-            ...draftPos,
-            einheit: draftPos.einheit || inferUnitFromText(draftPos.kurztext),
-            langtext: suggestLangtextForDraft(draftPos, ctx),
-          };
+    draftPos.langtext.trim().length > 10 ?
+    draftPos :
+    {
+      ...draftPos,
+      einheit: draftPos.einheit || inferUnitFromText(draftPos.kurztext),
+      langtext: suggestLangtextForDraft(draftPos, ctx)
+    };
 
     if (withText !== draftPos) setDraftPos(withText);
 
@@ -4061,23 +4062,23 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       posNr: rowForCalc.posNr,
       kurztext: rowForCalc.kurztext,
       langtext: rowForCalc.langtext,
-      einheit: rowForCalc.einheit,
+      einheit: rowForCalc.einheit
     });
 
-    const detectedWorkType = technicalPosition
-      ? {
-          key: technicalPosition.workType,
-          confidence: 0.99,
-          ambiguous: false,
-          title: technicalPosition.title,
-          message: `Technische Position erkannt: ${technicalPosition.title}`,
-        }
-      : detectWorkType({
-          posNr: rowForCalc.posNr,
-          kurztext: rowForCalc.kurztext,
-          langtext: rowForCalc.langtext,
-          einheit: rowForCalc.einheit,
-        });
+    const detectedWorkType = technicalPosition ?
+    {
+      key: technicalPosition.workType,
+      confidence: 0.99,
+      ambiguous: false,
+      title: technicalPosition.title,
+      message: `Technische Position erkannt: ${technicalPosition.title}`
+    } :
+    detectWorkType({
+      posNr: rowForCalc.posNr,
+      kurztext: rowForCalc.kurztext,
+      langtext: rowForCalc.langtext,
+      einheit: rowForCalc.einheit
+    });
 
     const forceLocalTiefbauPosition = isRlcForceLocalUrkalkulation(rowForCalc);
 
@@ -4090,15 +4091,15 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       console.warn("[Recipes KI] Unknown work type replaced by minimal review Urkalkulation.", {
         posNr: rowForCalc.posNr,
         kurztext: rowForCalc.kurztext,
-        count: minimal.length,
+        count: minimal.length
       });
       return;
     }
 
     setInfo(
-      technicalPosition
-        ? `Technische Position erkannt: ${technicalPosition.title} · Bibliothek: ${getTechnicalPositionCount()} Positionen`
-        : `KI-Urkalkulation wird berechnet: ${detectedWorkType.title || detectRlcUrkalkulationFamilyV4(rowForCalc)}…`
+      technicalPosition ?
+      `Technische Position erkannt: ${technicalPosition.title} · Bibliothek: ${getTechnicalPositionCount()} Positionen` :
+      `KI-Urkalkulation wird berechnet: ${detectedWorkType.title || detectRlcUrkalkulationFamilyV4(rowForCalc)}…`
     );
 
     console.log("[Recipes KI TRACE 1] before forceLocal", {
@@ -4109,13 +4110,13 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       menge: rowForCalc.menge,
       detectedWorkType: detectedWorkType.key,
       technicalPosition,
-      ctx,
+      ctx
     });
 
     const forceLocal =
-      !!technicalPosition ||
-      forceLocalTiefbauPosition ||
-      shouldForceLocalCalculation(detectedWorkType.key);
+    !!technicalPosition ||
+    forceLocalTiefbauPosition ||
+    shouldForceLocalCalculation(detectedWorkType.key);
 
     console.log("[Recipes KI] Urkalkulation flow", {
       posNr: rowForCalc.posNr,
@@ -4123,7 +4124,7 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       detectedWorkType: detectedWorkType.key,
       hasTechnicalPosition: !!technicalPosition,
       forceLocalTiefbauPosition,
-      forceLocal,
+      forceLocal
     });
 
     // Server-Autonomous zuerst versuchen.
@@ -4140,23 +4141,23 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       const serverLines = cleanRecipeLinesByWorkType(serverLinesRaw, detectedWorkType.key);
 
       const isSingleFremdleistung =
-        serverLines.length === 1 && serverLines[0]?.group === "Fremdleistung";
+      serverLines.length === 1 && serverLines[0]?.group === "Fremdleistung";
 
       const rejectSingleFremdleistung =
-        isSingleFremdleistung && shouldNeverUseSingleFremdleistung(rowForCalc);
+      isSingleFremdleistung && shouldNeverUseSingleFremdleistung(rowForCalc);
 
       console.log("[Recipes KI] Server breakdown guard", {
         posNr: rowForCalc.posNr,
         kurztext: rowForCalc.kurztext,
         serverLineCount: serverLines.length,
         isSingleFremdleistung,
-        rejectSingleFremdleistung,
+        rejectSingleFremdleistung
       });
 
       if (rejectSingleFremdleistung) {
         console.warn("[Recipes KI] Single-Fremdleistung rejected. Falling back to local Urkalkulation.", {
           posNr: rowForCalc.posNr,
-          kurztext: rowForCalc.kurztext,
+          kurztext: rowForCalc.kurztext
         });
 
         setInfo(
@@ -4186,7 +4187,7 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
 
     console.log("[Recipes KI TRACE 2] before local createKiSuggestion", {
       posNr: rowForCalc.posNr,
-      kurztext: rowForCalc.kurztext,
+      kurztext: rowForCalc.kurztext
     });
 
     const suggestedRaw = createKiSuggestion(rowForCalc, ctx);
@@ -4196,7 +4197,7 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       count: suggested.length,
       rawCount: suggestedRaw.length,
       groups: suggested.map((x) => x.group),
-      suggested,
+      suggested
     });
 
     setLines(suggested);
@@ -4212,7 +4213,7 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
         nextLabel: "Folgeposition erstellen",
         action: "createSurfaceFollowup",
         autoOpen: false,
-        pulse: true,
+        pulse: true
       });
 
       setInfo(
@@ -4240,7 +4241,7 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
         nextLabel: "Einzelpositionen erstellen",
         action: "createCompositeSplit",
         autoOpen: false,
-        pulse: true,
+        pulse: true
       });
       return;
     }
@@ -4251,25 +4252,25 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
         level: "warning",
         title: "Langtext fachlich verbessern",
         text:
-          "Der Langtext ist leer oder noch zu allgemein. Soll ich ihn positionsbezogen aus Kurztext, Einheit, Menge und Ausführungsparametern erzeugen?",
+        "Der Langtext ist leer oder noch zu allgemein. Soll ich ihn positionsbezogen aus Kurztext, Einheit, Menge und Ausführungsparametern erzeugen?",
         nextLabel: "Langtext erzeugen",
         action: "generateLongText",
         autoOpen: false,
-        pulse: true,
+        pulse: true
       });
       return;
     }
-if (!lines.length) {
+    if (!lines.length) {
       dispatchActiveKiSuggestion({
         id: "recipes-resources-missing",
         level: "warning",
         title: "Urkalkulation fehlt",
         text:
-          "Für diese Position fehlen Ressourcen und Preisaufbau. Soll ich Personal, Maschinen, Material, Transport, Zuschläge und EP automatisch vorschlagen?",
+        "Für diese Position fehlen Ressourcen und Preisaufbau. Soll ich Personal, Maschinen, Material, Transport, Zuschläge und EP automatisch vorschlagen?",
         nextLabel: "Urkalkulation starten",
         action: "suggestResources",
         autoOpen: false,
-        pulse: true,
+        pulse: true
       });
       return;
     }
@@ -4280,11 +4281,11 @@ if (!lines.length) {
         level: "critical",
         title: "EP fehlt",
         text:
-          "Die Ressourcen sind vorhanden, aber der Einheitspreis ist noch 0. Soll ich Zuschläge und Preisaufbau neu berechnen?",
+        "Die Ressourcen sind vorhanden, aber der Einheitspreis ist noch 0. Soll ich Zuschläge und Preisaufbau neu berechnen?",
         nextLabel: "EP berechnen",
         action: "calculatePriceBuildUp",
         autoOpen: false,
-        pulse: true,
+        pulse: true
       });
       return;
     }
@@ -4300,7 +4301,7 @@ if (!lines.length) {
         nextLabel: "Folgeposition erstellen",
         action: "createSurfaceFollowup",
         autoOpen: false,
-        pulse: true,
+        pulse: true
       });
       return;
     }
@@ -4310,62 +4311,62 @@ if (!lines.length) {
       level: "success",
       title: "Position bereit",
       text:
-        "Langtext, Ressourcen und EP sind vorhanden. Nächster sinnvoller Schritt: Position ins LV speichern oder als Nachtrag/Angebot weitergeben.",
+      "Langtext, Ressourcen und EP sind vorhanden. Nächster sinnvoller Schritt: Position ins LV speichern oder als Nachtrag/Angebot weitergeben.",
       nextLabel: "Position einfügen",
       action: "insertPosition",
       autoOpen: false,
-      pulse: false,
+      pulse: false
     });
   }, [draftPos.kurztext, draftPos.langtext, draftPos.einheit, draftPos.menge, lines, summary.ep]);
   function addLine(group: ResourceGroup) {
     const first = RESOURCE_CATALOG.find((x) => x.group === group);
     setLines((prev) => [
-      ...prev,
-      {
-        id: safeId(),
-        group,
-        resourceId: first?.id || "",
-        name: first?.name || "",
-        unit: first?.unit || "St",
-        qty: 1,
-        price: first?.defaultPrice || 0,
-        note: "",
-        aiSuggested: false,
-      },
-    ]);
+    ...prev,
+    {
+      id: safeId(),
+      group,
+      resourceId: first?.id || "",
+      name: first?.name || "",
+      unit: first?.unit || "St",
+      qty: 1,
+      price: first?.defaultPrice || 0,
+      note: "",
+      aiSuggested: false
+    }]
+    );
   }
 
   function updateLine(id: string, patch: Partial<RecipeLine>) {
     setLines((prev) =>
-      prev.map((r) => {
-        if (r.id !== id) return r;
-        let next = { ...r, ...patch };
+    prev.map((r) => {
+      if (r.id !== id) return r;
+      let next = { ...r, ...patch };
 
-        if (patch.resourceId !== undefined) {
-          if (!patch.resourceId) return { ...next, resourceId: "" };
+      if (patch.resourceId !== undefined) {
+        if (!patch.resourceId) return { ...next, resourceId: "" };
 
-          if (patch.resourceId.startsWith("LIB-")) {
-            const libItem = libraryRows.find((item) => libraryResourceId(item) === patch.resourceId);
-            if (libItem) {
-              const libLine = recipeLineFromLibrary(libItem);
-              next = { ...next, ...libLine, id: r.id };
-            }
-          } else {
-            const item = RESOURCE_CATALOG.find((x) => x.id === patch.resourceId);
-            if (item) {
-              next = {
-                ...next,
-                group: item.group,
-                name: item.name,
-                unit: item.unit,
-                price: item.defaultPrice,
-              };
-            }
+        if (patch.resourceId.startsWith("LIB-")) {
+          const libItem = libraryRows.find((item) => libraryResourceId(item) === patch.resourceId);
+          if (libItem) {
+            const libLine = recipeLineFromLibrary(libItem);
+            next = { ...next, ...libLine, id: r.id };
+          }
+        } else {
+          const item = RESOURCE_CATALOG.find((x) => x.id === patch.resourceId);
+          if (item) {
+            next = {
+              ...next,
+              group: item.group,
+              name: item.name,
+              unit: item.unit,
+              price: item.defaultPrice
+            };
           }
         }
+      }
 
-        return next;
-      })
+      return next;
+    })
     );
   }
 
@@ -4392,7 +4393,7 @@ if (!lines.length) {
       unit: selectedRow.einheit || "",
       createdAt: now,
       updatedAt: now,
-      lines,
+      lines
     };
 
     const next = [recipe, ...companyRecipes.filter((r) => r.signature !== signature)];
@@ -4420,9 +4421,9 @@ if (!lines.length) {
     const id = draftPos.id || safeId();
 
     const riskLevel: "low" | "medium" | "high" =
-      ctx.groundwater || ctx.restricted || ctx.trafficControl || ctx.soilClass === "6" || ctx.soilClass === "7"
-        ? "high"
-        : "medium";
+    ctx.groundwater || ctx.restricted || ctx.trafficControl || ctx.soilClass === "6" || ctx.soilClass === "7" ?
+    "high" :
+    "medium";
 
     const warning = riskLevel === "high" ? "Erschwerte Bedingungen aus Rezept erkannt." : "";
 
@@ -4462,7 +4463,7 @@ if (!lines.length) {
       priceBreakdown: pb,
       source: "recipe",
       createdAt: selectedRow.createdAt || now,
-      updatedAt: now,
+      updatedAt: now
     } as any;
 
     return { payload, totals, pb, riskLevel, warning };
@@ -4501,7 +4502,7 @@ if (!lines.length) {
         riskLevel,
         confidence: 0.9,
         aiReason: `Aus professioneller Rezept- und Ressourcen-Kalkulation übernommen.\n\nPreisaufbau:\n${breakdownText(pb)}`,
-        warning,
+        warning
       })
     );
 
@@ -4522,13 +4523,13 @@ if (!lines.length) {
     if (/^\d{1,3}(\.0+)?$/.test(pos) && kurz.length < 5 && lang.length < 10) return false;
 
     if (
-      text.includes("zwischensumme") ||
-      text.includes("gesamtsumme") ||
-      text.includes("summe titel") ||
-      text.includes("titel ") ||
-      text.includes("abschnitt ") ||
-      text.includes("los ")
-    ) {
+    text.includes("zwischensumme") ||
+    text.includes("gesamtsumme") ||
+    text.includes("summe titel") ||
+    text.includes("titel ") ||
+    text.includes("abschnitt ") ||
+    text.includes("los "))
+    {
       return false;
     }
 
@@ -4537,9 +4538,9 @@ if (!lines.length) {
 
   function rowHasUrkalkulation(row: LVPos): boolean {
     return (
-      (Array.isArray((row as any).priceBreakdown) && (row as any).priceBreakdown.length > 0) ||
-      (Array.isArray((row as any).recipeLines) && (row as any).recipeLines.length > 0)
-    );
+      Array.isArray((row as any).priceBreakdown) && (row as any).priceBreakdown.length > 0 ||
+      Array.isArray((row as any).recipeLines) && (row as any).recipeLines.length > 0);
+
   }
 
   function createGlobalUrkalkulationForRow(row: LVPos): LVPos | null {
@@ -4569,7 +4570,7 @@ if (!lines.length) {
     const gp = round2(qty * ep);
 
     const groupSum = (group: PriceBreakdownGroup) =>
-      round2(pb.filter((line) => line.group === group).reduce((sum, line) => sum + n(line.total), 0));
+    round2(pb.filter((line) => line.group === group).reduce((sum, line) => sum + n(line.total), 0));
 
     return {
       ...row,
@@ -4604,7 +4605,7 @@ if (!lines.length) {
       riskLevel: detected.ambiguous ? "high" : "medium",
       confidence: detected.ambiguous ? 0.7 : 0.88,
       aiReason: `Globale Urkalkulation für gesamtes LV erstellt.\n\nPreisaufbau:\n${breakdownText(pb)}`,
-      updatedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     } as any;
   }
 
@@ -4656,7 +4657,7 @@ if (!lines.length) {
       }
 
       const done = i + 1;
-      const pct = Math.round((done / candidates.length) * 100);
+      const pct = Math.round(done / candidates.length * 100);
 
       setGlobalUrkProgress({ done, total: candidates.length, changed: changed.length });
       setInfo(`Globale Urkalkulation läuft… ${done} / ${candidates.length} · ${pct} % · ${changed.length} erstellt`);
@@ -4668,17 +4669,17 @@ if (!lines.length) {
     setLvRows(refreshedLv);
 
     const refreshedSelected =
-      refreshedLv.find((r) => String(r.id || "") === String(selectedId || "")) ||
-      refreshedLv.find((r) => String(r.posNr || "") === String(draftPos.posNr || "")) ||
-      refreshedLv[0];
+    refreshedLv.find((r) => String(r.id || "") === String(selectedId || "")) ||
+    refreshedLv.find((r) => String(r.posNr || "") === String(draftPos.posNr || "")) ||
+    refreshedLv[0];
 
     if (refreshedSelected) {
       setSelectedId(String(refreshedSelected.id || ""));
       setDraftPos(draftFromLv(refreshedSelected));
       setLines(
-        Array.isArray((refreshedSelected as any).recipeLines)
-          ? ((refreshedSelected as any).recipeLines as RecipeLine[])
-          : []
+        Array.isArray((refreshedSelected as any).recipeLines) ?
+        (refreshedSelected as any).recipeLines as RecipeLine[] :
+        []
       );
     }
 
@@ -4692,14 +4693,14 @@ if (!lines.length) {
       setSelectedId(String(firstDone.id || ""));
       setDraftPos(draftFromLv(firstDone));
 
-      const firstLines = Array.isArray((firstDone as any).recipeLines)
-        ? ((firstDone as any).recipeLines as RecipeLine[])
-        : [];
+      const firstLines = Array.isArray((firstDone as any).recipeLines) ?
+      (firstDone as any).recipeLines as RecipeLine[] :
+      [];
 
       const fallbackLines =
-        !firstLines.length && Array.isArray((firstDone as any).priceBreakdown)
-          ? recipeLinesFromServerPriceBreakdown(firstDone as any)
-          : [];
+      !firstLines.length && Array.isArray((firstDone as any).priceBreakdown) ?
+      recipeLinesFromServerPriceBreakdown(firstDone as any) :
+      [];
 
       setLines((firstLines.length ? firstLines : fallbackLines).map((line) => ({ ...line, id: line.id || safeId() })));
       setLibraryQuery(String(firstDone.kurztext || ""));
@@ -4774,7 +4775,7 @@ if (!lines.length) {
       gp,
       source: "recipes-urkalkulation-v21",
       calculationStatus: "recipes_ready",
-      recipeLines: lines,
+      recipeLines: lines
     } as any);
 
     saveCurrentToDatenbank();
@@ -4782,17 +4783,17 @@ if (!lines.length) {
     setLvRows(refreshedLv);
 
     const refreshedSelected =
-      refreshedLv.find((r) => String(r.id || "") === String(selectedId || "")) ||
-      refreshedLv.find((r) => String(r.posNr || "") === String(draftPos.posNr || "")) ||
-      refreshedLv[0];
+    refreshedLv.find((r) => String(r.id || "") === String(selectedId || "")) ||
+    refreshedLv.find((r) => String(r.posNr || "") === String(draftPos.posNr || "")) ||
+    refreshedLv[0];
 
     if (refreshedSelected) {
       setSelectedId(String(refreshedSelected.id || ""));
       setDraftPos(draftFromLv(refreshedSelected));
       setLines(
-        Array.isArray((refreshedSelected as any).recipeLines)
-          ? ((refreshedSelected as any).recipeLines as RecipeLine[])
-          : []
+        Array.isArray((refreshedSelected as any).recipeLines) ?
+        (refreshedSelected as any).recipeLines as RecipeLine[] :
+        []
       );
     }
 
@@ -4815,8 +4816,8 @@ if (!lines.length) {
           source: "recipes-urkalkulation-v21",
           calculationStatus: "recipes_ready",
           recipeLines: lines,
-          recipeSummary: summary,
-        },
+          recipeSummary: summary
+        }
       })
     );
 
@@ -4830,6 +4831,98 @@ if (!lines.length) {
     saveCurrentToDatenbank();
     setLvRows(LV.list());
     return made.payload as LVPos & any;
+  }
+
+  async function saveUrkalkulation() {
+    const ok = saveForHandoff();
+    if (!ok) return;
+
+    if (!projectKey) {
+      setInfo("Urkalkulation lokal gespeichert. Kein Projekt ausgewählt.");
+      return;
+    }
+
+    const made = makeLvPayload();
+    if (!made) return;
+
+    const row = made.payload as LVPos & any;
+    const ep = round2(n(row.preis || row.ep || summary.ep));
+    const qty = Math.max(n(row.menge || row.qty, 1), 0.0001);
+    const gp = round2(ep * qty);
+    const savedAt = new Date().toISOString();
+
+    const snapshot = {
+      ok: true,
+      version: "RLC_URKALKULATION_PROJECT_V1",
+      source: "recipes",
+      projectKey,
+      projectCode: projectKey,
+      projectTitle,
+      savedAt,
+      selectedId: row.id || selectedId || null,
+      row: {
+        ...row,
+        preis: ep,
+        ep,
+        gp,
+        qty,
+        menge: qty,
+        unit: row.einheit || row.unit || "m",
+        einheit: row.einheit || row.unit || "m",
+        recipeLines: lines,
+        recipeSummary: summary,
+        priceBreakdown: buildPriceBreakdown(lines, selectedRow),
+        urkalkulationUnitPrice: ep,
+        urkalkulationTotal: gp,
+        calculationStatus: "recipes_ready",
+        source: "recipes-urkalkulation-server-v1",
+        updatedAt: savedAt
+      },
+      rows: LV.list(),
+      context: ctx,
+      recipeContext,
+      summary
+    };
+
+    try {
+      const token = getAuthToken();
+      const response = await fetch(
+        apiUrl(`/api/kalkulation/storage/urkalkulation/${encodeURIComponent(projectKey)}/save`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify(snapshot)
+        }
+      );
+
+      const raw = await response.text();
+      let result: any = null;
+      try {
+        result = raw ? JSON.parse(raw) : null;
+      } catch {
+        result = raw;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result?.error || result?.message || `HTTP ${response.status}`
+        );
+      }
+
+      setInfo("Urkalkulation lokal und auf dem Server gespeichert.");
+    } catch (error: any) {
+      console.error("[Recipes] Urkalkulation server save failed", error);
+      setInfo(
+        `Urkalkulation lokal gespeichert. Serverfehler: ${
+        error?.message || "unbekannt"}`
+
+      );
+    }
   }
 
   function pushToKi() {
@@ -4874,8 +4967,8 @@ if (!lines.length) {
           begruendung: "Aus Urkalkulation / Rezeptkalkulation als Nachtrag übernommen.",
           note: "Aus Urkalkulation / Rezeptkalkulation als Nachtrag übernommen.",
           regieRowId: payload.id || safeId(),
-          date: new Date().toISOString(),
-        }],
+          date: new Date().toISOString()
+        }]
       })
     );
     nav("/kalkulation/nachtraege?from=rezepte");
@@ -4889,7 +4982,7 @@ if (!lines.length) {
   }
   useEffect(() => {
     function handleRezepteCommand(event: Event) {
-      const detail = (event as CustomEvent<{ action?: string }>).detail;
+      const detail = (event as CustomEvent<{action?: string;}>).detail;
       const action = String(detail?.action || "").trim();
 
       if (!action) return;
@@ -4928,24 +5021,24 @@ if (!lines.length) {
   const validationErrors = validateDraft(draftPos);
   const rlcKiDashboardRow = useMemo(() => {
     const byGroup = (group: string) =>
-      lines
-        .filter((x) => x.group === group)
-        .map((x) => x.name)
-        .filter(Boolean);
+    lines.
+    filter((x) => x.group === group).
+    map((x) => x.name).
+    filter(Boolean);
 
     const risks = [
-      ctx.restricted ? "Eingeschränkter Arbeitsraum prüfen" : "",
-      ctx.groundwater ? "Grundwasser / Wasserhaltung prüfen" : "",
-      ctx.asphalt ? "Asphaltaufbruch / Wiederherstellung prüfen" : "",
-      ctx.trafficControl ? "Verkehrssicherung prüfen" : "",
-      ctx.soilClass ? `Bodenklasse BK ${ctx.soilClass} prüfen` : "",
-    ].filter(Boolean);
+    ctx.restricted ? "Eingeschränkter Arbeitsraum prüfen" : "",
+    ctx.groundwater ? "Grundwasser / Wasserhaltung prüfen" : "",
+    ctx.asphalt ? "Asphaltaufbruch / Wiederherstellung prüfen" : "",
+    ctx.trafficControl ? "Verkehrssicherung prüfen" : "",
+    ctx.soilClass ? `Bodenklasse BK ${ctx.soilClass} prüfen` : ""].
+    filter(Boolean);
 
     return {
       ...(selectedRow || {}),
-      source: lines.some((x) => x.aiSuggested)
-        ? "RLC KI Urkalkulation"
-        : "Manuelle Urkalkulation",
+      source: lines.some((x) => x.aiSuggested) ?
+      "RLC KI Urkalkulation" :
+      "Manuelle Urkalkulation",
       confidence: lines.length ? 0.82 : null,
       calculationStatus: lines.length ? "warning" : "needs_input",
       riskLevel: risks.length ? "medium" : "low",
@@ -4954,80 +5047,104 @@ if (!lines.length) {
         labor: byGroup("Personal"),
         materials: byGroup("Material"),
         logistics: [
-          ...byGroup("Entsorgung"),
-          ...(ctx.distanceKm ? [`Entfernung Baustelle: ${ctx.distanceKm} km`] : []),
-        ],
-        risks,
+        ...byGroup("Entsorgung"),
+        ...(ctx.distanceKm ? [`Entfernung Baustelle: ${ctx.distanceKm} km`] : [])],
+
+        risks
       },
       explainability: {
         version: "RLC_RECIPES_DASHBOARD_V1",
         confidence: lines.length ? 0.82 : null,
-        source: lines.some((x) => x.aiSuggested)
-          ? "RLC KI Ressourcen"
-          : "Manuelle Ressourcen",
+        source: lines.some((x) => x.aiSuggested) ?
+        "RLC KI Ressourcen" :
+        "Manuelle Ressourcen",
         machines: [...byGroup("Maschinen"), ...byGroup("LKW / Transport")],
         labor: byGroup("Personal"),
         materials: byGroup("Material"),
         logistics: [
-          ...byGroup("Entsorgung"),
-          ...(ctx.distanceKm ? [`Entfernung Baustelle: ${ctx.distanceKm} km`] : []),
-        ],
+        ...byGroup("Entsorgung"),
+        ...(ctx.distanceKm ? [`Entfernung Baustelle: ${ctx.distanceKm} km`] : [])],
+
         risks,
         standards: [],
         assumptions: [
-          draftPos.einheit ? `Einheit: ${draftPos.einheit}` : "",
-          draftPos.menge ? `Menge: ${draftPos.menge}` : "",
-          ctx.depthM ? `Tiefe: ${ctx.depthM} m` : "",
-          ctx.dailyOutput ? `Leistung pro Tag: ${ctx.dailyOutput}` : "",
-        ].filter(Boolean),
+        draftPos.einheit ? `Einheit: ${draftPos.einheit}` : "",
+        draftPos.menge ? `Menge: ${draftPos.menge}` : "",
+        ctx.depthM ? `Tiefe: ${ctx.depthM} m` : "",
+        ctx.dailyOutput ? `Leistung pro Tag: ${ctx.dailyOutput}` : ""].
+        filter(Boolean),
         calculationSteps: [
-          "Positionsdaten gelesen.",
-          "Ausführungsparameter bewertet.",
-          "Ressourcen aus KI, Bibliothek oder manueller Eingabe übernommen.",
-          "Urkalkulation und Preisaufbau gebildet.",
-        ],
-      },
+        "Positionsdaten gelesen.",
+        "Ausführungsparameter bewertet.",
+        "Ressourcen aus KI, Bibliothek oder manueller Eingabe übernommen.",
+        "Urkalkulation und Preisaufbau gebildet."]
+
+      }
     };
   }, [selectedRow, lines, ctx, draftPos]);
 
   return (
-    <div style={page}>
+    <div className={rlcClass("rlc-recipes-page", page)}>
+      <style>{`
+        .rlc-recipes-page, .rlc-recipes-page * { box-sizing: border-box; }
+        .rlc-recipes-page { width: 100%; max-width: 100%; overflow-x: hidden; }
+        .rlc-recipes-toolbar { position: sticky; top: 8px; z-index: 120; }
+        .rlc-recipes-layout { min-width: 0; }
+        .rlc-recipes-table-wrap { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        @media (max-width: 1240px) {
+          .rlc-recipes-layout { grid-template-columns: 260px minmax(0,1fr) !important; }
+          .rlc-recipes-toolbar { align-items: flex-start !important; }
+        }
+        @media (max-width: 980px) {
+          .rlc-recipes-layout { grid-template-columns: 1fr !important; }
+          .rlc-recipes-left { position: static !important; top: auto !important; }
+          .rlc-recipes-toolbar { top: 4px; }
+        }
+        @media (max-width: 640px) {
+          .rlc-recipes-page { padding: 8px !important; gap: 10px !important; }
+          .rlc-recipes-toolbar button { width: 100%; justify-content: center; }
+        }
+      `}</style>
       <input
         ref={libraryImportRef}
         type="file"
         accept=".csv,text/csv"
-        style={{ display: "none" }}
-        onChange={(e) => importRecipeLibraryFile(e.target.files?.[0])}
-      />
 
-      <section style={heroCard}>
+        onChange={(e) => importRecipeLibraryFile(e.target.files?.[0])} className="rlc-migrated-pages-kalkulation-recipes-tsx-827" />
+      
+
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Urkalkulation</div>
-          <h1 style={title}>Neue Position mit Urkalkulation</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Urkalkulation</div>
+          <h1 className={rlcClass(null, title)}>Neue Position mit Urkalkulation</h1>
+          <p className={rlcClass(null, subtitle)}>
             Position vollständig erfassen, Ressourcen kalkulieren, EP/GP automatisch bilden und mit Preisaufbau an KI, Nachträge, Angebot und GAEB übergeben.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button type="button" style={btnSecondary} onClick={resetDraft}>
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={resetDraft}>
             Neue Position
           </button>
 
-          <button type="button" style={btnSecondary} onClick={autoFillLangtext}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={autoFillLangtext}>
             Langtext automatisch
           </button>
 
-          <button type="button" style={btnSecondary} onClick={applyToLv} disabled={!lines.length}>
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={saveUrkalkulation} disabled={!lines.length}>
+            Speichern
+          </button>
+
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={applyToLv} disabled={!lines.length}>
             Position ins LV speichern
           </button>
 
-          <button type="button" style={btnPrimary} onClick={pushToKi} disabled={!lines.length}>
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={pushToKi} disabled={!lines.length}>
             Position in Kalkulation übernehmen
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectTitle}</b> · Auftrag: <b>{activeAuftragLabel}</b> · Bibliothek:{" "}
           <b>{libraryRows.length.toLocaleString("de-DE")}</b>
           {info ? <span> · {info}</span> : null}
@@ -5035,128 +5152,154 @@ if (!lines.length) {
       </section>
 
 
-      {globalUrkModalOpen ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-          }}
-        >
-          <div
-            style={{
-              width: "min(720px, 100%)",
-              borderRadius: 22,
-              background: "#FFFFFF",
-              border: "1px solid #E5E7EB",
-              boxShadow: "0 24px 80px rgba(15, 23, 42, 0.28)",
-              padding: 24,
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 900, color: "#2563EB", letterSpacing: 0.8, textTransform: "uppercase" }}>
+      {globalUrkModalOpen ?
+      <div className="rlc-migrated-pages-kalkulation-recipes-tsx-828">
+
+
+
+
+
+
+
+
+
+
+        
+          <div className="rlc-migrated-pages-kalkulation-recipes-tsx-829">
+
+
+
+
+
+
+
+
+          
+            <div className="rlc-migrated-pages-kalkulation-recipes-tsx-830">
               RLC Urkalkulation
             </div>
 
-            <h2 style={{ margin: "8px 0 8px", fontSize: 24, color: "#0F172A" }}>
+            <h2 className="rlc-migrated-pages-kalkulation-recipes-tsx-831">
               Gesamtes LV urkalkulieren
             </h2>
 
-            <p style={{ margin: "0 0 18px", color: "#475569", lineHeight: 1.55 }}>
+            <p className="rlc-migrated-pages-kalkulation-recipes-tsx-832">
               RLC erstellt für alle echten LV-Positionen einen technischen Preisaufbau mit Personal, Maschinen,
               Material, Transport, Gemeinkosten, Risiko und Gewinn. Titel, Summen und Strukturpositionen werden ignoriert.
             </p>
 
-            <div style={{ display: "grid", gap: 12 }}>
+            <div className="rlc-migrated-pages-kalkulation-recipes-tsx-833">
               <button
-                type="button"
-                style={{ ...btnPrimary, justifyContent: "flex-start", padding: "14px 16px" }}
-                onClick={() => void createGlobalLvUrkalkulation("missing")} disabled={globalUrkRunning}
-              >
+              type="button" className={rlcClass(null,
+              { ...btnPrimary, justifyContent: "flex-start", padding: "14px 16px" })}
+              onClick={() => void createGlobalLvUrkalkulation("missing")} disabled={globalUrkRunning}>
+              
                 Nur Positionen ohne Urkalkulation erstellen und übernehmen
               </button>
 
               <button
-                type="button"
-                style={{ ...btnSecondary, justifyContent: "flex-start", padding: "14px 16px" }}
-                onClick={() => void createGlobalLvUrkalkulation("all")} disabled={globalUrkRunning}
-              >
+              type="button" className={rlcClass(null,
+              { ...btnSecondary, justifyContent: "flex-start", padding: "14px 16px" })}
+              onClick={() => void createGlobalLvUrkalkulation("all")} disabled={globalUrkRunning}>
+              
                 Alle Positionen neu erstellen und in Kalkulation übernehmen
               </button>
 
               <button
-                type="button"
-                style={{ ...btnSecondary, justifyContent: "flex-start", padding: "14px 16px" }}
-                onClick={() => setGlobalUrkModalOpen(false)}
-              >
+              type="button" className={rlcClass(null,
+              { ...btnSecondary, justifyContent: "flex-start", padding: "14px 16px" })}
+              onClick={() => setGlobalUrkModalOpen(false)}>
+              
                 Abbrechen
               </button>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div> :
+      null}
 
-      {(globalUrkRunning || globalUrkDone) ? (
-        <div
-          style={{
-            position: "fixed",
-            right: 24,
-            bottom: 24,
-            width: 440,
-            maxWidth: "calc(100vw - 48px)",
-            zIndex: 10000,
-            borderRadius: 22,
-            background: "#FFFFFF",
-            border: "1px solid #D8E2F0",
-            boxShadow: "0 24px 70px rgba(15, 23, 42, 0.24)",
-            padding: 20,
-          }}
-        >
-          <div style={{ fontSize: 12, fontWeight: 900, color: "#2563EB", letterSpacing: 0.7, textTransform: "uppercase" }}>
+      {globalUrkRunning || globalUrkDone ?
+      <div className="rlc-migrated-pages-kalkulation-recipes-tsx-834">
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+          <div className="rlc-migrated-pages-kalkulation-recipes-tsx-835">
             RLC Urkalkulation
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 20, fontWeight: 900, color: "#0F172A" }}>
+          <div className="rlc-migrated-pages-kalkulation-recipes-tsx-836">
             {globalUrkRunning ? "Globale Urkalkulation läuft…" : "Globale Urkalkulation abgeschlossen"}
           </div>
 
-          <div style={{ marginTop: 8, color: "#475569", fontWeight: 700 }}>
+          <div className="rlc-migrated-pages-kalkulation-recipes-tsx-837">
             {globalUrkProgress.done.toLocaleString("de-DE")} / {globalUrkProgress.total.toLocaleString("de-DE")} Positionen ·{" "}
-            {globalUrkProgress.total ? Math.round((globalUrkProgress.done / globalUrkProgress.total) * 100) : 100} %
+            {globalUrkProgress.total ? Math.round(globalUrkProgress.done / globalUrkProgress.total * 100) : 100} %
           </div>
 
-          <div style={{ marginTop: 12, height: 10, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
-            <div
-              style={{
-                height: "100%",
-                width: `${globalUrkProgress.total ? Math.round((globalUrkProgress.done / globalUrkProgress.total) * 100) : 100}%`,
-                background: "#2563EB",
-                transition: "width 160ms ease",
-              }}
-            />
+          <div className="rlc-migrated-pages-kalkulation-recipes-tsx-838">
+            <div className={rlcClass(null,
+          {
+            height: "100%",
+            width: `${globalUrkProgress.total ? Math.round(globalUrkProgress.done / globalUrkProgress.total * 100) : 100}%`,
+            background: "#146EF5",
+            transition: "width 160ms ease"
+          })} />
+          
           </div>
 
-          <div style={{ marginTop: 10, fontSize: 13, color: "#64748B" }}>
+          <div className="rlc-migrated-pages-kalkulation-recipes-tsx-839">
             Erstellt: <b>{globalUrkProgress.changed.toLocaleString("de-DE")}</b> Position(en)
           </div>
 
-          {globalUrkDone ? (
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button type="button" style={btnPrimary} onClick={() => navigate("/kalkulation/mit-ki")}>
+          {globalUrkDone ?
+        <div className="rlc-migrated-pages-kalkulation-recipes-tsx-840">
+              <button type="button" className={rlcClass(null, btnPrimary)} onClick={() => navigate("/kalkulation/mit-ki")}>
                 Zur Kalkulation mit KI
               </button>
-              <button type="button" style={btnSecondary} onClick={() => setGlobalUrkDone(false)}>
+              <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => setGlobalUrkDone(false)}>
                 Schließen
               </button>
-            </div>
-          ) : null}
+            </div> :
+        null}
+        </div> :
+      null}
+      <section className={rlcClass("rlc-recipes-toolbar", stickyActionBar)}>
+        <div className="rlc-migrated-pages-kalkulation-recipes-tsx-841">
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={saveUrkalkulation} disabled={!lines.length}>
+            Speichern
+          </button>
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={pushToKi} disabled={!lines.length}>
+            Kalkulation mit KI
+          </button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={applyToLv} disabled={!lines.length}>
+            Ins LV speichern
+          </button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={pushToNachtrag} disabled={!lines.length}>
+            Nachtrag
+          </button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={pushToAngebot} disabled={!lines.length}>
+            Angebot / Export
+          </button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => navigate(`/kalkulation/gaeb${projectKey ? `?projectCode=${encodeURIComponent(projectKey)}` : ""}`)} disabled={!lines.length}>
+            GAEB
+          </button>
         </div>
-      ) : null}
-      <section style={grid5}>
+        <div className="rlc-migrated-pages-kalkulation-recipes-tsx-842">
+          {draftPos.posNr || "Neue Position"} · {draftPos.kurztext || "Noch kein Kurztext"}
+        </div>
+      </section>
+
+      <section className={rlcClass(null, grid5)}>
         <KpiCard label="Direkte Kosten" value={money(summary.base)} />
         <KpiCard label="Zuschläge" value={`${num(summary.surcharge, 1)} %`} />
         <KpiCard label="EP kalkuliert" value={money(summary.ep)} sub={`${summary.count} Ressourcen`} />
@@ -5164,124 +5307,124 @@ if (!lines.length) {
         <KpiCard label="GP kalkuliert" value={money(summary.gp)} />
       </section>
 
-      <section style={quickNavCard}>
+      <section className={rlcClass(null, quickNavCard)}>
         <div>
-          <h2 style={sectionTitle}>Weiterverarbeitung</h2>
-          <div style={sectionText}>
+          <h2 className={rlcClass(null, sectionTitle)}>Weiterverarbeitung</h2>
+          <div className={rlcClass(null, sectionText)}>
             Nach dem Erfassen der Position kann sie direkt in die weiteren Kalkulationsmodule übernommen werden.
           </div>
         </div>
 
-        <div style={buttonRowNoTop}>
-          <button type="button" style={btnSecondary} onClick={() => openModule("/kalkulation/lv-import")}>
+        <div className={rlcClass(null, buttonRowNoTop)}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => openModule("/kalkulation/lv-import")}>
             LV / Positionen
           </button>
-          <button type="button" style={btnSecondary} onClick={() => openModule("/kalkulation/nachtraege")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => openModule("/kalkulation/nachtraege")}>
             Nachtrag erstellen
           </button>
-          <button type="button" style={btnSecondary} onClick={() => openModule("/kalkulation/angebot")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => openModule("/kalkulation/angebot")}>
             Angebot / Export
           </button>
-          <button type="button" style={btnSecondary} onClick={() => openModule("/kalkulation/gaeb")}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => openModule("/kalkulation/gaeb")}>
             GAEB
           </button>
         </div>
       </section>
 
-      <section style={layout}>
-        <aside style={leftCard}>
-          <div style={sectionHead}>
+      <section className={rlcClass("rlc-recipes-layout", layout)}>
+        <aside className={rlcClass("rlc-recipes-left", leftCard)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>LV als Vorlage</h2>
-              <div style={sectionText}>Bestehende Position laden oder neue Position frei erfassen.</div>
+              <h2 className={rlcClass(null, sectionTitle)}>LV als Vorlage</h2>
+              <div className={rlcClass(null, sectionText)}>Bestehende Position laden oder neue Position frei erfassen.</div>
             </div>
           </div>
 
-          <button type="button" style={{ ...btnPrimary, width: "100%", marginBottom: 10 }} onClick={resetDraft}>
+          <button type="button" className={rlcClass(null, { ...btnPrimary, width: "100%", marginBottom: 10 })} onClick={resetDraft}>
             + Neue Position
           </button>
 
-          <input
-            style={input}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Suche PosNr / Text…"
-          />
+          <input className={rlcClass(null,
+          input)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Suche PosNr / Text…" />
+          
 
-          <div style={lvList}>
+          <div className={rlcClass(null, lvList)}>
             {filteredLv.map((r) => {
               const active = String(r.id) === selectedId;
-  return (
+              return (
                 <button
                   key={r.id}
-                  type="button"
-                  style={{ ...lvItem, ...(active ? lvItemActive : {}) }}
-                  onClick={() => loadExistingPosition(r)}
-                >
+                  type="button" className={rlcClass(null,
+                  { ...lvItem, ...(active ? lvItemActive : {}) })}
+                  onClick={() => loadExistingPosition(r)}>
+                  
                   <b>{r.posNr || "—"}</b>
                   <span>{r.kurztext || "Ohne Kurztext"}</span>
                   <small>
                     {num(r.menge, 3)} {r.einheit || ""}
                   </small>
-                </button>
-              );
+                </button>);
+
             })}
 
-            {!filteredLv.length ? <div style={emptyState}>Kein LV vorhanden.</div> : null}
+            {!filteredLv.length ? <div className={rlcClass(null, emptyState)}>Kein LV vorhanden.</div> : null}
           </div>
         </aside>
 
-        <main style={mainStack}>
-          <section id="rlc-recipes-position-data" style={card}>
-            <div style={sectionHead}>
+        <main className={rlcClass(null, mainStack)}>
+          <section id="rlc-recipes-position-data" className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <section style={{ ...card, border: "2px solid #2563EB", background: "#EFF6FF" }}>
-  <div style={sectionHead}>
+                <section className={rlcClass(null, { ...card, border: "2px solid #146EF5", background: "#EAF2FF" })}>
+  <div className={rlcClass(null, sectionHead)}>
     <div>
-      <h2 style={sectionTitle}>Urkalkulation starten</h2>
-      <div style={sectionText}>
+      <h2 className={rlcClass(null, sectionTitle)}>Urkalkulation starten</h2>
+      <div className={rlcClass(null, sectionText)}>
         RLC erstellt aus Positionsdaten, Langtext und Ausführungsparametern automatisch Ressourcen, Zuschläge, EP und Preisaufbau.
       </div>
     </div>
 
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <button type="button" style={btnPrimary} onClick={kiSuggest}>
+    <div className="rlc-migrated-pages-kalkulation-recipes-tsx-843">
+      <button type="button" className={rlcClass(null, btnPrimary)} onClick={kiSuggest}>
         Urkalkulation starten
       </button>
 
-      <button type="button" style={btnSecondary} onClick={() => setGlobalUrkModalOpen(true)} disabled={globalUrkRunning}>
+      <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => setGlobalUrkModalOpen(true)} disabled={globalUrkRunning}>
         Urkalkulation gesamtes LV
       </button>
     </div>
   </div>
 </section>
-<h2 style={sectionTitle}>1. Positionsdaten</h2>
-                <div style={sectionText}>Hier wird die komplette LV-Position erfasst.</div>
+<h2 className={rlcClass(null, sectionTitle)}>1. Positionsdaten</h2>
+                <div className={rlcClass(null, sectionText)}>Hier wird die komplette LV-Position erfasst.</div>
               </div>
 
-              {validationErrors.length ? (
-                <div style={warningPill}>{validationErrors.length} Pflichtfeld(er) offen</div>
-              ) : (
-                <div style={okPill}>Positionsdaten vollständig</div>
-              )}
+              {validationErrors.length ?
+              <div className={rlcClass(null, warningPill)}>{validationErrors.length} Pflichtfeld(er) offen</div> :
+
+              <div className={rlcClass(null, okPill)}>Positionsdaten vollständig</div>
+              }
             </div>
 
-            <div style={formGrid}>
+            <div className={rlcClass(null, formGrid)}>
               <Field label="Positionsnummer">
-                <input
-                  style={input}
-                  value={draftPos.posNr}
-                  onChange={(e) => setDraftPos({ ...draftPos, posNr: e.target.value })}
-                  placeholder="z.B. 01.0010"
-                />
+                <input className={rlcClass(null,
+                input)}
+                value={draftPos.posNr}
+                onChange={(e) => setDraftPos({ ...draftPos, posNr: e.target.value })}
+                placeholder="z.B. 01.0010" />
+                
               </Field>
 
               <Field label="Einheit">
-                <select
-                  style={input}
-                  value={draftPos.einheit}
-                  onChange={(e) => setDraftPos({ ...draftPos, einheit: e.target.value })}
-                >
+                <select className={rlcClass(null,
+                input)}
+                value={draftPos.einheit}
+                onChange={(e) => setDraftPos({ ...draftPos, einheit: e.target.value })}>
+                  
                   <option value="m">m</option>
                   <option value="m²">m²</option>
                   <option value="m³">m³</option>
@@ -5295,68 +5438,68 @@ if (!lines.length) {
               <Field label="Menge">
                 <input
                   type="number"
-                  step="0.001"
-                  style={input}
+                  step="0.001" className={rlcClass(null,
+                  input)}
                   value={draftPos.menge}
-                  onChange={(e) => setDraftPos({ ...draftPos, menge: n(e.target.value) })}
-                />
+                  onChange={(e) => setDraftPos({ ...draftPos, menge: n(e.target.value) })} />
+                
               </Field>
             </div>
 
-            <div style={{ marginTop: 12 }}>
+            <div className="rlc-migrated-pages-kalkulation-recipes-tsx-844">
               <Field label="Kurztext">
-                <input
-                  style={input}
-                  value={draftPos.kurztext}
-                  onChange={(e) => {
-                    const kurztext = e.target.value;
-                    setDraftPos({
-                      ...draftPos,
-                      kurztext,
-                      einheit: draftPos.einheit || inferUnitFromText(kurztext),
-                    });
-                    setLibraryQuery(kurztext);
-                  }}
-                  placeholder="z.B. Frostschutzkies 0/32 einbauen, Rasengitterstein verlegen, Tiefbord setzen"
-                />
+                <input className={rlcClass(null,
+                input)}
+                value={draftPos.kurztext}
+                onChange={(e) => {
+                  const kurztext = e.target.value;
+                  setDraftPos({
+                    ...draftPos,
+                    kurztext,
+                    einheit: draftPos.einheit || inferUnitFromText(kurztext)
+                  });
+                  setLibraryQuery(kurztext);
+                }}
+                placeholder="z.B. Frostschutzkies 0/32 einbauen, Rasengitterstein verlegen, Tiefbord setzen" />
+                
               </Field>
             </div>
 
-            <div style={{ marginTop: 12 }}>
+            <div className="rlc-migrated-pages-kalkulation-recipes-tsx-845">
               <Field label="Langtext">
-                <textarea
-                  style={{ ...input, minHeight: 120, lineHeight: 1.5 }}
-                  value={draftPos.langtext}
-                  onChange={(e) => setDraftPos({ ...draftPos, langtext: e.target.value })}
-                  placeholder="Ausführliche Leistungsbeschreibung, Nebenleistungen, Abrechnung, technische Anforderungen..."
-                />
+                <textarea className={rlcClass(null,
+                { ...input, minHeight: 120, lineHeight: 1.5 })}
+                value={draftPos.langtext}
+                onChange={(e) => setDraftPos({ ...draftPos, langtext: e.target.value })}
+                placeholder="Ausführliche Leistungsbeschreibung, Nebenleistungen, Abrechnung, technische Anforderungen..." />
+                
               </Field>
 
-              <button type="button" style={{ ...btnSecondary, marginTop: 8 }} onClick={autoFillLangtext}>
+              <button type="button" className={rlcClass(null, { ...btnSecondary, marginTop: 8 })} onClick={autoFillLangtext}>
                 Langtext automatisch erstellen
               </button>
             </div>
           </section>
 
-          <section style={card}>
-            <div style={sectionHead}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>2. Parameter der Ausführung</h2>
-                <div style={sectionText}>Diese Werte beeinflussen Personal, Maschinen, Transport, Material, Zeit und Risiko.</div>
+                <h2 className={rlcClass(null, sectionTitle)}>2. Parameter der Ausführung</h2>
+                <div className={rlcClass(null, sectionText)}>Diese Werte beeinflussen Personal, Maschinen, Transport, Material, Zeit und Risiko.</div>
               </div>
             </div>
 
-            <div style={formGrid}>
+            <div className={rlcClass(null, formGrid)}>
               <Field label="Grabentiefe / Tiefe m">
-                <input type="number" step="0.1" style={input} value={ctx.depthM} onChange={(e) => setCtx({ ...ctx, depthM: n(e.target.value) })} />
+                <input type="number" step="0.1" className={rlcClass(null, input)} value={ctx.depthM} onChange={(e) => setCtx({ ...ctx, depthM: n(e.target.value) })} />
               </Field>
 
               <Field label="Entfernung Baustelle km">
-                <input type="number" step="1" style={input} value={ctx.distanceKm} onChange={(e) => setCtx({ ...ctx, distanceKm: n(e.target.value) })} />
+                <input type="number" step="1" className={rlcClass(null, input)} value={ctx.distanceKm} onChange={(e) => setCtx({ ...ctx, distanceKm: n(e.target.value) })} />
               </Field>
 
               <Field label="Bodenklasse">
-                <select style={input} value={ctx.soilClass} onChange={(e) => setCtx({ ...ctx, soilClass: e.target.value })}>
+                <select className={rlcClass(null, input)} value={ctx.soilClass} onChange={(e) => setCtx({ ...ctx, soilClass: e.target.value })}>
                   <option value="1">BK 1</option>
                   <option value="2">BK 2</option>
                   <option value="3">BK 3</option>
@@ -5368,27 +5511,27 @@ if (!lines.length) {
               </Field>
 
               <Field label="Leistung pro Tag">
-                <input type="number" step="1" style={input} value={ctx.dailyOutput} onChange={(e) => setCtx({ ...ctx, dailyOutput: n(e.target.value) })} />
+                <input type="number" step="1" className={rlcClass(null, input)} value={ctx.dailyOutput} onChange={(e) => setCtx({ ...ctx, dailyOutput: n(e.target.value) })} />
               </Field>
             </div>
 
-            <div style={buttonRow}>
-              <label style={checkLabel}>
+            <div className={rlcClass(null, buttonRow)}>
+              <label className={rlcClass(null, checkLabel)}>
                 <input type="checkbox" checked={ctx.restricted} onChange={(e) => setCtx({ ...ctx, restricted: e.target.checked })} />
                 eingeschränkter Arbeitsraum
               </label>
 
-              <label style={checkLabel}>
+              <label className={rlcClass(null, checkLabel)}>
                 <input type="checkbox" checked={ctx.groundwater} onChange={(e) => setCtx({ ...ctx, groundwater: e.target.checked })} />
                 Grundwasser
               </label>
 
-              <label style={checkLabel}>
+              <label className={rlcClass(null, checkLabel)}>
                 <input type="checkbox" checked={ctx.asphalt} onChange={(e) => setCtx({ ...ctx, asphalt: e.target.checked })} />
                 Asphalt betroffen
               </label>
 
-              <label style={checkLabel}>
+              <label className={rlcClass(null, checkLabel)}>
                 <input type="checkbox" checked={ctx.trafficControl} onChange={(e) => setCtx({ ...ctx, trafficControl: e.target.checked })} />
                 Verkehrssicherung
               </label>
@@ -5397,325 +5540,325 @@ if (!lines.length) {
 
           <RlcKiDashboard row={rlcKiDashboardRow} />
 
-          <section style={card}>
-            <div style={sectionHead}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>Position fertigstellen</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>Position fertigstellen</h2>
+                <div className={rlcClass(null, sectionText)}>
                   Wenn Positionsdaten, Langtext und Ressourcen vollständig sind, kann die Position übernommen oder gespeichert werden.
                 </div>
               </div>
             </div>
 
-            <div style={buttonRowNoTop}>
+            <div className={rlcClass(null, buttonRowNoTop)}>
               <button
-                type="button"
-                style={btnPrimary}
+                type="button" className={rlcClass(null,
+                btnPrimary)}
                 onClick={pushToKi}
-                disabled={!lines.length}
-              >
+                disabled={!lines.length}>
+                
                 Position in Kalkulation übernehmen
               </button>
 
               <button
-                type="button"
-                style={btnSecondary}
+                type="button" className={rlcClass(null,
+                btnSecondary)}
                 onClick={applyToLv}
-                disabled={!lines.length}
-              >
+                disabled={!lines.length}>
+                
                 Position ins LV speichern
               </button>
 
               <button
-                type="button"
-                style={btnSecondary}
+                type="button" className={rlcClass(null,
+                btnSecondary)}
                 onClick={saveAsCompanyRecipe}
-                disabled={!lines.length}
-              >
+                disabled={!lines.length}>
+                
                 Als Firmen-Rezept speichern
               </button>
             </div>
 
-            {!lines.length ? (
-              <div style={sectionText}>
+            {!lines.length ?
+            <div className={rlcClass(null, sectionText)}>
                 Nach Abschluss der Urkalkulation wird die Position mit allen Ressourcen, Preisen und dem vollständigen Preisaufbau in die Kalkulation übernommen.
-              </div>
-            ) : null}
+              </div> :
+            null}
           </section>
 
 
-          <section style={card}>
-            <div style={sectionHead}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>3. Importierte Bibliothek / Preise</h2>
-                <div style={sectionText}>
+                <h2 className={rlcClass(null, sectionTitle)}>3. Importierte Bibliothek / Preise</h2>
+                <div className={rlcClass(null, sectionText)}>
                   CSV-Bibliothek durchsuchen und echte Artikel/Positionen direkt in die Urkalkulation übernehmen.
                 </div>
               </div>
 
-              <div style={buttonRowNoTop}>
-                <button type="button" style={btnSecondary} onClick={() => libraryImportRef.current?.click()}>
+              <div className={rlcClass(null, buttonRowNoTop)}>
+                <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => libraryImportRef.current?.click()}>
                   CSV importieren
                 </button>
-                <button type="button" style={btnSecondary} onClick={refreshLibrary}>
+                <button type="button" className={rlcClass(null, btnSecondary)} onClick={refreshLibrary}>
                   Aktualisieren
                 </button>
               </div>
             </div>
 
-            <div style={libraryFilterGrid}>
-              <input
-                style={input}
-                value={libraryQuery}
-                onChange={(e) => setLibraryQuery(e.target.value)}
-                placeholder="Bibliothek suchen: Frostschutz, Rasengitter, Bordstein, LKW..."
-              />
+            <div className={rlcClass(null, libraryFilterGrid)}>
+              <input className={rlcClass(null,
+              input)}
+              value={libraryQuery}
+              onChange={(e) => setLibraryQuery(e.target.value)}
+              placeholder="Bibliothek suchen: Frostschutz, Rasengitter, Bordstein, LKW..." />
+              
 
-              <select
-                style={input}
-                value={libraryGroupFilter}
-                onChange={(e) => setLibraryGroupFilter(e.target.value as ResourceGroup | "Alle")}
-              >
+              <select className={rlcClass(null,
+              input)}
+              value={libraryGroupFilter}
+              onChange={(e) => setLibraryGroupFilter(e.target.value as ResourceGroup | "Alle")}>
+                
                 <option value="Alle">Alle Gruppen</option>
-                {GROUPS.map((g) => (
-                  <option key={g} value={g}>
+                {GROUPS.map((g) =>
+                <option key={g} value={g}>
                     {g}
                   </option>
-                ))}
+                )}
               </select>
             </div>
 
-            <div style={libraryList}>
-              {filteredLibraryRows.map((item, idx) => (
-                <button
-                  key={`${libraryCode(item) || idx}-${libraryTitle(item)}`}
-                  type="button"
-                  style={libraryItem}
-                  onClick={() => addLibraryItem(item)}
-                >
+            <div className={rlcClass(null, libraryList)}>
+              {filteredLibraryRows.map((item, idx) =>
+              <button
+                key={`${libraryCode(item) || idx}-${libraryTitle(item)}`}
+                type="button" className={rlcClass(null,
+                libraryItem)}
+                onClick={() => addLibraryItem(item)}>
+                
                   <b>{libraryCode(item) || "—"} · {libraryTitle(item) || "Ohne Text"}</b>
                   <span>
                     {libraryGroup(item)} · {libraryUnit(item)} · {money(libraryPrice(item))}
                   </span>
                 </button>
-              ))}
+              )}
 
-              {!filteredLibraryRows.length ? (
-                <div style={emptyCell}>
+              {!filteredLibraryRows.length ?
+              <div className={rlcClass(null, emptyCell)}>
                   Keine Bibliothekstreffer. Importiere zuerst eine CSV oder ändere die Suche.
-                </div>
-              ) : null}
+                </div> :
+              null}
             </div>
           </section>
 
-          <section style={card}>
-            <div style={sectionHead}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>4. Urkalkulation / Ressourcen</h2>
-                <div style={sectionText}>Personal, Geräte, Material, Transport, Entsorgung und Zuschläge bilden den EP.</div>
+                <h2 className={rlcClass(null, sectionTitle)}>4. Urkalkulation / Ressourcen</h2>
+                <div className={rlcClass(null, sectionText)}>Personal, Geräte, Material, Transport, Entsorgung und Zuschläge bilden den EP.</div>
               </div>
             </div>
 
-            <div style={addGroupRow}>
-              {GROUPS.map((g) => (
-                <button key={g} type="button" style={btnSecondary} onClick={() => addLine(g)}>
+            <div className={rlcClass(null, addGroupRow)}>
+              {GROUPS.map((g) =>
+              <button key={g} type="button" className={rlcClass(null, btnSecondary)} onClick={() => addLine(g)}>
                   + {g}
                 </button>
-              ))}
+              )}
             </div>
 
-            <div style={tableWrap}>
-              <table style={table}>
+            <div className={rlcClass("rlc-recipes-table-wrap", tableWrap)}>
+              <table className={rlcClass(null, table)}>
                 <thead>
                   <tr>
-                    <th style={th}>Gruppe</th>
-                    <th style={th}>Ressource</th>
-                    <th style={th}>ME</th>
-                    <th style={thRight}>Menge</th>
-                    <th style={thRight}>Preis</th>
-                    <th style={thRight}>Gesamt</th>
-                    <th style={th}>Hinweis</th>
-                    <th style={th}>Aktion</th>
+                    <th className={rlcClass(null, th)}>Gruppe</th>
+                    <th className={rlcClass(null, th)}>Ressource</th>
+                    <th className={rlcClass(null, th)}>ME</th>
+                    <th className={rlcClass(null, thRight)}>Menge</th>
+                    <th className={rlcClass(null, thRight)}>Preis</th>
+                    <th className={rlcClass(null, thRight)}>Gesamt</th>
+                    <th className={rlcClass(null, th)}>Hinweis</th>
+                    <th className={rlcClass(null, th)}>Aktion</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {lines.map((line) => {
                     const hasKnownOption = resourceOptions.some((x) => x.id === line.resourceId);
-  return (
+                    return (
                       <tr key={line.id}>
-                        <td style={td}>
-                          <span style={groupBadge(line.group)}>{line.group}</span>
+                        <td className={rlcClass(null, td)}>
+                          <span className={rlcClass(null, groupBadge(line.group))}>{line.group}</span>
                         </td>
 
-                        <td style={td}>
-                          <select
-                            style={cellInput}
-                            value={line.resourceId || ""}
-                            onChange={(e) => updateLine(line.id, { resourceId: e.target.value })}
-                          >
-                            {!line.resourceId ? (
-                              <option value="">
+                        <td className={rlcClass(null, td)}>
+                          <select className={rlcClass(null,
+                          cellInput)}
+                          value={line.resourceId || ""}
+                          onChange={(e) => updateLine(line.id, { resourceId: e.target.value })}>
+                            
+                            {!line.resourceId ?
+                            <option value="">
                                 {line.name ? `Manuell · ${line.name}` : "Manuell"}
-                              </option>
-                            ) : null}
+                              </option> :
+                            null}
 
-                            {line.resourceId && !hasKnownOption ? (
-                              <option value={line.resourceId}>
-                                {line.resourceId.startsWith("LIB-")
-                                  ? `Bibliothek · ${line.name || line.resourceId}`
-                                  : line.name || line.resourceId}
-                              </option>
-                            ) : null}
+                            {line.resourceId && !hasKnownOption ?
+                            <option value={line.resourceId}>
+                                {line.resourceId.startsWith("LIB-") ?
+                              `Bibliothek · ${line.name || line.resourceId}` :
+                              line.name || line.resourceId}
+                              </option> :
+                            null}
 
                             <option value="">Manuell</option>
 
                             <optgroup label="Standard-Ressourcen">
-                              {RESOURCE_CATALOG.map((r) => (
-                                <option key={r.id} value={r.id}>
+                              {RESOURCE_CATALOG.map((r) =>
+                              <option key={r.id} value={r.id}>
                                   {r.group} · {r.name}
                                 </option>
-                              ))}
+                              )}
                             </optgroup>
 
-                            {libraryRows.length ? (
-                              <optgroup label="Importierte Bibliothek">
-                                {resourceOptions
-                                  .filter((option) => option.source === "library")
-                                  .slice(0, 1000)
-                                  .map((option) => (
-                                    <option key={option.id} value={option.id}>
+                            {libraryRows.length ?
+                            <optgroup label="Importierte Bibliothek">
+                                {resourceOptions.
+                              filter((option) => option.source === "library").
+                              slice(0, 1000).
+                              map((option) =>
+                              <option key={option.id} value={option.id}>
                                       {option.label}
                                     </option>
-                                  ))}
-                              </optgroup>
-                            ) : null}
+                              )}
+                              </optgroup> :
+                            null}
                           </select>
 
-                          {(!line.resourceId || line.resourceId.startsWith("LIB-")) ? (
-                            <input
-                              style={{ ...cellInput, marginTop: 6 }}
-                              value={line.name}
-                              onChange={(e) => updateLine(line.id, { name: e.target.value })}
-                              placeholder="Eigene Ressource"
-                            />
-                          ) : null}
+                          {!line.resourceId || line.resourceId.startsWith("LIB-") ?
+                          <input className={rlcClass(null,
+                          { ...cellInput, marginTop: 6 })}
+                          value={line.name}
+                          onChange={(e) => updateLine(line.id, { name: e.target.value })}
+                          placeholder="Eigene Ressource" /> :
+
+                          null}
                         </td>
 
-                        <td style={td}>
-                          <input style={{ ...cellInput, width: 80 }} value={line.unit} onChange={(e) => updateLine(line.id, { unit: e.target.value })} />
+                        <td className={rlcClass(null, td)}>
+                          <input className={rlcClass(null, { ...cellInput, width: 80 })} value={line.unit} onChange={(e) => updateLine(line.id, { unit: e.target.value })} />
                         </td>
 
-                        <td style={tdRight}>
+                        <td className={rlcClass(null, tdRight)}>
                           <input
-                            type="number"
-                            style={{ ...cellInput, width: 90, textAlign: "right" }}
+                            type="number" className={rlcClass(null,
+                            { ...cellInput, width: 90, textAlign: "right" })}
                             value={line.qty}
                             onChange={(e) => updateLine(line.id, { qty: n(e.target.value) })}
-                            disabled={line.unit === "%"}
-                          />
+                            disabled={line.unit === "%"} />
+                          
                         </td>
 
-                        <td style={tdRight}>
+                        <td className={rlcClass(null, tdRight)}>
                           <input
-                            type="number"
-                            style={{ ...cellInput, width: 95, textAlign: "right" }}
+                            type="number" className={rlcClass(null,
+                            { ...cellInput, width: 95, textAlign: "right" })}
                             value={line.price}
-                            onChange={(e) => updateLine(line.id, { price: n(e.target.value) })}
-                          />
+                            onChange={(e) => updateLine(line.id, { price: n(e.target.value) })} />
+                          
                         </td>
 
-                        <td style={tdRight}>
+                        <td className={rlcClass(null, tdRight)}>
                           <b>{line.unit === "%" ? "—" : money(lineTotal(line))}</b>
                         </td>
 
-                        <td style={td}>
-                          <input style={cellInput} value={line.note} onChange={(e) => updateLine(line.id, { note: e.target.value })} placeholder="Hinweis" />
+                        <td className={rlcClass(null, td)}>
+                          <input className={rlcClass(null, cellInput)} value={line.note} onChange={(e) => updateLine(line.id, { note: e.target.value })} placeholder="Hinweis" />
                         </td>
 
-                        <td style={td}>
-                          <button type="button" style={btnDangerMini} onClick={() => deleteLine(line.id)}>
+                        <td className={rlcClass(null, td)}>
+                          <button type="button" className={rlcClass(null, btnDangerMini)} onClick={() => deleteLine(line.id)}>
                             Löschen
                           </button>
                         </td>
-                      </tr>
-                    );
+                      </tr>);
+
                   })}
 
-                  {!lines.length ? (
-                    <tr>
-                      <td colSpan={8} style={emptyCell}>
+                  {!lines.length ?
+                  <tr>
+                      <td colSpan={8} className={rlcClass(null, emptyCell)}>
                         Noch keine Ressourcen. Erfasse die Positionsdaten und klicke auf „Urkalkulation starten“ oder übernimm Artikel aus der Bibliothek.
                       </td>
-                    </tr>
-                  ) : null}
+                    </tr> :
+                  null}
                 </tbody>
               </table>
             </div>
           </section>
 
-          <section style={card}>
-            <div style={sectionHead}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 style={sectionTitle}>5. Preisaufbau für KI-Kalkulation</h2>
-                <div style={sectionText}>Diese Struktur wird in die Kalkulation mit KI übernommen.</div>
+                <h2 className={rlcClass(null, sectionTitle)}>5. Preisaufbau für KI-Kalkulation</h2>
+                <div className={rlcClass(null, sectionText)}>Diese Struktur wird in die Kalkulation mit KI übernommen.</div>
               </div>
             </div>
 
-            <div style={tableWrap}>
-              <table style={{ ...table, minWidth: 900 }}>
+            <div className={rlcClass("rlc-recipes-table-wrap", tableWrap)}>
+              <table className={rlcClass(null, { ...table, minWidth: 900 })}>
                 <thead>
                   <tr>
-                    <th style={th}>Gruppe</th>
-                    <th style={th}>Bezeichnung</th>
-                    <th style={th}>ME</th>
-                    <th style={thRight}>Menge je Einheit</th>
-                    <th style={thRight}>Preis</th>
-                    <th style={thRight}>EP-Anteil</th>
-                    <th style={th}>Hinweis</th>
+                    <th className={rlcClass(null, th)}>Gruppe</th>
+                    <th className={rlcClass(null, th)}>Bezeichnung</th>
+                    <th className={rlcClass(null, th)}>ME</th>
+                    <th className={rlcClass(null, thRight)}>Menge je Einheit</th>
+                    <th className={rlcClass(null, thRight)}>Preis</th>
+                    <th className={rlcClass(null, thRight)}>EP-Anteil</th>
+                    <th className={rlcClass(null, th)}>Hinweis</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {priceBreakdown.map((line) => (
-                    <tr key={line.id}>
-                      <td style={td}>{line.group}</td>
-                      <td style={td}>{line.name}</td>
-                      <td style={td}>{line.unit}</td>
-                      <td style={tdRight}>{num(line.qty, 3)}</td>
-                      <td style={tdRight}>{money(line.price)}</td>
-                      <td style={tdRight}>
+                  {priceBreakdown.map((line) =>
+                  <tr key={line.id}>
+                      <td className={rlcClass(null, td)}>{line.group}</td>
+                      <td className={rlcClass(null, td)}>{line.name}</td>
+                      <td className={rlcClass(null, td)}>{line.unit}</td>
+                      <td className={rlcClass(null, tdRight)}>{num(line.qty, 3)}</td>
+                      <td className={rlcClass(null, tdRight)}>{money(line.price)}</td>
+                      <td className={rlcClass(null, tdRight)}>
                         <b>{money(line.total)}</b>
                       </td>
-                      <td style={td}>{line.note || ""}</td>
+                      <td className={rlcClass(null, td)}>{line.note || ""}</td>
                     </tr>
-                  ))}
+                  )}
 
-                  {!priceBreakdown.length ? (
-                    <tr>
-                      <td colSpan={7} style={emptyCell}>
+                  {!priceBreakdown.length ?
+                  <tr>
+                      <td colSpan={7} className={rlcClass(null, emptyCell)}>
                         Noch kein Preisaufbau vorhanden.
                       </td>
-                    </tr>
-                  ) : null}
+                    </tr> :
+                  null}
 
-                  {priceBreakdown.length ? (
-                    <tr>
-                      <td colSpan={5} style={{ ...tdRight, fontWeight: 900 }}>
+                  {priceBreakdown.length ?
+                  <tr>
+                      <td colSpan={5} className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>
                         Summe EP
                       </td>
-                      <td style={{ ...tdRight, fontWeight: 900 }}>{money(summary.ep)}</td>
-                      <td style={td}></td>
-                    </tr>
-                  ) : null}
+                      <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>{money(summary.ep)}</td>
+                      <td className={rlcClass(null, td)}></td>
+                    </tr> :
+                  null}
                 </tbody>
               </table>
             </div>
           </section>
         </main>
       </section>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UI ================= */
@@ -5723,28 +5866,28 @@ if (!lines.length) {
 function KpiCard({
   label,
   value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+  sub
+
+
+
+
+}: {label: string;value: string;sub?: string;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: {label: string;children: React.ReactNode;}) {
   return (
-    <label style={{ display: "grid", gap: 5 }}>
-      <span style={labelStyle}>{label}</span>
+    <label className="rlc-migrated-pages-kalkulation-recipes-tsx-846">
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
       {children}
-    </label>
-  );
+    </label>);
+
 }
 
 function groupBadge(group: ResourceGroup): React.CSSProperties {
@@ -5765,18 +5908,24 @@ function groupBadge(group: ResourceGroup): React.CSSProperties {
 
 const page: React.CSSProperties = {
   display: "grid",
-  gap: 16,
-  padding: 16,
+  gap: 12,
+  padding: 12,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  overflowX: "hidden"
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  minWidth: 0,
+  maxWidth: "100%",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
-  padding: 22,
+  padding: 18,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -5784,110 +5933,134 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 1040,
   opacity: 0.9,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92,
+  opacity: 0.92
 };
 
 const grid5: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const quickNavCard: React.CSSProperties = {
+  minWidth: 0,
+  maxWidth: "100%",
   background: "#FFFFFF",
   border: "1px solid #DBEAFE",
   borderRadius: 16,
-  padding: 16,
+  padding: 12,
   boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: 14,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
+};
+
+const stickyActionBar: React.CSSProperties = {
+  minWidth: 0,
+  maxWidth: "100%",
+  background: "rgba(255,255,255,0.96)",
+  border: "1px solid #DBEAFE",
+  borderRadius: 16,
+  padding: 10,
+  boxShadow: "0 8px 24px rgba(15,23,42,0.10)",
+  backdropFilter: "blur(12px)",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap"
 };
 
 const kpiCard: React.CSSProperties = {
+  minWidth: 0,
+  maxWidth: "100%",
   background: "#FFFFFF",
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const layout: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "360px minmax(0,1fr)",
+  gridTemplateColumns: "minmax(250px,300px) minmax(0,1fr)",
   gap: 16,
-  alignItems: "start",
+  alignItems: "start"
 };
 
 const leftCard: React.CSSProperties = {
+  minWidth: 0,
+  maxWidth: "100%",
   background: "#FFFFFF",
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
   boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
   position: "sticky",
-  top: 12,
+  top: 12
 };
 
 const mainStack: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  minWidth: 0,
+  minWidth: 0
 };
 
 const card: React.CSSProperties = {
+  minWidth: 0,
+  maxWidth: "100%",
   background: "#FFFFFF",
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -5896,21 +6069,21 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.45,
+  lineHeight: 1.45
 };
 
 const input: React.CSSProperties = {
@@ -5920,32 +6093,32 @@ const input: React.CSSProperties = {
   fontSize: 13,
   width: "100%",
   boxSizing: "border-box",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const formGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const buttonRow: React.CSSProperties = {
   display: "flex",
   gap: 10,
   flexWrap: "wrap",
-  marginTop: 12,
+  marginTop: 12
 };
 
 const buttonRowNoTop: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const checkLabel: React.CSSProperties = {
@@ -5954,7 +6127,7 @@ const checkLabel: React.CSSProperties = {
   gap: 7,
   fontSize: 13,
   color: "#0F172A",
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const lvList: React.CSSProperties = {
@@ -5962,7 +6135,7 @@ const lvList: React.CSSProperties = {
   gap: 8,
   marginTop: 12,
   maxHeight: "68vh",
-  overflow: "auto",
+  overflow: "auto"
 };
 
 const lvItem: React.CSSProperties = {
@@ -5974,31 +6147,33 @@ const lvItem: React.CSSProperties = {
   borderRadius: 12,
   padding: 10,
   cursor: "pointer",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const lvItemActive: React.CSSProperties = {
-  borderColor: "#2563EB",
-  background: "#EFF6FF",
+  borderColor: "#146EF5",
+  background: "#EAF2FF"
 };
 
 const addGroupRow: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const tableWrap: React.CSSProperties = {
+  minWidth: 0,
+  maxWidth: "100%",
   overflow: "auto",
   border: "1px solid #E5E7EB",
-  borderRadius: 12,
+  borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
-  minWidth: 1180,
-  borderCollapse: "collapse",
+  minWidth: 980,
+  borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
@@ -6009,25 +6184,25 @@ const th: React.CSSProperties = {
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
   whiteSpace: "nowrap",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const thRight: React.CSSProperties = {
   ...th,
-  textAlign: "right",
+  textAlign: "right"
 };
 
 const td: React.CSSProperties = {
   padding: "8px 9px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdRight: React.CSSProperties = {
   ...td,
   textAlign: "right",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const cellInput: React.CSSProperties = {
@@ -6037,13 +6212,13 @@ const cellInput: React.CSSProperties = {
   fontSize: 12,
   width: "100%",
   boxSizing: "border-box",
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const emptyCell: React.CSSProperties = {
   padding: 16,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const emptyState: React.CSSProperties = {
@@ -6052,7 +6227,7 @@ const emptyState: React.CSSProperties = {
   borderRadius: 12,
   padding: 14,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const warningPill: React.CSSProperties = {
@@ -6062,7 +6237,7 @@ const warningPill: React.CSSProperties = {
   borderRadius: 999,
   padding: "6px 10px",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const okPill: React.CSSProperties = {
@@ -6072,14 +6247,14 @@ const okPill: React.CSSProperties = {
   borderRadius: 999,
   padding: "6px 10px",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const libraryFilterGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(0,1fr) 220px",
+  gridTemplateColumns: "minmax(0,1fr) minmax(160px,220px)",
   gap: 10,
-  marginBottom: 10,
+  marginBottom: 10
 };
 
 const libraryList: React.CSSProperties = {
@@ -6090,7 +6265,7 @@ const libraryList: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 12,
   padding: 8,
-  background: "#F8FAFC",
+  background: "#F8FAFC"
 };
 
 const libraryItem: React.CSSProperties = {
@@ -6102,7 +6277,7 @@ const libraryItem: React.CSSProperties = {
   gap: 4,
   textAlign: "left",
   cursor: "pointer",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnBase: React.CSSProperties = {
@@ -6110,22 +6285,22 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnDangerMini: React.CSSProperties = {
@@ -6135,8 +6310,8 @@ const btnDangerMini: React.CSSProperties = {
   borderRadius: 8,
   padding: "6px 9px",
   fontSize: 12,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const badgeNeutral: React.CSSProperties = {
@@ -6147,177 +6322,47 @@ const badgeNeutral: React.CSSProperties = {
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const badgeBlue: React.CSSProperties = {
   ...badgeNeutral,
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
 };
 
 const badgeOrange: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FED7AA",
   background: "#FFF7ED",
-  color: "#C2410C",
+  color: "#C2410C"
 };
 
 const badgePurple: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #DDD6FE",
   background: "#F5F3FF",
-  color: "#6D28D9",
+  color: "#6D28D9"
 };
 
 const badgeGreen: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #BBF7D0",
   background: "#F0FDF4",
-  color: "#15803D",
+  color: "#15803D"
 };
 
 const badgeRed: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const badgeWarn: React.CSSProperties = {
   ...badgeNeutral,
   border: "1px solid #FDE68A",
   background: "#FFFBEB",
-  color: "#B45309",
+  color: "#B45309"
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

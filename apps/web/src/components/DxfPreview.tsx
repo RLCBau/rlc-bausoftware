@@ -1,22 +1,22 @@
-import React from "react";
+import { rlcClass } from "../ui/rlcRuntimeStyle";import React from "react";
 
 export type DxfOverlays = {
-  bbox?: { min: { x: number; y: number }; max: { x: number; y: number } };
-  lines?: { a: { x: number; y: number }; b: { x: number; y: number }; layer?: string }[];
+  bbox?: {min: {x: number;y: number;};max: {x: number;y: number;};};
+  lines?: {a: {x: number;y: number;};b: {x: number;y: number;};layer?: string;}[];
   lwpolylines?: {
-    pts: { x: number; y: number }[];
+    pts: {x: number;y: number;}[];
     closed?: boolean;
     layer?: string;
   }[];
-  circles?: { c: { x: number; y: number }; r: number; layer?: string }[];
+  circles?: {c: {x: number;y: number;};r: number;layer?: string;}[];
   arcs?: {
-    c: { x: number; y: number };
+    c: {x: number;y: number;};
     r: number;
     start: number;
     end: number;
     layer?: string;
   }[];
-  layers?: { name: string; count: number }[];
+  layers?: {name: string;count: number;}[];
   meta?: {
     insUnits?: number;
     scaleUnitsToM?: number;
@@ -36,7 +36,7 @@ export default function DxfPreview({
   overlays,
   visibleLayers,
   zoom,
-  height = 560,
+  height = 560
 }: Props) {
   const ref = React.useRef<HTMLCanvasElement | null>(null);
 
@@ -136,16 +136,16 @@ export default function DxfPreview({
 
   return (
     <canvas
-      ref={ref}
-      style={{
+      ref={ref} className={rlcClass(null,
+      {
         width: "100%",
         height,
         display: "block",
         border: "1px solid var(--line)",
-        background: "#fff",
-      }}
-    />
-  );
+        background: "#fff"
+      })} />);
+
+
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number) {
@@ -175,8 +175,3 @@ function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number) 
 
   ctx.restore();
 }
-
-
-
-
-

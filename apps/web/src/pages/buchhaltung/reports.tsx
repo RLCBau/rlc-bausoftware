@@ -1,13 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 
 type ReportTyp =
-  | "Rechnung"
-  | "Regiebericht"
-  | "Nachtrag"
-  | "Abrechnung"
-  | "Prüfbericht"
-  | "Sonstiges";
+"Rechnung" |
+"Regiebericht" |
+"Nachtrag" |
+"Abrechnung" |
+"Prüfbericht" |
+"Sonstiges";
 
 type Report = {
   id: number;
@@ -28,13 +28,13 @@ type Report = {
 type Zeitraum = "ALL" | "30" | "60" | "90" | "THIS_MONTH" | "YTD";
 
 const fmtSize = (n?: number) =>
-  !n
-    ? "–"
-    : n < 1024
-    ? `${n} B`
-    : n < 1024 * 1024
-    ? `${(n / 1024).toFixed(1)} KB`
-    : `${(n / 1024 / 1024).toFixed(1)} MB`;
+!n ?
+"–" :
+n < 1024 ?
+`${n} B` :
+n < 1024 * 1024 ?
+`${(n / 1024).toFixed(1)} KB` :
+`${(n / 1024 / 1024).toFixed(1)} MB`;
 
 const fmtDate = (d = new Date()) => d.toLocaleDateString("de-DE");
 
@@ -46,13 +46,13 @@ function escapeHtml(str: string) {
   return String(str ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
@@ -77,7 +77,7 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 function csvEscape(v: unknown) {
   return `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -85,43 +85,43 @@ function csvEscape(v: unknown) {
 
 export default function Reports() {
   const [rows, setRows] = useState<Report[]>([
-    {
-      id: 1,
-      nummer: "RPT-001",
-      titel: "Abrechnung Oktober",
-      typ: "Abrechnung",
-      projekt: "BA III",
-      kostenstelle: "Erdarbeiten",
-      datum: "25.10.2025",
-      version: 1,
-      bearbeiter: "Müller",
-      status: "in Prüfung",
-    },
-    {
-      id: 2,
-      nummer: "RPT-002",
-      titel: "Regiebericht 12.10",
-      typ: "Regiebericht",
-      projekt: "Parkplatz Süd",
-      kostenstelle: "Leitungen",
-      datum: "12.10.2025",
-      version: 1,
-      bearbeiter: "Kraus",
-      status: "abgeschlossen",
-    },
-    {
-      id: 3,
-      nummer: "RPT-003",
-      titel: "Nachtrag DN200",
-      typ: "Nachtrag",
-      projekt: "BA IV",
-      kostenstelle: "Rohrbau",
-      datum: "20.10.2025",
-      version: 2,
-      bearbeiter: "Schmidt",
-      status: "offen",
-    },
-  ]);
+  {
+    id: 1,
+    nummer: "RPT-001",
+    titel: "Abrechnung Oktober",
+    typ: "Abrechnung",
+    projekt: "BA III",
+    kostenstelle: "Erdarbeiten",
+    datum: "25.10.2025",
+    version: 1,
+    bearbeiter: "Müller",
+    status: "in Prüfung"
+  },
+  {
+    id: 2,
+    nummer: "RPT-002",
+    titel: "Regiebericht 12.10",
+    typ: "Regiebericht",
+    projekt: "Parkplatz Süd",
+    kostenstelle: "Leitungen",
+    datum: "12.10.2025",
+    version: 1,
+    bearbeiter: "Kraus",
+    status: "abgeschlossen"
+  },
+  {
+    id: 3,
+    nummer: "RPT-003",
+    titel: "Nachtrag DN200",
+    typ: "Nachtrag",
+    projekt: "BA IV",
+    kostenstelle: "Rohrbau",
+    datum: "20.10.2025",
+    version: 2,
+    bearbeiter: "Schmidt",
+    status: "offen"
+  }]
+  );
 
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
   const [typ, setTyp] = useState<ReportTyp | "ALL">("ALL");
@@ -155,17 +155,17 @@ export default function Reports() {
     if (query.trim()) {
       const q = query.toLowerCase().trim();
       arr = arr.filter((r) =>
-        [
-          r.titel,
-          r.nummer,
-          r.projekt || "",
-          r.kostenstelle || "",
-          r.dateiname || "",
-          r.bearbeiter || "",
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
+      [
+      r.titel,
+      r.nummer,
+      r.projekt || "",
+      r.kostenstelle || "",
+      r.dateiname || "",
+      r.bearbeiter || ""].
+
+      join(" ").
+      toLowerCase().
+      includes(q)
       );
     }
 
@@ -196,7 +196,7 @@ export default function Reports() {
         bearbeiter: "System",
         dateiname: f.name,
         size: f.size,
-        url: URL.createObjectURL(f),
+        url: URL.createObjectURL(f)
       };
     });
 
@@ -227,16 +227,16 @@ export default function Reports() {
       Bearbeiter: r.bearbeiter || "",
       Status: r.status,
       Datei: r.dateiname || "",
-      Größe: fmtSize(r.size),
+      Größe: fmtSize(r.size)
     }));
 
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.map(csvEscape).join(";"),
-      ...data.map((d) =>
-        headers.map((h) => csvEscape((d as Record<string, unknown>)[h])).join(";")
-      ),
-    ].join("\n");
+    headers.map(csvEscape).join(";"),
+    ...data.map((d) =>
+    headers.map((h) => csvEscape((d as Record<string, unknown>)[h])).join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -265,7 +265,7 @@ export default function Reports() {
   }
 
   const printList = (useFiltered: boolean) =>
-    openPrint(printableHTML(useFiltered ? filtered : rows));
+  openPrint(printableHTML(useFiltered ? filtered : rows));
 
   const remove = (id: number) => {
     setRows((p) => {
@@ -279,7 +279,7 @@ export default function Reports() {
     });
   };
 
-  const update = <K extends keyof Report>(i: number, key: K, val: Report[K]) => {
+  const update = <K extends keyof Report,>(i: number, key: K, val: Report[K]) => {
     setRows((p) => {
       const c = [...p];
       if (!c[i]) return p;
@@ -288,7 +288,7 @@ export default function Reports() {
     });
   };
 
-  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<{url: string;name: string;} | null>(null);
 
   useEffect(() => {
     return () => {
@@ -325,29 +325,29 @@ export default function Reports() {
         ref={fileRef}
         type="file"
         multiple
-        style={{ display: "none" }}
-        onChange={(e) => addFiles(e.target.files)}
-      />
+
+        onChange={(e) => addFiles(e.target.files)} className="rlc-migrated-pages-buchhaltung-reports-tsx-283" />
+      
 
       <div
-        className="bh-dropzone"
+
         onDragEnter={(e) => {
           setHover(true);
           e.preventDefault();
         }}
         onDragOver={(e) => e.preventDefault()}
         onDragLeave={() => setHover(false)}
-        onDrop={onDrop}
-        style={{
-          border: "1px dashed #ccc",
-          borderRadius: 6,
-          padding: 14,
-          marginBottom: 12,
-          background: hover ? "rgba(0,0,0,0.05)" : "transparent",
-          cursor: "pointer",
-        }}
-        onClick={() => fileRef.current?.click()}
-      >
+        onDrop={onDrop} className={rlcClass("bh-dropzone",
+          {
+            border: "1px dashed #ccc",
+            borderRadius: 6,
+            padding: 14,
+            marginBottom: 12,
+            background: hover ? "rgba(0,0,0,0.05)" : "transparent",
+            cursor: "pointer"
+          })}
+        onClick={() => fileRef.current?.click()}>
+        
         📎 Datei hier ablegen oder klicken zum Hochladen
       </div>
 
@@ -393,11 +393,11 @@ export default function Reports() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Titel / Projekt / Kostenstelle"
-          />
+            placeholder="Titel / Projekt / Kostenstelle" />
+          
         </div>
 
-        <div style={{ alignSelf: "end", fontWeight: 600 }}>{total} Reports</div>
+        <div className="rlc-migrated-pages-buchhaltung-reports-tsx-284">{total} Reports</div>
       </div>
 
       <table className="bh-table">
@@ -427,10 +427,10 @@ export default function Reports() {
               <tr key={r.id}>
                 <td>
                   <button
-                    className="bh-btn"
-                    style={{ background: "#e74c3c" }}
-                    onClick={() => remove(r.id)}
-                  >
+                    className="bh-btn rlc-migrated-pages-buchhaltung-reports-tsx-285"
+
+                    onClick={() => remove(r.id)}>
+                    
                     Löschen
                   </button>
                 </td>
@@ -441,9 +441,9 @@ export default function Reports() {
                   <input
                     type="text"
                     value={r.titel}
-                    onChange={(e) => update(i, "titel", e.target.value)}
-                    style={{ minWidth: 180 }}
-                  />
+                    onChange={(e) => update(i, "titel", e.target.value)} className="rlc-migrated-pages-buchhaltung-reports-tsx-286" />
+
+                  
                 </td>
 
                 <td>{r.typ}</td>
@@ -452,31 +452,31 @@ export default function Reports() {
                   <input
                     type="text"
                     value={r.projekt || ""}
-                    onChange={(e) => update(i, "projekt", e.target.value)}
-                    style={{ width: 140 }}
-                  />
+                    onChange={(e) => update(i, "projekt", e.target.value)} className="rlc-migrated-pages-buchhaltung-reports-tsx-287" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={r.kostenstelle || ""}
-                    onChange={(e) => update(i, "kostenstelle", e.target.value)}
-                    style={{ width: 140 }}
-                  />
+                    onChange={(e) => update(i, "kostenstelle", e.target.value)} className="rlc-migrated-pages-buchhaltung-reports-tsx-288" />
+
+                  
                 </td>
 
                 <td>{r.datum}</td>
 
-                <td style={{ textAlign: "center", fontWeight: 600 }}>{r.version}</td>
+                <td className="rlc-migrated-pages-buchhaltung-reports-tsx-289">{r.version}</td>
 
                 <td>{r.bearbeiter}</td>
 
                 <td>
                   <select
                     value={r.status}
-                    onChange={(e) => update(i, "status", e.target.value as Report["status"])}
-                  >
+                    onChange={(e) => update(i, "status", e.target.value as Report["status"])}>
+                    
                     <option value="offen">offen</option>
                     <option value="in Prüfung">in Prüfung</option>
                     <option value="abgeschlossen">abgeschlossen</option>
@@ -487,101 +487,101 @@ export default function Reports() {
                 <td className="right">{fmtSize(r.size)}</td>
 
                 <td>
-                  {r.url ? (
-                    <button
-                      className="bh-btn ghost"
-                      onClick={() =>
-                        setPreview({
-                          url: r.url!,
-                          name: r.dateiname || r.titel,
-                        })
-                      }
-                    >
+                  {r.url ?
+                  <button
+                    className="bh-btn ghost"
+                    onClick={() =>
+                    setPreview({
+                      url: r.url!,
+                      name: r.dateiname || r.titel
+                    })
+                    }>
+                    
                       Öffnen
-                    </button>
-                  ) : (
-                    <span className="bh-text-muted">–</span>
-                  )}
+                    </button> :
+
+                  <span className="bh-text-muted">–</span>
+                  }
                 </td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={13} style={{ textAlign: "center", color: "#777", padding: 14 }}>
+          {filtered.length === 0 &&
+          <tr>
+              <td colSpan={13} className="rlc-migrated-pages-buchhaltung-reports-tsx-290">
                 Keine Reports im aktuellen Filter.
               </td>
             </tr>
-          )}
+          }
         </tbody>
       </table>
 
-      {preview && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2000,
-          }}
-          onClick={() => setPreview(null)}
-        >
+      {preview &&
+      <div
+
+
+
+
+
+
+
+
+
+        onClick={() => setPreview(null)} className="rlc-migrated-pages-buchhaltung-reports-tsx-291">
+        
           <div
-            style={{
-              background: "#fff",
-              width: "85vw",
-              height: "85vh",
-              borderRadius: 8,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                padding: 10,
-                display: "flex",
-                justifyContent: "space-between",
-                borderBottom: "1px solid #ccc",
-              }}
-            >
+
+
+
+
+
+
+
+
+
+          onClick={(e) => e.stopPropagation()} className="rlc-migrated-pages-buchhaltung-reports-tsx-292">
+          
+            <div className="rlc-migrated-pages-buchhaltung-reports-tsx-293">
+
+
+
+
+
+
+            
               <strong>{preview.name}</strong>
               <button className="bh-btn" onClick={() => setPreview(null)}>
                 Schließen
               </button>
             </div>
 
-            <div style={{ flex: 1 }}>
-              {isPdfPreview ? (
-                <iframe
-                  src={preview.url}
-                  style={{ width: "100%", height: "100%", border: 0 }}
-                  title="Report PDF"
-                />
-              ) : (
-                <img
-                  src={preview.url}
-                  alt="Preview"
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                />
-              )}
+            <div className="rlc-migrated-pages-buchhaltung-reports-tsx-294">
+              {isPdfPreview ?
+            <iframe
+              src={preview.url}
+
+              title="Report PDF" className="rlc-migrated-pages-buchhaltung-reports-tsx-295" /> :
+
+
+            <img
+              src={preview.url}
+              alt="Preview" className="rlc-migrated-pages-buchhaltung-reports-tsx-296" />
+
+
+            }
             </div>
           </div>
         </div>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
 
 function printableHTML(list: Report[]) {
-  const body = list
-    .map(
-      (r) => `
+  const body = list.
+  map(
+    (r) => `
     <tr>
       <td>${escapeHtml(r.nummer)}</td>
       <td>${escapeHtml(r.titel)}</td>
@@ -592,8 +592,8 @@ function printableHTML(list: Report[]) {
       <td>${escapeHtml(r.status)}</td>
       <td>${escapeHtml(r.bearbeiter || "")}</td>
     </tr>`
-    )
-    .join("");
+  ).
+  join("");
 
   return `<!doctype html><html><head><meta charset="utf-8"/><title>Reports</title>
   <style>
@@ -611,8 +611,3 @@ function printableHTML(list: Report[]) {
   <div style="margin-top:10px;color:#555">Erstellt am ${new Date().toLocaleString("de-DE")}</div>
   </body></html>`;
 }
-
-
-
-
-

@@ -1,10 +1,14 @@
-﻿// apps/web/src/pages/kalkulation/Versionsvergleich.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+// apps/web/src/pages/kalkulation/Versionsvergleich.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { apiUrl } from "../../lib/apiBase";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProject } from "../../store/useProject";
 import { LV, type LVPos } from "./store.lv";
+import Widersprueche from "../ki/Widersprueche";
+import BewertungAnalyse from "../ki/BewertungAnalyse";
 
 /* ================= TYPES ================= */
 
@@ -69,9 +73,9 @@ function safeId(): string {
 
 function n(value: unknown): number {
   const raw = String(value ?? "").trim();
-  const normalized = raw.includes(",")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw;
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw;
   const x = typeof value === "number" ? value : Number(normalized);
   return Number.isFinite(x) ? x : 0;
 }
@@ -79,14 +83,14 @@ function n(value: unknown): number {
 function money(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
-    currency: "EUR",
+    currency: "EUR"
   }).format(n(value));
 }
 
 function qty(value: unknown): string {
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 3
   }).format(n(value));
 }
 
@@ -98,7 +102,7 @@ function dateDE(value: string): string {
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
-    minute: "2-digit",
+    minute: "2-digit"
   });
 }
 
@@ -108,11 +112,11 @@ function todayDE(): string {
 
 function getProject(ctx: any): ProjectLike | null {
   const p =
-    ctx?.project ||
-    ctx?.currentProject ||
-    ctx?.selectedProject ||
-    ctx?.current ||
-    ctx;
+  ctx?.project ||
+  ctx?.currentProject ||
+  ctx?.selectedProject ||
+  ctx?.current ||
+  ctx;
 
   if (!p || typeof p !== "object") return null;
   return p as ProjectLike;
@@ -121,13 +125,13 @@ function getProject(ctx: any): ProjectLike | null {
 function getProjectKey(project: ProjectLike | null): string {
   return String(
     project?.code ||
-      project?.number ||
-      project?.projektnummer ||
-      project?.id ||
-      "GLOBAL"
-  )
-    .trim()
-    .toUpperCase();
+    project?.number ||
+    project?.projektnummer ||
+    project?.id ||
+    "GLOBAL"
+  ).
+  trim().
+  toUpperCase();
 }
 
 function getProjectName(project: ProjectLike | null): string {
@@ -179,22 +183,150 @@ function normalizeLvRow(row: Partial<LVPos>, projectKey = ""): LVPos {
     waehrung: row.waehrung || "EUR",
     confidence: row.confidence,
     createdAt: row.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 
 function cleanRows(rows: Partial<LVPos>[], projectKey: string): LVPos[] {
-  return rows
-    .filter((r) => !isTrashRow(r, projectKey))
-    .map((r) => normalizeLvRow(r, projectKey))
-    .sort((a, b) =>
-      String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
-        numeric: true,
-        sensitivity: "base",
-      })
-    );
+  return rows.
+  filter((r) => !isTrashRow(r, projectKey)).
+  map((r) => normalizeLvRow(r, projectKey)).
+  sort((a, b) =>
+  String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
+    numeric: true,
+    sensitivity: "base"
+  })
+  );
 }
 
+function versionTextKey(row: any): string {
+  return [
+  String(row?.kurztext || row?.shortText || row?.text || "").
+  trim().
+  toLowerCase().
+  replace(/\s+/g, " "),
+  String(row?.einheit || row?.unit || row?.me || "").
+  trim().
+  toLowerCase()].
+  join("|");
+}
+
+function extractStoredRows(parsed: any): any[] {
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.rows)) return parsed.rows;
+  if (Array.isArray(parsed?.items)) return parsed.items;
+  if (Array.isArray(parsed?.positions)) return parsed.positions;
+  if (Array.isArray(parsed?.data?.rows)) return parsed.data.rows;
+  return [];
+}
+
+function loadCanonicalLvRows(projectKey: string): any[] {
+  const keys = [
+  `rlc_lv_data_v1:${projectKey}`,
+  `rlc_gaeb_import_v1:${projectKey}`,
+  `RLC_POSITIONLV_${projectKey}`];
+
+
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed = JSON.parse(raw);
+      const rows = extractStoredRows(parsed);
+
+      const valid = rows.filter((row: any) => {
+        const pos = String(
+          row?.posNr ??
+          row?.position ??
+          row?.positionsnummer ??
+          row?.oz ??
+          ""
+        ).trim();
+
+        return pos && String(row?.kurztext ?? row?.text ?? "").trim();
+      });
+
+      if (valid.length) return valid;
+    } catch {
+
+
+      //
+    }}
+  try {
+    return LV.list();
+  } catch {
+    return [];
+  }
+}
+
+function reconcileVersionPositions(
+inputRows: LVPos[],
+projectKey: string)
+: LVPos[] {
+  const canonical = loadCanonicalLvRows(projectKey);
+  if (!canonical.length) return inputRows;
+
+  const byText = new Map<string, any[]>();
+
+  for (const row of canonical) {
+    const key = versionTextKey(row);
+    if (!key || key === "|") continue;
+
+    const list = byText.get(key) || [];
+    list.push(row);
+    byText.set(key, list);
+  }
+
+  const used = new Set<any>();
+
+  return inputRows.map((row, index) => {
+    const currentPos = String(row.posNr || "").trim();
+
+    // Eine bereits vollständige OZ bleibt unverändert.
+    if (
+    /^\d{1,3}(?:\.\d{1,4}){2,}$/.test(currentPos) ||
+    /[A-Za-z].*\d|\d.*[A-Za-z]/.test(currentPos))
+    {
+      return row;
+    }
+
+    const candidates = byText.get(versionTextKey(row)) || [];
+    let canonicalRow = candidates.find((candidate) => !used.has(candidate));
+
+    if (!canonicalRow) {
+      const fallback = canonical[index];
+      if (fallback && !used.has(fallback)) canonicalRow = fallback;
+    }
+
+    if (!canonicalRow) return row;
+
+    used.add(canonicalRow);
+
+    const canonicalPos = String(
+      canonicalRow?.posNr ??
+      canonicalRow?.position ??
+      canonicalRow?.positionsnummer ??
+      canonicalRow?.oz ??
+      ""
+    ).trim();
+
+    if (!canonicalPos) return row;
+
+    return normalizeLvRow(
+      {
+        ...row,
+        posNr: canonicalPos,
+        parentPosNr:
+        canonicalRow?.parentPosNr ??
+        canonicalRow?.parentPosition ??
+        row.parentPosNr,
+        sortIndex: canonicalRow?.sortIndex ?? row.sortIndex ?? index
+      },
+      projectKey
+    );
+  });
+}
 function loadVersions(projectKey: string): VersionRow[] {
   try {
     const raw = localStorage.getItem(storeKey(projectKey));
@@ -206,7 +338,10 @@ function loadVersions(projectKey: string): VersionRow[] {
       name: String(v.name || "Version"),
       createdAt: String(v.createdAt || new Date().toISOString()),
       source: v.source === "CSV" ? "CSV" : "LV",
-      rows: cleanRows(Array.isArray(v.rows) ? v.rows : [], projectKey),
+      rows: reconcileVersionPositions(
+        cleanRows(Array.isArray(v.rows) ? v.rows : [], projectKey),
+        projectKey
+      )
     }));
   } catch {
     return [];
@@ -217,13 +352,13 @@ function saveVersions(projectKey: string, versions: VersionRow[]) {
   try {
     localStorage.setItem(storeKey(projectKey), JSON.stringify(versions));
   } catch {
+
+
+
+
     // Große Versionsvergleiche werden serverseitig gespeichert.
     // LocalStorage bleibt nur ein optionaler Browser-Cache.
-  }
-}
-function analysisStoreKey(projectKey: string): string {
-  return `rlc_versionsvergleich_analysis_v1:${projectKey}`;
-}
+  }}function analysisStoreKey(projectKey: string): string {return `rlc_versionsvergleich_analysis_v1:${projectKey}`;}
 
 function loadAnalysisResult(projectKey: string): AnalysisResult | null {
   try {
@@ -237,7 +372,7 @@ function loadAnalysisResult(projectKey: string): AnalysisResult | null {
       title: String(parsed.title || ""),
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String) : [],
       changes: Array.isArray(parsed.changes) ? parsed.changes.map(String) : [],
-      unchanged: Array.isArray(parsed.unchanged) ? parsed.unchanged.map(String) : [],
+      unchanged: Array.isArray(parsed.unchanged) ? parsed.unchanged.map(String) : []
     };
   } catch {
     return null;
@@ -248,42 +383,42 @@ function saveAnalysisResult(projectKey: string, result: AnalysisResult) {
   try {
     localStorage.setItem(analysisStoreKey(projectKey), JSON.stringify(result));
   } catch {
-    //
-  }
-}
 
+
+    //
+  }}
 function getVersionAuthHeaders(extra: Record<string, string> = {}) {
   const token =
-    localStorage.getItem("rlc_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("authToken") ||
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("rlc_token") ||
-    sessionStorage.getItem("token") ||
-    "";
+  localStorage.getItem("rlc_token") ||
+  localStorage.getItem("token") ||
+  localStorage.getItem("authToken") ||
+  localStorage.getItem("accessToken") ||
+  sessionStorage.getItem("rlc_token") ||
+  sessionStorage.getItem("token") ||
+  "";
 
   return {
     ...extra,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
 
 function extractServerVersions(data: any): VersionRow[] {
   const raw =
-    data?.data?.versions ||
-    data?.versions ||
-    data?.snapshot?.data?.versions ||
-    [];
+  data?.data?.versions ||
+  data?.versions ||
+  data?.snapshot?.data?.versions ||
+  [];
 
   return Array.isArray(raw) ? raw : [];
 }
 
 function extractServerAnalysis(data: any): AnalysisResult | null {
   const raw =
-    data?.data?.analysis ||
-    data?.analysis ||
-    data?.snapshot?.data?.analysis ||
-    null;
+  data?.data?.analysis ||
+  data?.analysis ||
+  data?.snapshot?.data?.analysis ||
+  null;
 
   if (!raw || typeof raw.title !== "string") return null;
 
@@ -291,7 +426,7 @@ function extractServerAnalysis(data: any): AnalysisResult | null {
     title: String(raw.title || ""),
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     changes: Array.isArray(raw.changes) ? raw.changes.map(String) : [],
-    unchanged: Array.isArray(raw.unchanged) ? raw.unchanged.map(String) : [],
+    unchanged: Array.isArray(raw.unchanged) ? raw.unchanged.map(String) : []
   };
 }
 function extractRowsFromStoredCalc(parsed: any): any[] {
@@ -306,19 +441,19 @@ function toVersionLvRows(rawRows: any[], projectKey: string): LVPos[] {
   const mapped = rawRows.map((r: any, index: number) => {
     const menge = n(r.menge ?? r.quantity ?? r.qty);
     const preis =
-      n(r.rlcKiUnitPrice) ||
-      n(r.finalUnitPrice) ||
-      n(r.suggestedUnitPrice) ||
-      n(r.unitPrice) ||
-      n(r.preis) ||
-      n(r.ep);
+    n(r.rlcKiUnitPrice) ||
+    n(r.finalUnitPrice) ||
+    n(r.suggestedUnitPrice) ||
+    n(r.unitPrice) ||
+    n(r.preis) ||
+    n(r.ep);
 
     const gesamt =
-      n(r.rlcKiTotal) ||
-      n(r.totalNet) ||
-      n(r.gesamt) ||
-      n(r.gp) ||
-      Math.round(menge * preis * 100) / 100;
+    n(r.rlcKiTotal) ||
+    n(r.totalNet) ||
+    n(r.gesamt) ||
+    n(r.gp) ||
+    Math.round(menge * preis * 100) / 100;
 
     return {
       id: String(r.id || `${projectKey}-${r.posNr || index}`),
@@ -330,23 +465,26 @@ function toVersionLvRows(rawRows: any[], projectKey: string): LVPos[] {
       einheit: String(r.einheit ?? r.unit ?? r.me ?? "").trim(),
       menge,
       preis,
-      gesamt,
+      gesamt
     } as Partial<LVPos>;
   });
 
-  return cleanRows(mapped, projectKey).filter(
+  return reconcileVersionPositions(
+    cleanRows(mapped, projectKey),
+    projectKey
+  ).filter(
     (r) =>
-      String(r.posNr || r.kurztext || "").trim() &&
-      (n(r.menge) > 0 || n(r.preis) > 0 || n(r.gesamt) > 0)
+    String(r.posNr || r.kurztext || "").trim() && (
+    n(r.menge) > 0 || n(r.preis) > 0 || n(r.gesamt) > 0)
   );
 }
 
-function loadCurrentVersionRows(projectKey: string): { rows: LVPos[]; sourceLabel: string } {
+function loadCurrentVersionRows(projectKey: string): {rows: LVPos[];sourceLabel: string;} {
   const keys = [
-    { key: `rlc_kalkulation_mit_ki_elite_v1:${projectKey}`, label: "RLC-KI Kalkulation" },
-    { key: `rlc_lv_data_v1:${projectKey}`, label: "LV / Positionen" },
-    { key: `rlc_gaeb_import_v1:${projectKey}`, label: "GAEB Import" },
-  ];
+  { key: `rlc_kalkulation_mit_ki_elite_v1:${projectKey}`, label: "RLC-KI Kalkulation" },
+  { key: `rlc_lv_data_v1:${projectKey}`, label: "LV / Positionen" },
+  { key: `rlc_gaeb_import_v1:${projectKey}`, label: "GAEB Import" }];
+
 
   for (const item of keys) {
     try {
@@ -358,10 +496,10 @@ function loadCurrentVersionRows(projectKey: string): { rows: LVPos[]; sourceLabe
 
       if (rows.length) return { rows, sourceLabel: item.label };
     } catch {
-      //
-    }
-  }
 
+
+      //
+    }}
   return { rows: cleanRows(LV.list(), projectKey), sourceLabel: "LV Snapshot" };
 }
 
@@ -405,7 +543,7 @@ function parseCsv(text: string, projectKey: string): LVPos[] {
   const header = splitCsvLine(lines[0], sep).map((h) => h.toLowerCase());
 
   const find = (...names: string[]) =>
-    header.findIndex((h) => names.some((name) => h.includes(name)));
+  header.findIndex((h) => names.some((name) => h.includes(name)));
 
   const idxPos = find("pos", "position", "posnr");
   const idxKurz = find("kurz", "text", "beschreibung");
@@ -427,7 +565,7 @@ function parseCsv(text: string, projectKey: string): LVPos[] {
         langtext: idxLang >= 0 ? c[idxLang] || "" : "",
         einheit: idxEinheit >= 0 ? c[idxEinheit] || "" : "",
         menge: idxMenge >= 0 ? n(c[idxMenge]) : 0,
-        preis: idxPreis >= 0 ? n(c[idxPreis]) : 0,
+        preis: idxPreis >= 0 ? n(c[idxPreis]) : 0
       };
     }),
     projectKey
@@ -444,7 +582,7 @@ function toCell(row?: LVPos | null): CompareCell | null {
     einheit: String(row.einheit || ""),
     menge: n(row.menge),
     preis: n(row.preis),
-    gesamt: n(row.gesamt) || n(row.menge) * n(row.preis),
+    gesamt: n(row.gesamt) || n(row.menge) * n(row.preis)
   };
 }
 
@@ -463,36 +601,36 @@ function buildCompare(versions: VersionRow[]): CompareRow[] {
     });
   });
 
-  return Array.from(keys)
-    .sort((a, b) => a.localeCompare(b, "de", { numeric: true }))
-    .map((key) => {
-      const cells = versions.map((v) => {
-        const found = v.rows.find(
-          (r) => String(r.posNr || r.kurztext || "").trim() === key
-        );
-        return toCell(found);
-      });
-
-      const first = cells.find(Boolean);
-      const kurztext = first?.kurztext || "";
-      const posNr = first?.posNr || key;
-
-      const textVals = cells.map((c) => c?.kurztext || "");
-      const unitVals = cells.map((c) => c?.einheit || "");
-      const qtyVals = cells.map((c) => c?.menge ?? "");
-      const priceVals = cells.map((c) => c?.preis ?? "");
-
-      return {
-        key,
-        posNr,
-        kurztext,
-        cells,
-        diffText: !same(textVals),
-        diffUnit: !same(unitVals),
-        diffQty: !same(qtyVals),
-        diffPrice: !same(priceVals),
-      };
+  return Array.from(keys).
+  sort((a, b) => a.localeCompare(b, "de", { numeric: true })).
+  map((key) => {
+    const cells = versions.map((v) => {
+      const found = v.rows.find(
+        (r) => String(r.posNr || r.kurztext || "").trim() === key
+      );
+      return toCell(found);
     });
+
+    const first = cells.find(Boolean);
+    const kurztext = first?.kurztext || "";
+    const posNr = first?.posNr || key;
+
+    const textVals = cells.map((c) => c?.kurztext || "");
+    const unitVals = cells.map((c) => c?.einheit || "");
+    const qtyVals = cells.map((c) => c?.menge ?? "");
+    const priceVals = cells.map((c) => c?.preis ?? "");
+
+    return {
+      key,
+      posNr,
+      kurztext,
+      cells,
+      diffText: !same(textVals),
+      diffUnit: !same(unitVals),
+      diffQty: !same(qtyVals),
+      diffPrice: !same(priceVals)
+    };
+  });
 }
 
 function analyseVersion(v: VersionRow): AnalysisResult {
@@ -507,10 +645,10 @@ function analyseVersion(v: VersionRow): AnalysisResult {
   const missingPrice = rows.filter((r) => n(r.preis) <= 0);
   const total = rows.reduce((sum, r) => sum + n(r.gesamt || n(r.menge) * n(r.preis)), 0);
 
-  const expensive = [...rows]
-    .filter((r) => n(r.preis) > 0)
-    .sort((a, b) => n(b.preis) - n(a.preis))
-    .slice(0, 8);
+  const expensive = [...rows].
+  filter((r) => n(r.preis) > 0).
+  sort((a, b) => n(b.preis) - n(a.preis)).
+  slice(0, 8);
 
   if (missingText.length) warnings.push(`${missingText.length} Position(en) ohne Kurztext/Langtext.`);
   if (missingUnit.length) warnings.push(`${missingUnit.length} Position(en) ohne Einheit.`);
@@ -531,7 +669,7 @@ function analyseVersion(v: VersionRow): AnalysisResult {
     title: "Angebotsanalyse abgeschlossen",
     warnings,
     changes,
-    unchanged,
+    unchanged
   };
 }
 
@@ -556,7 +694,7 @@ function analyseCompare(rows: CompareRow[], versions: VersionRow[]): AnalysisRes
   if (missing.length) warnings.push(`${missing.length} Position(en) fehlen in mindestens einer Version.`);
 
   price.slice(0, 10).forEach((r) => {
-    const prices = r.cells.map((c) => (c ? money(c.preis) : "—")).join(" → ");
+    const prices = r.cells.map((c) => c ? money(c.preis) : "—").join(" → ");
     warnings.push(`Preisabweichung Pos. ${r.posNr}: ${prices}`);
   });
 
@@ -568,47 +706,47 @@ function analyseCompare(rows: CompareRow[], versions: VersionRow[]): AnalysisRes
     title: "Versionsvergleich abgeschlossen",
     warnings,
     changes,
-    unchanged,
+    unchanged
   };
 }
 
 function exportCompareCsv(rows: CompareRow[], versions: VersionRow[], projectKey: string) {
   const header = [
-    "PosNr",
-    "Kurztext",
-    ...versions.flatMap((v) => [
-      `${v.name} Menge`,
-      `${v.name} ME`,
-      `${v.name} EP`,
-      `${v.name} Gesamt`,
-    ]),
-    "Diff Menge",
-    "Diff ME",
-    "Diff Preis",
-    "Diff Text",
-  ];
+  "PosNr",
+  "Kurztext",
+  ...versions.flatMap((v) => [
+  `${v.name} Menge`,
+  `${v.name} ME`,
+  `${v.name} EP`,
+  `${v.name} Gesamt`]
+  ),
+  "Diff Menge",
+  "Diff ME",
+  "Diff Preis",
+  "Diff Text"];
+
 
   const lines = rows.map((r) =>
-    [
-      r.posNr,
-      r.kurztext,
-      ...r.cells.flatMap((c) => [
-        c ? qty(c.menge) : "",
-        c?.einheit || "",
-        c ? money(c.preis) : "",
-        c ? money(c.gesamt) : "",
-      ]),
-      r.diffQty ? "Ja" : "Nein",
-      r.diffUnit ? "Ja" : "Nein",
-      r.diffPrice ? "Ja" : "Nein",
-      r.diffText ? "Ja" : "Nein",
-    ]
-      .map(csvCell)
-      .join(";")
+  [
+  r.posNr,
+  r.kurztext,
+  ...r.cells.flatMap((c) => [
+  c ? qty(c.menge) : "",
+  c?.einheit || "",
+  c ? money(c.preis) : "",
+  c ? money(c.gesamt) : ""]
+  ),
+  r.diffQty ? "Ja" : "Nein",
+  r.diffUnit ? "Ja" : "Nein",
+  r.diffPrice ? "Ja" : "Nein",
+  r.diffText ? "Ja" : "Nein"].
+
+  map(csvCell).
+  join(";")
   );
 
   const blob = new Blob([[header.join(";"), ...lines].join("\n")], {
-    type: "text/csv;charset=utf-8",
+    type: "text/csv;charset=utf-8"
   });
 
   const a = document.createElement("a");
@@ -619,18 +757,18 @@ function exportCompareCsv(rows: CompareRow[], versions: VersionRow[], projectKey
 }
 
 function exportComparePdf(
-  rows: CompareRow[],
-  versions: VersionRow[],
-  projectKey: string,
-  projectName: string,
-  stats: {
-    rows: number;
-    priceDiff: number;
-    qtyDiff: number;
-    unitDiff: number;
-    textDiff: number;
-  }
-) {
+rows: CompareRow[],
+versions: VersionRow[],
+projectKey: string,
+projectName: string,
+stats: {
+  rows: number;
+  priceDiff: number;
+  qtyDiff: number;
+  unitDiff: number;
+  textDiff: number;
+})
+{
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -654,13 +792,13 @@ function exportComparePdf(
   doc.line(mx, 48, pageW - mx, 48);
 
   const kpis = [
-    ["Positionen", String(stats.rows)],
-    ["Preisabweichungen", String(stats.priceDiff)],
-    ["Mengenabweichungen", String(stats.qtyDiff)],
-    ["Einheitsabweichungen", String(stats.unitDiff)],
-    ["Textabweichungen", String(stats.textDiff)],
-    ["Versionen", String(versions.length)],
-  ];
+  ["Positionen", String(stats.rows)],
+  ["Preisabweichungen", String(stats.priceDiff)],
+  ["Mengenabweichungen", String(stats.qtyDiff)],
+  ["Einheitsabweichungen", String(stats.unitDiff)],
+  ["Textabweichungen", String(stats.textDiff)],
+  ["Versionen", String(versions.length)]];
+
 
   const boxW = 42;
   const boxH = 18;
@@ -689,23 +827,23 @@ function exportComparePdf(
     const b = r.cells[1];
 
     return [
-      r.posNr || "—",
-      r.kurztext || "—",
-      a ? qty(a.menge) : "—",
-      b ? qty(b.menge) : "—",
-      a?.einheit || "—",
-      b?.einheit || "—",
-      a ? money(a.preis) : "—",
-      b ? money(b.preis) : "—",
-      [
-        r.diffQty ? "Menge" : "",
-        r.diffUnit ? "ME" : "",
-        r.diffPrice ? "Preis" : "",
-        r.diffText ? "Text" : "",
-      ]
-        .filter(Boolean)
-        .join(", ") || "—",
-    ];
+    r.posNr || "—",
+    r.kurztext || "—",
+    a ? qty(a.menge) : "—",
+    b ? qty(b.menge) : "—",
+    a?.einheit || "—",
+    b?.einheit || "—",
+    a ? money(a.preis) : "—",
+    b ? money(b.preis) : "—",
+    [
+    r.diffQty ? "Menge" : "",
+    r.diffUnit ? "ME" : "",
+    r.diffPrice ? "Preis" : "",
+    r.diffText ? "Text" : ""].
+
+    filter(Boolean).
+    join(", ") || "—"];
+
   });
 
   autoTable(doc, {
@@ -721,16 +859,16 @@ function exportComparePdf(
       lineColor: [226, 232, 240],
       lineWidth: 0.1,
       overflow: "linebreak",
-      valign: "middle",
+      valign: "middle"
     },
     headStyles: {
       fillColor: [30, 64, 175],
       textColor: [255, 255, 255],
-      fontStyle: "bold",
+      fontStyle: "bold"
     },
     alternateRowStyles: {
-      fillColor: [248, 250, 252],
-    },
+      fillColor: [248, 250, 252]
+    }
   });
 
   const pages = doc.getNumberOfPages();
@@ -746,12 +884,12 @@ function exportComparePdf(
     doc.text(`Seite ${i}/${pages}`, pageW - mx, pageH - 7, { align: "right" });
   }
 
-  doc.save(`Versionsvergleich_${projectKey}.pdf`);
+  saveRlcPdfWithCompanyHeader(doc, `Versionsvergleich_${projectKey}.pdf`);
 }
 
 /* ================= COMPONENT ================= */
 
-export default function VersionsvergleichPage() {
+function VersionsvergleichCore() {
   const projectCtx: any = useProject();
   const project = getProject(projectCtx);
   const projectKey = getProjectKey(project);
@@ -780,7 +918,7 @@ export default function VersionsvergleichPage() {
     saveVersions(projectKey, next);
   }
 
-  
+
   async function saveVersionsToServer() {
     try {
       setInfo("Speichere Versionsvergleich auf Server …");
@@ -798,9 +936,9 @@ export default function VersionsvergleichPage() {
               viewMode,
               savedAt: new Date().toISOString(),
               projectKey,
-              projectName,
-            },
-          }),
+              projectName
+            }
+          })
         }
       );
 
@@ -826,7 +964,7 @@ export default function VersionsvergleichPage() {
         {
           method: "GET",
           credentials: "include",
-          headers: getVersionAuthHeaders(),
+          headers: getVersionAuthHeaders()
         }
       );
 
@@ -844,7 +982,15 @@ export default function VersionsvergleichPage() {
         return;
       }
 
-      setVersions(serverVersions);
+      const reconciledServerVersions = serverVersions.map((version) => ({
+        ...version,
+        rows: reconcileVersionPositions(
+          cleanRows(Array.isArray(version.rows) ? version.rows : [], projectKey),
+          projectKey
+        )
+      }));
+
+      setVersions(reconciledServerVersions);
       setSelected(json?.data?.selected || {});
       setViewMode(json?.data?.viewMode || "all");
       setInfo(`Versionsvergleich vom Server geladen · ${serverVersions.length} Version(en). Lokaler Browser-Speicher wurde nicht überschrieben.`);
@@ -877,9 +1023,9 @@ export default function VersionsvergleichPage() {
               selectedVersionIds: selectedVersions.map((v) => v.id),
               savedAt: new Date().toISOString(),
               projectKey,
-              projectName,
-            },
-          }),
+              projectName
+            }
+          })
         }
       );
 
@@ -905,7 +1051,7 @@ export default function VersionsvergleichPage() {
         {
           method: "GET",
           credentials: "include",
-          headers: getVersionAuthHeaders(),
+          headers: getVersionAuthHeaders()
         }
       );
 
@@ -930,7 +1076,7 @@ export default function VersionsvergleichPage() {
       setInfo(`Analyse-Server-Laden fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
     }
   }
-function createSnapshot() {
+  function createSnapshot() {
     const loaded = loadCurrentVersionRows(projectKey);
     const lvRows = loaded.rows;
 
@@ -946,7 +1092,7 @@ function createSnapshot() {
       name: `${loaded.sourceLabel} ${projectKey} · ${new Date().toLocaleString("de-DE")}`,
       createdAt: new Date().toISOString(),
       source: "LV",
-      rows: lvRows,
+      rows: lvRows
     };
 
     persist([version, ...versions]);
@@ -970,7 +1116,7 @@ function createSnapshot() {
         name: file.name,
         createdAt: new Date().toISOString(),
         source: "CSV",
-        rows,
+        rows
       };
 
       persist([version, ...versions]);
@@ -1004,16 +1150,16 @@ function createSnapshot() {
     try {
       localStorage.removeItem(analysisStoreKey(projectKey));
     } catch {
+
+
       //
-    }
-  }
-  const selectedVersions = useMemo(
+    }}const selectedVersions = useMemo(
     () => versions.filter((v) => selected[v.id]),
     [versions, selected]
   );
 
   const compareRows = useMemo(
-    () => (selectedVersions.length >= 2 ? buildCompare(selectedVersions) : []),
+    () => selectedVersions.length >= 2 ? buildCompare(selectedVersions) : [],
     [selectedVersions]
   );
 
@@ -1027,7 +1173,7 @@ function createSnapshot() {
       priceDiff: rows.filter((r) => r.diffPrice).length,
       qtyDiff: rows.filter((r) => r.diffQty).length,
       unitDiff: rows.filter((r) => r.diffUnit).length,
-      textDiff: rows.filter((r) => r.diffText).length,
+      textDiff: rows.filter((r) => r.diffText).length
     };
   }, [versions.length, selectedVersions, compareRows]);
 
@@ -1043,19 +1189,19 @@ function createSnapshot() {
     if (viewMode === "risk") {
       rows = rows.filter(
         (r) =>
-          r.diffPrice ||
-          r.diffQty ||
-          r.cells.some((c) => !c || n(c.preis) <= 0 || n(c.menge) <= 0)
+        r.diffPrice ||
+        r.diffQty ||
+        r.cells.some((c) => !c || n(c.preis) <= 0 || n(c.menge) <= 0)
       );
     }
 
     if (!q) return rows;
 
     return rows.filter((r) =>
-      [r.posNr, r.kurztext, ...r.cells.map((c) => c?.langtext || "")]
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
+    [r.posNr, r.kurztext, ...r.cells.map((c) => c?.langtext || "")].
+    join(" ").
+    toLowerCase().
+    includes(q)
     );
   }, [compareRows, query, viewMode]);
 
@@ -1096,7 +1242,7 @@ function createSnapshot() {
       const result = analyseVersion(selectedVersions[0]);
       setAnalysis({
         ...result,
-        title: "Risikoanalyse abgeschlossen",
+        title: "Risikoanalyse abgeschlossen"
       });
       setInfo("Risikoanalyse der ausgewählten Version erstellt.");
       return;
@@ -1106,7 +1252,7 @@ function createSnapshot() {
       const result = analyseCompare(compareRows, selectedVersions);
       setAnalysis({
         ...result,
-        title: "Risikoanalyse Versionsvergleich abgeschlossen",
+        title: "Risikoanalyse Versionsvergleich abgeschlossen"
       });
       setInfo("Risikoanalyse für den Versionsvergleich erstellt.");
       return;
@@ -1184,62 +1330,62 @@ function createSnapshot() {
   }, [selectedVersions, compareRows, filteredRows, projectKey, projectName, stats]);
 
   return (
-    <div style={page}>
-      <section style={heroCard}>
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Angebotsanalyse</div>
-          <h1 style={title}>Versionsvergleich / Angebotsanalyse</h1>
-          <p style={subtitle}>
+          <div className={rlcClass(null, eyebrow)}>RLC Angebotsanalyse</div>
+          <h1 className={rlcClass(null, title)}>Versionsvergleich / Angebotsanalyse</h1>
+          <p className={rlcClass(null, subtitle)}>
             Eine Version analysieren oder mehrere LV-/Angebotsversionen vergleichen:
             Preis-, Mengen-, Einheiten- und Textabweichungen werden sauber getrennt.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button style={btnPrimary} onClick={createSnapshot}>
+        <div className={rlcClass(null, heroActions)}>
+          <button className={rlcClass(null, btnPrimary)} onClick={createSnapshot}>
             Aktuelle Kalkulation als Version speichern
           </button>
 
-          <button style={btnSecondary} onClick={() => fileRef.current?.click()}>
+          <button className={rlcClass(null, btnSecondary)} onClick={() => fileRef.current?.click()}>
             CSV-Version importieren
           </button>
 
-          <button style={btnPrimary} disabled={!selectedVersions.length} onClick={runAnalysis}>
+          <button className={rlcClass(null, btnPrimary)} disabled={!selectedVersions.length} onClick={runAnalysis}>
             Analyse starten
           </button>
-          <button style={btnSecondary} disabled={!versions.length} onClick={saveVersionsToServer}>
+          <button className={rlcClass(null, btnSecondary)} disabled={!versions.length} onClick={saveVersionsToServer}>
             Server speichern
           </button>
 
-          <button style={btnSecondary} onClick={loadVersionsFromServer}>
+          <button className={rlcClass(null, btnSecondary)} onClick={loadVersionsFromServer}>
             Server laden
           </button>
 
-          <button style={btnSecondary} disabled={!analysis} onClick={() => saveAnalysisToServer()}>
+          <button className={rlcClass(null, btnSecondary)} disabled={!analysis} onClick={() => saveAnalysisToServer()}>
             Analyse speichern
           </button>
 
-          <button style={btnSecondary} onClick={loadAnalysisFromServer}>
+          <button className={rlcClass(null, btnSecondary)} onClick={loadAnalysisFromServer}>
             Analyse laden
           </button>
 
-          <button
-            style={btnSecondary}
-            disabled={selectedVersions.length < 2}
-            onClick={() => exportCompareCsv(filteredRows, selectedVersions, projectKey)}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          disabled={selectedVersions.length < 2}
+          onClick={() => exportCompareCsv(filteredRows, selectedVersions, projectKey)}>
+            
             CSV exportieren
           </button>
 
-          <button
-            style={btnSecondary}
-            disabled={selectedVersions.length < 2}
-            onClick={exportCurrentPdf}
-          >
+          <button className={rlcClass(null,
+          btnSecondary)}
+          disabled={selectedVersions.length < 2}
+          onClick={exportCurrentPdf}>
+            
             PDF exportieren
           </button>
 
-          <button style={btnDanger} onClick={clearAll} disabled={!versions.length}>
+          <button className={rlcClass(null, btnDanger)} onClick={clearAll} disabled={!versions.length}>
             Alles löschen
           </button>
 
@@ -1247,62 +1393,62 @@ function createSnapshot() {
             ref={fileRef}
             type="file"
             accept=".csv"
-            style={{ display: "none" }}
+
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) importCsvFile(file);
               if (fileRef.current) fileRef.current.value = "";
-            }}
-          />
+            }} className="rlc-migrated-pages-kalkulation-versionsvergleich-tsx-847" />
+          
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectKey}</b>
           {projectName ? <span> · {projectName}</span> : null}
         </div>
       </section>
 
-      {info ? <div style={successBox}>{info}</div> : null}
-      {analysisBusy ? <div style={successBox}>Analyse läuft… Bitte warten.</div> : null}
+      {info ? <div className={rlcClass(null, successBox)}>{info}</div> : null}
+      {analysisBusy ? <div className={rlcClass(null, successBox)}>Analyse läuft… Bitte warten.</div> : null}
 
-      {analysis ? (
-        <section style={analysisBox}>
-          <div style={sectionHead}>
+      {analysis ?
+      <section className={rlcClass(null, analysisBox)}>
+          <div className={rlcClass(null, sectionHead)}>
             <div>
-              <h2 style={sectionTitle}>{analysis.title}</h2>
-              <div style={sectionText}>
+              <h2 className={rlcClass(null, sectionTitle)}>{analysis.title}</h2>
+              <div className={rlcClass(null, sectionText)}>
                 KI-/Analyseprotokoll für diese Seite. Hier werden keine LV-Daten automatisch verändert.
               </div>
             </div>
           </div>
 
-          {analysis.changes.length ? (
-            <div style={analysisList}>
-              {analysis.changes.map((x, i) => (
-                <div key={`a-c-${i}`} style={analysisOk}>✓ {x}</div>
-              ))}
-            </div>
-          ) : null}
+          {analysis.changes.length ?
+        <div className={rlcClass(null, analysisList)}>
+              {analysis.changes.map((x, i) =>
+          <div key={`a-c-${i}`} className={rlcClass(null, analysisOk)}>✓ {x}</div>
+          )}
+            </div> :
+        null}
 
-          {analysis.warnings.length ? (
-            <div style={analysisList}>
-              {analysis.warnings.map((x, i) => (
-                <div key={`a-w-${i}`} style={analysisWarn}>⚠  {x}</div>
-              ))}
-            </div>
-          ) : null}
+          {analysis.warnings.length ?
+        <div className={rlcClass(null, analysisList)}>
+              {analysis.warnings.map((x, i) =>
+          <div key={`a-w-${i}`} className={rlcClass(null, analysisWarn)}>⚠  {x}</div>
+          )}
+            </div> :
+        null}
 
-          {analysis.unchanged.length ? (
-            <div style={analysisList}>
-              {analysis.unchanged.map((x, i) => (
-                <div key={`a-u-${i}`} style={analysisNeutral}>– {x}</div>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
+          {analysis.unchanged.length ?
+        <div className={rlcClass(null, analysisList)}>
+              {analysis.unchanged.map((x, i) =>
+          <div key={`a-u-${i}`} className={rlcClass(null, analysisNeutral)}>– {x}</div>
+          )}
+            </div> :
+        null}
+        </section> :
+      null}
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <Kpi label="Versionen" value={String(stats.versions)} />
         <Kpi label="Ausgewählt" value={String(stats.selected)} />
         <Kpi label="Positionen" value={String(stats.rows)} />
@@ -1312,183 +1458,242 @@ function createSnapshot() {
         <Kpi label="Textabweichungen" value={String(stats.textDiff)} danger={stats.textDiff > 0} />
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Gespeicherte Versionen</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Gespeicherte Versionen</h2>
+            <div className={rlcClass(null, sectionText)}>
               Eine Version = Angebotsanalyse. Zwei oder mehr Versionen = Versionsvergleich.
             </div>
           </div>
         </div>
 
-        <div style={versionGrid}>
+        <div className={rlcClass(null, versionGrid)}>
           {versions.map((v) => {
             const active = !!selected[v.id];
 
             return (
               <label
-                key={v.id}
-                style={{
+                key={v.id} className={rlcClass(null,
+                {
                   ...versionItem,
-                  ...(active ? versionItemActive : {}),
-                }}
-              >
+                  ...(active ? versionItemActive : {})
+                })}>
+                
                 <input
                   type="checkbox"
                   checked={active}
                   onChange={(e) =>
-                    setSelected((s) => ({ ...s, [v.id]: e.target.checked }))
-                  }
-                />
+                  setSelected((s) => ({ ...s, [v.id]: e.target.checked }))
+                  } />
+                
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={versionTitle}>{v.name}</div>
-                  <div style={versionMeta}>
+                <div className="rlc-migrated-pages-kalkulation-versionsvergleich-tsx-848">
+                  <div className={rlcClass(null, versionTitle)}>{v.name}</div>
+                  <div className={rlcClass(null, versionMeta)}>
                     {v.source} · {dateDE(v.createdAt)} · {v.rows.length} Pos.
                   </div>
                 </div>
 
                 <button
-                  type="button"
-                  style={btnMiniDanger}
+                  type="button" className={rlcClass(null,
+                  btnMiniDanger)}
                   onClick={(e) => {
                     e.preventDefault();
                     deleteVersion(v.id);
-                  }}
-                >
+                  }}>
+                  
                   Löschen
                 </button>
-              </label>
-            );
+              </label>);
+
           })}
 
-          {!versions.length ? (
-            <div style={emptyBox}>
+          {!versions.length ?
+          <div className={rlcClass(null, emptyBox)}>
               Noch keine Version gespeichert. Speichere zuerst die aktuelle Kalkulation
               oder importiere eine CSV-Version.
-            </div>
-          ) : null}
+            </div> :
+          null}
         </div>
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 style={sectionTitle}>Vergleichstabelle</h2>
-            <div style={sectionText}>
+            <h2 className={rlcClass(null, sectionTitle)}>Vergleichstabelle</h2>
+            <div className={rlcClass(null, sectionText)}>
               Rot markiert Abweichungen. Grün bedeutet gleiche Werte.
             </div>
           </div>
 
-          <input
-            style={searchInput}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Suche PosNr / Text…"
-          />
+          <input className={rlcClass(null,
+          searchInput)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Suche PosNr / Text…" />
+          
         </div>
 
-        <div style={filterRow}>
-          <button style={viewMode === "all" ? btnPrimary : btnSecondary} onClick={() => setViewMode("all")}>
+        <div className={rlcClass(null, filterRow)}>
+          <button className={rlcClass(null, viewMode === "all" ? btnPrimary : btnSecondary)} onClick={() => setViewMode("all")}>
             Alle
           </button>
-          <button style={viewMode === "price" ? btnPrimary : btnSecondary} onClick={() => setViewMode("price")}>
+          <button className={rlcClass(null, viewMode === "price" ? btnPrimary : btnSecondary)} onClick={() => setViewMode("price")}>
             Preisabweichungen
           </button>
-          <button style={viewMode === "qty" ? btnPrimary : btnSecondary} onClick={() => setViewMode("qty")}>
+          <button className={rlcClass(null, viewMode === "qty" ? btnPrimary : btnSecondary)} onClick={() => setViewMode("qty")}>
             Mengenabweichungen
           </button>
-          <button style={viewMode === "unit" ? btnPrimary : btnSecondary} onClick={() => setViewMode("unit")}>
+          <button className={rlcClass(null, viewMode === "unit" ? btnPrimary : btnSecondary)} onClick={() => setViewMode("unit")}>
             Einheitsabweichungen
           </button>
-          <button style={viewMode === "text" ? btnPrimary : btnSecondary} onClick={() => setViewMode("text")}>
+          <button className={rlcClass(null, viewMode === "text" ? btnPrimary : btnSecondary)} onClick={() => setViewMode("text")}>
             Textabweichungen
           </button>
-          <button style={viewMode === "risk" ? btnPrimary : btnSecondary} onClick={runRiskAnalysis}>
+          <button className={rlcClass(null, viewMode === "risk" ? btnPrimary : btnSecondary)} onClick={runRiskAnalysis}>
             Risikoanalyse
           </button>
         </div>
 
-        {selectedVersions.length < 2 ? (
-          <div style={emptyBox}>
+        {selectedVersions.length < 2 ?
+        <div className={rlcClass(null, emptyBox)}>
             Für die Tabelle bitte mindestens zwei Versionen auswählen. Für eine einzelne Version nutze „Analyse starten“.
-          </div>
-        ) : (
-          <CompareTable rows={filteredRows} versions={selectedVersions} />
-        )}
+          </div> :
+
+        <CompareTable rows={filteredRows} versions={selectedVersions} />
+        }
       </section>
-    </div>
+    </div>);
+
+}
+
+type VersionsModuleTab = "vergleich" | "pruefung" | "ranking";
+
+function tabFromSearch(search: string): VersionsModuleTab {
+  const tab = new URLSearchParams(search).get("tab");
+  if (tab === "pruefung") return "pruefung";
+  if (tab === "ranking") return "ranking";
+  return "vergleich";
+}
+
+export default function VersionsvergleichPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<VersionsModuleTab>(() =>
+  tabFromSearch(location.search)
   );
+
+  useEffect(() => {
+    setActiveTab(tabFromSearch(location.search));
+  }, [location.search]);
+
+  function selectTab(tab: VersionsModuleTab) {
+    setActiveTab(tab);
+    const suffix = tab === "vergleich" ? "" : `?tab=${tab}`;
+    navigate(`/kalkulation/versionsvergleich${suffix}`, { replace: true });
+  }
+
+  return (
+    <div className={rlcClass(null, moduleShell)}>
+      <div className={rlcClass(null, moduleTabs)}>
+        <button
+          type="button" className={rlcClass(null,
+          activeTab === "vergleich" ? moduleTabActive : moduleTab)}
+          onClick={() => selectTab("vergleich")}>
+          
+          Versionsvergleich
+        </button>
+        <button
+          type="button" className={rlcClass(null,
+          activeTab === "pruefung" ? moduleTabActive : moduleTab)}
+          onClick={() => selectTab("pruefung")}>
+          
+          LV / Angebot prüfen
+        </button>
+        <button
+          type="button" className={rlcClass(null,
+          activeTab === "ranking" ? moduleTabActive : moduleTab)}
+          onClick={() => selectTab("ranking")}>
+          
+          Angebotsranking
+        </button>
+      </div>
+
+      {activeTab === "vergleich" ? <VersionsvergleichCore /> : null}
+      {activeTab === "pruefung" ? <Widersprueche embedded /> : null}
+      {activeTab === "ranking" ? <BewertungAnalyse embedded /> : null}
+    </div>);
+
 }
 
 /* ================= TABLE ================= */
 
 function CompareTable({
   rows,
-  versions,
-}: {
-  rows: CompareRow[];
-  versions: VersionRow[];
-}) {
+  versions
+
+
+
+}: {rows: CompareRow[];versions: VersionRow[];}) {
   return (
-    <div style={tableWrap}>
-      <table style={table}>
+    <div className={rlcClass(null, tableWrap)}>
+      <table className={rlcClass(null, table)}>
         <thead>
           <tr>
-            <th style={thFixed}>PosNr</th>
-            <th style={thText}>Kurztext</th>
-            {versions.map((v) => (
-              <th key={v.id} style={thGroup} colSpan={4}>
+            <th className={rlcClass(null, thFixed)}>PosNr</th>
+            <th className={rlcClass(null, thText)}>Kurztext</th>
+            {versions.map((v) =>
+            <th key={v.id} className={rlcClass(null, thGroup)} colSpan={4}>
                 {v.name}
               </th>
-            ))}
+            )}
           </tr>
 
           <tr>
-            <th style={thFixed}></th>
-            <th style={thText}></th>
-            {versions.map((v) => (
-              <React.Fragment key={`sub-${v.id}`}>
-                <th style={thSmall}>Menge</th>
-                <th style={thSmall}>ME</th>
-                <th style={thSmall}>EP</th>
-                <th style={thSmall}>Gesamt</th>
+            <th className={rlcClass(null, thFixed)}></th>
+            <th className={rlcClass(null, thText)}></th>
+            {versions.map((v) =>
+            <React.Fragment key={`sub-${v.id}`}>
+                <th className={rlcClass(null, thSmall)}>Menge</th>
+                <th className={rlcClass(null, thSmall)}>ME</th>
+                <th className={rlcClass(null, thSmall)}>EP</th>
+                <th className={rlcClass(null, thSmall)}>Gesamt</th>
               </React.Fragment>
-            ))}
+            )}
           </tr>
         </thead>
 
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.key} style={{ background: i % 2 ? "#FCFCFC" : "#FFFFFF" }}>
-              <td style={tdStrong}>{r.posNr || "—"}</td>
-              <td style={tdText}>{r.kurztext || "—"}</td>
+          {rows.map((r, i) =>
+          <tr key={r.key} className={rlcClass(null, { background: i % 2 ? "#FCFCFC" : "#FFFFFF" })}>
+              <td className={rlcClass(null, tdStrong)}>{r.posNr || "—"}</td>
+              <td className={rlcClass(null, tdText)}>{r.kurztext || "—"}</td>
 
-              {r.cells.map((c, idx) => (
-                <React.Fragment key={`${r.key}-${idx}`}>
-                  <td style={tdState(!r.diffQty)}>{c ? qty(c.menge) : "—"}</td>
-                  <td style={tdState(!r.diffUnit)}>{c?.einheit || "—"}</td>
-                  <td style={tdState(!r.diffPrice)}>{c ? money(c.preis) : "—"}</td>
-                  <td style={tdState(!r.diffPrice || !r.diffQty)}>
+              {r.cells.map((c, idx) =>
+            <React.Fragment key={`${r.key}-${idx}`}>
+                  <td className={rlcClass(null, tdState(!r.diffQty))}>{c ? qty(c.menge) : "—"}</td>
+                  <td className={rlcClass(null, tdState(!r.diffUnit))}>{c?.einheit || "—"}</td>
+                  <td className={rlcClass(null, tdState(!r.diffPrice))}>{c ? money(c.preis) : "—"}</td>
+                  <td className={rlcClass(null, tdState(!r.diffPrice || !r.diffQty))}>
                     {c ? money(c.gesamt) : "—"}
                   </td>
                 </React.Fragment>
-              ))}
+            )}
             </tr>
-          ))}
+          )}
 
-          {!rows.length ? (
-            <tr>
-              <td colSpan={2 + versions.length * 4} style={emptyCell}>
+          {!rows.length ?
+          <tr>
+              <td colSpan={2 + versions.length * 4} className={rlcClass(null, emptyCell)}>
                 Keine Positionen gefunden.
               </td>
-            </tr>
-          ) : null}
+            </tr> :
+          null}
         </tbody>
       </table>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= UI ================= */
@@ -1496,38 +1701,73 @@ function CompareTable({
 function Kpi({
   label,
   value,
-  danger,
-}: {
-  label: string;
-  value: string;
-  danger?: boolean;
-}) {
+  danger
+
+
+
+
+}: {label: string;value: string;danger?: boolean;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={{ ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" }}>
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* ================= STYLES ================= */
 
+const moduleShell: React.CSSProperties = {
+  display: "grid",
+  minWidth: 0
+};
+
+const moduleTabs: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  margin: "16px 16px 0",
+  padding: 8,
+  border: "1px solid #DCE5F0",
+  borderRadius: 14,
+  background: "#FFFFFF",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+
+const moduleTab: React.CSSProperties = {
+  border: "1px solid transparent",
+  borderRadius: 10,
+  padding: "10px 14px",
+  background: "transparent",
+  color: "#334155",
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer"
+};
+
+const moduleTabActive: React.CSSProperties = {
+  ...moduleTab,
+  border: "1px solid #BED6FF",
+  background: "#DBEAFE",
+  color: "#123EA5"
+};
+
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -1535,37 +1775,37 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.8,
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const title: React.CSSProperties = {
   margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 900,
   opacity: 0.88,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.9,
+  opacity: 0.9
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const card: React.CSSProperties = {
@@ -1573,7 +1813,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -1582,47 +1822,47 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const filterRow: React.CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const kpiCard: React.CSSProperties = {
   background: "#FFFFFF",
   border: "1px solid #E5E7EB",
   borderRadius: 16,
-  padding: 16,
+  padding: 16
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 800,
-  textTransform: "uppercase",
+  fontWeight: 700,
+  textTransform: "uppercase"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 22,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const searchInput: React.CSSProperties = {
@@ -1630,7 +1870,7 @@ const searchInput: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 11px",
   fontSize: 13,
-  width: 300,
+  width: 300
 };
 
 const btnBase: React.CSSProperties = {
@@ -1638,29 +1878,29 @@ const btnBase: React.CSSProperties = {
   borderRadius: 10,
   padding: "9px 13px",
   fontSize: 13,
-  fontWeight: 800,
+  fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  border: "1px solid #2563EB",
-  background: "#2563EB",
-  color: "#FFFFFF",
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
 };
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: "#FFFFFF",
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const btnDanger: React.CSSProperties = {
   ...btnBase,
   border: "1px solid #FECACA",
   background: "#FEF2F2",
-  color: "#B91C1C",
+  color: "#B91C1C"
 };
 
 const btnMiniDanger: React.CSSProperties = {
@@ -1670,14 +1910,14 @@ const btnMiniDanger: React.CSSProperties = {
   borderRadius: 8,
   padding: "5px 8px",
   fontSize: 11,
-  fontWeight: 800,
-  cursor: "pointer",
+  fontWeight: 700,
+  cursor: "pointer"
 };
 
 const versionGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
-  gap: 10,
+  gap: 10
 };
 
 const versionItem: React.CSSProperties = {
@@ -1687,85 +1927,85 @@ const versionItem: React.CSSProperties = {
   padding: 10,
   border: "1px solid #E5E7EB",
   borderRadius: 12,
-  background: "#FFFFFF",
+  background: "#FFFFFF"
 };
 
 const versionItemActive: React.CSSProperties = {
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF"
 };
 
 const versionTitle: React.CSSProperties = {
-  fontWeight: 900,
+  fontWeight: 700,
   fontSize: 13,
   color: "#0F172A",
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
+  textOverflow: "ellipsis"
 };
 
 const versionMeta: React.CSSProperties = {
   marginTop: 3,
   fontSize: 12,
-  color: "#64748B",
+  color: "#64748B"
 };
 
 const tableWrap: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 12,
   overflow: "auto",
-  maxHeight: "72vh",
+  maxHeight: "72vh"
 };
 
 const table: React.CSSProperties = {
   width: "100%",
   minWidth: 1250,
-  borderCollapse: "collapse",
+  borderCollapse: "collapse"
 };
 
 const thBase: React.CSSProperties = {
   background: "#F8FAFC",
   color: "#475569",
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 700,
   padding: "9px",
   borderBottom: "1px solid #E5E7EB",
   textAlign: "left",
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const thFixed: React.CSSProperties = {
   ...thBase,
-  minWidth: 100,
+  minWidth: 100
 };
 
 const thText: React.CSSProperties = {
   ...thBase,
-  minWidth: 300,
+  minWidth: 300
 };
 
 const thGroup: React.CSSProperties = {
   ...thBase,
   textAlign: "center",
-  borderLeft: "1px solid #E5E7EB",
+  borderLeft: "1px solid #E5E7EB"
 };
 
 const thSmall: React.CSSProperties = {
   ...thBase,
   textAlign: "right",
-  minWidth: 95,
+  minWidth: 95
 };
 
 const tdBase: React.CSSProperties = {
   padding: "8px 9px",
   fontSize: 12,
   borderBottom: "1px solid #F1F5F9",
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const tdStrong: React.CSSProperties = {
   ...tdBase,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const tdText: React.CSSProperties = {
@@ -1773,7 +2013,7 @@ const tdText: React.CSSProperties = {
   maxWidth: 420,
   whiteSpace: "nowrap",
   overflow: "hidden",
-  textOverflow: "ellipsis",
+  textOverflow: "ellipsis"
 };
 
 function tdState(ok: boolean): React.CSSProperties {
@@ -1783,7 +2023,7 @@ function tdState(ok: boolean): React.CSSProperties {
     whiteSpace: "nowrap",
     background: ok ? "#F0FDF4" : "#FEF2F2",
     color: ok ? "#166534" : "#B91C1C",
-    fontWeight: ok ? 700 : 900,
+    fontWeight: ok ? 700 : 900
   };
 }
 
@@ -1794,37 +2034,37 @@ const successBox: React.CSSProperties = {
   borderRadius: 12,
   padding: "10px 12px",
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600
 };
 
 const analysisBox: React.CSSProperties = {
   ...card,
-  border: "1px solid #BFDBFE",
-  background: "#F8FAFC",
+  border: "1px solid #BED6FF",
+  background: "#F8FAFC"
 };
 
 const analysisList: React.CSSProperties = {
   display: "grid",
   gap: 6,
-  marginTop: 8,
+  marginTop: 8
 };
 
 const analysisOk: React.CSSProperties = {
   fontSize: 13,
   color: "#166534",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const analysisWarn: React.CSSProperties = {
   fontSize: 13,
   color: "#92400E",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const analysisNeutral: React.CSSProperties = {
   fontSize: 13,
   color: "#64748B",
-  fontWeight: 800,
+  fontWeight: 700
 };
 
 const emptyBox: React.CSSProperties = {
@@ -1833,32 +2073,11 @@ const emptyBox: React.CSSProperties = {
   borderRadius: 12,
   padding: 16,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const emptyCell: React.CSSProperties = {
   padding: 16,
   color: "#64748B",
-  fontSize: 13,
+  fontSize: 13
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

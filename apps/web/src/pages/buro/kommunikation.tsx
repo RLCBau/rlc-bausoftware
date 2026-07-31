@@ -1,4 +1,4 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
 import { KommsDB } from "./store.komms";
 import { KThread, KMessage, KAttachment } from "./types";
 
@@ -7,26 +7,26 @@ const th: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  whiteSpace: "nowrap",
+  whiteSpace: "nowrap"
 };
 
 const td: React.CSSProperties = {
   padding: "6px 10px",
   borderBottom: "1px solid var(--line)",
   fontSize: 13,
-  verticalAlign: "middle",
+  verticalAlign: "middle"
 };
 
 const inp: React.CSSProperties = {
   border: "1px solid var(--line)",
   borderRadius: 6,
   padding: "6px 8px",
-  fontSize: 13,
+  fontSize: 13
 };
 
 const lbl: React.CSSProperties = {
   fontSize: 12,
-  opacity: 0.8,
+  opacity: 0.8
 };
 
 type ComposeState = {
@@ -40,7 +40,7 @@ const EMPTY_COMPOSE: ComposeState = {
   to: "",
   cc: "",
   subject: "",
-  body: "",
+  body: ""
 };
 
 function pickFile(cb: (file: File) => void | Promise<void>) {
@@ -83,8 +83,8 @@ export default function Kommunikation() {
     const qq = q.trim().toLowerCase();
     return threads.filter((t) => {
       const text = `${t.subject ?? ""} ${(t.participants ?? []).join(" ")} ${
-        t.projectId ?? ""
-      }`.toLowerCase();
+      t.projectId ?? ""}`.
+      toLowerCase();
       const okQ = !qq || text.includes(qq);
       const okUnread = !onlyUnread || (t.unreadCount ?? 0) > 0;
       const okP = !proj || (t.projectId ?? "") === proj;
@@ -94,9 +94,9 @@ export default function Kommunikation() {
 
   const projects = React.useMemo(
     () =>
-      Array.from(
-        new Set(threads.map((t) => t.projectId).filter(Boolean))
-      ) as string[],
+    Array.from(
+      new Set(threads.map((t) => t.projectId).filter(Boolean))
+    ) as string[],
     [threads]
   );
 
@@ -121,7 +121,7 @@ export default function Kommunikation() {
       const next: KThread = {
         ...sel,
         ...patch,
-        updatedAt: Date.now(),
+        updatedAt: Date.now()
       };
       KommsDB.upsertThread(next);
       refresh();
@@ -145,19 +145,19 @@ export default function Kommunikation() {
 
     const subject = (compose.subject || sel.subject || "(ohne Betreff)").trim();
 
-    const toList: string[] = compose.to
-      ? compose.to
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+    const toList: string[] = compose.to ?
+    compose.to.
+    split(",").
+    map((s) => s.trim()).
+    filter(Boolean) :
+    [];
 
-    const ccList: string[] = compose.cc
-      ? compose.cc
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+    const ccList: string[] = compose.cc ?
+    compose.cc.
+    split(",").
+    map((s) => s.trim()).
+    filter(Boolean) :
+    [];
 
     const msg: KMessage = {
       id: crypto.randomUUID(),
@@ -167,32 +167,32 @@ export default function Kommunikation() {
       cc: ccList,
       subject,
       body,
-      attachments: [],
+      attachments: []
     };
 
     await KommsDB.addMessage(sel.id, msg);
 
-    const existingParticipants: string[] = Array.isArray(sel.participants)
-      ? sel.participants
-      : [];
+    const existingParticipants: string[] = Array.isArray(sel.participants) ?
+    sel.participants :
+    [];
 
     const participantSet = new Set<string>([
-      ...existingParticipants,
-      ...toList,
-      ...ccList,
-    ]);
+    ...existingParticipants,
+    ...toList,
+    ...ccList]
+    );
 
     KommsDB.upsertThread({
       ...sel,
       subject,
       participants: Array.from(participantSet),
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     });
 
     setCompose((prev) => ({
       ...prev,
       subject,
-      body: "",
+      body: ""
     }));
 
     refresh();
@@ -215,7 +215,7 @@ export default function Kommunikation() {
     KommsDB.upsertThread({
       ...sel,
       unreadCount: 0,
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     });
     refresh();
   }, [sel, refresh]);
@@ -228,29 +228,29 @@ export default function Kommunikation() {
 
     setCompose((prev) => ({
       ...prev,
-      subject: prev.subject || sel.subject || "",
+      subject: prev.subject || sel.subject || ""
     }));
   }, [selId, sel]);
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateRows: "auto 1fr",
-        gap: 10,
-        padding: 10,
-      }}
-    >
+    <div className="rlc-migrated-pages-buro-kommunikation-tsx-485">
+
+
+
+
+
+
+      
       <div
-        className="card"
-        style={{
-          padding: "8px 10px",
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
+        className="card rlc-migrated-pages-buro-kommunikation-tsx-486">
+
+
+
+
+
+
+
+        
         <button className="btn" onClick={newThread}>
           + Neue Konversation
         </button>
@@ -261,312 +261,312 @@ export default function Kommunikation() {
           Datei anhängen
         </button>
 
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-kommunikation-tsx-487" />
 
         <input
           placeholder="Suche Betreff / Teilnehmer / Projekt…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inp, width: 300 }}
-        />
+          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 300 })} />
+        
 
         <select
           value={proj}
-          onChange={(e) => setProj(e.target.value)}
-          style={{ ...inp, width: 160 }}
-        >
+          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
+          { ...inp, width: 160 })}>
+          
           <option value="">Alle Projekte</option>
-          {projects.map((p) => (
-            <option key={p} value={p}>
+          {projects.map((p) =>
+          <option key={p} value={p}>
               {p}
             </option>
-          ))}
+          )}
         </select>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <label className="rlc-migrated-pages-buro-kommunikation-tsx-488">
           <input
             type="checkbox"
             checked={onlyUnread}
-            onChange={(e) => setOnlyUnread(e.target.checked)}
-          />
-          <span style={{ fontSize: 13 }}>Nur ungelesene</span>
+            onChange={(e) => setOnlyUnread(e.target.checked)} />
+          
+          <span className="rlc-migrated-pages-buro-kommunikation-tsx-489">Nur ungelesene</span>
         </label>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(380px, 44vw) 1fr",
-          gap: 10,
-          minHeight: "60vh",
-        }}
-      >
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="rlc-migrated-pages-buro-kommunikation-tsx-490">
+
+
+
+
+
+
+        
+        <div className="card rlc-migrated-pages-buro-kommunikation-tsx-491">
+          <table className="rlc-migrated-pages-buro-kommunikation-tsx-492">
             <thead>
               <tr>
-                <th style={th}>Betreff</th>
-                <th style={th}>Projekt</th>
-                <th style={th}>Teilnehmer</th>
-                <th style={th}>Ungelesen</th>
-                <th style={th}>Aktualisiert</th>
+                <th className={rlcClass(null, th)}>Betreff</th>
+                <th className={rlcClass(null, th)}>Projekt</th>
+                <th className={rlcClass(null, th)}>Teilnehmer</th>
+                <th className={rlcClass(null, th)}>Ungelesen</th>
+                <th className={rlcClass(null, th)}>Aktualisiert</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td style={{ ...td, opacity: 0.7 }} colSpan={5}>
+              {filtered.length === 0 ?
+              <tr>
+                  <td className={rlcClass(null, { ...td, opacity: 0.7 })} colSpan={5}>
                     Keine Konversationen gefunden.
                   </td>
-                </tr>
-              ) : (
-                filtered.map((t) => (
-                  <tr
-                    key={t.id}
-                    onClick={() => setSelId(t.id)}
-                    style={{
-                      cursor: "pointer",
-                      background: t.id === selId ? "#f1f5ff" : undefined,
-                    }}
-                  >
-                    <td style={td} title={t.subject}>
+                </tr> :
+
+              filtered.map((t) =>
+              <tr
+                key={t.id}
+                onClick={() => setSelId(t.id)} className={rlcClass(null,
+                {
+                  cursor: "pointer",
+                  background: t.id === selId ? "#f1f5ff" : undefined
+                })}>
+                
+                    <td className={rlcClass(null, td)} title={t.subject}>
                       <b>{t.subject || "(ohne Betreff)"}</b>
                     </td>
-                    <td style={td}>{t.projectId || "—"}</td>
-                    <td style={td} title={(t.participants || []).join(", ")}>
+                    <td className={rlcClass(null, td)}>{t.projectId || "—"}</td>
+                    <td className={rlcClass(null, td)} title={(t.participants || []).join(", ")}>
                       {(t.participants || []).slice(0, 3).join(", ")}
                       {(t.participants || []).length > 3 ? "…" : ""}
                     </td>
-                    <td style={td}>{t.unreadCount ?? 0}</td>
-                    <td style={td}>{new Date(t.updatedAt).toLocaleString()}</td>
+                    <td className={rlcClass(null, td)}>{t.unreadCount ?? 0}</td>
+                    <td className={rlcClass(null, td)}>{new Date(t.updatedAt).toLocaleString()}</td>
                   </tr>
-                ))
-              )}
+              )
+              }
             </tbody>
           </table>
         </div>
 
         <div
-          className="card"
-          style={{
-            padding: 12,
-            display: "grid",
-            gridTemplateRows: "auto auto 1fr auto",
-            gap: 10,
-          }}
+          className="card rlc-migrated-pages-buro-kommunikation-tsx-493"
+
+
+
+
+
+
           onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}
-        >
-          {!sel ? (
-            <div style={{ opacity: 0.7 }}>
+          onDrop={onDrop}>
+          
+          {!sel ?
+          <div className="rlc-migrated-pages-buro-kommunikation-tsx-494">
               Links eine Konversation wählen oder neu erstellen.
-            </div>
-          ) : (
-            <>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "120px 1fr 120px 1fr",
-                  gap: 10,
-                }}
-              >
-                <label style={lbl}>Betreff</label>
-                <input
-                  style={inp}
-                  value={sel.subject ?? ""}
-                  onChange={(e) => update({ subject: e.target.value })}
-                />
+            </div> :
 
-                <label style={lbl}>Projekt-ID</label>
-                <input
-                  style={inp}
-                  value={sel.projectId ?? ""}
-                  onChange={(e) => update({ projectId: e.target.value })}
-                />
+          <>
+              <div className="rlc-migrated-pages-buro-kommunikation-tsx-495">
 
-                <label style={lbl}>Teilnehmer</label>
-                <input
-                  style={inp}
-                  placeholder="kommagetrennt"
-                  value={(sel.participants ?? []).join(", ")}
-                  onChange={(e) =>
-                    update({
-                      participants: e.target.value
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                />
+
+
+
+
+              
+                <label className={rlcClass(null, lbl)}>Betreff</label>
+                <input className={rlcClass(null,
+              inp)}
+              value={sel.subject ?? ""}
+              onChange={(e) => update({ subject: e.target.value })} />
+              
+
+                <label className={rlcClass(null, lbl)}>Projekt-ID</label>
+                <input className={rlcClass(null,
+              inp)}
+              value={sel.projectId ?? ""}
+              onChange={(e) => update({ projectId: e.target.value })} />
+              
+
+                <label className={rlcClass(null, lbl)}>Teilnehmer</label>
+                <input className={rlcClass(null,
+              inp)}
+              placeholder="kommagetrennt"
+              value={(sel.participants ?? []).join(", ")}
+              onChange={(e) =>
+              update({
+                participants: e.target.value.
+                split(",").
+                map((s) => s.trim()).
+                filter(Boolean)
+              })
+              } />
+              
 
                 <div />
-                <div style={{ display: "flex", gap: 8 }}>
+                <div className="rlc-migrated-pages-buro-kommunikation-tsx-496">
                   <button className="btn" onClick={markAllRead}>
                     Als gelesen markieren
                   </button>
                 </div>
               </div>
 
-              {(sel.attachments?.length ?? 0) > 0 && (
-                <div>
-                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Dateien</div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "repeat(auto-fill, minmax(180px, 1fr))",
-                      gap: 8,
-                    }}
-                  >
-                    {(sel.attachments ?? []).map((a) => (
-                      <AttachmentPreview key={a.id} a={a} />
-                    ))}
+              {(sel.attachments?.length ?? 0) > 0 &&
+            <div>
+                  <div className="rlc-migrated-pages-buro-kommunikation-tsx-497">Dateien</div>
+                  <div className="rlc-migrated-pages-buro-kommunikation-tsx-498">
+
+
+
+
+
+
+                
+                    {(sel.attachments ?? []).map((a) =>
+                <AttachmentPreview key={a.id} a={a} />
+                )}
                   </div>
                 </div>
-              )}
+            }
 
+              <div className="rlc-migrated-pages-buro-kommunikation-tsx-499">
+
+
+
+
+
+
+
+              
+                {sel.messages.length === 0 ?
+              <div className="rlc-migrated-pages-buro-kommunikation-tsx-500">Noch keine Nachrichten.</div> :
+
+              sel.messages.
+              slice().
+              sort((a, b) => a.when - b.when).
+              map((m) =>
               <div
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: 8,
-                  overflow: "auto",
-                  background: "#fff",
-                  padding: 10,
-                }}
-              >
-                {sel.messages.length === 0 ? (
-                  <div style={{ opacity: 0.6 }}>Noch keine Nachrichten.</div>
-                ) : (
-                  sel.messages
-                    .slice()
-                    .sort((a, b) => a.when - b.when)
-                    .map((m) => (
-                      <div
-                        key={m.id}
-                        style={{
-                          padding: "8px 10px",
-                          borderBottom: "1px dashed var(--line)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            alignItems: "baseline",
-                          }}
-                        >
-                          <div style={{ fontWeight: 700 }}>{m.from}</div>
-                          <div style={{ fontSize: 12, opacity: 0.7 }}>
+                key={m.id} className="rlc-migrated-pages-buro-kommunikation-tsx-501">
+
+
+
+
+                
+                        <div className="rlc-migrated-pages-buro-kommunikation-tsx-502">
+
+
+
+
+
+                  
+                          <div className="rlc-migrated-pages-buro-kommunikation-tsx-503">{m.from}</div>
+                          <div className="rlc-migrated-pages-buro-kommunikation-tsx-504">
                             {new Date(m.when).toLocaleString()}
                           </div>
                         </div>
 
-                        {m.subject ? (
-                          <div style={{ fontSize: 13, margin: "2px 0 6px 0" }}>
+                        {m.subject ?
+                <div className="rlc-migrated-pages-buro-kommunikation-tsx-505">
                             <b>{m.subject}</b>
-                          </div>
-                        ) : null}
+                          </div> :
+                null}
 
-                        <div style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>
+                        <div className="rlc-migrated-pages-buro-kommunikation-tsx-506">
                           {m.body}
                         </div>
 
-                        {(m.attachments?.length ?? 0) > 0 ? (
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns:
-                                "repeat(auto-fill, minmax(160px, 1fr))",
-                              gap: 8,
-                              marginTop: 8,
-                            }}
-                          >
-                            {(m.attachments ?? []).map((a) => (
-                              <AttachmentPreview key={a.id} a={a} />
-                            ))}
-                          </div>
-                        ) : null}
+                        {(m.attachments?.length ?? 0) > 0 ?
+                <div className="rlc-migrated-pages-buro-kommunikation-tsx-507">
+
+
+
+
+
+
+
+                  
+                            {(m.attachments ?? []).map((a) =>
+                  <AttachmentPreview key={a.id} a={a} />
+                  )}
+                          </div> :
+                null}
                       </div>
-                    ))
-                )}
+              )
+              }
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "80px 1fr 40px 1fr",
-                  gap: 8,
-                }}
-              >
-                <label style={lbl}>An</label>
-                <input
-                  style={inp}
-                  value={compose.to}
-                  onChange={(e) =>
-                    setCompose((p) => ({ ...p, to: e.target.value }))
-                  }
-                  placeholder="mail1@..., mail2@..."
-                />
+              <div className="rlc-migrated-pages-buro-kommunikation-tsx-508">
 
-                <label style={lbl}>CC</label>
-                <input
-                  style={inp}
-                  value={compose.cc}
-                  onChange={(e) =>
-                    setCompose((p) => ({ ...p, cc: e.target.value }))
-                  }
-                />
 
-                <label style={lbl}>Betreff</label>
-                <input
-                  style={{ ...inp, gridColumn: "2 / -1" }}
-                  value={compose.subject}
-                  onChange={(e) =>
-                    setCompose((p) => ({ ...p, subject: e.target.value }))
-                  }
-                />
 
-                <label style={{ ...lbl, gridColumn: "1 / -1" }}>Nachricht</label>
-                <textarea
-                  style={{
-                    ...inp,
-                    gridColumn: "1 / -1",
-                    minHeight: 120,
-                    resize: "vertical",
-                  }}
-                  value={compose.body}
-                  onChange={(e) =>
-                    setCompose((p) => ({ ...p, body: e.target.value }))
-                  }
-                  placeholder="Schreibe eine Nachricht… (Anhänge: Datei auf diesen Bereich ziehen)"
-                />
 
-                <div
-                  style={{
-                    gridColumn: "1 / -1",
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    gap: 8,
-                  }}
-                >
+
+              
+                <label className={rlcClass(null, lbl)}>An</label>
+                <input className={rlcClass(null,
+              inp)}
+              value={compose.to}
+              onChange={(e) =>
+              setCompose((p) => ({ ...p, to: e.target.value }))
+              }
+              placeholder="mail1@..., mail2@..." />
+              
+
+                <label className={rlcClass(null, lbl)}>CC</label>
+                <input className={rlcClass(null,
+              inp)}
+              value={compose.cc}
+              onChange={(e) =>
+              setCompose((p) => ({ ...p, cc: e.target.value }))
+              } />
+              
+
+                <label className={rlcClass(null, lbl)}>Betreff</label>
+                <input className={rlcClass(null,
+              { ...inp, gridColumn: "2 / -1" })}
+              value={compose.subject}
+              onChange={(e) =>
+              setCompose((p) => ({ ...p, subject: e.target.value }))
+              } />
+              
+
+                <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>Nachricht</label>
+                <textarea className={rlcClass(null,
+              {
+                ...inp,
+                gridColumn: "1 / -1",
+                minHeight: 120,
+                resize: "vertical"
+              })}
+              value={compose.body}
+              onChange={(e) =>
+              setCompose((p) => ({ ...p, body: e.target.value }))
+              }
+              placeholder="Schreibe eine Nachricht… (Anhänge: Datei auf diesen Bereich ziehen)" />
+              
+
+                <div className="rlc-migrated-pages-buro-kommunikation-tsx-509">
+
+
+
+
+
+
+                
                   <button
-                    className="btn"
-                    onClick={send}
-                    disabled={!compose.body.trim()}
-                  >
+                  className="btn"
+                  onClick={send}
+                  disabled={!compose.body.trim()}>
+                  
                     Senden
                   </button>
                 </div>
               </div>
             </>
-          )}
+          }
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
-function AttachmentPreview({ a }: { a: KAttachment }) {
+function AttachmentPreview({ a }: {a: KAttachment;}) {
   const isImg = (a.mime || "").startsWith("image/");
   const isPDF = (a.mime || "").includes("pdf");
 
@@ -576,60 +576,55 @@ function AttachmentPreview({ a }: { a: KAttachment }) {
   };
 
   return (
-    <div
-      style={{
-        border: "1px solid var(--line)",
-        borderRadius: 6,
-        overflow: "hidden",
-        background: "#fff",
-      }}
-    >
-      <div
-        style={{
-          padding: "6px 8px",
-          fontSize: 12,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
+    <div className="rlc-migrated-pages-buro-kommunikation-tsx-510">
+
+
+
+
+
+
+      
+      <div className="rlc-migrated-pages-buro-kommunikation-tsx-511">
+
+
+
+
+
+
+
+        
         <span
-          style={{
-            fontWeight: 600,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-          title={a.name}
-        >
+
+
+
+
+
+
+          title={a.name} className="rlc-migrated-pages-buro-kommunikation-tsx-512">
+          
           {a.name}
         </span>
-        <div style={{ flex: 1 }} />
+        <div className="rlc-migrated-pages-buro-kommunikation-tsx-513" />
         <button className="btn" onClick={open}>
           Öffnen
         </button>
       </div>
 
-      {isImg ? (
-        <img
-          src={a.dataURL}
-          alt={a.name}
-          style={{ width: "100%", height: "auto", display: "block" }}
-        />
-      ) : null}
+      {isImg ?
+      <img
+        src={a.dataURL}
+        alt={a.name} className="rlc-migrated-pages-buro-kommunikation-tsx-514" /> :
 
-      {isPDF ? (
-        <iframe
-          title={a.name}
-          src={a.dataURL}
-          style={{ width: "100%", height: 200, border: 0 }}
-        />
-      ) : null}
-    </div>
-  );
+
+      null}
+
+      {isPDF ?
+      <iframe
+        title={a.name}
+        src={a.dataURL} className="rlc-migrated-pages-buro-kommunikation-tsx-515" /> :
+
+
+      null}
+    </div>);
+
 }
-
-
-
-
-

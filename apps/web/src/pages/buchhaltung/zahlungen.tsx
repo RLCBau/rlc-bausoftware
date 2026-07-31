@@ -1,3 +1,4 @@
+import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 import React, { useMemo, useState } from "react";
 import "./styles.css";
 
@@ -31,10 +32,10 @@ type MatchStatus = "unmatched" | "matched";
    HELPERS
    ========================= */
 const fmt = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 const brutto = (r: RechnungLite) => safeNumber(r.netto) * (1 + safeNumber(r.mwstPct) / 100);
 
@@ -45,7 +46,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -54,13 +55,13 @@ function escapeHtml(s: unknown) {
   return String(s ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
@@ -85,7 +86,7 @@ const withinDays = (d: Date, days: number) => {
 };
 
 const isSameMonth = (d: Date, ref: Date) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 function csvEscape(v: unknown) {
   return `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -96,53 +97,53 @@ function csvEscape(v: unknown) {
    ========================= */
 export default function Zahlungseingaenge() {
   const [rechnungen] = useState<RechnungLite[]>([
-    {
-      id: 1,
-      nr: "R-2025-001",
-      kunde: "Muster GmbH",
-      datum: "30.10.2025",
-      netto: 4500,
-      mwstPct: 19,
-      gezahlt: 1200,
-    },
-    {
-      id: 2,
-      nr: "R-2025-002",
-      kunde: "Bau AG",
-      datum: "29.10.2025",
-      netto: 2890,
-      mwstPct: 19,
-      gezahlt: 2890,
-    },
-    {
-      id: 3,
-      nr: "R-2025-003",
-      kunde: "Stadtwerke",
-      datum: "15.09.2025",
-      netto: 9800,
-      mwstPct: 7,
-      gezahlt: 0,
-    },
-  ]);
+  {
+    id: 1,
+    nr: "R-2025-001",
+    kunde: "Muster GmbH",
+    datum: "30.10.2025",
+    netto: 4500,
+    mwstPct: 19,
+    gezahlt: 1200
+  },
+  {
+    id: 2,
+    nr: "R-2025-002",
+    kunde: "Bau AG",
+    datum: "29.10.2025",
+    netto: 2890,
+    mwstPct: 19,
+    gezahlt: 2890
+  },
+  {
+    id: 3,
+    nr: "R-2025-003",
+    kunde: "Stadtwerke",
+    datum: "15.09.2025",
+    netto: 9800,
+    mwstPct: 7,
+    gezahlt: 0
+  }]
+  );
 
   const [zahlungen, setZahlungen] = useState<Zahlung[]>([
-    {
-      id: 1,
-      datum: "02.11.2025",
-      kunde: "Muster GmbH",
-      betrag: 1000,
-      methode: "Überweisung",
-      verwendungszweck: "R-2025-001",
-    },
-    {
-      id: 2,
-      datum: "01.11.2025",
-      kunde: "Stadtwerke",
-      betrag: 3500,
-      methode: "Überweisung",
-      verwendungszweck: "Teilzahlung Baugrube",
-    },
-  ]);
+  {
+    id: 1,
+    datum: "02.11.2025",
+    kunde: "Muster GmbH",
+    betrag: 1000,
+    methode: "Überweisung",
+    verwendungszweck: "R-2025-001"
+  },
+  {
+    id: 2,
+    datum: "01.11.2025",
+    kunde: "Stadtwerke",
+    betrag: 3500,
+    methode: "Überweisung",
+    verwendungszweck: "Teilzahlung Baugrube"
+  }]
+  );
 
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
   const [kunde, setKunde] = useState<string>("ALL");
@@ -151,9 +152,9 @@ export default function Zahlungseingaenge() {
 
   const kundenListe = useMemo(
     () => [
-      "ALL",
-      ...Array.from(new Set([...rechnungen.map((r) => r.kunde), ...zahlungen.map((z) => z.kunde)])),
-    ],
+    "ALL",
+    ...Array.from(new Set([...rechnungen.map((r) => r.kunde), ...zahlungen.map((z) => z.kunde)]))],
+
     [rechnungen, zahlungen]
   );
 
@@ -210,28 +211,28 @@ export default function Zahlungseingaenge() {
   const addZahlung = () => {
     const id = zahlungen.length ? Math.max(...zahlungen.map((z) => z.id)) + 1 : 1;
     setZahlungen((prev) => [
-      ...prev,
-      {
-        id,
-        datum: new Date().toLocaleDateString("de-DE"),
-        kunde: "Neuer Kunde",
-        betrag: 0,
-        methode: "Überweisung",
-      },
-    ]);
+    ...prev,
+    {
+      id,
+      datum: new Date().toLocaleDateString("de-DE"),
+      kunde: "Neuer Kunde",
+      betrag: 0,
+      methode: "Überweisung"
+    }]
+    );
   };
 
   const removeZahlung = (id: number) =>
-    setZahlungen((prev) => prev.filter((z) => z.id !== id));
+  setZahlungen((prev) => prev.filter((z) => z.id !== id));
 
-  const updateZahlung = <K extends keyof Zahlung>(index: number, key: K, value: Zahlung[K]) => {
+  const updateZahlung = <K extends keyof Zahlung,>(index: number, key: K, value: Zahlung[K]) => {
     setZahlungen((prev) => {
       const c = [...prev];
       if (!c[index]) return prev;
 
       c[index] = {
         ...c[index],
-        [key]: key === "betrag" ? safeNumber(value, 0) : value,
+        [key]: key === "betrag" ? safeNumber(value, 0) : value
       };
 
       return c;
@@ -243,22 +244,22 @@ export default function Zahlungseingaenge() {
     const tol = 0.5;
 
     setZahlungen((prev) =>
-      prev.map((z) => {
-        if (z.rechnungId || safeNumber(z.betrag) <= 0) return z;
+    prev.map((z) => {
+      if (z.rechnungId || safeNumber(z.betrag) <= 0) return z;
 
-        const vz = safeTrim(z.verwendungszweck);
+      const vz = safeTrim(z.verwendungszweck);
 
-        const byNr = rechnungenMitRest.find((r) => vz.includes(r.nr));
-        if (byNr) return { ...z, rechnungId: byNr.id };
+      const byNr = rechnungenMitRest.find((r) => vz.includes(r.nr));
+      if (byNr) return { ...z, rechnungId: byNr.id };
 
-        const cand = rechnungenMitRest
-          .filter((r) => r.kunde === z.kunde && r.offen > 0)
-          .find((r) => Math.abs(r.offen - safeNumber(z.betrag)) <= tol);
+      const cand = rechnungenMitRest.
+      filter((r) => r.kunde === z.kunde && r.offen > 0).
+      find((r) => Math.abs(r.offen - safeNumber(z.betrag)) <= tol);
 
-        if (cand) return { ...z, rechnungId: cand.id };
+      if (cand) return { ...z, rechnungId: cand.id };
 
-        return z;
-      })
+      return z;
+    })
     );
   };
 
@@ -271,7 +272,7 @@ export default function Zahlungseingaenge() {
       Methode: z.methode,
       Verwendungszweck: z.verwendungszweck || "",
       Rechnung: z.rechnungId ? rechnungen.find((r) => r.id === z.rechnungId)?.nr || "" : "",
-      Status: z.rechnungId ? "zugeordnet" : "offen",
+      Status: z.rechnungId ? "zugeordnet" : "offen"
     }));
 
     if (!data.length) {
@@ -281,19 +282,19 @@ export default function Zahlungseingaenge() {
 
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.map(csvEscape).join(";"),
-      ...data.map((row) =>
-        headers.map((h) => csvEscape((row as Record<string, unknown>)[h])).join(";")
-      ),
-    ].join("\n");
+    headers.map(csvEscape).join(";"),
+    ...data.map((row) =>
+    headers.map((h) => csvEscape((row as Record<string, unknown>)[h])).join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     const href = URL.createObjectURL(blob);
     a.href = href;
-    a.download = useFiltered
-      ? "zahlungseingaenge_gefiltert.csv"
-      : "zahlungseingaenge_alle.csv";
+    a.download = useFiltered ?
+    "zahlungseingaenge_gefiltert.csv" :
+    "zahlungseingaenge_alle.csv";
     a.click();
     URL.revokeObjectURL(href);
   };
@@ -324,7 +325,7 @@ export default function Zahlungseingaenge() {
     const y = (pageH - h) / 2;
 
     pdf.addImage(img, "PNG", x, y, w, h);
-    pdf.save(useFiltered ? "Zahlungseingaenge_gefiltert.pdf" : "Zahlungseingaenge_alle.pdf");
+    saveRlcPdfWithCompanyHeader(pdf, useFiltered ? "Zahlungseingaenge_gefiltert.pdf" : "Zahlungseingaenge_alle.pdf");
   };
 
   function buildReportNode(list: Zahlung[]) {
@@ -355,13 +356,13 @@ export default function Zahlungseingaenge() {
           </tr>
         </thead>
         <tbody>
-          ${list
-            .map((z) => {
-              const nr = z.rechnungId
-                ? rechnungen.find((r) => r.id === z.rechnungId)?.nr || ""
-                : "";
-              const matched = !!z.rechnungId;
-              return `
+          ${list.
+    map((z) => {
+      const nr = z.rechnungId ?
+      rechnungen.find((r) => r.id === z.rechnungId)?.nr || "" :
+      "";
+      const matched = !!z.rechnungId;
+      return `
                 <tr>
                   <td>${escapeHtml(z.datum)}</td>
                   <td>${escapeHtml(z.kunde)}</td>
@@ -371,8 +372,8 @@ export default function Zahlungseingaenge() {
                   <td>${escapeHtml(nr)}</td>
                   <td>${matched ? '<span class="chip ok">zugeordnet</span>' : '<span class="chip warn">offen</span>'}</td>
                 </tr>`;
-            })
-            .join("")}
+    }).
+    join("")}
         </tbody>
       </table>
       <div style="margin-top:10px">
@@ -440,11 +441,11 @@ export default function Zahlungseingaenge() {
         <div>
           <label>Kunde</label>
           <select value={kunde} onChange={(e) => setKunde(e.target.value)}>
-            {kundenListe.map((k) => (
-              <option key={k} value={k}>
+            {kundenListe.map((k) =>
+            <option key={k} value={k}>
                 {k === "ALL" ? "Alle" : k}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
@@ -452,8 +453,8 @@ export default function Zahlungseingaenge() {
           <label>Methode</label>
           <select
             value={methode}
-            onChange={(e) => setMethode(e.target.value as Zahlung["methode"] | "ALL")}
-          >
+            onChange={(e) => setMethode(e.target.value as Zahlung["methode"] | "ALL")}>
+            
             <option value="ALL">Alle</option>
             <option value="Überweisung">Überweisung</option>
             <option value="Bar">Bar</option>
@@ -491,22 +492,22 @@ export default function Zahlungseingaenge() {
         <tbody>
           {filtered.map((z) => {
             const i = zahlungen.findIndex((x) => x.id === z.id);
-            const r = z.rechnungId
-              ? rechnungenMitRest.find((x) => x.id === z.rechnungId)
-              : undefined;
-            const nr = z.rechnungId
-              ? rechnungen.find((r) => r.id === z.rechnungId)?.nr || ""
-              : "";
+            const r = z.rechnungId ?
+            rechnungenMitRest.find((x) => x.id === z.rechnungId) :
+            undefined;
+            const nr = z.rechnungId ?
+            rechnungen.find((r) => r.id === z.rechnungId)?.nr || "" :
+            "";
             const matched = !!z.rechnungId;
 
             return (
               <tr key={z.id}>
                 <td>
                   <button
-                    className="bh-btn"
-                    style={{ background: "#e74c3c" }}
-                    onClick={() => removeZahlung(z.id)}
-                  >
+                    className="bh-btn rlc-migrated-pages-buchhaltung-zahlungen-tsx-308"
+
+                    onClick={() => removeZahlung(z.id)}>
+                    
                     Löschen
                   </button>
                 </td>
@@ -515,18 +516,18 @@ export default function Zahlungseingaenge() {
                   <input
                     type="text"
                     value={z.datum}
-                    onChange={(e) => updateZahlung(i, "datum", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => updateZahlung(i, "datum", e.target.value)} className="rlc-migrated-pages-buchhaltung-zahlungen-tsx-309" />
+
+                  
                 </td>
 
                 <td>
                   <input
                     type="text"
                     value={z.kunde}
-                    onChange={(e) => updateZahlung(i, "kunde", e.target.value)}
-                    style={{ minWidth: 160 }}
-                  />
+                    onChange={(e) => updateZahlung(i, "kunde", e.target.value)} className="rlc-migrated-pages-buchhaltung-zahlungen-tsx-310" />
+
+                  
                 </td>
 
                 <td className="right">
@@ -534,16 +535,16 @@ export default function Zahlungseingaenge() {
                     type="number"
                     step="0.01"
                     value={z.betrag}
-                    onChange={(e) => updateZahlung(i, "betrag", safeNumber(e.target.value, 0))}
-                    style={{ width: 120, textAlign: "right" }}
-                  />
+                    onChange={(e) => updateZahlung(i, "betrag", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-zahlungen-tsx-311" />
+
+                  
                 </td>
 
                 <td>
                   <select
                     value={z.methode}
-                    onChange={(e) => updateZahlung(i, "methode", e.target.value as Zahlung["methode"])}
-                  >
+                    onChange={(e) => updateZahlung(i, "methode", e.target.value as Zahlung["methode"])}>
+                    
                     <option value="Überweisung">Überweisung</option>
                     <option value="Bar">Bar</option>
                     <option value="Karte">Karte</option>
@@ -556,56 +557,56 @@ export default function Zahlungseingaenge() {
                   <input
                     type="text"
                     value={z.verwendungszweck || ""}
-                    onChange={(e) => updateZahlung(i, "verwendungszweck", e.target.value)}
-                    style={{ minWidth: 220 }}
-                  />
+                    onChange={(e) => updateZahlung(i, "verwendungszweck", e.target.value)} className="rlc-migrated-pages-buchhaltung-zahlungen-tsx-312" />
+
+                  
                 </td>
 
                 <td>
                   <select
                     value={z.rechnungId || ""}
                     onChange={(e) =>
-                      updateZahlung(
-                        i,
-                        "rechnungId",
-                        e.target.value ? Number(e.target.value) : undefined
-                      )
-                    }
-                  >
+                    updateZahlung(
+                      i,
+                      "rechnungId",
+                      e.target.value ? Number(e.target.value) : undefined
+                    )
+                    }>
+                    
                     <option value="">– auswählen –</option>
-                    {rechnungenMitRest.map((r) => (
-                      <option key={r.id} value={r.id}>
+                    {rechnungenMitRest.map((r) =>
+                    <option key={r.id} value={r.id}>
                         {r.nr} · {r.kunde} · offen {fmt(r.offen)} €
                       </option>
-                    ))}
+                    )}
                   </select>
                 </td>
 
                 <td>
-                  {matched ? (
-                    <span className="chip ok">zugeordnet</span>
-                  ) : (
-                    <span className="chip warn">offen</span>
-                  )}
+                  {matched ?
+                  <span className="chip ok">zugeordnet</span> :
+
+                  <span className="chip warn">offen</span>
+                  }
                 </td>
 
                 <td className="right">
                   {r ? fmt(Math.max(0, r.offen - safeNumber(z.betrag))) : "—"}
                 </td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={9} style={{ textAlign: "center", color: "#777", padding: 14 }}>
+          {filtered.length === 0 &&
+          <tr>
+              <td colSpan={9} className="rlc-migrated-pages-buchhaltung-zahlungen-tsx-313">
                 Keine Zahlungseingänge im aktuellen Filter.
               </td>
             </tr>
-          )}
+          }
 
-          <tr style={{ background: "#fafafa", fontWeight: 600 }}>
-            <td colSpan={3} style={{ textAlign: "right" }}>
+          <tr className="rlc-migrated-pages-buchhaltung-zahlungen-tsx-314">
+            <td colSpan={3} className="rlc-migrated-pages-buchhaltung-zahlungen-tsx-315">
               Summe (gefiltert):
             </td>
             <td className="right">{fmt(sumFiltered)}</td>
@@ -614,14 +615,9 @@ export default function Zahlungseingaenge() {
         </tbody>
       </table>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-zahlungen-tsx-316">
         Gesamt Zahlungen: <b>{fmt(sumAll)} €</b> · Nicht zugeordnet: <b>{fmt(sumUnmatched)} €</b>
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-

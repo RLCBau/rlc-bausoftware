@@ -1,4 +1,4 @@
-// apps/web/src/pages/kalkulation/Uebersicht.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/Uebersicht.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../components/PageHeader";
@@ -30,18 +30,18 @@ function getCurrentProject(projectCtx: any): ProjectLike | null {
     projectCtx?.currentProject ??
     projectCtx?.current ??
     projectCtx?.selectedProject ??
-    projectCtx?.project ??
-    (typeof projectCtx?.getCurrentProject === "function"
-      ? projectCtx.getCurrentProject()
-      : null) ??
-    null
-  );
+    projectCtx?.project ?? (
+    typeof projectCtx?.getCurrentProject === "function" ?
+    projectCtx.getCurrentProject() :
+    null) ??
+    null);
+
 }
 
 function projectCode(project: ProjectLike | null): string {
-  return String(project?.code ?? project?.number ?? project?.id ?? "")
-    .trim()
-    .toUpperCase();
+  return String(project?.code ?? project?.number ?? project?.id ?? "").
+  trim().
+  toUpperCase();
 }
 
 function projectName(project: ProjectLike | null): string {
@@ -49,10 +49,10 @@ function projectName(project: ProjectLike | null): string {
 }
 
 function n(value: unknown): number {
-  const raw = String(value ?? "0")
-    .replace(/\s/g, "")
-    .replace(/\.(?=\d{3}(?:[.,]|$))/g, "")
-    .replace(",", ".");
+  const raw = String(value ?? "0").
+  replace(/\s/g, "").
+  replace(/\.(?=\d{3}(?:[.,]|$))/g, "").
+  replace(",", ".");
 
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -61,7 +61,7 @@ function n(value: unknown): number {
 function money(value: unknown): string {
   return `${n(value).toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 2
   })} €`;
 }
 
@@ -76,13 +76,13 @@ function rowTotal(row: LVPos): number {
 }
 
 function norm(value: unknown): string {
-  return String(value ?? "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(value ?? "").
+  toLowerCase().
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/[^\p{L}\p{N}]+/gu, " ").
+  replace(/\s+/g, " ").
+  trim();
 }
 
 function duplicateKey(row: LVPos): string {
@@ -90,11 +90,11 @@ function duplicateKey(row: LVPos): string {
   if (text.length < 8) return "";
 
   return [
-    text,
-    norm(row.einheit),
-    Math.round(n(row.menge) * 1000) / 1000,
-    Math.round(rowPrice(row) * 100) / 100,
-  ].join("|");
+  text,
+  norm(row.einheit),
+  Math.round(n(row.menge) * 1000) / 1000,
+  Math.round(rowPrice(row) * 100) / 100].
+  join("|");
 }
 
 function getDuplicateCount(rows: LVPos[]): number {
@@ -115,70 +115,70 @@ function getDuplicateCount(rows: LVPos[]): number {
   );
 }
 
-function TileButton({ tile }: { tile: Tile }) {
+function TileButton({ tile }: {tile: Tile;}) {
   const nav = useNavigate();
 
   return (
-    <button type="button" style={tileCard} onClick={() => nav(tile.to)}>
-      <div style={tileTop}>
-        <div style={iconBox}>{tile.icon}</div>
-        {tile.badge ? <span style={tileBadge}>{tile.badge}</span> : null}
+    <button type="button" className={rlcClass(null, tileCard)} onClick={() => nav(tile.to)}>
+      <div className={rlcClass(null, tileTop)}>
+        <div className={rlcClass(null, iconBox)}>{tile.icon}</div>
+        {tile.badge ? <span className={rlcClass(null, tileBadge)}>{tile.badge}</span> : null}
       </div>
 
-      <div style={tileTitle}>{tile.title}</div>
-      <div style={tileText}>{tile.desc}</div>
-      <div style={tileFooter}>Öffnen →</div>
-    </button>
-  );
+      <div className={rlcClass(null, tileTitle)}>{tile.title}</div>
+      <div className={rlcClass(null, tileText)}>{tile.desc}</div>
+      <div className={rlcClass(null, tileFooter)}>Öffnen →</div>
+    </button>);
+
 }
 
 function Section({
   title,
   subtitle,
-  tiles,
-}: {
-  title: string;
-  subtitle: string;
-  tiles: Tile[];
-}) {
+  tiles
+
+
+
+
+}: {title: string;subtitle: string;tiles: Tile[];}) {
   return (
-    <section style={card}>
-      <div style={sectionHead}>
+    <section className={rlcClass(null, card)}>
+      <div className={rlcClass(null, sectionHead)}>
         <div>
-          <h2 style={sectionTitle}>{title}</h2>
-          <div style={sectionText}>{subtitle}</div>
+          <h2 className={rlcClass(null, sectionTitle)}>{title}</h2>
+          <div className={rlcClass(null, sectionText)}>{subtitle}</div>
         </div>
       </div>
 
-      <div style={tilesGrid}>
-        {tiles.map((tile) => (
-          <TileButton key={tile.to} tile={tile} />
-        ))}
+      <div className={rlcClass(null, tilesGrid)}>
+        {tiles.map((tile) =>
+        <TileButton key={tile.to} tile={tile} />
+        )}
       </div>
-    </section>
-  );
+    </section>);
+
 }
 
 function Kpi({
   label,
   value,
   sub,
-  danger,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  danger?: boolean;
-}) {
+  danger
+
+
+
+
+
+}: {label: string;value: string;sub?: string;danger?: boolean;}) {
   return (
-    <div style={kpiCard}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={{ ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" }}>
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-      {sub ? <div style={kpiSub}>{sub}</div> : null}
-    </div>
-  );
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
 }
 
 export default function KalkulationUebersicht() {
@@ -215,11 +215,11 @@ export default function KalkulationUebersicht() {
     const duplicates = getDuplicateCount(lvRows);
     const ready = lvRows.filter(
       (r) =>
-        String(r.posNr || "").trim() &&
-        String(r.kurztext || "").trim() &&
-        String(r.einheit || "").trim() &&
-        n(r.menge) > 0 &&
-        rowPrice(r) > 0
+      String(r.posNr || "").trim() &&
+      String(r.kurztext || "").trim() &&
+      String(r.einheit || "").trim() &&
+      n(r.menge) > 0 &&
+      rowPrice(r) > 0
     ).length;
 
     return {
@@ -233,7 +233,7 @@ export default function KalkulationUebersicht() {
       duplicates,
       ready,
       problems:
-        missingQty + missingUnit + missingPrice + missingText + missingLang + duplicates,
+      missingQty + missingUnit + missingPrice + missingText + missingLang + duplicates
     };
   }, [lvRows]);
 
@@ -254,7 +254,7 @@ export default function KalkulationUebersicht() {
       missingResources,
       highRisk,
       lowConfidence,
-      problems: missingEp + missingUnit + missingResources + highRisk + lowConfidence,
+      problems: missingEp + missingUnit + missingResources + highRisk + lowConfidence
     };
   }, [dbRows]);
 
@@ -263,7 +263,7 @@ export default function KalkulationUebersicht() {
       return {
         title: "LV importieren oder Positionen anlegen",
         text: "Es sind noch keine LV-Positionen vorhanden. Starte mit LV / Positionen.",
-        to: "/kalkulation/lv-import",
+        to: "/kalkulation/lv-import"
       };
     }
 
@@ -271,7 +271,7 @@ export default function KalkulationUebersicht() {
       return {
         title: "LV-Daten prüfen",
         text: "Es gibt fehlende Mengen, Einheiten, Texte, Preise oder doppelte Positionen.",
-        to: "/kalkulation/lv-import",
+        to: "/kalkulation/lv-import"
       };
     }
 
@@ -279,155 +279,155 @@ export default function KalkulationUebersicht() {
       return {
         title: "Kalkulationsdatenbank bereinigen",
         text: "Die Datenbank enthält fehlende EP, Ressourcen, Einheiten oder Risiko-Einträge.",
-        to: "/kalkulation/datenbank",
+        to: "/kalkulation/datenbank"
       };
     }
 
     return {
       title: "KI-Kalkulation starten",
       text: "LV und Datenbasis sind vorbereitet. Jetzt kann die Kalkulation mit KI geprüft werden.",
-      to: "/kalkulation/mit-ki",
+      to: "/kalkulation/mit-ki"
     };
   }, [lvStats, dbStats]);
 
   const tiles: Tile[] = [
-    {
-      title: "LV / Positionen",
-      desc: "Leistungsverzeichnis importieren, Positionen prüfen, neue Positionen anlegen und Projekt-LV vorbereiten.",
-      to: "/kalkulation/lv-import",
-      icon: "📋",
-      group: "workflow",
-      badge: lvStats.problems ? `${lvStats.problems} prüfen` : "Start",
-    },
-    {
-      title: "Kalkulation",
-      desc: "Zentrale Kalkulation mit Hauptauftrag, Unteraufträgen, KI-Vorschlag, manueller Bearbeitung, Preisaufbau und Urkalkulation.",
-      to: "/kalkulation/mit-ki",
-      icon: "🧮",
-      group: "workflow",
-      badge: "Zentral",
-    },
-    {
-      title: "Preise & Ressourcen",
-      desc: "Firmenpreise, Personal, Maschinen, Material, Transport, Entsorgung und Standardansätze pflegen.",
-      to: "/kalkulation/preise",
-      icon: "💶",
-      group: "daten",
-    },
-    {
-      title: "Kalkulationsdatenbank",
-      desc: "Erfahrungswerte, gelernte Positionen, Preisansätze und wiederverwendbare Kalkulationsdaten verwalten.",
-      to: "/kalkulation/datenbank",
-      icon: "🧠",
-      group: "daten",
-      badge: dbStats.problems ? `${dbStats.problems} prüfen` : undefined,
-    },
-    {
-      title: "GAEB Import / Export",
-      desc: "GAEB-Dateien importieren, prüfen, übernehmen und als X83/X84 exportieren.",
-      to: "/kalkulation/gaeb",
-      icon: "📦",
-      group: "daten",
-      badge: "GAEB",
-    },
-    {
-      title: "Nachträge",
-      desc: "Zusatzleistungen, Varianten und Nachtragspositionen erstellen und prüfen.",
-      to: "/kalkulation/nachtraege",
-      icon: "➕",
-      group: "export",
-    },
-    {
-      title: "Angebot / Export",
-      desc: "Angebot aus der Kalkulation erzeugen und als PDF, Excel oder weitere Ausgabeformate exportieren.",
-      to: "/kalkulation/angebot",
-      icon: "📄",
-      group: "export",
-      badge: "PDF/XLSX",
-    },
-    {
-      title: "Versionsvergleich / Analyse",
-      desc: "Kalkulationsstände, Angebotsversionen, Preisabweichungen und Risiken vergleichen.",
-      to: "/kalkulation/versionsvergleich",
-      icon: "📊",
-      group: "export",
-    },
-    {
-      title: "CRM / Angebotsverfolgung",
-      desc: "Angebote nachverfolgen, Status pflegen und Rückmeldungen strukturiert verwalten.",
-      to: "/kalkulation/crm",
-      icon: "📌",
-      group: "export",
-    },
-  ];
+  {
+    title: "LV / Positionen",
+    desc: "Leistungsverzeichnis importieren, Positionen prüfen, neue Positionen anlegen und Projekt-LV vorbereiten.",
+    to: "/kalkulation/lv-import",
+    icon: "📋",
+    group: "workflow",
+    badge: lvStats.problems ? `${lvStats.problems} prüfen` : "Start"
+  },
+  {
+    title: "Kalkulation",
+    desc: "Zentrale Kalkulation mit Hauptauftrag, Unteraufträgen, KI-Vorschlag, manueller Bearbeitung, Preisaufbau und Urkalkulation.",
+    to: "/kalkulation/mit-ki",
+    icon: "🧮",
+    group: "workflow",
+    badge: "Zentral"
+  },
+  {
+    title: "Preise & Ressourcen",
+    desc: "Firmenpreise, Personal, Maschinen, Material, Transport, Entsorgung und Standardansätze pflegen.",
+    to: "/kalkulation/preise",
+    icon: "💶",
+    group: "daten"
+  },
+  {
+    title: "Kalkulationsdatenbank",
+    desc: "Erfahrungswerte, gelernte Positionen, Preisansätze und wiederverwendbare Kalkulationsdaten verwalten.",
+    to: "/kalkulation/datenbank",
+    icon: "🧠",
+    group: "daten",
+    badge: dbStats.problems ? `${dbStats.problems} prüfen` : undefined
+  },
+  {
+    title: "GAEB Import / Export",
+    desc: "GAEB-Dateien importieren, prüfen, übernehmen und als X83/X84 exportieren.",
+    to: "/kalkulation/gaeb",
+    icon: "📦",
+    group: "daten",
+    badge: "GAEB"
+  },
+  {
+    title: "Nachträge",
+    desc: "Zusatzleistungen, Varianten und Nachtragspositionen erstellen und prüfen.",
+    to: "/kalkulation/nachtraege",
+    icon: "➕",
+    group: "export"
+  },
+  {
+    title: "Angebot / Export",
+    desc: "Angebot aus der Kalkulation erzeugen und als PDF, Excel oder weitere Ausgabeformate exportieren.",
+    to: "/kalkulation/angebot",
+    icon: "📄",
+    group: "export",
+    badge: "PDF/XLSX"
+  },
+  {
+    title: "Versionsvergleich / Analyse",
+    desc: "Kalkulationsstände, Angebotsversionen, Preisabweichungen und Risiken vergleichen.",
+    to: "/kalkulation/versionsvergleich",
+    icon: "📊",
+    group: "export"
+  },
+  {
+    title: "CRM / Angebotsverfolgung",
+    desc: "Angebote nachverfolgen, Status pflegen und Rückmeldungen strukturiert verwalten.",
+    to: "/kalkulation/crm",
+    icon: "📌",
+    group: "export"
+  }];
+
 
   return (
-    <div style={page}>
+    <div className={rlcClass(null, page)}>
       <PageHeader
         breadcrumb="RLC Module / Kalkulation"
         title="Kalkulation"
-        subtitle="Zentrale Steuerung für LV, KI-Kalkulation, Datenbank, GAEB und Angebot."
-      />
+        subtitle="Zentrale Steuerung für LV, KI-Kalkulation, Datenbank, GAEB und Angebot." />
+      
 
-      <section style={heroCard}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <div style={eyebrow}>RLC Kalkulation</div>
-          <h1 style={heroTitle}>Kalkulationszentrale</h1>
-          <p style={heroText}>
+          <div className={rlcClass(null, eyebrow)}>RLC Kalkulation</div>
+          <h1 className={rlcClass(null, heroTitle)}>Kalkulationszentrale</h1>
+          <p className={rlcClass(null, heroText)}>
             Diese Übersicht steuert den gesamten Kalkulationsprozess: LV prüfen,
             KI-Kalkulation starten, Datenbank bereinigen, Urkalkulation aufbauen
             und Angebot / GAEB vorbereiten.
           </p>
         </div>
 
-        <div style={heroActions}>
-          <button type="button" style={btnPrimary} onClick={() => nav(nextStep.to)}>
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnPrimary)} onClick={() => nav(nextStep.to)}>
             Nächster Schritt
           </button>
 
           <button
-            type="button"
-            style={btnSecondary}
-            onClick={() => nav("/kalkulation/lv-import")}
-          >
+            type="button" className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => nav("/kalkulation/lv-import")}>
+            
             LV prüfen
           </button>
 
           <button
-            type="button"
-            style={btnSecondary}
-            onClick={() => nav("/kalkulation/mit-ki")}
-          >
+            type="button" className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => nav("/kalkulation/mit-ki")}>
+            
             KI-Kalkulation
           </button>
 
           <button
-            type="button"
-            style={btnSecondary}
-            onClick={() => nav("/kalkulation/datenbank")}
-          >
+            type="button" className={rlcClass(null,
+            btnSecondary)}
+            onClick={() => nav("/kalkulation/datenbank")}>
+            
             Datenbank
           </button>
         </div>
 
-        <div style={heroMeta}>
+        <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{code || "—"}</b>
-          {name ? (
-            <>
+          {name ?
+          <>
               {" "}
               · <b>{name}</b>
-            </>
-          ) : null}
+            </> :
+          null}
         </div>
       </section>
 
-      <section style={grid4}>
+      <section className={rlcClass(null, grid4)}>
         <Kpi
           label="LV-Positionen"
           value={String(lvStats.total)}
           sub={`${lvStats.ready} plausibel · ${lvStats.problems} prüfen`}
-          danger={lvStats.problems > 0}
-        />
+          danger={lvStats.problems > 0} />
+        
 
         <Kpi label="Netto aus LV" value={money(lvStats.net)} />
 
@@ -435,33 +435,33 @@ export default function KalkulationUebersicht() {
           label="Datenbank"
           value={String(dbStats.total)}
           sub={`${dbStats.problems} Datenbank-Probleme`}
-          danger={dbStats.problems > 0}
-        />
+          danger={dbStats.problems > 0} />
+        
 
         <Kpi
           label="Nächster Schritt"
           value={nextStep.title}
           sub={nextStep.text}
-          danger={lvStats.problems > 0 || dbStats.problems > 0}
-        />
+          danger={lvStats.problems > 0 || dbStats.problems > 0} />
+        
       </section>
 
-      <section style={workflowCard}>
-        <div style={workflowStep}>1. LV / Positionen</div>
-        <div style={workflowArrow}>→</div>
-        <div style={workflowStep}>2. KI-Kalkulation</div>
-        <div style={workflowArrow}>→</div>
-        <div style={workflowStep}>3. Datenbank / Preise</div>
-        <div style={workflowArrow}>→</div>
-        <div style={workflowStep}>4. Urkalkulation</div>
-        <div style={workflowArrow}>→</div>
-        <div style={workflowStep}>5. Angebot / GAEB</div>
+      <section className={rlcClass(null, workflowCard)}>
+        <div className={rlcClass(null, workflowStep)}>1. LV / Positionen</div>
+        <div className={rlcClass(null, workflowArrow)}>→</div>
+        <div className={rlcClass(null, workflowStep)}>2. KI-Kalkulation</div>
+        <div className={rlcClass(null, workflowArrow)}>→</div>
+        <div className={rlcClass(null, workflowStep)}>3. Datenbank / Preise</div>
+        <div className={rlcClass(null, workflowArrow)}>→</div>
+        <div className={rlcClass(null, workflowStep)}>4. Urkalkulation</div>
+        <div className={rlcClass(null, workflowArrow)}>→</div>
+        <div className={rlcClass(null, workflowStep)}>5. Angebot / GAEB</div>
       </section>
 
-      <section style={diagnoseGrid}>
-        <div style={card}>
-          <h2 style={sectionTitle}>LV-Kontrolle</h2>
-          <div style={miniStats}>
+      <section className={rlcClass(null, diagnoseGrid)}>
+        <div className={rlcClass(null, card)}>
+          <h2 className={rlcClass(null, sectionTitle)}>LV-Kontrolle</h2>
+          <div className={rlcClass(null, miniStats)}>
             <span>Positionen</span>
             <b>{lvStats.total}</b>
             <span>Menge fehlt / 0</span>
@@ -479,17 +479,17 @@ export default function KalkulationUebersicht() {
           </div>
 
           <button
-            type="button"
-            style={btnFull}
-            onClick={() => nav("/kalkulation/lv-import")}
-          >
+            type="button" className={rlcClass(null,
+            btnFull)}
+            onClick={() => nav("/kalkulation/lv-import")}>
+            
             LV / Positionen öffnen
           </button>
         </div>
 
-        <div style={card}>
-          <h2 style={sectionTitle}>Datenbank-Kontrolle</h2>
-          <div style={miniStats}>
+        <div className={rlcClass(null, card)}>
+          <h2 className={rlcClass(null, sectionTitle)}>Datenbank-Kontrolle</h2>
+          <div className={rlcClass(null, miniStats)}>
             <span>Einträge</span>
             <b>{dbStats.total}</b>
             <span>EP fehlt</span>
@@ -505,10 +505,10 @@ export default function KalkulationUebersicht() {
           </div>
 
           <button
-            type="button"
-            style={btnFull}
-            onClick={() => nav("/kalkulation/datenbank")}
-          >
+            type="button" className={rlcClass(null,
+            btnFull)}
+            onClick={() => nav("/kalkulation/datenbank")}>
+            
             Kalkulationsdatenbank öffnen
           </button>
         </div>
@@ -517,22 +517,22 @@ export default function KalkulationUebersicht() {
       <Section
         title="Hauptworkflow"
         subtitle="Diese zwei Bereiche sind der tägliche Kern der Kalkulation."
-        tiles={tiles.filter((x) => x.group === "workflow")}
-      />
+        tiles={tiles.filter((x) => x.group === "workflow")} />
+      
 
       <Section
         title="Daten & Preisgrundlagen"
         subtitle="Hier liegen Preisbasis, Ressourcen, GAEB und Erfahrungswerte."
-        tiles={tiles.filter((x) => x.group === "daten")}
-      />
+        tiles={tiles.filter((x) => x.group === "daten")} />
+      
 
       <Section
         title="Nachträge, Angebot & Analyse"
         subtitle="Alles für Ausgabe, Nachträge, Vergleich und Angebotsverfolgung."
-        tiles={tiles.filter((x) => x.group === "export")}
-      />
-    </div>
-  );
+        tiles={tiles.filter((x) => x.group === "export")} />
+      
+    </div>);
+
 }
 
 /* ===================== STYLES ===================== */
@@ -540,17 +540,17 @@ export default function KalkulationUebersicht() {
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
-  padding: 16,
+  padding: 16
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg,#0F172A,#1E3A8A)",
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)",
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
 const eyebrow: React.CSSProperties = {
@@ -558,32 +558,32 @@ const eyebrow: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.82,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const heroTitle: React.CSSProperties = {
-  margin: "4px 0",
+  color: "#FFFFFF", margin: "4px 0",
   fontSize: 30,
-  fontWeight: 900,
-  lineHeight: 1.1,
+  fontWeight: 700,
+  lineHeight: 1.1
 };
 
 const heroText: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.9,
-  lineHeight: 1.55,
+  lineHeight: 1.55
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92,
+  opacity: 0.92
 };
 
 const btnBase: React.CSSProperties = {
@@ -594,32 +594,32 @@ const btnBase: React.CSSProperties = {
   background: "#FFFFFF",
   color: "#0F172A",
   cursor: "pointer",
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  background: "#2563EB",
-  border: "1px solid #2563EB",
+  background: "#146EF5",
+  border: "1px solid #146EF5",
   color: "#FFFFFF",
-  boxShadow: "0 10px 20px rgba(37,99,235,0.22)",
+  boxShadow: "0 10px 20px rgba(37,99,235,0.22)"
 };
 
 const btnSecondary: React.CSSProperties = {
-  ...btnBase,
+  ...btnBase
 };
 
 const btnFull: React.CSSProperties = {
   ...btnPrimary,
   marginTop: 14,
-  width: "100%",
+  width: "100%"
 };
 
 const grid4: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
-  gap: 12,
+  gap: 12
 };
 
 const kpiCard: React.CSSProperties = {
@@ -627,30 +627,30 @@ const kpiCard: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const kpiLabel: React.CSSProperties = {
   fontSize: 12,
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.04em"
 };
 
 const kpiValue: React.CSSProperties = {
   marginTop: 6,
   fontSize: 20,
   color: "#0F172A",
-  fontWeight: 900,
-  lineHeight: 1.25,
+  fontWeight: 700,
+  lineHeight: 1.25
 };
 
 const kpiSub: React.CSSProperties = {
   marginTop: 4,
   fontSize: 12,
   color: "#64748B",
-  lineHeight: 1.35,
+  lineHeight: 1.35
 };
 
 const workflowCard: React.CSSProperties = {
@@ -661,28 +661,28 @@ const workflowCard: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 10,
-  flexWrap: "wrap",
+  flexWrap: "wrap"
 };
 
 const workflowStep: React.CSSProperties = {
-  background: "#EFF6FF",
+  background: "#EAF2FF",
   color: "#1E3A8A",
-  border: "1px solid #BFDBFE",
+  border: "1px solid #BED6FF",
   borderRadius: 999,
   padding: "8px 12px",
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const workflowArrow: React.CSSProperties = {
   color: "#64748B",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const diagnoseGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))",
-  gap: 14,
+  gap: 14
 };
 
 const card: React.CSSProperties = {
@@ -690,7 +690,7 @@ const card: React.CSSProperties = {
   border: "1px solid #E5E7EB",
   borderRadius: 16,
   padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
 };
 
 const miniStats: React.CSSProperties = {
@@ -699,7 +699,7 @@ const miniStats: React.CSSProperties = {
   gridTemplateColumns: "1fr auto",
   gap: 8,
   fontSize: 13,
-  color: "#0F172A",
+  color: "#0F172A"
 };
 
 const sectionHead: React.CSSProperties = {
@@ -708,27 +708,27 @@ const sectionHead: React.CSSProperties = {
   gap: 12,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12,
+  marginBottom: 12
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
   fontSize: 17,
   color: "#0F172A",
-  fontWeight: 900,
+  fontWeight: 700
 };
 
 const sectionText: React.CSSProperties = {
   marginTop: 4,
   fontSize: 13,
   color: "#64748B",
-  lineHeight: 1.5,
+  lineHeight: 1.5
 };
 
 const tilesGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))",
-  gap: 14,
+  gap: 14
 };
 
 const tileCard: React.CSSProperties = {
@@ -742,57 +742,57 @@ const tileCard: React.CSSProperties = {
   display: "grid",
   alignContent: "start",
   gap: 8,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.035)",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.035)"
 };
 
 const tileTop: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
-  gap: 10,
+  gap: 10
 };
 
 const iconBox: React.CSSProperties = {
   width: 46,
   height: 46,
   borderRadius: 14,
-  background: "#EFF6FF",
+  background: "#EAF2FF",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: 24,
-  border: "1px solid #DBEAFE",
+  border: "1px solid #DBEAFE"
 };
 
 const tileBadge: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  border: "1px solid #BFDBFE",
-  background: "#EFF6FF",
-  color: "#1D4ED8",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3",
   borderRadius: 999,
   padding: "4px 9px",
   fontSize: 11,
-  fontWeight: 900,
-  whiteSpace: "nowrap",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
 };
 
 const tileTitle: React.CSSProperties = {
-  fontWeight: 900,
+  fontWeight: 700,
   fontSize: 16,
   color: "#0F172A",
-  marginTop: 2,
+  marginTop: 2
 };
 
 const tileText: React.CSSProperties = {
   color: "#64748B",
   fontSize: 13,
-  lineHeight: 1.5,
+  lineHeight: 1.5
 };
 
 const tileFooter: React.CSSProperties = {
   marginTop: 6,
-  color: "#2563EB",
+  color: "#146EF5",
   fontSize: 13,
-  fontWeight: 900,
+  fontWeight: 700
 };

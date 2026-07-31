@@ -1,4 +1,4 @@
-import { Col } from "./ui/DataSheet";
+﻿import { Col } from "./ui/DataSheet";
 
 export const SHEETS: Record<string, { title: string; columns: Col<any>[]; sum?: string[] }> = {
   // --- 1. Kalkulation (estratto) ---
@@ -69,7 +69,7 @@ export const SHEETS: Record<string, { title: string; columns: Col<any>[]; sum?: 
     sum: ["soll", "ist", "diff"],
   },
   "mengenermittlung/ki-aufmass": {
-    title: "KI-Aufmaß",
+    title: "KI-AufmaÃŸ",
     columns: [
       { key: "quelle", header: "Quelle", width: 200, editable: true, type: "text" },
       { key: "voce", header: "Leistung", width: 380, editable: true, type: "text" },
@@ -77,38 +77,6 @@ export const SHEETS: Record<string, { title: string; columns: Col<any>[]; sum?: 
       { key: "conf", header: "Conf.", width: 120, align: "right", type: "number", editable: true },
     ],
     sum: ["menge"],
-  },
-  "mengenermittlung/regieberichte": {
-    title: "Regieberichte",
-    columns: [
-      { key: "datum", header: "Datum", width: 140, editable: true, type: "text" },
-      { key: "beschreibung", header: "Beschreibung", width: 480, editable: true, type: "text" },
-      { key: "stunden", header: "Std.", width: 120, align: "right", type: "number", editable: true },
-      { key: "kosten", header: "Kosten", width: 140, align: "right", type: "number", editable: true },
-    ],
-    sum: ["stunden", "kosten"],
-  },
-  "mengenermittlung/lieferscheine": {
-    title: "Lieferscheine",
-    columns: [
-      { key: "datum", header: "Datum", width: 140, editable: true, type: "text" },
-      { key: "lieferant", header: "Lieferant", width: 220, editable: true, type: "text" },
-      { key: "ddt", header: "LS/Beleg", width: 160, editable: true, type: "text" },
-      { key: "material", header: "Material", width: 300, editable: true, type: "text" },
-      { key: "menge", header: "Menge", width: 120, align: "right", type: "number", editable: true },
-      { key: "kosten", header: "Kosten", width: 140, align: "right", type: "number", editable: true },
-    ],
-    sum: ["menge", "kosten"],
-  },
-  "mengenermittlung/verknuepfung-nachtraege": {
-    title: "Verknüpfung Nachträge & Abrechnung",
-    columns: [
-      { key: "nr", header: "Nr.", width: 100, editable: true, type: "text" },
-      { key: "beschreibung", header: "Beschreibung", width: 480, editable: true, type: "text" },
-      { key: "betrag", header: "Betrag", width: 140, align: "right", type: "number", editable: true },
-      { key: "status", header: "Status", width: 140, editable: true, type: "text" },
-    ],
-    sum: ["betrag"],
   },
   "mengenermittlung/historie-versionen": {
     title: "Historie / Versionierung",
@@ -122,7 +90,7 @@ export const SHEETS: Record<string, { title: string; columns: Col<any>[]; sum?: 
     sum: ["summe"],
   },
   "mengenermittlung/gps-zuweisung": {
-    title: "GPS-gestützte Zuweisung",
+    title: "GPS-gestÃ¼tzte Zuweisung",
     columns: [
       { key: "punkt", header: "Punkt", width: 180, editable: true, type: "text" },
       { key: "koord", header: "Koordinate", width: 240, editable: true, type: "text" },
@@ -131,7 +99,7 @@ export const SHEETS: Record<string, { title: string; columns: Col<any>[]; sum?: 
     ],
   },
 
-  // 🚀 Nuove
+  // ðŸš€ Nuove
   "mengenermittlung/vorlagen-formeln": {
     title: "Vorlagen & Formelkatalog",
     columns: [
@@ -157,8 +125,23 @@ export const SHEETS: Record<string, { title: string; columns: Col<any>[]; sum?: 
     sum: ["soll", "ist", "betrag"],
   },
 
-  // --- (le altre macro rimangono come già definite – puoi estenderle allo stesso modo) ---
+  // --- (le altre macro rimangono come giÃ  definite â€“ puoi estenderle allo stesso modo) ---
+
+
+  // --- 8. Mobile ---
+  "mobile/inbox": {
+    title: "Mobile Inbox",
+    columns: [
+      { key: "typ", header: "Typ", width: 180, editable: false, type: "text" },
+      { key: "datum", header: "Datum", width: 140, editable: false, type: "text" },
+      { key: "projekt", header: "Projekt", width: 180, editable: false, type: "text" },
+      { key: "erstelltVon", header: "Erstellt von", width: 200, editable: false, type: "text" },
+      { key: "status", header: "Status", width: 150, editable: false, type: "text" },
+      { key: "zielmodul", header: "Zielmodul", width: 220, editable: false, type: "text" },
+    ],
+  },
 };
+
 
 
 

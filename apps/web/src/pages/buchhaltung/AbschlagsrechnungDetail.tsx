@@ -1,3 +1,4 @@
+import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader, outputPdfBlobWithCompanyHeader as outputRlcPdfBlobWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 import { API_BASE } from "../../lib/apiBase";
 // apps/web/src/pages/buchhaltung/AbschlagsrechnungDetail.tsx
 import React, { useEffect, useMemo, useState } from "react";
@@ -37,10 +38,10 @@ type AbschlagItem = {
 };
 
 const fmtEUR = (v: number) =>
-  new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: "EUR",
-  }).format(safeNum(v));
+new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR"
+}).format(safeNum(v));
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -49,7 +50,7 @@ function safeTrim(v: unknown) {
 function safeNum(x: unknown, fallback = 0) {
   if (x === null || x === undefined || x === "") return fallback;
   const normalized =
-    typeof x === "string" ? x.replace(/\s/g, "").replace(",", ".") : x;
+  typeof x === "string" ? x.replace(/\s/g, "").replace(",", ".") : x;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -57,13 +58,13 @@ function safeNum(x: unknown, fallback = 0) {
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = {
     "Content-Type": "application/json",
-    ...(init?.headers || {}),
+    ...(init?.headers || {})
   };
 
   const res = await fetch(apiUrl(path), {
     ...init,
     headers,
-    credentials: "include",
+    credentials: "include"
   });
 
   if (!res.ok) {
@@ -87,7 +88,7 @@ function recalc(a: AbschlagItem): AbschlagItem {
       einheit: safeTrim(r.einheit) || "m",
       qty,
       ep,
-      total: qty * ep,
+      total: qty * ep
     };
   });
 
@@ -104,31 +105,31 @@ function recalc(a: AbschlagItem): AbschlagItem {
     mwst,
     rows: normalizedRows,
     netto,
-    brutto,
+    brutto
   };
 }
 
 /* =================== PDF HELPERS =================== */
 
 function drawBox(
-  doc: jsPDF,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  lw = 0.6
-) {
+doc: jsPDF,
+x: number,
+y: number,
+w: number,
+h: number,
+lw = 0.6)
+{
   doc.setLineWidth(lw);
   doc.rect(x, y, w, h);
 }
 
 async function printJsPdf(doc: jsPDF) {
-  const blob = doc.output("blob");
+  const blob = await outputRlcPdfBlobWithCompanyHeader(doc);
   const url = URL.createObjectURL(blob);
 
   const w = window.open(url, "_blank", "noopener,noreferrer");
   if (!w) {
-    doc.save("document.pdf");
+    saveRlcPdfWithCompanyHeader(doc, "document.pdf");
     URL.revokeObjectURL(url);
     return;
   }
@@ -142,9 +143,9 @@ async function printJsPdf(doc: jsPDF) {
         setTimeout(() => URL.revokeObjectURL(url), 10_000);
       }
     } catch {
+
       // ignore
-    }
-  }, 200);
+    }}, 200);
 }
 
 function buildAbschlagPdf(args: {
@@ -228,13 +229,13 @@ function buildAbschlagPdf(args: {
   let y = headerY + headerH + 10;
 
   const body = (item.rows || []).map((r) => [
-    r.lvPos || "",
-    r.kurztext || "",
-    r.einheit || "",
-    safeNum(r.qty).toString(),
-    fmtEUR(safeNum(r.ep)),
-    fmtEUR(safeNum(r.total)),
-  ]);
+  r.lvPos || "",
+  r.kurztext || "",
+  r.einheit || "",
+  safeNum(r.qty).toString(),
+  fmtEUR(safeNum(r.ep)),
+  fmtEUR(safeNum(r.total))]
+  );
 
   autoTable(doc, {
     startY: y,
@@ -247,11 +248,11 @@ function buildAbschlagPdf(args: {
       cellPadding: 3.5,
       minCellHeight: 10,
       lineWidth: 0.35,
-      valign: "middle",
+      valign: "middle"
     },
     headStyles: {
       fontStyle: "bold",
-      lineWidth: 0.5,
+      lineWidth: 0.5
     },
     columnStyles: {
       0: { cellWidth: 24 },
@@ -259,14 +260,14 @@ function buildAbschlagPdf(args: {
       2: { cellWidth: 18 },
       3: { halign: "right", cellWidth: 20 },
       4: { halign: "right", cellWidth: 22 },
-      5: { halign: "right", cellWidth: 24 },
+      5: { halign: "right", cellWidth: 24 }
     },
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin }
   });
 
-  const lastY = (doc as any).lastAutoTable?.finalY
-    ? (doc as any).lastAutoTable.finalY
-    : y + 60;
+  const lastY = (doc as any).lastAutoTable?.finalY ?
+  (doc as any).lastAutoTable.finalY :
+  y + 60;
 
   const totalsW = 86;
   const totalsH = 26;
@@ -288,13 +289,13 @@ function buildAbschlagPdf(args: {
 
   doc.setFont("helvetica", "bold");
   doc.text(fmtEUR(item.netto), totalsX + totalsW - 6, totalsY + tRow / 2 + 3.2, {
-    align: "right",
+    align: "right"
   });
   doc.text(fmtEUR(item.brutto), totalsX + totalsW - 6, totalsY + tRow + tRow / 2 + 3.2, {
-    align: "right",
+    align: "right"
   });
   doc.text(fmtEUR(item.brutto), totalsX + totalsW - 6, totalsY + tRow * 2 + tRow / 2 + 3.2, {
-    align: "right",
+    align: "right"
   });
 
   doc.setFont("helvetica", "normal");
@@ -363,7 +364,7 @@ export default function AbschlagsrechnungDetail() {
         `/api/abschlag/save/${encodeURIComponent(projectKey)}`,
         {
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payload)
         }
       );
 
@@ -386,7 +387,7 @@ export default function AbschlagsrechnungDetail() {
     if (!current) return;
 
     const next = items.map((x) =>
-      x.id === current.id ? recalc({ ...x, ...patch } as AbschlagItem) : x
+    x.id === current.id ? recalc({ ...x, ...patch } as AbschlagItem) : x
     );
 
     setItems(next);
@@ -406,7 +407,7 @@ export default function AbschlagsrechnungDetail() {
         ...patch,
         qty,
         ep,
-        total: qty * ep,
+        total: qty * ep
       };
     });
 
@@ -418,16 +419,16 @@ export default function AbschlagsrechnungDetail() {
 
     patchCurrent({
       rows: [
-        ...(current.rows || []),
-        {
-          lvPos: "",
-          kurztext: "",
-          einheit: "m",
-          qty: 0,
-          ep: 0,
-          total: 0,
-        },
-      ],
+      ...(current.rows || []),
+      {
+        lvPos: "",
+        kurztext: "",
+        einheit: "m",
+        qty: 0,
+        ep: 0,
+        total: 0
+      }]
+
     });
   }
 
@@ -442,7 +443,7 @@ export default function AbschlagsrechnungDetail() {
     const doc = buildAbschlagPdf({
       projectCode: String(p?.code || ""),
       projectName: String(p?.name || ""),
-      item: current,
+      item: current
     });
 
     await printJsPdf(doc);
@@ -454,35 +455,35 @@ export default function AbschlagsrechnungDetail() {
     const doc = buildAbschlagPdf({
       projectCode: String(p?.code || ""),
       projectName: String(p?.name || ""),
-      item: current,
+      item: current
     });
 
-    doc.save(`${p?.code || "Projekt"}_Abschlag_${current.nr}.pdf`);
+    saveRlcPdfWithCompanyHeader(doc, `${p?.code || "Projekt"}_Abschlag_${current.nr}.pdf`);
   }
 
   if (!p) {
     return (
-      <div style={{ padding: 16 }}>
+      <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-66">
         <h2>Abschlagsrechnung</h2>
-        <div style={{ color: "#666" }}>Kein Projekt ausgewählt.</div>
-        <button onClick={() => navigate(-1)} style={{ marginTop: 12 }}>
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-67">Kein Projekt ausgewählt.</div>
+        <button onClick={() => navigate(-1)} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-68">
           ← Zurück
         </button>
-      </div>
-    );
+      </div>);
+
   }
 
   if (!current) {
     return (
-      <div style={{ padding: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
+      <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-69">
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-70">
+
+
+
+
+
+
+          
           <button onClick={() => navigate("/buchhaltung/abschlagsrechnungen")}>
             ← Zurück
           </button>
@@ -491,59 +492,59 @@ export default function AbschlagsrechnungDetail() {
           </button>
         </div>
 
-        {info ? (
-          <div
-            style={{
-              marginTop: 12,
-              color: "#991B1B",
-              whiteSpace: "pre-wrap",
-            }}
-          >
+        {info ?
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-71">
+
+
+
+
+
+          
             {info}
-          </div>
-        ) : (
-          <div style={{ marginTop: 12, color: "#666" }}>
+          </div> :
+
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-72">
             {loading ? "Lädt…" : "Kein Eintrag gefunden."}
           </div>
-        )}
-      </div>
-    );
+        }
+      </div>);
+
   }
 
   return (
-    <div style={{ padding: 16, maxWidth: 1180, margin: "0 auto" }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
-        }}
-      >
+    <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-73">
+      <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-74">
+
+
+
+
+
+
+        
         <div>
-          <nav style={{ color: "#888", fontSize: 13 }}>
+          <nav className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-75">
             RLC / 7. Buchhaltung / Abrechnung / Abschlagsrechnungen / Detail
           </nav>
-          <h2 style={{ margin: "6px 0 0 0" }}>
+          <h2 className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-76">
             {current.title || `Abschlagsrechnung ${current.nr}`}
           </h2>
-          <div style={{ color: "#666", marginTop: 6 }}>
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-77">
             <b>{p.code}</b> — {p.name}
           </div>
-          <div style={{ color: "#888", marginTop: 6, fontSize: 12 }}>
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-78">
             Datei:{" "}
-            <span style={{ fontFamily: "monospace" }}>{filePath || ""}</span>
+            <span className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-79">{filePath || ""}</span>
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80">
+
+
+
+
+
+
+          
           <button onClick={() => navigate("/buchhaltung/abschlagsrechnungen")}>
             ← Zurück
           </button>
@@ -562,127 +563,127 @@ export default function AbschlagsrechnungDetail() {
         </div>
       </div>
 
-      {info && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #FECACA",
-            background: "#FEF2F2",
-            color: "#991B1B",
-            fontSize: 13,
-            whiteSpace: "pre-wrap",
-          }}
-        >
+      {info &&
+      <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-81">
+
+
+
+
+
+
+
+
+
+
+        
           {info}
         </div>
-      )}
+      }
 
-      <div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div
-          style={{
-            border: "1px solid #eee",
-            borderRadius: 12,
-            padding: 12,
-            minWidth: 220,
-            background: "#fff",
-          }}
-        >
-          <div style={{ color: "#666" }}>Netto</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{fmtEUR(current.netto)}</div>
+      <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-82">
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-83">
+
+
+
+
+
+
+
+          
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-84">Netto</div>
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-85">{fmtEUR(current.netto)}</div>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #eee",
-            borderRadius: 12,
-            padding: 12,
-            minWidth: 220,
-            background: "#fff",
-          }}
-        >
-          <div style={{ color: "#666" }}>Brutto</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{fmtEUR(current.brutto)}</div>
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-86">
+
+
+
+
+
+
+
+          
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-87">Brutto</div>
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-88">{fmtEUR(current.brutto)}</div>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #eee",
-            borderRadius: 12,
-            padding: 12,
-            minWidth: 220,
-            background: "#fff",
-          }}
-        >
-          <div style={{ color: "#666" }}>MwSt</div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{safeNum(current.mwst)} %</div>
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-89">
+
+
+
+
+
+
+
+          
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-90">MwSt</div>
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-91">{safeNum(current.mwst)} %</div>
         </div>
       </div>
 
-      <div
-        style={{
-          marginTop: 14,
-          border: "1px solid #eee",
-          borderRadius: 12,
-          overflow: "hidden",
-          background: "#fff",
-        }}
-      >
-        <div
-          style={{
-            padding: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <label style={{ fontSize: 13, color: "#555" }}>
+      <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-92">
+
+
+
+
+
+
+
+        
+        <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-93">
+
+
+
+
+
+
+
+          
+          <div className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-94">
+            <label className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-95">
               Titel{" "}
               <input
                 value={current.title || ""}
-                onChange={(e) => patchCurrent({ title: e.target.value })}
-                style={{
-                  marginLeft: 6,
-                  padding: "6px 10px",
-                  border: "1px solid #ddd",
-                  borderRadius: 8,
-                  width: 280,
-                }}
-              />
+                onChange={(e) => patchCurrent({ title: e.target.value })} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-96" />
+
+
+
+
+
+
+
+              
             </label>
 
-            <label style={{ fontSize: 13, color: "#555" }}>
+            <label className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-97">
               Datum{" "}
               <input
                 type="date"
                 value={current.date}
-                onChange={(e) => patchCurrent({ date: e.target.value })}
-                style={{
-                  marginLeft: 6,
-                  padding: "6px 10px",
-                  border: "1px solid #ddd",
-                  borderRadius: 8,
-                }}
-              />
+                onChange={(e) => patchCurrent({ date: e.target.value })} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-98" />
+
+
+
+
+
+
+              
             </label>
 
-            <label style={{ fontSize: 13, color: "#555" }}>
+            <label className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-99">
               Status{" "}
               <select
                 value={current.status}
                 onChange={(e) =>
-                  patchCurrent({ status: e.target.value as AbschlagStatus })
-                }
-                style={{
-                  marginLeft: 6,
-                  padding: "6px 10px",
-                  border: "1px solid #ddd",
-                  borderRadius: 8,
-                }}
-              >
+                patchCurrent({ status: e.target.value as AbschlagStatus })
+                } className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-100">
+
+
+
+
+
+
+                
                 <option value="Entwurf">Entwurf</option>
                 <option value="Freigegeben">Freigegeben</option>
                 <option value="Gebucht">Gebucht</option>
@@ -690,210 +691,200 @@ export default function AbschlagsrechnungDetail() {
             </label>
           </div>
 
-          <button onClick={addRow} disabled={loading} style={{ fontWeight: 700 }}>
+          <button onClick={addRow} disabled={loading} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-101">
             + Position hinzufügen
           </button>
         </div>
 
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead style={{ background: "#fafafa" }}>
+        <table className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-102">
+          <thead className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-103">
             <tr>
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
-                }}
-              >
+              <th className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-104">
+
+
+
+
+
+                
                 LV-Pos
               </th>
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
-                }}
-              >
+              <th className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-105">
+
+
+
+
+
+                
                 Kurztext
               </th>
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
-                }}
-              >
+              <th className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-106">
+
+
+
+
+
+                
                 Einheit
               </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
-                }}
-              >
+              <th className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-107">
+
+
+
+
+
+                
                 Menge
               </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
-                }}
-              >
+              <th className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-108">
+
+
+
+
+
+                
                 EP
               </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
-                }}
-              >
+              <th className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-109">
+
+
+
+
+
+                
                 Gesamt
               </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
-                }}
-              >
+              <th className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-110">
+
+
+
+
+
+                
                 Aktion
               </th>
             </tr>
           </thead>
 
           <tbody>
-            {(current.rows || []).map((r, idx) => (
-              <tr key={idx}>
-                <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3" }}>
+            {(current.rows || []).map((r, idx) =>
+            <tr key={idx}>
+                <td className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-111">
                   <input
-                    value={r.lvPos || ""}
-                    onChange={(e) => patchRow(idx, { lvPos: e.target.value })}
-                    style={{
-                      width: 120,
-                      padding: "6px 10px",
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                    }}
-                  />
+                  value={r.lvPos || ""}
+                  onChange={(e) => patchRow(idx, { lvPos: e.target.value })} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-112" />
+
+
+
+
+
+
+                
                 </td>
 
-                <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3" }}>
+                <td className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-113">
                   <input
-                    value={r.kurztext || ""}
-                    onChange={(e) => patchRow(idx, { kurztext: e.target.value })}
-                    style={{
-                      width: "100%",
-                      padding: "6px 10px",
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                    }}
-                  />
+                  value={r.kurztext || ""}
+                  onChange={(e) => patchRow(idx, { kurztext: e.target.value })} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-114" />
+
+
+
+
+
+
+                
                 </td>
 
-                <td style={{ padding: 12, borderBottom: "1px solid #f3f3f3" }}>
+                <td className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-115">
                   <input
-                    value={r.einheit || ""}
-                    onChange={(e) => patchRow(idx, { einheit: e.target.value })}
-                    style={{
-                      width: 90,
-                      padding: "6px 10px",
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                    }}
-                  />
+                  value={r.einheit || ""}
+                  onChange={(e) => patchRow(idx, { einheit: e.target.value })} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-116" />
+
+
+
+
+
+
+                
                 </td>
 
-                <td
-                  style={{
-                    padding: 12,
-                    borderBottom: "1px solid #f3f3f3",
-                    textAlign: "right",
-                  }}
-                >
+                <td className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-117">
+
+
+
+
+
+                
                   <input
-                    type="number"
-                    value={safeNum(r.qty)}
-                    onChange={(e) => patchRow(idx, { qty: safeNum(e.target.value) })}
-                    style={{
-                      width: 110,
-                      padding: "6px 10px",
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                      textAlign: "right",
-                    }}
-                  />
+                  type="number"
+                  value={safeNum(r.qty)}
+                  onChange={(e) => patchRow(idx, { qty: safeNum(e.target.value) })} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-118" />
+
+
+
+
+
+
+
+                
                 </td>
 
-                <td
-                  style={{
-                    padding: 12,
-                    borderBottom: "1px solid #f3f3f3",
-                    textAlign: "right",
-                  }}
-                >
+                <td className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-119">
+
+
+
+
+
+                
                   <input
-                    type="number"
-                    value={safeNum(r.ep)}
-                    onChange={(e) => patchRow(idx, { ep: safeNum(e.target.value) })}
-                    style={{
-                      width: 110,
-                      padding: "6px 10px",
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                      textAlign: "right",
-                    }}
-                  />
+                  type="number"
+                  value={safeNum(r.ep)}
+                  onChange={(e) => patchRow(idx, { ep: safeNum(e.target.value) })} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-120" />
+
+
+
+
+
+
+
+                
                 </td>
 
-                <td
-                  style={{
-                    padding: 12,
-                    borderBottom: "1px solid #f3f3f3",
-                    textAlign: "right",
-                    fontWeight: 800,
-                  }}
-                >
+                <td className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-121">
+
+
+
+
+
+
+                
                   {fmtEUR(safeNum(r.total))}
                 </td>
 
-                <td
-                  style={{
-                    padding: 12,
-                    borderBottom: "1px solid #f3f3f3",
-                    textAlign: "right",
-                  }}
-                >
+                <td className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-122">
+
+
+
+
+
+                
                   <button onClick={() => removeRow(idx)} disabled={loading}>
                     Löschen
                   </button>
                 </td>
               </tr>
-            ))}
+            )}
 
-            {(current.rows || []).length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ padding: 14, color: "#777" }}>
+            {(current.rows || []).length === 0 &&
+            <tr>
+                <td colSpan={7} className="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-123">
                   Keine Positionen. Wenn du aus „Verknüpfung“ übernommen hast,
                   werden sie hier sichtbar.
                 </td>
               </tr>
-            )}
+            }
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-
-
-
-
-
-
-
-
-

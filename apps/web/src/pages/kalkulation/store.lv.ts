@@ -53,7 +53,7 @@ export type LVPos = {
   langtext: string;
   bemerkung?: string;
 
-  // quantitÃ  / unitÃ 
+  // quantità / unità
   einheit: string;
   menge: number;
 
@@ -1124,7 +1124,7 @@ export const LV = {
       iMenge = headerIndex(first, ["menge", "qty", "quantity"]);
       iPreis = headerIndex(first, ["preis", "ep", "einheitspreis", "einzelpreis"]);
       iGesamt = headerIndex(first, ["gesamt", "gesamtpreis", "total"]);
-      iWaehrung = headerIndex(first, ["waehrung", "wÃ¤hrung", "currency"]);
+      iWaehrung = headerIndex(first, ["waehrung", "währung", "currency"]);
       iConfidence = headerIndex(first, ["confidence"]);
       iSource = headerIndex(first, ["source", "quelle"]);
       iSortIndex = headerIndex(first, ["sortindex", "sortierung", "sort"]);

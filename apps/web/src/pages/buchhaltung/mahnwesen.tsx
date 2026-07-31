@@ -1,3 +1,4 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
 import React, { useMemo, useState } from "react";
 import "./styles.css";
 
@@ -26,10 +27,10 @@ type Status = "ALL" | "OVERDUE" | "DUNNED" | "CLEARED";
    HELPERS
    ========================= */
 const fmt = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+safeNumber(n).toLocaleString("de-DE", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
 
 function safeTrim(v: unknown) {
   return String(v ?? "").trim();
@@ -38,7 +39,7 @@ function safeTrim(v: unknown) {
 function safeNumber(v: unknown, fallback = 0) {
   if (v === null || v === undefined || v === "") return fallback;
   const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
+  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -57,10 +58,10 @@ const parseDE = (s: string) => {
 };
 
 const daysBetween = (a: Date, b: Date) =>
-  Math.round((+a - +b) / 86400000);
+Math.round((+a - +b) / 86400000);
 
 const isSameMonth = (d: Date, ref = new Date()) =>
-  d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 const withinDays = (d: Date, days: number) => {
   const from = new Date();
@@ -73,24 +74,24 @@ const todayDE = () => new Date().toLocaleDateString("de-DE");
 
 const offen = (f: Forderung) => Math.max(0, safeNumber(f.brutto) - safeNumber(f.bezahlt));
 const overdueDays = (f: Forderung) =>
-  Math.max(0, daysBetween(new Date(), parseDE(f.faellig)));
+Math.max(0, daysBetween(new Date(), parseDE(f.faellig)));
 
 const defaultGebuehr = (stufe: number) =>
-  stufe === 1 ? 5 : stufe === 2 ? 10 : stufe >= 3 ? 20 : 0;
+stufe === 1 ? 5 : stufe === 2 ? 10 : stufe >= 3 ? 20 : 0;
 
-const defaultZins = (stufe: number) => (stufe >= 2 ? 9.0 : 5.0);
+const defaultZins = (stufe: number) => stufe >= 2 ? 9.0 : 5.0;
 
 function escapeHtml(s: unknown) {
   return String(s ?? "").replace(
     /[&<>"']/g,
     (m) =>
-      ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;",
-      }[m]!)
+    ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    })[m]!
   );
 }
 
@@ -103,59 +104,59 @@ function csvEscape(v: unknown) {
    ========================= */
 export default function Mahnwesen() {
   const [rows, setRows] = useState<Forderung[]>([
-    {
-      id: 1,
-      nr: "R-2025-001",
-      kunde: "Muster GmbH",
-      datum: "30.09.2025",
-      faellig: "30.10.2025",
-      brutto: 5355.0,
-      bezahlt: 1200,
-      stufe: 1,
-      letzteMahnung: "05.11.2025",
-      gebuehr: 5,
-      zinssatz: 5,
-      notiz: "Erinnerung per Mail",
-    },
-    {
-      id: 2,
-      nr: "R-2025-002",
-      kunde: "Bau AG",
-      datum: "15.09.2025",
-      faellig: "15.10.2025",
-      brutto: 3439.1,
-      bezahlt: 0,
-      stufe: 2,
-      letzteMahnung: "01.11.2025",
-      gebuehr: 10,
-      zinssatz: 9,
-    },
-    {
-      id: 3,
-      nr: "R-2025-003",
-      kunde: "Stadtwerke",
-      datum: "28.10.2025",
-      faellig: "27.11.2025",
-      brutto: 10486.0,
-      bezahlt: 0,
-      stufe: 0,
-    },
-    {
-      id: 4,
-      nr: "R-2025-004",
-      kunde: "Privat Huber",
-      datum: "01.09.2025",
-      faellig: "01.10.2025",
-      brutto: 890.0,
-      bezahlt: 890.0,
-      stufe: 0,
-    },
-  ]);
+  {
+    id: 1,
+    nr: "R-2025-001",
+    kunde: "Muster GmbH",
+    datum: "30.09.2025",
+    faellig: "30.10.2025",
+    brutto: 5355.0,
+    bezahlt: 1200,
+    stufe: 1,
+    letzteMahnung: "05.11.2025",
+    gebuehr: 5,
+    zinssatz: 5,
+    notiz: "Erinnerung per Mail"
+  },
+  {
+    id: 2,
+    nr: "R-2025-002",
+    kunde: "Bau AG",
+    datum: "15.09.2025",
+    faellig: "15.10.2025",
+    brutto: 3439.1,
+    bezahlt: 0,
+    stufe: 2,
+    letzteMahnung: "01.11.2025",
+    gebuehr: 10,
+    zinssatz: 9
+  },
+  {
+    id: 3,
+    nr: "R-2025-003",
+    kunde: "Stadtwerke",
+    datum: "28.10.2025",
+    faellig: "27.11.2025",
+    brutto: 10486.0,
+    bezahlt: 0,
+    stufe: 0
+  },
+  {
+    id: 4,
+    nr: "R-2025-004",
+    kunde: "Privat Huber",
+    datum: "01.09.2025",
+    faellig: "01.10.2025",
+    brutto: 890.0,
+    bezahlt: 890.0,
+    stufe: 0
+  }]
+  );
 
   const [sel, setSel] = useState<Record<number, boolean>>({});
   const toggleSel = (id: number) => setSel((s) => ({ ...s, [id]: !s[id] }));
   const allFilteredSelected = (arr: Forderung[]) =>
-    arr.length > 0 && arr.every((r) => sel[r.id]);
+  arr.length > 0 && arr.every((r) => sel[r.id]);
   const toggleAll = (arr: Forderung[]) => {
     const all = allFilteredSelected(arr);
     const next: Record<number, boolean> = { ...sel };
@@ -214,8 +215,8 @@ export default function Mahnwesen() {
 
     arr.sort(
       (a, b) =>
-        overdueDays(b) - overdueDays(a) ||
-        safeNumber(b.stufe) - safeNumber(a.stufe)
+      overdueDays(b) - overdueDays(a) ||
+      safeNumber(b.stufe) - safeNumber(a.stufe)
     );
 
     return arr;
@@ -232,25 +233,25 @@ export default function Mahnwesen() {
 
   const selectedIds = useMemo(
     () =>
-      Object.keys(sel)
-        .filter((k) => sel[+k])
-        .map(Number),
+    Object.keys(sel).
+    filter((k) => sel[+k]).
+    map(Number),
     [sel]
   );
 
-  const update = <K extends keyof Forderung>(id: number, key: K, val: Forderung[K]) => {
+  const update = <K extends keyof Forderung,>(id: number, key: K, val: Forderung[K]) => {
     setRows((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              [key]:
-                key === "bezahlt" || key === "gebuehr" || key === "zinssatz"
-                  ? safeNumber(val, 0)
-                  : val,
-            }
-          : r
-      )
+    prev.map((r) =>
+    r.id === id ?
+    {
+      ...r,
+      [key]:
+      key === "bezahlt" || key === "gebuehr" || key === "zinssatz" ?
+      safeNumber(val, 0) :
+      val
+    } :
+    r
+    )
     );
   };
 
@@ -258,19 +259,19 @@ export default function Mahnwesen() {
     if (!ids.length) return;
 
     setRows((prev) =>
-      prev.map((r) => {
-        if (!ids.includes(r.id)) return r;
+    prev.map((r) => {
+      if (!ids.includes(r.id)) return r;
 
-        const next = Math.min(3, safeNumber(r.stufe) + 1) as 0 | 1 | 2 | 3;
+      const next = Math.min(3, safeNumber(r.stufe) + 1) as 0 | 1 | 2 | 3;
 
-        return {
-          ...r,
-          stufe: next,
-          letzteMahnung: todayDE(),
-          gebuehr: r.gebuehr ?? defaultGebuehr(next),
-          zinssatz: r.zinssatz ?? defaultZins(next),
-        };
-      })
+      return {
+        ...r,
+        stufe: next,
+        letzteMahnung: todayDE(),
+        gebuehr: r.gebuehr ?? defaultGebuehr(next),
+        zinssatz: r.zinssatz ?? defaultZins(next)
+      };
+    })
     );
   };
 
@@ -278,16 +279,16 @@ export default function Mahnwesen() {
     if (!ids.length) return;
 
     setRows((prev) =>
-      prev.map((r) =>
-        ids.includes(r.id)
-          ? {
-              ...r,
-              stufe: 0,
-              letzteMahnung: undefined,
-              gebuehr: undefined,
-            }
-          : r
-      )
+    prev.map((r) =>
+    ids.includes(r.id) ?
+    {
+      ...r,
+      stufe: 0,
+      letzteMahnung: undefined,
+      gebuehr: undefined
+    } :
+    r
+    )
     );
   };
 
@@ -307,7 +308,7 @@ export default function Mahnwesen() {
       LetzteMahnung: r.letzteMahnung || "",
       Gebühr: fmt(r.gebuehr ?? defaultGebuehr(r.stufe)),
       Zinssatz: String(r.zinssatz ?? defaultZins(r.stufe)).replace(".", ","),
-      Notiz: r.notiz || "",
+      Notiz: r.notiz || ""
     }));
 
     if (!data.length) {
@@ -317,11 +318,11 @@ export default function Mahnwesen() {
 
     const headers = Object.keys(data[0]);
     const csv = [
-      headers.map(csvEscape).join(";"),
-      ...data.map((row) =>
-        headers.map((h) => csvEscape((row as Record<string, unknown>)[h])).join(";")
-      ),
-    ].join("\n");
+    headers.map(csvEscape).join(";"),
+    ...data.map((row) =>
+    headers.map((h) => csvEscape((row as Record<string, unknown>)[h])).join(";")
+    )].
+    join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
@@ -368,7 +369,7 @@ export default function Mahnwesen() {
 
     const pdf = new jsPDF({ unit: "pt", format: "a4" });
     addCanvas(pdf, canvas);
-    pdf.save(`Mahnung_${r.nr}.pdf`);
+    saveRlcPdfWithCompanyHeader(pdf, `Mahnung_${r.nr}.pdf`);
   };
 
   const downloadMahnungListe = async (list: Forderung[]) => {
@@ -391,7 +392,7 @@ export default function Mahnwesen() {
       addCanvas(pdf, canvas);
     }
 
-    pdf.save("Mahnschreiben.pdf");
+    saveRlcPdfWithCompanyHeader(pdf, "Mahnschreiben.pdf");
   };
 
   const addCanvas = (pdf: any, canvas: HTMLCanvasElement) => {
@@ -440,10 +441,10 @@ export default function Mahnwesen() {
             Ausgewählte hochstufen
           </button>
           <button
-            className="bh-btn"
-            style={{ background: "#f39c12" }}
-            onClick={() => zuruecksetzen(selectedIds)}
-          >
+            className="bh-btn rlc-migrated-pages-buchhaltung-mahnwesen-tsx-249"
+
+            onClick={() => zuruecksetzen(selectedIds)}>
+            
             Stufe zurücksetzen
           </button>
         </div>
@@ -475,15 +476,15 @@ export default function Mahnwesen() {
         <div>
           <label>Kunde</label>
           <select value={kunde} onChange={(e) => setKunde(e.target.value)}>
-            {kundenListe.map((k) => (
-              <option key={k} value={k}>
+            {kundenListe.map((k) =>
+            <option key={k} value={k}>
                 {k === "ALL" ? "Alle" : k}
               </option>
-            ))}
+            )}
           </select>
         </div>
 
-        <div style={{ alignSelf: "end", fontWeight: 600 }}>
+        <div className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-250">
           Offen gesamt: {fmt(totals.off)} € · Davon überfällig: {fmt(totals.due)} €
         </div>
       </div>
@@ -491,12 +492,12 @@ export default function Mahnwesen() {
       <table className="bh-table">
         <thead>
           <tr>
-            <th style={{ width: 36 }}>
+            <th className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-251">
               <input
                 type="checkbox"
                 checked={allFilteredSelected(filtered)}
-                onChange={() => toggleAll(filtered)}
-              />
+                onChange={() => toggleAll(filtered)} />
+              
             </th>
             <th>Rechnung</th>
             <th>Kunde</th>
@@ -523,13 +524,13 @@ export default function Mahnwesen() {
             const warn = of > 0.01 && od > 0;
 
             return (
-              <tr key={r.id} style={{ background: warn ? "#fff7f5" : undefined }}>
+              <tr key={r.id} className={rlcClass(null, { background: warn ? "#fff7f5" : undefined })}>
                 <td>
                   <input
                     type="checkbox"
                     checked={idSel}
-                    onChange={() => toggleSel(r.id)}
-                  />
+                    onChange={() => toggleSel(r.id)} />
+                  
                 </td>
 
                 <td>{r.nr}</td>
@@ -543,27 +544,27 @@ export default function Mahnwesen() {
                     type="number"
                     step="0.01"
                     value={r.bezahlt}
-                    onChange={(e) => update(r.id, "bezahlt", safeNumber(e.target.value, 0))}
-                    style={{ width: 110, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(r.id, "bezahlt", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-252" />
+
+                  
                 </td>
 
-                <td
-                  className="right"
-                  style={{
+                <td className={rlcClass(
+                  "right",
+                  {
                     fontWeight: 600,
-                    color: of > 0 ? "#c0392b" : "#2c3e50",
-                  }}
-                >
+                    color: of > 0 ? "#c0392b" : "#2c3e50"
+                  })}>
+                  
                   {fmt(of)}
                 </td>
 
-                <td
-                  style={{
-                    fontWeight: 600,
-                    color: od > 0 ? "#b02a1a" : "#2c3e50",
-                  }}
-                >
+                <td className={rlcClass(null,
+                {
+                  fontWeight: 600,
+                  color: od > 0 ? "#b02a1a" : "#2c3e50"
+                })}>
+                  
                   {od}
                 </td>
 
@@ -571,9 +572,9 @@ export default function Mahnwesen() {
                   <select
                     value={r.stufe}
                     onChange={(e) =>
-                      update(r.id, "stufe", Number(e.target.value) as Forderung["stufe"])
-                    }
-                  >
+                    update(r.id, "stufe", Number(e.target.value) as Forderung["stufe"])
+                    }>
+                    
                     <option value={0}>0 – Erinnerung</option>
                     <option value={1}>1 – 1. Mahnung</option>
                     <option value={2}>2 – 2. Mahnung</option>
@@ -586,9 +587,9 @@ export default function Mahnwesen() {
                     type="number"
                     step="0.01"
                     value={r.gebuehr ?? defaultGebuehr(r.stufe)}
-                    onChange={(e) => update(r.id, "gebuehr", safeNumber(e.target.value, 0))}
-                    style={{ width: 90, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(r.id, "gebuehr", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-253" />
+
+                  
                 </td>
 
                 <td>
@@ -596,9 +597,9 @@ export default function Mahnwesen() {
                     type="number"
                     step="0.1"
                     value={r.zinssatz ?? defaultZins(r.stufe)}
-                    onChange={(e) => update(r.id, "zinssatz", safeNumber(e.target.value, 0))}
-                    style={{ width: 80, textAlign: "right" }}
-                  />
+                    onChange={(e) => update(r.id, "zinssatz", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-254" />
+
+                  
                 </td>
 
                 <td>
@@ -606,21 +607,21 @@ export default function Mahnwesen() {
                     type="text"
                     value={r.letzteMahnung || ""}
                     placeholder="tt.mm.jjjj"
-                    onChange={(e) => update(r.id, "letzteMahnung", e.target.value)}
-                    style={{ width: 110 }}
-                  />
+                    onChange={(e) => update(r.id, "letzteMahnung", e.target.value)} className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-255" />
+
+                  
                 </td>
 
                 <td>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <div className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-256">
                     <button className="bh-btn ghost" onClick={() => hochstufen([r.id])}>
                       Hochstufen
                     </button>
                     <button
-                      className="bh-btn ghost"
-                      style={{ background: "#f39c12" }}
-                      onClick={() => zuruecksetzen([r.id])}
-                    >
+                      className="bh-btn ghost rlc-migrated-pages-buchhaltung-mahnwesen-tsx-257"
+
+                      onClick={() => zuruecksetzen([r.id])}>
+                      
                       Zurücksetzen
                     </button>
                     <button className="bh-btn ghost" onClick={() => printMahnungEinzeln(r)}>
@@ -633,30 +634,30 @@ export default function Mahnwesen() {
                 </td>
 
                 <td>
-                  {of <= 0.01 ? (
-                    <span className="chip ok">Ausgeglichen</span>
-                  ) : r.stufe > 0 ? (
-                    <span className="chip warn">Abgemahnt</span>
-                  ) : od > 0 ? (
-                    <span className="chip warn">Überfällig</span>
-                  ) : (
-                    <span className="chip">Offen</span>
-                  )}
+                  {of <= 0.01 ?
+                  <span className="chip ok">Ausgeglichen</span> :
+                  r.stufe > 0 ?
+                  <span className="chip warn">Abgemahnt</span> :
+                  od > 0 ?
+                  <span className="chip warn">Überfällig</span> :
+
+                  <span className="chip">Offen</span>
+                  }
                 </td>
-              </tr>
-            );
+              </tr>);
+
           })}
 
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={15} style={{ textAlign: "center", color: "#777", padding: 14 }}>
+          {filtered.length === 0 &&
+          <tr>
+              <td colSpan={15} className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-258">
                 Keine Forderungen im aktuellen Filter.
               </td>
             </tr>
-          )}
+          }
 
-          <tr style={{ background: "#fafafa", fontWeight: 600 }}>
-            <td colSpan={7} style={{ textAlign: "right" }}>
+          <tr className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-259">
+            <td colSpan={7} className="rlc-migrated-pages-buchhaltung-mahnwesen-tsx-260">
               Summe (gefiltert) – Offen:
             </td>
             <td className="right">{fmt(totals.off)}</td>
@@ -665,12 +666,12 @@ export default function Mahnwesen() {
         </tbody>
       </table>
 
-      <div className="bh-note" style={{ marginTop: 8 }}>
+      <div className="bh-note rlc-migrated-pages-buchhaltung-mahnwesen-tsx-261">
         *Demo – Per l’invio email: POST <code>/api/mahnung/send</code> con HTML/PDF,
         CC Bauleiter; per automatismi, pianifica escalation (z.B. +7 / +14 / +21 giorni).
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 /* =========================
@@ -681,20 +682,20 @@ function briefInnerHTML(r: Forderung) {
   const od = overdueDays(r);
   const geb = r.gebuehr ?? defaultGebuehr(r.stufe);
   const zinssatz = r.zinssatz ?? defaultZins(r.stufe);
-  const zinsProTag = (of * (zinssatz / 100)) / 365;
+  const zinsProTag = of * (zinssatz / 100) / 365;
   const zinsBisher = Math.max(
     0,
     Math.round(zinsProDagSafe(zinsProTag, od) * 100) / 100
   );
 
   const stufeTitel =
-    r.stufe === 0
-      ? "Zahlungserinnerung"
-      : r.stufe === 1
-      ? "1. Mahnung"
-      : r.stufe === 2
-      ? "2. Mahnung"
-      : "Letzte Mahnung";
+  r.stufe === 0 ?
+  "Zahlungserinnerung" :
+  r.stufe === 1 ?
+  "1. Mahnung" :
+  r.stufe === 2 ?
+  "2. Mahnung" :
+  "Letzte Mahnung";
 
   return `<!doctype html><html><head><meta charset="utf-8"/><title>${escapeHtml(
     stufeTitel
@@ -745,9 +746,9 @@ th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left}
 }
 
 function reportHTML(list: Forderung[]) {
-  const body = list
-    .map(
-      (r) => `
+  const body = list.
+  map(
+    (r) => `
     <tr>
       <td>${escapeHtml(r.nr)}</td>
       <td>${escapeHtml(r.kunde)}</td>
@@ -761,8 +762,8 @@ function reportHTML(list: Forderung[]) {
       <td>${escapeHtml(r.letzteMahnung || "")}</td>
     </tr>
   `
-    )
-    .join("");
+  ).
+  join("");
 
   return `<!doctype html><html><head><meta charset="utf-8"/><title>Mahn-Report</title>
 <style>
@@ -792,8 +793,3 @@ function zinsProDagSafe(proTag: number, tage: number) {
   if (!isFinite(proTag) || proTag <= 0 || tage <= 0) return 0;
   return proTag * tage;
 }
-
-
-
-
-
