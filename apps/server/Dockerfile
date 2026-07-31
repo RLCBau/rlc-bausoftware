@@ -1,18 +1,67 @@
-FROM node:20-alpine
+FROM debian:bullseye-slim AS libredwg-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ca-certificates \
+    python3 \
+    build-essential \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    texinfo \
+    gettext \
+    libxml2-dev \
+    libpcre2-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN git clone --depth 1 https://github.com/LibreDWG/libredwg.git \
+    && cd libredwg \
+    && sh autogen.sh \
+    && ./configure \
+         --prefix=/usr/local \
+         --disable-bindings \
+         --disable-docs \
+    && make -j"$(nproc)" \
+    && make install DESTDIR=/install
+
+
+FROM node:20-bullseye-slim
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    pkg-config \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    libxml2 \
+    libpcre2-8-0 \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copia il prisma dalla cartella corretta
+COPY --from=libredwg-builder /install/usr/local /usr/local
+
+RUN ldconfig \
+    && dwg2dxf --version \
+    && dwgread --version
+
+COPY apps/server/package*.json ./
+RUN npm ci --include=dev
+
 COPY apps/server/prisma ./prisma
-
-# Copia tutto il codice del server
 COPY apps/server ./
 
-RUN npm run build
+ENV RLC_CAD_CONVERTER_COMMAND="dwg2dxf --overwrite --file {output} {input}"
 
 EXPOSE 4000
 
-CMD sh -c "npx prisma generate && npx prisma migrate deploy && node dist/index.js"
+CMD sh -c "npx prisma generate && npx prisma migrate deploy && node -r ts-node/register/transpile-only src/index.ts"

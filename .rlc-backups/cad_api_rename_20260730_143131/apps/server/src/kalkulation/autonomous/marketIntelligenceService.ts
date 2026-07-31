@@ -1,0 +1,523 @@
+import { prisma } from "../../lib/prisma";
+import {
+  getInternetIntelligenceEvents,
+  getInternetIntelligenceStatus,
+  getInternetMarketTrends,
+  InternetEvent,
+} from "./internetIntelligenceAgent";
+
+type CandidateType =
+  | "DATABASE_POSITION"
+  | "KNOWLEDGE"
+  | "PRICE_SUGGESTION"
+  | "REGULATION_ALERT"
+  | "TECHNOLOGY_ALERT";
+
+type ReviewStatus =
+  | "NEW"
+  | "REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "APPLIED";
+
+const db = prisma as any;
+
+const norm = (value: unknown) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9äöüß]+/g, " ")
+    .trim();
+
+const tokens = (value: unknown) =>
+  [...new Set(norm(value).split(/\s+/).filter((token) => token.length >= 3))];
+
+const overlap = (left: string[], right: string[]) =>
+  left.length
+    ? left.filter((token) => right.includes(token)).length / left.length
+    : 0;
+
+const MARKET_ONLY_PATTERN =
+  /preisindex|erzeugerpreis|einfuhrpreis|statistik|newsticker|meldung|bericht|marktbericht|konjunktur|inflation|tarifverhandlung|lohnerhöhung|lohnentwicklung/;
+
+const TECHNICAL_POSITION_PATTERN =
+  /liefern|einbauen|herstellen|verlegen|montieren|ausbauen|abbrechen|entsorgen|aushub|verdichten|pflastern|asphaltieren|betonieren|rohr|leitung|schacht|bordstein|pflaster|asphalttragschicht|asphaltbinder|asphaltdeckschicht/;
+
+function isKnownDirection(event: InternetEvent) {
+  return (
+    event.marketImpact.direction === "UP" ||
+    event.marketImpact.direction === "DOWN"
+  );
+}
+
+function hasQuantifiedImpact(event: InternetEvent) {
+  return (
+    event.marketImpact.estimatedChangeMinPct != null ||
+    event.marketImpact.estimatedChangeMaxPct != null
+  );
+}
+
+function isRelevantPriceEvent(event: InternetEvent) {
+  const hasTarget =
+    event.marketImpact.materials.length > 0 ||
+    event.marketImpact.trades.length > 0 ||
+    event.marketImpact.lvTerms.length > 0;
+
+  return (
+    hasTarget &&
+    (isKnownDirection(event) || hasQuantifiedImpact(event)) &&
+    event.marketImpact.confidence >= 60 &&
+    event.totalScore >= 60
+  );
+}
+
+function isTechnicalDatabasePosition(event: InternetEvent) {
+  const text = norm(
+    `${event.title} ${event.marketImpact.materials.join(" ")} ` +
+    `${event.marketImpact.trades.join(" ")} ${event.marketImpact.lvTerms.join(" ")}`
+  );
+
+  const hasMaterial = event.marketImpact.materials.length > 0;
+  const hasTrade = event.marketImpact.trades.length > 0;
+  const hasLvTerms = event.marketImpact.lvTerms.length >= 2;
+  const isMarketOnly = MARKET_ONLY_PATTERN.test(text);
+  const hasTechnicalLanguage = TECHNICAL_POSITION_PATTERN.test(text);
+
+  return (
+    hasMaterial &&
+    hasTrade &&
+    hasLvTerms &&
+    hasTechnicalLanguage &&
+    !isMarketOnly &&
+    event.totalScore >= 85 &&
+    event.marketImpact.confidence >= 80
+  );
+}
+
+function classifyExclusiveAlert(
+  event: InternetEvent
+): "REGULATION_ALERT" | "TECHNOLOGY_ALERT" | null {
+  const text = norm(
+    `${event.title} ${event.matchedSignals.join(" ")} ` +
+    `${event.marketImpact.lvTerms.join(" ")}`
+  );
+
+  if (
+    /\bdin\b|\bnorm\b|gesetz|verordnung|richtlinie|regelwerk|vob|reb/.test(text)
+  ) {
+    return "REGULATION_ALERT";
+  }
+
+  if (
+    /technologie|innovation|digitalisierung|gnss|machine control|maschine|verfahren|robotik|automatisierung/.test(
+      text
+    )
+  ) {
+    return "TECHNOLOGY_ALERT";
+  }
+
+  return null;
+}
+
+function proposedTechnicalPosition(event: InternetEvent) {
+  const material = event.marketImpact.materials[0] || null;
+  const trade = event.marketImpact.trades[0] || null;
+  const lvTerms = event.marketImpact.lvTerms.slice(0, 8);
+
+  const shortText = [
+    material,
+    trade && trade !== material ? trade : null,
+  ]
+    .filter(Boolean)
+    .join(" – ")
+    .slice(0, 180);
+
+  return {
+    shortText,
+    longText: [
+      `Technischer Marktkandidat: ${shortText}`,
+      `Quelle: ${event.label}`,
+      `Auslöser: ${event.title}`,
+      lvTerms.length ? `LV-Bezug: ${lvTerms.join(", ")}` : null,
+      `Bewertung: ${event.totalScore}/100`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    unit: null,
+    trade,
+    material,
+    tags: [
+      ...event.marketImpact.materials,
+      ...event.marketImpact.trades,
+      ...event.marketImpact.lvTerms,
+    ],
+  };
+}
+
+async function findDatabaseMatches(event: InternetEvent) {
+  const searchTokens = tokens(
+    `${event.marketImpact.materials.join(" ")} ` +
+    `${event.marketImpact.trades.join(" ")} ` +
+    `${event.marketImpact.lvTerms.join(" ")} ${event.title}`
+  );
+
+  if (searchTokens.length < 2) return [];
+
+  const rows = await db.kalkulationsDbEntry.findMany({
+    take: 500,
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      shortText: true,
+      longText: true,
+      unit: true,
+      trade: true,
+      unitPriceNet: true,
+    },
+  });
+
+  return rows
+    .map((row: any) => ({
+      ...row,
+      score: overlap(
+        searchTokens,
+        tokens(`${row.shortText} ${row.longText} ${row.trade}`)
+      ),
+    }))
+    .filter((row: any) => row.score >= 0.7)
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, 5);
+}
+
+async function findKnowledgeMatches(event: InternetEvent) {
+  const searchTokens = tokens(
+    `${event.title} ${event.marketImpact.materials.join(" ")} ` +
+    `${event.marketImpact.trades.join(" ")} ` +
+    `${event.marketImpact.lvTerms.join(" ")}`
+  );
+
+  if (searchTokens.length < 2) return [];
+
+  const rows = await db.rlcGlobalKnowledgeAggregated.findMany({
+    take: 500,
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      shortText: true,
+      longText: true,
+      unit: true,
+      gewerk: true,
+      category: true,
+      confidence: true,
+    },
+  });
+
+  return rows
+    .map((row: any) => ({
+      ...row,
+      score: overlap(
+        searchTokens,
+        tokens(
+          `${row.shortText} ${row.longText} ${row.gewerk} ${row.category}`
+        )
+      ),
+    }))
+    .filter((row: any) => row.score >= 0.72)
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, 5);
+}
+
+async function createCandidateIfMissing(
+  eventId: string,
+  type: CandidateType,
+  data: Record<string, unknown>
+) {
+  const title = String(data.title || "");
+  const fingerprint = norm(
+    title
+      .replace(/^Knowledge-Kandidat:\s*/i, "")
+      .replace(/^Technische Datenbankposition prüfen:\s*/i, "")
+      .replace(/^Neue Datenbankposition prüfen:\s*/i, "")
+  )
+    .replace(/statistisches bundesamt/g, "")
+    .replace(/www genesis destatis de/g, "")
+    .replace(/genesis destatis de/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 140);
+
+  const sameEventType = await db.marketIntelligenceCandidate.findFirst({
+    where: { eventId, type },
+    select: { id: true },
+  });
+
+  if (sameEventType) return false;
+
+  const recentSameType = await db.marketIntelligenceCandidate.findMany({
+    where: {
+      type,
+      status: { in: ["NEW", "REVIEW", "APPROVED", "APPLIED"] },
+    },
+    take: 200,
+    orderBy: { createdAt: "desc" },
+    select: { id: true, title: true },
+  });
+
+  const duplicate = recentSameType.some((candidate: any) => {
+    const candidateFingerprint = norm(
+      String(candidate.title || "")
+        .replace(/^Knowledge-Kandidat:\s*/i, "")
+        .replace(/^Technische Datenbankposition prüfen:\s*/i, "")
+        .replace(/^Neue Datenbankposition prüfen:\s*/i, "")
+    )
+      .replace(/statistisches bundesamt/g, "")
+      .replace(/www genesis destatis de/g, "")
+      .replace(/genesis destatis de/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 140);
+
+    if (!fingerprint || !candidateFingerprint) return false;
+
+    const left = tokens(fingerprint);
+    const right = tokens(candidateFingerprint);
+
+    return (
+      fingerprint === candidateFingerprint ||
+      overlap(left, right) >= 0.82 ||
+      overlap(right, left) >= 0.82
+    );
+  });
+
+  if (duplicate) return false;
+
+  await db.marketIntelligenceCandidate.create({
+    data: {
+      eventId,
+      type,
+      status: "NEW",
+      ...data,
+    },
+  });
+
+  return true;
+}
+
+export async function synchronizeMarketIntelligence(limit = 500) {
+  const events = await getInternetIntelligenceEvents(limit);
+
+  let imported = 0;
+  let candidates = 0;
+
+  for (const event of events) {
+    const stored = await db.marketIntelligenceEvent.upsert({
+      where: { externalId: event.id },
+      update: {
+        title: event.title,
+        url: event.link,
+        sourceId: event.sourceId,
+        sourceName: event.label,
+        publishedAt: new Date(event.publishedAt),
+        priority: event.priority,
+        relevanceScore: event.relevanceScore,
+        trustScore: event.trustScore,
+        totalScore: event.totalScore,
+        verification: event.verification,
+        matchedSignals: event.matchedSignals,
+        priceHints: event.priceHints,
+        marketImpact: event.marketImpact,
+      },
+      create: {
+        externalId: event.id,
+        title: event.title,
+        url: event.link,
+        sourceId: event.sourceId,
+        sourceName: event.label,
+        publishedAt: new Date(event.publishedAt),
+        priority: event.priority,
+        relevanceScore: event.relevanceScore,
+        trustScore: event.trustScore,
+        totalScore: event.totalScore,
+        verification: event.verification,
+        matchedSignals: event.matchedSignals,
+        priceHints: event.priceHints,
+        marketImpact: event.marketImpact,
+      },
+    });
+
+    imported += 1;
+
+    const alertType = classifyExclusiveAlert(event);
+
+    if (alertType) {
+      const created = await createCandidateIfMissing(stored.id, alertType, {
+        confidence: event.marketImpact.confidence / 100,
+        title: event.title,
+        rationale:
+          event.marketImpact.cause ||
+          `Automatisch aus ${event.label} erkannt.`,
+        proposedData: {
+          marketImpact: event.marketImpact,
+          source: {
+            title: event.title,
+            label: event.label,
+            link: event.link,
+          },
+        },
+      });
+
+      if (created) candidates += 1;
+      continue;
+    }
+
+    const databaseMatches = await findDatabaseMatches(event);
+    const knowledgeMatches = await findKnowledgeMatches(event);
+
+    if (isRelevantPriceEvent(event)) {
+      const created = await createCandidateIfMissing(
+        stored.id,
+        "PRICE_SUGGESTION",
+        {
+          confidence: event.marketImpact.confidence / 100,
+          title: event.title,
+          rationale:
+            event.marketImpact.cause ||
+            `Preisrelevanter Markthinweis aus ${event.label}.`,
+          proposedData: {
+            marketImpact: event.marketImpact,
+            databaseMatches,
+            source: {
+              title: event.title,
+              label: event.label,
+              link: event.link,
+            },
+          },
+        }
+      );
+
+      if (created) candidates += 1;
+    }
+
+    if (
+      !isRelevantPriceEvent(event) &&
+      knowledgeMatches.length === 0 &&
+      event.totalScore >= 65 &&
+      event.marketImpact.confidence >= 50
+    ) {
+      const created = await createCandidateIfMissing(
+        stored.id,
+        "KNOWLEDGE",
+        {
+          confidence: event.totalScore / 100,
+          title: `Knowledge-Kandidat: ${event.title}`,
+          rationale:
+            "Keine ausreichend ähnliche Information in Global Knowledge gefunden.",
+          proposedData: {
+            shortText: event.title.slice(0, 180),
+            longText: [
+              `Markthinweis: ${event.title}`,
+              `Quelle: ${event.label}`,
+              `Bewertung: ${event.totalScore}/100`,
+              event.marketImpact.materials.length
+                ? `Materialien: ${event.marketImpact.materials.join(", ")}`
+                : null,
+              event.marketImpact.trades.length
+                ? `Gewerke: ${event.marketImpact.trades.join(", ")}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+            unit: null,
+            gewerk: event.marketImpact.trades[0] || null,
+            category: "Market Intelligence",
+          },
+        }
+      );
+
+      if (created) candidates += 1;
+    }
+
+    if (
+      databaseMatches.length === 0 &&
+      isTechnicalDatabasePosition(event)
+    ) {
+      const position = proposedTechnicalPosition(event);
+
+      if (position.shortText) {
+        const created = await createCandidateIfMissing(
+          stored.id,
+          "DATABASE_POSITION",
+          {
+            confidence: event.totalScore / 100,
+            title: `Technische Datenbankposition prüfen: ${position.shortText}`,
+            rationale:
+              "Technische Leistung erkannt, aber keine ausreichend ähnliche Position gefunden.",
+            proposedData: position,
+          }
+        );
+
+        if (created) candidates += 1;
+      }
+    }
+  }
+
+  return {
+    imported,
+    candidates,
+    processedEvents: events.length,
+  };
+}
+
+export async function getMarketDashboard() {
+  const [status, trends, eventCount, newCount, approvedCount, appliedCount, rejectedCount, recentEvents, recentCandidates] = await Promise.all([
+    getInternetIntelligenceStatus(), getInternetMarketTrends(), db.marketIntelligenceEvent.count(),
+    db.marketIntelligenceCandidate.count({ where: { status: "NEW" } }), db.marketIntelligenceCandidate.count({ where: { status: "APPROVED" } }),
+    db.marketIntelligenceCandidate.count({ where: { status: "APPLIED" } }), db.marketIntelligenceCandidate.count({ where: { status: "REJECTED" } }),
+    db.marketIntelligenceEvent.findMany({ take: 20, orderBy: { publishedAt: "desc" } }),
+    db.marketIntelligenceCandidate.findMany({ take: 30, orderBy: { createdAt: "desc" }, include: { event: true } }),
+  ]);
+  return { status, counters: { events: eventCount, new: newCount, approved: approvedCount, applied: appliedCount, rejected: rejectedCount }, trends, recentEvents, recentCandidates };
+}
+
+export async function listMarketCandidates(status?: string, type?: string, limit = 100) {
+  return db.marketIntelligenceCandidate.findMany({ where: { ...(status ? { status } : {}), ...(type ? { type } : {}) }, take: Math.min(limit, 500), orderBy: { createdAt: "desc" }, include: { event: true, reviews: { orderBy: { createdAt: "desc" } } } });
+}
+
+export async function reviewMarketCandidate(id: string, action: "APPROVE" | "REJECT", note?: string, userId?: string) {
+  const status: ReviewStatus = action === "APPROVE" ? "APPROVED" : "REJECTED";
+  const candidate = await db.marketIntelligenceCandidate.update({ where: { id }, data: { status, reviewedAt: new Date(), reviewedBy: userId || null, reviewNote: note || null } });
+  await db.marketIntelligenceReview.create({ data: { candidateId: id, action, note: note || null, userId: userId || null } });
+  return candidate;
+}
+
+export async function applyMarketCandidate(id: string, companyId: string, userId?: string) {
+  const candidate = await db.marketIntelligenceCandidate.findUnique({ where: { id }, include: { event: true } });
+  if (!candidate) throw new Error("MARKET_CANDIDATE_NOT_FOUND");
+  if (candidate.status !== "APPROVED") throw new Error("MARKET_CANDIDATE_NOT_APPROVED");
+  const data = candidate.proposedData as any;
+  let result: any = null;
+  if (candidate.type === "DATABASE_POSITION") {
+    result = await db.kalkulationsDbEntry.create({ data: {
+      companyId, source: "market-intelligence-approved", shortText: data.shortText,
+      longText: data.longText || null, unit: data.unit || null, trade: data.trade || null,
+      tags: data.tags || [], aiNote: `Freigegebener Market-Intelligence-Kandidat ${candidate.id}`,
+      confidence: candidate.confidence, unitPriceNet: 0,
+    }});
+  } else if (candidate.type === "KNOWLEDGE") {
+    const normalizedKey = norm(`${data.shortText}|${data.unit || ""}|${data.gewerk || ""}`).replace(/\s+/g, "-").slice(0, 180);
+    result = await db.rlcGlobalKnowledgeAggregated.upsert({ where: { normalizedKey }, update: {
+      longText: data.longText || null, confidence: Math.max(candidate.confidence, 0.5), needsReview: false,
+      sources: [{ type: "MARKET_INTELLIGENCE", eventId: candidate.eventId, url: candidate.event.link }],
+    }, create: {
+      normalizedKey, shortText: data.shortText, longText: data.longText || null, unit: data.unit || null,
+      gewerk: data.gewerk || null, category: data.category || "Market Intelligence", confidence: Math.max(candidate.confidence, 0.5),
+      sampleCount: 1, needsReview: false, sources: [{ type: "MARKET_INTELLIGENCE", eventId: candidate.eventId, url: candidate.event.link }],
+    }});
+  } else {
+    result = { recorded: true, message: "Hinweis freigegeben; keine Datenbankänderung erforderlich." };
+  }
+  await db.marketIntelligenceCandidate.update({ where: { id }, data: { status: "APPLIED", appliedAt: new Date(), appliedBy: userId || null, appliedResult: result } });
+  await db.marketIntelligenceReview.create({ data: { candidateId: id, action: "APPLY", note: "Explizit angewendet", userId: userId || null } });
+  return result;
+}

@@ -1,3 +1,4 @@
+import copilotTtsRouter from "./routes/copilot.tts";
 // apps/server/src/index.ts
 import globalKnowledgeRouter from "./routes/globalKnowledge";
 import "dotenv/config";
@@ -15,9 +16,9 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { PROJECTS_ROOT } from "./lib/projectsRoot";
-import { COMPANIES_ROOT } from "./lib/companiesRoot"; // ✅ NEW (company logo/header storage root)
+import { COMPANIES_ROOT } from "./lib/companiesRoot"; // âœ… NEW (company logo/header storage root)
 
-// ✅ MAILER VERIFY (punto 2)
+// âœ… MAILER VERIFY (punto 2)
 import { verifyMailerOnce } from "./lib/mailer";
 
 /* ---- ROUTES (base) ---- */
@@ -36,6 +37,7 @@ import whoamiRoutes from "./routes/whoami";
 import gaebRoutes from "./routes/gaeb.routes";
 import versionsvergleichRoutes from "./routes/versionsvergleich";
 import kalkulationStorageRoutes from "./routes/kalkulation.storage";
+import copilotSttRoutes from "./routes/copilot.stt";
 import kiRoutes from "./routes/ki";
 import abrechnungRoutes from "./routes/abrechnung";
 import buchhaltungRoutes from "./routes/buchhaltung";
@@ -57,11 +59,13 @@ import projectLvRoutes from "./routes/projectLv";
 
 import fileRoutes from "./routes/files";
 import filesStaticRoutes from "./routes/filesStatic";
+import storageRoutes from "./routes/storage";
 
 import regieRoutes from "./routes/regie";
 import lsRoutes from "./routes/ls";
 import fotosRoutes from "./routes/fotos";
 import inboxRouter from "./routes/inbox";
+import inboxWorkflowRouter from "./routes/inboxWorkflow";
 import photosRouter from "./routes/photos"; // legacy (lo teniamo come /api/photos-legacy)
 import regiePdfRoutes from "./routes/regiePdf";
 import tagesberichtRoutes from "./routes/tagesbericht";
@@ -69,7 +73,7 @@ import sollistRoutes from "./routes/sollist";
 
 import cadRoutes from "./routes/cad";
 import cadTakeoffRoutes from "./routes/cad.takeoff";
-import bricscadRoutes from "./routes/bricscad";
+import cadImportRoutes from "./routes/cad-import";
 import autoKiRouter from "./routes/autoKi";
 
 import kalkulationRecipesRoutes from "./routes/kalkulation.recipes";
@@ -84,17 +88,21 @@ import kalkulationMengenRoutes from "./routes/kalkulation.mengen";
 import kalkulationRechnungRoutes from "./routes/kalkulation.rechnung";
 import { requireAuth, requireVerifiedEmail } from "./middleware/auth";
 import { auditTrail } from "./middleware/audit";
-/* ✅ LICENSE (Server Upgrade) */
+/* âœ… LICENSE (Server Upgrade) */
 import { requireServerLicense } from "./middleware/license";
 import licenseRoutes from "./routes/license";
 
-/* ✅ COMPANY + SUBSCRIPTION (blocco totale) */
+/* âœ… COMPANY + SUBSCRIPTION (blocco totale) */
 import { requireCompany, requireActiveSubscription } from "./middleware/guards";
 import companyInvitesRoutes from "./routes/company.invites";
 import companyAdminRoutes from "./routes/company.admin";
+import companyMobileLicensesRoutes from "./routes/company.mobile-licenses";
 import kiLs from "./routes/ki.lieferschein";
 import kiDebug from "./routes/ki.debug";
 import multer from "multer";
+import documentDeliveryRoutes from "./routes/documentDelivery";
+import autonomousRouter from "./routes/autonomous";
+import vorlagenRoutes from "./routes/vorlagen";
 
 /* ======================= CRASH SHIELD (NO BREAKING CHANGES) ======================= */
 const pdfUpload = multer({ storage: multer.memoryStorage() });
@@ -114,23 +122,23 @@ function memSnapshot() {
 }
 
 process.on("unhandledRejection", (reason: any) => {
-  console.error("❌ unhandledRejection:", reason);
+  console.error("âŒ unhandledRejection:", reason);
   if (DEBUG_MEMORY) console.error("   mem:", memSnapshot());
 });
 
 process.on("uncaughtException", (err: any) => {
-  console.error("❌ uncaughtException:", err);
+  console.error("âŒ uncaughtException:", err);
   if (DEBUG_MEMORY) console.error("   mem:", memSnapshot());
 });
 
 process.on("warning", (w: any) => {
-  console.warn("⚠️ process warning:", w?.message || w);
+  console.warn("âš ï¸ process warning:", w?.message || w);
   if (DEBUG_MEMORY) console.warn("   mem:", memSnapshot());
 });
 
 if (DEBUG_MEMORY) {
   setInterval(() => {
-    console.log("🧠 mem:", memSnapshot());
+    console.log("ðŸ§  mem:", memSnapshot());
   }, 30_000).unref?.();
 }
 /* ======================= /CRASH SHIELD ======================= */
@@ -149,6 +157,7 @@ function requestId() {
 }
 
 const app = express();
+
 
 
 // =======================
@@ -184,10 +193,10 @@ async function ensureDevCompany() {
       create: { id: companyId, name: "DEV COMPANY", code: "DEV" },
     });
 
-    console.log(`👤 DEV company ready: ${companyId}`);
+    console.log(`ðŸ‘¤ DEV company ready: ${companyId}`);
   } catch (e: any) {
     console.warn(
-      "⚠️  DEV company upsert skipped (DB non raggiungibile). Il server continua in modalità file-based.\n" +
+      "âš ï¸  DEV company upsert skipped (DB non raggiungibile). Il server continua in modalitÃ  file-based.\n" +
         (e?.message || e)
     );
   }
@@ -195,7 +204,7 @@ async function ensureDevCompany() {
 
 /* ======================= Projects Root (FS) ======================= */
 fs.mkdirSync(PROJECTS_ROOT, { recursive: true });
-fs.mkdirSync(COMPANIES_ROOT, { recursive: true }); // ✅ NEW: ensure company storage root exists
+fs.mkdirSync(COMPANIES_ROOT, { recursive: true }); // âœ… NEW: ensure company storage root exists
 
 /* ======================= Core Middleware ======================= */
 app.set("trust proxy", 1);
@@ -254,11 +263,13 @@ app.use(
   })
 );
 
-// ✅ preflight
+// âœ… preflight
 app.options(/.*/, cors());
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+app.use("/api/autonomous", autonomousRouter);
 
 /* ======================= Project PDFs (mobile) ======================= */
 function isSafeFsKey(x: string) {
@@ -273,7 +284,7 @@ function collectPdfFiles(rootAbs: string) {
     "_staging",
     "raw",
     "inbox",
-    "photos", // se vuoi includere pdf anche lì, togli questa riga
+    "photos", // se vuoi includere pdf anche lÃ¬, togli questa riga
   ]);
 
   function walk(dirAbs: string, depth: number) {
@@ -392,7 +403,7 @@ const s3 = S3_ENABLED
     })
   : null;
 
-/* ======================= PROJEKTLISTE: DB → fallback FS ======================= */
+/* ======================= PROJEKTLISTE: DB â†’ fallback FS ======================= */
 function safeJsonParse<T>(buf: Buffer, fallback: T): T {
   try {
     return JSON.parse(buf.toString("utf8")) as T;
@@ -443,7 +454,7 @@ function listProjectsFromFs() {
 }
 
 /**
- * ✅ projects list
+ * âœ… projects list
  */
 app.get(
   "/api/projects",
@@ -501,7 +512,7 @@ app.get(
 );
 
 /**
- * ✅ Mobile: lista PDF presenti in data/projects/<fsKey>/...
+ * âœ… Mobile: lista PDF presenti in data/projects/<fsKey>/...
  * GET /api/projects/:fsKey/pdfs
  */
 app.get(
@@ -812,7 +823,7 @@ app.use("/api/fotos", fotosRoutes);
 app.use("/api/auth", adminAuthRoutes);
 app.use("/api/auth", authRoutes);
 
-/* ✅ project-lv API */
+/* âœ… project-lv API */
 app.use(
   "/api/project-lv",
   projectLvRoutes
@@ -833,7 +844,7 @@ app.use(
 
 app.use("/api/openai", openaiRoutes);
 
-/* ✅ Tutto ciò che è "core app" va dietro Company + Abo */
+/* âœ… Tutto ciÃ² che Ã¨ "core app" va dietro Company + Abo */
 app.use(
   "/api/gaeb",
   requireAuth,
@@ -909,9 +920,10 @@ app.use(
 );
 app.use("/api/company", companyInvitesRoutes);
 app.use("/api/company", companyAdminRoutes);
+app.use("/api/company", companyMobileLicensesRoutes);
 
 /* misc */
-// ❌ REMOVE – rompe routing fotos
+// âŒ REMOVE â€“ rompe routing fotos
 // app.use(
 //   "/api",
 //   requireAuth,
@@ -959,11 +971,11 @@ app.use(
   cadTakeoffRoutes
 );
 app.use(
-  "/api/bricscad",
+  "/api/cad",
   requireAuth,
   requireCompany,
   requireActiveSubscription,
-  bricscadRoutes
+  cadImportRoutes
 );
 app.use(
   
@@ -972,6 +984,16 @@ app.use(
   requireCompany,
   requireActiveSubscription,
   autoKiRouter
+);
+
+/* inbox workflow generic approvals/rejections */
+app.use(
+  "/api/inbox",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  requireServerLicense(),
+  inboxWorkflowRouter
 );
 
 /* inbox + workflows (SERVER upgrade required) */
@@ -986,20 +1008,20 @@ app.use(
 
 /**
  * =========================================================
- * ✅ FIX CRITICO (FOTOS INBOX):
+ * âœ… FIX CRITICO (FOTOS INBOX):
  * L'app chiama /api/photos/inbox/list ma i dati stanno in routes/fotos.ts
 
  * Quindi montiamo lo STESSO router anche su /api/photos.
  *
  * IMPORTANTE: /api/photos NON deve puntare al vecchio photosRouter,
  * altrimenti intercetta la request e restituisce 96/Not Found.
- * Per compatibilità teniamo il vecchio router come /api/photos-legacy.
+ * Per compatibilitÃ  teniamo il vecchio router come /api/photos-legacy.
  * =========================================================
  */
 app.use(
   "/api/photos",  
    requireAuth,
-   fotosRoutes // ✅ alias: /api/photos/inbox/list -> routes/fotos.ts
+   fotosRoutes // âœ… alias: /api/photos/inbox/list -> routes/fotos.ts
 );
 app.use(
   "/api/photos-legacy",
@@ -1012,7 +1034,7 @@ app.use(
 );
 
 /**
- * ✅ Mobile chiama /api/fotos/...
+ * âœ… Mobile chiama /api/fotos/...
  */
 app.use(
   "/api/fotos",
@@ -1021,7 +1043,7 @@ app.use(
 );
 
 /**
- * ✅ (compat) alcune vecchie chiamate potrebbero usare /api/... diretto
+ * âœ… (compat) alcune vecchie chiamate potrebbero usare /api/... diretto
  */
 // app.use(
 //   "/api",
@@ -1079,7 +1101,7 @@ app.use(
   sollistRoutes
 );
 
-/* ✅ files API */
+/* âœ… files API */
 app.use(
   "/api/files",
   requireAuth,
@@ -1099,8 +1121,8 @@ app.use(
 );
 
 /**
- * ✅ FIX CRITICO:
- * Prima projectsRoutes, poi lvRoutes (così /api/projects NON si rompe)
+ * âœ… FIX CRITICO:
+ * Prima projectsRoutes, poi lvRoutes (cosÃ¬ /api/projects NON si rompe)
  */
 app.use(
   "/api/projects",
@@ -1233,10 +1255,11 @@ app.use(
 app.use("/api/ki", kiLs);
 
 /* static helper (extra) */
+app.use("/api/storage", storageRoutes);
 app.use("/files", filesStaticRoutes);
 app.use(kiDebug);
 
-/* ==== Alias/health per l’import ==== */
+/* ==== Alias/health per lâ€™import ==== */
 app.get("/api/import/_ping", (_req, res) => res.json({ ok: true }));
 app.get("/api/import/_projects-check", async (_req, res) => {
   try {
@@ -1266,7 +1289,68 @@ app.get("/api/import/_projects-check", async (_req, res) => {
   }
 });
 
+
+
+app.post("/api/copilot/tts", async (req, res) => {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return res.status(500).json({ ok: false, error: "OPENAI_API_KEY fehlt am Server." });
+
+    const text = String(req.body?.text || "").replace(/\s+/g, " ").trim().slice(0, 1800);
+    if (!text) return res.status(400).json({ ok: false, error: "Text fehlt." });
+
+    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini-tts",
+        voice: String(req.body?.voice || "coral"),
+        input: text,
+        instructions:
+          String(req.body?.instructions || "") ||
+          "Sprich auf Deutsch natÃ¼rlich, warm, weiblich, professionell und ruhig. Du bist der RLC Copilot fÃ¼r Baukalkulation. Nicht roboterhaft sprechen.",
+        response_format: "mp3",
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text().catch(() => "");
+      return res.status(response.status).json({ ok: false, error: "OpenAI TTS Fehler", detail: err.slice(0, 1000) });
+    }
+
+    const audioBuffer = Buffer.from(await response.arrayBuffer());
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(audioBuffer);
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error?.message || "TTS Serverfehler" });
+  }
+});
+
+
+
+app.get("/api/copilot/ping", (_req, res) => {
+  res.json({ ok: true, route: "copilot-ping" });
+});
+
+app.use(
+  "/api/document-delivery",
+  documentDeliveryRoutes
+);
+
+app.use(
+  "/api/vorlagen",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  vorlagenRoutes
+);
+
 /* ======================= 404 & Error Handler ======================= */
+app.use("/api/copilot", copilotSttRoutes);
 app.use((_req, res) => res.status(404).json({ error: "Not Found" }));
 app.use(
   (
@@ -1275,7 +1359,7 @@ app.use(
     res: express.Response,
     _next: express.NextFunction
   ) => {
-    console.error("❌ Unhandled Error:", err);
+    console.error("âŒ Unhandled Error:", err);
     if (DEBUG_MEMORY) console.error("   mem:", memSnapshot());
     res
       .status(500)
@@ -1283,28 +1367,29 @@ app.use(
   }
 );
 
+
 /* ======================= START ======================= */
 (async () => {
   try {
     await ensureDevCompany();
 
-    // ✅ MAILER VERIFY (punto 2): logga subito se SMTP è rotto
+    // âœ… MAILER VERIFY (punto 2): logga subito se SMTP Ã¨ rotto
     // Non blocca la partenza: se fallisce, stampa errore e continua.
     try {
       await verifyMailerOnce();
     } catch (e: any) {
       console.error(
-        "⚠️ [startup] SMTP verify failed (server continues):",
+        "âš ï¸ [startup] SMTP verify failed (server continues):",
         e?.message || e
       );
     }
 
     app.listen(PORT, () => {
       console.log(`[RLC-API] listening on http://localhost:${PORT}`);
-      console.log(`📁 Projects root: ${PROJECTS_ROOT} (static: /projects)`);
+      console.log(`ðŸ“ Projects root: ${PROJECTS_ROOT} (static: /projects)`);
       if (FRONTEND_ORIGIN)
-        console.log(`🌐 FRONTEND_ORIGIN allowed: ${FRONTEND_ORIGIN}`);
-      if (DEBUG_MEMORY) console.log(`🧠 DEBUG_MEMORY=on (mem logging enabled)`);
+        console.log(`ðŸŒ FRONTEND_ORIGIN allowed: ${FRONTEND_ORIGIN}`);
+      if (DEBUG_MEMORY) console.log(`ðŸ§  DEBUG_MEMORY=on (mem logging enabled)`);
     });
   } catch (e) {
     console.error("Startup error:", e);
@@ -1313,3 +1398,4 @@ app.use(
 })();
 
 export default app;
+

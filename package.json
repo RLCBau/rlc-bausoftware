@@ -1,7 +1,9 @@
 {
   "dependencies": {
     "@prisma/client": "^6.16.2",
+    "exceljs": "^4.4.0",
     "pdfjs-dist": "^5.4.296",
+    "pdfkit": "^0.18.0",
     "prisma": "^6.16.2"
   }
 }

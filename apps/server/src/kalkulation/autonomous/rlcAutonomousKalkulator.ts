@@ -1,5 +1,7 @@
-import { analyzeRlcProjectContext } from "./projectContextAnalyzer";
+import { runKalkulationAgents } from "../agents/orchestrator";
+import type { KalkulationAgentsResult } from "../agents/types";
 import { calculateAutonomousUrkalkulation } from "./autonomousUrkalkulationEngine";
+import { analyzeRlcProjectContext } from "./projectContextAnalyzer";
 import type {
   RlcAutonomousCalcInput,
   RlcAutonomousCalcResult,
@@ -8,6 +10,7 @@ import type {
 
 export type RlcAutonomousResolveResult = {
   context: RlcAutonomousProjectContext;
+  agents: KalkulationAgentsResult;
   result: RlcAutonomousCalcResult | null;
 };
 
@@ -16,11 +19,43 @@ export function resolveRlcAutonomousCalculation(
   allRows: RlcAutonomousCalcInput[] = [],
   projectCode?: string
 ): RlcAutonomousResolveResult {
-  const context = analyzeRlcProjectContext(allRows.length > 0 ? allRows : [row], projectCode);
-  const result = calculateAutonomousUrkalkulation(row, context);
+  const context = analyzeRlcProjectContext(
+    allRows.length > 0 ? allRows : [row],
+    projectCode
+  );
+
+  const agents = runKalkulationAgents({
+    row,
+    allRows: allRows.length > 0 ? allRows : [row],
+    projectContext: context,
+  });
+
+  const engineResult = calculateAutonomousUrkalkulation(row, context);
+
+  const result = engineResult
+    ? {
+        ...engineResult,
+        confidence: Math.min(engineResult.confidence, agents.confidence),
+        riskLevel:
+          agents.summary.riskLevel === "high"
+            ? "high"
+            : engineResult.riskLevel,
+        calculationStatus: agents.summary.reviewRequired
+          ? "needs_review"
+          : engineResult.calculationStatus,
+        warnings: Array.from(
+          new Set([...engineResult.warnings, ...agents.warnings])
+        ),
+        aiReason:
+          `${engineResult.aiReason} ` +
+          `Agentenanalyse: ${agents.summary.trade}, ` +
+          `${agents.summary.bauverfahren}, Risiko ${agents.summary.riskLevel}.`,
+      }
+    : null;
 
   return {
     context,
+    agents,
     result,
   };
 }
@@ -49,6 +84,8 @@ export function mapAutonomousResultToKiRow(
     leistungsart: r.leistungsart,
     priceBreakdown: r.costLines,
     rlcAutonomousContext: resolved.context,
+    rlcAgentSummary: resolved.agents.summary,
+    rlcAgentReports: resolved.agents.reports,
     warning: r.warnings.join(" · "),
     aiReason: r.aiReason,
   };

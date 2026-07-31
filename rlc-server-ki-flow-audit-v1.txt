@@ -1,0 +1,950 @@
+apps/server/src/index.ts:3:import globalKnowledgeRouter from "./routes/globalKnowledge";
+apps/server/src/index.ts:33:import openaiRoutes from "./routes/openai.routes";
+apps/server/src/index.ts:78:import kalkulationRecipesRoutes from "./routes/kalkulation.recipes";
+apps/server/src/index.ts:398:/* ======================= PROJEKTLISTE: DB → fallback FS ======================= */
+apps/server/src/index.ts:399:function safeJsonParse<T>(buf: Buffer, fallback: T): T {
+apps/server/src/index.ts:403:    return fallback;
+apps/server/src/index.ts:810:app.use("/api/global-knowledge", globalKnowledgeRouter);
+apps/server/src/index.ts:837:app.use("/api/openai", openaiRoutes);
+apps/server/src/index.ts:1152:  kalkulationRecipesRoutes
+apps/server/src/index.ts:1286:    const apiKey = process.env.OPENAI_API_KEY;
+apps/server/src/index.ts:1287:    if (!apiKey) return res.status(500).json({ ok: false, error: "OPENAI_API_KEY fehlt am Server." });
+apps/server/src/index.ts:1292:    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+apps/server/src/index.ts:1311:      return res.status(response.status).json({ ok: false, error: "OpenAI TTS Fehler", detail: err.slice(0, 1000) });
+apps/server/src/kalkulation/rlcPreisBibliothek.ts:13035:            id: "rlc-fallback-pflaster-komplett-m2",
+apps/server/src/kalkulation/rlcReverseUrkalkulationEngine.ts:51:function n(v: unknown, fallback = 0): number {
+apps/server/src/kalkulation/rlcReverseUrkalkulationEngine.ts:53:  return Number.isFinite(x) ? x : fallback;
+apps/server/src/kalkulation/knowledgeHub.ts:3:export type RlcKnowledgeHubInput = {
+apps/server/src/kalkulation/knowledgeHub.ts:11:export type RlcKnowledgeHubResult = {
+apps/server/src/kalkulation/knowledgeHub.ts:18:export function resolveRlcKnowledgeHub(input: RlcKnowledgeHubInput): RlcKnowledgeHubResult {
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:1:import { resolveRlcKnowledgeHub } from "../knowledgeHub";
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:82:  const knowledgeHub = resolveRlcKnowledgeHub({
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:94:    externalMatches: knowledgeHub.externalMatches.length,
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:95:    externalConfidence: knowledgeHub.externalKnowledgeConfidence,
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:104:    externalKnowledge: knowledgeHub.hasExternalKnowledge ? knowledgeHub.externalMatches : baseResult.externalKnowledge,
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:105:    externalKnowledgeConfidence: knowledgeHub.hasExternalKnowledge
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:106:      ? knowledgeHub.externalKnowledgeConfidence
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:118:      standards: knowledgeHub.hasExternalKnowledge
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:119:        ? knowledgeHub.externalMatches.map((x: any) => x.title || x.sourceName).filter(Boolean)
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:121:      externalSources: knowledgeHub.hasExternalKnowledge ? knowledgeHub.externalMatches : [],
+apps/server/src/kalkulation/pipeline/rlcCalculationPipeline.ts:136:      ...knowledgeHub.technicalNotes,
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:48:function n(v: any, fallback = 0): number {
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:50:  return Number.isFinite(x) ? x : fallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:452:  templateCache = await prisma.recipeTemplate.findMany({
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:467:function buildDirectTechnicalRecipeOverride(
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:567:      source: "recipe",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:639:    const fallback = t.includes("ac 11 ds") || t.includes("ads aus ac 11") ? 18 : t.includes("deckschicht") || t.includes("ac 8") || t.includes("ac8") ? 18 : 14;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:640:    return make(existingEp > 0 ? existingEp : fallback, "Fremdleistung", "Asphaltschicht einbauen", "Straßenbau / Asphalt");
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:654:function buildUniversalRlcLibraryFallback(
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:759:    source: "recipe",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:772:function buildTechnicalComponentFallback(
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:1192:      source: "technical-parser",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:1724:      source: "technical-parser",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2001:    const fallbackKey =
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2014:      hasAuto ? autoKey : fallbackKey,
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2019:        : `KG/PVC Rohr ${dn.toUpperCase()} verlegen, Fallback ohne Tiefe`
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2428:   * Non deve cadere nei vecchi RecipeTemplates/DB.
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2531:    source: "technical-parser",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2886:    source: "technical-parser",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2913:export async function calcRecipeKalkulationRow(row: InputRow): Promise<any | null> {
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2935:  const asphaltTechnicalFallback =
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2937:      ? buildTechnicalComponentFallback(row, text, einheit, menge, technical)
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2944:  if (asphaltTechnicalFallback) return asphaltTechnicalFallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2946:  const blockBPriorityFallback = buildTechnicalComponentFallback(row, text, einheit, menge, technical);
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2948:    blockBPriorityFallback &&
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2958:    return blockBPriorityFallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2972:    : buildDirectTechnicalRecipeOverride(row, text, einheit, menge);
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2976:  const technicalFallback = buildTechnicalComponentFallback(row, text, einheit, menge, technical);
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2985:  if (technicalFallback) return technicalFallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2987:  const libraryFallback = buildUniversalRlcLibraryFallback(row, text, einheit, menge);
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2994:    return libraryFallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:2998:  if (!templates.length) return libraryFallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3006:  if (!best) return libraryFallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3016:   * Die Recipe Engine kalkuliert immer den EP pro Einheit.
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3103:  if (direct <= 0) return libraryFallback;
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3112:      id: "recipe-gk",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3122:      id: "recipe-risk",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3132:      id: "recipe-profit",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3186:      `RLC Recipe Engine: passende Rezeptfamilie gefunden: ${best.title}.`,
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3191:      "Preisaufbau wurde aus Technical Parser + RecipeComponents + RLC Preisbibliothek erzeugt.",
+apps/server/src/kalkulation/kalkulationsRecipeEngine.ts:3194:    source: "recipe",
+apps/server/src/kalkulation/technicalParser/rlcTechnicalPositionParser.ts:66:function n(value: any, fallback = 0): number {
+apps/server/src/kalkulation/technicalParser/rlcTechnicalPositionParser.ts:68:  return Number.isFinite(x) ? x : fallback;
+apps/server/src/kalkulation/technicalParser/rlcTechnicalPositionParser.ts:1506:  function extractLayerCmByKeywords(keys: string[], fallbackCm = 0): number {
+apps/server/src/kalkulation/technicalParser/rlcTechnicalPositionParser.ts:1540:    return best || fallbackCm;
+apps/server/src/lib/prisma.ts:9:/* Deutsch: Log-Level aus ENV ableiten (Fallback auf bestehende Liste) */
+apps/server/src/lib/prisma.ts:66:  // admin email preferita: ADMIN_BYPASS_EMAILS (prima), fallback dev@rlc.local
+apps/server/src/lib/auditLog.ts:19:  // fallback (express)
+apps/server/src/routes/copilot.stt.ts:3:import OpenAI from "openai";
+apps/server/src/routes/copilot.stt.ts:4:import { toFile } from "openai/uploads";
+apps/server/src/routes/copilot.stt.ts:9:function getOpenAI() {
+apps/server/src/routes/copilot.stt.ts:10:  const apiKey = process.env.OPENAI_API_KEY;
+apps/server/src/routes/copilot.stt.ts:11:  if (!apiKey) throw new Error("OPENAI_API_KEY missing");
+apps/server/src/routes/copilot.stt.ts:12:  return new OpenAI({ apiKey });
+apps/server/src/routes/copilot.stt.ts:26:    const openai = getOpenAI();
+apps/server/src/routes/copilot.stt.ts:36:    const result = await openai.audio.transcriptions.create({
+apps/server/src/routes/abschlag.ts:17:function safeJsonParse<T>(s: string, fallback: T): T {
+apps/server/src/routes/abschlag.ts:21:    return fallback;
+apps/server/src/routes/filesStatic.ts:32: * - fallback in data/projects/<projectId>/<rest...>
+apps/server/src/routes/import.ts:652:        console.warn("PDF parse failed, fallback placeholder:", e);
+apps/server/src/routes/kalkulation.recipes.ts:1:// apps/server/src/routes/kalkulation.recipes.ts
+apps/server/src/routes/kalkulation.recipes.ts:194:function toNum(x: any, fallback = 0): number {
+apps/server/src/routes/kalkulation.recipes.ts:196:  return Number.isFinite(n) ? n : fallback;
+apps/server/src/routes/kalkulation.recipes.ts:199:function safeNumber(x: any, fallback = 0) {
+apps/server/src/routes/kalkulation.recipes.ts:201:  return Number.isFinite(n) ? n : fallback;
+apps/server/src/routes/kalkulation.recipes.ts:273:  // 5) fallback robust: garantisce esistenza Company
+apps/server/src/routes/kalkulation.recipes.ts:344: * GET /api/kalkulation/recipes/templates
+apps/server/src/routes/kalkulation.recipes.ts:347:router.get("/recipes/templates", async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:364:    const rows = await prisma.recipeTemplate.findMany({
+apps/server/src/routes/kalkulation.recipes.ts:388: * GET /api/kalkulation/recipes/templates/:key
+apps/server/src/routes/kalkulation.recipes.ts:390:router.get("/recipes/templates/:key", async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:394:    const tpl = await prisma.recipeTemplate.findUnique({
+apps/server/src/routes/kalkulation.recipes.ts:410: * POST /api/kalkulation/recipes/templates
+apps/server/src/routes/kalkulation.recipes.ts:438:router.post("/recipes/templates", requireDev, async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:442:    const tpl = await prisma.recipeTemplate.upsert({
+apps/server/src/routes/kalkulation.recipes.ts:466:      await prisma.recipeComponent.deleteMany({ where: { templateId: tpl.id } });
+apps/server/src/routes/kalkulation.recipes.ts:467:      await prisma.recipeComponent.createMany({
+apps/server/src/routes/kalkulation.recipes.ts:489: * DELETE /api/kalkulation/recipes/templates/:key
+apps/server/src/routes/kalkulation.recipes.ts:491:router.delete("/recipes/templates/:key", requireDev, async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:494:    await prisma.recipeTemplate.delete({ where: { key } });
+apps/server/src/routes/kalkulation.recipes.ts:502: * GET /api/kalkulation/recipes/stats
+apps/server/src/routes/kalkulation.recipes.ts:504:router.get("/recipes/stats", async (_req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:507:      prisma.recipeTemplate.count(),
+apps/server/src/routes/kalkulation.recipes.ts:508:      prisma.recipeComponent.count(),
+apps/server/src/routes/kalkulation.recipes.ts:509:      prisma.recipeVariant.count(),
+apps/server/src/routes/kalkulation.recipes.ts:522: * GET /api/kalkulation/recipes/templates/:key/variants
+apps/server/src/routes/kalkulation.recipes.ts:524:router.get("/recipes/templates/:key/variants", async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:528:    const tpl = await prisma.recipeTemplate.findUnique({
+apps/server/src/routes/kalkulation.recipes.ts:544:    const dbVariants = await prisma.recipeVariant.findMany({
+apps/server/src/routes/kalkulation.recipes.ts:608: * POST /api/kalkulation/recipes/templates/:key/suggest
+apps/server/src/routes/kalkulation.recipes.ts:620:router.post("/recipes/templates/:key/suggest", async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:625:    const tpl = await prisma.recipeTemplate.findUnique({
+apps/server/src/routes/kalkulation.recipes.ts:641:    const dbVariants = await prisma.recipeVariant.findMany({
+apps/server/src/routes/kalkulation.recipes.ts:726:   POST /api/kalkulation/recipes/calc
+apps/server/src/routes/kalkulation.recipes.ts:744:router.post("/recipes/calc", async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:757:    const tpl = await prisma.recipeTemplate.findUnique({
+apps/server/src/routes/kalkulation.recipes.ts:769:      const v = await prisma.recipeVariant.findFirst({
+apps/server/src/routes/kalkulation.recipes.ts:907:   POST /api/kalkulation/recipes/calc-suggest
+apps/server/src/routes/kalkulation.recipes.ts:919:router.post("/recipes/calc-suggest", async (req, res) => {
+apps/server/src/routes/kalkulation.recipes.ts:923:    const tpl = await prisma.recipeTemplate.findUnique({
+apps/server/src/routes/kalkulation.recipes.ts:931:    const dbVariants = await prisma.recipeVariant.findMany({
+apps/server/src/routes/kalkulation.recipes.ts:974:    const tplFull = await prisma.recipeTemplate.findUnique({
+apps/server/src/routes/support.chat.ts:4:import OpenAI from "openai";
+apps/server/src/routes/support.chat.ts:16: * Support Chat (Hybrid: rules + optional AI fallback)
+apps/server/src/routes/support.chat.ts:411:  // default: not handled → AI fallback
+apps/server/src/routes/support.chat.ts:419:async function aiFallbackAnswer(input: z.infer<typeof ChatSchema>) {
+apps/server/src/routes/support.chat.ts:420:  const apiKey = process.env.OPENAI_API_KEY;
+apps/server/src/routes/support.chat.ts:430:          "Hinweis: Erweiterter KI-Support ist nicht aktiv, weil OPENAI_API_KEY auf dem Server fehlt.",
+apps/server/src/routes/support.chat.ts:439:          "Note: advanced AI support is not active because OPENAI_API_KEY is missing on the server.",
+apps/server/src/routes/support.chat.ts:446:        "Nota: la modalità AI avanzata non è attiva perché manca OPENAI_API_KEY sul server.",
+apps/server/src/routes/support.chat.ts:450:  const client = new OpenAI({ apiKey });
+apps/server/src/routes/support.chat.ts:472:    model: process.env.OPENAI_MODEL_SUPPORT || "gpt-4.1-mini",
+apps/server/src/routes/support.chat.ts:505:      const ai = await aiFallbackAnswer(parsed);
+apps/server/src/routes/autoKi.ts:8:import OpenAI from "openai";
+apps/server/src/routes/autoKi.ts:25:function safeJsonParse<T>(s: string, fallback: T): T {
+apps/server/src/routes/autoKi.ts:29:    return fallback;
+apps/server/src/routes/autoKi.ts:58:/* ===================== OPENAI ===================== */
+apps/server/src/routes/autoKi.ts:60:function getOpenAI() {
+apps/server/src/routes/autoKi.ts:61:  const key = process.env.OPENAI_API_KEY;
+apps/server/src/routes/autoKi.ts:62:  if (!key) throw new Error("OPENAI_API_KEY missing");
+apps/server/src/routes/autoKi.ts:63:  return new OpenAI({ apiKey: key });
+apps/server/src/routes/autoKi.ts:66:const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+apps/server/src/routes/autoKi.ts:153:  // fallback FS
+apps/server/src/routes/autoKi.ts:205:/* ===================== OPENAI VISION ===================== */
+apps/server/src/routes/autoKi.ts:247:async function analyzeWithOpenAI(imageDataUrl: string, note: string) {
+apps/server/src/routes/autoKi.ts:248:  const client = getOpenAI();
+apps/server/src/routes/autoKi.ts:251:    model: OPENAI_MODEL,
+apps/server/src/routes/autoKi.ts:304:function toNum(v: any, fallback = 0) {
+apps/server/src/routes/autoKi.ts:306:  return Number.isFinite(n) ? n : fallback;
+apps/server/src/routes/autoKi.ts:612:        const out = await analyzeWithOpenAI(preview, note);
+apps/server/src/routes/autoKi.ts:613:        summary = out.summary || "Analyse OK (OpenAI).";
+apps/server/src/routes/autoKi.ts:642:          source: "image+openai",
+apps/server/src/routes/autoKi.ts:645:        console.error("[auto-ki] OpenAI failed:", e?.message || e);
+apps/server/src/routes/autoKi.ts:646:        summary = `Analyse OK (scale=${scale}), aber OpenAI Fehler.`;
+apps/server/src/routes/autoKi.ts:652:            descr: `Datei gespeichert (${original}). OpenAI Fehler: ${e?.message || "unknown"}`,
+apps/server/src/routes/verknuepfung.ts:24:function readJson<T>(file: string, fallback: T): T {
+apps/server/src/routes/verknuepfung.ts:26:    if (!fs.existsSync(file)) return fallback;
+apps/server/src/routes/verknuepfung.ts:29:    return fallback;
+apps/server/src/routes/verknuepfung.ts:100:    // DB fallback
+apps/server/src/routes/tagesbericht.ts:30:function readJson<T>(p: string, fallback: T): T {
+apps/server/src/routes/tagesbericht.ts:32:    if (!fs.existsSync(p)) return fallback;
+apps/server/src/routes/tagesbericht.ts:35:    return fallback;
+apps/server/src/routes/projectLv.ts:529:   resolve project by (companyId + id/code) with DEV fallback
+apps/server/src/routes/projectLv.ts:543:  const fallback = await prisma.project.findFirst({
+apps/server/src/routes/projectLv.ts:549:  if (fallback) {
+apps/server/src/routes/projectLv.ts:557:      fallback.companyId
+apps/server/src/routes/projectLv.ts:559:    return fallback;
+apps/server/src/routes/projectLv.ts:562:  // RLC FS fallback:
+apps/server/src/routes/projectLv.ts:632:    log("RLC FS project fallback failed:", key, e?.message || e);
+apps/server/src/routes/projectLv.ts:792:  // Fallback: se non esiste una versione positiva pulita, usa l'ultima disponibile.
+apps/server/src/routes/projectLv.ts:1275:  function normalizeOneItem(item: any, prefix: string, fallbackNo: number) {
+apps/server/src/routes/projectLv.ts:1289:    const position = joinOz(prefix, rNo) || String(fallbackNo);
+apps/server/src/routes/cad.takeoff.ts:10:function safeJsonParse<T>(s: string, fallback: T): T {
+apps/server/src/routes/cad.takeoff.ts:14:    return fallback;
+apps/server/src/routes/bricscad.ts:99:    // 3) Fallback: neuestes *.png im Folder
+apps/server/src/routes/openai.routes.ts:2:import OpenAI from "openai";
+apps/server/src/routes/openai.routes.ts:7:// ⚙️ OpenAI-Client (neues SDK)
+apps/server/src/routes/openai.routes.ts:8:const client = new OpenAI({
+apps/server/src/routes/openai.routes.ts:9:  apiKey: process.env.OPENAI_API_KEY,
+apps/server/src/routes/openai.routes.ts:19:const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+apps/server/src/routes/openai.routes.ts:21:// POST /api/openai/kalkulation
+apps/server/src/routes/ls.ts:34:function readJson<T>(p: string, fallback: T): T {
+apps/server/src/routes/ls.ts:36:    if (!fs.existsSync(p)) return fallback;
+apps/server/src/routes/ls.ts:38:    return raw ? (JSON.parse(raw) as T) : fallback;
+apps/server/src/routes/ls.ts:40:    return fallback;
+apps/server/src/routes/ls.ts:89: * - FS fallback: cerca in PROJECTS_ROOT un project.json con id==input
+apps/server/src/routes/ls.ts:107:    // ignore -> fallback FS sotto
+apps/server/src/routes/ls.ts:110:  // 3) fallback filesystem: scan project.json per match su id
+apps/server/src/routes/ls.ts:1122:  // 3) fallback by lieferscheinNummer + date
+apps/server/src/routes/historie.ts:25:function readJson<T>(filePath: string, fallback: T): T {
+apps/server/src/routes/historie.ts:27:    if (!fs.existsSync(filePath)) return fallback;
+apps/server/src/routes/historie.ts:30:    return fallback;
+apps/server/src/routes/companyPrices.ts:24:  // 3) First company fallback
+apps/server/src/routes/pdf.ts:17:function n(v: any, fallback = 0) {
+apps/server/src/routes/pdf.ts:23:  return Number.isFinite(x) ? x : fallback;
+apps/server/src/routes/pdf.ts:464:        doc.fontSize(8).fillColor("#94A3B8").text("Powered by OpenAI · RLC Bausoftware", 40, 780, {
+apps/server/src/routes/ki/maengel.ts:57:      console.warn("[maengel/upload] Vision fallback:", (e as any)?.message);
+apps/server/src/routes/ki/vision.ts:4:const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+apps/server/src/routes/ki/vision.ts:7:  if (!OPENAI_API_KEY) {
+apps/server/src/routes/ki/vision.ts:8:    return { title: "Beschädigte Kante", desc: "Ausbruch/Kante (Fallback).", cat: "Straßenbau", prio: "hoch", lv: "ERD-1001" };
+apps/server/src/routes/ki/vision.ts:13:  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+apps/server/src/routes/ki/vision.ts:15:    headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+apps/server/src/routes/ki - Kopie.ts:4:import OpenAI from "openai";
+apps/server/src/routes/ki - Kopie.ts:23:const ai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+apps/server/src/routes/ki - Kopie.ts:61:  const m = String(process.env.OPENAI_VISION_MODEL || "").trim();
+apps/server/src/routes/ki - Kopie.ts:62:  // ✅ robust fallback
+apps/server/src/routes/ki - Kopie.ts:67:  const m = String(process.env.OPENAI_MODEL || "").trim();
+apps/server/src/routes/ki - Kopie.ts:68:  // ✅ robust fallback (gpt-4.1-mini può non essere abilitato su alcuni account/env)
+apps/server/src/routes/ki - Kopie.ts:73: * ✅ Consistent OpenAI error payload (keeps requestId when available)
+apps/server/src/routes/ki - Kopie.ts:75:function openAiErrorPayload(err: any) {
+apps/server/src/routes/ki - Kopie.ts:82:  // OpenAI SDK may expose request id differently
+apps/server/src/routes/ki - Kopie.ts:110:function requireOpenAiKeyOrRespond(res: express.Response) {
+apps/server/src/routes/ki - Kopie.ts:111:  if (!process.env.OPENAI_API_KEY) {
+apps/server/src/routes/ki - Kopie.ts:113:      error: "OPENAI_API_KEY fehlt",
+apps/server/src/routes/ki - Kopie.ts:115:        "Server hat keinen OPENAI_API_KEY. Setze ihn in apps/server/.env und starte den Server neu.",
+apps/server/src/routes/ki - Kopie.ts:245:function parseWeightFallback(text: string) {
+apps/server/src/routes/ki - Kopie.ts:272:function parseTimeFallback(text: string) {
+apps/server/src/routes/ki - Kopie.ts:341:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:421:    res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki - Kopie.ts:476:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:581:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki - Kopie.ts:628:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:681:    const fallbackText =
+apps/server/src/routes/ki - Kopie.ts:706:    if (!fallbackText) return res.status(400).json({ error: "text fehlt" });
+apps/server/src/routes/ki - Kopie.ts:726:    const weightFallback = isLS
+apps/server/src/routes/ki - Kopie.ts:727:      ? parseWeightFallback(visionText || fallbackText)
+apps/server/src/routes/ki - Kopie.ts:729:    const timeFallback = isLS ? parseTimeFallback(visionText || fallbackText) : null;
+apps/server/src/routes/ki - Kopie.ts:775:"""${fallbackText}"""
+apps/server/src/routes/ki - Kopie.ts:783:Hilfs-Fallback (wenn sinnvoll):
+apps/server/src/routes/ki - Kopie.ts:786:    nettogewichtDetected: weightFallback || null,
+apps/server/src/routes/ki - Kopie.ts:787:    timeDetected: timeFallback || null,
+apps/server/src/routes/ki - Kopie.ts:826:"""${fallbackText}"""
+apps/server/src/routes/ki - Kopie.ts:878:      // 2) menge/einheit: somma righe se numeriche, oppure nettogewicht fallback
+apps/server/src/routes/ki - Kopie.ts:891:        } else if (weightFallback) {
+apps/server/src/routes/ki - Kopie.ts:892:          fp.menge = weightFallback.quantity;
+apps/server/src/routes/ki - Kopie.ts:893:          if (!fp.einheit) fp.einheit = weightFallback.unit;
+apps/server/src/routes/ki - Kopie.ts:899:      // 3) zeitVon fallback
+apps/server/src/routes/ki - Kopie.ts:900:      if (!fp.zeitVon && timeFallback?.zeitVon) fp.zeitVon = timeFallback.zeitVon;
+apps/server/src/routes/ki - Kopie.ts:921:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki - Kopie.ts:927:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:998:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki - Kopie.ts:1004:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:1042:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki - Kopie.ts:1048:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:1087:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki - Kopie.ts:1200:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:1261:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki - Kopie.ts:1267:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki - Kopie.ts:1304:    return res.status(500).json(openAiErrorPayload(e));
+apps/server/src/routes/gps.ts:40:function readJson<T>(p: string, fallback: T): T {
+apps/server/src/routes/gps.ts:42:    if (!fs.existsSync(p)) return fallback;
+apps/server/src/routes/gps.ts:45:    return fallback;
+apps/server/src/routes/buero/bauzeitenplan.ts:15:    // Fallback: ultimo snapshot su file (per start)
+apps/server/src/routes/buero/bauzeitenplan.ts:40:    // Fallback file
+apps/server/src/routes/kalkulation.ki.ts:2:import OpenAI from "openai";
+apps/server/src/routes/kalkulation.ki.ts:5:import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
+apps/server/src/routes/kalkulation.ki.ts:7:import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
+apps/server/src/routes/kalkulation.ki.ts:52:type CalcSource = "database" | "recipe" | "technical-parser" | "openai" | "rule-engine";
+apps/server/src/routes/kalkulation.ki.ts:102:function n(value: any, fallback = 0): number {
+apps/server/src/routes/kalkulation.ki.ts:103:  if (value === null || value === undefined || value === "") return fallback;
+apps/server/src/routes/kalkulation.ki.ts:111:  return Number.isFinite(x) ? x : fallback;
+apps/server/src/routes/kalkulation.ki.ts:775:  let score = source === "openai" ? 0.82 : source === "database" ? 0.76 : 0.62;
+apps/server/src/routes/kalkulation.ki.ts:877: * OpenAI kann priceBreakdown manchmal für die Gesamtmenge liefern
+apps/server/src/routes/kalkulation.ki.ts:1200:  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
+apps/server/src/routes/kalkulation.ki.ts:3925:   * Direct Technical Recipe Override:
+apps/server/src/routes/kalkulation.ki.ts:3929:  const isDirectTechnicalRecipeOverride =
+apps/server/src/routes/kalkulation.ki.ts:3948:  if (!isHouseConnectionGuardContext && !isSpecialCivilGuardContext && !isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && minEp > 0 && guardedEp > 0 && guardedEp < minEp) {
+apps/server/src/routes/kalkulation.ki.ts:3955:  if (!isHouseConnectionGuardContext && !isSpecialCivilGuardContext && !isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && maxEp > 0 && guardedEp > maxEp) {
+apps/server/src/routes/kalkulation.ki.ts:4003:      ? "needs_review"
+apps/server/src/routes/kalkulation.ki.ts:4461:  if (source === "openai") warnings.push("OpenAI-Schätzung verwendet, bitte fachlich prüfen");
+apps/server/src/routes/kalkulation.ki.ts:4462:  if (source === "rule-engine") warnings.push("Nur Regel-Engine-Fallback verwendet");
+apps/server/src/routes/kalkulation.ki.ts:4487:function enrichFinalRowWithKnowledgeHub(row: any, result: any): any {
+apps/server/src/routes/kalkulation.ki.ts:4491:    const knowledgeHub = resolveRlcKnowledgeHub({
+apps/server/src/routes/kalkulation.ki.ts:4499:    console.log("[RLC KnowledgeHub FINAL CHECK]", {
+apps/server/src/routes/kalkulation.ki.ts:4502:      matches: knowledgeHub.externalMatches.length,
+apps/server/src/routes/kalkulation.ki.ts:4503:      confidence: knowledgeHub.externalKnowledgeConfidence
+apps/server/src/routes/kalkulation.ki.ts:4506:    if (!knowledgeHub.hasExternalKnowledge) return result;
+apps/server/src/routes/kalkulation.ki.ts:4510:      externalKnowledge: knowledgeHub.externalMatches,
+apps/server/src/routes/kalkulation.ki.ts:4511:      externalKnowledgeConfidence: knowledgeHub.externalKnowledgeConfidence,
+apps/server/src/routes/kalkulation.ki.ts:4514:        ...knowledgeHub.technicalNotes
+apps/server/src/routes/kalkulation.ki.ts:4518:    console.warn("[RLC KnowledgeHub FINAL ERROR]", row?.posNr, e?.message || e);
+apps/server/src/routes/kalkulation.ki.ts:4537:  const source: CalcSource = sourceOverride || (dbEp > 0 ? "database" : "rule-engine");
+apps/server/src/routes/kalkulation.ki.ts:4541:   * Wenn keine sichere Datenbank vorhanden ist, nutzt die Rule-Engine
+apps/server/src/routes/kalkulation.ki.ts:4593:        : `Server-Fallback: Kein ausreichend sicherer Datenbanktreffer und keine verwertbare OpenAI-Antwort. Preis wurde über Regel-Engine aus Einheit, Textmerkmalen, Risiko, Gemeinkosten und Gewinn aufgebaut. Regel-EP: ${ruleEp} €; Gewerk ${gewerk}, Leistungsart ${leistungsart}, Verfahren ${bauverfahren}.`;
+apps/server/src/routes/kalkulation.ki.ts:4673:function getOpenAIClient(): OpenAI | null {
+apps/server/src/routes/kalkulation.ki.ts:4674:  const apiKey = process.env.OPENAI_API_KEY;
+apps/server/src/routes/kalkulation.ki.ts:4676:  return new OpenAI({ apiKey });
+apps/server/src/routes/kalkulation.ki.ts:4679:async function openAiCalcRow(row: InputRow, matches: DbMatch[]): Promise<any | null> {
+apps/server/src/routes/kalkulation.ki.ts:4680:  const client = getOpenAIClient();
+apps/server/src/routes/kalkulation.ki.ts:5282:    model: process.env.OPENAI_KALKULATION_MODEL || "gpt-4o-mini",
+apps/server/src/routes/kalkulation.ki.ts:5321:  const fallbackBreakdown = buildPriceBreakdownFromCosts({
+apps/server/src/routes/kalkulation.ki.ts:5333:  const rawPriceBreakdown = normalizedBreakdown.length ? normalizedBreakdown : fallbackBreakdown;
+apps/server/src/routes/kalkulation.ki.ts:5344:  const disposalFallbackContext =
+apps/server/src/routes/kalkulation.ki.ts:5347:  if (disposalFallbackContext && breakdownTotal <= 0) {
+apps/server/src/routes/kalkulation.ki.ts:5357:        note: "Fallback: prüfpflichtige Schätzung, da Deponie-/Materialklasse fehlt.",
+apps/server/src/routes/kalkulation.ki.ts:5367:        note: "Fallback: Analytik/Einstufung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5377:        note: "Fallback: Laden/Umschlag pro Einheit.",
+apps/server/src/routes/kalkulation.ki.ts:5387:        note: `Fallback: Transport prüfpflichtig kalkuliert${projectDistanceKm > 0 ? `, Entfernung ${projectDistanceKm} km` : ""}.`,
+apps/server/src/routes/kalkulation.ki.ts:5397:        note: "Fallback: Deponieklasse fehlt, daher konservative prüfpflichtige Annahme.",
+apps/server/src/routes/kalkulation.ki.ts:5407:        note: "Fallback: Nachweise separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5417:        note: "Fallback: Nachweisführung/Bauleitung anteilig.",
+apps/server/src/routes/kalkulation.ki.ts:5427:        note: "Fallback: Gemeinkosten.",
+apps/server/src/routes/kalkulation.ki.ts:5437:        note: "Fallback: erhöhtes Risiko wegen fehlender Material-/Deponieklasse.",
+apps/server/src/routes/kalkulation.ki.ts:5447:        note: "Fallback: Gewinn.",
+apps/server/src/routes/kalkulation.ki.ts:5456:   * Reine Abfuhr-/Transportpositionen ohne Entsorgung/Deponie dürfen von OpenAI
+apps/server/src/routes/kalkulation.ki.ts:5459:  const ntOpenAi = norm(text);
+apps/server/src/routes/kalkulation.ki.ts:5461:    (ntOpenAi.includes("abfuhr") ||
+apps/server/src/routes/kalkulation.ki.ts:5462:      ntOpenAi.includes("abfahren") ||
+apps/server/src/routes/kalkulation.ki.ts:5463:      ntOpenAi.includes("transport")) &&
+apps/server/src/routes/kalkulation.ki.ts:5464:    !ntOpenAi.includes("entsorgung") &&
+apps/server/src/routes/kalkulation.ki.ts:5465:    !ntOpenAi.includes("deponie") &&
+apps/server/src/routes/kalkulation.ki.ts:5466:    !ntOpenAi.includes("verwertung");
+apps/server/src/routes/kalkulation.ki.ts:5479:        id: "openai-transport-rlc-deckel",
+apps/server/src/routes/kalkulation.ki.ts:5486:        note: "OpenAI-Wert wurde gedeckelt: reine Transportposition ohne Entsorgung/Deponie.",
+apps/server/src/routes/kalkulation.ki.ts:5492:  if (disposalFallbackContext && priceBreakdown.length) {
+apps/server/src/routes/kalkulation.ki.ts:5518:          line.note = "RLC Guard: Risiko für Entsorgung auf plausiblen Maximalwert begrenzt, da OpenAI Wert pro m³ unplausibel hoch war.";
+apps/server/src/routes/kalkulation.ki.ts:5525:          line.note = "RLC Guard: Gewinn für Entsorgung auf plausiblen Maximalwert begrenzt, da OpenAI Wert pro m³ unplausibel hoch war.";
+apps/server/src/routes/kalkulation.ki.ts:5536:  const riskSoilFallbackContext =
+apps/server/src/routes/kalkulation.ki.ts:5539:  if (riskSoilFallbackContext) {
+apps/server/src/routes/kalkulation.ki.ts:5575:          note: "Fallback: Anfahrt, Einrichtung und Koordination separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5585:          note: "Fallback: Kampfmittelsondierung und Sicherheitsfreigabe separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5595:          note: "Fallback: Bodenanalyse/Altlastenprüfung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5605:          note: "Fallback: Gutachter/Fachfirma/baubegleitende Kontrolle separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5615:          note: "Fallback: Beweissicherung/Zustandsaufnahme/Rissprotokoll separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5625:          note: "Fallback: Dokumentation und Freigabeunterlagen separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5635:          note: "Fallback: Gemeinkosten.",
+apps/server/src/routes/kalkulation.ki.ts:5645:          note: "Fallback: Risiko wegen Kampfmittel-/Altlasten-/Freigabeabhängigkeit.",
+apps/server/src/routes/kalkulation.ki.ts:5655:          note: "Fallback: Gewinn.",
+apps/server/src/routes/kalkulation.ki.ts:5663:  const houseConnectionFallbackContext =
+apps/server/src/routes/kalkulation.ki.ts:5666:  if (houseConnectionFallbackContext) {
+apps/server/src/routes/kalkulation.ki.ts:5695:          note: "Fallback: Zugang/Anfahrt/Einrichtung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5705:          note: "Fallback: Handschachtung im Bestand/Innenhof separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5715:          note: "Fallback: Kernbohrung/Wanddurchführung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5725:          note: "Fallback: Hauseinführung/Bestandsanschluss separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5735:          note: "Fallback: Oberflächenschutz separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5745:          note: "Fallback: Wiederherstellung Privatfläche separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5755:          note: "Fallback: Eigentümerabstimmung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5765:          note: "Fallback: Dokumentation/Nachweise separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5775:          note: "Fallback: Gemeinkosten.",
+apps/server/src/routes/kalkulation.ki.ts:5785:          note: "Fallback: Risiko wegen Bestand/Privatgrund/beengtem Zugang.",
+apps/server/src/routes/kalkulation.ki.ts:5795:          note: "Fallback: Gewinn.",
+apps/server/src/routes/kalkulation.ki.ts:5803:  const specialCivilFallbackContext =
+apps/server/src/routes/kalkulation.ki.ts:5806:  if (specialCivilFallbackContext) {
+apps/server/src/routes/kalkulation.ki.ts:5843:          note: "Fallback: Spezialgerät-Antransport und Einrichtung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5853:          note: "Fallback: komplexer Verbau separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5863:          note: "Fallback: Wasserhaltung/Pumpen separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5873:          note: "Fallback: Bodenverbesserung/HDI/Injektion separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5883:          note: "Fallback: Vortrieb/Pressung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5893:          note: "Fallback: Fachkolonne/Bauleitung/Vermessung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5903:          note: "Fallback: Rückbau/Logistik separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5913:          note: "Fallback: Dokumentation/Nachweise separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:5923:          note: "Fallback: Gemeinkosten.",
+apps/server/src/routes/kalkulation.ki.ts:5933:          note: "Fallback: hohes Risiko wegen Spezialtiefbau/beengter Bauweise.",
+apps/server/src/routes/kalkulation.ki.ts:5943:          note: "Fallback: Gewinn.",
+apps/server/src/routes/kalkulation.ki.ts:5964:  const waterHoldingFallbackContext =
+apps/server/src/routes/kalkulation.ki.ts:5967:  if (waterHoldingFallbackContext) {
+apps/server/src/routes/kalkulation.ki.ts:6002:          note: "Fallback: Anfahrt, Einrichtung und Aufbau separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6012:          note: "Fallback: Pumpenanlage, Pumpensumpf und Filterbrunnen separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6022:          note: "Fallback: Grundwasserabsenkung und Baugrubenentwässerung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6032:          note: "Fallback: Drainage, Wasserableitung und Leitungen separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6042:          note: "Fallback: Einleitgenehmigung und Nachweise separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6052:          note: "Fallback: Dauerbetrieb, Kontrolle und Pumpenwartung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6062:          note: "Fallback: Notstrom und Ausfallsicherung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6072:          note: "Fallback: Rückbau, Abbau und Abtransport separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6082:          note: "Fallback: Gemeinkosten.",
+apps/server/src/routes/kalkulation.ki.ts:6092:          note: "Fallback: Risiko wegen Wasserandrang, Dauerbetrieb und Ausfallrisiko.",
+apps/server/src/routes/kalkulation.ki.ts:6102:          note: "Fallback: Gewinn.",
+apps/server/src/routes/kalkulation.ki.ts:6110:  const authorityFallbackContext =
+apps/server/src/routes/kalkulation.ki.ts:6111:    !riskSoilFallbackContext &&
+apps/server/src/routes/kalkulation.ki.ts:6112:    !waterHoldingFallbackContext &&
+apps/server/src/routes/kalkulation.ki.ts:6115:  if (authorityFallbackContext) {
+apps/server/src/routes/kalkulation.ki.ts:6142:          note: "Fallback: Genehmigungen/Behördenauflagen separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6152:          note: "Fallback: verkehrsrechtliche Anordnung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6162:          note: "Fallback: Behördenabstimmung über Laufzeit separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6172:          note: "Fallback: Sicherheitskoordination separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6182:          note: "Fallback: Denkmalpflege/Archäologie separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6192:          note: "Fallback: Kampfmittelsondierung/Freigabe separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6202:          note: "Fallback: Dokumentation/Nachweise separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6212:          note: `Fallback: Ortstermine/Anfahrt separat angesetzt${projectDistanceKm > 0 ? `, Entfernung ${projectDistanceKm} km` : ""}.`,
+apps/server/src/routes/kalkulation.ki.ts:6222:          note: "Fallback: Gemeinkosten.",
+apps/server/src/routes/kalkulation.ki.ts:6232:          note: "Fallback: Risiko wegen Behörden-/Freigabeabhängigkeit.",
+apps/server/src/routes/kalkulation.ki.ts:6242:          note: "Fallback: Gewinn.",
+apps/server/src/routes/kalkulation.ki.ts:6250:  const logisticsFallbackContext =
+apps/server/src/routes/kalkulation.ki.ts:6253:  if (logisticsFallbackContext) {
+apps/server/src/routes/kalkulation.ki.ts:6285:          note: "Fallback: Zufahrt herstellen/sichern separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6295:          note: "Fallback: Lagerfläche/Zwischenlager separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6305:          note: "Fallback: Materialumschlag mit Gerät separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6315:          note: "Fallback: Baustrom/Beleuchtung über Laufzeit separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6325:          note: "Fallback: Baustellenwasser/Wasseranschluss separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6335:          note: "Fallback: Spezialgeräte-Miete/Mietverlängerung separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6345:          note: "Fallback: Kontrolle/Betrieb/Vorhaltung über Laufzeit separat angesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:6355:          note: `Fallback: Rückbau/Logistik separat angesetzt${projectDistanceKm > 0 ? `, Entfernung ${projectDistanceKm} km` : ""}.`,
+apps/server/src/routes/kalkulation.ki.ts:6365:          note: "Fallback: Gemeinkosten.",
+apps/server/src/routes/kalkulation.ki.ts:6375:          note: "Fallback: Risiko wegen Logistik-/Vorhaltungsabhängigkeit.",
+apps/server/src/routes/kalkulation.ki.ts:6385:          note: "Fallback: Gewinn.",
+apps/server/src/routes/kalkulation.ki.ts:6778:    Math.min(0.92, round2(n(parsed.confidence, confidenceFrom(row, riskLevel, matches, "openai"))))
+apps/server/src/routes/kalkulation.ki.ts:6781:  const contextSensitiveOpenAi = isContextSensitivePosition(text, einheit);
+apps/server/src/routes/kalkulation.ki.ts:6785:  if (contextSensitiveOpenAi) {
+apps/server/src/routes/kalkulation.ki.ts:7169:  const isErschwernisOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7172:  const isVorhaltungOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7175:  const isWasserhaltungOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7178:  const isDisposalOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7185:  const isSurfaceRestorationOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7186:    !isVorhaltungOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7190:  const isTempSupplyOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7193:  const isTestingOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7194:    !isTempSupplyOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7197:  const isSiteSetupOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7200:  const isLogisticsOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7201:    !isSiteSetupOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7204:  const isTrafficSafetyOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7205:    !isSurfaceRestorationOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7212:  const isDocumentationOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7213:    !isTempSupplyOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7214:    !isSurfaceRestorationOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7215:    !isDisposalOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7219:  const isAuthorityOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7220:    !isWasserhaltungOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7221:    !isTrafficSafetyOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7222:    !isDocumentationOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7223:    !isVorhaltungOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7226:  const isSpecialCivilOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7227:    !isWasserhaltungOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7230:  const isHouseConnectionOpenAi =
+apps/server/src/routes/kalkulation.ki.ts:7231:    !isDocumentationOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7232:    !isTempSupplyOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7233:    !isSurfaceRestorationOpenAi &&
+apps/server/src/routes/kalkulation.ki.ts:7236:  const baseWarnings = buildWarnings(row, riskLevel, matches, confidence, "openai").filter((w) => {
+apps/server/src/routes/kalkulation.ki.ts:7239:    if (isTestingOpenAi && /bestandsanschluss/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7240:    if (isTempSupplyOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|dokumentation\/vermessung|prüfung|pruefung/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7241:    if (isSurfaceRestorationOpenAi && /entsorgung\/deponieklasse|bestandsanschluss|verkehrssicherung|rsa|dokumentation\/vermessung|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7244:    if (isAuthorityOpenAi && /dokumentation\/vermessung|bestandspläne|as-built/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7247:    if (isTrafficSafetyOpenAi && /baustelleneinrichtung|provisorium|baustraße|baustrasse|spezialtiefbau|behörden|behoerden/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7248:    if (isDocumentationOpenAi && /bestandsanschluss|hausanschluss|gebäudeeinführung|gebaeudeeinfuehrung|behörden|behoerden|kampfmittel|denkmalpflege|sigeko|arbeitssicherheit|verkehrssicherung|rsa/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7249:    if (isAuthorityOpenAi && /verkehrssicherung|rsa|dokumentation\/vermessung|vorhaltung\/stillstand|vorhaltung|stillstand/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7250:    if (isSpecialCivilOpenAi && /erschwernis|beengte bauweise/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7251:    if (isHouseConnectionOpenAi && /erschwernis|beengte bauweise/i.test(msg)) return false;
+apps/server/src/routes/kalkulation.ki.ts:7253:    return isErschwernisOpenAi || isVorhaltungOpenAi || isDisposalOpenAi || isTestingOpenAi || isLogisticsOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7260:    contextSensitiveOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7261:      ? isHouseConnectionOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7269:        : isWasserhaltungOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7271:          : isSpecialCivilOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7273:          : isErschwernisOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7275:          : isTestingOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7277:          : isTrafficSafetyOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7281:          : isDocumentationOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7283:          : isTempSupplyOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7285:          : isSurfaceRestorationOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7287:          : isDisposalOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7289:            : isWasserhaltungOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7291:            : isVorhaltungOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7293:            : isSiteSetupOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7301:  const calculationStatus = contextSensitiveOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7302:    ? "needs_review"
+apps/server/src/routes/kalkulation.ki.ts:7307:  const finalRiskLevel = contextSensitiveOpenAi ? "high" : riskLevel;
+apps/server/src/routes/kalkulation.ki.ts:7308:  const finalConfidence = contextSensitiveOpenAi
+apps/server/src/routes/kalkulation.ki.ts:7580:      `OpenAI-Kalkulation: Keine ausreichend sichere Datenbankbasis vorhanden. Die Urkalkulation wurde per OpenAI aus LV-Text, Einheit, Menge, Gewerk, Leistungsart und Bauverfahren erstellt. Fachliche Prüfung erforderlich.`,
+apps/server/src/routes/kalkulation.ki.ts:7582:    source: "openai",
+apps/server/src/routes/kalkulation.ki.ts:7624:function shouldUseOpenAIForRow(
+apps/server/src/routes/kalkulation.ki.ts:7627:  useOpenAI: boolean,
+apps/server/src/routes/kalkulation.ki.ts:7628:  openAiBudgetLeft: number,
+apps/server/src/routes/kalkulation.ki.ts:7631:  if (!useOpenAI) return false;
+apps/server/src/routes/kalkulation.ki.ts:7632:  if (openAiBudgetLeft <= 0) return false;
+apps/server/src/routes/kalkulation.ki.ts:7644:   * - Starker DB-Treffer = keine OpenAI nötig.
+apps/server/src/routes/kalkulation.ki.ts:7645:   * - Ohne starken DB-Treffer darf OpenAI auch bei bekannten Positionen prüfen,
+apps/server/src/routes/kalkulation.ki.ts:7646:   *   sonst fallen Aushub/Pflaster/Leistenstein auf zu niedrige Rule-Engine-Werte.
+apps/server/src/routes/kalkulation.ki.ts:7797:function rlcGlobalKnowledgeFamilyKey(textRaw: any): string {
+apps/server/src/routes/kalkulation.ki.ts:7862:function rlcGlobalKnowledgeFamilyCompatible(row: InputRow, item: any): boolean {
+apps/server/src/routes/kalkulation.ki.ts:7880:  const rowFamily = rlcGlobalKnowledgeFamilyKey(rowText);
+apps/server/src/routes/kalkulation.ki.ts:7881:  const itemFamily = rlcGlobalKnowledgeFamilyKey(itemText);
+apps/server/src/routes/kalkulation.ki.ts:7883:  if (!rowFamily || !itemFamily) return item.globalKnowledgeSimilarity >= 70;
+apps/server/src/routes/kalkulation.ki.ts:7888:function globalKnowledgeSimilarity(row: InputRow, item: any): number {
+apps/server/src/routes/kalkulation.ki.ts:7929:function blockBadCompanyCalibrationByGlobalKnowledge(row: InputRow, result: any): any {
+apps/server/src/routes/kalkulation.ki.ts:7951:  const gk = (result as any)?.globalKnowledgeMatch;
+apps/server/src/routes/kalkulation.ki.ts:7999:  const fallbackEp = gkAvg > 0 ? gkAvg : gkMin > 0 ? gkMin : 0;
+apps/server/src/routes/kalkulation.ki.ts:8001:  const recalculatedTotal = fallbackEp > 0 && qty > 0 ? round2(fallbackEp * qty) : n((result as any).totalNet ?? (result as any).gesamt);
+apps/server/src/routes/kalkulation.ki.ts:8003:  const recalcNote = fallbackEp > 0
+apps/server/src/routes/kalkulation.ki.ts:8004:    ? `RLC Block+Recalculate: blockierter Firmenpreis wurde nicht als finaler EP verwendet. Neuer prüfpflichtiger EP aus Global Knowledge Ø ${round2(fallbackEp)} €/Einheit.`
+apps/server/src/routes/kalkulation.ki.ts:8012:    calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:8013:    suggestedUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).suggestedUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:8014:    finalUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).finalUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:8015:    baseUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).baseUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:8016:    rlcKiUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).rlcKiUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:8017:    unitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).unitPrice,
+apps/server/src/routes/kalkulation.ki.ts:8018:    preis: fallbackEp > 0 ? round2(fallbackEp) : (result as any).preis,
+apps/server/src/routes/kalkulation.ki.ts:8025:    globalKnowledgeCompanyCalibrationBlocked: true,
+apps/server/src/routes/kalkulation.ki.ts:8026:    globalKnowledgeCompanyCalibrationBlockReason: warn,
+apps/server/src/routes/kalkulation.ki.ts:8027:    recalculatedAfterBlock: fallbackEp > 0,
+apps/server/src/routes/kalkulation.ki.ts:8028:    recalculatedUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : null,
+apps/server/src/routes/kalkulation.ki.ts:8030:    recalculationSource: fallbackEp > 0 ? "global-knowledge-average" : "none",
+apps/server/src/routes/kalkulation.ki.ts:8036:function recalcBlockedTechnicalAfterGlobalKnowledge(row: InputRow, result: any): any {
+apps/server/src/routes/kalkulation.ki.ts:8039:    s((result as any)?.source).includes("technical-parser-blocked-by-family-mismatch");
+apps/server/src/routes/kalkulation.ki.ts:8046:  const gk = (result as any)?.globalKnowledgeMatch;
+apps/server/src/routes/kalkulation.ki.ts:8056:  const fallbackEp = gkAvg > 0 ? gkAvg : gkMin > 0 ? gkMin : 0;
+apps/server/src/routes/kalkulation.ki.ts:8058:  if (!sameUnit || gkConfidence < 0.5 || fallbackEp <= 0) return result;
+apps/server/src/routes/kalkulation.ki.ts:8061:  const total = qty > 0 ? round2(fallbackEp * qty) : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
+apps/server/src/routes/kalkulation.ki.ts:8071:    `RLC Block+Recalculate: Nach Global-Knowledge-Treffer wurde der blockierte technical-parser Preis ersetzt. ` +
+apps/server/src/routes/kalkulation.ki.ts:8072:    `Neuer prüfpflichtiger EP aus Global Knowledge Ø ${round2(fallbackEp)} €/Einheit.`;
+apps/server/src/routes/kalkulation.ki.ts:8076:    source: "technical-parser-blocked-by-family-mismatch-recalculated-gk",
+apps/server/src/routes/kalkulation.ki.ts:8079:    calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:8080:    suggestedUnitPrice: round2(fallbackEp),
+apps/server/src/routes/kalkulation.ki.ts:8081:    finalUnitPrice: round2(fallbackEp),
+apps/server/src/routes/kalkulation.ki.ts:8082:    baseUnitPrice: round2(fallbackEp),
+apps/server/src/routes/kalkulation.ki.ts:8083:    rlcKiUnitPrice: round2(fallbackEp),
+apps/server/src/routes/kalkulation.ki.ts:8084:    unitPrice: round2(fallbackEp),
+apps/server/src/routes/kalkulation.ki.ts:8085:    preis: round2(fallbackEp),
+apps/server/src/routes/kalkulation.ki.ts:8093:    recalculatedUnitPrice: round2(fallbackEp),
+apps/server/src/routes/kalkulation.ki.ts:8101:function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: string; reason: string } {
+apps/server/src/routes/kalkulation.ki.ts:8111:  const family = rlcGlobalKnowledgeFamilyKey(rowText);
+apps/server/src/routes/kalkulation.ki.ts:8123:      source: "rlc-family-fallback-forststrasse-v30",
+apps/server/src/routes/kalkulation.ki.ts:8124:      reason: "Forst-/Kiesstraße wiederherstellen mit Bindekies, Fertiger, Bankettanpassung: V30-Fallback 24,50 €/m.",
+apps/server/src/routes/kalkulation.ki.ts:8131:      source: "rlc-family-fallback-flaechen-wege-v30",
+apps/server/src/routes/kalkulation.ki.ts:8132:      reason: "Flächen/Wege wiederherstellen mit Bindekies, Planieren/Verdichten, Kleinflächen/Almen: V30-Fallback 14,50 €/m².",
+apps/server/src/routes/kalkulation.ki.ts:8139:      source: "rlc-family-fallback-schachtabdeckung-guss-klasse-b",
+apps/server/src/routes/kalkulation.ki.ts:8140:      reason: "Gusseiserne Schachtabdeckung Klasse B, rund DN625: V30-Fallback 200 €/St statt D400-Fallback 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8147:      source: "rlc-family-fallback-betonsockel-gross-v30",
+apps/server/src/routes/kalkulation.ki.ts:8148:      reason: "Großer Betonsockel C25/30 inkl. Erdarbeiten und Leerrohre DN100: V30-Fallback 1200 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8155:      source: "rlc-family-fallback-elektroverteilung-zuschlag-v30",
+apps/server/src/routes/kalkulation.ki.ts:8156:      reason: "Zuschlag Elektroverteilung mit Notstromeinspeisung/Netztrennschalter im Schaltschrank: V30-Fallback 770 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8163:      source: "rlc-family-fallback-ueberfahrt-30t-v30",
+apps/server/src/routes/kalkulation.ki.ts:8164:      reason: "Überfahrt über offenen Rohrgraben, Brückenklasse 30 t, Schrammbord/Geländer: V30-Fallback 300 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8171:      source: "rlc-family-fallback-mittelspannungskabel-v30",
+apps/server/src/routes/kalkulation.ki.ts:8172:      reason: "Verlegung Mittelspannungskabel ohne Tiefbau, Bündeln/Einlegen im vorhandenen Graben: V30-Fallback 8,10 €/lfm.",
+apps/server/src/routes/kalkulation.ki.ts:8179:      source: "rlc-family-fallback-hdpe-da63-pn16-v30",
+apps/server/src/routes/kalkulation.ki.ts:8180:      reason: "HDPE DA63 PN16/SDR11 liefern und verlegen: V30-Fallback 5,80 €/m.",
+apps/server/src/routes/kalkulation.ki.ts:8188:      source: "rlc-family-fallback-pp-rohr-dn160",
+apps/server/src/routes/kalkulation.ki.ts:8189:      reason: "PP-Rohr DN160 SN8 liefern und verlegen: V27-Fallback 27 €/m statt falschem Kanal-DN150-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8196:      source: "rlc-family-fallback-zulage-schichtenverbund",
+apps/server/src/routes/kalkulation.ki.ts:8197:      reason: "Zulage Schichtenverbund an Bord/Rinne/Asphaltkante: V27-Fallback 2 €/m statt Bordstein-Komplettpreis.",
+apps/server/src/routes/kalkulation.ki.ts:8204:      source: "rlc-family-fallback-sohl-ummantelungsbeton",
+apps/server/src/routes/kalkulation.ki.ts:8205:      reason: "Sohl-/Ummantelungsbeton C25/30 liefern und einbauen: V27-Fallback 260 €/m³ statt Betonsockel-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8212:      source: "rlc-family-fallback-mikrorohr-hausanschluss",
+apps/server/src/routes/kalkulation.ki.ts:8213:      reason: "Mikrorohrhausanschlussleitung 2x7 mm: V27-Fallback 3,50 €/m statt Kabelschutzrohr-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8220:      source: "rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d",
+apps/server/src/routes/kalkulation.ki.ts:8221:      reason: "Zuschlag Schachtabdeckung Klasse D: V27-Fallback 2350 €/St statt normaler 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8228:      source: "rlc-family-fallback-statik-druckerhoehungsschacht-v27",
+apps/server/src/routes/kalkulation.ki.ts:8229:      reason: "Statik Druckerhöhungsschacht inkl. Bewehrungspläne/Stahllisten: V27-Fallback 3750 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8236:      source: "rlc-family-fallback-asphalt-trennen-v27",
+apps/server/src/routes/kalkulation.ki.ts:8237:      reason: "Asphalt trennen/schneiden ca. 20 cm: V27-Fallback 3,50 €/m statt 11 €/m.",
+apps/server/src/routes/kalkulation.ki.ts:8244:      source: "rlc-family-fallback-flaechen-wege-wiederherstellen",
+apps/server/src/routes/kalkulation.ki.ts:8245:      reason: "Flächen/Wege wiederherstellen mit Bindekies, Planieren/Verdichten: V27-Fallback 14,50 €/m².",
+apps/server/src/routes/kalkulation.ki.ts:8253:      source: "rlc-family-fallback-kiesstrasse-wiederherstellen",
+apps/server/src/routes/kalkulation.ki.ts:8254:      reason: "Kies-/Forststraße wiederherstellen: profilieren, planieren, verdichten, ca. 10 cm Bindekies, Breite 4–5 m. V21-Fallback 24 €/m statt pauschal 35 €/m.",
+apps/server/src/routes/kalkulation.ki.ts:8261:      source: "rlc-family-fallback-zuschlag-rohrgrabenaushub-bkl6",
+apps/server/src/routes/kalkulation.ki.ts:8262:      reason: "Zuschlag Rohrgrabenaushub Bodenklasse 6 / Homogenbereich B4 inkl. Zerkleinern: V21-Fallback 31,90 €/m³.",
+apps/server/src/routes/kalkulation.ki.ts:8269:      source: "rlc-family-fallback-schachtabdeckung-v2a-sonder",
+apps/server/src/routes/kalkulation.ki.ts:8270:      reason: "Sonder-Schachtabdeckung V2A/Edelstahl, Klasse D, rechteckig 1000x1000, regensicher/tagwasserdicht: V21-Fallback 5400 €/St statt generischem 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8274:  // RLC V17: Präzise Spezialfälle vor generischen Family-Fallbacks.
+apps/server/src/routes/kalkulation.ki.ts:8279:      source: "rlc-family-fallback-mikrokabelleerrohrverbund",
+apps/server/src/routes/kalkulation.ki.ts:8280:      reason: "Mikrokabelleerrohrverbund: präziser Mikro-Leerrohrverbund-Fallback 4,37 €/m statt generischem Kabelschutzrohr-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8287:      source: "rlc-family-fallback-lwl-mikro-kabel",
+apps/server/src/routes/kalkulation.ki.ts:8288:      reason: "LWL Mikro-Kabel: präziser Kabel-Fallback 1,50 €/m statt generischem LWL/Mikrorohr-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8317:      source: "rlc-family-fallback-auffuellmaterial",
+apps/server/src/routes/kalkulation.ki.ts:8319:        ? "Auffüllmaterial inkl. Einbau/Verdichtung: präziser Fallback 28 €/m³ statt Forststraßen-Fallback."
+apps/server/src/routes/kalkulation.ki.ts:8320:        : "Auffüllmaterial reine Material-/Zulageposition V20: präziser Fallback 3,50 €/m³ statt Forststraßen-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8327:      source: "rlc-family-fallback-schacht-mindertiefe-cm",
+apps/server/src/routes/kalkulation.ki.ts:8328:      reason: "Mehr-/Mindertiefe Schacht cm: präziser Tiefenzuschlag 62,61 €/cm statt falschem Stückpreis-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8335:      source: "rlc-family-fallback-schacht-cm-zuschlag",
+apps/server/src/routes/kalkulation.ki.ts:8336:      reason: "Mehr-/Minderpreis Schacht cm: präziser cm-Zuschlag 2,22 €/cm statt falschem Stückpreis-Fallback.",
+apps/server/src/routes/kalkulation.ki.ts:8343:      source: "rlc-family-fallback-schachtabdeckung-dps",
+apps/server/src/routes/kalkulation.ki.ts:8344:      reason: "Schachtabdeckung DPS/Sonderabdeckung: prüfpflichtiger Sonder-Fallback 7500 €/St statt generischem 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8351:      source: "rlc-family-fallback-kabelzugschacht-abdeckung",
+apps/server/src/routes/kalkulation.ki.ts:8352:      reason: "Kabelzugschacht inkl. Abdeckung: präziser Fallback 1385 €/St statt generischer Schachtabdeckung 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8359:      source: "rlc-family-fallback-statik-druckerhoehungsschacht",
+apps/server/src/routes/kalkulation.ki.ts:8360:      reason: "Statik Druckerhöhungsschacht: V29-Fallback 3750 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8367:      source: "rlc-family-fallback-betonsockel",
+apps/server/src/routes/kalkulation.ki.ts:8368:      reason: "Betonsockel C25/30: technischer Fallback 450 €/Einheit prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8375:      source: "rlc-family-fallback-forststrasse",
+apps/server/src/routes/kalkulation.ki.ts:8376:      reason: "Forststraße wiederherstellen: technischer Fallback 35 €/Einheit prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8383:      source: "rlc-family-fallback-kabelzugschacht-abdeckung",
+apps/server/src/routes/kalkulation.ki.ts:8384:      reason: "Kabelzugschacht inkl. Abdeckung: präziser Fallback 1385,25 €/St statt generischer Schachtabdeckung 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8391:      source: "rlc-family-fallback-schachtabdeckung-dps",
+apps/server/src/routes/kalkulation.ki.ts:8392:      reason: "Schachtabdeckung DPS/Sonderabdeckung: prüfpflichtiger Sonder-Fallback 7500 €/St statt generischem 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8401:      source: "rlc-family-fallback-schachtabdeckung-v2a-sonder",
+apps/server/src/routes/kalkulation.ki.ts:8402:      reason: "Sonder-Schachtabdeckung V2A/Edelstahl mit Sondermerkmalen: V24-Fallback 5400 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8409:      source: "rlc-family-fallback-schachtabdeckung-zulage-klasse-d",
+apps/server/src/routes/kalkulation.ki.ts:8410:      reason: "Zulage Schachtabdeckung / Klasse D: V24-Fallback 120 €/St statt Sonderabdeckung 5400 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8417:      source: "rlc-family-fallback-schachtabdeckung-guss-klasse-d",
+apps/server/src/routes/kalkulation.ki.ts:8418:      reason: "Gusseiserne Schachtabdeckung Klasse D mit Einlage: V25-Fallback 320 €/St statt Sonderabdeckung 5400 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8425:      source: "rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d",
+apps/server/src/routes/kalkulation.ki.ts:8426:      reason: "Zuschlag Schachtabdeckung Klasse D: V29-Fallback 2350 €/St statt normaler 420 €/St.",
+apps/server/src/routes/kalkulation.ki.ts:8433:      source: "rlc-family-fallback-schachtabdeckung",
+apps/server/src/routes/kalkulation.ki.ts:8434:      reason: "Normale Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8441:      source: "rlc-family-fallback-strassenablauf",
+apps/server/src/routes/kalkulation.ki.ts:8442:      reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8449:      source: "rlc-family-fallback-kabelschacht",
+apps/server/src/routes/kalkulation.ki.ts:8450:      reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8457:      source: "rlc-family-fallback-kabelschutzrohr",
+apps/server/src/routes/kalkulation.ki.ts:8465:      source: "rlc-family-fallback-bordstein",
+apps/server/src/routes/kalkulation.ki.ts:8466:      reason: "Bordstein setzen inkl. Rückenstütze: technischer Fallback 95 €/m prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8473:      source: "rlc-family-fallback-entsorgung",
+apps/server/src/routes/kalkulation.ki.ts:8474:      reason: "Aushub/Boden entsorgen inkl. Laden, Transport und Kippe: technischer Fallback 45 €/m³ prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8481:      source: "rlc-family-fallback-kanal-dn150",
+apps/server/src/routes/kalkulation.ki.ts:8482:      reason: "Kanalrohr DN150 verlegen inkl. Bettung: technischer Fallback 145 €/m prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8489:      source: "rlc-family-fallback-suchschlitz",
+apps/server/src/routes/kalkulation.ki.ts:8490:      reason: "Suchschlitz zur Leitungserkundung: technischer Fallback 55 €/m prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8497:      source: "rlc-family-fallback-gasleitung",
+apps/server/src/routes/kalkulation.ki.ts:8498:      reason: "Gasleitung PE als Meterleistung: technischer Fallback 42 €/m prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8505:      source: "rlc-family-fallback-lwl-mikrorohr",
+apps/server/src/routes/kalkulation.ki.ts:8506:      reason: "LWL/Mikrorohrverband als Meterleistung: technischer Fallback 10 €/m prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8513:      source: "rlc-family-fallback-stromkabel",
+apps/server/src/routes/kalkulation.ki.ts:8514:      reason: "Strom-/Mittelspannungskabel als Meterleistung: technischer Fallback 32 €/m prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8521:      source: "rlc-family-fallback-asphalt-schneiden",
+apps/server/src/routes/kalkulation.ki.ts:8522:      reason: "Asphalt schneiden als Meterleistung: technischer Fallback 11 €/m prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8529:      source: "rlc-family-fallback-strassenablauf",
+apps/server/src/routes/kalkulation.ki.ts:8530:      reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8537:      source: "rlc-family-fallback-schacht",
+apps/server/src/routes/kalkulation.ki.ts:8538:      reason: "Fertigteilschacht setzen: technischer Fallback 1800 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8545:      source: "rlc-family-fallback-schachtabdeckung",
+apps/server/src/routes/kalkulation.ki.ts:8546:      reason: "Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8553:      source: "rlc-family-fallback-kabelschacht",
+apps/server/src/routes/kalkulation.ki.ts:8554:      reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8561:      source: "rlc-family-fallback-lkw-transport",
+apps/server/src/routes/kalkulation.ki.ts:8562:      reason: "LKW Transport auf Nachweis: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8569:      source: "rlc-family-fallback-regie-personal",
+apps/server/src/routes/kalkulation.ki.ts:8570:      reason: "Regiestunde Facharbeiter: technischer Fallback 58 €/h prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8577:      source: "rlc-family-fallback-regie-bagger",
+apps/server/src/routes/kalkulation.ki.ts:8578:      reason: "Regiestunde Bagger inkl. Fahrer: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8585:      source: "rlc-family-fallback-fels",
+apps/server/src/routes/kalkulation.ki.ts:8586:      reason: "Fels/Bodenklasse 6-7 lösen/laden/entsorgen: technischer Fallback 95 €/m³ prüfpflichtig gesetzt.",
+apps/server/src/routes/kalkulation.ki.ts:8619:    source === "technical-parser" ||
+apps/server/src/routes/kalkulation.ki.ts:8621:      source.includes("technical-parser") &&
+apps/server/src/routes/kalkulation.ki.ts:8655:    source: "technical-parser-rohrgrabenaushub-cleaned",
+apps/server/src/routes/kalkulation.ki.ts:8658:    calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:8671:function recalcBlockedOrTooLowByFamilyFallback(row: InputRow, result: any): any {
+apps/server/src/routes/kalkulation.ki.ts:8676:    (result as any)?.globalKnowledgeCompanyCalibrationBlocked === true ||
+apps/server/src/routes/kalkulation.ki.ts:8687:  const fallback = rlcFamilyFallbackEp(row, result);
+apps/server/src/routes/kalkulation.ki.ts:8688:  if (fallback.ep <= 0) return result;
+apps/server/src/routes/kalkulation.ki.ts:8699:  const family = rlcGlobalKnowledgeFamilyKey(rowText);
+apps/server/src/routes/kalkulation.ki.ts:8719:  const forceFamilyFallback =
+apps/server/src/routes/kalkulation.ki.ts:8729:  if (!blocked && !tooLow && !forceFamilyFallback) return result;
+apps/server/src/routes/kalkulation.ki.ts:8732:  const total = qty > 0 ? round2(fallback.ep * qty) : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
+apps/server/src/routes/kalkulation.ki.ts:8735:    `RLC Family-Fallback-Recalculate: ${fallback.reason} ` +
+apps/server/src/routes/kalkulation.ki.ts:8740:    source: `${fallback.source}-recalculated`,
+apps/server/src/routes/kalkulation.ki.ts:8743:    calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:8744:    suggestedUnitPrice: round2(fallback.ep),
+apps/server/src/routes/kalkulation.ki.ts:8745:    finalUnitPrice: round2(fallback.ep),
+apps/server/src/routes/kalkulation.ki.ts:8746:    baseUnitPrice: round2(fallback.ep),
+apps/server/src/routes/kalkulation.ki.ts:8747:    rlcKiUnitPrice: round2(fallback.ep),
+apps/server/src/routes/kalkulation.ki.ts:8748:    unitPrice: round2(fallback.ep),
+apps/server/src/routes/kalkulation.ki.ts:8749:    preis: round2(fallback.ep),
+apps/server/src/routes/kalkulation.ki.ts:8757:    recalculatedUnitPrice: round2(fallback.ep),
+apps/server/src/routes/kalkulation.ki.ts:8759:    recalculationSource: fallback.source,
+apps/server/src/routes/kalkulation.ki.ts:8761:    familyFallbackApplied: true,
+apps/server/src/routes/kalkulation.ki.ts:8762:    familyFallbackReason: fallback.reason,
+apps/server/src/routes/kalkulation.ki.ts:8766:async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any> {
+apps/server/src/routes/kalkulation.ki.ts:8785:    const matches = await prisma.rlcGlobalKnowledgeAggregated.findMany({
+apps/server/src/routes/kalkulation.ki.ts:8809:      .map((m: any) => ({ ...m, globalKnowledgeSimilarity: globalKnowledgeSimilarity(row, m) }))
+apps/server/src/routes/kalkulation.ki.ts:8810:      .filter((m: any) => m.globalKnowledgeSimilarity >= 70 || rlcGlobalKnowledgeFamilyCompatible(row, m))
+apps/server/src/routes/kalkulation.ki.ts:8811:      .sort((a: any, b: any) => b.globalKnowledgeSimilarity - a.globalKnowledgeSimilarity);
+apps/server/src/routes/kalkulation.ki.ts:8814:    if (!best) return recalcBlockedOrTooLowByFamilyFallback(row, result);
+apps/server/src/routes/kalkulation.ki.ts:8865:        ? "needs_review"
+apps/server/src/routes/kalkulation.ki.ts:8876:    return recalcBlockedTechnicalAfterGlobalKnowledge(row, blockBadCompanyCalibrationByGlobalKnowledge(row, {
+apps/server/src/routes/kalkulation.ki.ts:8881:      globalKnowledgeMatch: best,
+apps/server/src/routes/kalkulation.ki.ts:8882:      globalKnowledgeMatches: scoredMatches,
+apps/server/src/routes/kalkulation.ki.ts:8883:      globalKnowledgePriceMin: best.priceMin,
+apps/server/src/routes/kalkulation.ki.ts:8884:      globalKnowledgePriceAvg: best.priceAvg,
+apps/server/src/routes/kalkulation.ki.ts:8885:      globalKnowledgePriceMax: best.priceMax,
+apps/server/src/routes/kalkulation.ki.ts:8886:      globalKnowledgeConfidence: best.confidence,
+apps/server/src/routes/kalkulation.ki.ts:8887:      globalKnowledgeSource: Array.isArray(best.sources) ? best.sources.join(', ') : '',
+apps/server/src/routes/kalkulation.ki.ts:8906:  useOpenAI: boolean,
+apps/server/src/routes/kalkulation.ki.ts:8907:  openAiBudgetLeft = 999,
+apps/server/src/routes/kalkulation.ki.ts:8936:      aiReason: "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition. Von OpenAI bewusst ausgeschlossen.",
+apps/server/src/routes/kalkulation.ki.ts:8937:      source: "rule-engine",
+apps/server/src/routes/kalkulation.ki.ts:8962:   * Freigegebene / geprüfte Kalkulationsdaten sind stärker als Cache und OpenAI.
+apps/server/src/routes/kalkulation.ki.ts:9121:   * forceRecalculate darf nur Cache/OpenAI neu berechnen, aber nicht geprüfte Firmenwerte ignorieren.
+apps/server/src/routes/kalkulation.ki.ts:9283:   * RLC Technical Parser muss VOR KI-Cache / Rule-Engine / OpenAI gewinnen.
+apps/server/src/routes/kalkulation.ki.ts:9298:const technicalRecipeInput =
+apps/server/src/routes/kalkulation.ki.ts:9310:  const technicalRecipeRow = await calcRecipeKalkulationRow(technicalRecipeInput);
+apps/server/src/routes/kalkulation.ki.ts:9316:    technicalRecipeRow?.source === "technical-parser"
+apps/server/src/routes/kalkulation.ki.ts:9319:      ...technicalRecipeRow,
+apps/server/src/routes/kalkulation.ki.ts:9320:      source: "technical-parser",
+apps/server/src/routes/kalkulation.ki.ts:9322:        s(technicalRecipeRow.warning),
+apps/server/src/routes/kalkulation.ki.ts:9323:        "RLC Technical Parser priorisiert vor Cache, Rule-Engine und OpenAI.",
+apps/server/src/routes/kalkulation.ki.ts:9326:        s(technicalRecipeRow.aiReason),
+apps/server/src/routes/kalkulation.ki.ts:9327:        "RLC-KI: geprüfter technischer Komponentenpreis aus RecipeEngine / Preisbibliothek wurde direkt übernommen.",
+apps/server/src/routes/kalkulation.ki.ts:9332:      const gkForBlockedTechnical = (technicalRow as any).globalKnowledgeMatch;
+apps/server/src/routes/kalkulation.ki.ts:9335:      const blockedFallbackEp = gkBlockedAvg > 0 ? gkBlockedAvg : gkBlockedMin > 0 ? gkBlockedMin : 0;
+apps/server/src/routes/kalkulation.ki.ts:9337:      const blockedTotal = blockedFallbackEp > 0 && blockedQty > 0
+apps/server/src/routes/kalkulation.ki.ts:9338:        ? round2(blockedFallbackEp * blockedQty)
+apps/server/src/routes/kalkulation.ki.ts:9341:      const technicalRecalcNote = blockedFallbackEp > 0
+apps/server/src/routes/kalkulation.ki.ts:9342:        ? `RLC Block+Recalculate: technical-parser Ergebnis blockiert; neuer prüfpflichtiger EP aus Global Knowledge Ø ${round2(blockedFallbackEp)} €/Einheit.`
+apps/server/src/routes/kalkulation.ki.ts:9343:        : `RLC Block+Recalculate: technical-parser Ergebnis blockiert; kein belastbarer Alternativ-EP gefunden.`;
+apps/server/src/routes/kalkulation.ki.ts:9348:            source: "technical-parser-blocked-by-family-mismatch-recalculated",
+apps/server/src/routes/kalkulation.ki.ts:9349:            confidence: Math.min(n((technicalRow as any).confidence, 0.5), blockedFallbackEp > 0 ? 0.52 : 0.45),
+apps/server/src/routes/kalkulation.ki.ts:9351:            calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:9352:            suggestedUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).suggestedUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:9353:            finalUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).finalUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:9354:            baseUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).baseUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:9355:            rlcKiUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).rlcKiUnitPrice,
+apps/server/src/routes/kalkulation.ki.ts:9356:            unitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).unitPrice,
+apps/server/src/routes/kalkulation.ki.ts:9357:            preis: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : (technicalRow as any).preis,
+apps/server/src/routes/kalkulation.ki.ts:9366:            recalculatedAfterBlock: blockedFallbackEp > 0,
+apps/server/src/routes/kalkulation.ki.ts:9367:            recalculatedUnitPrice: blockedFallbackEp > 0 ? round2(blockedFallbackEp) : null,
+apps/server/src/routes/kalkulation.ki.ts:9369:            recalculationSource: blockedFallbackEp > 0 ? "global-knowledge-average" : "none",
+apps/server/src/routes/kalkulation.ki.ts:9373:    const finalTechnicalRowWithFallback = cleanRohrgrabenaushubTechnicalSource(
+apps/server/src/routes/kalkulation.ki.ts:9375:      recalcBlockedOrTooLowByFamilyFallback(row, finalTechnicalRow)
+apps/server/src/routes/kalkulation.ki.ts:9379:    kalkulationAiCache.set(technicalCacheKey, finalTechnicalRowWithFallback);
+apps/server/src/routes/kalkulation.ki.ts:9381:    return finalTechnicalRowWithFallback;
+apps/server/src/routes/kalkulation.ki.ts:9405:   * RLC Recipe Engine zuerst:
+apps/server/src/routes/kalkulation.ki.ts:9406:   * RLC-KI nutzt interne Rezeptlogik + RLC Preisbibliothek vor OpenAI.
+apps/server/src/routes/kalkulation.ki.ts:9407:   * OpenAI bleibt Expertprüfung/Fallback, nicht Hauptquelle.
+apps/server/src/routes/kalkulation.ki.ts:9409:  const recipeRow = await calcRecipeKalkulationRow(row);
+apps/server/src/routes/kalkulation.ki.ts:9411:  const knowledgeHub = resolveRlcKnowledgeHub({
+apps/server/src/routes/kalkulation.ki.ts:9416:    family: (recipeRow as any)?.rlcFamily || (recipeRow as any)?.family || (recipeRow as any)?.gewerk
+apps/server/src/routes/kalkulation.ki.ts:9419:  console.log("[RLC KnowledgeHub]", {
+apps/server/src/routes/kalkulation.ki.ts:9421:    family: (recipeRow as any)?.rlcFamily || (recipeRow as any)?.family || (recipeRow as any)?.gewerk,
+apps/server/src/routes/kalkulation.ki.ts:9422:    matches: knowledgeHub.externalMatches.length,
+apps/server/src/routes/kalkulation.ki.ts:9423:    confidence: knowledgeHub.externalKnowledgeConfidence
+apps/server/src/routes/kalkulation.ki.ts:9426:  if (knowledgeHub.hasExternalKnowledge) {
+apps/server/src/routes/kalkulation.ki.ts:9427:    (recipeRow as any).externalKnowledge = knowledgeHub.externalMatches;
+apps/server/src/routes/kalkulation.ki.ts:9428:    (recipeRow as any).externalKnowledgeConfidence = knowledgeHub.externalKnowledgeConfidence;
+apps/server/src/routes/kalkulation.ki.ts:9429:    (recipeRow as any).aiReason = [
+apps/server/src/routes/kalkulation.ki.ts:9430:      String((recipeRow as any).aiReason || ""),
+apps/server/src/routes/kalkulation.ki.ts:9431:      ...knowledgeHub.technicalNotes
+apps/server/src/routes/kalkulation.ki.ts:9435:  if (!technicalContextSensitive && !technicalSpecialCivilSensitive && recipeRow) {
+apps/server/src/routes/kalkulation.ki.ts:9436:    const guardedRecipeRow = applyPlausibilityGuard(
+apps/server/src/routes/kalkulation.ki.ts:9440:        ...recipeRow,
+apps/server/src/routes/kalkulation.ki.ts:9441:        source: recipeRow.source || "recipe",
+apps/server/src/routes/kalkulation.ki.ts:9445:    kalkulationAiCache.set(cacheKey, guardedRecipeRow);
+apps/server/src/routes/kalkulation.ki.ts:9447:    return guardedRecipeRow;
+apps/server/src/routes/kalkulation.ki.ts:9450:  const useOpenAIForThisRow = forceRecalculate
+apps/server/src/routes/kalkulation.ki.ts:9451:    ? Boolean(useOpenAI && openAiBudgetLeft > 0 && !isStructuralTitleRow(row))
+apps/server/src/routes/kalkulation.ki.ts:9452:    : shouldUseOpenAIForRow(row, matches, useOpenAI, openAiBudgetLeft, forceRecalculate);
+apps/server/src/routes/kalkulation.ki.ts:9454:  if (useOpenAIForThisRow) {
+apps/server/src/routes/kalkulation.ki.ts:9456:      const aiRow = await openAiCalcRow(row, matches);
+apps/server/src/routes/kalkulation.ki.ts:9463:          aiRow.source = "openai";
+apps/server/src/routes/kalkulation.ki.ts:9466:            `Datenbanktreffer vorhanden: EP ${round2(dbEp)} EUR wurde durch OpenAI plausibilisiert.`
+apps/server/src/routes/kalkulation.ki.ts:9488:      console.error("[kalkulation.ki] OpenAI plausibility check failed:", e?.message || e);
+apps/server/src/routes/kalkulation.ki.ts:9500:  const ruleRow = calcRuleRow(row, matches, "rule-engine");
+apps/server/src/routes/kalkulation.ki.ts:9520:  if (row.source === "rule-engine") return false;
+apps/server/src/routes/kalkulation.ki.ts:9800:        calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:9864:          calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:9916:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:9950:    openAiCount: rows.filter((r) => r.source === "openai").length,
+apps/server/src/routes/kalkulation.ki.ts:9952:    ruleEngineCount: rows.filter((r) => r.source === "rule-engine").length,
+apps/server/src/routes/kalkulation.ki.ts:9953:    recipeCount: rows.filter((r) => r.source === "recipe").length,
+apps/server/src/routes/kalkulation.ki.ts:9954:    technicalParserCount: rows.filter((r) => r.source === "technical-parser").length,
+apps/server/src/routes/kalkulation.ki.ts:9973:  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
+apps/server/src/routes/kalkulation.ki.ts:9990:  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
+apps/server/src/routes/kalkulation.ki.ts:10048:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:10228:  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
+apps/server/src/routes/kalkulation.ki.ts:10273:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:10313:    calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:10458:    calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:10643:    calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:10648:    familyFallbackApplied: true,
+apps/server/src/routes/kalkulation.ki.ts:10649:    familyFallbackReason: reason,
+apps/server/src/routes/kalkulation.ki.ts:10757:    source: String(result?.source || "rule-engine").includes("no-x84-family-guard")
+apps/server/src/routes/kalkulation.ki.ts:10759:      : `${result?.source || "rule-engine"}+no-x84-family-guard`,
+apps/server/src/routes/kalkulation.ki.ts:10788:    forstSource === "technical-parser" &&
+apps/server/src/routes/kalkulation.ki.ts:10805:      "Falsche Firmenkalibrierung/technical-parser-Basis wurde durch prüfpflichtigen Forststraßen-Fallback ersetzt.";
+apps/server/src/routes/kalkulation.ki.ts:10809:      source: "rlc-family-fallback-forststrasse-recalculated",
+apps/server/src/routes/kalkulation.ki.ts:10812:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:10825:      familyFallbackApplied: true,
+apps/server/src/routes/kalkulation.ki.ts:10826:      familyFallbackReason: note,
+apps/server/src/routes/kalkulation.ki.ts:10830:      recalculationSource: "rlc-family-fallback-forststrasse",
+apps/server/src/routes/kalkulation.ki.ts:10845:    guardSource === "technical-parser" &&
+apps/server/src/routes/kalkulation.ki.ts:10880:      "Source wurde von technical-parser auf prüfpflichtige Aushub-Kalkulation umgestellt.";
+apps/server/src/routes/kalkulation.ki.ts:10884:      source: "technical-parser-rohrgrabenaushub-cleaned",
+apps/server/src/routes/kalkulation.ki.ts:10887:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:10906:  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
+apps/server/src/routes/kalkulation.ki.ts:11059:  // Korrigiert zu breite Fallback-Treffer kurz vor Anwendung.
+apps/server/src/routes/kalkulation.ki.ts:11094:  // Ziel: keine billigen 2,50/22,00-Fallbacks für technische Hauptleistungen.
+apps/server/src/routes/kalkulation.ki.ts:11211:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:11241:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:11251:        "RLC Calibration Guard V6: Pauschale wurde vor Zero-Return geprüft, damit OpenAI-Nullwerte nicht ungeprüft durchlaufen.",
+apps/server/src/routes/kalkulation.ki.ts:11436:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:11533:      calculationStatus: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:11544:        "RLC Guard No-X84: Der Preis wurde nicht als sicher freigegeben, weil keine historische Angebots-/X84-Baseline vorhanden ist und der technische Parser/Recipe einen unplausiblen EP erzeugt hat.",
+apps/server/src/routes/kalkulation.ki.ts:11624:      status: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:11686:      status: "needs_review",
+apps/server/src/routes/kalkulation.ki.ts:11766:    dbComparability?.status === "needs_review"
+apps/server/src/routes/kalkulation.ki.ts:11808:      dbComparability?.status === "needs_review" ? "DB-Treffer nur nach Langtext-/Urkalkulationsprüfung vergleichbar." : "",
+apps/server/src/routes/kalkulation.ki.ts:11813:router.post("/suggest-batch", async (req, res) => {
+apps/server/src/routes/kalkulation.ki.ts:11824:      // Standard-Kalkulation darf OpenAI nicht massenhaft verwenden.
+apps/server/src/routes/kalkulation.ki.ts:11825:      // OpenAI nur wenn explizit expertMode / forceOpenAIReview / useOpenAIIfNoDatabaseHit=true.
+apps/server/src/routes/kalkulation.ki.ts:11826:      const useOpenAIIfNoDatabaseHit =
+apps/server/src/routes/kalkulation.ki.ts:11827:        options.useOpenAIIfNoDatabaseHit === true ||
+apps/server/src/routes/kalkulation.ki.ts:11829:        options.forceOpenAIReview === true;
+apps/server/src/routes/kalkulation.ki.ts:11831:      const maxOpenAiRowsPerBatch = Math.max(
+apps/server/src/routes/kalkulation.ki.ts:11833:        Math.min(20, n(options.maxOpenAiRowsPerBatch, useOpenAIIfNoDatabaseHit ? 5 : 0))
+apps/server/src/routes/kalkulation.ki.ts:11844:      let openAiUsed = 0;
+apps/server/src/routes/kalkulation.ki.ts:11851:       * OpenAI bleibt über maxOpenAiRowsPerBatch begrenzt.
+apps/server/src/routes/kalkulation.ki.ts:11866:          if (openAiUsed < maxOpenAiRowsPerBatch) {
+apps/server/src/routes/kalkulation.ki.ts:11867:            openAiUsed += 1;
+apps/server/src/routes/kalkulation.ki.ts:11871:          out[index] = await calcSmartRow(row, matches, companyId, useOpenAIIfNoDatabaseHit,
+apps/server/src/routes/kalkulation.ki.ts:11877:          out[index] = await applyGlobalKnowledgeHint(row, out[index]);
+apps/server/src/routes/kalkulation.ki.ts:11880:          if (out[index]?.source !== "openai" && budgetLeft > 0) {
+apps/server/src/routes/kalkulation.ki.ts:11881:            openAiUsed = Math.max(0, openAiUsed - 1);
+apps/server/src/routes/kalkulation.ki.ts:11885:            openAiUsed = Math.max(0, openAiUsed - 1);
+apps/server/src/routes/kalkulation.ki.ts:11888:          console.error("[kalkulation.ki] row fallback", {
+apps/server/src/routes/kalkulation.ki.ts:11895:          const finalRowBeforeKnowledgeHub = applyRlcX84BenchmarkLearningSignal(row, applyRlcProjectOutlierFinalOverride(row, applyRlcFinalSuchschlitzGuard(row, applyRlcAutonomousSmallPositionGuard(row, calcRuleRow(row, [], "rule-engine")))));
+apps/server/src/routes/kalkulation.ki.ts:11897:          const knowledgeHub = resolveRlcKnowledgeHub({
+apps/server/src/routes/kalkulation.ki.ts:11902:            family: (finalRowBeforeKnowledgeHub as any)?.rlcFamily || (finalRowBeforeKnowledgeHub as any)?.family || (finalRowBeforeKnowledgeHub as any)?.gewerk
+apps/server/src/routes/kalkulation.ki.ts:11905:          if (knowledgeHub.hasExternalKnowledge) {
+apps/server/src/routes/kalkulation.ki.ts:11906:            console.log("[RLC KnowledgeHub FINAL]", {
+apps/server/src/routes/kalkulation.ki.ts:11908:              matches: knowledgeHub.externalMatches.length,
+apps/server/src/routes/kalkulation.ki.ts:11909:              confidence: knowledgeHub.externalKnowledgeConfidence
+apps/server/src/routes/kalkulation.ki.ts:11912:            (finalRowBeforeKnowledgeHub as any).externalKnowledge = knowledgeHub.externalMatches;
+apps/server/src/routes/kalkulation.ki.ts:11913:            (finalRowBeforeKnowledgeHub as any).externalKnowledgeConfidence = knowledgeHub.externalKnowledgeConfidence;
+apps/server/src/routes/kalkulation.ki.ts:11914:            (finalRowBeforeKnowledgeHub as any).aiReason = [
+apps/server/src/routes/kalkulation.ki.ts:11915:              String((finalRowBeforeKnowledgeHub as any).aiReason || ""),
+apps/server/src/routes/kalkulation.ki.ts:11916:              ...knowledgeHub.technicalNotes
+apps/server/src/routes/kalkulation.ki.ts:11920:          out[index] = finalRowBeforeKnowledgeHub;
+apps/server/src/routes/kalkulation.ki.ts:11940:        const base = r || calcRuleRow(rows[index], [], "rule-engine");
+apps/server/src/routes/kalkulation.ki.ts:11963:        maxOpenAiRowsPerBatch,
+apps/server/src/routes/kalkulation.ki.ts:11964:        openAiUsed,
+apps/server/src/routes/kalkulation.ki.ts:11975:        engine: "database-recipe-openai-rule-engine-parallel-v2",
+apps/server/src/routes/kalkulation.ki.ts:11984:          maxOpenAiRowsPerBatch,
+apps/server/src/routes/kalkulation.ki.ts:11985:          openAiUsed,
+apps/server/src/routes/kalkulation.ki.ts:11989:    console.error("[kalkulation.ki] suggest-batch failed:", e);
+apps/server/src/routes/kalkulation.datenbank.ts:15:function n(value: any, fallback = 0): number {
+apps/server/src/routes/kalkulation.datenbank.ts:17:  return Number.isFinite(x) ? x : fallback;
+apps/server/src/routes/kalkulation.datenbank.ts:66:function globalKnowledgeKeyOf(row: any): string {
+apps/server/src/routes/kalkulation.datenbank.ts:126:function isApprovedForGlobalKnowledge(row: any): boolean {
+apps/server/src/routes/kalkulation.datenbank.ts:128:    row?.approvedForGlobalKnowledge ??
+apps/server/src/routes/kalkulation.datenbank.ts:129:    row?.parameters?.approvedForGlobalKnowledge ??
+apps/server/src/routes/kalkulation.datenbank.ts:130:    row?.parameter?.approvedForGlobalKnowledge ??
+apps/server/src/routes/kalkulation.datenbank.ts:145:  const normalizedKey = globalKnowledgeKeyOf(anchor);
+apps/server/src/routes/kalkulation.datenbank.ts:161:  const group = allRows.filter((row) => globalKnowledgeKeyOf(row) === normalizedKey);
+apps/server/src/routes/kalkulation.datenbank.ts:587:      if (savedEntryId && isApprovedForGlobalKnowledge(r)) {
+apps/server/src/routes/kalkulation.datenbank.ts:725:/* ================= RECIPES DB ================= */
+apps/server/src/routes/kalkulation.datenbank.ts:727:router.get("/recipes-db", async (req, res) => {
+apps/server/src/routes/kalkulation.datenbank.ts:732:    const rows = await prisma.companyRecipeDb.findMany({
+apps/server/src/routes/kalkulation.datenbank.ts:740:    return res.status(500).json({ ok: false, error: e?.message || "RECIPES_LIST_FAILED" });
+apps/server/src/routes/kalkulation.datenbank.ts:744:router.post("/recipes-db/upsert", async (req, res) => {
+apps/server/src/routes/kalkulation.datenbank.ts:749:    const recipe = req.body?.recipe || req.body;
+apps/server/src/routes/kalkulation.datenbank.ts:750:    const signature = s(recipe.signature);
+apps/server/src/routes/kalkulation.datenbank.ts:757:    const saved = await prisma.companyRecipeDb.upsert({
+apps/server/src/routes/kalkulation.datenbank.ts:766:        title: s(recipe.title || signature),
+apps/server/src/routes/kalkulation.datenbank.ts:767:        sourcePosNr: s(recipe.sourcePosNr),
+apps/server/src/routes/kalkulation.datenbank.ts:768:        sourceText: s(recipe.sourceText),
+apps/server/src/routes/kalkulation.datenbank.ts:769:        unit: s(recipe.unit),
+apps/server/src/routes/kalkulation.datenbank.ts:770:        context: recipe.context || {},
+apps/server/src/routes/kalkulation.datenbank.ts:771:        lines: recipe.lines || [],
+apps/server/src/routes/kalkulation.datenbank.ts:777:        title: s(recipe.title || signature),
+apps/server/src/routes/kalkulation.datenbank.ts:778:        sourcePosNr: s(recipe.sourcePosNr),
+apps/server/src/routes/kalkulation.datenbank.ts:779:        sourceText: s(recipe.sourceText),
+apps/server/src/routes/kalkulation.datenbank.ts:780:        unit: s(recipe.unit),
+apps/server/src/routes/kalkulation.datenbank.ts:781:        context: recipe.context || {},
+apps/server/src/routes/kalkulation.datenbank.ts:782:        lines: recipe.lines || [],
+apps/server/src/routes/kalkulation.datenbank.ts:786:    return res.json({ ok: true, recipe: saved });
+apps/server/src/routes/kalkulation.datenbank.ts:788:    return res.status(500).json({ ok: false, error: e?.message || "RECIPE_UPSERT_FAILED" });
+apps/server/src/routes/kalkulation.datenbank.ts:792:router.delete("/recipes-db/:id", async (req, res) => {
+apps/server/src/routes/kalkulation.datenbank.ts:797:    const row = await prisma.companyRecipeDb.findFirst({
+apps/server/src/routes/kalkulation.datenbank.ts:804:    await prisma.companyRecipeDb.delete({ where: { id } });
+apps/server/src/routes/kalkulation.datenbank.ts:807:    return res.status(500).json({ ok: false, error: e?.message || "RECIPE_DELETE_FAILED" });
+apps/server/src/routes/kalkulation.datenbank.ts:847:function csvNumber(value: any, fallback = 0): number {
+apps/server/src/routes/kalkulation.datenbank.ts:849:  if (!raw) return fallback;
+apps/server/src/routes/kalkulation.datenbank.ts:858:  return Number.isFinite(x) ? x : fallback;
+apps/server/src/routes/sollist.ts:15: *   - fallback: der übergebene projectId/code (gesäubert)
+apps/server/src/routes/sollist.ts:50: * 3. Sonst fallback: sanitize(idOrCode).
+apps/server/src/routes/sollist.ts:76:  // Fallback: direkt den Parameter säubern
+apps/server/src/routes/sollist.ts:78:  console.log("[sollist] FS key fallback (no project found):", {
+apps/server/src/routes/kalkulation.variants.ts:74:  // fallback: se è vuoto, almeno “Variant”
+apps/server/src/routes/kalkulation.variants.ts:108:    const tpl = await prisma.recipeTemplate.findUnique({
+apps/server/src/routes/kalkulation.variants.ts:117:    const variants = await prisma.recipeVariant.findMany({
+apps/server/src/routes/fotos.ts:28:function tryReadJsonFile(filePath: string, fallback: any) {
+apps/server/src/routes/fotos.ts:30:    if (!fs.existsSync(filePath)) return fallback;
+apps/server/src/routes/fotos.ts:32:    return raw ? JSON.parse(raw) : fallback;
+apps/server/src/routes/fotos.ts:34:    return fallback;
+apps/server/src/routes/fotos.ts:44:    // fallback copy
+apps/server/src/routes/fotos.ts:205:function parseJsonField(v: any, fallback: any) {
+apps/server/src/routes/fotos.ts:206:  if (!v) return fallback;
+apps/server/src/routes/fotos.ts:211:    return fallback;
+apps/server/src/routes/inbox.ts:20:function readJson<T>(p: string, fallback: T): T {
+apps/server/src/routes/inbox.ts:22:    if (!fs.existsSync(p)) return fallback;
+apps/server/src/routes/inbox.ts:24:    return raw ? (JSON.parse(raw) as T) : fallback;
+apps/server/src/routes/inbox.ts:26:    return fallback;
+apps/server/src/routes/regie.ts:42:function readJson<T>(p: string, fallback: T): T {
+apps/server/src/routes/regie.ts:44:    if (!fs.existsSync(p)) return fallback;
+apps/server/src/routes/regie.ts:46:    return raw ? (JSON.parse(raw) as T) : fallback;
+apps/server/src/routes/regie.ts:48:    return fallback;
+apps/server/src/routes/regie.ts:550:        // fallback: scan inbox e match su json.id/docId
+apps/server/src/routes/regie.ts:945: * 3) fallback: match su regieNummer + date (se disponibili)
+apps/server/src/routes/regie.ts:984:  // 3) fallback by regieNummer + date
+apps/server/src/routes/copilot.tts.ts:14:    const apiKey = process.env.OPENAI_API_KEY;
+apps/server/src/routes/copilot.tts.ts:19:        error: "OPENAI_API_KEY fehlt am Server.",
+apps/server/src/routes/copilot.tts.ts:36:    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+apps/server/src/routes/copilot.tts.ts:55:        error: "OpenAI TTS Fehler",
+apps/server/src/routes/ki.ts:4:import OpenAI from "openai";
+apps/server/src/routes/ki.ts:22:const ai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+apps/server/src/routes/ki.ts:188:  const m = String(process.env.OPENAI_VISION_MODEL || "").trim();
+apps/server/src/routes/ki.ts:193:  const m = String(process.env.OPENAI_MODEL || "").trim();
+apps/server/src/routes/ki.ts:220: * ✅ Consistent OpenAI error payload
+apps/server/src/routes/ki.ts:222:function openAiErrorPayload(err: any) {
+apps/server/src/routes/ki.ts:254:function requireOpenAiKeyOrRespond(res: express.Response) {
+apps/server/src/routes/ki.ts:255:  if (!process.env.OPENAI_API_KEY) {
+apps/server/src/routes/ki.ts:257:      error: "OPENAI_API_KEY fehlt",
+apps/server/src/routes/ki.ts:259:        "Server hat keinen OPENAI_API_KEY. Setze ihn in apps/server/.env und starte den Server neu.",
+apps/server/src/routes/ki.ts:402:function parseWeightFallback(text: string) {
+apps/server/src/routes/ki.ts:429:function parseTimeFallback(text: string) {
+apps/server/src/routes/ki.ts:546:              // We pass as any to stay compatible across openai SDK versions.
+apps/server/src/routes/ki.ts:614:  fallbackText: string;
+apps/server/src/routes/ki.ts:623:    String(entitiesFlat?._visionText || "") || String(opts.fallbackText || "");
+apps/server/src/routes/ki.ts:625:  const weightFallback = parseWeightFallback(visionText);
+apps/server/src/routes/ki.ts:626:  const timeFallback = parseTimeFallback(visionText);
+apps/server/src/routes/ki.ts:654:  if (!fp.zeitVon && timeFallback?.zeitVon) fp.zeitVon = timeFallback.zeitVon;
+apps/server/src/routes/ki.ts:682:  } else if (weightFallback) {
+apps/server/src/routes/ki.ts:683:    fp.menge = weightFallback.quantity;
+apps/server/src/routes/ki.ts:684:    fp.einheit = weightFallback.unit;
+apps/server/src/routes/ki.ts:991:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1082:    res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki.ts:1091:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1190:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki.ts:1269:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1371:    // fallback text: typed text + OCR text
+apps/server/src/routes/ki.ts:1372:    const fallbackText = [finalText, visionTextFromFiles]
+apps/server/src/routes/ki.ts:1397:          fallbackText,
+apps/server/src/routes/ki.ts:1429:    const weightFallback = isLS
+apps/server/src/routes/ki.ts:1430:      ? parseWeightFallback(visionText || fallbackText)
+apps/server/src/routes/ki.ts:1432:    const timeFallback = isLS
+apps/server/src/routes/ki.ts:1433:      ? parseTimeFallback(visionText || fallbackText)
+apps/server/src/routes/ki.ts:1479:"""${fallbackText}"""
+apps/server/src/routes/ki.ts:1487:Hilfs-Fallback:
+apps/server/src/routes/ki.ts:1490:    nettogewichtDetected: weightFallback || null,
+apps/server/src/routes/ki.ts:1491:    timeDetected: timeFallback || null,
+apps/server/src/routes/ki.ts:1522:"""${fallbackText}"""
+apps/server/src/routes/ki.ts:1541:      text: fallbackText,
+apps/server/src/routes/ki.ts:1562:          fallbackText,
+apps/server/src/routes/ki.ts:1572:                notes: "LS fallback: AI leer -> direkt aus OCR/Vision gefüllt.",
+apps/server/src/routes/ki.ts:1595:      text: fallbackText,
+apps/server/src/routes/ki.ts:1603:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki.ts:1609:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1676:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki.ts:1682:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1720:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki.ts:1726:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1765:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki.ts:1877:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1938:    return res.status(500).json(openAiErrorPayload(err));
+apps/server/src/routes/ki.ts:1944:    if (!requireOpenAiKeyOrRespond(res)) return;
+apps/server/src/routes/ki.ts:1981:    return res.status(500).json(openAiErrorPayload(e));
+apps/server/src/routes/aufmass.ts:235: * - Otherwise -> fallback to safeProjectKey(input)
+apps/server/src/routes/aufmass.ts:270:  // fallback: sanitize
+apps/server/src/routes/mail.routes.ts:68:function normalizeFilename(name?: string, fallback = "Anhang") {
+apps/server/src/routes/mail.routes.ts:70:  if (!n) return fallback;
+apps/server/src/routes/lv.routes.ts:6:import OpenAI from "openai";
+apps/server/src/routes/lv.routes.ts:10:const ai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+apps/server/src/routes/lv.routes.ts:146:        model: process.env.OPENAI_MODEL || "gpt-4o-mini",

@@ -316,7 +316,7 @@ async function syncOne(item: QueueItem) {
       ...(item.payload || {}),
       projectId: pk, // server FS-key
     };
-    return api.postRegie(pk, payload);
+    return (api as any).pushRegieToServer(pk, ((payload as any)?.row ?? payload));
   }
 
   // =========================

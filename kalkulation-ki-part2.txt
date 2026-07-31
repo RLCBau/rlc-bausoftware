@@ -1,0 +1,361 @@
+
+  if (input.hasRealX84 || !Number.isFinite(ep) || ep <= 0 || menge <= 20) {
+    return { applied: false, ep, warning: "" };
+  }
+
+  const isMeter = /^(m|lfm|laufmeter|laufende meter|meter)$/.test(unit);
+  const isVolume = /^(m3|m³|cbm|kubikmeter)$/.test(unit);
+
+  let cap = 0;
+  let reason = "";
+
+  if (
+    isMeter &&
+    /hausanschlussleitung|verlegung hausanschlussleitung|hausanschluss.*leitung|anschlussleitung/.test(text) &&
+    !/kernbohrung|hauseinfuehrung|gebaeudeeinfuehrung|wanddurchfuehrung/.test(text)
+  ) {
+    cap = 11.4;
+    reason = "Hausanschlussleitung als lineare Leitungsverlegung";
+  } else if (isMeter && /kabelschutzrohr/.test(text)) {
+    cap = 30;
+    reason = "Kabelschutzrohr ohne eindeutige Komplettleistung";
+  } else if (isMeter && /lwl.*miko|lwl.*mikro|miko-kabel|mikrokabel|miko kabel|12 fasern/.test(text)) {
+    cap = 10;
+    reason = "LWL/Mikro-Kabel linearer Meteransatz";
+  } else if (isMeter && /(mikrokabelleerrohrverbund|mikrokabelleerrohr|mikrokabel.*leerrohr)/.test(text)) {
+    cap = 10;
+    reason = "Mikrokabelleerrohrverbund linearer Meteransatz";
+  } else if (isMeter && /(schutzmatte.*kabelverleg|kabelverleg.*schutzmatte)/.test(text)) {
+    cap = 10;
+    reason = "Schutzmatte Kabelverlegung linearer Meteransatz";
+  } else if (isMeter && /(verlegung.*mittelspannungskabel|mittelspannungskabel|verlegung.*ortsnetzkabel|ortsnetzkabel)/.test(text)) {
+    cap = 32;
+    reason = "Kabelverlegung ohne Tiefbau-Komplettpaket";
+  } else if (isMeter && /zwischenplanum/.test(text)) {
+    cap = 20;
+    reason = "Zwischenplanum linearer Ansatz";
+  } else if (isMeter && /drainageleitung|drainageleitungen/.test(text)) {
+    cap = 28;
+    reason = "Drainageleitung linearer Meteransatz";
+  }
+
+  if (
+    isVolume &&
+    /zuschlag.*rohrgrabenaushub.*(bd-kl\.?\s*6|bkl\.?\s*6|bodenklasse\s*6|klasse\s*6)/.test(text)
+  ) {
+    cap = 25;
+    reason = "Zuschlag Rohrgrabenaushub Bodenklasse 6";
+  }
+
+  if (
+    unit === "cm" &&
+    /(mehr- oder minderpreis|mehr.*minderpreis)/.test(text)
+  ) {
+    cap = 25;
+    reason = "Mehr-/Minderpreis cm ohne X84-Basis";
+  }
+
+  if (cap > 0 && ep > cap) {
+    return {
+      applied: true,
+      ep: cap,
+      warning: `RLC No-X84 Preisguard: ${reason}; EP von ${ep.toFixed(2)} auf ${cap.toFixed(2)} €/Einheit plausibilisiert. Ohne X84 bleibt Position prüfpflichtig.`,
+    };
+  }
+
+  return { applied: false, ep, warning: "" };
+}
+
+
+function isRlcCableInstallationText(textRaw: any): boolean {
+  const text = norm(textRaw);
+  return /(mittelspannungskabel|ortsnetzkabel|niederspannungskabel|stromkabel|energiekabel|kabelverlegung|verlegung.*kabel|kabel.*verleg|erdkabel|kabelgraben)/i.test(text);
+}
+
+function contextSensitiveWarning(textRaw: any): string {
+  const text = norm(textRaw);
+
+  if (/(kampfmittel|kampfmittelsondierung|altlast|altlasten|bodenkontamination|bodenklasse unbekannt|bodenanalyse|gutachter|sicherheitsfreigabe|beweissicherung|zustandsaufnahme|rissprotokoll|baubegleitende kontrolle|bodenrisiko|bodenrisiken)/i.test(text)) {
+    return "Kontextabhängige Position: Kampfmittel/Altlasten/Bodenrisiken/Beweissicherung hängt stark von Verdachtslage, Sondierungsumfang, Bodenklasse, Analytik, Gutachter, Sicherheitsfreigabe, baubegleitender Kontrolle, Dokumentation und Haftungsrisiko ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(wasserhaltung|grundwasserabsenkung|baugrubenentwässerung|baugrubenentwaesserung|pumpensumpf|pumpenanlage|filterbrunnen|drainage|wasserableitung|einleitgenehmigung|dauerbetrieb|pumpenwartung|notstrom|ausfallsicherung|grundwasserhaltung)/i.test(text)) {
+    return "Kontextabhängige Position: Wasserhaltung/Grundwasser/Pumpen/Baugrubenentwässerung hängt stark von Dauer, Grundwasserandrang, Pumpentechnik, Filterbrunnen, Ableitung, Einleitgenehmigung, Wartung, Notstrom, Ausfallsicherung und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(dokumentation|fotodokumentation|aufmaß|aufmass|massenermittlung|vermessung|vermessungsdaten|gnss|tachymeter|bestandsplan|bestandspläne|bestandsplaene|bestandszeichnung|cad|as-built|as built|dwg|dxf|landxml|übergabeunterlagen|uebergabeunterlagen|nachweisführung|nachweisfuehrung)/i.test(text)) {
+    return "Kontextabhängige Position: Dokumentation/Vermessung/Bestandspläne/As-Built hängt stark von Projektumfang, Bauzeit, Vermessungsterminen, GNSS-/Tachymeteraufnahmen, CAD-Nachbearbeitung, Datenformaten, Übergabeunterlagen, Auftraggeberabstimmung und digitaler Nachweisführung ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage|hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand)/i.test(text)) {
+    return "Kontextabhängige Position: Spezialtiefbau/schwierige Bauverfahren hängt stark von Bauverfahren, Baugrund, Verbau, Wasserhaltung, Spezialgeräten, Vortrieb, Pressung, Platzverhältnissen, Risiken, Dokumentation und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(verkehrssicherung|verkehrsfuehrung|verkehrsführung|rsa|beschilderung|absperrung|sperrung|umleitung|lichtsignalanlage|ampel|baustellenampel|verkehrszeichen|leitbaken|fußgängerführung|fussgängerführung|fussgaengerfuehrung|anwohnerverkehr)/i.test(text)) {
+    return "Kontextabhängige Position: Verkehrssicherung/RSA/Umleitung/Beschilderung hängt stark von Bauzeit, Verkehrsführung, verkehrsrechtlicher Anordnung, Beschilderung, Absperrmaterial, Lichtsignalanlage, täglicher Kontrolle, Wartung, Anpassung, Anwohnerverkehr, Aufbau, Vorhaltung und Rückbau ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(genehmigung|genehmigungen|behörde|behoerde|behörden|behoerden|auflage|auflagen|verkehrsrechtliche anordnung|sigeko|sige ko|arbeitssicherheit|sicherheitskonzept|sicherheitsbeauftragter|denkmalpflege|archäologisch|archaeologisch|kampfmittel|sondierung|freigabe|freigaben)/i.test(text)) {
+    return "Kontextabhängige Position: Behörden/Genehmigungen/Auflagen/Sicherheit hängt stark von Laufzeit, Auflagen, Terminen, Fachstellen, verkehrsrechtlicher Anordnung, SiGeKo, Kampfmittel, Denkmalpflege, Freigaben und Dokumentationspflichten ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(baustelleneinrichtung|baustelle einrichten|vorhaltung|baustellengemeinkosten|bürocontainer|buero container|büro container|buero-container|büro-container|mannschaftscontainer|sanitärcontainer|sanitaercontainer|containeranlage|baustrom|bauwasser|baustellenbeleuchtung)/i.test(text)) {
+    return "Kontextabhängige Position: Baustelleneinrichtung/Vorhaltung/Container/Baustrom/Bauwasser hängt stark von Bauzeit, Containeranzahl, Miete, Aufbau, Betrieb, Reinigung, Wartung, Baustrom, Bauwasser, Beleuchtung, Zufahrt, Entfernung, Kontrolle, Rückbau und Gemeinkosten ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(baustellenlogistik|baustellenzufahrt|zufahrtssicherung|lagerfläche|lagerflaeche|zwischenlager|materialumschlag|spezialgeräte|spezialgeraete|mietverlängerung|mietverlaengerung)/i.test(text)) {
+    return "Kontextabhängige Position: Baustellenlogistik/Zufahrt/Lager/Versorgung hängt stark von Bauzeit, Zufahrt, Lagerflächen, Gerätemiete, Betrieb, Kontrolle, Rückbau und Logistik ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(schutzmaßnahme|schutzmassnahme|lärmschutz|laermschutz|staubschutz|erschütterungsschutz|erschuetterungsschutz|baumschutz|wurzelschutz|gewässerschutz|gewaesserschutz|ölbindemittel|oelbindemittel|havarie|anwohnerinformation|beweissicherung|zustandsdokumentation|umweltschutz|naturschutz)/i.test(text)) {
+    return "Kontextabhängige Position: Schutzmaßnahmen/Umwelt/Natur/Anwohner hängen stark von Bauzeit, Auflagen, Schutzumfang, Kontrollintervallen, Dokumentation, Rückbau, Risiken und örtlichen Bedingungen ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(baustelleneinrichtung|baustelle einrichten|vorhaltung|baustellengemeinkosten)/i.test(text)) {
+    return "Kontextabhängige Position: Baustelleneinrichtung/Vorhaltung muss über Dauer, Entfernung, Personal, Geräte, Container, Logistik und Gemeinkosten urkalkuliert werden. Historische Datenbankpreise dürfen nur als Vergleich dienen.";
+  }
+
+  if (/(verkehrssicherung|erschwernis|beengte bauweise|bauzeiten|anliegerverkehr)/i.test(text)) {
+    return "Kontextabhängige Position: Preis hängt stark von Bauzeit, Verkehrsführung, Platzverhältnissen, Auflagen und Bauablauf ab. Historische Preise nur als Orientierung verwenden.";
+  }
+
+  if (/(bestandspläne|bestandsplaene|bestandszeichnung|vermessung|dokumentation|wartungs- und bedienungsanleitung)/i.test(text)) {
+    return "Kontextabhängige Position: Dokumentation/Vermessung hängt von Projektumfang, Laufzeit, Datenformaten, Behördenanforderungen und Nachbearbeitung ab. Historische Preise nur als Vergleich verwenden.";
+  }
+
+  return "Kontextabhängige Position: Preis muss aus Projektparametern urkalkuliert werden. Datenbankpreis nur als historischer Vergleich.";
+}
+
+function contextSensitiveAiHint(textRaw: any, unitRaw: any): string {
+  if (!isContextSensitivePosition(textRaw, unitRaw)) return "";
+
+  return `
+WICHTIG - kontextabhängige Position:
+- Diese Position ist baustellenabhängig.
+- Verwende Datenbankpreise NICHT blind als direkten EP.
+- Historische Preise dienen nur als Vergleich.
+- Kalkuliere über Urkalkulation mit Dauer, Entfernung, Personal, Geräten, Logistik, Gemeinkosten, Risiko und Gewinn.
+- Wenn Dauer/Entfernung/Projektgröße fehlen, gib eine Warnung und konservative prüfpflichtige Kalkulation aus.
+`;
+}
+
+
+function lightSurfaceRange(text: string, unitRaw: string): { min: number; avg: number; max: number; label: string } {
+  const t = norm(text);
+  const u = normUnit(unitRaw);
+
+  if (u !== "m²") return { min: 0, avg: 0, max: 0, label: "" };
+
+  if (
+    t.includes("unterlage reinigen") ||
+    t.includes("untergrund reinigen") ||
+    t.includes("fläche reinigen") ||
+    t.includes("flaeche reinigen")
+  ) {
+    return { min: 0.15, avg: 0.45, max: 2.5, label: "Unterlage reinigen" };
+  }
+
+  if (
+    t.includes("schichtenverbund") ||
+    t.includes("haftkleber") ||
+    t.includes("bitumenemulsion")
+  ) {
+    return { min: 0.35, avg: 0.85, max: 2.5, label: "Schichtenverbund" };
+  }
+
+  if (
+    t.includes("einfräsen") ||
+    t.includes("einfraesen") ||
+    t.includes("abfräsen") ||
+    t.includes("abfraesen") ||
+    t.includes("fräsen") ||
+    t.includes("fraesen")
+  ) {
+    return { min: 2, avg: 4.5, max: 9, label: "Asphalt fräsen" };
+  }
+
+  if (
+    t.includes("ac 11 ds") ||
+    t.includes("ads aus ac 11") ||
+    t.includes("asphaltdeckschicht") ||
+    t.includes("deckschicht")
+  ) {
+    return { min: 10, avg: 18, max: 32, label: "Asphaltdeckschicht" };
+  }
+
+  if (
+    t.includes("zulage") &&
+    (t.includes("mehr") || t.includes("minder")) &&
+    (t.includes("stärke") || t.includes("staerke"))
+  ) {
+    return { min: 1, avg: 4.5, max: 12, label: "Asphalt Mehr-/Minderstärke" };
+  }
+
+  if (t.includes("planie")) {
+    return { min: 2, avg: 5, max: 10, label: "Planie" };
+  }
+
+  return { min: 0, avg: 0, max: 0, label: "" };
+}
+
+function basePrice(text: string, unit: string): number {
+  const t = norm(text);
+  const u = normUnit(unit);
+
+  const light = lightSurfaceRange(text, unit);
+  if (light.avg > 0) return light.avg;
+
+  if (t.includes("aushub") && u === "m³") return 18.5;
+  if (t.includes("abfuhr") && (u === "t" || u === "m³")) return 24;
+  if (t.includes("verfüll") && u === "m³") return 28;
+  if (t.includes("kies") && u === "m³") return 38;
+  if (t.includes("speedpipe") && u === "m") return 8.5;
+  if (t.includes("kabelschutzrohr") && u === "m") return 18.5;
+  if (t.includes("rohr") && u === "m") return 26;
+  if (t.includes("pflaster") && u === "m²") return 39;
+  if (t.includes("asphalt") && u === "m²") return 18;
+  if (t.includes("schacht") && u === "St") return 650;
+  if (u === "m") return 14;
+  if (u === "m²") return 8;
+  if (u === "m³") return 36;
+  if (u === "t") return 32;
+  if (u === "St") return 75;
+
+  return 25;
+}
+
+function riskFromText(text: string, unit: string, menge: number): RiskLevel {
+  const t = norm(text);
+
+  if (!text || !unit || menge <= 0) return "high";
+
+  if (
+    t.includes("unbekannt") ||
+    t.includes("bodenklasse") ||
+    t.includes("kontaminiert") ||
+    t.includes("bestand") ||
+    t.includes("anschluss") ||
+    t.includes("grundwasser") ||
+    t.includes("entsorgung") ||
+    t.includes("nach bedarf") ||
+    t.includes("bauseits")
+  ) {
+    return "high";
+  }
+
+  if (text.length < 12 || menge > 1000) return "medium";
+
+  return "low";
+}
+
+function scoreDbMatch(row: InputRow, db: any): DbMatch {
+  let score = 0;
+  const reasons: string[] = [];
+
+  const rowText = `${s(row.posNr)} ${s(row.kurztext)} ${s(row.langtext)}`;
+  const dbText = `${s(db.positionNumber)} ${s(db.shortText)} ${s(db.longText)}`;
+
+  const rowTokens = tokenize(rowText);
+  const dbTokens = new Set(tokenize(dbText));
+  const tokenHits = rowTokens.filter((t) => dbTokens.has(t)).length;
+
+  if (s(row.posNr) && norm(row.posNr) === norm(db.positionNumber)) {
+    score += 35;
+    reasons.push("Positionsnummer identisch");
+  }
+
+  if (s(row.einheit) && norm(row.einheit) === norm(db.unit)) {
+    score += 15;
+    reasons.push("Einheit identisch");
+  }
+
+  if (tokenHits > 0) {
+    score += Math.min(30, tokenHits * 6);
+    reasons.push(`${tokenHits} Text-Treffer`);
+  }
+
+  if (s(db.trade) && norm(detectGewerk(rowText)) === norm(db.trade)) {
+    score += 8;
+    reasons.push("Gewerk ähnlich");
+  }
+
+  if (n(db.useCount) > 0) {
+    score += Math.min(8, n(db.useCount));
+    reasons.push(`${n(db.useCount)}x verwendet`);
+  }
+
+  if (n(db.confidence) > 0) {
+    score += Math.min(8, Math.round(n(db.confidence) * 8));
+  }
+
+  const qgBonus = qualityGateScoreBonus(db);
+  if (qgBonus > 0) {
+    score += qgBonus;
+    reasons.push(`Quality Gate: ${qualityGateStatusOf(db)}`);
+  }
+
+  return {
+    row: db,
+    score: Math.min(100, score),
+    reasons,
+  };
+}
+
+async function findDbMatches(companyId: string, row: InputRow): Promise<DbMatch[]> {
+  const posNr = s(row.posNr);
+  const kurztext = s(row.kurztext);
+  const langtext = s(row.langtext);
+  const tokens = tokenize(`${posNr} ${kurztext} ${langtext}`).slice(0, 6);
+
+  const or: any[] = [];
+
+  if (posNr) {
+    or.push({ positionNumber: { contains: posNr, mode: "insensitive" } });
+  }
+
+  if (kurztext) {
+    or.push({ shortText: { contains: kurztext.slice(0, 80), mode: "insensitive" } });
+    or.push({ longText: { contains: kurztext.slice(0, 80), mode: "insensitive" } });
+  }
+
+  for (const token of tokens) {
+    or.push({ shortText: { contains: token, mode: "insensitive" } });
+    or.push({ longText: { contains: token, mode: "insensitive" } });
+  }
+
+  if (!or.length) return [];
+
+  const rows = await prisma.kalkulationsDbEntry.findMany({
+    where: {
+      companyId,
+      OR: or,
+    },
+    orderBy: [{ useCount: "desc" }, { updatedAt: "desc" }],
+    take: 30,
+  });
+
+  return rows
+    .filter((db) => !isDbEntryBlockedByQualityGate(db))
+    .map((db) => scoreDbMatch(row, db))
+    .filter((x) => x.score >= 12 && n(x.row.unitPriceNet) > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
+function weightedDbPrice(matches: DbMatch[], unit: string): number {
+  const usable = matches.filter((m) => {
+    if (!unit) return true;
+    return norm(m.row.unit) === norm(unit);
+  });
+
+  if (!usable.length) return 0;
+
+  const totalWeight = usable.reduce(
+    (sum, m) => sum + Math.max(1, m.score) * qualityGateWeightFactor(m.row),
+    0
+  );
+  const weighted = usable.reduce(
+    (sum, m) =>
+      sum + n(m.row.unitPriceNet) * Math.max(1, m.score) * qualityGateWeightFactor(m.row),
+    0
+  );

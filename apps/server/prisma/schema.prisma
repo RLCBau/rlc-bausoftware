@@ -31,8 +31,75 @@ model Company {
   subscription CompanySubscription?
 
   // Invites + Members (seat & invite system)
-  invites CompanyInvite[]
-  members CompanyMember[]
+  invites        CompanyInvite[]
+  members        CompanyMember[]
+  mobileLicenses MobileLicense[]
+}
+
+model VorlageTemplate {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  companyId       String?
+  sourceTemplateId String?
+  title           String
+  description     String
+  categoryKey     String
+  categoryLabel   String
+  language        String   @default("de")
+  outputType      String   @default("DOCUMENT")
+  content         Json
+  variables       Json
+  tags            String[]
+  isStandard      Boolean  @default(false)
+  isProtected     Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  version         Int      @default(1)
+  usageCount      Int      @default(0)
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sourceTemplate VorlageTemplate?  @relation("VorlageCopies", fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  copies         VorlageTemplate[] @relation("VorlageCopies")
+  favorites      VorlageFavorite[]
+  documents      VorlageDocument[]
+
+  @@index([companyId, categoryKey, isActive])
+  @@index([isStandard, isActive])
+  @@index([title])
+}
+
+model VorlageFavorite {
+  id         String   @id @default(cuid())
+  companyId  String
+  userId     String
+  templateId String
+  createdAt  DateTime @default(now())
+
+  template VorlageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId, templateId])
+  @@index([companyId, userId])
+}
+
+model VorlageDocument {
+  id              String   @id @default(cuid())
+  companyId       String
+  projectId       String?
+  templateId      String?
+  title           String
+  content         Json
+  values          Json
+  status          String   @default("ENTWURF")
+  outputFormat    String   @default("DOCUMENT")
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  template VorlageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, projectId, updatedAt])
+  @@index([templateId])
 }
 
 model CompanyInvite {
@@ -51,10 +118,11 @@ model CompanyInvite {
   usedCount Int     @default(0)
   isActive  Boolean @default(true)
 
-  expiresAt       DateTime
-  acceptedAt      DateTime?
-  createdAt       DateTime  @default(now())
-  createdByUserId String?
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  createdByUserId   String?
+  activatedByUserId String?
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -62,6 +130,35 @@ model CompanyInvite {
   @@index([email])
   @@index([code])
   @@index([companyId, isActive])
+}
+
+model MobileLicense {
+  id        String @id @default(uuid())
+  companyId String
+  code      String @unique
+  role      String
+  status    String @default("FREE")
+
+  employeeName  String?
+  employeeEmail String?
+  deviceName    String?
+  deviceId      String?
+  appVersion    String?
+
+  activatedAt DateTime?
+  lastLoginAt DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdByUserId String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, role])
+  @@index([deviceId])
 }
 
 model CompanyMember {
@@ -179,6 +276,7 @@ model Project {
   resourceCapacities ResourceCapacity[]
   currentUsers       User[]                @relation("UserCurrentProject")
   workflowDocs       WorkflowDoc[]
+  aufmassOrte       AufmassOrt[]
 
   @@unique([code, companyId])
 }
@@ -880,35 +978,35 @@ model RlcGlobalPriceKnowledge {
 }
 
 model RlcGlobalPosition {
-  id                 String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  source             String?
-  sourceUrl          String?
-  sourceType         String?
-  region             String?
-  year               Int?
+  source     String?
+  sourceUrl  String?
+  sourceType String?
+  region     String?
+  year       Int?
 
-  gewerk             String?
-  category           String?
-  positionNumber     String?
-  shortText          String
-  longText           String?
-  unit               String?
+  gewerk         String?
+  category       String?
+  positionNumber String?
+  shortText      String
+  longText       String?
+  unit           String?
 
-  priceMin           Float?
-  priceAvg           Float?
-  priceMax           Float?
+  priceMin Float?
+  priceAvg Float?
+  priceMax Float?
 
-  confidence         Float    @default(0.3)
-  sampleCount        Int      @default(1)
+  confidence  Float @default(0.3)
+  sampleCount Int   @default(1)
 
-  isContextSensitive Boolean  @default(false)
-  needsReview        Boolean  @default(true)
+  isContextSensitive Boolean @default(false)
+  needsReview        Boolean @default(true)
 
-  normalizedKey      String?
+  normalizedKey String?
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([shortText])
   @@index([unit])
@@ -918,49 +1016,138 @@ model RlcGlobalPosition {
 }
 
 model RlcGlobalImportLog {
-  id           String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  sourceName   String
-  sourceType   String?
-  sourceUrl    String?
+  sourceName String
+  sourceType String?
+  sourceUrl  String?
 
-  importedRows Int      @default(0)
-  acceptedRows Int      @default(0)
-  rejectedRows Int      @default(0)
+  importedRows Int @default(0)
+  acceptedRows Int @default(0)
+  rejectedRows Int @default(0)
 
-  notes        String?
+  notes String?
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model RlcGlobalKnowledgeAggregated {
-  id                 String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  normalizedKey      String   @unique
-  shortText          String
-  longText           String?
-  unit               String?
+  normalizedKey String  @unique
+  shortText     String
+  longText      String?
+  unit          String?
 
-  gewerk             String?
-  category           String?
+  gewerk   String?
+  category String?
 
-  priceMin           Float?
-  priceAvg           Float?
-  priceMax           Float?
+  priceMin Float?
+  priceAvg Float?
+  priceMax Float?
 
-  confidence         Float    @default(0.3)
-  sampleCount        Int      @default(0)
+  confidence  Float @default(0.3)
+  sampleCount Int   @default(0)
 
   sources            Json?
-  isContextSensitive Boolean  @default(false)
-  needsReview        Boolean  @default(true)
+  isContextSensitive Boolean @default(false)
+  needsReview        Boolean @default(true)
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([shortText])
   @@index([unit])
   @@index([gewerk])
   @@index([category])
   @@index([confidence])
+}
+
+model AufmassOrt {
+  id          String   @id @default(uuid())
+  projectId   String
+  parentId    String?
+  nummer      String
+  name        String
+  description String?
+  color       String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    AufmassOrt?          @relation("AufmassOrtTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  AufmassOrt[]         @relation("AufmassOrtTree")
+  positions AufmassOrtPosition[]
+
+  @@index([projectId])
+  @@index([projectId, parentId])
+  @@index([projectId, sortOrder])
+}
+
+model AufmassOrtPosition {
+  ortId      String
+  positionId String
+  createdAt  DateTime   @default(now())
+
+  ort AufmassOrt @relation(fields: [ortId], references: [id], onDelete: Cascade)
+
+  @@id([ortId, positionId])
+  @@index([positionId])
+}
+model MarketIntelligenceEvent {
+  id              String   @id @default(uuid())
+  externalId      String   @unique
+  title           String
+  url             String?
+  sourceId        String
+  sourceName      String
+  publishedAt     DateTime
+  priority        String
+  relevanceScore  Int
+  trustScore      Int
+  totalScore      Int
+  verification    String
+  matchedSignals  Json
+  priceHints      Json
+  marketImpact    Json
+  candidates      MarketIntelligenceCandidate[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([publishedAt])
+  @@index([totalScore])
+}
+
+model MarketIntelligenceCandidate {
+  id            String   @id @default(uuid())
+  eventId       String
+  type          String
+  status        String   @default("NEW")
+  title         String
+  rationale     String?
+  confidence    Float    @default(0.5)
+  proposedData  Json
+  reviewedAt    DateTime?
+  reviewedBy    String?
+  reviewNote    String?
+  appliedAt     DateTime?
+  appliedBy     String?
+  appliedResult Json?
+  event         MarketIntelligenceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reviews       MarketIntelligenceReview[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([eventId])
+  @@index([status, type])
+}
+
+model MarketIntelligenceReview {
+  id          String   @id @default(uuid())
+  candidateId String
+  action      String
+  note        String?
+  userId      String?
+  candidate   MarketIntelligenceCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  @@index([candidateId])
 }

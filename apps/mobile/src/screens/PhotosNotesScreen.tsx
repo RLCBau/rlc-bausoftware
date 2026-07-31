@@ -416,6 +416,7 @@ type KiSuggestion = {
 type KiUiResult = {
   mode: "NUR_APP" | "SERVER_SYNC";
   humanText: string;
+  suggestion?: KiSuggestion | null;
   suggestions: KiSuggestion[];
   raw?: any;
 };
@@ -612,6 +613,309 @@ function buildUiResultFromServer(res: any): KiUiResult {
     suggestions: [suggestion],
     raw: res,
   };
+}
+
+
+function normalizeKiPhotosResult(raw: any) {
+  const root =
+    raw?.data && typeof raw.data === "object"
+      ? raw.data
+      : raw?.result && typeof raw.result === "object"
+      ? raw.result
+      : raw;
+
+  const suggestions =
+    Array.isArray(root?.suggestions) ? root.suggestions :
+    Array.isArray(raw?.suggestions) ? raw.suggestions :
+    [];
+
+  const firstSuggestion =
+    suggestions[0] ||
+    root?.suggestion ||
+    raw?.suggestion ||
+    null;
+
+  const directFields =
+    root?.fields ||
+    raw?.fields ||
+    root?.extractedFields ||
+    raw?.extractedFields ||
+    root?.fieldPatches ||
+    raw?.fieldPatches ||
+    null;
+
+  const fallbackDirectObject =
+    !firstSuggestion &&
+    root &&
+    typeof root === "object" &&
+    (
+      root.note != null ||
+      root.comment != null ||
+      root.bemerkungen != null ||
+      root.kostenstelle != null ||
+      root.lvItemPos != null ||
+      root.lvPos != null ||
+      root.materialien != null ||
+      root.materials != null ||
+      root.extras != null ||
+      root.boxes != null
+    )
+      ? root
+      : null;
+
+  const fieldPatches =
+    firstSuggestion?.fieldPatches ||
+    firstSuggestion?.extractedFields ||
+    firstSuggestion?.patch ||
+    firstSuggestion?.fields ||
+    directFields ||
+    fallbackDirectObject ||
+    null;
+
+  const errorMessage = String(
+    root?.error?.message ||
+      raw?.error?.message ||
+      root?.message ||
+      raw?.message ||
+      ""
+  ).trim();
+
+  const notes = String(
+    firstSuggestion?.notes ||
+      root?.notes ||
+      raw?.notes ||
+      errorMessage ||
+      "KI Analyse abgeschlossen."
+  ).trim();
+
+  const suggestion =
+    fieldPatches
+      ? {
+          ...(firstSuggestion && typeof firstSuggestion === "object"
+            ? firstSuggestion
+            : {}),
+          fieldPatches,
+        }
+      : firstSuggestion || fallbackDirectObject;
+
+  return {
+    suggestion: suggestion || null,
+    notes,
+    raw,
+    errorMessage,
+  };
+}
+
+function toFlatKiObject(input: any): Record<string, any> {
+  if (!input) return {};
+
+  if (typeof input === "object" && !Array.isArray(input)) {
+    return input;
+  }
+
+  if (Array.isArray(input)) {
+    const out: Record<string, any> = {};
+    for (const p of input) {
+      if (!p) continue;
+
+      const path = typeof p.path === "string" ? p.path : "";
+      if (path) {
+        const k = path
+          .replace(/^\//, "")
+          .replace(/^row\//, "")
+          .replace(/\//g, ".")
+          .trim();
+        if (k) out[k] = p.value;
+        continue;
+      }
+
+      const field = String(p.field || p.key || p.name || "").trim();
+      if (field) out[field] = p.value ?? p.val ?? p.v ?? p.data;
+    }
+    return out;
+  }
+
+  return {};
+}
+
+function normalizeExtras(input: any): ExtraRow[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+
+  const out = input
+    .map((x) => {
+      if (!x || typeof x !== "object") return null;
+
+      const label = String(x.label || x.name || x.key || x.beschreibung || "").trim();
+      const value = String(x.value || x.text || x.val || "").trim();
+
+      return {
+        id: String(x.id || uid("extra")),
+        typ: String(x.typ || "TEXT"),
+        beschreibung: String(x.beschreibung || label || value || "").trim(),
+        einheit: String(x.einheit || "").trim(),
+        menge: x.menge ?? "",
+        label,
+        value,
+      } as unknown as ExtraRow;
+    })
+    .filter((x) => {
+      const a: any = x;
+      return !!a && (!!String(a?.beschreibung || "").trim() || !!String(a?.value || "").trim());
+    });
+
+  return out.length ? (out as ExtraRow[]) : undefined;
+}
+
+function normalizeBoxes(input: any): DetectBox[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+
+  const out = input
+    .map((b) => {
+      if (!b || typeof b !== "object") return null;
+
+      const x = Number(b.x);
+      const y = Number(b.y);
+      const w = Number(b.w ?? b.width);
+      const h = Number(b.h ?? b.height);
+
+      if (![x, y, w, h].every(Number.isFinite)) return null;
+
+      return {
+        id: String(b.id || uid("box")),
+        x,
+        y,
+        w,
+        h,
+        label: String(b.label || b.name || "").trim() || undefined,
+        score: Number.isFinite(Number(b.score)) ? Number(b.score) : undefined,
+      } as unknown as DetectBox;
+    })
+    .filter(Boolean);
+
+  return out.length ? (out as DetectBox[]) : undefined;
+}
+
+function _kiStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function _kiFirst(...vals: any[]) {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return "";
+}
+
+function _kiIsDateLike(v: any) {
+  const s = _kiStr(v);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{2}\.\d{2}\.\d{4}$/.test(s);
+}
+
+function _kiCapSentence(input: string) {
+  const s = _kiStr(input);
+  if (!s) return "";
+  const n = s.replace(/\s+/g, " ").trim();
+  const first = n.charAt(0).toUpperCase() + n.slice(1);
+  return /[.!?]$/.test(first) ? first : `${first}.`;
+}
+
+function inferTechnicalPhotoNote(rawText: string, fp?: Record<string, any>) {
+  const source = _kiStr(
+    _kiFirst(
+      fp?.technicalText,
+      fp?.technischerText,
+      fp?.description,
+      fp?.beschreibung,
+      fp?.summary,
+      fp?.text,
+      fp?.note,
+      fp?.comment,
+      fp?.bemerkungen,
+      rawText
+    )
+  );
+
+  if (!source) return "";
+
+  const src = source.toLowerCase();
+
+  const dnMatch =
+    source.match(/\bDN\s*[-]?\s*(\d+(?:[.,]\d+)?)\b/i) ||
+    source.match(/\b(\d+(?:[.,]\d+)?)\s*mm\b/i);
+  const dn = dnMatch ? String(dnMatch[1]).replace(",", ".") : "";
+
+  const hasRohr = /\brohr|rohre|leitung|leitungen\b/i.test(src);
+  const hasSpeedpipe = /\bspeedpipe\b/i.test(src);
+  const hasKabel = /\bkabel|kabelleitung|kabeln\b/i.test(src);
+  const hasGraben = /\bgraben\b/i.test(src);
+  const hasVerlegt = /\bverlegt|verlegung\b/i.test(src);
+  const hasEingezogen = /\beingezogen|eingezogenen\b/i.test(src);
+  const hasAuffuellen = /\baufgefüllt|aufgef[üu]llt|verfüllt|verfullt\b/i.test(src);
+
+  if (hasSpeedpipe && dn && (hasVerlegt || hasEingezogen)) {
+    return `Speedpipe DN ${dn} wurde verlegt.`;
+  }
+  if (hasSpeedpipe && dn) {
+    return `Speedpipe DN ${dn} wurde eingebaut.`;
+  }
+  if (hasRohr && dn && hasVerlegt) {
+    return `Es wurden Rohre DN ${dn} verlegt.`;
+  }
+  if (hasRohr && dn) {
+    return `Rohr DN ${dn} wurde eingebaut.`;
+  }
+  if (hasGraben && hasKabel && hasVerlegt) {
+    return `Im Graben wurden Kabel verlegt.`;
+  }
+  if (hasGraben && hasKabel) {
+    return `Im Graben wurden Kabel eingebaut.`;
+  }
+  if (hasGraben && hasAuffuellen) {
+    return `Die Baugrube wurde aufgefüllt.`;
+  }
+  if (hasKabel && hasVerlegt) {
+    return `Es wurden Kabel verlegt.`;
+  }
+
+  return _kiCapSentence(source);
+}
+
+function buildImprovedPhotoFieldPatches(rawText: string, fields: Record<string, any>) {
+  const next: Record<string, any> = { ...(fields || {}) };
+
+  const noteVal = _kiFirst(
+    next.note,
+    next.comment,
+    next.bemerkungen,
+    next.text,
+    next.description,
+    next.beschreibung,
+    next.summary,
+    next.technicalText,
+    next.technischerText,
+    rawText
+  );
+
+  const tech = inferTechnicalPhotoNote(String(noteVal || rawText || ""), next);
+
+  if (tech && !_kiIsDateLike(tech)) {
+    next.note = tech;
+    next.comment = tech;
+    next.bemerkungen = tech;
+    if (!next.technicalText) next.technicalText = tech;
+  }
+
+  if (!next.kostenstelle && next.costCenter) next.kostenstelle = next.costCenter;
+  if (!next.lvItemPos && next.lvPos) next.lvItemPos = next.lvPos;
+  if (!next.lvItemPos && next.lvPosition) next.lvItemPos = next.lvPosition;
+
+  const extras = normalizeExtras(next.extras ?? next.materialien ?? next.materials ?? null);
+  if (extras) next.extras = extras;
+
+  const boxes = normalizeBoxes(next.boxes ?? next.detectBoxes ?? next.detections ?? null);
+  if (boxes) next.boxes = boxes;
+
+  return next;
 }
 
 function looksLikeMissingEndpoint(err: any) {
@@ -1077,30 +1381,28 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
 
       await queueNormalizeExisting();
 
-      await queueAdd({
-        kind: "PHOTO_NOTE",
-        projectId: localKey,
-        payload: {
-          offlineOnly: true,
-          projectUuid: projectId,
-          projectCode: baKey || null,
-          docId: row.id,
-          id: row.id,
-          date: row.date,
-          workflowStatus: status,
-          comment: row.comment,
-          bemerkungen: row.bemerkungen,
-          kostenstelle: row.kostenstelle,
-          lvItemPos: row.lvItemPos,
-          files: row.files,
-          attachments: row.files,
-          photos: row.files,
-          imageUri: row.imageUri,
-          extras: row.extras,
-          boxes: row.boxes,
-          row,
-        },
-      });
+    await queueAdd({
+  kind: "PHOTO_NOTE",
+  projectId: baKey,
+  payload: {
+    projectUuid: projectId,
+    projectCode: baKey,
+    docId: row.id,
+    id: row.id,
+    date: row.date,
+    comment: row.comment,
+    bemerkungen: row.bemerkungen,
+    kostenstelle: row.kostenstelle,
+    lvItemPos: row.lvItemPos,
+    files: row.files,
+    attachments: row.files,
+    photos: row.files,
+    imageUri: row.imageUri,
+    extras: row.extras,
+    boxes: row.boxes,
+    row,
+  } as any,
+});
     },
     [mode, localKey, projectId, baKey]
   );
@@ -1228,7 +1530,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
           extras: row.extras,
           boxes: row.boxes,
           row,
-        },
+        } as any,
       });
 
       await queueProcessPending(async (item: QueueItem) => {
@@ -1329,13 +1631,7 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
       setLastPdfUri(out.pdfUri);
       setLastPdfName(out.fileName);
 
-      const attachmentsRaw: string[] = Array.isArray(out.attachments)
-        ? out.attachments
-        : Platform.OS === "web"
-        ? []
-        : [out.pdfUri];
-
-      const attachments = (attachmentsRaw || [])
+      const attachments = (Platform.OS === "web" ? [] : [out.pdfUri])
         .map((x) => String(x || ""))
         .filter((u) => u.startsWith("file://"));
 
@@ -1355,39 +1651,222 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
     setKiLoading(true);
 
     try {
-      const mNow = await readMode();
       const row = buildRow("EINGEREICHT");
 
-      const localRes = buildLocalKiResult(row);
+      if (mode === "NUR_APP") {
+        const hasMain = !!row?.imageUri;
+        const hasFiles = Array.isArray(row?.files) && row.files.length > 0;
+        const hasText =
+          !!String(row?.comment || row?.note || "").trim() ||
+          !!String(row?.kostenstelle || "").trim() ||
+          !!String(row?.lvItemPos || "").trim();
+
+        setKiUi({
+          mode,
+          humanText:
+            "KI ist im Modus NUR_APP nicht verfügbar.\n\n" +
+            "Im lokalen Modus werden keine Dateien an den Server gesendet und keine KI-Analyse ausgeführt.\n\n" +
+            "Bitte nutze SERVER_SYNC für Fotoanalyse, OCR und automatische Vorschläge.\n\n" +
+            `Hauptfoto vorhanden: ${hasMain ? "ja" : "nein"}\n` +
+            `Anhänge vorhanden: ${hasFiles ? "ja" : "nein"}\n` +
+            `Text/Felder vorhanden: ${hasText ? "ja" : "nein"}`,
+          suggestion: null,
+          suggestions: [],
+          raw: {
+            localOnly: true,
+            mode,
+          },
+        });
+        return;
+      }
+
+      const fn =
+        (api as any)?.kiPhotosSuggest ||
+        (api as any)?.kiSuggestPhotos ||
+        null;
+
+      if (typeof fn !== "function") {
+        setKiUi({
+          mode,
+          humanText: "KI Endpoint nicht verbunden. (api.kiPhotosSuggest fehlt)",
+          suggestion: null,
+          suggestions: [],
+          raw: null,
+        });
+        return;
+      }
+
+      const mainFile = row?.imageUri
+        ? [
+            {
+              id: uid("main"),
+              uri: String(row.imageUri),
+              name: "main_photo.jpg",
+              type: "image/jpeg",
+            },
+          ]
+        : [];
+
+      const normalizedRowFiles = normalizeFiles(row?.files || []);
+
+      const payload = {
+        projectId: baKey || projectId,
+        projectCode: baKey || undefined,
+        projectFsKey: baKey || projectId,
+        date: String(row?.date || ymdToday()).slice(0, 10),
+        text: String(row?.comment || row?.note || "").trim(),
+        row,
+        files: [...mainFile, ...normalizedRowFiles],
+        attachments: [...mainFile, ...normalizedRowFiles],
+        strict: true,
+        _client: {
+          mode,
+          hasMain: !!row?.imageUri,
+          filesCount: Array.isArray(row?.files) ? row.files.length : 0,
+        },
+      };
+
+      let res: any;
+      try {
+        res =
+          typeof fn === "function" && fn.length >= 2
+            ? await fn(baKey || projectId, payload)
+            : await fn(payload);
+      } catch {
+        res =
+          typeof fn === "function" && fn.length >= 2
+            ? await fn(baKey || projectId, { ...payload, row })
+            : await fn({ ...payload, row });
+      }
+
+      const normalized = normalizeKiPhotosResult(res);
+
+      const baseFp = toFlatKiObject(
+        normalized?.suggestion?.fieldPatches ||
+          normalized?.suggestion?.extractedFields ||
+          normalized?.suggestion?.patch ||
+          normalized?.suggestion?.fields ||
+          normalized?.suggestion ||
+          null
+      );
+
+      const improvedFp = buildImprovedPhotoFieldPatches(
+        String(row?.comment || row?.note || "").trim(),
+        baseFp
+      );
+
+      const finalSuggestion =
+        improvedFp && Object.keys(improvedFp).length
+          ? {
+              ...(normalized.suggestion && typeof normalized.suggestion === "object"
+                ? normalized.suggestion
+                : {}),
+              fieldPatches: improvedFp,
+            }
+          : normalized.suggestion || null;
+
       setKiUi({
-        ...localRes,
-        mode: mNow,
+        mode,
+        humanText:
+          String(
+            improvedFp?.technicalText ||
+              improvedFp?.note ||
+              improvedFp?.comment ||
+              normalized.notes ||
+              "KI Analyse abgeschlossen."
+          ).trim(),
+        suggestion: finalSuggestion,
+        suggestions: finalSuggestion ? [finalSuggestion] : [],
+        raw: normalized.raw,
       });
     } catch (e: any) {
       setKiUi({
-        mode: mode === "NUR_APP" ? "NUR_APP" : "SERVER_SYNC",
+        mode,
         humanText: `KI Vorschlag fehlgeschlagen: ${String(e?.message || e)}`,
-        suggestions: [{ title: "Fehler", summary: String(e?.message || e) }],
+        suggestion: null,
+        suggestions: [],
+        raw: { error: String(e?.message || e) },
       });
     } finally {
       setKiLoading(false);
     }
-  }, [buildRow, readMode, mode]);
+  }, [buildRow, mode, baKey, projectId]);
 
-  const applyKiPatches = useCallback(() => {
-    const fp = kiUi?.suggestions?.[0]?.fieldPatches;
-    if (!fp) {
-      Alert.alert("Übernehmen", "Kein übernehmbarer Vorschlag vorhanden.");
-      return;
+  const applyKiSuggestion = useCallback(() => {
+    try {
+      const sug = kiUi?.suggestion || kiUi?.suggestions?.[0] || null;
+
+      const sugAny = sug as any;
+
+let fp: any =
+  sugAny?.fieldPatches ||
+  sugAny?.extractedFields ||
+  sugAny?.patch ||
+  sugAny?.fields ||
+  sugAny ||
+  null;
+      
+      if (!fp) {
+        Alert.alert("KI", "Kein KI-Vorschlag vorhanden.");
+        return;
+      }
+
+      fp = toFlatKiObject(fp);
+      fp = buildImprovedPhotoFieldPatches(String(note || "").trim(), fp);
+
+      if (!fp || typeof fp !== "object" || !Object.keys(fp).length) {
+        Alert.alert("KI", "KI-Felder leer oder unbekanntes Format.");
+        return;
+      }
+
+      const noteVal = _kiFirst(
+        fp.note,
+        fp.comment,
+        fp.bemerkungen,
+        fp.text,
+        fp.description,
+        fp.beschreibung,
+        fp.summary,
+        fp.technicalText,
+        fp.technischerText
+      );
+
+      const kostenstelleVal = _kiFirst(fp.kostenstelle, fp.costCenter, fp.ks);
+
+      const lvPosVal = _kiFirst(
+        fp.lvItemPos,
+        fp.lvPos,
+        fp.lvPosition,
+        fp.position
+      );
+
+      const extrasVal = fp.extras ?? fp.materialien ?? fp.materials ?? null;
+      const boxesVal = fp.boxes ?? fp.detectBoxes ?? fp.detections ?? null;
+
+      if (_kiStr(noteVal) && !_kiIsDateLike(noteVal)) {
+        setNote(_kiStr(noteVal));
+      }
+
+      if (_kiStr(kostenstelleVal) && !_kiIsDateLike(kostenstelleVal)) {
+        setKostenstelle(_kiStr(kostenstelleVal));
+      }
+
+      if (_kiStr(lvPosVal) && !_kiIsDateLike(lvPosVal)) {
+        setLvItemPos(_kiStr(lvPosVal));
+      }
+
+      const nextExtras = normalizeExtras(extrasVal);
+      if (nextExtras) setExtras(nextExtras);
+
+      const nextBoxes = normalizeBoxes(boxesVal);
+      if (nextBoxes) setBoxes(nextBoxes);
+
+      Alert.alert("KI", "Vorschlag übernommen.");
+      setKiOpen(false);
+    } catch (e: any) {
+      Alert.alert("KI", e?.message || "Übernahme fehlgeschlagen.");
     }
-
-    if (typeof fp.kostenstelle === "string") setKostenstelle(fp.kostenstelle);
-    if (fp.lvItemPos != null) setLvItemPos(String(fp.lvItemPos || ""));
-    const nextNote = String(fp.comment || fp.bemerkungen || "").trim();
-    if (nextNote) setNote(nextNote);
-
-    Alert.alert("Übernommen", "Vorschlag wurde in das Formular übernommen.");
-  }, [kiUi]);
+  }, [kiUi, note]);
 
   const onReset = useCallback(() => {
     Alert.alert("Formular leeren", "Wirklich alles zurücksetzen?", [
@@ -1700,13 +2179,12 @@ export default function PhotosNotesScreen({ route, navigation }: Props) {
                 style={[
                   styles.modalBtn,
                   {
-                    backgroundColor: COLORS.primary,
-                    opacity:
-                      !kiLoading && kiUi?.suggestions?.[0]?.fieldPatches ? 1 : 0.5,
+                    backgroundColor: COLORS.accent,
+                    opacity: kiLoading || !kiUi?.suggestion ? 0.5 : 1,
                   },
                 ]}
-                onPress={applyKiPatches}
-                disabled={kiLoading || !kiUi?.suggestions?.[0]?.fieldPatches}
+                onPress={applyKiSuggestion}
+                disabled={kiLoading || !kiUi?.suggestion}
               >
                 <Text style={{ color: "#fff", fontWeight: "900" }}>
                   Übernehmen
@@ -1830,7 +2308,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
   },
   fileName: { flex: 1, color: "#fff", fontWeight: "800" },
-  link: { color: COLORS.primary, fontWeight: "900" },
+  link: { color: COLORS.accent, fontWeight: "900" },
 
   histRow: {
     borderRadius: 14,

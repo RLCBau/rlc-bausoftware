@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: rlc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: rlc
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d rlc"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    container_name: rlc-minio
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: rlcminio
+      MINIO_ROOT_PASSWORD: rlcminio_password_change_me
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  server:
+    image: rlc-bausoftware-server
+    container_name: rlc-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/rlc?schema=public
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: rlcminio
+      MINIO_SECRET_KEY: rlcminio_password_change_me
+    volumes:
+      - /opt/rlc-bausoftware/apps/server:/app
+
+volumes:
+  pgdata:
+  miniodata:

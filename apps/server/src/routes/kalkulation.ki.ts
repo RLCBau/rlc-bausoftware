@@ -1,11 +1,15 @@
+import { learnCompanyRecipeFromKiRow } from "../kalkulation/companyRecipeLearning";
 import { Router } from "express";
 import OpenAI from "openai";
 import { prisma } from "../lib/prisma";
 import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreisBibliothek";
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
+import { annotateExistingCalculation } from "../kalkulation/constructionIntelligenceEngine";
 import { resolveRlcAutonomousCalculation, mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
 import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalculationPipeline";
 import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
+import * as ciFs from "node:fs";
+import * as ciPath from "node:path";
 
 const router = Router();
 
@@ -1236,7 +1240,9 @@ function x84AnchorEpFromRow(row: any): number {
     n(row?.originalPreKiPrice) ||
     n(row?.originalUnitPrice) ||
     n(row?.einzelpreis) ||
-    n(row?.ep) ||
+    n(row?.ep ??
+      row?.preis
+  ) ||
     n(row?.preis)
   );
 }
@@ -9723,6 +9729,31 @@ async function saveKiLearningRows(
       lastUsedAt: new Date(),
     };
 
+    /*
+     * Recipe-Learning è indipendente dalla protezione della KalkulationsDb.
+     * Anche se un prezzo X84/freigegeben non può essere sovrascritto,
+     * un breakdown KI valido può diventare una ricetta proposta.
+     */
+    try {
+      const recipeLearningResult = await learnCompanyRecipeFromKiRow({
+        companyId,
+        projectId: project?.id || null,
+        row,
+      });
+
+      if (recipeLearningResult !== "skipped") {
+        console.info(
+          `[RLC CompanyRecipe Learning] ${recipeLearningResult}: ${posNr} ${kurztext}`
+        );
+      }
+    } catch (recipeError: any) {
+      console.warn(
+        "[RLC CompanyRecipe Learning ERROR]",
+        posNr,
+        recipeError?.message || recipeError
+      );
+    }
+
     if (existing) {
       /*
 
@@ -11972,6 +12003,7 @@ router.post("/suggest-batch", async (req, res) => {
             budgetLeft = 1;
           }
 
+          const constructionIntelligenceStartedAt = performance.now();
           out[index] = await calcSmartRow(row, matches, companyId, useOpenAIIfNoDatabaseHit,
             budgetLeft,
             forceRecalculate
@@ -11979,6 +12011,23 @@ router.post("/suggest-batch", async (req, res) => {
 
           out[index] = applyRlcX84BenchmarkLearningSignal(row, applyRlcProjectOutlierFinalOverride(row, applyRlcFinalSuchschlitzGuard(row, applyRlcAutonomousSmallPositionGuard(row, out[index]))));
           out[index] = await applyGlobalKnowledgeHint(row, out[index]);
+          out[index] = annotateExistingCalculation(out[index], {
+            startedAtMs: constructionIntelligenceStartedAt,
+            stages: [
+              {
+                stage: "existing-calcSmartRow-pipeline",
+                ok: true,
+              },
+              {
+                stage: "final-guards",
+                ok: true,
+              },
+              {
+                stage: "global-knowledge-hint",
+                ok: true,
+              },
+            ],
+          });
           out[index] = enrichRlcCalculationPipeline({ row, baseResult: out[index] });
 
           if (out[index]?.source !== "openai" && budgetLeft > 0) {
@@ -12098,5 +12147,346 @@ router.post("/suggest-batch", async (req, res) => {
     });
   }
 });
+
+
+
+// RLC_CONSTRUCTION_INTELLIGENCE_REANNOTATE_ENDPOINT_V2
+router.post("/construction-intelligence/reannotate/:projectKey", async (req, res) => {
+  try {
+    const projectKey = String(req.params.projectKey || "").trim();
+
+    if (!/^[A-Za-z0-9._-]+$/.test(projectKey)) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ungültiger Projektschlüssel.",
+      });
+    }
+
+    const projectsRoot = process.env.PROJECTS_ROOT || "/app/data/projects";
+    const filePath = ciPath.join(
+      projectsRoot,
+      projectKey,
+      "kalkulation",
+      "ki-kalkulation.json"
+    );
+
+    if (!ciFs.existsSync(filePath)) {
+      return res.status(404).json({
+        ok: false,
+        projectKey,
+        error: "KI-Kalkulation nicht gefunden.",
+      });
+    }
+
+    const originalText = ciFs.readFileSync(filePath, "utf8");
+    const raw = JSON.parse(originalText);
+
+    const rows = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.rows)
+        ? raw.rows
+        : Array.isArray(raw?.positions)
+          ? raw.positions
+          : Array.isArray(raw?.items)
+            ? raw.items
+            : [];
+
+    if (!rows.length) {
+      return res.status(400).json({
+        ok: false,
+        projectKey,
+        error: "Keine Kalkulationspositionen gefunden.",
+      });
+    }
+
+    let annotatedRows = 0;
+
+    const updatedRows = rows.map((row: any) => {
+      if (!row || typeof row !== "object") return row;
+
+      const updated = annotateExistingCalculation(row, {
+        stages: [
+          {
+            stage: "existing-file-reannotation",
+            ok: true,
+          },
+        ],
+      });
+
+      if (updated?.constructionIntelligence) annotatedRows += 1;
+      return updated ?? row;
+    });
+
+    let updatedDocument: any;
+
+    if (Array.isArray(raw)) {
+      updatedDocument = updatedRows;
+    } else if (Array.isArray(raw?.rows)) {
+      updatedDocument = { ...raw, rows: updatedRows };
+    } else if (Array.isArray(raw?.positions)) {
+      updatedDocument = { ...raw, positions: updatedRows };
+    } else if (Array.isArray(raw?.items)) {
+      updatedDocument = { ...raw, items: updatedRows };
+    } else {
+      return res.status(400).json({
+        ok: false,
+        projectKey,
+        error: "Unbekanntes KI-Dateiformat.",
+      });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = `${filePath}.bak-ci-v2-${timestamp}`;
+    const temporaryPath = `${filePath}.tmp-ci-v2`;
+
+    ciFs.copyFileSync(filePath, backupPath);
+    ciFs.writeFileSync(
+      temporaryPath,
+      JSON.stringify(updatedDocument, null, 2),
+      "utf8"
+    );
+    ciFs.renameSync(temporaryPath, filePath);
+
+    return res.json({
+      ok: true,
+      projectKey,
+      engine: "rlc-construction-intelligence-v2",
+      totalRows: rows.length,
+      annotatedRows,
+      priceModified: false,
+      backupPath,
+      filePath,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error(
+      "[construction-intelligence-reannotate]",
+      error?.message || error
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error:
+        error?.message ||
+        "Construction-Intelligence-Reannotation fehlgeschlagen.",
+    });
+  }
+});
+
+
+// RLC_CONSTRUCTION_INTELLIGENCE_STATUS_ENDPOINT_V2
+router.get("/construction-intelligence/status/:projectKey", async (req, res) => {
+  try {
+    const projectKey = String(req.params.projectKey || "").trim();
+
+    if (!/^[A-Za-z0-9._-]+$/.test(projectKey)) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ungültiger Projektschlüssel.",
+      });
+    }
+
+    const projectsRoot = process.env.PROJECTS_ROOT || "/app/data/projects";
+    const filePath = ciPath.join(
+      projectsRoot,
+      projectKey,
+      "kalkulation",
+      "ki-kalkulation.json"
+    );
+
+    if (!ciFs.existsSync(filePath)) {
+      return res.status(404).json({
+        ok: false,
+        projectKey,
+        error: "KI-Kalkulation nicht gefunden.",
+      });
+    }
+
+    const raw = JSON.parse(ciFs.readFileSync(filePath, "utf8"));
+    const rows = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.rows)
+        ? raw.rows
+        : Array.isArray(raw?.positions)
+          ? raw.positions
+          : Array.isArray(raw?.items)
+            ? raw.items
+            : [];
+
+    const numeric = (value: unknown): number => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const unitPrice = (row: Record<string, any>): number =>
+      numeric(
+        row?.rlcKiUnitPrice ??
+          row?.finalUnitPrice ??
+          row?.suggestedUnitPrice ??
+          row?.unitPrice ??
+          row?.ep ??
+          row?.preis
+      );
+
+    const annotated = rows.filter(
+      (row: Record<string, any>) =>
+        row && typeof row === "object" && row.constructionIntelligence
+    );
+
+    const sourceCounts: Record<string, number> = {};
+    const reviewRows: Array<Record<string, any>> = [];
+    const decisionRows: Array<Record<string, any>> = [];
+    let confidenceSum = 0;
+    let decisionScoreSum = 0;
+    let decisionScoredRows = 0;
+    let mismatchCount = 0;
+
+    for (const row of annotated) {
+      const ci = row.constructionIntelligence || {};
+      const source =
+        normalizeSource(ci.finalSource) ||
+        normalizeSource(row.source) ||
+        normalizeSource(row.calculationSource) ||
+        "existing-calculation";
+
+      sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+      confidenceSum += numeric(ci.confidence);
+
+      const decisionScore = numeric(ci.decisionScore);
+      const decisionReasons = Array.isArray(ci.decisionReasons)
+        ? ci.decisionReasons
+        : [];
+      const decisionComponents =
+        ci.decisionComponents &&
+        typeof ci.decisionComponents === "object"
+          ? ci.decisionComponents
+          : {};
+      const alternatives = Array.isArray(ci.alternatives)
+        ? ci.alternatives
+        : [];
+
+      if (Number.isFinite(Number(ci.decisionScore))) {
+        decisionScoreSum += decisionScore;
+        decisionScoredRows += 1;
+      }
+
+      decisionRows.push({
+        posNr:
+          row.posNr ??
+          row.positionsnummer ??
+          row.position ??
+          row.oz ??
+          null,
+        kurztext: row.kurztext ?? row.shortText ?? "",
+        source,
+        ep: unitPrice(row),
+        confidence: numeric(ci.confidence),
+        decisionScore,
+        decisionReasons,
+        decisionComponents,
+        alternatives,
+        requiresReview: Boolean(ci.requiresReview),
+        engine: ci.engine || "unknown",
+      });
+
+      const currentEp = unitPrice(row);
+      const observedEp = numeric(ci.finalEp);
+
+      if (
+        Number.isFinite(currentEp) &&
+        Number.isFinite(observedEp) &&
+        Math.abs(currentEp - observedEp) > 0.000001
+      ) {
+        mismatchCount += 1;
+      }
+
+      if (ci.requiresReview) {
+        reviewRows.push({
+          posNr:
+            row.posNr ??
+            row.positionsnummer ??
+            row.position ??
+            row.oz ??
+            null,
+          kurztext: row.kurztext ?? row.shortText ?? "",
+          source,
+          ep: currentEp,
+          confidence: numeric(ci.confidence),
+          decisionScore,
+          decisionReasons,
+          decisionComponents,
+          alternatives,
+          durationMs: numeric(ci.totalDurationMs),
+        });
+      }
+    }
+
+    reviewRows.sort(
+      (a, b) => numeric(a.confidence) - numeric(b.confidence)
+    );
+
+    const coverage = rows.length > 0 ? annotated.length / rows.length : 0;
+    const averageConfidence =
+      annotated.length > 0 ? confidenceSum / annotated.length : 0;
+    const averageDecisionScore =
+      decisionScoredRows > 0
+        ? decisionScoreSum / decisionScoredRows
+        : 0;
+
+    decisionRows.sort(
+      (a, b) => numeric(b.decisionScore) - numeric(a.decisionScore)
+    );
+
+    return res.json({
+      ok: true,
+      projectKey,
+      engine: "rlc-construction-intelligence-v2",
+      mode: "multi-factor-explainable-observer",
+      decisionMode: "multi-factor-explainable-selection",
+      summary: {
+        totalRows: rows.length,
+        annotatedRows: annotated.length,
+        coverage,
+        coveragePercent: Math.round(coverage * 10000) / 100,
+        averageConfidence:
+          Math.round(averageConfidence * 10000) / 10000,
+        averageDecisionScore:
+          Math.round(averageDecisionScore * 100) / 100,
+        decisionScoredRows,
+        requiresReview: reviewRows.length,
+        epSourceMismatches: mismatchCount,
+        priceModified: mismatchCount > 0,
+      },
+      sources: Object.entries(sourceCounts)
+        .map(([source, count]) => ({ source, count }))
+        .sort((a, b) => b.count - a.count),
+      reviewRows: reviewRows.slice(0, 200),
+      decisions: decisionRows.slice(0, 500),
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error(
+      "[construction-intelligence-status]",
+      error?.message || error
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: "Construction-Intelligence-Status konnte nicht geladen werden.",
+    });
+  }
+});
+
+
+
+const normalizeSource = (value: unknown): string => {
+  const source = String(value ?? "").trim();
+
+  if (!source || source.toLowerCase() === "unknown") {
+    return "";
+  }
+
+  return source;
+};
 
 export default router;

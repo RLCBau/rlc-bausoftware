@@ -1,0 +1,35 @@
+.start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #0b0f12;
+  color: #f5f5f5;
+  text-align: center;
+  padding: 20px;
+}
+
+.start-inner {
+  max-width: 800px;
+}
+
+.start .logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: 20px;
+}
+
+.start h1 {
+  font-size: 42px;
+  margin: 10px 0;
+  font-weight: bold;
+}
+
+.start p {
+  font-size: 18px;
+  line-height: 1.6;
+  color: #cdd7e0;
+}
+
+
+

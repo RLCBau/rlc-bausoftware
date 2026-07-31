@@ -1,0 +1,34 @@
+.docmgr { padding: 16px; }
+.docmgr-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.docmgr-actions { display:flex; align-items:center; gap:8px; }
+.muted { color: #777; }
+
+.btn { padding:8px 12px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer; }
+.btn:hover { background:#f6f6f6; }
+.btn.ghost { background:transparent; }
+.btn.small { padding:6px 10px; font-size: 0.9rem; }
+
+.search { padding:8px 10px; border:1px solid #ccc; border-radius:8px; min-width:240px; }
+
+.dropzone {
+  border:2px dashed #c9c9c9; border-radius:12px; padding:24px; text-align:center; color:#666; margin:8px 0 16px;
+}
+
+.uploadlist { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.upload { display:grid; grid-template-columns:1fr 300px 120px; gap:12px; align-items:center; }
+.upload .bar { background:#f0f0f0; height:8px; border-radius:8px; overflow:hidden; }
+.upload .fill { height:100%; background:#1e90ff; }
+.upload .name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.table { display:flex; flex-direction:column; border:1px solid #eee; border-radius:12px; overflow:hidden; }
+.thead, .row { display:grid; grid-template-columns: 1fr 120px 120px 170px 140px; gap:12px; align-items:center; }
+.thead { background:#fafafa; padding:10px 12px; font-weight:600; border-bottom:1px solid #eee; }
+.row { padding:10px 12px; border-bottom:1px solid #f1f1f1; }
+.row:last-child { border-bottom:none; }
+.cell.name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; padding:24px; }
+.modal-body { width:min(1200px, 95vw); height:min(85vh, 900px); background:#fff; border-radius:12px; overflow:hidden; display:flex; flex-direction:column; }
+.modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 12px; border-bottom:1px solid #eee; }
+.modal-head .title { font-weight:600; }
+.modal .frame { width:100%; height:100%; border:0; }

@@ -1,0 +1,366 @@
+  return {
+    ...row,
+    id: input.id,
+    posNr: s(input.posNr),
+    menge: n(input.menge, row.menge),
+  };
+}
+
+async function calcSmartRow(
+  row: InputRow,
+  matches: DbMatch[],
+  companyId: string,
+  useOpenAI: boolean,
+  openAiBudgetLeft = 999,
+  forceRecalculate = false
+) {
+  if (isStructuralTitleRow(row)) {
+    return {
+      id: row.id,
+      posNr: s(row.posNr),
+      kurztext: s(row.kurztext),
+      langtext: s(row.langtext),
+      einheit: s(row.einheit) || "PS",
+      menge: n(row.menge, 1),
+      materialCost: 0,
+      laborCost: 0,
+      machineCost: 0,
+      subcontractorCost: 0,
+      disposalCost: 0,
+      overheadCost: 0,
+      riskCost: 0,
+      profitCost: 0,
+      baseUnitPrice: n(row.preis),
+      suggestedUnitPrice: n(row.preis),
+      finalUnitPrice: n(row.preis),
+      confidence: 0.9,
+      riskLevel: "low",
+      calculationStatus: n(row.preis) > 0 ? "manual" : "ok",
+      gewerk: "Gliederung / Titel",
+      leistungsart: "Strukturposition",
+      bauverfahren: "Keine kalkulatorische Leistungsposition",
+      warning: "",
+      aiReason: "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition. Von OpenAI bewusst ausgeschlossen.",
+      source: "rule-engine",
+      priceBreakdown: [],
+    };
+  }
+
+  const unit = s(row.einheit);
+  const hasStrongDb = strongDatabaseHit(matches, unit);
+
+  /*
+   * Freigegeben/Geprüft darf nur greifen, wenn der Treffer wirklich zur LV-Position passt.
+   * Sonst würde z.B. ein freigegebener Schalungswert fälschlich bei Pflaster/Kies/Aushub verwendet.
+   */
+  const approvedMatch = matches.find((m) => {
+    if (!isApprovedDbMatch(m)) return false;
+    if (unit && norm(m.row.unit) !== norm(unit)) return false;
+    if (m.score < 65) return false;
+
+    const hasExactPos = m.reasons.includes("Positionsnummer identisch");
+    const textHitReason = m.reasons.find((r) => r.includes("Text-Treffer")) || "";
+    const textHits = n(textHitReason.split(" ")[0]);
+
+    return hasExactPos || textHits >= 3;
+  });
+
+  /*
+   * Freigegebene / geprüfte Kalkulationsdaten sind stärker als Cache und OpenAI.
+   * Ein vom Kalkulator freigegebener Wert darf nicht durch alte KI-Cachewerte überschrieben werden.
+   */
+  if (approvedMatch && hasStrongDb && !forceRecalculate) {
+    const dbRow = calcRuleRow(row, matches, "database");
+    return {
+      ...dbRow,
+      source: "database",
+      confidence: Math.max(n(dbRow.confidence), qualityGateStatusOf(approvedMatch.row) === "Freigegeben" ? 0.96 : 0.92),
+      calculationStatus: "ok",
+      riskLevel: n(dbRow.finalUnitPrice) > 0 ? "low" : dbRow.riskLevel,
+      warning: [
+        qualityGateStatusOf(approvedMatch.row) === "Freigegeben"
+          ? "Freigegebener Kalkulationswert aus Datenbank verwendet."
+          : "Geprüfter Kalkulationswert aus Datenbank verwendet.",
+        s(dbRow.warning),
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        `Quality-Gate-Datenbanktreffer verwendet: ${qualityGateStatusOf(approvedMatch.row)}.`,
+        s(dbRow.aiReason),
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
+
+  const hasHistoricalOfferBaselineForDb =
+    n((row as any)?.angebotUnitPrice) > 0 ||
+    n((row as any)?.x84UnitPrice) > 0 ||
+    n((row as any)?.angebotTotal) > 0 ||
+    n((row as any)?.x84Total) > 0;
+
+  /*
+   * X83-only / Firmen-Datenbank DIREKT:
+   * Wenn PosNr exakt in der Firmen-Datenbank existiert, wird exakt dieser EP verwendet.
+   * Keine Gewichtung, kein Parser, keine Einheit-Blockade.
+   */
+  const directDbPosition = s(row.posNr);
+  if (directDbPosition) {
+    const directDb = await prisma.kalkulationsDbEntry.findFirst({
+      where: {
+        companyId,
+        positionNumber: directDbPosition,
+        unitPriceNet: { gt: 0 },
+      },
+      orderBy: [{ confidence: "desc" }, { updatedAt: "desc" }],
+    });
+
+    if (hasHistoricalOfferBaselineForDb && directDb) {
+      const exactDbEp = n(directDb.unitPriceNet);
+      const menge = n(row.menge);
+      const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
+
+      const companyDbRow = {
+        ...row,
+        source: "database",
+        suggestedUnitPrice: exactDbEp,
+        finalUnitPrice: exactDbEp,
+        rlcKiUnitPrice: exactDbEp,
+        unitPrice: exactDbEp,
+        preis: exactDbEp,
+        totalNet: exactDbTotal,
+        rlcKiTotal: exactDbTotal,
+        gesamt: exactDbTotal,
+        confidence: 0.99,
+        calculationStatus: "ok",
+        riskLevel: "low",
+        warning: "",
+        aiReason: [
+          "Firmen-Datenbank Direktmatch: exakter Firmenwert aus X84-Baseline verwendet.",
+          "Position: " + s(directDb.positionNumber),
+          "EP netto: " + exactDbEp,
+        ].join("\n\n"),
+      };
+
+      const companyDbCacheKey = cacheKeyForRow(row);
+      kalkulationAiCache.set(companyDbCacheKey, companyDbRow);
+      scheduleKalkulationAiCacheSave();
+
+      return companyDbRow;
+    }
+  }
+
+  /*
+   * X83-only / Firmen-Datenbank:
+   * Wenn ein starker Firmen-Datenbanktreffer existiert, muss dieser VOR dem Technical Parser gewinnen.
+   * forceRecalculate darf nur Cache/OpenAI neu berechnen, aber nicht geprüfte Firmenwerte ignorieren.
+   */
+  const strongCompanyDbMatch = matches.find((m) => {
+    const dbEp = n(m.row.unitPriceNet);
+    const rowUnit = s(row.einheit);
+    const dbUnit = s(m.row.unit);
+    const unitOk = !rowUnit || !dbUnit || norm(rowUnit) === norm(dbUnit);
+
+    const rowPos = s(row.posNr);
+    const dbPos = s(m.row.positionNumber);
+    const posOk = rowPos && dbPos && norm(rowPos) === norm(dbPos);
+
+    return dbEp > 0 && (posOk || (unitOk && m.score >= 60));
+  });
+
+  if (hasHistoricalOfferBaselineForDb && strongCompanyDbMatch) {
+    const dbRow = calcRuleRow(row, [strongCompanyDbMatch], "database");
+    const exactDbEp = n(strongCompanyDbMatch.row.unitPriceNet);
+    const menge = n(row.menge);
+    const exactDbTotal = Math.round(exactDbEp * menge * 100) / 100;
+
+    const companyDbRow = {
+      ...dbRow,
+      source: "database",
+      suggestedUnitPrice: exactDbEp,
+      finalUnitPrice: exactDbEp,
+      unitPrice: exactDbEp,
+      preis: exactDbEp,
+      totalNet: exactDbTotal,
+      gesamt: exactDbTotal,
+      confidence: 0.99,
+      calculationStatus: "ok",
+      riskLevel: "low",
+      warning: "",
+      aiReason: [
+        "Firmen-Datenbank priorisiert: exakter Firmenwert aus X84-Baseline verwendet.",
+        "Position: " + s(strongCompanyDbMatch.row.positionNumber),
+        "EP netto: " + exactDbEp,
+      ].filter(Boolean).join("\n\n"),
+    };
+
+    const companyDbCacheKey = cacheKeyForRow(row);
+    kalkulationAiCache.set(companyDbCacheKey, companyDbRow);
+    scheduleKalkulationAiCacheSave();
+
+    return companyDbRow;
+  }
+
+  /*
+   * RLC Technical Parser muss VOR KI-Cache / Rule-Engine / OpenAI gewinnen.
+   * Grund: A-F Blöcke liefern geprüfte technische Kalkulationen.
+   */
+  const x83PriorityKurztext = String((row as any).kurztext || "").toLowerCase();
+
+  
+    const technicalContextText = `${s(row.kurztext)} ${s(row.langtext)}`.trim();
+    const technicalContextSensitive = isContextSensitivePosition(
+      technicalContextText,
+      s(row.einheit)
+    );
+
+    const technicalSpecialCivilSensitive =
+      /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(technicalContextText));
+
+const technicalRecipeInput =
+    x83PriorityKurztext.includes("fsk korrigieren") ||
+    (
+      x83PriorityKurztext.includes("boden") &&
+      x83PriorityKurztext.includes("zwischenlagern")
+    )
+      ? {
+          ...row,
+          langtext: (row as any).kurztext || (row as any).langtext || "",
+        }
+      : row;
+
+  const technicalRecipeRow = await calcRecipeKalkulationRow(technicalRecipeInput);
+
+  if (!technicalContextSensitive && !technicalSpecialCivilSensitive && technicalRecipeRow?.source === "technical-parser") {
+    const technicalRow = {
+      ...technicalRecipeRow,
+      source: "technical-parser",
+      warning: [
+        s(technicalRecipeRow.warning),
+        "RLC Technical Parser priorisiert vor Cache, Rule-Engine und OpenAI.",
+      ].filter(Boolean).join(" · "),
+      aiReason: [
+        s(technicalRecipeRow.aiReason),
+        "RLC-KI: geprüfter technischer Komponentenpreis aus RecipeEngine / Preisbibliothek wurde direkt übernommen.",
+      ].filter(Boolean).join("\n\n"),
+    };
+
+    const technicalCacheKey = cacheKeyForRow(row);
+    kalkulationAiCache.set(technicalCacheKey, technicalRow);
+    scheduleKalkulationAiCacheSave();
+    return technicalRow;
+  }
+
+  const cacheKey = cacheKeyForRow(row);
+  const cached = kalkulationAiCache.get(cacheKey);
+
+  if (cached && !forceRecalculate) {
+    return cloneCachedRow(
+      {
+        ...cached,
+        warning: [s(cached.warning), "KI-Cache verwendet"].filter(Boolean).join(" · "),
+      },
+      row
+    );
+  }
+
+  if (cached && forceRecalculate) {
+    console.log("[kalkulation.ki] KI-Cache bypassed by forceRecalculate", {
+      posNr: s(row.posNr),
+      kurztext: s(row.kurztext).slice(0, 80),
+    });
+  }
+
+  /*
+   * RLC Recipe Engine zuerst:
+   * RLC-KI nutzt interne Rezeptlogik + RLC Preisbibliothek vor OpenAI.
+   * OpenAI bleibt Expertprüfung/Fallback, nicht Hauptquelle.
+   */
+  const recipeRow = await calcRecipeKalkulationRow(row);
+
+  if (!technicalContextSensitive && !technicalSpecialCivilSensitive && recipeRow) {
+    const guardedRecipeRow = applyPlausibilityGuard(
+      row,
+      matches,
+      {
+        ...recipeRow,
+        source: recipeRow.source || "recipe",
+      },
+      forceRecalculate
+    );
+    kalkulationAiCache.set(cacheKey, guardedRecipeRow);
+    scheduleKalkulationAiCacheSave();
+    return guardedRecipeRow;
+  }
+
+  const useOpenAIForThisRow = forceRecalculate
+    ? Boolean(useOpenAI && openAiBudgetLeft > 0 && !isStructuralTitleRow(row))
+    : shouldUseOpenAIForRow(row, matches, useOpenAI, openAiBudgetLeft, forceRecalculate);
+
+  if (useOpenAIForThisRow) {
+    try {
+      const aiRow = await openAiCalcRow(row, matches);
+
+      if (aiRow) {
+        if (hasStrongDb) {
+          const dbEp = weightedDbPrice(matches, unit);
+          const aiEp = n(aiRow.finalUnitPrice);
+
+          aiRow.source = "openai";
+          aiRow.warning = [
+            s(aiRow.warning),
+            `Datenbanktreffer vorhanden: EP ${round2(dbEp)} EUR wurde durch OpenAI plausibilisiert.`
+          ]
+            .filter(Boolean)
+            .join(" · ");
+
+          aiRow.aiReason = [
+            s(aiRow.aiReason),
+            `Datenbank wurde nicht blind übernommen, sondern gegen LV-Text, Mengen, Schichten, Transport, Entsorgung, Personal und Maschinen geprüft. Datenbank-EP: ${round2(dbEp)} EUR, geprüfter EP: ${round2(aiEp)} EUR.`
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+        }
+
+        const guarded = applyPlausibilityGuard(row, matches, aiRow, forceRecalculate);
+        kalkulationAiCache.set(cacheKey, guarded);
+        scheduleKalkulationAiCacheSave();
+        return guarded;
+      }
+    } catch (e: any) {
+      console.error("[kalkulation.ki] OpenAI plausibility check failed:", e?.message || e);
+    }
+  }
+
+  if (hasStrongDb) {
+      const dbRow = calcRuleRow(row, matches, "database");
+      const guardedDbRow = applyPlausibilityGuard(row, matches, dbRow, forceRecalculate);
+      kalkulationAiCache.set(cacheKey, guardedDbRow);
+      scheduleKalkulationAiCacheSave();
+      return guardedDbRow;
+    }
+
+  const ruleRow = calcRuleRow(row, matches, "rule-engine");
+    const guardedRuleRow = applyPlausibilityGuard(row, matches, ruleRow, forceRecalculate);
+    kalkulationAiCache.set(cacheKey, guardedRuleRow);
+    scheduleKalkulationAiCacheSave();
+    return guardedRuleRow;
+}
+
+
+function normalizeLearningRisk(value: any): string {
+  const v = s(value).toLowerCase();
+
+  if (v === "low" || v === "niedrig") return "niedrig";
+  if (v === "high" || v === "hoch") return "hoch";
+  if (v === "critical" || v === "kritisch") return "kritisch";
+
+  return "mittel";
+}
+
+function isValidLearningRow(row: any): boolean {
+  if (!row) return false;
+  if (row.source === "rule-engine") return false;
+  if (row.source === "database") return false;
+  if (row.source === "x84-company-baseline") return false;
+  if (isStructuralTitleRow(row)) return false;
+
+  const ep = n(row.finalUnitPrice ?? row.suggestedUnitPrice ?? row.baseUnitPrice);
+  const kurztext = s(row.kurztext);

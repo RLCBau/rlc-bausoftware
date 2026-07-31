@@ -1,0 +1,14 @@
+[Unit]
+Description=RLC encrypted infrastructure backup upload
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/rlc/backup.env
+ExecStart=/usr/local/sbin/rlc-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true

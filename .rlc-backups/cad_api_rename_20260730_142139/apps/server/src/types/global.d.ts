@@ -1,0 +1,11 @@
+declare module "multer";
+declare module "pdf-parse";
+declare module "csv-parse/sync";
+declare module "dxf-parser";
+declare module "express-request-id";
+declare module "express-rate-limit";
+declare module "helmet";
+declare module "compression";
+declare module "morgan";
+declare module "mime-types";
+declare module "unzipper";

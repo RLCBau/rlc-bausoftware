@@ -21,8 +21,6 @@ import {
   looksLikeProjectCode,
   extractBaCode,
   Project,
-  // @ts-ignore (se non esiste, rimuovi questa riga)
-  IS_DEV,
 } from "../lib/api";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Projects">;
@@ -264,7 +262,6 @@ function makeLocalId() {
 /** ✅ FlatList keys: make them unique even if backend returns duplicate ids */
 function listKeyOf(p: Project, index: number) {
   const base = String((p as any)?.id || projectFsKey(p) || "").trim() || "row";
-  // index suffix prevents React "same key" warning when duplicates exist
   return `${base}__${index}`;
 }
 
@@ -278,7 +275,6 @@ export default function ProjectsScreen({ navigation }: Props) {
   const [q, setQ] = useState("");
 
   const [mode, setMode] = useState<"SERVER_SYNC" | "NUR_APP">("SERVER_SYNC");
-
   const isStandalone = mode === ("NUR_APP" as any);
 
   // ✅ BA code map state (scoped by mode)
@@ -304,7 +300,6 @@ export default function ProjectsScreen({ navigation }: Props) {
       }
     } catch {}
 
-    // ✅ FIX: always keep state consistent with returned fallback
     setMode("SERVER_SYNC");
     return "SERVER_SYNC";
   }, []);
@@ -318,13 +313,9 @@ export default function ProjectsScreen({ navigation }: Props) {
     try {
       setLoading(true);
 
-      // always re-check mode (in case user switched)
       const mNow = await readMode();
-
-      // always refresh code map (scoped)
       await readCodeMap(mNow);
 
-      // STANDALONE: load local projects
       if (mNow === "NUR_APP") {
         const local = await loadLocalProjects();
         const arr = local.map(localToProject);
@@ -352,7 +343,6 @@ export default function ProjectsScreen({ navigation }: Props) {
         return;
       }
 
-      // SERVER_SYNC: load from api
       const list = await api.projects();
       const arr = Array.isArray(list) ? list : [];
       setItems(arr);
@@ -426,7 +416,6 @@ export default function ProjectsScreen({ navigation }: Props) {
         return;
       }
 
-      // ✅ BA code from map first, fallback to p.code
       const baCode = getBaForProject(
         codeMap,
         projectId,
@@ -434,7 +423,6 @@ export default function ProjectsScreen({ navigation }: Props) {
       );
       const codeOk = looksLikeProjectCode(baCode);
 
-      // ✅ SERVER_SYNC: se BA mancante/errato -> resta qui e chiedi BA
       if (!isStandalone && !codeOk) {
         const current = getBaForProject(
           codeMap,
@@ -443,7 +431,7 @@ export default function ProjectsScreen({ navigation }: Props) {
         );
         setEditingId(projectId);
         setEditingValue(current);
-        setPendingOpen(p); // ✅ remember: user wanted to open THIS project
+        setPendingOpen(p);
         return;
       }
 
@@ -497,7 +485,6 @@ export default function ProjectsScreen({ navigation }: Props) {
       const p = localToProject(lp);
       setItems((prev) => [p, ...prev]);
 
-      // open immediately
       await openProject(p);
     } catch (e: any) {
       Alert.alert(
@@ -519,7 +506,7 @@ export default function ProjectsScreen({ navigation }: Props) {
       );
       setEditingId(projectId);
       setEditingValue(current);
-      setPendingOpen(null); // manual edit does not auto-open
+      setPendingOpen(null);
     },
     [codeMap]
   );
@@ -541,10 +528,8 @@ export default function ProjectsScreen({ navigation }: Props) {
       next[projectId] = ba;
       setCodeMap(next);
 
-      // ✅ save codemap scoped by current mode
       await saveCodeMap(mode, next);
 
-      // optional: if local project, persist into local projects list too
       if (/^local-/i.test(projectId)) {
         try {
           const list = await loadLocalProjects();
@@ -558,7 +543,6 @@ export default function ProjectsScreen({ navigation }: Props) {
       setEditingId(null);
       setEditingValue("");
 
-      // ✅ snapshot pendingOpen BEFORE we clear it
       const pending = pendingOpen;
       const shouldAutoOpen =
         pending && String((pending as any)?.id || "").trim() === projectId;
@@ -619,7 +603,6 @@ export default function ProjectsScreen({ navigation }: Props) {
   function renderItem({ item }: { item: Project }) {
     const projectId = String((item as any)?.id || "").trim();
 
-    // ✅ BA from map (preferred) else item.code
     const baCode = getBaForProject(
       codeMap,
       projectId,
@@ -627,7 +610,6 @@ export default function ProjectsScreen({ navigation }: Props) {
     );
     const codeOk = looksLikeProjectCode(baCode);
 
-    // counters should follow FS policy (prefer BA if available, else uuid/local id)
     const fsKey = codeOk ? baCode : projectFsKey(item);
 
     if (fsKey && !counters[fsKey]) {
@@ -664,7 +646,6 @@ export default function ProjectsScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* ✅ NEW: BA-Code editor row */}
         <View style={s.codeRow}>
           <Text style={s.codeLabel}>BA-Code</Text>
 
@@ -681,7 +662,6 @@ export default function ProjectsScreen({ navigation }: Props) {
               <Pressable
                 style={s.codeBtn}
                 onPress={(e: any) => {
-                  // prevent card navigation
                   e?.stopPropagation?.();
                   saveEdit(item);
                 }}
@@ -749,6 +729,14 @@ export default function ProjectsScreen({ navigation }: Props) {
             </Pressable>
 
             <View style={{ flex: 1 }} />
+
+            <Pressable
+              onPress={() => console.log("NEW PROJECT")}
+              style={s.newBtn}
+            >
+              <Text style={s.newBtnTxt}>+ Neu</Text>
+            </Pressable>
+
             {isStandalone ? (
               <View style={s.modePill}>
                 <Text style={s.modeTxt}>NUR_APP</Text>
@@ -792,11 +780,9 @@ export default function ProjectsScreen({ navigation }: Props) {
           ) : null}
         </View>
 
-        {/* ✅ LIST */}
         <View style={s.listWrap}>
           <FlatList
             data={filtered}
-            // ✅ IMPORTANT: always unique keys (fixes "same key" warning if backend duplicates ids)
             keyExtractor={(x, i) => listKeyOf(x, i)}
             renderItem={renderItem}
             contentContainerStyle={{
@@ -859,6 +845,14 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   backTxt: { color: "#fff", fontWeight: "900" },
+
+  newBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#2e7d32",
+  },
+  newBtnTxt: { color: "#fff", fontWeight: "900", fontSize: 12 },
 
   modePill: {
     paddingVertical: 6,
@@ -954,7 +948,6 @@ const s = StyleSheet.create({
   },
   badgeTxt: { fontSize: 11, fontWeight: "900" },
 
-  // ✅ BA-Code row styles
   codeRow: {
     marginTop: 12,
     paddingTop: 10,

@@ -1,0 +1,6 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import PageHeader from "../../components/PageHeader";
+import Card from "../../components/Card";
+export default function CADUebersicht() {
+    return (_jsxs("div", { className: "space-y-3", children: [_jsx(PageHeader, { breadcrumb: "RLC Module / CAD \u00B7 PDF-Viewer", title: "\uD83D\uDCD0 CAD / PDF-Viewer \u2013 \u00DCbersicht", subtitle: "Import, Ansicht und \u00DCbergabe relevanter Fl\u00E4chen/Daten an Aufma\u00DF & Kalkulation." }), _jsx(Card, { children: _jsxs("ul", { className: "list-disc ml-5 space-y-1", children: [_jsxs("li", { children: [_jsx("b", { children: "Import DWG/DXF/PDF/LandXML:" }), " Pl\u00E4ne/Modelle einlesen."] }), _jsxs("li", { children: [_jsx("b", { children: "Fl\u00E4chen-/Leitungsanalyse:" }), " Elemente erkennen und messen."] }), _jsxs("li", { children: [_jsx("b", { children: "\u00DCbergabe an Aufma\u00DF:" }), " Mengen aus Geometrien \u00FCbernehmen."] }), _jsxs("li", { children: [_jsx("b", { children: "\u00DCbergabe an Kalkulation:" }), " Objekte direkt LV-Positionen zuordnen."] }), _jsxs("li", { children: [_jsx("b", { children: "Viewer-Werkzeuge:" }), " Zoomen, Messen, Layer ein/aus."] }), _jsxs("li", { children: [_jsx("b", { children: "Export/\u00DCbernahme:" }), " als PDF oder LV-Eintrag."] })] }) })] }));
+}

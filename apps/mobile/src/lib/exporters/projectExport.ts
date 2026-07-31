@@ -1262,6 +1262,63 @@ function regieReportHtml(params: {
  *  PRINT/SAVE/EMAIL HELPERS
  * ============================================================ */
 
+async function getAuthToken(): Promise<string> {
+  try {
+    return String((await AsyncStorage.getItem("auth_token")) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function uploadProjectPdfToServer(params: {
+  projectFsKey: string;
+  kindFolder: "regie" | "lieferscheine" | "photos";
+  fileName: string;
+  fileUri: string;
+}): Promise<any> {
+  if (Platform.OS === "web") return null;
+
+  const pdfUri = String(params.fileUri || "").trim();
+  if (!pdfUri.startsWith("file://")) return null;
+
+  const base = await getApiBaseUrlFromStorage();
+  const token = await getAuthToken();
+  if (!base || !token) return null;
+
+  const fd = new FormData();
+  fd.append("kindFolder", params.kindFolder);
+
+  // @ts-ignore React Native file upload
+  fd.append("file", {
+    uri: pdfUri,
+    name: safeFileName(params.fileName),
+    type: "application/pdf",
+  });
+
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(params.projectFsKey)}/pdfs/upload`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      body: fd,
+    }
+  );
+
+  const txt = await res.text().catch(() => "");
+  if (!res.ok) {
+    throw new Error(txt || `HTTP ${res.status}`);
+  }
+
+  try {
+    return txt ? JSON.parse(txt) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function printToPdf(html: string): Promise<{ uri: string }> {
   const out = await Print.printToFileAsync({ html, base64: false });
   return out;
@@ -1437,19 +1494,38 @@ async function exportUnifiedRegieModelPdf(params: {
     "_" +
     date +
     ".pdf";
+const saved = await savePdfToProjectFolder({
+  projectFsKey,
+  kindFolder,
+  fileName: fileBase,
+  sourceUri: out.uri,
+});
 
-  const saved = await savePdfToProjectFolder({
+try {
+  console.log("[PDFDBG] uploading pdf to server...", {
     projectFsKey,
     kindFolder,
     fileName: fileBase,
-    sourceUri: out.uri,
+    fileUri: saved,
   });
 
-  return {
-    pdfUri: saved,
+  await uploadProjectPdfToServer({
+    projectFsKey,
+    kindFolder,
     fileName: fileBase,
-    date,
-  };
+    fileUri: saved,
+  });
+
+  console.log("[PDFDBG] upload pdf done");
+} catch (e: any) {
+  console.log("[PDFDBG] uploadProjectPdfToServer failed:", String(e?.message || e));
+}
+
+return {
+  pdfUri: saved,
+  fileName: fileBase,
+  date,
+};
 }
 
 /* ============================================================

@@ -105,3 +105,16 @@ projects/**/*.pdf
 ############################################################
 # END
 ############################################################
+
+# RLC runtime / private data
+apps/server/data/
+backups/
+_backup*/
+testfiles/
+rlc-kalkulationsdb-backup.json
+
+# RLC temporary backups
+*.save
+*.backup
+*.bak_*
+*.tsbuildinfo

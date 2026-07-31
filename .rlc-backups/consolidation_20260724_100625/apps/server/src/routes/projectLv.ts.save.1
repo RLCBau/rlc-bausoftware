@@ -1,0 +1,971 @@
+// apps/server/src/routes/projectLv.ts
+import express, { Request, Response } from "express";
+import path from "path";
+import fs from "fs";
+import ExcelJS from "exceljs";
+import PDFDocument from "pdfkit";
+import { prisma } from "../lib/prisma";
+
+const router = express.Router();
+
+const PROJECTS_ROOT =
+  process.env.PROJECTS_ROOT || path.join(process.cwd(), "data", "projects");
+
+/** Log helper */
+function log(...args: any[]) {
+  console.log("[LV-API]", ...args);
+}
+
+/**
+ * Garantisce che esista SEMPRE una companyId valida
+ */
+async function ensureCompanyId(req: Request): Promise<string> {
+  const auth: any = (req as any).auth;
+
+  if (auth && typeof auth.company === "string") {
+    const found = await prisma.company.findUnique({ where: { id: auth.company } });
+    if (found) return found.id;
+  }
+
+  if (process.env.DEV_COMPANY_ID) {
+    const found = await prisma.company.findUnique({
+      where: { id: process.env.DEV_COMPANY_ID },
+    });
+    if (found) return found.id;
+  }
+
+  const first = await prisma.company.findFirst();
+  if (first) return first.id;
+
+  const created = await prisma.company.create({
+    data: { name: "Standard Firma", code: "STANDARD" },
+  });
+  return created.id;
+}
+
+/* =========================================================
+   ✅ NEW helper: resolve project by (companyId + id/code) with DEV fallback
+   - first try scoped by companyId
+   - if not found -> fallback (id/code) unscoped (useful in DEV / missing auth)
+========================================================= */
+async function resolveProject(companyId: string, projectIdOrCode: string) {
+  const key = String(projectIdOrCode || "").trim();
+  if (!key) return null;
+
+  // 1) strict scope
+  const scoped = await prisma.project.findFirst({
+    where: {
+      companyId,
+      OR: [{ id: key }, { code: key }],
+    },
+  });
+  if (scoped) return scoped;
+
+  // 2) DEV fallback (unscoped) - do not break prod; still returns exact id/code match only
+  const fallback = await prisma.project.findFirst({
+    where: {
+      OR: [{ id: key }, { code: key }],
+    },
+  });
+
+  if (fallback) {
+    log(
+      "WARN: project resolved without company scope (likely DEV / auth mismatch).",
+      "requested=",
+      key,
+      "companyId=",
+      companyId,
+      "project.companyId=",
+      fallback.companyId
+    );
+  }
+
+  return fallback;
+}
+
+async function getLvHeaderByVersion(projectId: string, version?: number | null) {
+  return prisma.lVHeader.findFirst({
+    where: {
+      projectId,
+      ...(typeof version === "number" && Number.isFinite(version) ? { version } : {}),
+    },
+    orderBy: { version: "desc" },
+  });
+}
+
+async function getLvForExport(projectId: string, version?: number | null) {
+  const header = await getLvHeaderByVersion(projectId, version);
+
+  if (!header) {
+    return { header: null, items: [] as any[] };
+  }
+
+  const items = await prisma.lVPosition.findMany({
+    where: { lvId: header.id },
+    orderBy: { position: "asc" },
+  });
+
+  return { header, items };
+}
+
+function num(v: any): number {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+/* =========================================================
+   SEARCH LV (Prisma) — usa l'ULTIMO header (version desc)
+   Alias multipli per non rompere il frontend:
+   - GET /api/projects/:projectId/lv/search?q=...
+   - GET /api/:projectId/lv/search?q=...
+   - (NEW) GET /api/project-lv/:projectId/lv/search?q=...   <-- se montato su /api/project-lv
+========================================================= */
+async function handleLvSearch(req: Request, res: Response) {
+  try {
+    const companyId = await ensureCompanyId(req);
+
+    const projectIdOrCode = String(req.params.projectId || "").trim();
+    const q = String((req.query as any)?.q || "").trim();
+    const take = Math.min(50, Math.max(1, Number((req.query as any)?.take || 20)));
+
+    if (!projectIdOrCode) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+    if (!q) return res.json({ ok: true, items: [] });
+
+    // ✅ resolve project by UUID or code, with company-scope + fallback
+    const project = await resolveProject(companyId, projectIdOrCode);
+    if (!project) {
+      return res.status(404).json({
+        ok: false,
+        error: "Projekt nicht gefunden",
+        hint: "projectId può essere UUID oppure project.code (es. BA-2025-DEMO)",
+      });
+    }
+
+    const projectId = project.id;
+
+    // latest header
+    const header = await prisma.lVHeader.findFirst({
+      where: { projectId },
+      orderBy: { version: "desc" },
+      select: { id: true, version: true, title: true },
+    });
+
+    if (!header) return res.json({ ok: true, items: [] });
+
+    const items = await prisma.lVPosition.findMany({
+      where: {
+        lvId: header.id,
+        OR: [
+          { kurztext: { contains: q, mode: "insensitive" } },
+          { langtext: { contains: q, mode: "insensitive" } },
+          { position: { contains: q, mode: "insensitive" } },
+          { einheit: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { position: "asc" },
+      take,
+      select: {
+        id: true,
+        position: true,
+        kurztext: true,
+        langtext: true,
+        einheit: true,
+        menge: true,
+        einzelpreis: true,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      header,
+      items: items.map((p) => ({
+        id: p.id,
+        pos: p.position,
+        text: p.kurztext,
+        langtext: p.langtext || "",
+        unit: p.einheit,
+        quantity: p.menge ?? 0,
+        ep: p.einzelpreis ?? 0,
+      })),
+    });
+  } catch (e: any) {
+    console.error("[LV-API] search error", e);
+    return res.status(500).json({ ok: false, error: e?.message || "search failed" });
+  }
+}
+
+router.get("/projects/:projectId/lv/search", handleLvSearch);
+router.get("/:projectId/lv/search", handleLvSearch);
+// ✅ Alias per quando il router è montato su /api/project-lv
+router.get("/project-lv/:projectId/lv/search", handleLvSearch);
+
+/* =========================================================
+   GET LV
+   PROBLEMA: prima era SOLO "/project-lv/:projectId"
+   Se monti router su app.use("/api/project-lv", router)
+   allora chiamare /api/project-lv/:id dava 404.
+
+   FIX:
+   - aggiungo route principale "/:projectId"
+   - mantengo anche "/project-lv/:projectId" come compatibilità
+   - progetto risolto per ID o CODE (BA-2025-DEMO)
+========================================================= */
+
+async function handleGetProjectLv(req: Request, res: Response) {
+  try {
+    const companyId = await ensureCompanyId(req);
+    const projectIdOrCode = String(req.params.projectId || "").trim();
+
+    if (!projectIdOrCode) {
+      return res.status(400).json({ ok: false, error: "projectId fehlt" });
+    }
+
+    /* -------- 0. Projekt prüfen (ID O CODE) -------- */
+    const project = await resolveProject(companyId, projectIdOrCode);
+
+    if (!project) {
+      return res.status(404).json({
+        ok: false,
+        error: "Projekt nicht gefunden",
+        hint: "projectId può essere UUID oppure project.code (es. BA-2025-DEMO)",
+      });
+    }
+
+    const projectId = project.id;
+
+    /* -------- 1. LV aus DB versuchen -------- */
+    const header = await prisma.lVHeader.findFirst({
+      where: { projectId },
+      orderBy: { version: "desc" },
+    });
+
+    if (header) {
+      const positions = await prisma.lVPosition.findMany({
+        where: { lvId: header.id },
+        orderBy: { position: "asc" },
+      });
+
+      log("LV aus DB gefunden. Header:", header.id, "Anzahl Pos:", positions.length);
+
+      return res.json({
+        ok: true,
+        source: "db",
+        header: {
+          id: header.id,
+          title: header.title,
+          currency: header.currency,
+          version: header.version,
+        },
+        items: positions.map((p) => ({
+          id: p.id,
+          pos: p.position,
+          text: p.kurztext,
+          langtext: p.langtext || "",
+          unit: p.einheit,
+          quantity: p.menge ?? 0,
+          ep: p.einzelpreis ?? 0,
+        })),
+      });
+    }
+
+    /* -------- 2. Kein LV in DB → lv.json NUR für dieses Projekt -------- */
+    const folderById = path.join(PROJECTS_ROOT, project.id);
+
+    const safeCode = project.code ? project.code.replace(/[^A-Za-z0-9_\-]/g, "_") : null;
+    const folderByCode = safeCode ? path.join(PROJECTS_ROOT, safeCode) : null;
+
+    const candidatePaths: string[] = [path.join(folderById, "lv.json")];
+    if (folderByCode) candidatePaths.push(path.join(folderByCode, "lv.json"));
+
+    let lvJsonPath: string | null = null;
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        lvJsonPath = p;
+        break;
+      }
+    }
+
+    if (!lvJsonPath) {
+      log("Kein LV in DB und keine lv.json für Projekt gefunden:", projectIdOrCode);
+      return res.json({ ok: true, source: "empty", header: null, items: [] });
+    }
+
+    log("lv.json gefunden unter:", lvJsonPath);
+
+    const raw = fs.readFileSync(lvJsonPath, "utf8");
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      console.error("[LV-API] lv.json ist kein gültiges JSON:", e);
+      return res.status(500).json({ ok: false, error: "lv.json ist kein gültiges JSON" });
+    }
+
+    const itemsFromJson: any[] = Array.isArray(parsed.items) ? parsed.items : [];
+
+    // nuovo header
+    const newHeader = await prisma.lVHeader.create({
+      data: {
+        projectId,
+        title: parsed.title || "LV aus Datei",
+        currency: parsed.currency || "EUR",
+        version: 1,
+      },
+    });
+
+    const dataForDb = itemsFromJson.map((p, idx) => ({
+      lvId: newHeader.id,
+      position: String(p.pos ?? p.position ?? p.id ?? idx + 1),
+      kurztext: String(p.text ?? p.kurztext ?? ""),
+      langtext: p.langtext ? String(p.langtext) : "",
+      einheit: String(p.unit ?? p.einheit ?? ""),
+      menge:
+        p.quantity !== undefined && p.quantity !== null
+          ? Number(p.quantity)
+          : p.menge ?? null,
+      einzelpreis:
+        p.ep !== undefined && p.ep !== null ? Number(p.ep) : p.einzelpreis ?? null,
+      gesamt: p.gesamt ?? null,
+      parentPos: p.parentPos ?? null,
+    }));
+
+    if (dataForDb.length > 0) {
+      await prisma.lVPosition.createMany({ data: dataForDb });
+    }
+
+    log(
+      "LV aus lv.json in DB importiert. Header:",
+      newHeader.id,
+      "Anzahl Pos:",
+      dataForDb.length
+    );
+
+    return res.json({
+      ok: true,
+      source: "lvjson",
+      header: {
+        id: newHeader.id,
+        title: newHeader.title,
+        currency: newHeader.currency,
+        version: newHeader.version,
+      },
+      items: dataForDb.map((p, idx) => ({
+        id: `import-${idx}`,
+        pos: p.position,
+        text: p.kurztext,
+        langtext: p.langtext || "",
+        unit: p.einheit,
+        quantity: p.menge ?? 0,
+        ep: p.einzelpreis ?? 0,
+      })),
+    });
+  } catch (err) {
+    console.error("GET /api/project-lv/:projectId error:", err);
+    return res.status(500).json({ ok: false, error: "Fehler beim Laden des LV" });
+  }
+}
+
+/**
+ * ✅ Route principale corretta (SE monti su /api/project-lv)
+ * GET /api/project-lv/:projectId
+ */
+router.get("/:projectId", (req, res) => {
+  // uniforma param name per handler
+  (req as any).params.projectId = req.params.projectId;
+  return handleGetProjectLv(req, res);
+});
+
+/**
+ * ✅ Compatibilità con vecchio path:
+ * GET /api/project-lv/project-lv/:projectId
+ */
+router.get("/project-lv/:projectId", (req, res) => {
+  (req as any).params.projectId = req.params.projectId;
+  return handleGetProjectLv(req, res);
+});
+
+router.post("/:projectId/import", async (req, res) => {
+  try {
+    const companyId = await ensureCompanyId(req);
+    const projectIdOrCode = String(req.params.projectId || "").trim();
+
+    if (!projectIdOrCode) {
+      return res.status(400).json({ ok: false, error: "projectId fehlt" });
+    }
+
+    const project = await resolveProject(companyId, projectIdOrCode);
+
+    if (!project) {
+      return res.status(404).json({
+        ok: false,
+        error: "Projekt nicht gefunden",
+      });
+    }
+
+    const projectId = project.id;
+
+    const itemsRaw = Array.isArray(req.body?.items) ? req.body.items : [];
+
+    if (!itemsRaw.length) {
+      return res.status(400).json({
+        ok: false,
+        error: "Keine LV items übergeben",
+      });
+    }
+
+    const last = await prisma.lVHeader.findFirst({
+  where: { projectId },
+  orderBy: { version: "desc" },
+  select: { version: true },
+});
+
+const nextVersion = (last?.version || 0) + 1;
+
+const header = await prisma.lVHeader.create({
+  data: {
+    projectId,
+    title: req.body?.title || "Importiertes LV",
+    currency: req.body?.currency || "EUR",
+    version: nextVersion,
+  },
+});
+    
+    const data = itemsRaw.map((p, i) => {
+      const quantity =
+        typeof p.quantity === "number"
+          ? p.quantity
+          : typeof p.menge === "number"
+          ? p.menge
+          : null;
+
+      const ep =
+        typeof p.ep === "number"
+          ? p.ep
+          : typeof p.einzelpreis === "number"
+          ? p.einzelpreis
+          : null;
+
+      return {
+        lvId: header.id,
+        position: String(p.pos ?? p.position ?? i + 1),
+        kurztext: String(p.text ?? p.kurztext ?? ""),
+        langtext: p.langtext ? String(p.langtext) : "",
+        einheit: String(p.unit ?? p.einheit ?? ""),
+        menge: quantity,
+        einzelpreis: ep,
+        gesamt:
+          typeof quantity === "number" && typeof ep === "number"
+            ? Number((quantity * ep).toFixed(2))
+            : null,
+      };
+    });
+
+    if (data.length) {
+      await prisma.lVPosition.createMany({ data });
+    }
+
+    return res.json({
+      ok: true,
+      headerId: header.id,
+      count: data.length,
+    });
+  } catch (e) {
+    console.error("[LV-IMPORT] error", e);
+    return res.status(500).json({
+      ok: false,
+      error: "Import failed",
+    });
+  }
+});
+
+async function getLatestLvHeaderOrCreate(projectId: string, title = "Importiertes LV") {
+  const latest = await prisma.lVHeader.findFirst({
+    where: { projectId },
+    orderBy: { version: "desc" },
+  });
+
+  if (latest) return latest;
+
+  return prisma.lVHeader.create({
+    data: {
+      projectId,
+      title,
+      currency: "EUR",
+      version: 1,
+    },
+  });
+}
+
+function toNullableNumber(v: any): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function resolveProjectOrFail(req: Request, res: Response) {
+  const companyId = await ensureCompanyId(req);
+  const projectIdOrCode = String(req.params.projectId || "").trim();
+
+  if (!projectIdOrCode) {
+    res.status(400).json({ ok: false, error: "projectId fehlt" });
+    return null;
+  }
+
+  const project = await resolveProject(companyId, projectIdOrCode);
+  if (!project) {
+    res.status(404).json({ ok: false, error: "Projekt nicht gefunden" });
+    return null;
+  }
+
+  return project;
+}
+
+/**
+ * POST /api/project-lv/:projectId/position
+ */
+router.post("/:projectId/position", async (req, res) => {
+  try {
+    const project = await resolveProjectOrFail(req, res);
+    if (!project) return;
+
+    const header = await getLatestLvHeaderOrCreate(
+      project.id,
+      req.body?.headerTitle || "Importiertes LV"
+    );
+
+    const pos = String(req.body?.pos ?? req.body?.position ?? "").trim();
+    const text = String(req.body?.text ?? req.body?.kurztext ?? "").trim();
+    const langtext =
+      req.body?.langtext !== undefined && req.body?.langtext !== null
+        ? String(req.body.langtext)
+        : "";
+    const unit = String(req.body?.unit ?? req.body?.einheit ?? "").trim();
+
+    const quantity = toNullableNumber(req.body?.quantity ?? req.body?.menge);
+    const ep = toNullableNumber(req.body?.ep ?? req.body?.einzelpreis);
+    const parentPos =
+      req.body?.parentPos !== undefined && req.body?.parentPos !== null
+        ? String(req.body.parentPos)
+        : null;
+
+    if (!pos) {
+      return res.status(400).json({ ok: false, error: "Position fehlt" });
+    }
+
+    if (!text) {
+      return res.status(400).json({ ok: false, error: "Kurztext fehlt" });
+    }
+
+    if (!unit) {
+      return res.status(400).json({ ok: false, error: "Einheit fehlt" });
+    }
+
+    const created = await prisma.lVPosition.create({
+      data: {
+        lvId: header.id,
+        position: pos,
+        kurztext: text,
+        langtext,
+        einheit: unit,
+        menge: quantity ?? 0,
+        einzelpreis: ep,
+        gesamt:
+          typeof quantity === "number" && typeof ep === "number"
+            ? Number((quantity * ep).toFixed(2))
+            : null,
+        parentPos,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      item: {
+        id: created.id,
+        pos: created.position,
+        text: created.kurztext,
+        langtext: created.langtext || "",
+        unit: created.einheit,
+        quantity: Number(created.menge ?? 0),
+        ep: created.einzelpreis != null ? Number(created.einzelpreis) : 0,
+      },
+    });
+  } catch (e: any) {
+    console.error("[LV-POSITION-CREATE] error", e);
+    return res.status(500).json({ ok: false, error: e?.message || "Create failed" });
+  }
+});
+
+/**
+ * PATCH /api/project-lv/:projectId/position/:positionId
+ */
+router.patch("/:projectId/position/:positionId", async (req, res) => {
+  try {
+    const project = await resolveProjectOrFail(req, res);
+    if (!project) return;
+
+    const positionId = String(req.params.positionId || "").trim();
+    if (!positionId) {
+      return res.status(400).json({ ok: false, error: "positionId fehlt" });
+    }
+
+    const latest = await prisma.lVHeader.findFirst({
+      where: { projectId: project.id },
+      orderBy: { version: "desc" },
+      select: { id: true },
+    });
+
+    if (!latest) {
+      return res.status(404).json({ ok: false, error: "Kein LV vorhanden" });
+    }
+
+    const existing = await prisma.lVPosition.findFirst({
+      where: {
+        id: positionId,
+        lvId: latest.id,
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ ok: false, error: "Position nicht gefunden" });
+    }
+
+    const nextQuantityRaw =
+      req.body?.quantity !== undefined ? req.body.quantity : req.body?.menge;
+    const nextEpRaw =
+      req.body?.ep !== undefined ? req.body.ep : req.body?.einzelpreis;
+
+    const quantity =
+      nextQuantityRaw !== undefined ? toNullableNumber(nextQuantityRaw) : Number(existing.menge);
+
+    const ep =
+      nextEpRaw !== undefined ? toNullableNumber(nextEpRaw) : existing.einzelpreis != null
+        ? Number(existing.einzelpreis)
+        : null;
+
+    const updated = await prisma.lVPosition.update({
+      where: { id: existing.id },
+      data: {
+        position:
+          req.body?.pos !== undefined || req.body?.position !== undefined
+            ? String(req.body?.pos ?? req.body?.position ?? existing.position)
+            : undefined,
+        kurztext:
+          req.body?.text !== undefined || req.body?.kurztext !== undefined
+            ? String(req.body?.text ?? req.body?.kurztext ?? existing.kurztext)
+            : undefined,
+        langtext:
+          req.body?.langtext !== undefined
+            ? (req.body.langtext == null ? "" : String(req.body.langtext))
+            : undefined,
+        einheit:
+          req.body?.unit !== undefined || req.body?.einheit !== undefined
+            ? String(req.body?.unit ?? req.body?.einheit ?? existing.einheit)
+            : undefined,
+        menge: quantity ?? 0,
+        einzelpreis: ep,
+        gesamt:
+          typeof quantity === "number" && typeof ep === "number"
+            ? Number((quantity * ep).toFixed(2))
+            : null,
+        parentPos:
+          req.body?.parentPos !== undefined
+            ? (req.body.parentPos == null ? null : String(req.body.parentPos))
+            : undefined,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      item: {
+        id: updated.id,
+        pos: updated.position,
+        text: updated.kurztext,
+        langtext: updated.langtext || "",
+        unit: updated.einheit,
+        quantity: Number(updated.menge ?? 0),
+        ep: updated.einzelpreis != null ? Number(updated.einzelpreis) : 0,
+      },
+    });
+  } catch (e: any) {
+    console.error("[LV-POSITION-PATCH] error", e);
+    return res.status(500).json({ ok: false, error: e?.message || "Patch failed" });
+  }
+});
+
+/**
+ * DELETE /api/project-lv/:projectId/position/:positionId
+ */
+router.delete("/:projectId/position/:positionId", async (req, res) => {
+  try {
+    const project = await resolveProjectOrFail(req, res);
+    if (!project) return;
+
+    const positionId = String(req.params.positionId || "").trim();
+    if (!positionId) {
+      return res.status(400).json({ ok: false, error: "positionId fehlt" });
+    }
+
+    const latest = await prisma.lVHeader.findFirst({
+      where: { projectId: project.id },
+      orderBy: { version: "desc" },
+      select: { id: true },
+    });
+
+    if (!latest) {
+      return res.status(404).json({ ok: false, error: "Kein LV vorhanden" });
+    }
+
+    const existing = await prisma.lVPosition.findFirst({
+      where: {
+        id: positionId,
+        lvId: latest.id,
+      },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ ok: false, error: "Position nicht gefunden" });
+    }
+
+    await prisma.lVPosition.delete({
+      where: { id: existing.id },
+    });
+
+    return res.json({
+      ok: true,
+      deletedId: existing.id,
+    });
+  } catch (e: any) {
+    console.error("[LV-POSITION-DELETE] error", e);
+    return res.status(500).json({ ok: false, error: e?.message || "Delete failed" });
+  }
+});
+
+router.get("/:projectId/versions", async (req, res) => {
+  try {
+    const project = await resolveProjectOrFail(req, res);
+    if (!project) return;
+
+    const versions = await prisma.lVHeader.findMany({
+      where: { projectId: project.id },
+      orderBy: { version: "desc" },
+      select: {
+        id: true,
+        version: true,
+        title: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      versions,
+    });
+  } catch (e) {
+    console.error("[LV-VERSIONS] error", e);
+    return res.status(500).json({ ok: false });
+  }
+});
+
+router.get("/:projectId/version/:version", async (req, res) => {
+  try {
+    const project = await resolveProjectOrFail(req, res);
+    if (!project) return;
+
+    const version = Number(req.params.version);
+
+    const header = await prisma.lVHeader.findFirst({
+      where: {
+        projectId: project.id,
+        version,
+      },
+    });
+
+    if (!header) {
+      return res.status(404).json({ ok: false, error: "Version not found" });
+    }
+
+    const positions = await prisma.lVPosition.findMany({
+      where: { lvId: header.id },
+      orderBy: { position: "asc" },
+    });
+
+    return res.json({
+      ok: true,
+      header,
+      items: positions,
+    });
+  } catch (e) {
+    console.error("[LV-VERSION-GET] error", e);
+    return res.status(500).json({ ok: false });
+  }
+});
+
+router.get("/:projectId/export/excel", async (req, res) => {
+  try {
+    const project = await resolveProjectOrFail(req, res);
+    if (!project) return;
+
+    const versionRaw = req.query?.version;
+    const version =
+      versionRaw !== undefined && versionRaw !== null && String(versionRaw).trim() !== ""
+        ? Number(versionRaw)
+        : null;
+
+    const { header, items } = await getLvForExport(project.id, version);
+
+    if (!header) {
+      return res.status(404).json({ ok: false, error: "Kein LV vorhanden" });
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("LV");
+
+    sheet.columns = [
+      { header: "Position", key: "position", width: 18 },
+      { header: "Kurztext", key: "kurztext", width: 40 },
+      { header: "Langtext", key: "langtext", width: 60 },
+      { header: "Einheit", key: "einheit", width: 12 },
+      { header: "Menge", key: "menge", width: 14 },
+      { header: "EP", key: "einzelpreis", width: 14 },
+      { header: "Gesamt", key: "gesamt", width: 16 },
+      { header: "ParentPos", key: "parentPos", width: 18 },
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+
+    for (const item of items) {
+      sheet.addRow({
+        position: item.position,
+        kurztext: item.kurztext,
+        langtext: item.langtext || "",
+        einheit: item.einheit,
+        menge: num(item.menge),
+        einzelpreis: num(item.einzelpreis),
+        gesamt: num(item.gesamt),
+        parentPos: item.parentPos || "",
+      });
+    }
+
+    const lastRow = sheet.addRow({
+      position: "",
+      kurztext: "",
+      langtext: "",
+      einheit: "",
+      menge: "",
+      einzelpreis: "Summe",
+      gesamt: items.reduce((s, x) => s + num(x.gesamt), 0),
+      parentPos: "",
+    });
+    lastRow.font = { bold: true };
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="lv_${project.code}_v${header.version}.xlsx"`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (e: any) {
+    console.error("[LV-EXPORT-EXCEL] error", e);
+    return res.status(500).json({ ok: false, error: e?.message || "Excel export failed" });
+  }
+});
+
+router.get("/:projectId/export/pdf", async (req, res) => {
+  try {
+    const project = await resolveProjectOrFail(req, res);
+    if (!project) return;
+
+    const versionRaw = req.query?.version;
+    const version =
+      versionRaw !== undefined && versionRaw !== null && String(versionRaw).trim() !== ""
+        ? Number(versionRaw)
+        : null;
+
+    const { header, items } = await getLvForExport(project.id, version);
+
+    if (!header) {
+      return res.status(404).json({ ok: false, error: "Kein LV vorhanden" });
+    }
+
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    const chunks: Buffer[] = [];
+
+    doc.on("data", (c) => chunks.push(c as Buffer));
+    doc.on("end", () => {
+      const pdf = Buffer.concat(chunks);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="lv_${project.code}_v${header.version}.pdf"`
+      );
+      res.send(pdf);
+    });
+
+    doc.fontSize(18).text("Leistungsverzeichnis", { align: "left" });
+    doc.moveDown(0.2);
+    doc.fontSize(11).text(`Projekt: ${project.code} ${project.name}`);
+    doc.text(`Version: ${header.version}`);
+    doc.text(`Titel: ${header.title}`);
+    doc.moveDown(0.5);
+
+    doc.fontSize(10).text("Pos", 40, doc.y, { width: 70 });
+    doc.text("Kurztext", 110, doc.y, { width: 180 });
+    doc.text("ME", 290, doc.y, { width: 35 });
+    doc.text("Menge", 325, doc.y, { width: 60, align: "right" });
+    doc.text("EP", 390, doc.y, { width: 70, align: "right" });
+    doc.text("Gesamt", 465, doc.y, { width: 90, align: "right" });
+    doc.moveDown(0.3);
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor("#cccccc").stroke();
+    doc.moveDown(0.3);
+
+    let sum = 0;
+
+    for (const item of items) {
+      const menge = num(item.menge);
+      const ep = num(item.einzelpreis);
+      const gesamt = num(item.gesamt);
+      sum += gesamt;
+
+      doc.fontSize(9);
+      doc.text(String(item.position || ""), 40, doc.y, { width: 70 });
+      doc.text(String(item.kurztext || ""), 110, doc.y, { width: 180 });
+      doc.text(String(item.einheit || ""), 290, doc.y, { width: 35 });
+      doc.text(String(menge), 325, doc.y, { width: 60, align: "right" });
+      doc.text(String(ep), 390, doc.y, { width: 70, align: "right" });
+      doc.text(String(gesamt), 465, doc.y, { width: 90, align: "right" });
+
+      if (item.langtext) {
+        doc.moveDown(0.1);
+        doc.fontSize(8).fillColor("#555555");
+        doc.text(String(item.langtext), 110, doc.y, { width: 345 });
+        doc.fillColor("#000000");
+      }
+
+      doc.moveDown(0.35);
+
+      if (doc.y > 730) {
+        doc.addPage();
+      }
+    }
+
+    doc.moveDown(0.3);
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor("#999999").stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(11).text(`Gesamtsumme: ${sum.toFixed(2)} EUR`, { align: "right" });
+
+    doc.end();
+  } catch (e: any) {
+    console.error("[LV-EXPORT-PDF] error", e);
+    return res.status(500).json({ ok: false, error: e?.message || "PDF export failed" });
+  }
+});
+
+
+
+export default router;
