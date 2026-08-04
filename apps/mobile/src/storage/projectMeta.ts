@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /* =========================
  *  Tipi base
@@ -35,10 +35,9 @@ export type ProjectEmails = {
 export type ProjectRoles = {
   /** Interne Hauptrollen */
   bauleiter?: Person;
-  abrechnung?: Person;
   buero?: Person;
+  kalkulator?: Person;
   polier?: Person;
-  vermessung?: Person;
 
   /** Operative Rollen */
   fahrer?: Person;
@@ -128,10 +127,9 @@ function normalizeRoles(raw: any): ProjectRoles {
   const out: ProjectRoles = {};
 
   out.bauleiter = normalizePerson(raw?.bauleiter);
-  out.abrechnung = normalizePerson(raw?.abrechnung);
   out.buero = normalizePerson(raw?.buero);
+  out.kalkulator = normalizePerson(raw?.kalkulator ?? raw?.abrechnung ?? raw?.vermessung);
   out.polier = normalizePerson(raw?.polier);
-  out.vermessung = normalizePerson(raw?.vermessung);
 
   out.fahrer = normalizePerson(raw?.fahrer);
   out.mitarbeiter = normalizePerson(raw?.mitarbeiter);
@@ -186,3 +184,5 @@ export async function setProjectRoles(projectId: string, roles: ProjectRoles): P
   const normalized = normalizeRoles(roles as any);
   await AsyncStorage.setItem(keyRoles(projectId), JSON.stringify(normalized));
 }
+
+

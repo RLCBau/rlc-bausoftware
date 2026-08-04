@@ -1,6 +1,5 @@
 import { learnCompanyRecipeFromKiRow } from "../kalkulation/companyRecipeLearning";
 import { Router } from "express";
-import OpenAI from "openai";
 import { prisma } from "../lib/prisma";
 import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreisBibliothek";
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
@@ -10,6 +9,7 @@ import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalcula
 import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
 import * as ciFs from "node:fs";
 import * as ciPath from "node:path";
+import { completeRlcAiText } from "../services/ai/rlcAiGateway";
 
 const router = Router();
 
@@ -4724,16 +4724,7 @@ function extractJson(text: string): any | null {
   return null;
 }
 
-function getOpenAIClient(): OpenAI | null {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || !apiKey.trim()) return null;
-  return new OpenAI({ apiKey });
-}
-
 async function openAiCalcRow(row: InputRow, matches: DbMatch[]): Promise<any | null> {
-  const client = getOpenAIClient();
-  if (!client) return null;
-
   const posNr = s(row.posNr);
   const kurztext = s(row.kurztext);
   const langtext = s(row.langtext);
@@ -5332,9 +5323,10 @@ JSON-Schema:
 }
 `;
 
-  const completion = await client.chat.completions.create({
-    model: process.env.OPENAI_KALKULATION_MODEL || "gpt-4o-mini",
+  const completion = await completeRlcAiText({
+    purpose: "kalkulation",
     temperature: 0.15,
+    responseFormat: "json",
     messages: [
       {
         role: "system",
@@ -5348,7 +5340,7 @@ JSON-Schema:
     ],
   });
 
-  const content = completion.choices?.[0]?.message?.content || "";
+  const content = completion.text || "";
   const parsed = extractJson(content);
   if (!parsed || typeof parsed !== "object") return null;
 
@@ -7634,6 +7626,9 @@ JSON-Schema:
       `OpenAI-Kalkulation: Keine ausreichend sichere Datenbankbasis vorhanden. Die Urkalkulation wurde per OpenAI aus LV-Text, Einheit, Menge, Gewerk, Leistungsart und Bauverfahren erstellt. Fachliche Prüfung erforderlich.`,
 
     source: cleanRlcSourceFlags("openai"),
+    aiProvider: completion.provider,
+    aiModel: completion.model,
+    aiFallbackUsed: completion.fallbackUsed,
     priceBreakdown,
   };
 }

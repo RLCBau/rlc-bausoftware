@@ -3,11 +3,11 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import OpenAI from "openai";
+import { createRlcAiCompatClient } from "../services/ai/rlcAiCompatClient";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
-const ai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const ai = createRlcAiCompatClient();
 
 /** ===== In-Memory store per test (sostituisci con Prisma/DB) ===== */
 type LVItem = {
@@ -127,7 +127,6 @@ function compareRows(lv: Row[], an: Row[]): CompareItem[] {
 }
 
 async function annotateWithAI(items: CompareItem[], lang: "de" | "it" | "en") {
-  if (!ai) return items;
   const sys =
     lang === "de"
       ? "Du bist ein Baukalkulator (Tief-/Straßenbau). Entscheide bei Abweichungen, ob Nachtrag nötig ist oder LV aktualisiert werden sollte."
@@ -144,6 +143,7 @@ Rispondi SOLO JSON: {"note":"...", "action":"nachtrag"|"update", "confidence":0.
     try {
       const out = await ai.chat.completions.create({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        _rlcPurpose: "extraction",
         messages: [{ role: "system", content: sys }, { role: "user", content: prompt }],
         temperature: 0.2,
         response_format: { type: "json_object" },

@@ -1,13 +1,19 @@
 // apps/web/src/lib/formulas.ts
+
 /**
- * Valutatore di formule molto semplice e sicuro (niente eval).
+ * Sicuro: niente eval
+ *
  * Supporta:
- *  - Numeri (punto decimale)
- *  - + - * /  ^  (potenza)
- *  - parentesi ( )
- *  - riferimenti a variabili (L,B,H,D,T,N, qualsiasi chiave [a-zA-Z_]\w*)
- *  - funzioni: round(x), ceil(x), floor(x), min(a,b,...), max(a,b,...), sum(a,b,...)
- *  - formule con prefisso opzionale "=" (es. "=L*B")
+ * - numeri decimali
+ * - + - * / ^ (% opzionale aggiunto)
+ * - parentesi ()
+ * - variabili: L, B, H, D, T, N, ecc.
+ * - funzioni:
+ *   round(x), ceil(x), floor(x),
+ *   min(a,b,...), max(a,b,...), sum(a,b,...),
+ *   abs(x), sqrt(x)
+ * - prefisso opzionale "="
+ * - unary minus / unary plus
  */
 
 export type Vars = Record<string, number | undefined>;
@@ -16,56 +22,96 @@ type Token =
   | { t: "num"; v: number }
   | { t: "id"; v: string }
   | { t: "op"; v: string }
-  | { t: "lp" } // (
-  | { t: "rp" } // )
-  | { t: "comma" };
+  | { t: "lp" }
+  | { t: "rp" }
+  | { t: "comma" }
+  | { t: "fn"; name: string; argc: number };
 
 const isDigit = (c: string) => c >= "0" && c <= "9";
+
 const isIdStart = (c: string) =>
   (c >= "a" && c <= "z") ||
   (c >= "A" && c <= "Z") ||
   c === "_" ||
   c === "$";
+
 const isIdChar = (c: string) => isIdStart(c) || isDigit(c);
 
+function isOpToken(tk?: Token): tk is Extract<Token, { t: "op" }> {
+  return !!tk && tk.t === "op";
+}
+
+function isValueToken(tk?: Token): boolean {
+  return !!tk && (tk.t === "num" || tk.t === "id" || tk.t === "rp" || tk.t === "fn");
+}
+
+/* =========================================================
+   TOKENIZE
+   ========================================================= */
+
 export function tokenize(expr: string): Token[] {
-  const s = expr.trim().replace(/^\s*=/, ""); // togli "=" iniziale se presente
+  const s = expr.trim().replace(/^\s*=/, "");
   const out: Token[] = [];
   let i = 0;
 
   while (i < s.length) {
     const c = s[i];
 
-    if (c === " " || c === "\t" || c === "\n") {
+    if (c === " " || c === "\t" || c === "\n" || c === "\r") {
       i++;
       continue;
     }
 
-    if ("+-*/^".includes(c)) {
+    if ("+-*/^%".includes(c)) {
       out.push({ t: "op", v: c });
       i++;
       continue;
     }
+
     if (c === "(") {
       out.push({ t: "lp" });
       i++;
       continue;
     }
+
     if (c === ")") {
       out.push({ t: "rp" });
       i++;
       continue;
     }
+
     if (c === ",") {
       out.push({ t: "comma" });
       i++;
       continue;
     }
 
-    if (isDigit(c) || (c === "." && isDigit(s[i + 1]))) {
+    if (isDigit(c) || (c === "." && isDigit(s[i + 1] || ""))) {
       let j = i + 1;
-      while (j < s.length && (isDigit(s[j]) || s[j] === ".")) j++;
-      out.push({ t: "num", v: parseFloat(s.slice(i, j)) });
+      let dotCount = c === "." ? 1 : 0;
+
+      while (j < s.length) {
+        const ch = s[j];
+        if (isDigit(ch)) {
+          j++;
+          continue;
+        }
+        if (ch === ".") {
+          dotCount++;
+          if (dotCount > 1) break;
+          j++;
+          continue;
+        }
+        break;
+      }
+
+      const raw = s.slice(i, j);
+      const num = Number(raw);
+      if (!Number.isFinite(num)) {
+        throw new Error(`Ungültige Zahl: ${raw}`);
+      }
+
+      out.push({ t: "num", v: num });
       i = j;
       continue;
     }
@@ -78,111 +124,198 @@ export function tokenize(expr: string): Token[] {
       continue;
     }
 
-    throw new Error("Unerwartetes Zeichen: " + c);
+    throw new Error(`Unerwartetes Zeichen: ${c}`);
   }
+
   return out;
 }
 
-// Shunting-yard -> RPN
-const prec: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2, "^": 3 };
+/* =========================================================
+   SHUNTING-YARD -> RPN
+   ========================================================= */
+
+const prec: Record<string, number> = {
+  "+": 1,
+  "-": 1,
+  "*": 2,
+  "/": 2,
+  "%": 2,
+  "^": 4,
+  "u+": 5,
+  "u-": 5,
+};
+
+const rightAssoc = new Set(["^", "u+", "u-"]);
+
+type StackItem =
+  | { t: "op"; v: string }
+  | { t: "lp" }
+  | { t: "fnName"; name: string };
+
+type FnFrame = {
+  hasValue: boolean;
+  commaCount: number;
+};
 
 export function toRPN(tokens: Token[]): Token[] {
   const out: Token[] = [];
-  const st: Token[] = [];
+  const st: StackItem[] = [];
+  const fnFrames: FnFrame[] = [];
 
-  // per funzioni e argomenti
-  const funcStack: string[] = [];
-  const argCount: number[] = [];
+  let prev: Token | undefined;
 
-  let i = 0;
-  while (i < tokens.length) {
+  for (let i = 0; i < tokens.length; i++) {
     const tk = tokens[i];
 
-    if (tk.t === "num" || tk.t === "id") {
-      // se un id è seguito da LP -> è una funzione
+    if (tk.t === "num") {
+      out.push(tk);
+      if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      prev = tk;
+      continue;
+    }
+
+    if (tk.t === "id") {
       const next = tokens[i + 1];
-      if (tk.t === "id" && next && next.t === "lp") {
-        funcStack.push(tk.v);
-        argCount.push(0);
-        st.push({ t: "lp" });
-        i += 2; // consumiamo id + lp
+      if (next?.t === "lp") {
+        st.push({ t: "fnName", name: tk.v });
+        prev = tk;
         continue;
       }
+
       out.push(tk);
-      i++;
+      if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      prev = tk;
+      continue;
+    }
+
+    if (tk.t === "lp") {
+      const prevWasFnName = st.length > 0 && st[st.length - 1].t === "fnName";
+      st.push({ t: "lp" });
+
+      if (prevWasFnName) {
+        fnFrames.push({
+          hasValue: false,
+          commaCount: 0,
+        });
+      }
+
+      prev = tk;
       continue;
     }
 
     if (tk.t === "comma") {
-      // svuotiamo fino alla parentesi
-      while (st.length && st[st.length - 1].t !== "lp") out.push(st.pop()!);
-      if (!argCount.length) throw new Error("Unerwartetes Komma");
-      argCount[argCount.length - 1]++; // nuovo argomento
-      i++;
+      while (st.length && st[st.length - 1].t !== "lp") {
+        const top = st.pop()!;
+        if (top.t === "op") out.push(top);
+      }
+
+      if (!st.length) throw new Error("Unerwartetes Komma");
+
+      if (!fnFrames.length) throw new Error("Komma außerhalb einer Funktion");
+
+      fnFrames[fnFrames.length - 1].commaCount++;
+      prev = tk;
       continue;
     }
 
     if (tk.t === "op") {
-      while (
-        st.length &&
-        st[st.length - 1].t === "op" &&
-        prec[(st[st.length - 1] as any).v] >= prec[tk.v]
-      ) {
-        out.push(st.pop()!);
-      }
-      st.push(tk);
-      i++;
-      continue;
-    }
-    if (tk.t === "lp") {
-      st.push(tk);
-      i++;
-      continue;
-    }
-    if (tk.t === "rp") {
-      while (st.length && st[st.length - 1].t !== "lp") out.push(st.pop()!);
-      if (!st.length) throw new Error("Klammern passen nicht");
-      st.pop(); // remove '('
+      let op = tk.v;
 
-      // se stiamo chiudendo una funzione
-      if (argCount.length) {
-        const fn = funcStack.pop()!;
-        const cnt = argCount.pop()!;
-        // se c'era almeno un argomento, l'ultima parte non vede la virgola
-        const totalArgs = cnt + 1;
-        out.push({ t: "id", v: `__fn__${fn}__${totalArgs}` });
+      const unary =
+        !prev ||
+        prev.t === "op" ||
+        prev.t === "lp" ||
+        prev.t === "comma";
+
+      if (unary && (op === "+" || op === "-")) {
+        op = op === "+" ? "u+" : "u-";
       }
-      i++;
+
+      while (st.length) {
+        const top = st[st.length - 1];
+        if (top.t !== "op") break;
+
+        const pTop = prec[top.v];
+        const pCur = prec[op];
+        const shouldPop = rightAssoc.has(op) ? pTop > pCur : pTop >= pCur;
+
+        if (!shouldPop) break;
+        out.push(st.pop() as Extract<StackItem, { t: "op" }>);
+      }
+
+      st.push({ t: "op", v: op });
+      prev = { t: "op", v: op };
+      continue;
+    }
+
+    if (tk.t === "rp") {
+      while (st.length && st[st.length - 1].t !== "lp") {
+        const top = st.pop()!;
+        if (top.t === "op") out.push(top);
+      }
+
+      if (!st.length) throw new Error("Klammern passen nicht");
+      st.pop(); // remove lp
+
+      if (st.length && st[st.length - 1].t === "fnName") {
+        const fn = st.pop() as { t: "fnName"; name: string };
+        const frame = fnFrames.pop();
+
+        if (!frame) throw new Error("Funktionsfehler");
+
+        const argc = frame.hasValue ? frame.commaCount + 1 : 0;
+        out.push({ t: "fn", name: fn.name, argc });
+        if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      } else {
+        if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      }
+
+      prev = tk;
       continue;
     }
   }
 
   while (st.length) {
-    const t = st.pop()!;
-    if (t.t === "lp" || t.t === "rp") throw new Error("Klammern passen nicht");
-    out.push(t);
+    const top = st.pop()!;
+    if (top.t === "lp" || top.t === "fnName") {
+      throw new Error("Klammern passen nicht");
+    }
+    out.push(top);
   }
+
   return out;
 }
 
+/* =========================================================
+   FUNCTIONS
+   ========================================================= */
+
 function callFn(name: string, args: number[]): number {
-  switch (name) {
+  switch (name.toLowerCase()) {
     case "round":
       return Math.round(args[0] ?? 0);
     case "ceil":
       return Math.ceil(args[0] ?? 0);
     case "floor":
       return Math.floor(args[0] ?? 0);
+    case "abs":
+      return Math.abs(args[0] ?? 0);
+    case "sqrt":
+      return Math.sqrt(args[0] ?? 0);
     case "min":
-      return Math.min(...args);
+      return args.length ? Math.min(...args) : 0;
     case "max":
-      return Math.max(...args);
+      return args.length ? Math.max(...args) : 0;
     case "sum":
       return args.reduce((a, b) => a + b, 0);
     default:
-      throw new Error("Unbekannte Funktion: " + name);
+      throw new Error(`Unbekannte Funktion: ${name}`);
   }
 }
+
+/* =========================================================
+   EVAL RPN
+   ========================================================= */
 
 export function evalRPN(rpn: Token[], vars: Vars): number {
   const st: number[] = [];
@@ -190,39 +323,84 @@ export function evalRPN(rpn: Token[], vars: Vars): number {
   for (const tk of rpn) {
     if (tk.t === "num") {
       st.push(tk.v);
-    } else if (tk.t === "id") {
-      // funzione codificata?
-      if (tk.v.startsWith("__fn__")) {
-        const [, fnName, argN] = tk.v.match(/^__fn__(.+)__(\d+)$/)!;
-        const n = parseInt(argN, 10);
-        const args = st.splice(-n, n);
-        st.push(callFn(fnName, args));
+      continue;
+    }
+
+    if (tk.t === "id") {
+      const v = vars[tk.v];
+      st.push(typeof v === "number" && Number.isFinite(v) ? v : 0);
+      continue;
+    }
+
+    if (tk.t === "fn") {
+      const args = tk.argc > 0 ? st.splice(-tk.argc, tk.argc) : [];
+      st.push(callFn(tk.name, args));
+      continue;
+    }
+
+    if (tk.t === "op") {
+      if (tk.v === "u+") {
+        const a = st.pop() ?? 0;
+        st.push(+a);
         continue;
       }
-      const v = vars[tk.v];
-      st.push(typeof v === "number" ? v : 0);
-    } else if (tk.t === "op") {
+
+      if (tk.v === "u-") {
+        const a = st.pop() ?? 0;
+        st.push(-a);
+        continue;
+      }
+
       const b = st.pop() ?? 0;
       const a = st.pop() ?? 0;
+
       switch (tk.v) {
-        case "+": st.push(a + b); break;
-        case "-": st.push(a - b); break;
-        case "*": st.push(a * b); break;
-        case "/": st.push(b === 0 ? 0 : a / b); break;
-        case "^": st.push(Math.pow(a, b)); break;
+        case "+":
+          st.push(a + b);
+          break;
+        case "-":
+          st.push(a - b);
+          break;
+        case "*":
+          st.push(a * b);
+          break;
+        case "/":
+          st.push(b === 0 ? 0 : a / b);
+          break;
+        case "%":
+          st.push(b === 0 ? 0 : a % b);
+          break;
+        case "^":
+          st.push(Math.pow(a, b));
+          break;
+        default:
+          throw new Error(`Unbekannter Operator: ${tk.v}`);
       }
     }
   }
-  return st.pop() ?? 0;
+
+  const result = st.pop() ?? 0;
+  return Number.isFinite(result) ? result : 0;
 }
+
+/* =========================================================
+   PUBLIC API
+   ========================================================= */
 
 export function evaluateExpression(expr: string, vars: Vars): number {
   if (!expr || !expr.trim()) return 0;
+
   try {
     const rpn = toRPN(tokenize(expr));
     const val = evalRPN(rpn, vars);
-    return isFinite(val) ? val : 0;
+    return Number.isFinite(val) ? val : 0;
   } catch {
     return 0;
   }
 }
+
+
+
+
+
+

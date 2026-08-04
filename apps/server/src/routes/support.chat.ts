@@ -1,12 +1,12 @@
 // apps/server/src/routes/support.chat.ts
 import { Router } from "express";
 import { z } from "zod";
-import OpenAI from "openai";
 import { PrismaClient } from "@prisma/client";
 
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireCompany, requireActiveSubscription } from "../middleware/guards";
 import { requireServerLicense } from "../middleware/license";
+import { completeRlcAiText } from "../services/ai/rlcAiGateway";
 
 const r = Router();
 const prisma = new PrismaClient();
@@ -420,22 +420,7 @@ function buildRuleBasedAnswer(
 }
 
 async function aiFallbackAnswer(input: z.infer<typeof ChatSchema>) {
-  const apiKey = process.env.OPENAI_API_KEY;
   const language = langOf(input);
-
-  if (!apiKey) {
-    return {
-      type: "info" as ReplyType,
-      answer:
-        language === "de"
-          ? "Die erweiterte KI ist nicht aktiv, weil OPENAI_API_KEY auf dem Server fehlt."
-          : language === "en"
-            ? "Advanced AI is not active because OPENAI_API_KEY is missing on the server."
-            : "La KI avanzata non è attiva perché sul server manca OPENAI_API_KEY.",
-    };
-  }
-
-  const client = new OpenAI({ apiKey });
   const ctx: Record<string, any> = input.context || {};
   const projectLvContext = await loadProjectLvContext(input);
   const projectLvContextText = formatProjectLvContext(projectLvContext);
@@ -473,8 +458,8 @@ async function aiFallbackAnswer(input: z.infer<typeof ChatSchema>) {
     }
   }
 
-  const completion = await client.chat.completions.create({
-    model: process.env.OPENAI_MODEL_SUPPORT || "gpt-4.1-mini",
+  const completion = await completeRlcAiText({
+    purpose: "copilot",
     temperature: 0.35,
     messages: [
       {
@@ -488,8 +473,18 @@ async function aiFallbackAnswer(input: z.infer<typeof ChatSchema>) {
     ],
   });
 
-  const answer = completion.choices?.[0]?.message?.content?.trim() || "Ok.";
-  return { type: "info" as ReplyType, answer };
+  const answer = completion.text.trim() || "Ok.";
+  return {
+    type: "info" as ReplyType,
+    answer,
+    ai: {
+      provider: completion.provider,
+      model: completion.model,
+      mode: completion.mode,
+      fallbackUsed: completion.fallbackUsed,
+      latencyMs: completion.latencyMs,
+    },
+  };
 }
 
 r.post(
@@ -514,10 +509,17 @@ r.post(
       }
 
       const ai = await aiFallbackAnswer(parsed);
-      return res.json({ ok: true, type: ai.type, answer: ai.answer, actions: [] });
+      return res.json({
+        ok: true,
+        type: ai.type,
+        answer: ai.answer,
+        actions: [],
+        ai: ai.ai,
+      });
     } catch (e: any) {
       console.error("POST /api/support/chat failed:", e);
-      return res.status(400).json({
+      const status = e?.name === "ZodError" ? 400 : 503;
+      return res.status(status).json({
         ok: false,
         error: e?.message || "bad request",
       });

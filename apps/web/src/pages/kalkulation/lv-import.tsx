@@ -1,626 +1,2368 @@
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // RLC Bausoftware · apps/web/src/pages/kalkulation/lv-import.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+
+import { runRlcAction } from "../../lib/rlcProgress";
+import { useLocation, useNavigate } from "react-router-dom";
+import { API_BASE } from "../../lib/apiBase";
+import { useProject } from "../../store/useProject";
 import { LV, type LVPos } from "./store.lv";
-import { Projects } from "./projectStore";
 
 const MWST_KEY = "rlc_lv_mwst_v1";
-const API_BASE = "https://api.rlcbausoftware.com";
 
-type GaebMode = "x83" | "x84";
-type GaebIssue = {
-  position?: string;
-  posNr?: string;
-  type?: string;
-  field?: string;
-  message?: string;
-  reason?: string;
+type ProjectLike = {
+  id?: string;
   code?: string;
+  number?: string;
+  projektnummer?: string;
+  name?: string;
+  projectName?: string;
+  projektname?: string;
+  client?: string;
+  place?: string;
+  location?: string;
 };
 
-type GaebValidationResult = {
-  ok?: boolean;
-  valid?: boolean;
-  mode?: GaebMode;
-  errorCount?: number;
-  warningCount?: number;
-  errors?: GaebIssue[];
-  warnings?: GaebIssue[];
+type ViewMode = "liste" | "editor";
+
+type LvSelectionRequest = {
+  projectCode: string;
+  positionId: string;
+  positionNumber: string;
+  shortText: string;
 };
+
+type LvQualityFilter =
+"alle" |
+"kritisch" |
+"warning" |
+"epFehlt" |
+"einheitFehlt" |
+"mengeFehlt" |
+"kurztextFehlt" |
+"langtextFehlt" |
+"doppelte";
+
+function apiUrl(path: string): string {
+  const base = String(API_BASE || "").replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return base ? `${base}${cleanPath}` : cleanPath;
+}
+
+function getAuthToken(): string {
+  try {
+    const directKeys = [
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
+
+
+    for (const key of directKeys) {
+      const value = localStorage.getItem(key);
+      if (value && value.trim()) return value.trim();
+    }
+
+    const jsonKeys = ["auth", "user", "session", "rlc_auth", "rlc_session"];
+
+    for (const key of jsonKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+        const token =
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
+
+        if (typeof token === "string" && token.trim()) return token.trim();
+      } catch {
+
+
+        //
+      }}} catch {
+
+
+    //
+  }return "";
+}
+
+function withAuthHeaders(extra?: Record<string, string>): HeadersInit {
+  const token = getAuthToken();
+
+  return {
+    ...(extra || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
+
+function getCurrentProjectFromSources(projectCtx: any): ProjectLike | null {
+  const ctxProject =
+  projectCtx?.currentProject ??
+  projectCtx?.current ??
+  projectCtx?.selectedProject ??
+  projectCtx?.project ?? (
+  typeof projectCtx?.getCurrentProject === "function" ?
+  projectCtx.getCurrentProject() :
+  null);
+
+  if (ctxProject) return ctxProject as ProjectLike;
+
+  try {
+    return ((globalThis as any).__RLC_CURRENT_PROJECT ?? null) as ProjectLike | null;
+  } catch {
+    return null;
+  }
+}
+
+function getProjectCode(project: ProjectLike | null): string {
+  return String(project?.code ?? project?.number ?? project?.projektnummer ?? "").
+  trim().
+  toUpperCase();
+}
+
+function getProjectName(project: ProjectLike | null): string {
+  return String(project?.name ?? project?.projectName ?? project?.projektname ?? "").trim();
+}
+
+function normalizedLookupText(value: unknown): string {
+  return String(value ?? "").
+  trim().
+  toLocaleLowerCase("de-DE").
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/\s+/g, " ");
+}
+
+function normalizedPositionParts(value: unknown): string[] {
+  return String(value ?? "").
+  trim().
+  toLocaleLowerCase("de-DE").
+  split(/[^a-z0-9]+/i).
+  filter(Boolean).
+  map((part) => {
+    if (!/^\d+$/.test(part)) return part;
+    const normalized = part.replace(/^0+(?=\d)/, "");
+    return normalized || "0";
+  });
+}
+
+function rowMeta(row: LVPos): any {
+  return (row as any)?.meta || {};
+}
+
+function rowIdentityValues(row: LVPos): string[] {
+  const meta = rowMeta(row);
+  return [
+  row.id,
+  meta?.id,
+  meta?.positionId,
+  meta?.lvPositionId,
+  meta?.uuid,
+  meta?.sourcePositionId].
+
+  map((item) => normalizedLookupText(item)).
+  filter(Boolean);
+}
+
+function rowPositionValues(row: LVPos): string[] {
+  const meta = rowMeta(row);
+  return [
+  row.posNr,
+  meta?.fullPositionNumber,
+  meta?.lvPositionNumber,
+  meta?.gaebOz,
+  meta?.positionOz,
+  meta?.outlineNumber,
+  meta?.positionNumber,
+  meta?.positionNo,
+  meta?.posNr,
+  meta?.pos,
+  meta?.oz].
+
+  map((item) => String(item ?? "").trim()).
+  filter(Boolean);
+}
+
+function resolveRequestedLvRow(
+candidateRows: LVPos[],
+request: LvSelectionRequest)
+: {row: LVPos | null;ambiguous: boolean;} {
+  const requestedId = normalizedLookupText(request.positionId);
+  const requestedText = normalizedLookupText(request.shortText);
+  const requestedParts = normalizedPositionParts(request.positionNumber);
+
+  if (requestedId) {
+    const idMatch = candidateRows.find((row) =>
+    rowIdentityValues(row).includes(requestedId)
+    );
+    if (idMatch) return { row: idMatch, ambiguous: false };
+  }
+
+  if (requestedParts.length) {
+    const exactPositionMatches = candidateRows.filter((row) =>
+    rowPositionValues(row).some((item) => {
+      const parts = normalizedPositionParts(item);
+      return (
+        parts.length === requestedParts.length &&
+        parts.every((part, index) => part === requestedParts[index]));
+
+    })
+    );
+
+    if (exactPositionMatches.length === 1) {
+      return { row: exactPositionMatches[0], ambiguous: false };
+    }
+
+    if (exactPositionMatches.length > 1 && requestedText) {
+      const textMatch = exactPositionMatches.find(
+        (row) => normalizedLookupText(row.kurztext) === requestedText
+      );
+      if (textMatch) return { row: textMatch, ambiguous: false };
+    }
+
+    const requestedLastPart = requestedParts[requestedParts.length - 1];
+    const suffixMatches = candidateRows.filter((row) =>
+    rowPositionValues(row).some((item) => {
+      const parts = normalizedPositionParts(item);
+      return parts.length > 0 && parts[parts.length - 1] === requestedLastPart;
+    })
+    );
+
+    if (suffixMatches.length === 1) {
+      return { row: suffixMatches[0], ambiguous: false };
+    }
+
+    if (suffixMatches.length > 1 && requestedText) {
+      const textMatch = suffixMatches.find(
+        (row) => normalizedLookupText(row.kurztext) === requestedText
+      );
+      if (textMatch) return { row: textMatch, ambiguous: false };
+    }
+
+    if (exactPositionMatches.length > 1 || suffixMatches.length > 1) {
+      return { row: null, ambiguous: true };
+    }
+  }
+
+  if (requestedText) {
+    const textMatches = candidateRows.filter(
+      (row) => normalizedLookupText(row.kurztext) === requestedText
+    );
+    if (textMatches.length === 1) return { row: textMatches[0], ambiguous: false };
+    if (textMatches.length > 1) return { row: null, ambiguous: true };
+  }
+
+  return { row: null, ambiguous: false };
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+
+  const raw = String(value ?? "").trim();
+  if (!raw) return 0;
+
+  const normalized = raw.includes(",") ?
+  raw.replace(/\./g, "").replace(",", ".") :
+  raw.replace(/\s/g, "");
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function fmtCurrency(v: unknown): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR"
+  }).format(toNumber(v));
+}
+
+function fmtNumber(v: unknown): string {
+  return toNumber(v).toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3
+  });
+}
+
+function esc(s: string): string {
+  return String(s ?? "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;");
+}
+
+function lineTotal(row: LVPos): number {
+  if (typeof row.gesamt === "number" && Number.isFinite(row.gesamt)) {
+    return row.gesamt;
+  }
+
+  return round2(toNumber(row.menge) * toNumber(row.preis));
+}
+
+function safeUuid(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+function makeLvRow(patch?: Partial<LVPos>): LVPos {
+  const menge = toNumber(patch?.menge);
+  const preis = patch?.preis === undefined || patch?.preis === null ? 0 : toNumber(patch.preis);
+
+  return {
+    id: String(patch?.id || safeUuid()),
+    posNr: String(patch?.posNr ?? ""),
+    parentPosNr: String(patch?.parentPosNr ?? ""),
+    sortIndex: patch?.sortIndex,
+    kurztext: String(patch?.kurztext ?? ""),
+    langtext: String(patch?.langtext ?? ""),
+    bemerkung: String(patch?.bemerkung ?? ""),
+    einheit: String(patch?.einheit ?? "m"),
+    menge,
+    preis,
+    gesamt:
+    patch?.gesamt === undefined || patch?.gesamt === null ?
+    round2(menge * preis) :
+    toNumber(patch.gesamt),
+    waehrung: String(patch?.waehrung ?? "EUR"),
+    confidence: patch?.confidence,
+    source: patch?.source ?? "manual",
+    createdAt: patch?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  } as LVPos;
+}
+
+function lvTextKey(row: LVPos): string {
+  return String(`${row.kurztext || ""} ${row.langtext || ""}`).
+  toLowerCase().
+  normalize("NFKD").
+  replace(/[\u0300-\u036f]/g, "").
+  replace(/[^a-z0-9äöüß]+/gi, " ").
+  replace(/\s+/g, " ").
+  trim();
+}
+
+function getLvDuplicateGroups(rows: LVPos[]): LVPos[][] {
+  const map = new Map<string, LVPos[]>();
+
+  for (const row of rows) {
+    const text = lvTextKey(row);
+    if (text.length < 8) continue;
+
+    const key = [
+    text.slice(0, 140),
+    String(row.einheit || "").trim().toLowerCase(),
+    round2(toNumber(row.menge)),
+    round2(toNumber(row.preis))].
+    join("|");
+
+    const list = map.get(key) || [];
+    list.push(row);
+    map.set(key, list);
+  }
+
+  return Array.from(map.values()).filter((group) => group.length > 1);
+}
+
+function lvRowScore(row: LVPos): number {
+  return (
+    (String(row.posNr || "").trim() ? 10 : 0) + (
+    String(row.kurztext || "").trim() ? 10 : 0) + (
+    String(row.langtext || "").trim() ? 8 : 0) + (
+    String(row.einheit || "").trim() ? 6 : 0) + (
+    toNumber(row.menge) > 0 ? 10 : 0) + (
+    toNumber(row.preis) > 0 ? 10 : 0));
+
+}
+
+function suggestUnit(row: LVPos): string {
+  const existing = String(row.einheit || "").trim();
+  if (existing) return existing;
+
+  const text = lvTextKey(row);
+
+  if (
+  text.includes("aushub") ||
+  text.includes("boden") ||
+  text.includes("verfull") ||
+  text.includes("verfüll") ||
+  text.includes("kies") ||
+  text.includes("schotter") ||
+  text.includes("beton"))
+  {
+    return "m³";
+  }
+
+  if (
+  text.includes("asphalt") ||
+  text.includes("pflaster") ||
+  text.includes("fläche") ||
+  text.includes("flache") ||
+  text.includes("tragschicht") ||
+  text.includes("deckschicht"))
+  {
+    return "m²";
+  }
+
+  if (
+  text.includes("rohr") ||
+  text.includes("leitung") ||
+  text.includes("kabel") ||
+  text.includes("speedpipe") ||
+  text.includes("trasse"))
+  {
+    return "m";
+  }
+
+  if (
+  text.includes("schacht") ||
+  text.includes("anschluss") ||
+  text.includes("bogen") ||
+  text.includes("muffe") ||
+  text.includes("abzweig"))
+  {
+    return "St";
+  }
+
+  if (text.includes("abfuhr") || text.includes("entsorgung")) return "t";
+
+  return "m";
+}
+
+function suggestKurztext(row: LVPos): string {
+  const kurz = String(row.kurztext || "").trim();
+  if (kurz.length >= 6) return kurz;
+
+  const lang = String(row.langtext || "").replace(/\s+/g, " ").trim();
+  if (lang.length >= 6) return lang.slice(0, 90);
+
+  const pos = String(row.posNr || "").trim();
+  return pos ? `Leistung zu Position ${pos}` : "Leistung prüfen";
+}
+
+function suggestLangtext(row: LVPos): string {
+  const existing = String(row.langtext || "").trim();
+  if (existing.length >= 25) return existing;
+
+  const kurz = suggestKurztext(row);
+  const unit = suggestUnit(row);
+  const text = lvTextKey(row);
+  const parts: string[] = [];
+
+  parts.push(`${kurz}.`);
+  parts.push(`Ausführung gemäß Leistungsbeschreibung und Ausführungsplanung.`);
+  parts.push(`Abrechnung nach tatsächlich ausgeführter Menge in ${unit}.`);
+
+  if (text.includes("aushub") || text.includes("graben")) {
+    parts.push("Einschließlich Lösen, Laden, profilgerechtem Herstellen und seitlichem Lagern beziehungsweise Abfahren nach Erfordernis.");
+  }
+
+  if (text.includes("verfull") || text.includes("verfüll") || text.includes("kies") || text.includes("schotter")) {
+    parts.push("Einschließlich lagenweisem Einbau, Verdichtung und Herstellung der geforderten Tragfähigkeit.");
+  }
+
+  if (text.includes("rohr") || text.includes("leitung") || text.includes("speedpipe") || text.includes("kabel")) {
+    parts.push("Einschließlich Lieferung beziehungsweise Verlegung, Ausrichtung, Bettung und fachgerechtem Anschluss.");
+  }
+
+  if (text.includes("asphalt") || text.includes("pflaster")) {
+    parts.push("Einschließlich Vorbereitung des Untergrundes, Einbau, Verdichtung und höhengerechter Wiederherstellung der Oberfläche.");
+  }
+
+  parts.push("Nebenleistungen, Geräte, Personal, Material und erforderliche Hilfsleistungen sind einzukalkulieren.");
+
+  return parts.join(" ");
+}
+function rowStatus(row: LVPos): "ok" | "warning" | "critical" {
+  if (!String(row.posNr || "").trim() || !String(row.kurztext || "").trim()) {
+    return "critical";
+  }
+
+  if (!String(row.einheit || "").trim() || toNumber(row.menge) <= 0) {
+    return "warning";
+  }
+
+  return "ok";
+}
+
+function statusLabel(status: "ok" | "warning" | "critical"): string {
+  if (status === "ok") return "OK";
+  if (status === "warning") return "Prüfen";
+  return "Fehlt";
+}
+
+function KpiCard({
+  label,
+  value,
+  sub
+
+
+
+
+}: {label: string;value: string;sub?: string;}) {
+  return (
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    </div>);
+
+}
+
+function Field({
+  label,
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
+  return (
+    <label className="rlc-migrated-pages-kalkulation-lv-import-tsx-912">
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
+      {children}
+    </label>);
+
+}
 
 export default function LVImportPage() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState<LVPos[]>([]);
-  const [mwst, setMwst] = useState<number>(() => Number(localStorage.getItem(MWST_KEY) ?? 19));
+  const location = useLocation();
   const fileRef = useRef<HTMLInputElement>(null);
+  const selectedItemRef = useRef<HTMLButtonElement>(null);
+  const projectCtx: any = useProject();
 
-  const [gaebResult, setGaebResult] = useState<GaebValidationResult | null>(null);
-  const [gaebBusy, setGaebBusy] = useState<GaebMode | null>(null);
-  const [gaebInfo, setGaebInfo] = useState<string>("");
+  const selectionRequest = useMemo<LvSelectionRequest>(() => {
+    const params = new URLSearchParams(location.search);
+    return {
+      projectCode: String(params.get("projectCode") || "").trim().toUpperCase(),
+      positionId: String(params.get("positionId") || "").trim(),
+      positionNumber: String(
+        params.get("positionNumber") || params.get("posNr") || ""
+      ).trim(),
+      shortText: String(params.get("shortText") || "").trim()
+    };
+  }, [location.search]);
 
-  // initial load
+  const currentProject = getCurrentProjectFromSources(projectCtx);
+  const contextProjectCode = getProjectCode(currentProject);
+  const projectCode = selectionRequest.projectCode || contextProjectCode;
+  const projectName =
+  !selectionRequest.projectCode || selectionRequest.projectCode === contextProjectCode ?
+  getProjectName(currentProject) :
+  "";
+  const canUseLocalFallback =
+  !selectionRequest.projectCode || selectionRequest.projectCode === contextProjectCode;
+  const hasRequestedPosition = Boolean(
+    selectionRequest.positionId ||
+    selectionRequest.positionNumber ||
+    selectionRequest.shortText
+  );
+
+  const [rows, setRows] = useState<LVPos[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [mwst, setMwst] = useState<number>(() =>
+  Number(localStorage.getItem(MWST_KEY) ?? 19)
+  );
+  const [info, setInfo] = useState("");
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("editor");
+  const [qualityFilter, setQualityFilter] = useState<LvQualityFilter>("alle");
+  const [kiWorking, setKiWorking] = useState(false);
+  const [kiProgress, setKiProgress] = useState(0);
+  const [kiLog, setKiLog] = useState<string[]>([]);
+
   useEffect(() => {
-    setRows(LV.list());
-  }, []);
+    let cancelled = false;
+
+    async function loadLv() {
+      const localRows = LV.list();
+
+      if (!projectCode) {
+        if (!cancelled) {
+          const selection = resolveRequestedLvRow(localRows, selectionRequest);
+          setRows(localRows);
+          setSelectedId(selection.row?.id || localRows[0]?.id || "");
+        }
+        return;
+      }
+
+      try {
+        setInfo("Lade Projekt-LV vom Server …");
+
+        const response = await fetch(
+          apiUrl(`/api/projects/${encodeURIComponent(projectCode)}/lv`),
+          {
+            method: "GET",
+            credentials: "include",
+            headers: withAuthHeaders({
+              Accept: "application/json"
+            })
+          }
+        );
+
+        const raw = await response.text();
+
+        let payload: any = {};
+        try {
+          payload = raw ? JSON.parse(raw) : {};
+        } catch {
+          payload = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error ||
+            payload?.message ||
+            `LV konnte nicht geladen werden: HTTP ${response.status}`
+          );
+        }
+
+        const source =
+        payload?.items ??
+        payload?.rows ??
+        payload?.positions ??
+        payload?.lv?.items ??
+        payload?.lv?.rows ??
+        payload?.data?.items ??
+        payload?.data?.rows ??
+        payload?.data?.positions ??
+        payload?.data ??
+        payload;
+
+        const serverRows: LVPos[] = Array.isArray(source) ?
+        source.map((item: any, index: number) => ({
+          id: String(
+            item?.id ||
+            item?.positionId ||
+            item?.uuid ||
+            `${projectCode}-${index + 1}`
+          ),
+          posNr: String(
+            item?.fullPositionNumber ||
+            item?.lvPositionNumber ||
+            item?.gaebOz ||
+            item?.positionOz ||
+            item?.outlineNumber ||
+            item?.posNr ||
+            item?.positionNumber ||
+            item?.positionNo ||
+            item?.pos ||
+            item?.oz ||
+            ""
+          ),
+          parentPosNr: String(item?.parentPosNr || item?.parentPos || ""),
+          sortIndex:
+          item?.sortIndex === undefined ? index : Number(item.sortIndex),
+          kurztext: String(
+            item?.kurztext ||
+            item?.shortText ||
+            item?.shorttext ||
+            item?.text ||
+            item?.description ||
+            ""
+          ),
+          langtext: String(
+            item?.langtext ||
+            item?.longText ||
+            item?.longtext ||
+            item?.descriptionLong ||
+            ""
+          ),
+          bemerkung: String(item?.bemerkung || item?.note || ""),
+          einheit: String(
+            item?.einheit ||
+            item?.unit ||
+            item?.me ||
+            ""
+          ),
+          menge: toNumber(
+            item?.menge ??
+            item?.quantity ??
+            item?.qty ??
+            0
+          ),
+          preis: toNumber(
+            item?.preis ??
+            item?.unitPrice ??
+            item?.unitPriceNet ??
+            item?.ep ??
+            0
+          ),
+          gesamt: toNumber(
+            item?.gesamt ??
+            item?.total ??
+            item?.totalNet ??
+            item?.gp ??
+            0
+          ),
+          waehrung: String(item?.waehrung || item?.currency || "EUR"),
+          source: "import",
+          createdAt: item?.createdAt,
+          updatedAt: item?.updatedAt,
+          meta: item
+        })) :
+        [];
+
+        if (cancelled) return;
+
+        if (serverRows.length > 0) {
+          const storedRows = LV.setAll(serverRows);
+          const selection = resolveRequestedLvRow(storedRows, selectionRequest);
+          setRows(storedRows);
+          setSelectedId(selection.row?.id || storedRows[0]?.id || "");
+          setInfo(
+            hasRequestedPosition ?
+            selection.row ?
+            `Marktbeobachtung: Position ${selection.row.posNr || "ohne Nummer"} im Projekt ${projectCode} geöffnet.` :
+            selection.ambiguous ?
+            `Marktbeobachtung: Mehrere passende Positionen in ${projectCode} gefunden. Bitte über die Suche eingrenzen.` :
+            `Marktbeobachtung: Die gemeldete Position wurde im LV von ${projectCode} nicht gefunden.` :
+            `${storedRows.length} LV-Positionen vom Server geladen.`
+          );
+          return;
+        }
+
+        const fallbackRows = canUseLocalFallback ? localRows : [];
+        const selection = resolveRequestedLvRow(fallbackRows, selectionRequest);
+        setRows(fallbackRows);
+        setSelectedId(selection.row?.id || fallbackRows[0]?.id || "");
+        setInfo(
+          hasRequestedPosition ?
+          selection.row ?
+          `Marktbeobachtung: Position ${selection.row.posNr || "ohne Nummer"} im lokalen LV geöffnet.` :
+          `Marktbeobachtung: Die gemeldete Position wurde im LV von ${projectCode} nicht gefunden.` :
+          fallbackRows.length ?
+          "Keine Server-LV gefunden. Lokaler Stand geladen." :
+          "Für dieses Projekt wurde kein LV gefunden."
+        );
+      } catch (error: any) {
+        if (cancelled) return;
+
+        const fallbackRows = canUseLocalFallback ? localRows : [];
+        const selection = resolveRequestedLvRow(fallbackRows, selectionRequest);
+        setRows(fallbackRows);
+        setSelectedId(selection.row?.id || fallbackRows[0]?.id || "");
+        setInfo(
+          hasRequestedPosition && !canUseLocalFallback ?
+          `Das Projekt-LV ${projectCode} konnte nicht vom Server geladen werden.` :
+          error?.message ||
+          "LV konnte nicht vom Server geladen werden."
+        );
+      }
+    }
+
+    void loadLv();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+  projectCode,
+  selectionRequest,
+  hasRequestedPosition,
+  canUseLocalFallback]
+  );
+
+  useEffect(() => {
+    if (!hasRequestedPosition || !selectedId) return;
+    const frame = window.requestAnimationFrame(() => {
+      selectedItemRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "smooth"
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [hasRequestedPosition, selectedId]);
 
   useEffect(() => {
     localStorage.setItem(MWST_KEY, String(mwst || 0));
   }, [mwst]);
 
-  const curProject = Projects.getCurrent();
-  const projectCode = String(curProject?.number || "").trim().toUpperCase();
+  const duplicateGroups = useMemo(() => getLvDuplicateGroups(rows), [rows]);
 
-  // helpers
-  const save = (r: LVPos) => {
-    LV.upsert(r);
-    setRows(LV.list());
-  };
+  const duplicateIds = useMemo(() => {
+    return new Set(
+      duplicateGroups.flatMap((group) => group.map((row) => row.id))
+    );
+  }, [duplicateGroups]);
 
-  const addRow = () => {
-    LV.upsert({
-      id: crypto.randomUUID(),
-      posNr: "",
-      kurztext: "",
-      einheit: "m",
-      menge: 0,
-      preis: 0,
+  const qualityStats = useMemo(() => {
+    return {
+      total: rows.length,
+      critical: rows.filter((r) => rowStatus(r) === "critical").length,
+      warning: rows.filter((r) => rowStatus(r) === "warning").length,
+      epFehlt: rows.filter((r) => toNumber(r.preis) <= 0).length,
+      einheitFehlt: rows.filter((r) => !String(r.einheit || "").trim()).length,
+      mengeFehlt: rows.filter((r) => toNumber(r.menge) <= 0).length,
+      kurztextFehlt: rows.filter((r) => !String(r.kurztext || "").trim()).length,
+      langtextFehlt: rows.filter((r) => !String(r.langtext || "").trim()).length,
+      doppelte: duplicateGroups.reduce((sum, g) => sum + Math.max(0, g.length - 1), 0)
+    };
+  }, [rows, duplicateGroups]);
+
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
+    return rows.filter((r) => {
+      if (qualityFilter === "kritisch" && rowStatus(r) !== "critical") return false;
+      if (qualityFilter === "warning" && rowStatus(r) !== "warning") return false;
+      if (qualityFilter === "epFehlt" && toNumber(r.preis) > 0) return false;
+      if (qualityFilter === "einheitFehlt" && String(r.einheit || "").trim()) return false;
+      if (qualityFilter === "mengeFehlt" && toNumber(r.menge) > 0) return false;
+      if (qualityFilter === "kurztextFehlt" && String(r.kurztext || "").trim()) return false;
+      if (qualityFilter === "langtextFehlt" && String(r.langtext || "").trim()) return false;
+      if (qualityFilter === "doppelte" && !duplicateIds.has(r.id)) return false;
+
+      if (!q) return true;
+
+      const hay = `${r.posNr || ""} ${r.kurztext || ""} ${r.langtext || ""} ${
+      r.einheit || ""} ${
+      r.source || ""}`.toLowerCase();
+
+      return hay.includes(q);
     });
-    setRows(LV.list());
-  };
+  }, [rows, query, qualityFilter, duplicateIds]);
 
-  const del = (id: string) => {
-    LV.remove(id);
-    setRows(LV.list());
-  };
+  const selectedRow = useMemo(() => {
+    return rows.find((r) => r.id === selectedId) || rows[0] || null;
+  }, [rows, selectedId]);
 
-  const clearAll = () => {
-    if (confirm("Alle Zeilen wirklich löschen?")) {
-      LV.clear();
-      setRows([]);
-      setGaebResult(null);
-      setGaebInfo("");
-    }
-  };
+  const totals = useMemo(() => {
+    const netto = rows.reduce((sum, row) => sum + lineTotal(row), 0);
+    const brutto = netto * (1 + (mwst || 0) / 100);
+    const priced = rows.filter((r) => toNumber(r.preis) > 0).length;
+    const critical = rows.filter((r) => rowStatus(r) === "critical").length;
+    const warning = rows.filter((r) => rowStatus(r) === "warning").length;
 
-  // CSV
-  const exportCSV = () => {
-    const csv = LV.exportCSV(rows);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "lv.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    return {
+      netto: round2(netto),
+      brutto: round2(brutto),
+      priced,
+      total: rows.length,
+      coverage: rows.length ? Math.round(priced / rows.length * 100) : 0,
+      critical,
+      warning
+    };
+  }, [rows, mwst]);
 
-  const importCSV = (text: string) => {
-    LV.importCSV(text);
-    setRows(LV.list());
-    setGaebResult(null);
-    setGaebInfo("");
-  };
+  function refreshRows(preselectId?: string) {
+    const next = LV.list();
+    setRows(next);
 
-  // Paste rows (semicolon CSV)
-  const pasteRows = () => {
-    const example = `PosNr;Kurztext;Einheit;Menge;Preis;Confidence
-01.0001;"Aushub Baugrube";m³;120;35.5;`;
-    const t = prompt("Zeilen einfügen (CSV mit ; – Kopfzeile erlaubt):", example);
-    if (!t) return;
-    LV.importCSV(t);
-    setRows(LV.list());
-    setGaebResult(null);
-    setGaebInfo("");
-  };
-
-  // XLSX (SpreadsheetML)
-  const exportXLSX = () => {
-    const xmlHeader =
-      `<?xml version="1.0"?>` +
-      `<?mso-application progid="Excel.Sheet"?>` +
-      `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
-      `xmlns:o="urn:schemas-microsoft-com:office:office" ` +
-      `xmlns:x="urn:schemas-microsoft-com:office:excel" ` +
-      `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
-    const sheetOpen = `<Worksheet ss:Name="LV"><Table>`;
-    const headRow =
-      `<Row>` +
-      ["PosNr", "Kurztext", "Einheit", "Menge", "EP (netto)", "Confidence", "Zeilen-Netto"]
-        .map((h) => `<Cell><Data ss:Type="String">${esc(h)}</Data></Cell>`)
-        .join("") +
-      `</Row>`;
-    const body = rows
-      .map((r) => {
-        const z = (r.menge || 0) * (r.preis || 0);
-        return (
-          `<Row>` +
-          `<Cell><Data ss:Type="String">${esc(r.posNr || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.kurztext || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="String">${esc(r.einheit || "")}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${num(r.menge)}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${num(r.preis)}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${num(r.confidence)}</Data></Cell>` +
-          `<Cell><Data ss:Type="Number">${num(z)}</Data></Cell>` +
-          `</Row>`
-        );
-      })
-      .join("");
-    const foot =
-      `<Row><Cell><Data ss:Type="String">MwSt %</Data></Cell><Cell/><Cell/><Cell/><Cell/><Cell/>` +
-      `<Cell><Data ss:Type="Number">${mwst}</Data></Cell></Row>`;
-    const xml = xmlHeader + sheetOpen + headRow + body + foot + `</Table></Worksheet></Workbook>`;
-    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "lv.xlsx";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Auto-PosNr helper
-  const autoPosNr = () => {
-    const next = [...rows];
-    let i = 1;
-    for (const r of next) {
-      if (!r.posNr || /^\s*$/.test(r.posNr)) {
-        r.posNr = `01.${String(i).padStart(4, "0")}`;
-        LV.upsert(r);
-        i++;
-      }
-    }
-    setRows(LV.list());
-    setGaebResult(null);
-    setGaebInfo("");
-  };
-
-  async function validateGAEB(mode: GaebMode): Promise<GaebValidationResult | null> {
-    if (!projectCode) {
-      alert("Kein Projekt gewählt");
-      return null;
-    }
-
-    setGaebBusy(mode);
-    setGaebInfo("");
-
-    try {
-      const r = await fetch(
-        `${API_BASE}/api/project-lv/${encodeURIComponent(projectCode)}/export/gaeb/validate?mode=${mode}`,
-        { method: "POST" }
-      );
-
-      const j = await r.json().catch(() => ({}));
-
-      if (!r.ok) {
-        throw new Error(j?.error || "Validierung fehlgeschlagen");
-      }
-
-      const result: GaebValidationResult = {
-        ...j,
-        mode,
-        valid: !!j?.valid,
-        errorCount: Number(j?.errorCount || 0),
-        warningCount: Number(j?.warningCount || 0),
-        errors: normalizeIssues(j?.errors),
-        warnings: normalizeIssues(j?.warnings),
-      };
-
-      setGaebResult(result);
-
-      if (result.valid) {
-        setGaebInfo(`GAEB ${mode.toUpperCase()} ist valide.`);
-      } else {
-        setGaebInfo(
-          `GAEB ${mode.toUpperCase()} ist nicht valide. Fehler: ${result.errorCount || 0}, Warnungen: ${result.warningCount || 0}.`
-        );
-      }
-
-      return result;
-    } catch (e: any) {
-      const errResult: GaebValidationResult = {
-        mode,
-        valid: false,
-        errorCount: 1,
-        warningCount: 0,
-        errors: [
-          {
-            type: "error",
-            field: "system",
-            message: e?.message || "Unbekannter Fehler",
-          },
-        ],
-        warnings: [],
-      };
-      setGaebResult(errResult);
-      setGaebInfo(`Validierungs-Fehler: ${e?.message || e}`);
-      return errResult;
-    } finally {
-      setGaebBusy(null);
-    }
-  }
-
-  async function exportGAEBProject(mode: GaebMode) {
-    if (!projectCode) {
-      alert("Kein Projekt gewählt");
+    if (preselectId) {
+      setSelectedId(preselectId);
       return;
     }
 
-    setGaebBusy(mode);
-    setGaebInfo("");
-
-    try {
-      const validation = await fetch(
-        `${API_BASE}/api/project-lv/${encodeURIComponent(projectCode)}/export/gaeb/validate?mode=${mode}`,
-        { method: "POST" }
-      );
-
-      const val = await validation.json().catch(() => ({}));
-
-      if (!validation.ok) {
-        throw new Error(val?.error || "Validierung fehlgeschlagen");
-      }
-
-      const result: GaebValidationResult = {
-        ...val,
-        mode,
-        valid: !!val?.valid,
-        errorCount: Number(val?.errorCount || 0),
-        warningCount: Number(val?.warningCount || 0),
-        errors: normalizeIssues(val?.errors),
-        warnings: normalizeIssues(val?.warnings),
-      };
-
-      setGaebResult(result);
-
-      if (!result.valid) {
-        setGaebInfo(
-          `Export ${mode.toUpperCase()} blockiert. Fehler: ${result.errorCount || 0}, Warnungen: ${result.warningCount || 0}.`
-        );
-        return;
-      }
-
-      const r = await fetch(
-        `${API_BASE}/api/project-lv/${encodeURIComponent(projectCode)}/export/gaeb/${mode}`,
-        { method: "POST" }
-      );
-
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        throw new Error(j?.error || "Export fehlgeschlagen");
-      }
-
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${projectCode}.${mode}.xml`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setGaebInfo(`Export ${mode.toUpperCase()} erfolgreich erstellt.`);
-    } catch (e: any) {
-      setGaebInfo(`Export-Fehler: ${e?.message || e}`);
-    } finally {
-      setGaebBusy(null);
+    if (!next.some((r) => r.id === selectedId)) {
+      setSelectedId(next[0]?.id || "");
     }
   }
 
-  const totals = useMemo(() => {
-    const netto = rows.reduce((s, r) => s + (r.menge || 0) * (r.preis || 0), 0);
-    const brutto = netto * (1 + (mwst || 0) / 100);
-    return { netto, brutto };
-  }, [rows, mwst]);
+  function saveRow(row: LVPos) {
+    const next = makeLvRow({
+      ...row,
+      gesamt: round2(toNumber(row.menge) * toNumber(row.preis))
+    });
 
-  const gaebStatusColor = gaebResult ? (gaebResult.valid ? "#2a7" : "#d33") : "#666";
+    LV.upsert(next);
+    refreshRows(next.id);
+  }
+
+  function patchSelected(patch: Partial<LVPos>) {
+    if (!selectedRow) return;
+    saveRow({ ...selectedRow, ...patch });
+  }
+
+  function addRow() {
+    const row = makeLvRow({
+      posNr: "",
+      kurztext: "",
+      langtext: "",
+      bemerkung: "",
+      einheit: "m",
+      menge: 1,
+      preis: 0,
+      waehrung: "EUR",
+      source: "manual"
+    });
+
+    LV.upsert(row);
+    refreshRows(row.id);
+    setViewMode("editor");
+    setInfo("Neue LV-Position erstellt.");
+  }
+
+  function duplicateSelected() {
+    if (!selectedRow) return;
+
+    const copy = makeLvRow({
+      ...selectedRow,
+      id: safeUuid(),
+      posNr: `${selectedRow.posNr || ""}.Kopie`,
+      source: "manual"
+    });
+
+    LV.upsert(copy);
+    refreshRows(copy.id);
+    setInfo("Position dupliziert.");
+  }
+
+  function deleteRow(id: string) {
+    if (!window.confirm("Diese LV-Position wirklich löschen?")) return;
+
+    LV.remove(id);
+    refreshRows();
+    setInfo("LV-Position gelöscht.");
+  }
+
+  function clearAll() {
+    if (!window.confirm("Alle LV-Zeilen wirklich löschen?")) return;
+
+    LV.clear();
+    setRows([]);
+    setSelectedId("");
+    setInfo("LV lokal geleert.");
+  }
+
+  function importCSV(text: string) {
+    try {
+      LV.importCSV(text);
+      refreshRows();
+      setInfo("CSV lokal importiert.");
+    } catch (e: any) {
+      setInfo(`Fehler beim CSV-Import: ${e?.message || e}`);
+    }
+  }
+
+  function exportCSV() {
+    const csv = LV.exportCSV(rows);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = projectCode ? `${projectCode}-lv.csv` : "lv.csv";
+    a.click();
+
+    URL.revokeObjectURL(url);
+    setInfo("CSV exportiert.");
+  }
+
+  function pasteRows() {
+    const example = `PosNr;Kurztext;Langtext;Einheit;Menge;Preis
+01.0001;"Aushub Baugrube";"Aushub Baugrube gemäß Leistungsbeschreibung";m³;120;35,50`;
+
+    const text = window.prompt("Zeilen einfügen, CSV mit Semikolon:", example);
+    if (!text) return;
+
+    importCSV(text);
+  }
+
+  function exportXLSX() {
+    const xmlHeader =
+    `<?xml version="1.0"?>` +
+    `<?mso-application progid="Excel.Sheet"?>` +
+    `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
+    `xmlns:o="urn:schemas-microsoft-com:office:office" ` +
+    `xmlns:x="urn:schemas-microsoft-com:office:excel" ` +
+    `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`;
+
+    const sheetOpen = `<Worksheet ss:Name="LV"><Table>`;
+
+    const headRow =
+    `<Row>` +
+    [
+    "PosNr",
+    "Kurztext",
+    "Langtext",
+    "Bemerkung",
+    "Einheit",
+    "Menge",
+    "EP netto",
+    "Gesamt",
+    "Währung",
+    "Quelle"].
+
+    map((h) => `<Cell><Data ss:Type="String">${esc(h)}</Data></Cell>`).
+    join("") +
+    `</Row>`;
+
+    const body = rows.
+    map((r) => {
+      const total = lineTotal(r);
+
+      return (
+        `<Row>` +
+        `<Cell><Data ss:Type="String">${esc(r.posNr || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.kurztext || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.langtext || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.bemerkung || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.einheit || "")}</Data></Cell>` +
+        `<Cell><Data ss:Type="Number">${toNumber(r.menge)}</Data></Cell>` +
+        `<Cell><Data ss:Type="Number">${toNumber(r.preis)}</Data></Cell>` +
+        `<Cell><Data ss:Type="Number">${toNumber(total)}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.waehrung || "EUR")}</Data></Cell>` +
+        `<Cell><Data ss:Type="String">${esc(r.source || "manual")}</Data></Cell>` +
+        `</Row>`);
+
+    }).
+    join("");
+
+    const xml =
+    xmlHeader +
+    sheetOpen +
+    headRow +
+    body +
+    `</Table></Worksheet></Workbook>`;
+
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = projectCode ? `${projectCode}-lv.xlsx` : "lv.xlsx";
+    a.click();
+
+    URL.revokeObjectURL(url);
+    setInfo("XLSX exportiert.");
+  }
+
+  function autoPosNr() {
+    const next = LV.renumber("01", 1, 4);
+    setRows(next);
+    setSelectedId(next[0]?.id || "");
+    setInfo("Positionen automatisch nummeriert.");
+  }
+
+  async function syncRowsToServer(customRows?: LVPos[]) {
+    const code = String(projectCode || "").trim().toUpperCase();
+
+    if (!code) {
+      setInfo("Kein Projektcode vorhanden. Server-Speicherung nicht möglich.");
+      return false;
+    }
+
+    const sourceRows = customRows ?? LV.list();
+
+    const payloadItems = sourceRows.
+    filter((r) => String(r.posNr ?? "").trim() || String(r.kurztext ?? "").trim()).
+    map((r) => ({
+      pos: String(r.posNr ?? "").trim(),
+      parentPos: String(r.parentPosNr ?? "").trim(),
+      text: String(r.kurztext ?? "").trim(),
+      langtext: String(r.langtext ?? "").trim(),
+      bemerkung: String(r.bemerkung ?? "").trim(),
+      unit: String(r.einheit ?? "").trim(),
+      quantity: Number(r.menge ?? 0),
+      ep:
+      r.preis === null || r.preis === undefined || !Number.isFinite(Number(r.preis)) ?
+      null :
+      Number(r.preis),
+      total: Number.isFinite(lineTotal(r)) ? lineTotal(r) : null,
+      currency: r.waehrung || "EUR"
+    }));
+
+    if (!payloadItems.length) {
+      setInfo("Keine gültigen LV-Zeilen für die Server-Speicherung vorhanden.");
+      return false;
+    }
+
+    try {
+      setSyncBusy(true);
+      setInfo("Speichere Projekt-LV am Server …");
+
+      const response = await fetch(
+        apiUrl(`/api/project-lv/${encodeURIComponent(code)}/import`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: withAuthHeaders({
+            "Content-Type": "application/json"
+          }),
+          body: JSON.stringify({
+            title: `LV ${code}`,
+            currency: "EUR",
+            items: payloadItems
+          })
+        }
+      );
+
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(json?.error || "Server-Speicherung fehlgeschlagen");
+      }
+
+      setInfo(`Projekt-LV am Server gespeichert. Zeilen: ${Number(json?.count || payloadItems.length)}.`);
+      return true;
+    } catch (e: any) {
+      setInfo(`Server-Fehler: ${e?.message || e}`);
+      return false;
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  function applyLvFilter(filter: LvQualityFilter) {
+    setQualityFilter(filter);
+    setViewMode("editor");
+    setInfo(`LV-Filter aktiviert: ${filter}`);
+  }
+
+  function runWithProgress(title: string, work: () => string[]) {
+    setKiWorking(true);
+    setKiProgress(10);
+    setKiLog([`${title} gestartet …`]);
+
+    window.setTimeout(() => {
+      setKiProgress(45);
+
+      window.setTimeout(() => {
+        const log = work();
+
+        setKiProgress(100);
+        setKiLog(log.length ? log : ["Keine sichtbaren Änderungen erkannt."]);
+        setInfo(`${title} abgeschlossen.`);
+
+        window.setTimeout(() => {
+          setKiWorking(false);
+          setKiProgress(0);
+        }, 900);
+      }, 300);
+    }, 250);
+  }
+
+  function fixMissingFields() {
+    runWithProgress("LV-Prüfung", () => {
+      const log: string[] = [];
+
+      const next = rows.map((row) => {
+        let changed = false;
+        const patch: Partial<LVPos> = {};
+
+        if (!String(row.einheit || "").trim()) {
+          const unit = suggestUnit(row);
+          patch.einheit = unit;
+          log.push(`✓ Pos. ${row.posNr || "—"} – Einheit ergänzt: leer → ${unit}`);
+          changed = true;
+        }
+
+        if (!String(row.kurztext || "").trim()) {
+          const kurz = suggestKurztext(row);
+          patch.kurztext = kurz;
+          log.push(`✓ Pos. ${row.posNr || "—"} – Kurztext ergänzt.`);
+          changed = true;
+        }
+
+        if (!String(row.langtext || "").trim()) {
+          const lang = suggestLangtext({ ...row, ...patch });
+          patch.langtext = lang;
+          log.push(`✓ Pos. ${row.posNr || "—"} – Langtext ergänzt.`);
+          changed = true;
+        }
+
+        if (toNumber(row.menge) <= 0) {
+          log.push(`⚠ Pos. ${row.posNr || "—"} – Menge fehlt / 0. Manuelle Prüfung notwendig.`);
+        }
+
+        if (toNumber(row.preis) <= 0) {
+          log.push(`⚠ Pos. ${row.posNr || "—"} – EP fehlt. Preisprüfung in Kalkulation notwendig.`);
+        }
+
+        if (!changed) return row;
+
+        return makeLvRow({
+          ...row,
+          ...patch,
+          gesamt: round2(toNumber(row.menge) * toNumber(row.preis))
+        });
+      });
+
+      LV.setAll(next);
+      setRows(next);
+      return log;
+    });
+  }
+
+  function deleteDuplicateLvRows() {
+    runWithProgress("Dublettenbereinigung", () => {
+      const groups = getLvDuplicateGroups(rows);
+
+      if (!groups.length) return ["Keine doppelten LV-Positionen gefunden."];
+
+      const removeIds = new Set<string>();
+      const log: string[] = [];
+
+      for (const group of groups) {
+        const sorted = [...group].sort((a, b) => lvRowScore(b) - lvRowScore(a));
+        const keep = sorted[0];
+
+        for (const row of sorted.slice(1)) {
+          removeIds.add(row.id);
+          log.push(`✓ Dublette gelöscht: Pos. ${row.posNr || "—"} – behalten wurde Pos. ${keep.posNr || "—"}`);
+        }
+      }
+
+      const next = rows.filter((row) => !removeIds.has(row.id));
+      LV.setAll(next);
+      setRows(next);
+      setSelectedId(next[0]?.id || "");
+
+      return log;
+    });
+  }
+
+  useEffect(() => {
+    function handleLvCommand(event: Event) {
+      const detail = (event as CustomEvent<{filter?: LvQualityFilter;action?: string;}>).detail;
+      if (!detail) return;
+
+      if (detail.filter) {
+        applyLvFilter(detail.filter);
+      }
+
+      if (detail.action === "fixMissing") {
+        fixMissingFields();
+      }
+
+      if (detail.action === "deleteDuplicates") {
+        deleteDuplicateLvRows();
+      }
+
+      if (detail.action === "syncServer") {
+        void syncRowsToServer(rows);
+      }
+
+      if (detail.action === "goKi") {
+        navigate("/kalkulation/mit-ki");
+      }
+
+      if (detail.action === "goGaeb") {
+        navigate(`/kalkulation/gaeb${projectCode ? `?projectCode=${encodeURIComponent(projectCode)}` : ""}`);
+      }
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    window.addEventListener("rlc:lv-command", handleLvCommand);
+
+    return () => {
+      window.removeEventListener("rlc:lv-command", handleLvCommand);
+    };
+  }, [rows, projectCode, navigate]);
+
+  const selectedStatus = selectedRow ? rowStatus(selectedRow) : "critical";
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2>LV hochladen / erstellen</h2>
+    <div className={rlcClass(null, page)}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".csv,text/csv"
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = () => importCSV(String(reader.result || ""));
+          reader.readAsText(file, "utf-8");
+
+          e.currentTarget.value = "";
+        }} className="rlc-migrated-pages-kalkulation-lv-import-tsx-913" />
+      
+
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
         <div>
-          <b>Projekt:</b> {curProject ? `${curProject.number} — ${curProject.name}` : "kein Projekt ausgewählt"}
+          <div className={rlcClass(null, eyebrow)}>RLC Leistungsverzeichnis</div>
+          <h1 className={rlcClass(null, title)}>LV / Positionen</h1>
+          <p className={rlcClass(null, subtitle)}>
+            Kompakte LV-Verwaltung: importieren, prüfen, bearbeiten und direkt in Kalkulation, GAEB oder Angebot weitergeben.
+          </p>
         </div>
 
-        <label style={{ marginLeft: 12 }}>
-          MwSt %
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnHeroPrimary)} onClick={addRow}>
+            + Position
+          </button>
+
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => fileRef.current?.click()}>
+            CSV importieren
+          </button>
+
+          <button
+            type="button" className={rlcClass(null,
+            btnHeroSecondary)}
+            onClick={() => void syncRowsToServer(rows)}
+            disabled={syncBusy || rows.length === 0}>
+            
+            {syncBusy ? "Speichert …" : "Server speichern"}
+          </button>
+
+          <button
+            type="button" className={rlcClass(null,
+            btnHeroSecondary)}
+            onClick={() =>
+            navigate(
+              `/kalkulation/gaeb${
+              projectCode ? `?projectCode=${encodeURIComponent(projectCode)}` : ""}`
+
+            )
+            }>
+            
+            GAEB
+          </button>
+
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => navigate("/kalkulation/mit-ki")}>
+            Kalkulation mit KI
+          </button>
+        </div>
+
+        <div className={rlcClass(null, heroMeta)}>
+          Projekt: <b>{projectCode || "—"}</b>
+          {projectName ? <span> · <b>{projectName}</b></span> : null}
+          {info ? <span> · {info}</span> : null}
+        </div>
+      </section>
+
+      <section className={rlcClass(null, grid4)}>
+        <KpiCard label="Netto" value={fmtCurrency(totals.netto)} />
+        <KpiCard label="Brutto" value={fmtCurrency(totals.brutto)} />
+        <KpiCard label="Positionen" value={String(totals.total)} sub={`${totals.coverage}% mit EP`} />
+        <KpiCard label="Prüfung" value={String(totals.critical + totals.warning)} sub={`${totals.critical} fehlt · ${totals.warning} prüfen`} />
+      </section>
+
+      <section className={rlcClass(null, compactToolbar)}>
+        <div className={rlcClass(null, toolbarLeft)}>
           <input
-            type="number"
-            value={mwst}
-            onChange={(e) => setMwst(Number(e.target.value || 0))}
-            style={{ width: 70, marginLeft: 6 }}
-          />
-        </label>
+            value={query}
+            onChange={(e) => setQuery(e.target.value)} className={rlcClass(null,
+            searchInput)}
+            placeholder="LV durchsuchen: PosNr, Kurztext, Langtext, ME…" />
+          
 
-        <button onClick={() => fileRef.current?.click()}>CSV Import</button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (!f) return;
-            const r = new FileReader();
-            r.onload = () => importCSV(String(r.result || ""));
-            r.readAsText(f, "utf-8");
-          }}
-        />
-
-        <button onClick={pasteRows}>Zeilen einfügen</button>
-        <button onClick={exportCSV}>CSV Export</button>
-        <button onClick={exportXLSX}>XLSX Export</button>
-
-        <button
-          onClick={() => validateGAEB("x83")}
-          disabled={!projectCode || !!gaebBusy}
-          title={!projectCode ? "Kein Projekt gewählt" : "GAEB X83 prüfen"}
-        >
-          {gaebBusy === "x83" ? "X83 prüft …" : "X83 prüfen"}
-        </button>
-
-        <button
-          onClick={() => exportGAEBProject("x83")}
-          disabled={!projectCode || !!gaebBusy}
-          title={!projectCode ? "Kein Projekt gewählt" : "GAEB X83 exportieren"}
-        >
-          {gaebBusy === "x83" ? "X83 Export …" : "X83 Export"}
-        </button>
-
-        <button
-          onClick={() => validateGAEB("x84")}
-          disabled={!projectCode || !!gaebBusy}
-          title={!projectCode ? "Kein Projekt gewählt" : "GAEB X84 prüfen"}
-        >
-          {gaebBusy === "x84" ? "X84 prüft …" : "X84 prüfen"}
-        </button>
-
-        <button
-          onClick={() => exportGAEBProject("x84")}
-          disabled={!projectCode || !!gaebBusy}
-          title={!projectCode ? "Kein Projekt gewählt" : "GAEB X84 exportieren"}
-        >
-          {gaebBusy === "x84" ? "X84 Export …" : "X84 Export"}
-        </button>
-
-        <button onClick={addRow}>+ Zeile</button>
-        <button onClick={autoPosNr}>Auto-Position</button>
-        <button onClick={clearAll}>Alles löschen</button>
-
-        <button
-          style={{ marginLeft: "auto" }}
-          onClick={() => navigate("/kalkulation/manuell")}
-          title="Wechsel zur Kalkulation – Manuell"
-        >
-          ⇢ in „Kalkulation manuell“
-        </button>
-
-        <button
-          onClick={() => navigate("/kalkulation/mit-ki")}
-          title="Wechsel zur Kalkulation – KI"
-        >
-          ⇢ in „Kalkulation mit KI“
-        </button>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <span style={{ ...badge, borderColor: gaebStatusColor, color: gaebStatusColor }}>
-          {gaebResult ? (gaebResult.valid ? "GAEB valide" : "GAEB nicht valide") : "GAEB Status offen"}
-        </span>
-
-        <span style={pill}>Projektcode: {projectCode || "—"}</span>
-
-        {gaebResult && (
-          <>
-            <span style={{ ...pill, borderColor: "#d33", color: "#d33" }}>
-              Fehler: {gaebResult.errorCount || 0}
-            </span>
-            <span style={{ ...pill, borderColor: "#c80", color: "#c80" }}>
-              Warnungen: {gaebResult.warningCount || 0}
-            </span>
-            {gaebResult.mode && <span style={pill}>Modus: {gaebResult.mode.toUpperCase()}</span>}
-          </>
-        )}
-      </div>
-
-      {!!gaebInfo && (
-        <div style={{ marginBottom: 12, color: gaebInfo.includes("Fehler") || gaebInfo.includes("blockiert") ? "#b00" : "#0a7" }}>
-          {gaebInfo}
+          <div className={rlcClass(null, mwstBox)}>
+            <span>MwSt</span>
+            <input
+              type="number"
+              value={mwst}
+              onChange={(e) => setMwst(Number(e.target.value || 0))} className={rlcClass(null,
+              mwstInput)} />
+            
+            <span>%</span>
+          </div>
         </div>
-      )}
 
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {["Position", "Kurztext", "ME", "Menge (Formel)", "EP (netto)", "Menge (calc.)", "Zeilenpreis", "Aktion"].map(
-                (h, i) => (
-                  <th key={i} style={th}>
-                    {h}
-                  </th>
-                )
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const zeile = (r.menge || 0) * (r.preis || 0);
-              return (
-                <tr key={r.id}>
-                  <td style={td}>
-                    <input value={r.posNr} onChange={(e) => save({ ...r, posNr: e.target.value })} style={inp(110)} />
-                  </td>
-                  <td style={td}>
-                    <input value={r.kurztext} onChange={(e) => save({ ...r, kurztext: e.target.value })} style={inp(520)} />
-                  </td>
-                  <td style={td}>
-                    <input value={r.einheit} onChange={(e) => save({ ...r, einheit: e.target.value })} style={inp(60)} />
-                  </td>
-                  <td style={tdNum}>
-                    <input
-                      type="number"
-                      value={r.menge}
-                      onChange={(e) => save({ ...r, menge: num(e.target.value) })}
-                      style={inp(120, "right")}
-                    />
-                  </td>
-                  <td style={tdNum}>
-                    <input
-                      type="number"
-                      value={r.preis ?? 0}
-                      onChange={(e) => save({ ...r, preis: num(e.target.value) })}
-                      style={inp(120, "right")}
-                    />
-                  </td>
-                  <td style={{ ...tdNum, color: "#999" }}>{r.menge ?? 0}</td>
-                  <td style={{ ...tdNum, fontWeight: 600 }}>{fmt(zeile)}</td>
-                  <td style={td}>
-                    <button onClick={() => del(r.id)}>Löschen</button>
-                  </td>
-                </tr>
-              );
-            })}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={8} style={{ padding: 12, color: "#666" }}>
-                  Noch keine Zeilen.
-                </td>
-              </tr>
+        <div className={rlcClass(null, toolbarButtons)}>
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={pasteRows}>
+            Einfügen
+          </button>
+
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={exportCSV}>
+            CSV
+          </button>
+
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={exportXLSX}>
+            XLSX
+          </button>
+
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={autoPosNr}>
+            Auto-Nr.
+          </button>
+
+          <button
+            type="button" className={rlcClass(null,
+            viewMode === "editor" ? buttonPrimary : buttonBase)}
+            onClick={() => setViewMode("editor")}>
+            
+            Editor
+          </button>
+
+          <button
+            type="button" className={rlcClass(null,
+            viewMode === "liste" ? buttonPrimary : buttonBase)}
+            onClick={() => setViewMode("liste")}>
+            
+            Liste
+          </button>
+
+          <button type="button" className={rlcClass(null, buttonDanger)} onClick={clearAll}>
+            Leeren
+          </button>
+        </div>
+      </section>
+
+      <section className={rlcClass(null, qualityPanel)}>
+        <div className={rlcClass(null, qualityTop)}>
+          <div>
+            <b>LV-KI Prüfung</b>
+            <div className={rlcClass(null, qualitySub)}>
+              Filter, Datenprüfung, automatische Ergänzung und Änderungsprotokoll.
+            </div>
+          </div>
+
+          <div className={rlcClass(null, qualityActions)}>
+            <button type="button" className={rlcClass(null, qualityFilter === "alle" ? chipActive : chip)} onClick={() => applyLvFilter("alle")}>
+              Alle {qualityStats.total}
+            </button>
+            <button type="button" className={rlcClass(null, qualityFilter === "kritisch" ? chipActive : chip)} onClick={() => applyLvFilter("kritisch")}>
+              Kritisch {qualityStats.critical}
+            </button>
+            <button type="button" className={rlcClass(null, qualityFilter === "warning" ? chipActive : chip)} onClick={() => applyLvFilter("warning")}>
+              Prüfen {qualityStats.warning}
+            </button>
+            <button type="button" className={rlcClass(null, qualityFilter === "epFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("epFehlt")}>
+              EP fehlt {qualityStats.epFehlt}
+            </button>
+            <button type="button" className={rlcClass(null, qualityFilter === "einheitFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("einheitFehlt")}>
+              Einheit fehlt {qualityStats.einheitFehlt}
+            </button>
+            <button type="button" className={rlcClass(null, qualityFilter === "mengeFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("mengeFehlt")}>
+              Menge fehlt {qualityStats.mengeFehlt}
+            </button>
+            <button type="button" className={rlcClass(null, qualityFilter === "langtextFehlt" ? chipActive : chip)} onClick={() => applyLvFilter("langtextFehlt")}>
+              Langtext fehlt {qualityStats.langtextFehlt}
+            </button>
+            <button type="button" className={rlcClass(null, qualityFilter === "doppelte" ? chipActive : chip)} onClick={() => applyLvFilter("doppelte")}>
+              Doppelte {qualityStats.doppelte}
+            </button>
+          </div>
+        </div>
+
+        <div className={rlcClass(null, qualityActions)}>
+          <button type="button" className={rlcClass(null, buttonPrimary)} onClick={fixMissingFields}>
+            Fehlende Daten automatisch ergänzen
+          </button>
+
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={deleteDuplicateLvRows}>
+            Doppelte bereinigen
+          </button>
+
+          <button type="button" className={rlcClass(null, buttonBase)} onClick={() => void syncRowsToServer(rows)}>
+            Server speichern
+          </button>
+        </div>
+
+        {kiWorking || kiLog.length ?
+        <div className={rlcClass(null, kiProtocolBox)}>
+            <div className={rlcClass(null, protocolHead)}>
+              <b>KI-Protokoll</b>
+              <span>{kiWorking ? `${kiProgress}%` : "abgeschlossen"}</span>
+            </div>
+
+            <div className={rlcClass(null, progressTrack)}>
+              <div className={rlcClass(null, { ...progressFill, width: `${kiWorking ? kiProgress : 100}%` })} />
+            </div>
+
+            <div className={rlcClass(null, protocolList)}>
+              {kiLog.slice(0, 8).map((line, idx) =>
+            <div key={`${line}-${idx}`} className={rlcClass(null, line.startsWith("⚠") ? protocolWarn : protocolOk)}>
+                  {line}
+                </div>
             )}
-          </tbody>
-        </table>
-      </div>
+            </div>
+          </div> :
+        null}
+      </section>
 
-      {gaebResult && !gaebResult.valid && (
-        <div style={{ marginTop: 20 }}>
-          <h3 style={{ marginBottom: 10 }}>GAEB Fehler / Warnungen</h3>
+      {info ? <div className={rlcClass(null, statusBox(info))}>{info}</div> : null}
 
-          <div style={{ border: "1px solid #eee", borderRadius: 8, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead style={{ background: "#fafafa" }}>
+      {viewMode === "editor" ?
+      <section className={rlcClass(null, mainLayout)}>
+          <aside className={rlcClass(null, listCard)}>
+            <div className={rlcClass(null, listHeader)}>
+              <div>
+                <h2 className={rlcClass(null, sectionTitle)}>LV-Positionen</h2>
+                <div className={rlcClass(null, sectionText)}>
+                  {filteredRows.length.toLocaleString("de-DE")} von {rows.length.toLocaleString("de-DE")}
+                </div>
+              </div>
+            </div>
+
+            <div className={rlcClass(null, positionList)}>
+              {filteredRows.map((r) => {
+              const active = r.id === selectedId;
+              const status = rowStatus(r);
+
+              return (
+                <button
+                  key={r.id}
+                  ref={active ? selectedItemRef : undefined}
+                  type="button" className={rlcClass(null,
+                  {
+                    ...positionItem,
+                    ...(active ? positionItemActive : {})
+                  })}
+                  onClick={() => setSelectedId(r.id)}>
+                  
+                    <div className={rlcClass(null, positionTop)}>
+                      <b>{r.posNr || "—"}</b>
+                      <span className={rlcClass(null, statusBadge(status))}>{statusLabel(status)}</span>
+                    </div>
+
+                    <div className={rlcClass(null, positionText)}>{r.kurztext || "Ohne Kurztext"}</div>
+
+                    <div className={rlcClass(null, positionMeta)}>
+                      {fmtNumber(r.menge)} {r.einheit || "ME"} · EP {fmtCurrency(r.preis || 0)} · GP {fmtCurrency(lineTotal(r))}
+                    </div>
+                  </button>);
+
+            })}
+
+              {!filteredRows.length ?
+            <div className={rlcClass(null, emptyState)}>Keine LV-Position vorhanden.</div> :
+            null}
+            </div>
+          </aside>
+
+          <main className={rlcClass(null, editorCard)}>
+            {selectedRow ?
+          <>
+                <div className={rlcClass(null, editorHead)}>
+                  <div>
+                    <h2 className={rlcClass(null, sectionTitle)}>Position bearbeiten</h2>
+                    <div className={rlcClass(null, sectionText)}>
+                      {selectedRow.posNr || "Neue Position"} · {selectedRow.kurztext || "Ohne Kurztext"}
+                    </div>
+                  </div>
+
+                  <div className={rlcClass(null, editorActions)}>
+                    <span className={rlcClass(null, statusBadge(selectedStatus))}>{statusLabel(selectedStatus)}</span>
+
+                    <button type="button" className={rlcClass(null, buttonBase)} onClick={duplicateSelected}>
+                      Duplizieren
+                    </button>
+
+                    <button type="button" className={rlcClass(null, buttonDanger)} onClick={() => deleteRow(selectedRow.id)}>
+                      Löschen
+                    </button>
+                  </div>
+                </div>
+
+                <div className={rlcClass(null, formGrid)}>
+                  <Field label="Positionsnummer">
+                    <input
+                  value={selectedRow.posNr || ""}
+                  onChange={(e) => patchSelected({ posNr: e.target.value })} className={rlcClass(null,
+                  inputStyle)}
+                  placeholder="z.B. 01.0010" />
+                
+                  </Field>
+
+                  <Field label="Einheit">
+                    <input
+                  value={selectedRow.einheit || ""}
+                  onChange={(e) => patchSelected({ einheit: e.target.value })} className={rlcClass(null,
+                  inputStyle)}
+                  placeholder="m / m² / m³ / St" />
+                
+                  </Field>
+
+                  <Field label="Menge">
+                    <input
+                  type="number"
+                  value={selectedRow.menge ?? 0}
+                  onChange={(e) =>
+                  patchSelected({
+                    menge: toNumber(e.target.value),
+                    gesamt: round2(toNumber(e.target.value) * toNumber(selectedRow.preis))
+                  })
+                  } className={rlcClass(null,
+                  inputStyle)} />
+                
+                  </Field>
+
+                  <Field label="EP netto">
+                    <input
+                  type="number"
+                  value={selectedRow.preis ?? 0}
+                  onChange={(e) =>
+                  patchSelected({
+                    preis: toNumber(e.target.value),
+                    gesamt: round2(toNumber(selectedRow.menge) * toNumber(e.target.value))
+                  })
+                  } className={rlcClass(null,
+                  inputStyle)} />
+                
+                  </Field>
+                </div>
+
+                <div className={rlcClass(null, formGrid2)}>
+                  <Field label="Kurztext">
+                    <input
+                  value={selectedRow.kurztext || ""}
+                  onChange={(e) => patchSelected({ kurztext: e.target.value })} className={rlcClass(null,
+                  inputStyle)}
+                  placeholder="Kurze Leistungsbeschreibung" />
+                
+                  </Field>
+
+                  <div className={rlcClass(null, sumBox)}>
+                    <div className={rlcClass(null, sumLabel)}>Gesamt netto</div>
+                    <div className={rlcClass(null, sumValue)}>{fmtCurrency(lineTotal(selectedRow))}</div>
+                  </div>
+                </div>
+
+                <div className="rlc-migrated-pages-kalkulation-lv-import-tsx-914">
+                  <Field label="Langtext">
+                    <textarea
+                  value={selectedRow.langtext || ""}
+                  onChange={(e) => patchSelected({ langtext: e.target.value })} className={rlcClass(null,
+                  largeTextArea)}
+                  placeholder="Ausführliche Leistungsbeschreibung, Nebenleistungen, Abrechnung, technische Anforderungen…" />
+                
+                  </Field>
+                </div>
+
+                <div className="rlc-migrated-pages-kalkulation-lv-import-tsx-915">
+                  <Field label="Bemerkung / interne Notiz">
+                    <textarea
+                  value={selectedRow.bemerkung || ""}
+                  onChange={(e) => patchSelected({ bemerkung: e.target.value })} className={rlcClass(null,
+                  noteTextArea)}
+                  placeholder="Optionale Bemerkung" />
+                
+                  </Field>
+                </div>
+
+                <div className={rlcClass(null, bottomActions)}>
+                  <button
+                type="button" className={rlcClass(null,
+                buttonPrimary)}
+                onClick={() => navigate("/kalkulation/rezepte")}>
+                
+                    Urkalkulation / Rezept erstellen
+                  </button>
+
+                  <button
+                type="button" className={rlcClass(null,
+                buttonBase)}
+                onClick={() => navigate("/kalkulation/mit-ki")}>
+                
+                    Zur KI-Kalkulation
+                  </button>
+
+                  <button
+                type="button" className={rlcClass(null,
+                buttonBase)}
+                onClick={() => navigate("/kalkulation/angebot")}>
+                
+                    Angebot
+                  </button>
+                </div>
+              </> :
+
+          <div className={rlcClass(null, emptyState)}>Keine Position gewählt.</div>
+          }
+          </main>
+        </section> :
+
+      <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
+            <div>
+              <h2 className={rlcClass(null, sectionTitle)}>LV-Kompaktliste</h2>
+              <div className={rlcClass(null, sectionText)}>
+                Schnelle Übersicht. Für Langtext und Details bitte Editor verwenden.
+              </div>
+            </div>
+          </div>
+
+          <div className={rlcClass(null, tableWrap)}>
+            <table className={rlcClass(null, table)}>
+              <thead>
                 <tr>
-                  <th style={th}>Pos.</th>
-                  <th style={th}>Typ</th>
-                  <th style={th}>Feld</th>
-                  <th style={th}>Meldung</th>
+                  <th className={rlcClass(null, th)}>Status</th>
+                  <th className={rlcClass(null, th)}>Position</th>
+                  <th className={rlcClass(null, th)}>Kurztext</th>
+                  <th className={rlcClass(null, th)}>ME</th>
+                  <th className={rlcClass(null, thRight)}>Menge</th>
+                  <th className={rlcClass(null, thRight)}>EP</th>
+                  <th className={rlcClass(null, thRight)}>GP</th>
+                  <th className={rlcClass(null, th)}>Quelle</th>
+                  <th className={rlcClass(null, th)}>Aktion</th>
                 </tr>
               </thead>
+
               <tbody>
-                {(gaebResult.errors || []).map((err, i) => (
-                  <tr key={`e-${i}`} style={{ background: "#fff5f5" }}>
-                    <td style={td}>{err.position || err.posNr || "—"}</td>
-                    <td style={{ ...td, color: "#d33", fontWeight: 600 }}>{err.type || "error"}</td>
-                    <td style={td}>{err.field || "—"}</td>
-                    <td style={td}>{err.message || err.reason || err.code || "—"}</td>
-                  </tr>
-                ))}
+                {filteredRows.map((r) => {
+                const status = rowStatus(r);
 
-                {(gaebResult.warnings || []).map((warn, i) => (
-                  <tr key={`w-${i}`} style={{ background: "#fff9e8" }}>
-                    <td style={td}>{warn.position || warn.posNr || "—"}</td>
-                    <td style={{ ...td, color: "#c80", fontWeight: 600 }}>{warn.type || "warning"}</td>
-                    <td style={td}>{warn.field || "—"}</td>
-                    <td style={td}>{warn.message || warn.reason || warn.code || "—"}</td>
-                  </tr>
-                ))}
+                return (
+                  <tr key={r.id}>
+                      <td className={rlcClass(null, td)}>
+                        <span className={rlcClass(null, statusBadge(status))}>{statusLabel(status)}</span>
+                      </td>
 
-                {!(gaebResult.errors || []).length && !(gaebResult.warnings || []).length && (
-                  <tr>
-                    <td colSpan={4} style={{ padding: 12, color: "#666" }}>
-                      Keine Detailfehler vorhanden.
+                      <td className={rlcClass(null, td)}>
+                        <b>{r.posNr || "—"}</b>
+                      </td>
+
+                      <td className={rlcClass(null, td)}>{r.kurztext || "—"}</td>
+                      <td className={rlcClass(null, td)}>{r.einheit || "—"}</td>
+                      <td className={rlcClass(null, tdRight)}>{fmtNumber(r.menge)}</td>
+                      <td className={rlcClass(null, tdRight)}>{fmtCurrency(r.preis || 0)}</td>
+                      <td className={rlcClass(null, { ...tdRight, fontWeight: 700 })}>{fmtCurrency(lineTotal(r))}</td>
+
+                      <td className={rlcClass(null, td)}>
+                        <span className={rlcClass(null, badgeNeutral)}>{r.source || "manual"}</span>
+                      </td>
+
+                      <td className={rlcClass(null, td)}>
+                        <button
+                        type="button" className={rlcClass(null,
+                        buttonBase)}
+                        onClick={() => {
+                          setSelectedId(r.id);
+                          setViewMode("editor");
+                        }}>
+                        
+                          Öffnen
+                        </button>
+                      </td>
+                    </tr>);
+
+              })}
+
+                {!filteredRows.length ?
+              <tr>
+                    <td colSpan={9} className="rlc-migrated-pages-kalkulation-lv-import-tsx-916">
+                      Keine LV-Positionen vorhanden.
                     </td>
-                  </tr>
-                )}
+                  </tr> :
+              null}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        </section>
+      }
+    </div>);
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 24, marginTop: 16 }}>
-        <div style={sumBox}>
-          <div>Gesamt Netto</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.netto)}</div>
-        </div>
-        <div style={sumBox}>
-          <div>Gesamt Brutto</div>
-          <div style={{ fontWeight: 700 }}>{fmt(totals.brutto)}</div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
-function normalizeIssues(items: unknown): GaebIssue[] {
-  if (!Array.isArray(items)) return [];
-  return items.map((it: any) => ({
-    position: it?.position ?? it?.posNr ?? it?.positionNo ?? "",
-    posNr: it?.posNr ?? it?.position ?? it?.positionNo ?? "",
-    type: it?.type ?? "",
-    field: it?.field ?? it?.path ?? "",
-    message: it?.message ?? it?.reason ?? it?.error ?? "",
-    reason: it?.reason ?? it?.message ?? "",
-    code: it?.code ?? "",
-  }));
-}
+/* ===================== STYLES ===================== */
 
-/* UI helpers */
-const th: React.CSSProperties = {
+
+const qualityPanel: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #D7E3F5",
+  borderRadius: 16,
+  padding: 14,
+  display: "grid",
+  gap: 12,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+
+const qualityTop: React.CSSProperties = {
+  display: "grid",
+  gap: 10
+};
+
+const qualitySub: React.CSSProperties = {
+  marginTop: 3,
+  color: "#64748B",
+  fontSize: 13,
+  fontWeight: 600
+};
+
+const qualityActions: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center"
+};
+
+const chip: React.CSSProperties = {
+  border: "1px solid #CBD5E1",
+  background: "#FFFFFF",
+  color: "#334155",
+  borderRadius: 999,
+  padding: "7px 11px",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer"
+};
+
+const chipActive: React.CSSProperties = {
+  ...chip,
+  border: "1px solid #146EF5",
+  background: "#EAF2FF",
+  color: "#0B5BD3"
+};
+
+const kiProtocolBox: React.CSSProperties = {
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  borderRadius: 14,
+  padding: 12,
+  display: "grid",
+  gap: 9
+};
+
+const protocolHead: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 8,
+  color: "#0F172A",
+  fontSize: 13
+};
+
+const progressTrack: React.CSSProperties = {
+  height: 9,
+  borderRadius: 999,
+  background: "#DBEAFE",
+  overflow: "hidden"
+};
+
+const progressFill: React.CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  background: "linear-gradient(90deg,#146EF5,#22C55E)",
+  transition: "width 220ms ease"
+};
+
+const protocolList: React.CSSProperties = {
+  display: "grid",
+  gap: 6
+};
+
+const protocolOk: React.CSSProperties = {
+  border: "1px solid #BBF7D0",
+  background: "#F0FDF4",
+  color: "#166534",
+  borderRadius: 10,
+  padding: "7px 9px",
+  fontSize: 12,
+  fontWeight: 700
+};
+
+const protocolWarn: React.CSSProperties = {
+  ...protocolOk,
+  border: "1px solid #FDE68A",
+  background: "#FFFBEB",
+  color: "#92400E"
+};
+
+const page: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+  padding: 16
+};
+
+const heroCard: React.CSSProperties = {
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
+  color: "#FFFFFF",
+  borderRadius: 18,
+  padding: 20,
+  display: "grid",
+  gap: 12,
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
+};
+
+const eyebrow: React.CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  opacity: 0.82,
+  fontWeight: 700
+};
+
+const title: React.CSSProperties = {
+  margin: "4px 0",
+  fontSize: 28,
+  fontWeight: 700,
+  lineHeight: 1.1
+};
+
+const subtitle: React.CSSProperties = {
+  margin: 0,
+  maxWidth: 940,
+  opacity: 0.9,
+  lineHeight: 1.5
+};
+
+const heroActions: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap"
+};
+
+const heroMeta: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.92
+};
+
+const grid4: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gap: 12
+};
+
+const kpiCard: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 14,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
+  minWidth: 0
+};
+
+const kpiLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748B",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em"
+};
+
+const kpiValue: React.CSSProperties = {
+  marginTop: 6,
+  fontSize: 21,
+  color: "#0F172A",
+  fontWeight: 700,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+};
+
+const kpiSub: React.CSSProperties = {
+  marginTop: 3,
+  fontSize: 12,
+  color: "#64748B"
+};
+
+const compactToolbar: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 12,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+  alignItems: "center",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+
+const toolbarLeft: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
+  flex: "1 1 420px",
+  minWidth: 280
+};
+
+const toolbarButtons: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center"
+};
+
+const searchInput: React.CSSProperties = {
+  width: "100%",
+  fontSize: 14,
+  borderRadius: 10,
+  border: "1px solid #D1D5DB",
+  padding: "10px 12px",
+  background: "#FFFFFF",
+  color: "#111827",
+  boxSizing: "border-box"
+};
+
+const mwstBox: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  border: "1px solid #E5E7EB",
+  background: "#F8FAFC",
+  borderRadius: 10,
+  padding: "7px 9px",
+  color: "#475569",
+  fontSize: 13,
+  fontWeight: 700
+};
+
+const mwstInput: React.CSSProperties = {
+  width: 58,
+  border: "1px solid #D1D5DB",
+  borderRadius: 8,
+  padding: "6px 7px",
+  fontSize: 13,
+  textAlign: "right"
+};
+
+const statusBox = (info: string): React.CSSProperties => {
+  const isError =
+  info.startsWith("Fehler") ||
+  info.startsWith("Server-Fehler") ||
+  info.includes("fehlgeschlagen");
+
+  const isSuccess =
+  info.includes("gespeichert") ||
+  info.includes("importiert") ||
+  info.includes("exportiert") ||
+  info.includes("erstellt");
+
+  return {
+    padding: "11px 13px",
+    borderRadius: 12,
+    border: `1px solid ${isError ? "#FECACA" : isSuccess ? "#BBF7D0" : "#D1D5DB"}`,
+    background: isError ? "#FEF2F2" : isSuccess ? "#F0FDF4" : "#F8FAFC",
+    color: isError ? "#B91C1C" : isSuccess ? "#15803D" : "#475569",
+    fontSize: 13,
+    fontWeight: 600
+  };
+};
+
+const mainLayout: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "390px minmax(0,1fr)",
+  gap: 14,
+  alignItems: "start"
+};
+
+const card: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+
+const listCard: React.CSSProperties = {
+  ...card,
+  position: "sticky",
+  top: 12,
+  maxHeight: "calc(100vh - 24px)",
+  overflow: "hidden",
+  display: "grid",
+  gridTemplateRows: "auto minmax(0,1fr)"
+};
+
+const listHeader: React.CSSProperties = {
+  marginBottom: 12
+};
+
+const positionList: React.CSSProperties = {
+  display: "grid",
+  gridAutoRows: "max-content",
+  alignContent: "start",
+  gap: 8,
+  overflow: "auto",
+  paddingRight: 4
+};
+
+const positionItem: React.CSSProperties = {
+  display: "grid",
+  gap: 6,
+  border: "1px solid #E5E7EB",
+  background: "#FFFFFF",
+  borderRadius: 12,
+  padding: 10,
+  minHeight: 92,
+  height: "auto",
+  maxHeight: "none",
+  overflow: "visible",
+  alignSelf: "stretch",
+  cursor: "pointer",
   textAlign: "left",
-  padding: "8px 6px",
-  borderBottom: "1px solid #eee",
-  background: "#fafafa",
-  fontWeight: 600,
-  whiteSpace: "nowrap",
+  whiteSpace: "normal",
+  color: "#0F172A"
 };
 
-const td: React.CSSProperties = {
-  padding: "6px",
-  borderBottom: "1px solid #f0f0f0",
+const positionItemActive: React.CSSProperties = {
+  borderColor: "#146EF5",
+  background: "#EAF2FF"
 };
 
-const tdNum: React.CSSProperties = {
-  ...td,
-  textAlign: "right",
+const positionTop: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 8,
+  alignItems: "center"
+};
+
+const positionText: React.CSSProperties = {
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
+  overflow: "hidden",
+  minHeight: 35,
+  fontSize: 13,
+  fontWeight: 700,
+  lineHeight: 1.35,
+  color: "#0F172A"
+};
+
+const positionMeta: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748B",
+  lineHeight: 1.4
+};
+
+const editorCard: React.CSSProperties = {
+  ...card,
+  minWidth: 0
+};
+
+const editorHead: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  marginBottom: 14
+};
+
+const editorActions: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center"
+};
+
+const sectionTitle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 17,
+  color: "#0F172A",
+  fontWeight: 700
+};
+
+const sectionText: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 13,
+  color: "#64748B",
+  lineHeight: 1.45
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748B",
+  fontWeight: 700
+};
+
+const formGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1.1fr 0.7fr 0.7fr 0.7fr",
+  gap: 12
+};
+
+const formGrid2: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0,1fr) 220px",
+  gap: 12,
+  marginTop: 12,
+  alignItems: "end"
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  fontSize: 14,
+  borderRadius: 10,
+  border: "1px solid #D1D5DB",
+  padding: "10px 12px",
+  background: "#FFFFFF",
+  color: "#111827",
+  boxSizing: "border-box"
+};
+
+const largeTextArea: React.CSSProperties = {
+  ...inputStyle,
+  minHeight: 180,
+  resize: "vertical",
+  fontFamily: "inherit",
+  lineHeight: 1.5
+};
+
+const noteTextArea: React.CSSProperties = {
+  ...inputStyle,
+  minHeight: 78,
+  resize: "vertical",
+  fontFamily: "inherit",
+  lineHeight: 1.45
 };
 
 const sumBox: React.CSSProperties = {
-  border: "1px solid #eee",
-  borderRadius: 8,
-  padding: "10px 14px",
-  minWidth: 220,
-  background: "#fcfcfc",
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  borderRadius: 12,
+  padding: "10px 12px"
 };
 
-const inp = (w: number, align: "left" | "right" = "left"): React.CSSProperties => ({
-  width: w,
-  padding: "6px 8px",
-  textAlign: align,
-});
-
-const badge: React.CSSProperties = {
-  border: "1px solid #bbb",
-  borderRadius: 999,
-  padding: "4px 10px",
+const sumLabel: React.CSSProperties = {
   fontSize: 12,
-  background: "#fff",
+  color: "#0B5BD3",
+  fontWeight: 700,
+  textTransform: "uppercase"
 };
 
-const pill: React.CSSProperties = {
-  border: "1px solid #ccc",
-  borderRadius: 999,
-  padding: "4px 10px",
+const sumValue: React.CSSProperties = {
+  marginTop: 5,
+  fontSize: 20,
+  color: "#0F172A",
+  fontWeight: 700
+};
+
+const bottomActions: React.CSSProperties = {
+  marginTop: 16,
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  justifyContent: "flex-end"
+};
+
+const sectionHead: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  marginBottom: 12
+};
+
+const tableWrap: React.CSSProperties = {
+  border: "1px solid #E5E7EB",
+  borderRadius: 12,
+  overflow: "auto",
+  background: "#FFFFFF"
+};
+
+const table: React.CSSProperties = {
+  width: "100%",
+  minWidth: 1120,
+  borderCollapse: "collapse"
+};
+
+const th: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 10px",
+  borderBottom: "1px solid #E5E7EB",
+  background: "#F8FAFC",
+  fontWeight: 700,
+  whiteSpace: "nowrap",
   fontSize: 12,
-  background: "#fff",
+  color: "#475569",
+  textTransform: "uppercase",
+  letterSpacing: "0.02em"
 };
 
-const num = (v: any) => Number(v || 0);
+const thRight: React.CSSProperties = {
+  ...th,
+  textAlign: "right"
+};
 
-const fmt = (v: number) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(v || 0);
+const td: React.CSSProperties = {
+  padding: "9px 10px",
+  borderBottom: "1px solid #F1F5F9",
+  verticalAlign: "middle",
+  fontSize: 13,
+  color: "#0F172A"
+};
 
-const esc = (s: string) =>
-  (s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+const tdRight: React.CSSProperties = {
+  ...td,
+  textAlign: "right",
+  whiteSpace: "nowrap"
+};
+
+const buttonBase: React.CSSProperties = {
+  fontSize: 13,
+  borderRadius: 10,
+  padding: "9px 12px",
+  border: "1px solid #D1D5DB",
+  background: "#FFFFFF",
+  color: "#0F172A",
+  cursor: "pointer",
+  fontWeight: 700,
+  whiteSpace: "nowrap"
+};
+
+const buttonPrimary: React.CSSProperties = {
+  ...buttonBase,
+  background: "#146EF5",
+  border: "1px solid #0B5BD3",
+  color: "#FFFFFF"
+};
+
+const buttonDanger: React.CSSProperties = {
+  ...buttonBase,
+  background: "#FEF2F2",
+  border: "1px solid #FECACA",
+  color: "#B91C1C"
+};
+
+const btnHeroPrimary: React.CSSProperties = {
+  ...buttonPrimary,
+  padding: "10px 15px",
+  boxShadow: "0 10px 20px rgba(37,99,235,0.22)"
+};
+
+const btnHeroSecondary: React.CSSProperties = {
+  ...buttonBase,
+  padding: "10px 15px",
+  background: "#FFFFFF",
+  color: "#0F172A"
+};
+
+const badgeNeutral: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  border: "1px solid #CBD5E1",
+  background: "#F8FAFC",
+  color: "#475569",
+  borderRadius: 999,
+  padding: "5px 9px",
+  fontSize: 12,
+  fontWeight: 700,
+  whiteSpace: "nowrap"
+};
+
+function statusBadge(status: "ok" | "warning" | "critical"): React.CSSProperties {
+  if (status === "ok") {
+    return {
+      ...badgeNeutral,
+      border: "1px solid #BBF7D0",
+      background: "#F0FDF4",
+      color: "#15803D"
+    };
+  }
+
+  if (status === "warning") {
+    return {
+      ...badgeNeutral,
+      border: "1px solid #FDE68A",
+      background: "#FFFBEB",
+      color: "#B45309"
+    };
+  }
+
+  return {
+    ...badgeNeutral,
+    border: "1px solid #FECACA",
+    background: "#FEF2F2",
+    color: "#B91C1C"
+  };
+}
+
+const emptyState: React.CSSProperties = {
+  border: "1px dashed #CBD5E1",
+  background: "#F8FAFC",
+  borderRadius: 12,
+  padding: 14,
+  color: "#64748B",
+  fontSize: 13
+};

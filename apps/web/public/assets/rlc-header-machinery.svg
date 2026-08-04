@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 150" role="img" aria-label="Technische Linienzeichnung von Baumaschinen und Vermessungsgerät">
+  <defs>
+    <linearGradient id="fade" x1="0" x2="1">
+      <stop offset="0" stop-color="#146ef5" stop-opacity="0"/>
+      <stop offset=".18" stop-color="#146ef5" stop-opacity=".18"/>
+      <stop offset=".56" stop-color="#146ef5" stop-opacity=".34"/>
+      <stop offset="1" stop-color="#0b5bd3" stop-opacity=".46"/>
+    </linearGradient>
+    <pattern id="grid" width="34" height="24" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0v24" fill="none" stroke="#146ef5" stroke-opacity=".10" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <path d="M110 126H1185" fill="none" stroke="url(#fade)" stroke-width="2"/>
+  <path d="M190 114h970M255 102h835M410 90h650" fill="none" stroke="#146ef5" stroke-dasharray="3 8" stroke-opacity=".14"/>
+  <rect x="380" y="28" width="790" height="98" fill="url(#grid)" opacity=".65"/>
+
+  <!-- Kettenbagger -->
+  <g fill="none" stroke="#146ef5" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke-opacity=".42" stroke-width="2.4">
+      <path d="M345 113h132c11 0 20 5 24 13H330c3-8 7-13 15-13Z"/>
+      <rect x="341" y="118" width="149" height="17" rx="8.5"/>
+      <path d="M360 126h111M383 118l-12 17M414 118l-12 17M445 118l-12 17M476 119l-11 15"/>
+      <path d="M398 111V75h53l27 36"/>
+      <path d="M408 76l10-28h38l22 30v32M418 48l-11-7M455 49l-1 28M410 80h65"/>
+      <path d="M409 51 354 22l-74 48M353 22l28 43"/>
+      <path d="M280 70l-38 41M242 111l-33-3-20 18 48 3 16-18"/>
+      <path d="M279 70l13 9-37 37-13-5M401 91h-22v20M462 87h11"/>
+      <circle cx="360" cy="126" r="5"/><circle cx="470" cy="126" r="5"/>
+    </g>
+    <g stroke-opacity=".20" stroke-width="1.2">
+      <path d="M424 55h25l17 21h-51l9-21ZM402 91h72M391 109h91"/>
+      <path d="M317 32 285 65M332 40l-29 37M254 102l-20-3"/>
+    </g>
+  </g>
+
+  <!-- Walzenzug -->
+  <g fill="none" stroke="#146ef5" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke-opacity=".40" stroke-width="2.4">
+      <circle cx="759" cy="116" r="21"/>
+      <circle cx="759" cy="116" r="15"/>
+      <circle cx="868" cy="116" r="20"/>
+      <circle cx="868" cy="116" r="8"/>
+      <path d="M780 116h68M774 97h60l15 19M790 96l9-34h48l15 34M803 63l8-15h32l4 14"/>
+      <path d="M808 65v31M845 64v32M811 67h31l4 25h-42l7-25Z"/>
+      <path d="M854 92h24l8 13v11M789 92h-23l-12 6M866 74h21M877 74l8 18"/>
+      <path d="M822 48V37M809 37h26M788 116h61"/>
+    </g>
+    <g stroke-opacity=".18" stroke-width="1.2">
+      <path d="M818 69v20M834 69v20M799 101h60M744 132h140"/>
+    </g>
+  </g>
+
+  <!-- Tachymeter -->
+  <g fill="none" stroke="#146ef5" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke-opacity=".44" stroke-width="2.4">
+      <path d="M1064 51h38v42h-38zM1057 58h7v27h-7zM1102 58h7v27h-7z"/>
+      <circle cx="1083" cy="71" r="11"/>
+      <circle cx="1083" cy="71" r="4"/>
+      <path d="M1070 93h26l7 9h-40l7-9ZM1083 102v6M1069 108h28"/>
+      <path d="M1083 108l-31 29M1083 108v29M1083 108l31 29"/>
+      <path d="M1048 137h11M1077 137h12M1107 137h12"/>
+      <path d="M1070 51V40h26v11M1077 40v-8h12v8"/>
+    </g>
+    <g stroke-opacity=".18" stroke-width="1.2">
+      <circle cx="1083" cy="71" r="16"/>
+      <path d="M1040 71h16M1110 71h31M1083 24v8"/>
+    </g>
+  </g>
+
+  <!-- Kleine technische Markierungen -->
+  <g fill="#146ef5" opacity=".24">
+    <circle cx="540" cy="126" r="2.5"/><circle cx="584" cy="126" r="2.5"/>
+    <circle cx="628" cy="126" r="2.5"/><circle cx="672" cy="126" r="2.5"/>
+    <circle cx="934" cy="126" r="2.5"/><circle cx="978" cy="126" r="2.5"/>
+  </g>
+</svg>

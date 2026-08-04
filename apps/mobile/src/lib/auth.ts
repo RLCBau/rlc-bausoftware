@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 /* ============================================================
@@ -6,12 +6,13 @@ import * as SecureStore from "expo-secure-store";
  * ============================================================ */
 
 const TOKEN_KEY = "auth_token"; // ✅ token solo per SERVER_SYNC
+const SERVER_TOKEN_KEY = "auth_token_server_sync";
 const AUTH_STATE_KEY_BASE = "rlc_mobile_auth_state_v1";
 const AUTH_MODE_KEY = "rlc_mobile_auth_mode_v1"; // ✅ per ricordare l'ultima modalità usata
 
-// 🔐 ADMIN DEV (solo sviluppo)
-const ADMIN_EMAIL = "rlcvermessung@gmail.com";
-const ADMIN_KEY = "rlc_admin_7e2f9c4a_d8b1_4f6c_a2e9_91c5b7d3e8fa";
+// 🔐 ADMIN DEV (solo sviluppo, mai incorporare credenziali nel sorgente)
+const ADMIN_EMAIL = String(process.env.EXPO_PUBLIC_DEV_ADMIN_EMAIL || "").trim();
+const ADMIN_KEY = String(process.env.EXPO_PUBLIC_DEV_ADMIN_KEY || "").trim();
 
 /* ============================================================
  *  TYPES
@@ -32,12 +33,24 @@ export type AuthState = {
  *  API BASE URL (Expo)
  * ============================================================ */
 
-function apiBaseUrl() {
-  const u =
+async function apiBaseUrl() {
+  // Keep auth.ts independent from serverProfile.ts: serverProfile clears auth
+  // when the selected server changes, so importing it here would create a
+  // circular module dependency.
+  try {
+    const raw = await AsyncStorage.getItem("rlc_verified_server_profile_v1");
+    if (raw) {
+      const profile = JSON.parse(raw);
+      const verified = String(profile?.apiUrl || "").trim();
+      if (/^https?:\/\//i.test(verified)) return verified.replace(/\/$/, "");
+    }
+  } catch {}
+
+  const fallback =
     (process.env.EXPO_PUBLIC_API_URL as any) ||
     (process.env.EXPO_PUBLIC_API_BASE_URL as any) ||
     "http://localhost:4000";
-  return String(u).replace(/\/$/, "");
+  return String(fallback).replace(/\/$/, "");
 }
 
 /* ============================================================
@@ -101,6 +114,17 @@ export async function setToken(token: string) {
   } catch {
     // ignore
   }
+
+  // NUR_APP usa un token local:... per il proprio login, ma non deve
+  // distruggere l'ultima sessione server valida necessaria al PDF Core.
+  if (!t.startsWith("local:") && t.split(".").length === 3) {
+    await AsyncStorage.setItem(SERVER_TOKEN_KEY, t);
+    try {
+      await SecureStore.setItemAsync(SERVER_TOKEN_KEY, t);
+    } catch {
+      // AsyncStorage rimane il fallback.
+    }
+  }
 }
 
 export async function getToken(): Promise<string> {
@@ -120,6 +144,36 @@ export async function getTokenOrNull(): Promise<string | null> {
   return t ? t : null;
 }
 
+/**
+ * Token esclusivo per chiamate online condivise tra SERVER_SYNC e NUR_APP
+ * (per esempio /api/pdf/mobile-render). Non restituisce mai token local:...
+ */
+export async function getServerToken(): Promise<string> {
+  try {
+    const secure = normalizeToken(
+      await SecureStore.getItemAsync(SERVER_TOKEN_KEY)
+    );
+    if (secure && !secure.startsWith("local:")) return secure;
+  } catch {
+    // fallback sotto
+  }
+
+  try {
+    const stored = normalizeToken(
+      await AsyncStorage.getItem(SERVER_TOKEN_KEY)
+    );
+    if (stored && !stored.startsWith("local:")) return stored;
+  } catch {
+    // fallback sotto
+  }
+
+  const current = normalizeToken(await getToken());
+  if (current && !current.startsWith("local:") && current.split(".").length === 3) {
+    return current;
+  }
+  return "";
+}
+
 export async function hasToken(): Promise<boolean> {
   const t = await getToken();
   return !!normalizeToken(t);
@@ -133,6 +187,17 @@ export async function clearToken() {
   }
   try {
     await AsyncStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+
+  try {
+    await AsyncStorage.removeItem(SERVER_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+  try {
+    await SecureStore.deleteItemAsync(SERVER_TOKEN_KEY);
   } catch {
     // ignore
   }
@@ -226,9 +291,12 @@ export async function adminLoginDev(): Promise<
   if (!IS_DEV) {
     return { ok: false, error: "ADMIN_LOGIN_DISABLED_IN_PROD" };
   }
+  if (!ADMIN_EMAIL || !ADMIN_KEY) {
+    return { ok: false, error: "ADMIN_LOGIN_NOT_CONFIGURED" };
+  }
 
   try {
-    const url = `${apiBaseUrl()}/api/auth/admin-login`;
+    const url = `${await apiBaseUrl()}/api/auth/admin-login`;
 
     const resp = await fetch(url, {
       method: "POST",
@@ -304,3 +372,4 @@ export async function logoutAll(): Promise<void> {
     // ignore
   }
 }
+

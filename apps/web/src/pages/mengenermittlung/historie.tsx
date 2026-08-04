@@ -1,449 +1,1198 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
+import MengPageHeader from "./MengPageHeader";
+import { apiUrl } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 
-/* ===== Types ===== */
-type Row = { id: string; pos: string; text: string; qty: number; unit: string };
+type Row = {
+  id: string;
+  pos: string;
+  text: string;
+  qty: number;
+  unit: string;
+  ep: number;
+  factor: number;
+};
+
+type VersionStatus =
+"ENTWURF" |
+"GESPEICHERT" |
+"VERSENDET" |
+"FREIGEGEBEN";
+
 type Version = {
   id: string;
   projectId: string;
   createdAt: number;
-  user: string;
+  updatedAt?: number;
+  sentAt?: number;
+  approvedAt?: number;
+  createdBy?: string;
+  user?: string;
   note?: string;
+  recipient?: string;
+  status?: VersionStatus;
+  documentName?: string;
+  pdfUrl?: string;
   data: Row[];
 };
 
-const API_BASE =
-  (import.meta as any)?.env?.VITE_API_URL ||
-  (import.meta as any)?.env?.VITE_BACKEND_URL ||
-  "https://api.rlcbausoftware.com";
+type MessageState = {
+  title: string;
+  text: string;
+  tone: "info" | "success" | "error";
+} | null;
 
 const rid = () =>
-  (crypto as any)?.randomUUID ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random()}`;
-const fmt = (ts: number) => new Date(ts).toLocaleString();
+globalThis.crypto?.randomUUID?.() ??
+`${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-/* ===== API ===== */
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<T>;
-}
+const formatDateTime = (value?: number) => {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+};
 
-/* ===== Normalizer (robust) ===== */
-function normalizeRows(input: any): Row[] {
-  const arr = Array.isArray(input) ? input : [];
-  return arr.map((x: any, i: number) => {
-    const id =
-      String(x?.id || x?.rowId || x?.uuid || "") ||
-      `${Date.now()}-${i}-${Math.random()}`;
+const formatMoney = (value: number) =>
+new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR"
+}).format(Number.isFinite(value) ? value : 0);
 
-    const pos = String(x?.pos || x?.position || x?.nr || x?.Positionsnummer || "").trim();
-    const text = String(x?.text || x?.kurztext || x?.Kurztext || x?.langtext || x?.Text || "").trim();
+const formatNumber = (value: number) =>
+new Intl.NumberFormat("de-DE", {
+  maximumFractionDigits: 3
+}).format(Number.isFinite(value) ? value : 0);
 
-    // qty: prova ist/soll/qty/menge/quantity
-    const qtyRaw =
-      x?.qty ?? x?.menge ?? x?.quantity ?? x?.ist ?? x?.Ist ?? x?.soll ?? x?.Soll ?? 0;
+function getHistorieAuthHeaders(): Record<string, string> {
+  const keys = [
+  "rlc_token",
+  "token",
+  "authToken",
+  "accessToken",
+  "rlc.auth.token",
+  "rlc_mobile_token",
+  "rlc_auth_token",
+  "rlc_access_token"];
 
-    const qty = Number(qtyRaw || 0);
 
-    const unit = String(x?.unit || x?.einheit || x?.Einheit || x?.uom || "").trim();
+  for (const key of keys) {
+    const token =
+    localStorage.getItem(key) ||
+    sessionStorage.getItem(key);
 
-    return { id, pos, text, qty: Number.isFinite(qty) ? qty : 0, unit };
-  });
-}
-
-/* ===== Diff ===== */
-function diff(a: Row[], b: Row[]) {
-  const A = new Map(a.map((x) => [x.id, x]));
-  const B = new Map(b.map((x) => [x.id, x]));
-  const added: Row[] = [];
-  const removed: Row[] = [];
-  const changed: { before: Row; after: Row }[] = [];
-
-  for (const [id, v] of B) if (!A.has(id)) added.push(v);
-  for (const [id, v] of A) if (!B.has(id)) removed.push(v);
-
-  for (const [id, oldV] of A) {
-    const nv = B.get(id);
-    if (!nv) continue;
-    if (
-      oldV.qty !== nv.qty ||
-      oldV.text !== nv.text ||
-      oldV.unit !== nv.unit ||
-      oldV.pos !== nv.pos
-    ) {
-      changed.push({ before: oldV, after: nv });
+    if (token?.trim()) {
+      return { Authorization: `Bearer ${token.trim()}` };
     }
   }
+
+  try {
+    const raw =
+    localStorage.getItem("auth") ||
+    localStorage.getItem("rlc_auth") ||
+    localStorage.getItem("user");
+
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const token =
+      parsed?.token ||
+      parsed?.accessToken ||
+      parsed?.authToken ||
+      parsed?.data?.token ||
+      parsed?.data?.accessToken;
+
+      if (typeof token === "string" && token.trim()) {
+        return { Authorization: `Bearer ${token.trim()}` };
+      }
+    }
+  } catch {
+
+
+    // Keine gespeicherten Auth-Daten.
+  }return {};
+}
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(apiUrl(path), {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...getHistorieAuthHeaders(),
+      ...(init?.headers || {})
+    },
+    ...init
+  });
+
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || `HTTP ${response.status}`);
+  }
+
+  return data as T;
+}
+
+function normalizeRows(input: unknown): Row[] {
+  const source = Array.isArray(input) ?
+  input :
+  Array.isArray((input as any)?.rows) ?
+  (input as any).rows :
+  Array.isArray((input as any)?.items) ?
+  (input as any).items :
+  [];
+
+  return source.map((value: any, index: number) => {
+    const pos = String(
+      value?.pos ??
+      value?.posNr ??
+      value?.position ??
+      value?.nr ??
+      value?.Positionsnummer ??
+      ""
+    ).trim();
+
+    const text = String(
+      value?.text ??
+      value?.kurztext ??
+      value?.Kurztext ??
+      value?.langtext ??
+      value?.Text ??
+      ""
+    ).trim();
+
+    const qty = Number(
+      value?.qty ??
+      value?.menge ??
+      value?.quantity ??
+      value?.ist ??
+      value?.Ist ??
+      value?.soll ??
+      value?.Soll ??
+      0
+    );
+
+    const ep = Number(
+      value?.ep ??
+      value?.unitPrice ??
+      value?.unitPriceNet ??
+      value?.rlcKiUnitPrice ??
+      0
+    );
+
+    const factor = Number(value?.factor ?? 1);
+
+    return {
+      id:
+      String(value?.id ?? value?.rowId ?? value?.uuid ?? "").trim() ||
+      `${pos || "row"}-${index}`,
+      pos,
+      text,
+      qty: Number.isFinite(qty) ? qty : 0,
+      unit: String(
+        value?.unit ?? value?.einheit ?? value?.Einheit ?? value?.uom ?? ""
+      ).trim(),
+      ep: Number.isFinite(ep) ? ep : 0,
+      factor: Number.isFinite(factor) && factor !== 0 ? factor : 1
+    };
+  });
+}
+
+function normalizeVersions(input: unknown): Version[] {
+  const source = Array.isArray(input) ?
+  input :
+  Array.isArray((input as any)?.items) ?
+  (input as any).items :
+  [];
+
+  return source.
+  map((value: any): Version => ({
+    id: String(value?.id || rid()),
+    projectId: String(value?.projectId || ""),
+    createdAt: Number(value?.createdAt || Date.now()),
+    updatedAt: value?.updatedAt ? Number(value.updatedAt) : undefined,
+    sentAt: value?.sentAt ? Number(value.sentAt) : undefined,
+    approvedAt: value?.approvedAt ? Number(value.approvedAt) : undefined,
+    createdBy: String(value?.createdBy || value?.user || "Bauleitung"),
+    user: String(value?.user || value?.createdBy || "Bauleitung"),
+    note: value?.note ? String(value.note) : undefined,
+    recipient: value?.recipient ? String(value.recipient) : undefined,
+    status: normalizeStatus(value?.status, value?.sentAt, value?.approvedAt),
+    documentName: value?.documentName ?
+    String(value.documentName) :
+    undefined,
+    pdfUrl: value?.pdfUrl ? String(value.pdfUrl) : undefined,
+    data: normalizeRows(value?.data || value?.rows || [])
+  })).
+  sort((a: Version, b: Version) => b.createdAt - a.createdAt);
+}
+
+function normalizeStatus(
+status: unknown,
+sentAt?: unknown,
+approvedAt?: unknown)
+: VersionStatus {
+  const normalized = String(status || "").toUpperCase();
+
+  if (approvedAt || normalized === "FREIGEGEBEN") return "FREIGEGEBEN";
+  if (sentAt || normalized === "VERSENDET") return "VERSENDET";
+  if (normalized === "ENTWURF") return "ENTWURF";
+  return "GESPEICHERT";
+}
+
+function versionTotal(version: Version): number {
+  return version.data.reduce(
+    (sum, row) => sum + row.qty * row.ep * row.factor,
+    0
+  );
+}
+
+function currentTotal(rows: Row[]): number {
+  return rows.reduce(
+    (sum, row) => sum + row.qty * row.ep * row.factor,
+    0
+  );
+}
+
+function statusLabel(status?: VersionStatus): string {
+  switch (status) {
+    case "ENTWURF":
+      return "Entwurf";
+    case "VERSENDET":
+      return "Versendet";
+    case "FREIGEGEBEN":
+      return "Freigegeben";
+    default:
+      return "Gespeichert";
+  }
+}
+
+function statusStyle(status?: VersionStatus): React.CSSProperties {
+  if (status === "FREIGEGEBEN") {
+    return {
+      color: "#166534",
+      background: "#dcfce7",
+      borderColor: "#bbf7d0"
+    };
+  }
+
+  if (status === "VERSENDET") {
+    return {
+      color: "#0b5bd3",
+      background: "#dbeafe",
+      borderColor: "#bed6ff"
+    };
+  }
+
+  if (status === "ENTWURF") {
+    return {
+      color: "#92400e",
+      background: "#fef3c7",
+      borderColor: "#fde68a"
+    };
+  }
+
+  return {
+    color: "#475569",
+    background: "#f1f5f9",
+    borderColor: "#e2e8f0"
+  };
+}
+
+function diff(a: Row[], b: Row[]) {
+  const before = new Map(a.map((row) => [row.id, row]));
+  const after = new Map(b.map((row) => [row.id, row]));
+
+  const added: Row[] = [];
+  const removed: Row[] = [];
+  const changed: Array<{before: Row;after: Row;}> = [];
+
+  for (const [id, row] of after) {
+    if (!before.has(id)) added.push(row);
+  }
+
+  for (const [id, row] of before) {
+    if (!after.has(id)) removed.push(row);
+  }
+
+  for (const [id, oldRow] of before) {
+    const newRow = after.get(id);
+    if (!newRow) continue;
+
+    if (
+    oldRow.qty !== newRow.qty ||
+    oldRow.text !== newRow.text ||
+    oldRow.unit !== newRow.unit ||
+    oldRow.pos !== newRow.pos)
+    {
+      changed.push({ before: oldRow, after: newRow });
+    }
+  }
+
   return { added, removed, changed };
 }
 
-/* ===== Page ===== */
-export default function HistoriePage() {
-  const store: any = useProject();
+const shell: React.CSSProperties = {
+  display: "grid",
+  gap: 16
+};
 
-  // "id" può essere UUID, "name" è BA-2025-DEMO (come nel tuo header)
-  const projectName =
-    store?.project?.name || store?.project?.title || store?.activeProjectName || "BA-2025-DEMO";
+const card: React.CSSProperties = {
+  border: "1px solid #dce5f2",
+  background: "#ffffff",
+  borderRadius: 18,
+  boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
+  padding: 16
+};
 
-  const projectIdFromStore =
-    store?.projectId ||
-    store?.activeProjectId ||
-    store?.selectedProjectId ||
-    store?.project?.id ||
-    store?.project?.projectId ||
-    "";
+const summaryGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 12
+};
 
-  // per chiamate API uso sempre quello che arriva dallo store (anche se UUID),
-  // perché il backend ormai risolve e salva nella cartella canonica.
-  const [projectId, setProjectId] = React.useState<string>(projectIdFromStore || "BA-2025-DEMO");
+const summaryCard: React.CSSProperties = {
+  ...card,
+  minHeight: 104
+};
 
-  // label mostrata all’utente: BA-2025-DEMO
-  const [projectLabel, setProjectLabel] = React.useState<string>(projectName || "BA-2025-DEMO");
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid #d9e2f1",
+  borderRadius: 10,
+  padding: "9px 10px",
+  background: "#ffffff",
+  color: "#0f172a"
+};
+
+const btn: React.CSSProperties = {
+  padding: "9px 12px",
+  border: "1px solid #d7e2f0",
+  background: "#ffffff",
+  borderRadius: 11,
+  fontWeight: 700,
+  cursor: "pointer"
+};
+
+const btnPrimary: React.CSSProperties = {
+  ...btn,
+  color: "#ffffff",
+  background: "#0f4ec9",
+  borderColor: "#0f4ec9"
+};
+
+export default function AufmassHistorie() {
+  const { getSelectedProject } = useProject();
+  const project = getSelectedProject();
+
+  const projectId = String(project?.code || project?.id || "").trim();
+  const projectLabel = String(
+    project?.code || project?.name || project?.id || ""
+  ).trim();
 
   const [versions, setVersions] = React.useState<Version[]>([]);
   const [current, setCurrent] = React.useState<Row[]>([]);
-  const [sel, setSel] = React.useState<string[]>([]);
-  const [compare, setCompare] = React.useState<{ left?: Version; right?: Version } | null>(null);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [openedVersion, setOpenedVersion] = React.useState<Version | null>(null);
+  const [comparison, setComparison] = React.useState<{
+    left: Version;
+    right: Version;
+  } | null>(null);
   const [note, setNote] = React.useState("");
+  const [recipient, setRecipient] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [offline, setOffline] = React.useState(false);
+  const [message, setMessage] = React.useState<MessageState>(null);
 
-  React.useEffect(() => {
-    if (projectIdFromStore && projectIdFromStore !== projectId) setProjectId(projectIdFromStore);
-    if (projectName && projectName !== projectLabel) setProjectLabel(projectName);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectIdFromStore, projectName]);
-
-  async function loadAll() {
-    const pid = String(projectId || "").trim();
-    if (!pid) {
-      setError("Projekt-ID fehlt");
+  const loadAll = React.useCallback(async () => {
+    if (!projectId) {
+      setVersions([]);
+      setCurrent([]);
       return;
     }
 
     setLoading(true);
-    setError(null);
+    setOffline(false);
 
     try {
-      const [hist, cur] = await Promise.all([
-        api<{ ok: boolean; items: Version[]; resolvedProjectId?: string }>(
-          `/api/historie?projectId=${encodeURIComponent(pid)}`
-        ),
-        api<{ ok: boolean; rows: any[]; resolvedProjectId?: string }>(
-          `/api/historie/current?projectId=${encodeURIComponent(pid)}`
-        ),
-      ]);
+      const [historyResult, currentResult] = await Promise.all([
+      api<{ok: boolean;items?: unknown[];}>(
+        `/api/historie?projectId=${encodeURIComponent(projectId)}`
+      ),
+      api<{ok: boolean;rows?: unknown[];}>(
+        `/api/historie/current?projectId=${encodeURIComponent(projectId)}`
+      )]
+      );
 
-      setVersions(hist.items || []);
-      setCurrent(normalizeRows(cur.rows || []));
+      const serverVersions = normalizeVersions(historyResult.items || []);
+      const serverCurrent = normalizeRows(currentResult.rows || []);
 
-      // se il backend ci dice “BA-2025-DEMO” come resolved, mostralo come label
-      if (hist.resolvedProjectId) setProjectLabel(hist.resolvedProjectId);
-    } catch (e) {
-      console.warn("Offline fallback", e);
-      setError("Offline gespeichert (LS)");
-
-      const lsHist = localStorage.getItem(`sollist-hist:${pid}`);
-      const lsCur = localStorage.getItem(`sollist:${pid}`);
-
-      setVersions(lsHist ? JSON.parse(lsHist) : []);
-      setCurrent(lsCur ? JSON.parse(lsCur) : []);
+      setVersions(serverVersions);
+      setCurrent(serverCurrent);
+    } catch (error: any) {
+      console.warn("Aufmaß-Historie: Server nicht erreichbar", error);
+      setOffline(true);
+      setVersions([]);
+      setCurrent([]);
+      setMessage({
+        title: "Server nicht erreichbar",
+        text:
+        error?.message ||
+        "Aufmaß-Historie und aktueller Aufmaßstand konnten nicht vom Server geladen werden.",
+        tone: "error"
+      });
     } finally {
       setLoading(false);
     }
-  }
-
-  React.useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   React.useEffect(() => {
-    const pid = String(projectId || "").trim();
-    if (!pid) return;
-    localStorage.setItem(`sollist-hist:${pid}`, JSON.stringify(versions));
-  }, [projectId, versions]);
+    void loadAll();
+  }, [loadAll]);
 
-  React.useEffect(() => {
-    const pid = String(projectId || "").trim();
-    if (!pid) return;
-    localStorage.setItem(`sollist:${pid}`, JSON.stringify(current));
-  }, [projectId, current]);
 
-  async function saveSnapshot() {
-    const pid = String(projectId || "").trim();
-    if (!pid) return alert("Projekt-ID fehlt");
+  const latestSaved = versions[0];
+  const latestSent = versions.
+  filter(
+    (version) =>
+    version.status === "VERSENDET" ||
+    version.status === "FREIGEGEBEN" ||
+    Boolean(version.sentAt)
+  ).
+  sort((a, b) => (b.sentAt || b.createdAt) - (a.sentAt || a.createdAt))[0];
 
-    const v: Version = {
+  const saveVersion = React.useCallback(async () => {
+    if (!projectId) {
+      setMessage({
+        title: "Kein Projekt gewählt",
+        text: "Bitte zuerst ein Projekt auswählen.",
+        tone: "error"
+      });
+      return;
+    }
+
+    if (!current.length) {
+      setMessage({
+        title: "Keine Aufmaßdaten",
+        text: "Im aktuellen Projekt wurden keine Aufmaßdaten gefunden.",
+        tone: "error"
+      });
+      return;
+    }
+
+    const version: Version = {
       id: rid(),
-      projectId: pid,
+      projectId,
       createdAt: Date.now(),
-      user: "Bauleiter",
-      note: note?.trim() || undefined,
-      data: JSON.parse(JSON.stringify(current)),
+      createdBy: "Bauleitung",
+      user: "Bauleitung",
+      note: note.trim() || undefined,
+      recipient: recipient.trim() || undefined,
+      status: "GESPEICHERT",
+      documentName: `Aufmaß ${versions.length + 1}`,
+      data: JSON.parse(JSON.stringify(current)) as Row[]
     };
 
-    setVersions((prev) => [v, ...prev]);
-    setNote("");
-
     try {
-      await api(`/api/historie`, { method: "POST", body: JSON.stringify(v) });
-      setError(null);
-    } catch {
-      setError("Offline gespeichert (LS)");
-    }
-  }
-
-  async function saveCurrent() {
-    const pid = String(projectId || "").trim();
-    if (!pid) return alert("Projekt-ID fehlt");
-    try {
-      await api(`/api/historie/current?projectId=${encodeURIComponent(pid)}`, {
+      await api("/api/historie", {
         method: "POST",
-        body: JSON.stringify({ rows: current }),
+        body: JSON.stringify(version)
       });
-      setError(null);
-      alert("Soll-Ist gespeichert");
-    } catch (e) {
-      console.error(e);
-      alert("Fehler beim Speichern");
-    }
-  }
 
-  async function restoreVersion(v: Version) {
-    try {
-      await api(`/api/historie/restore`, { method: "POST", body: JSON.stringify(v) });
-      setCurrent(v.data || []);
-      alert("Version erfolgreich wiederhergestellt.");
-    } catch (e) {
-      console.error(e);
-      alert("Fehler beim Wiederherstellen");
-    }
-  }
-
-  async function deleteVersion(v: Version) {
-    const pid = String(projectId || "").trim();
-    if (!pid) return;
-
-    if (!confirm("Version wirklich löschen?")) return;
-
-    // optimistic
-    setVersions((prev) => prev.filter((x) => x.id !== v.id));
-    setSel((prev) => prev.filter((id) => id !== v.id));
-
-    try {
-      await api(`/api/historie/${encodeURIComponent(v.id)}?projectId=${encodeURIComponent(pid)}`, {
-        method: "DELETE",
+      setVersions((previous) => [version, ...previous]);
+      setNote("");
+      setRecipient("");
+      setOffline(false);
+      setMessage({
+        title: "Aufmaß gespeichert",
+        text: "Der aktuelle Aufmaßstand wurde auf dem Server gespeichert.",
+        tone: "success"
       });
-    } catch (e) {
-      console.warn("Delete failed (offline?)", e);
-      setError("Offline: gelöscht nur lokal (LS)");
+    } catch (error: any) {
+      setOffline(true);
+      setMessage({
+        title: "Speichern fehlgeschlagen",
+        text:
+        error?.message ||
+        "Der Aufmaßstand konnte nicht auf dem Server gespeichert werden.",
+        tone: "error"
+      });
     }
-  }
+  }, [projectId, current, note, recipient, versions.length]);
 
-  function toggleSelect(id: string) {
-    setSel((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length === 2) return [prev[1], id];
-      return [...prev, id];
+  const markAsSent = React.useCallback(
+    async (version: Version) => {
+      const updated: Version = {
+        ...version,
+        status: "VERSENDET",
+        sentAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      try {
+        await api("/api/historie", {
+          method: "POST",
+          body: JSON.stringify(updated)
+        });
+
+        setVersions((previous) =>
+        previous.map((item) => item.id === version.id ? updated : item)
+        );
+        setOffline(false);
+        setMessage({
+          title: "Als versendet markiert",
+          text: "Die Versendung wurde auf dem Server dokumentiert.",
+          tone: "success"
+        });
+      } catch (error: any) {
+        setOffline(true);
+        setMessage({
+          title: "Statusänderung fehlgeschlagen",
+          text:
+          error?.message ||
+          "Der Status konnte nicht auf dem Server aktualisiert werden.",
+          tone: "error"
+        });
+      }
+    },
+    []
+  );
+
+  const restoreVersion = React.useCallback(async (version: Version) => {
+    try {
+      await api("/api/historie/restore", {
+        method: "POST",
+        body: JSON.stringify(version)
+      });
+
+      setCurrent(version.data || []);
+      setMessage({
+        title: "Aufmaß wiederhergestellt",
+        text: "Der ausgewählte Aufmaßstand wurde wiederhergestellt.",
+        tone: "success"
+      });
+    } catch (error: any) {
+      setMessage({
+        title: "Wiederherstellung fehlgeschlagen",
+        text:
+        error?.message || "Der Aufmaßstand konnte nicht wiederhergestellt werden.",
+        tone: "error"
+      });
+    }
+  }, []);
+
+  const deleteVersion = React.useCallback(
+    async (version: Version) => {
+      if (!projectId) return;
+
+      try {
+        await api(
+          `/api/historie/${encodeURIComponent(
+            version.id
+          )}?projectId=${encodeURIComponent(projectId)}`,
+          { method: "DELETE" }
+        );
+
+        setVersions((previous) =>
+        previous.filter((item) => item.id !== version.id)
+        );
+        setSelectedIds((previous) =>
+        previous.filter((id) => id !== version.id)
+        );
+        setOpenedVersion((currentVersion) =>
+        currentVersion?.id === version.id ? null : currentVersion
+        );
+        setOffline(false);
+      } catch (error: any) {
+        setOffline(true);
+        setMessage({
+          title: "Löschen fehlgeschlagen",
+          text:
+          error?.message ||
+          "Die Aufmaß-Version konnte nicht auf dem Server gelöscht werden.",
+          tone: "error"
+        });
+      }
+    },
+    [projectId]
+  );
+
+  function toggleSelection(id: string) {
+    setSelectedIds((previous) => {
+      if (previous.includes(id)) {
+        return previous.filter((item) => item !== id);
+      }
+
+      if (previous.length === 2) {
+        return [previous[1], id];
+      }
+
+      return [...previous, id];
     });
   }
 
-  function openCompare() {
-    if (sel.length < 2) return alert("Bitte 2 Versionen auswählen");
-    const [a, b] = sel;
-    const left = versions.find((v) => v.id === a)!;
-    const right = versions.find((v) => v.id === b)!;
-    setCompare({ left, right });
+  function openComparison() {
+    if (selectedIds.length !== 2) return;
+
+    const left = versions.find((version) => version.id === selectedIds[0]);
+    const right = versions.find((version) => version.id === selectedIds[1]);
+
+    if (left && right) {
+      setComparison({ left, right });
+    }
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}>
-      {/* LEFT */}
-      <div className="card" style={{ padding: 14 }}>
-        <h3 style={{ margin: 0 }}>Historie / Soll-Ist-Versionierung</h3>
+    <div className={rlcClass(null, shell)}>
+      <MengPageHeader
+        title="Aufmaß-Historie"
+        subtitle="Gespeicherte, versendete und freigegebene Aufmaßstände dokumentieren." />
+      
 
-        <div style={{ marginTop: 8 }}>
-          <label style={{ fontSize: 12, color: "var(--muted)" }}>Projekt</label>
-          {/* Mostra nome progetto, non UUID */}
-          <input value={projectLabel} readOnly />
-          {/* ID tecnico (UUID) nascosto ma usato per API */}
-          <input value={projectId} onChange={(e) => setProjectId(e.target.value)} style={{ display: "none" }} />
+      <section className={rlcClass(null, summaryGrid)}>
+        <SummaryCard
+          label="Letztes Aufmaß"
+          value={latestSaved ? formatDateTime(latestSaved.createdAt) : "Noch keines"}
+          detail={
+          latestSaved ?
+          `${latestSaved.data.length} Positionen · ${formatMoney(
+            versionTotal(latestSaved)
+          )}` :
+          "Keine Version gespeichert"
+          } />
+        
+
+        <SummaryCard
+          label="Letzte Versendung"
+          value={
+          latestSent ?
+          formatDateTime(latestSent.sentAt || latestSent.createdAt) :
+          "Noch nicht versendet"
+          }
+          detail={
+          latestSent?.recipient ?
+          `Empfänger: ${latestSent.recipient}` :
+          "Kein Empfänger dokumentiert"
+          } />
+        
+
+        <SummaryCard
+          label="Gespeicherte Versionen"
+          value={String(versions.length)}
+          detail={`${versions.filter((v) => v.status === "VERSENDET").length} versendet`} />
+        
+
+        <SummaryCard
+          label="Aktueller Abrechnungsstand"
+          value={formatMoney(currentTotal(current))}
+          detail={`${current.filter((row) => row.qty !== 0).length} Positionen mit Menge`} />
+        
+      </section>
+
+      <section className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1405">
+
+
+
+
+
+
+          
+          <label className="rlc-migrated-pages-mengenermittlung-historie-tsx-1406">
+            Notiz zum Aufmaß
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="z. B. Aufmaßstand Juli 2026" className={rlcClass(null,
+              input)} />
+            
+          </label>
+
+          <label className="rlc-migrated-pages-mengenermittlung-historie-tsx-1407">
+            Empfänger (optional)
+            <input
+              value={recipient}
+              onChange={(event) => setRecipient(event.target.value)}
+              placeholder="z. B. Auftraggeber / Bauleitung" className={rlcClass(null,
+              input)} />
+            
+          </label>
+
+          <button
+            type="button" className={rlcClass(null,
+            btnPrimary)}
+            onClick={saveVersion}
+            disabled={loading || !projectId}>
+            
+            Aktuellen Aufmaßstand speichern
+          </button>
         </div>
 
-        <div style={{ marginTop: 10 }}>
-          <label style={{ fontSize: 12, color: "var(--muted)" }}>Notiz (optional)</label>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="z.B. Stand nach Ortsbesichtigung"
-          />
+        <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1408">
+
+
+
+
+
+
+
+
+          
+          <div className={rlcClass(null,
+          {
+            color: offline ? "#b45309" : "#166534",
+            fontSize: 12,
+            fontWeight: 700
+          })}>
+            
+            Projekt: {projectLabel || "Kein Projekt gewählt"} ·{" "}
+            {offline ? "Server nicht erreichbar" : "Server verbunden"}
+          </div>
+
+          <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1409">
+            <button
+              type="button" className={rlcClass(null,
+              btn)}
+              onClick={openComparison}
+              disabled={selectedIds.length !== 2}>
+              
+              Versionen vergleichen
+            </button>
+            <button
+              type="button" className={rlcClass(null,
+              btn)}
+              onClick={() => void loadAll()}
+              disabled={loading}>
+              
+              Neu laden
+            </button>
+          </div>
         </div>
+      </section>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-          <button className="btn" onClick={saveSnapshot} disabled={loading}>
-            Version speichern
-          </button>
-          <button className="btn" onClick={saveCurrent} disabled={loading}>
-            Speichern
-          </button>
-          <button className="btn" onClick={openCompare} disabled={sel.length < 2}>
-            Vergleichen
-          </button>
-          <button className="btn" onClick={loadAll} disabled={loading}>
-            Neu laden
-          </button>
-        </div>
+      <section className={rlcClass(null, card)}>
+        <h2 className="rlc-migrated-pages-mengenermittlung-historie-tsx-1410">
+          Verlauf der Aufmaßstände
+        </h2>
 
-        {loading && <div style={{ color: "var(--muted)", marginTop: 8 }}>Laden…</div>}
-        {error && <div style={{ color: "crimson", marginTop: 8 }}>{error}</div>}
+        {!versions.length ?
+        <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1411">
+            Noch keine Aufmaß-Version gespeichert.
+          </div> :
 
-        <div
-          style={{
-            marginTop: 10,
-            maxHeight: 420,
-            overflow: "auto",
-            border: "1px solid var(--line)",
-            borderRadius: 8,
-          }}
-        >
-          {versions.length === 0 && (
-            <div style={{ padding: 10, color: "var(--muted)" }}>Keine Versionen</div>
-          )}
+        <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1412">
+            <table className="rlc-migrated-pages-mengenermittlung-historie-tsx-1413">
+              <thead>
+                <tr>
+                  <Th />
+                  <Th>Datum</Th>
+                  <Th>Bezeichnung</Th>
+                  <Th>Status</Th>
+                  <Th>Positionen</Th>
+                  <Th style={{ textAlign: "right" }}>Netto</Th>
+                  <Th>Erstellt von</Th>
+                  <Th>Empfänger</Th>
+                  <Th>Aktionen</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {versions.map((version) =>
+              <tr key={version.id}>
+                    <Td>
+                      <input
+                    type="checkbox"
+                    checked={selectedIds.includes(version.id)}
+                    onChange={() => toggleSelection(version.id)} />
+                  
+                    </Td>
+                    <Td>{formatDateTime(version.createdAt)}</Td>
+                    <Td>
+                      <strong>
+                        {version.documentName ||
+                    `Aufmaß ${versions.indexOf(version) + 1}`}
+                      </strong>
+                      <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1414">
+                        {version.note || "Ohne Notiz"}
+                      </div>
+                    </Td>
+                    <Td>
+                      <span className={rlcClass(null,
+                  {
+                    display: "inline-flex",
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    border: "1px solid",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    ...statusStyle(version.status)
+                  })}>
+                    
+                        {statusLabel(version.status)}
+                      </span>
+                    </Td>
+                    <Td>{version.data.length}</Td>
+                    <Td style={{ textAlign: "right" }}>
+                      {formatMoney(versionTotal(version))}
+                    </Td>
+                    <Td>{version.createdBy || version.user || "Bauleitung"}</Td>
+                    <Td>{version.recipient || "—"}</Td>
+                    <Td>
+                      <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1415">
+                        <button
+                      type="button" className={rlcClass(null,
+                      btn)}
+                      onClick={() => setOpenedVersion(version)}>
+                      
+                          Öffnen
+                        </button>
 
-          {versions.map((v) => (
-            <div
-              key={v.id}
-              style={{
-                padding: 10,
-                borderBottom: "1px solid var(--line)",
-                background: sel.includes(v.id) ? "rgba(0,0,0,.05)" : undefined,
-                display: "grid",
-                gridTemplateColumns: "auto 1fr auto",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={sel.includes(v.id)}
-                onChange={() => toggleSelect(v.id)}
-              />
+                        {version.pdfUrl ?
+                    <a
+                      href={version.pdfUrl}
+                      target="_blank"
+                      rel="noreferrer" className={rlcClass(null,
+                      { ...btn, textDecoration: "none" })}>
+                      
+                            PDF anzeigen
+                          </a> :
+                    null}
 
-              <div>
-                <div>
-                  <strong>{fmt(v.createdAt)}</strong> · {v.user}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{v.note || "—"}</div>
-              </div>
+                        {version.status !== "VERSENDET" &&
+                    version.status !== "FREIGEGEBEN" ?
+                    <button
+                      type="button" className={rlcClass(null,
+                      btn)}
+                      onClick={() => void markAsSent(version)}>
+                      
+                            Als versendet markieren
+                          </button> :
+                    null}
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn" onClick={() => restoreVersion(v)}>
-                  Wiederherstellen
-                </button>
-                <button className="btn" onClick={() => deleteVersion(v)}>
-                  Löschen
-                </button>
+                        <button
+                      type="button" className={rlcClass(null,
+                      btn)}
+                      onClick={() => void restoreVersion(version)}>
+                      
+                          Wiederherstellen
+                        </button>
+
+                        <button
+                      type="button" className={rlcClass(null,
+                      { ...btn, color: "#b91c1c" })}
+                      onClick={() => void deleteVersion(version)}>
+                      
+                          Löschen
+                        </button>
+                      </div>
+                    </Td>
+                  </tr>
+              )}
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      {openedVersion ?
+      <section className={rlcClass(null, card)}>
+          <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1416">
+
+
+
+
+
+
+
+          
+            <div>
+              <h2 className="rlc-migrated-pages-mengenermittlung-historie-tsx-1417">
+                {openedVersion.documentName || "Aufmaß-Version"}
+              </h2>
+              <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1418">
+                {formatDateTime(openedVersion.createdAt)} ·{" "}
+                {statusLabel(openedVersion.status)}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+            <button
+            type="button" className={rlcClass(null,
+            btn)}
+            onClick={() => setOpenedVersion(null)}>
+            
+              Schließen
+            </button>
+          </div>
 
-      {/* RIGHT */}
-      <div className="card" style={{ padding: 14 }}>
-        <h4 style={{ marginTop: 0 }}>Aktuelle Soll-Ist-Daten</h4>
-        <SimpleTable rows={current} />
+          <VersionTable rows={openedVersion.data} />
+        </section> :
+      null}
 
-        {compare && (
-          <div style={{ marginTop: 16 }}>
-            <h4 style={{ margin: 0 }}>
-              Vergleich • {fmt(compare.left!.createdAt)} ↔ {fmt(compare.right!.createdAt)}
-            </h4>
-            <DiffView a={compare.left!.data} b={compare.right!.data} />
-            <div style={{ marginTop: 10 }}>
-              <button className="btn" onClick={() => setCompare(null)}>
-                Schließen
+      {comparison ?
+      <section className={rlcClass(null, card)}>
+          <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1419">
+
+
+
+
+
+
+
+          
+            <div>
+              <h2 className="rlc-migrated-pages-mengenermittlung-historie-tsx-1420">Versionsvergleich</h2>
+              <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1421">
+                {formatDateTime(comparison.left.createdAt)} ↔{" "}
+                {formatDateTime(comparison.right.createdAt)}
+              </div>
+            </div>
+            <button
+            type="button" className={rlcClass(null,
+            btn)}
+            onClick={() => setComparison(null)}>
+            
+              Vergleich schließen
+            </button>
+          </div>
+
+          <DiffView a={comparison.left.data} b={comparison.right.data} />
+        </section> :
+      null}
+
+      {message ?
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={() => setMessage(null)} className="rlc-migrated-pages-mengenermittlung-historie-tsx-1422">
+
+
+
+
+
+
+
+
+
+        
+          <div
+          onClick={(event) => event.stopPropagation()} className="rlc-migrated-pages-mengenermittlung-historie-tsx-1423">
+
+
+
+
+
+
+
+          
+            <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1424">
+              {message.title}
+            </div>
+            <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1425">
+              {message.text}
+            </div>
+            <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1426">
+              <button
+              type="button" className={rlcClass(null,
+              btnPrimary)}
+              onClick={() => setMessage(null)}>
+              
+                OK
               </button>
             </div>
           </div>
-        )}
+        </div> :
+      null}
+    </div>);
+
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail
+
+
+
+
+}: {label: string;value: string;detail: string;}) {
+  return (
+    <div className={rlcClass(null, summaryCard)}>
+      <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1427">
+        {label}
       </div>
-    </div>
-  );
+      <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1428">{value}</div>
+      <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1429">
+        {detail}
+      </div>
+    </div>);
+
 }
 
-/* ===== UI Components ===== */
-function SimpleTable({ rows }: { rows: Row[] }) {
+function VersionTable({ rows }: {rows: Row[];}) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-      <thead>
-        <tr>
-          <Th>Pos</Th>
-          <Th>Text</Th>
-          <Th style={{ textAlign: "right" }}>Menge</Th>
-          <Th>Einheit</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.length === 0 ? (
+    <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1430">
+      <table className="rlc-migrated-pages-mengenermittlung-historie-tsx-1431">
+        <thead>
           <tr>
-            <Td colSpan={4} style={{ color: "var(--muted)" }}>
-              —
-            </Td>
+            <Th>Pos.</Th>
+            <Th>Text</Th>
+            <Th>Einheit</Th>
+            <Th style={{ textAlign: "right" }}>Menge</Th>
+            <Th style={{ textAlign: "right" }}>EP netto</Th>
+            <Th style={{ textAlign: "right" }}>Gesamt netto</Th>
           </tr>
-        ) : (
-          rows.map((r) => (
-            <tr key={r.id}>
-              <Td>{r.pos}</Td>
-              <Td>{r.text}</Td>
-              <Td style={{ textAlign: "right" }}>{r.qty}</Td>
-              <Td>{r.unit}</Td>
+        </thead>
+        <tbody>
+          {rows.map((row) =>
+          <tr key={row.id}>
+              <Td>{row.pos || "—"}</Td>
+              <Td>{row.text || "—"}</Td>
+              <Td>{row.unit || "—"}</Td>
+              <Td style={{ textAlign: "right" }}>{formatNumber(row.qty)}</Td>
+              <Td style={{ textAlign: "right" }}>{formatMoney(row.ep)}</Td>
+              <Td style={{ textAlign: "right" }}>
+                {formatMoney(row.qty * row.ep * row.factor)}
+              </Td>
             </tr>
-          ))
-        )}
-      </tbody>
-    </table>
-  );
+          )}
+        </tbody>
+      </table>
+    </div>);
+
 }
 
-function DiffView({ a, b }: { a: Row[]; b: Row[] }) {
-  const d = diff(a, b);
+function DiffView({ a, b }: {a: Row[];b: Row[];}) {
+  const result = diff(a, b);
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 8 }}>
-      <Card title={`Neu (+${d.added.length})`}>
-        {d.added.length ? d.added.map((x) => <Line key={x.id} text={`${x.pos} ${x.text}`} color="#1a7f37" />) : <Empty />}
-      </Card>
-      <Card title={`Entfernt (${d.removed.length})`}>
-        {d.removed.length ? d.removed.map((x) => <Line key={x.id} text={`${x.pos} ${x.text}`} color="#b42318" />) : <Empty />}
-      </Card>
-      <Card title={`Geändert (${d.changed.length})`}>
-        {d.changed.length ? d.changed.map((x) => (
-          <Line key={x.after.id} text={`${x.after.pos} ${x.after.text}: ${x.before.qty} → ${x.after.qty}`} color="#956400" />
-        )) : <Empty />}
-      </Card>
-    </div>
-  );
+    <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1432">
+
+
+
+
+
+      
+      <DiffCard title={`Neu (${result.added.length})`}>
+        {result.added.length ?
+        result.added.map((row) =>
+        <DiffLine
+          key={row.id}
+          text={`${row.pos} ${row.text}`}
+          color="#166534" />
+
+        ) :
+
+        <Empty />
+        }
+      </DiffCard>
+
+      <DiffCard title={`Entfernt (${result.removed.length})`}>
+        {result.removed.length ?
+        result.removed.map((row) =>
+        <DiffLine
+          key={row.id}
+          text={`${row.pos} ${row.text}`}
+          color="#b91c1c" />
+
+        ) :
+
+        <Empty />
+        }
+      </DiffCard>
+
+      <DiffCard title={`Geändert (${result.changed.length})`}>
+        {result.changed.length ?
+        result.changed.map(({ before, after }) =>
+        <DiffLine
+          key={after.id}
+          text={`${after.pos} ${after.text}: ${before.qty} → ${after.qty}`}
+          color="#92400e" />
+
+        ) :
+
+        <Empty />
+        }
+      </DiffCard>
+    </div>);
+
 }
 
-function Card({ title, children }: React.PropsWithChildren<{ title: string }>) {
+function DiffCard({
+  title,
+  children
+}: React.PropsWithChildren<{title: string;}>) {
   return (
-    <div style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 10 }}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>{title}</div>
+    <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1433">
+      <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1434">{title}</div>
       {children}
-    </div>
-  );
+    </div>);
+
 }
-function Line({ text, color }: { text: string; color: string }) {
+
+function DiffLine({ text, color }: {text: string;color: string;}) {
   return (
-    <div style={{ fontSize: 13, padding: "4px 6px", borderRadius: 6, background: `${color}20`, color }}>
+    <div className={rlcClass(null,
+    {
+      fontSize: 12,
+      padding: "5px 7px",
+      borderRadius: 7,
+      marginBottom: 5,
+      background: `${color}14`,
+      color
+    })}>
+      
       {text}
-    </div>
-  );
+    </div>);
+
 }
-function Empty() { return <div style={{ color: "var(--muted)" }}>—</div>; }
-function Th(p: any) { return <th {...p} style={{ padding: "6px 8px", borderBottom: "1px solid var(--line)", textAlign: "left" }} />; }
-function Td(p: any) { return <td {...p} style={{ padding: "6px 8px", borderBottom: "1px solid var(--line)", verticalAlign: "top" }} />; }
+
+function Empty() {
+  return <div className="rlc-migrated-pages-mengenermittlung-historie-tsx-1435">—</div>;
+}
+
+function Th(
+props: React.ThHTMLAttributes<HTMLTableCellElement> & {
+  children?: React.ReactNode;
+})
+{
+  const { children, style, ...rest } = props;
+
+  return (
+    <th
+      {...rest} className={rlcClass(null,
+      {
+        padding: "8px",
+        borderBottom: "1px solid #dce5f2",
+        textAlign: "left",
+        color: "#475569",
+        fontSize: 12,
+        whiteSpace: "nowrap",
+        ...style
+      })}>
+      
+      {children}
+    </th>);
+
+}
+
+function Td(
+props: React.TdHTMLAttributes<HTMLTableCellElement> & {
+  children?: React.ReactNode;
+})
+{
+  const { children, style, ...rest } = props;
+
+  return (
+    <td
+      {...rest} className={rlcClass(null,
+      {
+        padding: "8px",
+        borderBottom: "1px solid #edf2f7",
+        verticalAlign: "top",
+        fontSize: 13,
+        ...style
+      })}>
+      
+      {children}
+    </td>);
+
+}

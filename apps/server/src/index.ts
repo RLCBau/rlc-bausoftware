@@ -103,6 +103,8 @@ import multer from "multer";
 import documentDeliveryRoutes from "./routes/documentDelivery";
 import autonomousRouter from "./routes/autonomous";
 import vorlagenRoutes from "./routes/vorlagen";
+import enterpriseRoutes from "./routes/enterprise";
+import aiRuntimeRoutes from "./routes/ai.runtime";
 
 /* ======================= CRASH SHIELD (NO BREAKING CHANGES) ======================= */
 const pdfUpload = multer({ storage: multer.memoryStorage() });
@@ -814,6 +816,10 @@ app.get(
 );
 
 /* ======================= Route Registration ======================= */
+// Public identity + signed pairing verification live inside this router.
+// Pairing creation is protected by the router's auth/admin middleware.
+app.use("/api/enterprise", enterpriseRoutes);
+
 app.use("/api/aufmass", aufmassRoutes);
 app.use("/api/global-knowledge", globalKnowledgeRouter);
 app.use("/api/import", importRoutes);
@@ -1120,6 +1126,15 @@ app.use(
   supportChatRoutes
 );
 
+app.use(
+  "/api/ai-runtime",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  requireServerLicense(),
+  aiRuntimeRoutes
+);
+
 /**
  * âœ… FIX CRITICO:
  * Prima projectsRoutes, poi lvRoutes (cosÃ¬ /api/projects NON si rompe)
@@ -1398,4 +1413,3 @@ app.use(
 })();
 
 export default app;
-

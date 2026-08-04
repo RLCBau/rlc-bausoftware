@@ -1,0 +1,134 @@
+﻿/* RLC Mengenermittlung Theme V1 - angelehnt an AufmaßEditor */
+
+.meng-theme {
+  background:
+    radial-gradient(circle at top left, rgba(37,99,235,0.045), transparent 30%),
+    #F6F8FC;
+  color: #0F172A;
+  min-height: 100%;
+  padding: 12px 16px 24px;
+}
+
+.meng-theme .card {
+  background: #FFFFFF !important;
+  border: 1px solid #E5EAF3 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 12px 32px rgba(15,23,42,0.06) !important;
+}
+
+.meng-theme .page-title,
+.meng-theme h1,
+.meng-theme h2 {
+  color: #0F172A !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em;
+}
+
+.meng-theme .page-subtitle,
+.meng-theme p {
+  color: #64748B;
+}
+
+.meng-theme button,
+.meng-theme .btn {
+  border: 1px solid #D9E2F1 !important;
+  border-radius: 10px !important;
+  padding: 7px 11px !important;
+  min-height: 34px;
+  font-size: 12.5px;
+  font-weight: 700 !important;
+  background: #FFFFFF;
+  color: #0F172A;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+}
+
+.meng-theme button:hover,
+.meng-theme .btn:hover {
+  background: #EAF2FF !important;
+  border-color: #BED6FF !important;
+}
+
+.meng-theme button.primary,
+.meng-theme .btn.primary {
+  background: linear-gradient(135deg,#146EF5,#146EF5) !important;
+  border-color: #146EF5 !important;
+  color: #FFFFFF !important;
+}
+
+.meng-theme input,
+.meng-theme textarea,
+.meng-theme select {
+  border: 1px solid #D9E2F1 !important;
+  border-radius: 10px !important;
+  padding: 8px 10px !important;
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  font-weight: 650;
+  outline: none;
+}
+
+.meng-theme input:focus,
+.meng-theme textarea:focus,
+.meng-theme select:focus {
+  border-color: #146EF5 !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+}
+
+.meng-theme table {
+  border-spacing: 0;
+  border-collapse: collapse;
+  background: #FFFFFF;
+}
+
+.meng-theme th {
+  background: #F8FAFC !important;
+  color: #475569 !important;
+  font-size: 12px;
+  font-weight: 700 !important;
+  border-bottom: 1px solid #E5EAF3 !important;
+  white-space: nowrap;
+}
+
+.meng-theme td {
+  border-bottom: 1px solid #EEF2F7 !important;
+  color: #0F172A;
+}
+
+.meng-theme tbody tr {
+  background: #FFFFFF !important;
+}
+
+.meng-theme tbody tr:hover {
+  background: #F8FBFF !important;
+}
+
+.meng-theme .page-header,
+.meng-theme .page-header-actions {
+  background: transparent;
+}
+
+.meng-theme > .card:first-child,
+.meng-theme .meng-hero {
+  background: linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%) !important;
+  color: #FFFFFF !important;
+  border-radius: 20px !important;
+  padding: 16px 20px !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  box-shadow: 0 14px 34px rgba(15,23,42,0.16) !important;
+}
+
+.meng-theme > .card:first-child h1,
+.meng-theme > .card:first-child h2,
+.meng-theme > .card:first-child p,
+.meng-theme > .card:first-child .page-title,
+.meng-theme > .card:first-child .page-subtitle {
+  color: #FFFFFF !important;
+}
+
+.meng-theme > .card:first-child button {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.48) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}

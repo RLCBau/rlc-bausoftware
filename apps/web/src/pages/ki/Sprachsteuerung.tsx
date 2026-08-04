@@ -1,12 +1,53 @@
-import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/ki/Sprachsteuerung.tsx
 
-type R = SpeechRecognition | any;
+import React from "react";
+import { useProject } from "../../store/useProject";
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  0?: {
+    transcript?: string;
+  };
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+};
+
+type SpeechRecognitionErrorLike = {
+  error?: string;
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onstart: null | (() => void);
+  onend: null | (() => void);
+  onerror: null | ((e: SpeechRecognitionErrorLike) => void);
+  onresult: null | ((evt: SpeechRecognitionEventLike) => void);
+  start: () => void;
+  stop: () => void;
+};
+
+type ProjectLike = {
+  id?: string;
+  code?: string;
+};
+
 declare global {
   interface Window {
-    webkitSpeechRecognition?: any;
-    SpeechRecognition?: any;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    SpeechRecognition?: new () => SpeechRecognitionLike;
   }
 }
+
+const shell: React.CSSProperties = {
+  display: "grid",
+  gap: 16
+};
 
 const card: React.CSSProperties = {
   border: "1px solid var(--line)",
@@ -14,29 +55,64 @@ const card: React.CSSProperties = {
   padding: 16,
   background: "#fff",
   display: "grid",
-  gap: 12,
+  gap: 12
+};
+
+const input: React.CSSProperties = {
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  padding: "8px 10px",
+  fontSize: 14
 };
 
 export default function Sprachsteuerung() {
+  const projectCtx = useProject() as unknown as {
+    currentProject?: ProjectLike | null;
+  };
+
+  const currentProject = projectCtx?.currentProject ?? null;
+  const storeProjectId = currentProject?.id ?? "";
+  const projectCode = currentProject?.code ?? "";
+
   const [lang, setLang] = React.useState("de-DE");
   const [listening, setListening] = React.useState(false);
   const [interim, setInterim] = React.useState("");
   const [finalText, setFinalText] = React.useState("");
-  const [projectId, setProjectId] = React.useState("");
+  const [projectInput, setProjectInput] = React.useState("");
   const [date, setDate] = React.useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
+  new Date().toISOString().slice(0, 10)
   );
-  const recogRef = React.useRef<R | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  // --- init SpeechRecognition
+  const recogRef = React.useRef<SpeechRecognitionLike | null>(null);
+  const restartTimerRef = React.useRef<number | null>(null);
+
+  const effectiveProjectId = React.useMemo(
+    () => projectInput.trim() || storeProjectId || projectCode || "",
+    [projectInput, storeProjectId, projectCode]
+  );
+
+  const resetRecognition = React.useCallback(() => {
+    if (recogRef.current) {
+      try {
+        recogRef.current.stop();
+      } catch {}
+    }
+    recogRef.current = null;
+  }, []);
+
   const ensureRecognition = React.useCallback(() => {
-    if (recogRef.current) return recogRef.current as R;
+    if (recogRef.current) return recogRef.current;
+
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
-      alert("Spracherkennung wird von diesem Browser nicht unterstützt. Bitte Chrome/Edge verwenden.");
+      window.alert(
+        "Spracherkennung wird von diesem Browser nicht unterstützt. Bitte Chrome oder Edge verwenden."
+      );
       return null;
     }
-    const rec: R = new SR();
+
+    const rec = new SR();
     rec.lang = lang;
     rec.continuous = true;
     rec.interimResults = true;
@@ -45,20 +121,35 @@ export default function Sprachsteuerung() {
     rec.onstart = () => {
       setListening(true);
       setInterim("");
+      setError(null);
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = (e: any) => console.warn("[Speech] error", e?.error || e);
-    rec.onresult = (evt: SpeechRecognitionEvent) => {
-      let interimChunk = "", finalChunk = "";
+
+    rec.onend = () => {
+      setListening(false);
+    };
+
+    rec.onerror = (e: SpeechRecognitionErrorLike) => {
+      console.warn("[Speech] error", e?.error || e);
+      setError(e?.error || "Spracherkennung fehlgeschlagen");
+    };
+
+    rec.onresult = (evt: SpeechRecognitionEventLike) => {
+      let interimChunk = "";
+      let finalChunk = "";
+
       for (let i = evt.resultIndex; i < evt.results.length; i++) {
         const res = evt.results[i];
-        const txt = res[0].transcript;
-        if (res.isFinal) finalChunk += txt;
-        else interimChunk += txt;
+        const txt = res?.[0]?.transcript || "";
+        if (res.isFinal) finalChunk += txt;else
+        interimChunk += txt;
       }
+
       if (interimChunk) setInterim(interimChunk.trim());
+
       if (finalChunk) {
-        setFinalText((old) => (old + (old ? " " : "") + finalChunk.trim()).trim());
+        setFinalText((old) =>
+        (old + (old ? " " : "") + finalChunk.trim()).trim()
+        );
         setInterim("");
       }
     };
@@ -89,62 +180,129 @@ export default function Sprachsteuerung() {
 
   React.useEffect(() => {
     if (!listening) return;
-    stop();
-    setTimeout(start, 120);
-  }, [lang]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const composedText = finalText + (interim ? (finalText ? " " : "") + interim : "");
+    resetRecognition();
 
-  // === salva e apri Regieberichte ===
+    if (restartTimerRef.current) {
+      window.clearTimeout(restartTimerRef.current);
+    }
+
+    restartTimerRef.current = window.setTimeout(() => {
+      start();
+    }, 120);
+
+    return () => {
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+    };
+  }, [lang, listening, resetRecognition, start]);
+
+  React.useEffect(() => {
+    return () => {
+      if (restartTimerRef.current) {
+        window.clearTimeout(restartTimerRef.current);
+      }
+      resetRecognition();
+    };
+  }, [resetRecognition]);
+
+  const composedText =
+  finalText + (interim ? (finalText ? " " : "") + interim : "");
+
   async function saveAndOpenRegie() {
     try {
-      if (!projectId) return alert("Bitte Projekt-ID eingeben.");
-      if (!finalText.trim()) return alert("Kein Text erkannt.");
+      if (!effectiveProjectId) {
+        window.alert("Bitte Projekt-ID eingeben.");
+        return;
+      }
+      if (!finalText.trim()) {
+        window.alert("Kein Text erkannt.");
+        return;
+      }
+
+      setError(null);
 
       const res = await fetch("/api/ki/parse-speech/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: finalText, projectId, date }),
+        body: JSON.stringify({
+          text: finalText.trim(),
+          projectId: effectiveProjectId,
+          projectCode: projectCode || "",
+          date
+        })
       });
+
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
 
-      sessionStorage.setItem("regie:openProjectId", projectId);
-      if (data?.saved?.id) sessionStorage.setItem("regie:focusId", String(data.saved.id));
+      const data = (await res.json()) as {
+        saved?: {id?: string;};
+      };
 
-      window.location.href = `/mengenermittlung/regieberichte?projectId=${encodeURIComponent(projectId)}`;
-    } catch (e: any) {
+      sessionStorage.setItem("regie:openProjectId", effectiveProjectId);
+      if (data?.saved?.id) {
+        sessionStorage.setItem("regie:focusId", String(data.saved.id));
+      }
+
+      window.location.href = `/mengenermittlung/regieberichte?projectId=${encodeURIComponent(
+        effectiveProjectId
+      )}`;
+    } catch (e) {
       console.error(e);
-      alert(e?.message || "Speichern/Öffnen fehlgeschlagen");
+      const msg = e instanceof Error ? e.message : "Speichern/Öffnen fehlgeschlagen";
+      setError(msg);
+      window.alert(msg);
     }
   }
 
-  // === apri solo Regieberichte ===
   function openRegie() {
-    if (!projectId) return alert("Bitte Projekt-ID eingeben.");
-    sessionStorage.setItem("regie:openProjectId", projectId);
-    window.location.href = `/mengenermittlung/regieberichte?projectId=${encodeURIComponent(projectId)}`;
+    if (!effectiveProjectId) {
+      window.alert("Bitte Projekt-ID eingeben.");
+      return;
+    }
+    sessionStorage.setItem("regie:openProjectId", effectiveProjectId);
+    window.location.href = `/mengenermittlung/regieberichte?projectId=${encodeURIComponent(
+      effectiveProjectId
+    )}`;
   }
 
-  // === Parsing KI standard ===
   async function parseWithKI() {
     try {
-      if (!projectId) return alert("Bitte Projekt-ID eingeben.");
+      if (!effectiveProjectId) {
+        window.alert("Bitte Projekt-ID eingeben.");
+        return;
+      }
+      if (!finalText.trim()) {
+        window.alert("Kein Text erkannt.");
+        return;
+      }
+
+      setError(null);
+
       const res = await fetch("/api/ki/parse-speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: finalText, projectId, date }),
+        body: JSON.stringify({
+          text: finalText.trim(),
+          projectId: effectiveProjectId,
+          projectCode: projectCode || "",
+          date
+        })
       });
+
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json() as {
+
+      const data = (await res.json()) as {
         ok: boolean;
-        item: any;
+        item: unknown;
       };
 
-      const doSave = confirm(
+      const doSave = window.confirm(
         "Gefundene Daten:\n\n" +
-          JSON.stringify(data.item, null, 2) +
-          "\n\nSoll der Eintrag gespeichert werden?"
+        JSON.stringify(data.item, null, 2) +
+        "\n\nSoll der Eintrag gespeichert werden?"
       );
 
       if (!doSave) return;
@@ -152,88 +310,156 @@ export default function Sprachsteuerung() {
       const save = await fetch("/api/regie", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data.item, date: new Date(data.item.date) }),
+        body: JSON.stringify({
+          ...(typeof data.item === "object" && data.item ? data.item : {}),
+          projectId: effectiveProjectId,
+          projectCode: projectCode || "",
+          date
+        })
       });
+
       if (!save.ok) throw new Error(await save.text());
-      alert("Regiebericht angelegt!");
-    } catch (e: any) {
+
+      window.alert("Regiebericht angelegt!");
+    } catch (e) {
       console.error(e);
-      alert(e?.message || "KI-Parsing fehlgeschlagen");
+      const msg = e instanceof Error ? e.message : "KI-Parsing fehlgeschlagen";
+      setError(msg);
+      window.alert(msg);
     }
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className={rlcClass(null, shell)}>
       <h1>Sprachsteuerung (Regieberichte diktieren)</h1>
 
-      <div style={card}>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ fontSize: 13, color: "var(--muted)" }}>Sprache</label>
-          <select value={lang} onChange={(e) => setLang(e.target.value)} style={{ padding: "6px 8px" }}>
+      <div className={rlcClass(null, card)}>
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1042">
+
+
+
+
+
+
+          
+          <label className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1043">Sprache</label>
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value)} className={rlcClass(null,
+            { ...input, width: 180 })}>
+            
             <option value="de-DE">Deutsch (de-DE)</option>
             <option value="it-IT">Italiano (it-IT)</option>
             <option value="en-US">English (en-US)</option>
           </select>
 
-          <label style={{ marginLeft: 16, fontSize: 13, color: "var(--muted)" }}>Projekt-ID</label>
-          <input
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            placeholder="z. B. BA-2025-834"
-            style={{ padding: "6px 8px", flex: 1, minWidth: 160 }}
-          />
+          <label className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1044">
 
-          <label style={{ marginLeft: 16, fontSize: 13, color: "var(--muted)" }}>Datum</label>
+            
+            Projekt-ID
+          </label>
+          <input
+            value={projectInput}
+            onChange={(e) => setProjectInput(e.target.value)}
+            placeholder="z. B. BA-2025-834" className={rlcClass(null,
+            { ...input, flex: 1, minWidth: 160 })} />
+          
+
+          <label className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1045">
+
+            
+            Datum
+          </label>
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={{ padding: "6px 8px" }}
-          />
+            onChange={(e) => setDate(e.target.value)} className={rlcClass(null,
+            { ...input, width: 150 })} />
+          
 
-          {!listening ? (
-            <button className="btn" onClick={start} title="Start">🎙️ Start</button>
-          ) : (
-            <button className="btn" onClick={stop} title="Stop">⏹️ Stop</button>
-          )}
+          {!listening ?
+          <button className="btn" onClick={start} title="Start">
+              🎙️ Start
+            </button> :
+
+          <button className="btn" onClick={stop} title="Stop">
+              ⏹️ Stop
+            </button>
+          }
         </div>
 
-        <div style={{ position: "relative" }}>
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1046">
+          Aktiv: {effectiveProjectId || "kein Projekt gewählt"}
+        </div>
+
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1047">
           <textarea
             value={composedText}
-            onChange={(e) => setFinalText(e.target.value)}
-            placeholder="gesprochenes Kommando…"
-            style={{
-              width: "100%",
-              minHeight: 160,
-              padding: 12,
-              border: "1px solid var(--line)",
-              borderRadius: 8,
-              fontSize: 14,
+            onChange={(e) => {
+              setFinalText(e.target.value);
+              setInterim("");
             }}
-          />
-          {listening && (
-            <div style={{ position: "absolute", right: 12, top: 12, fontSize: 12, color: "#16a34a" }}>
+            placeholder="gesprochenes Kommando…" className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1048" />
+
+
+
+
+
+
+
+
+          
+          {listening &&
+          <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1049">
+
+
+
+
+
+
+
+            
               ● recording
             </div>
-          )}
+          }
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <button className="btn" onClick={parseWithKI} disabled={!finalText.trim()}>
+        {error && <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1050">{error}</div>}
+
+        <div className="rlc-migrated-pages-ki-sprachsteuerung-tsx-1051">
+          <button
+            className="btn"
+            onClick={parseWithKI}
+            disabled={!finalText.trim()}>
+            
             KI-Parsing
           </button>
-          <button className="btn" onClick={saveAndOpenRegie} disabled={!projectId || !finalText.trim()}>
+          <button
+            className="btn"
+            onClick={saveAndOpenRegie}
+            disabled={!effectiveProjectId || !finalText.trim()}>
+            
             ➜ Als Regiebericht speichern & öffnen
           </button>
-          <button className="btn" onClick={openRegie} disabled={!projectId}>
+          <button
+            className="btn"
+            onClick={openRegie}
+            disabled={!effectiveProjectId}>
+            
             Regieberichte öffnen
           </button>
-          <button className="btn" onClick={() => { setFinalText(""); setInterim(""); }}>
+          <button
+            className="btn"
+            onClick={() => {
+              setFinalText("");
+              setInterim("");
+              setError(null);
+            }}>
+            
             Leeren
           </button>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 }

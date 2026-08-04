@@ -1,0 +1,674 @@
+ D 0
+ D 11.12.1
+ D 7.5.0
+ D =
+ D RLC_CAD_API_RENAME_V15_26/INSTALL_UBUNTU.sh
+ D RLC_CAD_API_RENAME_V15_26/README.txt
+ D RLC_CAD_API_RENAME_V15_26/apps/web/src/pages/cad/CADViewer.tsx
+ D RLC_CAD_API_RENAME_V15_26/migrate_rlc_cad_names.py
+ D RLC_CAD_DXF_DWG_V15_27/INSTALL_SERVER_UBUNTU.sh
+ D RLC_CAD_DXF_DWG_V15_27/INSTALL_WEB.ps1
+ D RLC_CAD_DXF_DWG_V15_27/README.txt
+ D RLC_CAD_DXF_DWG_V15_27/apps/server/src/parsers/dxf.engine.ts
+ D RLC_CAD_DXF_DWG_V15_27/apps/server/src/parsers/dxf.ts
+ D RLC_CAD_DXF_DWG_V15_27/apps/server/src/routes/cad-import.ts
+ D RLC_CAD_DXF_DWG_V15_27/apps/server/src/services/cad-converter.service.ts
+ D RLC_CAD_DXF_DWG_V15_27/apps/server/src/services/cad-import.service.ts
+ D RLC_CAD_DXF_DWG_V15_27/apps/web/src/pages/cad/CADViewer.tsx
+ D RLC_CAD_DXF_DWG_V15_27/apps/web/src/pages/cad/rlcCadEngine.ts
+ D RLC_CAD_SERVER_MULTI_DRAWING_V1/INSTALL.sh
+ D RLC_CAD_SERVER_MULTI_DRAWING_V1/README.txt
+ D RLC_CAD_SERVER_MULTI_DRAWING_V1/payload/apps/server/src/routes/cad.ts
+ D RLC_CAD_V1_REAL_ENGINE/INSTALL_RLC_CAD_V1.sh
+ D RLC_CAD_V1_REAL_ENGINE/README.txt
+ D RLC_CAD_V1_REAL_ENGINE/apps/server/src/parsers/dxf.ts
+ D RLC_CAD_V1_REAL_ENGINE/apps/server/src/routes/bricscad.ts
+ D RLC_CAD_V1_REAL_ENGINE/apps/web/src/pages/cad/CADViewer.tsx
+ M apps/mobile/App.tsx
+ M apps/mobile/app.json
+ M apps/mobile/assets/icon.png
+ M apps/mobile/package-lock.json
+ M apps/mobile/package.json
+ M apps/mobile/src/components/DocActionBar.tsx
+ M apps/mobile/src/lib/api.ts
+ M apps/mobile/src/lib/appMode.ts
+ M apps/mobile/src/lib/auth.ts
+ M apps/mobile/src/lib/companyBundle.ts
+ M apps/mobile/src/lib/companyCache.ts
+ M apps/mobile/src/lib/docSubmit.ts
+ M apps/mobile/src/lib/exportStorage.ts
+ M apps/mobile/src/lib/exporters/offlineExport.ts
+ M apps/mobile/src/lib/exporters/projectExport.ts
+ M apps/mobile/src/lib/exporters/regiePdf.ts
+ M apps/mobile/src/lib/fsDirs.ts
+ M apps/mobile/src/lib/hydratePreview.ts
+ M apps/mobile/src/lib/localAuth.ts
+ M apps/mobile/src/lib/mailComposer.ts
+ M apps/mobile/src/lib/mediaStore.ts
+ M apps/mobile/src/lib/offlineQueue.ts
+ M apps/mobile/src/lib/openPdf.ts
+ M apps/mobile/src/lib/pdfStorage.ts
+ M apps/mobile/src/lib/queueExecutor.ts
+ M apps/mobile/src/lib/storage.ts
+ M apps/mobile/src/lib/submitUnified.ts
+ M apps/mobile/src/lib/sync.ts
+ M apps/mobile/src/navigation/types.ts
+ M apps/mobile/src/screens/AnmeldenScreen.tsx
+ M apps/mobile/src/screens/ArbeitsmodusScreen.tsx
+ M apps/mobile/src/screens/CompanyAdminScreen.tsx
+ M apps/mobile/src/screens/CompanyImportScreen.tsx
+ M apps/mobile/src/screens/CompanyOfflineSetupScreen.tsx
+ M apps/mobile/src/screens/EingangPruefungScreen.tsx
+ M apps/mobile/src/screens/InboxScreen.tsx
+ M apps/mobile/src/screens/LieferscheinScreen.tsx
+ M apps/mobile/src/screens/LoginScreen.tsx
+ M apps/mobile/src/screens/LvReadOnlyScreen.tsx
+ M apps/mobile/src/screens/PdfViewerScreen.tsx
+ M apps/mobile/src/screens/PhotosNotesScreen.tsx
+ M apps/mobile/src/screens/ProjectHomeScreen.tsx
+ M apps/mobile/src/screens/ProjectPdfsScreen.tsx
+ M apps/mobile/src/screens/ProjectsScreen.tsx
+ M apps/mobile/src/screens/RegieScreen.tsx
+ M apps/mobile/src/screens/StartScreen.tsx
+ M apps/mobile/src/screens/SupportChatScreen.tsx
+ M apps/mobile/src/screens/TeamRolesScreen.tsx
+ M apps/mobile/src/storage/projectMeta.ts
+ M apps/mobile/src/storage/session.ts
+ M apps/mobile/src/ui/theme.ts
+ M apps/server/package-lock.json
+ M apps/server/package.json
+ M apps/server/src/index.ts
+ M apps/server/src/routes/autoKi.ts
+ M apps/server/src/routes/kalkulation.ki.ts
+ M apps/server/src/routes/ki.ts
+ M apps/server/src/routes/lv.routes.ts
+ M apps/server/src/routes/openai.routes.ts
+ M apps/server/src/routes/support.chat.ts
+ M apps/web/package-lock.json
+ M apps/web/package.json
+A  apps/web/public/assets/rlc-copilot-cartoon.webp
+A  apps/web/public/assets/rlc-header-machinery.svg
+ M apps/web/src/App.css
+ M apps/web/src/App.tsx
+ M apps/web/src/api/client.ts
+ M apps/web/src/api/files.ts
+ M apps/web/src/api/pdf.ts
+ M apps/web/src/api/projects.ts
+ M apps/web/src/api/regie.ts
+ M apps/web/src/components/Card.tsx
+ M apps/web/src/components/DxfPreview.tsx
+ M apps/web/src/components/PageHeader.tsx
+ M apps/web/src/components/Section.tsx
+ M apps/web/src/components/Sidebar.tsx
+ M apps/web/src/components/documents/DocumentManager.tsx
+ M apps/web/src/components/documents/documents.css
+ M apps/web/src/hooks/useAutosave.ts
+ M apps/web/src/hooks/useCurrentDocumentUrl.ts
+ M apps/web/src/index.css
+ M apps/web/src/lib/api.ts
+ M apps/web/src/lib/apiKalk.ts
+ M apps/web/src/lib/buchhaltung/store.ts
+ M apps/web/src/lib/buro/store.ts
+ M apps/web/src/lib/cad/store.ts
+ M apps/web/src/lib/formulas.ts
+ M apps/web/src/lib/mengen/formulas.ts
+ M apps/web/src/lib/pdf.ts
+ M apps/web/src/lib/recipesApi.ts
+ M apps/web/src/lib/storage.ts
+ M apps/web/src/lib/types.ts
+ M apps/web/src/lib/utils/excel.ts
+ M apps/web/src/main.tsx
+ D apps/web/src/pages/Buchhaltung.tsx
+ D apps/web/src/pages/Buero.tsx
+ D apps/web/src/pages/CAD.tsx
+ D apps/web/src/pages/GenericSheet.tsx
+ D apps/web/src/pages/Hilfe.tsx
+ D apps/web/src/pages/KI.tsx
+ D apps/web/src/pages/Mengenermittlung.tsx
+ D apps/web/src/pages/SectionIndex.tsx
+ M apps/web/src/pages/assets/logo.svg
+ D apps/web/src/pages/aufmass/aufmassEditor.tsx
+ M apps/web/src/pages/buchhaltung/AbschlagsrechnungDetail.tsx
+ M apps/web/src/pages/buchhaltung/Abschlagsrechnungen.tsx
+ M apps/web/src/pages/buchhaltung/BuchhaltungLayout.tsx
+ M apps/web/src/pages/buchhaltung/Kostenuebersicht.tsx
+ M apps/web/src/pages/buchhaltung/Uebersicht.tsx
+ M apps/web/src/pages/buchhaltung/datev.tsx
+ M apps/web/src/pages/buchhaltung/eingang.tsx
+ M apps/web/src/pages/buchhaltung/kassenbuch.tsx
+ M apps/web/src/pages/buchhaltung/kostenstellen.tsx
+ M apps/web/src/pages/buchhaltung/lieferscheine.tsx
+ M apps/web/src/pages/buchhaltung/mahnwesen.tsx
+ M apps/web/src/pages/buchhaltung/rechnungen.tsx
+ M apps/web/src/pages/buchhaltung/reports.tsx
+ M apps/web/src/pages/buchhaltung/stores.ts
+ M apps/web/src/pages/buchhaltung/styles.css
+ M apps/web/src/pages/buchhaltung/types.ts
+ M apps/web/src/pages/buchhaltung/ust.tsx
+ M apps/web/src/pages/buchhaltung/zahlungen.tsx
+ M apps/web/src/pages/buro/DocumentManager.tsx
+ M apps/web/src/pages/buro/Uebersicht.tsx
+ M apps/web/src/pages/buro/bauzeitenplan.tsx
+ M apps/web/src/pages/buro/dokumente.tsx
+ M apps/web/src/pages/buro/index.tsx
+ M apps/web/src/pages/buro/kommunikation.tsx
+ M apps/web/src/pages/buro/lager.tsx
+ M apps/web/src/pages/buro/maschinenverwaltung.tsx
+ M apps/web/src/pages/buro/materialverwaltung.tsx
+ D apps/web/src/pages/buro/nutzerverwaltung.tsx
+ M apps/web/src/pages/buro/outlookKalender.tsx
+ M apps/web/src/pages/buro/personalverwaltung.tsx
+ M apps/web/src/pages/buro/projekte.tsx
+ M apps/web/src/pages/buro/ressourcenplanung.tsx
+ M apps/web/src/pages/buro/sicherheit.tsx
+ M apps/web/src/pages/buro/store.calendar.ts
+ M apps/web/src/pages/buro/store.docs.ts
+ M apps/web/src/pages/buro/store.gantt.ts
+ M apps/web/src/pages/buro/store.komms.ts
+ M apps/web/src/pages/buro/store.lager.ts
+ M apps/web/src/pages/buro/store.machines.ts
+ M apps/web/src/pages/buro/store.material.ts
+ M apps/web/src/pages/buro/store.personal.ts
+ M apps/web/src/pages/buro/store.ressourcen.ts
+ M apps/web/src/pages/buro/store.sicherheit.ts
+ M apps/web/src/pages/buro/store.ts
+ M apps/web/src/pages/buro/store.uebergabe.ts
+ M apps/web/src/pages/buro/store.users.ts
+ M apps/web/src/pages/buro/tasks.tsx
+ M apps/web/src/pages/buro/types.ts
+ M apps/web/src/pages/buro/uebergabe.tsx
+ M apps/web/src/pages/buro/vertraege.tsx
+ M apps/web/src/pages/buro/vertrage.tsx
+ M apps/web/src/pages/cad/CADViewer.tsx
+ M apps/web/src/pages/cad/CadGeoMap.tsx
+ M apps/web/src/pages/cad/CadGeoTransform.ts
+ D apps/web/src/pages/cad/CadPage.tsx
+ D apps/web/src/pages/cad/CadWithMap.tsx
+ D apps/web/src/pages/cad/Editor2D.tsx
+ D apps/web/src/pages/cad/Editor2DNew.tsx
+ D apps/web/src/pages/cad/Uebersicht.tsx
+ M apps/web/src/pages/cad/asbuild.tsx
+ D apps/web/src/pages/cad/asbuilt.tsx
+ D apps/web/src/pages/cad/bim.tsx
+ D apps/web/src/pages/cad/cad.css
+ D apps/web/src/pages/cad/components/CanvasStage.tsx
+ D apps/web/src/pages/cad/components/Editor2DCanvas.tsx
+ D apps/web/src/pages/cad/components/LeftPanel.tsx
+ D apps/web/src/pages/cad/components/Panels.tsx
+ D apps/web/src/pages/cad/components/RightPanel.tsx
+ D apps/web/src/pages/cad/components/StatusBar.tsx
+ D apps/web/src/pages/cad/components/TopBar.tsx
+ D apps/web/src/pages/cad/components/store.ts
+ D apps/web/src/pages/cad/export.tsx
+ D apps/web/src/pages/cad/gnss.tsx
+ D apps/web/src/pages/cad/ifcLayers.tsx
+ D apps/web/src/pages/cad/import.tsx
+ M apps/web/src/pages/cad/index.tsx
+ D apps/web/src/pages/cad/machine.tsx
+ D apps/web/src/pages/cad/machineFormats.tsx
+ D apps/web/src/pages/cad/pdfViewer.tsx
+ M apps/web/src/pages/cad/store.ts
+ D apps/web/src/pages/cad/tools.tsx
+ M apps/web/src/pages/cad/types.ts
+ D apps/web/src/pages/cad/utils/cadTypesUtils.ts
+ D apps/web/src/pages/cad/zeichner.tsx
+ M apps/web/src/pages/info/Uebersicht.tsx
+ M apps/web/src/pages/info/changelog.tsx
+ M apps/web/src/pages/info/datenschutz.tsx
+ M apps/web/src/pages/info/faq.tsx
+ M apps/web/src/pages/info/hilfe.tsx
+ M apps/web/src/pages/info/impressum.tsx
+ M apps/web/src/pages/info/index.tsx
+ M apps/web/src/pages/info/shortcuts.tsx
+ M apps/web/src/pages/info/support.tsx
+ M apps/web/src/pages/info/system.tsx
+ M apps/web/src/pages/info/ueber.tsx
+ M apps/web/src/pages/info/updates.tsx
+ D apps/web/src/pages/kalkulation.tsx
+ M apps/web/src/pages/kalkulation/ImportPage.tsx
+ M apps/web/src/pages/kalkulation/Manuell.tsx
+ M apps/web/src/pages/kalkulation/Recipes.tsx
+ D "apps/web/src/pages/kalkulation/Textdokument (neu) (2).txt"
+ M apps/web/src/pages/kalkulation/Uebersicht.tsx
+ M apps/web/src/pages/kalkulation/Versionsvergleich.tsx
+ M apps/web/src/pages/kalkulation/angebot.tsx
+ M apps/web/src/pages/kalkulation/aufschlag.tsx
+ M apps/web/src/pages/kalkulation/catalogStore.ts
+ M apps/web/src/pages/kalkulation/changeStore.ts
+ M apps/web/src/pages/kalkulation/crm.tsx
+ M apps/web/src/pages/kalkulation/gaeb.tsx
+ M apps/web/src/pages/kalkulation/index.tsx
+ M apps/web/src/pages/kalkulation/kalkulationMitKI.tsx
+ M apps/web/src/pages/kalkulation/lv-export.tsx
+ M apps/web/src/pages/kalkulation/lv-import.tsx
+ D apps/web/src/pages/kalkulation/lvOhnePreis.tsx
+ M apps/web/src/pages/kalkulation/lvUpload.tsx
+ M apps/web/src/pages/kalkulation/nachtraege.tsx
+ M apps/web/src/pages/kalkulation/preise.tsx
+ M apps/web/src/pages/kalkulation/pricing.ts
+ M apps/web/src/pages/kalkulation/project.tsx
+ M apps/web/src/pages/kalkulation/projectStore.ts
+ M apps/web/src/pages/kalkulation/recipesHandoff.ts
+ M apps/web/src/pages/kalkulation/store.lv.ts
+ M apps/web/src/pages/kalkulation/useKiSuggest.ts
+ M apps/web/src/pages/kalkulation/vergleich.tsx
+ M apps/web/src/pages/ki/AutoAbrechnung.tsx
+ M apps/web/src/pages/ki/AutoLV.tsx
+ M apps/web/src/pages/ki/BewertungAnalyse.tsx
+ M apps/web/src/pages/ki/Fotoerkennung.tsx
+ M apps/web/src/pages/ki/Index.ts
+ M apps/web/src/pages/ki/KILayout.tsx
+ M apps/web/src/pages/ki/Maengel.tsx
+ D apps/web/src/pages/ki/MarketIntelligence.tsx
+ M apps/web/src/pages/ki/Optimierung.tsx
+ M apps/web/src/pages/ki/RegieAuto.tsx
+ M apps/web/src/pages/ki/Sprachsteuerung.tsx
+ D "apps/web/src/pages/ki/Textdokument (neu).txt"
+ M apps/web/src/pages/ki/Uebersicht.tsx
+ M apps/web/src/pages/ki/Widersprueche.tsx
+ M apps/web/src/pages/ki/analyse.tsx
+ M apps/web/src/pages/ki/foto.tsx
+ M apps/web/src/pages/ki/index.tsx
+ D apps/web/src/pages/ki/lv-auto.tsx
+ M apps/web/src/pages/ki/nachtraege.tsx
+ M apps/web/src/pages/ki/sprach.tsx
+ M apps/web/src/pages/ki/store.lv.ts
+ M apps/web/src/pages/ki/useKiPropose.ts
+ M apps/web/src/pages/ki/useKiSuggest.ts
+ D apps/web/src/pages/ki/vorschlaege.tsx
+ D apps/web/src/pages/mengenermittlung/Aufmass.tsx
+ M apps/web/src/pages/mengenermittlung/AufmassEditor.tsx
+ M apps/web/src/pages/mengenermittlung/AufmassVergleich.tsx
+ D apps/web/src/pages/mengenermittlung/AufmasseKI.tsx
+ D apps/web/src/pages/mengenermittlung/AutoKi.tsx
+ M apps/web/src/pages/mengenermittlung/GPSZuweisung.tsx
+ D apps/web/src/pages/mengenermittlung/ImportFiles.tsx
+ D apps/web/src/pages/mengenermittlung/ManuellFoto.tsx
+ D apps/web/src/pages/mengenermittlung/PositionLV.tsx
+ M apps/web/src/pages/mengenermittlung/Regieberichte.tsx
+ M apps/web/src/pages/mengenermittlung/SollIst.tsx
+ M apps/web/src/pages/mengenermittlung/Uebersicht.tsx
+ D apps/web/src/pages/mengenermittlung/VerknuepfungNachtraege.tsx
+ D apps/web/src/pages/mengenermittlung/VerknuepfungNachtraegeAbrechnung.tsx
+ M apps/web/src/pages/mengenermittlung/abrechnungskreise.tsx
+ D apps/web/src/pages/mengenermittlung/auftragsliste.tsx
+ D apps/web/src/pages/mengenermittlung/ausdrucke.tsx
+ M apps/web/src/pages/mengenermittlung/bilder.tsx
+ D apps/web/src/pages/mengenermittlung/datenaustausch.tsx
+ M apps/web/src/pages/mengenermittlung/historie.tsx
+ M apps/web/src/pages/mengenermittlung/importfiles.css
+ M apps/web/src/pages/mengenermittlung/index.tsx
+ M apps/web/src/pages/mengenermittlung/lieferscheine.tsx
+ M apps/web/src/pages/mengenermittlung/mengenermittlung.tsx
+ D apps/web/src/pages/mengenermittlung/nachtraege/VerknuepfungNachtraege.tsx
+ D apps/web/src/pages/mengenermittlung/nachtraege/index.ts
+ D apps/web/src/pages/mengenermittlung/neuberechnung.tsx
+ D apps/web/src/pages/mengenermittlung/raumbuch.tsx
+ D apps/web/src/pages/mengenermittlung/stammdaten.tsx
+ D apps/web/src/pages/mengenermittlung/verknuepfung/VerknuepfungNachtraege.tsx
+ M apps/web/src/pages/mobile/Pruefung.tsx
+ M apps/web/src/pages/mobile/Uebersicht.tsx
+ D apps/web/src/pages/pdf/pdfviewer.tsx
+ D apps/web/src/pages/placeholders.tsx
+ D apps/web/src/pages/regie/Regie.tsx
+ M apps/web/src/pages/start/ImportProjectJson.tsx
+ M apps/web/src/pages/start/ProjectImport.tsx
+ M apps/web/src/pages/start/Startseite.tsx
+ M apps/web/src/pages/start/project.tsx
+ M apps/web/src/pages/start/projektAuswahl.tsx
+ M apps/web/src/pages/start/projektUebersicht.tsx
+ M apps/web/src/pages/start/startseite.css
+ D apps/web/src/pages/startseite.tsx
+ M apps/web/src/pdf-worker.js
+ M apps/web/src/router.tsx
+ D apps/web/src/routes/App.tsx
+ D apps/web/src/routes/Buchhaltung.tsx
+ D apps/web/src/routes/Buero.tsx
+ D apps/web/src/routes/Cad.tsx
+ D apps/web/src/routes/Info.tsx
+ D apps/web/src/routes/KI.tsx
+ D apps/web/src/routes/Kalkulation.Angebot.tsx
+ D apps/web/src/routes/Kalkulation.LVImport.tsx
+ D apps/web/src/routes/Kalkulation.Preise.tsx
+ D apps/web/src/routes/Kalkulation.Versionen.tsx
+ D apps/web/src/routes/Kalkulation.tsx
+ D apps/web/src/routes/Login.tsx
+ D apps/web/src/routes/Massenermittlung.Calc.tsx
+ D apps/web/src/routes/Massenermittlung.DDT.tsx
+ D apps/web/src/routes/Massenermittlung.Regie.tsx
+ D apps/web/src/routes/Massenermittlung.tsx
+ D apps/web/src/routes/ProjectDetail.tsx
+ D apps/web/src/routes/Projects.tsx
+ D apps/web/src/routes/Section.tsx
+ D apps/web/src/routes/styles.css
+ M apps/web/src/schemas.ts
+ M apps/web/src/shared/Placeholder.tsx
+ M apps/web/src/store/Projects.ts
+ M apps/web/src/store/persist.ts
+ D apps/web/src/store/useproject.tsx
+ D "apps/web/src/styles - Kopie.css"
+ M apps/web/src/styles.css
+ M apps/web/src/types/dxf-viewer.d.ts
+ M apps/web/src/ui/DataSheet.tsx
+ M apps/web/src/ui/Sidebar.tsx
+ M apps/web/src/ui/kit.tsx
+ M apps/web/src/utils/cadImport.ts
+ M apps/web/src/utils/cadMapping.ts
+ M apps/web/src/utils/excel.ts
+ M apps/web/src/utils/formulas.ts
+ M apps/web/src/utils/pdf/printPdf.ts
+ M apps/web/src/utils/project.ts
+ M apps/web/src/utils/templates.ts
+ M apps/web/src/utils/usePersistentState.ts
+ D docker-compose.yml.backup_20260730_145229
+ D docker-compose.yml.bak-2026-04-21-1243
+ D docker-compose.yml.bak.2026-03-05_102903
+ D docker-compose.yml.bak.2026-03-05_102952
+ D docker-compose.yml.bak.2026-03-05_104654
+ D kalkulation-ki-normalize.txt
+ D kalkulation-ki-part1.txt
+ D kalkulation-ki-part2.txt
+ D kalkulation-ki-part3.txt
+ D kalkulation-ki-smartrow.txt
+ D rlc-server-ki-flow-audit-v1.txt
+ D rlc-server@1.0.0
+ D tsc
+?? CHECKSUMS_SHA256.txt
+?? INSTALLAZIONE_RLC_ENTERPRISE_AI.md
+?? RLC_ENTERPRISE_AI_README.md
+?? RLC_KI_LOCALE_LAPTOP.md
+?? THIRD_PARTY_NOTICES_ENTERPRISE_AI.md
+?? apps/mobile/assets/rlc-copilot-avatar-3d.png
+?? apps/mobile/src/components/RlcCategoryGrid.tsx
+?? apps/mobile/src/components/RlcKiFloatingButton.tsx
+?? apps/mobile/src/lib/exporters/bautagebuchPdfBuilder.ts
+?? apps/mobile/src/lib/exporters/blueDocumentPdfBuilder.ts
+?? apps/mobile/src/lib/exporters/documentPdfBuilder.ts
+?? apps/mobile/src/lib/exporters/pdfBranding.ts
+?? apps/mobile/src/lib/exporters/schlussrechnungPdfBuilder.ts
+?? apps/mobile/src/lib/mobilePdfCore.ts
+?? apps/mobile/src/lib/rlcKiFieldParser.ts
+?? apps/mobile/src/lib/rlcKiModuleBridge.ts
+?? apps/mobile/src/lib/rlcKiSmartParser.ts
+?? apps/mobile/src/lib/serverProfile.ts
+?? apps/mobile/src/lib/submitToEingangPruefung.ts
+?? apps/mobile/src/screens/AbschlagEditorScreen.tsx
+?? apps/mobile/src/screens/AbschlagListScreen.tsx
+?? apps/mobile/src/screens/AngebotEditorScreen.tsx
+?? apps/mobile/src/screens/AngebotListScreen.tsx
+?? apps/mobile/src/screens/ArbeitszeitenScreen.tsx
+?? apps/mobile/src/screens/BautagebuchScreen.tsx
+?? apps/mobile/src/screens/KalkulationOutlierScreen.tsx
+?? apps/mobile/src/screens/KalkulationScreen.tsx
+?? apps/mobile/src/screens/KiCalculationScreen.tsx
+?? apps/mobile/src/screens/LvImportScreen.tsx
+?? apps/mobile/src/screens/MengenEditorScreen.tsx
+?? apps/mobile/src/screens/MengenListScreen.tsx
+?? apps/mobile/src/screens/RechnungEditorScreen.tsx
+?? apps/mobile/src/screens/RechnungListScreen.tsx
+?? apps/mobile/src/screens/RlcCopilotScreen.tsx
+?? apps/mobile/src/screens/SchlussrechnungScreen.tsx
+?? apps/mobile/src/screens/ServerSetupScreen.tsx
+?? apps/mobile/src/screens/TagesberichtEditorScreen.tsx
+?? apps/mobile/src/screens/TagesberichtListScreen.tsx
+?? apps/mobile/src/ui/RlcUi.tsx
+?? apps/mobile/src/ui/inlineStyles.ts
+?? apps/server/src/routes/ai.runtime.ts
+?? apps/server/src/routes/enterprise.ts
+?? apps/server/src/scripts/aiRuntimeSmokeTest.ts
+?? apps/server/src/scripts/createEnterprisePairing.ts
+?? apps/server/src/services/ai/
+?? apps/server/src/services/enterpriseProvisioning.ts
+?? apps/web/src/App.js
+?? apps/web/src/api/client.js
+?? apps/web/src/api/files.js
+?? apps/web/src/api/pdf.js
+?? apps/web/src/api/projectLvCompat.js
+?? apps/web/src/api/projectLvCompat.ts
+?? apps/web/src/api/projects.js
+?? apps/web/src/api/regie.js
+?? apps/web/src/api/vorlagen.js
+?? apps/web/src/api/vorlagen.ts
+?? apps/web/src/components/Card.js
+?? apps/web/src/components/DxfPreview.js
+?? apps/web/src/components/PageHeader.js
+?? apps/web/src/components/RlcExplainabilityCard.js
+?? apps/web/src/components/RlcExplainabilityCard.tsx
+?? apps/web/src/components/RlcGlobalProgress.js
+?? apps/web/src/components/RlcGlobalProgress.tsx
+?? apps/web/src/components/RlcKiAssistant.js
+?? apps/web/src/components/RlcKiAssistant.tsx
+?? apps/web/src/components/Section.js
+?? apps/web/src/components/Sidebar.js
+?? apps/web/src/components/document-delivery/
+?? apps/web/src/components/documents/DocumentManager.js
+?? apps/web/src/components/rlc-ai/
+?? apps/web/src/copilot/
+?? apps/web/src/hooks/useAutosave.js
+?? apps/web/src/hooks/useCurrentDocumentUrl.js
+?? apps/web/src/lib/api.js
+?? apps/web/src/lib/apiBase.js
+?? apps/web/src/lib/apiBase.ts
+?? apps/web/src/lib/apiKalk.js
+?? apps/web/src/lib/buchhaltung/store.js
+?? apps/web/src/lib/buro/store.js
+?? apps/web/src/lib/cad/store.js
+?? apps/web/src/lib/formulas.js
+?? apps/web/src/lib/mengen/formulas.js
+?? apps/web/src/lib/pdf.js
+?? apps/web/src/lib/pdf/
+?? apps/web/src/lib/recipesApi.js
+?? apps/web/src/lib/rlcProgress.js
+?? apps/web/src/lib/rlcProgress.ts
+?? apps/web/src/lib/stammdaten.js
+?? apps/web/src/lib/stammdaten.ts
+?? apps/web/src/lib/storage.js
+?? apps/web/src/lib/types.js
+?? apps/web/src/lib/utils/excel.js
+?? apps/web/src/main.js
+?? apps/web/src/pages/auth/
+?? apps/web/src/pages/buchhaltung/AbschlagsrechnungDetail.js
+?? apps/web/src/pages/buchhaltung/Abschlagsrechnungen.js
+?? apps/web/src/pages/buchhaltung/BuchhaltungLayout.js
+?? apps/web/src/pages/buchhaltung/Kostenuebersicht.js
+?? apps/web/src/pages/buchhaltung/Uebersicht.js
+?? apps/web/src/pages/buchhaltung/datev.js
+?? apps/web/src/pages/buchhaltung/eingang.js
+?? apps/web/src/pages/buchhaltung/kassenbuch.js
+?? apps/web/src/pages/buchhaltung/kostenstellen.js
+?? apps/web/src/pages/buchhaltung/lieferscheine.js
+?? apps/web/src/pages/buchhaltung/mahnwesen.js
+?? apps/web/src/pages/buchhaltung/rechnungen.js
+?? apps/web/src/pages/buchhaltung/reports.js
+?? apps/web/src/pages/buchhaltung/stores.js
+?? apps/web/src/pages/buchhaltung/types.js
+?? apps/web/src/pages/buchhaltung/ust.js
+?? apps/web/src/pages/buchhaltung/zahlungen.js
+?? apps/web/src/pages/buro/Bautagebuch.js
+?? apps/web/src/pages/buro/Bautagebuch.tsx
+?? apps/web/src/pages/buro/DocumentManager.js
+?? apps/web/src/pages/buro/Nutzerverwaltung.js
+?? apps/web/src/pages/buro/Nutzerverwaltung.tsx
+?? apps/web/src/pages/buro/ProjektakteFotos.js
+?? apps/web/src/pages/buro/ProjektakteFotos.tsx
+?? apps/web/src/pages/buro/Tagesberichte.js
+?? apps/web/src/pages/buro/Tagesberichte.tsx
+?? apps/web/src/pages/buro/Uebersicht.js
+?? apps/web/src/pages/buro/VorlagenCenter.js
+?? apps/web/src/pages/buro/VorlagenCenter.tsx
+?? apps/web/src/pages/buro/bauzeitenplan.js
+?? apps/web/src/pages/buro/dokumente.js
+?? apps/web/src/pages/buro/index.js
+?? apps/web/src/pages/buro/kommunikation.js
+?? apps/web/src/pages/buro/lager.js
+?? apps/web/src/pages/buro/maschinenverwaltung.js
+?? apps/web/src/pages/buro/materialverwaltung.js
+?? apps/web/src/pages/buro/outlookKalender.js
+?? apps/web/src/pages/buro/personalverwaltung.js
+?? apps/web/src/pages/buro/projekte.js
+?? apps/web/src/pages/buro/ressourcenplanung.js
+?? apps/web/src/pages/buro/sicherheit.js
+?? apps/web/src/pages/buro/store.calendar.js
+?? apps/web/src/pages/buro/store.docs.js
+?? apps/web/src/pages/buro/store.gantt.js
+?? apps/web/src/pages/buro/store.js
+?? apps/web/src/pages/buro/store.komms.js
+?? apps/web/src/pages/buro/store.lager.js
+?? apps/web/src/pages/buro/store.machines.js
+?? apps/web/src/pages/buro/store.material.js
+?? apps/web/src/pages/buro/store.personal.js
+?? apps/web/src/pages/buro/store.ressourcen.js
+?? apps/web/src/pages/buro/store.sicherheit.js
+?? apps/web/src/pages/buro/store.uebergabe.js
+?? apps/web/src/pages/buro/store.users.js
+?? apps/web/src/pages/buro/tasks.js
+?? apps/web/src/pages/buro/types.js
+?? apps/web/src/pages/buro/uebergabe.js
+?? apps/web/src/pages/buro/vertraege.js
+?? apps/web/src/pages/buro/vertrage.js
+?? apps/web/src/pages/buro/vorlagen-center.css
+?? apps/web/src/pages/cad/CADViewer.js
+?? apps/web/src/pages/cad/CadGeoMap.js
+?? apps/web/src/pages/cad/CadGeoTransform.js
+?? apps/web/src/pages/cad/asbuild.js
+?? apps/web/src/pages/cad/index.js
+?? apps/web/src/pages/cad/rlcCadEngine.js
+?? apps/web/src/pages/cad/rlcCadEngine.ts
+?? apps/web/src/pages/cad/store.js
+?? apps/web/src/pages/cad/types.js
+?? apps/web/src/pages/info/Uebersicht.js
+?? apps/web/src/pages/info/changelog.js
+?? apps/web/src/pages/info/datenschutz.js
+?? apps/web/src/pages/info/faq.js
+?? apps/web/src/pages/info/hilfe.js
+?? apps/web/src/pages/info/impressum.js
+?? apps/web/src/pages/info/index.js
+?? apps/web/src/pages/info/shortcuts.js
+?? apps/web/src/pages/info/support.js
+?? apps/web/src/pages/info/system.js
+?? apps/web/src/pages/info/ueber.js
+?? apps/web/src/pages/info/updates.js
+?? apps/web/src/pages/kalkulation/ImportPage.js
+?? apps/web/src/pages/kalkulation/KalkulationsDatenbankPositionPage.js
+?? apps/web/src/pages/kalkulation/KalkulationsDatenbankPositionPage.tsx
+?? apps/web/src/pages/kalkulation/Kalkulationszentrale.js
+?? apps/web/src/pages/kalkulation/Kalkulationszentrale.tsx
+?? apps/web/src/pages/kalkulation/Manuell.js
+?? apps/web/src/pages/kalkulation/Recipes.js
+?? apps/web/src/pages/kalkulation/Uebersicht.js
+?? apps/web/src/pages/kalkulation/Versionsvergleich.js
+?? apps/web/src/pages/kalkulation/angebot.js
+?? apps/web/src/pages/kalkulation/aufschlag.js
+?? apps/web/src/pages/kalkulation/catalogStore.js
+?? apps/web/src/pages/kalkulation/changeStore.js
+?? apps/web/src/pages/kalkulation/crm.js
+?? apps/web/src/pages/kalkulation/gaeb.js
+?? apps/web/src/pages/kalkulation/index.js
+?? apps/web/src/pages/kalkulation/kalkulationMitKI.js
+?? apps/web/src/pages/kalkulation/kalkulationsDatenbank.js
+?? apps/web/src/pages/kalkulation/kalkulationsDatenbank.ts
+?? apps/web/src/pages/kalkulation/kalkulationsDatenbankPage.js
+?? apps/web/src/pages/kalkulation/kalkulationsDatenbankPage.tsx
+?? apps/web/src/pages/kalkulation/lv-export.js
+?? apps/web/src/pages/kalkulation/lv-import.js
+?? apps/web/src/pages/kalkulation/lvUpload.js
+?? apps/web/src/pages/kalkulation/nachtraege.js
+?? apps/web/src/pages/kalkulation/preise.js
+?? apps/web/src/pages/kalkulation/pricing.js
+?? apps/web/src/pages/kalkulation/project.js
+?? apps/web/src/pages/kalkulation/projectStore.js
+?? apps/web/src/pages/kalkulation/recipeLibrary.js
+?? apps/web/src/pages/kalkulation/recipeLibrary.ts
+?? apps/web/src/pages/kalkulation/recipesHandoff.js
+?? apps/web/src/pages/kalkulation/store.lv.js
+?? apps/web/src/pages/kalkulation/technicalPositionLibrary.js
+?? apps/web/src/pages/kalkulation/technicalPositionLibrary.ts
+?? apps/web/src/pages/kalkulation/useKiSuggest.js
+?? apps/web/src/pages/kalkulation/vergleich.js
+?? apps/web/src/pages/kalkulation/workTypeLibrary.js
+?? apps/web/src/pages/kalkulation/workTypeLibrary.ts
+?? apps/web/src/pages/ki/AutoAbrechnung.js
+?? apps/web/src/pages/ki/AutoLV.js
+?? apps/web/src/pages/ki/BewertungAnalyse.js
+?? apps/web/src/pages/ki/Fotoerkennung.js
+?? apps/web/src/pages/ki/Index.js
+?? apps/web/src/pages/ki/KILayout.js
+?? apps/web/src/pages/ki/Maengel.js
+?? apps/web/src/pages/ki/Optimierung.js
+?? apps/web/src/pages/ki/RegieAuto.js
+?? apps/web/src/pages/ki/Sprachsteuerung.js
+?? apps/web/src/pages/ki/Uebersicht.js
+?? apps/web/src/pages/ki/Vorschlaege.js
+?? apps/web/src/pages/ki/Vorschlaege.tsx
+?? apps/web/src/pages/ki/Widersprueche.js
+?? apps/web/src/pages/ki/analyse.js
+?? apps/web/src/pages/ki/foto.js
+?? apps/web/src/pages/ki/nachtraege.js
+?? apps/web/src/pages/ki/sprach.js
+?? apps/web/src/pages/ki/store.lv.js
+?? apps/web/src/pages/ki/useKiPropose.js
+?? apps/web/src/pages/ki/useKiSuggest.js
+?? apps/web/src/pages/mengenermittlung/AufmassEditor.js
+?? apps/web/src/pages/mengenermittlung/AufmassVergleich.js
+?? apps/web/src/pages/mengenermittlung/AutoKI.js
+?? apps/web/src/pages/mengenermittlung/AutoKI.tsx
+?? apps/web/src/pages/mengenermittlung/GPSZuweisung.js
+?? apps/web/src/pages/mengenermittlung/MengPageHeader.js
+?? apps/web/src/pages/mengenermittlung/MengPageHeader.tsx
+?? apps/web/src/pages/mengenermittlung/Regieberichte.js
+?? apps/web/src/pages/mengenermittlung/SollIst.js
+?? apps/web/src/pages/mengenermittlung/Uebersicht.js
+?? apps/web/src/pages/mengenermittlung/abrechnungskreise.js
+?? apps/web/src/pages/mengenermittlung/bilder.js
+?? apps/web/src/pages/mengenermittlung/historie.js
+?? apps/web/src/pages/mengenermittlung/index.js
+?? apps/web/src/pages/mengenermittlung/lieferscheine.js
+?? apps/web/src/pages/mengenermittlung/mengenermittlung-theme.css
+?? apps/web/src/pages/mengenermittlung/mengenermittlung.js
+?? apps/web/src/pages/mobile/Arbeitszeiten.js
+?? apps/web/src/pages/mobile/Arbeitszeiten.tsx
+?? apps/web/src/pages/mobile/MitarbeiterEingaenge.js
+?? apps/web/src/pages/mobile/MitarbeiterEingaenge.tsx
+?? apps/web/src/pages/mobile/Pruefung.js
+?? apps/web/src/pages/mobile/Uebersicht.js
+?? apps/web/src/pages/mobile/mobileEmployee.js
+?? apps/web/src/pages/mobile/mobileEmployee.ts
+?? apps/web/src/pages/site/
+?? apps/web/src/pages/start/ImportProjectJson.js
+?? apps/web/src/pages/start/ProjectImport.js
+?? apps/web/src/pages/start/Startseite.js
+?? apps/web/src/pages/start/project.js
+?? apps/web/src/pages/start/projektAuswahl.js
+?? apps/web/src/pages/start/projektUebersicht.js
+?? apps/web/src/rlc-inline-migrated.css
+?? apps/web/src/rlc-inline-theme.css
+?? apps/web/src/rlc-web-system.css
+?? apps/web/src/router.js
+?? apps/web/src/schemas.js
+?? apps/web/src/shared/Placeholder.js
+?? apps/web/src/store/Projects.js
+?? apps/web/src/store/persist.js
+?? apps/web/src/store/useProject.js
+?? apps/web/src/store/useProject.tsx
+?? apps/web/src/ui/DataSheet.js
+?? apps/web/src/ui/Sidebar.js
+?? apps/web/src/ui/kit.js
+?? apps/web/src/ui/rlcDynamicStyle.js
+?? apps/web/src/ui/rlcDynamicStyle.ts
+?? apps/web/src/ui/rlcRuntimeStyle.js
+?? apps/web/src/ui/rlcRuntimeStyle.ts
+?? apps/web/src/utils/cadImport.js
+?? apps/web/src/utils/cadMapping.js
+?? apps/web/src/utils/excel.js
+?? apps/web/src/utils/formulas.js
+?? apps/web/src/utils/pdf/printPdf.js
+?? apps/web/src/utils/project.js
+?? apps/web/src/utils/templates.js
+?? apps/web/src/utils/usePersistentState.js
+?? apps/web/src/vite-env.d.ts
+?? apps/web/src/workers/
+?? docker-compose.enterprise.yml
+?? docker-compose.laptop-ai.yml
+?? scripts/create-enterprise-pairing.sh
+?? scripts/install-enterprise-ai.sh
+?? scripts/laptop-ai.ps1

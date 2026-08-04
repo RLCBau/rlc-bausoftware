@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/pdfStorage.ts
+﻿// apps/mobile/src/lib/pdfStorage.ts
 
 /**
  * Offline PDF storage (ROBUST for Expo SDK 54+)
@@ -9,8 +9,8 @@
  *   - new API: Directory.documentDirectory.uri / Directory.cacheDirectory.uri
  *
  * Exposed API:
- * - downloadPdf(projectFsKey, name, absUrl)           // http/https ONLY
- * - importLocalPdf(projectFsKey, name, localUri)      // file:// or content://
+ * - downloadPdf(projectFsKey, name, absUrl)                  // http/https ONLY
+ * - importLocalPdf(projectFsKey, name, localUri)             // file:// or content://
  * - getLocalUri(projectFsKey, name)
  * - isDownloaded(projectFsKey, name)
  * - deletePdf(projectFsKey, name)
@@ -18,7 +18,7 @@
  */
 
 import * as LegacyFS from "expo-file-system/legacy";
-import * as FS from "expo-file-system"; // for Directory.* fallback (SDK 54+)
+import * as FS from "expo-file-system";
 
 /* ============================================================
  * Helpers
@@ -37,39 +37,40 @@ function safeFilename(name: string) {
   return base.toLowerCase().endsWith(".pdf") ? base : `${base}.pdf`;
 }
 
+function ensureTrailingSlash(v: string) {
+  return v.endsWith("/") ? v : `${v}/`;
+}
+
 /**
- * Base directory (robusto):
+ * Base directory robusto:
  * - preferisce documentDirectory
  * - fallback su cacheDirectory
- *
- * ✅ FIX: supporta Expo SDK 54+ new API:
- *   Directory.documentDirectory.uri / Directory.cacheDirectory.uri
+ * - supporta anche SDK 54+ new API
  */
 function baseDir(): string {
-  const legacyDoc = String((LegacyFS as any).documentDirectory || "").trim();
-  const legacyCache = String((LegacyFS as any).cacheDirectory || "").trim();
+  const legacyDoc = String((LegacyFS as any).documentDirectory || "");
+  const legacyCache = String((LegacyFS as any).cacheDirectory || "");
 
-  const fsDoc = String((FS as any).documentDirectory || "").trim();
-  const fsCache = String((FS as any).cacheDirectory || "").trim();
+  const fsDoc = String((FS as any).documentDirectory || "");
+  const fsCache = String((FS as any).cacheDirectory || "");
 
   const dirDoc =
-    String((FS as any)?.Directory?.documentDirectory?.uri || "").trim() ||
-    String((FS as any)?.Directory?.documentDirectory || "").trim(); // safety
+    String((FS as any)?.Directory?.documentDirectory?.uri || "") ||
+    String((FS as any)?.Directory?.documentDirectory || "");
 
   const dirCache =
-    String((FS as any)?.Directory?.cacheDirectory?.uri || "").trim() ||
-    String((FS as any)?.Directory?.cacheDirectory || "").trim();
+    String((FS as any)?.Directory?.cacheDirectory?.uri || "") ||
+    String((FS as any)?.Directory?.cacheDirectory || "");
 
   const root =
-    legacyDoc ||
-    fsDoc ||
-    dirDoc ||
-    legacyCache ||
-    fsCache ||
-    dirCache;
+    legacyDoc.trim() ||
+    fsDoc.trim() ||
+    dirDoc.trim() ||
+    legacyCache.trim() ||
+    fsCache.trim() ||
+    dirCache.trim();
 
   if (!root) {
-    // 🔥 Diagnostics: show what the module actually contains
     const keysLegacy = Object.keys(LegacyFS as any).slice(0, 30).join(",");
     const keysFS = Object.keys(FS as any).slice(0, 30).join(",");
 
@@ -85,7 +86,7 @@ function baseDir(): string {
     );
   }
 
-  return root.endsWith("/") ? root : `${root}/`;
+  return ensureTrailingSlash(root);
 }
 
 async function ensureDir(dirUri: string) {
@@ -95,35 +96,20 @@ async function ensureDir(dirUri: string) {
     if (info.exists && !info.isDirectory) {
       await LegacyFS.deleteAsync(dirUri, { idempotent: true });
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
   await LegacyFS.makeDirectoryAsync(dirUri, { intermediates: true });
 }
 
-/**
- * ✅ NEW: preferred dir (standard progetto)
- * baseDir()/rlc/projects/<key>/pdf/
- */
 function projectDirPreferred(projectFsKey: string) {
   const k = safeProjectKey(projectFsKey);
   return `${baseDir()}rlc/projects/${k}/pdf/`;
 }
 
-/**
- * ✅ Legacy dir (compat)
- * baseDir()/rlc_pdfs/<key>/
- */
 function projectDirLegacy(projectFsKey: string) {
   const k = safeProjectKey(projectFsKey);
   return `${baseDir()}rlc_pdfs/${k}/`;
 }
 
-/**
- * ✅ Backwards compatible accessor:
- * - scriviamo/creiamo SEMPRE su preferred
- * - ma leggiamo anche legacy tramite findExistingLocal/listDownloadedPdfs
- */
 function projectDir(projectFsKey: string) {
   return projectDirPreferred(projectFsKey);
 }
@@ -147,29 +133,30 @@ function isContentUrl(u: string) {
  * ============================================================ */
 
 export type PdfMetaItem = {
-  name: string; // filename
-  uri: string; // file://
+  name: string;
+  uri: string;
   size?: number;
-  mtime?: string; // ISO
+  mtime?: string;
 };
 
 /* ============================================================
- * Internal: multi-dir helpers
+ * Internal helpers
  * ============================================================ */
 
 async function ensureProjectDirs(projectFsKey: string) {
   const d1 = projectDirPreferred(projectFsKey);
   const d2 = projectDirLegacy(projectFsKey);
 
-  // create both (idempotent)
   await ensureDir(d1);
   await ensureDir(d2);
 
-  // extra safety for older code paths (harmless)
   try {
-    await ensureDir(`${baseDir()}projects/`);
-    await ensureDir(`${baseDir()}projects/${safeProjectKey(projectFsKey)}/`);
-    await ensureDir(`${baseDir()}projects/${safeProjectKey(projectFsKey)}/pdf/`);
+    const root = baseDir();
+    await ensureDir(`${root}rlc/`);
+    await ensureDir(`${root}rlc/projects/`);
+    await ensureDir(`${root}rlc/projects/${safeProjectKey(projectFsKey)}/`);
+    await ensureDir(`${root}rlc/projects/${safeProjectKey(projectFsKey)}/pdf/`);
+    await ensureDir(`${root}rlc_pdfs/`);
   } catch {}
 }
 
@@ -183,7 +170,10 @@ async function infoIfFile(uri: string) {
   }
 }
 
-async function findExistingLocal(projectFsKey: string, name: string): Promise<string | null> {
+async function findExistingLocal(
+  projectFsKey: string,
+  name: string
+): Promise<string | null> {
   const safeName = safeFilename(name);
 
   const preferred = fileUriInDir(projectDirPreferred(projectFsKey), safeName);
@@ -202,12 +192,9 @@ async function findExistingLocal(projectFsKey: string, name: string): Promise<st
  * API
  * ============================================================ */
 
-/**
- * List all locally downloaded PDFs for a project
- * ✅ reads BOTH dirs: preferred + legacy
- * ✅ ensures dirs exist
- */
-export async function listDownloadedPdfs(projectFsKey: string): Promise<PdfMetaItem[]> {
+export async function listDownloadedPdfs(
+  projectFsKey: string
+): Promise<PdfMetaItem[]> {
   await ensureProjectDirs(projectFsKey);
 
   const preferredDir = projectDirPreferred(projectFsKey);
@@ -267,29 +254,26 @@ export async function listDownloadedPdfs(projectFsKey: string): Promise<PdfMetaI
   return out;
 }
 
-/**
- * Get local uri for a given pdf name
- * ✅ checks preferred + legacy dirs
- */
-export async function getLocalUri(projectFsKey: string, name: string): Promise<string | null> {
+export async function getLocalUri(
+  projectFsKey: string,
+  name: string
+): Promise<string | null> {
   const uri = await findExistingLocal(projectFsKey, name);
   return uri || null;
 }
 
-/**
- * Returns true if a PDF exists locally
- * ✅ checks preferred + legacy dirs
- */
-export async function isDownloaded(projectFsKey: string, name: string): Promise<boolean> {
+export async function isDownloaded(
+  projectFsKey: string,
+  name: string
+): Promise<boolean> {
   const uri = await findExistingLocal(projectFsKey, name);
   return !!uri;
 }
 
-/**
- * Delete a locally stored PDF (preferred + legacy)
- * ✅ idempotent
- */
-export async function deletePdf(projectFsKey: string, name: string): Promise<void> {
+export async function deletePdf(
+  projectFsKey: string,
+  name: string
+): Promise<void> {
   const safeName = safeFilename(name);
 
   const preferred = fileUriInDir(projectDirPreferred(projectFsKey), safeName);
@@ -303,12 +287,11 @@ export async function deletePdf(projectFsKey: string, name: string): Promise<voi
   } catch {}
 }
 
-/**
- * Download a PDF from absolute URL into offline storage
- * - absUrl MUST be http/https
- * - Saves into preferred dir
- */
-export async function downloadPdf(projectFsKey: string, name: string, absUrl: string): Promise<string> {
+export async function downloadPdf(
+  projectFsKey: string,
+  name: string,
+  absUrl: string
+): Promise<string> {
   const url = String(absUrl || "").trim();
   if (!isHttpUrl(url)) {
     throw new Error("downloadPdf: URL muss http/https sein");
@@ -333,37 +316,28 @@ export async function downloadPdf(projectFsKey: string, name: string, absUrl: st
   return savedUri;
 }
 
-/**
- * Import a local pdf (file:// or content://) into offline storage
- * ✅ works with DocumentPicker (copyToCacheDirectory) + Android content://
- * ✅ saves into preferred dir
- */
-export async function importLocalPdf(projectFsKey: string, name: string, localUri: string): Promise<string> {
+export async function importLocalPdf(
+  projectFsKey: string,
+  name: string,
+  localUri: string
+): Promise<{ uri: string; name: string }> {
   const src = String(localUri || "").trim();
   if (!src) throw new Error("importLocalPdf: localUri fehlt");
 
-  // Accept file:// and content://
-  if (!isFileUrl(src) && !isContentUrl(src)) {
-    // still try copyAsync; some providers return bare paths
-  }
-
   await ensureProjectDirs(projectFsKey);
 
+  const safeName = safeFilename(name);
   const dir = projectDirPreferred(projectFsKey);
-  const target = fileUriInDir(dir, name);
+  const target = fileUriInDir(dir, safeName);
 
-  // remove previous versions (both dirs)
   try {
-    await deletePdf(projectFsKey, name);
+    await deletePdf(projectFsKey, safeName);
   } catch {}
 
   try {
     await LegacyFS.copyAsync({ from: src, to: target });
   } catch (e1: any) {
-    // Fallback: base64 read/write (works if provider allows reading)
-    const Enc =
-      (LegacyFS as any).EncodingType ||
-      (FS as any).EncodingType;
+    const Enc = (LegacyFS as any).EncodingType || (FS as any).EncodingType;
 
     try {
       const b64 = await LegacyFS.readAsStringAsync(src, {
@@ -374,7 +348,9 @@ export async function importLocalPdf(projectFsKey: string, name: string, localUr
       });
     } catch (e2: any) {
       throw new Error(
-        `PDF Import fehlgeschlagen: ${e2?.message || e1?.message || String(e2 || e1)}`
+        `PDF Import fehlgeschlagen: ${
+          e2?.message || e1?.message || String(e2 || e1)
+        }`
       );
     }
   }
@@ -382,5 +358,9 @@ export async function importLocalPdf(projectFsKey: string, name: string, localUr
   const info = await infoIfFile(target);
   if (!info) throw new Error("PDF Import: Datei wurde nicht gespeichert");
 
-  return target;
+  return {
+    uri: target,
+    name: safeName,
+  };
 }
+

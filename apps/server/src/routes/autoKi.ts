@@ -63,7 +63,9 @@ function getOpenAI() {
   return new OpenAI({ apiKey: key });
 }
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+// Vision remains a dedicated route. Changing the text model must never silently
+// change image compatibility or the local fallback contract.
+const OPENAI_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 const KI_VISION_ON = String(process.env.KI_VISION || "on").toLowerCase() !== "off";
 
 /* ===================== TYPES ===================== */

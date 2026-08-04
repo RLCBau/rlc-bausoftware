@@ -1,4 +1,4 @@
-import * as FileSystem from "expo-file-system/legacy";
+﻿import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import * as ImageManipulator from "expo-image-manipulator";
 
@@ -84,3 +84,4 @@ export async function persistAttachmentToProject(params: {
     type: params.type || (ext === "png" ? "image/png" : "image/jpeg"),
   };
 }
+

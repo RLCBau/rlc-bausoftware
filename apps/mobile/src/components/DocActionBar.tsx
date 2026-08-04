@@ -1,21 +1,16 @@
 // apps/mobile/src/components/DocActionBar.tsx
 import React from "react";
-import { View, Pressable, Text, StyleSheet } from "react-native";
-import { COLORS } from "../ui/theme";
-
+import { View, Pressable, Text } from "react-native";
+import { COLORS, RLC_CONTROL, RLC_RADIUS, RLC_TEXT_SCALING, RLC_TYPOGRAPHY, createRlcStyles } from "../ui/theme";
 type Props = {
   onSaveOffline: () => Promise<void> | void;
   onSubmit: () => Promise<void> | void;
-
   onOpenPdf?: () => Promise<void> | void;
   onEmailPdf?: () => Promise<void> | void;
-
   onReset?: () => void;
-
-  showPdfActions?: boolean; // true per TUTTI alla fine
+  showPdfActions?: boolean;
   submitting?: boolean;
 };
-
 export function DocActionBar({
   onSaveOffline,
   onSubmit,
@@ -23,52 +18,78 @@ export function DocActionBar({
   onEmailPdf,
   onReset,
   showPdfActions = true,
-  submitting,
+  submitting
 }: Props) {
-  return (
-    <View style={styles.wrap}>
-      <Pressable style={[styles.btn, styles.primary]} onPress={onSaveOffline} disabled={!!submitting}>
-        <Text style={styles.primaryTxt}>Speichern (offline)</Text>
+  return <View style={styles.wrap}>
+      <Pressable style={[styles.btn, styles.primary, submitting ? styles.disabled : null]} onPress={onSaveOffline} disabled={!!submitting}>
+        <Text {...RLC_TEXT_SCALING} style={styles.primaryTxt}>Speichern (offline)</Text>
       </Pressable>
 
-      <Pressable style={[styles.btn, styles.dark]} onPress={onSubmit} disabled={!!submitting}>
-        <Text style={styles.darkTxt}>
+      <Pressable style={[styles.btn, styles.dark, submitting ? styles.disabled : null]} onPress={onSubmit} disabled={!!submitting}>
+        <Text {...RLC_TEXT_SCALING} style={styles.darkTxt}>
           {submitting ? "Einreichen..." : "Einreichen (Inbox + Sync/Queue)"}
         </Text>
       </Pressable>
 
-      {showPdfActions && (
-        <View style={styles.row}>
-          <Pressable style={[styles.btn, styles.secondary]} onPress={onOpenPdf} disabled={!onOpenPdf}>
-            <Text style={styles.secondaryTxt}>PDF öffnen</Text>
+      {showPdfActions && <View style={styles.row}>
+          <Pressable style={[styles.btn, styles.secondary, !onOpenPdf ? styles.disabled : null]} onPress={onOpenPdf} disabled={!onOpenPdf}>
+            <Text {...RLC_TEXT_SCALING} style={styles.secondaryTxt}>PDF öffnen</Text>
           </Pressable>
 
-          <Pressable style={[styles.btn, styles.secondary]} onPress={onEmailPdf} disabled={!onEmailPdf}>
-            <Text style={styles.secondaryTxt}>E-Mail senden</Text>
+          <Pressable style={[styles.btn, styles.secondary, !onEmailPdf ? styles.disabled : null]} onPress={onEmailPdf} disabled={!onEmailPdf}>
+            <Text {...RLC_TEXT_SCALING} style={styles.secondaryTxt}>E-Mail senden</Text>
           </Pressable>
-        </View>
-      )}
+        </View>}
 
-      <Pressable style={[styles.btn, styles.secondary]} onPress={onReset} disabled={!onReset}>
-        <Text style={styles.secondaryTxt}>Formular leeren</Text>
+      <Pressable style={[styles.btn, styles.secondary, !onReset ? styles.disabled : null]} onPress={onReset} disabled={!onReset}>
+        <Text {...RLC_TEXT_SCALING} style={styles.secondaryTxt}>Formular leeren</Text>
       </Pressable>
-    </View>
-  );
+    </View>;
 }
-
-const styles = StyleSheet.create({
-  wrap: { gap: 10, marginTop: 10 },
-  row: { flexDirection: "row", gap: 10 },
+const styles = createRlcStyles("DocActionBar", {
+  wrap: {
+    gap: 10,
+    marginTop: 10
+  },
+  row: {
+    flexDirection: "row",
+    gap: 10
+  },
   btn: {
+    minHeight: RLC_CONTROL.minHeight,
     paddingVertical: 14,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    borderRadius: RLC_RADIUS.button,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1
   },
-  primary: { backgroundColor: COLORS.primary },
-  primaryTxt: { color: "white", fontWeight: "800" },
-  dark: { backgroundColor: "#111" },
-  darkTxt: { color: "white", fontWeight: "800" },
-  secondary: { borderWidth: 1, borderColor: COLORS.primary, backgroundColor: "white", flex: 1 },
-  secondaryTxt: { color: COLORS.primary, fontWeight: "800" },
+  primary: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accentDark
+  },
+  primaryTxt: {
+    color: COLORS.textLight,
+    ...RLC_TYPOGRAPHY.button
+  },
+  dark: {
+    backgroundColor: COLORS.accentDark,
+    borderColor: COLORS.accent
+  },
+  darkTxt: {
+    color: COLORS.textLight,
+    ...RLC_TYPOGRAPHY.button
+  },
+  secondary: {
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    flex: 1
+  },
+  secondaryTxt: {
+    color: COLORS.text,
+    ...RLC_TYPOGRAPHY.button
+  },
+  disabled: {
+    opacity: 0.5
+  }
 });

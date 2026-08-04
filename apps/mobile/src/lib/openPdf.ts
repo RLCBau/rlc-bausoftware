@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/openPdf.ts
+﻿// apps/mobile/src/lib/openPdf.ts
 import { Alert, Linking, Platform } from "react-native";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as FileSystem from "expo-file-system"; // ONLY for Android contentUri bridge (no dirs)
@@ -77,3 +77,4 @@ export async function openPdfOrAlert(uri: string) {
     Alert.alert("PDF öffnen", e?.message || String(e));
   }
 }
+

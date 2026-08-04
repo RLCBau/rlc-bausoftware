@@ -1,4 +1,4 @@
-// apps/mobile/src/lib/submitUnified.ts
+﻿// apps/mobile/src/lib/submitUnified.ts
 import { Alert } from "react-native";
 import { queueAdd, queueProcessPending, type QueueItem } from "./offlineQueue";
 
@@ -45,3 +45,4 @@ export async function submitDraftUnified(opts: {
   if (!opts.silent) Alert.alert("Einreichen", "In Inbox/Queue übernommen.");
   return { ok: true };
 }
+

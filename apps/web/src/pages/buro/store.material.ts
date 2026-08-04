@@ -1,53 +1,264 @@
 import { MaterialItem, MatMove, MatAttachment } from "./types";
-const KEY="rlc-material-db";
-const load=():MaterialItem[]=>JSON.parse(localStorage.getItem(KEY)||"[]");
-const save=(a:MaterialItem[])=>localStorage.setItem(KEY,JSON.stringify(a));
 
-export const MaterialDB={
-  list():MaterialItem[]{ return load().sort((a,b)=>(a.name||"").localeCompare(b.name||"")); },
-  create():MaterialItem{
-    const it:MaterialItem={ id:crypto.randomUUID(), name:"", code:"", unit:"Stk", stock:0, minStock:0, priceNet:0,
-      projectId:"", location:"", supplier:"", moves:[], attachments:[], updatedAt:Date.now() };
-    const all=load(); all.push(it); save(all); return it;
-  },
-  upsert(it:MaterialItem){ const all=load(); const i=all.findIndex(x=>x.id===it.id); if(i>=0) all[i]=it; else all.push(it); save(all); },
-  remove(id:string){ save(load().filter(x=>x.id!==id)); },
+const KEY = "rlc-material-db";
 
-  addMove(itemId:string, m:MatMove){
-    const all=load(); const it=all.find(x=>x.id===itemId); if(!it) return;
-    it.moves=[m,...(it.moves||[])];
-    it.stock = (it.stock||0) + (m.dir==="IN"?m.qty: -m.qty);
-    it.updatedAt=Date.now(); save(all);
-  },
+/* ================= LOAD / SAVE ================= */
 
-  async attach(itemId:string, f:File){
-    const dataURL=await new Promise<string>(res=>{ const r=new FileReader(); r.onload=()=>res(String(r.result)); r.readAsDataURL(f); });
-    const a:MatAttachment={ id:crypto.randomUUID(), name:f.name, mime:f.type, size:f.size, dataURL };
-    const all=load(); const it=all.find(x=>x.id===itemId); if(!it) return;
-    it.attachments=[a,...(it.attachments||[])]; it.updatedAt=Date.now(); save(all);
-  },
-
-  exportCSV(rows:MaterialItem[]){
-    const h="id;name;code;projectId;location;unit;stock;minStock;priceNet;supplier";
-    const b=rows.map(r=>[
-      r.id, esc(r.name||""), esc(r.code||""), r.projectId||"", esc(r.location||""), r.unit||"",
-      r.stock??0, r.minStock??0, r.priceNet??0, esc(r.supplier||"")
-    ].join(";")).join("\n");
-    return h+"\n"+b;
-  },
-  importCSV(txt:string){
-    const lines=txt.split(/\r?\n/).filter(Boolean); if(lines.length<=1) return 0;
-    const rows=lines.slice(1).map(l=>l.split(";")); const all=load();
-    for(const r of rows){
-      const it:MaterialItem={ id:r[0]||crypto.randomUUID(), name:unesc(r[1]||""), code:unesc(r[2]||""), projectId:r[3]||"",
-        location:unesc(r[4]||""), unit:r[5]||"", stock:+(r[6]||0), minStock:+(r[7]||0), priceNet:+(r[8]||0),
-        supplier:unesc(r[9]||""), moves:[], attachments:[], updatedAt:Date.now() };
-      const i=all.findIndex(x=>x.id===it.id); if(i>=0) all[i]=it; else all.push(it);
-    }
-    save(all); return rows.length;
-  },
-  exportJSON(){ return JSON.stringify(load()); },
-  importJSON(txt:string){ const data:MaterialItem[]=JSON.parse(txt||"[]"); save(data); return data.length; }
+const load = (): MaterialItem[] => {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 };
-function esc(s:string){return (s||"").replace(/;/g,",");}
-function unesc(s:string){return s;}
+
+const save = (rows: MaterialItem[]) => {
+  localStorage.setItem(KEY, JSON.stringify(rows));
+};
+
+/* ================= HELPERS ================= */
+
+function esc(s: string) {
+  return (s || "").replace(/;/g, ",").replace(/\n/g, " ");
+}
+
+function unesc(s: string) {
+  return s || "";
+}
+
+function normalizeItem(it: MaterialItem): MaterialItem {
+  return {
+    id: it.id || crypto.randomUUID(),
+    name: it.name || "",
+    code: it.code || "",
+    unit: it.unit || "Stk",
+    stock: Number.isFinite(it.stock) ? it.stock : 0,
+    minStock: Number.isFinite(it.minStock) ? it.minStock : 0,
+    priceNet: Number.isFinite(it.priceNet) ? it.priceNet : 0,
+    projectId: it.projectId || undefined,
+    location: it.location || "",
+    supplier: it.supplier || "",
+    moves: Array.isArray(it.moves) ? it.moves : [],
+    attachments: Array.isArray(it.attachments) ? it.attachments : [],
+    updatedAt: it.updatedAt || Date.now(),
+  };
+}
+
+function normalizeMove(m: MatMove): MatMove {
+  return {
+    id: m.id || crypto.randomUUID(),
+    dir: m.dir === "OUT" ? "OUT" : "IN",
+    qty: Number(m.qty || 0),
+    note: m.note || "",
+    date: m.date || new Date().toISOString(),
+  };
+}
+
+/* ================= DB ================= */
+
+export const MaterialDB = {
+  list(): MaterialItem[] {
+    return load()
+      .map(normalizeItem)
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  },
+
+  create(projectId?: string): MaterialItem {
+    const item = normalizeItem({
+      id: crypto.randomUUID(),
+      name: "",
+      code: "",
+      unit: "Stk",
+      stock: 0,
+      minStock: 0,
+      priceNet: 0,
+      projectId,
+      location: "",
+      supplier: "",
+      moves: [],
+      attachments: [],
+      updatedAt: Date.now(),
+    } as MaterialItem);
+
+    const all = load();
+    all.push(item);
+    save(all);
+
+    return item;
+  },
+
+  upsert(item: MaterialItem) {
+    const it = normalizeItem(item);
+
+    const all = load();
+    const index = all.findIndex((x) => x.id === it.id);
+
+    if (index >= 0) {
+      all[index] = it;
+    } else {
+      all.push(it);
+    }
+
+    save(all);
+    return it;
+  },
+
+  remove(id: string) {
+    const all = load().filter((x) => x.id !== id);
+    save(all);
+  },
+
+  /* ================= MOVES ================= */
+
+  addMove(itemId: string, move: MatMove) {
+    const all = load();
+    const index = all.findIndex((x) => x.id === itemId);
+    if (index === -1) return;
+
+    const it = normalizeItem(all[index]);
+    const m = normalizeMove(move);
+
+    const delta = m.dir === "IN" ? m.qty : -m.qty;
+
+    it.moves = [m, ...(it.moves ?? [])];
+    it.stock = Math.max(0, (it.stock || 0) + delta);
+    it.updatedAt = Date.now();
+
+    all[index] = it;
+    save(all);
+
+    return m;
+  },
+
+  /* ================= ATTACHMENTS ================= */
+
+  async attach(itemId: string, file: File): Promise<MatAttachment | null> {
+    const all = load();
+    const index = all.findIndex((x) => x.id === itemId);
+    if (index === -1) return null;
+
+    const it = normalizeItem(all[index]);
+
+    const dataURL = await new Promise<string>((res) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.readAsDataURL(file);
+    });
+
+    const attachment: MatAttachment = {
+      id: crypto.randomUUID(),
+      name: file.name,
+      mime: file.type,
+      size: file.size,
+      dataURL,
+    };
+
+    it.attachments = [attachment, ...(it.attachments ?? [])];
+    it.updatedAt = Date.now();
+
+    all[index] = it;
+    save(all);
+
+    return attachment;
+  },
+
+  /* ================= CSV ================= */
+
+  exportCSV(rows: MaterialItem[]) {
+    const header =
+      "id;name;code;projectId;location;unit;stock;minStock;priceNet;supplier";
+
+    const body = rows
+      .map((r) => {
+        const it = normalizeItem(r);
+
+        return [
+          it.id,
+          esc(it.name || ""),
+          esc(it.code || ""),
+          it.projectId ?? "",
+          esc(it.location || ""),
+          it.unit ?? "",
+          it.stock ?? 0,
+          it.minStock ?? 0,
+          it.priceNet ?? 0,
+          esc(it.supplier || ""),
+        ].join(";");
+      })
+      .join("\n");
+
+    return header + "\n" + body;
+  },
+
+  importCSV(txt: string) {
+    if (!txt) return 0;
+
+    const lines = txt.split(/\r?\n/).filter(Boolean);
+    if (lines.length <= 1) return 0;
+
+    const rows = lines.slice(1).map((l) => l.split(";"));
+    const all = load();
+
+    let count = 0;
+
+    for (const r of rows) {
+      try {
+        const item: MaterialItem = normalizeItem({
+          id: r[0] || crypto.randomUUID(),
+          name: unesc(r[1] || ""),
+          code: unesc(r[2] || ""),
+          projectId: r[3] || undefined,
+          location: unesc(r[4] || ""),
+          unit: r[5] || "Stk",
+          stock: Number(r[6] || 0),
+          minStock: Number(r[7] || 0),
+          priceNet: Number(r[8] || 0),
+          supplier: unesc(r[9] || ""),
+          moves: [],
+          attachments: [],
+          updatedAt: Date.now(),
+        } as MaterialItem);
+
+        const index = all.findIndex((x) => x.id === item.id);
+
+        if (index >= 0) {
+          all[index] = item;
+        } else {
+          all.push(item);
+        }
+
+        count++;
+      } catch {
+        // skip row
+      }
+    }
+
+    save(all);
+    return count;
+  },
+
+  /* ================= JSON ================= */
+
+  exportJSON() {
+    return JSON.stringify(load());
+  },
+
+  importJSON(txt: string) {
+    try {
+      const data: MaterialItem[] = JSON.parse(txt || "[]");
+      const normalized = data.map(normalizeItem);
+      save(normalized);
+      return normalized.length;
+    } catch {
+      return 0;
+    }
+  },
+};
+
+
+
+
+

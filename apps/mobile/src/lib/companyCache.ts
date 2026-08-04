@@ -1,6 +1,6 @@
-// apps/mobile/src/lib/companyCache.ts
+﻿// apps/mobile/src/lib/companyCache.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { Buffer } from "buffer";
 import { api, request } from "./api";
 
@@ -285,3 +285,4 @@ export async function clearCompanyCache(): Promise<void> {
     await cleanupOldLogoFiles();
   } catch {}
 }
+

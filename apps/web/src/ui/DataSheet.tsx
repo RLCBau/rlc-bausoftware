@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { rlcClass } from "./rlcRuntimeStyle";import { useMemo } from "react";
 
-export type Col<T> = {
+export type Col<T extends Record<string, unknown>> = {
   key: keyof T & string;
   header: string;
   width?: number;
@@ -9,17 +9,7 @@ export type Col<T> = {
   align?: "left" | "right" | "center";
 };
 
-export default function DataSheet<T extends Record<string, any>>({
-  title,
-  columns,
-  rows,
-  onChange,
-  sumKeys = [],
-  dense = false,
-  zebra = false,
-  rowSeparator = false,
-  onRowClick,
-}: {
+type Props<T extends Record<string, unknown>> = {
   title: string;
   columns: Col<T>[];
   rows: T[];
@@ -29,104 +19,199 @@ export default function DataSheet<T extends Record<string, any>>({
   zebra?: boolean;
   rowSeparator?: boolean;
   onRowClick?: (row: T, index: number) => void;
-}) {
-  function toNumber(v: unknown) {
-    const n = Number(String(v ?? "").replace(",", "."));
-    return Number.isFinite(n) ? n : 0;
-  }
+  createEmptyRow?: () => T;
+};
 
-  function updateCell(i: number, key: keyof T & string, value: any, col?: Col<T>) {
+function toNumber(v: unknown): number {
+  const n = Number(String(v ?? "").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getAlign<T extends Record<string, unknown>>(col: Col<T>): "left" | "right" | "center" {
+  return col.align || (col.type === "number" ? "right" : "left");
+}
+
+export default function DataSheet<T extends Record<string, unknown>>({
+  title,
+  columns,
+  rows,
+  onChange,
+  sumKeys = [],
+  dense = false,
+  zebra = false,
+  rowSeparator = false,
+  onRowClick,
+  createEmptyRow
+}: Props<T>) {
+  function updateCell(
+  rowIndex: number,
+  key: keyof T & string,
+  value: unknown,
+  col?: Col<T>)
+  {
     const next = rows.slice();
-    if (col?.type === "number") next[i][key] = toNumber(value);
-    else if (col?.type === "checkbox") next[i][key] = Boolean(value);
-    else next[i][key] = value;
+    const row = { ...next[rowIndex] } as T;
+
+    if (col?.type === "number") {
+      (row as Record<string, unknown>)[key] = toNumber(value);
+    } else if (col?.type === "checkbox") {
+      (row as Record<string, unknown>)[key] = Boolean(value);
+    } else {
+      (row as Record<string, unknown>)[key] = String(value ?? "");
+    }
+
+    next[rowIndex] = row;
     onChange(next);
   }
 
-  function addRow() { onChange([...(rows || []), {} as T]); }
-  function deleteRow(i: number) {
-    const next = rows.slice(); next.splice(i, 1); onChange(next);
+  function addRow() {
+    const empty =
+    createEmptyRow?.() ??
+    Object.fromEntries(
+      columns.map((c) => [
+      c.key,
+      c.type === "checkbox" ? false : c.type === "number" ? 0 : ""]
+      )
+    ) as T;
+
+    onChange([...(rows || []), empty]);
+  }
+
+  function deleteRow(rowIndex: number) {
+    const next = rows.slice();
+    next.splice(rowIndex, 1);
+    onChange(next);
   }
 
   const totals = useMemo(() => {
     const acc: Record<string, number> = {};
-    sumKeys.forEach(k => (acc[k] = rows.reduce((a, r) => a + (toNumber(r[k]) || 0), 0)));
+    for (const key of sumKeys) {
+      acc[key] = rows.reduce((sum, row) => sum + toNumber(row[key]), 0);
+    }
     return acc;
   }, [rows, sumKeys]);
 
   return (
     <div className={`card ${dense ? "card--dense" : ""}`}>
       <div className="card-title">{title}</div>
+
       <div className="toolbar">
-        <button className="input" onClick={addRow}>+ Zeile</button>
+        <button type="button" className="input" onClick={addRow}>
+          + Zeile
+        </button>
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table className={`table ${zebra ? "table--zebra" : ""} ${rowSeparator ? "table--rowsep" : ""}`}>
+
+      <div className="rlc-migrated-ui-datasheet-tsx-1570">
+        <table
+          className={`table ${zebra ? "table--zebra" : ""} ${
+          rowSeparator ? "table--rowsep" : ""}`
+          }>
+          
           <thead>
             <tr>
-              <th style={{ width: 60 }}>Aktion</th>
-              {columns.map(c => (<th key={c.key} style={{ width: c.width }}>{c.header}</th>))}
+              <th className="rlc-migrated-ui-datasheet-tsx-1571">Aktion</th>
+              {columns.map((col) =>
+              <th key={col.key} className={rlcClass(null, { width: col.width })}>
+                  {col.header}
+                </th>
+              )}
             </tr>
           </thead>
+
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} onClick={() => onRowClick?.(r, i)} className={onRowClick ? "row--clickable" : ""}>
+            {rows.map((row, rowIndex) =>
+            <tr
+              key={rowIndex}
+              onClick={() => onRowClick?.(row, rowIndex)}
+              className={onRowClick ? "row--clickable" : ""}>
+              
                 <td>
-                  <button className="input danger" onClick={(e)=>{e.stopPropagation(); deleteRow(i);}}>Löschen</button>
+                  <button
+                  type="button"
+                  className="input danger"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteRow(rowIndex);
+                  }}>
+                  
+                    Löschen
+                  </button>
                 </td>
-                {columns.map(c => {
-                  const v = r[c.key];
-                  const align = c.align || (c.type === "number" ? "right" : "left");
-                  if (!c.editable) {
-                    return (
-                      <td key={c.key} style={{ textAlign: align as any }}>
-                        <span className={align === "right" ? "cell-number" : ""}>
-                          {c.type === "number" ? toNumber(v).toFixed(2) : String(v ?? "")}
-                        </span>
-                      </td>
-                    );
-                  }
-                  if (c.type === "checkbox") {
-                    return (
-                      <td key={c.key} style={{ textAlign: "center" }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(v)}
-                          onChange={(e) => updateCell(i, c.key, e.currentTarget.checked, c)}
-                        />
-                      </td>
-                    );
-                  }
+
+                {columns.map((col) => {
+                const value = row[col.key];
+                const align = getAlign(col);
+
+                if (!col.editable) {
                   return (
-                    <td key={c.key} style={{ textAlign: align as any }}>
+                    <td key={col.key} className={rlcClass(null, { textAlign: align })}>
+                        <span className={align === "right" ? "cell-number" : ""}>
+                          {col.type === "number" ?
+                        toNumber(value).toFixed(2) :
+                        String(value ?? "")}
+                        </span>
+                      </td>);
+
+                }
+
+                if (col.type === "checkbox") {
+                  return (
+                    <td key={col.key} className="rlc-migrated-ui-datasheet-tsx-1572">
+                        <input
+                        type="checkbox"
+                        checked={Boolean(value)}
+                        onChange={(e) =>
+                        updateCell(rowIndex, col.key, e.currentTarget.checked, col)
+                        }
+                        onClick={(e) => e.stopPropagation()} />
+                      
+                      </td>);
+
+                }
+
+                return (
+                  <td key={col.key} className={rlcClass(null, { textAlign: align })}>
                       <input
-                        style={{ width: c.width ? c.width - 20 : 160, textAlign: align as any }}
-                        defaultValue={v ?? ""}
-                        onBlur={(e) => updateCell(i, c.key, e.currentTarget.value, c)}
-                        type="text"
-                        placeholder={c.type === "number" ? "z.B. 1*3+2" : ""}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-            {sumKeys.length > 0 && (
-              <tr>
-                <td style={{ fontWeight: 600 }}>Summe</td>
-                {columns.map(c => (
-                  <td key={c.key}
-                      style={{ textAlign: (c.align || (c.type === "number" ? "right" : "left")) as any, fontWeight: 600 }}>
-                    {sumKeys.includes(c.key) ? (totals[c.key] || 0).toFixed(2) : ""}
-                  </td>
-                ))}
+                      type="text" className={rlcClass(
+                        "input",
+                        {
+                          width: col.width ? Math.max(col.width - 20, 80) : 160,
+                          textAlign: align
+                        })}
+                      value={col.type === "number" ? String(value ?? 0) : String(value ?? "")}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                      updateCell(rowIndex, col.key, e.currentTarget.value, col)
+                      }
+                      placeholder={col.type === "number" ? "z. B. 12.50" : ""} />
+                    
+                    </td>);
+
+              })}
               </tr>
             )}
+
+            {sumKeys.length > 0 &&
+            <tr>
+                <td className="rlc-migrated-ui-datasheet-tsx-1573">Summe</td>
+                {columns.map((col) => {
+                const align = getAlign(col);
+                return (
+                  <td
+                    key={col.key} className={rlcClass(null,
+                    { textAlign: align, fontWeight: 600 })}>
+                    
+                      {sumKeys.includes(col.key) ?
+                    (totals[col.key] || 0).toFixed(2) :
+                    ""}
+                    </td>);
+
+              })}
+              </tr>
+            }
           </tbody>
         </table>
       </div>
-    </div>
-  );
+    </div>);
+
 }
-
-

@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import QRCode from "qrcode";
@@ -24,19 +24,19 @@ export default function AutoLV() {
   // Dati intestazione
   const [company, setCompany] = React.useState({
     name: "RLC Bausoftware GmbH",
-    address: "Musterstraße 12, 80333 München",
+    address: "MusterstraÃŸe 12, 80333 MÃ¼nchen",
     phone: "+49 89 123456",
     email: "info@rlc-bau.de",
     logoUrl: "/rlc-logo.png"
   });
   const [client, setClient] = React.useState({
     name: "Muster Bau GmbH",
-    address: "Hauptstraße 5, 50667 Köln"
+    address: "HauptstraÃŸe 5, 50667 KÃ¶ln"
   });
   const [offer, setOffer] = React.useState({
     number: `ANG-${new Date().toISOString().slice(0,10).replace(/-/g,"")}`,
-    place: "München",
-    notes: "Zahlungsbedingungen: 30 Tage netto. Angebot gültig 30 Tage."
+    place: "MÃ¼nchen",
+    notes: "Zahlungsbedingungen: 30 Tage netto. Angebot gÃ¼ltig 30 Tage."
   });
   const [watermark, setWatermark] = React.useState(true);
 
@@ -58,7 +58,7 @@ export default function AutoLV() {
   // Email
   const [mail, setMail] = React.useState({
     to:"", subject:"Ihr Angebot",
-    body:"Guten Tag,\nim Anhang finden Sie unser Angebot als PDF.\nMit freundlichen Grüßen\nRLC Bausoftware"
+    body:"Guten Tag,\nim Anhang finden Sie unser Angebot als PDF.\nMit freundlichen GrÃ¼ÃŸen\nRLC Bausoftware"
   });
 
   React.useEffect(() => { setRows(LV.list()); }, []);
@@ -146,7 +146,7 @@ export default function AutoLV() {
           <div>
             <div style={{ fontWeight:800 }}>{company.name}</div>
             <div style={{ opacity:.8, fontSize:13 }}>{company.address}</div>
-            <div style={{ opacity:.8, fontSize:13 }}>{company.phone} · {company.email}</div>
+            <div style={{ opacity:.8, fontSize:13 }}>{company.phone} Â· {company.email}</div>
           </div>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"100px 1fr 100px 1fr", gap:8, alignItems:"center" }}>
@@ -184,18 +184,18 @@ export default function AutoLV() {
 
       {/* Azioni KI */}
       <div className="card" style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px" }}>
-        <div style={{ fontWeight:700, fontSize:16 }}>Kalkulation mit KI – Powered by OpenAI</div>
+        <div style={{ fontWeight:700, fontSize:16 }}>Kalkulation mit KI â€“ Powered by OpenAI</div>
         <div style={{ flex:1 }}/>
         <button className="btn" onClick={addRow}>+ Position</button>
-        <button className="btn" onClick={calcAll} disabled={loading || rows.length === 0}>{loading ? "Berechne…" : "KI-Kalkulation starten"}</button>
+        <button className="btn" onClick={calcAll} disabled={loading || rows.length === 0}>{loading ? "Berechneâ€¦" : "KI-Kalkulation starten"}</button>
       </div>
 
       {/* KPI */}
       <div className="card" style={{ padding:"10px 16px", display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:16 }}>
-        <Kpi title="Qualität (avg. Confidence)"><ProgressBar value={avgConfidence*100}/><small style={{ opacity:.8 }}>Ø {(avgConfidence*100).toFixed(0)}%</small></Kpi>
+        <Kpi title="QualitÃ¤t (avg. Confidence)"><ProgressBar value={avgConfidence*100}/><small style={{ opacity:.8 }}>Ã˜ {(avgConfidence*100).toFixed(0)}%</small></Kpi>
         <Kpi title="Abdeckung (KI-Preis)"><ProgressBar value={coverage.pct}/><small style={{ opacity:.8 }}>{coverage.priced}/{coverage.total} Pos. ({coverage.pct}%)</small></Kpi>
-        <Kpi title="Gesamt netto"><div style={{ fontWeight:700, fontSize:16 }}>{netto.toFixed(2)} €</div></Kpi>
-        <Kpi title="Gesamt brutto (inkl. Aufschlag & MwSt)"><div style={{ fontWeight:700, fontSize:16 }}>{brutto.toFixed(2)} €</div></Kpi>
+        <Kpi title="Gesamt netto"><div style={{ fontWeight:700, fontSize:16 }}>{netto.toFixed(2)} â‚¬</div></Kpi>
+        <Kpi title="Gesamt brutto (inkl. Aufschlag & MwSt)"><div style={{ fontWeight:700, fontSize:16 }}>{brutto.toFixed(2)} â‚¬</div></Kpi>
       </div>
 
       {/* Pannello capitolo */}
@@ -212,7 +212,7 @@ export default function AutoLV() {
               <input type="number" style={{ ...inp, width:70 }} value={kapMarkup[ch] ?? 0}
                      onChange={e=>setKapMarkup({ ...kapMarkup, [ch]: +e.target.value })}/>%
               <div style={{ opacity:.7, fontSize:12 }}>
-                Σ: {(kapTotals[ch]?.sumFinalKap ?? 0).toFixed(2)} €
+                Î£: {(kapTotals[ch]?.sumFinalKap ?? 0).toFixed(2)} â‚¬
               </div>
             </div>
           ))}
@@ -230,9 +230,9 @@ export default function AutoLV() {
             <th style={th}>Kurztext</th>
             <th style={th}>Einheit</th>
             <th style={th}>Menge</th>
-            <th style={th}>KI-Preis [€]</th>
+            <th style={th}>KI-Preis [â‚¬]</th>
             <th style={th}>Rabatt %</th>
-            <th style={th}>Zeilen-€ (netto)</th>
+            <th style={th}>Zeilen-â‚¬ (netto)</th>
             <th style={th}>Confidence</th>
             <th style={th}></th>
           </tr>
@@ -242,11 +242,11 @@ export default function AutoLV() {
             <React.Fragment key={ch}>
               <tr>
                 <td style={{ ...td, background:"#f5f7fb", fontWeight:700 }} colSpan={10}>
-                  Kapitel {ch} · Rabatt: {kapTotals[ch]?.rabattKap ?? 0}% · Markup: {kapTotals[ch]?.markupKap ?? 0}% ·
-                  Σ Roh: {(kapTotals[ch]?.sumRaw ?? 0).toFixed(2)} € ·
-                  Σ nach Zeilenrabatt: {(kapTotals[ch]?.sumAfterLineDisc ?? 0).toFixed(2)} € ·
-                  Σ nach Kap.-Rabatt: {(kapTotals[ch]?.sumAfterKap ?? 0).toFixed(2)} € ·
-                  Σ Kapitel (final): {(kapTotals[ch]?.sumFinalKap ?? 0).toFixed(2)} €
+                  Kapitel {ch} Â· Rabatt: {kapTotals[ch]?.rabattKap ?? 0}% Â· Markup: {kapTotals[ch]?.markupKap ?? 0}% Â·
+                  Î£ Roh: {(kapTotals[ch]?.sumRaw ?? 0).toFixed(2)} â‚¬ Â·
+                  Î£ nach Zeilenrabatt: {(kapTotals[ch]?.sumAfterLineDisc ?? 0).toFixed(2)} â‚¬ Â·
+                  Î£ nach Kap.-Rabatt: {(kapTotals[ch]?.sumAfterKap ?? 0).toFixed(2)} â‚¬ Â·
+                  Î£ Kapitel (final): {(kapTotals[ch]?.sumFinalKap ?? 0).toFixed(2)} â‚¬
                 </td>
               </tr>
 
@@ -262,15 +262,15 @@ export default function AutoLV() {
                     <td style={td}><input style={{ ...inp, width:"100%" }} value={r.kurztext} onChange={e => update(r.id, { kurztext:e.target.value })}/></td>
                     <td style={td}><input style={{ ...inp, width:60 }} value={r.einheit} onChange={e => update(r.id, { einheit:e.target.value })}/></td>
                     <td style={td}><input style={{ ...inp, width:80, textAlign:"right" }} type="number" value={r.menge} onChange={e => update(r.id, { menge:+e.target.value })}/></td>
-                    <td style={td}>{r.preis?.toFixed(2) ?? "—"}</td>
+                    <td style={td}>{r.preis?.toFixed(2) ?? "â€”"}</td>
                     <td style={td}>
                       <input type="number" style={{ ...inp, width:80 }} value={r.rabatt ?? 0}
                              onChange={e => update(r.id, { rabatt:+e.target.value })}/>
                     </td>
-                    <td style={td}>{afterLine.toFixed(2)} € <span style={{ opacity:.6, fontSize:12 }}>({raw.toFixed(2)})</span></td>
-                    <td style={td}>{r.confidence != null ? (r.confidence * 100).toFixed(0) + " %" : "—"}</td>
+                    <td style={td}>{afterLine.toFixed(2)} â‚¬ <span style={{ opacity:.6, fontSize:12 }}>({raw.toFixed(2)})</span></td>
+                    <td style={td}>{r.confidence != null ? (r.confidence * 100).toFixed(0) + " %" : "â€”"}</td>
                     <td style={{ ...td, whiteSpace:"nowrap" }}>
-                      <button className="btn" onClick={() => delRow(r.id)}>Löschen</button>
+                      <button className="btn" onClick={() => delRow(r.id)}>LÃ¶schen</button>
                     </td>
                   </tr>
                 );
@@ -296,7 +296,7 @@ export default function AutoLV() {
         <div style={{ fontWeight:700, marginLeft:20 }}>MwSt:</div>
         <input type="number" style={{ ...inp, width:80 }} value={mwst} onChange={e => setMwst(+e.target.value)}/> %
         <div style={{ flex:1 }}/>
-        <div style={{ fontWeight:700, fontSize:16 }}>Gesamt Brutto: {brutto.toFixed(2)} €</div>
+        <div style={{ fontWeight:700, fontSize:16 }}>Gesamt Brutto: {brutto.toFixed(2)} â‚¬</div>
       </div>
 
       {/* Firme + PDF */}
@@ -321,7 +321,7 @@ export default function AutoLV() {
             company, client, offer, watermark,
             sigBauleiter, sigAuftraggeber, bauleiterName, auftraggeberName, pdfColors
           })}>
-            📄 Angebot (PDF) generieren
+            ðŸ“„ Angebot (PDF) generieren
           </button>
           <div style={{ opacity:.7, fontSize:13 }}>Mit Logo, QR, digitalen Unterschriften (mit Name+Datum), Kapitel-Zusammenfassung, Wasserzeichen.</div>
         </div>
@@ -339,7 +339,7 @@ export default function AutoLV() {
           <button className="btn" onClick={()=>handleSendEmail({
             rows, kapRabatt, kapMarkup, kapTotals, netto, aufschlag, mwst, brutto, company, client, offer, watermark,
             sigBauleiter, sigAuftraggeber, bauleiterName, auftraggeberName, pdfColors, mail
-          })}>📨 Angebot per E-Mail senden</button>
+          })}>ðŸ“¨ Angebot per E-Mail senden</button>
         </div>
       </div>
     </div>
@@ -347,7 +347,7 @@ export default function AutoLV() {
 }
 
 /* ===== Helpers Calcolo ===== */
-function getChapter(posNr: string | undefined) { if (!posNr) return "—"; const m = posNr.match(/^(\d{2})/); return m ? m[1] : "—"; }
+function getChapter(posNr: string | undefined) { if (!posNr) return "â€”"; const m = posNr.match(/^(\d{2})/); return m ? m[1] : "â€”"; }
 function lineRaw(r: LVPos) { return (r.menge ?? 0) * (r.preis ?? 0); }
 function lineAfterLineDiscount(r: LVPos & { rabatt?: number }) { const raw = lineRaw(r); const rab = (r.rabatt ?? 0); return raw * (1 - rab / 100); }
 
@@ -383,7 +383,7 @@ function SignPad({ title, onSave }: { title: string; onSave: (dataUrl: string | 
                 onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}/>
       </div>
       <div style={{ display:"flex", gap:8, marginTop:8 }}>
-        <button className="btn" onClick={clear} disabled={!dirty}>Löschen</button>
+        <button className="btn" onClick={clear} disabled={!dirty}>LÃ¶schen</button>
         <button className="btn" onClick={save} disabled={!dirty}>Speichern</button>
       </div>
     </div>
@@ -401,7 +401,7 @@ function exportXLSX(opts: {
 }) {
   const { rows, kapRabatt, kapMarkup, kapTotals, netto, aufschlag, mwst, brutto, company, client, offer } = opts;
 
-  const data1 = [["Kapitel","Pos-Nr","Kurztext","Einheit","Menge","E-Preis","Rabatt %","Zeilen-€ nach Rabatt","Confidence %"]];
+  const data1: Array<Array<string | number>> = [["Kapitel","Pos-Nr","Kurztext","Einheit","Menge","E-Preis","Rabatt %","Zeilen-€ nach Rabatt","Confidence %"]];
   for (const r of rows) {
     const ch = getChapter(r.posNr);
     data1.push([
@@ -411,7 +411,7 @@ function exportXLSX(opts: {
   }
   const ws1 = XLSX.utils.aoa_to_sheet(data1);
 
-  const data2 = [["Kapitel","Kap.-Rabatt %","Markup %","Σ Roh","Σ n. Zeilenrabatt","Σ nach Kap.-Rabatt","Σ Kapitel (final)"]];
+  const data2: Array<Array<string | number>> = [["Kapitel","Kap.-Rabatt %","Markup %","Î£ Roh","Î£ n. Zeilenrabatt","Î£ nach Kap.-Rabatt","Î£ Kapitel (final)"]];
   Object.entries(kapTotals).forEach(([ch, t]) => {
     data2.push([ch, kapRabatt[ch] ?? 0, kapMarkup[ch] ?? 0, t.sumRaw, t.sumAfterLineDisc, t.sumAfterKap, t.sumFinalKap]);
   });
@@ -429,9 +429,9 @@ function exportXLSX(opts: {
     [],
     ["Netto", netto],
     ["Aufschlag %", aufschlag],
-    ["Aufschlag €", aufschlagWert],
+    ["Aufschlag â‚¬", aufschlagWert],
     ["MwSt %", mwst],
-    ["MwSt €", steuer],
+    ["MwSt â‚¬", steuer],
     ["Brutto", brutto]
   ];
   const ws3 = XLSX.utils.aoa_to_sheet(data3);
@@ -488,8 +488,8 @@ async function buildPdfDoc(opts: {
 
   try { const img = await loadImage(company.logoUrl); doc.addImage(img, "PNG", 155, 10, 40, 15); } catch {}
 
-  doc.setFontSize(16); doc.text("Angebot – KI-Kalkulation", 14, 18);
-  doc.setFontSize(10); doc.text(`${company.name} · ${company.address} · ${company.phone} · ${company.email}`, 14, 24);
+  doc.setFontSize(16); doc.text("Angebot â€“ KI-Kalkulation", 14, 18);
+  doc.setFontSize(10); doc.text(`${company.name} Â· ${company.address} Â· ${company.phone} Â· ${company.email}`, 14, 24);
 
   doc.setFontSize(11);
   doc.text(`Kunde: ${client.name}`, 14, 32);
@@ -509,13 +509,13 @@ async function buildPdfDoc(opts: {
   const body = rows.map(r => [
     getChapter(r.posNr), r.posNr || "", r.kurztext || "", r.einheit || "",
     (r.menge ?? 0).toFixed(2),
-    r.preis != null ? r.preis.toFixed(2) : "—",
+    r.preis != null ? r.preis.toFixed(2) : "â€”",
     (r.rabatt ?? 0).toFixed(1) + "%",
-    lineAfterLineDiscount(r).toFixed(2) + " €",
-    r.confidence != null ? Math.round(r.confidence * 100) + "%" : "—"
+    lineAfterLineDiscount(r).toFixed(2) + " â‚¬",
+    r.confidence != null ? Math.round(r.confidence * 100) + "%" : "â€”"
   ]);
   (doc as any).autoTable({
-    head: [["Kap.","Pos.-Nr","Kurztext","Einheit","Menge","E-Preis [€]","Zeilenrabatt","Zeilen € n. Rabatt","KI-Conf."]],
+    head: [["Kap.","Pos.-Nr","Kurztext","Einheit","Menge","E-Preis [â‚¬]","Zeilenrabatt","Zeilen â‚¬ n. Rabatt","KI-Conf."]],
     body,
     styles: { fontSize:9, cellPadding:2 },
     headStyles: { fillColor: pdfColors.head, textColor:255 },
@@ -527,13 +527,13 @@ async function buildPdfDoc(opts: {
   const kapRows = Object.entries(kapTotals).map(([ch, t]) => [
     ch,
     (kapRabatt[ch] ?? 0) + " %",
-    (t.sumRaw).toFixed(2) + " €",
-    (t.sumAfterLineDisc).toFixed(2) + " €",
-    "nach Kap.-Rabatt: " + (t.sumAfterKap).toFixed(2) + " €",
-    "Markup " + (t.markupKap ?? 0) + "% → " + (t.sumFinalKap).toFixed(2) + " €"
+    (t.sumRaw).toFixed(2) + " â‚¬",
+    (t.sumAfterLineDisc).toFixed(2) + " â‚¬",
+    "nach Kap.-Rabatt: " + (t.sumAfterKap).toFixed(2) + " â‚¬",
+    "Markup " + (t.markupKap ?? 0) + "% â†’ " + (t.sumFinalKap).toFixed(2) + " â‚¬"
   ]);
   (doc as any).autoTable({
-    head: [["Kapitel","Kap.-Rabatt","Σ Roh","Σ n. Zeilenrabatt","Σ nach Kap.-Rabatt","Σ Kapitel (final)"]],
+    head: [["Kapitel","Kap.-Rabatt","Î£ Roh","Î£ n. Zeilenrabatt","Î£ nach Kap.-Rabatt","Î£ Kapitel (final)"]],
     body: kapRows,
     styles: { fontSize:9, cellPadding:2 },
     headStyles: { fillColor: pdfColors.chap },
@@ -547,12 +547,12 @@ async function buildPdfDoc(opts: {
 
   doc.setFontSize(12); doc.text("Zusammenfassung:", 14, y2);
   doc.setFontSize(11);
-  doc.text(`Nettosumme: ${netto.toFixed(2)} €`, 20, y2 + 8);
-  doc.text(`Aufschlag (${aufschlag}%): ${(aufschlagWert).toFixed(2)} €`, 20, y2 + 16);
-  doc.text(`MwSt (${mwst}%): ${steuer.toFixed(2)} €`, 20, y2 + 24);
-  doc.setFont(undefined, "bold");
-  doc.text(`Bruttosumme: ${brutto.toFixed(2)} €`, 20, y2 + 34);
-  doc.setFont(undefined, "normal");
+  doc.text(`Nettosumme: ${netto.toFixed(2)} â‚¬`, 20, y2 + 8);
+  doc.text(`Aufschlag (${aufschlag}%): ${(aufschlagWert).toFixed(2)} â‚¬`, 20, y2 + 16);
+  doc.text(`MwSt (${mwst}%): ${steuer.toFixed(2)} â‚¬`, 20, y2 + 24);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Bruttosumme: ${brutto.toFixed(2)} â‚¬`, 20, y2 + 34);
+  doc.setFont("helvetica", "normal");
 
   const y3 = y2 + 44;
   doc.setFontSize(10);
@@ -578,7 +578,7 @@ async function buildPdfDoc(opts: {
 
   doc.text(`Ort: ${offer.place}`, 20, sigY + 24);
 
-  addPageNumbers(doc, (page, total) => `Seite ${page} / ${total}  ·  © ${new Date().getFullYear()} ${company.name}`);
+  addPageNumbers(doc, (page, total) => `Seite ${page} / ${total}  Â·  Â© ${new Date().getFullYear()} ${company.name}`);
   return doc;
 }
 
@@ -593,7 +593,7 @@ async function handleSendEmail(all: {
   mail:{to:string;subject:string;body:string};
 }) {
   const { mail } = all;
-  if (!mail.to) { alert("Bitte Empfänger-E-Mail angeben."); return; }
+  if (!mail.to) { alert("Bitte EmpfÃ¤nger-E-Mail angeben."); return; }
   const pdfBase64 = await generatePdfBase64(all);
   const res = await fetch("/api/mail/send-offer", {
     method:"POST",
@@ -628,3 +628,7 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => { const img = new Image(); img.crossOrigin = "anonymous"; img.onload = () => res(img); img.onerror = rej; img.src = src; });
 }
 function hexToRgb(hex:string){ const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16); return [r,g,b]; }
+
+
+
+

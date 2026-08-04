@@ -1,37 +1,21 @@
 // apps/mobile/src/screens/CompanyAdminScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  StyleSheet,
-  Alert,
-  Image,
-  ScrollView,
-  Platform,
-} from "react-native";
+import { SafeAreaView, View, Text, TextInput, Pressable, Alert, Image, ScrollView, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-
 import { api, CompanyHeader } from "../lib/api";
-import { COLORS } from "../ui/theme";
-
+import { COLORS, createRlcStyles } from "../ui/theme";
 export default function CompanyAdminScreen() {
   const [busy, setBusy] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
-
   const [header, setHeader] = useState<CompanyHeader | null>(null);
   const [logoUri, setLogoUri] = useState<string | null>(null);
-
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      // 1) mostra cache subito se c’è
       const cached = await api.getCompanyHeaderCached();
       if (cached) {
         setHeader(cached);
@@ -40,18 +24,14 @@ export default function CompanyAdminScreen() {
         setPhone(String(cached.phone || ""));
         setEmail(String(cached.email || ""));
       }
-
       const cachedLogo = await api.getCompanyLogoCachedUri();
       if (cachedLogo) setLogoUri(cachedLogo);
-
-      // 2) poi refresh dal server
       const fresh = await api.getCompanyHeader();
       setHeader(fresh);
       setName(String(fresh.name || ""));
       setAddress(String(fresh.address || ""));
       setPhone(String(fresh.phone || ""));
       setEmail(String(fresh.email || ""));
-
       const logo = await api.downloadCompanyLogoToCache(false);
       if (logo) setLogoUri(logo);
     } catch (e: any) {
@@ -60,21 +40,15 @@ export default function CompanyAdminScreen() {
       setBusy(false);
     }
   }, []);
-
   useEffect(() => {
     load();
   }, [load]);
-
-  const payload = useMemo(
-    () => ({
-      name: name.trim(),
-      address: address.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-    }),
-    [name, address, phone, email]
-  );
-
+  const payload = useMemo(() => ({
+    name: name.trim(),
+    address: address.trim(),
+    phone: phone.trim(),
+    email: email.trim()
+  }), [name, address, phone, email]);
   const saveHeader = useCallback(async () => {
     if (!payload.name) {
       Alert.alert("Fehlt", "Firmenname fehlt.");
@@ -91,7 +65,6 @@ export default function CompanyAdminScreen() {
       setBusy(false);
     }
   }, [payload]);
-
   const pickAndUploadLogo = useCallback(async () => {
     setLogoBusy(true);
     try {
@@ -100,30 +73,19 @@ export default function CompanyAdminScreen() {
         Alert.alert("Berechtigung", "Bitte Fotos-Berechtigung erlauben.");
         return;
       }
-
       const res = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 1,
+        quality: 1
       });
-
       if (res.canceled) return;
       const uri = res.assets?.[0]?.uri;
       if (!uri) return;
-
-      // mime best-effort
       const u = uri.toLowerCase();
-      const mime = u.endsWith(".jpg") || u.endsWith(".jpeg")
-        ? "image/jpeg"
-        : u.endsWith(".webp")
-        ? "image/webp"
-        : "image/png";
-
+      const mime = u.endsWith(".jpg") || u.endsWith(".jpeg") ? "image/jpeg" : u.endsWith(".webp") ? "image/webp" : "image/png";
       const updated = await api.uploadCompanyLogoAdmin(uri, mime);
       setHeader(updated);
-
       const localLogo = await api.downloadCompanyLogoToCache(true);
       if (localLogo) setLogoUri(localLogo);
-
       Alert.alert("OK", "Logo hochgeladen.");
     } catch (e: any) {
       Alert.alert("Logo", e?.message || String(e));
@@ -131,7 +93,6 @@ export default function CompanyAdminScreen() {
       setLogoBusy(false);
     }
   }, []);
-
   const syncToOffline = useCallback(async () => {
     setBusy(true);
     try {
@@ -145,9 +106,7 @@ export default function CompanyAdminScreen() {
       setBusy(false);
     }
   }, []);
-
-  return (
-    <ScrollView contentContainerStyle={styles.wrap}>
+  return <ScrollView contentContainerStyle={styles.wrap}>
       <Text style={styles.h1}>Firma – Admin (SERVER_SYNC)</Text>
       <Text style={styles.p}>
         Header + Logo werden am Server gespeichert. Alle Nutzer bekommen es via
@@ -156,52 +115,20 @@ export default function CompanyAdminScreen() {
 
       <View style={styles.card}>
         <Text style={styles.label}>Firmenname *</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="z.B. RLC Tiefbau KG"
-          placeholderTextColor={COLORS.muted}
-          style={styles.input}
-        />
+        <TextInput value={name} onChangeText={setName} placeholder="Firmenname" placeholderTextColor={COLORS.sub} style={styles.input} />
 
         <Text style={styles.label}>Adresse</Text>
-        <TextInput
-          value={address}
-          onChangeText={setAddress}
-          placeholder="Straße, PLZ Ort"
-          placeholderTextColor={COLORS.muted}
-          style={styles.input}
-          multiline
-        />
+        <TextInput value={address} onChangeText={setAddress} placeholder="Straße, PLZ Ort" placeholderTextColor={COLORS.sub} style={styles.input} multiline />
 
         <Text style={styles.label}>Telefon</Text>
-        <TextInput
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="+49 ..."
-          placeholderTextColor={COLORS.muted}
-          style={styles.input}
-          keyboardType={
-            Platform.OS === "ios" ? "numbers-and-punctuation" : "phone-pad"
-          }
-        />
+        <TextInput value={phone} onChangeText={setPhone} placeholder="Telefon" placeholderTextColor={COLORS.sub} style={styles.input} keyboardType={Platform.OS === "ios" ? "numbers-and-punctuation" : "phone-pad"} />
 
         <Text style={styles.label}>E-Mail</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="info@firma.de"
-          placeholderTextColor={COLORS.muted}
-          style={styles.input}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
+        <TextInput value={email} onChangeText={setEmail} placeholder="E-Mail Firma" placeholderTextColor={COLORS.sub} style={styles.input} autoCapitalize="none" keyboardType="email-address" />
 
-        <Pressable
-          disabled={busy}
-          onPress={saveHeader}
-          style={[styles.btnPrimary, busy && { opacity: 0.6 }]}
-        >
+        <Pressable disabled={busy} onPress={saveHeader} style={[styles.btnPrimary, busy && {
+        opacity: 0.6
+      }]}>
           <Text style={styles.btnPrimaryText}>
             {busy ? "Speichere..." : "Daten speichern"}
           </Text>
@@ -211,34 +138,28 @@ export default function CompanyAdminScreen() {
       <View style={styles.card}>
         <Text style={styles.label}>Logo</Text>
 
-        {logoUri ? (
-          <View style={styles.logoRow}>
-            <Image source={{ uri: logoUri }} style={styles.logo} />
-            <View style={{ flex: 1 }}>
+        {logoUri ? <View style={styles.logoRow}>
+            <Image source={{
+          uri: logoUri
+        }} style={styles.logo} />
+            <View style={styles._inline1}>
               <Text style={styles.small} numberOfLines={2}>
                 {logoUri}
               </Text>
             </View>
-          </View>
-        ) : (
-          <Text style={styles.small}>Kein Logo im Cache.</Text>
-        )}
+          </View> : <Text style={styles.small}>Kein Logo im Cache.</Text>}
 
-        <Pressable
-          disabled={logoBusy}
-          onPress={pickAndUploadLogo}
-          style={[styles.btn, logoBusy && { opacity: 0.6 }]}
-        >
+        <Pressable disabled={logoBusy} onPress={pickAndUploadLogo} style={[styles.btn, logoBusy && {
+        opacity: 0.6
+      }]}>
           <Text style={styles.btnText}>
             {logoBusy ? "Upload..." : "Logo auswählen & hochladen"}
           </Text>
         </Pressable>
 
-        <Pressable
-          disabled={busy}
-          onPress={syncToOffline}
-          style={[styles.btnGhost, busy && { opacity: 0.6 }]}
-        >
+        <Pressable disabled={busy} onPress={syncToOffline} style={[styles.btnGhost, busy && {
+        opacity: 0.6
+      }]}>
           <Text style={styles.btnGhostText}>Offline Cache aktualisieren</Text>
         </Pressable>
 
@@ -255,27 +176,40 @@ export default function CompanyAdminScreen() {
           Updated: {String(header?.updatedAt || "-")}
         </Text>
       </View>
-    </ScrollView>
-  );
+    </ScrollView>;
 }
-
-const styles = StyleSheet.create({
-  wrap: { padding: 16, paddingBottom: 28, backgroundColor: COLORS.bg },
-  h1: { fontSize: 20, fontWeight: "900", color: COLORS.text, marginBottom: 6 },
-  p: { color: COLORS.muted, marginBottom: 14, lineHeight: 18 },
+const styles = createRlcStyles("CompanyAdminScreen", {
+  wrap: {
+    padding: 14,
+    paddingBottom: 28,
+    backgroundColor: COLORS.bg
+  },
+  h1: {
+    fontSize: 18,
+    lineHeight: 27,
+    fontWeight: "600",
+    color: COLORS.text,
+    marginBottom: 6
+  },
+  p: {
+    color: COLORS.sub,
+    marginBottom: 14,
+    lineHeight: 18,
+    fontWeight: "600"
+  },
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
   label: {
     color: COLORS.text,
-    fontWeight: "800",
+    fontWeight: "600",
     marginBottom: 6,
-    marginTop: 8,
+    marginTop: 8
   },
   input: {
     borderWidth: 1,
@@ -284,16 +218,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: COLORS.text,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.inputBg,
+    fontWeight: "600"
   },
   btnPrimary: {
     marginTop: 12,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accentDark,
+    borderWidth: 1,
     borderRadius: 14,
     paddingVertical: 13,
-    alignItems: "center",
+    alignItems: "center"
   },
-  btnPrimaryText: { color: "#fff", fontWeight: "900" },
+  btnPrimaryText: {
+    color: COLORS.textLight,
+    fontWeight: "600"
+  },
   btn: {
     marginTop: 12,
     borderWidth: 1,
@@ -301,8 +241,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: "center",
+    backgroundColor: COLORS.card2
   },
-  btnText: { color: COLORS.text, fontWeight: "900" },
+  btnText: {
+    color: COLORS.text,
+    fontWeight: "600"
+  },
   btnGhost: {
     marginTop: 10,
     borderWidth: 1,
@@ -310,14 +254,33 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: "center",
+    backgroundColor: COLORS.card
   },
-  btnGhostText: { color: COLORS.text, fontWeight: "800", fontSize: 12 },
-  small: { color: COLORS.muted, fontSize: 12, lineHeight: 16 },
-  logoRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+  btnGhostText: {
+    color: COLORS.text,
+    fontWeight: "600",
+    fontSize: 12
+  },
+  small: {
+    color: COLORS.sub,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600"
+  },
+  logoRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center"
+  },
   logo: {
     width: 56,
     height: 56,
     borderRadius: 12,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.card2,
+    borderWidth: 1,
+    borderColor: COLORS.border
   },
+  _inline1: {
+    flex: 1
+  }
 });

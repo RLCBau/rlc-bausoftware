@@ -118,3 +118,6 @@ rlc-kalkulationsdb-backup.json
 *.backup
 *.bak_*
 *.tsbuildinfo
+
+# Archivi locali
+*.zip

@@ -1,0 +1,13 @@
+services:
+  ollama:
+    container_name: rlc-laptop-ollama
+
+  server:
+    container_name: rlc-laptop-server
+    environment:
+      # Privacy guard: the laptop copy is strictly local and cannot call OpenAI.
+      RLC_AI_MODE: LOCAL
+      OPENAI_API_KEY: ""
+      RLC_PUBLIC_API_URL: ${RLC_PUBLIC_API_URL:-http://127.0.0.1:4000}
+      RLC_SERVER_NAME: ${RLC_SERVER_NAME:-RLC Laptop Lokal}
+      RLC_COMPANY_CODE: ${RLC_COMPANY_CODE:-RLC-LAPTOP}

@@ -1,9 +1,10 @@
-// apps/web/src/pages/kalkulation/store.lv.ts
+﻿// apps/web/src/pages/kalkulation/store.lv.ts
 
 export type LVPos = {
   id: string;
   posNr: string;
   kurztext: string;
+  langtext?: string;
   einheit: string;
   menge: number;
   preis?: number;
@@ -74,7 +75,7 @@ export const LV = {
   },
 
   /* ========= CSV =========
-     Formato (separatore “;”):
+     Formato (separatore â€œ;â€):
      PosNr;Kurztext;Einheit;Menge;Preis;Confidence
   ======================== */
   exportCSV(rows: LVPos[]) {
@@ -104,7 +105,7 @@ export const LV = {
     const rows: LVPos[] = [];
     for (const l of lines) {
       if (!l.trim()) continue;
-      // split semplice sul “;” (il kurztext è JSON.stringify, quindi non contiene ;)
+      // split semplice sul â€œ;â€ (il kurztext Ã¨ JSON.stringify, quindi non contiene ;)
       const parts = l.split(";");
       if (parts.length < 4) continue;
 
@@ -133,8 +134,8 @@ export const LV = {
 export type CadPayload = {
   posNr?: string;
   kurztext?: string;
-  einheit?: string;   // es. m, m², Stk
-  menge?: number;     // quantità calcolata dal CAD
+  einheit?: string;   // es. m, mÂ², Stk
+  menge?: number;     // quantitÃ  calcolata dal CAD
   preis?: number;     // opzionale
   confidence?: number;
 };
@@ -173,4 +174,5 @@ export const LV_CAD = {
     return list.length;
   }
 };
+
 

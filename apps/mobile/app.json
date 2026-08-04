@@ -26,7 +26,22 @@
     "plugins": [
       "expo-web-browser",
       "expo-mail-composer",
-      "expo-asset"
+      "expo-asset",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "RLC Mobile benötigt die Kamera, um den QR-Code Ihres privaten RLC Servers zu scannen."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

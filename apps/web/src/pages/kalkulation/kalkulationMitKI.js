@@ -1,0 +1,9547 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";
+import { outputPdfBlobWithCompanyHeader, savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+// apps/web/src/pages/kalkulation/kalkulationMitKI.tsx
+import React from "react";
+import { runRlcAction } from "../../lib/rlcProgress";
+import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { useProject } from "../../store/useProject";
+import { API_BASE } from "../../lib/apiBase";
+import { LV, AuftragStore } from "./store.lv";
+import { Catalog } from "./catalogStore";
+import { useKiSuggest } from "./useKiSuggest";
+import { KalkulationsDatenbank } from "./kalkulationsDatenbank";
+const KI_HANDOFF_KEY = "rlc_kalkulation_ki_handoff_v1";
+const HANDOFF_CONSUMED_TS_KEY = "kalkulation:kiHandoffConsumedTs";
+const KALKULATION_API_BASE = "/api/kalkulation";
+/* ================= HELPERS ================= */
+function apiUrl(path) {
+    const base = String(API_BASE || "").replace(/\/+$/, "");
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    if (!base)
+        return cleanPath;
+    if (base.endsWith("/api") && cleanPath.startsWith("/api/")) {
+        return `${base}${cleanPath.slice(4)}`;
+    }
+    return `${base}${cleanPath}`;
+}
+function safeFileName(value) {
+    return String(value || "Datei").
+        replace(/[^\w.-]+/g, "_").
+        replace(/_+/g, "_");
+}
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+function localBackupKey(projectKey) {
+    return `rlc_kalkulation_mit_ki_elite_v1:${projectKey || "NO_PROJECT"}`;
+}
+function getAuthToken() {
+    try {
+        const keys = [
+            "token",
+            "authToken",
+            "accessToken",
+            "rlc_token",
+            "rlc_auth_token",
+            "rlc_access_token"
+        ];
+        for (const key of keys) {
+            const value = localStorage.getItem(key);
+            if (value && value.trim())
+                return value.trim();
+        }
+        const jsonKeys = ["auth", "user", "session", "rlc_auth", "rlc_session"];
+        for (const key of jsonKeys) {
+            const raw = localStorage.getItem(key);
+            if (!raw)
+                continue;
+            try {
+                const parsed = JSON.parse(raw);
+                const token = parsed?.token ??
+                    parsed?.accessToken ??
+                    parsed?.authToken ??
+                    parsed?.jwt ??
+                    parsed?.data?.token ??
+                    parsed?.data?.accessToken;
+                if (typeof token === "string" && token.trim())
+                    return token.trim();
+            }
+            catch {
+                //
+            }
+        }
+    }
+    catch {
+        //
+    }
+    return "";
+}
+function authJsonHeaders() {
+    const token = getAuthToken();
+    return {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+}
+function n(value, fallback = 0) {
+    if (value === null || value === undefined || value === "")
+        return fallback;
+    const raw = String(value).trim();
+    const normalized = raw.includes(",") ?
+        raw.replace(/\./g, "").replace(",", ".") :
+        raw.replace(/\s/g, "");
+    const parsed = typeof value === "number" ? value : Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+function round2(value) {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+function money(value) {
+    return `${n(value).toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    })} €`;
+}
+function qty(value) {
+    return n(value).toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 3
+    });
+}
+function percent(value) {
+    return `${Math.round(n(value) * 100)} %`;
+}
+function safeId() {
+    try {
+        return crypto.randomUUID();
+    }
+    catch {
+        return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+}
+function normText(value) {
+    return String(value ?? "").
+        toLowerCase().
+        normalize("NFKD").
+        replace(/[\u0300-\u036f]/g, "").
+        trim();
+}
+function getProjectObject(projectCtx) {
+    return (projectCtx?.project ||
+        projectCtx?.currentProject ||
+        projectCtx?.selectedProject ||
+        projectCtx?.current ||
+        projectCtx ||
+        {});
+}
+function hasRealX84ForProject(projectKey) {
+    try {
+        if (!projectKey || typeof localStorage === "undefined")
+            return false;
+        const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+        return String(parsed?.format || "").toUpperCase() === "X84";
+    }
+    catch {
+        return false;
+    }
+}
+function getProjectKey(projectCtx) {
+    const projectObj = getProjectObject(projectCtx);
+    return String(projectObj?.code ||
+        projectObj?.projectCode ||
+        projectObj?.number ||
+        projectCtx?.projectCode ||
+        projectObj?.id ||
+        projectCtx?.projectId ||
+        projectCtx?.id ||
+        "").trim();
+}
+function getProjectTitle(projectCtx) {
+    const projectObj = getProjectObject(projectCtx);
+    const code = projectObj?.code ||
+        projectObj?.projectCode ||
+        projectObj?.number ||
+        projectObj?.id ||
+        "";
+    const name = projectObj?.name || projectObj?.projectName || "Projekt";
+    if (!code)
+        return "Kein Projekt gewählt";
+    return `${code} — ${name}`;
+}
+function getChapter(posNr) {
+    if (!posNr)
+        return "—";
+    const m = String(posNr).match(/^(\d{2})/);
+    return m ? m[1] : "—";
+}
+// RLC_STRUCTURAL_TOP_LEVEL_FIX
+function kiIsStructuralRow(row) {
+    const pos = String(row.posNr || "").trim();
+    const kurzRaw = String(row.kurztext || "").trim();
+    const langRaw = String(row.langtext || "").trim();
+    const kurz = kurzRaw.toLowerCase();
+    const lang = langRaw.toLowerCase();
+    const text = `${kurz} ${lang}`.replace(/\s+/g, " ").trim();
+    const unit = String(row.einheit || "").trim().toLowerCase();
+    const gewerk = String(row.gewerk || "").trim().toLowerCase();
+    const leistungsart = String(row.leistungsart || "").trim().toLowerCase();
+    const hasRealText = kurzRaw.length >= 8 ||
+        langRaw.length >= 18 ||
+        /(aushub|abfuhr|verfüll|verfull|pflaster|asphalt|rohr|leitung|speedpipe|kabel|schacht|beton|schalung|bewehrung)/i.test(`${kurzRaw} ${langRaw}`);
+    const pureChapter = /^\d{1,2}$/.test(pos) ||
+        /^\d{1,2}\.0{1,3}$/.test(pos);
+    const placeholder = /^leistung\s+zu\s+position\s+\d+/i.test(kurzRaw) ||
+        /^leistung\s+zu\s+pos\.?\s*\d+/i.test(kurzRaw) ||
+        /^position\s+\d+$/i.test(kurzRaw) ||
+        /^leistung prüfen$/i.test(kurzRaw);
+    const structuralText = /^titel\s*\d*$/i.test(kurzRaw) ||
+        /^abschnitt\s*\d*$/i.test(kurzRaw) ||
+        /^kapitel\s*\d*$/i.test(kurzRaw) ||
+        /^los\s*\d*$/i.test(kurzRaw) ||
+        /^bereich\s*\d*$/i.test(kurzRaw) ||
+        text.includes("summe titel") ||
+        text.includes("zwischensumme") ||
+        text.includes("gesamtsumme") ||
+        text.includes("keine kalkulatorische leistungsposition") ||
+        gewerk.includes("gliederung") ||
+        leistungsart.includes("struktur");
+    if (structuralText)
+        return true;
+    if (pureChapter && !hasRealText)
+        return true;
+    if (placeholder && !hasRealText && n(row.menge) <= 0)
+        return true;
+    if ((unit === "ps" || unit === "pauschal") && pureChapter && !hasRealText) {
+        return true;
+    }
+    return false;
+}
+function kiPrepareStructuralRow(row) {
+    return {
+        ...row,
+        menge: 0,
+        preis: 0,
+        gesamt: 0,
+        materialCost: 0,
+        laborCost: 0,
+        machineCost: 0,
+        subcontractorCost: 0,
+        disposalCost: 0,
+        overheadCost: 0,
+        riskCost: 0,
+        profitCost: 0,
+        baseUnitPrice: 0,
+        suggestedUnitPrice: 0,
+        finalUnitPrice: 0,
+        priceBreakdown: [],
+        confidence: 1,
+        riskLevel: "low",
+        calculationStatus: "ok",
+        warning: "",
+        aiReason: "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition."
+    };
+}
+/* ================= PRICE BREAKDOWN ================= */
+function normalizeBreakdownGroup(value) {
+    const raw = String(value || "").trim();
+    if (raw === "Lohn")
+        return "Personal";
+    if (raw === "Personal")
+        return "Personal";
+    if (raw === "Maschinen")
+        return "Maschinen";
+    if (raw === "LKW / Transport" || raw === "Transport")
+        return "LKW / Transport";
+    if (raw === "Material")
+        return "Material";
+    if (raw === "Entsorgung")
+        return "Entsorgung";
+    if (raw === "Fremdleistung")
+        return "Fremdleistung";
+    if (raw === "Nachunternehmer")
+        return "Fremdleistung";
+    if (raw === "Gemeinkosten")
+        return "Gemeinkosten";
+    if (raw === "Risiko")
+        return "Risiko";
+    if (raw === "Gewinn")
+        return "Gewinn";
+    return "Material";
+}
+function normalizeBreakdownLine(line) {
+    const qtyValue = n(line.qty, 1);
+    const priceValue = n(line.price ?? line.unitPrice);
+    const totalValue = line.total !== undefined && line.total !== null ?
+        n(line.total) :
+        round2(qtyValue * priceValue);
+    return {
+        id: String(line.id || safeId()),
+        group: normalizeBreakdownGroup(line.group),
+        name: String(line.name || "Kostenansatz"),
+        unit: String(line.unit || "EH"),
+        qty: qtyValue,
+        price: priceValue > 0 ? priceValue : qtyValue > 0 ? round2(totalValue / qtyValue) : 0,
+        total: round2(totalValue),
+        note: String(line.note || "")
+    };
+}
+function normalizeBreakdown(lines) {
+    if (!Array.isArray(lines))
+        return [];
+    return lines.map((x) => normalizeBreakdownLine(x));
+}
+function sumBreakdown(lines) {
+    if (!Array.isArray(lines))
+        return 0;
+    return round2(lines.reduce((sum, line) => sum + n(line.total), 0));
+}
+function getUnitPrice(row) {
+    const decision = String(row.priceDecision || "").trim();
+    const angebot = getOfferUnitPrice(row);
+    const rlcKi = getRlcKiUnitPrice(row);
+    if (decision === "rlcKi" && rlcKi > 0)
+        return rlcKi;
+    // Standard: X84/Angebot bleibt finaler Preis.
+    if (angebot > 0)
+        return angebot;
+    const breakdown = sumBreakdown(row.priceBreakdown);
+    return n(row.finalUnitPrice ?? row.preis ?? row.suggestedUnitPrice, breakdown);
+}
+function lineNet(row) {
+    const raw = n(row.menge) * getUnitPrice(row);
+    const rab = n(row.rabatt);
+    return round2(raw * (1 - rab / 100));
+}
+function rowHasRealX84(row) {
+    const anyRow = row;
+    const marker = String(anyRow.gaebType ||
+        anyRow.importType ||
+        anyRow.importMode ||
+        anyRow.importSource ||
+        anyRow.source ||
+        anyRow.quelle ||
+        "").toLowerCase();
+    return (anyRow.x84Imported === true ||
+        anyRow.hasX84 === true ||
+        anyRow.angebotImported === true ||
+        anyRow.offerImported === true ||
+        marker.includes("x84"));
+}
+function getOfferUnitPrice(row) {
+    /*
+     * X84/Angebotspreis:
+     * - echte Angebotsfelder haben Vorrang
+     * - alte/importierte X84-Zeilen können den EP nur in row.preis haben
+     * - finalUnitPrice/suggestedUnitPrice werden NICHT als X84 abgeleitet
+     */
+    const direct = n(row.angebotUnitPrice) ||
+        n(row.originalPreKiPrice) ||
+        n(row.x84UnitPrice) ||
+        n(row.reverseUrkalkulation?.x84UnitPrice) ||
+        n(row.dbComparability?.x84UnitPrice);
+    if (direct > 0)
+        return direct;
+    const hasKiResult = n(row.rlcKiUnitPrice) > 0 ||
+        n(row.openAiSuggestedUnitPrice) > 0 ||
+        Array.isArray(row.priceBreakdown) && row.priceBreakdown.length > 0 ||
+        String(row.source || "").trim().length > 0;
+    if (!hasKiResult && n(row.preis) > 0) {
+        return n(row.preis);
+    }
+    if (rowHasRealX84(row) && n(row.preis) > 0) {
+        return n(row.preis);
+    }
+    return 0;
+}
+function offerLineNet(row) {
+    const raw = n(row.menge) * getOfferUnitPrice(row);
+    const rab = n(row.rabatt);
+    return round2(raw * (1 - rab / 100));
+}
+function getLightWorkRlcUnitPrice(row) {
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    /*
+     * Leichte Nebenleistungen:
+     * RLC-KI bekommt hier einen eigenen technischen Prüfwert.
+     * X84 bleibt nur Angebotspreis und darf diesen Wert nicht bestimmen.
+     */
+    if (text.includes("schichtenverbund")) {
+        return 0.85;
+    }
+    if (text.includes("unterlage reinigen") ||
+        text.includes("untergrund reinigen") ||
+        text.includes("flache reinigen") ||
+        text.includes("fläche reinigen") ||
+        text.includes("flaeche reinigen")) {
+        return 0.45;
+    }
+    if (text.includes("asphalt trennen") ||
+        text.includes("asphalt schneiden") ||
+        text.includes("asphalt einschneiden")) {
+        return 12;
+    }
+    return 0;
+}
+function sanitizeRlcKiPruefwert(row, rawKiEp) {
+    const kiEp = n(rawKiEp);
+    const unit = String(row.einheit || "").trim().toLowerCase();
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    if (kiEp <= 0) {
+        return { value: 0, rejected: false, reason: "" };
+    }
+    /*
+     * RLC-KI darf NICHT gegen X84 blockiert werden.
+     * X84 ist nur Angebots-/Vergleichspreis.
+     * Diese Funktion prüft nur harte technische Ausreißer.
+     */
+    const light = getLightWorkRlcUnitPrice({
+        ...row,
+        rlcKiUnitPrice: kiEp
+    });
+    if (light > 0) {
+        return {
+            value: round2(light),
+            rejected: false,
+            reason: "RLC-Plausibilität: leichte Nebenleistung erkannt."
+        };
+    }
+    const range = getRlcRangeForRow(row);
+    /*
+     * Range nur als sehr grober technischer Ausreißerschutz.
+     * Nicht mehr eng deckeln, sonst zerstören wir Server/Recipe/OpenAI-Ergebnisse.
+     */
+    if (range.max > 0 && kiEp > range.max * 4.0) {
+        return {
+            value: 0,
+            rejected: true,
+            reason: `RLC-Plausibilität: KI-Prüfwert als extremer Ausreißer verworfen (${money(kiEp)} RLC-KI ↔ RLC max ${money(range.max)}).`
+        };
+    }
+    const isPauschal = unit === "psch" ||
+        unit === "ps" ||
+        unit === "pauschal" ||
+        text.includes("baustelleneinricht") ||
+        text.includes("baustelle einricht") ||
+        text.includes("baustelle räumen") ||
+        text.includes("baustelle raumen");
+    /*
+     * Pauschalpositionen dürfen stark abweichen.
+     * Nur komplett absurde Werte werden verworfen.
+     */
+    if (isPauschal && (kiEp < 1 || kiEp > 250000)) {
+        return {
+            value: 0,
+            rejected: true,
+            reason: `RLC-Plausibilität: Pauschalposition als extremer Ausreißer verworfen (${money(kiEp)} RLC-KI).`
+        };
+    }
+    return { value: round2(kiEp), rejected: false, reason: "" };
+}
+function getRlcRangeForRow(row) {
+    if (!row)
+        return { min: 0, avg: 0, max: 0, source: "", group: "" };
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    const unit = String(row.einheit || "").trim().toLowerCase();
+    const direct = {
+        min: n(row.rlcPreisMin),
+        avg: n(row.rlcPreisAvg),
+        max: n(row.rlcPreisMax),
+        source: String(row.rlcPreisSource || ""),
+        group: String(row.rlcPreisGroup || "")
+    };
+    if (unit === "m²" || unit === "m2" || unit === "qm" || unit === "m^2") {
+        if (text.includes("unterlage reinigen") ||
+            text.includes("untergrund reinigen") ||
+            text.includes("fläche reinigen") ||
+            text.includes("flaeche reinigen")) {
+            return {
+                min: 0.15,
+                avg: 0.45,
+                max: 2.5,
+                source: "RLC Plausibilitätsbibliothek",
+                group: "Oberfläche / Reinigung"
+            };
+        }
+        if (text.includes("asphalt einfräsen") ||
+            text.includes("asphalt einfraesen") ||
+            text.includes("fräsen") ||
+            text.includes("fraesen") ||
+            text.includes("abfräsen") ||
+            text.includes("abfraesen")) {
+            return {
+                min: 2,
+                avg: 4.5,
+                max: 9,
+                source: "RLC Plausibilitätsbibliothek",
+                group: "Oberfläche / Asphalt fräsen"
+            };
+        }
+        if (text.includes("ac 11 ds") ||
+            text.includes("ads aus ac 11") ||
+            text.includes("asphaltdeckschicht") ||
+            text.includes("deckschicht") ||
+            text.includes("4 cm")) {
+            return {
+                min: 10,
+                avg: 18,
+                max: 32,
+                source: "RLC Plausibilitätsbibliothek",
+                group: "Oberfläche / Asphaltdeckschicht"
+            };
+        }
+        if (text.includes("zulage") && (text.includes("mehr") || text.includes("minder")) && (text.includes("stärke") || text.includes("staerke"))) {
+            return {
+                min: 1,
+                avg: 4.5,
+                max: 12,
+                source: "RLC Plausibilitätsbibliothek",
+                group: "Oberfläche / Asphalt Zulage"
+            };
+        }
+        if (text.includes("planie")) {
+            return {
+                min: 2,
+                avg: 5,
+                max: 10,
+                source: "RLC Plausibilitätsbibliothek",
+                group: "Oberfläche / Planie"
+            };
+        }
+    }
+    if (text.includes("abfuhr erdreich") &&
+        text.includes("bis 5 km") && (text.includes("lkw") || text.includes("kippvorgang"))) {
+        return {
+            min: 18,
+            avg: 28,
+            max: 42,
+            source: "RLC Preisbibliothek",
+            group: "LKW / Transport"
+        };
+    }
+    if (direct.avg > 0 && direct.max > 0)
+        return direct;
+    return { min: 0, avg: 0, max: 0, source: "", group: "" };
+}
+function getTrustedRlcDatabasePrice(row) {
+    // X84 darf RLC-KI nicht mehr bestimmen.
+    const range = getRlcRangeForRow(row);
+    const rowUnit = String(row.einheit || "").trim().toLowerCase();
+    const matches = KalkulationsDatenbank.search({
+        posNr: row.posNr || "",
+        kurztext: row.kurztext || "",
+        langtext: row.langtext || "",
+        einheit: row.einheit || "",
+        menge: n(row.menge),
+        parameter: {
+            gewerk: row.gewerk || "",
+            leistungsart: row.leistungsart || "",
+            bauverfahren: row.bauverfahren || "",
+            menge: n(row.menge),
+            einheit: row.einheit || ""
+        }
+    }, 8);
+    const candidates = matches.
+        map((m) => {
+        const ep = n(m.eintrag?.kosten?.epNetto);
+        return { match: m, ep };
+    }).
+        filter((x) => x.ep > 0 && x.ep < 1000000).
+        sort((a, b) => b.match.score - a.match.score);
+    for (const item of candidates) {
+        const score = n(item.match.score);
+        const ep = round2(item.ep);
+        const entry = item.match.eintrag;
+        const entryUnit = String(entry.einheit || "").trim().toLowerCase();
+        if (rowUnit && entryUnit && rowUnit !== entryUnit)
+            continue;
+        /*
+         * Datenbank nur verwenden, wenn der Treffer wirklich stark ist.
+         * Damit wird verhindert, dass ähnliche, aber falsche Positionen übernommen werden.
+         */
+        if (score < 68)
+            continue;
+        /*
+         * RLC-Preisbibliothek ist Kontrollrahmen:
+         * Wenn ein Datenbankwert klar über dem realistischen Max liegt,
+         * wird er nicht als RLC-KI-Preis akzeptiert.
+         */
+        if (range.max > 0 && ep > range.max * 1.35)
+            continue;
+        /*
+         * X84 ist NICHT Wahrheit, aber Plausibilitätsanker.
+         * Bei mittelstarkem Treffer darf der Datenbankpreis nicht extrem weit weg sein.
+         * Sehr starke Treffer dürfen mehr abweichen.
+         */
+        const x84 = getOfferUnitPrice(row);
+        if (x84 > 0) {
+            const ratio = ep / x84;
+            if (ratio > 3.0 || ratio < 0.25)
+                continue;
+            if (score < 82 && (ratio > 2.2 || ratio < 0.45))
+                continue;
+        }
+        return ep;
+    }
+    return 0;
+}
+function resolveBestRlcKiPrice(row, allowDatabaseSearch = false) {
+    const angebotEp = getOfferUnitPrice(row);
+    const range = getRlcRangeForRow(row);
+    const dbEp = allowDatabaseSearch ? getTrustedRlcDatabasePrice(row) : 0;
+    const serverRaw = n(row.rlcKiUnitPrice) ||
+        n(row.suggestedUnitPrice) ||
+        n(row.baseUnitPrice);
+    const openAiRaw = n(row.openAiSuggestedUnitPrice);
+    /*
+     * Serverwert nicht im Frontend nachträglich deckeln oder ersetzen.
+     * Der Server enthält bereits DB-Vergleich, X84-Reverse-Urkalkulation
+     * und Plausibilitätsprüfung. Frontend zeigt nur den Prüfwert.
+     */
+    const checkedOpenAi = sanitizeRlcKiPruefwert(row, openAiRaw);
+    const serverEp = serverRaw > 0 ? round2(serverRaw) : 0;
+    const openAiEp = checkedOpenAi.value > 0 ? checkedOpenAi.value : 0;
+    const libraryAvgEp = range.avg > 0 && range.max > 0 ?
+        round2(range.avg) :
+        0;
+    function isPlausibleAgainstX84(ep, source) {
+        if (ep <= 0)
+            return false;
+        /*
+         * RLC-KI darf NICHT durch X84 blockiert werden.
+         * X84 ist nur Vergleichs-/Angebotspreis.
+         * Server, Recipe und OpenAI liefern eigenständige Prüfwerte.
+         */
+        if (source === "server" || source === "openai" || source === "bibliothek") {
+            return true;
+        }
+        if (angebotEp <= 0)
+            return true;
+        const ratio = ep / angebotEp;
+        // Firmen-Datenbank darf stärker abweichen, aber nicht komplett absurd.
+        if (source === "datenbank") {
+            return ratio >= 0.25 && ratio <= 3.0;
+        }
+        return true;
+    }
+    function isPlausibleAgainstLibrary(ep, source) {
+        if (ep <= 0)
+            return false;
+        /*
+         * RLC-Bibliothek ist ab jetzt nur Kontroll-/Anzeigeinformation.
+         * Sie darf Server, Recipe, Datenbank oder OpenAI nicht blockieren.
+         * Fachliche Prüfhinweise werden separat angezeigt.
+         */
+        return true;
+    }
+    const candidates = [];
+    if (dbEp > 0 &&
+        isPlausibleAgainstX84(dbEp, "datenbank") &&
+        isPlausibleAgainstLibrary(dbEp, "datenbank")) {
+        candidates.push({
+            source: "datenbank",
+            ep: dbEp,
+            weight: 100,
+            reason: "Firmen-Datenbank: stärkste Quelle, Treffer wurde plausibilisiert."
+        });
+    }
+    if (serverEp > 0 &&
+        isPlausibleAgainstX84(serverEp, "server") &&
+        isPlausibleAgainstLibrary(serverEp, "server")) {
+        candidates.push({
+            source: "server",
+            ep: serverEp,
+            weight: 70,
+            reason: "Server-/Recipe-Kalkulation wurde als plausibler RLC-KI-Prüfwert akzeptiert."
+        });
+    }
+    /*
+     * WICHTIG:
+     * OpenAI und RLC Bibliothek werden hier bewusst NICHT automatisch als RLC-KI-Preis übernommen.
+     * OpenAI bleibt Vergleich.
+     * Bibliothek bleibt Plausibilitätsrahmen.
+     */
+    const best = candidates.sort((a, b) => b.weight - a.weight)[0];
+    if (!best) {
+        return {
+            angebotEp,
+            dbEp,
+            serverEp,
+            openAiEp,
+            libraryAvgEp,
+            finalRlcKiEp: 0,
+            source: angebotEp > 0 ? "x84" : "none",
+            confidence: 0,
+            warning: "",
+            reason: [
+                "Kein belastbarer RLC-KI-Preis gefunden.",
+                `Server/RLC ${money(serverEp)}, DB ${money(dbEp)}, OpenAI ${money(openAiEp)}, Bibliothek Ø ${money(libraryAvgEp)}, X84 ${money(angebotEp)}.`,
+                "OpenAI und Bibliothek wurden nicht automatisch als Preis übernommen."
+            ].
+                join(" ")
+        };
+    }
+    const diffPct = angebotEp > 0 ? round2((best.ep - angebotEp) / angebotEp * 100) : 0;
+    const warning = angebotEp > 0 && Math.abs(diffPct) >= 35 ?
+        `RLC-KI weicht deutlich vom X84-Angebotspreis ab (${money(angebotEp)} X84 ↔ ${money(best.ep)} RLC-KI, ${diffPct}%). Fachlich prüfen.` :
+        "";
+    return {
+        angebotEp,
+        dbEp,
+        serverEp,
+        openAiEp,
+        libraryAvgEp,
+        finalRlcKiEp: round2(best.ep),
+        source: best.source,
+        confidence: best.source === "datenbank" ? 0.92 : 0.78,
+        warning,
+        reason: [
+            best.reason,
+            `Quellen geprüft: DB ${money(dbEp)}, Server/RLC ${money(serverEp)}, OpenAI ${money(openAiEp)}, Bibliothek Ø ${money(libraryAvgEp)}, X84 ${money(angebotEp)}.`,
+            "X84 bleibt Referenz/Angebot. RLC-KI ist ein geprüfter Vergleichswert."
+        ].
+            join(" ")
+    };
+}
+function getRawRlcKiUnitPrice(row) {
+    /*
+     * Nur gespeicherte KI/OpenAI-Prüfwerte lesen.
+     * Keine Datenbank-Suche hier, weil diese Funktion beim Rendern sehr oft läuft.
+     */
+    const explicitRlc = n(row.rlcKiUnitPrice);
+    if (explicitRlc > 0)
+        return round2(explicitRlc);
+    const explicitOpenAi = n(row.openAiSuggestedUnitPrice);
+    if (explicitOpenAi > 0)
+        return round2(explicitOpenAi);
+    return 0;
+}
+function scrollToLvPosition(rowId) {
+    const id = String(rowId || "").trim();
+    if (!id)
+        return;
+    try {
+        const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function" ?
+            CSS.escape(id) :
+            id.replace(/["\\]/g, "\\$&");
+        const el = document.querySelector(`[data-row-id="${escaped}"]`) ||
+            document.querySelector(`[data-lv-row-id="${escaped}"]`) ||
+            document.getElementById(`rlc-row-${id}`) ||
+            document.getElementById(id);
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (el instanceof HTMLElement) {
+                el.focus?.();
+            }
+        }
+    }
+    catch {
+        // Scroll ist nur Komfortfunktion. Keine Kalkulation blockieren.
+    }
+}
+function getRlcKiDisplay(row) {
+    const raw = getRawRlcKiUnitPrice(row);
+    if (raw <= 0) {
+        return { valid: 0, raw: 0, label: "—", rejected: false };
+    }
+    const checked = sanitizeRlcKiPruefwert(row, raw);
+    return {
+        valid: checked.value,
+        raw,
+        label: checked.value > 0 ? money(checked.value) : "—",
+        rejected: checked.rejected
+    };
+}
+function showLangtextModal(text) {
+    const old = document.getElementById("rlc-langtext-modal");
+    if (old)
+        old.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "rlc-langtext-modal";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "999999";
+    overlay.style.background = "rgba(15, 23, 42, 0.55)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "24px";
+    const box = document.createElement("div");
+    box.style.width = "min(820px, 96vw)";
+    box.style.maxHeight = "82vh";
+    box.style.background = "#ffffff";
+    box.style.borderRadius = "18px";
+    box.style.boxShadow = "0 24px 80px rgba(15, 23, 42, 0.32)";
+    box.style.border = "1px solid #dbe4f0";
+    box.style.overflow = "hidden";
+    box.style.fontFamily = "inherit";
+    const head = document.createElement("div");
+    head.style.padding = "18px 22px";
+    head.style.background = "linear-gradient(135deg, #10204a, #2457d6)";
+    head.style.color = "white";
+    head.style.fontWeight = "900";
+    head.style.fontSize = "18px";
+    head.textContent = "Langtext / Positionssumme";
+    const body = document.createElement("pre");
+    body.style.margin = "0";
+    body.style.padding = "22px";
+    body.style.maxHeight = "56vh";
+    body.style.overflow = "auto";
+    body.style.whiteSpace = "pre-wrap";
+    body.style.wordBreak = "break-word";
+    body.style.fontFamily = "inherit";
+    body.style.fontSize = "15px";
+    body.style.lineHeight = "1.55";
+    body.style.color = "#0f172a";
+    body.style.background = "#f8fafc";
+    body.textContent = text;
+    const footer = document.createElement("div");
+    footer.style.padding = "14px 22px";
+    footer.style.display = "flex";
+    footer.style.justifyContent = "flex-end";
+    footer.style.gap = "10px";
+    footer.style.background = "#ffffff";
+    footer.style.borderTop = "1px solid #e5e7eb";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "Schließen";
+    close.style.border = "1px solid #cbd5e1";
+    close.style.borderRadius = "12px";
+    close.style.background = "#ffffff";
+    close.style.color = "#0f172a";
+    close.style.fontWeight = "800";
+    close.style.padding = "10px 18px";
+    close.style.cursor = "pointer";
+    close.onclick = () => overlay.remove();
+    overlay.onclick = (e) => {
+        if (e.target === overlay)
+            overlay.remove();
+    };
+    document.addEventListener("keydown", function esc(ev) {
+        if (ev.key === "Escape") {
+            overlay.remove();
+            document.removeEventListener("keydown", esc);
+        }
+    }, { once: false });
+    footer.appendChild(close);
+    box.appendChild(head);
+    box.appendChild(body);
+    box.appendChild(footer);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+}
+function getX84CompanyFrontendOverride(row) {
+    /*
+     * Firmen-Datenbank-Override:
+     * Keine hardcoded Frontend-Preise.
+     * Wahrheit ist die synchronisierte Kalkulationsdatenbank.
+     */
+    const pos = String(row.posNr || row.pos || "").trim();
+    if (!pos)
+        return 0;
+    try {
+        const hit = KalkulationsDatenbank.list().find((entry) => {
+            const entryPos = String(entry.posNr || entry.positionNumber || "").trim();
+            const source = String(entry.quelle || entry.source || "").trim();
+            return entryPos === pos && source === "x84-company-baseline";
+        });
+        if (!hit)
+            return 0;
+        return (n(hit.kosten?.epNetto) ||
+            n(hit.preis) ||
+            n(hit.unitPriceNet) ||
+            n(hit.finalUnitPrice));
+    }
+    catch {
+        return 0;
+    }
+}
+function getRlcKiUnitPrice(row) {
+    /*
+     * Kein Frontend-Datenbank-Override beim Rendern.
+     * Server entscheidet über DB, X84-Reverse-Urkalkulation und Plausibilität.
+     */
+    const decision = resolveBestRlcKiPrice(row);
+    return decision.finalRlcKiEp > 0 ? decision.finalRlcKiEp : 0;
+}
+function clearOldKiProposalFields(row) {
+    // X84 darf RLC-KI nicht mehr bestimmen.
+    const x84 = getOfferUnitPrice(row) ||
+        n(row.originalPreKiPrice) ||
+        n(row.preis) ||
+        n(row.finalUnitPrice);
+    return normalizeEliteRow({
+        ...row,
+        // X84 bleibt der finale Preis
+        preis: x84,
+        finalUnitPrice: x84,
+        suggestedUnitPrice: x84,
+        gesamt: round2(n(row.menge) * x84),
+        // Alte KI/OpenAI-Prüfwerte löschen
+        rlcKiUnitPrice: 0,
+        rlcKiTotal: 0,
+        priceDifference: 0,
+        priceDifferencePct: 0,
+        openAiSuggestedUnitPrice: undefined,
+        openAiSuggestedTotal: undefined,
+        openAiSuggestedAt: undefined,
+        openAiSuggestedReason: undefined,
+        openAiSuggestedWarning: undefined,
+        openAiSuggestedPriceBreakdown: undefined,
+        openAiRejected: true,
+        // Alte künstliche Prüfhinweise entfernen
+        warning: "",
+        calculationStatus: "ok",
+        riskLevel: "medium"
+    });
+}
+function rlcKiLineNet(row) {
+    const raw = n(row.menge) * getRlcKiUnitPrice(row);
+    const rab = n(row.rabatt);
+    return round2(raw * (1 - rab / 100));
+}
+function getPriceDifference(row) {
+    return round2(getRlcKiUnitPrice(row) - getOfferUnitPrice(row));
+}
+function getPriceDifferencePct(row) {
+    const angebot = getOfferUnitPrice(row);
+    if (angebot <= 0)
+        return 0;
+    return round2(getPriceDifference(row) / angebot * 100);
+}
+function isRlcKiWithinFivePercent(row) {
+    const x84 = getOfferUnitPrice(row);
+    const rlc = getRlcKiUnitPrice(row);
+    if (x84 <= 0 || rlc <= 0)
+        return false;
+    const pct = Math.abs((rlc - x84) / x84 * 100);
+    return pct <= 5;
+}
+function cleanRlcKiWarningState(row) {
+    if (!isRlcKiWithinFivePercent(row))
+        return row;
+    return {
+        ...row,
+        warning: "",
+        calculationStatus: "ok",
+        riskLevel: "low",
+        confidence: Math.max(n(row.confidence), 0.96)
+    };
+}
+function getRlcKiDifference(row) {
+    return round2(getRlcKiUnitPrice(row) - getOfferUnitPrice(row));
+}
+function getRlcKiDifferencePct(row) {
+    const angebot = getOfferUnitPrice(row);
+    if (angebot <= 0)
+        return 0;
+    return round2(getRlcKiDifference(row) / angebot * 100);
+}
+function shouldKeepOfferPrice(angebotEp, kiEp) {
+    if (angebotEp <= 0 || kiEp <= 0)
+        return false;
+    const diffPct = Math.abs((kiEp - angebotEp) / angebotEp * 100);
+    // Sicherheitsregel:
+    // Bei großer Abweichung bleibt der X84-Angebotspreis final.
+    return diffPct >= 35;
+}
+function costBuildUp(row) {
+    const breakdown = sumBreakdown(row.priceBreakdown);
+    if (breakdown > 0)
+        return breakdown;
+    return round2(n(row.materialCost) +
+        n(row.laborCost) +
+        n(row.machineCost) +
+        n(row.subcontractorCost) +
+        n(row.disposalCost) +
+        n(row.overheadCost) +
+        n(row.riskCost) +
+        n(row.profitCost));
+}
+function makeBreakdownLine(group, name, unit, total, note = "") {
+    return normalizeBreakdownLine({
+        group,
+        name,
+        unit,
+        qty: 1,
+        price: round2(total),
+        total: round2(total),
+        note
+    });
+}
+function buildAutomaticPriceBreakdown(row) {
+    const unit = String(row.einheit || "EH");
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    const ep = n(row.finalUnitPrice) ||
+        n(row.preis) ||
+        n(row.suggestedUnitPrice) ||
+        n(row.baseUnitPrice) ||
+        0;
+    let material = n(row.materialCost);
+    let labor = n(row.laborCost);
+    let machine = n(row.machineCost);
+    let subcontractor = n(row.subcontractorCost);
+    let disposal = n(row.disposalCost);
+    let overhead = n(row.overheadCost);
+    let risk = n(row.riskCost);
+    let profit = n(row.profitCost);
+    const existingSum = material + labor + machine + subcontractor + disposal + overhead + risk + profit;
+    if (existingSum <= 0 && ep > 0) {
+        if (text.includes("aushub") ||
+            text.includes("graben") ||
+            text.includes("verfull") ||
+            text.includes("verfüll")) {
+            material = round2(ep * 0.14);
+            labor = round2(ep * 0.28);
+            machine = round2(ep * 0.27);
+            subcontractor = 0;
+            disposal = round2(ep * 0.1);
+            overhead = round2(ep * 0.09);
+            risk = round2(ep * 0.04);
+            profit = round2(ep * 0.08);
+        }
+        else if (text.includes("rohr") ||
+            text.includes("speedpipe") ||
+            text.includes("kabel")) {
+            material = round2(ep * 0.42);
+            labor = round2(ep * 0.24);
+            machine = round2(ep * 0.11);
+            subcontractor = 0;
+            disposal = round2(ep * 0.02);
+            overhead = round2(ep * 0.09);
+            risk = round2(ep * 0.04);
+            profit = round2(ep * 0.08);
+        }
+        else if (text.includes("asphalt") || text.includes("pflaster")) {
+            material = round2(ep * 0.45);
+            labor = round2(ep * 0.18);
+            machine = round2(ep * 0.14);
+            subcontractor = 0;
+            disposal = round2(ep * 0.04);
+            overhead = round2(ep * 0.08);
+            risk = round2(ep * 0.03);
+            profit = round2(ep * 0.08);
+        }
+        else {
+            material = round2(ep * 0.28);
+            labor = round2(ep * 0.34);
+            machine = round2(ep * 0.18);
+            subcontractor = 0;
+            disposal = round2(ep * 0.02);
+            overhead = round2(ep * 0.08);
+            risk = round2(ep * 0.03);
+            profit = round2(ep * 0.07);
+        }
+    }
+    const lines = [];
+    if (material > 0) {
+        lines.push(makeBreakdownLine("Material", "Materialansatz", unit, material));
+    }
+    if (labor > 0) {
+        lines.push(makeBreakdownLine("Personal", "Lohn / Kolonne", unit, labor));
+    }
+    if (machine > 0) {
+        lines.push(makeBreakdownLine("Maschinen", "Maschinenansatz", unit, machine));
+    }
+    if (subcontractor > 0) {
+        lines.push(makeBreakdownLine("Fremdleistung", "Fremdleistung", unit, subcontractor));
+    }
+    if (disposal > 0) {
+        lines.push(makeBreakdownLine("Entsorgung", "Entsorgung / Deponie", unit, disposal));
+    }
+    if (overhead > 0) {
+        lines.push(makeBreakdownLine("Gemeinkosten", "Baustellengemeinkosten", unit, overhead));
+    }
+    if (risk > 0) {
+        lines.push(makeBreakdownLine("Risiko", "Risikopuffer", unit, risk));
+    }
+    if (profit > 0) {
+        lines.push(makeBreakdownLine("Gewinn", "Gewinnanteil", unit, profit));
+    }
+    return lines;
+}
+function breakdownText(row) {
+    const lines = row.priceBreakdown?.length ?
+        row.priceBreakdown :
+        buildAutomaticPriceBreakdown(row);
+    if (!lines.length)
+        return "";
+    return lines.
+        map((line) => `${line.group}: ${line.name} · ${qty(line.qty)} ${line.unit} × ${money(line.price)} = ${money(line.total)}`).
+        join("\n");
+}
+function groupSum(row, group) {
+    return round2((row.priceBreakdown || []).
+        filter((x) => x.group === group).
+        reduce((sum, x) => sum + n(x.total), 0));
+}
+/* ================= KI AUTO INSERTIONS ================= */
+function suggestUnitFromText(row) {
+    const current = String(row.einheit || "").trim();
+    if (current)
+        return current;
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    if (text.includes("aushub") ||
+        text.includes("boden") ||
+        text.includes("verfull") ||
+        text.includes("verfüll") ||
+        text.includes("kies") ||
+        text.includes("schotter") ||
+        text.includes("beton")) {
+        return "m³";
+    }
+    if (text.includes("asphalt") ||
+        text.includes("pflaster") ||
+        text.includes("flache") ||
+        text.includes("fläche") ||
+        text.includes("schalung") ||
+        text.includes("deckschicht") ||
+        text.includes("tragschicht")) {
+        return "m²";
+    }
+    if (text.includes("rohr") ||
+        text.includes("leitung") ||
+        text.includes("kabel") ||
+        text.includes("speedpipe") ||
+        text.includes("markierung") ||
+        text.includes("trasse")) {
+        return "m";
+    }
+    if (text.includes("schacht") ||
+        text.includes("hausanschluss") ||
+        text.includes("anschluss") ||
+        text.includes("muffe") ||
+        text.includes("abzweig") ||
+        text.includes("bogen")) {
+        return "Stk";
+    }
+    if (text.includes("abfuhr") || text.includes("entsorgung"))
+        return "t";
+    return current;
+}
+function suggestKurztext(row) {
+    const kurz = String(row.kurztext || "").trim();
+    if (kurz.length >= 8)
+        return kurz;
+    const lang = String(row.langtext || "").replace(/\s+/g, " ").trim();
+    if (lang.length >= 8)
+        return lang.slice(0, 90);
+    const pos = String(row.posNr || "").trim();
+    return pos ? `Leistung zu Position ${pos}` : "Leistung prüfen";
+}
+function suggestGewerk(row) {
+    if (String(row.gewerk || "").trim())
+        return String(row.gewerk || "").trim();
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    if (text.includes("aushub") ||
+        text.includes("graben") ||
+        text.includes("verfull") ||
+        text.includes("verfüll") ||
+        text.includes("boden")) {
+        return "Tiefbau / Erdarbeiten";
+    }
+    if (text.includes("rohr") ||
+        text.includes("leitung") ||
+        text.includes("speedpipe") ||
+        text.includes("kabel")) {
+        return "Tiefbau / Leitungsbau";
+    }
+    if (text.includes("asphalt") ||
+        text.includes("pflaster") ||
+        text.includes("markierung")) {
+        return "Straßenbau / Oberfläche";
+    }
+    if (text.includes("beton") ||
+        text.includes("schalung") ||
+        text.includes("bewehrung") ||
+        text.includes("fundament")) {
+        return "Rohbau / Betonbau";
+    }
+    return "Allgemein";
+}
+function suggestLeistungsart(row) {
+    if (String(row.leistungsart || "").trim()) {
+        return String(row.leistungsart || "").trim();
+    }
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    if (text.includes("liefern") && text.includes("verlegen")) {
+        return "Liefern und Einbauen";
+    }
+    if (text.includes("liefern"))
+        return "Lieferleistung";
+    if (text.includes("verlegen") || text.includes("einbauen")) {
+        return "Einbauleistung";
+    }
+    if (text.includes("aushub") || text.includes("abtrag"))
+        return "Erdbewegung";
+    if (text.includes("abfuhr") || text.includes("entsorgung")) {
+        return "Transport / Entsorgung";
+    }
+    if (text.includes("schalung"))
+        return "Schalarbeiten";
+    if (text.includes("bewehrung"))
+        return "Bewehrungsarbeiten";
+    if (text.includes("beton"))
+        return "Betonarbeiten";
+    return "Sonstige Leistung";
+}
+function suggestBauverfahren(row, unit) {
+    if (String(row.bauverfahren || "").trim()) {
+        return String(row.bauverfahren || "").trim();
+    }
+    const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`);
+    if (text.includes("aushub") || text.includes("graben")) {
+        return "Baggeraushub mit Laden / ggf. Abtransport";
+    }
+    if (text.includes("abfuhr")) {
+        return "LKW-Transport inklusive Lade- und Kippvorgang";
+    }
+    if (text.includes("verfull") || text.includes("verfüll")) {
+        return "Einbau lagenweise mit Verdichtung";
+    }
+    if (text.includes("speedpipe")) {
+        return "Speedpipe-Verlegung im Leitungsgraben";
+    }
+    if (text.includes("kabelschutz")) {
+        return "Kabelschutzrohr liefern und verlegen";
+    }
+    if (text.includes("asphalt")) {
+        return "Asphalteinbau mit Verdichtung und höhengerechter Wiederherstellung";
+    }
+    if (text.includes("schacht") || text.includes("anschluss")) {
+        return "Einbau, Anschluss und fachgerechte Herstellung";
+    }
+    if (unit === "m")
+        return "Längenbezogene Ausführung";
+    if (unit === "m²")
+        return "Flächenbezogene Ausführung";
+    if (unit === "m³")
+        return "Volumenbezogene Ausführung";
+    return "Standard-Ausführung";
+}
+function suggestLangtext(row) {
+    const existing = String(row.langtext || "").trim();
+    if (existing.length >= 25)
+        return existing;
+    const kurztext = suggestKurztext(row);
+    const unit = suggestUnitFromText(row);
+    const gewerk = suggestGewerk(row);
+    const leistungsart = suggestLeistungsart(row);
+    const bauverfahren = suggestBauverfahren(row, unit);
+    const text = normText(`${kurztext} ${existing}`);
+    const parts = [];
+    parts.push(`${kurztext}.`);
+    parts.push(`Ausführung als ${leistungsart.toLowerCase()} im Bereich ${gewerk}.`);
+    parts.push(`Bauverfahren: ${bauverfahren}.`);
+    if (n(row.menge) > 0 && unit) {
+        parts.push(`Abrechnung nach tatsächlich ausgeführter Menge in ${unit}.`);
+    }
+    if (text.includes("aushub") || text.includes("graben")) {
+        parts.push("Einschließlich Lösen, Laden, profilgerechtem Herstellen, seitlichem Lagern beziehungsweise Abfahren nach Erfordernis.");
+    }
+    if (text.includes("verfull") || text.includes("verfüll") || text.includes("kies")) {
+        parts.push("Einschließlich lagenweisem Einbau, Verdichtung und Herstellung der geforderten Tragfähigkeit.");
+    }
+    if (text.includes("rohr") ||
+        text.includes("speedpipe") ||
+        text.includes("kabel") ||
+        text.includes("leitung")) {
+        parts.push("Einschließlich Lieferung beziehungsweise Verlegung, Ausrichtung, Bettung und fachgerechtem Anschluss gemäß Ausführungsplanung.");
+    }
+    if (text.includes("asphalt")) {
+        parts.push("Einschließlich Vorbereiten des Untergrundes, Einbau, Verdichtung und höhengerechter Wiederherstellung der Oberfläche.");
+    }
+    if (text.includes("schacht") || text.includes("anschluss")) {
+        parts.push("Einschließlich Einbau, Ausrichten, Anschließen, Abdichten und funktionsgerechter Herstellung.");
+    }
+    parts.push("Nebenleistungen, Geräte, Personal, Material, Baustellenorganisation und erforderliche Hilfsleistungen sind in der Kalkulation berücksichtigt.");
+    return parts.join(" ");
+}
+function appendInfoText(oldValue, text) {
+    const old = String(oldValue || "").trim();
+    if (!old)
+        return text;
+    if (old.includes(text))
+        return old;
+    return `${old}\n${text}`;
+}
+function normalizeEliteRow(row) {
+    const rawBreakdown = normalizeBreakdown(row.priceBreakdown);
+    const breakdownSum = sumBreakdown(rawBreakdown);
+    const unitPrice = n(row.finalUnitPrice ?? row.preis ?? row.suggestedUnitPrice, breakdownSum);
+    return {
+        id: String(row.id || safeId()),
+        auftragId: row.auftragId || "",
+        auftragName: row.auftragName || "",
+        auftragType: row.auftragType,
+        posNr: String(row.posNr ?? ""),
+        parentPosNr: row.parentPosNr,
+        sortIndex: row.sortIndex,
+        kurztext: String(row.kurztext ?? ""),
+        langtext: String(row.langtext ?? ""),
+        bemerkung: row.bemerkung,
+        einheit: String(row.einheit ?? ""),
+        menge: n(row.menge),
+        preis: unitPrice || n(row.preis),
+        gesamt: round2(n(row.menge) * unitPrice),
+        waehrung: row.waehrung || "EUR",
+        confidence: row.confidence,
+        source: row.source || "manual",
+        createdAt: row.createdAt,
+        updatedAt: new Date().toISOString(),
+        rabatt: n(row.rabatt),
+        originalPreKiPrice: n(row.originalPreKiPrice),
+        angebotUnitPrice: n(row.angebotUnitPrice),
+        angebotTotal: n(row.angebotTotal),
+        x84UnitPrice: n(row.x84UnitPrice),
+        rlcKiUnitPrice: n(row.rlcKiUnitPrice),
+        rlcKiTotal: n(row.rlcKiTotal),
+        priceDifference: n(row.priceDifference),
+        priceDifferencePct: n(row.priceDifferencePct),
+        materialCost: n(row.materialCost),
+        laborCost: n(row.laborCost),
+        machineCost: n(row.machineCost),
+        subcontractorCost: n(row.subcontractorCost),
+        disposalCost: n(row.disposalCost),
+        overheadCost: n(row.overheadCost),
+        riskCost: n(row.riskCost),
+        profitCost: n(row.profitCost),
+        baseUnitPrice: n(row.baseUnitPrice),
+        // WICHTIG:
+        // suggestedUnitPrice/baseUnitPrice sind KI-/Serverfelder.
+        // Sie dürfen NICHT automatisch aus X84/preis/finalUnitPrice befüllt werden,
+        // sonst wird ein importiertes X84 fälschlich als RLC-KI angezeigt.
+        suggestedUnitPrice: n(row.suggestedUnitPrice),
+        finalUnitPrice: unitPrice,
+        priceDecision: (row.priceDecision || "x84"),
+        riskLevel: row.riskLevel || "medium",
+        calculationStatus: row.calculationStatus || "manual",
+        gewerk: row.gewerk || "",
+        leistungsart: row.leistungsart || "",
+        bauverfahren: row.bauverfahren || "",
+        warning: row.warning || "",
+        aiReason: row.aiReason || "",
+        priceBreakdown: rawBreakdown,
+        openAiSuggestedUnitPrice: row.openAiSuggestedUnitPrice,
+        openAiSuggestedTotal: row.openAiSuggestedTotal,
+        openAiSuggestedAt: row.openAiSuggestedAt,
+        openAiSuggestedReason: row.openAiSuggestedReason,
+        openAiSuggestedWarning: row.openAiSuggestedWarning,
+        openAiSuggestedPriceBreakdown: row.openAiSuggestedPriceBreakdown,
+        preisManuellGeprueft: row.preisManuellGeprueft,
+        preisManuellGeprueftAt: row.preisManuellGeprueftAt,
+        openAiRejected: row.openAiRejected,
+        rlcPreisMin: row.rlcPreisMin,
+        rlcPreisAvg: row.rlcPreisAvg,
+        rlcPreisMax: row.rlcPreisMax,
+        rlcPreisSource: row.rlcPreisSource,
+        rlcPreisGroup: row.rlcPreisGroup
+    };
+}
+function enhanceKalkulatorInsertions(row) {
+    if (kiIsStructuralRow(row)) {
+        return normalizeEliteRow(kiPrepareStructuralRow(row));
+    }
+    const hadMissingKurz = !String(row.kurztext || "").trim();
+    const hadMissingLang = !String(row.langtext || "").trim();
+    const hadMissingUnit = !String(row.einheit || "").trim();
+    const hadMissingBreakdown = !row.priceBreakdown?.length;
+    const einheit = suggestUnitFromText(row);
+    const kurztext = suggestKurztext({ ...row, einheit });
+    const gewerk = suggestGewerk({ ...row, kurztext, einheit });
+    const leistungsart = suggestLeistungsart({
+        ...row,
+        kurztext,
+        einheit,
+        gewerk
+    });
+    const bauverfahren = suggestBauverfahren({ ...row, kurztext, einheit, gewerk, leistungsart }, einheit);
+    const langtext = suggestLangtext({
+        ...row,
+        kurztext,
+        einheit,
+        gewerk,
+        leistungsart,
+        bauverfahren
+    });
+    let warning = String(row.warning || "");
+    let aiReason = String(row.aiReason || "");
+    const prepared = normalizeEliteRow({
+        ...row,
+        kurztext,
+        langtext,
+        einheit,
+        gewerk,
+        leistungsart,
+        bauverfahren
+    });
+    const priceBreakdown = prepared.priceBreakdown?.length ?
+        normalizeBreakdown(prepared.priceBreakdown) :
+        buildAutomaticPriceBreakdown(prepared);
+    const breakdownSum = sumBreakdown(priceBreakdown);
+    /*
+     * Wichtig:
+     * finalUnitPrice vom Server ist die verbindliche Wahrheit.
+     * priceBreakdown kann bewusst eine KI-Prognose enthalten, z.B. wenn die
+     * Stabilitätsbremse aktiv ist. Dann darf die Urkalkulationssumme den finalen EP
+     * NICHT automatisch überschreiben.
+     */
+    const stableServerEp = n(prepared.finalUnitPrice ?? prepared.preis);
+    const finalUnitPrice = stableServerEp > 0 ? stableServerEp : breakdownSum > 0 ? breakdownSum : getUnitPrice(prepared);
+    const fixed = [];
+    if (hadMissingKurz)
+        fixed.push("Kurztext");
+    if (hadMissingLang)
+        fixed.push("Langtext");
+    if (hadMissingUnit)
+        fixed.push("Einheit");
+    if (hadMissingBreakdown && priceBreakdown.length)
+        fixed.push("Preisaufbau");
+    if (fixed.length) {
+        warning = appendInfoText(warning, `KI hat fehlende Felder automatisch ergänzt: ${fixed.join(", ")}.`);
+        aiReason = appendInfoText(aiReason, "Kalkulator-KI: Fehlende Eingaben wurden automatisch ergänzt. Kurztext, Langtext, Einheit, Gewerk, Leistungsart, Bauverfahren und Kostenstruktur wurden aus Positionsnummer, Textmerkmalen und Einheit abgeleitet.");
+    }
+    return normalizeEliteRow({
+        ...prepared,
+        priceBreakdown, finalUnitPrice,
+        preis: finalUnitPrice,
+        suggestedUnitPrice: prepared.suggestedUnitPrice || finalUnitPrice,
+        gesamt: round2(n(prepared.menge) * finalUnitPrice),
+        warning,
+        aiReason
+    });
+}
+function fromLvRows(rows) {
+    return rows.map((r) => {
+        const realX84 = rowHasRealX84(r) ||
+            String(r.gaebType || r.importType || "").toLowerCase().includes("x84");
+        const importedEp = realX84 ?
+            n(r.angebotUnitPrice) || n(r.originalPreKiPrice) || n(r.preis) :
+            0;
+        const base = normalizeEliteRow({
+            ...r,
+            angebotUnitPrice: importedEp,
+            angebotTotal: round2(n(r.menge) * importedEp),
+            originalPreKiPrice: importedEp,
+            finalUnitPrice: n(r.finalUnitPrice) || importedEp,
+            suggestedUnitPrice: realX84 ? 0 : n(r.suggestedUnitPrice),
+            baseUnitPrice: realX84 ? 0 : n(r.baseUnitPrice),
+            rlcKiUnitPrice: realX84 ? 0 : n(r.rlcKiUnitPrice),
+            rlcKiTotal: realX84 ? 0 : n(r.rlcKiTotal),
+            confidence: r.confidence,
+            calculationStatus: realX84 && importedEp > 0 ? "manual" : "critical",
+            riskLevel: "medium",
+            rabatt: 0
+        });
+        if (kiIsStructuralRow(base)) {
+            return normalizeEliteRow(kiPrepareStructuralRow(base));
+        }
+        return base.priceBreakdown?.length ? base : enhanceKalkulatorInsertions(base);
+    });
+}
+function mergeEliteResult(oldRow, result, mode = "offer-check") {
+    const resultBreakdown = normalizeBreakdown(result.priceBreakdown);
+    const oldBreakdown = normalizeBreakdown(oldRow.priceBreakdown);
+    const menge = n(result.menge ?? oldRow.menge);
+    /*
+     * WICHTIG:
+     * In "Neue Kalkulation erstellen" darf aus alten Frontend-Feldern
+     * (preis/finalUnitPrice) keine künstliche X84-/Angebotsbasis entstehen.
+     * Angebotsbasis gibt es nur im Modus "Angebot prüfen" und nur aus
+     * expliziten Angebotsfeldern.
+     */
+    const existingOfferEp = n(oldRow.angebotUnitPrice) ||
+        n(oldRow.originalPreKiPrice) ||
+        n(oldRow.x84UnitPrice);
+    const resultOfferEp = n(result.angebotUnitPrice) ||
+        n(result.originalPreKiPrice) ||
+        n(result.x84UnitPrice);
+    /*
+     * X84 bleibt immer Vergleichsbasis im Frontend.
+     * Auch bei "Neue Kalkulation" wird X84 NICHT an den Server als Preisbasis gesendet,
+     * darf aber nach der Serverantwort nicht aus der Anzeige gelöscht werden.
+     */
+    const angebotEp = existingOfferEp || (mode === "offer-check" ? resultOfferEp : 0);
+    const serverEp = n(result.rlcKiUnitPrice) ||
+        n(result.finalUnitPrice) ||
+        n(result.suggestedUnitPrice) ||
+        n(result.baseUnitPrice) ||
+        n(result.unitPrice) ||
+        n(result.preis) ||
+        0;
+    const normalizedResult = {
+        ...result,
+        rlcKiUnitPrice: serverEp,
+        rlcKiTotal: serverEp > 0 ? round2(menge * serverEp) : 0,
+        finalUnitPrice: serverEp,
+        suggestedUnitPrice: n(result.suggestedUnitPrice) || serverEp,
+        baseUnitPrice: n(result.baseUnitPrice) || serverEp,
+        preis: serverEp,
+        totalNet: serverEp > 0 ? round2(menge * serverEp) : 0
+    };
+    const temp = normalizeEliteRow({
+        ...oldRow,
+        ...normalizedResult,
+        angebotUnitPrice: angebotEp,
+        angebotTotal: angebotEp > 0 ? round2(menge * angebotEp) : 0,
+        originalPreKiPrice: angebotEp,
+        x84UnitPrice: angebotEp,
+        rlcPreisMin: result.rlcPreisMin ?? oldRow.rlcPreisMin,
+        rlcPreisAvg: result.rlcPreisAvg ?? oldRow.rlcPreisAvg,
+        rlcPreisMax: result.rlcPreisMax ?? oldRow.rlcPreisMax,
+        rlcPreisSource: result.rlcPreisSource ?? oldRow.rlcPreisSource,
+        rlcPreisGroup: result.rlcPreisGroup ?? oldRow.rlcPreisGroup
+    });
+    const decision = resolveBestRlcKiPrice(temp, false);
+    const rlcKiEp = decision.finalRlcKiEp || serverEp;
+    const finalUnitPrice = mode === "offer-check" && angebotEp > 0 ? angebotEp : rlcKiEp;
+    const diff = rlcKiEp > 0 && angebotEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
+    const diffPct = rlcKiEp > 0 && angebotEp > 0 ? round2(diff / angebotEp * 100) : 0;
+    const merged = normalizeEliteRow({
+        ...oldRow,
+        posNr: result.posNr || oldRow.posNr,
+        kurztext: result.kurztext || oldRow.kurztext,
+        langtext: result.langtext ?? oldRow.langtext,
+        einheit: result.einheit || oldRow.einheit,
+        menge,
+        materialCost: result.materialCost ?? oldRow.materialCost,
+        laborCost: result.laborCost ?? oldRow.laborCost,
+        machineCost: result.machineCost ?? oldRow.machineCost,
+        subcontractorCost: result.subcontractorCost ?? oldRow.subcontractorCost,
+        disposalCost: result.disposalCost ?? oldRow.disposalCost,
+        overheadCost: result.overheadCost ?? oldRow.overheadCost,
+        riskCost: result.riskCost ?? oldRow.riskCost,
+        profitCost: result.profitCost ?? oldRow.profitCost,
+        angebotUnitPrice: angebotEp,
+        angebotTotal: angebotEp > 0 ? round2(menge * angebotEp) : 0,
+        originalPreKiPrice: angebotEp,
+        x84UnitPrice: angebotEp,
+        rlcKiUnitPrice: rlcKiEp,
+        rlcKiTotal: rlcKiEp > 0 ? round2(menge * rlcKiEp) : 0,
+        priceDifference: diff,
+        priceDifferencePct: diffPct,
+        baseUnitPrice: n(result.baseUnitPrice) || rlcKiEp,
+        suggestedUnitPrice: n(result.suggestedUnitPrice) || rlcKiEp,
+        finalUnitPrice,
+        preis: finalUnitPrice,
+        gesamt: round2(menge * finalUnitPrice),
+        priceDecision: mode === "offer-check" && angebotEp > 0 ? "x84" : "rlcKi",
+        confidence: Math.max(n(result.confidence), n(oldRow.confidence), decision.confidence),
+        riskLevel: mode === "offer-check" && Math.abs(diffPct) >= 35 ?
+            "high" :
+            result.riskLevel ?? oldRow.riskLevel ?? "medium",
+        calculationStatus: mode === "offer-check" && Math.abs(diffPct) >= 35 ?
+            "warning" :
+            result.calculationStatus ?? oldRow.calculationStatus ?? "manual",
+        gewerk: result.gewerk ?? oldRow.gewerk,
+        leistungsart: result.leistungsart ?? oldRow.leistungsart,
+        bauverfahren: result.bauverfahren ?? oldRow.bauverfahren,
+        rlcPreisMin: result.rlcPreisMin ?? oldRow.rlcPreisMin,
+        rlcPreisAvg: result.rlcPreisAvg ?? oldRow.rlcPreisAvg,
+        rlcPreisMax: result.rlcPreisMax ?? oldRow.rlcPreisMax,
+        rlcPreisSource: result.rlcPreisSource ?? oldRow.rlcPreisSource,
+        rlcPreisGroup: result.rlcPreisGroup ?? oldRow.rlcPreisGroup,
+        warning: [decision.warning, result.warning ?? oldRow.warning].
+            filter(Boolean).
+            join(" · "),
+        aiReason: [
+            result.aiReason ?? oldRow.aiReason,
+            `RLC-KI Preisentscheidung: ${decision.source}. ${decision.reason}`
+        ].
+            filter(Boolean).
+            join("\n\n"),
+        source: result.source || "server",
+        priceBreakdown: resultBreakdown.length ? resultBreakdown : oldBreakdown
+    });
+    const enhanced = enhanceKalkulatorInsertions(merged);
+    /*
+     * RLC FIX:
+     * Server-KI Ergebnis muss nach allen Frontend-Enrichments gewinnen.
+     * Sonst können alte lokale Fallbacks/Enhancer z.B. 057 Auffüllmaterial
+     * wieder von Server 3,50 €/m³ auf lokalen Altwert 28 €/m³ zurücksetzen.
+     */
+    const strictServerEp = n(result.rlcKiUnitPrice) ||
+        n(result.finalUnitPrice) ||
+        n(result.suggestedUnitPrice) ||
+        n(result.baseUnitPrice) ||
+        n(result.unitPrice) ||
+        n(result.preis);
+    if (strictServerEp > 0) {
+        const strictServerTotal = round2(menge * strictServerEp);
+        const strictDiff = angebotEp > 0 ? round2(strictServerEp - angebotEp) : 0;
+        const strictDiffPct = angebotEp > 0 ? round2(strictDiff / angebotEp * 100) : 0;
+        return normalizeEliteRow({
+            ...enhanced,
+            rlcKiUnitPrice: strictServerEp,
+            rlcKiTotal: strictServerTotal,
+            baseUnitPrice: n(result.baseUnitPrice) || strictServerEp,
+            suggestedUnitPrice: n(result.suggestedUnitPrice) || strictServerEp,
+            // Server-KI ist immer der RLC-KI-Preis. X84 bleibt separat in angebotUnitPrice/x84UnitPrice.
+            finalUnitPrice: strictServerEp,
+            preis: strictServerEp,
+            gesamt: strictServerTotal,
+            priceDifference: strictDiff,
+            priceDifferencePct: strictDiffPct,
+            source: result.source || enhanced.source,
+            warning: result.warning ?? enhanced.warning,
+            aiReason: result.aiReason ?? enhanced.aiReason,
+            riskLevel: (result.riskLevel || enhanced.riskLevel),
+            calculationStatus: (result.calculationStatus || enhanced.calculationStatus),
+            confidence: n(result.confidence) || enhanced.confidence,
+            priceBreakdown: resultBreakdown.length ? resultBreakdown : enhanced.priceBreakdown
+        });
+    }
+    return enhanced;
+}
+function keepX84AsFinalPrice(row) {
+    const angebotEp = n(row.angebotUnitPrice) ||
+        n(row.originalPreKiPrice) ||
+        n(row.preis) ||
+        n(row.finalUnitPrice);
+    /*
+     * RLC-KI bleibt nur Vergleich.
+     * Kein Fallback auf finalUnitPrice/preis, sonst wird X84 erneut als KI-Wert erzeugt.
+     */
+    const rlcKiEp = n(row.rlcKiUnitPrice) ||
+        n(row.openAiSuggestedUnitPrice);
+    const diff = rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
+    const diffPct = rlcKiEp > 0 && angebotEp > 0 ? round2(diff / angebotEp * 100) : 0;
+    return normalizeEliteRow({
+        ...row,
+        // X84 bleibt finaler Angebots-/LV-Preis
+        angebotUnitPrice: angebotEp,
+        angebotTotal: round2(n(row.menge) * angebotEp),
+        originalPreKiPrice: angebotEp,
+        preis: angebotEp,
+        finalUnitPrice: angebotEp,
+        gesamt: round2(n(row.menge) * angebotEp),
+        // RLC-KI bleibt separat
+        rlcKiUnitPrice: rlcKiEp,
+        rlcKiTotal: rlcKiEp > 0 ? round2(n(row.menge) * rlcKiEp) : 0,
+        priceDifference: diff,
+        priceDifferencePct: diffPct
+    });
+}
+function normalizeKiWarningStatus(row) {
+    const warning = String(row.warning || "").trim();
+    const lower = warning.toLowerCase();
+    const hasRealProblem = lower.includes("plausibilitäts") ||
+        lower.includes("openai-vorschlag") ||
+        lower.includes("gezielte openai") ||
+        lower.includes("kritisch") ||
+        lower.includes("bestandsanschluss") ||
+        lower.includes("technisch prüfen") ||
+        lower.includes("erhöhtes kalkulationsrisiko") ||
+        lower.includes("menge fehlt") ||
+        lower.includes("einheit fehlt") ||
+        lower.includes("kein ausreichend") ||
+        lower.includes("außerhalb");
+    const onlyRecipeHint = lower.includes("rezeptkalkulation verwendet") && !hasRealProblem;
+    const onlyFallbackHint = lower.includes("nur regel-engine-fallback verwendet") && !hasRealProblem;
+    if (onlyRecipeHint || onlyFallbackHint) {
+        return {
+            ...row,
+            calculationStatus: "ok",
+            riskLevel: row.riskLevel === "high" ? "medium" : row.riskLevel,
+            warning: ""
+        };
+    }
+    return row;
+}
+function normalizeKiWarningRows(input) {
+    return input.map((r) => normalizeKiWarningStatus(r));
+}
+function statusLabel(status) {
+    if (status === "ok")
+        return "OK";
+    if (status === "warning")
+        return "Warnung";
+    if (status === "critical")
+        return "Kritisch";
+    return "Manuell";
+}
+function riskLabel(risk) {
+    if (risk === "low")
+        return "Niedrig";
+    if (risk === "medium")
+        return "Mittel";
+    if (risk === "high")
+        return "Hoch";
+    return "—";
+}
+function riskStyle(risk) {
+    if (risk === "low")
+        return badgeOk;
+    if (risk === "medium")
+        return badgeWarn;
+    if (risk === "high")
+        return badgeCritical;
+    return badgeNeutral;
+}
+function statusStyle(status) {
+    if (status === "ok")
+        return badgeOk;
+    if (status === "warning")
+        return badgeWarn;
+    if (status === "critical")
+        return badgeCritical;
+    return badgeNeutral;
+}
+function rowHasNoDb(row) {
+    const warning = String(row.warning || "").toLowerCase();
+    const reason = String(row.aiReason || "").toLowerCase();
+    return (warning.includes("keine passende erfahrung") ||
+        warning.includes("keine passende") ||
+        reason.includes("kein ausreichend ähnlicher datenbanktreffer") ||
+        reason.includes("kein direkter datenbanktreffer"));
+}
+function rowProblem(row) {
+    if (kiIsStructuralRow(row)) {
+        return "Strukturzeile / Titel – keine Kalkulation nötig";
+    }
+    if (!String(row.posNr || "").trim())
+        return "Positionsnummer fehlt";
+    if (!String(row.kurztext || "").trim())
+        return "Kurztext fehlt";
+    if (!String(row.langtext || "").trim())
+        return "Langtext fehlt";
+    if (!String(row.einheit || "").trim())
+        return "Einheit fehlt";
+    if (!row.priceBreakdown?.length)
+        return "Preisaufbau fehlt";
+    if (n(row.menge) <= 0)
+        return "Menge fehlt oder ist 0";
+    if (getUnitPrice(row) <= 0)
+        return "Einheitspreis fehlt";
+    if (row.calculationStatus === "critical") {
+        return row.warning || "Kritisch prüfen";
+    }
+    if (row.riskLevel === "high")
+        return "Hohes Risiko";
+    if (rowHasNoDb(row) && row.calculationStatus !== "manual") {
+        return "Ohne DB-Treffer";
+    }
+    if (n(row.confidence) < 0.7)
+        return "Sicherheit niedrig";
+    if (row.calculationStatus === "warning") {
+        return row.warning || "Warnung prüfen";
+    }
+    return "OK";
+}
+function isSafeRow(row) {
+    if (kiIsStructuralRow(row))
+        return false;
+    return (getUnitPrice(row) > 0 &&
+        n(row.menge) > 0 &&
+        String(row.posNr || "").trim().length > 0 &&
+        String(row.kurztext || "").trim().length >= 8 &&
+        String(row.langtext || "").trim().length >= 25 &&
+        String(row.einheit || "").trim().length > 0 &&
+        Array.isArray(row.priceBreakdown) &&
+        row.priceBreakdown.length > 0 &&
+        n(row.confidence) >= 0.75 &&
+        row.calculationStatus !== "critical" &&
+        row.riskLevel !== "high");
+}
+function riskFromDb(risk) {
+    if (risk === "niedrig")
+        return "low";
+    if (risk === "hoch" || risk === "kritisch")
+        return "high";
+    return "medium";
+}
+function getCurrentBreakdown(row) {
+    const existing = normalizeBreakdown(row.priceBreakdown);
+    if (existing.length)
+        return existing;
+    return buildAutomaticPriceBreakdown(row);
+}
+function breakdownGroupTotal(row, groups) {
+    return round2(getCurrentBreakdown(row).
+        filter((line) => groups.includes(line.group)).
+        reduce((sum, line) => sum + n(line.total), 0));
+}
+function databaseCostsFromCurrentRow(row) {
+    return {
+        materialCost: breakdownGroupTotal(row, ["Material"]),
+        laborCost: breakdownGroupTotal(row, ["Personal"]),
+        machineCost: breakdownGroupTotal(row, ["Maschinen"]),
+        transportCost: breakdownGroupTotal(row, ["LKW / Transport"]),
+        subcontractorCost: breakdownGroupTotal(row, ["Fremdleistung"]),
+        disposalCost: breakdownGroupTotal(row, ["Entsorgung"]),
+        overheadCost: breakdownGroupTotal(row, ["Gemeinkosten"]),
+        riskCost: breakdownGroupTotal(row, ["Risiko"]),
+        profitCost: breakdownGroupTotal(row, ["Gewinn"])
+    };
+}
+function saveRowsToDatenbank(rows, projectKey, projectTitle = "") {
+    const valid = rows.filter((r) => {
+        if (kiIsStructuralRow(r))
+            return false;
+        const textOk = String(r.kurztext || r.posNr || "").trim().length > 0;
+        const priceOk = getUnitPrice(r) > 0 || sumBreakdown(getCurrentBreakdown(r)) > 0;
+        return textOk && priceOk;
+    });
+    if (!valid.length)
+        return 0;
+    const datenbankDuplicateKey = (r) => [
+        String(projectKey || "").trim().toLowerCase(),
+        String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+        String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+        String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+        String(r?.datenbankQuelle || r?.quelle || r?.source || "ki").trim().toLowerCase()
+    ].
+        join("||");
+    const existingKeys = new Set(KalkulationsDatenbank.list().map((r) => [
+        String(r?.projektCode || "").trim().toLowerCase(),
+        String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+        String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+        String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+        String(r?.quelle || r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase()
+    ].
+        join("||")));
+    const seenKeys = new Set();
+    const uniqueValid = valid.filter((r) => {
+        const key = datenbankDuplicateKey(r);
+        if (existingKeys.has(key))
+            return false;
+        if (seenKeys.has(key))
+            return false;
+        seenKeys.add(key);
+        return true;
+    });
+    const serverSyncSourceRows = uniqueValid.length ?
+        uniqueValid :
+        valid.filter((r) => Boolean(r.approvedForGlobalKnowledge));
+    if (!uniqueValid.length && !serverSyncSourceRows.length) {
+        console.log("[RLC-KI] V48C Datenbank Duplicate Guard: no new rows", {
+            projectKey,
+            skipped: valid.length
+        });
+        return 0;
+    }
+    if (!uniqueValid.length && serverSyncSourceRows.length) {
+        console.log("[RLC-KI] V51D server sync despite local duplicate", {
+            projectKey,
+            serverSyncRows: serverSyncSourceRows.length,
+            localNewRows: 0
+        });
+    }
+    const serverSyncRows = serverSyncSourceRows.map((r) => {
+        const currentBreakdown = getCurrentBreakdown(r);
+        const ep = sumBreakdown(currentBreakdown) > 0 ?
+            sumBreakdown(currentBreakdown) :
+            getUnitPrice(r);
+        const gp = round2(n(r.menge) * ep * (1 - n(r.rabatt) / 100));
+        return {
+            posNr: r.posNr || "",
+            kurztext: r.kurztext || "",
+            langtext: r.langtext || "",
+            einheit: r.einheit || "",
+            menge: n(r.menge),
+            finalUnitPrice: ep,
+            unitPriceNet: ep,
+            totalNet: gp,
+            materialCost: n(r.materialCost),
+            laborCost: n(r.laborCost),
+            machineCost: n(r.machineCost),
+            transportCost: n(r.transportCost),
+            subcontractorCost: n(r.subcontractorCost),
+            disposalCost: n(r.disposalCost),
+            overheadCost: n(r.overheadCost),
+            riskCost: n(r.riskCost),
+            profitCost: n(r.profitCost),
+            gewerk: r.gewerk || "",
+            leistungsart: r.leistungsart || "",
+            bauverfahren: r.bauverfahren || "",
+            bodenklasse: r.bodenklasse || "",
+            source: String(r.datenbankQuelle || r.source || "ki"),
+            datenbankQuelle: String(r.datenbankQuelle || r.source || "ki"),
+            approvedForCompanyDb: Boolean(r.approvedForCompanyDb),
+            approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge),
+            confidence: n(r.confidence, 0.75),
+            riskLevel: r.riskLevel || "medium",
+            aiReason: r.aiReason || "",
+            warning: r.warning || ""
+        };
+    });
+    void fetch(apiUrl("/api/kalkulation/datenbank/bulk-upsert"), {
+        method: "POST",
+        credentials: "include",
+        headers: authJsonHeaders(),
+        body: JSON.stringify({
+            projectKey,
+            projectTitle,
+            rows: serverSyncRows
+        })
+    }).
+        then(async (res) => {
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) {
+            console.warn("[RLC-KI] V51 server datenbank sync failed", {
+                status: res.status,
+                json,
+                projectKey,
+                count: serverSyncRows.length
+            });
+            return;
+        }
+        console.log("[RLC-KI] V51 server datenbank sync ok", {
+            projectKey,
+            saved: json.saved,
+            rows: serverSyncRows.length,
+            globalCandidates: serverSyncRows.filter((r) => r.approvedForGlobalKnowledge).length
+        });
+    }).
+        catch((error) => {
+        console.warn("[RLC-KI] V51 server datenbank sync error", {
+            projectKey,
+            count: serverSyncRows.length,
+            error
+        });
+    });
+    KalkulationsDatenbank.bulkUpsert(uniqueValid.map((r) => {
+        const currentBreakdown = getCurrentBreakdown(r);
+        const costs = databaseCostsFromCurrentRow({
+            ...r,
+            priceBreakdown: currentBreakdown
+        });
+        const ep = sumBreakdown(currentBreakdown) > 0 ?
+            sumBreakdown(currentBreakdown) :
+            getUnitPrice(r);
+        const gp = round2(n(r.menge) * ep * (1 - n(r.rabatt) / 100));
+        return KalkulationsDatenbank.fromCalculatedPosition({
+            quelle: String(r.datenbankQuelle || r.source || "ki"),
+            projektCode: projectKey,
+            projektName: projectTitle,
+            posNr: r.posNr || "",
+            kurztext: r.kurztext || "",
+            langtext: r.langtext || "",
+            einheit: r.einheit || "",
+            menge: n(r.menge),
+            materialCost: costs.materialCost,
+            laborCost: costs.laborCost,
+            machineCost: costs.machineCost,
+            transportCost: costs.transportCost,
+            subcontractorCost: costs.subcontractorCost,
+            disposalCost: costs.disposalCost,
+            overheadCost: costs.overheadCost,
+            riskCost: costs.riskCost,
+            profitCost: costs.profitCost,
+            finalUnitPrice: ep,
+            totalNet: gp,
+            gewerk: r.gewerk || "",
+            leistungsart: r.leistungsart || "",
+            bauverfahren: r.bauverfahren || "",
+            riskLevel: r.riskLevel || "medium",
+            confidence: n(r.confidence, 0.75),
+            aiReason: `${r.aiReason || ""}\n\nPreisaufbau:\n${breakdownText({
+                ...r,
+                priceBreakdown: currentBreakdown
+            })}`,
+            warning: r.warning || ""
+        });
+    }));
+    return uniqueValid.length;
+}
+function findDatenbankMatches(row) {
+    if (!row)
+        return [];
+    return KalkulationsDatenbank.search({
+        posNr: row.posNr || "",
+        kurztext: row.kurztext || "",
+        langtext: row.langtext || "",
+        einheit: row.einheit || "",
+        menge: n(row.menge),
+        parameter: {
+            gewerk: row.gewerk || "",
+            leistungsart: row.leistungsart || "",
+            bauverfahren: row.bauverfahren || "",
+            menge: n(row.menge),
+            einheit: row.einheit || ""
+        }
+    }, 5);
+}
+function datenbankEntryToRowPatch(entry) {
+    const divisor = Math.max(1, n(entry.menge));
+    const patch = normalizeEliteRow({
+        materialCost: round2(n(entry.kosten.material) / divisor),
+        laborCost: round2(n(entry.kosten.lohn) / divisor),
+        machineCost: round2(n(entry.kosten.maschinen) / divisor),
+        subcontractorCost: round2(n(entry.kosten.fremdleistung) / divisor),
+        disposalCost: round2(n(entry.kosten.entsorgung) / divisor),
+        overheadCost: round2(n(entry.kosten.gemeinkosten) / divisor),
+        riskCost: round2(n(entry.kosten.risiko) / divisor),
+        profitCost: round2(n(entry.kosten.gewinn) / divisor),
+        baseUnitPrice: n(entry.kosten.epNetto),
+        suggestedUnitPrice: n(entry.kosten.epNetto),
+        finalUnitPrice: n(entry.kosten.epNetto),
+        preis: n(entry.kosten.epNetto),
+        riskLevel: riskFromDb(entry.risiko),
+        calculationStatus: "ok",
+        confidence: n(entry.confidence, 0.75),
+        gewerk: entry.parameter?.gewerk || "",
+        leistungsart: entry.parameter?.leistungsart || "",
+        bauverfahren: entry.parameter?.bauverfahren || "",
+        warning: "",
+        aiReason: entry.kiHinweis ?
+            `${entry.kiHinweis}\n\nAus Kalkulationsdatenbank übernommen.` :
+            "Aus Kalkulationsdatenbank übernommen."
+    });
+    return {
+        ...patch,
+        priceBreakdown: buildAutomaticPriceBreakdown(patch)
+    };
+}
+/* ================= CSV / GAEB HELPERS ================= */
+function splitCsvLine(line) {
+    const out = [];
+    let cur = "";
+    let inside = false;
+    for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
+        const next = line[i + 1];
+        if (ch === '"' && inside && next === '"') {
+            cur += '"';
+            i += 1;
+            continue;
+        }
+        if (ch === '"') {
+            inside = !inside;
+            continue;
+        }
+        if ((ch === ";" || ch === ",") && !inside) {
+            out.push(cur.trim());
+            cur = "";
+            continue;
+        }
+        cur += ch;
+    }
+    out.push(cur.trim());
+    return out;
+}
+function parseImportedCsv(text) {
+    const lines = text.
+        replace(/\r/g, "").
+        split("\n").
+        map((x) => x.trim()).
+        filter(Boolean);
+    if (lines.length < 2)
+        return [];
+    const headers = splitCsvLine(lines[0]).map((h) => normText(h).replace(/[^a-z0-9]+/g, ""));
+    function get(row, names) {
+        for (const name of names) {
+            const idx = headers.indexOf(name);
+            if (idx >= 0)
+                return row[idx] ?? "";
+        }
+        return "";
+    }
+    return lines.slice(1).map((line) => {
+        const row = splitCsvLine(line);
+        const ep = n(get(row, ["epfinal", "preis", "ep", "unitprice", "einheitspreis"]));
+        const parsed = normalizeEliteRow({
+            id: safeId(),
+            posNr: get(row, ["posnr", "position", "lvpos", "positionsnummer"]),
+            kurztext: get(row, ["kurztext", "text", "leistung"]),
+            langtext: get(row, ["langtext", "beschreibung"]),
+            einheit: get(row, ["einheit", "me", "unit"]),
+            menge: n(get(row, ["menge", "qty", "quantity"])),
+            preis: ep,
+            finalUnitPrice: ep,
+            materialCost: n(get(row, ["material"])),
+            laborCost: n(get(row, ["lohn", "labor"])),
+            machineCost: n(get(row, ["maschine", "machine"])),
+            subcontractorCost: n(get(row, ["fremdleistung", "subcontractor"])),
+            disposalCost: n(get(row, ["entsorgung", "disposal"])),
+            overheadCost: n(get(row, ["gemeinkosten", "overhead"])),
+            riskCost: n(get(row, ["risiko", "risk"])),
+            profitCost: n(get(row, ["gewinn", "profit"])),
+            warning: get(row, ["warnung", "warning"]),
+            aiReason: get(row, ["kibegruendung", "aireason"]),
+            riskLevel: "medium",
+            calculationStatus: ep > 0 ? "manual" : "critical"
+        });
+        return {
+            ...parsed,
+            priceBreakdown: buildAutomaticPriceBreakdown(parsed)
+        };
+    });
+}
+function xmlEscape(value) {
+    return String(value ?? "").
+        replace(/&/g, "&amp;").
+        replace(/</g, "&lt;").
+        replace(/>/g, "&gt;").
+        replace(/"/g, "&quot;");
+}
+function buildLocalGaebFallback(rows, mode) {
+    const now = new Date().toISOString();
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<RLC-GAEB-EXPORT mode="${mode.toUpperCase()}" createdAt="${now}">
+  <Info>Lokaler Fallback-Export. Für echten GAEB-Standard Serverroute verwenden.</Info>
+  <Positions>
+${rows.
+        map((r) => `    <Position>
+      <PosNr>${xmlEscape(r.posNr)}</PosNr>
+      <Kurztext>${xmlEscape(r.kurztext)}</Kurztext>
+      <Langtext>${xmlEscape(r.langtext)}</Langtext>
+      <Einheit>${xmlEscape(r.einheit)}</Einheit>
+      <Menge>${n(r.menge)}</Menge>
+      <EP>${getUnitPrice(r)}</EP>
+      <Gesamt>${lineNet(r)}</Gesamt>
+      <Preisaufbau>${xmlEscape(breakdownText(r))}</Preisaufbau>
+      <KI>${xmlEscape(r.aiReason)}</KI>
+    </Position>`).
+        join("\n")}
+  </Positions>
+</RLC-GAEB-EXPORT>`;
+}
+function serverLvTextSignature(row) {
+    return [
+        normText(row?.kurztext ?? row?.text ?? row?.shortText ?? row?.title ?? ""),
+        String(row?.einheit ?? row?.unit ?? row?.me ?? "").trim().toLowerCase()
+    ].
+        join("|");
+}
+function extractServerLvItems(payload) {
+    if (Array.isArray(payload?.items))
+        return payload.items;
+    if (Array.isArray(payload?.positions))
+        return payload.positions;
+    if (Array.isArray(payload?.lv))
+        return payload.lv;
+    if (Array.isArray(payload?.rows)) {
+        // Neuer LV-Endpunkt kann entweder direkt Positionen oder
+        // einen Import-Container mit verschachtelten `positions` liefern.
+        const directRows = payload.rows;
+        const nestedPositions = directRows.flatMap((row) => Array.isArray(row?.positions) ? row.positions : []);
+        return nestedPositions.length ? nestedPositions : directRows;
+    }
+    if (Array.isArray(payload))
+        return payload;
+    return [];
+}
+function reconcileKalkulationWithServerLv(currentRows, serverItems) {
+    const current = Array.isArray(currentRows) ? currentRows : [];
+    const server = Array.isArray(serverItems) ? serverItems : [];
+    if (!server.length)
+        return current;
+    const used = new Set();
+    const exact = new Map();
+    const signatures = new Map();
+    current.forEach((row, index) => {
+        const pos = String(row?.posNr || "").trim();
+        if (pos) {
+            const list = exact.get(pos) || [];
+            list.push(index);
+            exact.set(pos, list);
+        }
+        const signature = serverLvTextSignature(row);
+        if (signature !== "|") {
+            const list = signatures.get(signature) || [];
+            list.push(index);
+            signatures.set(signature, list);
+        }
+    });
+    const takeFirstUnused = (indexes) => {
+        for (const index of indexes || []) {
+            if (!used.has(index)) {
+                used.add(index);
+                return index;
+            }
+        }
+        return null;
+    };
+    const reconciled = server.map((src, serverIndex) => {
+        const posNr = String(src?.posNr ??
+            src?.position ??
+            src?.pos ??
+            src?.positionsnummer ??
+            src?.oz ??
+            "").trim();
+        let currentIndex = takeFirstUnused(exact.get(posNr));
+        if (currentIndex === null) {
+            currentIndex = takeFirstUnused(signatures.get(serverLvTextSignature(src)));
+        }
+        // Ultimo fallback controllato: il vecchio import aveva numerazione progressiva
+        // 001, 002... nello stesso ordine dell'X83.
+        if (currentIndex === null) {
+            const candidate = current[serverIndex];
+            const candidatePos = String(candidate?.posNr || "").trim();
+            if (candidate &&
+                !used.has(serverIndex) && (/^\d{1,4}$/.test(candidatePos) || /^\d{1,3}\.\d{1,3}$/.test(candidatePos))) {
+                used.add(serverIndex);
+                currentIndex = serverIndex;
+            }
+        }
+        const old = currentIndex === null ? null : current[currentIndex];
+        const menge = n(src?.menge ?? src?.quantity ?? src?.qty ?? old?.menge);
+        const kurztext = String(src?.kurztext ?? src?.text ?? src?.shortText ?? old?.kurztext ?? "");
+        const langtext = String(src?.langtext ??
+            src?.longText ??
+            src?.description ??
+            old?.langtext ??
+            "");
+        const einheit = String(src?.einheit ?? src?.unit ?? src?.me ?? old?.einheit ?? "");
+        return normalizeEliteRow({
+            ...(old || {}),
+            id: String(old?.id || src?.id || safeId()),
+            posNr,
+            parentPosNr: src?.parentPosNr ?? old?.parentPosNr,
+            sortIndex: src?.sortIndex ?? serverIndex,
+            kurztext,
+            langtext,
+            einheit,
+            menge,
+            updatedAt: new Date().toISOString()
+        });
+    });
+    // Mantieni soltanto vere posizioni aggiuntive create fuori dal LV.
+    const extras = current.filter((row, index) => {
+        if (used.has(index))
+            return false;
+        const pos = String(row?.posNr || "").trim().toUpperCase();
+        return /^(AUTO|CAD|FOTO|NACHTRAG|NT|REGIE)[.-]/.test(pos);
+    });
+    return [...reconciled, ...extras].map((row) => cleanRlcKiWarningState(normalizeEliteRow(row)));
+}
+/* ================= COMPONENT ================= */
+export default function KalkulationMitKI() {
+    const projectCtx = useProject();
+    const projectKey = getProjectKey(projectCtx);
+    const projectTitle = getProjectTitle(projectCtx);
+    const projectObj = getProjectObject(projectCtx);
+    const projectUuid = String(projectObj?.id || projectCtx?.projectId || projectCtx?.id || "").trim();
+    const { eliteCalculateRows, loading } = useKiSuggest();
+    const navigate = useNavigate();
+    const csvInputRef = React.useRef(null);
+    const selectedDetailRef = React.useRef(null);
+    const importHandoffDoneRef = React.useRef(false);
+    const recipesHandoffDoneRef = React.useRef(false);
+    const [rows, setRows] = React.useState(() => {
+        if (!projectKey || typeof localStorage === "undefined")
+            return [];
+        try {
+            const raw = localStorage.getItem(localBackupKey(projectKey));
+            if (!raw)
+                return [];
+            const parsed = JSON.parse(raw);
+            const rawRows = Array.isArray(parsed) ?
+                parsed :
+                Array.isArray(parsed?.rows) ?
+                    parsed.rows :
+                    Array.isArray(parsed?.items) ?
+                        parsed.items :
+                        Array.isArray(parsed?.positions) ?
+                            parsed.positions :
+                            [];
+            if (!rawRows.length)
+                return [];
+            return sanitizeRowsForStorage(rawRows.map((x) => normalizeEliteRow(x)));
+        }
+        catch {
+            return [];
+        }
+    });
+    React.useEffect(() => {
+        if (!projectKey)
+            return;
+        let alive = true;
+        KalkulationsDatenbank.listServer().
+            then(() => {
+            if (!alive)
+                return;
+            /*
+             * Nach Firmen-Datenbank-Sync UI neu berechnen,
+             * damit getX84CompanyFrontendOverride() die x84-company-baseline nutzt.
+             */
+            setRows((prev) => prev.map((r) => cleanRlcKiWarningState(normalizeEliteRow({ ...r }))));
+        }).
+            catch(() => {
+            // Offline / nicht angemeldet: bestehender lokaler Stand bleibt aktiv.
+        });
+        return () => {
+            alive = false;
+        };
+    }, [projectKey]);
+    React.useEffect(() => {
+        if (!projectKey)
+            return;
+        let cancelled = false;
+        let retryTimer = null;
+        let syncInFlight = false;
+        let syncCompleted = false;
+        const fetchLvPayload = async () => {
+            // Primär: kanonisches Projekt-LV über UUID.
+            if (projectUuid) {
+                const pageSize = 500;
+                const all = [];
+                for (let page = 1; page <= 50; page += 1) {
+                    const response = await fetch(apiUrl(`/api/projects/${encodeURIComponent(projectUuid)}/lv?page=${page}&pageSize=${pageSize}`), {
+                        method: "GET",
+                        credentials: "include",
+                        cache: "no-store",
+                        headers: authJsonHeaders()
+                    });
+                    if (!response.ok)
+                        break;
+                    const payload = await response.json().catch(() => null);
+                    const pageItems = extractServerLvItems(payload);
+                    if (!pageItems.length)
+                        break;
+                    all.push(...pageItems);
+                    if (pageItems.length < pageSize)
+                        break;
+                }
+                if (all.length)
+                    return all;
+            }
+            // Fallback: älterer Endpunkt über Projektcode.
+            const response = await fetch(apiUrl(`/api/project-lv/${encodeURIComponent(projectKey)}`), {
+                method: "GET",
+                credentials: "include",
+                cache: "no-store",
+                headers: authJsonHeaders()
+            });
+            const payload = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(payload?.error || `LV HTTP ${response.status}`);
+            }
+            return extractServerLvItems(payload);
+        };
+        const syncWithServerLv = async () => {
+            if (cancelled || syncInFlight || syncCompleted)
+                return;
+            syncInFlight = true;
+            try {
+                const serverItems = await fetchLvPayload();
+                if (!serverItems.length || cancelled)
+                    return;
+                syncCompleted = true;
+                setRows((previous) => {
+                    const next = reconcileKalkulationWithServerLv(previous, serverItems);
+                    try {
+                        localStorage.setItem(localBackupKey(projectKey), JSON.stringify({
+                            version: "elite-v3-server-lv-reconciled",
+                            source: "server-lv-reconcile",
+                            meta: {
+                                projectKey,
+                                projectUuid,
+                                updatedAt: new Date().toISOString()
+                            },
+                            rows: next
+                        }));
+                    }
+                    catch {
+                        // UI darf nicht wegen lokaler Cache-Probleme abbrechen.
+                    }
+                    return next;
+                });
+                setServerStatus(`${serverItems.length} LV-Positionen mit Server-OZ synchronisiert`);
+                window.setTimeout(() => setServerStatus(""), 2600);
+            }
+            catch (error) {
+                console.warn("[RLC-KI] Server-LV-Synchronisierung fehlgeschlagen", error);
+            }
+            finally {
+                syncInFlight = false;
+            }
+        };
+        void syncWithServerLv();
+        retryTimer = window.setTimeout(() => {
+            if (!cancelled && !syncCompleted && !syncInFlight) {
+                void syncWithServerLv();
+            }
+        }, 2500);
+        return () => {
+            cancelled = true;
+            if (retryTimer !== null)
+                window.clearTimeout(retryTimer);
+        };
+    }, [projectKey, projectUuid]);
+    const [selectedId, setSelectedId] = React.useState("");
+    const [auftraege, setAuftraege] = React.useState(() => {
+        AuftragStore.ensureDefault(projectKey);
+        return AuftragStore.list();
+    });
+    const [selectedAuftragId, setSelectedAuftragId] = React.useState(() => {
+        const haupt = AuftragStore.ensureDefault(projectKey);
+        return haupt.id;
+    });
+    React.useEffect(() => {
+        if (!projectKey) {
+            setAuftraege([]);
+            setSelectedAuftragId("");
+            return;
+        }
+        const haupt = AuftragStore.ensureDefault(projectKey);
+        const nextAuftraege = AuftragStore.list();
+        setAuftraege(nextAuftraege);
+        setSelectedAuftragId((currentId) => nextAuftraege.some((auftrag) => auftrag.id === currentId)
+            ? currentId
+            : haupt.id);
+    }, [projectKey]);
+    const selectedAuftrag = React.useMemo(() => auftraege.find((a) => a.id === selectedAuftragId) || null, [auftraege, selectedAuftragId]);
+    const [serverBusy, setServerBusy] = React.useState(false);
+    const [serverStatus, setServerStatus] = React.useState("");
+    const [activeAction, setActiveAction] = React.useState(null);
+    async function runWithAction(id, label, fn) {
+        let progressTimer;
+        try {
+            setActiveAction({ id, label, progress: 8, status: "running" });
+            setServerStatus(`${label}: RLC arbeitet…`);
+            progressTimer = window.setInterval(() => {
+                setActiveAction((prev) => {
+                    if (!prev || prev.id !== id || prev.status !== "running")
+                        return prev;
+                    const nextProgress = Math.min(92, prev.progress + Math.max(2, Math.round((100 - prev.progress) * 0.08)));
+                    return { ...prev, progress: nextProgress };
+                });
+            }, 450);
+            await Promise.resolve(fn());
+            setActiveAction({ id, label, progress: 100, status: "success" });
+            setServerStatus(`${label}: abgeschlossen`);
+            window.setTimeout(() => setActiveAction(null), 1600);
+        }
+        catch (e) {
+            setActiveAction({ id, label, progress: 100, status: "error" });
+            setServerStatus(`${label}: Fehler`);
+            window.setTimeout(() => setActiveAction(null), 2600);
+            throw e;
+        }
+        finally {
+            if (progressTimer)
+                window.clearInterval(progressTimer);
+        }
+    }
+    const [x84OfferNet, setX84OfferNet] = React.useState(0);
+    const [lastKiSource, setLastKiSource] = React.useState("");
+    const [kiMode, setKiMode] = React.useState("new-calculation");
+    const [pdfBusy, setPdfBusy] = React.useState(false);
+    const [activeHint, setActiveHint] = React.useState("");
+    /**
+     * UI-Logik:
+     * - KI-Assistent öffnet automatisch beim Seitenstart.
+     * - Der Nutzer kann ihn schließen und später wieder öffnen.
+     * - LV-Aktionen werden kompakt in ein Menü gelegt.
+     * - Optionale Tabellen-Spalten können ausgeblendet bleiben.
+     */
+    const [showQuickActions, setShowQuickActions] = React.useState(false);
+    const [showLvActions, setShowLvActions] = React.useState(false);
+    const [showAdvancedLvColumns, setShowAdvancedLvColumns] = React.useState(false);
+    const [viewFilter, setViewFilter] = React.useState("alle");
+    const [selectedDuplicateIds, setSelectedDuplicateIds] = React.useState([]);
+    const [selectedOpenAiIds, setSelectedOpenAiIds] = React.useState([]);
+    const [lvPage, setLvPage] = React.useState(1);
+    const [lvPageSize, setLvPageSize] = React.useState(5);
+    const [showCommercialSettings, setShowCommercialSettings] = React.useState(false);
+    const [showChapterSettings, setShowChapterSettings] = React.useState(false);
+    const [priceDiffView, setPriceDiffView] = React.useState("outside10");
+    const [mwst, setMwst] = React.useState(19);
+    const [globalMarkup, setGlobalMarkup] = React.useState(() => {
+        const saved = localStorage.getItem("rlc_kalkulation_global_markup_v1");
+        return saved == null ? 10 : Number(saved);
+    });
+    React.useEffect(() => {
+        localStorage.setItem("rlc_kalkulation_global_markup_v1", String(globalMarkup));
+    }, [globalMarkup]);
+    const [kapRabatt, setKapRabatt] = React.useState({});
+    const [kapMarkup, setKapMarkup] = React.useState({});
+    const [catalogRows, setCatalogRows] = React.useState(() => Catalog.list());
+    const [catalogQuery, setCatalogQuery] = React.useState("");
+    const [catalogGroup, setCatalogGroup] = React.useState("Alle");
+    const visibleCatalogRows = React.useMemo(() => {
+        const q = catalogQuery.trim().toLowerCase();
+        return catalogRows.
+            filter((r) => {
+            if (catalogGroup !== "Alle" && r.gruppe !== catalogGroup)
+                return false;
+            if (!q)
+                return true;
+            return `${r.posNr} ${r.kurztext} ${r.einheit}`.
+                toLowerCase().
+                includes(q);
+        }).
+            slice(0, 300);
+    }, [catalogRows, catalogQuery, catalogGroup]);
+    const [company] = React.useState({
+        name: "RLC Bausoftware GmbH",
+        address: "Musterstraße 12, 80333 München",
+        phone: "+49 89 123456",
+        email: "info@rlc-bau.de",
+        logoUrl: "/rlc-logo.png"
+    });
+    const [client, setClient] = React.useState({
+        name: "Muster Bau GmbH",
+        address: "Hauptstraße 5, 50667 Köln"
+    });
+    const [offer, setOffer] = React.useState({
+        number: `ANG-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
+        place: "München",
+        notes: "Zahlungsbedingungen: 30 Tage netto. Angebot gültig 30 Tage. Preise basieren auf KI-gestützter Kalkulation und technischer Plausibilitätsprüfung."
+    });
+    const chapters = React.useMemo(() => {
+        const map = new Map();
+        for (const r of rows) {
+            const ch = getChapter(r.posNr);
+            if (!map.has(ch))
+                map.set(ch, []);
+            map.get(ch).push(r);
+        }
+        return map;
+    }, [rows]);
+    const filteredRows = React.useMemo(() => {
+        const duplicateMap = new Map();
+        for (const row of rows) {
+            if (kiIsStructuralRow(row))
+                continue;
+            const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`).
+                replace(/[^a-z0-9äöüß]+/gi, " ").
+                replace(/\s+/g, " ").
+                trim();
+            if (text.length < 8)
+                continue;
+            const key = [
+                text.slice(0, 140),
+                String(row.einheit || "").trim().toLowerCase(),
+                round2(n(row.menge)),
+                round2(getUnitPrice(row))
+            ].
+                join("|");
+            if (!duplicateMap.has(key))
+                duplicateMap.set(key, []);
+            duplicateMap.get(key).push(row);
+        }
+        const duplicateIds = new Set(Array.from(duplicateMap.values()).
+            filter((group) => group.length > 1).
+            flatMap((group) => group.map((row) => row.id)));
+        return rows.filter((r) => {
+            if (selectedAuftragId) {
+                const rowAuftragId = String(r.auftragId || "").trim();
+                const rowAuftragIsKnown = rowAuftragId ?
+                    auftraege.some((a) => a.id === rowAuftragId) :
+                    false;
+                if (rowAuftragIsKnown && rowAuftragId !== selectedAuftragId)
+                    return false;
+            }
+            if (viewFilter === "alle")
+                return true;
+            if (viewFilter === "kritisch")
+                return !kiIsStructuralRow(r) && r.calculationStatus === "critical";
+            if (viewFilter === "warnungen")
+                return !kiIsStructuralRow(r) && r.calculationStatus === "warning";
+            if (viewFilter === "hochrisiko")
+                return !kiIsStructuralRow(r) && r.riskLevel === "high";
+            if (viewFilter === "sicher")
+                return !kiIsStructuralRow(r) && isSafeRow(r);
+            if (viewFilter === "ohneDb") {
+                return !kiIsStructuralRow(r) && rowHasNoDb(r) && r.calculationStatus !== "manual";
+            }
+            if (viewFilter === "mengeFehlt")
+                return !kiIsStructuralRow(r) && n(r.menge) <= 0;
+            if (viewFilter === "preisFehlt")
+                return !kiIsStructuralRow(r) && getUnitPrice(r) <= 0;
+            if (viewFilter === "einheitFehlt")
+                return !kiIsStructuralRow(r) && !String(r.einheit || "").trim();
+            if (viewFilter === "urkalkulationFehlt")
+                return !kiIsStructuralRow(r) && (!Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0);
+            if (viewFilter === "doppelte")
+                return duplicateIds.has(r.id);
+            return true;
+        });
+    }, [rows, viewFilter, selectedAuftragId, auftraege]);
+    const selectedRow = React.useMemo(() => filteredRows.find((r) => r.id === selectedId) || filteredRows[0] || null, [filteredRows, selectedId]);
+    const datenbankMatches = React.useMemo(() => findDatenbankMatches(selectedRow), [selectedRow]);
+    React.useLayoutEffect(() => {
+        if (!projectKey)
+            return;
+        importHandoff();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectKey]);
+    React.useEffect(() => {
+        if (!filteredRows.length) {
+            setSelectedId("");
+            return;
+        }
+        const exists = filteredRows.some((r) => r.id === selectedId);
+        if (!exists)
+            setSelectedId(filteredRows[0].id);
+    }, [filteredRows, selectedId]);
+    React.useEffect(() => {
+        if (!selectedRow) {
+            setActiveHint("Keine Position gewählt.");
+            return;
+        }
+        const hints = [];
+        if (!selectedRow.kurztext.trim())
+            hints.push("Kurztext fehlt.");
+        if (!selectedRow.langtext.trim())
+            hints.push("Langtext fehlt.");
+        if (!selectedRow.einheit.trim())
+            hints.push("Einheit fehlt.");
+        if (!selectedRow.priceBreakdown?.length)
+            hints.push("Preisaufbau fehlt.");
+        if (n(selectedRow.menge) <= 0)
+            hints.push("Menge fehlt oder ist 0.");
+        if (getUnitPrice(selectedRow) <= 0)
+            hints.push("Einheitspreis fehlt.");
+        if (selectedRow.riskLevel === "high")
+            hints.push("Hohes Risiko prüfen.");
+        if (selectedRow.calculationStatus === "critical") {
+            hints.push("Kalkulation kritisch: Kostenansätze prüfen.");
+        }
+        if (datenbankMatches.length) {
+            hints.push(`Kalkulationsdatenbank kennt ${datenbankMatches.length} ähnliche Position(en).`);
+        }
+        setActiveHint(hints.length ? hints.join(" ") : "Position wirkt plausibel.");
+    }, [selectedRow, datenbankMatches.length]);
+    function importHandoff() {
+        if (importHandoffDoneRef.current && rows.length > 0) {
+            return;
+        }
+        importHandoffDoneRef.current = true;
+        function extractRowsFromParsed(parsed) {
+            if (Array.isArray(parsed))
+                return parsed;
+            if (Array.isArray(parsed?.rows))
+                return parsed.rows;
+            if (Array.isArray(parsed?.items))
+                return parsed.items;
+            if (Array.isArray(parsed?.data))
+                return parsed.data;
+            if (Array.isArray(parsed?.data?.rows))
+                return parsed.data.rows;
+            if (Array.isArray(parsed?.positions))
+                return parsed.positions;
+            if (Array.isArray(parsed?.lvPositions))
+                return parsed.lvPositions;
+            return [];
+        }
+        function normalizeImportedStorageRows(rawRows) {
+            return rawRows.
+                map((x) => {
+                const sourceKind = String(x.gaebType || x.importType || x.format || x.source || x.name || "").toLowerCase();
+                const explicitOfferEp = n(x.angebotUnitPrice) ||
+                    n(x.originalPreKiPrice) ||
+                    n(x.x84UnitPrice);
+                const rawEp = n(x.preis) ||
+                    n(x.ep) ||
+                    n(x.unitPrice) ||
+                    n(x.finalUnitPrice);
+                const isRealOfferImport = sourceKind.includes("x84") ||
+                    sourceKind.includes("angebot") ||
+                    explicitOfferEp > 0;
+                const offerEp = isRealOfferImport ? explicitOfferEp || rawEp : 0;
+                const workEp = offerEp > 0 ? offerEp : rawEp;
+                return normalizeEliteRow({
+                    ...x,
+                    id: String(x.id || safeId()),
+                    posNr: x.posNr || x.position || x.oz || "",
+                    kurztext: x.kurztext || x.text || x.title || x.shortText || "",
+                    langtext: x.langtext || x.description || x.longText || "",
+                    einheit: x.einheit || x.unit || x.me || "",
+                    menge: n(x.menge ?? x.qty ?? x.quantity),
+                    // Nur echte X84-/Angebotsdaten dürfen Angebotsbasis werden.
+                    // X83 darf NICHT automatisch als Angebot/X84 gespeichert werden.
+                    angebotUnitPrice: offerEp,
+                    angebotTotal: offerEp > 0 ? round2(n(x.menge ?? x.qty ?? x.quantity) * offerEp) : 0,
+                    originalPreKiPrice: offerEp,
+                    x84UnitPrice: offerEp,
+                    // X84/Angebot darf als finaler Angebotswert erscheinen,
+                    // aber NIEMALS als RLC-KI-Vorschlag.
+                    preis: workEp,
+                    finalUnitPrice: workEp,
+                    suggestedUnitPrice: isRealOfferImport ? 0 : n(x.suggestedUnitPrice),
+                    baseUnitPrice: isRealOfferImport ? 0 : n(x.baseUnitPrice),
+                    rlcKiUnitPrice: isRealOfferImport ? 0 : n(x.rlcKiUnitPrice),
+                    rlcKiTotal: isRealOfferImport ? 0 : n(x.rlcKiTotal),
+                    auftragId: x.auftragId || selectedAuftragId || "",
+                    auftragName: x.auftragName || selectedAuftrag?.name || "",
+                    auftragType: x.auftragType || selectedAuftrag?.type,
+                    confidence: typeof x.confidence === "number" ? x.confidence : 0.75,
+                    calculationStatus: x.calculationStatus || "manual",
+                    riskLevel: x.riskLevel || "medium",
+                    priceDecision: isRealOfferImport ? "x84" : x.priceDecision || "manual"
+                });
+            }).
+                filter((r) => {
+                return (String(r.posNr || "").trim() ||
+                    String(r.kurztext || "").trim() ||
+                    String(r.langtext || "").trim());
+            });
+        }
+        function tryLoadRowsFromKey(key) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw)
+                    return [];
+                const parsed = JSON.parse(raw);
+                const rawRows = extractRowsFromParsed(parsed);
+                if (!rawRows.length)
+                    return [];
+                return normalizeImportedStorageRows(rawRows).map((r) => kiIsStructuralRow(r) ?
+                    normalizeEliteRow(kiPrepareStructuralRow(r)) :
+                    enhanceKalkulatorInsertions(r));
+            }
+            catch {
+                return [];
+            }
+        }
+        function readStoredX84OfferMap() {
+            const map = new Map();
+            try {
+                const raw = localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`);
+                if (!raw)
+                    return map;
+                const parsed = JSON.parse(raw);
+                const rawRows = extractRowsFromParsed(parsed);
+                for (const x of rawRows) {
+                    const pos = String(x?.posNr || x?.position || x?.oz || "").trim();
+                    if (!pos)
+                        continue;
+                    const ep = n(x?.angebotUnitPrice) ||
+                        n(x?.originalPreKiPrice) ||
+                        n(x?.x84UnitPrice) ||
+                        n(x?.ep) ||
+                        n(x?.einzelpreis) ||
+                        n(x?.unitPrice) ||
+                        n(x?.preis);
+                    if (ep > 0)
+                        map.set(pos, ep);
+                }
+            }
+            catch {
+                //
+            }
+            return map;
+        }
+        function mergeStoredX84OfferPrices(input) {
+            const x84Map = readStoredX84OfferMap();
+            if (!x84Map.size)
+                return input;
+            return input.map((row) => {
+                const pos = String(row.posNr || "").trim();
+                const offerEp = x84Map.get(pos) || getOfferUnitPrice(row);
+                if (offerEp <= 0)
+                    return row;
+                const rlcEp = n(row.rlcKiUnitPrice);
+                return normalizeEliteRow({
+                    ...row,
+                    angebotUnitPrice: offerEp,
+                    x84UnitPrice: offerEp,
+                    originalPreKiPrice: offerEp,
+                    angebotTotal: round2(n(row.menge) * offerEp),
+                    // X84 darf RLC-KI nicht überschreiben.
+                    rlcKiUnitPrice: rlcEp,
+                    rlcKiTotal: rlcEp > 0 ? round2(n(row.menge) * rlcEp) : 0,
+                    suggestedUnitPrice: rlcEp > 0 ? n(row.suggestedUnitPrice) : 0,
+                    baseUnitPrice: rlcEp > 0 ? n(row.baseUnitPrice) : 0
+                });
+            });
+        }
+        /*
+         * Wichtig:
+         * Wenn nach einer KI-Kalkulation ein X84 importiert wird, darf der X84-Import
+         * NICHT die gesamte KI-Kalkulation ersetzen. Wir laden daher zuerst den
+         * Kalkulationsstand und mergen X84 nur als Vergleichspreis.
+         * Wenn es noch keinen Kalkulationsstand gibt, wird der GAEB/X83/X84-Import geladen.
+         */
+        try {
+            const rawKiBackup = localStorage.getItem(localBackupKey(projectKey));
+            if (rawKiBackup) {
+                const parsedKiBackup = JSON.parse(rawKiBackup);
+                const source = String(parsedKiBackup?.source || "");
+                const backupRows = Array.isArray(parsedKiBackup) ?
+                    parsedKiBackup :
+                    Array.isArray(parsedKiBackup?.rows) ?
+                        parsedKiBackup.rows :
+                        [];
+                const backupSafeRows = sanitizeRowsForStorage(backupRows.map((x) => normalizeEliteRow(x)));
+                const backupKiNet = backupSafeRows.reduce((sum, r) => {
+                    return sum + n(r.rlcKiTotal ?? r.totalNet ?? r.gesamt);
+                }, 0);
+                if (backupSafeRows.length &&
+                    backupKiNet > 0) {
+                    setRows(backupSafeRows);
+                    setServerStatus("KI-Kalkulation geladen");
+                    setTimeout(() => setServerStatus(""), 1800);
+                    return;
+                }
+            }
+        }
+        catch {
+            // Wenn der KI-Backup beschädigt ist, darf normaler LV-Fallback weiterlaufen.
+        }
+        const keys = [
+            localBackupKey(projectKey),
+            `rlc_lv_data_v1:${projectKey}`,
+            `rlc_gaeb_import_v1:${projectKey}`,
+            `RLC_POSITIONLV_${projectKey}`
+        ];
+        for (const key of keys) {
+            const loaded = tryLoadRowsFromKey(key);
+            if (loaded.length) {
+                const lvBeforeOverwrite = LV.list();
+                const urkByKey = new Map();
+                for (const u of lvBeforeOverwrite) {
+                    const hasUrk = Array.isArray(u.priceBreakdown) && u.priceBreakdown.length > 0;
+                    if (!hasUrk)
+                        continue;
+                    const keys = [
+                        String(u.id || "").trim(),
+                        String(u.posNr || "").trim(),
+                        String(u.pos || "").trim()
+                    ].
+                        filter(Boolean);
+                    for (const k of keys) {
+                        urkByKey.set(k, u);
+                    }
+                }
+                const loadedWithUrk = loaded.map((r) => {
+                    const possibleKeys = [
+                        String(r.id || "").trim(),
+                        String(r.posNr || "").trim(),
+                        String(r.pos || "").trim()
+                    ].
+                        filter(Boolean);
+                    const u = possibleKeys.map((k) => urkByKey.get(k)).find(Boolean);
+                    if (!u)
+                        return r;
+                    const pb = normalizeBreakdown(u.priceBreakdown || []);
+                    const ep = sumBreakdown(pb) ||
+                        n(u.rlcKiUnitPrice) ||
+                        n(u.finalUnitPrice) ||
+                        n(u.preis);
+                    const menge = n(r.menge ?? u.menge);
+                    return {
+                        ...u,
+                        ...r,
+                        menge,
+                        finalUnitPrice: r.finalUnitPrice,
+                        preis: r.preis,
+                        suggestedUnitPrice: r.suggestedUnitPrice,
+                        rlcKiUnitPrice: r.rlcKiUnitPrice,
+                        rlcKiTotal: r.rlcKiTotal,
+                        gesamt: r.gesamt,
+                        totalNet: r.totalNet,
+                        gp: r.gp,
+                        priceBreakdown: pb,
+                        recipeLines: pb,
+                        urkalkulationUnitPrice: ep,
+                        urkalkulationTotal: round2(menge * ep),
+                        source: u.source || "recipes-urkalkulation-global-lv-merged",
+                        calculationStatus: pb.length ? "recipes_ready" : r.calculationStatus || "needs_review",
+                        aiReason: appendInfoText(u.aiReason || r.aiReason, "Globale Urkalkulation aus Recipes automatisch in Kalkulation mit KI übernommen.")
+                    };
+                });
+                // RLC FIX: Globale Urkalkulation darf die Kalkulation nicht überschreiben.
+                // Sie bleibt nur Preisaufbau/Analyse in Recipes.
+                const safeLoaded = sanitizeRowsForStorage(loadedWithUrk);
+                setRows(safeLoaded);
+                persistRows(safeLoaded);
+                // Wichtig:
+                // localBackupKey(projectKey) = rlc_kalkulation_mit_ki_elite_v1.
+                // Diese Datei darf NUR echte KI/Kalkulationsdaten enthalten.
+                // LV/X83/X84-Quellen dürfen hier niemals automatisch hineinkopiert werden,
+                // sonst wird ein importiertes LV fälschlich als KI-Ergebnis gezählt.
+                setServerStatus(`${safeLoaded.length} LV-Positionen geladen · Preisaufbau übernommen · RLC-KI Preise unverändert`);
+                setTimeout(() => setServerStatus(""), 2500);
+                return;
+            }
+        }
+        // Kein globaler LV-Fallback:
+        // Neues Projekt bleibt leer, bis explizit GAEB/X83/X84 importiert wird.
+        setRows([]);
+    }
+    React.useEffect(() => {
+        if (!projectKey)
+            return;
+        if (!rows.length)
+            return;
+        try {
+            const lvRows = LV.list();
+            const urkByKey = new Map();
+            for (const u of lvRows) {
+                const pb = normalizeBreakdown(u.priceBreakdown || []);
+                if (!pb.length)
+                    continue;
+                const keys = [
+                    String(u.id || "").trim(),
+                    String(u.posNr || "").trim(),
+                    String(u.pos || "").trim()
+                ].
+                    filter(Boolean);
+                for (const k of keys)
+                    urkByKey.set(k, u);
+            }
+            if (!urkByKey.size)
+                return;
+            let changed = false;
+            const merged = rows.map((r) => {
+                const keys = [
+                    String(r.id || "").trim(),
+                    String(r.posNr || "").trim(),
+                    String(r.pos || "").trim()
+                ].
+                    filter(Boolean);
+                const u = keys.map((k) => urkByKey.get(k)).find(Boolean);
+                if (!u)
+                    return r;
+                const pb = normalizeBreakdown(u.priceBreakdown || []);
+                if (!pb.length)
+                    return r;
+                const already = Array.isArray(r.priceBreakdown) &&
+                    JSON.stringify(r.priceBreakdown) === JSON.stringify(pb);
+                if (already)
+                    return r;
+                changed = true;
+                const menge = n(r.menge ?? u.menge);
+                const ep = sumBreakdown(pb);
+                return normalizeEliteRow({
+                    ...r,
+                    // Nur Info / Preisaufbau aus Recipes
+                    priceBreakdown: pb,
+                    recipeLines: pb,
+                    urkalkulationUnitPrice: ep,
+                    urkalkulationTotal: round2(menge * ep),
+                    // Kalkulationspreise bleiben geschützt
+                    finalUnitPrice: r.finalUnitPrice,
+                    preis: r.preis,
+                    ep: r.ep,
+                    suggestedUnitPrice: r.suggestedUnitPrice,
+                    rlcKiUnitPrice: r.rlcKiUnitPrice,
+                    rlcKiTotal: r.rlcKiTotal,
+                    gesamt: r.gesamt,
+                    totalNet: r.totalNet,
+                    gp: r.gp,
+                    source: r.source,
+                    calculationStatus: r.calculationStatus,
+                    riskLevel: r.riskLevel,
+                    aiReason: appendInfoText(r.aiReason, "Preisaufbau aus Recipes als Info übernommen. Kalkulationspreis unverändert.")
+                });
+            });
+            if (!changed)
+                return;
+            const safeRows = sanitizeRowsForStorage(merged);
+            setRows(safeRows);
+            persistRows(safeRows);
+            setServerStatus("Preisaufbau aus Recipes übernommen · RLC-KI Preise unverändert");
+            setTimeout(() => setServerStatus(""), 3000);
+        }
+        catch (err) {
+            console.warn("RLC read-only Preisaufbau merge failed", err);
+        }
+    }, [projectKey, rows]);
+    const lvTotalPages = React.useMemo(() => {
+        return Math.max(1, Math.ceil(filteredRows.length / lvPageSize));
+    }, [filteredRows.length, lvPageSize]);
+    React.useEffect(() => {
+        if (lvPage > lvTotalPages)
+            setLvPage(lvTotalPages);
+    }, [lvPage, lvTotalPages]);
+    const visibleLvRows = React.useMemo(() => {
+        return filteredRows;
+    }, [filteredRows]);
+    const filteredChapters = React.useMemo(() => {
+        const map = new Map();
+        for (const r of visibleLvRows) {
+            const ch = getChapter(r.posNr);
+            if (!map.has(ch))
+                map.set(ch, []);
+            map.get(ch).push(r);
+        }
+        return map;
+    }, [visibleLvRows]);
+    const problemCounts = React.useMemo(() => {
+        const relevantRows = rows.filter((r) => !kiIsStructuralRow(r));
+        return {
+            kritisch: relevantRows.filter((r) => r.calculationStatus === "critical").length,
+            warnungen: relevantRows.filter((r) => r.calculationStatus === "warning" || r.riskLevel === "high").length,
+            hochrisiko: relevantRows.filter((r) => r.riskLevel === "high").length,
+            ohneDb: relevantRows.filter((r) => rowHasNoDb(r) && r.calculationStatus !== "manual").length,
+            sicher: relevantRows.filter(isSafeRow).length,
+            einheitFehlt: relevantRows.filter((r) => !String(r.einheit || "").trim()).length,
+            kurztextFehlt: relevantRows.filter((r) => !String(r.kurztext || "").trim()).length,
+            langtextFehlt: relevantRows.filter((r) => !String(r.langtext || "").trim()).length,
+            preisFehlt: relevantRows.filter((r) => round2(getUnitPrice(r)) <= 0).length,
+            preisaufbauFehlt: relevantRows.filter((r) => !Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0).length,
+            mengeFehlt: relevantRows.filter((r) => n(r.menge) <= 0).length
+        };
+    }, [rows]);
+    const duplicateGroups = React.useMemo(() => {
+        const map = new Map();
+        for (const row of rows) {
+            if (kiIsStructuralRow(row))
+                continue;
+            const text = normText(`${row.kurztext || ""} ${row.langtext || ""}`).
+                replace(/[^a-z0-9äöüß]+/gi, " ").
+                replace(/\s+/g, " ").
+                trim();
+            if (text.length < 8)
+                continue;
+            const key = [
+                text.slice(0, 140),
+                String(row.einheit || "").trim().toLowerCase(),
+                round2(n(row.menge)),
+                round2(getUnitPrice(row))
+            ].
+                join("|");
+            if (!map.has(key))
+                map.set(key, []);
+            map.get(key).push(row);
+        }
+        return Array.from(map.values()).
+            filter((group) => group.length > 1).
+            map((group) => [...group].sort((a, b) => {
+            const pa = String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
+                numeric: true
+            });
+            if (pa !== 0)
+                return pa;
+            return String(a.id).localeCompare(String(b.id));
+        }));
+    }, [rows]);
+    const duplicateCountToDelete = React.useMemo(() => {
+        return duplicateGroups.reduce((sum, group) => sum + Math.max(0, group.length - 1), 0);
+    }, [duplicateGroups]);
+    React.useEffect(() => {
+        function handleGlobalKiCommand(event) {
+            const detail = event.detail;
+            if (!detail)
+                return;
+            const filter = String(detail.filter || "");
+            const action = String(detail.action || "");
+            // Wenn die globale KI einen Prüf-Filter setzt, muss die Liste alle Aufträge zeigen,
+            // sonst kann z.B. "Menge fehlt" 1 melden, aber in "Hauptauftrag" 0 anzeigen.
+            if (filter) {
+                setSelectedAuftragId("");
+            }
+            if (filter === "alle")
+                setViewFilter("alle");
+            if (filter === "kritisch")
+                setViewFilter("kritisch");
+            if (filter === "warnungen")
+                setViewFilter("warnungen");
+            if (filter === "hochrisiko")
+                setViewFilter("hochrisiko");
+            if (filter === "ohneDb")
+                setViewFilter("ohneDb");
+            if (filter === "sicher")
+                setViewFilter("sicher");
+            if (filter === "mengeFehlt")
+                setViewFilter("mengeFehlt");
+            if (filter === "preisFehlt")
+                setViewFilter("preisFehlt");
+            if (filter === "einheitFehlt")
+                setViewFilter("einheitFehlt");
+            if (filter === "urkalkulationFehlt")
+                setViewFilter("urkalkulationFehlt");
+            if (filter === "doppelte")
+                setViewFilter("doppelte");
+            if (action === "runKi")
+                void runEliteCalculation(false);
+            if (action === "completeMissing")
+                autoCompleteMissingFields();
+            if (action === "selectDuplicates")
+                selectDuplicateRowsToDelete();
+            setLvPage(1);
+            window.scrollTo({
+                top: 0,
+                behavior: "smooth"
+            });
+        }
+        window.addEventListener("rlc:kalkulation-filter", handleGlobalKiCommand);
+        return () => {
+            window.removeEventListener("rlc:kalkulation-filter", handleGlobalKiCommand);
+        };
+        // Handler nur bei Projektwechsel neu registrieren, nicht bei jedem Render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectKey]);
+    React.useEffect(() => {
+        const nextR = { ...kapRabatt };
+        const nextM = { ...kapMarkup };
+        for (const ch of chapters.keys()) {
+            if (nextR[ch] == null)
+                nextR[ch] = 0;
+            if (nextM[ch] == null)
+                nextM[ch] = 0;
+        }
+        for (const k of Object.keys(nextR))
+            if (!chapters.has(k))
+                delete nextR[k];
+        for (const k of Object.keys(nextM))
+            if (!chapters.has(k))
+                delete nextM[k];
+        setKapRabatt(nextR);
+        setKapMarkup(nextM);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chapters.size]);
+    const chapterTotals = React.useMemo(() => {
+        const out = {};
+        chapters.forEach((list, ch) => {
+            const netRaw = list.reduce((sum, r) => sum + lineNet(r), 0);
+            const risk = list.reduce((sum, r) => sum + n(r.riskCost) * n(r.menge), 0);
+            const profit = list.reduce((sum, r) => sum + n(r.profitCost) * n(r.menge), 0);
+            const afterChapterDiscount = netRaw * (1 - n(kapRabatt[ch]) / 100);
+            const afterChapterMarkup = afterChapterDiscount * (1 + n(kapMarkup[ch]) / 100);
+            out[ch] = {
+                netRaw: round2(netRaw),
+                afterChapterDiscount: round2(afterChapterDiscount),
+                afterChapterMarkup: round2(afterChapterMarkup),
+                risk: round2(risk),
+                profit: round2(profit)
+            };
+        });
+        return out;
+    }, [chapters, kapRabatt, kapMarkup]);
+    const summary = React.useMemo(() => {
+        const netBeforeGlobal = Object.values(chapterTotals).reduce((sum, total) => sum + total.afterChapterMarkup, 0);
+        const globalMarkupValue = netBeforeGlobal * (globalMarkup / 100);
+        const net = netBeforeGlobal + globalMarkupValue;
+        const tax = net * (mwst / 100);
+        const gross = net + tax;
+        const angebotNet = round2(rows.reduce((sum, r) => sum + offerLineNet(r), 0));
+        const angebotTax = round2(angebotNet * (mwst / 100));
+        const angebotGross = round2(angebotNet + angebotTax);
+        const rlcKiNet = round2(rows.reduce((sum, r) => sum + rlcKiLineNet(r), 0));
+        const rlcKiTax = round2(rlcKiNet * (mwst / 100));
+        const rlcKiGross = round2(rlcKiNet + rlcKiTax);
+        const diffNet = round2(rlcKiNet - angebotNet);
+        const diffPct = angebotNet > 0 ? round2(diffNet / angebotNet * 100) : 0;
+        const directCost = rows.reduce((sum, r) => sum +
+            n(r.menge) * (n(r.materialCost) +
+                n(r.laborCost) +
+                n(r.machineCost) +
+                n(r.subcontractorCost) +
+                n(r.disposalCost)), 0);
+        const riskSum = rows.reduce((sum, r) => sum + n(r.riskCost) * n(r.menge), 0);
+        const profitSum = rows.reduce((sum, r) => sum + n(r.profitCost) * n(r.menge), 0);
+        const priced = rows.filter((r) => getUnitPrice(r) > 0).length;
+        const avgConfidence = rows.length ?
+            rows.reduce((sum, r) => sum + n(r.confidence), 0) / rows.length :
+            0;
+        return {
+            net: round2(net),
+            gross: round2(gross),
+            tax: round2(tax),
+            angebotNet,
+            angebotTax,
+            angebotGross,
+            rlcKiNet,
+            rlcKiTax,
+            rlcKiGross,
+            diffNet,
+            diffPct,
+            directCost: round2(directCost),
+            riskSum: round2(riskSum),
+            profitSum: round2(profitSum),
+            globalMarkupValue: round2(globalMarkupValue),
+            marginPct: net > 0 ? round2(profitSum / net * 100) : 0,
+            priced,
+            total: rows.length,
+            coveragePct: rows.length ? Math.round(priced / rows.length * 100) : 0,
+            avgConfidence: round2(avgConfidence),
+            highRisk: rows.filter((r) => r.riskLevel === "high").length,
+            warnings: rows.filter((r) => r.calculationStatus === "warning").length,
+            critical: rows.filter((r) => r.calculationStatus === "critical").length,
+            knowledgeCount: KalkulationsDatenbank.count()
+        };
+    }, [rows, chapterTotals, globalMarkup, mwst]);
+    const selectedAuftragSummary = React.useMemo(() => {
+        const list = selectedAuftragId ?
+            rows.filter((r) => r.auftragId === selectedAuftragId) :
+            rows;
+        const net = round2(list.reduce((sum, r) => sum + lineNet(r), 0));
+        const count = list.length;
+        const priced = list.filter((r) => getUnitPrice(r) > 0).length;
+        return { net, count, priced };
+    }, [rows, selectedAuftragId]);
+    const priceDiffRows = React.useMemo(() => {
+        return rows.
+            filter((r) => !kiIsStructuralRow(r)).
+            map((r) => {
+            const angebotEp = getOfferUnitPrice(r);
+            const kiEp = getRlcKiUnitPrice(r);
+            const menge = n(r.menge);
+            const angebotGp = round2(menge * angebotEp);
+            const kiGp = round2(menge * kiEp);
+            const diffEp = round2(kiEp - angebotEp);
+            const diffGp = round2(kiGp - angebotGp);
+            const diffPct = angebotEp > 0 ? round2(diffEp / angebotEp * 100) : 0;
+            const absDiffPct = Math.abs(diffPct);
+            let gruppe = "OHNE_VERGLEICH";
+            if (angebotEp > 0 && kiEp > 0) {
+                if (diffPct > 10)
+                    gruppe = "RLC_HOEHER_UEBER_10";
+                else if (diffPct < -10)
+                    gruppe = "RLC_NIEDRIGER_UEBER_10";
+                else
+                    gruppe = "INNERHALB_10";
+            }
+            let empfehlung = "OK";
+            if (gruppe === "OHNE_VERGLEICH")
+                empfehlung = "Ohne Vergleich";
+            else if (absDiffPct >= 30)
+                empfehlung = "Kritisch";
+            else if (absDiffPct >= 20)
+                empfehlung = "Prüfen";
+            else if (absDiffPct > 10)
+                empfehlung = diffPct > 0 ? "RLC höher > 10%" : "RLC niedriger > 10%";
+            else
+                empfehlung = "Innerhalb ±10%";
+            return {
+                id: r.id,
+                posNr: r.posNr,
+                kurztext: r.kurztext,
+                einheit: r.einheit,
+                menge,
+                angebotEp,
+                angebotGp,
+                kiEp,
+                kiGp,
+                diffEp,
+                diffGp,
+                diffPct,
+                gruppe,
+                empfehlung
+            };
+        });
+    }, [rows]);
+    const priceDiffReport = React.useMemo(() => {
+        const byAbsGp = (a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp);
+        const byHigherGp = (a, b) => b.diffGp - a.diffGp;
+        const byLowerGp = (a, b) => a.diffGp - b.diffGp;
+        const comparable = priceDiffRows.filter((r) => r.angebotEp > 0 && r.kiEp > 0);
+        const higher10 = comparable.filter((r) => r.gruppe === "RLC_HOEHER_UEBER_10").sort(byHigherGp);
+        const lower10 = comparable.filter((r) => r.gruppe === "RLC_NIEDRIGER_UEBER_10").sort(byLowerGp);
+        const inside10 = comparable.filter((r) => r.gruppe === "INNERHALB_10").sort(byAbsGp);
+        const missing = priceDiffRows.filter((r) => r.gruppe === "OHNE_VERGLEICH").sort(byAbsGp);
+        const outside10 = [...higher10, ...lower10].sort(byAbsGp);
+        const over20Pct = comparable.filter((r) => Math.abs(r.diffPct) >= 20).sort(byAbsGp);
+        const over10000Gp = comparable.filter((r) => Math.abs(r.diffGp) >= 10000).sort(byAbsGp);
+        return {
+            all: comparable.sort(byAbsGp),
+            comparable,
+            higher10,
+            lower10,
+            inside10,
+            missing,
+            outside10,
+            topAbs: [...outside10].sort(byAbsGp).slice(0, 30),
+            over20Pct,
+            over10000Gp,
+            counts: {
+                total: priceDiffRows.length,
+                comparable: comparable.length,
+                outside10: outside10.length,
+                higher10: higher10.length,
+                lower10: lower10.length,
+                inside10: inside10.length,
+                missing: missing.length
+            },
+            sums: {
+                x84: round2(comparable.reduce((sum, r) => sum + r.angebotGp, 0)),
+                rlc: round2(comparable.reduce((sum, r) => sum + r.kiGp, 0)),
+                diff: round2(comparable.reduce((sum, r) => sum + r.diffGp, 0)),
+                higher: round2(higher10.reduce((sum, r) => sum + r.diffGp, 0)),
+                lower: round2(lower10.reduce((sum, r) => sum + r.diffGp, 0)),
+                inside: round2(inside10.reduce((sum, r) => sum + r.diffGp, 0))
+            }
+        };
+    }, [priceDiffRows]);
+    const activePriceDiffRows = React.useMemo(() => {
+        if (priceDiffView === "higher10")
+            return priceDiffReport.higher10;
+        if (priceDiffView === "lower10")
+            return priceDiffReport.lower10;
+        if (priceDiffView === "inside10")
+            return priceDiffReport.inside10;
+        if (priceDiffView === "over20")
+            return priceDiffReport.over20Pct;
+        if (priceDiffView === "over10000")
+            return priceDiffReport.over10000Gp;
+        if (priceDiffView === "all")
+            return priceDiffReport.all;
+        if (priceDiffView === "missing")
+            return priceDiffReport.missing;
+        return priceDiffReport.outside10;
+    }, [priceDiffReport, priceDiffView]);
+    const topPriceDiffRows = activePriceDiffRows;
+    const activeKiDecision = React.useMemo(() => {
+        if (!rows.length) {
+            return {
+                level: "info",
+                title: "Keine LV-Positionen vorhanden",
+                text: "Lade zuerst ein Leistungsverzeichnis oder füge Positionen hinzu. Danach kann die KI aktiv prüfen.",
+                nextLabel: "LV importieren",
+                filter: "alle",
+                action: "",
+                readyForExport: false,
+                shouldRecalculate: false
+            };
+        }
+        if (problemCounts.mengeFehlt > 0) {
+            return {
+                level: "critical",
+                title: "Mengen fehlen",
+                text: `${problemCounts.mengeFehlt} Position(en) haben keine gültige Menge. Ohne Menge ist Angebot, Urkalkulation und Abrechnung nicht belastbar.`,
+                nextLabel: "Mengen prüfen",
+                filter: "mengeFehlt",
+                action: "",
+                readyForExport: false,
+                shouldRecalculate: false
+            };
+        }
+        if (problemCounts.einheitFehlt > 0) {
+            return {
+                level: "critical",
+                title: "Einheiten fehlen",
+                text: `${problemCounts.einheitFehlt} Position(en) haben keine Einheit. Die KI kann diese Positionen nicht sauber kalkulieren.`,
+                nextLabel: "Einheiten prüfen",
+                filter: "einheitFehlt",
+                action: "",
+                readyForExport: false,
+                shouldRecalculate: false
+            };
+        }
+        if (problemCounts.preisFehlt > 0 || problemCounts.preisaufbauFehlt > 0) {
+            return {
+                level: "warning",
+                title: "Kalkulation unvollständig",
+                text: `${problemCounts.preisFehlt} EP fehlen, ${problemCounts.preisaufbauFehlt} Urkalkulation(en) fehlen. Starte zuerst die KI-Kalkulation für offene Positionen.`,
+                nextLabel: "KI starten",
+                filter: "preisFehlt",
+                action: "runKi",
+                readyForExport: false,
+                shouldRecalculate: false
+            };
+        }
+        if (duplicateGroups.length > 0) {
+            return {
+                level: "warning",
+                title: "Doppelte LV-Positionen erkannt",
+                text: `${duplicateGroups.length} Duplikatgruppe(n) gefunden. Vor Angebot/GAEB sollten doppelte Positionen geprüft oder gelöscht werden.`,
+                nextLabel: "Doppelte prüfen",
+                filter: "doppelte",
+                action: "selectDuplicates",
+                readyForExport: false,
+                shouldRecalculate: false
+            };
+        }
+        if (summary.critical > 0 || summary.highRisk > 0) {
+            return {
+                level: "warning",
+                title: "Prüfung erforderlich",
+                text: `${summary.critical} kritische Position(en), ${summary.highRisk} Hochrisiko-Position(en). Vor Export bitte fachlich prüfen.`,
+                nextLabel: "Prüfhinweise prüfen",
+                filter: "warnungen",
+                action: "",
+                readyForExport: false,
+                shouldRecalculate: false
+            };
+        }
+        if (summary.warnings > 0) {
+            return {
+                level: "warning",
+                title: "Kalkulation plausibel, aber mit Hinweisen",
+                text: `${summary.warnings} Position(en) haben Warnhinweise. Export ist möglich, aber vorher fachlich prüfen.`,
+                nextLabel: "Prüfhinweise prüfen",
+                filter: "warnungen",
+                action: "",
+                readyForExport: true,
+                shouldRecalculate: false
+            };
+        }
+        return {
+            level: "ok",
+            title: "Kalkulation exportbereit",
+            text: "Alle relevanten Positionen sind kalkuliert. KI neu berechnen ist aktuell nicht nötig. Nächster sinnvoller Schritt: Urkalkulation PDF, Angebot oder GAEB Export.",
+            nextLabel: "Export vorbereiten",
+            filter: "alle",
+            action: "",
+            readyForExport: true,
+            shouldRecalculate: false
+        };
+    }, [rows.length, problemCounts, duplicateGroups, summary]);
+    React.useEffect(() => {
+        const duplicateCount = duplicateGroups.reduce((sum, group) => sum + Math.max(0, group.length - 1), 0);
+        const payload = {
+            count: rows.length,
+            net: summary.net,
+            gross: summary.gross,
+            duplicateCount,
+            missingUnits: problemCounts.einheitFehlt,
+            missingQty: problemCounts.mengeFehlt,
+            missingPrice: problemCounts.preisFehlt,
+            missingBreakdown: problemCounts.preisaufbauFehlt,
+            activeKi: activeKiDecision
+        };
+        window.__RLC_KALKULATION_RUNTIME_SUMMARY__ = payload;
+        window.dispatchEvent(new CustomEvent("rlc:kalkulation-runtime-summary", {
+            detail: payload
+        }));
+    }, [
+        rows.length,
+        summary.net,
+        summary.gross,
+        duplicateGroups,
+        problemCounts.einheitFehlt,
+        problemCounts.mengeFehlt,
+        problemCounts.preisFehlt,
+        problemCounts.preisaufbauFehlt,
+        activeKiDecision
+    ]);
+    React.useEffect(() => {
+        if (!activeKiDecision)
+            return;
+        const shouldPulse = activeKiDecision.level === "critical" ||
+            activeKiDecision.level === "warning" ||
+            Boolean(activeKiDecision.action);
+        if (!shouldPulse)
+            return;
+        window.dispatchEvent(new CustomEvent("rlc:active-ki-suggestion", {
+            detail: {
+                id: "rlc:kalkulation-active-ki-bridge",
+                module: "kalkulation",
+                level: activeKiDecision.level,
+                title: activeKiDecision.title,
+                text: activeKiDecision.text,
+                nextLabel: activeKiDecision.nextLabel,
+                action: activeKiDecision.action,
+                filter: activeKiDecision.filter,
+                eventName: "rlc:kalkulation-filter",
+                autoOpen: false,
+                pulse: true
+            }
+        }));
+    }, [activeKiDecision]);
+    function sanitizeRowsForStorage(input) {
+        return input.map((r) => {
+            const kiEp = getRlcKiUnitPrice(r);
+            const x84 = getOfferUnitPrice(r);
+            const decision = (r.priceDecision || "x84");
+            let finalEp = x84;
+            if (decision === "rlcKi" && kiEp > 0)
+                finalEp = kiEp;
+            if (decision === "manual" && n(r.finalUnitPrice) > 0) {
+                finalEp = n(r.finalUnitPrice);
+            }
+            return cleanRlcKiWarningState(normalizeEliteRow({
+                ...r,
+                angebotUnitPrice: x84,
+                angebotTotal: round2(n(r.menge) * x84),
+                originalPreKiPrice: x84,
+                rlcKiUnitPrice: kiEp,
+                rlcKiTotal: kiEp > 0 ? round2(n(r.menge) * kiEp) : 0,
+                priceDifference: kiEp > 0 ? round2(kiEp - x84) : 0,
+                priceDifferencePct: kiEp > 0 && x84 > 0 ? round2((kiEp - x84) / x84 * 100) : 0,
+                priceDecision: decision,
+                finalUnitPrice: finalEp,
+                preis: finalEp,
+                gesamt: round2(n(r.menge) * finalEp)
+            }));
+        });
+    }
+    function compactKiRowsForStorage(rows, projectKeyForX84) {
+        const hasRealX84 = projectKeyForX84 ? hasRealX84ForProject(projectKeyForX84) : false;
+        return rows.map((r) => ({
+            id: r.id,
+            auftragId: r.auftragId,
+            auftragName: r.auftragName,
+            parentPosNr: r.parentPosNr,
+            posNr: r.posNr,
+            positionNumber: r.positionNumber,
+            kurztext: r.kurztext,
+            shortText: r.shortText,
+            langtext: typeof r.langtext === "string" ? r.langtext.slice(0, 1200) : r.langtext,
+            menge: r.menge,
+            quantity: r.quantity,
+            einheit: r.einheit,
+            unit: r.unit,
+            angebotUnitPrice: hasRealX84 ? r.angebotUnitPrice : 0,
+            angebotTotal: hasRealX84 ? r.angebotTotal : 0,
+            angebotTotalNet: hasRealX84 ? r.angebotTotalNet : 0,
+            originalPreKiPrice: hasRealX84 ? r.originalPreKiPrice : 0,
+            x84UnitPrice: hasRealX84 ? r.x84UnitPrice : 0,
+            x84TotalNet: hasRealX84 ? r.x84TotalNet : 0,
+            materialCost: r.materialCost,
+            laborCost: r.laborCost,
+            machineCost: r.machineCost,
+            subcontractorCost: r.subcontractorCost,
+            disposalCost: r.disposalCost,
+            overheadCost: r.overheadCost,
+            riskCost: r.riskCost,
+            profitCost: r.profitCost,
+            baseUnitPrice: r.baseUnitPrice,
+            suggestedUnitPrice: r.suggestedUnitPrice,
+            finalUnitPrice: r.finalUnitPrice,
+            rlcKiUnitPrice: r.rlcKiUnitPrice,
+            rlcKiTotal: r.rlcKiTotal,
+            totalNet: r.totalNet,
+            confidence: r.confidence,
+            riskLevel: r.riskLevel,
+            calculationStatus: r.calculationStatus,
+            status: r.status,
+            source: r.source,
+            warning: r.warning,
+            pruefHinweis: r.pruefHinweis,
+            priceDecision: r.priceDecision
+        }));
+    }
+    function persistRows(next, modeOverride) {
+        const persistKiMode = modeOverride || kiMode;
+        /*
+         * AutoKi-Schutz:
+         * Ein späterer Reload/Persist mit einem veralteten rows-Snapshot darf
+         * bereits importierte AutoKi-Positionen nicht wieder entfernen.
+         */
+        let rowsToPersist = Array.isArray(next) ? [...next] : [];
+        try {
+            const rawStored = localStorage.getItem(localBackupKey(projectKey));
+            if (rawStored) {
+                const parsedStored = JSON.parse(rawStored);
+                const storedRows = Array.isArray(parsedStored) ?
+                    parsedStored :
+                    Array.isArray(parsedStored?.rows) ?
+                        parsedStored.rows :
+                        [];
+                const existingKeys = new Set(rowsToPersist.map((row) => String(row?.posNr || row?.pos || row?.id || "").
+                    trim().
+                    toUpperCase()));
+                const protectedAutoKiRows = storedRows.
+                    filter((row) => {
+                    const source = String(row?.source || "").toLowerCase();
+                    return (row?.importedFromAutoKi === true ||
+                        source.includes("auto-ki"));
+                }).
+                    filter((row) => {
+                    const key = String(row?.posNr ||
+                        row?.pos ||
+                        row?.id ||
+                        "").
+                        trim().
+                        toUpperCase();
+                    if (!key || existingKeys.has(key))
+                        return false;
+                    existingKeys.add(key);
+                    return true;
+                }).
+                    map((row) => normalizeEliteRow(row));
+                if (protectedAutoKiRows.length) {
+                    rowsToPersist = [...rowsToPersist, ...protectedAutoKiRows];
+                }
+            }
+        }
+        catch (error) {
+            console.warn("AutoKi persist protection failed", error);
+        }
+        const safeInput = sanitizeRowsForStorage(rowsToPersist);
+        const normalized = safeInput.map((r, idx) => {
+            const originalRow = Array.isArray(rowsToPersist) ?
+                rowsToPersist[idx] || {} :
+                {};
+            const explicitOfferEp = n(r.angebotUnitPrice) ||
+                n(r.originalPreKiPrice) ||
+                n(r.x84UnitPrice);
+            // X84/Angebot bleibt immer Vergleichsbasis.
+            // Es darf aber niemals als RLC-KI-Preis interpretiert werden.
+            const angebotEp = explicitOfferEp;
+            const rlcKiEp = n(r.rlcKiUnitPrice) ||
+                0;
+            const decision = (r.priceDecision || (persistKiMode === "offer-check" ? "x84" : "rlcKi"));
+            const manualEp = n(r.finalUnitPrice);
+            const finalEp = decision === "rlcKi" && rlcKiEp > 0 ?
+                rlcKiEp :
+                decision === "manual" && manualEp > 0 ?
+                    manualEp :
+                    angebotEp > 0 ?
+                        angebotEp :
+                        rlcKiEp;
+            const diff = angebotEp > 0 && rlcKiEp > 0 ? round2(rlcKiEp - angebotEp) : 0;
+            const diffPct = angebotEp > 0 && rlcKiEp > 0 ? round2(diff / angebotEp * 100) : 0;
+            return cleanRlcKiWarningState(normalizeEliteRow({
+                ...r,
+                // Nur echte Angebotsbasis speichern; nie aus KI-Preis ableiten.
+                angebotUnitPrice: angebotEp,
+                angebotTotal: angebotEp > 0 ? round2(n(r.menge) * angebotEp) : 0,
+                originalPreKiPrice: angebotEp,
+                x84UnitPrice: angebotEp,
+                rlcKiUnitPrice: rlcKiEp,
+                rlcKiTotal: rlcKiEp > 0 ? round2(n(r.menge) * rlcKiEp) : 0,
+                priceDifference: diff,
+                priceDifferencePct: diffPct,
+                finalUnitPrice: finalEp,
+                preis: finalEp,
+                gesamt: round2(n(r.menge) * finalEp),
+                priceDecision: decision
+            }));
+        });
+        const normalizedWithX84Learning = normalized.map((r, idx) => {
+            const originalRow = Array.isArray(next) ? next[idx] || {} : {};
+            return {
+                ...r,
+                x84BenchmarkEp: originalRow.x84BenchmarkEp ?? r.x84BenchmarkEp,
+                x84BenchmarkGp: originalRow.x84BenchmarkGp ?? r.x84BenchmarkGp,
+                x84BenchmarkDiffPct: originalRow.x84BenchmarkDiffPct ?? r.x84BenchmarkDiffPct,
+                x84BenchmarkDiffGp: originalRow.x84BenchmarkDiffGp ?? r.x84BenchmarkDiffGp,
+                x84BenchmarkStatus: originalRow.x84BenchmarkStatus ?? r.x84BenchmarkStatus,
+                x84BenchmarkLearningSignal: originalRow.x84BenchmarkLearningSignal ?? r.x84BenchmarkLearningSignal,
+                x84BenchmarkUsedAsPrice: originalRow.x84BenchmarkUsedAsPrice ?? r.x84BenchmarkUsedAsPrice,
+                x84BenchmarkNote: originalRow.x84BenchmarkNote ?? r.x84BenchmarkNote
+            };
+        });
+        setRows(normalizedWithX84Learning);
+        try {
+            localStorage.setItem(localBackupKey(projectKey), JSON.stringify({
+                meta: {
+                    projectKey,
+                    projectTitle,
+                    updatedAt: new Date().toISOString(),
+                    kiMode: persistKiMode
+                },
+                rows: compactKiRowsForStorage(normalizedWithX84Learning, projectKey).map((r, idx) => ({
+                    ...r,
+                    x84BenchmarkEp: normalizedWithX84Learning[idx]?.x84BenchmarkEp,
+                    x84BenchmarkGp: normalizedWithX84Learning[idx]?.x84BenchmarkGp,
+                    x84BenchmarkDiffPct: normalizedWithX84Learning[idx]?.x84BenchmarkDiffPct,
+                    x84BenchmarkDiffGp: normalizedWithX84Learning[idx]?.x84BenchmarkDiffGp,
+                    x84BenchmarkStatus: normalizedWithX84Learning[idx]?.x84BenchmarkStatus,
+                    x84BenchmarkLearningSignal: normalizedWithX84Learning[idx]?.x84BenchmarkLearningSignal,
+                    x84BenchmarkUsedAsPrice: normalizedWithX84Learning[idx]?.x84BenchmarkUsedAsPrice,
+                    x84BenchmarkNote: normalizedWithX84Learning[idx]?.x84BenchmarkNote
+                }))
+            }));
+        }
+        catch (e) {
+            console.warn("[KI] local backup failed:", e);
+        }
+    }
+    React.useEffect(() => {
+        if (!projectKey || recipesHandoffDoneRef.current)
+            return;
+        if (typeof localStorage === "undefined")
+            return;
+        const storageKey = "rlc_recipes_to_kalkulation_pending";
+        try {
+            const raw = localStorage.getItem(storageKey);
+            if (!raw)
+                return;
+            const parsed = JSON.parse(raw);
+            if (parsed?.projectKey && String(parsed.projectKey) !== String(projectKey))
+                return;
+            if (parsed?.mode === "global-lv" ||
+                parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V3" ||
+                parsed?.version === "RLC_RECIPES_TRANSFER_GLOBAL_LV_V4") {
+                // RLC FIX: Globale Urkalkulation darf die Kalkulation niemals automatisch übernehmen.
+                // Sie bleibt nur Preisaufbau/Analyse. Einzelposition-Handoff bleibt unverändert.
+                localStorage.removeItem(storageKey);
+                recipesHandoffDoneRef.current = true;
+                return;
+            }
+            if (parsed?.version !== "RLC_RECIPES_TRANSFER_V1")
+                return;
+            const src = parsed?.row || {};
+            const posNr = String(src.posNr || src.pos || "").trim();
+            const kurztext = String(src.kurztext || src.title || "Rezeptposition").trim();
+            const einheit = String(src.einheit || src.unit || "m").trim();
+            const menge = n(src.menge ?? src.qty);
+            const ep = round2(n(src.ep ?? src.preis ?? src.unitPrice));
+            const gp = round2(ep * menge);
+            if (!kurztext || !einheit || menge <= 0 || ep <= 0)
+                return;
+            const recipeRow = normalizeEliteRow({
+                ...src,
+                id: src.id || `recipes-${Date.now()}`,
+                posNr,
+                kurztext,
+                langtext: src.langtext || "",
+                einheit,
+                menge,
+                preis: ep,
+                ep,
+                gp,
+                rlcKiUnitPrice: ep,
+                rlcKiTotal: gp,
+                source: "recipes-urkalkulation-v21",
+                calculationStatus: "recipes_ready",
+                riskLevel: "low",
+                priceBreakdown: Array.isArray(src.priceBreakdown) ?
+                    src.priceBreakdown :
+                    Array.isArray(src.recipeLines) ?
+                        src.recipeLines :
+                        [],
+                recipeLines: Array.isArray(src.recipeLines) ?
+                    src.recipeLines :
+                    Array.isArray(src.priceBreakdown) ?
+                        src.priceBreakdown :
+                        [],
+                recipeSummary: src.recipeSummary || null,
+                aiReason: "Aus Recipes / Urkalkulation in Kalkulation mit KI übernommen."
+            });
+            recipesHandoffDoneRef.current = true;
+            let baseRows = Array.isArray(rows) ? rows : [];
+            try {
+                const backupRaw = localStorage.getItem(localBackupKey(projectKey));
+                const backupParsed = backupRaw ? JSON.parse(backupRaw) : null;
+                const backupRows = Array.isArray(backupParsed?.rows) ?
+                    backupParsed.rows.map((r) => normalizeEliteRow(r)) :
+                    Array.isArray(backupParsed) ?
+                        backupParsed.map((r) => normalizeEliteRow(r)) :
+                        [];
+                // Wichtig:
+                // Bei Einzel-Übergabe aus Recipes darf NIEMALS das komplette LV aus Recipes
+                // als Kalkulationsbasis verwendet werden, sonst wird der gesamte Netto-Betrag ersetzt.
+                // Basis bleibt immer die bestehende Kalkulation. Nur recipeRow wird danach eingemischt.
+                if (backupRows.length >= baseRows.length) {
+                    baseRows = backupRows;
+                }
+            }
+            catch {
+                // lokaler Backup konnte nicht gelesen werden
+            }
+            const existingIdx = baseRows.findIndex((r) => {
+                const a = String(r.posNr || r.pos || "").trim();
+                return posNr && a === posNr;
+            });
+            const recipePriceBreakdown = Array.isArray(recipeRow.priceBreakdown) ?
+                recipeRow.priceBreakdown :
+                [];
+            const recipeLines = Array.isArray(recipeRow.recipeLines) ?
+                recipeRow.recipeLines :
+                recipePriceBreakdown;
+            const next = existingIdx >= 0 ?
+                baseRows.map((r, idx) => {
+                    if (idx !== existingIdx)
+                        return r;
+                    const mengeProtected = n(r.menge ?? recipeRow.menge);
+                    const urkEp = round2(sumBreakdown(normalizeBreakdown(recipePriceBreakdown)));
+                    return normalizeEliteRow({
+                        ...r,
+                        // Nur Preisaufbau / Urkalkulation aus Recipes übernehmen.
+                        priceBreakdown: recipePriceBreakdown,
+                        recipeLines,
+                        recipeSummary: recipeRow.recipeSummary || r.recipeSummary || null,
+                        urkalkulationUnitPrice: urkEp,
+                        urkalkulationTotal: round2(mengeProtected * urkEp),
+                        // Kalkulationspreise bleiben geschützt.
+                        finalUnitPrice: r.finalUnitPrice,
+                        preis: r.preis,
+                        ep: r.ep,
+                        suggestedUnitPrice: r.suggestedUnitPrice,
+                        rlcKiUnitPrice: r.rlcKiUnitPrice,
+                        rlcKiTotal: r.rlcKiTotal,
+                        gesamt: r.gesamt,
+                        totalNet: r.totalNet,
+                        gp: r.gp,
+                        source: r.source,
+                        calculationStatus: r.calculationStatus,
+                        riskLevel: r.riskLevel,
+                        aiReason: appendInfoText(r.aiReason, "Preisaufbau aus Recipes für diese Position übernommen. Kalkulationspreis unverändert.")
+                    });
+                }) :
+                [recipeRow, ...baseRows];
+            const safeNext = normalizeKiWarningRows(next);
+            setRows(safeNext);
+            persistRows(safeNext, "new-calculation");
+            // RLC FIX: kein LV.setAll hier. Einzel-Übergabe darf andere Urkalkulationen nicht löschen.
+            const selected = safeNext.find((r) => String(r.id || "") === String(recipeRow.id || "")) ||
+                safeNext.find((r) => String(r.posNr || "") === String(recipeRow.posNr || "")) ||
+                recipeRow;
+            setSelectedId(String(selected.id || recipeRow.id || ""));
+            setLvPage(1);
+            setServerStatus("Urkalkulation übernommen");
+            window.setTimeout(() => setServerStatus(""), 2500);
+            localStorage.removeItem(storageKey);
+        }
+        catch {
+            // Übergabe darf Kalkulation nicht blockieren.
+        }
+    }, [projectKey, rows]);
+    React.useEffect(() => {
+        if (!projectKey)
+            return;
+        const handoffKey = "rlc_auto_ki_kalkulation_import_v1";
+        const rawHandoff = localStorage.getItem(handoffKey);
+        if (!rawHandoff)
+            return;
+        // Bei Projekten mit bestehendem LV zuerst den normalen
+        // Kalkulations-Speicherstand vollständig laden lassen.
+        if (!rows.length)
+            return;
+        try {
+            const parsed = JSON.parse(rawHandoff);
+            const importedRows = Array.isArray(parsed?.rows) ? parsed.rows : [];
+            if (!importedRows.length) {
+                localStorage.removeItem(handoffKey);
+                return;
+            }
+            const handoffProjectKeys = new Set([
+                parsed?.projectKey,
+                parsed?.projectId
+            ].
+                map((value) => String(value || "").trim().toUpperCase()).
+                filter(Boolean));
+            const activeProjectKeys = new Set([projectKey].
+                map((value) => String(value || "").trim().toUpperCase()).
+                filter(Boolean));
+            const projectMatches = !handoffProjectKeys.size ||
+                Array.from(handoffProjectKeys).some((value) => activeProjectKeys.has(value));
+            if (!projectMatches)
+                return;
+            const normalizedImported = importedRows.
+                map((input, index) => {
+                const posNr = String(input?.posNr ||
+                    input?.pos ||
+                    `AUTO.${String(index + 1).padStart(3, "0")}`).trim();
+                const menge = n(input?.menge ?? input?.qty);
+                const einheit = String(input?.einheit || input?.unit || "m").trim() || "m";
+                return normalizeEliteRow({
+                    ...input,
+                    id: String(input?.id || "").trim() ||
+                        `AUTO-KI-${Date.now()}-${index + 1}`,
+                    posNr,
+                    pos: posNr,
+                    kurztext: String(input?.kurztext || input?.text || "").trim() ||
+                        `Neue Position ${posNr}`,
+                    text: String(input?.text || input?.kurztext || "").trim() ||
+                        `Neue Position ${posNr}`,
+                    langtext: String(input?.langtext || input?.aiReason || "").trim(),
+                    einheit,
+                    unit: einheit,
+                    menge,
+                    qty: menge,
+                    ep: 0,
+                    unitPrice: 0,
+                    finalUnitPrice: 0,
+                    rlcKiUnitPrice: 0,
+                    rlcKiTotal: 0,
+                    gesamt: 0,
+                    totalNet: 0,
+                    source: "auto-ki-plan-foto",
+                    calculationStatus: "needs_review",
+                    status: "needs_review",
+                    riskLevel: "high",
+                    warning: String(input?.warning || "").trim() ||
+                        "Neue Position aus KI-Mengenermittlung. Preis und Urkalkulation prüfen.",
+                    pruefHinweis: String(input?.pruefHinweis || "").trim() ||
+                        "Aus Plan-/Fotoanalyse übernommen. Noch nicht kalkuliert.",
+                    aiReason: String(input?.aiReason || input?.langtext || "").trim() ||
+                        "Neue Position aus KI-Mengenermittlung",
+                    importedFromAutoKi: true,
+                    importedAt: String(input?.importedAt || "").trim() ||
+                        new Date().toISOString()
+                });
+            }).
+                filter((row) => {
+                return Boolean(String(row.posNr || "").trim() ||
+                    String(row.kurztext || "").trim());
+            });
+            if (!normalizedImported.length) {
+                localStorage.removeItem(handoffKey);
+                return;
+            }
+            const existingKeys = new Set(rows.map((row) => String(row?.posNr ||
+                row?.pos ||
+                row?.id ||
+                "").
+                trim().
+                toUpperCase()));
+            let nextAutoNumber = 1;
+            const getNextFreeAutoPos = () => {
+                while (existingKeys.has(`AUTO.${String(nextAutoNumber).padStart(3, "0")}`)) {
+                    nextAutoNumber += 1;
+                }
+                const value = `AUTO.${String(nextAutoNumber).padStart(3, "0")}`;
+                nextAutoNumber += 1;
+                existingKeys.add(value);
+                return value;
+            };
+            const uniqueImported = normalizedImported.map((row) => {
+                const originalKey = String(row?.posNr ||
+                    row?.pos ||
+                    row?.id ||
+                    "").
+                    trim().
+                    toUpperCase();
+                if (originalKey && !existingKeys.has(originalKey)) {
+                    existingKeys.add(originalKey);
+                    return row;
+                }
+                const newPosNr = getNextFreeAutoPos();
+                return normalizeEliteRow({
+                    ...row,
+                    id: `AUTO-KI-${crypto.randomUUID()}`,
+                    posNr: newPosNr,
+                    pos: newPosNr,
+                    aiReason: appendInfoText(String(row?.aiReason || ""), `Ursprüngliche Position ${originalKey || "ohne Nummer"} war bereits vorhanden. Neue Nummer: ${newPosNr}.`),
+                    importedFromAutoKi: true
+                });
+            });
+            const next = normalizeKiWarningRows([
+                ...rows,
+                ...uniqueImported
+            ]);
+            persistRows(next, "new-calculation");
+            setSelectedId(String(uniqueImported[0]?.id || ""));
+            setLvPage(1);
+            localStorage.removeItem(handoffKey);
+            setServerStatus(`${uniqueImported.length} AutoKI-Position(en) in Kalkulation übernommen`);
+            window.setTimeout(() => setServerStatus(""), 3500);
+        }
+        catch (error) {
+            console.error("AutoKI Kalkulation handoff failed", error);
+            setServerStatus("AutoKI-Positionen konnten nicht übernommen werden");
+            window.setTimeout(() => setServerStatus(""), 3500);
+        }
+    }, [projectKey, rows.length]);
+    function updateRow(id, patch) {
+        const next = rows.map((r) => r.id === id ? normalizeEliteRow({ ...r, ...patch }) : r);
+        persistRows(next);
+    }
+    function refreshAuftraege() {
+        setAuftraege(AuftragStore.list());
+    }
+    function createUnterauftrag() {
+        const name = window.prompt("Name des Unterauftrags, z.B. Wasserleitung, Kanalbau, Straßenbau");
+        if (!name?.trim())
+            return;
+        const haupt = AuftragStore.ensureDefault(projectKey);
+        const created = AuftragStore.createUnterauftrag(name.trim(), haupt.id, projectKey);
+        refreshAuftraege();
+        setSelectedAuftragId(created.id);
+    }
+    function addRow() {
+        const haupt = AuftragStore.ensureDefault(projectKey);
+        const auftrag = selectedAuftragId && selectedAuftrag ?
+            selectedAuftrag :
+            haupt;
+        sessionStorage.setItem("rlc_recipes_new_position_context_v1", JSON.stringify({
+            source: "kalkulationMitKI",
+            projectKey,
+            projectTitle,
+            auftragId: auftrag.id,
+            auftragName: auftrag.name,
+            auftragType: auftrag.type,
+            returnTo: "/kalkulation/mit-ki",
+            ts: new Date().toISOString()
+        }));
+        window.location.href = "/kalkulation/rezepte";
+    }
+    function deleteRow(id) {
+        if (!window.confirm("Position wirklich löschen?"))
+            return;
+        const next = rows.filter((r) => r.id !== id);
+        try {
+            localStorage.removeItem(KI_HANDOFF_KEY);
+            sessionStorage.removeItem(HANDOFF_CONSUMED_TS_KEY);
+        }
+        catch {
+            //
+        }
+        try {
+            const store = LV;
+            if (typeof store.remove === "function")
+                store.remove(id);
+            if (typeof store.delete === "function")
+                store.delete(id);
+            if (typeof store.deleteById === "function")
+                store.deleteById(id);
+        }
+        catch {
+            //
+        }
+        persistRows(next);
+        if (selectedId === id) {
+            setSelectedId(next[0]?.id || "");
+        }
+        setServerStatus("Position gelöscht und gespeichert");
+        setTimeout(() => setServerStatus(""), 1800);
+    }
+    function updateBreakdownLine(lineId, patch) {
+        if (!selectedRow)
+            return;
+        const nextLines = (selectedRow.priceBreakdown || []).map((line) => {
+            if (line.id !== lineId)
+                return line;
+            const next = normalizeBreakdownLine({ ...line, ...patch });
+            return {
+                ...next,
+                total: round2(n(next.qty) * n(next.price))
+            };
+        });
+        const ep = sumBreakdown(nextLines);
+        updateRow(selectedRow.id, {
+            priceBreakdown: nextLines,
+            finalUnitPrice: ep,
+            preis: ep,
+            suggestedUnitPrice: ep
+        });
+    }
+    function catalogGroupToBreakdownGroup(group) {
+        if (group === "Arbeiter")
+            return "Personal";
+        if (group === "Maschinen")
+            return "Maschinen";
+        if (group === "Material")
+            return "Material";
+        return "Fremdleistung";
+    }
+    function addCatalogRowToSelected(row) {
+        if (!selectedRow) {
+            alert("Bitte zuerst eine LV-Position auswählen.");
+            return;
+        }
+        const nextLine = normalizeBreakdownLine({
+            group: catalogGroupToBreakdownGroup(row.gruppe),
+            name: row.kurztext || row.posNr || "Artikel",
+            unit: row.einheit || selectedRow.einheit || "EH",
+            qty: 1,
+            price: n(row.ep),
+            total: n(row.ep),
+            note: row.posNr ? `Artikel-Nr.: ${row.posNr}` : ""
+        });
+        const nextLines = [...(selectedRow.priceBreakdown || []), nextLine];
+        const ep = sumBreakdown(nextLines);
+        updateRow(selectedRow.id, {
+            priceBreakdown: nextLines,
+            finalUnitPrice: ep,
+            preis: ep,
+            suggestedUnitPrice: ep,
+            calculationStatus: "manual",
+            aiReason: appendInfoText(selectedRow.aiReason, `Artikel "${row.kurztext}" wurde aus der Ressourcenliste in die Urkalkulation übernommen.`)
+        });
+    }
+    function addBreakdownLine() {
+        if (!selectedRow)
+            return;
+        const nextLines = [
+            ...(selectedRow.priceBreakdown || []),
+            normalizeBreakdownLine({
+                group: "Material",
+                name: "Neue Preiszeile",
+                unit: selectedRow.einheit || "EH",
+                qty: 1,
+                price: 0
+            })
+        ];
+        updateRow(selectedRow.id, {
+            priceBreakdown: nextLines,
+            finalUnitPrice: sumBreakdown(nextLines),
+            preis: sumBreakdown(nextLines)
+        });
+    }
+    function deleteBreakdownLine(lineId) {
+        if (!selectedRow)
+            return;
+        const nextLines = (selectedRow.priceBreakdown || []).filter((line) => line.id !== lineId);
+        updateRow(selectedRow.id, {
+            priceBreakdown: nextLines,
+            finalUnitPrice: sumBreakdown(nextLines),
+            preis: sumBreakdown(nextLines)
+        });
+    }
+    function regenerateSelectedBreakdown() {
+        if (!selectedRow)
+            return;
+        const next = buildAutomaticPriceBreakdown(selectedRow);
+        const ep = sumBreakdown(next);
+        updateRow(selectedRow.id, {
+            priceBreakdown: next,
+            finalUnitPrice: ep,
+            preis: ep,
+            suggestedUnitPrice: ep,
+            aiReason: appendInfoText(selectedRow.aiReason, "KI hat den Preisaufbau dieser Position neu erzeugt.")
+        });
+    }
+    function saveAllToKnowledge() {
+        const count = saveRowsToDatenbank(rows, projectKey, projectTitle);
+        setServerStatus(`✅ ${count} Position(en) in Kalkulationsdatenbank übertragen`);
+        setTimeout(() => setServerStatus(""), 3500);
+    }
+    function saveSelectedToKnowledge() {
+        if (!selectedRow)
+            return;
+        const count = saveRowsToDatenbank([selectedRow], projectKey, projectTitle);
+        setServerStatus(`${count} Position in Kalkulationsdatenbank gespeichert`);
+        setTimeout(() => setServerStatus(""), 2500);
+    }
+    function applyKnowledge(match) {
+        if (!selectedRow)
+            return;
+        updateRow(selectedRow.id, datenbankEntryToRowPatch(match.eintrag));
+        KalkulationsDatenbank.markUsed(match.eintrag.id);
+        setServerStatus("Kalkulationsdatenbankwert übernommen");
+        setTimeout(() => setServerStatus(""), 2000);
+    }
+    function applyKiSuggestedPrice(rowId) {
+        const row = rows.find((r) => r.id === rowId);
+        if (!row)
+            return;
+        const kiEp = getRlcKiUnitPrice(row);
+        const current = getUnitPrice(row);
+        if (kiEp <= 0) {
+            alert("Kein gültiger RLC-KI-Vorschlag vorhanden.");
+            return;
+        }
+        updateRow(rowId, {
+            preis: kiEp,
+            finalUnitPrice: kiEp,
+            suggestedUnitPrice: kiEp,
+            priceDecision: "rlcKi",
+            calculationStatus: "ok",
+            riskLevel: row.riskLevel === "high" ? "medium" : row.riskLevel,
+            warning: "",
+            aiReason: appendInfoText(row.aiReason, `RLC-KI-Vorschlag manuell als finaler EP übernommen: ${money(current)} → ${money(kiEp)}.`)
+        });
+        setServerStatus("RLC-KI-Preis übernommen");
+        setTimeout(() => setServerStatus(""), 2200);
+    }
+    function kiCloneRows(input) {
+        try {
+            return JSON.parse(JSON.stringify(input));
+        }
+        catch {
+            return input.map((r) => ({ ...r }));
+        }
+    }
+    function kiRowLabel(row) {
+        const pos = String(row.posNr || "").trim();
+        const text = String(row.kurztext || "").trim();
+        if (pos && text)
+            return `Pos. ${pos} – ${text.slice(0, 80)}`;
+        if (pos)
+            return `Pos. ${pos}`;
+        if (text)
+            return text.slice(0, 90);
+        return String(row.id || "Position");
+    }
+    function kiEmitStart(title) {
+        window.dispatchEvent(new CustomEvent("rlc:ki-action-start", {
+            detail: {
+                title,
+                text: title
+            }
+        }));
+    }
+    let kiSmoothProgressTimer = null;
+    function kiEmitProgress(progress, text) {
+        window.dispatchEvent(new CustomEvent("rlc:ki-action-progress", {
+            detail: {
+                progress,
+                text
+            }
+        }));
+    }
+    function kiStopSmoothProgress() {
+        if (kiSmoothProgressTimer !== null) {
+            window.clearInterval(kiSmoothProgressTimer);
+            kiSmoothProgressTimer = null;
+        }
+    }
+    function kiStartSmoothProgress(args) {
+        const startedAt = Date.now();
+        const from = Math.max(0, Math.min(100, args.from));
+        const to = Math.max(from, Math.min(96, args.to));
+        const duration = Math.max(args.estimatedMs, 8000);
+        kiEmitProgress(from, args.text);
+        kiSmoothProgressTimer = window.setInterval(() => {
+            const elapsed = Date.now() - startedAt;
+            const ratio = Math.min(elapsed / duration, 0.97);
+            const eased = 1 - Math.pow(1 - ratio, 2);
+            const progress = Math.min(to, Math.round(from + (to - from) * eased));
+            kiEmitProgress(progress, args.text);
+        }, 650);
+    }
+    function kiClassifyRow(row) {
+        const pos = String(row.posNr || "").trim();
+        const kurzRaw = String(row.kurztext || "").trim();
+        const langRaw = String(row.langtext || "").trim();
+        const text = `${kurzRaw} ${langRaw}`.toLowerCase().replace(/\s+/g, " ").trim();
+        const unit = String(row.einheit || "").trim();
+        const menge = n(row.menge);
+        const lightEp = n(row.angebotUnitPrice) ||
+            n(row.originalPreKiPrice) ||
+            n(row.finalUnitPrice) ||
+            n(row.preis) ||
+            n(row.suggestedUnitPrice) ||
+            0;
+        const pureChapter = /^\d{1,2}$/.test(pos) ||
+            /^\d{1,2}\.0{1,3}$/.test(pos);
+        const structuralText = /^titel\s*\d*$/i.test(kurzRaw) ||
+            /^abschnitt\s*\d*$/i.test(kurzRaw) ||
+            /^kapitel\s*\d*$/i.test(kurzRaw) ||
+            /^los\s*\d*$/i.test(kurzRaw) ||
+            text.includes("zwischensumme") ||
+            text.includes("gesamtsumme") ||
+            text.includes("summe titel");
+        const hasRealWorkText = kurzRaw.length >= 8 ||
+            langRaw.length >= 18 ||
+            /(aushub|abfuhr|verfüll|verfull|pflaster|asphalt|rohr|leitung|speedpipe|kabel|schacht|beton|schalung|bewehrung|plani|sandbett|tragschicht|deckschicht)/i.test(`${kurzRaw} ${langRaw}`);
+        if (structuralText)
+            return "structure";
+        if (pureChapter && !hasRealWorkText)
+            return "structure";
+        if (!hasRealWorkText || !unit || menge <= 0)
+            return "incomplete";
+        if (lightEp <= 0 && (!Array.isArray(row.priceBreakdown) || row.priceBreakdown.length === 0)) {
+            return "incomplete";
+        }
+        if (row.riskLevel === "high" || row.calculationStatus === "critical") {
+            return "review";
+        }
+        return "real-position";
+    }
+    function kiIsRealCalcRow(row) {
+        return !kiIsStructuralRow(row);
+    }
+    function kiSourceShort(row) {
+        const source = String(row?.source || "").toLowerCase();
+        if (source.includes("company-calibration"))
+            return "RLC-KI · Firmenkalibrierung";
+        if (source.includes("database"))
+            return "Datenbank";
+        if (source.includes("openai"))
+            return "OpenAI";
+        if (source.includes("technical-parser"))
+            return "RLC-KI · technische Kalkulation";
+        if (source.includes("recipe"))
+            return "RLC-KI · Rezept/Urkalkulation";
+        if (source.includes("rule"))
+            return "RLC-KI · Regelwerk";
+        if (source.includes("x84"))
+            return "X84 / Angebotsbasis";
+        return "RLC-KI";
+    }
+    function kiRowShortStatus(row) {
+        const source = kiSourceShort(row);
+        const ep = getUnitPrice(row);
+        const gp = lineNet(row);
+        const status = row?.riskLevel === "high" || row?.calculationStatus === "warning" ?
+            "prüfpflichtig" :
+            row?.calculationStatus === "critical" ?
+                "kritisch prüfen" :
+                "berechnet";
+        return `${source} · ${status} · EP ${money(ep)} · GP ${money(gp)}`;
+    }
+    function compactKiWarningText(value) {
+        const raw = String(value || "").replace(/\s+/g, " ").trim();
+        if (!raw)
+            return "";
+        const parts = raw.
+            split(" · ").
+            map((x) => x.trim()).
+            filter(Boolean);
+        const important = parts.filter((x) => {
+            const t = x.toLowerCase();
+            return (t.includes("plausibilitätsgrenze") ||
+                t.includes("stabilitätsbremse") ||
+                t.includes("datenbankpreis") ||
+                t.includes("regionalen unterschieden") ||
+                t.includes("prüfen"));
+        });
+        const selected = (important.length ? important : parts).slice(0, 2);
+        let out = selected.join(" · ");
+        if (out.length > 260)
+            out = out.slice(0, 257).trimEnd() + "…";
+        return out;
+    }
+    function kiBuildChangeLog(beforeRows, afterRows) {
+        const beforeMap = new Map(beforeRows.map((r) => [r.id, r]));
+        const afterMap = new Map(afterRows.map((r) => [r.id, r]));
+        const changes = [];
+        const warnings = [];
+        const unchanged = [];
+        const countRelevantRows = (list) => list.filter((r) => !kiIsStructuralRow(r));
+        const countMissingPrice = (list) => countRelevantRows(list).filter((r) => round2(getUnitPrice(r)) <= 0).length;
+        const countMissingUrkalkulation = (list) => countRelevantRows(list).filter((r) => !Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0).length;
+        const countMissingUnit = (list) => countRelevantRows(list).filter((r) => !String(r.einheit || "").trim()).length;
+        const countMissingQty = (list) => countRelevantRows(list).filter((r) => n(r.menge) <= 0).length;
+        const beforeMissingPrice = countMissingPrice(beforeRows);
+        const afterMissingPrice = countMissingPrice(afterRows);
+        const beforeMissingUrk = countMissingUrkalkulation(beforeRows);
+        const afterMissingUrk = countMissingUrkalkulation(afterRows);
+        const beforeMissingUnit = countMissingUnit(beforeRows);
+        const afterMissingUnit = countMissingUnit(afterRows);
+        const beforeMissingQty = countMissingQty(beforeRows);
+        const afterMissingQty = countMissingQty(afterRows);
+        if (beforeMissingPrice !== afterMissingPrice) {
+            changes.push(`EP fehlend reduziert: ${beforeMissingPrice} → ${afterMissingPrice}.`);
+        }
+        if (beforeMissingUrk !== afterMissingUrk) {
+            changes.push(`Urkalkulation fehlend reduziert: ${beforeMissingUrk} → ${afterMissingUrk}.`);
+        }
+        if (beforeMissingUnit !== afterMissingUnit) {
+            changes.push(`Einheiten fehlend reduziert: ${beforeMissingUnit} → ${afterMissingUnit}.`);
+        }
+        if (beforeMissingQty !== afterMissingQty) {
+            changes.push(`Mengen fehlend reduziert: ${beforeMissingQty} → ${afterMissingQty}.`);
+        }
+        for (const after of afterRows) {
+            if (kiIsStructuralRow(after))
+                continue;
+            const before = beforeMap.get(after.id);
+            if (!before) {
+                changes.push(`${kiRowLabel(after)} neu hinzugefügt.`);
+                continue;
+            }
+            const beforePrice = round2(getUnitPrice(before));
+            const afterPrice = round2(getUnitPrice(after));
+            if (beforePrice !== afterPrice) {
+                changes.push(`${kiRowLabel(after)} – Preis geändert: ${money(beforePrice)} → ${money(afterPrice)}.`);
+            }
+            const beforeText = String(before.kurztext || "").trim();
+            const afterText = String(after.kurztext || "").trim();
+            if (beforeText !== afterText) {
+                changes.push(!beforeText && afterText ?
+                    `${kiRowLabel(after)} – Kurztext ergänzt.` :
+                    `${kiRowLabel(after)} – Kurztext geändert.`);
+            }
+            const beforeLang = String(before.langtext || "").trim();
+            const afterLang = String(after.langtext || "").trim();
+            if (beforeLang !== afterLang) {
+                changes.push(!beforeLang && afterLang ?
+                    `${kiRowLabel(after)} – Langtext ergänzt.` :
+                    `${kiRowLabel(after)} – Langtext geändert.`);
+            }
+            if (String(before.einheit || "").trim() !== String(after.einheit || "").trim()) {
+                changes.push(`${kiRowLabel(after)} – Einheit geändert: ${String(before.einheit || "leer")} → ${String(after.einheit || "leer")}.`);
+            }
+            if (round2(n(before.menge)) !== round2(n(after.menge))) {
+                changes.push(`${kiRowLabel(after)} – Menge geändert: ${qty(before.menge)} → ${qty(after.menge)}.`);
+            }
+            const beforeBreakdown = before.priceBreakdown?.length || 0;
+            const afterBreakdown = after.priceBreakdown?.length || 0;
+            if (beforeBreakdown !== afterBreakdown) {
+                changes.push(beforeBreakdown === 0 && afterBreakdown > 0 ?
+                    `${kiRowLabel(after)} – Urkalkulation / Preisaufbau ergänzt (${afterBreakdown} Ansatz/Ansätze).` :
+                    `${kiRowLabel(after)} – Urkalkulation geändert (${beforeBreakdown} → ${afterBreakdown} Ansätze).`);
+            }
+            else if (beforeBreakdown > 0 && afterBreakdown > 0) {
+                const beforeSum = round2((before.priceBreakdown || []).reduce((sum, x) => sum + n(x.total), 0));
+                const afterSum = round2((after.priceBreakdown || []).reduce((sum, x) => sum + n(x.total), 0));
+                if (beforeSum !== afterSum) {
+                    changes.push(`${kiRowLabel(after)} – Urkalkulation Summe geändert: ${money(beforeSum)} → ${money(afterSum)}.`);
+                }
+            }
+            if (before.calculationStatus !== after.calculationStatus) {
+                changes.push(`${kiRowLabel(after)} – Status geändert: ${statusLabel(before.calculationStatus)} → ${statusLabel(after.calculationStatus)}.`);
+            }
+            if (before.riskLevel !== after.riskLevel) {
+                changes.push(`${kiRowLabel(after)} – Risiko geändert: ${riskLabel(before.riskLevel)} → ${riskLabel(after.riskLevel)}.`);
+            }
+            if (after.warning && after.warning !== before.warning) {
+                const compactWarning = compactKiWarningText(after.warning);
+                if (compactWarning) {
+                    warnings.push(`${kiRowLabel(after)} – ${compactWarning}`);
+                }
+            }
+        }
+        for (const before of beforeRows) {
+            if (kiIsStructuralRow(before))
+                continue;
+            if (!afterMap.has(before.id)) {
+                changes.push(`${kiRowLabel(before)} gelöscht.`);
+            }
+        }
+        if (!changes.length && !warnings.length) {
+            const allComplete = afterMissingPrice === 0 &&
+                afterMissingUrk === 0 &&
+                afterMissingUnit === 0 &&
+                afterMissingQty === 0;
+            unchanged.push(allComplete ?
+                "Prüfung abgeschlossen: Alle sichtbaren LV-Positionen haben EP, Menge, Einheit und Urkalkulation." :
+                "Keine sichtbaren Änderungen erkannt. Einzelne Positionen müssen noch manuell geprüft werden.");
+        }
+        return { changes, warnings, unchanged };
+    }
+    function kiEmitResult(title, beforeRows, afterRows, summary) {
+        const log = kiBuildChangeLog(beforeRows, afterRows);
+        const protocol = [];
+        const checkedCount = typeof summary?.checkedCount === "number" ? summary.checkedCount : afterRows.length;
+        const skippedCount = typeof summary?.skippedCount === "number" ? summary.skippedCount : 0;
+        const serverRequestedCount = typeof summary?.serverRequestedCount === "number" ? summary.serverRequestedCount : 0;
+        const serverReturnedCount = typeof summary?.serverReturnedCount === "number" ? summary.serverReturnedCount : 0;
+        const localFallbackCount = typeof summary?.localFallbackCount === "number" ? summary.localFallbackCount : 0;
+        protocol.push(`Geprüfte LV-Positionen: ${checkedCount}.`);
+        if (skippedCount > 0) {
+            protocol.push(`Bereits vollständig übernommen: ${skippedCount}.`);
+        }
+        if (serverRequestedCount > 0) {
+            protocol.push(`An Server-KI gesendet: ${serverRequestedCount}.`);
+        }
+        if (serverReturnedCount > 0) {
+            protocol.push(`Vom Server/OpenAI berechnet: ${serverReturnedCount}.`);
+        }
+        if (localFallbackCount > 0 && serverReturnedCount === 0) {
+            protocol.push(`Lokaler Fallback verwendet: ${localFallbackCount}.`);
+        }
+        if (serverRequestedCount === 0 && skippedCount > 0) {
+            protocol.push("Keine Server-KI nötig: vollständige Positionen übernommen.");
+        }
+        const cleanWarnings = log.warnings.filter((w) => {
+            const x = String(w || "").toLowerCase();
+            if (!x.trim())
+                return false;
+            // Nicht als Warnung anzeigen, wenn Server/OpenAI erfolgreich gerechnet hat.
+            if (serverReturnedCount > 0) {
+                if (x.includes("openai-schätzung verwendet"))
+                    return false;
+                if (x.includes("regel-engine-fallback verwendet"))
+                    return false;
+                if (x.includes("lokaler fallback verwendet"))
+                    return false;
+                if (x.includes("ki-cache verwendet"))
+                    return false;
+            }
+            return true;
+        });
+        const unchanged = !log.changes.length && !cleanWarnings.length && protocol.length ?
+            ["Prüfung abgeschlossen. Keine weiteren sichtbaren Änderungen nötig."] :
+            log.unchanged;
+        window.dispatchEvent(new CustomEvent("rlc:ki-action-result", {
+            detail: {
+                title,
+                changes: [...protocol, ...log.changes],
+                warnings: cleanWarnings,
+                unchanged
+            }
+        }));
+    }
+    function buildNoX84KiPayloadRows(rows) {
+        return (Array.isArray(rows) ? rows : []).map((r, index) => ({
+            id: String(r.id ?? r.rowId ?? `row-${index + 1}`),
+            posNr: String(r.posNr ?? r.pos ?? r.positionNumber ?? r.position ?? ""),
+            kurztext: String(r.kurztext ?? r.shortText ?? r.text ?? ""),
+            langtext: String(r.langtext ?? r.longText ?? r.description ?? ""),
+            einheit: String(r.einheit ?? r.unit ?? ""),
+            menge: Number(r.menge ?? r.quantity ?? r.qty ?? 0) || 0
+        }));
+    }
+    function buildRlcX84DiffReport(rows, projectKey) {
+        const list = Array.isArray(rows) ? rows : [];
+        const toNum = (v) => {
+            const x = Number(v ?? 0);
+            return Number.isFinite(x) ? x : 0;
+        };
+        const qtyOf = (r) => toNum(r.menge) || toNum(r.quantity) || toNum(r.qty);
+        const rlcEpOf = (r) => toNum(r.finalUnitPrice) || toNum(r.rlcKiUnitPrice) || toNum(r.unitPrice) || toNum(r.preis);
+        const rlcGpOf = (r) => toNum(r.totalNet) ||
+            toNum(r.rlcKiTotal) ||
+            toNum(r.totalPrice) ||
+            toNum(r.gesamt) ||
+            Math.round(rlcEpOf(r) * qtyOf(r) * 100) / 100;
+        const x84EpOf = (r) => toNum(r.x84UnitPrice) || toNum(r.angebotUnitPrice) || toNum(r.originalPreKiPrice);
+        const x84GpOf = (r) => {
+            const gp = toNum(r.x84Total) || toNum(r.angebotTotal) || toNum(r.originalPreKiTotal);
+            if (gp > 0)
+                return gp;
+            const ep = x84EpOf(r);
+            const qty = qtyOf(r);
+            return ep > 0 && qty > 0 ? Math.round(ep * qty * 100) / 100 : 0;
+        };
+        const compact = (r) => {
+            const qty = qtyOf(r);
+            const x84Ep = x84EpOf(r);
+            const rlcEp = rlcEpOf(r);
+            const x84Gp = x84GpOf(r);
+            const rlcGp = rlcGpOf(r);
+            const diffGp = Math.round((rlcGp - x84Gp) * 100) / 100;
+            const diffPct = x84Gp > 0 ? Math.round(diffGp / x84Gp * 10000) / 100 : 0;
+            let status = "OK";
+            if (Math.abs(diffPct) >= 30 || Math.abs(diffGp) >= 10000)
+                status = "Kritisch";
+            else if (diffPct > 10)
+                status = "RLC höher > 10%";
+            else if (diffPct < -10)
+                status = "RLC niedriger > 10%";
+            else if (Math.abs(diffPct) > 5)
+                status = "Prüfen";
+            return {
+                id: r.id,
+                posNr: r.posNr ?? r.pos,
+                kurztext: r.kurztext ?? r.text ?? "",
+                einheit: r.einheit ?? r.unit ?? "",
+                menge: qty,
+                x84Ep,
+                rlcEp,
+                x84Gp,
+                rlcGp,
+                diffPct,
+                diffGp,
+                status,
+                source: r.source,
+                riskLevel: r.riskLevel,
+                calculationStatus: r.calculationStatus,
+                warning: r.warning
+            };
+        };
+        const comparable = list.map(compact).filter((r) => r.x84Ep > 0 && r.rlcEp > 0 && r.menge > 0);
+        const totalX84 = comparable.reduce((s, r) => s + r.x84Gp, 0);
+        const totalRlc = comparable.reduce((s, r) => s + r.rlcGp, 0);
+        const delta = totalRlc - totalX84;
+        const critical = comparable.
+            filter((r) => r.status === "Kritisch").
+            sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+        const rlcHigher = comparable.
+            filter((r) => r.diffGp > 0 && r.status !== "OK").
+            sort((a, b) => b.diffGp - a.diffGp);
+        const rlcLower = comparable.
+            filter((r) => r.diffGp < 0 && r.status !== "OK").
+            sort((a, b) => a.diffGp - b.diffGp);
+        const over10000 = comparable.
+            filter((r) => Math.abs(r.diffGp) >= 10000).
+            sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+        return {
+            ok: true,
+            projectKey,
+            createdAt: new Date().toISOString(),
+            count: comparable.length,
+            totalX84: Math.round(totalX84 * 100) / 100,
+            totalRlc: Math.round(totalRlc * 100) / 100,
+            delta: Math.round(delta * 100) / 100,
+            deltaPct: totalX84 > 0 ? Math.round(delta / totalX84 * 10000) / 100 : 0,
+            summary: {
+                criticalCount: critical.length,
+                rlcHigherCount: rlcHigher.length,
+                rlcLowerCount: rlcLower.length,
+                over10000Count: over10000.length
+            },
+            topByAbsDiff: [...comparable].sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp)).slice(0, 150),
+            critical: critical.slice(0, 150),
+            rlcHigher: rlcHigher.slice(0, 150),
+            rlcLower: rlcLower.slice(0, 150),
+            over10000: over10000.slice(0, 150)
+        };
+    }
+    function rlcBuildX84DiffSummarySafe(items) {
+        const n = (v) => {
+            const x = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
+            return Number.isFinite(x) ? x : 0;
+        };
+        const rows = Array.isArray(items) ? items : [];
+        let comparableCount = 0;
+        let rlcHigherCount = 0;
+        let rlcLowerCount = 0;
+        let within10Count = 0;
+        let outside10Count = 0;
+        let over20Count = 0;
+        let over10000Count = 0;
+        let criticalCount = 0;
+        for (const r of rows) {
+            const qty = n(r.menge ?? r.quantity);
+            const x84Ep = n(r.x84Ep ??
+                r.x84UnitPrice ??
+                r.angebotUnitPrice ??
+                r.offerUnitPrice ??
+                r.originalPreKiPrice ??
+                r.reverseUrkalkulation?.x84UnitPrice ??
+                r.dbComparability?.x84UnitPrice);
+            const rlcEp = n(r.rlcEp ??
+                r.rlcKiUnitPrice ??
+                r.finalUnitPrice ??
+                r.suggestedUnitPrice ??
+                r.preis ??
+                r.unitPrice);
+            if (!(qty > 0 && x84Ep > 0 && rlcEp > 0))
+                continue;
+            comparableCount++;
+            const x84Gp = qty * x84Ep;
+            const rlcGp = qty * rlcEp;
+            const diffGp = rlcGp - x84Gp;
+            const diffPct = x84Gp !== 0 ? diffGp / x84Gp * 100 : 0;
+            if (diffPct > 10) {
+                rlcHigherCount++;
+                outside10Count++;
+            }
+            else if (diffPct < -10) {
+                rlcLowerCount++;
+                outside10Count++;
+            }
+            else {
+                within10Count++;
+            }
+            if (Math.abs(diffPct) > 20)
+                over20Count++;
+            if (Math.abs(diffGp) > 10000)
+                over10000Count++;
+            if (Math.abs(diffPct) > 20 || Math.abs(diffGp) > 10000) {
+                criticalCount++;
+            }
+        }
+        return {
+            count: comparableCount,
+            comparableCount,
+            outside10Count,
+            rlcHigherCount,
+            rlcLowerCount,
+            within10Count,
+            over20Count,
+            over10000Count,
+            criticalCount
+        };
+    }
+    function saveRlcX84LearningReport(rows, projectKey) {
+        const safeRows = Array.isArray(rows) ? rows : [];
+        const entries = safeRows.
+            filter((r) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none").
+            map((r) => {
+            const x84Ep = Number(r.x84BenchmarkEp || 0);
+            const rlcEp = Number(r.rlcKiUnitPrice || r.finalUnitPrice || r.preis || 0);
+            const qty = Number(r.menge || r.quantity || 0);
+            const diffPct = Number(r.x84BenchmarkDiffPct || 0);
+            const diffGp = Number(r.x84BenchmarkDiffGp || 0);
+            let bucket = r.x84BenchmarkLearningSignal;
+            if (Math.abs(diffPct) >= 50 && Math.abs(diffGp) >= 500) {
+                bucket = "technical_review_required";
+            }
+            return {
+                posNr: r.posNr,
+                kurztext: String(r.kurztext || "").slice(0, 160),
+                einheit: r.einheit,
+                menge: qty,
+                x84Ep,
+                rlcEp,
+                diffPct,
+                diffGp,
+                status: r.x84BenchmarkStatus,
+                signal: r.x84BenchmarkLearningSignal,
+                bucket,
+                usedAsPrice: false,
+                source: String(r.source || "").slice(0, 120)
+            };
+        }).
+            sort((a, b) => Math.abs(b.diffGp || 0) - Math.abs(a.diffGp || 0)).
+            slice(0, 200);
+        const summary = {
+            stableReferenceCount: entries.filter((x) => x.bucket === "stable_reference").length,
+            softLearningCandidateCount: entries.filter((x) => x.bucket === "soft_learning_candidate").length,
+            lowPriorityLearningCandidateCount: entries.filter((x) => x.bucket === "low_priority_learning_candidate").length,
+            strongLearningCandidateCount: entries.filter((x) => x.bucket === "strong_learning_candidate").length,
+            technicalReviewRequiredCount: entries.filter((x) => x.bucket === "technical_review_required").length
+        };
+        const report = {
+            ok: true,
+            projectKey,
+            createdAt: new Date().toISOString(),
+            count: entries.length,
+            summary,
+            entries
+        };
+        // Der vollstaendige Learning-Stand wird serverseitig gespeichert.
+        // Kein grosses localStorage-Backup mehr: verhindert QuotaExceededError
+        // und doppelte Browser-Persistenz.
+        console.log("[RLC-KI] X84 Learning Report prepared for server workflow", {
+            projectKey,
+            count: report.count,
+            summary: report.summary
+        });
+        return report;
+    }
+    const RLC_LEARNING_CACHE_TTL_MS = 15000;
+    const rlcLearningStateCache = new Map();
+    const rlcLearningStateRequests = new Map();
+    async function loadRlcX84LearningState(projectKey, options = {}) {
+        const key = String(projectKey || "").trim();
+        if (!key)
+            return {};
+        const cached = rlcLearningStateCache.get(key);
+        if (!options.force &&
+            cached &&
+            Date.now() - cached.loadedAt < RLC_LEARNING_CACHE_TTL_MS) {
+            return cached.value;
+        }
+        const pending = rlcLearningStateRequests.get(key);
+        if (!options.force && pending)
+            return pending;
+        const request = (async () => {
+            try {
+                const token = getAuthToken();
+                const response = await fetch(apiUrl(`/api/kalkulation/storage/learning/${encodeURIComponent(key)}`), {
+                    method: "GET",
+                    credentials: "include",
+                    cache: "no-store",
+                    headers: {
+                        Accept: "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`Learning State konnte nicht geladen werden: HTTP ${response.status}`);
+                }
+                const payload = await response.json();
+                const value = payload?.data && typeof payload.data === "object" ? payload.data : {};
+                rlcLearningStateCache.set(key, { value, loadedAt: Date.now() });
+                return value;
+            }
+            catch (error) {
+                console.error("[RLC-KI] Learning State load failed", error);
+                return cached?.value || {};
+            }
+            finally {
+                rlcLearningStateRequests.delete(key);
+            }
+        })();
+        rlcLearningStateRequests.set(key, request);
+        return request;
+    }
+    async function saveRlcX84LearningState(projectKey, state) {
+        const response = await fetch(apiUrl(`/api/kalkulation/storage/learning/${encodeURIComponent(projectKey)}/save`), {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                ...(getAuthToken() ?
+                    { Authorization: `Bearer ${getAuthToken()}` } :
+                    {})
+            },
+            body: JSON.stringify({
+                data: state
+            })
+        });
+        if (!response.ok) {
+            const text = await response.text().catch(() => "");
+            throw new Error(`Learning State konnte nicht gespeichert werden: HTTP ${response.status} ${text}`);
+        }
+        const payload = await response.json();
+        const savedState = payload?.data && typeof payload.data === "object" ? payload.data : state;
+        rlcLearningStateCache.set(String(projectKey), {
+            value: savedState,
+            loadedAt: Date.now()
+        });
+        return savedState;
+    }
+    async function saveRlcX84LearningApprovalDraft(rows, projectKey) {
+        const safeRows = Array.isArray(rows) ? rows : [];
+        const candidates = safeRows.
+            filter((r) => r?.x84BenchmarkLearningSignal && r.x84BenchmarkLearningSignal !== "none").
+            map((r) => {
+            const x84Ep = Number(r.x84BenchmarkEp || 0);
+            const rlcEp = Number(r.rlcKiUnitPrice || r.finalUnitPrice || r.preis || 0);
+            const qty = Number(r.menge || r.quantity || 0);
+            const diffPct = Number(r.x84BenchmarkDiffPct || 0);
+            const diffGp = Number(r.x84BenchmarkDiffGp || 0);
+            const absPct = Math.abs(diffPct);
+            const absGp = Math.abs(diffGp);
+            let approvalLevel = "manual_review";
+            if (r.x84BenchmarkLearningSignal === "stable_reference" && absPct <= 10) {
+                approvalLevel = "safe_review";
+            }
+            else if (r.x84BenchmarkLearningSignal === "soft_learning_candidate" && absPct <= 15) {
+                approvalLevel = "soft_review";
+            }
+            if (absPct >= 50 || absGp >= 50000 || r.x84BenchmarkUsedAsPrice === true) {
+                approvalLevel = "blocked_review";
+            }
+            return {
+                id: r.id,
+                posNr: r.posNr,
+                kurztext: String(r.kurztext || "").slice(0, 160),
+                einheit: r.einheit,
+                menge: qty,
+                x84Ep,
+                rlcEp,
+                diffPct,
+                diffGp,
+                source: String(r.source || "").slice(0, 140),
+                riskLevel: r.riskLevel || "",
+                calculationStatus: r.calculationStatus || "",
+                learningSignal: r.x84BenchmarkLearningSignal,
+                benchmarkStatus: r.x84BenchmarkStatus,
+                approvalLevel,
+                decision: "pending",
+                approvedForCompanyDb: false,
+                approvedForGlobalKnowledge: false,
+                usedAsPrice: false,
+                note: "Nur Freigabe-Entwurf. X84 wird nicht automatisch als Preis übernommen und nicht automatisch in die Datenbank geschrieben."
+            };
+        }).
+            sort((a, b) => {
+            const levelOrder = {
+                safe_review: 1,
+                soft_review: 2,
+                manual_review: 3,
+                blocked_review: 4
+            };
+            const la = levelOrder[a.approvalLevel] || 9;
+            const lb = levelOrder[b.approvalLevel] || 9;
+            if (la !== lb)
+                return la - lb;
+            return Math.abs(b.diffGp || 0) - Math.abs(a.diffGp || 0);
+        }).
+            slice(0, 200);
+        const summary = {
+            total: candidates.length,
+            safeReviewCount: candidates.filter((x) => x.approvalLevel === "safe_review").length,
+            softReviewCount: candidates.filter((x) => x.approvalLevel === "soft_review").length,
+            manualReviewCount: candidates.filter((x) => x.approvalLevel === "manual_review").length,
+            blockedReviewCount: candidates.filter((x) => x.approvalLevel === "blocked_review").length,
+            approvedForCompanyDbCount: 0,
+            approvedForGlobalKnowledgeCount: 0
+        };
+        const draft = {
+            ok: true,
+            projectKey,
+            createdAt: new Date().toISOString(),
+            mode: "approval_draft_only",
+            autoWriteToDatabase: false,
+            x84UsedAsPrice: false,
+            summary,
+            candidates
+        };
+        try {
+            const currentState = await loadRlcX84LearningState(projectKey);
+            await saveRlcX84LearningState(projectKey, {
+                ...currentState,
+                projectKey,
+                draft,
+                updatedAt: new Date().toISOString()
+            });
+            console.log("[RLC-KI] X84 Learning Approval Draft saved on server", {
+                projectKey,
+                summary
+            });
+        }
+        catch (error) {
+            console.error("[RLC-KI] X84 Learning Approval Draft server save failed", error);
+        }
+        return draft;
+    }
+    function applyX84BenchmarkLearningToRows(rows, diffReport) {
+        const list = Array.isArray(diffReport?.rows) ? diffReport.rows :
+            Array.isArray(diffReport?.allRows) ? diffReport.allRows :
+                Array.isArray(diffReport?.topByAbsDiff) ? diffReport.topByAbsDiff :
+                    [];
+        const byPos = new Map();
+        for (const d of list) {
+            const pos = String(d?.posNr ?? d?.pos ?? "").trim();
+            if (pos)
+                byPos.set(pos, d);
+        }
+        return (Array.isArray(rows) ? rows : []).map((r) => {
+            const pos = String(r?.posNr ?? r?.pos ?? "").trim();
+            const d = byPos.get(pos);
+            if (!d)
+                return r;
+            const x84Ep = Number(d.x84Ep ?? d.x84UnitPrice ?? d.angebotUnitPrice ?? 0);
+            const rlcEp = Number(d.rlcEp ?? r.rlcKiUnitPrice ?? r.finalUnitPrice ?? 0);
+            const diffPct = Number(d.diffPct ?? 0);
+            const diffGp = Number(d.diffGp ?? 0);
+            if (!x84Ep || !rlcEp)
+                return r;
+            const absPct = Math.abs(diffPct);
+            const absGp = Math.abs(diffGp);
+            let status = "ok";
+            let signal = "none";
+            if (absPct <= 10) {
+                status = "within_10_percent";
+                signal = "stable_reference";
+            }
+            else if (absPct <= 15) {
+                status = "review_light";
+                signal = "soft_learning_candidate";
+            }
+            else if (absGp <= 500) {
+                status = "review_small_amount";
+                signal = "low_priority_learning_candidate";
+            }
+            else {
+                status = "review_required";
+                signal = "strong_learning_candidate";
+            }
+            return {
+                ...r,
+                x84BenchmarkEp: x84Ep,
+                x84BenchmarkDiffPct: diffPct,
+                x84BenchmarkDiffGp: diffGp,
+                x84BenchmarkStatus: status,
+                x84BenchmarkLearningSignal: signal,
+                x84BenchmarkUsedAsPrice: false,
+                x84BenchmarkNote: "X84 wurde nur als Benchmark/Lernsignal gespeichert. Der Preis wurde nicht blind aus X84 übernommen."
+            };
+        });
+    }
+    function saveRlcX84DiffReport(rows, projectKey) {
+        const baseReport = buildRlcX84DiffReport(rows, projectKey);
+        const safeSummary = rlcBuildX84DiffSummarySafe(rows);
+        const report = {
+            ...baseReport,
+            count: safeSummary.count,
+            summary: safeSummary
+        };
+        const storageKey = `rlc_last_ki_x84_diff_report_v1:${projectKey}`;
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(report));
+            console.log("[RLC-KI] X84 Diff Report saved", {
+                storageKey,
+                count: report.count,
+                totalX84: report.totalX84,
+                totalRlc: report.totalRlc,
+                delta: report.delta,
+                deltaPct: report.deltaPct,
+                summary: report.summary
+            });
+            console.table(report.topByAbsDiff.slice(0, 30));
+        }
+        catch (e) {
+            console.warn("[RLC-KI] could not save X84 Diff Report", e);
+        }
+        return report;
+    }
+    function scheduleKiAutoSaveAfterCalculation(snapshotRows, modeOverride) {
+        if (!projectKey || typeof window === "undefined")
+            return;
+        const safeRows = sanitizeRowsForStorage(snapshotRows);
+        const rlcKiNet = round2(safeRows.reduce((sum, r) => sum + rlcKiLineNet(r), 0));
+        const angebotNet = round2(safeRows.reduce((sum, r) => sum + offerLineNet(r), 0));
+        const finalNet = round2(safeRows.reduce((sum, r) => {
+            const qty = n(r?.menge ?? r?.quantity);
+            const ep = n(r?.finalUnitPrice) ||
+                n(r?.preis) ||
+                n(r?.rlcKiUnitPrice) ||
+                n(r?.suggestedUnitPrice) ||
+                n(r?.unitPrice);
+            return sum + qty * ep;
+        }, 0));
+        const payload = {
+            ok: true,
+            projectKey,
+            projectCode: projectKey,
+            projectTitle,
+            savedAt: new Date().toISOString(),
+            source: "rlc-ki-autosave",
+            mode: modeOverride || kiMode,
+            rows: safeRows,
+            summary: {
+                rowCount: safeRows.length,
+                angebotNet,
+                rlcKiNet,
+                totalNet: finalNet > 0 ? finalNet : rlcKiNet,
+                net: finalNet > 0 ? finalNet : rlcKiNet,
+                netto: finalNet > 0 ? finalNet : rlcKiNet
+            },
+            totals: {
+                angebotNet,
+                rlcKiNet,
+                totalNet: finalNet > 0 ? finalNet : rlcKiNet,
+                net: finalNet > 0 ? finalNet : rlcKiNet,
+                netto: finalNet > 0 ? finalNet : rlcKiNet
+            },
+            meta: {
+                mwst,
+                globalMarkup,
+                projectKey,
+                projectTitle
+            }
+        };
+        try {
+            localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+            localStorage.setItem(`rlc_kalkulation_mit_ki_elite_v1:${projectKey}`, JSON.stringify(payload));
+            setServerStatus("Automatisch gespeichert");
+            window.setTimeout(() => setServerStatus(""), 1800);
+        }
+        catch {
+            // Lokaler Autosave darf die Kalkulation niemals blockieren.
+        } // Server-Snapshot ist ab jetzt die Wahrheit für Mobile.
+        // Wichtig: Es werden snapshotRows gespeichert, nicht der evtl. veraltete React-State.
+        void fetch(`${API_BASE}/api/kalkulation/storage/ki/${encodeURIComponent(projectKey)}/save`, {
+            method: "POST",
+            headers: authJsonHeaders(),
+            body: JSON.stringify({ data: payload })
+        }).
+            then(async (res) => {
+            if (!res.ok) {
+                const txt = await res.text().catch(() => "");
+                throw new Error(txt || `HTTP ${res.status}`);
+            }
+            setServerStatus("Server-Snapshot gespeichert");
+            window.setTimeout(() => setServerStatus(""), 2200);
+        }).
+            catch((e) => {
+            console.warn("[RLC-KI] Server-Snapshot konnte nicht gespeichert werden", e);
+            setServerStatus("Lokal gespeichert – Server-Snapshot fehlgeschlagen");
+            window.setTimeout(() => setServerStatus(""), 3500);
+        });
+    }
+    function showOfferCheckModal(input) {
+        if (typeof document === "undefined") {
+            alert([
+                "Angebot prüfen – Vergleich ohne Neuberechnung",
+                "",
+                `Vergleichbare Positionen: ${input.comparable.length}`,
+                `X84 / Angebot netto: ${money(input.offerTotal)}`,
+                `RLC-KI netto: ${money(input.rlcTotal)}`,
+                `Differenz: ${money(input.diffTotal)} (${input.diffPctTotal}%)`,
+                "",
+                "Wichtig: Es wurde keine neue Kalkulation erstellt und kein Preis geändert."
+            ].
+                join("\n"));
+            return;
+        }
+        const esc = (value) => String(value ?? "").
+            replace(/&/g, "&amp;").
+            replace(/</g, "&lt;").
+            replace(/>/g, "&gt;").
+            replace(/"/g, "&quot;");
+        const topRows = [...input.comparable].
+            sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp)).
+            slice(0, 15);
+        const overlay = document.createElement("div");
+        overlay.style.position = "fixed";
+        overlay.style.inset = "0";
+        overlay.style.zIndex = "99999";
+        overlay.style.background = "rgba(15,23,42,0.55)";
+        overlay.style.display = "flex";
+        overlay.style.alignItems = "center";
+        overlay.style.justifyContent = "center";
+        overlay.style.padding = "24px";
+        overlay.innerHTML = `
+    <div style="width:min(1100px,96vw);max-height:90vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.35);display:flex;flex-direction:column;">
+      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+        <div style="font-size:21px;font-weight:900;color:#0f172a;">Angebot prüfen</div>
+        <div style="font-size:13px;color:#475569;margin-top:6px;">
+          Vergleich RLC-KI gegen X84 / Angebot. Keine Neuberechnung, keine Preisänderung.
+        </div>
+      </div>
+
+      <div style="padding:20px 24px;overflow:auto;">
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px;">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">X84 / Angebot netto</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(input.offerTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">RLC-KI netto</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(input.rlcTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Differenz</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(input.diffTotal)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;">${input.diffPctTotal}%</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;background:#fff;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Außerhalb ±10%</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${input.outside10}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;">RLC höher ${input.rlcHigher} · niedriger ${input.rlcLower}</div>
+          </div>
+        </div>
+
+        <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:10px;">
+          Größte Abweichungen
+        </div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead style="background:#f8fafc;color:#334155;">
+              <tr>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Pos.</th>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Kurztext</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">EP X84</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">EP RLC-KI</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Diff. GP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${topRows.
+            map((x) => `
+                    <tr>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:800;">${esc(x.row.posNr)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;">${esc(x.row.kurztext)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.offerEp)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.rlcEp)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:800;">${money(x.diffGp)}</td>
+                      <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${x.diffPct}%</td>
+                    </tr>
+                  `).
+            join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:14px;font-size:13px;color:#475569;line-height:1.45;">
+          Hinweis: Diese Prüfung verändert keine Preise. Die offizielle RLC-Kalkulation bleibt unverändert.
+        </div>
+      </div>
+
+      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;gap:10px;">
+        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
+          Schließen
+        </button>
+      </div>
+    </div>
+  `;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('[data-action="close"]')?.addEventListener("click", close);
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay)
+                close();
+        });
+    }
+    function runOfferCheckOnly() {
+        if (!rows.length) {
+            alert("Keine Positionen vorhanden.");
+            return;
+        }
+        const hasX84 = hasRealX84ForProject(projectKey);
+        if (!hasX84) {
+            alert("Keine echte X84-/Angebotsbasis geladen. Angebot prüfen ist nur als Vergleich nach X84/Angebot sinnvoll.");
+            return;
+        }
+        const realRows = rows.filter((r) => kiIsRealCalcRow(r));
+        const comparable = realRows.
+            map((r) => {
+            const qty = n(r.menge);
+            const offerEp = getOfferUnitPrice(r);
+            const rlcEp = getRlcKiUnitPrice(r);
+            const offerGp = round2(qty * offerEp);
+            const rlcGp = round2(qty * rlcEp);
+            const diffGp = round2(rlcGp - offerGp);
+            const diffPct = offerGp > 0 ? round2(diffGp / offerGp * 100) : 0;
+            return {
+                row: r,
+                offerEp,
+                rlcEp,
+                offerGp,
+                rlcGp,
+                diffGp,
+                diffPct
+            };
+        }).
+            filter((x) => x.offerEp > 0 && x.rlcEp > 0);
+        const offerTotal = round2(comparable.reduce((sum, x) => sum + x.offerGp, 0));
+        const rlcTotal = round2(comparable.reduce((sum, x) => sum + x.rlcGp, 0));
+        const diffTotal = round2(rlcTotal - offerTotal);
+        const diffPctTotal = offerTotal > 0 ? round2(diffTotal / offerTotal * 100) : 0;
+        const outside10 = comparable.filter((x) => Math.abs(x.diffPct) > 10).length;
+        const rlcHigher = comparable.filter((x) => x.diffGp > 0).length;
+        const rlcLower = comparable.filter((x) => x.diffGp < 0).length;
+        setServerStatus(`Angebot geprüft: ${comparable.length} Positionen · Differenz ${money(diffTotal)} (${diffPctTotal}%)`);
+        window.setTimeout(() => setServerStatus(""), 4500);
+        showOfferCheckModal({
+            comparable,
+            offerTotal,
+            rlcTotal,
+            diffTotal,
+            diffPctTotal,
+            outside10,
+            rlcHigher,
+            rlcLower
+        });
+    }
+    function showExpertReviewModal(currentRows, expertRows) {
+        if (typeof document === "undefined") {
+            alert("KI Expertprüfung abgeschlossen. Änderungen wurden nicht automatisch übernommen.");
+            return;
+        }
+        const esc = (value) => String(value ?? "").
+            replace(/&/g, "&amp;").
+            replace(/</g, "&lt;").
+            replace(/>/g, "&gt;").
+            replace(/"/g, "&quot;");
+        const oldById = new Map(currentRows.map((r) => [String(r.id), r]));
+        const changes = expertRows.
+            map((next) => {
+            const old = oldById.get(String(next.id));
+            if (!old)
+                return null;
+            const oldEp = getRlcKiUnitPrice(old) || n(old.finalUnitPrice);
+            const newEp = getRlcKiUnitPrice(next) || n(next.finalUnitPrice);
+            const qty = n(next.menge);
+            const diffEp = round2(newEp - oldEp);
+            const diffGp = round2(diffEp * qty);
+            const diffPct = oldEp > 0 ? round2(diffEp / oldEp * 100) : 0;
+            return {
+                row: next,
+                oldEp,
+                newEp,
+                diffEp,
+                diffGp,
+                diffPct
+            };
+        }).
+            filter((x) => x && Math.abs(x.diffGp) > 0.01).
+            sort((a, b) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
+        const oldTotal = round2(currentRows.reduce((sum, r) => sum + n(r.rlcKiTotal ?? lineNet(r)), 0));
+        const newTotal = round2(expertRows.reduce((sum, r) => sum + n(r.rlcKiTotal ?? lineNet(r)), 0));
+        const diffTotal = round2(newTotal - oldTotal);
+        const diffPctTotal = oldTotal > 0 ? round2(diffTotal / oldTotal * 100) : 0;
+        const overlay = document.createElement("div");
+        overlay.style.position = "fixed";
+        overlay.style.inset = "0";
+        overlay.style.zIndex = "99999";
+        overlay.style.background = "rgba(15,23,42,0.55)";
+        overlay.style.display = "flex";
+        overlay.style.alignItems = "center";
+        overlay.style.justifyContent = "center";
+        overlay.style.padding = "24px";
+        overlay.innerHTML = `
+    <div style="width:min(1100px,96vw);max-height:90vh;overflow:hidden;background:#fff;border-radius:18px;box-shadow:0 24px 80px rgba(15,23,42,.35);display:flex;flex-direction:column;">
+      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+        <div style="font-size:21px;font-weight:900;color:#0f172a;">KI Expertprüfung</div>
+        <div style="font-size:13px;color:#475569;margin-top:6px;">
+          Tiefprüfung abgeschlossen. Die Kalkulation wurde nicht automatisch geändert.
+        </div>
+      </div>
+
+      <div style="padding:20px 24px;overflow:auto;">
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px;">
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Aktuelle RLC-KI</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(oldTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Expertprüfung Vorschlag</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(newTotal)}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Differenz</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${money(diffTotal)}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:2px;">${diffPctTotal}%</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:14px;">
+            <div style="font-size:12px;color:#64748b;font-weight:800;">Geänderte Positionen</div>
+            <div style="font-size:20px;font-weight:900;color:#0f172a;margin-top:4px;">${changes.length}</div>
+          </div>
+        </div>
+
+        <div style="font-size:15px;font-weight:900;color:#0f172a;margin-bottom:10px;">Größte Änderungen</div>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead style="background:#f8fafc;color:#334155;">
+              <tr>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Pos.</th>
+                <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Kurztext</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Alt EP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Expert EP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">Diff. GP</th>
+                <th style="text-align:right;padding:10px;border-bottom:1px solid #e5e7eb;">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${changes.slice(0, 20).map((x) => `
+                <tr>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:800;">${esc(x.row.posNr)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;">${esc(x.row.kurztext)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.oldEp)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${money(x.newEp)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:800;">${money(x.diffGp)}</td>
+                  <td style="padding:10px;border-bottom:1px solid #f1f5f9;text-align:right;">${x.diffPct}%</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:14px;font-size:13px;color:#475569;line-height:1.45;">
+          Hinweis: Die Expertprüfung ist ein Prüfbericht. Erst mit “Änderungen übernehmen” wird die Kalkulation ersetzt.
+        </div>
+      </div>
+
+      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;gap:10px;">
+        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
+          Nicht übernehmen
+        </button>
+        <button data-action="apply" style="padding:10px 16px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
+          Änderungen übernehmen
+        </button>
+      </div>
+    </div>
+  `;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('[data-action="close"]')?.addEventListener("click", close);
+        overlay.querySelector('[data-action="apply"]')?.addEventListener("click", () => {
+            persistRows(expertRows, "new-calculation");
+            scheduleKiAutoSaveAfterCalculation(expertRows, "new-calculation");
+            setServerStatus("Expertprüfung übernommen");
+            window.setTimeout(() => setServerStatus(""), 2500);
+            close();
+        });
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay)
+                close();
+        });
+    }
+    async function runEliteCalculation(forceRecalculate = false, expertMode = false, modeOverride) {
+        const effectiveKiMode = modeOverride || kiMode;
+        if (!rows.length) {
+            alert("Keine Positionen vorhanden.");
+            return;
+        }
+        const preparedRows = rows.map((row) => kiIsStructuralRow(row) ?
+            normalizeEliteRow(kiPrepareStructuralRow(row)) :
+            row);
+        const rowsForKi = preparedRows.
+            filter((row) => kiIsRealCalcRow(row) && (forceRecalculate || expertMode || !row.preisManuellGeprueft)).
+            map((row) => {
+            const storedOfferUnitPrice = effectiveKiMode === "offer-check" ?
+                n(row.angebotUnitPrice) ||
+                    n(row.originalPreKiPrice) ||
+                    n(row.x84UnitPrice) ||
+                    n(row.reverseUrkalkulation?.x84UnitPrice) ||
+                    n(row.dbComparability?.x84UnitPrice) :
+                0;
+            const calculationStartEp = effectiveKiMode === "offer-check" && storedOfferUnitPrice > 0 ?
+                storedOfferUnitPrice :
+                0;
+            return {
+                ...row,
+                // Angebot prüfen: echte Angebotsbasis mitsenden.
+                // Neue Kalkulation: keine Angebotsbasis mitsenden, RLC kalkuliert aus Null.
+                angebotUnitPrice: storedOfferUnitPrice,
+                angebotTotal: storedOfferUnitPrice > 0 ? round2(n(row.menge) * storedOfferUnitPrice) : 0,
+                originalPreKiPrice: storedOfferUnitPrice,
+                x84UnitPrice: storedOfferUnitPrice,
+                preis: calculationStartEp,
+                finalUnitPrice: calculationStartEp,
+                // Neue Kalkulation ignoriert alte KI-/manuelle Preiswerte vollständig.
+                rlcKiUnitPrice: effectiveKiMode === "offer-check" ? n(row.rlcKiUnitPrice) : 0,
+                rlcKiTotal: effectiveKiMode === "offer-check" ? n(row.rlcKiTotal) : 0,
+                suggestedUnitPrice: effectiveKiMode === "offer-check" ? n(row.suggestedUnitPrice) : 0,
+                baseUnitPrice: effectiveKiMode === "offer-check" ? n(row.baseUnitPrice) : 0,
+                priceDecision: effectiveKiMode === "offer-check" ? row.priceDecision : "rlcKi",
+                source: effectiveKiMode === "offer-check" ? row.source : undefined
+            };
+        });
+        const beforeRows = kiCloneRows(preparedRows);
+        /*
+         * Performance-Regel:
+         * - normale KI / Neue Kalkulation: große Server-Batches, KEIN OpenAI-Massenlauf
+         * - Expertprüfung: kleinere Batches, OpenAI erlaubt
+         */
+        const batchSize = expertMode ? 20 : 50;
+        const batches = [];
+        for (let i = 0; i < rowsForKi.length; i += batchSize) {
+            batches.push(rowsForKi.slice(i, i + batchSize));
+        }
+        try {
+            const fullRequestRows = effectiveKiMode === "offer-check" ?
+                rowsForKi :
+                buildNoX84KiPayloadRows(rowsForKi);
+            const fullWithX84Fields = fullRequestRows.filter((r) => Number(r.x84UnitPrice ?? 0) > 0 ||
+                Number(r.angebotUnitPrice ?? 0) > 0 ||
+                Number(r.originalPreKiPrice ?? 0) > 0 ||
+                Number(r.preis ?? 0) > 0 ||
+                Number(r.gesamt ?? 0) > 0).length;
+            const fullPayload = {
+                forceRecalculate,
+                rows: fullRequestRows,
+                maxParallelRows: expertMode ? 4 : 10,
+                maxOpenAiRowsPerBatch: expertMode ? Math.min(batchSize, 10) : 0,
+                expertMode,
+                useOpenAIIfNoDatabaseHit: expertMode,
+                forceOpenAIReview: expertMode,
+                debug: {
+                    sourceInput: effectiveKiMode === "offer-check" ?
+                        "offer-check-full-rowsForKi" :
+                        "gaeb-import-no-x84-clean-full",
+                    projectKey,
+                    requestRows: fullRequestRows.length,
+                    batches: batches.length,
+                    batchSize,
+                    withX84Fields: fullWithX84Fields,
+                    createdAt: new Date().toISOString()
+                }
+            };
+            localStorage.setItem(`rlc_last_ki_full_request_payload_v1:${projectKey}`, JSON.stringify(fullPayload));
+            console.log("[RLC-KI] FULL request payload saved", {
+                storageKey: `rlc_last_ki_full_request_payload_v1:${projectKey}`,
+                sourceInput: fullPayload.debug.sourceInput,
+                rows: fullPayload.debug.requestRows,
+                batches: fullPayload.debug.batches,
+                withX84Fields: fullPayload.debug.withX84Fields
+            });
+        }
+        catch (e) {
+            console.warn("[RLC-KI] could not save FULL request payload", e);
+        }
+        async function callServerKiBatch(batchRows, batchIndex) {
+            const res = await fetch(apiUrl("/api/kalkulation/ki/suggest-batch"), {
+                method: "POST",
+                credentials: "include",
+                headers: authJsonHeaders(),
+                body: JSON.stringify((() => {
+                    const requestRows = effectiveKiMode === "offer-check" ?
+                        batchRows :
+                        buildNoX84KiPayloadRows(batchRows);
+                    const withX84Fields = requestRows.filter((r) => Number(r.x84UnitPrice ?? 0) > 0 ||
+                        Number(r.angebotUnitPrice ?? 0) > 0 ||
+                        Number(r.originalPreKiPrice ?? 0) > 0 ||
+                        Number(r.preis ?? 0) > 0 ||
+                        Number(r.gesamt ?? 0) > 0).length;
+                    const payload = {
+                        forceRecalculate,
+                        rows: requestRows,
+                        maxParallelRows: expertMode ? 4 : 10,
+                        maxOpenAiRowsPerBatch: expertMode ? Math.min(batchRows.length, 10) : 0,
+                        expertMode,
+                        useOpenAIIfNoDatabaseHit: expertMode,
+                        forceOpenAIReview: expertMode,
+                        debug: {
+                            sourceInput: effectiveKiMode === "offer-check" ? "offer-check-batchRows" : "gaeb-import-no-x84-clean",
+                            projectKey,
+                            batchRows: batchRows.length,
+                            requestRows: requestRows.length,
+                            withX84Fields,
+                            createdAt: new Date().toISOString()
+                        }
+                    };
+                    try {
+                        const storageKey = `rlc_last_ki_request_payload_v1:${projectKey}`;
+                        localStorage.setItem(storageKey, JSON.stringify(payload));
+                        console.log("[RLC-KI] request payload saved", {
+                            storageKey,
+                            sourceInput: payload.debug.sourceInput,
+                            rows: payload.debug.requestRows,
+                            withX84Fields
+                        });
+                    }
+                    catch (e) {
+                        console.warn("[RLC-KI] could not save request payload", e);
+                    }
+                    return payload;
+                })())
+            });
+            const text = await res.text();
+            let json = null;
+            try {
+                json = text ? JSON.parse(text) : null;
+            }
+            catch {
+                throw new Error(`KI_BATCH_${batchIndex}_INVALID_JSON_STATUS_${res.status}: ${text.slice(0, 300)}`);
+            }
+            if (!res.ok || !json?.ok || !Array.isArray(json.rows)) {
+                throw new Error(`KI_BATCH_${batchIndex}_FAILED_STATUS_${res.status}: ${json?.error || json?.message || text.slice(0, 300)}`);
+            }
+            return json;
+        }
+        try {
+            kiEmitStart(expertMode ?
+                "KI-Expertprüfung wird gestartet…" :
+                forceRecalculate ?
+                    "KI-Neuberechnung schnell wird gestartet…" :
+                    "KI-Kalkulation wird gestartet…");
+            kiEmitProgress(18, "LV-Positionen werden vorbereitet…");
+            if (!rowsForKi.length) {
+                const unchangedNext = normalizeKiWarningRows(preparedRows);
+                persistRows(unchangedNext, effectiveKiMode);
+                scheduleKiAutoSaveAfterCalculation(unchangedNext, effectiveKiMode);
+                kiEmitProgress(96, "Keine Server-KI nötig…");
+                kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, unchangedNext, {
+                    checkedCount: preparedRows.length,
+                    skippedCount: preparedRows.length,
+                    serverRequestedCount: 0,
+                    serverReturnedCount: 0,
+                    localFallbackCount: 0
+                });
+                setServerStatus("Keine Server-KI nötig: alle Positionen sind bereits geprüft.");
+                setTimeout(() => setServerStatus(""), 3000);
+                return;
+            }
+            kiStartSmoothProgress({
+                from: 18,
+                to: 82,
+                text: `Server-KI berechnet ${rowsForKi.length} Position(en) in ${batches.length} Batch(es)…`,
+                estimatedMs: Math.max(5000, rowsForKi.length * (expertMode ? 650 : 120))
+            });
+            const allServerRows = [];
+            const batchSummaries = [];
+            const startedAt = Date.now();
+            for (let i = 0; i < batches.length; i += 1) {
+                const batch = batches[i];
+                const from = i * batchSize + 1;
+                const to = Math.min(rowsForKi.length, from + batch.length - 1);
+                setServerStatus(`Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`);
+                kiEmitProgress(Math.min(82, Math.round(22 + i / Math.max(1, batches.length) * 58)), `Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`);
+                const json = await callServerKiBatch(batch, i + 1);
+                allServerRows.push(...json.rows);
+                batchSummaries.push(json.summary || {});
+            }
+            const returnedById = new Set();
+            const returnedByPos = new Set();
+            for (const item of allServerRows) {
+                if (item.id)
+                    returnedById.add(String(item.id));
+                if (item.posNr)
+                    returnedByPos.add(String(item.posNr));
+            }
+            const missingRequested = rowsForKi.filter((row) => !returnedById.has(String(row.id)) && !returnedByPos.has(String(row.posNr || "")));
+            if (missingRequested.length > 0) {
+                throw new Error(`KI_SERVER_INCOMPLETE_RESULT: ${missingRequested.length} von ${rowsForKi.length} Position(en) fehlen. Beispiel: ${kiRowLabel(missingRequested[0])}`);
+            }
+            kiStopSmoothProgress();
+            kiEmitProgress(84, "KI-Ergebnisse werden übernommen…");
+            const byKey = new Map();
+            for (const item of allServerRows) {
+                const id = item.id;
+                const pos = item.posNr;
+                if (id)
+                    byKey.set(String(id), item);
+                if (pos)
+                    byKey.set(String(pos), item);
+            }
+            const requestedIds = new Set(rowsForKi.map((r) => String(r.id)));
+            const requestedPos = new Set(rowsForKi.map((r) => String(r.posNr || "")).filter(Boolean));
+            const next = preparedRows.map((old) => {
+                const result = byKey.get(String(old.id)) || byKey.get(String(old.posNr || ""));
+                const wasRequested = requestedIds.has(String(old.id)) || requestedPos.has(String(old.posNr || ""));
+                if (wasRequested && !result) {
+                    throw new Error(`KI_RESULT_MISSING_FOR_${kiRowLabel(old)}`);
+                }
+                const base = result ?
+                    mergeEliteResult(old, result, effectiveKiMode) :
+                    kiIsStructuralRow(old) ?
+                        normalizeEliteRow(kiPrepareStructuralRow(old)) :
+                        old;
+                return {
+                    ...base,
+                    auftragId: old.auftragId || selectedAuftragId,
+                    auftragName: old.auftragName || selectedAuftrag?.name || "",
+                    auftragType: old.auftragType || selectedAuftrag?.type
+                };
+            });
+            kiEmitProgress(88, "Änderungen werden gespeichert…");
+            const cleanedNext = next.map((r) => kiIsStructuralRow(r) ?
+                {
+                    ...r,
+                    materialCost: 0,
+                    laborCost: 0,
+                    machineCost: 0,
+                    subcontractorCost: 0,
+                    disposalCost: 0,
+                    overheadCost: 0,
+                    riskCost: 0,
+                    profitCost: 0,
+                    baseUnitPrice: 0,
+                    suggestedUnitPrice: 0,
+                    finalUnitPrice: 0,
+                    preis: 0,
+                    rlcKiUnitPrice: 0,
+                    rlcKiTotal: 0,
+                    priceBreakdown: [],
+                    riskLevel: "low",
+                    calculationStatus: "ok",
+                    warning: "",
+                    aiReason: "Titel-/Gliederungsposition: Keine kalkulatorische Leistungsposition."
+                } :
+                r);
+            const cleanedNextNormalized = normalizeKiWarningRows(cleanedNext);
+            saveRlcX84DiffReport(cleanedNextNormalized, projectKey);
+            const x84DiffReportForLearning = JSON.parse(localStorage.getItem(`rlc_last_ki_x84_diff_report_v1:${projectKey}`) || "{}");
+            const cleanedNextWithX84Learning = applyX84BenchmarkLearningToRows(cleanedNextNormalized, x84DiffReportForLearning);
+            saveRlcX84LearningReport(cleanedNextWithX84Learning, projectKey);
+            void saveRlcX84LearningApprovalDraft(cleanedNextWithX84Learning, projectKey);
+            if (expertMode) {
+                try {
+                    localStorage.setItem(`rlc_ki_expert_review_v1:${projectKey}`, JSON.stringify({
+                        ok: true,
+                        projectKey,
+                        projectTitle,
+                        createdAt: new Date().toISOString(),
+                        rows: sanitizeRowsForStorage(cleanedNextWithX84Learning)
+                    }));
+                }
+                catch { }
+                showExpertReviewModal(beforeRows, cleanedNextWithX84Learning);
+            }
+            else {
+                persistRows(cleanedNextWithX84Learning, effectiveKiMode);
+                scheduleKiAutoSaveAfterCalculation(cleanedNextWithX84Learning, effectiveKiMode);
+            }
+            // saveRowsToDatenbank(cleanedNext, projectKey, projectTitle); // deaktiviert: KI-Kalkulation darf Datenbank nicht automatisch füllen
+            const durationMs = Date.now() - startedAt;
+            const openAiUsed = batchSummaries.reduce((sum, x) => sum + n(x?.openAiUsed), 0);
+            const serverSummary = {
+                totalNet: round2(cleanedNext.reduce((sum, r) => sum + n(r.rlcKiTotal), 0)),
+                durationMs,
+                openAiUsed,
+                batchCount: batches.length,
+                checkedCount: preparedRows.length,
+                skippedCount: preparedRows.length - rowsForKi.length,
+                serverRequestedCount: rowsForKi.length,
+                serverReturnedCount: allServerRows.length,
+                localFallbackCount: 0,
+                maxParallelRows: expertMode ? 4 : 10
+            };
+            setLastKiSource("Server-KI");
+            const kiDurationSec = `${(durationMs / 1000).toFixed(1).replace(".", ",")} s`;
+            const kiSpeedInfo = [
+                `Zeit: ${kiDurationSec}`,
+                `Batch: ${batches.length}`,
+                openAiUsed > 0 ? `OpenAI: ${openAiUsed}` : "OpenAI: 0"
+            ].
+                filter(Boolean).
+                join(" · ");
+            setServerStatus(`KI-Prüfung abgeschlossen · Server-KI · ${rowsForKi.length} Position(en) · ${kiSpeedInfo}`);
+            kiEmitProgress(96, "Änderungsprotokoll wird erstellt…");
+            kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, cleanedNext, serverSummary);
+            setTimeout(() => setServerStatus(""), 3500);
+        }
+        catch (e) {
+            kiStopSmoothProgress();
+            console.error("[RLC-KI] server calculation failed", e);
+            window.dispatchEvent(new CustomEvent("rlc:ki-action-result", {
+                detail: {
+                    title: "KI-Kalkulation fehlgeschlagen",
+                    changes: [],
+                    warnings: [
+                        "Die Server-KI konnte nicht abgeschlossen werden. Es wurde nichts gespeichert und kein lokaler/manual Fallback übernommen.",
+                        e instanceof Error ? e.message : "Unbekannter Fehler"
+                    ],
+                    unchanged: []
+                }
+            }));
+            setLastKiSource("Server-KI Fehler");
+            setServerStatus("KI-Kalkulation fehlgeschlagen · nichts gespeichert");
+            setTimeout(() => setServerStatus(""), 4500);
+        }
+    }
+    function autoCompleteMissingFields() {
+        if (!rows.length)
+            return;
+        const missingCount = problemCounts.kurztextFehlt +
+            problemCounts.langtextFehlt +
+            problemCounts.einheitFehlt +
+            problemCounts.mengeFehlt +
+            problemCounts.preisFehlt +
+            problemCounts.preisaufbauFehlt;
+        if (missingCount <= 0) {
+            setServerStatus("Keine fehlenden Daten gefunden");
+            window.setTimeout(() => setServerStatus(""), 2500);
+            return;
+        }
+        const beforeRows = kiCloneRows(rows);
+        kiEmitStart("Fehlende Daten werden geprüft…");
+        kiEmitProgress(25, "Kurztexte, Langtexte, Einheiten und Preisaufbau werden geprüft…");
+        const next = rows.map((r) => kiIsStructuralRow(r) ? normalizeEliteRow(kiPrepareStructuralRow(r)) : enhanceKalkulatorInsertions(r));
+        kiEmitProgress(72, "Ergänzungen werden gespeichert…");
+        persistRows(normalizeKiWarningRows(next));
+        const count = problemCounts.kurztextFehlt +
+            problemCounts.langtextFehlt +
+            problemCounts.einheitFehlt +
+            problemCounts.preisaufbauFehlt;
+        setServerStatus(count > 0 ?
+            "KI hat fehlende Texte, Einheiten und Preisaufbau ergänzt" :
+            "Keine fehlenden Texte, Einheiten oder Preisaufbauten gefunden");
+        kiEmitProgress(96, "Änderungsprotokoll wird erstellt…");
+        kiEmitResult("Fehlende Daten ergänzt", beforeRows, next);
+        setTimeout(() => setServerStatus(""), 3000);
+    }
+    function handleCsvImport(file) {
+        if (!file)
+            return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const text = String(reader.result || "");
+                const imported = parseImportedCsv(text).map((r) => normalizeEliteRow(r));
+                if (!imported.length) {
+                    alert("Keine gültigen CSV-Zeilen gefunden.");
+                    return;
+                }
+                const next = [...imported, ...rows];
+                persistRows(normalizeKiWarningRows(next));
+                setServerStatus(`${imported.length} CSV-Position(en) importiert`);
+                setTimeout(() => setServerStatus(""), 2500);
+            }
+            catch {
+                alert("CSV konnte nicht gelesen werden.");
+            }
+            finally {
+                if (csvInputRef.current)
+                    csvInputRef.current.value = "";
+            }
+        };
+        reader.readAsText(file, "utf-8");
+    }
+    async function exportGaeb(mode) {
+        if (!rows.length)
+            return;
+        const filename = `KI_Kalkulation_${safeFileName(projectKey || offer.number)}.${mode}`;
+        const payload = {
+            projectCode: projectKey,
+            mode,
+            rows: rows.map((r) => ({
+                id: r.id,
+                posNr: r.posNr,
+                parentPosNr: r.parentPosNr,
+                kurztext: r.kurztext,
+                langtext: r.langtext,
+                einheit: r.einheit,
+                menge: n(r.menge),
+                preis: getUnitPrice(r),
+                gesamt: lineNet(r),
+                waehrung: "EUR",
+                priceBreakdown: r.priceBreakdown || [],
+                bemerkung: [
+                    r.bemerkung,
+                    r.aiReason ? `KI-Begründung: ${r.aiReason}` : "",
+                    r.warning ? `Warnung: ${r.warning}` : "",
+                    breakdownText(r) ? `Preisaufbau:\n${breakdownText(r)}` : ""
+                ].
+                    filter(Boolean).
+                    join("\n")
+            }))
+        };
+        try {
+            setServerStatus(`GAEB ${mode.toUpperCase()} wird erzeugt…`);
+            const res = await fetch(apiUrl(`/api/project-lv/${encodeURIComponent(projectKey || "NO_PROJECT")}/export/gaeb/${mode}`), {
+                method: "POST",
+                credentials: "include",
+                headers: authJsonHeaders(),
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok)
+                throw new Error(`GAEB Export Fehler ${res.status}`);
+            const blob = await res.blob();
+            downloadBlob(blob, filename);
+            setServerStatus(`GAEB ${mode.toUpperCase()} exportiert`);
+            setTimeout(() => setServerStatus(""), 2200);
+        }
+        catch {
+            const blob = new Blob([buildLocalGaebFallback(rows, mode)], {
+                type: "application/xml;charset=utf-8"
+            });
+            downloadBlob(blob, filename);
+            setServerStatus(`GAEB ${mode.toUpperCase()} lokal exportiert`);
+            setTimeout(() => setServerStatus(""), 2200);
+        }
+    }
+    async function loadX84OfferTotalOnly() {
+        if (!projectKey)
+            return;
+        try {
+            const r = await fetch(apiUrl(`/api/projects/${encodeURIComponent(projectKey)}/lv?page=1&pageSize=2000`), {
+                method: "GET",
+                credentials: "include",
+                headers: authJsonHeaders()
+            });
+            const json = await r.json().catch(() => null);
+            const serverRows = Array.isArray(json?.rows) ?
+                json.rows :
+                Array.isArray(json?.items) ?
+                    json.items :
+                    [];
+            if (!r.ok || !serverRows.length) {
+                setX84OfferNet(0);
+                return;
+            }
+            const total = serverRows.reduce((sum, x) => {
+                const menge = n(x.menge ?? x.quantity);
+                const ep = n(x.ep ?? x.einzelpreis ?? x.preis);
+                const gesamt = n(x.gesamt ?? x.total ?? x.totalNet);
+                return sum + (gesamt || round2(menge * ep));
+            }, 0);
+            setX84OfferNet(round2(total));
+        }
+        catch (e) {
+            console.error("[RLC] X84 total load failed", e);
+            setX84OfferNet(0);
+        }
+    }
+    React.useEffect(() => {
+        void loadX84OfferTotalOnly();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectKey]);
+    async function saveToProjectServer() {
+        if (!projectKey) {
+            alert("Kein Projekt gewählt.");
+            return;
+        }
+        const storageRows = sanitizeRowsForStorage(rows);
+        setRows(storageRows);
+        LV.setAll(storageRows);
+        const payload = {
+            version: "elite-v3-price-breakdown",
+            meta: {
+                projectKey,
+                savedAt: new Date().toISOString(),
+                offer,
+                client,
+                company,
+                mwst,
+                globalMarkup,
+                aufschlag: globalMarkup,
+                kapRabatt,
+                kapMarkup,
+                offerNumber: offer.number
+            },
+            rows: storageRows,
+            summary,
+            chapterTotals,
+            totals: {
+                netto: summary.net,
+                aufschlagWert: summary.globalMarkupValue,
+                brutto: summary.gross
+            }
+        };
+        try {
+            setServerBusy(true);
+            setServerStatus("Speichere…");
+            const r = await fetch(apiUrl(`${KALKULATION_API_BASE}/${encodeURIComponent(projectKey)}/ki/save`), {
+                method: "POST",
+                credentials: "include",
+                headers: authJsonHeaders(),
+                body: JSON.stringify(payload)
+            });
+            if (r.status === 401 || r.status === 403) {
+                localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+                setServerStatus("Nicht angemeldet · lokal gesichert");
+                return;
+            }
+            if (r.status === 404) {
+                localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+                setServerStatus("Route fehlt · lokal gesichert");
+                return;
+            }
+            const json = await r.json().catch(() => null);
+            if (!r.ok || !json?.ok) {
+                localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+                setServerStatus("Serverfehler · lokal gesichert");
+                return;
+            }
+            setServerStatus("Gespeichert");
+            setTimeout(() => setServerStatus(""), 2000);
+        }
+        catch {
+            localStorage.setItem(localBackupKey(projectKey), JSON.stringify(payload));
+            setServerStatus("Fehler · lokal gesichert");
+        }
+        finally {
+            setServerBusy(false);
+        }
+    }
+    function isValidKalkulationSnapshotRows(candidateRows) {
+        if (!Array.isArray(candidateRows) || candidateRows.length === 0)
+            return false;
+        const validRows = candidateRows.filter((r) => {
+            const pos = String(r.posNr || r.pos || "").trim();
+            const kurztext = String(r.kurztext || r.text || "").trim();
+            const menge = n(r.menge);
+            const ep = n(r.angebotUnitPrice) ||
+                n(r.originalPreKiPrice) ||
+                n(r.preis) ||
+                n(r.finalUnitPrice);
+            const looksLikePlaceholder = /^Position\s+\d+/i.test(kurztext) ||
+                kurztext === "" ||
+                kurztext.toLowerCase() === pos.toLowerCase();
+            return pos && !looksLikePlaceholder && menge > 0 && ep > 0;
+        });
+        return validRows.length >= Math.max(1, Math.floor(candidateRows.length * 0.9));
+    }
+    async function loadFromProjectServer() {
+        if (!projectKey) {
+            alert("Kein Projekt gewählt.");
+            return;
+        }
+        try {
+            setServerBusy(true);
+            setServerStatus("Lade…");
+            const r = await fetch(apiUrl(`${KALKULATION_API_BASE}/${encodeURIComponent(projectKey)}/ki`), {
+                method: "GET",
+                credentials: "include",
+                headers: authJsonHeaders()
+            });
+            const json = await r.json().catch(() => null);
+            if (r.status === 401 || r.status === 403) {
+                const raw = localStorage.getItem(localBackupKey(projectKey));
+                if (!raw) {
+                    setServerStatus("Nicht angemeldet · kein lokaler Speicherstand");
+                    return;
+                }
+                applySnapshot(JSON.parse(raw));
+                setServerStatus("Nicht angemeldet · lokal geladen");
+                return;
+            }
+            if (r.status === 404 || !json?.exists) {
+                const raw = localStorage.getItem(localBackupKey(projectKey));
+                if (!raw) {
+                    setServerStatus("Kein Speicherstand");
+                    return;
+                }
+                applySnapshot(JSON.parse(raw));
+                setServerStatus("Lokal geladen");
+                return;
+            }
+            if (!r.ok || !json?.ok) {
+                setServerStatus("Laden fehlgeschlagen");
+                return;
+            }
+            applySnapshot(json.data || {});
+            setServerStatus("Geladen");
+            setTimeout(() => setServerStatus(""), 2000);
+        }
+        catch {
+            setServerStatus("Fehler beim Laden");
+        }
+        finally {
+            setServerBusy(false);
+        }
+    }
+    function applySnapshot(data) {
+        const loadedRows = Array.isArray(data.rows) ?
+            data.rows.map((x) => normalizeEliteRow(x)) :
+            [];
+        if (loadedRows.length) {
+            const safeRows = sanitizeRowsForStorage(loadedRows);
+            if (!isValidKalkulationSnapshotRows(safeRows)) {
+                setServerStatus("Laden abgebrochen: Speicherstand enthält ungültige Mengen/Positionen");
+                setTimeout(() => setServerStatus(""), 3500);
+                return;
+            }
+            persistRows(safeRows);
+        }
+        const meta = data.meta || {};
+        if (typeof meta.mwst === "number")
+            setMwst(meta.mwst);
+        if (typeof meta.globalMarkup === "number")
+            setGlobalMarkup(meta.globalMarkup);
+        if (typeof meta.aufschlag === "number")
+            setGlobalMarkup(meta.aufschlag);
+        if (meta.kapRabatt)
+            setKapRabatt(meta.kapRabatt);
+        if (meta.kapMarkup)
+            setKapMarkup(meta.kapMarkup);
+        if (meta.offer)
+            setOffer(meta.offer);
+        if (meta.client)
+            setClient(meta.client);
+    }
+    function buildRlcKiPdfExportRows(inputRows) {
+        return inputRows.
+            filter((r) => !kiIsStructuralRow(r)).
+            map((r) => {
+            const qty = n(r.menge);
+            const rlcEp = getRlcKiUnitPrice(r) ||
+                n(r.rlcKiUnitPrice) ||
+                n(r.openAiSuggestedUnitPrice) ||
+                n(r.finalUnitPrice) ||
+                n(r.preis);
+            const gp = round2(qty * rlcEp);
+            return normalizeEliteRow({
+                ...r,
+                preis: rlcEp,
+                finalUnitPrice: rlcEp,
+                suggestedUnitPrice: rlcEp,
+                rlcKiUnitPrice: rlcEp,
+                rlcKiTotal: gp,
+                gesamt: gp,
+                totalNet: gp,
+                priceDecision: "rlcKi"
+            });
+        });
+    }
+    function buildRlcKiPdfExportSummary(inputRows, oldSummary, taxRate) {
+        const netto = round2(inputRows.reduce((sum, r) => sum + round2(n(r.menge) * getRlcKiUnitPrice(r)), 0));
+        const mwstValue = round2(netto * (n(taxRate) / 100));
+        const brutto = round2(netto + mwstValue);
+        return {
+            ...oldSummary,
+            netto,
+            net: netto,
+            totalNet: netto,
+            rlcKiNet: netto,
+            finalNet: netto,
+            mwst: mwstValue,
+            mwstSum: mwstValue,
+            tax: mwstValue,
+            brutto,
+            gross: brutto,
+            totalGross: brutto
+        };
+    }
+    function stripInternalPdfCosts(inputRows) {
+        return inputRows.map((r) => {
+            const safeBreakdown = normalizeBreakdown(r.priceBreakdown || []).filter((line) => {
+                const g = String(line.group || "").trim().toLowerCase();
+                return g !== "risiko" && g !== "gewinn";
+            });
+            return {
+                ...r,
+                priceBreakdown: safeBreakdown,
+                recipeLines: safeBreakdown,
+                riskCost: 0,
+                profitCost: 0
+            };
+        });
+    }
+    function stripInternalPdfSummary(inputSummary) {
+        return {
+            ...inputSummary,
+            riskSum: 0,
+            profitSum: 0,
+            marginPct: undefined
+        };
+    }
+    React.useEffect(() => {
+        const producer = async () => {
+            const pdfRows = stripInternalPdfCosts(buildRlcKiPdfExportRows(rows));
+            const pdfSummary = stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
+            const blob = await exportPdf({
+                projectKey,
+                projectTitle,
+                rows: pdfRows,
+                chapterTotals,
+                summary: pdfSummary,
+                offer,
+                client,
+                company,
+                mwst,
+                globalMarkup,
+                delivery: true
+            });
+            if (!blob) {
+                throw new Error("KI-Kalkulation PDF konnte nicht erzeugt werden.");
+            }
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            let binary = "";
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+            }
+            return {
+                name: `KI_Angebot_${safeFileName(offer.number || projectKey)}.pdf`,
+                base64: btoa(binary)
+            };
+        };
+        window.__RLC_DOCUMENT_PDF_PRODUCER__ = producer;
+        return () => {
+            if (window.__RLC_DOCUMENT_PDF_PRODUCER__ === producer) {
+                delete window.__RLC_DOCUMENT_PDF_PRODUCER__;
+            }
+        };
+    }, [
+        rows,
+        summary,
+        mwst,
+        projectKey,
+        projectTitle,
+        chapterTotals,
+        offer,
+        client,
+        company,
+        globalMarkup
+    ]);
+    React.useEffect(() => {
+        const producer = async () => {
+            const pdfRows = stripInternalPdfCosts(buildRlcKiPdfExportRows(rows));
+            const pdfSummary = stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
+            const result = await exportPdf({
+                projectKey,
+                projectTitle,
+                rows: pdfRows,
+                chapterTotals,
+                summary: pdfSummary,
+                offer,
+                client,
+                company,
+                mwst,
+                globalMarkup,
+                delivery: true
+            });
+            if (!(result instanceof Blob)) {
+                throw new Error("Kalkulations-PDF konnte nicht an Document Delivery übergeben werden.");
+            }
+            const pdfBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = String(reader.result || "");
+                    resolve(dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl);
+                };
+                reader.onerror = () => reject(new Error("Kalkulations-PDF konnte nicht gelesen werden."));
+                reader.readAsDataURL(result);
+            });
+            return {
+                base64: pdfBase64,
+                name: `KI_Angebot_${safeFileName(offer.number || projectKey)}.pdf`
+            };
+        };
+        window.__RLC_DOCUMENT_PDF_PRODUCER__ = producer;
+        return () => {
+            if (window.__RLC_DOCUMENT_PDF_PRODUCER__ === producer) {
+                delete window.__RLC_DOCUMENT_PDF_PRODUCER__;
+            }
+        };
+    }, [
+        projectKey,
+        projectTitle,
+        rows,
+        chapterTotals,
+        summary,
+        offer,
+        client,
+        company,
+        mwst,
+        globalMarkup
+    ]);
+    async function handlePdfExport() {
+        try {
+            setPdfBusy(true);
+            setServerStatus("PDF wird erzeugt…");
+            const pdfRows = stripInternalPdfCosts(buildRlcKiPdfExportRows(rows));
+            const pdfSummary = stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
+            await exportPdf({
+                projectKey,
+                projectTitle,
+                rows: pdfRows,
+                chapterTotals,
+                summary: pdfSummary,
+                offer,
+                client,
+                company,
+                mwst,
+                globalMarkup
+            });
+            setServerStatus("PDF erzeugt");
+            setTimeout(() => setServerStatus(""), 1800);
+        }
+        catch {
+            setServerStatus("PDF Fehler");
+        }
+        finally {
+            setPdfBusy(false);
+        }
+    }
+    async function handleUrkalkulationPdfExport() {
+        try {
+            setPdfBusy(true);
+            setServerStatus("Urkalkulation PDF wird erzeugt…");
+            const realRowsForPdf = rows.filter((r) => !kiIsStructuralRow(r));
+            const auftragRows = selectedAuftragId ?
+                realRowsForPdf.filter((r) => r.auftragId === selectedAuftragId) :
+                realRowsForPdf;
+            const exportRows = auftragRows.length ? auftragRows : realRowsForPdf;
+            const exportSelectedAuftrag = auftragRows.length && selectedAuftragId ? selectedAuftrag : null;
+            if (!exportRows.length) {
+                setServerStatus("Keine Positionen für Urkalkulation PDF vorhanden");
+                window.setTimeout(() => setServerStatus(""), 2500);
+                return;
+            }
+            const isInternalPdf = window.confirm("Urkalkulation PDF intern erzeugen?\n\nOK = Intern mit Risiko/Gewinn\nAbbrechen = Kunde ohne Risiko/Gewinn");
+            const rawPdfRows = buildRlcKiPdfExportRows(exportRows);
+            const pdfRows = isInternalPdf ? rawPdfRows : stripInternalPdfCosts(rawPdfRows);
+            const pdfSummary = isInternalPdf ?
+                buildRlcKiPdfExportSummary(pdfRows, summary, mwst) :
+                stripInternalPdfSummary(buildRlcKiPdfExportSummary(pdfRows, summary, mwst));
+            exportUrkalkulationPdfLocal({
+                projectKey,
+                projectTitle,
+                rows: pdfRows,
+                summary: pdfSummary,
+                offer,
+                selectedAuftrag: exportSelectedAuftrag,
+                client,
+                company,
+                globalMarkup
+            });
+            setServerStatus("Urkalkulation PDF erzeugt");
+            setTimeout(() => setServerStatus(""), 1800);
+        }
+        catch {
+            setServerStatus("Urkalkulation PDF Fehler");
+        }
+        finally {
+            setPdfBusy(false);
+        }
+    }
+    function acceptSafeSuggestions() {
+        const safe = rows.filter(isSafeRow);
+        if (!safe.length) {
+            alert("Keine sicheren Vorschläge vorhanden.");
+            return;
+        }
+        const count = saveRowsToDatenbank(safe, projectKey, projectTitle);
+        setServerStatus(`${count} sichere Position(en) übernommen und gelernt`);
+        setTimeout(() => setServerStatus(""), 2500);
+    }
+    function selectDuplicateRowsToDelete() {
+        const ids = duplicateGroups.flatMap((group) => group.slice(1).map((row) => row.id));
+        setSelectedDuplicateIds(ids);
+        if (ids.length) {
+            setServerStatus(`${ids.length} doppelte Position(en) ausgewählt. Es bleibt je Gruppe 1 Position erhalten.`);
+            setTimeout(() => setServerStatus(""), 3000);
+        }
+        else {
+            setServerStatus("Keine doppelten Positionen gefunden.");
+            setTimeout(() => setServerStatus(""), 2500);
+        }
+    }
+    function toggleDuplicateSelection(rowId, checked) {
+        setSelectedDuplicateIds((current) => {
+            if (checked)
+                return Array.from(new Set([...current, rowId]));
+            return current.filter((id) => id !== rowId);
+        });
+    }
+    function deleteSelectedDuplicateRows() {
+        if (!selectedDuplicateIds.length) {
+            alert("Keine doppelten Positionen ausgewählt.");
+            return;
+        }
+        const ok = window.confirm(`${selectedDuplicateIds.length} doppelte Position(en) löschen? Je Duplikatgruppe bleibt mindestens 1 Position erhalten.`);
+        if (!ok)
+            return;
+        const ids = new Set(selectedDuplicateIds);
+        const next = rows.filter((row) => !ids.has(row.id));
+        setSelectedDuplicateIds([]);
+        persistRows(next);
+        try {
+            localStorage.removeItem(KI_HANDOFF_KEY);
+            sessionStorage.removeItem(HANDOFF_CONSUMED_TS_KEY);
+        }
+        catch {
+            //
+        }
+        setServerStatus(`${ids.size} doppelte Position(en) gelöscht.`);
+        setTimeout(() => setServerStatus(""), 3000);
+    }
+    function toggleOpenAiSelection(rowId, checked) {
+        setSelectedOpenAiIds((current) => {
+            if (checked)
+                return Array.from(new Set([...current, rowId]));
+            return current.filter((id) => id !== rowId);
+        });
+    }
+    function clearOpenAiSelection() {
+        setSelectedOpenAiIds([]);
+        setServerStatus("OpenAI-Auswahl gelöscht");
+        setTimeout(() => setServerStatus(""), 1800);
+    }
+    function selectWarningsForOpenAi() {
+        const ids = rows.
+            filter((r) => !kiIsStructuralRow(r) && (r.calculationStatus === "warning" ||
+            r.calculationStatus === "critical" ||
+            r.riskLevel === "high" ||
+            rowHasNoDb(r))).
+            map((r) => r.id);
+        setSelectedOpenAiIds(Array.from(new Set(ids)));
+        setServerStatus(`${ids.length} Position(en) für OpenAI-Prüfung ausgewählt`);
+        setTimeout(() => setServerStatus(""), 2500);
+    }
+    async function runSelectedOpenAiCheck() {
+        const selectedRows = rows.filter((r) => selectedOpenAiIds.includes(r.id) && !kiIsStructuralRow(r));
+        if (!selectedRows.length) {
+            setServerStatus("Keine Positionen für OpenAI ausgewählt");
+            setTimeout(() => setServerStatus(""), 2200);
+            return;
+        }
+        const beforeRows = kiCloneRows(rows);
+        try {
+            kiEmitStart("Ausgewählte Positionen werden mit OpenAI geprüft…");
+            kiEmitProgress(15, `${selectedRows.length} ausgewählte Position(en) werden vorbereitet…`);
+            setServerStatus(`${selectedRows.length} Position(en) werden mit OpenAI geprüft…`);
+            const res = await eliteCalculateRows(projectKey, selectedRows, {
+                forceRecalculate: true,
+                expertMode: true,
+                useOpenAIIfNoDatabaseHit: true,
+                forceOpenAIReview: true,
+                maxParallelRows: 3,
+                maxOpenAiRowsPerBatch: Math.min(selectedRows.length, 50)
+            });
+            const byId = new Map();
+            const byPos = new Map();
+            for (const item of res.rows || []) {
+                if (item.id)
+                    byId.set(String(item.id), item);
+                if (item.posNr)
+                    byPos.set(String(item.posNr), item);
+            }
+            const next = rows.map((r) => {
+                const result = byId.get(r.id) || byPos.get(r.posNr || "");
+                if (!result)
+                    return r;
+                const currentEp = n(r.finalUnitPrice ?? r.preis);
+                const openAiEp = n(result.finalUnitPrice ??
+                    result.suggestedUnitPrice ??
+                    result.baseUnitPrice ??
+                    currentEp);
+                const diff = round2(openAiEp - currentEp);
+                const diffPct = currentEp > 0 ? round2(Math.abs(diff) / currentEp * 100) : 0;
+                return normalizeEliteRow(enhanceKalkulatorInsertions({
+                    ...r,
+                    // WICHTIG:
+                    // OpenAI wird NICHT automatisch übernommen.
+                    // Der bestehende EP bleibt unverändert.
+                    preis: currentEp,
+                    finalUnitPrice: currentEp,
+                    gesamt: round2(n(r.menge) * currentEp),
+                    // OpenAI-Vorschlag wird separat gespeichert.
+                    openAiSuggestedUnitPrice: openAiEp,
+                    openAiSuggestedTotal: round2(n(r.menge) * openAiEp),
+                    openAiSuggestedAt: new Date().toISOString(),
+                    openAiSuggestedReason: result.aiReason || "",
+                    openAiSuggestedWarning: result.warning || "",
+                    openAiSuggestedPriceBreakdown: result.priceBreakdown || [],
+                    rlcPreisMin: result.rlcPreisMin,
+                    rlcPreisAvg: result.rlcPreisAvg,
+                    rlcPreisMax: result.rlcPreisMax,
+                    rlcPreisSource: result.rlcPreisSource,
+                    rlcPreisGroup: result.rlcPreisGroup,
+                    calculationStatus: diffPct >= 10 ? "warning" : r.calculationStatus,
+                    riskLevel: diffPct >= 25 ? "high" : r.riskLevel,
+                    warning: [
+                        cleanOpenAiProposalWarning(r.warning),
+                        `OpenAI-Vorschlag vorhanden: ${openAiEp} €/EH statt aktuell ${currentEp} €/EH (${diff >= 0 ? "+" : ""}${diff} €, ${diffPct} % Abweichung). Bitte manuell übernehmen oder ablehnen.`
+                    ].
+                        filter(Boolean).
+                        join(" · ")
+                }));
+            });
+            persistRows(normalizeKiWarningRows(next));
+            // Wichtig: OpenAI-Testwerte NICHT automatisch in Datenbank speichern.
+            // saveRowsToDatenbank(next, projectKey, projectTitle);
+            kiEmitProgress(96, "OpenAI-Vorschläge werden gespeichert…");
+            kiEmitResult("OpenAI-Prüfung als Vorschlag gespeichert", beforeRows, next, res.summary);
+            setSelectedOpenAiIds([]);
+            setServerStatus(`${selectedRows.length} OpenAI-Vorschlag/Vorschläge gespeichert`);
+            setTimeout(() => setServerStatus(""), 3500);
+        }
+        catch (e) {
+            console.error(e);
+            setServerStatus("OpenAI-Prüfung fehlgeschlagen");
+            setTimeout(() => setServerStatus(""), 3500);
+        }
+    }
+    function getRawOpenAiProposalPrice(row) {
+        return n(row?.openAiSuggestedUnitPrice);
+    }
+    function getOpenAiProposalPrice(row) {
+        const openAi = getRawOpenAiProposalPrice(row);
+        const rlc = getRlcRangeForRow(row);
+        if (openAi <= 0)
+            return 0;
+        /*
+         * Zentrale Plausibilitätslogik:
+         * RLC-Materialpreise dürfen den finalen EP NICHT deckeln.
+         * Material dient nur als Urkalkulations-/Materialansatz.
+         * Deckelung ist nur erlaubt bei echten Leistungs-/Transport-/Fremdleistungswerten.
+         */
+        const rlcGroup = String(rlc.group || "").toLowerCase();
+        const rlcCanLimitFinalPrice = rlcGroup.includes("transport") ||
+            rlcGroup.includes("maschine") ||
+            rlcGroup.includes("fremdleistung") ||
+            rlcGroup.includes("oberfläche");
+        if (rlcCanLimitFinalPrice && rlc.avg > 0 && rlc.min > 0 && rlc.max > 0) {
+            if (openAi > rlc.max)
+                return rlc.avg;
+            if (openAi < rlc.min)
+                return rlc.avg;
+        }
+        return openAi;
+    }
+    function rowHasOpenAiProposal(row) {
+        return getRawOpenAiProposalPrice(row) > 0 || getOpenAiProposalPrice(row) > 0;
+    }
+    function acceptOpenAiSuggestionForRow(rowId) {
+        const target = rows.find((r) => r.id === rowId);
+        if (!target)
+            return;
+        const proposal = getOpenAiProposalPrice(target);
+        if (proposal <= 0)
+            return;
+        const next = rows.map((r) => {
+            if (r.id !== rowId)
+                return r;
+            const anyRow = r;
+            return normalizeEliteRow(enhanceKalkulatorInsertions({
+                ...r,
+                preis: proposal,
+                finalUnitPrice: proposal,
+                suggestedUnitPrice: proposal,
+                gesamt: round2(n(r.menge) * proposal),
+                source: "ki",
+                priceBreakdown: Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
+                    anyRow.openAiSuggestedPriceBreakdown.length ?
+                    anyRow.openAiSuggestedPriceBreakdown :
+                    r.priceBreakdown,
+                warning: "",
+                calculationStatus: "ok",
+                riskLevel: r.riskLevel === "high" ? "medium" : r.riskLevel,
+                aiReason: [
+                    r.aiReason,
+                    "OpenAI-Vorschlag wurde manuell für diese Position übernommen.",
+                    anyRow.openAiSuggestedReason
+                ].
+                    filter(Boolean).
+                    join("\n\n"),
+                preisManuellGeprueft: true,
+                preisManuellGeprueftAt: new Date().toISOString(),
+                openAiRejected: true,
+                openAiSuggestedUnitPrice: undefined,
+                openAiSuggestedTotal: undefined,
+                openAiSuggestedAt: undefined,
+                openAiSuggestedReason: undefined,
+                openAiSuggestedWarning: undefined,
+                openAiSuggestedPriceBreakdown: undefined
+            }));
+        });
+        persistRows(normalizeKiWarningRows(next));
+        setServerStatus("OpenAI-Preis für Position übernommen");
+        setTimeout(() => setServerStatus(""), 2500);
+    }
+    function rejectOpenAiSuggestionForRow(rowId) {
+        const next = rows.map((r) => {
+            if (r.id !== rowId)
+                return r;
+            return cleanRlcKiWarningState(normalizeEliteRow({
+                ...r,
+                warning: "",
+                calculationStatus: "ok",
+                riskLevel: r.riskLevel === "high" ? "medium" : r.riskLevel,
+                preisManuellGeprueft: true,
+                preisManuellGeprueftAt: new Date().toISOString(),
+                openAiRejected: true,
+                openAiSuggestedUnitPrice: undefined,
+                openAiSuggestedTotal: undefined,
+                openAiSuggestedAt: undefined,
+                openAiSuggestedReason: undefined,
+                openAiSuggestedWarning: undefined,
+                openAiSuggestedPriceBreakdown: undefined
+            }));
+        });
+        persistRows(normalizeKiWarningRows(next));
+        setServerStatus("OpenAI-Vorschlag abgelehnt");
+        setTimeout(() => setServerStatus(""), 2500);
+    }
+    function saveOpenAiSuggestionForRow(rowId) {
+        const target = rows.find((r) => r.id === rowId);
+        if (!target)
+            return;
+        const proposal = getOpenAiProposalPrice(target);
+        if (proposal <= 0)
+            return;
+        const anyRow = target;
+        const learnedRow = normalizeEliteRow(enhanceKalkulatorInsertions({
+            ...target,
+            preis: proposal,
+            finalUnitPrice: proposal,
+            suggestedUnitPrice: proposal,
+            gesamt: round2(n(target.menge) * proposal),
+            source: "ki",
+            priceBreakdown: Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
+                anyRow.openAiSuggestedPriceBreakdown.length ?
+                anyRow.openAiSuggestedPriceBreakdown :
+                target.priceBreakdown,
+            warning: "",
+            aiReason: [
+                target.aiReason,
+                "Als geprüfter Firmenwert aus OpenAI-Vorschlag gespeichert.",
+                anyRow.openAiSuggestedReason
+            ].
+                filter(Boolean).
+                join("\n\n")
+        }));
+        const count = saveRowsToDatenbank([learnedRow], projectKey, projectTitle);
+        setServerStatus(`${count} Firmenwert gespeichert`);
+        setTimeout(() => setServerStatus(""), 2500);
+    }
+    function selectedOpenAiProposalPrice() {
+        return n(selectedRow?.openAiSuggestedUnitPrice);
+    }
+    function selectedHasOpenAiProposal() {
+        return !!selectedRow && selectedOpenAiProposalPrice() > 0;
+    }
+    function cleanOpenAiProposalWarning(text) {
+        return String(text || "").
+            split(" · ").
+            filter((part) => !part.toLowerCase().includes("openai-vorschlag")).
+            join(" · ").
+            trim();
+    }
+    function acceptSelectedOpenAiSuggestion() {
+        if (!selectedRow)
+            return;
+        const proposal = selectedOpenAiProposalPrice();
+        if (proposal <= 0) {
+            setServerStatus("Kein OpenAI-Vorschlag für diese Position vorhanden");
+            setTimeout(() => setServerStatus(""), 2200);
+            return;
+        }
+        const next = rows.map((r) => {
+            if (r.id !== selectedRow.id)
+                return r;
+            const anyRow = r;
+            const cleanedWarning = cleanOpenAiProposalWarning(r.warning);
+            return normalizeEliteRow(enhanceKalkulatorInsertions({
+                ...r,
+                preis: proposal,
+                finalUnitPrice: proposal,
+                suggestedUnitPrice: proposal,
+                gesamt: round2(n(r.menge) * proposal),
+                source: "ki",
+                priceBreakdown: Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
+                    anyRow.openAiSuggestedPriceBreakdown.length ?
+                    anyRow.openAiSuggestedPriceBreakdown :
+                    r.priceBreakdown,
+                warning: cleanedWarning,
+                aiReason: [
+                    r.aiReason,
+                    "OpenAI-Vorschlag wurde manuell übernommen.",
+                    anyRow.openAiSuggestedReason
+                ].
+                    filter(Boolean).
+                    join("\n\n"),
+                preisManuellGeprueft: true,
+                preisManuellGeprueftAt: new Date().toISOString(),
+                openAiRejected: true,
+                openAiSuggestedUnitPrice: undefined,
+                openAiSuggestedTotal: undefined,
+                openAiSuggestedAt: undefined,
+                openAiSuggestedReason: undefined,
+                openAiSuggestedWarning: undefined,
+                openAiSuggestedPriceBreakdown: undefined
+            }));
+        });
+        persistRows(normalizeKiWarningRows(next));
+        setServerStatus("OpenAI-Vorschlag wurde übernommen");
+        setTimeout(() => setServerStatus(""), 2500);
+    }
+    function rejectSelectedOpenAiSuggestion() {
+        const next = rows.map((r) => clearOldKiProposalFields(r));
+        persistRows(next);
+        setSelectedOpenAiIds([]);
+        setServerStatus("Alle alten OpenAI/RLC-KI-Vorschläge wurden gelöscht. X84 bleibt final.");
+        setTimeout(() => setServerStatus(""), 3000);
+    }
+    function saveSelectedOpenAiSuggestionAsKnowledge() {
+        if (!selectedRow)
+            return;
+        const proposal = selectedOpenAiProposalPrice();
+        if (proposal <= 0) {
+            setServerStatus("Kein OpenAI-Vorschlag zum Speichern vorhanden");
+            setTimeout(() => setServerStatus(""), 2200);
+            return;
+        }
+        const anyRow = selectedRow;
+        const learnedRow = normalizeEliteRow(enhanceKalkulatorInsertions({
+            ...selectedRow,
+            preis: proposal,
+            finalUnitPrice: proposal,
+            suggestedUnitPrice: proposal,
+            gesamt: round2(n(selectedRow.menge) * proposal),
+            source: "ki",
+            priceBreakdown: Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
+                anyRow.openAiSuggestedPriceBreakdown.length ?
+                anyRow.openAiSuggestedPriceBreakdown :
+                selectedRow.priceBreakdown,
+            warning: "",
+            aiReason: [
+                selectedRow.aiReason,
+                "Als geprüfter Firmenwert aus OpenAI-Vorschlag gespeichert.",
+                anyRow.openAiSuggestedReason
+            ].
+                filter(Boolean).
+                join("\n\n")
+        }));
+        const count = saveRowsToDatenbank([learnedRow], projectKey, projectTitle);
+        setServerStatus(`${count} OpenAI-Vorschlag als Firmenwert gespeichert`);
+        setTimeout(() => setServerStatus(""), 3000);
+    }
+    function activeFilterLabel() {
+        switch (viewFilter) {
+            case "kritisch":
+                return "Kritische Positionen";
+            case "warnungen":
+                return "Warnungen";
+            case "hochrisiko":
+                return "Hochrisiko";
+            case "ohneDb":
+                return "Ohne Datenbanktreffer";
+            case "sicher":
+                return "Sichere Positionen";
+            case "alle":
+            default:
+                return "Alle Positionen";
+        }
+    }
+    function kiAssistantMessage() {
+        if (!rows.length) {
+            return "Noch keine LV-Positionen vorhanden. Lade zuerst ein Leistungsverzeichnis oder füge Positionen manuell hinzu.";
+        }
+        if (loading) {
+            return "Ich analysiere gerade die Positionen, ergänze fehlende Angaben, prüfe Risiken und baue die Urkalkulation auf.";
+        }
+        if (problemCounts.kurztextFehlt > 0 ||
+            problemCounts.langtextFehlt > 0 ||
+            problemCounts.einheitFehlt > 0 ||
+            problemCounts.preisaufbauFehlt > 0) {
+            return `Es fehlen noch Angaben: ${problemCounts.kurztextFehlt} Kurztext, ${problemCounts.langtextFehlt} Langtext, ${problemCounts.einheitFehlt} Einheit, ${problemCounts.preisaufbauFehlt} Preisaufbau. Du kannst diese automatisch ergänzen lassen.`;
+        }
+        if (summary.critical > 0) {
+            return `${summary.critical} Position(en) sind kritisch. Prüfe zuerst Mengen, Einheitspreise und fehlende Kostenansätze.`;
+        }
+        if (summary.highRisk > 0) {
+            return `${summary.highRisk} Position(en) haben erhöhtes Risiko. Prüfe diese Positionen vor dem Export.`;
+        }
+        if (problemCounts.ohneDb > 0) {
+            return `${problemCounts.ohneDb} Position(en) haben keinen sicheren Datenbanktreffer. Nach manueller Prüfung können sie gelernt werden.`;
+        }
+        if (problemCounts.sicher > 0) {
+            return `${problemCounts.sicher} Position(en) sind plausibel und können in die Wissensbasis übernommen werden.`;
+        }
+        return "Die Kalkulation wirkt plausibel. Prüfe die größten Positionen und exportiere danach Angebot, XLSX, PDF oder GAEB.";
+    }
+    function runPrimaryKiAction() {
+        if (!rows.length) {
+            alert("Keine Positionen vorhanden.");
+            return;
+        }
+        if (problemCounts.kurztextFehlt > 0 ||
+            problemCounts.langtextFehlt > 0 ||
+            problemCounts.einheitFehlt > 0 ||
+            problemCounts.preisaufbauFehlt > 0) {
+            autoCompleteMissingFields();
+            return;
+        }
+        void runEliteCalculation();
+    }
+    function rlcCanSendToGlobalKnowledge(row) {
+        const ep = Number(row?.rlcEp ?? row?.finalUnitPrice ?? row?.preis ?? 0);
+        const qty = Number(row?.menge ?? row?.quantity ?? 0);
+        const unit = String(row?.einheit ?? row?.unit ?? "").trim();
+        const text = String(row?.kurztext ?? row?.shortText ?? "").trim();
+        const confidence = Number(row?.confidence ?? 0.75);
+        const approvalLevel = String(row?.approvalLevel || "").trim();
+        const diffPct = Math.abs(Number(row?.diffPct ?? 0));
+        if (!text)
+            return false;
+        if (!unit)
+            return false;
+        if (!Number.isFinite(ep) || ep <= 0)
+            return false;
+        if (!Number.isFinite(qty) || qty <= 0)
+            return false;
+        if (confidence < 0.5)
+            return false;
+        if (approvalLevel === "blocked_review" || approvalLevel === "manual_review")
+            return false;
+        if (diffPct > 20)
+            return false;
+        const unitLower = unit.toLowerCase();
+        const lumpSumUnit = unitLower === "psch" || unitLower === "st" || unitLower === "stk";
+        if (!lumpSumUnit && ep > 5000)
+            return false;
+        return true;
+    }
+    function rlcX84LearningCandidateKey(r) {
+        return [
+            String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+            String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+            String(r?.einheit || r?.unit || "").trim().toLowerCase()
+        ].
+            join("||");
+    }
+    function showRlcX84LearningFreigabeModal(candidates) {
+        if (typeof document === "undefined") {
+            const safe = candidates.filter((r) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
+            return Promise.resolve({
+                ok: true,
+                writeCompanyDb: true,
+                approveGlobalKnowledge: false,
+                selectedKeys: safe.map(rlcX84LearningCandidateKey)
+            });
+        }
+        const safe = candidates.filter((r) => r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review");
+        const esc = (value) => String(value ?? "").
+            replace(/&/g, "&amp;").
+            replace(/</g, "&lt;").
+            replace(/>/g, "&gt;").
+            replace(/"/g, "&quot;");
+        return new Promise((resolve) => {
+            const overlay = document.createElement("div");
+            overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: rgba(15, 23, 42, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+    `;
+            const rows = safe.
+                slice(0, 200).
+                map((r, idx) => {
+                const diff = Number(r.diffPct || 0);
+                const diffGp = Number(r.diffGp || 0);
+                return `
+          <tr>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">
+              <input type="checkbox" data-rlc-learning-index="${idx}" ${r.approvalLevel === "safe_review" ? "checked" : ""} />
+            </td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:700;">${esc(r.posNr)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(r.x84Ep || 0).toFixed(2)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;">${Number(r.rlcEp || 0).toFixed(2)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${diff.toFixed(2)}%</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${diffGp.toFixed(2)}</td>
+            <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;font-weight:800;color:${r.approvalLevel === "safe_review" ? "#166534" : "#92400e"};">
+              ${esc(r.approvalLevel)}
+            </td>
+          </tr>
+        `;
+            }).
+                join("");
+            overlay.innerHTML = `
+      <div style="
+        width: min(1180px, 96vw);
+        max-height: 88vh;
+        background: #ffffff;
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(15,23,42,.35);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      ">
+        <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+          <div style="font-size:20px;font-weight:900;color:#0f172a;">
+            RLC X84 Learning freigeben
+          </div>
+          <div style="font-size:13px;color:#475569;margin-top:6px;">
+            X84 bleibt nur Benchmark. Gespeichert wird ausschließlich der geprüfte RLC-KI-Preis.
+          </div>
+        </div>
+
+        <div style="padding:14px 24px;display:flex;gap:18px;align-items:center;border-bottom:1px solid #e5e7eb;background:#fff;">
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:700;color:#0f172a;">
+            <input id="rlcLearningSelectAll" type="checkbox" checked />
+            Alle safe_review Positionen auswählen
+          </label>
+
+          <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:700;color:#0f172a;">
+            <input id="rlcLearningGlobal" type="checkbox" />
+            Auch anonym in RLC Global Knowledge übernehmen
+          </label>
+
+          <div style="margin-left:auto;font-size:13px;color:#64748b;">
+            Freigabekandidaten: <b>${safe.length}</b> · Ausgewählt: <b id="rlcLearningSelectedCount">${safe.filter((r) => r.approvalLevel === "safe_review").length}</b>
+          </div>
+        </div>
+
+        <div style="overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead style="position:sticky;top:0;background:#f1f5f9;z-index:1;">
+              <tr>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;width:44px;"></th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Pos.</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Kurztext</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">X84 EP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">RLC EP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Diff %</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Diff GP</th>
+                <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Level</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
+        <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;gap:12px;justify-content:flex-end;">
+          <button data-action="cancel" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
+            Abbrechen
+          </button>
+          <button data-action="approve" style="padding:10px 18px;border-radius:10px;border:0;background:#0f172a;color:#fff;font-weight:900;cursor:pointer;">
+            Ausgewählte freigeben
+          </button>
+        </div>
+      </div>
+    `;
+            document.body.appendChild(overlay);
+            const close = (result) => {
+                overlay.remove();
+                resolve(result);
+            };
+            const updateSelectedCount = () => {
+                const count = overlay.querySelectorAll("input[data-rlc-learning-index]:checked").length;
+                const el = overlay.querySelector("#rlcLearningSelectedCount");
+                if (el)
+                    el.textContent = String(count);
+            };
+            const collectSelectedKeys = () => Array.from(overlay.querySelectorAll("input[data-rlc-learning-index]:checked")).
+                map((el) => safe[Number(el.dataset.rlcLearningIndex)]).
+                filter(Boolean).
+                map(rlcX84LearningCandidateKey);
+            overlay.querySelector('[data-action="cancel"]')?.addEventListener("click", () => {
+                close({ ok: false, writeCompanyDb: false, approveGlobalKnowledge: false, selectedKeys: [] });
+            });
+            overlay.querySelector('[data-action="approve"]')?.addEventListener("click", () => {
+                const selectedKeys = collectSelectedKeys();
+                const approveGlobalKnowledge = Boolean(overlay.querySelector("#rlcLearningGlobal")?.checked);
+                if (!selectedKeys.length) {
+                    alert("Bitte mindestens eine Position auswählen.");
+                    return;
+                }
+                close({
+                    ok: true,
+                    writeCompanyDb: true,
+                    approveGlobalKnowledge,
+                    selectedKeys
+                });
+            });
+            overlay.querySelector("#rlcLearningSelectAll")?.addEventListener("change", (event) => {
+                const checked = Boolean(event.target.checked);
+                overlay.
+                    querySelectorAll("input[data-rlc-learning-index]").
+                    forEach((input) => {
+                    input.checked = checked;
+                });
+                updateSelectedCount();
+            });
+            overlay.
+                querySelectorAll("input[data-rlc-learning-index]").
+                forEach((input) => {
+                input.addEventListener("change", updateSelectedCount);
+            });
+            updateSelectedCount();
+        });
+    }
+    function showRlcOutlierReportModal() {
+        if (typeof document === "undefined")
+            return;
+        const esc = (value) => String(value ?? "").
+            replace(/&/g, "&amp;").
+            replace(/</g, "&lt;").
+            replace(/>/g, "&gt;").
+            replace(/"/g, "&quot;");
+        const outliers = rows.
+            filter((r) => !kiIsStructuralRow(r)).
+            map((r) => {
+            const ep = getUnitPrice(r);
+            const gp = lineNet(r);
+            const qty = n(r.menge);
+            const confidence = n(r.confidence, 0.75);
+            const unit = String(r.einheit || "").trim();
+            const issues = [];
+            if (ep <= 0)
+                issues.push("EP fehlt / 0");
+            if (qty <= 0)
+                issues.push("Menge fehlt / 0");
+            if (!unit)
+                issues.push("Einheit fehlt");
+            if (ep > 5000 && !["Psch", "St", "Stk"].includes(unit))
+                issues.push("EP sehr hoch");
+            if (gp > 50000)
+                issues.push("GP sehr hoch");
+            if (qty > 10000)
+                issues.push("Menge sehr hoch");
+            if (confidence < 0.6)
+                issues.push("Confidence niedrig");
+            if (r.riskLevel === "high")
+                issues.push("Risk high");
+            if (r.calculationStatus === "critical")
+                issues.push("Critical");
+            if (r.calculationStatus === "warning")
+                issues.push("Warning");
+            if (r.globalKnowledgeBlockedByQualityGuard)
+                issues.push("Global Guard blockiert");
+            return {
+                id: r.id,
+                posNr: r.posNr || "",
+                kurztext: r.kurztext || "",
+                einheit: unit,
+                menge: qty,
+                ep,
+                gp,
+                confidence,
+                riskLevel: r.riskLevel || "",
+                status: r.calculationStatus || "",
+                issues
+            };
+        }).
+            filter((r) => r.issues.length > 0).
+            sort((a, b) => {
+            const gpDiff = Math.abs(b.gp || 0) - Math.abs(a.gp || 0);
+            if (gpDiff !== 0)
+                return gpDiff;
+            return b.issues.length - a.issues.length;
+        });
+        const overlay = document.createElement("div");
+        overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: Arial, sans-serif;
+  `;
+        const rowsHtml = outliers.slice(0, 300).map((r) => `
+    <tr>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:800;">${esc(r.posNr)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${esc(r.kurztext)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${esc(r.menge)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.einheit)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${Number(r.ep || 0).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:800;">${Number(r.gp || 0).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${Number(r.confidence || 0).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.riskLevel)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:center;">${esc(r.status)}</td>
+      <td style="padding:8px;border-bottom:1px solid #e5e7eb;color:#92400e;font-weight:700;">${esc(r.issues.join(" · "))}</td>
+    </tr>
+  `).join("");
+        overlay.innerHTML = `
+    <div style="
+      width: min(1240px, 96vw);
+      max-height: 88vh;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 24px 80px rgba(15,23,42,.35);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    ">
+      <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;background:#f8fafc;">
+        <div style="font-size:20px;font-weight:900;color:#0f172a;">
+          RLC Outlier Report
+        </div>
+        <div style="font-size:13px;color:#475569;margin-top:6px;">
+          Automatische Prüfung auf auffällige EP, GP, Mengen, Confidence, Risiko, Status und Global-Knowledge-Guard.
+        </div>
+      </div>
+
+      <div style="padding:14px 24px;border-bottom:1px solid #e5e7eb;background:#fff;display:flex;gap:16px;align-items:center;">
+        <div style="font-size:14px;color:#0f172a;font-weight:800;">
+          Auffällige Positionen: ${outliers.length}
+        </div>
+        <div style="font-size:13px;color:#64748b;">
+          Anzeige max. 300 Positionen
+        </div>
+      </div>
+
+      <div style="overflow:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead style="position:sticky;top:0;background:#f1f5f9;z-index:1;">
+            <tr>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Pos.</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Kurztext</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">Menge</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">EH</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">EP</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:right;">GP</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Conf.</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Risk</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:center;">Status</th>
+              <th style="padding:8px;border-bottom:1px solid #cbd5e1;text-align:left;">Grund</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || `<tr><td colspan="10" style="padding:20px;text-align:center;color:#64748b;">Keine Outlier gefunden.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+
+      <div style="padding:16px 24px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;gap:12px;justify-content:flex-end;">
+        <button data-action="close" style="padding:10px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:800;cursor:pointer;">
+          Schließen
+        </button>
+      </div>
+    </div>
+  `;
+        document.body.appendChild(overlay);
+        overlay.querySelector('[data-action="close"]')?.addEventListener("click", () => {
+            overlay.remove();
+        });
+        overlay.addEventListener("click", (event) => {
+            if (event.target === overlay)
+                overlay.remove();
+        });
+    }
+    if (typeof window !== "undefined") {
+        window.rlcOpenKalkulationOutlierReport = showRlcOutlierReportModal;
+    }
+    async function showRlcX84LearningApprovalDraft() {
+        let learningState = await loadRlcX84LearningState(projectKey);
+        const draft = learningState?.draft || {};
+        const candidates = Array.isArray(draft?.candidates) ? draft.candidates : [];
+        const summary = draft?.summary || {};
+        console.log("[RLC-KI] Learning Approval Draft", {
+            projectKey,
+            storage: "server",
+            ok: draft?.ok,
+            mode: draft?.mode,
+            autoWriteToDatabase: draft?.autoWriteToDatabase,
+            x84UsedAsPrice: draft?.x84UsedAsPrice,
+            summary
+        });
+        console.table(candidates.slice(0, 80).map((r) => ({
+            posNr: r.posNr,
+            kurztext: r.kurztext,
+            x84Ep: r.x84Ep,
+            rlcEp: r.rlcEp,
+            diffPct: r.diffPct,
+            diffGp: r.diffGp,
+            approvalLevel: r.approvalLevel,
+            decision: r.decision,
+            companyDb: r.approvedForCompanyDb,
+            globalDb: r.approvedForGlobalKnowledge,
+            source: r.source
+        })));
+        const freigabe = await showRlcX84LearningFreigabeModal(candidates);
+        if (!freigabe.ok)
+            return;
+        const selectedFreigabeKeys = new Set(freigabe.selectedKeys);
+        const approveGlobalKnowledge = freigabe.approveGlobalKnowledge;
+        const approved = candidates.
+            filter((r) => (r.approvalLevel === "safe_review" || r.approvalLevel === "soft_review") && selectedFreigabeKeys.has(rlcX84LearningCandidateKey(r))).
+            map((r) => ({
+            ...r,
+            decision: "approved",
+            approvedForCompanyDb: true,
+            approvedForGlobalKnowledge: approveGlobalKnowledge && rlcCanSendToGlobalKnowledge(r),
+            globalKnowledgeBlockedByQualityGuard: approveGlobalKnowledge && !rlcCanSendToGlobalKnowledge(r),
+            usedAsPrice: false,
+            approvedAt: new Date().toISOString(),
+            approvalSource: approveGlobalKnowledge ?
+                "manual_safe_review_company_and_global_approval" :
+                "manual_safe_review_company_only_approval",
+            note: approveGlobalKnowledge ?
+                "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Anonyme Übernahme in RLC Global Knowledge wurde bestätigt." :
+                "Manuell als Learning-Kandidat freigegeben. X84 wurde nicht automatisch als Preis übernommen. Speicherung nur in Firmen-Datenbank."
+        }));
+        const approvedSnapshot = {
+            ok: true,
+            projectKey,
+            createdAt: new Date().toISOString(),
+            mode: "approved_learning_candidates_only",
+            autoWriteToDatabase: false,
+            x84UsedAsPrice: false,
+            count: approved.length,
+            approvedForCompanyDbCount: approved.filter((r) => r.approvedForCompanyDb).length,
+            approvedForGlobalKnowledgeCount: approved.filter((r) => r.approvedForGlobalKnowledge).length,
+            entries: approved
+        };
+        learningState = await saveRlcX84LearningState(projectKey, {
+            ...learningState,
+            projectKey,
+            approved: approvedSnapshot,
+            updatedAt: new Date().toISOString()
+        });
+        const writeDb = freigabe.writeCompanyDb;
+        if (!writeDb)
+            return;
+        const learnedRows = approved.
+            filter((r) => Number(r.rlcEp || 0) > 0).
+            map((r, idx) => ({
+            ...normalizeEliteRow({
+                id: `x84-learning-approved-${r.posNr || idx}`,
+                posNr: String(r.posNr || ""),
+                kurztext: String(r.kurztext || ""),
+                langtext: `RLC X84 Benchmark Learning geprüft. ` +
+                    `X84 EP ${r.x84Ep} wurde nur als Vergleich genutzt. ` +
+                    `Gespeichert wird der geprüfte RLC-KI EP ${r.rlcEp}.`,
+                einheit: String(r.einheit || ""),
+                menge: Number(r.menge || 1) || 1,
+                rlcKiUnitPrice: Number(r.rlcEp || 0),
+                finalUnitPrice: Number(r.rlcEp || 0),
+                suggestedUnitPrice: Number(r.rlcEp || 0),
+                baseUnitPrice: Number(r.rlcEp || 0),
+                preis: Number(r.rlcEp || 0),
+                gesamt: round2((Number(r.menge || 1) || 1) * Number(r.rlcEp || 0)),
+                rlcKiTotal: round2((Number(r.menge || 1) || 1) * Number(r.rlcEp || 0)),
+                angebotUnitPrice: Number(r.x84Ep || 0),
+                x84UnitPrice: Number(r.x84Ep || 0),
+                originalPreKiPrice: Number(r.x84Ep || 0),
+                source: "x84-approved-learning-rlc-price",
+                datenbankQuelle: "x84-approved-learning-rlc-price",
+                calculationStatus: "ok",
+                riskLevel: "low",
+                confidence: 0.92,
+                warning: "",
+                aiReason: "Manuell freigegebener X84-Benchmark-Learning-Kandidat. " +
+                    "X84 wurde nur als Vergleich genutzt; gespeichert wurde der geprüfte RLC-KI-Preis."
+            }),
+            approvedForCompanyDb: true,
+            approvedForGlobalKnowledge: Boolean(r.approvedForGlobalKnowledge) && rlcCanSendToGlobalKnowledge(r),
+            globalKnowledgeBlockedByQualityGuard: Boolean(r.globalKnowledgeBlockedByQualityGuard)
+        }));
+        const duplicateKey = (r) => [
+            String(projectKey || "").trim().toLowerCase(),
+            String(r?.posNr || r?.positionNumber || "").trim().toLowerCase(),
+            String(r?.kurztext || r?.shortText || "").trim().toLowerCase(),
+            String(r?.einheit || r?.unit || "").trim().toLowerCase(),
+            String(r?.datenbankQuelle || r?.source || "ki").trim().toLowerCase()
+        ].
+            join("||");
+        const dbWrittenRaw = learningState?.dbWritten && typeof learningState.dbWritten === "object" ?
+            learningState.dbWritten :
+            {};
+        const alreadyWrittenKeys = new Set(Array.isArray(dbWrittenRaw?.keys) ? dbWrittenRaw.keys.map(String) : []);
+        const uniqueLearnedRows = [];
+        const uniqueLearningKeys = [];
+        const seenLearningKeys = new Set();
+        for (const row of learnedRows) {
+            const key = duplicateKey(row);
+            if (alreadyWrittenKeys.has(key))
+                continue;
+            if (seenLearningKeys.has(key))
+                continue;
+            seenLearningKeys.add(key);
+            uniqueLearningKeys.push(key);
+            uniqueLearnedRows.push(row);
+        }
+        if (!uniqueLearnedRows.length) {
+            setServerStatus("ℹ️ Keine neuen Learning-Kandidaten: bereits in Firmen-Datenbank gespeichert");
+            setTimeout(() => setServerStatus(""), 3500);
+            console.log("[RLC-KI] V48B Duplicate Guard: no new DB learning rows", {
+                projectKey,
+                skipped: learnedRows.length
+            });
+            return;
+        }
+        const count = saveRowsToDatenbank(uniqueLearnedRows, projectKey, projectTitle);
+        learningState = await saveRlcX84LearningState(projectKey, {
+            ...learningState,
+            projectKey,
+            dbWritten: {
+                ok: true,
+                projectKey,
+                updatedAt: new Date().toISOString(),
+                keys: Array.from(new Set([
+                    ...Array.from(alreadyWrittenKeys),
+                    ...uniqueLearningKeys
+                ]))
+            },
+            updatedAt: new Date().toISOString()
+        });
+        setServerStatus(`✅ ${count} neue geprüfte Learning-Kandidat(en) in Firmen-Datenbank übernommen`);
+        setTimeout(() => setServerStatus(""), 3500);
+        console.log("[RLC-KI] Approved Learning written to Firmen-Datenbank", {
+            count,
+            projectKey
+        });
+        alert([
+            "Firmen-Datenbank aktualisiert.",
+            "",
+            `Übernommen: ${count}`,
+            "",
+            "Quelle: geprüfte RLC-KI Learning-Kandidaten.",
+            "X84 wurde nicht als Preis gespeichert."
+        ].
+            join("\n"));
+    }
+    function renderPriceDiffTable(title, text, list) {
+        if (!list.length)
+            return null;
+        return (_jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-869", children: [_jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-870", children: [_jsxs("div", { children: [_jsx("h3", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-871", children: title }), _jsx("div", { className: rlcClass(null, sectionText), children: text })] }), _jsxs("div", { className: rlcClass(null, priceCompareBadge), children: [list.length, " Position(en)"] })] }), _jsx("div", { className: rlcClass(null, priceCompareTableWrap), children: _jsxs("table", { className: rlcClass(null, priceCompareTable), children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { className: rlcClass(null, priceCompareTh), children: "Pos." }), _jsx("th", { className: rlcClass(null, priceCompareTh), children: "Kurztext" }), _jsx("th", { className: rlcClass(null, priceCompareThRight), children: "Menge" }), _jsx("th", { className: rlcClass(null, priceCompareTh), children: "ME" }), _jsx("th", { className: rlcClass(null, priceCompareThRight), children: "EP X84" }), _jsx("th", { className: rlcClass(null, priceCompareThRight), children: "EP RLC-KI" }), _jsx("th", { className: rlcClass(null, priceCompareThRight), children: "Diff. %" }), _jsx("th", { className: rlcClass(null, priceCompareThRight), children: "Diff. GP" }), _jsx("th", { className: rlcClass(null, priceCompareTh), children: "Bewertung" })] }) }), _jsx("tbody", { children: list.map((r) => _jsxs("tr", { className: rlcClass(null, priceCompareTr), onClick: () => {
+                                        setSelectedId(r.id);
+                                        setViewFilter("alle");
+                                    }, children: [_jsx("td", { className: rlcClass(null, priceCompareTdStrong), children: r.posNr || "—" }), _jsx("td", { className: rlcClass(null, priceCompareTd), children: r.kurztext || "—" }), _jsx("td", { className: rlcClass(null, priceCompareTdRight), children: qty(r.menge) }), _jsx("td", { className: rlcClass(null, priceCompareTd), children: r.einheit || "—" }), _jsx("td", { className: rlcClass(null, priceCompareTdRight), children: money(r.angebotEp) }), _jsx("td", { className: rlcClass(null, priceCompareTdRight), children: money(r.kiEp) }), _jsxs("td", { className: rlcClass(null, priceCompareTdRight), children: [r.diffPct, "%"] }), _jsx("td", { className: rlcClass(null, priceCompareTdRight), children: money(r.diffGp) }), _jsx("td", { className: rlcClass(null, priceCompareTd), children: _jsx("span", { className: rlcClass(null, Math.abs(r.diffPct) >= 30 ?
+                                                    badgeCritical :
+                                                    Math.abs(r.diffPct) >= 20 ?
+                                                        badgeWarn :
+                                                        Math.abs(r.diffPct) >= 10 ?
+                                                            badgeInfo :
+                                                            badgeOk), children: r.empfehlung }) })] }, `${title}-${r.id}`)) })] }) })] }));
+    }
+    return (_jsxs("div", { className: rlcClass(null, page), children: [_jsx("input", { ref: csvInputRef, type: "file", accept: ".csv,text/csv", onChange: (e) => handleCsvImport(e.target.files?.[0] || null), className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-872" }), _jsxs("section", { className: rlcClass("rlc-page-hero", heroCardCompact), children: [_jsxs("div", { className: rlcClass(null, heroTopLine), children: [_jsxs("div", { children: [_jsx("div", { className: rlcClass(null, eyebrow), children: "RLC KI-Kalkulation" }), _jsx("h1", { className: rlcClass(null, titleCompact), children: "Kalkulation mit KI" }), _jsx("p", { className: rlcClass(null, subtitleCompact), children: "LV-Positionen kalkulieren, Urkalkulation aufbauen, Risiken pr\u00FCfen und Angebot, PDF, XLSX und GAEB direkt erzeugen." })] }), _jsxs("div", { className: rlcClass(null, heroMetaCompact), children: [_jsx("span", { children: "Projekt" }), _jsx("b", { children: projectKey || "—" }), lastKiSource ? _jsx("em", { children: lastKiSource }) : null] })] }), _jsxs("div", { className: rlcClass(null, compactToolbar), children: [_jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-873", children: [_jsx("button", { type: "button", className: rlcClass(null, kiMode === "new-calculation" ? btnPrimary : btnSecondary), onClick: () => {
+                                            setKiMode("new-calculation");
+                                            void runWithAction("ki-new-calculation", "Neue Kalkulation erstellen", () => runEliteCalculation(true, false, "new-calculation"));
+                                        }, disabled: loading || !rows.length, title: "Ohne Angebotsbasis: RLC erstellt die Kalkulation aus LV, Langtext, Menge, Einheit, Datenbank und Urkalkulation.", children: "Neue Kalkulation erstellen" }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: () => {
+                                            void runWithAction("ki-offer-check", "Angebot prüfen", () => runOfferCheckOnly());
+                                        }, disabled: loading || !rows.length, title: "Pr\u00FCft eine vorhandene Angebots-/X84-Basis. Dieser Modus ist Kontrolle, nicht Hauptkalkulation.", children: "Angebot pr\u00FCfen" })] }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: addRow, children: "Urkalkulation starten f\u00FCr neue und bestehende Positionen" }), "        ", _jsx("button", { type: "button", className: rlcClass(null, btnPrimary), onClick: () => void runWithAction("server-save", "Speichern", () => saveToProjectServer()), disabled: serverBusy || !projectKey, title: "Aktuellen Kalkulationsstand auf dem Server speichern.", children: "Speichern" }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: () => navigate("/kalkulation/gaeb"), title: "GAEB-Dateien importieren, pr\u00FCfen und exportieren.", children: "GAEB Import / Export" }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: () => setShowQuickActions((v) => !v), children: showQuickActions ? "Funktionen schließen" : "Funktionen" })] }), serverStatus ? _jsx("div", { className: rlcClass(null, heroStatus), children: serverStatus }) : null, activeAction ? _jsx(RlcActionProgress, { action: activeAction }) : null] }), showQuickActions ?
+                _jsxs("section", { className: rlcClass(null, compactActionPanel), children: [_jsx("div", { className: rlcClass(null, compactActionHeader), children: _jsxs("div", { children: [_jsx("h2", { className: rlcClass(null, sectionTitle), children: "Funktionen" }), _jsx("div", { className: rlcClass(null, sectionText), children: "Zentrale Funktionen f\u00FCr LV, Nachtr\u00E4ge, Angebot, GAEB, Export und Einstellungen." })] }) }), _jsxs("div", { className: rlcClass(null, compactActionGrid), children: [_jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true)), disabled: loading || !rows.length, children: [_jsx("b", { children: "KI Expertpr\u00FCfung" }), _jsx("span", { children: "Langsame Tiefpr\u00FCfung nur bei Bedarf" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: showRlcX84LearningApprovalDraft, disabled: loading, children: [_jsx("b", { children: "Learning pr\u00FCfen / freigeben" }), _jsx("span", { children: "Gepr\u00FCfte Kandidaten in Firmen-Datenbank \u00FCbernehmen" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => void runWithAction("ki-complete", "Fehlende Daten prüfen", () => autoCompleteMissingFields()), disabled: !rows.length, children: [_jsx("b", { children: "Fehlende Daten pr\u00FCfen" }), _jsx("span", { children: "Pr\u00FCft fehlende Kurztexte, Langtexte, Einheiten, Mengen und Preisaufbau" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => void runWithAction("server-save", "Speichern", () => saveToProjectServer()), disabled: serverBusy || !projectKey, children: [_jsx("b", { children: "Speichern" }), _jsx("span", { children: "Aktuellen Stand manuell sichern" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => void runWithAction("server-load", "Laden", () => loadFromProjectServer()), disabled: serverBusy || !projectKey, children: [_jsx("b", { children: "Laden" }), _jsx("span", { children: "Gespeicherten Stand wiederherstellen" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => navigate("/kalkulation/lv-import"), children: [_jsx("b", { children: "LV / Positionen" }), _jsx("span", { children: "Importieren und bearbeiten" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => navigate("/kalkulation/nachtraege"), children: [_jsx("b", { children: "Nachtr\u00E4ge" }), _jsx("span", { children: "Zusatzleistungen und \u00C4nderungen bearbeiten" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => navigate("/kalkulation/angebot"), children: [_jsx("b", { children: "Angebot / Export" }), _jsx("span", { children: "Angebot, PDF und Angebotsunterlagen erzeugen" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => navigate("/kalkulation/gaeb"), children: [_jsx("b", { children: "GAEB Import / Export" }), _jsx("span", { children: "GAEB-Dateien importieren, pr\u00FCfen und alle Formate zentral exportieren" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => csvInputRef.current?.click(), children: [_jsx("b", { children: "CSV Import" }), _jsx("span", { children: "Positionen aus CSV laden" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => downloadCsv(rows), disabled: !rows.length, children: [_jsx("b", { children: "CSV Export" }), _jsx("span", { children: "Aktuelle Kalkulation exportieren" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => exportXlsx(rows, chapterTotals, summary, offer), disabled: !rows.length, children: [_jsx("b", { children: "XLSX" }), _jsx("span", { children: "Kalkulation mit Preisaufbau" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport()), disabled: !rows.length || pdfBusy, children: [_jsx("b", { children: pdfBusy ? "PDF…" : "PDF Angebot" }), _jsx("span", { children: "Angebots-PDF erzeugen" })] }), _jsxs("button", { type: "button", className: rlcClass(null, compactActionButton), onClick: () => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport()), disabled: !rows.length || pdfBusy, children: [_jsx("b", { children: "Urkalkulation PDF" }), _jsx("span", { children: "Detailkalkulation exportieren" })] })] })] }) :
+                null, _jsxs("section", { className: rlcClass(null, compactOrderCard), children: [_jsxs("div", { className: rlcClass(null, orderHead), children: [_jsxs("div", { children: [_jsx("h2", { className: rlcClass(null, sectionTitle), children: "Auftragsstruktur" }), _jsx("div", { className: rlcClass(null, sectionText), children: "Hauptauftrag und Unterauftr\u00E4ge kompakt steuern." })] }), _jsx("button", { type: "button", className: rlcClass(null, btnPrimary), onClick: createUnterauftrag, children: "+ Unterauftrag" })] }), _jsxs("div", { className: rlcClass(null, auftragSummaryBoxCompact), children: [_jsxs("div", { children: ["Auftrag:", " ", _jsx("b", { children: selectedAuftragId ?
+                                            selectedAuftrag?.name || "—" :
+                                            "Alle Aufträge" })] }), _jsxs("div", { children: ["Positionen: ", _jsx("b", { children: selectedAuftragSummary.count }), " \u00B7 Kalkuliert:", " ", _jsx("b", { children: selectedAuftragSummary.priced }), " \u00B7 Netto:", " ", _jsx("b", { children: money(selectedAuftragSummary.net) })] })] }), _jsxs("div", { className: rlcClass(null, auftragTabsCompact), children: [_jsx("button", { type: "button", className: rlcClass(null, !selectedAuftragId ? auftragTabActive : auftragTab), onClick: () => setSelectedAuftragId(""), children: "Alle" }), auftraege.map((auftrag) => _jsxs("button", { type: "button", className: rlcClass(null, selectedAuftragId === auftrag.id ? auftragTabActive : auftragTab), onClick: () => setSelectedAuftragId(auftrag.id), children: [auftrag.type === "haupt" ? "Haupt" : "Unter", " \u00B7 ", auftrag.name] }, auftrag.id))] })] }), _jsxs("section", { className: rlcClass(null, grid4Compact), children: [_jsx(KpiCard, { label: "Angebot X84 netto", value: (() => {
+                            try {
+                                const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+                                const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
+                                const offerNet = x84OfferNet || summary.angebotNet;
+                                return hasRealX84 && offerNet > 0 ? money(offerNet) : "Keine X84 geladen";
+                            }
+                            catch {
+                                return "Keine X84 geladen";
+                            }
+                        })(), sub: (() => {
+                            try {
+                                const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+                                const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
+                                const offerNet = x84OfferNet || summary.angebotNet;
+                                return hasRealX84 && offerNet > 0 ?
+                                    `Brutto ${money(round2(offerNet * 1.19))}` :
+                                    "Nur X83/LV vorhanden · keine Angebotsdatei";
+                            }
+                            catch {
+                                return "Nur X83/LV vorhanden · keine Angebotsdatei";
+                            }
+                        })() }), _jsx(KpiCard, { label: "RLC-KI netto", value: loading ? "Wird berechnet…" : summary.rlcKiNet > 0 ? money(summary.rlcKiNet) : "0,00 €", sub: loading ? "Server-KI berechnet gerade echte RLC-Preise" : summary.rlcKiNet > 0 ? `Brutto ${money(summary.rlcKiGross)}` : "Noch keine RLC-KI berechnet" }), _jsx(KpiCard, { label: "Pr\u00FCfen", value: `${summary.critical + summary.highRisk}`, sub: summary.highRisk > 0 ? "Bitte jede Position prüfen · fachliche Prüfung erforderlich · RLC-KI übernimmt keine Haftung" : `${summary.critical} kritisch · fachlich geprüft` }), _jsx(KpiCard, { label: "\u00D8 Sicherheit", value: percent(summary.avgConfidence), sub: `${summary.priced}/${summary.total} kalkuliert` })] }), (() => {
+                try {
+                    const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
+                    return String(parsed?.format || "").toUpperCase() === "X84";
+                }
+                catch {
+                    return false;
+                }
+            })() && priceDiffReport.counts.total > 0 ?
+                _jsxs("section", { className: rlcClass(null, { ...priceCompareCard, display: rows.some((r) => getOfferUnitPrice(r) > 0) ? undefined : "none" }), children: [_jsxs("div", { className: rlcClass(null, sectionHead), children: [_jsxs("div", { children: [_jsx("h2", { className: rlcClass(null, sectionTitle), children: "Optionaler Angebotsvergleich X84 \u2194 RLC-KI" }), _jsxs("div", { className: rlcClass(null, sectionText), children: ["Optionaler Vergleich aller ", priceDiffReport.counts.total, " Positionen. X84 ist nur eine externe Angebots-/Vergleichsdatei und keine Kalkulationsgrundlage der RLC-KI."] })] }), _jsxs("div", { className: rlcClass(null, priceCompareBadge), children: [priceDiffReport.counts.outside10, " Abweichungen > \u00B110%"] })] }), _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-874", children: [_jsx(KpiCard, { label: "Alle Positionen", value: `${priceDiffReport.counts.total}`, sub: `${priceDiffReport.counts.comparable} vergleichbar · ${priceDiffReport.counts.missing} ohne Vergleich` }), _jsx(KpiCard, { label: "RLC-KI h\u00F6her als X84 >10%", value: `${priceDiffReport.counts.higher10}`, sub: `${money(priceDiffReport.sums.higher)} GP-Differenz` }), _jsx(KpiCard, { label: "RLC-KI niedriger als X84 >10%", value: `${priceDiffReport.counts.lower10}`, sub: `${money(priceDiffReport.sums.lower)} GP-Differenz` }), _jsx(KpiCard, { label: "Innerhalb \u00B110%", value: `${priceDiffReport.counts.inside10}`, sub: `${money(priceDiffReport.sums.inside)} GP-Differenz` }), _jsx(KpiCard, { label: "Differenz zum X84-Vergleich", value: money(priceDiffReport.sums.diff), sub: `${money(priceDiffReport.sums.x84)} X84 ↔ ${money(priceDiffReport.sums.rlc)} RLC-KI` })] }), _jsx("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-875", children: [
+                                ["outside10", `Außerhalb ±10% (${priceDiffReport.counts.outside10})`],
+                                ["higher10", `RLC höher >10% (${priceDiffReport.counts.higher10})`],
+                                ["lower10", `RLC niedriger >10% (${priceDiffReport.counts.lower10})`],
+                                ["inside10", `Innerhalb ±10% (${priceDiffReport.counts.inside10})`],
+                                ["over20", `Über ±20% (${priceDiffReport.over20Pct.length})`],
+                                ["over10000", `Über 10.000 € (${priceDiffReport.over10000Gp.length})`],
+                                ["all", `Alle vergleichbaren (${priceDiffReport.counts.comparable})`],
+                                ["missing", `Ohne Vergleich (${priceDiffReport.counts.missing})`]
+                            ].
+                                map(([key, label]) => _jsx("button", { type: "button", className: rlcClass(null, priceDiffView === key ? btnPrimary : btnSecondary), onClick: () => setPriceDiffView(key), children: label }, key)) }), renderPriceDiffTable(priceDiffView === "higher10" ?
+                            "RLC-KI höher als X84 um mehr als 10%" :
+                            priceDiffView === "lower10" ?
+                                "RLC-KI niedriger als X84 um mehr als 10%" :
+                                priceDiffView === "inside10" ?
+                                    "Positionen innerhalb ±10%" :
+                                    priceDiffView === "over20" ?
+                                        "Positionen über ±20%" :
+                                        priceDiffView === "over10000" ?
+                                            "Positionen über 10.000 € GP-Differenz" :
+                                            priceDiffView === "all" ?
+                                                "Alle vergleichbaren Positionen" :
+                                                priceDiffView === "missing" ?
+                                                    "Positionen ohne Vergleich" :
+                                                    "Alle Vergleichsabweichungen über ±10%", "Die Tabelle ist vollständig für den gewählten Filter. Diese Analyse bewertet eine externe X84-Datei gegen die autonome RLC-Kalkulation; sie kalibriert die RLC-KI nicht automatisch.", activePriceDiffRows)] }) :
+                null, showCommercialSettings ?
+                _jsxs("section", { className: rlcClass(null, card), children: [_jsx("div", { className: rlcClass(null, sectionHead), children: _jsxs("div", { children: [_jsx("h2", { className: rlcClass(null, sectionTitle), children: "Angebot / Rahmenwerte" }), _jsx("div", { className: rlcClass(null, sectionText), children: "Diese Werte flie\u00DFen in PDF, XLSX, Snapshot und Angebots\u00FCbergabe ein." })] }) }), _jsxs("div", { className: rlcClass(null, formGrid), children: [_jsx(Field, { label: "Angebot Nr.", children: _jsx("input", { className: rlcClass(null, input), value: offer.number, onChange: (e) => setOffer({ ...offer, number: e.target.value }) }) }), _jsx(Field, { label: "Ort", children: _jsx("input", { className: rlcClass(null, input), value: offer.place, onChange: (e) => setOffer({ ...offer, place: e.target.value }) }) }), _jsx(Field, { label: "Kunde", children: _jsx("input", { className: rlcClass(null, input), value: client.name, onChange: (e) => setClient({ ...client, name: e.target.value }) }) }), _jsx(Field, { label: "Kundenadresse", children: _jsx("input", { className: rlcClass(null, input), value: client.address, onChange: (e) => setClient({ ...client, address: e.target.value }) }) }), _jsx(Field, { label: "Globaler Aufschlag %", children: _jsx("input", { type: "number", className: rlcClass(null, input), value: globalMarkup, onChange: (e) => setGlobalMarkup(n(e.target.value)) }) }), _jsx(Field, { label: "MwSt %", children: _jsx("input", { type: "number", className: rlcClass(null, input), value: mwst, onChange: (e) => setMwst(n(e.target.value)) }) })] }), _jsx("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-876", children: _jsx(Field, { label: "Notizen / Zahlungsbedingungen", children: _jsx("textarea", { className: rlcClass(null, { ...input, minHeight: 70 }), value: offer.notes, onChange: (e) => setOffer({ ...offer, notes: e.target.value }) }) }) })] }) :
+                null, showChapterSettings ?
+                _jsxs("section", { className: rlcClass(null, card), children: [_jsx("div", { className: rlcClass(null, sectionHead), children: _jsxs("div", { children: [_jsx("h2", { className: rlcClass(null, sectionTitle), children: "Kapitelsteuerung" }), _jsx("div", { className: rlcClass(null, sectionText), children: "Rabatt und Markup pro Kapitel f\u00FCr Angebotsstrategie." })] }) }), _jsxs("div", { className: rlcClass(null, chapterGrid), children: [Array.from(chapters.keys()).map((ch) => _jsxs("div", { className: rlcClass(null, chapterBox), children: [_jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-877", children: ["Kapitel ", ch] }), _jsxs("div", { className: rlcClass(null, chapterInputs), children: [_jsx("label", { className: rlcClass(null, label), children: "Rabatt %" }), _jsx("input", { type: "number", className: rlcClass(null, smallInput), value: kapRabatt[ch] ?? 0, onChange: (e) => setKapRabatt({ ...kapRabatt, [ch]: n(e.target.value) }) }), _jsx("label", { className: rlcClass(null, label), children: "Markup %" }), _jsx("input", { type: "number", className: rlcClass(null, smallInput), value: kapMarkup[ch] ?? 0, onChange: (e) => setKapMarkup({ ...kapMarkup, [ch]: n(e.target.value) }) })] }), _jsxs("div", { className: rlcClass(null, tiny), children: ["Netto: ", money(chapterTotals[ch]?.afterChapterMarkup)] })] }, ch)), !chapters.size ? _jsx("div", { className: rlcClass(null, muted), children: "Noch keine Kapitel." }) : null] })] }) :
+                null, _jsxs("section", { id: "rlc-lv-positionen", className: rlcClass(null, calcEditorGrid), children: [_jsxs("div", { className: rlcClass(null, card), children: [_jsxs("div", { className: rlcClass(null, sectionHead), children: [_jsxs("div", { children: [_jsx("h2", { className: rlcClass(null, sectionTitle), children: "LV / Positionsliste" }), _jsx("div", { className: rlcClass(null, sectionText), children: "Kompakte \u00DCbersicht der LV-Positionen. Die technische Detailkalkulation erfolgt in Urkalkulation / Rezepte." })] }), _jsxs("div", { className: rlcClass(null, exportRow), children: [_jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: addRow, children: "Urkalkulation starten f\u00FCr neue und bestehende Positionen" }), _jsxs("details", { className: rlcClass(null, lvMenuWrap), children: [_jsx("summary", { className: rlcClass(null, lvMenuButton), children: "Mehr \u25BE" }), _jsxs("div", { className: rlcClass(null, lvMenuPanel), children: [_jsx("button", { type: "button", className: rlcClass(null, lvMenuItem), onClick: () => csvInputRef.current?.click(), children: "CSV importieren" }), _jsx("button", { type: "button", className: rlcClass(null, lvMenuItem), onClick: () => downloadCsv(rows), disabled: !rows.length, children: "CSV exportieren" }), _jsx("button", { type: "button", className: rlcClass(null, lvMenuItem), onClick: () => exportXlsx(rows, chapterTotals, summary, offer), disabled: !rows.length, children: "XLSX exportieren" }), _jsx("button", { type: "button", className: rlcClass(null, lvMenuItem), onClick: () => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport()), disabled: !rows.length || pdfBusy, children: "PDF Angebot" }), _jsx("button", { type: "button", className: rlcClass(null, lvMenuItem), onClick: () => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport()), disabled: !rows.length || pdfBusy, children: "Urkalkulation PDF" }), _jsx("button", { type: "button", className: rlcClass(null, lvMenuItem), onClick: () => void runRlcAction("ki-export-x83", "GAEB X83 exportieren", () => exportGaeb("x83")), disabled: !rows.length, children: "GAEB X83" }), _jsx("button", { type: "button", className: rlcClass(null, lvMenuItem), onClick: () => void runRlcAction("ki-export-x84", "GAEB X84 exportieren", () => exportGaeb("x84")), disabled: !rows.length, children: "GAEB X84" })] })] })] })] }), _jsxs("div", { className: rlcClass(null, filterRow), children: [_jsxs(FilterButton, { active: viewFilter === "alle", onClick: () => setViewFilter("alle"), children: ["Alle ", rows.length] }), _jsxs(FilterButton, { active: viewFilter === "kritisch", onClick: () => setViewFilter("kritisch"), children: ["Kritisch ", problemCounts.kritisch] }), _jsxs(FilterButton, { active: viewFilter === "warnungen", onClick: () => setViewFilter("warnungen"), children: ["Pr\u00FCfhinweise ", problemCounts.warnungen] }), _jsxs(FilterButton, { active: viewFilter === "hochrisiko", onClick: () => setViewFilter("hochrisiko"), children: ["Pr\u00FCfpflichtig ", problemCounts.hochrisiko] }), _jsxs(FilterButton, { active: viewFilter === "doppelte", onClick: () => {
+                                            setViewFilter("doppelte");
+                                            selectDuplicateRowsToDelete();
+                                            setLvPage(1);
+                                        }, children: ["Doppelte ", duplicateCountToDelete] }), _jsxs(FilterButton, { active: viewFilter === "ohneDb", onClick: () => setViewFilter("ohneDb"), children: ["Ohne DB ", problemCounts.ohneDb] }), _jsxs(FilterButton, { active: viewFilter === "sicher", onClick: () => setViewFilter("sicher"), children: ["Direkt sicher ", problemCounts.sicher] }), _jsxs("span", { className: rlcClass(null, filterMeta), children: ["Sichtbar: ", filteredRows.length, "/", rows.length] })] }), _jsxs("details", { open: true, className: rlcClass(null, lvDropdownBox), children: [_jsxs("summary", { className: rlcClass(null, lvDropdownSummary), children: [_jsxs("span", { children: ["LV-Positionen \u00B7 ", filteredRows.length, " Position(en) \u00B7 Sichtbar max. ", lvPageSize] }), _jsx("span", { className: rlcClass(null, lvDropdownHint), children: "\u00F6ffnen / schlie\u00DFen" })] }), _jsxs("div", { className: rlcClass(null, { ...exportRow, marginBottom: 10 }), children: [_jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: selectWarningsForOpenAi, disabled: !rows.length, title: "W\u00E4hlt Warnungen, kritische Positionen, Pr\u00FCfpflichtig und Positionen ohne DB f\u00FCr OpenAI aus.", children: "Pr\u00FCfhinweise ausw\u00E4hlen" }), _jsxs("button", { type: "button", className: rlcClass(null, btnPrimary), onClick: () => void runRlcAction("ki-openai-selected", "Auswahl mit OpenAI prüfen", () => runSelectedOpenAiCheck()), disabled: loading || selectedOpenAiIds.length === 0, title: "Pr\u00FCft nur die ausgew\u00E4hlten Positionen mit OpenAI.", children: ["Auswahl mit OpenAI pr\u00FCfen (", selectedOpenAiIds.length, ")"] }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: clearOpenAiSelection, disabled: selectedOpenAiIds.length === 0, children: "Auswahl l\u00F6schen" }), _jsx("button", { type: "button", className: rlcClass(null, btnPrimary), onClick: acceptSelectedOpenAiSuggestion, disabled: !selectedHasOpenAiProposal(), title: "\u00DCbernimmt den OpenAI-Vorschlag nur f\u00FCr die aktuell ausgew\u00E4hlte Position.", children: "OpenAI \u00FCbernehmen" }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: rejectSelectedOpenAiSuggestion, disabled: !selectedHasOpenAiProposal(), children: "OpenAI ablehnen" }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: saveSelectedOpenAiSuggestionAsKnowledge, disabled: !selectedHasOpenAiProposal(), title: "Speichert den OpenAI-Vorschlag als gepr\u00FCften Firmenwert in der lokalen Kalkulationsdatenbank.", children: "Als Firmenwert speichern" }), _jsxs("button", { type: "button", className: rlcClass(null, btnPrimary), onClick: () => void runRlcAction("ki-save-knowledge", "In Datenbank übertragen", () => saveAllToKnowledge()), disabled: !rows.length, title: "\u00DCbertr\u00E4gt alle aktuell kalkulierten LV-Positionen in die Kalkulationsdatenbank.", children: ["In Datenbank \u00FCbertragen (", rows.length, ")"] })] }), _jsx("div", { className: rlcClass(null, lvTableScroll), children: _jsxs("table", { className: rlcClass(null, lvTable), children: [_jsxs("colgroup", { children: [_jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-878" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-879" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-880" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-881" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-882" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-883" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-884" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-885" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-886" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-887" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-888" }), _jsx("col", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-889" })] }), _jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { className: rlcClass(null, lvTh), children: "OpenAI" }), _jsx("th", { className: rlcClass(null, lvTh), children: "Auftrag" }), _jsx("th", { className: rlcClass(null, lvTh), children: "Pos." }), _jsx("th", { className: rlcClass(null, lvTh), children: "Kurztext" }), _jsx("th", { className: rlcClass(null, lvThRight), children: "Menge" }), _jsx("th", { className: rlcClass(null, lvTh), children: "ME" }), _jsx("th", { className: rlcClass(null, lvThRight), children: hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot" }), _jsx("th", { className: rlcClass(null, lvThRight), children: "EP RLC-KI" }), _jsx("th", { className: rlcClass(null, lvThRight), children: "EP final" }), _jsx("th", { className: rlcClass(null, lvThRight), children: "GP final" }), _jsx("th", { className: rlcClass(null, lvTh), children: "Status" }), _jsx("th", { className: rlcClass(null, lvTh) })] }) }), _jsxs("tbody", { children: [visibleLvRows.map((r) => {
+                                                            const gp = lineNet(r);
+                                                            const isSelected = selectedRow?.id === r.id;
+                                                            return (_jsxs("tr", { id: `rlc-row-${r.id}`, className: rlcClass(null, {
+                                                                    ...lvRow,
+                                                                    ...(isSelected ? lvRowSelected : {}),
+                                                                    ...(r.calculationStatus === "critical" ?
+                                                                        lvRowCritical :
+                                                                        {}),
+                                                                    ...(r.calculationStatus === "warning" ? lvRowWarning : {}),
+                                                                    ...(kiIsStructuralRow(r) ? lvRowStructure : {})
+                                                                }), onClick: () => {
+                                                                    setSelectedId(r.id);
+                                                                    window.setTimeout(() => {
+                                                                        selectedDetailRef.current?.scrollIntoView({
+                                                                            behavior: "smooth",
+                                                                            block: "start"
+                                                                        });
+                                                                    }, 50);
+                                                                }, children: [_jsx("td", { className: rlcClass(null, lvTd), children: _jsx("input", { type: "checkbox", checked: selectedOpenAiIds.includes(r.id), disabled: kiIsStructuralRow(r), onClick: (e) => e.stopPropagation(), onChange: (e) => toggleOpenAiSelection(r.id, e.target.checked) }) }), _jsx("td", { className: rlcClass(null, lvTd), children: _jsxs("select", { className: rlcClass(null, lvSelect), value: r.auftragId || "", onChange: (e) => {
+                                                                                const a = auftraege.find((x) => x.id === e.target.value);
+                                                                                updateRow(r.id, {
+                                                                                    auftragId: a?.id || "",
+                                                                                    auftragName: a?.name || "",
+                                                                                    auftragType: a?.type
+                                                                                });
+                                                                            }, onClick: (e) => e.stopPropagation(), children: [_jsx("option", { value: "", children: "Ohne Auftrag" }), auftraege.map((a) => _jsxs("option", { value: a.id, children: [a.type === "haupt" ? "Haupt" : "Unter", " \u00B7", " ", a.name] }, a.id))] }) }), _jsx("td", { className: rlcClass(null, lvTd), children: _jsx("input", { className: rlcClass(null, lvPosInput), value: r.posNr, onChange: (e) => updateRow(r.id, { posNr: e.target.value }), onClick: (e) => e.stopPropagation() }) }), _jsxs("td", { className: rlcClass(null, lvTextTd), children: [_jsx("input", { className: rlcClass(null, lvKurztextInput), value: r.kurztext, placeholder: "Kurztext eingeben\u2026", onChange: (e) => updateRow(r.id, { kurztext: e.target.value }), onClick: (e) => e.stopPropagation() }), r.langtext?.trim() ?
+                                                                                _jsxs("div", { className: rlcClass(null, lvLangPreview), children: [r.langtext.slice(0, 150), r.langtext.length > 150 ? "…" : "", _jsx("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-890", children: _jsx("button", { type: "button", className: rlcClass(null, { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 }), onClick: (e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    const text = [
+                                                                                                        `Position: ${r.posNr || "—"}`,
+                                                                                                        `Kurztext: ${r.kurztext || "—"}`,
+                                                                                                        "",
+                                                                                                        "Langtext:",
+                                                                                                        r.langtext || "—",
+                                                                                                        "",
+                                                                                                        `Menge: ${qty(r.menge)} ${r.einheit || "EH"}`,
+                                                                                                        `${hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}: ${hasRealX84ForProject(projectKey) ? money(getOfferUnitPrice(r)) : "—"}`,
+                                                                                                        `EP RLC-KI: ${money(getRlcKiUnitPrice(r))}`,
+                                                                                                        `EP final: ${money(getUnitPrice(r))}`,
+                                                                                                        `Gesamt netto: ${money(lineNet(r))}`
+                                                                                                    ].
+                                                                                                        join("\n");
+                                                                                                    showLangtextModal(text);
+                                                                                                }, children: "Langtext / Summe" }) })] }) :
+                                                                                null, r.warning && !rowHasOpenAiProposal(r) ?
+                                                                                _jsx("div", { className: rlcClass(null, lvMiniWarning), children: kiRowShortStatus(r) }) :
+                                                                                null, rowHasOpenAiProposal(r) ?
+                                                                                _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-891", children: [_jsxs("div", { children: ["OpenAI-Vorschlag: ", money(getOpenAiProposalPrice(r)), " / EH"] }), _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-892", children: ["EP Angebot X84: ", money(getOfferUnitPrice(r)), " / EH \u00B7 RLC-KI aktuell:", " ", money(getRlcKiUnitPrice(r)), " / EH"] }), _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-893", children: ["Differenz OpenAI zu X84:", " ", money(round2(getOpenAiProposalPrice(r) - getOfferUnitPrice(r))), " \u00B7", " ", getOfferUnitPrice(r) > 0 ?
+                                                                                                    `${round2(Math.abs(getOpenAiProposalPrice(r) - getOfferUnitPrice(r)) / getOfferUnitPrice(r) * 100)} %` :
+                                                                                                    "—"] }), _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-894", children: ["Differenz OpenAI zu RLC-KI:", " ", money(round2(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r))), " \u00B7", " ", getRlcKiUnitPrice(r) > 0 ?
+                                                                                                    `${round2(Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r) * 100)} %` :
+                                                                                                    "—"] }), n(r.rlcPreisAvg) > 0 ?
+                                                                                            _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-895", children: ["RLC Bibliothek: min ", money(n(r.rlcPreisMin)), " \u00B7 avg", " ", money(n(r.rlcPreisAvg)), " \u00B7 max", " ", money(n(r.rlcPreisMax))] }) :
+                                                                                            null, _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-896", children: ["Bewertung:", " ", getRawOpenAiProposalPrice(r) !== getOpenAiProposalPrice(r) ?
+                                                                                                    "OpenAI wurde automatisch gegen RLC-Bibliothek plausibilisiert" :
+                                                                                                    getRlcKiUnitPrice(r) <= 0 ?
+                                                                                                        "kein RLC-KI EP vorhanden" :
+                                                                                                        Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r) < 0.1 ?
+                                                                                                            "nahe am aktuellen Preis" :
+                                                                                                            getOpenAiProposalPrice(r) > getRlcKiUnitPrice(r) ?
+                                                                                                                "OpenAI sieht aktuellen Preis eher zu niedrig" :
+                                                                                                                "OpenAI sieht aktuellen Preis eher zu hoch"] }), _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-897", children: [_jsx("button", { type: "button", className: rlcClass(null, { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 }), onClick: (e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        acceptOpenAiSuggestionForRow(r.id);
+                                                                                                    }, children: "OpenAI-Preis \u00FCbernehmen" }), _jsx("button", { type: "button", className: rlcClass(null, { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 }), onClick: (e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        rejectOpenAiSuggestionForRow(r.id);
+                                                                                                    }, children: "Ablehnen" }), _jsx("button", { type: "button", className: rlcClass(null, { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 }), onClick: (e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        saveOpenAiSuggestionForRow(r.id);
+                                                                                                    }, children: "Als Firmenwert speichern" })] })] }) :
+                                                                                null] }), _jsx("td", { className: rlcClass(null, lvTdRight), children: _jsx("input", { type: "number", className: rlcClass(null, lvNumberInput), value: r.menge, onChange: (e) => updateRow(r.id, { menge: n(e.target.value) }), onClick: (e) => e.stopPropagation() }) }), _jsx("td", { className: rlcClass(null, lvTd), children: _jsx("input", { className: rlcClass(null, lvUnitInput), value: r.einheit, onChange: (e) => updateRow(r.id, { einheit: e.target.value }), onClick: (e) => e.stopPropagation() }) }), _jsx("td", { className: rlcClass(null, lvTdRight), children: _jsx("b", { children: money(getOfferUnitPrice(r)) }) }), _jsx("td", { className: rlcClass(null, lvTdRight), children: (() => {
+                                                                            const ki = getRlcKiDisplay(r);
+                                                                            return (_jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-898", children: [_jsx("b", { className: rlcClass(null, ki.rejected ? { color: "#B91C1C" } : undefined), children: ki.label }), ki.rejected && ki.raw > 0 ?
+                                                                                        _jsx("span", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-899", children: "verworfen" }) :
+                                                                                        null, ki.valid > 0 ?
+                                                                                        _jsx("button", { type: "button", className: rlcClass(null, {
+                                                                                                ...btnMini,
+                                                                                                width: "100%",
+                                                                                                maxWidth: "100%",
+                                                                                                minWidth: 0,
+                                                                                                minHeight: 26,
+                                                                                                padding: "3px 4px",
+                                                                                                fontSize: 9.5,
+                                                                                                lineHeight: 1.05,
+                                                                                                whiteSpace: "normal",
+                                                                                                overflowWrap: "anywhere",
+                                                                                                textAlign: "center",
+                                                                                                boxSizing: "border-box"
+                                                                                            }), onClick: (e) => {
+                                                                                                e.stopPropagation();
+                                                                                                applyKiSuggestedPrice(r.id);
+                                                                                            }, children: "KI \u00FCbernehmen" }) :
+                                                                                        null] }));
+                                                                        })() }), _jsx("td", { className: rlcClass(null, lvTdRight), children: _jsx("input", { type: "number", className: rlcClass(null, lvPriceInput), value: getUnitPrice(r), onChange: (e) => updateRow(r.id, {
+                                                                                finalUnitPrice: n(e.target.value),
+                                                                                preis: n(e.target.value),
+                                                                                priceDecision: "manual"
+                                                                            }), onClick: (e) => e.stopPropagation() }) }), _jsx("td", { className: rlcClass(null, lvTdRight), children: _jsx("b", { children: money(gp) }) }), _jsx("td", { className: rlcClass(null, lvTd), children: _jsx("span", { className: rlcClass(null, statusStyle(r.calculationStatus)), children: kiIsStructuralRow(r) ? "Struktur" : statusLabel(r.calculationStatus) }) }), _jsx("td", { className: rlcClass(null, lvTd), children: _jsx("button", { type: "button", className: rlcClass(null, { ...btnDangerMini, minHeight: 26, padding: "3px 6px", fontSize: 9.5, lineHeight: 1, whiteSpace: "nowrap" }), onClick: (e) => {
+                                                                                e.stopPropagation();
+                                                                                deleteRow(r.id);
+                                                                            }, children: "L\u00F6schen" }) })] }, r.id));
+                                                        }), !visibleLvRows.length ?
+                                                            _jsx("tr", { children: _jsx("td", { colSpan: 12, className: rlcClass(null, { ...lvTd, color: "#64748B" }), children: "Keine Positionen f\u00FCr diesen Filter vorhanden." }) }) :
+                                                            null] })] }) })] })] }), _jsxs("div", { className: rlcClass(null, { ...bottomCalcGrid, gridTemplateColumns: "minmax(0,1fr)" }), children: [_jsxs("div", { className: rlcClass(null, { ...card, display: "none" }), children: [_jsxs("div", { className: rlcClass(null, sectionHead), children: [_jsxs("div", { children: [_jsx("h2", { className: rlcClass(null, sectionTitle), children: "Preisaufbau / Urkalkulation" }), _jsx("div", { className: rlcClass(null, sectionText), children: "Kompakte Kontrolle der gew\u00E4hlten Position. Detailaufbau erfolgt in Urkalkulation / Rezepte; hier werden EP, GP und vorhandene Ans\u00E4tze gepr\u00FCft." })] }), _jsxs("div", { className: rlcClass(null, exportRow), children: [_jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: regenerateSelectedBreakdown, disabled: !selectedRow, children: "Preisaufbau aktualisieren" }), _jsx("button", { type: "button", className: rlcClass(null, btnPrimary), onClick: addBreakdownLine, disabled: !selectedRow, children: "Ansatz manuell erg\u00E4nzen" })] })] }), selectedRow ?
+                                        _jsxs(_Fragment, { children: [_jsxs("div", { className: rlcClass(null, selectedPositionBar), children: [_jsxs("div", { children: [_jsx("b", { children: selectedRow.posNr || "—" }), " \u00B7", " ", selectedRow.kurztext || "Ohne Text"] }), _jsxs("div", { children: ["Menge: ", _jsxs("b", { children: [qty(selectedRow.menge), " ", selectedRow.einheit || "EH"] }), " \u00B7 EP:", " ", _jsx("b", { children: money(getUnitPrice(selectedRow)) }), " \u00B7 GP:", " ", _jsx("b", { children: money(lineNet(selectedRow)) })] })] }), _jsxs("div", { className: rlcClass(null, urkalkulationSummary), children: [_jsxs("div", { className: rlcClass(null, urkBox), children: [_jsx("span", { className: rlcClass(null, urkLabel), children: "Lohn" }), _jsx("b", { children: money(groupSum(selectedRow, "Personal")) })] }), _jsxs("div", { className: rlcClass(null, urkBox), children: [_jsx("span", { className: rlcClass(null, urkLabel), children: "Ger\u00E4te" }), _jsx("b", { children: money(groupSum(selectedRow, "Maschinen") +
+                                                                        groupSum(selectedRow, "LKW / Transport")) })] }), _jsxs("div", { className: rlcClass(null, urkBox), children: [_jsx("span", { className: rlcClass(null, urkLabel), children: "Stoffe" }), _jsx("b", { children: money(groupSum(selectedRow, "Material")) })] }), _jsxs("div", { className: rlcClass(null, urkBox), children: [_jsx("span", { className: rlcClass(null, urkLabel), children: "Fremd" }), _jsx("b", { children: money(groupSum(selectedRow, "Fremdleistung")) })] }), _jsxs("div", { className: rlcClass(null, urkBox), children: [_jsx("span", { className: rlcClass(null, urkLabel), children: "Sonstiges" }), _jsx("b", { children: money(groupSum(selectedRow, "Entsorgung") +
+                                                                        groupSum(selectedRow, "Gemeinkosten") +
+                                                                        groupSum(selectedRow, "Risiko") +
+                                                                        groupSum(selectedRow, "Gewinn")) })] }), _jsxs("div", { className: rlcClass(null, urkBoxStrong), children: [_jsx("span", { className: rlcClass(null, urkLabel), children: "EP" }), _jsx("b", { children: money(getUnitPrice(selectedRow)) })] })] }), _jsxs("details", { open: true, className: rlcClass(null, lvDropdownBox), children: [_jsxs("summary", { className: rlcClass(null, lvDropdownSummary), children: [_jsxs("span", { children: ["LV / Positionsliste \u00B7 ", filteredRows.length, " Position(en) \u00B7 Anzeige max. ", lvPageSize] }), _jsx("span", { className: rlcClass(null, lvDropdownHint), children: "\u00F6ffnen / schlie\u00DFen" })] }), _jsx("div", { className: rlcClass(null, lvTableScroll), children: _jsxs("table", { className: rlcClass(null, table), children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { className: rlcClass(null, th), children: "Nr" }), _jsx("th", { className: rlcClass(null, th), children: "Art" }), _jsx("th", { className: rlcClass(null, th), children: "Bezeichnung" }), _jsx("th", { className: rlcClass(null, th), children: "Einheit" }), _jsx("th", { className: rlcClass(null, th), children: "Menge" }), _jsx("th", { className: rlcClass(null, th), children: "Preis" }), _jsx("th", { className: rlcClass(null, th), children: "Leistung Netto" }), _jsx("th", { className: rlcClass(null, th), children: "Faktor" }), _jsx("th", { className: rlcClass(null, th), children: "EP Gesamt" }), _jsx("th", { className: rlcClass(null, th), children: "GP Gesamt" }), _jsx("th", { className: rlcClass(null, th), children: "Kostenart" }), _jsx("th", { className: rlcClass(null, th) })] }) }), _jsxs("tbody", { children: [(selectedRow.priceBreakdown || []).map((line, idx) => {
+                                                                                const gp = round2(n(line.total) * n(selectedRow.menge));
+                                                                                return (_jsxs("tr", { children: [_jsx("td", { className: rlcClass(null, td), children: String(idx + 10).padStart(2, "0") }), _jsx("td", { className: rlcClass(null, td), children: _jsxs("select", { className: rlcClass(null, { ...cellInput, width: 145 }), value: line.group, onChange: (e) => updateBreakdownLine(line.id, {
+                                                                                                    group: e.target.value
+                                                                                                }), children: [_jsx("option", { value: "Personal", children: "Personal / Lohn" }), _jsx("option", { value: "Maschinen", children: "Maschinen / Ger\u00E4t" }), _jsx("option", { value: "LKW / Transport", children: "LKW / Transport" }), _jsx("option", { value: "Material", children: "Material / Stoffe" }), _jsx("option", { value: "Entsorgung", children: "Entsorgung" }), _jsx("option", { value: "Fremdleistung", children: "Fremdleistung" }), _jsx("option", { value: "Gemeinkosten", children: "Gemeinkosten" }), _jsx("option", { value: "Risiko", children: "Risiko" }), _jsx("option", { value: "Gewinn", children: "Gewinn" })] }) }), _jsx("td", { className: rlcClass(null, td), children: _jsx("input", { className: rlcClass(null, { ...cellInput, width: "100%" }), value: line.name, onChange: (e) => updateBreakdownLine(line.id, { name: e.target.value }) }) }), _jsx("td", { className: rlcClass(null, td), children: _jsx("input", { className: rlcClass(null, { ...cellInput, width: 68 }), value: line.unit, onChange: (e) => updateBreakdownLine(line.id, { unit: e.target.value }) }) }), _jsx("td", { className: rlcClass(null, tdRight), children: _jsx("input", { type: "number", className: rlcClass(null, { ...cellInput, width: 78, textAlign: "right" }), value: line.qty, onChange: (e) => updateBreakdownLine(line.id, { qty: n(e.target.value) }) }) }), _jsx("td", { className: rlcClass(null, tdRight), children: _jsx("input", { type: "number", className: rlcClass(null, { ...cellInput, width: 86, textAlign: "right" }), value: line.price, onChange: (e) => updateBreakdownLine(line.id, { price: n(e.target.value) }) }) }), _jsx("td", { className: rlcClass(null, tdRight), children: money(line.total) }), _jsx("td", { className: rlcClass(null, tdRight), children: "1,000" }), _jsx("td", { className: rlcClass(null, tdRight), children: money(line.total) }), _jsx("td", { className: rlcClass(null, tdRight), children: money(gp) }), _jsx("td", { className: rlcClass(null, td), children: line.group }), _jsx("td", { className: rlcClass(null, td), children: _jsx("button", { type: "button", className: rlcClass(null, { ...btnDangerMini, minHeight: 26, padding: "3px 6px", fontSize: 9.5, lineHeight: 1, whiteSpace: "nowrap" }), onClick: () => deleteBreakdownLine(line.id), children: "\u00D7" }) })] }, line.id));
+                                                                            }), !selectedRow.priceBreakdown?.length ?
+                                                                                _jsx("tr", { children: _jsx("td", { colSpan: 12, className: rlcClass(null, { ...td, color: "#64748B" }), children: "Noch keine Ans\u00E4tze vorhanden. F\u00FCr den vollst\u00E4ndigen technischen Preisaufbau die Position in Urkalkulation / Rezepte \u00F6ffnen." }) }) :
+                                                                                null, _jsxs("tr", { children: [_jsx("td", { colSpan: 8, className: rlcClass(null, { ...tdRight, fontWeight: 700 }), children: "Summe EP" }), _jsx("td", { className: rlcClass(null, { ...tdRight, fontWeight: 700 }), children: money(sumBreakdown(selectedRow.priceBreakdown)) }), _jsx("td", { className: rlcClass(null, { ...tdRight, fontWeight: 700 }), children: money(lineNet(selectedRow)) }), _jsx("td", { colSpan: 2, className: rlcClass(null, td) })] })] })] }) })] })] }) :
+                                        _jsx("div", { className: rlcClass(null, muted), children: "Keine Position gew\u00E4hlt." })] }), _jsxs("aside", { ref: selectedDetailRef, className: rlcClass(null, sideCard), children: [_jsxs("div", { className: rlcClass(null, selectedDetailHeader), children: [_jsxs("div", { children: [_jsx("div", { className: rlcClass(null, selectedDetailEyebrow), children: "Ausgew\u00E4hlte LV-Position" }), _jsx("h2", { className: rlcClass(null, sectionTitle), children: "Positionspr\u00FCfung / Datenbankvergleich" })] }), selectedRow ?
+                                                _jsxs("div", { className: rlcClass(null, selectedDetailPosition), children: [selectedRow.posNr || "—", " \u00B7 ", selectedRow.kurztext || "Ohne Text"] }) :
+                                                null] }), selectedRow ?
+                                        _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-900", children: [_jsxs("div", { children: [_jsx("div", { className: rlcClass(null, label), children: "Position" }), _jsxs("div", { className: rlcClass(null, sideTitle), children: [selectedRow.posNr || "—", " \u00B7 ", selectedRow.kurztext || "Ohne Text"] })] }), _jsxs("div", { className: rlcClass(null, sideBadges), children: [_jsxs("span", { className: rlcClass(null, riskStyle(selectedRow.riskLevel)), children: ["Risiko: ", riskLabel(selectedRow.riskLevel)] }), _jsx("span", { className: rlcClass(null, statusStyle(selectedRow.calculationStatus)), children: statusLabel(selectedRow.calculationStatus) })] }), _jsxs("div", { className: rlcClass(null, compactInfoGrid), children: [_jsx(Detail, { label: "Problem", value: rowProblem(selectedRow) }), _jsx(Detail, { label: "Sicherheit", value: selectedRow.confidence != null ? percent(selectedRow.confidence) : "—" }), _jsx(Detail, { label: "Gewerk", value: selectedRow.gewerk || "—" }), _jsx(Detail, { label: "Leistungsart", value: selectedRow.leistungsart || "—" }), _jsx(Detail, { label: "Bauverfahren", value: selectedRow.bauverfahren || "—" }), _jsx(Detail, { label: "Quelle", value: selectedRow.source || "—" }), _jsx(Detail, { label: "Finaler EP", value: money(getUnitPrice(selectedRow)) }), _jsx(Detail, { label: "Zeilensumme", value: money(lineNet(selectedRow)) }), _jsx(Detail, { label: "EP Angebot X84", value: money(getOfferUnitPrice(selectedRow)) }), _jsx(Detail, { label: "EP RLC-KI", value: money(getRlcKiUnitPrice(selectedRow)) }), _jsx(Detail, { label: "Differenz EP", value: `${money(getPriceDifference(selectedRow))} · ${getPriceDifferencePct(selectedRow)}%` }), _jsx(Detail, { label: "Differenz GP", value: money(lineNet(selectedRow) - offerLineNet(selectedRow)) })] }), _jsx("div", { className: rlcClass(null, separator) }), _jsxs("details", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-901", children: [_jsx("summary", { className: rlcClass(null, detailsSummary), children: "Artikel / Ressourcen \u00FCbernehmen" }), _jsxs("div", { className: rlcClass(null, resourceToolbar), children: [_jsx("input", { className: rlcClass(null, input), value: catalogQuery, onChange: (e) => setCatalogQuery(e.target.value), placeholder: "Artikel suchen\u2026" }), _jsxs("select", { className: rlcClass(null, input), value: catalogGroup, onChange: (e) => setCatalogGroup(e.target.value), children: [_jsx("option", { value: "Alle", children: "Alle" }), _jsx("option", { value: "Material", children: "Material" }), _jsx("option", { value: "Arbeiter", children: "Arbeiter" }), _jsx("option", { value: "Maschinen", children: "Maschinen" }), _jsx("option", { value: "Sonstiges", children: "Sonstiges" })] }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: () => setCatalogRows(Catalog.list()), children: "Aktualisieren" })] }), _jsxs("div", { className: rlcClass(null, resourceList), children: [visibleCatalogRows.map((item) => _jsxs("button", { type: "button", className: rlcClass(null, resourceItem), onClick: () => addCatalogRowToSelected(item), children: [_jsxs("div", { className: rlcClass(null, resourceTitle), children: [item.posNr || "—", " \u00B7 ", item.kurztext || "Ohne Text"] }), _jsxs("div", { className: rlcClass(null, resourceMeta), children: [item.gruppe || "Sonstiges", " \u00B7 ", item.einheit || "EH", " \u00B7", " ", money(item.ep)] })] }, item.id)), !visibleCatalogRows.length ?
+                                                                    _jsx("div", { className: rlcClass(null, muted), children: "Keine Artikel gefunden." }) :
+                                                                    null] })] }), _jsx("div", { className: rlcClass(null, separator) }), _jsxs("div", { children: [_jsx("div", { className: rlcClass(null, label), children: "Warnung" }), _jsx("div", { className: rlcClass(null, warningBox), children: selectedRow.warning || "Keine kritische Warnung erkannt." })] }), _jsxs("div", { children: [_jsx("div", { className: rlcClass(null, label), children: "Urkalkulation / Preisaufbau" }), (() => {
+                                                            const lines = Array.isArray(selectedRow.priceBreakdown) && selectedRow.priceBreakdown.length ?
+                                                                selectedRow.priceBreakdown :
+                                                                Array.isArray(selectedRow.recipeLines) ?
+                                                                    selectedRow.recipeLines :
+                                                                    [];
+                                                            const safeLines = normalizeBreakdown(lines);
+                                                            const sum = sumBreakdown(safeLines);
+                                                            if (!safeLines.length) {
+                                                                return (_jsx("div", { className: rlcClass(null, reasonBox), children: "Kein Preisaufbau aus Urkalkulation \u00FCbernommen. Position in Urkalkulation / Rezepte bearbeiten und erneut \u00FCbernehmen." }));
+                                                            }
+                                                            return (_jsx("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-902", children: _jsxs("table", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-903", children: [_jsx("thead", { children: _jsxs("tr", { children: [_jsx("th", { className: rlcClass(null, { ...th, textAlign: "left" }), children: "Gruppe" }), _jsx("th", { className: rlcClass(null, { ...th, textAlign: "left" }), children: "Bezeichnung" }), _jsx("th", { className: rlcClass(null, { ...th, textAlign: "left" }), children: "ME" }), _jsx("th", { className: rlcClass(null, { ...th, textAlign: "right" }), children: "Menge je Einheit" }), _jsx("th", { className: rlcClass(null, { ...th, textAlign: "right" }), children: "Preis" }), _jsx("th", { className: rlcClass(null, { ...th, textAlign: "right" }), children: "EP-Anteil" }), _jsx("th", { className: rlcClass(null, { ...th, textAlign: "left" }), children: "Hinweis" })] }) }), _jsxs("tbody", { children: [safeLines.map((line) => _jsxs("tr", { children: [_jsx("td", { className: rlcClass(null, td), children: line.group }), _jsx("td", { className: rlcClass(null, td), children: line.name }), _jsx("td", { className: rlcClass(null, td), children: line.unit }), _jsx("td", { className: rlcClass(null, { ...tdRight }), children: qty(line.qty) }), _jsx("td", { className: rlcClass(null, { ...tdRight }), children: money(line.price) }), _jsx("td", { className: rlcClass(null, { ...tdRight, fontWeight: 700 }), children: money(line.total) }), _jsx("td", { className: rlcClass(null, { ...td, maxWidth: 360, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }), children: line.note || "—" })] }, line.id)), _jsxs("tr", { children: [_jsx("td", { colSpan: 5, className: rlcClass(null, { ...tdRight, fontWeight: 700 }), children: "Summe Urkalkulation" }), _jsx("td", { className: rlcClass(null, { ...tdRight, fontWeight: 700 }), children: money(sum) }), _jsxs("td", { className: rlcClass(null, td), children: ["Finaler EP: ", money(getUnitPrice(selectedRow))] })] })] })] }) }));
+                                                        })()] }), _jsxs("div", { children: [_jsx("div", { className: rlcClass(null, label), children: "KI-Begr\u00FCndung" }), _jsx("div", { className: rlcClass(null, { ...reasonBox, maxHeight: 260, overflowY: "auto", overflowX: "hidden", whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" }), children: selectedRow.aiReason ||
+                                                                "Noch keine KI-Begründung vorhanden. Starte die Kalkulation oder übernimm eine Position aus Urkalkulation / Rezepte." })] }), _jsxs("details", { open: datenbankMatches.length > 0, className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-904", children: [_jsxs("summary", { className: rlcClass(null, detailsSummary), children: ["Kalkulationsdatenbank (", datenbankMatches.length, ")"] }), datenbankMatches.length ?
+                                                            _jsx("div", { className: rlcClass(null, knowledgeList), children: datenbankMatches.map((match) => _jsxs("div", { className: rlcClass(null, knowledgeItem), children: [_jsx("div", { className: rlcClass(null, knowledgeTitle), children: match.eintrag.kurztext }), _jsxs("div", { className: rlcClass(null, tiny), children: [match.eintrag.posNr || "—", " \u00B7 EP", " ", money(match.eintrag.kosten.epNetto), " \u00B7 Score ", match.score, "% \u00B7 genutzt", " ", match.eintrag.verwendungen, "x"] }), _jsx("div", { className: rlcClass(null, tiny), children: match.gruende.join(" · ") }), _jsx("button", { type: "button", className: rlcClass(null, { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 }), onClick: () => applyKnowledge(match), children: "Vergleichswert \u00FCbernehmen" })] }, match.eintrag.id)) }) :
+                                                            _jsx("div", { className: rlcClass(null, muted), children: "Keine \u00E4hnliche Position in der Kalkulationsdatenbank." }), _jsx("button", { type: "button", className: rlcClass(null, { ...btnSecondary, marginTop: 8 }), onClick: saveSelectedToKnowledge, children: "Sicheren Wert in Datenbank lernen" })] }), _jsxs("details", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-905", children: [_jsx("summary", { className: rlcClass(null, detailsSummary), children: "Langtext / Pr\u00FCftext" }), _jsxs("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-906", children: [_jsx(Field, { label: "Langtext", children: _jsx("textarea", { className: rlcClass(null, { ...input, minHeight: 130 }), value: selectedRow.langtext, onChange: (e) => updateRow(selectedRow.id, { langtext: e.target.value }) }) }), _jsx("button", { type: "button", className: rlcClass(null, btnSecondary), onClick: () => updateRow(selectedRow.id, {
+                                                                        ...enhanceKalkulatorInsertions(selectedRow)
+                                                                    }), children: "Langtext automatisch erstellen" })] })] }), _jsxs("details", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-907", children: [_jsx("summary", { className: rlcClass(null, detailsSummary), children: "Manuelle EP-Anpassung" }), _jsx("div", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-908", children: _jsx(Field, { label: "Rabatt Zeile %", children: _jsx("input", { type: "number", className: rlcClass(null, input), value: selectedRow.rabatt ?? 0, onChange: (e) => updateRow(selectedRow.id, { rabatt: n(e.target.value) }) }) }) })] })] }) :
+                                        _jsx("div", { className: rlcClass(null, muted), children: "Keine Position gew\u00E4hlt." })] })] })] })] }));
+}
+/* ================= UI ================= */
+function RlcActionProgress({ action }) {
+    const progress = Math.max(0, Math.min(100, Math.round(action.progress)));
+    return (_jsxs("div", { className: rlcClass(null, rlcActionProgressWrap), children: [_jsxs("div", { className: rlcClass(null, rlcActionProgressTop), children: [_jsx("b", { children: action.status === "running" ?
+                            "RLC arbeitet…" :
+                            action.status === "success" ?
+                                "Abgeschlossen" :
+                                "Fehler" }), _jsxs("span", { children: [action.label, " \u00B7 ", progress, "%"] })] }), _jsx("div", { className: rlcClass(null, rlcActionProgressTrack), children: _jsx("div", { className: rlcClass(null, {
+                        ...rlcActionProgressFill,
+                        width: `${progress}%`,
+                        background: action.status === "error" ?
+                            "linear-gradient(90deg,#DC2626,#EF4444)" :
+                            action.status === "success" ?
+                                "linear-gradient(90deg,#16A34A,#22C55E)" :
+                                "linear-gradient(90deg,#146EF5,#60A5FA)"
+                    }) }) })] }));
+}
+function FilterButton({ active, onClick, children }) {
+    return (_jsx("button", { type: "button", className: rlcClass(null, active ? btnFilterActive : btnFilter), onClick: onClick, children: children }));
+}
+function KpiCard({ label, value, sub }) {
+    return (_jsxs("div", { className: rlcClass(null, kpiCard), children: [_jsx("div", { className: rlcClass(null, kpiLabel), children: label }), _jsx("div", { className: rlcClass(null, kpiValue), children: value }), sub ? _jsx("div", { className: rlcClass(null, kpiSub), children: sub }) : null] }));
+}
+function Field({ label: fieldLabel, children }) {
+    return (_jsxs("label", { className: "rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-909", children: [_jsx("span", { className: rlcClass(null, label), children: fieldLabel }), children] }));
+}
+function Detail({ label: l, value }) {
+    return (_jsxs("div", { children: [_jsx("div", { className: rlcClass(null, label), children: l }), _jsx("div", { className: rlcClass(null, detailValue), children: value })] }));
+}
+function QuickAction({ title, text, onClick, disabled }) {
+    return (_jsxs("button", { type: "button", className: rlcClass(null, {
+            ...quickActionButton,
+            opacity: disabled ? 0.55 : 1,
+            cursor: disabled ? "not-allowed" : "pointer"
+        }), onClick: onClick, disabled: disabled, children: [_jsx("div", { className: rlcClass(null, quickActionTitle), children: title }), _jsx("div", { className: rlcClass(null, quickActionText), children: text })] }));
+}
+/* ================= EXPORT ================= */
+function downloadCsv(rows) {
+    const header = [
+        "PosNr",
+        "Kurztext",
+        "Langtext",
+        "Einheit",
+        "Menge",
+        "Material",
+        "Lohn",
+        "Maschine",
+        "Fremdleistung",
+        "Entsorgung",
+        "Gemeinkosten",
+        "Risiko",
+        "Gewinn",
+        "EP final",
+        "Gesamt",
+        "Preisaufbau",
+        "RiskLevel",
+        "Status",
+        "Confidence",
+        "Warnung",
+        "KI-Begründung"
+    ];
+    const lines = rows.map((r) => [
+        r.posNr,
+        r.kurztext,
+        r.langtext,
+        r.einheit,
+        r.menge,
+        r.materialCost,
+        r.laborCost,
+        r.machineCost,
+        r.subcontractorCost,
+        r.disposalCost,
+        r.overheadCost,
+        r.riskCost,
+        r.profitCost,
+        getUnitPrice(r),
+        lineNet(r),
+        breakdownText(r),
+        r.riskLevel,
+        r.calculationStatus,
+        r.confidence,
+        r.warning,
+        r.aiReason
+    ].
+        map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).
+        join(";"));
+    const blob = new Blob([[header.join(";"), ...lines].join("\n")], {
+        type: "text/csv;charset=utf-8"
+    });
+    downloadBlob(blob, "ki-kalkulation-elite.csv");
+}
+function exportXlsx(rows, chapterTotals, summary, offer) {
+    const wsRows = XLSX.utils.json_to_sheet(rows.map((r) => ({
+        Kapitel: getChapter(r.posNr),
+        PosNr: r.posNr,
+        Kurztext: r.kurztext,
+        Langtext: r.langtext,
+        Einheit: r.einheit,
+        Menge: r.menge,
+        Material: r.materialCost,
+        Lohn: r.laborCost,
+        Maschine: r.machineCost,
+        Fremdleistung: r.subcontractorCost,
+        Entsorgung: r.disposalCost,
+        Gemeinkosten: r.overheadCost,
+        Risiko: r.riskCost,
+        Gewinn: r.profitCost,
+        EP_KI: getRlcKiUnitPrice(r),
+        EP_Final: getUnitPrice(r),
+        Gesamt: lineNet(r),
+        Preisaufbau: breakdownText(r),
+        RiskLevel: r.riskLevel,
+        Status: r.calculationStatus,
+        Confidence: r.confidence,
+        Warnung: r.warning,
+        KI_Begruendung: r.aiReason
+    })));
+    const wsBreakdown = XLSX.utils.json_to_sheet(rows.flatMap((r) => (r.priceBreakdown || []).map((line) => ({
+        PosNr: r.posNr,
+        Kurztext: r.kurztext,
+        Gruppe: line.group,
+        Bezeichnung: line.name,
+        Einheit: line.unit,
+        Menge: line.qty,
+        Preis: line.price,
+        Gesamt: line.total,
+        Hinweis: line.note || ""
+    }))));
+    const wsChapters = XLSX.utils.json_to_sheet(Object.entries(chapterTotals).map(([chapter, t]) => ({
+        Kapitel: chapter,
+        Netto: t.afterChapterMarkup,
+        Risiko: t.risk,
+        Gewinn: t.profit
+    })));
+    const wsSummary = XLSX.utils.json_to_sheet([
+        { Kennzahl: "Angebot", Wert: offer.number },
+        { Kennzahl: "Netto", Wert: summary.net },
+        { Kennzahl: "Brutto", Wert: summary.gross },
+        { Kennzahl: "Direkte Kosten", Wert: summary.directCost },
+        { Kennzahl: "Risikopuffer", Wert: summary.riskSum },
+        { Kennzahl: "Gewinn", Wert: summary.profitSum },
+        { Kennzahl: "Marge %", Wert: summary.marginPct },
+        { Kennzahl: "Ø Confidence", Wert: summary.avgConfidence },
+        { Kennzahl: "Hochrisiko", Wert: summary.highRisk },
+        { Kennzahl: "Kritisch", Wert: summary.critical }
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsRows, "Elite-Kalkulation");
+    XLSX.utils.book_append_sheet(wb, wsBreakdown, "Preisaufbau");
+    XLSX.utils.book_append_sheet(wb, wsChapters, "Kapitel");
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+    XLSX.writeFile(wb, `Elite_Kalkulation_${safeFileName(offer.number)}.xlsx`);
+}
+async function exportPdf(opts) {
+    const { projectKey, projectTitle, rows, summary, offer, client, company, mwst, globalMarkup, delivery } = opts;
+    const response = await fetch(apiUrl("/api/pdf/kalkulation-ki"), {
+        method: "POST",
+        credentials: "include",
+        headers: authJsonHeaders(),
+        body: JSON.stringify({
+            projectKey,
+            projectTitle,
+            project: {
+                id: projectKey,
+                code: projectKey,
+                name: projectTitle,
+                client: client?.name || "",
+                auftraggeber: client?.name || "",
+                clientAddress: client?.address || ""
+            },
+            offerNo: offer?.number || "",
+            angebotNr: offer?.number || "",
+            offer: {
+                number: offer?.number || "",
+                place: offer?.place || "",
+                notes: offer?.notes || ""
+            },
+            client: {
+                name: client?.name || "",
+                address: client?.address || ""
+            },
+            company,
+            rows,
+            summary,
+            totals: summary,
+            mwst,
+            globalMarkup,
+            options: {
+                city: offer?.place || "",
+                dateISO: new Date().toISOString()
+            }
+        })
+    });
+    if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(detail ||
+            `RLC PDF Core Fehler: HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    if (!blob.size) {
+        throw new Error("RLC PDF Core hat eine leere PDF-Datei geliefert.");
+    }
+    const filename = `KI_Angebot_${safeFileName(offer?.number || projectKey || "Projekt")}.pdf`;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    const result = {
+        blob,
+        name: filename,
+        base64: btoa(binary)
+    };
+    if (!delivery) {
+        downloadBlob(blob, filename);
+    }
+    return result;
+}
+async function exportPdfLocal(opts) {
+    const { projectKey, rows, summary, offer, client, company, globalMarkup } = opts;
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const marginX = 14;
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageW, 16, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
+    doc.text(company.name || "RLC Bausoftware", marginX, 28);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`${company.address} · ${company.phone} · ${company.email}`, marginX, 34);
+    doc.setDrawColor(203, 213, 225);
+    doc.line(marginX, 40, pageW - marginX, 40);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42);
+    doc.text("KI-Kalkulation / Angebot", marginX, 54);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text(`Projekt: ${projectKey || "—"}`, marginX, 63);
+    doc.text(`Angebot: ${offer.number}`, marginX, 69);
+    doc.text(`Kunde: ${client.name || "—"}`, marginX + 75, 63);
+    doc.text(`Ort: ${offer.place || "—"}`, marginX + 75, 69);
+    doc.text(`Datum: ${new Date().toLocaleDateString("de-DE")}`, pageW - marginX, 63, {
+        align: "right"
+    });
+    const kpiY = 82;
+    const boxW = 43;
+    const boxH = 19;
+    const gap = 5;
+    const kpis = [
+        ["Netto", money(summary.net)],
+        ["MwSt", money(summary.tax)],
+        ["Brutto", money(summary.gross)],
+        ["Direkte Kosten", money(summary.directCost)],
+        ["Risiko", money(summary.riskSum)],
+        ["Gewinn", money(summary.profitSum)]
+    ];
+    kpis.forEach(([labelText, value], i) => {
+        const x = marginX + i * (boxW + gap);
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(x, kpiY, boxW, boxH, 2.5, 2.5, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7.2);
+        doc.setTextColor(100, 116, 139);
+        doc.text(labelText, x + 3, kpiY + 6);
+        doc.setFontSize(9.2);
+        doc.setTextColor(15, 23, 42);
+        doc.text(String(value), x + 3, kpiY + 14, { maxWidth: boxW - 6 });
+    });
+    autoTable(doc, {
+        startY: 112,
+        margin: { left: marginX, right: marginX },
+        theme: "grid",
+        head: [
+            [
+                "Pos.",
+                "Leistungsbeschreibung / Preisaufbau",
+                "ME",
+                "Menge",
+                "EP",
+                "Gesamt",
+                "Risiko",
+                "Status"
+            ]
+        ],
+        body: rows.map((r) => [
+            r.posNr || "—",
+            [
+                r.kurztext || "—",
+                r.langtext ? `\n${r.langtext}` : "",
+                breakdownText(r) ? `\n\nPreisaufbau:\n${breakdownText(r)}` : "",
+                r.aiReason ? `\n\nKI: ${r.aiReason}` : ""
+            ].
+                join(""),
+            r.einheit || "—",
+            qty(r.menge),
+            money(getUnitPrice(r)),
+            money(lineNet(r)),
+            riskLabel(r.riskLevel),
+            statusLabel(r.calculationStatus)
+        ]),
+        styles: {
+            font: "helvetica",
+            fontSize: 6.8,
+            cellPadding: 1.7,
+            overflow: "linebreak",
+            lineColor: [226, 232, 240],
+            lineWidth: 0.1
+        },
+        headStyles: {
+            fillColor: [30, 58, 138],
+            textColor: [255, 255, 255],
+            fontStyle: "bold"
+        },
+        columnStyles: {
+            0: { cellWidth: 22 },
+            1: { cellWidth: 125 },
+            2: { cellWidth: 16 },
+            3: { cellWidth: 22, halign: "right" },
+            4: { cellWidth: 26, halign: "right" },
+            5: { cellWidth: 28, halign: "right" },
+            6: { cellWidth: 22 },
+            7: { cellWidth: 24 }
+        }
+    });
+    const finalY = doc.lastAutoTable?.finalY || 150;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Globaler Aufschlag: ${globalMarkup}%`, marginX, finalY + 10);
+    doc.text(offer.notes || "", marginX, finalY + 16, {
+        maxWidth: pageW - marginX * 2
+    });
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i += 1) {
+        doc.setPage(i);
+        doc.setDrawColor(226, 232, 240);
+        doc.line(marginX, pageH - 14, pageW - marginX, pageH - 14);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(100, 116, 139);
+        doc.text("RLC Bausoftware · KI-Kalkulation", marginX, pageH - 8);
+        doc.text(`Seite ${i}/${pages}`, pageW - marginX, pageH - 8, {
+            align: "right"
+        });
+    }
+    return await outputPdfBlobWithCompanyHeader(doc);
+}
+function exportUrkalkulationPdfLocal(opts) {
+    const { projectKey, projectTitle, rows, summary, offer, client, company, globalMarkup, selectedAuftrag } = opts;
+    const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const mx = 4;
+    const now = new Date().toLocaleDateString("de-DE");
+    function effectiveBreakdown(r) {
+        return r.priceBreakdown?.length ?
+            r.priceBreakdown :
+            buildAutomaticPriceBreakdown(r);
+    }
+    function sumGroup(r, groups) {
+        return round2(effectiveBreakdown(r).
+            filter((x) => groups.includes(x.group)).
+            reduce((s, x) => s + n(x.total), 0));
+    }
+    function isRealUrkalkulationPosition(r) {
+        if (kiIsStructuralRow(r))
+            return false;
+        const pos = String(r.posNr || "").trim();
+        const text = String(r.kurztext || "").trim().toLowerCase();
+        const menge = n(r.menge);
+        const ep = getUnitPrice(r);
+        if (!pos)
+            return false;
+        if (pos === "—")
+            return false;
+        if (/^\d{1,2}$/.test(pos))
+            return false;
+        if (text === "leistung prüfen")
+            return false;
+        if (text.startsWith("leistung zu position") && menge <= 0)
+            return false;
+        if (menge <= 0)
+            return false;
+        if (ep <= 0)
+            return false;
+        return true;
+    }
+    function rowScore(r) {
+        let score = 0;
+        if (String(r.kurztext || "").trim())
+            score += 10;
+        if (String(r.langtext || "").trim())
+            score += 10;
+        if (r.priceBreakdown?.length)
+            score += 20;
+        if (n(r.menge) > 0)
+            score += 20;
+        if (getUnitPrice(r) > 0)
+            score += 20;
+        if (r.calculationStatus === "ok")
+            score += 5;
+        return score;
+    }
+    function uniqueRows(input) {
+        const map = new Map();
+        for (const r of input) {
+            if (!isRealUrkalkulationPosition(r))
+                continue;
+            const key = String(r.posNr || r.id || "").trim();
+            const existing = map.get(key);
+            if (!existing || rowScore(r) > rowScore(existing)) {
+                map.set(key, r);
+            }
+        }
+        return Array.from(map.values()).sort((a, b) => String(a.posNr || "").localeCompare(String(b.posNr || ""), "de", {
+            numeric: true
+        }));
+    }
+    const pdfRows = uniqueRows(rows);
+    if (!pdfRows.length) {
+        alert("Keine gültigen Urkalkulationspositionen gefunden. Bitte prüfen: Pos-Nr, Menge und EP müssen vorhanden sein.");
+        return;
+    }
+    const pdfBaseNet = round2(pdfRows.reduce((sum, r) => sum + lineNet(r), 0));
+    const pdfMarkupValue = round2(pdfBaseNet * (globalMarkup / 100));
+    const pdfNet = round2(pdfBaseNet + pdfMarkupValue);
+    const taxRate = n(summary.net) > 0 && n(summary.tax) > 0 ?
+        round2(n(summary.tax) / n(summary.net) * 100) :
+        19;
+    const pdfTax = round2(pdfNet * (taxRate / 100));
+    const pdfGross = round2(pdfNet + pdfTax);
+    const pdfSummary = {
+        ...summary,
+        net: pdfNet,
+        tax: pdfTax,
+        gross: pdfGross,
+        globalMarkupValue: pdfMarkupValue,
+        directCost: round2(pdfRows.reduce((sum, r) => sum +
+            n(r.menge) * (sumGroup(r, ["Personal"]) +
+                sumGroup(r, ["Maschinen", "LKW / Transport"]) +
+                sumGroup(r, ["Material"]) +
+                sumGroup(r, ["Fremdleistung"]) +
+                sumGroup(r, ["Entsorgung"])), 0)),
+        riskSum: round2(pdfRows.reduce((sum, r) => sum + sumGroup(r, ["Risiko"]) * n(r.menge), 0)),
+        profitSum: round2(pdfRows.reduce((sum, r) => sum + sumGroup(r, ["Gewinn"]) * n(r.menge), 0))
+    };
+    function totalByGroup(groups) {
+        return round2(pdfRows.reduce((s, r) => s + sumGroup(r, groups) * n(r.menge), 0));
+    }
+    function lohnStunden(r) {
+        const lohn = sumGroup(r, ["Personal"]);
+        return lohn > 0 ? round2(lohn / 55) : 0;
+    }
+    function drawHeader() {
+        doc.setTextColor(0, 0, 0);
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.12);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(`Urkalkulation${selectedAuftrag?.name ? " · " + selectedAuftrag.name : ""}`, mx, 8);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(5.8);
+        doc.text(company.name || "RLC Bausoftware", mx, 13);
+        doc.text(`${company.address || ""} · ${company.phone || ""} · ${company.email || ""}`, mx, 17);
+        const y0 = 22;
+        const h = 35;
+        doc.rect(mx, y0, pageW - mx * 2, h);
+        doc.line(mx, y0 + 12, pageW - mx, y0 + 12);
+        doc.line(mx, y0 + 24, pageW - mx, y0 + 24);
+        doc.line(mx + 103, y0, mx + 103, y0 + 12);
+        doc.line(mx + 200, y0, mx + 200, y0 + 12);
+        doc.line(mx + 48, y0 + 12, mx + 48, y0 + 35);
+        doc.line(mx + 104, y0 + 12, mx + 104, y0 + 35);
+        doc.line(mx + 153, y0 + 12, mx + 153, y0 + 35);
+        doc.line(mx + 207, y0 + 12, mx + 207, y0 + 35);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5.7);
+        doc.text("Bauvorhaben:", mx + 2, y0 + 6);
+        doc.text("Auftraggeber:", mx + 106, y0 + 6);
+        doc.text("Ausschreibende Stelle:", mx + 203, y0 + 6);
+        doc.text("Projekt-Nr.:", mx + 2, y0 + 19);
+        doc.text("Angebot-Nr.:", mx + 51, y0 + 19);
+        doc.text("Datum:", mx + 107, y0 + 19);
+        doc.text("Kalkulationsart:", mx + 156, y0 + 19);
+        doc.text("Währung:", mx + 210, y0 + 19);
+        doc.text("Mengenbasis:", mx + 2, y0 + 31);
+        doc.text("Preisstand:", mx + 51, y0 + 31);
+        doc.text("Globaler Zuschlag:", mx + 107, y0 + 31);
+        doc.setFont("helvetica", "normal");
+        doc.text(projectTitle || projectKey || "—", mx + 30, y0 + 6, {
+            maxWidth: 68
+        });
+        doc.text(client.name || "—", mx + 135, y0 + 6, { maxWidth: 55 });
+        doc.text(client.address || "—", mx + 135, y0 + 11, { maxWidth: 55 });
+        doc.text(client.name || "—", mx + 238, y0 + 6, { maxWidth: 45 });
+        doc.text(client.address || "—", mx + 238, y0 + 11, { maxWidth: 45 });
+        doc.text(projectKey || "—", mx + 25, y0 + 19);
+        doc.text(offer.number || "—", mx + 78, y0 + 19);
+        doc.text(now, mx + 124, y0 + 19);
+        doc.text("KI / Urkalkulation", mx + 186, y0 + 19);
+        doc.text("EUR", mx + 232, y0 + 19);
+        doc.text("LV / KI-Kalkulation", mx + 30, y0 + 31);
+        doc.text(now, mx + 78, y0 + 31);
+        doc.text(`${globalMarkup}%`, mx + 143, y0 + 31);
+    }
+    drawHeader();
+    const personalTotal = totalByGroup(["Personal"]);
+    const machineTotal = totalByGroup(["Maschinen", "LKW / Transport"]);
+    const materialTotal = totalByGroup(["Material"]);
+    const subcontractorTotal = totalByGroup(["Fremdleistung"]);
+    const sonstigeTotal = totalByGroup([
+        "Entsorgung",
+        "Gemeinkosten",
+        "Risiko",
+        "Gewinn"
+    ]);
+    autoTable(doc, {
+        startY: 62,
+        margin: { left: mx, right: mx },
+        theme: "grid",
+        tableWidth: pageW - mx * 2,
+        head: [
+            [
+                "Zusammenstellung",
+                "Lohn",
+                "Geräte",
+                "Stoffe",
+                "Fremdleistung",
+                "Sonstiges",
+                "Netto"
+            ]
+        ],
+        body: [
+            [
+                "Einzelkosten der Teilleistungen",
+                money(personalTotal),
+                money(machineTotal),
+                money(materialTotal),
+                money(subcontractorTotal),
+                money(sonstigeTotal),
+                money(pdfBaseNet)
+            ],
+            [
+                `Zuschlag / Aufschlag ${globalMarkup}%`,
+                "",
+                "",
+                "",
+                "",
+                "",
+                money(pdfSummary.globalMarkupValue || 0)
+            ],
+            ["Gesamtsumme netto", "", "", "", "", "", money(pdfSummary.net)],
+            ["MwSt", "", "", "", "", "", money(pdfSummary.tax || 0)],
+            ["Gesamtsumme brutto", "", "", "", "", "", money(pdfSummary.gross || 0)]
+        ],
+        styles: {
+            font: "helvetica",
+            fontSize: 5.5,
+            cellPadding: 0.9,
+            lineWidth: 0.06,
+            lineColor: [90, 90, 90],
+            textColor: [0, 0, 0]
+        },
+        headStyles: {
+            fillColor: [215, 215, 215],
+            textColor: [0, 0, 0],
+            fontStyle: "bold",
+            lineColor: [70, 70, 70],
+            lineWidth: 0.08
+        },
+        columnStyles: {
+            0: { cellWidth: 75 },
+            1: { halign: "right" },
+            2: { halign: "right" },
+            3: { halign: "right" },
+            4: { halign: "right" },
+            5: { halign: "right" },
+            6: { halign: "right", fontStyle: "bold" }
+        }
+    });
+    const y = doc.lastAutoTable?.finalY || 85;
+    autoTable(doc, {
+        startY: y + 5,
+        margin: { left: mx, right: mx, top: 61 },
+        theme: "grid",
+        tableWidth: pageW - mx * 2,
+        showHead: "everyPage",
+        head: [
+            [
+                "OZ",
+                "Leistungsbeschreibung",
+                "ML",
+                "ZG",
+                "Faktor",
+                "Divisor",
+                "ME",
+                "Lohnstd.",
+                "Lohn-Betr.",
+                "Gerät",
+                "Stoffe",
+                "Fremd",
+                "Sonst.",
+                "EKT",
+                "EP",
+                "GP"
+            ]
+        ],
+        body: pdfRows.flatMap((r) => {
+            const menge = n(r.menge);
+            const ep = getUnitPrice(r);
+            const lohn = sumGroup(r, ["Personal"]);
+            const geraet = sumGroup(r, ["Maschinen", "LKW / Transport"]);
+            const stoffe = sumGroup(r, ["Material"]);
+            const fremd = sumGroup(r, ["Fremdleistung"]);
+            const sonst = sumGroup(r, ["Entsorgung", "Gemeinkosten", "Risiko", "Gewinn"]);
+            const ekt = lohn + geraet + stoffe + fremd + sonst;
+            const main = [
+                r.posNr || "—",
+                `${r.kurztext || "—"}${r.langtext ? "\n" + r.langtext : ""}`,
+                qty(menge),
+                "",
+                "1,000",
+                "1,000",
+                r.einheit || "EH",
+                qty(lohnStunden(r)),
+                money(lohn),
+                money(geraet),
+                money(stoffe),
+                money(fremd),
+                money(sonst),
+                money(ekt),
+                money(ep),
+                money(lineNet(r))
+            ];
+            const detailRows = effectiveBreakdown(r).map((b) => {
+                const isLohn = b.group === "Personal";
+                const isGeraet = b.group === "Maschinen" || b.group === "LKW / Transport";
+                const isStoffe = b.group === "Material";
+                const isFremd = b.group === "Fremdleistung";
+                const isSonst = ["Entsorgung", "Gemeinkosten", "Risiko", "Gewinn"].includes(b.group);
+                const bLohnStd = isLohn ? round2(n(b.total) / 55) : 0;
+                return [
+                    "",
+                    `   ${b.group} - ${b.name}${b.note ? " · " + b.note : ""}`,
+                    qty(b.qty),
+                    "",
+                    "1,000",
+                    "1,000",
+                    b.unit || r.einheit || "EH",
+                    isLohn ? qty(bLohnStd) : "",
+                    isLohn ? money(b.total) : "",
+                    isGeraet ? money(b.total) : "",
+                    isStoffe ? money(b.total) : "",
+                    isFremd ? money(b.total) : "",
+                    isSonst ? money(b.total) : "",
+                    money(b.total),
+                    "",
+                    ""
+                ];
+            });
+            return [main, ...detailRows];
+        }),
+        styles: {
+            font: "helvetica",
+            fontSize: 4.05,
+            cellPadding: 0.38,
+            overflow: "linebreak",
+            lineWidth: 0.04,
+            lineColor: [105, 105, 105],
+            textColor: [0, 0, 0],
+            minCellHeight: 2.8
+        },
+        headStyles: {
+            fillColor: [218, 218, 218],
+            textColor: [0, 0, 0],
+            fontStyle: "bold",
+            halign: "center",
+            valign: "middle",
+            lineWidth: 0.055,
+            lineColor: [65, 65, 65],
+            minCellHeight: 3.2
+        },
+        bodyStyles: {
+            valign: "top"
+        },
+        columnStyles: {
+            0: { cellWidth: 12, halign: "center" },
+            1: { cellWidth: 72 },
+            2: { cellWidth: 10, halign: "right" },
+            3: { cellWidth: 7, halign: "center" },
+            4: { cellWidth: 10, halign: "right" },
+            5: { cellWidth: 10, halign: "right" },
+            6: { cellWidth: 8, halign: "center" },
+            7: { cellWidth: 11, halign: "right" },
+            8: { cellWidth: 13, halign: "right" },
+            9: { cellWidth: 13, halign: "right" },
+            10: { cellWidth: 13, halign: "right" },
+            11: { cellWidth: 12, halign: "right" },
+            12: { cellWidth: 12, halign: "right" },
+            13: { cellWidth: 13, halign: "right", fontStyle: "bold" },
+            14: { cellWidth: 12, halign: "right", fontStyle: "bold" },
+            15: { cellWidth: 14, halign: "right", fontStyle: "bold" }
+        },
+        didParseCell: (data) => {
+            if (data.section !== "body")
+                return;
+            const raw = data.row.raw;
+            const oz = String(raw?.[0] || "").trim();
+            const isMainRow = Boolean(oz);
+            if (isMainRow) {
+                data.cell.styles.fillColor = [246, 246, 246];
+                if (data.column.index === 0 || data.column.index >= 13) {
+                    data.cell.styles.fontStyle = "bold";
+                }
+                if (data.column.index === 1) {
+                    data.cell.styles.fontStyle = "normal";
+                    data.cell.styles.fontSize = 4.2;
+                }
+            }
+            else {
+                data.cell.styles.fillColor = [255, 255, 255];
+                if (data.column.index === 1) {
+                    data.cell.styles.fontStyle = "normal";
+                    data.cell.styles.fontSize = 4.2;
+                }
+                if (data.column.index === 13) {
+                    data.cell.styles.fontStyle = "bold";
+                }
+            }
+        },
+        didDrawPage: () => {
+            drawHeader();
+        }
+    });
+    let finalY = doc.lastAutoTable?.finalY || 150;
+    if (finalY > pageH - 38) {
+        doc.addPage();
+        drawHeader();
+        finalY = 62;
+    }
+    autoTable(doc, {
+        startY: finalY + 5,
+        margin: { left: mx, right: mx },
+        theme: "grid",
+        tableWidth: 125,
+        head: [["Kontrollsummen", "Wert"]],
+        body: [
+            ["Anzahl Positionen", String(pdfRows.length)],
+            ["Direkte Kosten", money(pdfSummary.directCost || 0)],
+            ["Risikoanteil", money(pdfSummary.riskSum || 0)],
+            ["Gewinnanteil", money(pdfSummary.profitSum || 0)],
+            ["Netto", money(pdfSummary.net || 0)],
+            ["Brutto", money(pdfSummary.gross || 0)]
+        ],
+        styles: {
+            font: "helvetica",
+            fontSize: 5.7,
+            cellPadding: 0.9,
+            lineWidth: 0.06,
+            lineColor: [90, 90, 90]
+        },
+        headStyles: {
+            fillColor: [215, 215, 215],
+            textColor: [0, 0, 0],
+            fontStyle: "bold"
+        },
+        columnStyles: {
+            0: { cellWidth: 70 },
+            1: { cellWidth: 55, halign: "right", fontStyle: "bold" }
+        }
+    });
+    const pages = doc.getNumberOfPages();
+    for (let i = 1; i <= pages; i += 1) {
+        doc.setPage(i);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(5.5);
+        doc.setTextColor(60, 60, 60);
+        doc.setDrawColor(120, 120, 120);
+        doc.line(mx, pageH - 8, pageW - mx, pageH - 8);
+        doc.text("RLC Bausoftware · Urkalkulation", mx, pageH - 4);
+        doc.text(`Seite ${i}/${pages}`, pageW - mx, pageH - 4, { align: "right" });
+    }
+    saveRlcPdfWithCompanyHeader(doc, `Urkalkulation_${safeFileName(offer.number || projectKey)}.pdf`);
+}
+/* ================= STYLES ================= */
+const page = {
+    display: "grid",
+    gap: 16,
+    padding: 16,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+    overflowX: "hidden",
+    fontSize: 12,
+    lineHeight: 1.3
+};
+const heroCard = {
+    background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
+    color: "#FFFFFF",
+    borderRadius: 18,
+    padding: 22,
+    display: "grid",
+    gap: 14,
+    boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
+};
+const eyebrow = {
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    opacity: 0.8,
+    fontWeight: 700
+};
+const title = {
+    margin: "4px 0",
+    fontSize: 17,
+    fontWeight: 700
+};
+const subtitle = {
+    margin: 0,
+    maxWidth: 980,
+    opacity: 0.88,
+    lineHeight: 1.55
+};
+const heroActions = {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap"
+};
+const heroMeta = {
+    fontSize: 13,
+    opacity: 0.9
+};
+const quickActionsCard = {
+    background: "#FFFFFF",
+    border: "1px solid #DDE7F5",
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: "0 8px 24px rgba(15,23,42,0.05)"
+};
+const quickActionsGrid = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+    gap: 12
+};
+const quickActionButton = {
+    border: "1px solid #D7E3F5",
+    background: "linear-gradient(180deg,#FFFFFF,#F8FAFC)",
+    borderRadius: 14,
+    padding: 14,
+    textAlign: "left",
+    minHeight: 72,
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+const quickActionTitle = {
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#0F172A",
+    marginBottom: 6
+};
+const quickActionText = {
+    fontSize: 12,
+    lineHeight: 1.45,
+    color: "#64748B",
+    fontWeight: 600
+};
+const grid4 = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+    gap: 12
+};
+const kpiCard = {
+    background: "#FFFFFF",
+    border: "1px solid #E5E7EB",
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+const kpiLabel = {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em"
+};
+const kpiValue = {
+    marginTop: 6,
+    fontSize: 17,
+    color: "#0F172A",
+    fontWeight: 700
+};
+const kpiSub = {
+    marginTop: 3,
+    fontSize: 12,
+    color: "#64748B"
+};
+const kiAssistantBox = {
+    display: "grid",
+    gridTemplateColumns: "54px minmax(0,1fr)",
+    gap: 12,
+    alignItems: "start"
+};
+const kiAvatar = {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    background: "linear-gradient(135deg,#146EF5,#1E3A8A)",
+    color: "#FFFFFF",
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 700,
+    boxShadow: "0 12px 30px rgba(37,99,235,0.28)"
+};
+const kiBubble = {
+    border: "1px solid #BED6FF",
+    background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
+    color: "#1E3A8A",
+    borderRadius: 18,
+    padding: 16,
+    boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
+    display: "grid",
+    gap: 10
+};
+const kiBubbleTop = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    color: "#0F172A",
+    fontSize: 15
+};
+const kiStatus = {
+    border: "1px solid #BED6FF",
+    background: "#FFFFFF",
+    color: "#0B5BD3",
+    borderRadius: 999,
+    padding: "4px 9px",
+    fontSize: 11,
+    fontWeight: 700
+};
+const kiText = {
+    fontSize: 14,
+    lineHeight: 1.55,
+    color: "#1E3A8A",
+    fontWeight: 600
+};
+const kiQuickFacts = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap"
+};
+const kiQuickFact = {
+    border: "1px solid #DBEAFE",
+    background: "#FFFFFF",
+    color: "#334155",
+    borderRadius: 999,
+    padding: "5px 9px",
+    fontSize: 12,
+    fontWeight: 700
+};
+const card = {
+    background: "#FFFFFF",
+    minWidth: 0,
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    border: "1px solid #E5E7EB",
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+const sideCard = {
+    ...card,
+    alignSelf: "stretch",
+    position: "relative",
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflow: "hidden",
+    scrollMarginTop: 16
+};
+const selectedDetailHeader = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    flexWrap: "wrap",
+    paddingBottom: 12,
+    marginBottom: 12,
+    borderBottom: "1px solid #E2E8F0"
+};
+const selectedDetailEyebrow = {
+    marginBottom: 4,
+    color: "#146EF5",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.05em",
+    textTransform: "uppercase"
+};
+const selectedDetailPosition = {
+    maxWidth: 620,
+    padding: "8px 11px",
+    border: "1px solid #BED6FF",
+    borderRadius: 10,
+    background: "#EAF2FF",
+    color: "#1E3A8A",
+    fontSize: 12,
+    fontWeight: 700,
+    overflowWrap: "anywhere"
+};
+const sectionHead = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 12
+};
+const sectionTitle = {
+    margin: 0,
+    fontSize: 17,
+    color: "#0F172A",
+    fontWeight: 700
+};
+const sectionText = {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#64748B"
+};
+const formGrid = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+    gap: 12
+};
+const label = {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: 700
+};
+const input = {
+    border: "1px solid #D1D5DB",
+    borderRadius: 10,
+    padding: "6px 8px",
+    fontSize: 13,
+    width: "100%",
+    boxSizing: "border-box"
+};
+const smallInput = {
+    ...input,
+    width: 76,
+    padding: "7px 9px"
+};
+const cellInput = {
+    border: "1px solid #E5E7EB",
+    borderRadius: 8,
+    padding: "6px 8px",
+    fontSize: 12,
+    background: "#FFFFFF",
+    boxSizing: "border-box"
+};
+const chapterGrid = {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap"
+};
+const chapterBox = {
+    border: "1px solid #E5E7EB",
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 250,
+    background: "#F8FAFC"
+};
+const chapterInputs = {
+    marginTop: 8,
+    display: "grid",
+    gridTemplateColumns: "auto 80px auto 80px",
+    alignItems: "center",
+    gap: 8
+};
+const tiny = {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#64748B"
+};
+const muted = {
+    color: "#64748B",
+    fontSize: 13
+};
+const exportRow = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap"
+};
+const filterRow = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center",
+    marginBottom: 12
+};
+const btnFilter = {
+    border: "1px solid #CBD5E1",
+    background: "#FFFFFF",
+    color: "#334155",
+    borderRadius: 999,
+    padding: "5px 8px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer"
+};
+const btnFilterActive = {
+    ...btnFilter,
+    border: "1px solid #146EF5",
+    background: "#EAF2FF",
+    color: "#0B5BD3"
+};
+const filterMeta = {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: 700,
+    marginLeft: "auto"
+};
+const tableWrap = {
+    overflowX: "auto",
+    border: "1px solid #E5E7EB",
+    borderRadius: 12
+};
+const table = {
+    width: "100%",
+    minWidth: 1120,
+    borderCollapse: "collapse"
+};
+const th = {
+    textAlign: "left",
+    padding: "7px 7px",
+    fontSize: 12,
+    color: "#475569",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E5E7EB",
+    whiteSpace: "nowrap",
+    fontWeight: 700
+};
+const td = {
+    padding: "6px 7px",
+    fontSize: 12,
+    borderBottom: "1px solid #F1F5F9",
+    verticalAlign: "middle"
+};
+const tdRight = {
+    ...td,
+    textAlign: "right",
+    whiteSpace: "nowrap"
+};
+const chapterRow = {
+    ...td,
+    background: "#EAF2FF",
+    color: "#1E3A8A",
+    fontWeight: 700
+};
+const btnBase = {
+    border: "1px solid #D1D5DB",
+    borderRadius: 10,
+    padding: "5px 8px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap"
+};
+const btnPrimary = {
+    ...btnBase,
+    border: "1px solid #146EF5",
+    background: "#146EF5",
+    color: "#FFFFFF"
+};
+const btnSecondary = {
+    ...btnBase,
+    background: "#FFFFFF",
+    color: "#0F172A"
+};
+const btnMini = {
+    border: "1px solid #D1D5DB",
+    background: "#FFFFFF",
+    color: "#0F172A",
+    borderRadius: 8,
+    padding: "6px 9px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    marginTop: 8
+};
+const btnDangerMini = {
+    border: "1px solid #FECACA",
+    background: "#FEF2F2",
+    color: "#B91C1C",
+    borderRadius: 8,
+    padding: "6px 9px",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer"
+};
+const badgeNeutral = {
+    display: "inline-flex",
+    border: "1px solid #CBD5E1",
+    background: "#F8FAFC",
+    color: "#475569",
+    borderRadius: 999,
+    padding: "4px 9px",
+    fontSize: 11,
+    fontWeight: 700
+};
+const badgeOk = {
+    ...badgeNeutral,
+    border: "1px solid #BBF7D0",
+    background: "#F0FDF4",
+    color: "#15803D"
+};
+const badgeWarn = {
+    ...badgeNeutral,
+    border: "1px solid #FDE68A",
+    background: "#FFFBEB",
+    color: "#B45309"
+};
+const badgeInfo = {
+    ...badgeNeutral,
+    border: "1px solid #BED6FF",
+    background: "#EAF2FF",
+    color: "#0B5BD3"
+};
+const badgeCritical = {
+    ...badgeNeutral,
+    border: "1px solid #FECACA",
+    background: "#FEF2F2",
+    color: "#B91C1C"
+};
+const problemText = {
+    fontSize: 12,
+    color: "#334155",
+    fontWeight: 700
+};
+const sideTitle = {
+    marginTop: 4,
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#0F172A",
+    lineHeight: 1.35
+};
+const sideBadges = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap"
+};
+const separator = {
+    height: 1,
+    background: "#E5E7EB"
+};
+const detailValue = {
+    marginTop: 4,
+    color: "#0F172A",
+    fontWeight: 600,
+    fontSize: 13
+};
+const compactInfoGrid = {
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: 10
+};
+const costGrid = {
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: 8,
+    marginTop: 10
+};
+const costBox = {
+    border: "1px solid #E5E7EB",
+    background: "#F8FAFC",
+    borderRadius: 10,
+    padding: 9
+};
+const costLabel = {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: 700
+};
+const costValue = {
+    marginTop: 3,
+    fontSize: 13,
+    color: "#0F172A",
+    fontWeight: 700
+};
+const warningBox = {
+    border: "1px solid #FDE68A",
+    background: "#FFFBEB",
+    color: "#92400E",
+    borderRadius: 12,
+    padding: 10,
+    fontSize: 13,
+    lineHeight: 1.45,
+    whiteSpace: "pre-wrap"
+};
+const reasonBox = {
+    border: "1px solid #DBEAFE",
+    background: "#EAF2FF",
+    color: "#1E3A8A",
+    borderRadius: 12,
+    padding: 10,
+    fontSize: 13,
+    lineHeight: 1.45,
+    whiteSpace: "pre-wrap"
+};
+const detailsSummary = {
+    cursor: "pointer",
+    fontSize: 13,
+    color: "#0F172A",
+    fontWeight: 700,
+    padding: "8px 0"
+};
+const knowledgeList = {
+    display: "grid",
+    gap: 8,
+    marginTop: 6
+};
+const knowledgeItem = {
+    border: "1px solid #DBEAFE",
+    background: "#EAF2FF",
+    borderRadius: 12,
+    padding: 10
+};
+const knowledgeTitle = {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#0F172A",
+    lineHeight: 1.3
+};
+const breakdownHeader = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 8,
+    fontSize: 13
+};
+const miniTableWrap = {
+    overflowX: "auto",
+    border: "1px solid #E5E7EB",
+    borderRadius: 10,
+    marginBottom: 8
+};
+const miniTable = {
+    width: "100%",
+    minWidth: 720,
+    borderCollapse: "collapse"
+};
+const miniTh = {
+    textAlign: "left",
+    padding: "7px 6px",
+    fontSize: 11,
+    color: "#475569",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E5E7EB",
+    fontWeight: 700,
+    whiteSpace: "nowrap"
+};
+const miniTd = {
+    padding: "6px",
+    borderBottom: "1px solid #F1F5F9",
+    fontSize: 11,
+    verticalAlign: "middle"
+};
+const miniTdRight = {
+    ...miniTd,
+    textAlign: "right",
+    fontWeight: 700,
+    whiteSpace: "nowrap"
+};
+const miniInput = {
+    border: "1px solid #D1D5DB",
+    borderRadius: 7,
+    padding: "5px 6px",
+    fontSize: 11,
+    width: "100%",
+    boxSizing: "border-box",
+    background: "#FFFFFF"
+};
+const miniEmpty = {
+    padding: 10,
+    fontSize: 12,
+    color: "#64748B"
+};
+const auftragTabs = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap"
+};
+const auftragTab = {
+    border: "1px solid #CBD5E1",
+    background: "#FFFFFF",
+    color: "#334155",
+    borderRadius: 999,
+    padding: "8px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer"
+};
+const auftragTabActive = {
+    ...auftragTab,
+    border: "1px solid #146EF5",
+    background: "#EAF2FF",
+    color: "#0B5BD3"
+};
+const urkalkulationSummary = {
+    display: "grid",
+    gridTemplateColumns: "repeat(3,minmax(0,1fr))",
+    gap: 8,
+    marginBottom: 10
+};
+const urkBox = {
+    border: "1px solid #E5E7EB",
+    background: "#F8FAFC",
+    borderRadius: 10,
+    padding: 9,
+    display: "grid",
+    gap: 3
+};
+const urkBoxStrong = {
+    ...urkBox,
+    border: "1px solid #146EF5",
+    background: "#EAF2FF",
+    color: "#0B5BD3"
+};
+const urkLabel = {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: 700
+};
+const calcEditorGrid = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr)",
+    gap: 16,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0
+};
+const bottomCalcGrid = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 420px",
+    gap: 16,
+    alignItems: "start"
+};
+const selectedPositionBar = {
+    border: "1px solid #BED6FF",
+    background: "#EAF2FF",
+    color: "#1E3A8A",
+    borderRadius: 12,
+    padding: "10px 12px",
+    marginBottom: 10,
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    fontSize: 13
+};
+const resourceToolbar = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0,1fr) 130px auto",
+    gap: 8,
+    marginBottom: 10
+};
+const resourceList = {
+    display: "grid",
+    gap: 6,
+    maxHeight: 260,
+    overflow: "auto",
+    border: "1px solid #E5E7EB",
+    borderRadius: 10,
+    padding: 6,
+    background: "#F8FAFC"
+};
+const resourceItem = {
+    border: "1px solid #E5E7EB",
+    background: "#FFFFFF",
+    borderRadius: 9,
+    padding: 9,
+    textAlign: "left",
+    cursor: "pointer"
+};
+const resourceTitle = {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#0F172A"
+};
+const resourceMeta = {
+    marginTop: 3,
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: 600
+};
+const auftragSummaryBox = {
+    marginTop: 12,
+    border: "1px solid #BED6FF",
+    background: "#EAF2FF",
+    color: "#1E3A8A",
+    borderRadius: 12,
+    padding: "10px 12px",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    fontSize: 13,
+    fontWeight: 700
+};
+const pagerBar = {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginLeft: "auto",
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: 700
+};
+const compactHeroCard = {
+    ...heroCard,
+    padding: 18,
+    gap: 12
+};
+const compactHeroTop = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 16,
+    flexWrap: "wrap"
+};
+const compactHeroTitleWrap = {
+    display: "grid",
+    gap: 4
+};
+const compactTitle = {
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 700
+};
+const compactSubtitle = {
+    margin: 0,
+    maxWidth: 820,
+    opacity: 0.86,
+    lineHeight: 1.45,
+    fontSize: 13
+};
+const compactHeroActions = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    justifyContent: "flex-end"
+};
+const compactActionBar = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center"
+};
+const kiPanel = {
+    border: "1px solid #BED6FF",
+    background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
+    color: "#1E3A8A",
+    borderRadius: 16,
+    padding: 14,
+    boxShadow: "0 8px 24px rgba(15,23,42,0.06)",
+    display: "grid",
+    gap: 10
+};
+const kiPanelClosed = {
+    border: "1px solid #D7E3F5",
+    background: "#FFFFFF",
+    borderRadius: 14,
+    padding: "10px 12px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+const kiPanelTop = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap"
+};
+const kiPanelTitle = {
+    color: "#0F172A",
+    fontSize: 15,
+    fontWeight: 700
+};
+const kiPanelSubtitle = {
+    marginTop: 3,
+    color: "#1E3A8A",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 600
+};
+const kiPanelActions = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    justifyContent: "flex-end"
+};
+const kiFactsCompact = {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap"
+};
+const kiFactCompact = {
+    border: "1px solid #DBEAFE",
+    background: "#FFFFFF",
+    color: "#334155",
+    borderRadius: 999,
+    padding: "4px 8px",
+    fontSize: 11,
+    fontWeight: 700
+};
+const auftragCardCompact = {
+    ...card,
+    padding: 14
+};
+const auftragHeaderCompact = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 10
+};
+const auftragSummaryCompact = {
+    border: "1px solid #BED6FF",
+    background: "#EAF2FF",
+    color: "#1E3A8A",
+    borderRadius: 12,
+    padding: "8px 10px",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+    fontSize: 12,
+    fontWeight: 700,
+    marginBottom: 10
+};
+const lvMenuWrap = {
+    position: "relative"
+};
+const lvMenuButton = {
+    ...btnSecondary,
+    listStyle: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6
+};
+const lvMenuPanel = {
+    position: "absolute",
+    right: 0,
+    top: "calc(100% + 6px)",
+    zIndex: 20,
+    minWidth: 210,
+    border: "1px solid #D7E3F5",
+    background: "#FFFFFF",
+    borderRadius: 12,
+    padding: 6,
+    boxShadow: "0 16px 40px rgba(15,23,42,0.16)",
+    display: "grid",
+    gap: 4
+};
+const lvMenuItem = {
+    border: "none",
+    background: "transparent",
+    color: "#0F172A",
+    borderRadius: 9,
+    padding: "9px 10px",
+    textAlign: "left",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer"
+};
+const lvTableWrap = {
+    overflowX: "auto",
+    border: "1px solid #E5E7EB",
+    borderRadius: 12,
+    background: "#FFFFFF"
+};
+const lvStickyHeader = {
+    display: "none"
+};
+const lvTable = {
+    width: "100%",
+    maxWidth: "100%",
+    tableLayout: "fixed",
+    borderCollapse: "collapse"
+};
+const lvTh = {
+    position: "sticky",
+    top: 0,
+    zIndex: 5,
+    textAlign: "left",
+    padding: "4px 4px",
+    fontSize: 9.5,
+    color: "#475569",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #DDE3EC",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    lineHeight: 1.05,
+    fontWeight: 700
+};
+const lvThRight = {
+    ...lvTh,
+    textAlign: "right"
+};
+const lvRow = {
+    background: "#FFFFFF",
+    cursor: "pointer"
+};
+const lvRowSelected = {
+    background: "#EAF2FF"
+};
+const lvRowCritical = {
+    background: "#FEF2F2"
+};
+const lvRowWarning = {
+    background: "#FFFBEB"
+};
+const lvRowStructure = {
+    background: "#F8FAFC",
+    color: "#64748B",
+    fontStyle: "italic"
+};
+const lvTd = {
+    padding: "4px 4px",
+    fontSize: 10.5,
+    lineHeight: 1.15,
+    borderBottom: "1px solid #EEF2F7",
+    verticalAlign: "middle",
+    minWidth: 0,
+    overflow: "hidden",
+    overflowWrap: "anywhere"
+};
+const lvTextTd = {
+    ...lvTd,
+    minWidth: 280
+};
+const lvTdRight = {
+    ...lvTd,
+    textAlign: "right",
+    whiteSpace: "nowrap"
+};
+const lvSelect = {
+    ...cellInput,
+    width: 142,
+    minHeight: 28,
+    height: 28,
+    padding: "3px 5px",
+    fontSize: 10.5,
+    lineHeight: 1.1
+};
+const lvPosInput = {
+    ...cellInput,
+    width: 84,
+    minHeight: 28,
+    height: 28,
+    padding: "3px 5px",
+    fontSize: 10.5
+};
+const lvKurztextInput = {
+    ...cellInput,
+    width: "100%",
+    minWidth: 330,
+    fontWeight: 700
+};
+const lvLangPreview = {
+    marginTop: 4,
+    fontSize: 11,
+    color: "#64748B",
+    lineHeight: 1.35,
+    maxWidth: 680
+};
+const lvMiniWarning = {
+    marginTop: 2,
+    fontSize: 9,
+    color: "#B45309",
+    lineHeight: 1.15,
+    fontWeight: 650
+};
+const lvPriceCompareInline = {
+    marginTop: 2,
+    fontSize: 9.5,
+    color: "#1E3A8A",
+    fontWeight: 700,
+    lineHeight: 1.1
+};
+const lvNumberInput = {
+    ...cellInput,
+    width: 66,
+    minHeight: 28,
+    height: 28,
+    padding: "3px 5px",
+    fontSize: 10.5,
+    textAlign: "right"
+};
+const lvUnitInput = {
+    ...cellInput,
+    width: 54,
+    minHeight: 28,
+    height: 28,
+    padding: "3px 5px",
+    fontSize: 10.5
+};
+const lvPriceInput = {
+    ...cellInput,
+    width: 82,
+    minHeight: 28,
+    height: 28,
+    padding: "3px 5px",
+    fontSize: 10.5,
+    textAlign: "right"
+};
+const pagerBarCompact = {
+    display: "flex",
+    gap: 8,
+    alignItems: "center",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    marginTop: 12,
+    fontSize: 12,
+    color: "#475569",
+    fontWeight: 700
+};
+const heroCardCompact = {
+    background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
+    color: "#FFFFFF",
+    borderRadius: 16,
+    padding: 18,
+    display: "grid",
+    gap: 12,
+    boxShadow: "0 10px 28px rgba(15,23,42,0.16)"
+};
+const heroTopLine = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 16,
+    flexWrap: "wrap"
+};
+const titleCompact = {
+    color: "#FFFFFF", margin: "3px 0",
+    fontSize: 26,
+    fontWeight: 700
+};
+const subtitleCompact = {
+    margin: 0,
+    maxWidth: 900,
+    fontSize: 13,
+    opacity: 0.9,
+    lineHeight: 1.45
+};
+const heroMetaCompact = {
+    minWidth: 170,
+    border: "1px solid rgba(255,255,255,0.22)",
+    background: "rgba(255,255,255,0.08)",
+    borderRadius: 12,
+    padding: "10px 12px",
+    display: "grid",
+    gap: 3,
+    fontSize: 12
+};
+const heroStatus = {
+    border: "1px solid rgba(255,255,255,0.2)",
+    background: "rgba(255,255,255,0.1)",
+    borderRadius: 10,
+    padding: "8px 10px",
+    fontSize: 12,
+    fontWeight: 700
+};
+const compactToolbar = {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+    alignItems: "center"
+};
+const compactActionPanel = {
+    background: "#FFFFFF",
+    border: "1px solid #DDE7F5",
+    borderRadius: 14,
+    padding: 14,
+    boxShadow: "0 4px 14px rgba(15,23,42,0.05)"
+};
+const compactActionHeader = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 10
+};
+const compactActionGrid = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(175px,1fr))",
+    gap: 8
+};
+const compactActionButton = {
+    border: "1px solid #D7E3F5",
+    background: "#FFFFFF",
+    borderRadius: 12,
+    padding: 11,
+    textAlign: "left",
+    minHeight: 72,
+    cursor: "pointer",
+    display: "grid",
+    gap: 4
+};
+const compactOrderCard = {
+    ...card,
+    padding: 14
+};
+const orderHead = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 10
+};
+const auftragSummaryBoxCompact = {
+    border: "1px solid #BED6FF",
+    background: "#EAF2FF",
+    color: "#1E3A8A",
+    borderRadius: 10,
+    padding: "8px 10px",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+    fontSize: 12,
+    fontWeight: 700,
+    marginBottom: 8
+};
+const auftragTabsCompact = {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap"
+};
+const grid4Compact = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))",
+    gap: 10
+};
+const kiAssistantPanel = {
+    border: "1px solid #BED6FF",
+    background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
+    borderRadius: 14,
+    padding: 14,
+    display: "grid",
+    gap: 10,
+    boxShadow: "0 6px 18px rgba(37,99,235,0.08)"
+};
+const kiPanelHeader = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+    flexWrap: "wrap"
+};
+const kiPanelTitleWrap = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10
+};
+const kiAvatarSmall = {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    background: "linear-gradient(135deg,#146EF5,#1E3A8A)",
+    color: "#FFFFFF",
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 700
+};
+const kiPanelSub = {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: 700
+};
+const kiPanelText = {
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: "#1E3A8A",
+    fontWeight: 700
+};
+const kiQuickFactsCompact = {
+    display: "flex",
+    gap: 7,
+    flexWrap: "wrap"
+};
+const kiOpenButton = {
+    ...btnSecondary,
+    justifySelf: "start"
+};
+const kiDrawerTitleWrap = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10
+};
+const kiDrawerAvatar = {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    background: "linear-gradient(145deg,#146EF5,#1E40AF)",
+    color: "#FFFFFF",
+    display: "grid",
+    placeItems: "center",
+    fontSize: 17,
+    fontWeight: 700,
+    boxShadow: "0 12px 28px rgba(37,99,235,0.26)"
+};
+const kiDrawerMessage = {
+    border: "1px solid #BED6FF",
+    background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
+    color: "#1E3A8A",
+    borderRadius: 16,
+    padding: 13,
+    fontSize: 13,
+    lineHeight: 1.55,
+    fontWeight: 700
+};
+const kiDrawerHint = {
+    border: "1px solid #FDE68A",
+    background: "#FFFBEB",
+    color: "#92400E",
+    borderRadius: 14,
+    padding: 11,
+    fontSize: 12,
+    lineHeight: 1.45
+};
+const kiDrawerStats = {
+    display: "grid",
+    gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+    gap: 8
+};
+const lvDropdownBox = {
+    border: "1px solid #D7E3F5",
+    borderRadius: 14,
+    background: "#FFFFFF",
+    overflow: "hidden"
+};
+const lvDropdownSummary = {
+    listStyle: "none",
+    cursor: "pointer",
+    padding: "11px 14px",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E5E7EB",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#0F172A"
+};
+const lvDropdownHint = {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: 700
+};
+const lvTableScroll = {
+    display: "block",
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    maxHeight: 520,
+    overflowY: "auto",
+    overflowX: "hidden",
+    boxSizing: "border-box",
+    WebkitOverflowScrolling: "touch"
+};
+const priceCompareCard = {
+    background: "#FFFFFF",
+    border: "1px solid #DDE7F5",
+    borderRadius: 16,
+    padding: 16,
+    boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+const priceCompareBadge = {
+    border: "1px solid #BED6FF",
+    background: "#EAF2FF",
+    color: "#0B5BD3",
+    borderRadius: 999,
+    padding: "5px 8px",
+    fontSize: 12,
+    fontWeight: 700
+};
+const priceCompareTableWrap = {
+    overflowX: "auto",
+    overflowY: "auto",
+    maxHeight: 285,
+    border: "1px solid #E5E7EB",
+    borderRadius: 12
+};
+const priceCompareTable = {
+    width: "100%",
+    minWidth: 1120,
+    borderCollapse: "collapse"
+};
+const priceCompareTh = {
+    textAlign: "left",
+    padding: "9px 10px",
+    fontSize: 11,
+    color: "#475569",
+    background: "#F8FAFC",
+    borderBottom: "1px solid #E5E7EB",
+    whiteSpace: "nowrap",
+    fontWeight: 700,
+    position: "sticky",
+    top: 0,
+    zIndex: 2
+};
+const priceCompareThRight = {
+    ...priceCompareTh,
+    textAlign: "right"
+};
+const priceCompareTr = {
+    cursor: "pointer",
+    background: "#FFFFFF"
+};
+const priceCompareTd = {
+    padding: "8px 10px",
+    fontSize: 12,
+    borderBottom: "1px solid #F1F5F9",
+    verticalAlign: "middle"
+};
+const priceCompareTdStrong = {
+    ...priceCompareTd,
+    fontWeight: 700,
+    color: "#0F172A"
+};
+const priceCompareTdRight = {
+    ...priceCompareTd,
+    textAlign: "right",
+    whiteSpace: "nowrap",
+    fontWeight: 700
+};
+const rlcActionProgressWrap = {
+    marginTop: 12,
+    padding: "12px 14px",
+    borderRadius: 14,
+    border: "1px solid rgba(191,219,254,0.95)",
+    background: "rgba(239,246,255,0.98)",
+    boxShadow: "0 8px 22px rgba(15,23,42,0.08)"
+};
+const rlcActionProgressTop = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    fontSize: 13,
+    color: "#0F172A",
+    marginBottom: 8
+};
+const rlcActionProgressTrack = {
+    height: 10,
+    borderRadius: 999,
+    background: "#DBEAFE",
+    overflow: "hidden"
+};
+const rlcActionProgressFill = {
+    height: "100%",
+    borderRadius: 999,
+    transition: "width 420ms ease"
+};

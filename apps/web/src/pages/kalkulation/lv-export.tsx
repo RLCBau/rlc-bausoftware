@@ -1,256 +1,953 @@
-import React, { useMemo, useRef, useState } from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+// apps/web/src/pages/kalkulation/lvOhnePreis.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { LV, type LVPos } from "./store.lv";
+import { useProject } from "../../store/useProject";
 
-/** ===== Types ===== */
-type LVPos = {
-  posnr: string;
-  kurztext: string;
-  langtext?: string;
-  me?: string;
-  menge?: number;
-  // possono arrivare ma li rimuoviamo:
-  ep?: number | string | null;
-  gp?: number | string | null;
-  preis?: number | string | null;
-};
+type ExportFormat = "csv" | "pdf" | "gaeb-x83" | "gaeb-x84";
 
-const parseNum = (v: any) => {
-  if (v === null || v === undefined || v === "") return undefined;
-  const n = Number(String(v).replace(",", "."));
-  return Number.isFinite(n) ? n : undefined;
-};
+const API =
+(import.meta as any)?.env?.VITE_API_URL ||
+(import.meta as any)?.env?.VITE_BACKEND_URL ||
+"";
 
-/** CSV <-> JSON minimal (separatore ;) */
-function parseCSV(text: string): LVPos[] {
-  const lines = text.replace(/\r/g, "").split("\n").filter(l => l.trim() !== "");
-  if (lines.length === 0) return [];
-  const headers = lines[0].split(";").map(s => s.trim().toLowerCase());
+function apiUrl(path: string): string {
+  const cleanApi = String(API || "").replace(/\/+$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return cleanApi ? `${cleanApi}${cleanPath}` : cleanPath;
+}
 
-  const idx = (alts: string[]) => headers.findIndex(h => alts.includes(h));
+function getAuthToken(): string {
+  try {
+    const keys = [
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_token",
+    "rlc_auth_token",
+    "rlc_access_token"];
 
-  const iPos   = idx(["posnr","positionsnummer","pos","position"]);
-  const iKurz  = idx(["kurztext","kurz","bezeichnung"]);
-  const iLang  = idx(["langtext","text","beschreibung"]);
-  const iME    = idx(["me","einheit","eh","unit"]);
-  const iMenge = idx(["menge","qty","m"]);
-  const iEP    = idx(["ep","einheitspreis","preis","preis_ep","preis (ep)"]);
-  const iGP    = idx(["gp","gesamtpreis","ges preis","preis (gp)"]);
 
-  const out: LVPos[] = [];
-  for (let r = 1; r < lines.length; r++) {
-    const cols = lines[r].split(";");
-    if (cols.length === 1 && cols[0].trim() === "") continue;
-    out.push({
-      posnr: String(cols[iPos] ?? "").trim(),
-      kurztext: String(cols[iKurz] ?? "").trim(),
-      langtext: iLang >= 0 ? String(cols[iLang] ?? "").trim() : undefined,
-      me: iME >= 0 ? String(cols[iME] ?? "").trim() : undefined,
-      menge: iMenge >= 0 ? parseNum(cols[iMenge]) : undefined,
-      ep: iEP >= 0 ? cols[iEP] : undefined,
-      gp: iGP >= 0 ? cols[iGP] : undefined,
-    });
+    for (const key of keys) {
+      const value = localStorage.getItem(key);
+      if (value?.trim()) return value.trim();
+    }
+
+    const jsonKeys = ["auth", "user", "session", "rlc_auth", "rlc_session"];
+
+    for (const key of jsonKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+
+      try {
+        const parsed = JSON.parse(raw);
+        const token =
+        parsed?.token ??
+        parsed?.accessToken ??
+        parsed?.authToken ??
+        parsed?.jwt ??
+        parsed?.data?.token ??
+        parsed?.data?.accessToken;
+
+        if (typeof token === "string" && token.trim()) return token.trim();
+      } catch {
+
+        //
+      }}
+  } catch {
+
+    //
   }
-  return out;
+  return "";
 }
 
-function toCSV(rows: LVPos[], include: IncludeFields): string {
-  const head = [
-    include.posnr ? "PosNr" : null,
-    include.kurztext ? "Kurztext" : null,
-    include.langtext ? "Langtext" : null,
-    include.me ? "ME" : null,
-    include.menge ? "Menge" : null,
-  ].filter(Boolean);
+function authHeaders(extra?: Record<string, string>): HeadersInit {
+  const token = getAuthToken();
 
-  const body = rows.map(r => [
-    include.posnr ? r.posnr : null,
-    include.kurztext ? r.kurztext?.replace(/;/g, ",") : null,
-    include.langtext ? (r.langtext ?? "").replace(/;/g, ",") : null,
-    include.me ? (r.me ?? "") : null,
-    include.menge ? (r.menge ?? "") : null,
-  ].filter(v => v !== null).join(";"));
-
-  return [head.join(";"), ...body].join("\n");
-}
-
-/** ===== Component ===== */
-type IncludeFields = {
-  posnr: boolean; kurztext: boolean; langtext: boolean; me: boolean; menge: boolean;
-};
-
-export default function LVExportOhnePreisePage() {
-  const [rows, setRows] = useState<LVPos[]>([]);
-  const [query, setQuery] = useState("");
-  const [include, setInclude] = useState<IncludeFields>({
-    posnr: true, kurztext: true, langtext: false, me: true, menge: true,
-  });
-  const [stripEmptyLines, setStripEmptyLines] = useState(true);
-  const [outputSepComma, setOutputSepComma] = useState(false); // opzionale
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  /** filtra + rimuovi colonne prezzo */
-  const cleaned = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const base = rows
-      .map(r => ({ ...r, ep: undefined, gp: undefined, preis: undefined })) // rimuovi prezzi
-      .filter(r =>
-        !stripEmptyLines ||
-        (r.posnr?.trim() || r.kurztext?.trim())
-      );
-
-    if (!q) return base;
-    return base.filter(r =>
-      r.posnr.toLowerCase().includes(q) ||
-      (r.kurztext || "").toLowerCase().includes(q) ||
-      (r.langtext || "").toLowerCase().includes(q)
-    );
-  }, [rows, query, stripEmptyLines]);
-
-  const exportCSV = () => {
-    let csv = toCSV(cleaned, include);
-    if (outputSepComma) csv = csv.replace(/;/g, ",");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "LV_ohne_Preise.csv"; a.click();
-    URL.revokeObjectURL(url);
+  return {
+    ...(extra || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
+}
 
+function getCurrentProject(projectCtx: any): any {
   return (
-    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>LV ohne Preise exportieren</div>
+    projectCtx?.project ||
+    projectCtx?.currentProject ||
+    projectCtx?.selectedProject ||
+    projectCtx?.current ||
+    projectCtx ||
+    null);
 
-      {/* Toolbar */}
-      <div style={toolbar}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <input
-            placeholder="Suche… (PosNr, Kurz-/Langtext)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={searchInput}
-          />
+}
 
-          <label style={btnSecondary}>
-            CSV-Import (LV)
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,text/csv"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                const r = new FileReader();
-                r.onload = () => {
-                  const text = String(r.result || "");
-                  setRows(parseCSV(text));
-                };
-                r.readAsText(f, "utf-8");
-              }}
-            />
-          </label>
+function getProjectKey(projectCtx: any): string {
+  const p = getCurrentProject(projectCtx);
 
-          <button style={btnPrimary} disabled={cleaned.length === 0} onClick={exportCSV}>
-            CSV-Export (ohne Preise)
-          </button>
-        </div>
+  return String(
+    p?.code ||
+    p?.projectCode ||
+    p?.number ||
+    p?.projektnummer ||
+    p?.id ||
+    ""
+  ).
+  trim().
+  toUpperCase();
+}
 
-        <div style={{ fontSize: 12, color: "#6b7280" }}>
-          Positionen: {rows.length} • Export: {cleaned.length}
-        </div>
-      </div>
+function getProjectName(projectCtx: any): string {
+  const p = getCurrentProject(projectCtx);
+  return String(p?.name || p?.projectName || p?.projektname || "").trim();
+}
 
-      {/* Opzioni */}
-      <div style={card}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ fontWeight: 600 }}>Spalten im Export:</div>
-          {([
-            ["posnr","PosNr"],
-            ["kurztext","Kurztext"],
-            ["langtext","Langtext"],
-            ["me","ME"],
-            ["menge","Menge"],
-          ] as [keyof IncludeFields, string][]).map(([k, label]) => (
-            <label key={k} style={chk}>
-              <input
-                type="checkbox"
-                checked={include[k]}
-                onChange={(e) => setInclude({ ...include, [k]: e.target.checked })}
-              /> {label}
-            </label>
-          ))}
+function getProjectClient(projectCtx: any): string {
+  const p = getCurrentProject(projectCtx);
+  return String(p?.client || p?.auftraggeber || p?.kunde || "").trim();
+}
 
-          <label style={chk}>
-            <input
-              type="checkbox"
-              checked={stripEmptyLines}
-              onChange={(e) => setStripEmptyLines(e.target.checked)}
-            /> Leere Zeilen entfernen
-          </label>
+function getProjectPlace(projectCtx: any): string {
+  const p = getCurrentProject(projectCtx);
+  return String(p?.place || p?.ort || p?.location || "").trim();
+}
 
-          <label style={chk}>
-            <input
-              type="checkbox"
-              checked={outputSepComma}
-              onChange={(e) => setOutputSepComma(e.target.checked)}
-            /> Komma statt Semikolon
-          </label>
-        </div>
-      </div>
+function csvEscape(value: unknown): string {
+  const s = String(value ?? "");
+  if (s.includes('"') || s.includes(";") || s.includes("\n") || s.includes("\r")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
 
-      {/* Tabelle di anteprima */}
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-        <div style={{ overflow: "auto", maxHeight: "65vh" }}>
-          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
-            <thead style={{ position: "sticky", top: 0, background: "#f8fafc", borderBottom: "1px solid #e5e7eb" }}>
-              <tr>
-                {include.posnr && <th style={th(120)}>PosNr</th>}
-                {include.kurztext && <th style={th(360)}>Kurztext</th>}
-                {include.langtext && <th style={th(420)}>Langtext</th>}
-                {include.me && <th style={th(80)}>ME</th>}
-                {include.menge && <th style={th(100)}>Menge</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {cleaned.map((r, i) => (
-                <tr key={i} style={{ background: i % 2 ? "#fcfcfc" : "white" }}>
-                  {include.posnr && <td style={td(120)}>{r.posnr}</td>}
-                  {include.kurztext && <td style={td(360)} title={r.kurztext}>{r.kurztext}</td>}
-                  {include.langtext && <td style={td(420)} title={r.langtext}>{r.langtext}</td>}
-                  {include.me && <td style={td(80)}>{r.me ?? ""}</td>}
-                  {include.menge && <td style={td(100)}>{r.menge ?? ""}</td>}
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ padding: 16, color: "#6b7280" }}>
-                    Noch keine Daten. CSV importieren (Spalten-Beispiele: <b>PosNr;Kurztext;Langtext;ME;Menge;EP;GP</b>).
-                    Preise werden beim Export automatisch entfernt.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+function n(value: unknown): number {
+  const x =
+  typeof value === "number" ?
+  value :
+  Number(String(value ?? "").replace(",", ".").trim());
+
+  return Number.isFinite(x) ? x : 0;
+}
+
+function fmtNumber(value: unknown, digits = 3): string {
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  }).format(n(value));
+}
+
+function safeFileName(value: string): string {
+  return String(value || "Projekt").
+  replace(/[^\w.-]+/g, "_").
+  replace(/_+/g, "_").
+  slice(0, 120);
+}
+
+function todayDE(): string {
+  return new Date().toLocaleDateString("de-DE");
+}
+
+function cleanRows(rows: LVPos[]): LVPos[] {
+  return rows.
+  filter((r) => {
+    const pos = String(r.posNr || "").trim();
+    const text = String(r.kurztext || r.langtext || "").trim();
+    const unit = String(r.einheit || "").trim();
+    const qty = n(r.menge);
+
+    if (!pos && !text && !unit && qty === 0) return false;
+    if (pos.toUpperCase().startsWith("BA-")) return false;
+
+    return true;
+  }).
+  map((r) => ({
+    ...r,
+    posNr: String(r.posNr || "").trim(),
+    kurztext: String(r.kurztext || "").trim(),
+    langtext: String(r.langtext || "").trim(),
+    bemerkung: String(r.bemerkung || "").trim(),
+    einheit: String(r.einheit || "").trim(),
+    menge: n(r.menge),
+    preis: 0,
+    gesamt: 0
+  }));
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function downloadCsv(rows: LVPos[], projectKey: string) {
+  const header = [
+  "Position",
+  "ParentPosition",
+  "Kurztext",
+  "Langtext",
+  "Bemerkung",
+  "ME",
+  "Menge",
+  "EP_Manuell"];
+
+
+  const body = rows.map((r) =>
+  [
+  csvEscape(r.posNr),
+  csvEscape(r.parentPosNr || ""),
+  csvEscape(r.kurztext),
+  csvEscape(r.langtext || ""),
+  csvEscape(r.bemerkung || ""),
+  csvEscape(r.einheit),
+  csvEscape(fmtNumber(r.menge)),
+  ""].
+  join(";")
+  );
+
+  const csv = [header.join(";"), ...body].join("\n");
+
+  downloadBlob(
+    new Blob([csv], { type: "text/csv;charset=utf-8" }),
+    `LV_ohne_Preise_${safeFileName(projectKey)}.csv`
   );
 }
 
-/** ===== Styles ===== */
-const toolbar: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  border: "1px solid #e5e7eb",
-  background: "#f8fafc",
-  borderRadius: 10,
-  padding: 12,
-  marginBottom: 8,
+function xmlEscape(value: unknown): string {
+  return String(value ?? "").
+  replace(/&/g, "&amp;").
+  replace(/</g, "&lt;").
+  replace(/>/g, "&gt;").
+  replace(/"/g, "&quot;");
+}
+
+function buildGaebXml(
+rows: LVPos[],
+projectKey: string,
+projectName: string,
+mode: "x83" | "x84")
+{
+  const phase = mode.toUpperCase();
+
+  const positions = rows.
+  map((r, i) => {
+    const pos = xmlEscape(r.posNr || String(i + 1).padStart(3, "0"));
+    const short = xmlEscape(r.kurztext || "Position ohne Kurztext");
+    const long = xmlEscape(r.langtext || r.bemerkung || "");
+    const unit = xmlEscape(r.einheit || "m");
+    const qty = String(n(r.menge)).replace(",", ".");
+
+    return `
+      <Item ID="${pos}">
+        <ItemNo>${pos}</ItemNo>
+        <Qty>${qty}</Qty>
+        <QU>${unit}</QU>
+        <UP>0</UP>
+        <IT>0</IT>
+        <Description>
+          <CompleteText>
+            <DetailTxt>
+              <Text>${long || short}</Text>
+            </DetailTxt>
+            <OutlineText>
+              <OutlTxt>${short}</OutlTxt>
+            </OutlineText>
+          </CompleteText>
+        </Description>
+      </Item>`;
+  }).
+  join("");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<GAEB DA="${phase}">
+  <PrjInfo>
+    <NamePrj>${xmlEscape(projectName || projectKey || "Projekt")}</NamePrj>
+    <PrjNo>${xmlEscape(projectKey)}</PrjNo>
+  </PrjInfo>
+  <Award>
+    <BoQ>
+      <BoQInfo>
+        <Name>${xmlEscape(projectName || "Leistungsverzeichnis ohne Preise")}</Name>
+      </BoQInfo>
+      <BoQBody>${positions}
+      </BoQBody>
+    </BoQ>
+  </Award>
+</GAEB>`;
+}
+
+async function exportGaebViaServer(
+rows: LVPos[],
+projectKey: string,
+projectName: string,
+mode: "x83" | "x84")
+{
+  const payload = {
+    project: {
+      code: projectKey,
+      number: projectKey,
+      name: projectName
+    },
+    rows: rows.map((r) => ({
+      id: r.id,
+      posNr: r.posNr,
+      parentPosNr: r.parentPosNr || "",
+      kurztext: r.kurztext || "",
+      langtext: r.langtext || "",
+      bemerkung: r.bemerkung || "",
+      einheit: r.einheit || "",
+      menge: n(r.menge),
+      preis: 0,
+      ep: 0,
+      gesamt: 0,
+      total: 0,
+      waehrung: "EUR"
+    })),
+    options: {
+      withoutPrices: true,
+      mode
+    }
+  };
+
+  try {
+    const res = await fetch(apiUrl("/api/gaeb/export"), {
+      method: "POST",
+      credentials: "include",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        format: mode.toUpperCase(),
+        ...payload
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`GAEB Server Export fehlgeschlagen (${res.status})`);
+    }
+
+    const blob = await res.blob();
+    downloadBlob(blob, `LV_ohne_Preise_${safeFileName(projectKey)}.${mode}`);
+  } catch {
+    const xml = buildGaebXml(rows, projectKey, projectName, mode);
+    downloadBlob(
+      new Blob([xml], { type: "application/xml;charset=utf-8" }),
+      `LV_ohne_Preise_${safeFileName(projectKey)}.${mode}`
+    );
+  }
+}
+
+function exportPdf(
+rows: LVPos[],
+projectKey: string,
+projectName: string,
+client: string,
+place: string)
+{
+  const doc = new jsPDF({
+    unit: "mm",
+    format: "a4",
+    orientation: "portrait"
+  });
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const marginX = 12;
+
+  doc.setDrawColor(218, 226, 236);
+  doc.setLineWidth(0.25);
+  doc.rect(8, 8, pageW - 16, pageH - 16);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Leistungsverzeichnis ohne Preise", marginX, 24);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(
+    `Projekt: ${projectKey || "—"}${projectName ? ` · ${projectName}` : ""}`,
+    marginX,
+    38
+  );
+
+  doc.setFontSize(9.5);
+  doc.setTextColor(51, 65, 85);
+
+  if (client) {
+    doc.text(`Auftraggeber: ${client}`, marginX, 47);
+  }
+
+  if (place) {
+    doc.text(`Ort / Baustelle: ${place}`, marginX, client ? 54 : 47);
+  }
+
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`Datum: ${todayDE()}`, pageW - marginX, 38, { align: "right" });
+
+  doc.setFontSize(9.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text("Export ohne Einheitspreise und Gesamtpreise", pageW - marginX, 48, {
+    align: "right"
+  });
+  doc.text("Spalte „EP / Preis“ ist für handschriftliche Preise vorgesehen.", pageW - marginX, 55, {
+    align: "right"
+  });
+
+  autoTable(doc, {
+    startY: place || client ? 66 : 60,
+    margin: { left: marginX, right: marginX },
+    theme: "grid",
+    head: [["Pos.", "Leistungsbeschreibung", "ME", "Menge", "EP / Preis"]],
+    body: rows.map((r) => [
+    r.posNr || "—",
+    [
+    r.kurztext || "—",
+    r.langtext ? `\n${r.langtext}` : "",
+    r.bemerkung ? `\nBemerkung: ${r.bemerkung}` : ""].
+
+    filter(Boolean).
+    join(""),
+    r.einheit || "—",
+    fmtNumber(r.menge),
+    ""]
+    ),
+    styles: {
+      font: "helvetica",
+      fontSize: 7.8,
+      cellPadding: 2.1,
+      overflow: "linebreak",
+      lineColor: [215, 224, 235],
+      lineWidth: 0.12,
+      minCellHeight: 9.5,
+      textColor: [15, 23, 42]
+    },
+    headStyles: {
+      fillColor: [239, 246, 255],
+      textColor: [30, 58, 138],
+      fontStyle: "bold",
+      minCellHeight: 10
+    },
+    alternateRowStyles: {
+      fillColor: [250, 252, 255]
+    },
+    columnStyles: {
+      0: { cellWidth: 24 },
+      1: { cellWidth: 94 },
+      2: { cellWidth: 16, halign: "center" },
+      3: { cellWidth: 24, halign: "right" },
+      4: { cellWidth: 34, halign: "left" }
+    },
+    didDrawPage: () => {
+      doc.setDrawColor(218, 226, 236);
+      doc.setLineWidth(0.25);
+      doc.rect(8, 8, pageW - 16, pageH - 16);
+    }
+  });
+
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i += 1) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      `RLC Bausoftware · LV ohne Preise · Seite ${i}/${pages}`,
+      marginX,
+      292
+    );
+  }
+
+  saveRlcPdfWithCompanyHeader(doc, `LV_ohne_Preise_${safeFileName(projectKey)}.pdf`);
+}
+
+export default function LVOhnePreis() {
+  const navigate = useNavigate();
+  const projectCtx: any = useProject() as any;
+
+  const projectKey = getProjectKey(projectCtx);
+  const projectName = getProjectName(projectCtx);
+  const projectClient = getProjectClient(projectCtx);
+  const projectPlace = getProjectPlace(projectCtx);
+
+  const [rows, setRows] = useState<LVPos[]>(() => cleanRows(LV.list()));
+  const [query, setQuery] = useState("");
+  const [format, setFormat] = useState<ExportFormat>("pdf");
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    const refresh = () => setRows(cleanRows(LV.list()));
+
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("storage", refresh);
+
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+
+    return rows.filter((r) => {
+      const hay = `${r.posNr || ""} ${r.kurztext || ""} ${r.langtext || ""} ${
+      r.einheit || ""}`.
+      toLowerCase();
+
+      return hay.includes(q);
+    });
+  }, [rows, query]);
+
+  const totals = useMemo(() => {
+    const positions = rows.length;
+    const withQty = rows.filter((r) => n(r.menge) > 0).length;
+    const withShortText = rows.filter((r) => String(r.kurztext || "").trim()).length;
+    const withLongText = rows.filter((r) => String(r.langtext || "").trim()).length;
+    const withoutText = rows.filter(
+      (r) => !String(r.kurztext || r.langtext || "").trim()
+    ).length;
+
+    return { positions, withQty, withShortText, withLongText, withoutText };
+  }, [rows]);
+
+  async function exportNow() {
+    if (!filtered.length) {
+      alert("Keine Positionen zum Exportieren vorhanden.");
+      return;
+    }
+
+    setStatus("Export wird erstellt…");
+
+    try {
+      if (format === "csv") {
+        downloadCsv(filtered, projectKey);
+      }
+
+      if (format === "pdf") {
+        exportPdf(filtered, projectKey, projectName, projectClient, projectPlace);
+      }
+
+      if (format === "gaeb-x83") {
+        await exportGaebViaServer(filtered, projectKey, projectName, "x83");
+      }
+
+      if (format === "gaeb-x84") {
+        await exportGaebViaServer(filtered, projectKey, projectName, "x84");
+      }
+
+      setStatus("Export erfolgreich erstellt.");
+      setTimeout(() => setStatus(""), 2500);
+    } catch (e: any) {
+      setStatus("");
+      alert(`Export fehlgeschlagen: ${e?.message || e}`);
+    }
+  }
+
+  return (
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
+        <div>
+          <div className={rlcClass(null, eyebrow)}>RLC Ausschreibung / LV</div>
+          <h1 className={rlcClass(null, title)}>LV ohne Preise exportieren</h1>
+          <p className={rlcClass(null, subtitle)}>
+            Erstellt ein professionelles Leistungsverzeichnis ohne Einheitspreise
+            und Gesamtpreise. Im PDF wird zusätzlich eine leere Preisspalte für
+            handschriftliche Eintragungen ausgegeben.
+          </p>
+        </div>
+
+        <div className={rlcClass(null, heroActions)}>
+          <select className={rlcClass(null,
+          select)}
+          value={format}
+          onChange={(e) => setFormat(e.target.value as ExportFormat)}>
+            
+            <option value="pdf">PDF ohne Preise + Preisspalte</option>
+            <option value="csv">CSV ohne Preise</option>
+            <option value="gaeb-x83">GAEB X83 ohne Preise</option>
+            <option value="gaeb-x84">GAEB X84 ohne Preise</option>
+          </select>
+
+          <button className={rlcClass(null, btnPrimary)} onClick={exportNow} disabled={!filtered.length}>
+            Export erstellen
+          </button>
+
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/lv-import")}>
+            ⇢ LV bearbeiten
+          </button>
+
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/gaeb")}>
+            ⇢ GAEB Modul
+          </button>
+
+          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/angebot")}>
+            ⇢ Angebot
+          </button>
+        </div>
+
+        <div className={rlcClass(null, heroMeta)}>
+          Projekt: <b>{projectKey || "—"}</b>
+          {projectName ? <span> · {projectName}</span> : null}
+          {status ? <span> · {status}</span> : null}
+        </div>
+      </section>
+
+      <section className={rlcClass(null, grid4)}>
+        <Kpi label="Positionen gesamt" value={String(totals.positions)} />
+        <Kpi label="Mit Menge" value={String(totals.withQty)} />
+        <Kpi label="Mit Kurztext" value={String(totals.withShortText)} />
+        <Kpi
+          label="Ohne Text"
+          value={String(totals.withoutText)}
+          danger={totals.withoutText > 0} />
+        
+      </section>
+
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
+          <div>
+            <h2 className={rlcClass(null, sectionTitle)}>Export-Einstellungen</h2>
+            <div className={rlcClass(null, sectionText)}>
+              Preise werden nicht exportiert. Im PDF bleibt rechts eine freie
+              Spalte „EP / Preis“ zum manuellen Ausfüllen.
+            </div>
+          </div>
+
+          <input className={rlcClass(null,
+          searchInput)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Suche PosNr / Text / ME…" />
+          
+        </div>
+
+        <div className={rlcClass(null, infoGrid)}>
+          <Info label="Format" value={format.toUpperCase()} />
+          <Info label="Exportiert" value={`${filtered.length} von ${rows.length}`} />
+          <Info label="Langtexte" value={String(totals.withLongText)} />
+          <Info label="Auftraggeber" value={projectClient || "—"} />
+        </div>
+      </section>
+
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
+          <div>
+            <h2 className={rlcClass(null, sectionTitle)}>Export-Vorschau</h2>
+            <div className={rlcClass(null, sectionText)}>
+              Vorschau des LV ohne Preise. Die PDF-Ausgabe enthält zusätzlich
+              eine leere Preisspalte.
+            </div>
+          </div>
+        </div>
+
+        <div className={rlcClass(null, tableWrap)}>
+          <table className={rlcClass(null, table)}>
+            <thead>
+              <tr>
+                <th className={rlcClass(null, th)}>Pos.</th>
+                <th className={rlcClass(null, th)}>Kurztext</th>
+                <th className={rlcClass(null, th)}>Langtext</th>
+                <th className={rlcClass(null, th)}>ME</th>
+                <th className={rlcClass(null, thRight)}>Menge</th>
+                <th className={rlcClass(null, th)}>EP / Preis</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filtered.map((r, i) =>
+              <tr
+                key={r.id || `${r.posNr}-${i}`} className={rlcClass(null,
+                { background: i % 2 ? "#FCFCFC" : "#FFFFFF" })}>
+                
+                  <td className={rlcClass(null, tdStrong)}>{r.posNr || "—"}</td>
+                  <td className={rlcClass(null, td)}>{r.kurztext || "—"}</td>
+                  <td className={rlcClass(null, tdMuted)}>
+                    {r.langtext ? String(r.langtext).slice(0, 220) : "—"}
+                  </td>
+                  <td className={rlcClass(null, td)}>{r.einheit || "—"}</td>
+                  <td className={rlcClass(null, tdRight)}>{fmtNumber(r.menge)}</td>
+                  <td className={rlcClass(null, tdMuted)}>leer für Handschrift</td>
+                </tr>
+              )}
+
+              {!filtered.length ?
+              <tr>
+                  <td colSpan={6} className={rlcClass(null, { ...td, color: "#64748B" })}>
+                    Kein LV vorhanden oder kein Treffer im Filter.
+                  </td>
+                </tr> :
+              null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>);
+
+}
+
+function Kpi({
+  label,
+  value,
+  danger
+
+
+
+
+}: {label: string;value: string;danger?: boolean;}) {
+  return (
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+        {value}
+      </div>
+    </div>);
+
+}
+
+function Info({ label, value }: {label: string;value: string;}) {
+  return (
+    <div className={rlcClass(null, infoBox)}>
+      <div className={rlcClass(null, infoLabel)}>{label}</div>
+      <div className={rlcClass(null, infoValue)}>{value}</div>
+    </div>);
+
+}
+
+/* ================= STYLES ================= */
+
+const page: React.CSSProperties = {
+  display: "grid",
+  gap: 16,
+  padding: 16
 };
-const card: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 10, padding: 12, background: "white" };
-const btnPrimary: React.CSSProperties = { padding: "8px 12px", borderRadius: 8, border: "1px solid #2563eb", background: "#2563eb", color: "white", cursor: "pointer", fontWeight: 600 };
-const btnSecondary: React.CSSProperties = { padding: "8px 12px", borderRadius: 8, border: "1px solid #e5e7eb", background: "white", color: "#111827", cursor: "pointer", fontWeight: 600 };
-const searchInput: React.CSSProperties = { width: 260, height: 36, borderRadius: 8, border: "1px solid #e5e7eb", outline: "none", padding: "0 10px", fontSize: 14 };
-const chk: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, userSelect: "none" };
-function th(w: number): React.CSSProperties { return { position: "sticky", top: 0, background: "#f8fafc", textAlign: "left", padding: "10px 8px", fontSize: 12, borderBottom: "1px solid #e5e7eb", minWidth: w, maxWidth: w, zIndex: 1 }; }
-function td(w: number): React.CSSProperties { return { padding: "8px", fontSize: 12, borderBottom: "1px solid #f1f5f9", minWidth: w, maxWidth: w, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }; }
+
+const heroCard: React.CSSProperties = {
+  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
+  color: "#FFFFFF",
+  borderRadius: 18,
+  padding: 22,
+  display: "grid",
+  gap: 14,
+  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
+};
+
+const eyebrow: React.CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  opacity: 0.8,
+  fontWeight: 700
+};
+
+const title: React.CSSProperties = {
+  margin: "4px 0",
+  fontSize: 30,
+  fontWeight: 700
+};
+
+const subtitle: React.CSSProperties = {
+  margin: 0,
+  maxWidth: 920,
+  opacity: 0.88,
+  lineHeight: 1.55
+};
+
+const heroActions: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap"
+};
+
+const heroMeta: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.9
+};
+
+const grid4: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))",
+  gap: 12
+};
+
+const kpiCard: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+
+const kpiLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748B",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em"
+};
+
+const kpiValue: React.CSSProperties = {
+  marginTop: 6,
+  fontSize: 22,
+  fontWeight: 700
+};
+
+const card: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #E5E7EB",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+};
+
+const sectionHead: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  marginBottom: 12
+};
+
+const sectionTitle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 17,
+  color: "#0F172A",
+  fontWeight: 700
+};
+
+const sectionText: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 13,
+  color: "#64748B",
+  lineHeight: 1.45
+};
+
+const searchInput: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  borderRadius: 10,
+  padding: "9px 11px",
+  fontSize: 13,
+  width: 280,
+  boxSizing: "border-box"
+};
+
+const select: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  borderRadius: 10,
+  padding: "9px 13px",
+  fontSize: 13,
+  fontWeight: 700,
+  background: "#FFFFFF",
+  color: "#0F172A"
+};
+
+const btnBase: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  borderRadius: 10,
+  padding: "9px 13px",
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+  whiteSpace: "nowrap"
+};
+
+const btnPrimary: React.CSSProperties = {
+  ...btnBase,
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
+};
+
+const btnSecondary: React.CSSProperties = {
+  ...btnBase,
+  background: "#FFFFFF",
+  color: "#0F172A"
+};
+
+const infoGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gap: 10
+};
+
+const infoBox: React.CSSProperties = {
+  border: "1px solid #E5E7EB",
+  background: "#F8FAFC",
+  borderRadius: 12,
+  padding: 12
+};
+
+const infoLabel: React.CSSProperties = {
+  fontSize: 11,
+  color: "#64748B",
+  fontWeight: 700,
+  textTransform: "uppercase"
+};
+
+const infoValue: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 14,
+  color: "#0F172A",
+  fontWeight: 700
+};
+
+const tableWrap: React.CSSProperties = {
+  overflowX: "auto",
+  border: "1px solid #E5E7EB",
+  borderRadius: 12
+};
+
+const table: React.CSSProperties = {
+  width: "100%",
+  minWidth: 1080,
+  borderCollapse: "collapse"
+};
+
+const th: React.CSSProperties = {
+  textAlign: "left",
+  padding: "10px 9px",
+  fontSize: 12,
+  color: "#475569",
+  background: "#F8FAFC",
+  borderBottom: "1px solid #E5E7EB",
+  whiteSpace: "nowrap",
+  fontWeight: 700
+};
+
+const thRight: React.CSSProperties = {
+  ...th,
+  textAlign: "right"
+};
+
+const td: React.CSSProperties = {
+  padding: "8px 9px",
+  fontSize: 12,
+  borderBottom: "1px solid #F1F5F9",
+  verticalAlign: "middle"
+};
+
+const tdStrong: React.CSSProperties = {
+  ...td,
+  fontWeight: 700,
+  whiteSpace: "nowrap"
+};
+
+const tdRight: React.CSSProperties = {
+  ...td,
+  textAlign: "right",
+  whiteSpace: "nowrap"
+};
+
+const tdMuted: React.CSSProperties = {
+  ...td,
+  color: "#64748B",
+  maxWidth: 420,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis"
+};

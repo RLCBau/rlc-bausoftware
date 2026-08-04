@@ -1,4 +1,4 @@
-import * as FileSystem from "expo-file-system";
+﻿import * as FileSystem from "expo-file-system/legacy";
 
 function pickBaseDir() {
   // su iOS/Expo Go documentDirectory può essere null in rari casi, fallback su cacheDirectory
@@ -30,3 +30,4 @@ export async function getProjectPdfDir(projectFsKey: string) {
   const base = requireBaseDir();
   return ensureDir(`${base}rlc/pdfs/${projectFsKey}/`);
 }
+

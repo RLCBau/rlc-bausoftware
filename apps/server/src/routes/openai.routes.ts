@@ -1,13 +1,11 @@
 import express, { Request, Response, NextFunction } from "express";
-import OpenAI from "openai";
 import { z } from "zod";
+import { createRlcAiCompatClient } from "../services/ai/rlcAiCompatClient";
 
 const r = express.Router();
 
 // ⚙️ OpenAI-Client (neues SDK)
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const client = createRlcAiCompatClient();
 
 // 🔐 Request-Schema
 const Req = z.object({
@@ -16,7 +14,7 @@ const Req = z.object({
 });
 
 // Standard-Modell (kannst du in .env überschreiben)
-const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 // POST /api/openai/kalkulation
 r.post(
@@ -38,6 +36,7 @@ Antwortformat (GENAU so):
 
       const resp = await client.responses.create({
         model: MODEL,
+        _rlcPurpose: "kalkulation",
         input: prompt,
         temperature: 0.2,
       });
@@ -72,7 +71,18 @@ Antwortformat (GENAU so):
         Math.min(1, Number(data.confidence) || 0.7)
       );
 
-      res.json({ unitPrice: price, confidence });
+      res.json({
+        unitPrice: price,
+        confidence,
+        ai: anyResp?._rlc
+          ? {
+              provider: anyResp._rlc.provider,
+              model: anyResp._rlc.model,
+              mode: anyResp._rlc.mode,
+              fallbackUsed: anyResp._rlc.fallbackUsed,
+            }
+          : undefined,
+      });
     } catch (e) {
       next(e);
     }

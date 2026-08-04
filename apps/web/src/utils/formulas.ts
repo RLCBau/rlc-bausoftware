@@ -1,228 +1,395 @@
 // apps/web/src/utils/formulas.ts
-// Parser/valutatore leggero per espressioni di Aufmaß (tedesco-friendly)
+// Parser / valutatore leggero per espressioni di Aufmaß (tedesco-friendly)
 
 export type EvalContext = Record<string, number>;
 
-/**
- * Converte "1,25" -> "1.25" e pulisce spazi.
- */
-function normalizeNumberToken(tok: string) {
-  return tok.replace(/\./g, '').replace(',', '.').trim();
+type Token =
+  | { t: "num"; v: number }
+  | { t: "id"; v: string }
+  | { t: "op"; v: string }
+  | { t: "lp" }
+  | { t: "rp" }
+  | { t: "comma" }
+  | { t: "fn"; name: string; argc: number };
+
+const PRECEDENCE: Record<string, number> = {
+  "+": 1,
+  "-": 1,
+  "*": 2,
+  "/": 2,
+  "^": 4,
+  "u+": 5,
+  "u-": 5,
+};
+
+const RIGHT_ASSOC = new Set(["^", "u+", "u-"]);
+
+function normalizeNumericLiteral(raw: string): string {
+  const s = raw.trim();
+
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+
+  if (hasComma && hasDot) {
+    // es. 1.234,56 -> 1234.56
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      return s.replace(/\./g, "").replace(",", ".");
+    }
+    // es. 1,234.56 -> 1234.56
+    return s.replace(/,/g, "");
+  }
+
+  if (hasComma) {
+    return s.replace(",", ".");
+  }
+
+  return s;
 }
 
-/**
- * Tokenizza un'espressione: numeri, operatori, parentesi, funzioni.
- */
-function tokenize(expr: string): string[] {
-  const s = expr.replace(/\s+/g, '');
-  const tokens: string[] = [];
+function isDigit(c: string): boolean {
+  return c >= "0" && c <= "9";
+}
+
+function isIdStart(c: string): boolean {
+  return /[A-Za-z_]/.test(c);
+}
+
+function isIdChar(c: string): boolean {
+  return /[A-Za-z0-9_]/.test(c);
+}
+
+function tokenize(expr: string): Token[] {
+  const s = expr.trim().replace(/^\s*=/, "");
+  const tokens: Token[] = [];
   let i = 0;
 
   while (i < s.length) {
     const ch = s[i];
 
-    // numeri (consentite virgole e punti)
-    if (/[0-9]/.test(ch)) {
-      let j = i + 1;
-      while (j < s.length && /[0-9,\.]/.test(s[j])) j++;
-      tokens.push(normalizeNumberToken(s.slice(i, j)));
-      i = j;
-      continue;
-    }
-
-    // identificatori/funzioni o variabili (A1, B2, SUM, etc.)
-    if (/[A-Za-z_]/.test(ch)) {
-      let j = i + 1;
-      while (j < s.length && /[A-Za-z0-9_]/.test(s[j])) j++;
-      tokens.push(s.slice(i, j).toUpperCase());
-      i = j;
-      continue;
-    }
-
-    // operatori e parentesi
-    if ('+-*/^(),'.includes(ch)) {
-      tokens.push(ch);
+    if (/\s/.test(ch)) {
       i++;
       continue;
     }
 
-    // caratteri non riconosciuti
+    if ("+-*/^".includes(ch)) {
+      tokens.push({ t: "op", v: ch });
+      i++;
+      continue;
+    }
+
+    if (ch === "(") {
+      tokens.push({ t: "lp" });
+      i++;
+      continue;
+    }
+
+    if (ch === ")") {
+      tokens.push({ t: "rp" });
+      i++;
+      continue;
+    }
+
+    if (ch === ",") {
+      tokens.push({ t: "comma" });
+      i++;
+      continue;
+    }
+
+    if (isDigit(ch) || ch === "." || ch === ",") {
+      let j = i + 1;
+      while (j < s.length && /[0-9.,]/.test(s[j])) j++;
+
+      const raw = s.slice(i, j);
+      const normalized = normalizeNumericLiteral(raw);
+      const num = Number(normalized);
+
+      if (!Number.isFinite(num)) {
+        throw new Error(`Ungültige Zahl: ${raw}`);
+      }
+
+      tokens.push({ t: "num", v: num });
+      i = j;
+      continue;
+    }
+
+    if (isIdStart(ch)) {
+      let j = i + 1;
+      while (j < s.length && isIdChar(s[j])) j++;
+
+      tokens.push({ t: "id", v: s.slice(i, j).toUpperCase() });
+      i = j;
+      continue;
+    }
+
     throw new Error(`Ungültiges Zeichen: '${ch}'`);
   }
+
   return tokens;
 }
 
-/**
- * Shunting-yard -> RPN
- */
-function toRpn(tokens: string[]): string[] {
-  const out: string[] = [];
-  const ops: string[] = [];
+type StackItem =
+  | { t: "op"; v: string }
+  | { t: "lp" }
+  | { t: "fnName"; name: string };
 
-  const prec: Record<string, number> = { '^': 4, '*': 3, '/': 3, '+': 2, '-': 2 };
-  const rightAssoc = new Set(['^']);
+type FnFrame = {
+  hasValue: boolean;
+  commaCount: number;
+};
 
-  const isFunc = (t: string) => /^[A-Z_]+$/.test(t); // SUM, MIN, MAX
-  const isNumOrVar = (t: string) => /^[0-9.]+$/.test(t) || /^[A-Z_][A-Z0-9_]*$/.test(t);
+function toRpn(tokens: Token[]): Token[] {
+  const out: Token[] = [];
+  const ops: StackItem[] = [];
+  const fnFrames: FnFrame[] = [];
+
+  let prev: Token | undefined;
 
   for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
+    const token = tokens[i];
 
-    if (isNumOrVar(t)) {
-      out.push(t);
+    if (token.t === "num") {
+      out.push(token);
+      if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      prev = token;
       continue;
     }
 
-    if (t === ',') {
-      while (ops.length && ops[ops.length - 1] !== '(') out.push(ops.pop()!);
-      continue;
-    }
+    if (token.t === "id") {
+      const next = tokens[i + 1];
 
-    if (t in prec) {
-      while (
-        ops.length &&
-        ops[ops.length - 1] in prec &&
-        ((rightAssoc.has(t) && prec[t] < prec[ops[ops.length - 1]]) ||
-          (!rightAssoc.has(t) && prec[t] <= prec[ops[ops.length - 1]]))
-      ) {
-        out.push(ops.pop()!);
+      if (next?.t === "lp") {
+        ops.push({ t: "fnName", name: token.v });
+        prev = token;
+        continue;
       }
-      ops.push(t);
+
+      out.push(token);
+      if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      prev = token;
       continue;
     }
 
-    if (t === '(') {
-      // funzione immediatamente prima? (SUM( … ))
-      const prev = tokens[i - 1];
-      if (prev && /^[A-Z_]+$/.test(prev) && out[out.length - 1] === prev) {
-        // già spinto; niente
+    if (token.t === "lp") {
+      const prevWasFn = ops.length > 0 && ops[ops.length - 1].t === "fnName";
+      ops.push({ t: "lp" });
+
+      if (prevWasFn) {
+        fnFrames.push({
+          hasValue: false,
+          commaCount: 0,
+        });
       }
-      ops.push(t);
+
+      prev = token;
       continue;
     }
 
-    if (t === ')') {
-      while (ops.length && ops[ops.length - 1] !== '(') out.push(ops.pop()!);
-      if (!ops.length) throw new Error('Klammerfehler');
-      ops.pop(); // '('
+    if (token.t === "comma") {
+      while (ops.length && ops[ops.length - 1].t !== "lp") {
+        const top = ops.pop()!;
+        if (top.t === "op") out.push(top);
+      }
 
-      // funzione prima della parentesi?
-      const prev = out[out.length - 1];
-      // no-op qui; le funzioni le lasciamo come identificatori in output:
-      // nella fase eval riconosceremo SUM/MIN/MAX con arg stack separato.
+      if (!ops.length) throw new Error("Separator ',' an falscher Stelle");
+      if (!fnFrames.length) throw new Error("Separator ',' außerhalb Funktion");
+
+      fnFrames[fnFrames.length - 1].commaCount++;
+      prev = token;
       continue;
     }
 
-    if (isFunc(t)) {
-      out.push(t); // trattiamo le funzioni come token in uscita per semplicità
+    if (token.t === "op") {
+      let op = token.v;
+
+      const unary =
+        !prev || prev.t === "op" || prev.t === "lp" || prev.t === "comma";
+
+      if (unary && (op === "+" || op === "-")) {
+        op = op === "+" ? "u+" : "u-";
+      }
+
+      while (ops.length) {
+        const top = ops[ops.length - 1];
+        if (top.t !== "op") break;
+
+        const pTop = PRECEDENCE[top.v];
+        const pCur = PRECEDENCE[op];
+        const shouldPop = RIGHT_ASSOC.has(op) ? pTop > pCur : pTop >= pCur;
+
+        if (!shouldPop) break;
+        out.push(ops.pop() as { t: "op"; v: string });
+      }
+
+      ops.push({ t: "op", v: op });
+      prev = { t: "op", v: op };
       continue;
     }
 
-    throw new Error(`Ungültiges Token: ${t}`);
+    if (token.t === "rp") {
+      while (ops.length && ops[ops.length - 1].t !== "lp") {
+        const top = ops.pop()!;
+        if (top.t === "op") out.push(top);
+      }
+
+      if (!ops.length) throw new Error("Klammerfehler");
+      ops.pop(); // remove lp
+
+      if (ops.length && ops[ops.length - 1].t === "fnName") {
+        const fn = ops.pop() as { t: "fnName"; name: string };
+        const frame = fnFrames.pop();
+
+        if (!frame) throw new Error("Funktionsfehler");
+
+        const argc = frame.hasValue ? frame.commaCount + 1 : 0;
+        out.push({ t: "fn", name: fn.name, argc });
+
+        if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      } else {
+        if (fnFrames.length) fnFrames[fnFrames.length - 1].hasValue = true;
+      }
+
+      prev = token;
+      continue;
+    }
   }
 
   while (ops.length) {
     const op = ops.pop()!;
-    if (op === '(' || op === ')') throw new Error('Klammerfehler');
+    if (op.t === "lp" || op.t === "fnName") {
+      throw new Error("Klammerfehler");
+    }
     out.push(op);
   }
 
   return out;
 }
 
-/**
- * Valuta RPN con contesto (variabili colonna/righe ecc.).
- * Variabili ammesse: A1, B3, TOTAL, ecc. (dipende da chi chiama).
- * Funzioni supportate: SUM(...), MIN(...), MAX(...)
- */
-function evalRpn(rpn: string[], ctx: EvalContext): number {
-  const st: number[] = [];
-  const funcArgs: number[] = []; // collettore temporaneo
+function applyFunction(name: string, args: number[]): number {
+  switch (name) {
+    case "SUM":
+      return args.reduce((a, b) => a + b, 0);
 
-  const readValue = (t: string): number => {
-    if (/^[0-9.]+$/.test(t)) return parseFloat(t);
-    const fromCtx = ctx[t];
-    if (typeof fromCtx === 'number' && !Number.isNaN(fromCtx)) return fromCtx;
-    throw new Error(`Variable oder Zahl erwartet: ${t}`);
+    case "MIN":
+      return args.length ? Math.min(...args) : 0;
+
+    case "MAX":
+      return args.length ? Math.max(...args) : 0;
+
+    case "AVG":
+      return args.length ? args.reduce((a, b) => a + b, 0) / args.length : 0;
+
+    case "ROUND": {
+      const x = args[0] ?? 0;
+      const n = Math.trunc(args[1] ?? 0);
+      const factor = Math.pow(10, n);
+      return Math.round(x * factor) / factor;
+    }
+
+    case "CEIL":
+      return Math.ceil(args[0] ?? 0);
+
+    case "FLOOR":
+      return Math.floor(args[0] ?? 0);
+
+    case "ABS":
+      return Math.abs(args[0] ?? 0);
+
+    default:
+      throw new Error(`Unbekannte Funktion: ${name}`);
+  }
+}
+
+function evalRpn(rpn: Token[], ctx: EvalContext): number {
+  const stack: number[] = [];
+
+  const readValue = (name: string): number => {
+    const value = ctx[name];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    throw new Error(`Variable unbekannt: ${name}`);
   };
 
-  for (let i = 0; i < rpn.length; i++) {
-    const t = rpn[i];
-
-    if (/^[0-9.]+$/.test(t) || /^[A-Z_][A-Z0-9_]*$/.test(t)) {
-      // potrebbe essere numero o variabile/funzione
-      if (['SUM', 'MIN', 'MAX'].includes(t)) {
-        // segno funzione: consumiamo argomenti dal top finché troviamo sentinel (gestito dal chiamante)
-        // Semplificazione: usiamo uno “split” in valExpr: SUM(x,y,z) -> tokenizzato con virgole e parentesi,
-        // convertito correttamente in RPN. Qui, per funzioni, assumiamo stack già contenente tutti
-        // gli argomenti (separati da un marker). Per evitare complessità, usiamo convenzione:
-        // Inseriamo uno speciale token "§" prima della lista argomenti durante la costruzione RPN.
-        // Per non complicare, implementiamo funzione con regExp direttamente nel pre-parsing: vedi evaluate().
-        // Qui NON viene usato.
-        st.push(NaN); // placeholder
-      } else {
-        st.push(readValue(t));
-      }
+  for (const token of rpn) {
+    if (token.t === "num") {
+      stack.push(token.v);
       continue;
     }
 
-    switch (t) {
-      case '+': st.push(st.pop()! + st.pop()!); break;
-      case '-': {
-        const b = st.pop()!, a = st.pop()!;
-        st.push(a - b);
-        break;
+    if (token.t === "id") {
+      stack.push(readValue(token.v));
+      continue;
+    }
+
+    if (token.t === "fn") {
+      const args = token.argc > 0 ? stack.splice(-token.argc, token.argc) : [];
+      stack.push(applyFunction(token.name, args));
+      continue;
+    }
+
+    if (token.t === "op") {
+      if (token.v === "u+") {
+        const a = stack.pop();
+        if (a == null) throw new Error("Fehlender Operand");
+        stack.push(+a);
+        continue;
       }
-      case '*': st.push(st.pop()! * st.pop()!); break;
-      case '/': {
-        const b = st.pop()!, a = st.pop()!;
-        st.push(a / b);
-        break;
+
+      if (token.v === "u-") {
+        const a = stack.pop();
+        if (a == null) throw new Error("Fehlender Operand");
+        stack.push(-a);
+        continue;
       }
-      case '^': {
-        const b = st.pop()!, a = st.pop()!;
-        st.push(Math.pow(a, b));
-        break;
+
+      const b = stack.pop();
+      const a = stack.pop();
+
+      if (a == null || b == null) {
+        throw new Error("Fehlende Operanden");
       }
-      default:
-        throw new Error(`Unbekannter Operator: ${t}`);
+
+      switch (token.v) {
+        case "+":
+          stack.push(a + b);
+          break;
+        case "-":
+          stack.push(a - b);
+          break;
+        case "*":
+          stack.push(a * b);
+          break;
+        case "/":
+          stack.push(b === 0 ? NaN : a / b);
+          break;
+        case "^":
+          stack.push(Math.pow(a, b));
+          break;
+        default:
+          throw new Error(`Unbekannter Operator: ${token.v}`);
+      }
     }
   }
 
-  if (st.length !== 1) throw new Error('Ausdruck nicht auswertbar');
-  return st[0];
+  if (stack.length !== 1) {
+    throw new Error("Ausdruck nicht auswertbar");
+  }
+
+  return stack[0];
 }
 
-/**
- * Entry point sicuro: converte funzioni SUM(…) MIN(…) MAX(…) in pura aritmetica
- * espandendo gli argomenti e poi usa shunting-yard.
- */
 export function evaluate(expr: string, ctx: EvalContext = {}): number {
   if (!expr || !expr.trim()) return 0;
 
-  // Normalizza virgole decimali “euro-style”
-  let e = expr.replace(/\s+/g, '');
+  const normalizedCtx: EvalContext = Object.fromEntries(
+    Object.entries(ctx).map(([k, v]) => [k.toUpperCase(), Number(v)])
+  );
 
-  // Funzioni: SUM(a,b,c) -> ((a)+(b)+(c))
-  const fn = (name: 'SUM' | 'MIN' | 'MAX', reducer: (arr: number[]) => number) => {
-    const rx = new RegExp(`${name}\\(([^()]*)\\)`, 'gi');
-    for (;;) {
-      const before = e;
-      e = e.replace(rx, (_m, inner) => {
-        const parts = inner.split(',').map((p: string) => p.trim());
-        const values = parts.map(p => evaluate(p, ctx));
-        return String(reducer(values));
-      });
-      if (e === before) break;
-    }
-  };
+  const rpn = toRpn(tokenize(expr));
+  const result = evalRpn(rpn, normalizedCtx);
 
-  fn('SUM', arr => arr.reduce((a, b) => a + b, 0));
-  fn('MIN', arr => Math.min(...arr));
-  fn('MAX', arr => Math.max(...arr));
-
-  const rpn = toRpn(tokenize(e));
-  return evalRpn(rpn, ctx);
+  return Number.isFinite(result) ? result : NaN;
 }
+
+
+
 
 

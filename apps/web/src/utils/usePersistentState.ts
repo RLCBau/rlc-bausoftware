@@ -1,25 +1,76 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function usePersistentState<T>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem(key) : null;
-      return raw ? (JSON.parse(raw) as T) : initial;
-    } catch {
-      return initial;
-    }
-  });
+  const initialValue = useMemo(() => initial, [initial]);
 
+  function read(): T {
+    try {
+      if (typeof window === "undefined") return initialValue;
+
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return initialValue;
+
+      return JSON.parse(raw) as T;
+    } catch {
+      return initialValue;
+    }
+  }
+
+  const [value, setValue] = useState<T>(() => read());
+
+  // rileggi se cambia la chiave
+  useEffect(() => {
+    setValue(read());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  // salva su localStorage
   useEffect(() => {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      if (typeof window === "undefined") return;
+      window.localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      // ignore quota/SSR
+      // quota exceeded o serializzazione fallita
     }
   }, [key, value]);
 
-  return [value, setValue] as const;
+  // sync tra tab/browser
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    function onStorage(e: StorageEvent) {
+      if (e.key !== key) return;
+
+      try {
+        if (e.newValue === null) {
+          setValue(initialValue);
+          return;
+        }
+
+        setValue(JSON.parse(e.newValue) as T);
+      } catch {
+        setValue(initialValue);
+      }
+    }
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [key, initialValue]);
+
+  function reset() {
+    setValue(initialValue);
+    try {
+      if (typeof window === "undefined") return;
+      window.localStorage.removeItem(key);
+    } catch {}
+  }
+
+  return [value, setValue, reset] as const;
 }
 
-// esportazione default + named per compatibilità
 export default usePersistentState;
+
+
+
+
+

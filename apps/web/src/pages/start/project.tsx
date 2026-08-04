@@ -1,24 +1,37 @@
-// apps/web/src/pages/start/project.tsx
+import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/start/project.tsx
 import React, {
-  useEffect,
-  useState,
   ChangeEvent,
   FormEvent,
-} from "react";
+  useEffect,
+  useMemo,
+  useState } from
+"react";
 import { useNavigate } from "react-router-dom";
+import { API_BASE } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 import {
-  fetchProjects,
-  importProjectZip,
   createProject as apiCreateProject,
   deleteProject,
-} from "../../api/projects";
+  fetchProjects,
+  importProjectZip } from
+"../../api/projects";
 
-/* ========= API-Base ========= */
-const API =
-  (import.meta as any)?.env?.VITE_API_URL || "https://api.rlcbausoftware.com";
+/* ========= API ========= */
 
-/* ========= Tipi ========= */
+function apiUrl(path: string): string {
+  const base = String(API_BASE || "").replace(/\/+$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+
+  if (!base) return p;
+
+  if (base.endsWith("/api") && p.startsWith("/api/")) {
+    return `${base}${p.slice(4)}`;
+  }
+
+  return `${base}${p}`;
+}
+
+/* ========= Typen ========= */
 
 type ProjectItem = {
   id: string;
@@ -36,186 +49,93 @@ type NewProjectForm = {
   place: string;
 };
 
-/* ========= Helper: nächste Projektnummer berechnen ========= */
+type ApiProjectEnvelope = {
+  ok?: boolean;
+  project?: ProjectItem;
+  projects?: ProjectItem[];
+  error?: string;
+};
 
-/**
- * Ermittelt aus der vorhandenen Projektliste die nächste freie
- * Projektnummer im Schema "BA-2025-XYZ".
- *
- * Beispiele:
- *  - vorhandene Codes: BA-2025-001, BA-2025-002  ->  BA-2025-003
- *  - keine passenden Codes                        ->  BA-2025-001
- */
+/* ========= Constants ========= */
+
+const RECENT_KEY = "rlc_recent_projects";
+
+/* ========= Helper ========= */
+
+function getProjectYear(): number {
+  return new Date().getFullYear();
+}
+
 function computeNextProjectCode(projects: ProjectItem[]): string {
-  const DEFAULT_PREFIX = "BA-2025-";
+  const year = getProjectYear();
+  const prefix = `BA-${year}-`;
 
-  if (!projects || projects.length === 0) {
-    return `${DEFAULT_PREFIX}001`;
-  }
+  if (!projects?.length) return `${prefix}001`;
 
   let maxNum = 0;
 
   for (const p of projects) {
     const code = p.code || "";
-    // Nur Codes berücksichtigen, die wie "BA-2025-123" aussehen
-    const match = code.match(/^(.*-)(\d+)$/);
+    const match = code.match(/^(BA-\d{4}-)(\d+)$/);
     if (!match) continue;
 
-    const prefix = match[1];
-    const numStr = match[2];
-
-    if (prefix === DEFAULT_PREFIX) {
-      const num = parseInt(numStr, 10);
-      if (!Number.isNaN(num) && num > maxNum) {
-        maxNum = num;
-      }
+    if (match[1] === prefix) {
+      const num = Number.parseInt(match[2], 10);
+      if (Number.isFinite(num) && num > maxNum) maxNum = num;
     }
   }
 
-  const next = maxNum + 1;
-  const nextStr = String(next).padStart(3, "0");
-  return `${DEFAULT_PREFIX}${nextStr}`;
+  return `${prefix}${String(maxNum + 1).padStart(3, "0")}`;
 }
 
-/* ========= Stili (come prima) ========= */
+function isProjectItem(value: unknown): value is ProjectItem {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
 
-const pageContainer: React.CSSProperties = {
-  maxWidth: 1180,
-  margin: "0 auto",
-  padding: "1.5rem 1.75rem 2rem",
-};
+  return (
+    typeof v.id === "string" &&
+    typeof v.code === "string" &&
+    typeof v.name === "string");
 
-const sectionTitle: React.CSSProperties = {
-  fontSize: "1.5rem",
-  fontWeight: 600,
-  marginBottom: "0.25rem",
-  color: "#111827",
-};
+}
 
-const sectionSubtitle: React.CSSProperties = {
-  fontSize: "0.875rem",
-  color: "#6B7280",
-  marginBottom: "1.5rem",
-};
+function extractCreatedProject(value: unknown): ProjectItem | undefined {
+  if (isProjectItem(value)) return value;
 
-const layoutGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2.3fr)",
-  gap: "1.75rem",
-};
+  if (value && typeof value === "object") {
+    const env = value as ApiProjectEnvelope;
+    if (isProjectItem(env.project)) return env.project;
+  }
 
-const card: React.CSSProperties = {
-  background: "#FFFFFF",
-  borderRadius: 12,
-  border: "1px solid #E5E7EB",
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
-  padding: "1.5rem 1.75rem 1.75rem",
-};
+  return undefined;
+}
 
-const cardTitleRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: "0.75rem",
-};
+function normalizeText(v?: string | null): string {
+  return String(v || "").trim().toLowerCase();
+}
 
-const cardTitle: React.CSSProperties = {
-  fontSize: "1rem",
-  fontWeight: 600,
-  color: "#111827",
-};
+function fmtDate(value?: string): string {
+  if (!value) return "—";
 
-const cardHint: React.CSSProperties = {
-  fontSize: "0.8rem",
-  color: "#9CA3AF",
-};
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
 
-const cardBody: React.CSSProperties = {
-  fontSize: "0.875rem",
-  color: "#111827",
-};
+  return d.toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
 
-const btnBase: React.CSSProperties = {
-  fontSize: "0.8rem",
-  borderRadius: 999,
-  padding: "0.4rem 0.95rem",
-  border: "1px solid #D1D5DB",
-  background: "#F9FAFB",
-  color: "#374151",
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "0.35rem",
-  whiteSpace: "nowrap",
-};
-
-const btnPrimary: React.CSSProperties = {
-  ...btnBase,
-  background: "#2563EB",
-  borderColor: "#1D4ED8",
-  color: "#FFFFFF",
-  fontWeight: 500,
-};
-
-const btnGhost: React.CSSProperties = {
-  ...btnBase,
-  background: "#FFFFFF",
-};
-
-const btnDangerOutline: React.CSSProperties = {
-  ...btnBase,
-  borderColor: "#FCA5A5",
-  color: "#B91C1C",
-  background: "#FEF2F2",
-};
-
-const tableWrapper: React.CSSProperties = {
-  borderRadius: 10,
-  border: "1px solid #E5E7EB",
-  overflow: "hidden",
-  background: "#F9FAFB",
-};
-
-const tableHeader: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "0.9fr 1.8fr 1.3fr 1.7fr", // ultima colonna: Ort + Aktion
-  gap: "0.5rem",
-  padding: "0.55rem 0.9rem",
-  fontSize: "0.75rem",
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "#9CA3AF",
-  background: "#F3F4F6",
-};
-
-const tableRow: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "0.9fr 1.8fr 1.3fr 1.7fr",
-  gap: "0.5rem",
-  padding: "0.5rem 0.9rem",
-  fontSize: "0.85rem",
-  alignItems: "center",
-  borderTop: "1px solid #E5E7EB",
-  cursor: "pointer",
-};
-
-const tableRowAlt: React.CSSProperties = {
-  ...tableRow,
-  background: "#F9FAFB",
-};
-
-const tableRowHover: React.CSSProperties = {
-  boxShadow: "inset 0 0 0 1px #2563EB",
-  background: "#EFF6FF",
-};
-
-const mutedText: React.CSSProperties = {
-  fontSize: "0.8rem",
-  color: "#9CA3AF",
-  marginTop: "0.5rem",
-};
+function readRecentIds(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 /* ========= Component ========= */
 
@@ -234,23 +154,37 @@ const ProjectStartPage: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [recentIds, setRecentIds] = useState<string[]>(() => readRecentIds());
 
   const [newForm, setNewForm] = useState<NewProjectForm>({
-    code: "BA-2025-001",
+    code: computeNextProjectCode([]),
     name: "Neues Projekt",
     client: "",
-    place: "",
+    place: ""
   });
 
-  /** imposta il progetto selezionato ovunque (context + globale) */
-  const setCurrentEverywhere = (p: ProjectItem) => {
+  function saveRecent(projectId: string) {
+    try {
+      const next = [projectId, ...recentIds.filter((x) => x !== projectId)].slice(0, 6);
+      setRecentIds(next);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+
+      //
+    }}
+
+  function setCurrentEverywhere(p: ProjectItem) {
     try {
       const g = globalThis as any;
-      g.__RLC_CURRENT_PROJECT = p; // fallback globale
+      g.__RLC_CURRENT_PROJECT = p;
     } catch {
-      // niente
-    }
 
+      //
+    }
     try {
       projectCtx?.setCurrentProject?.(p);
       projectCtx?.setCurrentProjectId?.(p.id);
@@ -259,45 +193,45 @@ const ProjectStartPage: React.FC = () => {
     } catch (e) {
       console.warn("Project context not set correctly:", e);
     }
-  };
+  }
 
-  const clearCurrentIfMatches = (id: string) => {
+  function clearCurrentIfMatches(id: string) {
     try {
       const g = globalThis as any;
-      if (g.__RLC_CURRENT_PROJECT && g.__RLC_CURRENT_PROJECT.id === id) {
+      if (g.__RLC_CURRENT_PROJECT?.id === id) {
         g.__RLC_CURRENT_PROJECT = null;
       }
     } catch {
-      // ignore
+
+      //
     }
     try {
       if (projectCtx?.currentProject?.id === id) {
-        projectCtx.setCurrentProject?.(null);
+        projectCtx?.setCurrentProject?.(null);
       }
+
       if (projectCtx?.currentProjectId === id) {
-        projectCtx.setCurrentProjectId?.(null);
+        projectCtx?.setCurrentProjectId?.(null);
       }
     } catch {
-      // ignore
-    }
-  };
 
-  /* ------- Carica lista progetti ------- */
+      //
+    }}
 
-  const loadList = async () => {
+  async function loadList() {
     try {
       setLoading(true);
       setError(null);
+
       const data = await fetchProjects();
-      const list: ProjectItem[] = data.projects ?? [];
+      const list: ProjectItem[] = Array.isArray(data?.projects) ? data.projects : [];
+
       setProjects(list);
       await projectCtx?.loadProjects?.();
 
-      // 🔹 dopo aver die Projekte geladen, automatische nächste Projektnummer vorschlagen
-      const nextCode = computeNextProjectCode(list);
       setNewForm((prev) => ({
         ...prev,
-        code: nextCode,
+        code: computeNextProjectCode(list)
       }));
     } catch (e: any) {
       console.error(e);
@@ -305,25 +239,58 @@ const ProjectStartPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
     void loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ------- Handlers import ------- */
+  const filteredProjects = useMemo(() => {
+    const q = normalizeText(search);
+    if (!q) return projects;
 
-  const handleJsonFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    setJsonFile(f);
-  };
+    return projects.filter((p) => {
+      return (
+        normalizeText(p.code).includes(q) ||
+        normalizeText(p.name).includes(q) ||
+        normalizeText(p.client).includes(q) ||
+        normalizeText(p.place).includes(q));
 
-  const handleZipFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    setZipFile(f);
-  };
+    });
+  }, [projects, search]);
 
-  const handleImportJson = async () => {
+  const recentProjects = useMemo(() => {
+    const map = new Map(projects.map((p) => [p.id, p]));
+    return recentIds.map((id) => map.get(id)).filter(Boolean) as ProjectItem[];
+  }, [projects, recentIds]);
+
+  const selectedProject = useMemo(() => {
+    return projects.find((p) => p.id === selectedProjectId) || null;
+  }, [projects, selectedProjectId]);
+
+  const stats = useMemo(() => {
+    const withClient = projects.filter((p) => normalizeText(p.client)).length;
+    const withPlace = projects.filter((p) => normalizeText(p.place)).length;
+
+    return {
+      total: projects.length,
+      visible: filteredProjects.length,
+      recent: recentProjects.length,
+      withClient,
+      withPlace
+    };
+  }, [projects, filteredProjects, recentProjects]);
+
+  function handleJsonFileChange(e: ChangeEvent<HTMLInputElement>) {
+    setJsonFile(e.target.files?.[0] || null);
+  }
+
+  function handleZipFileChange(e: ChangeEvent<HTMLInputElement>) {
+    setZipFile(e.target.files?.[0] || null);
+  }
+
+  async function handleImportJson() {
     if (!jsonFile) return;
 
     try {
@@ -347,80 +314,88 @@ const ProjectStartPage: React.FC = () => {
       const parsed = JSON.parse(text);
       const project = parsed.project ?? parsed;
 
-      const res = await fetch(`${API}/api/import/project-json`, {
+      const fd = new FormData();
+      const blob = new Blob([JSON.stringify(project)], {
+        type: "application/json"
+      });
+
+      fd.append("file", blob, "project.json");
+
+      const res = await fetch(apiUrl("/api/import/project-json"), {
         method: "POST",
         headers: { Accept: "application/json" },
-        body: (() => {
-          const fd = new FormData();
-          const blob = new Blob([JSON.stringify(project)], {
-            type: "application/json",
-          });
-          fd.append("file", blob, "project.json");
-          return fd;
-        })(),
+        body: fd,
+        credentials: "include"
       });
 
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json) {
-        throw new Error("Backend-Fehler beim Import.");
-      }
-      if (json.ok === false) {
-        throw new Error(json.error || "Backend-Fehler beim Import.");
-      }
 
-      console.log("JSON import result:", json);
-      alert("Projekt erfolgreich importiert.");
+      if (!res.ok || !json) throw new Error("Backend-Fehler beim Import.");
+      if (json.ok === false) throw new Error(json.error || "Backend-Fehler beim Import.");
+
       setJsonFile(null);
       await loadList();
+      window.alert("Projekt erfolgreich importiert.");
     } catch (err: any) {
       console.error("Import-Fehler:", err);
-      setError(err?.message || "Fehler beim Import (project.json)");
-      alert("Import fehlgeschlagen: " + (err?.message ?? String(err)));
+      const msg = err?.message || "Fehler beim Import (project.json)";
+      setError(msg);
+      window.alert(`Import fehlgeschlagen: ${msg}`);
     }
-  };
+  }
 
-  const handleImportZip = async () => {
+  async function handleImportZip() {
     if (!zipFile) return;
-    const fd = new FormData();
-    fd.append("file", zipFile);
+
     try {
       setError(null);
+
+      const fd = new FormData();
+      fd.append("file", zipFile);
+
       await importProjectZip(fd);
+
       setZipFile(null);
       await loadList();
+      window.alert("ZIP erfolgreich importiert.");
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || "Fehler beim Import (ZIP)");
-      alert("Fehler beim Import (ZIP): " + (e?.message ?? String(e)));
+      const msg = e?.message || "Fehler beim Import (ZIP)";
+      setError(msg);
+      window.alert(`Fehler beim Import (ZIP): ${msg}`);
     }
-  };
+  }
 
-  /* ------- Handlers nuovo progetto ------- */
-
-  const handleNewChange = (e: ChangeEvent<HTMLInputElement>) => {
+  function handleNewChange(e: ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
     setNewForm((prev) => ({ ...prev, [name]: value }));
-  };
+  }
 
-  const handleCreateProject = async (e: FormEvent) => {
+  async function handleCreateProject(e: FormEvent) {
     e.preventDefault();
+
     setCreateError(null);
     setCreating(true);
+
     try {
       const payload = {
         code: newForm.code.trim(),
         name: newForm.name.trim(),
         client: newForm.client.trim(),
-        place: newForm.place.trim(),
+        place: newForm.place.trim()
       };
 
+      if (!payload.code) throw new Error("Projektnummer fehlt.");
+      if (!payload.name) throw new Error("Projektname fehlt.");
+
       const res = await apiCreateProject(payload);
-      const created: ProjectItem | undefined = res?.project ?? res;
+      const created = extractCreatedProject(res);
 
       await loadList();
 
       if (created?.id) {
         setCurrentEverywhere(created);
+        saveRecent(created.id);
         navigate("/projekt/uebersicht");
       }
     } catch (e: any) {
@@ -429,368 +404,816 @@ const ProjectStartPage: React.FC = () => {
     } finally {
       setCreating(false);
     }
-  };
+  }
 
-  /* ------- Seleziona progetto esistente ------- */
-
-  const handleOpenProject = (p: ProjectItem) => {
+  function handleOpenProject(p: ProjectItem) {
     setCurrentEverywhere(p);
+    saveRecent(p.id);
     navigate("/projekt/uebersicht");
-  };
+  }
 
-  /* ------- Löschen ------- */
+  async function handleDeleteProject(
+  p: ProjectItem,
+  ev: React.MouseEvent<HTMLButtonElement>)
+  {
+    ev.stopPropagation();
 
-  const handleDeleteProject = async (p: ProjectItem, ev: React.MouseEvent) => {
-    ev.stopPropagation(); // evita che il click selezioni il progetto
     if (!window.confirm(`Projekt "${p.code}" wirklich löschen?`)) return;
+
     try {
       setDeletingId(p.id);
+
       await deleteProject(p.id);
       clearCurrentIfMatches(p.id);
+
+      const nextRecent = recentIds.filter((x) => x !== p.id);
+      setRecentIds(nextRecent);
+
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(nextRecent));
+      } catch {
+
+        //
+      }
       await loadList();
     } catch (e: any) {
       console.error(e);
-      alert(
-        "Fehler beim Löschen des Projekts: " +
-          (e?.message ?? String(e))
-      );
+      window.alert(`Fehler beim Löschen des Projekts: ${e?.message ?? String(e)}`);
     } finally {
       setDeletingId(null);
     }
-  };
-
-  /* ========= Render ========= */
+  }
 
   return (
-    <div style={pageContainer}>
-      <h1 style={sectionTitle}>Projekt auswählen</h1>
-      <p style={sectionSubtitle}>
-        Bestehendes Projekt öffnen oder ein neues Projekt anlegen / importieren.
-      </p>
-
-      {(error || createError) && (
-        <div
-          style={{
-            marginBottom: "1rem",
-            padding: "0.75rem 1rem",
-            borderRadius: 8,
-            border: "1px solid #FCA5A5",
-            background: "#FEF2F2",
-            color: "#B91C1C",
-            fontSize: "0.85rem",
-          }}
-        >
-          {error && <div>Fehler: {error}</div>}
-          {createError && <div>{createError}</div>}
+    <div className={rlcClass(null, page)}>
+      <section className={rlcClass("rlc-page-hero", heroCard)}>
+        <div>
+          <div className={rlcClass(null, eyebrow)}>RLC Projektzentrale</div>
+          <h1 className={rlcClass(null, heroTitle)}>Projekt auswählen</h1>
+          <p className={rlcClass(null, heroText)}>
+            Bestehendes Projekt öffnen, neues Projekt anlegen oder Projektdateien
+            sauber importieren.
+          </p>
         </div>
-      )}
 
-      <div style={layoutGrid}>
-        {/* --------- Colonna sinistra: lista + import --------- */}
-        <section style={card}>
-          <div style={cardTitleRow}>
-            <div>
-              <div style={cardTitle}>Projekt auswählen</div>
-              <div style={cardHint}>
-                Wählen Sie ein bestehendes Projekt oder importieren Sie eine
-                Projektdatei.
+        <div className={rlcClass(null, heroActions)}>
+          <button type="button" className={rlcClass(null, btnPrimaryHero)} onClick={() => void loadList()}>
+            {loading ? "Lädt..." : "Projekte neu laden"}
+          </button>
+
+          <button
+            type="button" className={rlcClass(null,
+            btnSecondaryHero)}
+            onClick={() => {
+              const target = document.getElementById("create-project-card");
+              target?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}>
+            
+            Neues Projekt
+          </button>
+
+          <button
+            type="button" className={rlcClass(null,
+            btnSecondaryHero)}
+            onClick={() => {
+              const target = document.getElementById("import-project-card");
+              target?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}>
+            
+            Import
+          </button>
+        </div>
+
+        <div className={rlcClass(null, heroMeta)}>
+          Projekte: <b>{stats.total}</b> · Sichtbar: <b>{stats.visible}</b> · Zuletzt
+          geöffnet: <b>{stats.recent}</b>
+        </div>
+      </section>
+
+      {error || createError ?
+      <div className={rlcClass(null, errorBox)}>
+          {error ? <div>Fehler: {error}</div> : null}
+          {createError ? <div>{createError}</div> : null}
+        </div> :
+      null}
+
+      <section className={rlcClass(null, kpiGrid)}>
+        <Kpi label="Projekte" value={String(stats.total)} />
+        <Kpi label="Suchtreffer" value={String(stats.visible)} />
+        <Kpi label="Zuletzt geöffnet" value={String(stats.recent)} />
+        <Kpi label="Mit Auftraggeber" value={String(stats.withClient)} />
+        <Kpi label="Mit Ort" value={String(stats.withPlace)} />
+      </section>
+
+      <section className={rlcClass(null, layoutGrid)}>
+        <div className={rlcClass(null, mainStack)}>
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
+              <div>
+                <h2 className={rlcClass(null, sectionTitle)}>Projekt suchen & öffnen</h2>
+                <div className={rlcClass(null, sectionText)}>
+                  Schnell suchen, zuletzt verwendete Projekte öffnen oder aus der Liste wählen.
+                </div>
+              </div>
+
+              <button
+                type="button" className={rlcClass(null,
+                btnSecondary)}
+                onClick={() => void loadList()}
+                disabled={loading}>
+                
+                {loading ? "Lädt..." : "Neu laden"}
+              </button>
+            </div>
+
+            <div className={rlcClass(null, searchGrid)}>
+              <div>
+                <FieldLabel>Projekt suchen</FieldLabel>
+                <input
+                  type="text"
+                  placeholder="Nach Projektnummer, Name, Kunde oder Ort suchen..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)} className={rlcClass(null,
+                  searchInput)} />
+                
+              </div>
+
+              <div>
+                <FieldLabel>Schnellwahl</FieldLabel>
+                <div className={rlcClass(null, quickSelectRow)}>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)} className={rlcClass(null,
+                    input)}>
+                    
+                    <option value="">Projekt auswählen...</option>
+                    {filteredProjects.map((p) =>
+                    <option key={p.id} value={p.id}>
+                        {p.code} — {p.name}
+                      </option>
+                    )}
+                  </select>
+
+                  <button
+                    type="button" className={rlcClass(null,
+                    btnPrimary)}
+                    disabled={!selectedProject}
+                    onClick={() => selectedProject && handleOpenProject(selectedProject)}>
+                    
+                    Öffnen
+                  </button>
+                </div>
               </div>
             </div>
-            <button
-              type="button"
-              style={btnGhost}
-              onClick={() => loadList()}
-              disabled={loading}
-            >
-              Neu laden
-            </button>
-          </div>
+          </section>
 
-          <div style={cardBody}>
-            <div style={{ marginBottom: "0.9rem", fontWeight: 500 }}>
-              Projekte
+          {recentProjects.length > 0 ?
+          <section className={rlcClass(null, card)}>
+              <div className={rlcClass(null, sectionHead)}>
+                <div>
+                  <h2 className={rlcClass(null, sectionTitle)}>Zuletzt geöffnet</h2>
+                  <div className={rlcClass(null, sectionText)}>Direkter Zugriff auf die letzten Projekte.</div>
+                </div>
+              </div>
+
+              <div className={rlcClass(null, recentGrid)}>
+                {recentProjects.map((p) =>
+              <button
+                key={p.id}
+                type="button" className={rlcClass(null,
+                recentCard)}
+                onClick={() => handleOpenProject(p)}>
+                
+                    <div>
+                      <div className={rlcClass(null, projectCode)}>{p.code}</div>
+                      <div className={rlcClass(null, projectName)}>{p.name}</div>
+                      <div className={rlcClass(null, projectSub)}>
+                        {p.client || "—"} {p.place ? `· ${p.place}` : ""}
+                      </div>
+                    </div>
+
+                    <span className={rlcClass(null, openPill)}>Öffnen</span>
+                  </button>
+              )}
+              </div>
+            </section> :
+          null}
+
+          <section className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
+              <div>
+                <h2 className={rlcClass(null, sectionTitle)}>Alle Projekte</h2>
+                <div className={rlcClass(null, sectionText)}>
+                  Vollständige Projektliste mit Öffnen- und Löschen-Aktion.
+                </div>
+              </div>
             </div>
 
-            <div style={tableWrapper}>
-              <div style={tableHeader}>
+            <div className={rlcClass(null, tableWrap)}>
+              <div className={rlcClass(null, tableHeader)}>
                 <div>Projekt-Nr.</div>
                 <div>Name</div>
                 <div>Auftraggeber</div>
                 <div>Ort / Aktionen</div>
               </div>
-              {projects.length === 0 && (
-                <div
-                  style={{
-                    padding: "0.75rem 0.9rem",
-                    fontSize: "0.85rem",
-                    color: "#9CA3AF",
-                  }}
-                >
-                  Keine Projekte gefunden.
-                </div>
-              )}
-              {projects.map((p, idx) => {
-                const rowStyle = idx % 2 === 0 ? tableRow : tableRowAlt;
-                return (
-                  <div
-                    key={p.id}
-                    style={rowStyle}
-                    onClick={() => handleOpenProject(p)}
-                    onMouseEnter={(ev) => {
-                      (ev.currentTarget as HTMLDivElement).style.boxShadow =
-                        String(tableRowHover.boxShadow);
-                      (ev.currentTarget as HTMLDivElement).style.background =
-                        String(tableRowHover.background);
-                    }}
-                    onMouseLeave={(ev) => {
-                      (ev.currentTarget as HTMLDivElement).style.boxShadow =
-                        "none";
-                      (ev.currentTarget as HTMLDivElement).style.background =
-                        rowStyle.background ?? "transparent";
-                    }}
-                  >
-                    <div>{p.code}</div>
-                    <div>{p.name}</div>
-                    <div>{p.client || "–"}</div>
+
+              <div className={rlcClass(null, scrollList)}>
+                {!filteredProjects.length ?
+                <div className={rlcClass(null, emptyCell)}>Keine Projekte gefunden.</div> :
+                null}
+
+                {filteredProjects.map((p, idx) => {
+                  const isHovered = hoveredRowId === p.id;
+
+                  return (
                     <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      <span>{p.place || "–"}</span>
-                      <button
-                        type="button"
-                        style={btnDangerOutline}
-                        onClick={(ev) => handleDeleteProject(p, ev)}
-                        disabled={deletingId === p.id}
-                      >
-                        {deletingId === p.id
-                          ? "Lösche…"
-                          : "Projekt löschen"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                      key={p.id} className={rlcClass(null,
+                      {
+                        ...tableRow,
+                        background: idx % 2 === 0 ? "#FFFFFF" : "#F8FAFC",
+                        ...(isHovered ? tableRowHover : {})
+                      })}
+                      onMouseEnter={() => setHoveredRowId(p.id)}
+                      onMouseLeave={() => setHoveredRowId(null)}>
+                      
+                      <div className={rlcClass(null, projectCode)}>{p.code}</div>
 
-            <p style={mutedText}>
-              Tipp: Projekt auswählen, um zur Projekt-Übersicht zu wechseln.
-            </p>
+                      <div>
+                        <b>{p.name}</b>
+                        <div className={rlcClass(null, tiny)}>Erstellt: {fmtDate(p.createdAt)}</div>
+                      </div>
 
-            {/* Import-Blöcke */}
-            <div
-              style={{
-                marginTop: "1.25rem",
-                borderTop: "1px solid #E5E7EB",
-                paddingTop: "1rem",
-                display: "grid",
-                gap: "0.85rem",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 500, marginBottom: "0.25rem" }}>
-                  project.json importieren
-                </div>
-                <div style={{ fontSize: "0.8rem", color: "#6B7280" }}>
-                  Exportierte Projektdatei (project.json) wieder einlesen.
-                </div>
-                <div
-                  style={{
-                    marginTop: "0.5rem",
-                    display: "flex",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    onChange={handleJsonFileChange}
-                    style={{ fontSize: "0.8rem" }}
-                  />
-                  <button
-                    type="button"
-                    style={btnPrimary}
-                    onClick={handleImportJson}
-                    disabled={!jsonFile}
-                  >
-                    Import JSON
-                  </button>
-                </div>
+                      <div>{p.client || "—"}</div>
+
+                      <div className={rlcClass(null, rowActions)}>
+                        <span>{p.place || "—"}</span>
+
+                        <div className={rlcClass(null, buttonRow)}>
+                          <button
+                            type="button" className={rlcClass(null,
+                            btnSecondarySmall)}
+                            onClick={() => handleOpenProject(p)}>
+                            
+                            Öffnen
+                          </button>
+
+                          <button
+                            type="button" className={rlcClass(null,
+                            btnDangerSmall)}
+                            onClick={(ev) => handleDeleteProject(p, ev)}
+                            disabled={deletingId === p.id}>
+                            
+                            {deletingId === p.id ? "Lösche..." : "Löschen"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>);
+
+                })}
               </div>
+            </div>
+          </section>
+        </div>
 
+        <aside className={rlcClass(null, sideStack)}>
+          <section id="create-project-card" className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
               <div>
-                <div style={{ fontWeight: 500, marginBottom: "0.25rem" }}>
-                  Projekt-ZIP importieren
-                </div>
-                <div style={{ fontSize: "0.8rem", color: "#6B7280" }}>
-                  Komplettes Projektarchiv (inkl. Dateien) als ZIP einlesen.
-                </div>
-                <div
-                  style={{
-                    marginTop: "0.5rem",
-                    display: "flex",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <input
-                    type="file"
-                    accept=".zip,application/zip"
-                    onChange={handleZipFileChange}
-                    style={{ fontSize: "0.8rem" }}
-                  />
-                  <button
-                    type="button"
-                    style={btnPrimary}
-                    onClick={handleImportZip}
-                    disabled={!zipFile}
-                  >
-                    Import ZIP
-                  </button>
+                <h2 className={rlcClass(null, sectionTitle)}>Projekt erstellen</h2>
+                <div className={rlcClass(null, sectionText)}>
+                  Neues Projekt direkt mit Projektnummer, Name, Kunde und Ort anlegen.
                 </div>
               </div>
             </div>
-          </div>
-        </section>
 
-        {/* --------- Colonna destra: nuovo progetto --------- */}
-        <section style={card}>
-          <div style={cardTitleRow}>
-            <div>
-              <div style={cardTitle}>Projekt erstellen</div>
-              <div style={cardHint}>
-                Legen Sie ein neues Projekt mit Nummer, Namen und Ort an.
-              </div>
-            </div>
-          </div>
-
-          <form onSubmit={handleCreateProject} style={cardBody}>
-            <div style={{ display: "grid", gap: "0.6rem" }}>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    marginBottom: "0.15rem",
-                  }}
-                >
-                  Projektnummer
-                </label>
+            <form onSubmit={handleCreateProject} className={rlcClass(null, formStack)}>
+              <Field label="Projektnummer">
                 <input
                   type="text"
                   name="code"
                   value={newForm.code}
-                  onChange={handleNewChange}
-                  style={{
-                    width: "100%",
-                    fontSize: "0.85rem",
-                    borderRadius: 8,
-                    border: "1px solid #D1D5DB",
-                    padding: "0.45rem 0.6rem",
-                  }}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    marginBottom: "0.15rem",
-                  }}
-                >
-                  Projektname
-                </label>
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
+              </Field>
+
+              <Field label="Projektname">
                 <input
                   type="text"
                   name="name"
                   value={newForm.name}
-                  onChange={handleNewChange}
-                  style={{
-                    width: "100%",
-                    fontSize: "0.85rem",
-                    borderRadius: 8,
-                    border: "1px solid #D1D5DB",
-                    padding: "0.45rem 0.6rem",
-                  }}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    marginBottom: "0.15rem",
-                  }}
-                >
-                  Kunde / Auftraggeber
-                </label>
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
+              </Field>
+
+              <Field label="Kunde / Auftraggeber">
                 <input
                   type="text"
                   name="client"
                   value={newForm.client}
-                  onChange={handleNewChange}
-                  style={{
-                    width: "100%",
-                    fontSize: "0.85rem",
-                    borderRadius: 8,
-                    border: "1px solid #D1D5DB",
-                    padding: "0.45rem 0.6rem",
-                  }}
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.8rem",
-                    fontWeight: 500,
-                    marginBottom: "0.15rem",
-                  }}
-                >
-                  Ort
-                </label>
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
+              </Field>
+
+              <Field label="Ort">
                 <input
                   type="text"
                   name="place"
                   value={newForm.place}
-                  onChange={handleNewChange}
-                  style={{
-                    width: "100%",
-                    fontSize: "0.85rem",
-                    borderRadius: 8,
-                    border: "1px solid #D1D5DB",
-                    padding: "0.45rem 0.6rem",
-                  }}
-                />
+                  onChange={handleNewChange} className={rlcClass(null,
+                  input)} />
+                
+              </Field>
+
+              <button type="submit" className={rlcClass(null, btnPrimaryFull)} disabled={creating}>
+                {creating ? "Wird angelegt..." : "Projekt anlegen"}
+              </button>
+            </form>
+          </section>
+
+          <section id="import-project-card" className={rlcClass(null, card)}>
+            <div className={rlcClass(null, sectionHead)}>
+              <div>
+                <h2 className={rlcClass(null, sectionTitle)}>Projekt importieren</h2>
+                <div className={rlcClass(null, sectionText)}>
+                  project.json oder vollständiges Projekt-ZIP einlesen.
+                </div>
               </div>
             </div>
 
-            <div
-              style={{
-                marginTop: "1rem",
-                display: "flex",
-                justifyContent: "flex-end",
-              }}
-            >
-              <button type="submit" style={btnPrimary} disabled={creating}>
-                {creating ? "Wird angelegt..." : "Projekt anlegen"}
+            <div className={rlcClass(null, importBlock)}>
+              <div>
+                <div className={rlcClass(null, importTitle)}>project.json importieren</div>
+                <div className={rlcClass(null, sectionText)}>
+                  Exportierte Projektdatei wieder einlesen.
+                </div>
+              </div>
+
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={handleJsonFileChange} className={rlcClass(null,
+                fileInput)} />
+              
+
+              <button
+                type="button" className={rlcClass(null,
+                btnPrimary)}
+                onClick={handleImportJson}
+                disabled={!jsonFile}>
+                
+                Import JSON
               </button>
             </div>
-          </form>
-        </section>
-      </div>
-    </div>
-  );
+
+            <div className={rlcClass(null, importBlock)}>
+              <div>
+                <div className={rlcClass(null, importTitle)}>Projekt-ZIP importieren</div>
+                <div className={rlcClass(null, sectionText)}>
+                  Komplettes Projektarchiv inklusive Dateien einlesen.
+                </div>
+              </div>
+
+              <input
+                type="file"
+                accept=".zip,application/zip"
+                onChange={handleZipFileChange} className={rlcClass(null,
+                fileInput)} />
+              
+
+              <button
+                type="button" className={rlcClass(null,
+                btnPrimary)}
+                onClick={handleImportZip}
+                disabled={!zipFile}>
+                
+                Import ZIP
+              </button>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </div>);
+
 };
 
 export default ProjectStartPage;
+
+/* ========= UI ========= */
+
+function Kpi({ label, value }: {label: string;value: string;}) {
+  return (
+    <div className={rlcClass(null, kpiCard)}>
+      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+      <div className={rlcClass(null, kpiValue)}>{value}</div>
+    </div>);
+
+}
+
+function Field({
+  label,
+  children
+
+
+
+}: {label: string;children: React.ReactNode;}) {
+  return (
+    <label className={rlcClass(null, fieldWrap)}>
+      <span className={rlcClass(null, labelStyle)}>{label}</span>
+      {children}
+    </label>);
+
+}
+
+function FieldLabel({ children }: {children: React.ReactNode;}) {
+  return <div className={rlcClass(null, labelStyle)}>{children}</div>;
+}
+
+/* ========= Styles ========= */
+
+const page: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+  padding: "2px 0 16px"
+};
+
+const heroCard: React.CSSProperties = {
+  background: "linear-gradient(125deg, #0B5BD3 0%, #146EF5 58%, #24B4FF 100%)",
+  color: "#FFFFFF",
+  borderRadius: 12,
+  padding: "20px 22px",
+  display: "grid",
+  gap: 13,
+  boxShadow: "0 8px 24px rgba(20,110,245,0.16)",
+  overflow: "hidden"
+};
+
+const eyebrow: React.CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  opacity: 0.78,
+  fontWeight: 700
+};
+
+const heroTitle: React.CSSProperties = {
+  color: "#FFFFFF", margin: "4px 0",
+  fontSize: 29,
+  lineHeight: 1.1,
+  fontWeight: 700
+};
+
+const heroText: React.CSSProperties = {
+  margin: 0,
+  maxWidth: 920,
+  opacity: 0.88,
+  lineHeight: 1.55,
+  fontSize: 15
+};
+
+const heroActions: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap"
+};
+
+const heroMeta: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.9
+};
+
+const errorBox: React.CSSProperties = {
+  border: "1px solid #FCA5A5",
+  background: "#FEF2F2",
+  color: "#B91C1C",
+  borderRadius: 14,
+  padding: "12px 14px",
+  fontSize: 13,
+  fontWeight: 700
+};
+
+const kpiGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+  gap: 8
+};
+
+const kpiCard: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "0",
+  borderBottom: "2px solid #BED6FF",
+  borderRadius: 0,
+  padding: "12px 10px",
+  boxShadow: "none"
+};
+
+const kpiLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: "#64748B",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em"
+};
+
+const kpiValue: React.CSSProperties = {
+  marginTop: 6,
+  fontSize: 21,
+  color: "#0F172A",
+  fontWeight: 700
+};
+
+const layoutGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0,1.45fr) 420px",
+  gap: 14,
+  alignItems: "start"
+};
+
+const mainStack: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+  minWidth: 0
+};
+
+const sideStack: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+  minWidth: 0
+};
+
+const card: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: "1px solid #DDE5F0",
+  borderRadius: 10,
+  padding: 16,
+  boxShadow: "none"
+};
+
+const sectionHead: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+  marginBottom: 14
+};
+
+const sectionTitle: React.CSSProperties = {
+  margin: 0,
+  color: "#0F172A",
+  fontSize: 18,
+  fontWeight: 700
+};
+
+const sectionText: React.CSSProperties = {
+  marginTop: 4,
+  color: "#64748B",
+  fontSize: 13,
+  lineHeight: 1.45
+};
+
+const searchGrid: React.CSSProperties = {
+  display: "grid",
+  gap: 12
+};
+
+const fieldWrap: React.CSSProperties = {
+  display: "grid",
+  gap: 5
+};
+
+const labelStyle: React.CSSProperties = {
+  marginBottom: 5,
+  color: "#334155",
+  fontSize: 12,
+  fontWeight: 700
+};
+
+const input: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  border: "1px solid #D1D5DB",
+  borderRadius: 10,
+  background: "#FFFFFF",
+  color: "#0F172A",
+  padding: "10px 12px",
+  fontSize: 13,
+  outline: "none"
+};
+
+const searchInput: React.CSSProperties = {
+  ...input,
+  padding: "12px 13px",
+  fontSize: 14
+};
+
+const quickSelectRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0,1fr) auto",
+  gap: 8,
+  alignItems: "center"
+};
+
+const recentGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
+  gap: 10
+};
+
+const recentCard: React.CSSProperties = {
+  border: "0",
+  borderBottom: "1px solid #DDE5F0",
+  background: "#FFFFFF",
+  borderRadius: 0,
+  padding: "11px 2px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  textAlign: "left",
+  color: "#0F172A",
+  cursor: "pointer"
+};
+
+const projectCode: React.CSSProperties = {
+  color: "#0F172A",
+  fontWeight: 700
+};
+
+const projectName: React.CSSProperties = {
+  marginTop: 2,
+  color: "#0F172A",
+  fontWeight: 700
+};
+
+const projectSub: React.CSSProperties = {
+  marginTop: 3,
+  color: "#64748B",
+  fontSize: 12,
+  fontWeight: 600
+};
+
+const openPill: React.CSSProperties = {
+  border: "1px solid #BED6FF",
+  background: "#EAF2FF",
+  color: "#0B5BD3",
+  borderRadius: 999,
+  padding: "6px 10px",
+  fontSize: 12,
+  fontWeight: 700,
+  whiteSpace: "nowrap"
+};
+
+const tableWrap: React.CSSProperties = {
+  overflow: "hidden",
+  border: "1px solid #DDE5F0",
+  borderRadius: 10
+};
+
+const tableHeader: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1.6fr 1.2fr 1.8fr",
+  gap: 10,
+  padding: "11px 12px",
+  background: "#F8FAFC",
+  color: "#64748B",
+  fontSize: 12,
+  fontWeight: 700,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em"
+};
+
+const scrollList: React.CSSProperties = {
+  maxHeight: 470,
+  overflowY: "auto"
+};
+
+const tableRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1.6fr 1.2fr 1.8fr",
+  gap: 10,
+  alignItems: "center",
+  padding: "12px",
+  borderTop: "1px solid #E5E7EB",
+  color: "#0F172A",
+  fontSize: 13,
+  transition: "all 120ms ease"
+};
+
+const tableRowHover: React.CSSProperties = {
+  background: "#F5F8FF",
+  boxShadow: "inset 3px 0 0 #146EF5"
+};
+
+const tiny: React.CSSProperties = {
+  marginTop: 3,
+  color: "#64748B",
+  fontSize: 11,
+  fontWeight: 600
+};
+
+const rowActions: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 8,
+  flexWrap: "wrap"
+};
+
+const buttonRow: React.CSSProperties = {
+  display: "flex",
+  gap: 6,
+  flexWrap: "wrap"
+};
+
+const emptyCell: React.CSSProperties = {
+  padding: 16,
+  color: "#64748B",
+  fontSize: 13,
+  background: "#FFFFFF"
+};
+
+const formStack: React.CSSProperties = {
+  display: "grid",
+  gap: 12
+};
+
+const importBlock: React.CSSProperties = {
+  borderTop: "1px solid #E5E7EB",
+  paddingTop: 14,
+  marginTop: 14,
+  display: "grid",
+  gap: 10
+};
+
+const importTitle: React.CSSProperties = {
+  color: "#0F172A",
+  fontWeight: 700,
+  fontSize: 14
+};
+
+const fileInput: React.CSSProperties = {
+  fontSize: 12,
+  color: "#0F172A"
+};
+
+const btnBase: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  borderRadius: 8,
+  padding: "9px 13px",
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+  whiteSpace: "nowrap"
+};
+
+const btnPrimary: React.CSSProperties = {
+  ...btnBase,
+  border: "1px solid #146EF5",
+  background: "#146EF5",
+  color: "#FFFFFF"
+};
+
+const btnPrimaryFull: React.CSSProperties = {
+  ...btnPrimary,
+  width: "100%",
+  justifyContent: "center"
+};
+
+const btnSecondary: React.CSSProperties = {
+  ...btnBase,
+  background: "#FFFFFF",
+  color: "#0F172A"
+};
+
+const btnPrimaryHero: React.CSSProperties = {
+  ...btnBase,
+  border: "1px solid #FFFFFF",
+  background: "#FFFFFF",
+  color: "#0B5BD3",
+  padding: "11px 16px"
+};
+
+const btnSecondaryHero: React.CSSProperties = {
+  ...btnBase,
+  border: "1px solid rgba(255,255,255,0.55)",
+  background: "rgba(255,255,255,0.90)",
+  color: "#0F172A",
+  padding: "11px 16px"
+};
+
+const btnSecondarySmall: React.CSSProperties = {
+  ...btnSecondary,
+  padding: "7px 10px",
+  borderRadius: 9,
+  fontSize: 12
+};
+
+const btnDangerSmall: React.CSSProperties = {
+  ...btnSecondarySmall,
+  border: "1px solid #FCA5A5",
+  background: "#FEF2F2",
+  color: "#B91C1C"
+};

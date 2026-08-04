@@ -38,7 +38,9 @@
     "seed:kalkulation:templates:block20": "ts-node prisma/seed.kalkulation.templates.block20.sondergewerke_bahn_markierung_umwelt.ts",
     "seed:kalkulation:params:patch:v2": "ts-node prisma/seed.kalkulation.params.patch.v2.ts",
     "seed:vorlagen": "ts-node prisma/seed.vorlagen.ts",
-    "storage:smoke": "ts-node src/scripts/storageSmokeTest.ts"
+    "storage:smoke": "ts-node src/scripts/storageSmokeTest.ts",
+    "ai:smoke": "ts-node src/scripts/aiRuntimeSmokeTest.ts",
+    "enterprise:pairing": "ts-node src/scripts/createEnterprisePairing.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.932.0",
@@ -72,6 +74,7 @@
     "pdfjs-dist": "^3.11.174",
     "pdfkit": "^0.17.2",
     "pino": "^10.3.1",
+    "qrcode": "^1.5.4",
     "sharp": "^0.34.5",
     "unzipper": "^0.12.3",
     "xlsx": "^0.18.5",
@@ -92,6 +95,7 @@
     "@types/node": "^24.10.1",
     "@types/nodemailer": "^7.0.5",
     "@types/pdfkit": "^0.17.3",
+    "@types/qrcode": "^1.5.6",
     "@types/xlsx": "^0.0.35",
     "baseline-browser-mapping": "^2.9.8",
     "prisma": "^5.22.0",

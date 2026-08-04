@@ -1,7 +1,8 @@
 // apps/server/src/routes/ki.ts
 import express from "express";
 import multer from "multer";
-import OpenAI from "openai";
+import { createRlcAiCompatClient } from "../services/ai/rlcAiCompatClient";
+import { isRlcAiTextConfigured } from "../services/ai/rlcAiGateway";
 
 import path from "path";
 import fs from "fs";
@@ -19,7 +20,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-const ai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const ai = createRlcAiCompatClient();
 
 function apiBaseUrl() {
   return (
@@ -257,6 +258,18 @@ function requireOpenAiKeyOrRespond(res: express.Response) {
       error: "OPENAI_API_KEY fehlt",
       detail:
         "Server hat keinen OPENAI_API_KEY. Setze ihn in apps/server/.env und starte den Server neu.",
+    });
+    return false;
+  }
+  return true;
+}
+
+function requireRlcAiTextOrRespond(res: express.Response) {
+  if (!isRlcAiTextConfigured()) {
+    res.status(503).json({
+      error: "RLC_AI_NOT_CONFIGURED",
+      detail:
+        "Für OPENAI wird OPENAI_API_KEY benötigt; für LOCAL/HYBRID muss Ollama erreichbar sein.",
     });
     return false;
   }
@@ -1266,7 +1279,7 @@ router.post("/photos/suggest", async (req, res) => {
  * ============================================================ */
 router.post("/suggest", async (req, res) => {
   try {
-    if (!requireOpenAiKeyOrRespond(res)) return;
+    if (!requireRlcAiTextOrRespond(res)) return;
 
     const body = req.body || {};
 
@@ -1606,7 +1619,7 @@ ${JSON.stringify(current || {}, null, 2).slice(0, 6000)}
 
 router.post("/regie-suggest", async (req, res) => {
   try {
-    if (!requireOpenAiKeyOrRespond(res)) return;
+    if (!requireRlcAiTextOrRespond(res)) return;
 
     const { text, projectId, projectCode, date, entities, current } =
       req.body || {};
@@ -1679,7 +1692,7 @@ ${JSON.stringify(current || {}, null, 2).slice(0, 6000)}
 
 router.post("/propose", async (req, res) => {
   try {
-    if (!requireOpenAiKeyOrRespond(res)) return;
+    if (!requireRlcAiTextOrRespond(res)) return;
 
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: "Text fehlt" });
@@ -1723,7 +1736,7 @@ ${text}`;
 
 router.post("/voice-parse", async (req, res) => {
   try {
-    if (!requireOpenAiKeyOrRespond(res)) return;
+    if (!requireRlcAiTextOrRespond(res)) return;
 
     const { text, projectId } = req.body || {};
     if (!text) return res.status(400).json({ error: "text fehlt" });
@@ -1874,7 +1887,7 @@ router.post("/parse-speech/save", async (req, res) => {
 
 router.post("/offer-review", async (req, res) => {
   try {
-    if (!requireOpenAiKeyOrRespond(res)) return;
+    if (!requireRlcAiTextOrRespond(res)) return;
 
     const { projectId, lv, offers, weights } = req.body || {};
     if (!Array.isArray(lv) || !Array.isArray(offers) || offers.length === 0) {
@@ -1941,7 +1954,7 @@ Antworte NUR als JSON:
 
 router.post("/abrechnung", async (req, res) => {
   try {
-    if (!requireOpenAiKeyOrRespond(res)) return;
+    if (!requireRlcAiTextOrRespond(res)) return;
 
     const { projectId, lv } = req.body || {};
     if (!Array.isArray(lv) || lv.length === 0) {

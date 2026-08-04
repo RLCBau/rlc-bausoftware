@@ -3,11 +3,11 @@
 // Espone: BH.getState(), BH.setState(), BH.subscribe(), BH.use(selector),
 // e alcuni selettori/utility per la pagina "reports".
 
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useReducer } from "react";
 
 /* ----------------------------- Tipi di dominio ---------------------------- */
 
-export type Currency = number; // memorizziamo EUR come numero (2 decimali nel render)
+export type Currency = number; // EUR come numero, formattato nel render
 
 export interface Invoice {
   id: string;
@@ -16,9 +16,9 @@ export interface Invoice {
   dueDate: string; // ISO
   customer: string;
   net: Currency;
-  vat: Currency; // es. 0.19 * net
-  gross: Currency; // net + vat
-  paid: Currency; // somma pagamenti registrati
+  vat: Currency;
+  gross: Currency;
+  paid: Currency;
   status: "open" | "partial" | "paid";
   costCenter?: string;
 }
@@ -45,11 +45,21 @@ export interface State {
   lastUpdated: string;
 }
 
-/* ------------------------------ Dati di demo ------------------------------ */
+/* ------------------------------ Dati demo -------------------------------- */
+
+const STORAGE_KEY = "rlc.buchhaltung.store.v1";
 
 const demoProjects: Project[] = [
-  { id: "P001", name: "TW-BA-III – Erneuerung Trinkwasserleitung BA III", customer: "Stadtwerke" },
-  { id: "P002", name: "Asphaltdecke Sanierung", customer: "Tiefbauamt" },
+  {
+    id: "P001",
+    name: "TW-BA-III – Erneuerung Trinkwasserleitung BA III",
+    customer: "Stadtwerke",
+  },
+  {
+    id: "P002",
+    name: "Asphaltdecke Sanierung",
+    customer: "Tiefbauamt",
+  },
 ];
 
 const demoInvoices: Invoice[] = [
@@ -82,66 +92,111 @@ const demoInvoices: Invoice[] = [
 ];
 
 const demoPayments: Payment[] = [
-  { id: "Z-0001", invoiceId: "RE-2025-0002", date: "2025-09-25", amount: 12000, method: "bank" },
+  {
+    id: "Z-0001",
+    invoiceId: "RE-2025-0002",
+    date: "2025-09-25",
+    amount: 12000,
+    method: "bank",
+  },
 ];
 
-/* ------------------------------ Store semplice --------------------------- */
+/* ------------------------------ Helpers ---------------------------------- */
 
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
 
-let state: State = {
-  invoices: demoInvoices,
-  payments: demoPayments,
-  projects: demoProjects,
-  lastUpdated: new Date().toISOString(),
-};
-
-function notify() {
-  state.lastUpdated = new Date().toISOString();
-  listeners.forEach((l) => l());
-}
-
 function round2(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
-/* --------------------------- API di mutazione/base ------------------------ */
+function createDemoState(): State {
+  return {
+    invoices: demoInvoices,
+    payments: demoPayments,
+    projects: demoProjects,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+function safeLoad(): State | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as State;
+    if (!parsed || !Array.isArray(parsed.invoices) || !Array.isArray(parsed.payments) || !Array.isArray(parsed.projects)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function persist(next: State) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore localStorage quota / private mode
+  }
+}
+
+function recomputeState(base: State): State {
+  const paidByInv = new Map<string, number>();
+
+  for (const p of base.payments) {
+    paidByInv.set(p.invoiceId, round2((paidByInv.get(p.invoiceId) || 0) + p.amount));
+  }
+
+  const invoices = base.invoices.map((inv) => {
+    const paid = round2(paidByInv.get(inv.id) || 0);
+    const status: Invoice["status"] =
+      paid >= inv.gross ? "paid" : paid > 0 ? "partial" : "open";
+
+    return {
+      ...inv,
+      paid,
+      status,
+    };
+  });
+
+  return {
+    ...base,
+    invoices,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+/* ------------------------------ Store ------------------------------------ */
+
+let state: State = recomputeState(safeLoad() || createDemoState());
+
+function notify() {
+  persist(state);
+  listeners.forEach((l) => l());
+}
 
 function getState(): State {
   return state;
 }
 
 function setState(patch: Partial<State>) {
-  state = { ...state, ...patch };
-  recompute(); // riallinea status fatture dopo ogni modifica
+  state = recomputeState({
+    ...state,
+    ...patch,
+  });
   notify();
 }
 
 function subscribe(fn: Listener) {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
-/* ------------------------------ Logica/derive ---------------------------- */
-
-function recompute() {
-  // ricalcola 'paid' e 'status' delle fatture
-  const paidByInv = new Map<string, number>();
-  for (const p of state.payments) {
-    paidByInv.set(p.invoiceId, round2((paidByInv.get(p.invoiceId) || 0) + p.amount));
-  }
-  state.invoices = state.invoices.map((inv) => {
-    const paid = paidByInv.get(inv.id) || 0;
-    const status: Invoice["status"] = paid >= inv.gross ? "paid" : paid > 0 ? "partial" : "open";
-    return { ...inv, paid: round2(paid), status };
-  });
-}
-
-recompute();
-
-/* ------------------------------ Selettori utili -------------------------- */
+/* ------------------------------ Selettori -------------------------------- */
 
 function openItems() {
   return state.invoices.filter((i) => i.status !== "paid");
@@ -155,6 +210,7 @@ function overdue(referenceDate = new Date()) {
 function totals() {
   const sumGross = state.invoices.reduce((a, i) => a + i.gross, 0);
   const sumPaid = state.invoices.reduce((a, i) => a + i.paid, 0);
+
   return {
     invoicesGross: round2(sumGross),
     invoicesPaid: round2(sumPaid),
@@ -168,29 +224,33 @@ function monthlyKey(isoDate: string) {
 
 function monthlySummary(year?: number) {
   const map = new Map<string, { billed: number; paid: number }>();
+
   for (const inv of state.invoices) {
     const key = monthlyKey(inv.date);
     if (year && !key.startsWith(String(year))) continue;
+
     const bucket = map.get(key) || { billed: 0, paid: 0 };
     bucket.billed += inv.gross;
     map.set(key, bucket);
   }
+
   for (const p of state.payments) {
     const key = monthlyKey(p.date);
     if (year && !key.startsWith(String(year))) continue;
+
     const bucket = map.get(key) || { billed: 0, paid: 0 };
     bucket.paid += p.amount;
     map.set(key, bucket);
   }
-  const rows = Array.from(map.entries())
-    .sort(([a], [b]) => (a < b ? -1 : 1))
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, v]) => ({
       month,
       billed: round2(v.billed),
       paid: round2(v.paid),
       openDelta: round2(v.billed - v.paid),
     }));
-  return rows;
 }
 
 function kpi() {
@@ -199,6 +259,7 @@ function kpi() {
   const overdueCount = overdue().length;
   const avgInvoice =
     state.invoices.length > 0 ? round2(t.invoicesGross / state.invoices.length) : 0;
+
   return {
     ...t,
     invoicesCount: state.invoices.length,
@@ -208,53 +269,76 @@ function kpi() {
   };
 }
 
-/* ------------------------------ Operazioni API --------------------------- */
+/* ------------------------------ Operazioni -------------------------------- */
 
 function addInvoice(inv: Omit<Invoice, "paid" | "status">) {
   const exists = state.invoices.some((i) => i.id === inv.id);
   if (exists) throw new Error("Invoice ID bereits vorhanden.");
-  state.invoices = state.invoices.concat({ ...inv, paid: 0, status: "open" });
+
+  state = recomputeState({
+    ...state,
+    invoices: state.invoices.concat({
+      ...inv,
+      paid: 0,
+      status: "open",
+    }),
+  });
+
   notify();
 }
 
 function recordPayment(p: Payment) {
-  state.payments = state.payments.concat(p);
-  recompute();
+  const invoiceExists = state.invoices.some((i) => i.id === p.invoiceId);
+  if (!invoiceExists) throw new Error("Rechnung nicht gefunden.");
+
+  state = recomputeState({
+    ...state,
+    payments: state.payments.concat(p),
+  });
+
+  notify();
+}
+
+function resetDemo() {
+  state = recomputeState(createDemoState());
   notify();
 }
 
 /* ------------------------------ Hook React -------------------------------- */
 
 function useBH<T>(selector: (s: State) => T): T {
-  // trigger re-render su ogni notify()
   const [, force] = useReducer((x) => x + 1, 0);
+
   useEffect(() => {
     return subscribe(() => force());
   }, []);
-  return useMemo(() => selector(state), [state.lastUpdated]); // dipende dall’ultimo update
+
+  return selector(state);
 }
 
-/* --------------------------------- Export --------------------------------- */
+/* -------------------------------- Export ---------------------------------- */
 
 export const BH = {
-  // stato / base
   getState,
   setState,
   subscribe,
 
-  // hook
   use: useBH,
 
-  // selettori
   openItems,
   overdue,
   totals,
   monthlySummary,
   kpi,
 
-  // operazioni
   addInvoice,
   recordPayment,
+  resetDemo,
 };
 
 export default BH;
+
+
+
+
+
