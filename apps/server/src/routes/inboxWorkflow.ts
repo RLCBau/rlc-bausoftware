@@ -14,7 +14,8 @@ type WorkflowType =
   | "ABSCHLAGSRECHNUNG"
   | "RECHNUNG"
   | "KALKULATION"
-  | "OUTLIER_REPORT";
+  | "OUTLIER_REPORT"
+  | "ARBEITSZEIT";
 
 type WorkflowStage = "inbox" | "approved";
 
@@ -32,7 +33,46 @@ const TYPE_ALIASES: Record<string, WorkflowType> = {
   OUTLIER: "OUTLIER_REPORT",
   OUTLIER_REPORT: "OUTLIER_REPORT",
   "OUTLIER-REPORT": "OUTLIER_REPORT",
+  ARBEITSZEIT: "ARBEITSZEIT",
+  ARBEITSZEITEN: "ARBEITSZEIT",
+  ZEITERFASSUNG: "ARBEITSZEIT",
 };
+
+
+function firstText(...values: any[]) {
+  for (const value of values) {
+    const current = String(value ?? "").trim();
+    if (current) return current;
+  }
+  return "";
+}
+
+function normalizeSubmittedBy(raw: any, req: any) {
+  const source = raw?.submittedBy || raw?.sender || raw?.creator || {};
+  const employee = raw?.employee || raw?.mitarbeiter || raw?.personal || {};
+  const authUser = req?.user || req?.auth || {};
+
+  const employeeId = firstText(
+    source?.employeeId, source?.mitarbeiterId, employee?.id, employee?.employeeId,
+    employee?.mitarbeiterId, raw?.employeeId, raw?.mitarbeiterId, raw?.personalId
+  );
+  const employeeName = firstText(
+    source?.employeeName, source?.mitarbeiterName, employee?.name, employee?.fullName,
+    employee?.displayName, raw?.employeeName, raw?.mitarbeiterName,
+    typeof raw?.mitarbeiter === "string" ? raw.mitarbeiter : "",
+    typeof raw?.employee === "string" ? raw.employee : ""
+  );
+  const userId = firstText(source?.userId, source?.id, raw?.userId, authUser?.id, authUser?.userId, authUser?.sub);
+  const userName = firstText(source?.userName, source?.name, raw?.userName, authUser?.name, authUser?.displayName, authUser?.email);
+
+  return {
+    userId,
+    userName,
+    employeeId,
+    employeeName,
+    displayName: employeeName || userName || "Unbekannter Mitarbeiter",
+  };
+}
 
 function safePart(value: any) {
   return String(value || "")
@@ -408,6 +448,29 @@ function finalizeOutlier(projectKey: string, document: any) {
   return { module: "KI_OUTLIER_REPORT", file };
 }
 
+
+function finalizeArbeitszeit(projectKey: string, document: any) {
+  const file = path.join(projectDir(projectKey), "personal", "arbeitszeiten.json");
+  const official = {
+    ...document,
+    id: String(document?.id || document?.docId),
+    projectKey,
+    projectCode: projectKey,
+    employee: String(document?.employee || document?.mitarbeiter || ""),
+    date: String(document?.date || document?.datum || ""),
+    start: String(document?.start || document?.arbeitsbeginn || ""),
+    end: String(document?.end || document?.arbeitsende || ""),
+    breakMinutes: num(document?.breakMinutes ?? document?.pauseMinutes, 0),
+    hours: num(document?.hours, 0),
+    activity: String(document?.activity || document?.taetigkeit || ""),
+    machines: String(document?.machines || document?.maschinen || ""),
+    materials: String(document?.materials || document?.material || ""),
+    workflowStatus: "FREIGEGEBEN",
+    mobileApprovedAt: document?.approvedAt || Date.now(),
+  };
+  writeOfficialList(file, official);
+  return { module: "PERSONAL_ARBEITSZEITEN", file };
+}
 function finalizeDocument(projectKey: string, type: WorkflowType, document: any) {
   if (type === "ANGEBOT") return finalizeAngebot(projectKey, document);
   if (type === "MENGENERMITTLUNG") {
@@ -418,6 +481,7 @@ function finalizeDocument(projectKey: string, type: WorkflowType, document: any)
     return finalizeAbschlagsrechnung(projectKey, document);
   }
   if (type === "KALKULATION") return finalizeKalkulation(projectKey, document);
+  if (type === "ARBEITSZEIT") return finalizeArbeitszeit(projectKey, document);
   return finalizeOutlier(projectKey, document);
 }
 
@@ -452,8 +516,12 @@ router.post("/:projectKey/:type/submit", (req, res, next) => {
     const id = safePart(raw?.id || raw?.docId || `${type.toLowerCase()}_${now}`);
     if (!id) return res.status(400).json({ ok: false, error: "DOC_ID_REQUIRED" });
 
+    const submittedBy = normalizeSubmittedBy(raw, req);
     const document = {
       ...raw,
+      submittedBy,
+      employeeId: raw?.employeeId || submittedBy.employeeId || undefined,
+      employeeName: raw?.employeeName || submittedBy.employeeName || undefined,
       id,
       docId: id,
       type,
@@ -475,6 +543,7 @@ router.post("/:projectKey/:type/submit", (req, res, next) => {
       id,
       action: "submit",
       workflowStatus: "EINGEREICHT",
+      submittedBy,
       updatedAt: now,
     });
 
