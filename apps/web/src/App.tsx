@@ -104,6 +104,7 @@ const KIAutoAbrechnung = React.lazy(() => import("./pages/ki/AutoAbrechnung"));
 const KIRegieAuto = React.lazy(() => import("./pages/ki/RegieAuto"));
 const KIOptimierung = React.lazy(() => import("./pages/ki/Optimierung"));
 const KIMaengel = React.lazy(() => import("./pages/ki/Maengel"));
+const MarketIntelligence = React.lazy(() => import("./pages/ki/MarketIntelligence"));
 /* ------------------ BUCHHALTUNG ------------------ */
 const BuchhaltungLayout = React.lazy(() => import("./pages/buchhaltung/BuchhaltungLayout"));
 const Uebersicht = React.lazy(() => import("./pages/buchhaltung/Uebersicht"));
@@ -937,6 +938,7 @@ function AppShell() {
                 <Route path="regie-auto" element={<KIRegieAuto />} />
                 <Route path="optimierung" element={<KIOptimierung />} />
                 <Route path="maengel" element={<KIMaengel />} />
+                <Route path="market-intelligence" element={<MarketIntelligence />} />
               </Route>
 
               {/* KONSOLIDIERTE KI-KALKULATIONSFUNKTIONEN */}
