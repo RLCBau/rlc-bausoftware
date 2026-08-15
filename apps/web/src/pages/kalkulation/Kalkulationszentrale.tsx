@@ -1485,7 +1485,7 @@ export default function Kalkulationszentrale() {
 
         <Row
           label="Neueste Marktinformation"
-          value={newestMarketDate ? dateText(newestMarketDate) : "–"}
+          value={newestMarketDate ? new Date(newestMarketDate).toLocaleString("de-DE") : "–"}
         />
 
         <Row
