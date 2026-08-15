@@ -22,6 +22,7 @@ import Kalkulationszentrale from "./pages/kalkulation/Kalkulationszentrale";
 /* ------------------ AUTH ------------------ */
 const Login = React.lazy(() => import("./pages/auth/Login"));
 const PricingPage = React.lazy(() => import("./pages/site/PricingPage"));
+const MobilePage = React.lazy(() => import("./pages/site/software/MobilePage"));
 /* ------------------ START / PROJEKT ------------------ */
 const ProjectPage = React.lazy(() => import("./pages/start/project"));
 const ProjektUebersicht = React.lazy(() => import("./pages/start/projektUebersicht"));
@@ -181,7 +182,7 @@ function getAuthToken(): string | null {
 }
 
 function isPublicPath(pathname: string) {
-  return pathname === "/" || pathname === "/preise" || pathname === "/login";
+  return pathname === "/" || pathname === "/preise" || pathname === "/login" || pathname === "/software/mobile";
 }
 
 function RequireAuth({ children }: {children: React.ReactElement;}) {
@@ -564,6 +565,7 @@ function AppShell() {
           <Routes>
             <Route path="/" element={<PricingPage />} />
             <Route path="/preise" element={<PricingPage />} />
+            <Route path="/software/mobile" element={<MobilePage />} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
