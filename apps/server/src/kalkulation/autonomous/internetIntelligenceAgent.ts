@@ -130,7 +130,7 @@ const DEFAULT_SOURCES: InternetSource[] = [
     id: "destatis-baupreise",
     category: "PRICE",
     label: "Destatis Baupreise",
-    url: newsQuery("site:destatis.de Baupreise Baupreisindex Tiefbau Straßenbau Deutschland"),
+    url: "https://www.destatis.de/SiteGlobals/Functions/RSSFeed/DE/RSSNewsfeed/Aktuell.xml",
     enabled: true,
     trust: "OFFICIAL",
     allowedDomains: ["destatis.de"],
@@ -140,7 +140,7 @@ const DEFAULT_SOURCES: InternetSource[] = [
     id: "destatis-materialien",
     category: "PRICE",
     label: "Destatis Baumaterialien",
-    url: newsQuery("site:destatis.de Baumaterialien Beton Zement Stahl Preis Deutschland"),
+    url: "https://www.destatis.de/SiteGlobals/Functions/RSSFeed/DE/RSSNewsfeed/Aktuell.xml",
     enabled: true,
     trust: "OFFICIAL",
     allowedDomains: ["destatis.de"],
@@ -585,7 +585,7 @@ export async function runInternetIntelligenceCycle(force = false): Promise<Inter
             continue;
           }
 
-          const identity = `${source.id}|${entry.link || entry.title}`;
+          const identity = `${entry.sourceDomain || ""}|${entry.title.toLocaleLowerCase("de-DE").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+-\s+[^-]+$/g, "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim()}`;
           const contentHash = createHash("sha256").update(identity).digest("hex");
           if (seen[contentHash]) continue;
           const detectedAt = new Date().toISOString();

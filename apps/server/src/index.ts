@@ -26,6 +26,7 @@ import aufmassRoutes from "./routes/aufmass";
 import importRoutes from "./routes/import";
 import gpsRoutes from "./routes/gps";
 import supportChatRoutes from "./routes/support.chat";
+import publicDemoRouter from "./routes/public.demo";
 
 /* ---- ROUTES (auth + core) ---- */
 import authRoutes from "./routes/auth.routes";
@@ -819,6 +820,9 @@ app.use("/api/global-knowledge", globalKnowledgeRouter);
 app.use("/api/import", importRoutes);
 app.use("/api/gps", gpsRoutes);
 app.use("/api/fotos", fotosRoutes);
+/* public website */
+app.use("/api/public/demo-anfrage", publicDemoRouter);
+
 /* auth */
 app.use("/api/auth", adminAuthRoutes);
 app.use("/api/auth", authRoutes);

@@ -63,6 +63,7 @@ export async function sendMailLogged(opts: {
   subject: string;
   text?: string;
   html?: string;
+  replyTo?: string;
 }) {
   if (DISABLE_EMAIL) {
     console.log("[mailer] DISABLE_EMAIL=1 -> send skipped", {
@@ -84,6 +85,7 @@ export async function sendMailLogged(opts: {
     subject: opts.subject,
     text: opts.text,
     html: opts.html,
+    replyTo: opts.replyTo,
   });
 
   console.log("[mailer] sendMail OK", {
