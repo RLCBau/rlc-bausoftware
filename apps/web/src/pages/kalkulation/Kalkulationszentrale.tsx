@@ -1324,6 +1324,16 @@ export default function Kalkulationszentrale() {
   (name) => /error|fehler/.test(name) && !/lasterror/.test(name), /(\d[\d.]*)\s+Fehler/i);
   const latest = events.slice(0, 12);
 
+  const newestMarketDate = events
+    .map((event: any) => {
+      const raw = eventDate(event);
+      const timestamp = raw ? new Date(String(raw)).getTime() : NaN;
+      return Number.isFinite(timestamp) ? timestamp : null;
+    })
+    .filter((timestamp: number | null): timestamp is number => timestamp !== null)
+    .reduce((max: number | null, timestamp: number) =>
+      max === null || timestamp > max ? timestamp : max, null);
+
   return <main className={rlcClass(null, S.page)}>
     <section className={rlcClass("rlc-page-hero", S.hero)}>
       <div className={rlcClass(null, S.heroMain)}>
@@ -1459,12 +1469,74 @@ export default function Kalkulationszentrale() {
         <Row label="Änderungen in 24 Stunden" value={observerChanges} />
         <Row label="Fehler" value={observerErrors} />
       </Panel>
-      <Panel title="Internetbeobachtung">
-        <Row label="Letzte Aktualisierung" value={dateText(value(marketStatus, ["finishedAt", "lastRunAt", "updatedAt", "lastUpdate"]))} />
-        <Row label="Überwachte Quellen" value={value(marketStatus, ["sourcesChecked", "sources", "sourceCount"], 0)} />
-        <Row label="Gespeicherte Informationen" value={value(marketDashboard, ["counters.events"], events.length)} />
-        <Row label="Abgelehnte Informationen" value={value(marketStatus, ["rejectedEntries", "rejected", "rejections"], rejections.length)} />
-        <Row label="Letzter Fehler" value={value(marketStatus, ["lastError", "error"], "Kein Fehler")} />
+      <Panel title="Internet- und Marktbeobachtung">
+        <Row label="Status" value={observerStatus(marketStatus)} />
+
+        <Row
+          label="Letzte Systemprüfung"
+          value={dateText(value(marketStatus, [
+            "finishedAt",
+            "status.finishedAt",
+            "lastRunAt",
+            "updatedAt",
+            "lastUpdate"
+          ]))}
+        />
+
+        <Row
+          label="Neueste Marktinformation"
+          value={newestMarketDate ? dateText(newestMarketDate) : "–"}
+        />
+
+        <Row
+          label="Nächste automatische Prüfung"
+          value={dateText(value(marketStatus, [
+            "nextRunAt",
+            "status.nextRunAt"
+          ], null))}
+        />
+
+        <Row
+          label="Quellen geprüft"
+          value={value(marketStatus, [
+            "sourcesChecked",
+            "status.sourcesChecked",
+            "sources",
+            "sourceCount"
+          ], 0)}
+        />
+
+        <Row
+          label="Einträge analysiert"
+          value={value(marketStatus, [
+            "entriesRead",
+            "status.entriesRead"
+          ], 0)}
+        />
+
+        <Row
+          label="Gespeicherte Marktinformationen"
+          value={value(marketDashboard, ["counters.events"], events.length)}
+        />
+
+        <Row
+          label="Automatisch verworfen"
+          value={value(marketStatus, [
+            "rejectedEntries",
+            "status.rejectedEntries",
+            "rejected",
+            "rejections"
+          ], rejections.length)}
+        />
+
+        <Row
+          label="Letzter Fehler"
+          value={value(marketStatus, [
+            "lastError",
+            "status.lastError",
+            "error"
+          ], "Kein Fehler")}
+        />
       </Panel>
     </section>
 
