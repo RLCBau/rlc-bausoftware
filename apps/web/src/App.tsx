@@ -610,6 +610,84 @@ function AppShell() {
           </Link>
 
           <SideNav />
+
+          <div
+            style={{
+              marginLeft: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              paddingRight: 14,
+            }}
+          >
+            <Link
+              to="/info/support"
+              style={{
+                textDecoration: "none",
+                padding: "8px 12px",
+                borderRadius: 9,
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                color: "#334155",
+                fontWeight: 800,
+                fontSize: 13,
+              }}
+            >
+              Feedback / Kontakt
+            </Link>
+
+            <Link
+              to="/login"
+              style={{
+                textDecoration: "none",
+                padding: "8px 12px",
+                borderRadius: 9,
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                color: "#334155",
+                fontWeight: 800,
+                fontSize: 13,
+              }}
+            >
+              Neu anmelden
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => {
+                const keys = [
+                  "rlc_token",
+                  "token",
+                  "authToken",
+                  "accessToken",
+                  "rlc.auth.token",
+                  "rlc_mobile_token",
+                  "rlc_auth",
+                  "rlc_user",
+                  "rlc_company",
+                ];
+
+                keys.forEach((key) => {
+                  localStorage.removeItem(key);
+                  sessionStorage.removeItem(key);
+                });
+
+                window.location.href = "/login";
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 9,
+                border: "1px solid #dc2626",
+                background: "#fff",
+                color: "#b91c1c",
+                fontWeight: 900,
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Abmelden
+            </button>
+          </div>
         </div>
 
         <div className="layout rlc-migrated-app-tsx-9">
