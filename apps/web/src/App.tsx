@@ -85,6 +85,7 @@ const MobileUebersicht = React.lazy(() => import("./pages/mobile/Uebersicht"));
 const MobilePruefung = React.lazy(() => import("./pages/mobile/Pruefung"));
 const MobileArbeitszeiten = React.lazy(() => import("./pages/mobile/Arbeitszeiten"));
 const MobileMitarbeiterEingaenge = React.lazy(() => import("./pages/mobile/MitarbeiterEingaenge"));
+const PlatformAdmin = React.lazy(() => import("./pages/admin/PlatformAdmin"));
 /* ------------------ INFO ------------------ */
 const Hilfe = React.lazy(() => import("./pages/info/hilfe"));
 const FAQ = React.lazy(() => import("./pages/info/faq"));
@@ -999,6 +1000,9 @@ function AppShell() {
               <Route path="/mobile/abschlagsrechnungen" element={<Navigate to="/mobile/pruefung/ABSCHLAGSRECHNUNG" replace />} />
               <Route path="/mobile/rechnungen" element={<Navigate to="/mobile/pruefung/RECHNUNG" replace />} />
               <Route path="/mobile/outlier-reports" element={<Navigate to="/kalkulation/versionsvergleich" replace />} />
+
+              {/* RLC PLATFORM ADMIN */}
+              <Route path="/platform/admin" element={<PlatformAdmin />} />
 
               {/* FALLBACKS */}
               <Route path="/KI" element={<Navigate to="/ki" replace />} />
