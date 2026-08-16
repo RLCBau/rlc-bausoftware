@@ -330,7 +330,7 @@ export default function Login() {
         "info@rlcbausoftware.com";
 
       nav(
-        isPlatformAdmin ? "/platform/admin" : redirectTo,
+        isPlatformAdmin ? "/portal" : redirectTo,
         { replace: true }
       );
     } catch (err: any) {

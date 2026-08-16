@@ -1002,7 +1002,8 @@ function AppShell() {
               <Route path="/mobile/outlier-reports" element={<Navigate to="/kalkulation/versionsvergleich" replace />} />
 
               {/* RLC PLATFORM ADMIN */}
-              <Route path="/platform/admin" element={<PlatformAdmin />} />
+              <Route path="/portal" element={<PlatformAdmin />} />
+              <Route path="/platform/admin" element={<Navigate to="/portal" replace />} />
 
               {/* FALLBACKS */}
               <Route path="/KI" element={<Navigate to="/ki" replace />} />
