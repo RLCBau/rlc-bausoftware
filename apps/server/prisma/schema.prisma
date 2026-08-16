@@ -34,6 +34,7 @@ model Company {
   invites        CompanyInvite[]
   members        CompanyMember[]
   mobileLicenses MobileLicense[]
+  submissions    ProjectSubmission[]
 }
 
 model VorlageTemplate {
@@ -190,6 +191,7 @@ model CompanySubscription {
   // nuove licenze esplicite per RLC
   webSeatsPurchased    Int @default(0)
   mobileSeatsPurchased Int @default(0)
+  cloudEnabled         Boolean @default(false)
 
   currentPeriodStart         DateTime  @default(now())
   currentPeriodEnd           DateTime?
@@ -235,6 +237,7 @@ model User {
   activities     ActivityLog[]
   projectMembers ProjectMember[]
   companyMembers CompanyMember[]
+  submissions    ProjectSubmission[]
 
   company        Company? @relation(fields: [companyId], references: [id])
   currentProject Project? @relation("UserCurrentProject", fields: [currentProjectId], references: [id])
@@ -277,6 +280,7 @@ model Project {
   currentUsers       User[]                @relation("UserCurrentProject")
   workflowDocs       WorkflowDoc[]
   aufmassOrte       AufmassOrt[]
+  submissions        ProjectSubmission[]
 
   @@unique([code, companyId])
 }
@@ -632,6 +636,31 @@ model LedgerEntry {
   @@index([accountingId, date, account])
 }
 
+model ProjectSubmission {
+  id        String           @id @default(uuid())
+  companyId String
+  projectId String
+  userId    String?
+
+  source   SubmissionSource
+  kind     String
+  entityId String?
+  title    String?
+  meta     Json?
+
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, projectId, createdAt])
+  @@index([companyId, projectId, userId, createdAt])
+  @@index([projectId, source, createdAt])
+  @@index([userId, createdAt])
+  @@index([kind])
+}
+
 model ActivityLog {
   id        String   @id @default(uuid())
   companyId String
@@ -766,6 +795,13 @@ model WorkflowDocLink {
 
   @@index([workflowDocId])
   @@index([documentId])
+}
+
+enum SubmissionSource {
+  MOBILE
+  WEB
+  CLOUD
+  SYSTEM
 }
 
 enum UserRole {
