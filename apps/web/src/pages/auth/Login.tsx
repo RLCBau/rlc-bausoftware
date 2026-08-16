@@ -324,7 +324,15 @@ export default function Login() {
       }
 
       setAuth(data.token, data.user, data.company ?? null);
-      nav(redirectTo, { replace: true });
+
+      const isPlatformAdmin =
+        String(data.user?.email || "").trim().toLowerCase() ===
+        "info@rlcbausoftware.com";
+
+      nav(
+        isPlatformAdmin ? "/platform/admin" : redirectTo,
+        { replace: true }
+      );
     } catch (err: any) {
       setError(err?.message || "Login fehlgeschlagen.");
     } finally {
