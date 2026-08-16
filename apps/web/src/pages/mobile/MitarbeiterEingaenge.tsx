@@ -62,6 +62,7 @@ export default function MitarbeiterEingaenge() {
   const [rows, setRows] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const [selectedEmployee, setSelectedEmployee] = React.useState("ALL");
   const [error, setError] = React.useState("");
 
   const load = React.useCallback(async () => {
@@ -127,18 +128,80 @@ export default function MitarbeiterEingaenge() {
 
   React.useEffect(() => { void load(); }, [load]);
 
+  const employeeOptions = React.useMemo(() => {
+    const map = new Map<string, { key: string; label: string }>();
+
+    rows.forEach((row) => {
+      const employee = resolveMobileEmployee(row);
+
+      if (!map.has(employee.key)) {
+        map.set(employee.key, {
+          key: employee.key,
+          label: employee.label,
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, "de")
+    );
+  }, [rows]);
+
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("de-DE");
-    if (!needle) return rows;
+
     return rows.filter((row) => {
       const employee = resolveMobileEmployee(row);
+
+      if (
+        selectedEmployee !== "ALL" &&
+        employee.key !== selectedEmployee
+      ) {
+        return false;
+      }
+
+      if (!needle) return true;
+
       return `${employee.label} ${employee.employeeId} ${row?.title || ""} ${row?.id || ""}`
         .toLocaleLowerCase("de-DE")
         .includes(needle);
     });
-  }, [rows, query]);
+  }, [rows, query, selectedEmployee]);
 
-  const groups = React.useMemo(() => groupByMobileEmployee(filtered), [filtered]);
+  const groups = React.useMemo(
+    () => groupByMobileEmployee(filtered),
+    [filtered]
+  );
+
+  function documentUrl(row: any) {
+    const source = row?.__source;
+    const docId = String(row?.entityId || row?.id || "").trim();
+
+    if (!source || !docId) return "/mobile";
+
+    const params =
+      `projectId=${encodeURIComponent(projectKey)}` +
+      `&docId=${encodeURIComponent(docId)}` +
+      `&stage=inbox&source=mobile`;
+
+    if (source.key === "REGIE") {
+      return `/buro/regieberichte?${params}`;
+    }
+
+    if (source.key === "TAGESBERICHT") {
+      return `/buro/tagesberichte?${params}`;
+    }
+
+    if (source.key === "BAUTAGEBUCH") {
+      return `/buro/bautagebuch?${params}`;
+    }
+
+    if (source.key === "FOTOS") {
+      return `/buro/fotos?${params}`;
+    }
+
+    return `${source.to}?${params}`;
+  }
 
   return (
     <div style={{ display: "grid", gap: 16, paddingBottom: 28 }}>
@@ -149,6 +212,25 @@ export default function MitarbeiterEingaenge() {
       </section>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <select
+          value={selectedEmployee}
+          onChange={(e) => setSelectedEmployee(e.target.value)}
+          style={{
+            minWidth: 250,
+            border: "1px solid #cbd5e1",
+            borderRadius: 11,
+            padding: "10px 12px",
+            background: "white",
+          }}
+        >
+          <option value="ALL">Alle Mitarbeiter</option>
+          {employeeOptions.map((employee) => (
+            <option key={employee.key} value={employee.key}>
+              {employee.label}
+            </option>
+          ))}
+        </select>
+
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Mitarbeiter, Personalnummer oder Dokument suchen…" style={{ flex: "1 1 320px", border: "1px solid #cbd5e1", borderRadius: 11, padding: "10px 12px" }} />
         <button onClick={() => void load()} disabled={loading || !projectKey} style={{ border: "1px solid #cbd5e1", borderRadius: 11, padding: "10px 14px", background: "white", fontWeight: 900 }}>{loading ? "Lädt…" : "Aktualisieren"}</button>
       </div>
@@ -168,10 +250,31 @@ export default function MitarbeiterEingaenge() {
               <div style={{ fontWeight: 950 }}>{employeeRows.length} Eingänge</div>
             </header>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10, padding: 14 }}>
-              {SOURCES.filter((source) => (counts.get(source.key) || 0) > 0).map((source) => (
-                <Link key={source.key} to={source.to} style={{ textDecoration: "none", color: "inherit", border: "1px solid #e2e8f0", borderRadius: 12, padding: 12 }}>
-                  <div style={{ color: "#64748b", fontSize: 12, fontWeight: 800 }}>{source.title}</div>
-                  <div style={{ marginTop: 4, fontSize: 22, fontWeight: 950 }}>{counts.get(source.key)}</div>
+              {employeeRows.map((row) => (
+                <Link
+                  key={`${row.__source.key}-${row.id}`}
+                  to={documentUrl(row)}
+                  style={{
+                    textDecoration: "none",
+                    color: "inherit",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 12,
+                    padding: 12,
+                  }}
+                >
+                  <div style={{ color: "#64748b", fontSize: 12, fontWeight: 800 }}>
+                    {row.__source.title}
+                  </div>
+
+                  <div style={{ marginTop: 4, fontSize: 15, fontWeight: 950 }}>
+                    {row.title || row.__source.title}
+                  </div>
+
+                  <div style={{ marginTop: 5, fontSize: 12, color: "#64748b" }}>
+                    {row.createdAt
+                      ? new Date(row.createdAt).toLocaleString("de-DE")
+                      : ""}
+                  </div>
                 </Link>
               ))}
             </div>
