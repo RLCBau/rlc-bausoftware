@@ -235,7 +235,10 @@ app.use(
 );
 
 /* ----------------------- CORS ----------------------- */
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN?.trim();
+const FRONTEND_ORIGINS = String(process.env.FRONTEND_ORIGIN || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const ORIGIN_RE = [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/];
 
 app.use(
@@ -245,7 +248,7 @@ app.use(
       cb: (err: Error | null, allow?: boolean) => void
     ) => {
       if (!origin) return cb(null, true);
-      if (FRONTEND_ORIGIN && origin === FRONTEND_ORIGIN) return cb(null, true);
+      if (FRONTEND_ORIGINS.includes(origin)) return cb(null, true);
       if (ORIGIN_RE.some((r) => r.test(origin))) return cb(null, true);
       return cb(null, false);
     },
@@ -1404,8 +1407,8 @@ app.use(
     app.listen(PORT, () => {
       console.log(`[RLC-API] listening on http://localhost:${PORT}`);
       console.log(`ðŸ“ Projects root: ${PROJECTS_ROOT} (static: /projects)`);
-      if (FRONTEND_ORIGIN)
-        console.log(`ðŸŒ FRONTEND_ORIGIN allowed: ${FRONTEND_ORIGIN}`);
+      if (FRONTEND_ORIGINS.length)
+        console.log(`ðŸŒ FRONTEND_ORIGIN allowed: ${FRONTEND_ORIGINS.join(", ")}`);
       if (DEBUG_MEMORY) console.log(`ðŸ§  DEBUG_MEMORY=on (mem logging enabled)`);
     });
   } catch (e) {
