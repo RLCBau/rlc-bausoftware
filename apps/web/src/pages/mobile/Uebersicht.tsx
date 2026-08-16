@@ -522,6 +522,17 @@ export default function MobileUebersicht() {
             
             {loading ? "Server wird geprüft…" : "Aktualisieren"}
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/mobile/arbeitszeiten/mitarbeiter";
+            }}
+            disabled={!projectKey}
+            className={rlcClass(null, refreshButtonStyle)}
+          >
+            Eingänge nach Mitarbeiter
+          </button>
         </div>
       </section>
 

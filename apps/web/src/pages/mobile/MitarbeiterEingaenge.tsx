@@ -66,15 +66,58 @@ export default function MitarbeiterEingaenge() {
 
   const load = React.useCallback(async () => {
     if (!projectKey) return setRows([]);
+
     setLoading(true);
     setError("");
+
     try {
-      const result = await Promise.all(
-        SOURCES.map(async (source) =>
-          (await loadFirst(projectKey, source.endpoints)).map((doc) => ({ ...doc, __source: source }))
-        )
+      const response = await fetch(
+        apiUrl(`/api/company/projects/${encodeURIComponent(projectKey)}/submissions`),
+        {
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            ...authHeaders(),
+          },
+        }
       );
-      setRows(result.flat());
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || `HTTP ${response.status}`);
+      }
+
+      const submissions = Array.isArray(payload?.submissions)
+        ? payload.submissions
+        : [];
+
+      setRows(
+        submissions.map((row: any) => {
+          const sourceConfig =
+            SOURCES.find(
+              (source) =>
+                source.key === String(row.kind || "").toUpperCase()
+            ) || {
+              key: String(row.kind || "UNKNOWN").toUpperCase(),
+              title: String(row.kind || "Dokument"),
+              to: "/mobile",
+              endpoints: [],
+            };
+
+          return {
+            ...row,
+            id: row.entityId || row.id,
+            employeeId: row.userId,
+            employeeName: row.name,
+            name: row.name,
+            email: row.email,
+            date: row.createdAt,
+            title: row.title || sourceConfig.title,
+            __source: sourceConfig,
+          };
+        })
+      );
     } catch (err: any) {
       setError(err?.message || "Eingänge konnten nicht geladen werden.");
     } finally {
