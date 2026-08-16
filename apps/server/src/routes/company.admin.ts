@@ -479,4 +479,161 @@ r.patch(
   }
 );
 
+
+/**
+ * GET /api/company/projects/:projectId/submissions
+ * Optional: ?userId=...
+ *
+ * Restituisce tutti gli invii del progetto per la ditta loggata.
+ */
+r.get(
+  "/projects/:projectId/submissions",
+  requireAuth,
+  requireVerifiedEmail,
+  requireCompany,
+  requireCompanyAdmin,
+  async (req: any, res) => {
+    try {
+      const companyId = String(req.auth.companyId || "").trim();
+      const projectToken = String(req.params.projectId || "").trim();
+      const userId = String(req.query?.userId || "").trim();
+
+      if (!companyId || !projectToken) {
+        return res.status(400).json({
+          ok: false,
+          error: "bad params",
+        });
+      }
+
+      const project = await prisma.project.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { id: projectToken },
+            { code: projectToken },
+          ],
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+        },
+      });
+
+      if (!project) {
+        return res.status(404).json({
+          ok: false,
+          error: "project not found",
+        });
+      }
+
+      if (userId) {
+        const member = await prisma.companyMember.findFirst({
+          where: {
+            companyId,
+            userId,
+            active: true,
+          },
+          select: {
+            userId: true,
+          },
+        });
+
+        if (!member) {
+          return res.status(404).json({
+            ok: false,
+            error: "member not found",
+          });
+        }
+      }
+
+      const rows = await prisma.projectSubmission.findMany({
+        where: {
+          companyId,
+          projectId: project.id,
+          ...(userId ? { userId } : {}),
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 2000,
+        select: {
+          id: true,
+          source: true,
+          kind: true,
+          entityId: true,
+          title: true,
+          meta: true,
+          createdAt: true,
+          userId: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      const members = await prisma.companyMember.findMany({
+        where: {
+          companyId,
+          active: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+        select: {
+          role: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      });
+
+      return res.json({
+        ok: true,
+        project,
+        selectedUserId: userId || null,
+        members: members.map((m: any) => ({
+          userId: m.user.id,
+          name: m.user.name,
+          email: m.user.email,
+          appRole: m.user.role,
+          companyRole: m.role,
+        })),
+        submissions: rows.map((row: any) => ({
+          id: row.id,
+          userId: row.userId,
+          name: row.user?.name || null,
+          email: row.user?.email || null,
+          appRole: row.user?.role || null,
+          source: row.source,
+          kind: row.kind,
+          entityId: row.entityId,
+          title: row.title,
+          meta: row.meta,
+          createdAt: row.createdAt.toISOString(),
+        })),
+      });
+    } catch (e: any) {
+      console.error(
+        "GET /api/company/projects/:projectId/submissions failed:",
+        e
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error: e?.message || "failed",
+      });
+    }
+  }
+);
 export default r;
