@@ -8,6 +8,7 @@ import mime from "mime-types";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { recordProjectSubmission } from "../lib/projectSubmission";
 import { recognizeFromFiles } from "../services/photoRecognition";
 import { parseLieferschein } from "../services/lieferscheinParser";
 import { matchLVPositions } from "../services/lvMatching";
@@ -935,6 +936,18 @@ router.post(
       const out = path.join(dir, `${docId}.json`);
       writeJson(out, payload);
       console.log("[regie submit] out =", out, "exists =", fs.existsSync(out));
+      await recordProjectSubmission(req, {
+        projectToken: dbId ?? body.projectId,
+        source: "MOBILE",
+        kind: "REGIE",
+        entityId: docId,
+        title: `Regiebericht ${payload.date}`,
+        meta: {
+          projectCode: payload.projectCode,
+          reportType: payload.reportType,
+          workflowStatus: payload.workflowStatus,
+        },
+      });
 
       return res.json({ ok: true, fsKey, docId, inboxPath: out });
     } catch (e: any) {

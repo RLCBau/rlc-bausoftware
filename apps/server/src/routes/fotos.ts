@@ -5,6 +5,7 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { recordProjectSubmission } from "../lib/projectSubmission";
 import { createFotoDokumentationPdf } from "../services/pdf/fotoDokumentationPdf";
 import { loadRlcPdfCompanyFromRequest } from "../services/pdf/pdfCompanyContext";
 
@@ -633,7 +634,7 @@ router.post(
  */
 
 // SUBMIT -> crea voce INBOX e ritorna docId
-router.post("/inbox/submit", express.json(), (req, res) => {
+router.post("/inbox/submit", express.json(), async (req, res) => {
   const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
   if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
 
@@ -677,6 +678,17 @@ router.post("/inbox/submit", express.json(), (req, res) => {
   const next = [entry, ...list.filter((x: any) => String(x?.id) !== String(docId))];
   writeInboxNotes(projectId, next);
 
+  await recordProjectSubmission(req, {
+    projectToken: projectId,
+    source: "MOBILE",
+    kind: "FOTO",
+    entityId: docId,
+    title: String(entry?.title || entry?.note || entry?.text || "Fotos / Notizen"),
+    meta: {
+      projectCode: projectId,
+      workflowStatus: entry?.workflowStatus || entry?.status || "EINGEREICHT",
+    },
+  });
   return res.json({ ok: true, projectId, docId });
 });
 

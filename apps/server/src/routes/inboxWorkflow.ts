@@ -5,6 +5,7 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { recordProjectSubmission } from "../lib/projectSubmission";
 
 const router = Router();
 
@@ -439,7 +440,7 @@ router.get("/:projectKey/workflow", (req, res) => {
   });
 });
 
-router.post("/:projectKey/:type/submit", (req, res, next) => {
+router.post("/:projectKey/:type/submit", async (req, res, next) => {
   try {
     const { projectKey, type } = resolveParams(req);
     if (!type) return next();
@@ -478,6 +479,18 @@ router.post("/:projectKey/:type/submit", (req, res, next) => {
       updatedAt: now,
     });
 
+    await recordProjectSubmission(req, {
+      projectToken: projectKey,
+      source: "MOBILE",
+      kind: type,
+      entityId: id,
+      title: String(document?.title || document?.name || type),
+      meta: {
+        projectCode: projectKey,
+        workflowStatus: document.workflowStatus,
+        docType: type,
+      },
+    });
     return res.json({ ok: true, projectKey, type, id, document });
   } catch (error: any) {
     return res.status(500).json({

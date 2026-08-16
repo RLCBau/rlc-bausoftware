@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { z } from "zod";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { recordProjectSubmission } from "../lib/projectSubmission";
 import { createTagesberichtPdf } from "../services/pdf/tagesberichtPdf";
 import { createBautagebuchPdf } from "../services/pdf/bautagebuchPdf";
 import { loadRlcPdfCompanyFromRequest } from "../services/pdf/pdfCompanyContext";
@@ -170,6 +171,18 @@ router.post(
         submittedAt: Date.now(),
       };
       writeJson(path.join(dir, `${safeName(id)}.json`), payload);
+      await recordProjectSubmission(req, {
+        projectToken: body.projectId,
+        source: "MOBILE",
+        kind: "TAGESBERICHT",
+        entityId: id,
+        title: `Tagesbericht ${String(body.date || "").slice(0, 10)}`,
+        meta: {
+          projectCode: body.projectCode || fsKey,
+          reportType: payload.reportType,
+          workflowStatus: payload.workflowStatus,
+        },
+      });
       return res.json({ ok: true, id, snapshot: payload });
     } catch (e: any) {
       console.error("tagesbericht submit failed:", e);
