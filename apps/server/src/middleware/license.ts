@@ -1,4 +1,4 @@
-// apps/server/src/middleware/license.ts
+﻿// apps/server/src/middleware/license.ts
 import type { Response, NextFunction } from "express";
 import {
   hasActiveServerLicense,
@@ -28,10 +28,10 @@ function isRlcLocalDevReadOnlyBypass(req: any): boolean {
 // RLC_DEV_LICENSE_LOCALHOST_BYPASS_V3
 
 /**
- * Blocca le funzioni SERVER_SYNC finché non c'è una licenza attiva.
+ * Blocca le funzioni SERVER_SYNC finchÃ© non c'Ã¨ una licenza attiva.
  * Bypass:
  * - DEV_AUTH=on
- * - ADMIN_BYPASS_EMAILS (es. rlcvermessung@gmail.com)
+ * - ADMIN_BYPASS_EMAILS (es. info@rlcbausoftware.com)
  */
 export function requireServerLicense() {
   return (req: any, res: Response, next: NextFunction) => {
@@ -39,12 +39,12 @@ export function requireServerLicense() {
         req.license = { mode: "LOCAL_DEV", tier: "DEV", email: "dev@rlc.local" } as any;
         return next();
       }
-    // 🔓 DEV bypass totale
+    // ðŸ”“ DEV bypass totale
     if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
 
     const mode = String(req?.user?.mode || "NUR_APP") as Mode;
 
-    // 👉 NUR_APP non richiede licenza
+    // ðŸ‘‰ NUR_APP non richiede licenza
     if (mode !== "SERVER_SYNC") return next();
 
     const email = String(req?.user?.email || "").trim().toLowerCase();
@@ -55,7 +55,7 @@ export function requireServerLicense() {
       });
     }
 
-    // 🔓 Admin bypass (tu sempre sbloccato)
+    // ðŸ”“ Admin bypass (tu sempre sbloccato)
     if (isAdminBypassEmail(email)) return next();
 
     const lic = hasActiveServerLicense(email);
@@ -79,3 +79,4 @@ export function requireServerLicense() {
     return next();
   };
 }
+

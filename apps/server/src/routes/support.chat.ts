@@ -7,6 +7,7 @@ import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import { requireCompany, requireActiveSubscription } from "../middleware/guards";
 import { requireServerLicense } from "../middleware/license";
 import { completeRlcAiText } from "../services/ai/rlcAiGateway";
+import { formatSoftwareIntelligenceContext } from "../software-intelligence/repositoryKnowledge";
 
 const r = Router();
 const prisma = new PrismaClient();
@@ -440,6 +441,31 @@ async function aiFallbackAnswer(input: z.infer<typeof ChatSchema>) {
   }
 
   systemSections.push(`SERVER-PROJEKT-LV-KONTEXT:\n${projectLvContextText}`);
+
+  const repositoryPlatform =
+    String(ctx.source || "").toLowerCase().includes("mobile")
+      ? ("MOBILE" as const)
+      : null;
+
+  const repositoryContext = formatSoftwareIntelligenceContext(
+    normalize(input.originalMessage || input.message),
+    {
+      platform: repositoryPlatform,
+      currentPath: normalize(
+        ctx.pathname ||
+        ctx.path ||
+        ctx.page ||
+        ""
+      ),
+      screen: normalize(ctx.screen || ""),
+      limit: 8,
+    }
+  );
+
+  systemSections.push(
+    `RLC-REPOSITORY-SOFTWARE-INTELLIGENCE:
+${repositoryContext}`
+  );
 
   const optionalContext: Array<[string, unknown]> = [
     ["RLC-SOFTWARE-KNOWLEDGE", ctx.softwareKnowledge],
