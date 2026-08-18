@@ -22,7 +22,7 @@ function apiUrl(path: string): string {
 }
 
 const shell: React.CSSProperties = {
-  maxWidth: 980,
+  maxWidth: 860,
   margin: "0 auto",
   padding: "12px 16px 40px",
   fontFamily: "Inter,system-ui,Arial",
@@ -45,7 +45,7 @@ const chatWrap: React.CSSProperties = {
 };
 
 const messagesBox: React.CSSProperties = {
-  height: 460,
+  height: 320,
   overflowY: "auto",
   padding: 14,
   background: "#f8fafc"
@@ -75,7 +75,7 @@ const composer: React.CSSProperties = {
 
 const textareaStyle: React.CSSProperties = {
   width: "100%",
-  minHeight: 110,
+  minHeight: 78,
   resize: "vertical",
   border: "1px solid #cbd5e1",
   borderRadius: 10,
@@ -360,13 +360,44 @@ export default function Support() {
   return (
     <div className={rlcClass(null, shell)}>
       <div className={rlcClass(null, headerCard)}>
-        <h2 className="rlc-migrated-pages-info-support-tsx-817">Support / Chat</h2>
-        <div className="rlc-migrated-pages-info-support-tsx-818">
-          Intelligenter Support direkt im Web, ähnlich wie in der Mobile-App.
-          Der Chat sendet an <code>/api/support/chat</code>.
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap"
+          }}
+        >
+          <div>
+            <h2 style={{ margin: "0 0 5px" }}>Support / Kontakt</h2>
+            <div style={{ color: "#64748b", fontSize: 13 }}>
+              Fragen, technische Probleme oder Verbesserungsvorschläge direkt an den RLC Support senden.
+            </div>
+          </div>
+
+          <a
+            href="mailto:info@rlcbausoftware.com?subject=RLC%20Bausoftware%20%E2%80%93%20Supportanfrage"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "9px 13px",
+              borderRadius: 9,
+              background: "#2563eb",
+              color: "#ffffff",
+              textDecoration: "none",
+              fontWeight: 800,
+              fontSize: 13,
+              whiteSpace: "nowrap"
+            }}
+          >
+            Support per E-Mail kontaktieren
+          </a>
         </div>
-        <div className={rlcClass(null, smallInfo)}>
-          API: <b>{API_BASE || "relative /api"}</b>
+
+        <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
+          E-Mail: <b>info@rlcbausoftware.com</b>
         </div>
       </div>
 

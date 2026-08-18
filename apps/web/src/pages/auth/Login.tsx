@@ -272,6 +272,7 @@ export default function Login() {
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [name, setName] = React.useState("");
   const [inviteCode, setInviteCode] = React.useState("");
 
@@ -565,13 +566,30 @@ export default function Login() {
             <label className={rlcClass(null, label)}>Passwort</label>
             <input className={rlcClass(null,
             input)}
-            type="password"
+            type={showPassword ? "text" : "password"}
             autoComplete={
             mode === "login" ? "current-password" : "new-password"
             }
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Passwort" />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              style={{
+                marginTop: 7,
+                border: 0,
+                background: "transparent",
+                padding: 0,
+                color: "#2563eb",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: 12,
+              }}
+            >
+              {showPassword ? "Passwort ausblenden" : "Passwort anzeigen"}
+            </button>
             
           </div>
 
