@@ -229,6 +229,18 @@ export default function Support() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState("");
+  const [mailOpen, setMailOpen] = useState(false);
+  const [mailSending, setMailSending] = useState(false);
+  const [mailStatus, setMailStatus] = useState("");
+  const [mailForm, setMailForm] = useState({
+    name: "",
+    firma: "",
+    email: "",
+    telefon: "",
+    kategorie: "Support",
+    betreff: "RLC Bausoftware – Supportanfrage",
+    nachricht: ""
+  });
   const boxRef = useRef<HTMLDivElement | null>(null);
 
   function persist(next: ChatMsg[]) {
@@ -344,6 +356,70 @@ export default function Support() {
     }
   }
 
+  async function sendSupportMail() {
+    if (!mailForm.nachricht.trim()) {
+      setMailStatus("Bitte eine Nachricht eingeben.");
+      return;
+    }
+
+    setMailSending(true);
+    setMailStatus("Nachricht wird gesendet...");
+
+    try {
+      const token = getAuthToken();
+
+      const textBody = [
+        `Name: ${mailForm.name || "—"}`,
+        `Firma: ${mailForm.firma || "—"}`,
+        `E-Mail: ${mailForm.email || "—"}`,
+        `Telefon: ${mailForm.telefon || "—"}`,
+        `Kategorie: ${mailForm.kategorie}`,
+        "",
+        mailForm.nachricht
+      ].join("\n");
+
+      const htmlBody = `
+        <h2>RLC Bausoftware – Supportanfrage</h2>
+        <p><b>Name:</b> ${mailForm.name || "—"}</p>
+        <p><b>Firma:</b> ${mailForm.firma || "—"}</p>
+        <p><b>E-Mail:</b> ${mailForm.email || "—"}</p>
+        <p><b>Telefon:</b> ${mailForm.telefon || "—"}</p>
+        <p><b>Kategorie:</b> ${mailForm.kategorie}</p>
+        <hr/>
+        <p>${mailForm.nachricht.replace(/\n/g, "<br/>")}</p>
+      `;
+
+      const res = await fetch(apiUrl("/api/mail/send"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          to: "info@rlcbausoftware.com",
+          subject: mailForm.betreff,
+          text: textBody,
+          html: htmlBody
+        })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+
+      setMailStatus("Nachricht erfolgreich gesendet.");
+      setMailForm((prev) => ({
+        ...prev,
+        nachricht: ""
+      }));
+    } catch (e: any) {
+      setMailStatus(e?.message || "Nachricht konnte nicht gesendet werden.");
+    } finally {
+      setMailSending(false);
+    }
+  }
   function clearChat() {
     const next: ChatMsg[] = [
     {
@@ -376,24 +452,25 @@ export default function Support() {
             </div>
           </div>
 
-          <a
-            href="mailto:info@rlcbausoftware.com?subject=RLC%20Bausoftware%20%E2%80%93%20Supportanfrage"
+          <button
+            type="button"
+            onClick={() => setMailOpen(true)}
             style={{
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
               padding: "9px 13px",
               borderRadius: 9,
+              border: "1px solid #2563eb",
               background: "#2563eb",
               color: "#ffffff",
-              textDecoration: "none",
               fontWeight: 800,
               fontSize: 13,
-              whiteSpace: "nowrap"
+              cursor: "pointer"
             }}
           >
             Support per E-Mail kontaktieren
-          </a>
+          </button>
         </div>
 
         <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
@@ -473,6 +550,147 @@ export default function Support() {
           <div className={rlcClass(null, smallInfo)}>{status || "Bereit."}</div>
         </div>
       </div>
+      {mailOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 20
+          }}
+        >
+          <div
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              background: "#ffffff",
+              borderRadius: 16,
+              padding: 20,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.25)"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>Support per E-Mail kontaktieren</h2>
+                <div style={{ marginTop: 4, color: "#64748b", fontSize: 13 }}>
+                  Empfänger: <b>info@rlcbausoftware.com</b>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={secondaryBtn}
+                onClick={() => setMailOpen(false)}
+              >
+                Schließen
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2,minmax(0,1fr))",
+                gap: 12,
+                marginTop: 18
+              }}
+            >
+              <input
+                style={{ ...textareaStyle, minHeight: 44 }}
+                placeholder="Name"
+                value={mailForm.name}
+                onChange={(e) =>
+                  setMailForm((p) => ({ ...p, name: e.target.value }))
+                }
+              />
+
+              <input
+                style={{ ...textareaStyle, minHeight: 44 }}
+                placeholder="Firma"
+                value={mailForm.firma}
+                onChange={(e) =>
+                  setMailForm((p) => ({ ...p, firma: e.target.value }))
+                }
+              />
+
+              <input
+                style={{ ...textareaStyle, minHeight: 44 }}
+                placeholder="Ihre E-Mail"
+                value={mailForm.email}
+                onChange={(e) =>
+                  setMailForm((p) => ({ ...p, email: e.target.value }))
+                }
+              />
+
+              <input
+                style={{ ...textareaStyle, minHeight: 44 }}
+                placeholder="Telefon"
+                value={mailForm.telefon}
+                onChange={(e) =>
+                  setMailForm((p) => ({ ...p, telefon: e.target.value }))
+                }
+              />
+
+              <select
+                style={{ ...textareaStyle, minHeight: 44 }}
+                value={mailForm.kategorie}
+                onChange={(e) =>
+                  setMailForm((p) => ({ ...p, kategorie: e.target.value }))
+                }
+              >
+                <option>Support</option>
+                <option>Technisches Problem</option>
+                <option>Verbesserungsvorschlag</option>
+                <option>Lizenz</option>
+                <option>Sonstiges</option>
+              </select>
+
+              <input
+                style={{ ...textareaStyle, minHeight: 44 }}
+                value={mailForm.betreff}
+                onChange={(e) =>
+                  setMailForm((p) => ({ ...p, betreff: e.target.value }))
+                }
+              />
+            </div>
+
+            <textarea
+              style={{ ...textareaStyle, minHeight: 140, marginTop: 12 }}
+              placeholder="Nachricht"
+              value={mailForm.nachricht}
+              onChange={(e) =>
+                setMailForm((p) => ({ ...p, nachricht: e.target.value }))
+              }
+            />
+
+            <div style={btnRow}>
+              <button
+                type="button"
+                style={primaryBtn}
+                disabled={mailSending}
+                onClick={() => void sendSupportMail()}
+              >
+                {mailSending ? "Wird gesendet..." : "Nachricht senden"}
+              </button>
+
+              <button
+                type="button"
+                style={secondaryBtn}
+                onClick={() => setMailOpen(false)}
+              >
+                Abbrechen
+              </button>
+            </div>
+
+            <div style={smallInfo}>{mailStatus}</div>
+          </div>
+        </div>
+      ) : null}
+
     </div>);
 
 }
