@@ -1,5 +1,6 @@
 import { rlcClass } from "../../ui/rlcRuntimeStyle";import { API_BASE } from "../../lib/apiBase";
 import React, { useMemo, useRef, useState } from "react";
+import { buildRlcKnowledgeContext } from "../../copilot/RlcSoftwareKnowledge";
 
 type ChatMsg = {
   id: string;
@@ -289,6 +290,10 @@ export default function Support() {
           })),
           context: {
             source: "web-info-support",
+            softwareKnowledge: buildRlcKnowledgeContext(
+              value,
+              window.location.pathname
+            ),
             projectId: project?.id ?? null,
             projectCode: project?.code ?? null,
             projectName: project?.name ?? null,

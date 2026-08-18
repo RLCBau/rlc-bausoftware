@@ -249,6 +249,182 @@ export const RLC_SOFTWARE_KNOWLEDGE: RlcKnowledgeEntry[] = [
     keywords: ["ki", "auto lv", "fotoerkennung", "sprachsteuerung", "widersprüche", "optimierung", "mängel"]
   },
   {
+    id: "platform-admin",
+    module: "RLC Plattform",
+    title: "Super-Admin / Plattformverwaltung",
+    route: "/portal",
+    purpose: "Zentrale Verwaltung aller Firmen, Abonnements, Web- und Mobile-Lizenzen, Cloud-Freischaltungen, Benutzer und Projekte.",
+    workflows: [
+      "Als RLC Plattform-Administrator anmelden",
+      "RLC Portal öffnen",
+      "Firma aus der Firmenübersicht auswählen",
+      "Firmendaten und Abonnement verwalten",
+      "Web- und Mobile-Codes erzeugen"
+    ],
+    actions: [
+      "Firma auswählen",
+      "Firma verwalten",
+      "Abonnement ändern",
+      "Cloud aktivieren",
+      "Web-Code erstellen",
+      "Mobile-Code erstellen"
+    ],
+    related: ["/login"],
+    keywords: [
+      "portal",
+      "super admin",
+      "superadmin",
+      "plattform",
+      "firmenverwaltung",
+      "lizenzverwaltung",
+      "lizenzen"
+    ]
+  },
+  {
+    id: "company-management",
+    module: "RLC Plattform",
+    title: "Firmenverwaltung",
+    route: "/portal",
+    purpose: "Firmendaten, Firmencode, Adresse, E-Mail, Telefon, Benutzer, Projekte und gebuchte Leistungen zentral verwalten.",
+    workflows: [
+      "Firma auswählen",
+      "Firmendaten anzeigen oder ändern",
+      "Benutzer und Projekte prüfen",
+      "Lizenzumfang verwalten"
+    ],
+    actions: [
+      "Firma anlegen",
+      "Firmendaten speichern",
+      "Benutzer anzeigen",
+      "Projekte anzeigen"
+    ],
+    related: ["/portal"],
+    keywords: [
+      "firma",
+      "firmen",
+      "firmenübersicht",
+      "firmenverwaltung",
+      "firmencode",
+      "unternehmen"
+    ]
+  },
+  {
+    id: "web-licenses",
+    module: "RLC Plattform",
+    title: "Web-Lizenzen und Web-Freischaltcodes",
+    route: "/portal",
+    purpose: "Web-Arbeitsplätze einer Firma verwalten und Einladungscodes beziehungsweise Freischaltcodes für Web-Benutzer erzeugen.",
+    workflows: [
+      "Firma auswählen",
+      "Web-Lizenzanzahl festlegen",
+      "Rolle und optional E-Mail zuordnen",
+      "Web-Code erzeugen",
+      "Code verwalten"
+    ],
+    actions: [
+      "Web-Lizenzanzahl ändern",
+      "Web-Code erstellen",
+      "Web-Code sperren",
+      "Web-Code freigeben"
+    ],
+    related: ["/portal", "/login"],
+    keywords: [
+      "web lizenz",
+      "web lizenzen",
+      "web code",
+      "freischaltcode",
+      "einladungscode",
+      "lizenzcode",
+      "web seats"
+    ]
+  },
+  {
+    id: "mobile-licenses",
+    module: "RLC Plattform",
+    title: "Mobile-Lizenzen und Mobile-Codes",
+    route: "/portal",
+    purpose: "Mobile-Arbeitsplätze einer Firma verwalten und Lizenzcodes für Mitarbeiter beziehungsweise Geräte erzeugen.",
+    workflows: [
+      "Firma auswählen",
+      "Mobile-Lizenzanzahl festlegen",
+      "Mitarbeiter und Rolle zuordnen",
+      "Mobile-Code erzeugen",
+      "Lizenzstatus verwalten"
+    ],
+    actions: [
+      "Mobile-Lizenzanzahl ändern",
+      "Mobile-Code erstellen",
+      "Mobile-Lizenz sperren",
+      "Mobile-Lizenz aktivieren"
+    ],
+    related: ["/portal", "/mobile"],
+    keywords: [
+      "mobile lizenz",
+      "mobile lizenzen",
+      "mobile code",
+      "lizenzcode",
+      "mitarbeiter",
+      "gerät",
+      "mobile seats"
+    ]
+  },
+  {
+    id: "cloud-company",
+    module: "RLC Cloud",
+    title: "Cloud-Freischaltung",
+    route: "/portal",
+    purpose: "Cloud-Nutzung für eine Firma aktivieren oder deaktivieren und mit Web- und Mobile-Lizenzen verbinden.",
+    workflows: [
+      "Firma auswählen",
+      "Abonnement prüfen",
+      "Cloud aktivieren oder deaktivieren",
+      "Lizenzumfang prüfen"
+    ],
+    actions: [
+      "Cloud aktivieren",
+      "Cloud deaktivieren",
+      "Abonnement prüfen"
+    ],
+    related: ["/portal"],
+    keywords: [
+      "cloud",
+      "cloud freischaltung",
+      "server sync",
+      "synchronisation",
+      "server"
+    ]
+  },
+  {
+    id: "support-contact",
+    module: "Info / Hilfe",
+    title: "Support / Kontakt",
+    route: "/info/support",
+    purpose: "Fragen über den RLC Support-Chat stellen oder eine Supportanfrage direkt aus RLC an info@rlcbausoftware.com senden.",
+    workflows: [
+      "Support öffnen",
+      "Frage im Chat stellen",
+      "E-Mail-Dialog öffnen",
+      "Kontaktdaten und Nachricht eingeben",
+      "Nachricht direkt senden"
+    ],
+    actions: [
+      "Support-Chat verwenden",
+      "Support per E-Mail kontaktieren",
+      "Nachricht senden",
+      "Chat leeren"
+    ],
+    related: ["/info"],
+    keywords: [
+      "support",
+      "kontakt",
+      "email",
+      "hilfe",
+      "problem",
+      "fehler",
+      "verbesserungsvorschlag"
+    ]
+  },
+  {
     id: "help",
     module: "Info / Hilfe",
     title: "Hilfe, FAQ und Systemstatus",
@@ -312,7 +488,7 @@ export function buildRlcKnowledgeContext(query: string, pathname = "") {
   const matches = searchRlcSoftwareKnowledge(query, pathname, 8);
 
   return {
-    version: "2026-07-16",
+    version: "2026-08-18",
     totalEntries: RLC_SOFTWARE_KNOWLEDGE.length,
     matches,
     softwareMap: RLC_SOFTWARE_KNOWLEDGE.map((entry) => ({
