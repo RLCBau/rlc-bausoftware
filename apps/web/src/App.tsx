@@ -437,7 +437,7 @@ function SideNav() {
             
             <button
               type="button"
-              className={`rlc-top-nav-button ${activeSection ? "active" : ""}`}
+              className={`rlc-top-nav-button ${isOpen || (!openMenu && activeSection) ? "active" : ""}`}
               aria-expanded={isOpen}
               onClick={() => setOpenMenu(isOpen ? null : section.key)}>
               

@@ -249,6 +249,41 @@ export const RLC_SOFTWARE_KNOWLEDGE: RlcKnowledgeEntry[] = [
     keywords: ["ki", "auto lv", "fotoerkennung", "sprachsteuerung", "widersprüche", "optimierung", "mängel"]
   },
   {
+    id: "nutzerverwaltung",
+    module: "Büro / Verwaltung",
+    title: "Nutzerverwaltung & Rechte",
+    route: "/buro/nutzerverwaltung",
+    purpose: "Benutzer der eigenen Firma, Rollen, Rechte und benutzerbezogene Lizenzzuordnungen verwalten.",
+    workflows: [
+      "Im Hauptmenü Verwaltung öffnen",
+      "Nutzerverwaltung & Rechte auswählen",
+      "Benutzer der Firma anzeigen",
+      "Rollen und Berechtigungen verwalten",
+      "Lizenzzuordnung eines Benutzers prüfen oder verwalten"
+    ],
+    actions: [
+      "Benutzer verwalten",
+      "Rechte verwalten",
+      "Rollen verwalten",
+      "Lizenzzuordnung prüfen",
+      "Nutzerverwaltung öffnen"
+    ],
+    related: ["/buro", "/buro/nutzerverwaltung"],
+    keywords: [
+      "nutzerverwaltung",
+      "nutzer",
+      "benutzer",
+      "benutzerverwaltung",
+      "rechte",
+      "berechtigungen",
+      "rollen",
+      "lizenzverwaltung",
+      "lizenz",
+      "lizenzen",
+      "wo finde ich die lizenzverwaltung",
+      "lizenz zuordnen"
+    ]
+  },  {
     id: "platform-admin",
     module: "RLC Plattform",
     title: "Super-Admin / Plattformverwaltung",
@@ -276,7 +311,7 @@ export const RLC_SOFTWARE_KNOWLEDGE: RlcKnowledgeEntry[] = [
       "superadmin",
       "plattform",
       "firmenverwaltung",
-      "lizenzverwaltung",
+      "plattform-lizenzverwaltung",
       "lizenzen"
     ]
   },
