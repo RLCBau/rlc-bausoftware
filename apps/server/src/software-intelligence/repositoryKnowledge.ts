@@ -696,6 +696,8 @@ export function retrieveSoftwareIntelligence(
       file: x.file,
       fileStem: x.fileStem || "",
       routes: x.routes || [],
+      uiRoutes: (x.routes || []).filter((r) => !String(r).startsWith("/api/")),
+      apiRoutes: (x.routes || []).filter((r) => String(r).startsWith("/api/")),
       symbols: x.symbols || [],
       uiLabels: x.uiLabels || [],
       content: x.content.slice(0, 5000),
@@ -735,8 +737,11 @@ export function formatSoftwareIntelligenceContext(
         match.uiLabels.length
           ? `UI-Texte: ${match.uiLabels.slice(0, 12).join(" | ")}`
           : "",
-        match.routes.length
-          ? `Routen/Navigation: ${match.routes.join(", ")}`
+        match.uiRoutes?.length
+          ? `UI-Routen/Navigation: ${match.uiRoutes.join(", ")}`
+          : "",
+        match.apiRoutes?.length
+          ? `API-Endpunkte (NICHT als Benutzer-Navigation verwenden): ${match.apiRoutes.join(", ")}`
           : "",
         match.symbols.length
           ? `Symbole: ${match.symbols.slice(0, 12).join(", ")}`
