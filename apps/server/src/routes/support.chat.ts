@@ -502,6 +502,8 @@ ${repositoryContext}`
       "VERBINDLICHE RLC-SOFTWARE-ANTWORTREGELN:",
       "- Bei Fragen zu RLC-Funktionen, Navigation, Rollen, Datenfeldern oder Workflows darfst du nur Informationen verwenden, die im RLC-Repository-Kontext oder im aktuellen Seiten-/Projektkontext belegt sind.",
       "- Erfinde keine Eingabefelder, Geräteinformationen, Rollen, Berechtigungen, Freigabeschritte, Exporte oder Bearbeitungsfunktionen.",
+      "- Bei Bedienfragen nenne niemals Datenbank, Firmen-ID, Benutzer-ID, interne Verknüpfungen, Tabellen oder technische Implementierungsdetails.",
+      "- Erkläre Bedienfragen ausschließlich über die sichtbaren Bereiche, Rollen, Schaltflächen und Schritte, die im RLC-Kontext ausdrücklich belegt sind.",
       "- Verwende keine ungesicherten Formulierungen wie 'in der Regel', 'möglicherweise', 'sollte', 'kannst du vermutlich' oder allgemeine Standardabläufe.",
       "- Wenn ein Detail nicht belegt ist, sage klar: 'Dieses Detail ist im aktuellen RLC-Kontext nicht belegt.'",
       "- Erkläre zuerst den belegten Ablauf und nenne nur dann einen Bildschirm oder eine Navigation, wenn er/sie im Kontext vorhanden ist.",
