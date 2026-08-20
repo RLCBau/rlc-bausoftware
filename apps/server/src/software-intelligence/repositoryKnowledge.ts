@@ -1201,35 +1201,64 @@ export function formatSoftwareIntelligenceContext(
     ].join("\n");
   }
 
-  const blocks = result.matches.map(
-    (match, index) =>
-      [
-        `### Treffer ${index + 1}`,
-        `Score: ${match.score}`,
-        `Plattform: ${match.platform}`,
-        `Typ: ${match.kind}`,
-        `Bereich: ${match.area}`,
-        `Datei: ${match.file}`,
-        `Quellname: ${match.fileStem}`,
-        `Titel/Symbol: ${match.title}`,
-        match.uiLabels.length
-          ? `UI-Texte: ${match.uiLabels.slice(0, 12).join(" | ")}`
-          : "",
-        match.uiRoutes?.length
-          ? `UI-Routen/Navigation: ${match.uiRoutes.join(", ")}`
-          : "",
-        match.apiRoutes?.length
-          ? `API-Endpunkte (NICHT als Benutzer-Navigation verwenden): ${match.apiRoutes.join(", ")}`
-          : "",
-        match.symbols.length
-          ? `Symbole: ${match.symbols.slice(0, 12).join(", ")}`
-          : "",
-        "Quellcode-Kontext:",
-        match.content,
-      ]
-        .filter(Boolean)
-        .join("\n")
-  );
+  /*
+   * User-facing questions need navigation and workflow context, not
+   * implementation details copied from backend routes or source code.
+   */
+  const normalizedQuery = normalize(query);
+  const isTechnicalQuestion =
+    normalizedQuery.includes("backend") ||
+    normalizedQuery.includes("serverseitig") ||
+    normalizedQuery.includes(" api ") ||
+    normalizedQuery.startsWith("api ") ||
+    normalizedQuery.endsWith(" api") ||
+    normalizedQuery.includes("endpoint") ||
+    normalizedQuery.includes("datenbank") ||
+    normalizedQuery.includes("schema") ||
+    normalizedQuery.includes("implementierung") ||
+    normalizedQuery.includes("quellcode") ||
+    normalizedQuery.includes("route");
+
+  const blocks = result.matches.map((match, index) => {
+    const isUserFacingSource =
+      match.kind === "PAGE" ||
+      match.kind === "SCREEN" ||
+      match.kind === "COMPONENT";
+
+    const showImplementation =
+      isTechnicalQuestion || isUserFacingSource;
+
+    return [
+      `### Treffer ${index + 1}`,
+      `Score: ${match.score}`,
+      `Plattform: ${match.platform}`,
+      `Typ: ${match.kind}`,
+      `Bereich: ${match.area}`,
+      `Datei: ${match.file}`,
+      `Quellname: ${match.fileStem}`,
+      `Titel/Symbol: ${match.title}`,
+      match.uiLabels.length
+        ? `UI-Texte: ${match.uiLabels.slice(0, 12).join(" | ")}`
+        : "",
+      match.uiRoutes?.length
+        ? `UI-Routen/Navigation: ${match.uiRoutes.join(", ")}`
+        : "",
+      isTechnicalQuestion && match.apiRoutes?.length
+        ? `API-Endpunkte: ${match.apiRoutes.join(", ")}`
+        : "",
+      isTechnicalQuestion && match.symbols.length
+        ? `Symbole: ${match.symbols.slice(0, 12).join(", ")}`
+        : "",
+      showImplementation && isTechnicalQuestion
+        ? `Quellcode-Kontext:\n${match.content}`
+        : "",
+      !isTechnicalQuestion && !isUserFacingSource
+        ? "Technische Quelle nur zur fachlichen Validierung; keine API-, Datenbank-, ID- oder Implementierungsdetails an Nutzer ausgeben."
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  });
 
   return [
     "RLC SOFTWARE INTELLIGENCE",
