@@ -493,6 +493,24 @@ async function aiFallbackAnswer(input: z.infer<typeof ChatSchema>) {
 ${repositoryContext}`
   );
 
+  /*
+   * The repository context is the source of truth for RLC operation.
+   * The AI must not fill gaps with generic software assumptions.
+   */
+  systemSections.push(
+    [
+      "VERBINDLICHE RLC-SOFTWARE-ANTWORTREGELN:",
+      "- Bei Fragen zu RLC-Funktionen, Navigation, Rollen, Datenfeldern oder Workflows darfst du nur Informationen verwenden, die im RLC-Repository-Kontext oder im aktuellen Seiten-/Projektkontext belegt sind.",
+      "- Erfinde keine Eingabefelder, Geräteinformationen, Rollen, Berechtigungen, Freigabeschritte, Exporte oder Bearbeitungsfunktionen.",
+      "- Verwende keine ungesicherten Formulierungen wie 'in der Regel', 'möglicherweise', 'sollte', 'kannst du vermutlich' oder allgemeine Standardabläufe.",
+      "- Wenn ein Detail nicht belegt ist, sage klar: 'Dieses Detail ist im aktuellen RLC-Kontext nicht belegt.'",
+      "- Erkläre zuerst den belegten Ablauf und nenne nur dann einen Bildschirm oder eine Navigation, wenn er/sie im Kontext vorhanden ist.",
+      "- X84 ist im RLC-Kontext keine 'Kalibrierung'. Bei Fragen zur KI ohne X84 erkläre ausschließlich die autonome Urkalkulation und dass X84 nicht als Preisquelle vorausgesetzt wird, sofern dies im Kontext belegt ist.",
+      "- Bei CAD nenne keine Bearbeitungsfunktion für Geometrie oder Layer, wenn sie im Kontext nicht ausdrücklich belegt ist.",
+      "- Antworte knapp, konkret und in der Sprache der Nutzerfrage.",
+    ].join("\n")
+  );
+
   const optionalContext: Array<[string, unknown]> = [
     ["RLC-SOFTWARE-KNOWLEDGE", ctx.softwareKnowledge],
     ["AKTUELLER SEITENZUSTAND", ctx.pageRuntime],

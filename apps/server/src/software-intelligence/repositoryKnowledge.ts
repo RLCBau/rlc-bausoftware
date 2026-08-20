@@ -62,6 +62,7 @@ const STOP_WORDS = new Set([
   "finde", "finden", "funktioniert", "funktion",
   "kann", "kannst", "bitte", "zeige", "zeig",
   "oeffne", "offne",
+  "mobile", "web", "server", "app",
 ]);
 
 function normalize(value: unknown): string {
@@ -141,6 +142,74 @@ function tokens(value: unknown): string[] {
     expanded.add("menge");
   }
 
+  /*
+   * Product vocabulary / German compounds.
+   * These are semantic equivalents, not hard-coded answers.
+   */
+  if (
+    normalized.includes("lizenzcode") ||
+    normalized.includes("aktivierungscode")
+  ) {
+    expanded.add("lizenz");
+    expanded.add("license");
+    expanded.add("code");
+    expanded.add("aktivierung");
+    expanded.add("mobilelicense");
+    expanded.add("mobilelicenses");
+  }
+
+  if (
+    normalized.includes("x84") &&
+    (
+      normalized.includes("ohne") ||
+      normalized.includes("kein")
+    )
+  ) {
+    expanded.add("autonom");
+    expanded.add("autonomous");
+    expanded.add("urkalkulation");
+    expanded.add("preisquelle");
+  }
+
+  if (normalized.includes("cloud")) {
+    expanded.add("cloudenabled");
+    expanded.add("subscription");
+    expanded.add("firma");
+    expanded.add("company");
+  }
+
+  /*
+   * CAD and field-survey vocabulary.
+   * User terminology must resolve to the actual CAD, DXF and
+   * GPS / As-Built implementation sources.
+   */
+  if (
+    normalized.includes("cad") ||
+    normalized.includes("dxf") ||
+    normalized.includes("dwg")
+  ) {
+    expanded.add("cad");
+    expanded.add("cadviewer");
+    expanded.add("cadimport");
+    expanded.add("cadengine");
+    expanded.add("dxf");
+    expanded.add("dwg");
+    expanded.add("layer");
+    expanded.add("layern");
+  }
+
+  if (
+    normalized.includes("gps") ||
+    normalized.includes("asbuilt") ||
+    normalized.includes("as built")
+  ) {
+    expanded.add("gps");
+    expanded.add("asbuild");
+    expanded.add("asbuilt");
+    expanded.add("gpszuweisung");
+    expanded.add("gnss");
+    expanded.add("cadgeomap");
+  }
   return Array.from(expanded);
 }
 
@@ -148,34 +217,83 @@ function detectPlatform(
   query: string,
   options: SearchOptions
 ): Platform | null {
+  /*
+   * Runtime platform explicitly supplied by the application
+   * always has priority.
+   */
   if (options.platform) return options.platform;
 
   const q = normalize(query);
+  const currentPath = normalize(options.currentPath || "");
 
-  if (
-    q.includes("mobile") ||
-    q.includes("app") ||
-    options.screen
-  ) {
+  /*
+   * MOBILE only when the user is actually referring to use/navigation
+   * inside the Mobile application.
+   *
+   * IMPORTANT:
+   * A product term such as "Mobile-Lizenzcode" does NOT automatically
+   * mean that the implementation/administration lives in MOBILE.
+   */
+  const explicitMobileUsage =
+    q.includes("mobile app") ||
+    q.includes("mobile anwendung") ||
+    q.includes("in mobile") ||
+    q.includes("auf mobile") ||
+    q.includes("mobile screen") ||
+    q.includes("mobile screen") ||
+    q.includes("in der app") ||
+    q.includes("in die app") ||
+    q.includes("auf der app");
+
+  if (options.screen || explicitMobileUsage) {
     return "MOBILE";
   }
 
+  /*
+   * SERVER only when the question explicitly concerns technical
+   * backend/API/server implementation.
+   */
   if (
-    q.includes("web") ||
-    q.includes("browser") ||
-    String(options.currentPath || "").startsWith("/")
-  ) {
-    return "WEB";
-  }
-
-  if (
-    q.includes("server") ||
+    q.includes("serverseitig") ||
     q.includes("backend") ||
-    q.includes("api")
+    q.includes(" api ") ||
+    q.startsWith("api ") ||
+    q.endsWith(" api") ||
+    q.includes("server route") ||
+    q.includes("server implementierung")
   ) {
     return "SERVER";
   }
 
+  /*
+   * Explicit Web/browser wording.
+   */
+  if (
+    q.includes("im web") ||
+    q.includes("web app") ||
+    q.includes("webanwendung") ||
+    q.includes("browser")
+  ) {
+    return "WEB";
+  }
+
+  /*
+   * Current UI path can provide useful context, but the Support page
+   * itself must NOT force every product question to WEB.
+   */
+  if (
+    currentPath &&
+    currentPath.startsWith("/") &&
+    !currentPath.startsWith("/info/support") &&
+    !currentPath.startsWith("/support")
+  ) {
+    return "WEB";
+  }
+
+  /*
+   * No reliable platform intent:
+   * search WEB + MOBILE + SERVER together.
+   */
   return null;
 }
 
@@ -320,7 +438,7 @@ function intentBonus(
 
   /*
    * Canonical product intent.
-   * Resolve situazioni dove più file appartengono alla stessa area,
+   * Resolve situazioni dove piÃ¹ file appartengono alla stessa area,
    * ma uno rappresenta il punto operativo principale richiesto.
    */
 
@@ -408,6 +526,198 @@ function intentBonus(
     }
   }
 
+  /*
+   * =========================================================
+   * RLC semantic source authority
+   * =========================================================
+   * Prefer the source that actually implements/manages the
+   * requested concept. This changes retrieval authority only;
+   * it does NOT contain pre-written answers.
+   */
+
+  // ---------------------------------------------------------
+  // Mobile licence codes belonging to / managed for a company
+  // ---------------------------------------------------------
+  if (
+    (
+      q.includes("lizenzcode") ||
+      q.includes("aktivierungscode") ||
+      q.includes("mobile code") ||
+      q.includes("mobile lizenz")
+    ) &&
+    (
+      q.includes("firma") ||
+      q.includes("company") ||
+      q.includes("zugeordnet") ||
+      q.includes("zuordnen") ||
+      q.includes("erstellt") ||
+      q.includes("erstellen")
+    )
+  ) {
+    if (
+      file.includes("company.admin") ||
+      (
+        file.includes("company") &&
+        file.includes("license")
+      )
+    ) {
+      score += 2400;
+    }
+
+    if (
+      file.includes(
+        "apps web src pages buro nutzerverwaltung tsx"
+      )
+    ) {
+      score += 580;
+    }
+
+    if (
+      file.includes(
+        "apps web src pages admin platform admin tsx"
+      )
+    ) {
+      score += 420;
+    }
+
+    if (
+      file.includes(
+        "apps server src routes platform admin ts"
+      )
+    ) {
+      score += 340;
+    }
+
+    /*
+     * LoginScreen explains activation on the device,
+     * but not the company-side creation/assignment.
+     */
+    if (
+      file.includes("apps mobile src screens") &&
+      file.includes("login") &&
+      file.includes("screen")
+    ) {
+      score -= 700;
+    }
+
+    if (
+      file.includes("mobile pdf core")
+    ) {
+      score -= 450;
+    }
+  }
+
+  // ---------------------------------------------------------
+  // KI calculation WITHOUT X84 as price source
+  // ---------------------------------------------------------
+  if (
+    q.includes("x84") &&
+    (
+      q.includes("ohne") ||
+      q.includes("kein")
+    ) &&
+    (
+      q.includes("ki") ||
+      q.includes("kalkulation") ||
+      q.includes("kalkulier")
+    )
+  ) {
+    if (
+      file.includes(
+        "apps server src kalkulation autonomous autonomous urkalkulation engine ts"
+      )
+    ) {
+      score += 850;
+    }
+
+    if (
+      file.includes(
+        "apps server src kalkulation autonomous rlc autonomous kalkulator ts"
+      )
+    ) {
+      score += 700;
+    }
+
+    if (
+      file.includes(
+        "apps server src kalkulation autonomous tiefbau family catalog ts"
+      )
+    ) {
+      score += 520;
+    }
+
+    if (
+      file.includes(
+        "apps server src kalkulation construction intelligence engine ts"
+      )
+    ) {
+      score += 420;
+    }
+
+    if (
+      file.includes(
+        "apps server src routes kalkulation ki ts"
+      )
+    ) {
+      score += 380;
+    }
+
+    /*
+     * Reverse Urkalkulation explicitly starts from X84.
+     * It must not dominate a question asking how calculation
+     * works without X84.
+     */
+    if (
+      file.includes(
+        "rlc reverse urkalkulation engine"
+      )
+    ) {
+      score -= 280;
+    }
+  }
+
+  // ---------------------------------------------------------
+  // Cloud capability for a company
+  // ---------------------------------------------------------
+  if (
+    q.includes("cloud") &&
+    (
+      q.includes("firma") ||
+      q.includes("company") ||
+      q.includes("unternehmen")
+    )
+  ) {
+    if (
+      file.includes(
+        "apps web src pages admin platform admin tsx"
+      )
+    ) {
+      score += 650;
+    }
+
+    if (
+      file.includes(
+        "apps server src routes platform admin ts"
+      )
+    ) {
+      score += 500;
+    }
+
+    if (
+      file.includes(
+        "apps server src routes company admin ts"
+      )
+    ) {
+      score += 180;
+    }
+
+    if (
+      file.includes("pricing page")
+    ) {
+      score -= 180;
+    }
+  }
+
   return score;
 }
 
@@ -418,6 +728,11 @@ function scoreChunk(
 ): number {
   const qTerms = tokens(query);
   const qCompact = compact(query);
+
+  const effectiveOptions: SearchOptions = {
+    ...options,
+    platform: options.platform || detectPlatform(query, options),
+  };
 
   const fileStem = chunk.fileStem || "";
   const fileName = chunk.fileName || "";
@@ -430,7 +745,7 @@ function scoreChunk(
 
   let score =
     kindBonus(chunk.kind) +
-    intentBonus(chunk, query, options);
+    intentBonus(chunk, query, effectiveOptions);
 
   /*
    * Exact/compound match on the real source name is the strongest
@@ -487,13 +802,136 @@ function scoreChunk(
    */
   const content = normalize(chunk.content);
 
+  let contentMatches = 0;
+
   for (const term of qTerms) {
     if (
       term.length >= 4 &&
       content.includes(term)
     ) {
-      score += 3;
+      /*
+       * Il contenuto del singolo chunk serve a scegliere
+       * la sezione corretta dentro file grandi come
+       * PlatformAdmin.tsx o kalkulationMitKI.tsx.
+       */
+      score += term.length >= 8 ? 28 : 18;
+      contentMatches += 1;
     }
+  }
+
+  /*
+   * Più termini della domanda presenti nello stesso chunk =
+   * forte evidenza che questo sia il blocco realmente pertinente.
+   */
+  if (contentMatches >= 2) {
+    score += contentMatches * 22;
+  }
+
+  /*
+   * Termini tecnici specifici/composti hanno grande valore:
+   * X84, cloudEnabled, Lizenzcode ecc.
+   */
+  const rawQueryTerms = normalize(query)
+    .split(" ")
+    .filter((x) => x.length >= 3);
+
+  for (const rawTerm of rawQueryTerms) {
+    if (
+      rawTerm.length >= 5 &&
+      content.includes(rawTerm)
+    ) {
+      score += rawTerm.length >= 8 ? 35 : 20;
+    }
+  }
+
+  const q = normalize(query);
+  const contentCompact = compact(chunk.content);
+
+  /*
+   * Company-side licence creation and assignment belongs to the
+   * company administration backend, not to the device login flow.
+   */
+  if (
+    (
+      q.includes("lizenzcode") ||
+      q.includes("aktivierungscode")
+    ) &&
+    normalize(chunk.file).includes("company.admin")
+  ) {
+    score += 5000;
+  }
+
+  /*
+   * CAD questions must prefer the CAD workspace, CAD routes and
+   * DXF/DWG processing sources over generic import pages.
+   */
+  const chunkFile = String(chunk.file || "").toLowerCase();
+
+  const isCadQuestion =
+    q.includes("cad") ||
+    q.includes("dxf") ||
+    q.includes("dwg") ||
+    q.includes("layer");
+
+  const isCadSource =
+    /(^|[\\/])cad([\\/.\-]|$)|cadviewer|dxfpreview|dxf\.engine|cad-import|cad-converter/i.test(
+      chunkFile
+    );
+
+  if (isCadQuestion && isCadSource) {
+    score += 1400;
+  }
+
+  /*
+   * Prefer the precise section inside large source files.
+   */
+  if (
+    q.includes("cloud") &&
+    (
+      contentCompact.includes("cloudenabled") ||
+      contentCompact.includes("cloudaktiv") ||
+      contentCompact.includes("cloud")
+    )
+  ) {
+    score += 260;
+  }
+
+  if (
+    q.includes("x84") &&
+    (
+      q.includes("ohne") ||
+      q.includes("kein")
+    ) &&
+    (
+      contentCompact.includes("keinx84alspreisquelle") ||
+      (
+        contentCompact.includes("autonom") &&
+        contentCompact.includes("urkalkulation")
+      )
+    )
+  ) {
+    score += 340;
+  }
+
+  if (
+    (
+      q.includes("lizenzcode") ||
+      q.includes("aktivierungscode")
+    ) &&
+    (
+      contentCompact.includes("mobilelicense") ||
+      contentCompact.includes("mobilelizenz") ||
+      contentCompact.includes("mobileaktivierungscode")
+    )
+  ) {
+    score += 300;
+  }
+
+  if (
+    qCompact.length >= 6 &&
+    contentCompact.includes(qCompact)
+  ) {
+    score += 140;
   }
 
   const platform = detectPlatform(query, options);
@@ -543,7 +981,6 @@ function scoreChunk(
   }
 
   const file = normalize(chunk.file);
-  const q = normalize(query);
 
   /*
    * RLC source authority adjustments.
@@ -553,7 +990,7 @@ function scoreChunk(
    * dienen nur als Sekundärkontext.
    */
   if (
-    options.platform === "MOBILE" &&
+    effectiveOptions.platform === "MOBILE" &&
     (
       q.includes("wie funktioniert") ||
       q.includes("wie erfasse") ||
@@ -577,7 +1014,7 @@ function scoreChunk(
    * firmenspezifischer Mobile-Lizenzverwaltung.
    */
   if (
-    options.platform === "SERVER" &&
+    effectiveOptions.platform === "SERVER" &&
     (
       q.includes("lizenzpruefung") ||
       q.includes("lizenz pruefung") ||
@@ -654,13 +1091,54 @@ export function retrieveSoftwareIntelligence(
    * When the runtime knows the platform, never mix another platform
    * into the primary answer.
    */
-  const searchableChunks = options.platform
-    ? chunks.filter(
-        (chunk) => chunk.platform === options.platform
-      )
-    : chunks;
+  /*
+   * Effective platform:
+   * - explicit runtime platform has priority
+   * - otherwise infer it from the user's question
+   */
+  const effectivePlatform =
+    options.platform || detectPlatform(query, options);
 
-  const ranked: RankedChunk[] = searchableChunks
+  /*
+   * A Mobile licence code is activated on Mobile, but it is created
+   * and assigned in company administration on the server.
+   */
+  const normalizedQuery = normalize(query);
+  const isCompanyMobileLicenseQuery =
+    (
+      normalizedQuery.includes("lizenzcode") ||
+      normalizedQuery.includes("aktivierungscode")
+    ) &&
+    (
+      normalizedQuery.includes("firma") ||
+      normalizedQuery.includes("company")
+    );
+
+  const searchableChunks =
+    effectivePlatform && !isCompanyMobileLicenseQuery
+      ? chunks.filter(
+          (chunk) => chunk.platform === effectivePlatform
+        )
+      : chunks;
+  /*
+   * Test files document verification scenarios, not product behaviour.
+   * They must never become Copilot knowledge sources.
+   */
+  const productionChunks = searchableChunks.filter((chunk) => {
+    const isTestFile =
+      /(^|[\\/])(?:test[^\\/]*|[^\\/]*\.(?:test|spec))\.(?:[cm]?[jt]sx?)$/i.test(
+        chunk.file
+      );
+
+    const isRetrievalImplementation =
+      /(^|[\\/])software-intelligence[\\/](?:repositoryKnowledge|buildSoftwareIntelligenceIndex)\.ts$/i.test(
+        chunk.file
+      );
+
+    return !isTestFile && !isRetrievalImplementation;
+  });
+
+  const ranked: RankedChunk[] = productionChunks
     .map((chunk) => ({
       ...chunk,
       score: scoreChunk(chunk, query, options),
