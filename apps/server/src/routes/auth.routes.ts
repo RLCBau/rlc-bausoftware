@@ -103,7 +103,11 @@ function signToken(
   mode: "NUR_APP" | "SERVER_SYNC",
   extra?: { companyId?: string | null; companyRole?: string | null }
 ) {
-  const companyId = (extra?.companyId ?? process.env.DEV_COMPANY_ID ?? null) as
+  const companyId = (
+    extra && Object.prototype.hasOwnProperty.call(extra, "companyId")
+      ? extra.companyId
+      : process.env.DEV_COMPANY_ID ?? null
+  ) as
     | string
     | null;
 
@@ -744,12 +748,23 @@ r.post("/login", async (req, res, next) => {
     }
 
     const fullUser = await getUserCompanyPayload(u.id);
+    const isPlatformAccount = new Set([
+      "info@rlcbausoftware.com",
+      "info@rlcbausoftware",
+    ]).has(email);
+
+    const loginCompanyId = isPlatformAccount
+      ? null
+      : (fullUser?.companyId ?? null);
 
     const token = signToken(fullUser ?? u, body.mode, {
-      companyId: fullUser?.companyId ?? null,
-      companyRole:
-        (fullUser?.companyMembers?.[0]?.role as string | null | undefined) ??
-        (fullUser?.appRole ?? u.appRole ?? null),
+      companyId: loginCompanyId,
+      companyRole: isPlatformAccount
+        ? "PLATFORM_ADMIN"
+        : (
+            (fullUser?.companyMembers?.[0]?.role as string | null | undefined) ??
+            (fullUser?.appRole ?? u.appRole ?? null)
+          ),
     });
 
     return res.json({
@@ -760,10 +775,12 @@ r.post("/login", async (req, res, next) => {
         email: u.email,
         appRole: fullUser?.appRole ?? u.appRole,
         emailVerifiedAt: fullUser?.emailVerifiedAt ?? u.emailVerifiedAt,
-        companyId: fullUser?.companyId ?? null,
-        companyRole: fullUser?.companyMembers?.[0]?.role ?? null,
+        companyId: loginCompanyId,
+        companyRole: isPlatformAccount
+          ? "PLATFORM_ADMIN"
+          : (fullUser?.companyMembers?.[0]?.role ?? null),
       },
-      company: fullUser?.company ?? null,
+      company: isPlatformAccount ? null : (fullUser?.company ?? null),
     });
   } catch (e) {
     next(e);

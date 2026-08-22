@@ -29,47 +29,6 @@ declare global {
 }
 
 export function authJwt(req: Request, res: Response, next: NextFunction) {
-  // RLC_DEV_PROJECT_LIST_PUBLIC_V1
-  // Solo sviluppo locale: GET /api/projects senza token
-  // ammesso solo da browser localhost/127.0.0.1.
-  // Da dominio pubblico o curl senza Origin resta protetto.
-  const origin = String(req.headers.origin || "");
-  const isLocalDevOrigin =
-    origin.startsWith("http://localhost:") ||
-    origin.startsWith("http://127.0.0.1:");
-
-  if (
-    req.method === "GET" &&
-    isLocalDevOrigin &&
-    (
-      req.originalUrl === "/api/projects" ||
-      req.originalUrl.startsWith("/api/projects?") ||
-      /^\/api\/projects\/[^/]+\/lv(?:\?|$)/.test(req.originalUrl)
-    )
-  ) {
-    req.auth = {
-      sub: "dev-user",
-      role: "ADMIN",
-      companyId: process.env.DEV_COMPANY_ID || "dev-company",
-      companyRole: "ADMIN",
-      mode: "SERVER_SYNC",
-      device: "dev-browser",
-      email: "dev@rlc.local",
-      emailVerified: true,
-    };
-
-    (req as any).user = {
-      id: "dev-user",
-      email: "dev@rlc.local",
-      role: "ADMIN",
-      mode: "SERVER_SYNC",
-      emailVerified: true,
-      emailVerifiedAt: new Date().toISOString(),
-    };
-
-    return next();
-  }
-
   const h = req.header("authorization");
   if (!h || !h.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Kein Token" });

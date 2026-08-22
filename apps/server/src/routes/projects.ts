@@ -167,27 +167,33 @@ function dedupeProjectsStable(list: any[]) {
  * =======================================================*/
 async function ensureCompanyId(req: Request): Promise<string> {
   const auth: any = (req as any).auth;
+  const candidate =
+    typeof auth?.companyId === "string"
+      ? auth.companyId
+      : typeof auth?.company === "string"
+        ? auth.company
+        : "";
 
-  if (auth && typeof auth.company === "string") {
-    const found = await prisma.company.findUnique({ where: { id: auth.company } });
-    if (found) return found.id;
+  const companyId = String(candidate || "").trim();
+
+  if (!companyId) {
+    const error: any = new Error("COMPANY_CONTEXT_REQUIRED");
+    error.status = 403;
+    throw error;
   }
 
-  if (process.env.DEV_COMPANY_ID) {
-    const found = await prisma.company.findUnique({ where: { id: process.env.DEV_COMPANY_ID } });
-    if (found) return found.id;
-  }
-
-  const first = await prisma.company.findFirst();
-  if (first) return first.id;
-
-  const created = await prisma.company.create({
-    data: { name: "Standard Firma", code: "STANDARD" },
+  const found = await prisma.company.findUnique({
+    where: { id: companyId },
   });
 
-  return created.id;
-}
+  if (!found) {
+    const error: any = new Error("COMPANY_NOT_FOUND");
+    error.status = 403;
+    throw error;
+  }
 
+  return found.id;
+}
 /* =========================================================
  * generator BA-YYYY-XXX
  * =======================================================*/
@@ -234,39 +240,16 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
       },
     });
 
-    const fsProjectsRaw = readAllFsProjects();
-    const dbIds = new Set(db.map((p) => String(p.id)));
-    const dbCodes = new Set(db.map((p) => String(p.code || "").trim()).filter(Boolean));
-
-    const fsExtras = fsProjectsRaw
-      .map((x) => x?.data || null)
-      .filter(Boolean)
-      .filter((p) => {
-        const id = String(p?.id || "").trim();
-        const code = String(p?.code || "").trim();
-        if (id && dbIds.has(id)) return false;
-        if (code && dbCodes.has(code)) return false;
-        return true;
-      })
-      .map((p) => ({
-        id: String(p?.id || "").trim() || `fs-${safeFsName(String(p?.code || "PROJECT"))}`,
-        code: String(p?.code || "").trim() || undefined,
-        name: String(p?.name || "").trim() || undefined,
-        number: p?.number ?? null,
-        client: String(p?.client || "").trim(),
-        place: String(p?.place || "").trim(),
-        createdAt: p?.createdAt || undefined,
-        source: "FS",
-      }));
-
-    const merged = [...db, ...fsExtras];
-    const deduped = dedupeProjectsStable(merged);
-    const out = deduped.map(normalizeProjectForClient);
+    const out = db.map(normalizeProjectForClient);
 
     res.json({ ok: true, projects: out });
   } catch (err: any) {
     console.error("GET /api/projects error:", err);
-    res.status(500).json({ ok: false, error: err?.message || "Fehler beim Laden der Projekte" });
+    const status = Number(err?.status) === 403 ? 403 : 500;
+    res.status(status).json({
+      ok: false,
+      error: err?.message || "Fehler beim Laden der Projekte",
+    });
   }
 });
 

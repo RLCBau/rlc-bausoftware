@@ -50,6 +50,21 @@ company?: CompanyPayload | null)
   try {
     for (const key of AUTH_KEYS) localStorage.removeItem(key);
 
+    for (const key of [
+      "rlc_company_id",
+      "rlc_company",
+      "rlc_company_profile",
+      "companyProfile",
+      "rlc_projectId",
+      "rlc_active_project",
+      "rlc_active_project_id",
+      "projectId",
+      "projectKey",
+    ]) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
+
     localStorage.setItem("rlc_token", token);
 
     if (user?.companyId) {
@@ -326,9 +341,12 @@ export default function Login() {
 
       setAuth(data.token, data.user, data.company ?? null);
 
+      const normalizedEmail = String(data.user?.email || "").trim().toLowerCase();
+      const normalizedRole = String(data.user?.appRole || "").trim().toUpperCase();
       const isPlatformAdmin =
-        String(data.user?.email || "").trim().toLowerCase() ===
-        "info@rlcbausoftware.com";
+        normalizedRole === "PLATFORM_ADMIN" ||
+        normalizedEmail === "info@rlcbausoftware.com" ||
+        normalizedEmail === "info@rlcbausoftware";
 
       nav(
         isPlatformAdmin ? "/portal" : redirectTo,

@@ -559,6 +559,9 @@ function SubsectionEmpty() {
 
 function AppShell() {
   const { pathname } = useLocation();
+  const isPlatformPath =
+    pathname === "/portal" ||
+    pathname === "/platform/admin";
 
   if (isPublicPath(pathname)) {
     return (
@@ -576,6 +579,23 @@ function AppShell() {
 
   }
 
+  if (isPlatformPath) {
+    return (
+      <RequireAuth>
+        <div className="app rlc-app-shell">
+          <React.Suspense fallback={<RouteLoadingFallback />}>
+            <Routes>
+              <Route path="/portal" element={<PlatformAdmin />} />
+              <Route
+                path="/platform/admin"
+                element={<Navigate to="/portal" replace />}
+              />
+            </Routes>
+          </React.Suspense>
+        </div>
+      </RequireAuth>
+    );
+  }
   return (
     <RequireAuth>
       <div className="app rlc-app-shell">
