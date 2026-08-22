@@ -625,9 +625,42 @@ export default function PlatformAdmin() {
         <h1 style={{ margin: "7px 0" }}>Firmenverwaltung</h1>
 
         <div style={{ opacity: 0.92 }}>
-          Firmen, Benutzer, Projekte, Web-Lizenzen, Mobile-Lizenzen,
+          Firmen, Benutzer, Web-Lizenzen, Mobile-Lizenzen,
           Cloud und Freischaltcodes zentral verwalten.
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            [
+              "rlc_token",
+              "token",
+              "authToken",
+              "rlc_auth",
+              "rlc_user",
+              "rlc_company",
+              "rlc_company_id",
+              "rlc_active_project",
+              "rlc_active_project_id",
+            ].forEach((key) => {
+              localStorage.removeItem(key);
+              sessionStorage.removeItem(key);
+            });
+            window.location.replace("/login");
+          }}
+          style={{
+            marginTop: 18,
+            padding: "10px 16px",
+            borderRadius: 9,
+            border: "1px solid rgba(255,255,255,0.72)",
+            background: "white",
+            color: "#b91c1c",
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
+        >
+          Abmelden
+        </button>
       </section>
 
       {error ? (
@@ -1434,63 +1467,6 @@ export default function PlatformAdmin() {
                     <tr>
                       <td colSpan={5} style={{ padding: 14, color: "#64748b" }}>
                         Keine Benutzer vorhanden.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section style={card}>
-            <div style={sectionHead}>
-              <strong>Projekte der Firma</strong>
-            </div>
-
-            <div style={{ padding: 16, overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr>
-                    {[
-                      "Projekt",
-                      "Code",
-                      "Auftraggeber",
-                      "Ort",
-                      "Status",
-                      "Erstellt",
-                    ].map((x) => (
-                      <th
-                        key={x}
-                        style={{
-                          textAlign: "left",
-                          padding: 9,
-                          borderBottom: "1px solid #e2e8f0",
-                        }}
-                      >
-                        {x}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {company.projects.map((project) => (
-                    <tr key={project.id}>
-                      <td style={{ padding: 9, fontWeight: 800 }}>
-                        {project.name}
-                      </td>
-                      <td style={{ padding: 9 }}>{project.code}</td>
-                      <td style={{ padding: 9 }}>{project.client || "—"}</td>
-                      <td style={{ padding: 9 }}>{project.place || "—"}</td>
-                      <td style={{ padding: 9 }}>{project.status}</td>
-                      <td style={{ padding: 9 }}>{fmtDate(project.createdAt)}</td>
-                    </tr>
-                  ))}
-
-                  {!company.projects.length ? (
-                    <tr>
-                      <td colSpan={6} style={{ padding: 14, color: "#64748b" }}>
-                        Keine Projekte vorhanden.
                       </td>
                     </tr>
                   ) : null}

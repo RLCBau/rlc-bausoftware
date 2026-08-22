@@ -348,10 +348,12 @@ export default function Login() {
         normalizedEmail === "info@rlcbausoftware.com" ||
         normalizedEmail === "info@rlcbausoftware";
 
-      nav(
-        isPlatformAdmin ? "/portal" : redirectTo,
-        { replace: true }
-      );
+      if (isPlatformAdmin) {
+        window.location.replace("/portal");
+        return;
+      }
+
+      nav(redirectTo, { replace: true });
     } catch (err: any) {
       setError(err?.message || "Login fehlgeschlagen.");
     } finally {
