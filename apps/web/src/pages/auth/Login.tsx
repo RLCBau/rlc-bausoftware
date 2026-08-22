@@ -349,7 +349,7 @@ export default function Login() {
         normalizedEmail === "info@rlcbausoftware";
 
       if (isPlatformAdmin) {
-        window.location.replace("/portal");
+        window.location.replace("/portal?release=portal-v1");
         return;
       }
 

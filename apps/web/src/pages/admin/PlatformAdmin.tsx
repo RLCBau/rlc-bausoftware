@@ -646,7 +646,7 @@ export default function PlatformAdmin() {
               localStorage.removeItem(key);
               sessionStorage.removeItem(key);
             });
-            window.location.replace("/login");
+            window.location.replace("/login?release=portal-v1");
           }}
           style={{
             marginTop: 18,
