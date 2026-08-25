@@ -98,6 +98,7 @@ import companyInvitesRoutes from "./routes/company.invites";
 import companyAdminRoutes from "./routes/company.admin";
 import companyMobileLicensesRoutes from "./routes/company.mobile-licenses";
 import platformAdminRoutes from "./routes/platform.admin";
+import cloudRoutes from "./routes/cloud.routes";
 import kiLs from "./routes/ki.lieferschein";
 import kiDebug from "./routes/ki.debug";
 import multer from "multer";
@@ -932,6 +933,7 @@ app.use("/api/company", companyInvitesRoutes);
 app.use("/api/company", companyAdminRoutes);
 app.use("/api/company", companyMobileLicensesRoutes);
 app.use("/api/platform/admin", platformAdminRoutes);
+app.use("/api/cloud", cloudRoutes);
 
 /* misc */
 // âŒ REMOVE â€“ rompe routing fotos

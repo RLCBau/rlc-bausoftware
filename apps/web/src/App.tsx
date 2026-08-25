@@ -86,6 +86,7 @@ const MobilePruefung = React.lazy(() => import("./pages/mobile/Pruefung"));
 const MobileArbeitszeiten = React.lazy(() => import("./pages/mobile/Arbeitszeiten"));
 const MobileMitarbeiterEingaenge = React.lazy(() => import("./pages/mobile/MitarbeiterEingaenge"));
 const PlatformAdmin = React.lazy(() => import("./pages/admin/PlatformAdmin"));
+const CloudHome = React.lazy(() => import("./pages/cloud/CloudHome"));
 /* ------------------ INFO ------------------ */
 const Hilfe = React.lazy(() => import("./pages/info/hilfe"));
 const FAQ = React.lazy(() => import("./pages/info/faq"));
@@ -562,6 +563,7 @@ function AppShell() {
   const isPlatformPath =
     pathname === "/portal" ||
     pathname === "/platform/admin";
+  const isCloudPath = pathname === "/cloud";
 
   if (isPublicPath(pathname)) {
     return (
@@ -579,13 +581,14 @@ function AppShell() {
 
   }
 
-  if (isPlatformPath) {
+  if (isPlatformPath || isCloudPath) {
     return (
       <RequireAuth>
         <div className="app rlc-app-shell">
           <React.Suspense fallback={<RouteLoadingFallback />}>
             <Routes>
               <Route path="/portal" element={<PlatformAdmin />} />
+              <Route path="/cloud" element={<CloudHome />} />
               <Route
                 path="/platform/admin"
                 element={<Navigate to="/portal" replace />}

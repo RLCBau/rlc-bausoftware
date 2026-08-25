@@ -194,6 +194,47 @@ export async function requireActiveSubscription(
   }
 }
 
+export async function requireCloudEnabled(
+  req: Express.Request,
+  res: Response,
+  next: NextFunction
+) {
+  if (isDevAuth()) return next();
+
+  const companyId = getCompanyIdFromReq(req);
+  if (!companyId) {
+    return res.status(403).json({
+      error: "Keine Firma im Token",
+      code: "CLOUD_COMPANY_REQUIRED",
+    });
+  }
+
+  try {
+    const subscription = await withTimeout(
+      prisma.companySubscription.findUnique({
+        where: { companyId },
+        select: { cloudEnabled: true },
+      }),
+      2000,
+      "DB_TIMEOUT_CLOUD_SUBSCRIPTION"
+    );
+
+    if (!subscription?.cloudEnabled) {
+      return res.status(403).json({
+        error: "Cloud ist für diese Firma nicht aktiviert",
+        code: "CLOUD_NOT_ENABLED",
+      });
+    }
+
+    return next();
+  } catch (e: any) {
+    console.error("[guard:requireCloudEnabled]", e?.message || e);
+    return res.status(503).json({
+      error: "DB Fehler oder Timeout (Cloud Check)",
+      code: e?.message || "CLOUD_CHECK_FAILED",
+    });
+  }
+}
 export async function requireCompanySeatAvailable(
   req: Express.Request,
   res: Response,
