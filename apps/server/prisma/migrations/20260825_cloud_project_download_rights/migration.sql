@@ -1,0 +1,2 @@
+ALTER TABLE "ProjectMember"
+ADD COLUMN IF NOT EXISTS "canDownload" BOOLEAN NOT NULL DEFAULT false;
