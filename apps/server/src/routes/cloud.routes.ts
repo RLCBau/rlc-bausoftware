@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { prisma } from "../lib/prisma";
-import { presignGet } from "../lib/s3";
+import { bucket, presignGet, s3 } from "../lib/s3";
 import { requireAuth, requireVerifiedEmail } from "../middleware/auth";
 import {
   requireActiveSubscription,
@@ -20,6 +21,58 @@ const PROJECT_ROLES = new Set([
   "GAST",
 ]);
 
+function cloudObjectId(key: string) {
+  return `object:${Buffer.from(key, "utf8").toString("base64url")}`;
+}
+
+function objectKeyFromCloudId(value: string) {
+  try {
+    const raw = String(value || "");
+    if (!raw.startsWith("object:")) return null;
+    return Buffer.from(raw.slice("object:".length), "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function isCloudDownloadFile(key: string) {
+  return /\.(pdf|jpg|jpeg|png|heic|webp|doc|docx|xls|xlsx|csv|dxf|dwg|ifc|zip)$/i.test(key);
+}
+
+async function listProjectBucketFiles(projectCode: string) {
+  if (!s3) return [];
+
+  const prefix = `projects/${String(projectCode || "").trim()}/`;
+  const files: Array<{ key: string; size: string; updatedAt: string }> = [];
+  let token: string | undefined;
+
+  do {
+    const page = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: token,
+      })
+    );
+
+    for (const item of page.Contents || []) {
+      const key = String(item.Key || "");
+      if (!key || !isCloudDownloadFile(key)) continue;
+
+      files.push({
+        key,
+        size: String(item.Size || 0),
+        updatedAt: item.LastModified
+          ? item.LastModified.toISOString()
+          : new Date(0).toISOString(),
+      });
+    }
+
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+
+  return files;
+}
 router.use(
   requireAuth,
   requireVerifiedEmail,
@@ -238,23 +291,49 @@ router.get("/projects/:projectId", async (req: any, res) => {
       },
     });
 
+    const bucketFiles = await listProjectBucketFiles(access.project.code);
+    const availableKeys = new Set(bucketFiles.map((file) => file.key));
+
+    const registeredDocuments = documents
+      .filter(
+        (document) =>
+          document.current &&
+          (!s3 || availableKeys.has(document.current.storage.key))
+      )
+      .map((document) => ({
+        id: document.id,
+        name: document.name,
+        kind: document.kind,
+        updatedAt: document.updatedAt.toISOString(),
+        versionId: document.current!.id,
+        size: String(document.current!.storage.size),
+        mime: document.current!.storage.mime,
+      }));
+
+    const registeredKeys = new Set(
+      documents
+        .filter((document) => document.current)
+        .map((document) => document.current!.storage.key)
+    );
+
+    const directBucketFiles = bucketFiles
+      .filter((file) => !registeredKeys.has(file.key))
+      .map((file) => ({
+        id: cloudObjectId(file.key),
+        name: file.key.split("/").pop() || file.key,
+        kind: "DATEI",
+        updatedAt: file.updatedAt,
+        versionId: "",
+        size: file.size,
+        mime: "application/octet-stream",
+      }));
+
     return res.json({
       ok: true,
       project: access.project,
       canDownload: access.canDownload,
-      documents: documents
-        .filter((document) => document.current)
-        .map((document) => ({
-          id: document.id,
-          name: document.name,
-          kind: document.kind,
-          updatedAt: document.updatedAt.toISOString(),
-          versionId: document.current!.id,
-          size: String(document.current!.storage.size),
-          mime: document.current!.storage.mime,
-        })),
-    });
-  } catch (error: any) {
+      documents: [...registeredDocuments, ...directBucketFiles],
+    });  } catch (error: any) {
     return res.status(Number(error?.status) || 500).json({
       ok: false,
       error: String(error?.message || "Projekt konnte nicht geladen werden"),
@@ -276,6 +355,37 @@ router.get(
         });
       }
 
+      const directObjectKey = objectKeyFromCloudId(
+        String(req.params.documentId || "")
+      );
+
+      if (directObjectKey) {
+        const allowedPrefix = `projects/${access.project.code}/`;
+
+        if (!directObjectKey.startsWith(allowedPrefix) || !s3) {
+          return res.status(404).json({
+            ok: false,
+            error: "Datei nicht gefunden",
+          });
+        }
+
+        try {
+          await s3.send(
+            new HeadObjectCommand({ Bucket: bucket, Key: directObjectKey })
+          );
+        } catch {
+          return res.status(410).json({
+            ok: false,
+            error: "Datei ist nicht mehr im Cloud-Speicher vorhanden",
+          });
+        }
+
+        return res.json({
+          ok: true,
+          filename: directObjectKey.split("/").pop() || "download",
+          downloadUrl: await presignGet(directObjectKey),
+        });
+      }
       const document = await prisma.document.findFirst({
         where: {
           id: String(req.params.documentId || ""),
