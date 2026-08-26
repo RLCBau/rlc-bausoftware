@@ -33,7 +33,9 @@ function companyIdFrom(req: any) {
 }
 
 function isAdminRole(role: unknown) {
-  return String(role || "").trim().toUpperCase() === "ADMIN";
+  return ["ADMIN", "BAULEITER"].includes(
+    String(role || "").trim().toUpperCase()
+  );
 }
 
 async function currentCompanyMember(req: any) {

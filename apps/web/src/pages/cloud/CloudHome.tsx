@@ -341,7 +341,7 @@ export default function CloudHome() {
             </div>
           </div>
 
-          <nav style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div aria-label="Cloud-Navigation" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <div style={{ position: "relative" }}>
               <button
                 type="button"
@@ -447,7 +447,7 @@ export default function CloudHome() {
             >
               Abmelden
             </button>
-          </nav>
+          </div>
         </div>
       </header>
 
