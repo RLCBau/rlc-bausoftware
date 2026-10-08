@@ -1657,6 +1657,13 @@ export default function LoginScreen({ navigation, route }: Props) {
                 </View>
               </View>
 
+              <Pressable
+                accessibilityRole="link"
+                style={s.linkBtn}
+                onPress={() => Linking.openURL("https://rlcbausoftware.com/datenschutz/")}
+              >
+                <Text style={s.linkTxt}>Datenschutzerklärung</Text>
+              </Pressable>
               <View style={s.bottomSpace} />
             </View>
           </Pressable>
