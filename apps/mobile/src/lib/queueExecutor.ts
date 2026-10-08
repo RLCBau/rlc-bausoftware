@@ -9,6 +9,16 @@ import { api } from "./api";
  * - altrimenti usa payload come “row”
  */
 export async function rlcQueueExecutor(item: QueueItem) {
+  // A queued document must not be transmitted after an account/company switch.
+  // Recheck server-side project visibility for this execution path too.
+  const projectId = String(item.projectId || "").trim();
+  if (!projectId) throw new Error("QUEUE_PROJECT_REQUIRED");
+  const accessibleProjects = await api.projects();
+  const authorized = accessibleProjects.some((project: any) =>
+    String(project?.id || "").trim() === projectId ||
+    String(project?.code || "").trim() === projectId
+  );
+  if (!authorized) throw new Error("QUEUE_PROJECT_NOT_AUTHORIZED");
   const row = (item as any)?.payload?.row ?? (item as any)?.payload ?? {};
 
   switch (item.kind) {
