@@ -27,10 +27,7 @@ import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
  *   così InboxScreen/Eingangsprüfung vede subito le righe.
  */
 
-let _projectMap: Map<string, string> | null = null;
-
 async function loadProjectMap(): Promise<Map<string, string>> {
-  if (_projectMap) return _projectMap;
 
   const map = new Map<string, string>();
   try {
@@ -46,7 +43,6 @@ async function loadProjectMap(): Promise<Map<string, string>> {
     // best effort
   }
 
-  _projectMap = map;
   return map;
 }
 
@@ -99,13 +95,22 @@ export async function syncAll(
   let ok = 0,
     fail = 0;
 
-  // preload map (best effort)
-  await loadProjectMap();
+  // Fail closed: never replay offline documents to a server that cannot
+  // confirm which projects are visible to the currently authenticated user.
+  const allowedProjects = await loadProjectMap();
+  if (allowedProjects.size === 0) {
+    return { ok: 0, fail: list.filter((item) => item.status !== "DONE").length };
+  }
 
   const targetPk = await projectKeyForTarget(opts);
 
   for (const item of list) {
     if (item.status === "DONE") continue;
+
+    // The local queue is shared by legacy accounts; never transmit an item
+    // unless the current server session explicitly lists its project.
+    const itemProjectCode = allowedProjects.get(String(item.projectId || "").trim());
+    if (!itemProjectCode) { fail++; continue; }
 
     // ✅ filtro per progetto (se richiesto)
     if (targetPk) {
