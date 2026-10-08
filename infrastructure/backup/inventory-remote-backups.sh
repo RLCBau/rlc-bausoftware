@@ -10,7 +10,9 @@ set +a
 : "${STORAGEBOX_HOST:?}" "${STORAGEBOX_USER:?}" "${STORAGEBOX_PASSWORD_FILE:?}"
 [[ -r "$STORAGEBOX_PASSWORD_FILE" ]] || { echo "BLOCK storagebox_credential_unavailable"; exit 2; }
 export SSHPASS="$(cat "$STORAGEBOX_PASSWORD_FILE")"
-output="$(sshpass -e ssh -p 23 -o BatchMode=no -o ConnectTimeout=12 -o StrictHostKeyChecking=accept-new "$STORAGEBOX_USER@$STORAGEBOX_HOST" 'find backups/rlc -mindepth 1 -maxdepth 1 -type d -print' 2>/dev/null)" || { echo "BLOCK remote_listing_failed"; exit 2; }
+raw="$(printf 'ls -1 backups/rlc\n' | sshpass -e sftp -P 23 -oBatchMode=no -oConnectTimeout=12 -b - "$STORAGEBOX_USER@$STORAGEBOX_HOST" 2>/dev/null)" || { echo "BLOCK remote_listing_failed"; exit 2; }
+output="$(printf '%s\n' "$raw" | grep -E '^backups/rlc/[0-9]{8}T[0-9]{6}Z$' || true)"
+[[ -n "$output" ]] || { echo "BLOCK no_backup_directories_observed"; exit 2; }
 today="$(date -u +%s)"
 retention="${RETENTION_DAYS:-14}"
 total=0
