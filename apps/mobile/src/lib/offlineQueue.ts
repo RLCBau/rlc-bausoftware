@@ -175,13 +175,19 @@ export type QueueItem =
       };
     });
 
-const LEGACY_KEY = "rlc.queue.v2";
+// Legacy data remains stored under rlc.queue.v2 for controlled recovery.
 
 // Server queues belong to a specific authenticated identity. Legacy data is
 // retained in-place for manual recovery, never silently adopted by a new user.
 async function queueKey(): Promise<string> {
   const mode = await getAuthMode();
-  if (mode === "NUR_APP") return LEGACY_KEY;
+  if (mode === "NUR_APP") {
+    const localState = await getAuthState("NUR_APP");
+    const localIdentity = String(localState?.email || "").trim().toLowerCase();
+    if (!localIdentity) throw new Error("QUEUE_LOCAL_IDENTITY_REQUIRED");
+    // Never expose an older global queue to a newly signed-in local user.
+    return `rlc.queue.v3:NUR_APP:${encodeURIComponent(localIdentity)}`;
+  }
   const state = await getAuthState("SERVER_SYNC");
   const identity = String(state?.userId || state?.email || "").trim().toLowerCase();
   if (!identity) throw new Error("QUEUE_AUTH_REQUIRED");
