@@ -104,7 +104,11 @@ export async function setToken(token: string) {
 export async function getToken(): Promise<string> {
   try {
     const t = normalizeToken(await SecureStore.getItemAsync(TOKEN_KEY));
-    if (t) return t;
+    if (t) {
+      // Remove plaintext tokens left behind by older installations.
+      await AsyncStorage.removeItem(TOKEN_KEY).catch(() => undefined);
+      return t;
+    }
   } catch {
     // ignore
   }
