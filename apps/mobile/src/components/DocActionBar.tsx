@@ -118,8 +118,8 @@ const styles = StyleSheet.create({
   },
 
   dark: {
-    backgroundColor: "#12324A",
-    borderColor: "#1E4C6B",
+    backgroundColor: COLORS.accentDark,
+    borderColor: COLORS.accent,
   },
   darkTxt: {
     color: COLORS.textLight,
@@ -140,4 +140,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
 });
+
+
 

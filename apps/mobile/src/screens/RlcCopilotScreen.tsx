@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { COLORS } from "../ui/theme";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 
@@ -136,6 +136,8 @@ export default function RlcCopilotScreen() {
   ]);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<CopilotMode>("idle");
+  const speechRunIdRef = useRef(0);
+  const lastAssistantTextRef = useRef("");
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [recording, setRecording] = useState<any | null>(null);
   const [recordingBusy, setRecordingBusy] = useState(false);
@@ -256,10 +258,12 @@ export default function RlcCopilotScreen() {
     return null;
   }, []);
 
-  async function speak(text: string) {
+  async function speak(text: string, force = false) {
     const clean = s(text).replace(/\s+/g, " ").slice(0, 1400);
-    if (!clean || !voiceEnabled) return;
+    if (!clean || (!voiceEnabled && !force)) return;
 
+    const runId = ++speechRunIdRef.current;
+    try { Speech.stop(); } catch {}
     setMode("speaking");
 
     // 1) Professionelle Server-TTS wie Web.
@@ -320,9 +324,9 @@ export default function RlcCopilotScreen() {
         language: "de-DE",
         rate: 0.96,
         pitch: 1.0,
-        onDone: () => setMode("idle"),
-        onStopped: () => setMode("idle"),
-        onError: () => setMode("idle"),
+        onDone: () => { if (speechRunIdRef.current === runId) setMode("idle"); },
+        onStopped: () => { if (speechRunIdRef.current === runId) setMode("idle"); },
+        onError: () => { if (speechRunIdRef.current === runId) setMode("idle"); },
       });
       return;
     } catch {}
@@ -362,6 +366,7 @@ export default function RlcCopilotScreen() {
       }
 
       setMessages((prev) => [...prev, { id: uid(), role: "assistant", text: answer }]);
+      lastAssistantTextRef.current = answer;
       await speak(answer);
     } finally {
       setBusy(false);
@@ -507,6 +512,7 @@ export default function RlcCopilotScreen() {
   }
 
   function stopAudio() {
+    speechRunIdRef.current += 1;
     try {
       soundRef.current?.stopAsync?.();
       soundRef.current?.unloadAsync?.();
@@ -518,13 +524,31 @@ export default function RlcCopilotScreen() {
     setMode("idle");
   }
 
+  // RLC_STOP_AUDIO_ON_BLUR_V1
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        try {
+          soundRef.current?.stopAsync?.();
+          soundRef.current?.unloadAsync?.();
+          soundRef.current = null;
+        } catch {}
+        try {
+          Speech.stop();
+        } catch {}
+        setMode("idle");
+      };
+    }, [])
+  );
+
   const canSend = !!s(input) && !busy;
 
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 92 : 0}
       >
         <View style={styles.top}>
           <View style={styles.avatarWrap}>
@@ -544,8 +568,23 @@ export default function RlcCopilotScreen() {
               {projectCode || "Mobile"} \u00B7 {copilotModeLabel(mode)}
             </Text>
           </View>
-          <Pressable style={styles.smallBtn} onPress={() => setVoiceEnabled((v) => !v)}>
-            <Text style={styles.smallBtnTxt}>{voiceEnabled ? "Audio an" : "Audio aus"}</Text>
+          <Pressable
+            style={[styles.smallBtn, mode === "speaking" && styles.smallBtnStop]}
+            onPress={() => {
+              if (mode === "speaking" || voiceEnabled) {
+                stopAudio();
+                setVoiceEnabled(false);
+                return;
+              }
+
+              setVoiceEnabled(true);
+              const last = s(lastAssistantTextRef.current);
+              if (last) setTimeout(() => speak(last, true), 80);
+            }}
+          >
+            <Text style={styles.smallBtnTxt}>
+              {mode === "speaking" ? "Stop" : voiceEnabled ? "Audio an" : "Audio aus"}
+            </Text>
           </Pressable>
         </View>
 
@@ -574,6 +613,7 @@ export default function RlcCopilotScreen() {
           ref={listRef}
           style={styles.messages}
           contentContainerStyle={styles.messagesContent}
+          keyboardShouldPersistTaps="handled"
           data={messages}
           keyExtractor={(m) => m.id}
           renderItem={({ item }) => (
@@ -610,8 +650,9 @@ export default function RlcCopilotScreen() {
           <TextInput
             value={input}
             onChangeText={setInput}
+            onFocus={scrollEnd}
             placeholder="RLC KI fragen\u2026"
-            placeholderTextColor="#B8C1CC"
+            placeholderTextColor={COLORS.sub}
             style={styles.input}
             multiline
             editable={!busy}
@@ -637,7 +678,7 @@ export default function RlcCopilotScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#EEF4F8" },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
   flex: { flex: 1 },
   top: {
     flexDirection: "row",
@@ -648,16 +689,16 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     backgroundColor: COLORS.card,
     borderBottomWidth: 1,
-    borderBottomColor: "#D8E4ED",
+    borderBottomColor: COLORS.border,
   },
   avatarWrap: {
     width: 62,
     height: 62,
     borderRadius: 20,
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.text,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#2563EB",
+    shadowColor: COLORS.accent,
     shadowOpacity: 0.28,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 8 },
@@ -671,31 +712,35 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     borderRadius: 8,
-    backgroundColor: "#22C55E",
+    backgroundColor: COLORS.success,
     borderWidth: 2,
     borderColor: COLORS.card,
   },
-  modeListening: { backgroundColor: "#EF4444" },
-  modeSpeaking: { backgroundColor: "#3B82F6" },
-  modeAnalyzing: { backgroundColor: "#F59E0B" },
+  modeListening: { backgroundColor: COLORS.danger },
+  modeSpeaking: { backgroundColor: COLORS.accent },
+  modeAnalyzing: { backgroundColor: COLORS.warning },
   topText: { flex: 1 },
-  title: { fontSize: 34, fontWeight: "900", color: "#07121F", letterSpacing: -1 },
-  sub: { marginTop: 2, fontSize: 16, fontWeight: "800", color: "#697684" },
+  title: { fontSize: 34, fontWeight: "900", color: COLORS.text, letterSpacing: -1 },
+  sub: { marginTop: 2, fontSize: 16, fontWeight: "800", color: COLORS.sub },
   smallBtn: {
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: "#EEF4F8",
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
-    borderColor: "#D8E4ED",
+    borderColor: COLORS.border,
   },
-  smallBtnTxt: { fontWeight: "900", color: "#07121F", fontSize: 12 },
+  smallBtnStop: {
+    backgroundColor: COLORS.dangerBg,
+    borderColor: COLORS.danger,
+  },
+  smallBtnTxt: { fontWeight: "900", color: COLORS.text, fontSize: 12 },
   quickBar: {
     paddingVertical: 12,
     paddingLeft: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#E1E9F0",
-    backgroundColor: "#F8FBFD",
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
   },
   quick: {
     marginRight: 9,
@@ -704,11 +749,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#D8E4ED",
+    borderColor: COLORS.border,
   },
-  quickTxt: { color: "#07121F", fontWeight: "900", fontSize: 14 },
+  quickTxt: { color: COLORS.text, fontWeight: "900", fontSize: 14 },
   messages: { flex: 1 },
-  messagesContent: { padding: 16, paddingBottom: 24 },
+  messagesContent: { padding: 16, paddingBottom: 110 },
   bubble: {
     maxWidth: "88%",
     borderRadius: 20,
@@ -720,14 +765,14 @@ const styles = StyleSheet.create({
   assistantBubble: {
     alignSelf: "flex-start",
     backgroundColor: COLORS.card,
-    borderColor: "#D8E4ED",
+    borderColor: COLORS.border,
   },
   userBubble: {
     alignSelf: "flex-end",
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
   },
-  assistantText: { color: "#07121F", fontSize: 17, lineHeight: 25, fontWeight: "700" },
+  assistantText: { color: COLORS.text, fontSize: 17, lineHeight: 25, fontWeight: "700" },
   userText: { color: COLORS.card, fontSize: 17, lineHeight: 25, fontWeight: "800" },
   inputRow: {
     flexDirection: "row",
@@ -736,29 +781,29 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: COLORS.card,
     borderTopWidth: 1,
-    borderTopColor: "#D8E4ED",
+    borderTopColor: COLORS.border,
   },
   micBtn: {
     width: 54,
     minHeight: 54,
     borderRadius: 18,
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.text,
     alignItems: "center",
     justifyContent: "center",
   },
-  micBtnActive: { backgroundColor: "#DC2626" },
-  micBtnBusy: { backgroundColor: "#F59E0B" },
-  micBtnSpeaking: { backgroundColor: "#2563EB" },
+  micBtnActive: { backgroundColor: COLORS.danger },
+  micBtnBusy: { backgroundColor: COLORS.warning },
+  micBtnSpeaking: { backgroundColor: COLORS.accent },
   micTxt: { color: COLORS.card, fontWeight: "900", fontSize: 16 },
   input: {
     flex: 1,
     minHeight: 54,
     maxHeight: 120,
     borderRadius: 18,
-    backgroundColor: "#F3F7FA",
+    backgroundColor: COLORS.inputBg,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: "#07121F",
+    color: COLORS.text,
     fontSize: 17,
     fontWeight: "700",
   },
@@ -766,13 +811,29 @@ const styles = StyleSheet.create({
     minHeight: 54,
     paddingHorizontal: 18,
     borderRadius: 18,
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.accent,
     alignItems: "center",
     justifyContent: "center",
   },
-  sendBtnDisabled: { backgroundColor: "#9CA3AF" },
+  sendBtnDisabled: { backgroundColor: COLORS.sub },
   sendTxt: { color: COLORS.card, fontWeight: "900", fontSize: 16 },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

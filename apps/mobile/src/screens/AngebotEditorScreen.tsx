@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Sharing from "expo-sharing";
@@ -247,11 +248,14 @@ async function getMode(): Promise<"NUR_APP" | "SERVER_SYNC"> {
 }
 
 async function loadOfferSmart(projectCode: string, angebotId: string) {
-  const mode = await getMode();
-
-  if (mode === "NUR_APP") {
-    return loadOffer(projectCode, angebotId);
+  // Prima locale: evita che server vuoto/stale azzeri l'offerta in modifica
+  const local = await loadOffer(projectCode, angebotId);
+  if (local && Array.isArray((local as any).rows) && (local as any).rows.length) {
+    return local;
   }
+
+  const mode = await getMode();
+  if (mode === "NUR_APP") return local;
 
   try {
     const list = await api.getAngebote(projectCode);
@@ -259,18 +263,17 @@ async function loadOfferSmart(projectCode: string, angebotId: string) {
       ? list.find((x: any) => String(x?.id) === String(angebotId))
       : null;
 
-    if (found) {
+    if (found && Array.isArray(found?.rows) && found.rows.length) {
       const normalized = normalizeOfferDoc(found);
-      await saveOffer(normalized); // cache locale
+      await saveOffer(normalized);
       return normalized;
     }
   } catch (e) {
     console.log("loadOfferSmart server fallback -> local", e);
   }
 
-  return loadOffer(projectCode, angebotId);
+  return local;
 }
-
 async function saveOfferSmart(doc: AngebotDoc) {
   const mode = await getMode();
 
@@ -284,13 +287,68 @@ async function saveOfferSmart(doc: AngebotDoc) {
   }
 
   try {
-    await api.saveAngebot(doc.projectCode, next);
+    await api.saveAngebot(next.projectCode, next);
     await saveOffer(next); // cache locale aggiornata
     return next;
   } catch (e) {
     console.log("saveOfferSmart server fallback -> local", e);
     return saveOffer(next);
   }
+}
+
+async function syncAngebotToMengenAuto(saved: any) {
+  const projectCode = String(saved?.projectCode || "").trim();
+  if (!projectCode || !saved?.id) return;
+
+  const key = `rlc_mengen_list:${projectCode}`;
+  const raw = await AsyncStorage.getItem(key);
+  const list = raw ? JSON.parse(raw) : [];
+  const next = Array.isArray(list) ? list : [];
+
+  const existingIdx = next.findIndex((x: any) => String(x?.angebotId || "") === String(saved.id));
+
+  const rows = Array.isArray(saved?.rows)
+    ? saved.rows.map((r: any, i: number) => ({
+        id: String(r?.id || `${Date.now()}_${i}`),
+        pos: String(r?.pos || i + 1),
+        text: String(r?.text || r?.beschreibung || ""),
+        unit: String(r?.unit || r?.einheit || ""),
+        formula: "",
+        qty: String(r?.quantity ?? r?.qty ?? r?.menge ?? "0"),
+        ep: String(r?.ep ?? r?.price ?? r?.einzelpreis ?? "0"),
+        angebotRowId: r?.id ? String(r.id) : null,
+      }))
+    : [];
+
+  const mengenDoc = {
+    id: existingIdx >= 0 ? next[existingIdx].id : `mengen_${Date.now()}`,
+    projectId: saved.projectId,
+    projectCode,
+    sourceType: "ANGEBOT",
+    sourceLocked: true,
+    angebotId: String(saved.id),
+    angebotSnapshot: saved,
+    title: String(saved?.angebotTitle || saved?.angebotNr || "Mengenermittlung"),
+    datum: new Date().toISOString().slice(0, 10),
+    pdfUri: "",
+    rows: rows.length ? rows : [{
+      id: `${Date.now()}_0`,
+      pos: "1",
+      text: "",
+      unit: "",
+      formula: "",
+      qty: "0",
+      ep: "0",
+      angebotRowId: null,
+    }],
+    createdAt: existingIdx >= 0 ? next[existingIdx].createdAt || Date.now() : Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  if (existingIdx >= 0) next[existingIdx] = mengenDoc;
+  else next.unshift(mengenDoc);
+
+  await AsyncStorage.setItem(key, JSON.stringify(next));
 }
 async function exportOfferPdf(params: {
   doc: AngebotDoc;
@@ -311,22 +369,22 @@ async function exportOfferPdf(params: {
     brutto,
   } = params;
 
-  const rows = doc.rows.map((r) => {
+  const rows = (doc.rows || []).map((r) => {
     const qty = toNum(r.quantity);
     const ep = toNum(r.ep);
     const gp = qty * ep;
 
     return {
-      pos: r.pos || "",
-      text: r.text || "",
-      unit: r.unit || "",
-      qty,
-      ep,
+      pos: r.pos,
+      text: r.text,
+      unit: r.unit,
+      quantity: r.quantity,
+      ep: r.ep,
       gp,
     };
   });
 
-  await buildDocumentPdf({
+  const out = await buildDocumentPdf({
     type: "ANGEBOT",
     projectCode: doc.projectCode,
     fileName: `${doc.angebotNr || "angebot"}.pdf`,
@@ -343,28 +401,37 @@ async function exportOfferPdf(params: {
     rows,
     totals: {
       netto,
-      rabattPct: toNum(doc.rabattPct),
       rabattValue,
-      zuschlagPct: toNum(doc.zuschlagPct),
       zuschlagValue,
-      mwstPct: toNum(doc.mwstPct),
+      nettoFinal,
       mwstValue,
       brutto,
-    },
-    note: doc.note || "",
+    } as any,
     extraBlocks: [
       {
-        title: "Projekt",
+        title: "Projekt / Baustelle",
         lines: [
-          `Baustelle: ${doc.baustelle || doc.title || "-"}`,
-          `Projektcode: ${doc.projectCode || "-"}`,
-          `Gültig bis: ${doc.validUntil || "-"}`,
+          doc.baustelle || "",
+          doc.validUntil ? `Gültig bis: ${doc.validUntil}` : "",
+        ].filter(Boolean),
+      },
+      {
+        title: "Zusammenfassung",
+        lines: [
+          `Netto: ${fmtMoney(netto)} €`,
+          `Rabatt: ${fmtMoney(rabattValue)} €`,
+          `Zuschlag: ${fmtMoney(zuschlagValue)} €`,
           `Netto gesamt: ${fmtMoney(nettoFinal)} €`,
+          `MwSt.: ${fmtMoney(mwstValue)} €`,
+          `Brutto: ${fmtMoney(brutto)} €`,
         ],
       },
     ],
-    shareAfterCreate: true,
+    note: doc.note || "",
+    shareAfterCreate: false,
   });
+
+  return out;
 }
 
 async function exportOfferExcel(params: {
@@ -455,7 +522,9 @@ async function exportOfferExcel(params: {
 }
 
 export default function AngebotEditorScreen({ route, navigation }: Props) {
-  const { projectId, projectCode, title, angebotId } = route.params;
+  const { projectId, projectCode: routeProjectCode, title } = route.params;
+  const projectCode = String(routeProjectCode || projectId || "").trim();
+  const angebotId = String((route.params as any)?.angebotId || (route.params as any)?.docId || (route.params as any)?.editId || "").trim() || undefined;
 
   const [doc, setDoc] = useState<AngebotDoc>(() =>
     createEmptyOffer({ projectId, projectCode, title })
@@ -632,6 +701,7 @@ if (found) {
     });
 
     const saved = await saveOfferSmart(normalized);
+    await syncAngebotToMengenAuto(saved);
     setDoc(saved);
     return saved;
   }
@@ -681,8 +751,10 @@ if (found) {
   async function onExportPdf() {
     try {
       setBusy(true);
+
       const saved = await normalizeAndSaveCurrentDoc();
-      await exportOfferPdf({
+
+      const out: any = await exportOfferPdf({
         doc: saved,
         netto,
         rabattValue,
@@ -691,6 +763,29 @@ if (found) {
         mwstValue,
         brutto,
       });
+
+      const pdfUri = String(out?.pdfUri || out?.uri || "").trim();
+
+      if (!pdfUri) {
+        throw new Error("PDF wurde erstellt, aber kein pdfUri zurückgegeben.");
+      }
+
+      const withPdf = await saveOfferSmart({ ...(saved as any), pdfUri } as any);
+      setDoc(withPdf as any);
+
+      await submitToEingangPruefung({
+        type: "ANGEBOT",
+        projectKey: withPdf.projectCode || projectCode,
+        projectId: withPdf.projectId || projectId,
+        projectCode: withPdf.projectCode || projectCode,
+        title: withPdf.angebotTitle || withPdf.angebotNr || "Angebot",
+        doc: withPdf,
+        pdfUri,
+        status: "EINGEREICHT",
+        sourceScreen: "AngebotEditor",
+      });
+
+      await Linking.openURL(pdfUri);
     } catch (e: any) {
       Alert.alert("PDF Export", String(e?.message || "PDF Export fehlgeschlagen"));
     } finally {
@@ -887,7 +982,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               onChangeText={(v) => setField("angebotNr", v)}
               style={[s.input, isAccepted && s.inputLocked]}
               placeholder="ANG-2026-0001"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               editable={!isAccepted}
             />
 
@@ -897,7 +992,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               onChangeText={(v) => setField("angebotTitle", v)}
               style={[s.input, isAccepted && s.inputLocked]}
               placeholder="Angebot Tiefbauarbeiten"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               editable={!isAccepted}
             />
 
@@ -939,7 +1034,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   onChangeText={(v) => setField("datum", v)}
                   style={[s.input, isAccepted && s.inputLocked]}
                   placeholder="08.04.2026"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   editable={!isAccepted}
                 />
               </View>
@@ -950,7 +1045,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   onChangeText={(v) => setField("validUntil", v)}
                   style={[s.input, isAccepted && s.inputLocked]}
                   placeholder="22.04.2026"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   editable={!isAccepted}
                 />
               </View>
@@ -962,7 +1057,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               onChangeText={(v) => setField("baustelle", v)}
               style={[s.input, isAccepted && s.inputLocked]}
               placeholder="Projekt / Baustelle"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               editable={!isAccepted}
             />
           </View>
@@ -976,7 +1071,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               onChangeText={(v) => setField("customerName", v)}
               style={[s.input, isAccepted && s.inputLocked]}
               placeholder="Max Mustermann"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               editable={!isAccepted}
             />
 
@@ -987,7 +1082,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               style={[s.input, s.inputArea, isAccepted && s.inputLocked]}
               multiline
               placeholder="Straße, PLZ Ort"
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               editable={!isAccepted}
             />
 
@@ -999,7 +1094,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   onChangeText={(v) => setField("customerEmail", v)}
                   style={[s.input, isAccepted && s.inputLocked]}
                   placeholder="kunde@email.de"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   autoCapitalize="none"
                   editable={!isAccepted}
                 />
@@ -1011,7 +1106,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   onChangeText={(v) => setField("customerPhone", v)}
                   style={[s.input, isAccepted && s.inputLocked]}
                   placeholder="+49 ..."
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   editable={!isAccepted}
                 />
               </View>
@@ -1039,7 +1134,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                       onChangeText={(v) => setRow(row.id, { pos: v })}
                       style={[s.input, isAccepted && s.inputLocked]}
                       placeholder={String(idx + 1)}
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       editable={!isAccepted}
                     />
                   </View>
@@ -1051,7 +1146,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                       onChangeText={(v) => setRow(row.id, { unit: v })}
                       style={[s.input, isAccepted && s.inputLocked]}
                       placeholder="m / m² / Stk"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       editable={!isAccepted}
                     />
                   </View>
@@ -1064,7 +1159,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   style={[s.input, s.inputArea, isAccepted && s.inputLocked]}
                   multiline
                   placeholder="Leistungsbeschreibung"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   editable={!isAccepted}
                 />
 
@@ -1079,7 +1174,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                       style={[s.input, isAccepted && s.inputLocked]}
                       keyboardType="decimal-pad"
                       placeholder="0"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       editable={!isAccepted}
                     />
                   </View>
@@ -1094,7 +1189,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                       style={[s.input, isAccepted && s.inputLocked]}
                       keyboardType="decimal-pad"
                       placeholder="0,00"
-                      placeholderTextColor="#B8C1CC"
+                      placeholderTextColor={COLORS.sub}
                       editable={!isAccepted}
                     />
                   </View>
@@ -1129,7 +1224,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   style={[s.input, isAccepted && s.inputLocked]}
                   keyboardType="decimal-pad"
                   placeholder="0"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   editable={!isAccepted}
                 />
               </View>
@@ -1144,7 +1239,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   style={[s.input, isAccepted && s.inputLocked]}
                   keyboardType="decimal-pad"
                   placeholder="0"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   editable={!isAccepted}
                 />
               </View>
@@ -1157,7 +1252,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
                   style={[s.input, isAccepted && s.inputLocked]}
                   keyboardType="decimal-pad"
                   placeholder="19"
-                  placeholderTextColor="#B8C1CC"
+                  placeholderTextColor={COLORS.sub}
                   editable={!isAccepted}
                 />
               </View>
@@ -1170,7 +1265,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               style={[s.input, s.inputAreaLarge, isAccepted && s.inputLocked]}
               multiline
               placeholder="Zahlungsbedingungen, Ausführungshinweise, Sonstiges..."
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               editable={!isAccepted}
             />
           </View>
@@ -1222,7 +1317,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}`
               onPress={onExportPdf}
               disabled={busy}
             >
-              <Text style={s.actionBtnSecondaryTxt}>PDF exportieren</Text>
+              <Text style={s.actionBtnSecondaryTxt}>PDF</Text>
             </Pressable>
 
             <Pressable
@@ -1581,16 +1676,16 @@ const s = StyleSheet.create({
   flowBtnOrange: {
     minHeight: 50,
     borderRadius: 16,
-    backgroundColor: "#F97316",
+    backgroundColor: COLORS.warning,
     borderWidth: 1,
-    borderColor: "#F97316",
+    borderColor: COLORS.warning,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
 
   flowBtnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
     fontSize: 15,
   },
@@ -1660,6 +1755,20 @@ const s = StyleSheet.create({
     opacity: 0.6,
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

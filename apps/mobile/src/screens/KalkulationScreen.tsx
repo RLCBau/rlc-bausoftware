@@ -518,7 +518,7 @@ export default function KalkulationScreen() {
         onChangeText={setQuery}
         placeholder="Position, Kurztext oder Hinweis suchen…"
         style={styles.search}
-        placeholderTextColor="#B8C1CC"
+        placeholderTextColor={COLORS.sub}
       />
 
       <FlatList
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
 
   actionsRow: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, backgroundColor: COLORS.bg },
   primaryButton: { flex: 1, backgroundColor: COLORS.accent, padding: 12, borderRadius: 12, alignItems: "center" },
-  primaryText: { color: "#fff", fontWeight: "900" },
+  primaryText: { color: COLORS.textLight, fontWeight: "900" },
   secondaryButton: { flex: 1, backgroundColor: COLORS.card2, padding: 12, borderRadius: 12, alignItems: "center" },
   secondaryText: { color: COLORS.text, fontWeight: "900" },
 
@@ -612,12 +612,12 @@ const styles = StyleSheet.create({
   filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.border },
   filterChipActive: { backgroundColor: COLORS.text, borderColor: COLORS.text },
   filterText: { color: COLORS.sub, fontWeight: "900", fontSize: 12 },
-  filterTextActive: { color: "#fff" },
+  filterTextActive: { color: COLORS.textLight },
 
   listInfo: { paddingHorizontal: 16, paddingBottom: 6 },
   listInfoText: { color: COLORS.sub, fontWeight: "900", fontSize: 12 },
-  errorBox: { marginHorizontal: 16, padding: 12, backgroundColor: "#fee2e2", borderRadius: 12, marginBottom: 8 },
-  errorText: { color: "#991b1b", fontWeight: "900" },
+  errorBox: { marginHorizontal: 16, padding: 12, backgroundColor: COLORS.dangerBg, borderRadius: 12, marginBottom: 8 },
+  errorText: { color: COLORS.danger, fontWeight: "900" },
   noticeBox: { marginHorizontal: 16, padding: 12, backgroundColor: COLORS.card, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
   noticeText: { color: COLORS.sub, fontWeight: "900", lineHeight: 18 },
 
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   emptyTitle: { color: COLORS.text, fontWeight: "900", fontSize: 20, marginBottom: 8 },
   emptyText: { color: COLORS.sub, fontWeight: "900", lineHeight: 20 },
   emptyAction: { marginTop: 14, backgroundColor: COLORS.accent, borderRadius: 12, padding: 14, alignItems: "center" },
-  emptyActionText: { color: "#fff", fontWeight: "900" },
+  emptyActionText: { color: COLORS.textLight, fontWeight: "900" },
 
   card: { backgroundColor: COLORS.card, borderRadius: RLC_RADIUS.button, padding: 14, borderWidth: 1, borderColor: COLORS.border, marginBottom: 10 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "flex-start" },
@@ -636,8 +636,10 @@ const styles = StyleSheet.create({
   title: { color: COLORS.text, fontSize: 16, fontWeight: "900", marginTop: 10, lineHeight: 22 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   meta: { color: COLORS.sub, backgroundColor: COLORS.card2, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9, fontWeight: "900", fontSize: 12 },
-  warning: { color: "#92400e", marginTop: 10, fontWeight: "800", lineHeight: 18 },
+  warning: { color: COLORS.warning, marginTop: 10, fontWeight: "800", lineHeight: 18 },
 });
+
+
 
 
 

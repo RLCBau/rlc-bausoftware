@@ -8,6 +8,7 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -228,7 +229,7 @@ export default function SchlussrechnungsScreen({
         `${rechnung?.rechnungNr || "schlussrechnung"}_schlussrechnung`
       );
 
-      await buildSchlussrechnungPdf({
+      const out: any = await buildSchlussrechnungPdf({
         projectCode,
         fileName: `${fileNameBase}.pdf`,
         title: "SCHLUSSRECHNUNG",
@@ -263,8 +264,13 @@ export default function SchlussrechnungsScreen({
         rest,
         abschlagLines: buildAbschlagLines(abschlaege),
         note: rechnung?.note || "",
-        shareAfterCreate: true,
+        shareAfterCreate: false,
       });
+
+      const pdfUri = String(out?.pdfUri || out?.uri || "").trim();
+      if (pdfUri) {
+        await Linking.openURL(pdfUri);
+      }
     } catch (e) {
       console.log("EXPORT SCHLUSSRECHNUNG PDF ERROR", e);
       Alert.alert("Fehler", "Schlussrechnung PDF konnte nicht erstellt werden.");
@@ -361,7 +367,7 @@ export default function SchlussrechnungsScreen({
 
         <Pressable style={s.primaryBtn} onPress={onExportPdf} disabled={busy}>
           <Text style={s.primaryBtnTxt}>
-            {busy ? "Bitte warten..." : "PDF erzeugen"}
+            {busy ? "Bitte warten..." : "PDF"}
           </Text>
         </Pressable>
       </ScrollView>
@@ -519,5 +525,9 @@ const s = StyleSheet.create({
     fontSize: 18,
   },
 });
+
+
+
+
 
 

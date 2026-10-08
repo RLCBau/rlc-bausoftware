@@ -379,7 +379,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
     navigation.setOptions({
       title: title || "Projekt",
       headerStyle: {
-        backgroundColor: "#12324A",
+        backgroundColor: COLORS.accentDark,
       },
       headerTitleStyle: {
         color: COLORS.card,
@@ -823,7 +823,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
     <SafeAreaView style={s.safe}>
       <View style={s.bg}>
         <ScrollView style={s.wrap} contentContainerStyle={s.content}>
-          <View style={s.header}>
+          <View style={s.projectHeroCard}>
             <View style={s.headerRow}>
               <Pressable
                 style={s.backBtn}
@@ -856,7 +856,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
               </View>
             </View>
 
-            <Text style={s.h1}>{projektAnzeige}</Text>
+            <Text style={s.h1} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>{projektAnzeige}</Text>
 
             <View style={s.pillRow}>
               <View style={s.badge}>
@@ -936,8 +936,8 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
               <View style={s.cardHeaderRow}>
                 <View style={s.accentBar} />
                 <View style={{ flex: 1 }}>
-                  <Text style={s.cardTitle}>Projekt-Info</Text>
-                  <Text style={s.cardSub}>Kontakte & Zuständigkeiten</Text>
+                  <Text style={s.cardTitle} numberOfLines={1}>Projekt-Info</Text>
+                  <Text style={s.cardSub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>Kontakte & Zuständigkeiten</Text>
                 </View>
 
                 <Pressable
@@ -1013,7 +1013,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                 disabled={pdfBusy}
               >
                 <View style={s.navRow}>
-                  <View style={[s.navIcon, { backgroundColor: "#12324A" }]} />
+                  <View style={[s.navIcon, { backgroundColor: COLORS.accentDark }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.navTitle}>PDF laden (vom Gerät)</Text>
                     <Text style={s.navSub}>
@@ -1032,7 +1032,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                 onPress={() => navigation.navigate("Inbox" as any)}
               >
                 <View style={s.navRow}>
-                  <View style={[s.navIcon, { backgroundColor: "#12324A" }]} />
+                  <View style={[s.navIcon, { backgroundColor: COLORS.accentDark }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.navTitle}>Inbox (Offline)</Text>
                     <Text style={s.navSub}>
@@ -1063,7 +1063,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                 }}
               >
                 <View style={s.navRow}>
-                  <View style={[s.navIcon, { backgroundColor: "#2563EB" }]} />
+                  <View style={[s.navIcon, { backgroundColor: COLORS.accent }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.navTitle}>Eingang / Prüfung (Server)</Text>
                     <Text style={s.navSub}>
@@ -1091,7 +1091,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                 }}
               >
                 <View style={s.navRow}>
-                  <View style={[s.navIcon, { backgroundColor: "#7C3AED" }]} />
+                  <View style={[s.navIcon, { backgroundColor: COLORS.accentDark }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.navTitle}>Angebote</Text>
                     <Text style={s.navSub}>
@@ -1119,7 +1119,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
               }}
             >
               <View style={s.navRow}>
-                <View style={[s.navIcon, { backgroundColor: "#0EA5E9" }]} />
+                <View style={[s.navIcon, { backgroundColor: COLORS.accent }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.navTitle}>Kalkulation</Text>
                   <Text style={s.navSub}>
@@ -1146,7 +1146,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
               }}
             >
               <View style={s.navRow}>
-                <View style={[s.navIcon, { backgroundColor: "#2563EB" }]} />
+                <View style={[s.navIcon, { backgroundColor: COLORS.accent }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.navTitle}>KI-Kalkulation</Text>
                   <Text style={s.navSub}>
@@ -1174,7 +1174,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
               }}
             >
               <View style={s.navRow}>
-                <View style={[s.navIcon, { backgroundColor: "#B45309" }]} />
+                <View style={[s.navIcon, { backgroundColor: COLORS.warning }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.navTitle}>Outlier Report</Text>
                   <Text style={s.navSub}>
@@ -1201,7 +1201,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                 }}
               >
                 <View style={s.navRow}>
-                  <View style={[s.navIcon, { backgroundColor: "#F97316" }]} />
+                  <View style={[s.navIcon, { backgroundColor: COLORS.warning }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.navTitle}>Mengenermittlung</Text>
                     <Text style={s.navSub}>
@@ -1229,7 +1229,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                 }}
               >
                 <View style={s.navRow}>
-                  <View style={[s.navIcon, { backgroundColor: "#0F766E" }]} />
+                  <View style={[s.navIcon, { backgroundColor: COLORS.success }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.navTitle}>Rechnungen</Text>
                     <Text style={s.navSub}>
@@ -1257,7 +1257,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                   }}
                 >
                   <View style={s.navRow}>
-                    <View style={[s.navIcon, { backgroundColor: "#8B5CF6" }]} />
+                    <View style={[s.navIcon, { backgroundColor: COLORS.accentDark }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={s.navTitle}>Bautagebuch</Text>
                       <Text style={s.navSub}>
@@ -1285,7 +1285,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                   }}
                 >
                   <View style={s.navRow}>
-                    <View style={[s.navIcon, { backgroundColor: "#22C55E" }]} />
+                    <View style={[s.navIcon, { backgroundColor: COLORS.success }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={s.navTitle}>Regiebericht</Text>
                       <Text style={s.navSub}>Leistung / Stunden / Notiz</Text>
@@ -1311,7 +1311,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                   }}
                 >
                   <View style={s.navRow}>
-                    <View style={[s.navIcon, { backgroundColor: "#2563EB" }]} />
+                    <View style={[s.navIcon, { backgroundColor: COLORS.accent }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={s.navTitle}>Lieferschein</Text>
                       <Text style={s.navSub}>Foto + Notiz</Text>
@@ -1337,7 +1337,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                   }}
                 >
                   <View style={s.navRow}>
-                    <View style={[s.navIcon, { backgroundColor: "#F59E0B" }]} />
+                    <View style={[s.navIcon, { backgroundColor: COLORS.warning }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={s.navTitle}>Fotos / Notizen</Text>
                       <Text style={s.navSub}>Dokumentation & Anhänge</Text>
@@ -1452,7 +1452,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                           style={{
                             opacity: 0.75,
                             fontWeight: "700",
-                            color: "#0B1720",
+                            color: COLORS.text,
                           }}
                         >
                           Keine PDFs in der Liste.
@@ -1462,7 +1462,7 @@ export default function ProjectHomeScreen({ route, navigation }: Props) {
                             opacity: 0.58,
                             marginTop: 6,
                             fontWeight: "700",
-                            color: "#0B1720",
+                            color: COLORS.text,
                           }}
                         >
                           Es wurden noch keine Projekt-PDFs auf dem Server
@@ -1499,11 +1499,28 @@ const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: RLC_SPACING.page, paddingBottom: RLC_SPACING.bottomKi },
 
+  projectHeroCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 32,
+    padding: 22,
+    marginHorizontal: 14,
+    marginBottom: 18,
+    backgroundColor: "#061A33",
+    borderWidth: 1,
+    borderColor: "#143A63",
+    shadowColor: "#00152A",
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+
   header: {
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 16,
-    backgroundColor: "#12324A",
+    backgroundColor: COLORS.accentDark,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.10)",
   },
@@ -1527,12 +1544,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DDF1FF",
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: "#A8D3F5",
+    borderColor: COLORS.border,
   },
   headerKiTxt: {
-    color: "#12324A",
+    color: COLORS.accentDark,
     fontWeight: "900",
     fontSize: 13,
   },
@@ -1579,25 +1596,30 @@ const s = StyleSheet.create({
   },
 
   h1: {
-    marginTop: 12,
-    fontSize: 32,
+    color: "#FFFFFF",
+    fontSize: 38,
+    lineHeight: 42,
     fontWeight: "900",
-    color: COLORS.card,
+    letterSpacing: -1.0,
+    marginTop: 18,
+    marginBottom: 16,
   },
 
   pillRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
   badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.13)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.16)",
-    backgroundColor: "rgba(255,255,255,0.10)",
+    borderColor: "rgba(255,255,255,0.18)",
+    marginRight: 8,
+    marginBottom: 8,
   },
   badgeTxt: {
+    color: "#FFFFFF",
+    fontSize: 14,
     fontWeight: "900",
-    color: "rgba(255,255,255,0.94)",
-    fontSize: 12,
   },
   badgeOk: {},
   badgeWarn: {
@@ -1613,7 +1635,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251,146,60,0.35)",
   },
-  baHintTitle: { fontWeight: "900", color: "#FED7AA", fontSize: 13 },
+  baHintTitle: { fontWeight: "900", color: COLORS.warningBg, fontSize: 13 },
   baHintText: {
     marginTop: 6,
     fontWeight: "800",
@@ -1628,7 +1650,7 @@ const s = StyleSheet.create({
     padding: 15,
     backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#DDE7EF",
+    borderColor: COLORS.border,
     marginBottom: 12,
     ...Platform.select({
       ios: {
@@ -1647,15 +1669,15 @@ const s = StyleSheet.create({
     width: 6,
     height: 36,
     borderRadius: 999,
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.accent,
   },
 
-  cardTitle: { fontSize: 16, fontWeight: "900", color: "#0B1720" },
+  cardTitle: { fontSize: 16, fontWeight: "900", color: COLORS.text },
   cardSub: {
     marginTop: 2,
     opacity: 0.7,
     fontWeight: "700",
-    color: "#334155",
+    color: COLORS.sub,
   },
 
   sessionLine: {
@@ -1663,31 +1685,31 @@ const s = StyleSheet.create({
     fontSize: 14,
     opacity: 0.95,
     fontWeight: "800",
-    color: "#0B1720",
+    color: COLORS.text,
   },
-  sessionStrong: { fontWeight: "900", color: "#0B1720" },
+  sessionStrong: { fontWeight: "900", color: COLORS.text },
 
   btnOutline: {
     borderWidth: 1.5,
-    borderColor: "#C9D6E2",
+    borderColor: COLORS.border,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: "#F8FBFD",
+    backgroundColor: COLORS.inputBg,
   },
-  btnOutlineTxt: { fontWeight: "900", color: "#0B1720" },
+  btnOutlineTxt: { fontWeight: "900", color: COLORS.text },
 
   kv: { marginTop: 12 },
-  k: { fontWeight: "900", opacity: 0.72, fontSize: 12, color: "#334155" },
-  v: { fontWeight: "900", fontSize: 15, marginTop: 4, color: "#0B1720" },
+  k: { fontWeight: "900", opacity: 0.72, fontSize: 12, color: COLORS.sub },
+  v: { fontWeight: "900", fontSize: 15, marginTop: 4, color: COLORS.text },
 
   syncCard: {
     borderRadius: 20,
     padding: 15,
-    backgroundColor: "#12324A",
+    backgroundColor: COLORS.accentDark,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#1F4A68",
+    borderColor: COLORS.accent,
     ...Platform.select({
       ios: {
         shadowColor: COLORS.text,
@@ -1721,7 +1743,7 @@ const s = StyleSheet.create({
     padding: 15,
     backgroundColor: COLORS.card,
     borderWidth: 1,
-    borderColor: "#DDE7EF",
+    borderColor: COLORS.border,
     marginBottom: 12,
     ...Platform.select({
       ios: {
@@ -1735,33 +1757,33 @@ const s = StyleSheet.create({
     }),
   },
   navCardStrong: {
-    borderColor: "#BFD6FF",
-    backgroundColor: "#EEF5FF",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.accentSoft,
   },
 
   kiCard: { display: "none",
-    backgroundColor: "#EAF4FF",
-    borderColor: "#BFDDFB",
+    backgroundColor: COLORS.accentSoft,
+    borderColor: COLORS.border,
   },
   kiNavIcon: { display: "none",
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.accent,
     width: 14,
   },
   kiTitle: { display: "none",
     fontSize: 17,
     fontWeight: "900",
-    color: "#12324A",
+    color: COLORS.accentDark,
   },
   kiSub: { display: "none",
     marginTop: 5,
     fontWeight: "800",
-    color: "#31556F",
+    color: COLORS.sub,
   },
   kiPill: { display: "none",
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.accent,
   },
   kiPillTxt: { display: "none",
     color: COLORS.card,
@@ -1771,8 +1793,8 @@ const s = StyleSheet.create({
 
   navRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   navIcon: { width: 12, height: 44, borderRadius: 999 },
-  navTitle: { fontSize: 17, fontWeight: "900", color: "#0B1720" },
-  navSub: { opacity: 0.72, marginTop: 5, fontWeight: "700", color: "#334155" },
+  navTitle: { fontSize: 17, fontWeight: "900", color: COLORS.text },
+  navSub: { opacity: 0.72, marginTop: 5, fontWeight: "700", color: COLORS.sub },
 
   pdfBackdrop: {
     flex: 1,
@@ -1788,25 +1810,25 @@ const s = StyleSheet.create({
     borderRadius: 22,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#DDE7EF",
+    borderColor: COLORS.border,
     maxHeight: "80%",
   },
-  pdfTitle: { fontSize: 16, fontWeight: "900", color: "#0B1720" },
+  pdfTitle: { fontSize: 16, fontWeight: "900", color: COLORS.text },
   pdfSub: {
     marginTop: 2,
     opacity: 0.68,
     fontWeight: "700",
-    color: "#334155",
+    color: COLORS.sub,
   },
   pdfClose: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#F8FAFC",
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.inputBg,
   },
-  pdfCloseTxt: { fontWeight: "900", color: "#0B1720" },
+  pdfCloseTxt: { fontWeight: "900", color: COLORS.text },
 
   pdfItemRow: {
     flexDirection: "row",
@@ -1824,18 +1846,18 @@ const s = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: COLORS.inputBg,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  pdfItemName: { fontWeight: "900", fontSize: 14, color: "#0B1720" },
+  pdfItemName: { fontWeight: "900", fontSize: 14, color: COLORS.text },
   pdfItemMeta: {
     marginTop: 4,
     opacity: 0.65,
     fontWeight: "700",
     fontSize: 12,
-    color: "#334155",
+    color: COLORS.sub,
   },
 
   pdfActions: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -1844,13 +1866,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#12324A",
+    backgroundColor: COLORS.accentDark,
   },
   btnDangerSmall: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#DC2626",
+    backgroundColor: COLORS.danger,
   },
 
   btnTxtWhite: { color: COLORS.card, fontWeight: "900" },
@@ -1859,11 +1881,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: COLORS.successBg,
     borderWidth: 1,
     borderColor: "rgba(16,185,129,0.25)",
   },
-  badgeOfflineTxt: { fontWeight: "900", color: "#065F46", fontSize: 12 },
+  badgeOfflineTxt: { fontWeight: "900", color: COLORS.success, fontSize: 12 },
 
   floatingKiBtn: {
     position: "absolute",
@@ -1872,10 +1894,10 @@ const s = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 25,
-    backgroundColor: "#2563EB",
+    backgroundColor: COLORS.accent,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#2563EB",
+    shadowColor: COLORS.accent,
     shadowOpacity: 0.35,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
@@ -1888,7 +1910,7 @@ const s = StyleSheet.create({
     height: 66,
     borderRadius: 22,
     overflow: "hidden",
-    backgroundColor: "#0B1220",
+    backgroundColor: COLORS.text,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1904,12 +1926,18 @@ const s = StyleSheet.create({
     width: 13,
     height: 13,
     borderRadius: 7,
-    backgroundColor: "#22C55E",
+    backgroundColor: COLORS.success,
     borderWidth: 2,
     borderColor: COLORS.card,
   },
 
 });
+
+
+
+
+
+
 
 
 

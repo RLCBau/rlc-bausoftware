@@ -12,7 +12,11 @@
       "buildNumber": "2",
       "icon": "./assets/icon.png",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "RLC Mobile nutzt das Mikrofon fuer Spracheingaben im RLC KI Copilot.",
+        "NSCameraUsageDescription": "RLC Mobile nutzt die Kamera fuer Fotos, Lieferscheine, Regieberichte und Projektdokumentation.",
+        "NSPhotoLibraryUsageDescription": "RLC Mobile nutzt die Fotobibliothek zum Auswaehlen von Projektfotos und Dokumenten.",
+        "NSPhotoLibraryAddUsageDescription": "RLC Mobile kann erzeugte Projektdateien und Dokumente speichern."
       }
     },
     "android": {
@@ -26,7 +30,9 @@
     "plugins": [
       "expo-web-browser",
       "expo-mail-composer",
-      "expo-asset"
+      "expo-asset",
+      "expo-build-properties",
+      "expo-font"
     ],
     "extra": {
       "eas": {

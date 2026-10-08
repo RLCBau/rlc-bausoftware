@@ -1,6 +1,7 @@
 ﻿// apps/mobile/src/lib/exporters/bautagebuchPdfBuilder.ts
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { Linking } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import {
   getCompanyHeaderCached,
@@ -518,13 +519,14 @@ export async function buildBautagebuchPdf(
   };
 }
 
-export async function openBautagebuchPdf(result: BuildBautagebuchPdfResult) {
-  const uri = String(result?.pdfUri || "").trim();
-  if (!uri) throw new Error("PDF URI fehlt.");
-  return Sharing.shareAsync(uri, {
-    mimeType: "application/pdf",
-    dialogTitle: result.fileName || "Bautagebuch PDF",
-    UTI: "com.adobe.pdf",
-  });
+export async function openBautagebuchPdf(result: any) {
+  const uri = String(result?.pdfUri || result?.uri || result || "").trim();
+
+  if (!uri) {
+    throw new Error("PDF konnte nicht geöffnet werden: URI fehlt.");
+  }
+
+  await Linking.openURL(uri);
 }
+
 

@@ -19,6 +19,7 @@
   inputBg: "#F8FAFC",
 
   success: "#16A34A",
+  successBg: "#ECFDF5",
   successSoft: "#DCFCE7",
   warning: "#F59E0B",
   warningBg: "#FFF7ED",
@@ -41,5 +42,6 @@ export const RLC_RADIUS = {
   button: 14,
   pill: 999,
 };
+
 
 

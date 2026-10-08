@@ -188,9 +188,9 @@ console.log("[RLC] ENV_API_URL_RAW =", ENV_API_URL_RAW);
 const FALLBACK_API_URL = "https://api.rlcbausoftware.com";
 
 /** Keep a sync default (used for api.apiUrl field), real requests use getApiUrl() */
-const API_URL = String(ENV_API_URL_RAW || "").trim()
-  ? ENV_API_URL_RAW!.replace(/\/$/, "")
-  : FALLBACK_API_URL.replace(/\/$/, "");
+const API_URL = ENV_API_URL_RAW && (/^https:\/\//i.test(ENV_API_URL_RAW) || __DEV__)
+  ? ENV_API_URL_RAW.replace(/\/$/, "")
+  : FALLBACK_API_URL;
 
 /** PROD hardening switch */
 export const IS_DEV = typeof __DEV__ !== "undefined" ? __DEV__ : false;
@@ -320,7 +320,7 @@ function coerceApiHost(v: string): string {
 }
 
 function isValidBaseUrl(v: string): boolean {
-  return /^https?:\/\/.+/i.test(v);
+  return IS_DEV ? /^https?:\/\/.+/i.test(v) : /^https:\/\/.+/i.test(v);
 }
 
 /**
@@ -333,7 +333,7 @@ function isValidBaseUrl(v: string): boolean {
  * - AsyncStorage override is ignored in PROD builds.
  */
 export async function getApiUrl(): Promise<string> {
-  if (ENV_API_URL_RAW) return coerceApiHost(ENV_API_URL_RAW);
+  if (ENV_API_URL_RAW && isValidBaseUrl(ENV_API_URL_RAW)) return coerceApiHost(ENV_API_URL_RAW);
 
   if (!IS_DEV) return coerceApiHost(FALLBACK_API_URL);
 

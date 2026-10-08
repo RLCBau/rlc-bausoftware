@@ -10,8 +10,8 @@ const AUTH_STATE_KEY_BASE = "rlc_mobile_auth_state_v1";
 const AUTH_MODE_KEY = "rlc_mobile_auth_mode_v1"; // ✅ per ricordare l'ultima modalità usata
 
 // 🔐 ADMIN DEV (solo sviluppo)
-const ADMIN_EMAIL = "rlcvermessung@gmail.com";
-const ADMIN_KEY = "rlc_admin_7e2f9c4a_d8b1_4f6c_a2e9_91c5b7d3e8fa";
+const ADMIN_EMAIL = "";
+const ADMIN_KEY = ""; // No admin secrets in a distributed application.
 
 /* ============================================================
  *  TYPES
@@ -33,11 +33,13 @@ export type AuthState = {
  * ============================================================ */
 
 function apiBaseUrl() {
-  const u =
-    (process.env.EXPO_PUBLIC_API_URL as any) ||
-    (process.env.EXPO_PUBLIC_API_BASE_URL as any) ||
-    "http://localhost:4000";
-  return String(u).replace(/\/$/, "");
+  const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+  const candidate = String(
+    process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_BASE_URL || ""
+  ).trim();
+  if (/^https:\/\//i.test(candidate)) return candidate.replace(/\/$/, "");
+  if (isDev && /^http:\/\//i.test(candidate)) return candidate.replace(/\/$/, "");
+  return "https://api.rlcbausoftware.com";
 }
 
 /* ============================================================
@@ -93,14 +95,9 @@ export async function setToken(token: string) {
     return;
   }
 
-  // AsyncStorage come fallback
-  await AsyncStorage.setItem(TOKEN_KEY, t);
-
-  try {
-    await SecureStore.setItemAsync(TOKEN_KEY, t);
-  } catch {
-    // ignore
-  }
+  // Secrets must never be persisted in unencrypted AsyncStorage.
+  await SecureStore.setItemAsync(TOKEN_KEY, t);
+  await AsyncStorage.removeItem(TOKEN_KEY).catch(() => undefined);
 }
 
 export async function getToken(): Promise<string> {
@@ -111,8 +108,16 @@ export async function getToken(): Promise<string> {
     // ignore
   }
 
-  const a = normalizeToken(await AsyncStorage.getItem(TOKEN_KEY));
-  return a;
+  // One-time migration of tokens saved by older TestFlight builds.
+  const legacy = normalizeToken(await AsyncStorage.getItem(TOKEN_KEY));
+  if (!legacy) return "";
+  try {
+    await SecureStore.setItemAsync(TOKEN_KEY, legacy);
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    return legacy;
+  } catch {
+    return ""; // Never continue using an insecure token fallback.
+  }
 }
 
 export async function getTokenOrNull(): Promise<string | null> {
@@ -223,8 +228,8 @@ export async function adminLoginDev(): Promise<
   { ok: true; token: string } | { ok: false; error: string }
 > {
   const IS_DEV = typeof __DEV__ !== "undefined" ? __DEV__ : false;
-  if (!IS_DEV) {
-    return { ok: false, error: "ADMIN_LOGIN_DISABLED_IN_PROD" };
+  if (!IS_DEV || !ADMIN_EMAIL || !ADMIN_KEY) {
+    return { ok: false, error: "ADMIN_LOGIN_DISABLED" };
   }
 
   try {

@@ -788,7 +788,7 @@ export default function LvReadOnlyScreen({ route, navigation }: Props) {
                     onChangeText={setQ}
                     placeholder="Suchen (Position, Kurztext, Langtext)…"
                     style={s.search}
-                    placeholderTextColor="#B8C1CC"
+                    placeholderTextColor={COLORS.sub}
                     autoCorrect={false}
                     autoCapitalize="none"
                     blurOnSubmit={false}
@@ -1407,6 +1407,7 @@ const s = StyleSheet.create({
     lineHeight: 19,
   },
 });
+
 
 
 

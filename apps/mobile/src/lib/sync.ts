@@ -1,5 +1,6 @@
 ﻿// apps/mobile/src/lib/sync.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken } from "./auth";
 import { api } from "./api";
 import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
 
@@ -214,7 +215,7 @@ async function serverRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getToken();
   const headers: Record<string, any> = { ...(init.headers as any) };
 
   // JSON only (NOT for FormData)

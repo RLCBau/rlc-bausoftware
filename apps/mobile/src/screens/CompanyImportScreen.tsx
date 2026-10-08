@@ -294,7 +294,7 @@ export default function CompanyImportScreen({ navigation, route }: Props) {
               value={paste}
               onChangeText={setPaste}
               placeholder='{"v":1,"kind":"RLC_COMPANY_LIGHT",...}'
-              placeholderTextColor="#B8C1CC"
+              placeholderTextColor={COLORS.sub}
               style={styles.textarea}
               multiline
               autoCapitalize="none"
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
   },
 
   scanText: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
   },
 
@@ -514,11 +514,12 @@ const styles = StyleSheet.create({
   },
 
   btnGhostText: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
     fontSize: 12,
   },
 });
+
 
 
 

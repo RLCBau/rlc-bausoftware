@@ -34,7 +34,7 @@ export default function AnmeldenScreen({ route, navigation }: Props) {
     navigation.setOptions({
       title: title || "Anmelden",
       headerStyle: {
-        backgroundColor: "#12324A",
+        backgroundColor: COLORS.accentDark,
       },
       headerTitleStyle: {
         color: COLORS.card,
@@ -91,7 +91,7 @@ export default function AnmeldenScreen({ route, navigation }: Props) {
           value={name}
           onChangeText={setName}
           placeholder="Name"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
         />
 
         <Pressable style={s.submit} onPress={onSubmit}>
@@ -182,27 +182,28 @@ const s = StyleSheet.create({
 
   submit: {
     marginTop: 16,
-    backgroundColor: "#12324A",
+    backgroundColor: COLORS.accentDark,
     borderWidth: 1,
-    borderColor: "#1E4C6B",
+    borderColor: COLORS.accent,
     padding: 14,
     borderRadius: 14,
     alignItems: "center",
   },
 
   submitTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
     fontSize: 16,
   },
 
   submitSub: {
-    color: "#fff",
+    color: COLORS.textLight,
     opacity: 0.75,
     marginTop: 4,
     fontWeight: "700",
   },
 });
+
 
 
 

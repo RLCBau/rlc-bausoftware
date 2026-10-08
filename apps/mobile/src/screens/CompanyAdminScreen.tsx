@@ -159,7 +159,7 @@ export default function CompanyAdminScreen() {
           value={name}
           onChangeText={setName}
           placeholder="Firmenname"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           style={styles.input}
         />
 
@@ -168,7 +168,7 @@ export default function CompanyAdminScreen() {
           value={address}
           onChangeText={setAddress}
           placeholder="Straße, PLZ Ort"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           style={styles.input}
           multiline
         />
@@ -178,7 +178,7 @@ export default function CompanyAdminScreen() {
           value={phone}
           onChangeText={setPhone}
           placeholder="Telefon"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           style={styles.input}
           keyboardType={
             Platform.OS === "ios" ? "numbers-and-punctuation" : "phone-pad"
@@ -190,7 +190,7 @@ export default function CompanyAdminScreen() {
           value={email}
           onChangeText={setEmail}
           placeholder="E-Mail Firma"
-          placeholderTextColor="#B8C1CC"
+          placeholderTextColor={COLORS.sub}
           style={styles.input}
           autoCapitalize="none"
           keyboardType="email-address"
@@ -374,6 +374,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
 });
+
 
 
 

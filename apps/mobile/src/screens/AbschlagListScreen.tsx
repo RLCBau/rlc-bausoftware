@@ -358,11 +358,11 @@ const s = StyleSheet.create({
   },
 
   btnDark: {
-    backgroundColor: "#12324A",
+    backgroundColor: COLORS.accentDark,
   },
 
   btnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
     textAlign: "center",
   },
@@ -409,5 +409,6 @@ const s = StyleSheet.create({
     fontSize: 14,
   },
 });
+
 
 

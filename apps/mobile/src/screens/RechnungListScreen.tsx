@@ -197,15 +197,15 @@ function sourceBadgeStyle(sourceType?: string) {
   switch (sourceType) {
     case "ANGEBOT":
       return {
-        bg: "#EEF5FF",
-        border: "#BFDBFE",
-        text: "#1D4ED8",
+        bg: COLORS.accentSoft,
+        border: COLORS.border,
+        text: COLORS.accent,
       };
     case "MENGEN":
       return {
-        bg: "#ECFDF5",
-        border: "#A7F3D0",
-        text: "#047857",
+        bg: COLORS.successBg,
+        border: COLORS.successSoft,
+        text: COLORS.success,
       };
     default:
       return {
@@ -432,7 +432,7 @@ export default function RechnungListScreen({ route, navigation }: Props) {
                     } as any);
                   }}
                 >
-                  <Text style={s.secondaryActionBtnTxt}>Schlussrechnung</Text>
+                  <Text style={s.secondaryActionBtnTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>Schlussrechnung</Text>
                 </Pressable>
               </View>
 
@@ -450,7 +450,7 @@ export default function RechnungListScreen({ route, navigation }: Props) {
                 value={q}
                 onChangeText={setQ}
                 placeholder="Suchen (Nr., Kunde, Datum, Quelle)…"
-                placeholderTextColor="#B8C1CC"
+                placeholderTextColor={COLORS.sub}
                 style={s.search}
                 autoCorrect={false}
                 autoCapitalize="none"
@@ -590,7 +590,7 @@ export default function RechnungListScreen({ route, navigation }: Props) {
                     } as any)
                   }
                 >
-                  <Text style={s.schlussBtnTxt}>Schlussrechnung</Text>
+                  <Text style={s.schlussBtnTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>Schlussrechnung</Text>
                 </Pressable>
               </View>
 
@@ -963,37 +963,39 @@ const s = StyleSheet.create({
   },
 
   abschlagBtn: {
-    backgroundColor: "#F97316",
-    borderColor: "#F97316",
+    backgroundColor: COLORS.warning,
+    borderColor: COLORS.warning,
   },
 
   abschlagBtnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
   },
 
   openBtn: {
-    backgroundColor: "#0f4c81",
-    borderColor: "#0f4c81",
+    backgroundColor: COLORS.accentDark,
+    borderColor: COLORS.accentDark,
   },
 
   openBtnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
   },
 
   schlussBtn: {
-    backgroundColor: "#047857",
-    borderColor: "#047857",
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
   },
 
   schlussBtnTxt: {
-    color: "#fff",
+    color: COLORS.textLight,
     fontWeight: "900",
+    fontSize: 13,
+    textAlign: "center",
   },
 
   deleteBtn: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: COLORS.card2,
     borderColor: COLORS.border,
   },
 
@@ -1018,6 +1020,12 @@ const s = StyleSheet.create({
     opacity: 0.55,
   },
 });
+
+
+
+
+
+
 
 
 

@@ -51,9 +51,13 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.wrap}>
-        <View style={s.header}>
-          <Text style={s.h1}>Arbeitsmodus wählen</Text>
-          <Text style={s.sub}>Du kannst später jederzeit wechseln.</Text>
+        <View style={s.heroCard}>
+          <View style={s.heroBlueprintA} />
+          <View style={s.heroBlueprintB} />
+          <Text style={s.heroEyebrow}>RLC Bausoftware</Text>
+          <Text style={s.heroH1} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62}>Arbeitsmodus wählen</Text>
+          <View style={s.heroAccentLine} />
+          <Text style={s.heroSub}>Du kannst später jederzeit wechseln.</Text>
         </View>
 
         <Pressable
@@ -113,6 +117,64 @@ export default function ArbeitsmodusScreen({ navigation, route }: Props) {
 }
 
 const s = StyleSheet.create({
+  // RLC_ARBEITSMODUS_PREMIUM_V1
+  heroCard: {
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 26,
+    padding: 22,
+    marginBottom: 18,
+    backgroundColor: "#061A33",
+    borderWidth: 1,
+    borderColor: "#143A63",
+  },
+  heroBlueprintA: {
+    position: "absolute",
+    right: -34,
+    top: 22,
+    width: 170,
+    height: 95,
+    borderWidth: 1,
+    borderColor: "rgba(45,154,255,0.22)",
+    transform: [{ rotate: "-8deg" }],
+  },
+  heroBlueprintB: {
+    position: "absolute",
+    right: 34,
+    bottom: -24,
+    width: 130,
+    height: 88,
+    borderWidth: 1,
+    borderColor: "rgba(45,154,255,0.18)",
+    transform: [{ rotate: "7deg" }],
+  },
+  heroEyebrow: {
+    color: "#2BB6FF",
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 8,
+  },
+  heroAccentLine: {
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "#2BB6FF",
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  heroH1: {
+    color: "#FFFFFF",
+    fontSize: 34,
+    lineHeight: 38,
+    fontWeight: "900",
+    letterSpacing: -1.0,
+  },
+  heroSub: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 19,
+    lineHeight: 25,
+    fontWeight: "800",
+  },
   safe: {
     flex: 1,
     backgroundColor: COLORS.bg,
@@ -162,7 +224,7 @@ const s = StyleSheet.create({
 
   cardServer: {
     backgroundColor: COLORS.accentSoft,
-    borderColor: "#BFD6FF",
+    borderColor: COLORS.border,
   },
 
   rowTop: {
@@ -241,5 +303,13 @@ const s = StyleSheet.create({
     transform: [{ scale: 0.995 }],
   },
 });
+
+
+
+
+
+
+
+
 
 
