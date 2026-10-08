@@ -374,7 +374,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m)
       );
 
-      if (unlocked === "1") {
+      if (m === "NUR_APP" && unlocked === "1") {
         setAdminUnlocked(true);
 
         const cn = String(
@@ -418,7 +418,7 @@ export default function LoginScreen({ navigation, route }: Props) {
     try {
       if (m === "NUR_APP") {
         await AsyncStorage.setItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m), cn);
-        await AsyncStorage.setItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m), code);
+        await AsyncStorage.removeItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m));
         await AsyncStorage.setItem(
           modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m),
           "1"
@@ -434,7 +434,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         throw new Error("Lizenz nicht aktiv. Prüfe Admin-Code.");
 
       await AsyncStorage.setItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m), cn);
-      await AsyncStorage.setItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m), code);
+      await AsyncStorage.removeItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m));
       await AsyncStorage.setItem(
         modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m),
         "1"
