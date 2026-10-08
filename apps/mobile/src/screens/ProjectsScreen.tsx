@@ -29,6 +29,7 @@ import {
   IS_DEV,
 } from "../lib/api";
 import { COLORS } from "../ui/theme";
+import { getToken } from "../lib/auth";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Projects">;
 
@@ -749,6 +750,43 @@ export default function ProjectsScreen({ navigation }: Props) {
 
   const listEmpty = filtered.length === 0;
 
+  async function submitPrivacyRequest(requestType: "ACCESS" | "ERASURE") {
+    try {
+      if (isStandalone) {
+        Alert.alert("Datenschutz", "Im lokalen Modus können Daten ausschließlich auf diesem Gerät liegen. Bitte sichere offene Entwürfe vor einer Löschung und kontaktiere info@rlcbausoftware.com.");
+        return;
+      }
+      const token = await getToken();
+      if (!token) throw new Error("Bitte zuerst am Server anmelden.");
+      const base = await api.getApiUrl();
+      const response = await fetch(`${base}/api/privacy-rights/self-service`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requestType }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(
+        result?.error === "REQUEST_ALREADY_OPEN"
+          ? "Für diese Anfrage gibt es bereits einen offenen Vorgang."
+          : "Die Anfrage konnte nicht gespeichert werden."
+      );
+      Alert.alert("Datenschutz", `Anfrage erfasst. Referenz: ${String(result?.id || "")}. Sie wird nach Identitäts- und Aufbewahrungsprüfung bearbeitet.`);
+    } catch (error: any) {
+      Alert.alert("Datenschutz", String(error?.message || "Anfrage fehlgeschlagen."));
+    }
+  }
+
+  function requestAccountDeletion() {
+    Alert.alert(
+      "Konto löschen beantragen",
+      "Möchten Sie die Löschung Ihres Kontos und Ihrer personenbezogenen Daten beantragen? Gesetzlich aufzubewahrende Bau- und Rechnungsunterlagen werden geprüft; der Antrag löscht keine unsynchronisierten Entwürfe.",
+      [
+        { text: "Abbrechen", style: "cancel" },
+        { text: "Löschung beantragen", style: "destructive", onPress: () => void submitPrivacyRequest("ERASURE") },
+      ]
+    );
+  }
+
   return (
     <SafeAreaView style={s.safe}>
       <View style={s.bg}>
@@ -765,6 +803,14 @@ export default function ProjectsScreen({ navigation }: Props) {
             </View>
           </View>
 
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => void submitPrivacyRequest("ACCESS")}>
+              <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Datenauskunft</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={requestAccountDeletion}>
+              <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Konto löschen</Text>
+            </Pressable>
+          </View>
           <Text style={s.eyebrow}>RLC Bausoftware</Text>
           <Text style={s.eyebrowSub}>mobile</Text>
           <View style={s.titleRow}>
