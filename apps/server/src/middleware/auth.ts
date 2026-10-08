@@ -64,7 +64,7 @@ export function requireVerifiedEmail(
   res: Response,
   next: NextFunction
 ) {
-  const devOn = (process.env.DEV_AUTH || "").toLowerCase() === "on";
+  const devOn = process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on";
   if (devOn && (req as any)?.user?.id) return next();
 
   const v =
@@ -72,6 +72,7 @@ export function requireVerifiedEmail(
     (req as any)?.user?.emailVerified ??
     ((req as any)?.user?.emailVerifiedAt ? true : undefined);
 
-  if (v === true || v === undefined || v === null) return next();
+  // Authentication tokens without an explicit verified-email claim must not pass.
+  if (v === true) return next();
   return res.status(403).json({ ok: false, error: "EMAIL_NOT_VERIFIED" });
 }
