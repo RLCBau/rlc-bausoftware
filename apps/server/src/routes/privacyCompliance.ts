@@ -119,10 +119,22 @@ r.get("/:id/erasure-assessment", requirePermission("privacy:*"), async (req:any,
     prisma.projectSubmission.count({where:{userId:user.id}})
   ]);
   const secondary=await secondaryUserReferences(user.id);
+  const retentionCategories=[
+    {category:"ACCOUNT_PROFILE",decision:"REVIEW_FOR_ERASURE",basis:"Art. 17 DSGVO"},
+    {category:"CONSTRUCTION_PROJECT_DOCUMENTS",decision:"RETENTION_REVIEW",basis:"Contractual / statutory documentation"},
+    {category:"ACCOUNTING_AND_INVOICES",decision:"RETENTION_REVIEW",basis:"HGB / AO / GoBD"},
+    {category:"AUDIT_AND_SECURITY_LOGS",decision:"RETENTION_REVIEW",basis:"Security and accountability"},
+    {category:"WORKFORCE_AND_TIMESHEETS",decision:"RETENTION_REVIEW",basis:"Employment-law requirements"},
+    {category:"PHOTOS_AND_ATTACHMENTS",decision:"MANUAL_FILE_INVENTORY",basis:"Filesystem / object storage"},
+    {category:"DATABASE_BACKUPS_AND_ARCHIVES",decision:"BACKUP_EXPIRY_REVIEW",basis:"Backup retention / restore procedures"},
+    {category:"EXTERNAL_PROCESSORS_AND_AI",decision:"PROCESSOR_ERASURE_REVIEW",basis:"AVV / processor deletion"}
+  ];
   const assessment={
     accountId:user.id, companyId, identityVerified:Boolean(item.identityVerifiedAt),
     legalHold:Boolean(item.legalHold), legalHoldReason:String(item.legalHoldReason||""),
     linkedRecords:{activities,companyMemberships,projectMemberships,submissions,secondary},
+    retentionCategories, inventoryComplete:false,
+    blockingCategories:retentionCategories.filter(c=>c.decision!=="REVIEW_FOR_ERASURE").map(c=>c.category),
     retentionReviewRequired:true,
     deletableNow:false,
     executionEnabled:false,
