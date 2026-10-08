@@ -1096,18 +1096,13 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       await setToken(String(r.token));
 
-      const t = await getToken();
-      console.log(
-        "DEBUG TOKEN after setToken (SERVER_SYNC):",
-        t ? t.slice(0, 20) + "..." : null
-      );
-
       await patchAuthState(
         {
           email: e,
           name: name.trim(),
           role,
           userId: r?.user?.id ? String(r.user.id) : undefined,
+          companyId: r?.user?.companyId ? String(r.user.companyId) : undefined,
           emailVerifiedAt: r?.user?.emailVerifiedAt ?? emailVerifiedAt ?? nowIso(),
         },
         "SERVER_SYNC" as any

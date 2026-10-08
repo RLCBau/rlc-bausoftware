@@ -25,6 +25,7 @@ export type AuthState = {
   role?: string; // es. ADMIN, USER
   mode?: AuthMode;
   userId?: string;
+  companyId?: string;
   emailVerifiedAt?: string | null; // ISO or null
 };
 

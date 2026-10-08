@@ -185,7 +185,9 @@ async function queueKey(): Promise<string> {
   const state = await getAuthState("SERVER_SYNC");
   const identity = String(state?.userId || state?.email || "").trim().toLowerCase();
   if (!identity) throw new Error("QUEUE_AUTH_REQUIRED");
-  return `rlc.queue.v3:SERVER_SYNC:${encodeURIComponent(identity)}`;
+  const company = String(state?.companyId || "").trim().toLowerCase();
+  if (!company) throw new Error("QUEUE_COMPANY_REQUIRED");
+  return `rlc.queue.v3:SERVER_SYNC:${encodeURIComponent(company)}:${encodeURIComponent(identity)}`;
 }
 async function lockKey(): Promise<string> {
   return `${await queueKey()}.lock`;
