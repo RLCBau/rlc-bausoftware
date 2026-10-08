@@ -910,7 +910,8 @@ export default function LoginScreen({ navigation, route }: Props) {
       await persistEmail(e);
       await persistProfile(e);
 
-      await setToken(`local:${existing.passHash}`);
+      // NUR_APP never supplies a server bearer token. Keep local auth separate.
+      await clearToken();
 
       await patchAuthState({ email: e, name: name.trim(), role }, mode as any);
 
