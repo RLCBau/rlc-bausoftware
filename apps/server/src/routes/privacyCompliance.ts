@@ -118,10 +118,11 @@ r.get("/:id/erasure-assessment", requirePermission("privacy:*"), async (req:any,
     prisma.projectMember.count({where:{userId:user.id}}),
     prisma.projectSubmission.count({where:{userId:user.id}})
   ]);
+  const secondary=await secondaryUserReferences(user.id);
   const assessment={
     accountId:user.id, companyId, identityVerified:Boolean(item.identityVerifiedAt),
     legalHold:Boolean(item.legalHold), legalHoldReason:String(item.legalHoldReason||""),
-    linkedRecords:{activities,companyMemberships,projectMemberships,submissions},
+    linkedRecords:{activities,companyMemberships,projectMemberships,submissions,secondary},
     retentionReviewRequired:true,
     deletableNow:false,
     executionEnabled:false,
@@ -129,6 +130,25 @@ r.get("/:id/erasure-assessment", requirePermission("privacy:*"), async (req:any,
   };
   return res.json({ok:true,assessment});
 });
+
+/** Inventory of secondary references not represented as Prisma User relations.
+ * Fail closed if any count query fails or a new data category has not been reviewed. */
+async function secondaryUserReferences(userId:string) {
+  const checks:[string,Promise<number>][]=[
+    ["auditLog",prisma.auditLog.count({where:{userId}})],
+    ["aiMarketReviewUsage",prisma.aiMarketReviewUsage.count({where:{userId}})],
+    ["aiMarketCreditOrder",prisma.aiMarketCreditOrder.count({where:{userId}})],
+    ["vorlageFavorite",prisma.vorlageFavorite.count({where:{userId}})],
+    ["vorlageTemplate",prisma.vorlageTemplate.count({where:{createdByUserId:userId}})],
+    ["vorlageDocument",prisma.vorlageDocument.count({where:{createdByUserId:userId}})],
+    ["companyInviteCreated",prisma.companyInvite.count({where:{createdByUserId:userId}})],
+    ["companyInviteActivated",prisma.companyInvite.count({where:{activatedByUserId:userId}})],
+    ["mobileLicense",prisma.mobileLicense.count({where:{createdByUserId:userId}})],
+    ["marketIntelligenceReview",prisma.marketIntelligenceReview.count({where:{userId}})]
+  ];
+  const values=await Promise.all(checks.map(async ([name,promise])=>[name,await promise] as const));
+  return Object.fromEntries(values) as Record<string,number>;
+}
 
 /** Destructive proof-of-concept restricted to explicitly marked disposable test tenants.
  * Production accounts and retained construction records are never deleted here. */
@@ -156,8 +176,9 @@ r.post("/:id/test-erasure", requirePermission("privacy:*"), async (req:any,res)=
     prisma.projectMember.count({where:{userId:user.id}}),
     prisma.projectSubmission.count({where:{userId:user.id}})
   ]);
-  if(activities||members||projectMembers||submissions)
-    return res.status(409).json({ok:false,error:"LINKED_RECORDS_REQUIRE_REVIEW"});
+  const secondary=await secondaryUserReferences(user.id);
+  if(activities||members||projectMembers||submissions||Object.values(secondary).some(n=>n>0))
+    return res.status(409).json({ok:false,error:"LINKED_RECORDS_REQUIRE_REVIEW",linked:{activities,members,projectMembers,submissions,secondary}});
   await prisma.user.delete({where:{id:user.id}});
   const now=new Date().toISOString();
   const evidence={subjectUserId:user.id,deletedAt:now,scope:"DISPOSABLE_TEST_ACCOUNT_ONLY"};
