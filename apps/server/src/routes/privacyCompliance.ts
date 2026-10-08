@@ -119,6 +119,19 @@ r.get("/:id/erasure-assessment", requirePermission("privacy:*"), async (req:any,
     prisma.projectSubmission.count({where:{userId:user.id}})
   ]);
   const secondary=await secondaryUserReferences(user.id);
+  const [projectDocuments,projectSubmissions,employeeDocuments]=await Promise.all([
+    prisma.document.count({where:{project:{companyId}}}),
+    prisma.projectSubmission.count({where:{companyId}}),
+    prisma.companyEmployeeDocument.count({where:{employee:{companyId}}})
+  ]);
+  const storageInventory={
+    projectDocuments,
+    projectSubmissions,
+    employeeDocuments,
+    objectStore:"REQUIRES_BUCKET_AND_KEY_OWNERSHIP_AUDIT",
+    filesystem:"REQUIRES_ATTACHMENT_AND_PROJECT_FILE_SCAN",
+    backupInventory:"REQUIRES_SNAPSHOT_AND_RESTORE_PROCEDURE_REVIEW"
+  };
   const retentionCategories=[
     {category:"ACCOUNT_PROFILE",decision:"REVIEW_FOR_ERASURE",basis:"Art. 17 DSGVO"},
     {category:"CONSTRUCTION_PROJECT_DOCUMENTS",decision:"RETENTION_REVIEW",basis:"Contractual / statutory documentation"},
@@ -133,6 +146,7 @@ r.get("/:id/erasure-assessment", requirePermission("privacy:*"), async (req:any,
     accountId:user.id, companyId, identityVerified:Boolean(item.identityVerifiedAt),
     legalHold:Boolean(item.legalHold), legalHoldReason:String(item.legalHoldReason||""),
     linkedRecords:{activities,companyMemberships,projectMemberships,submissions,secondary},
+    storageInventory,
     retentionCategories, inventoryComplete:false,
     blockingCategories:retentionCategories.filter(c=>c.decision!=="REVIEW_FOR_ERASURE").map(c=>c.category),
     retentionReviewRequired:true,
