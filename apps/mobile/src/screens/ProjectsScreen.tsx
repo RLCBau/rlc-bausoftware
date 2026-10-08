@@ -29,7 +29,7 @@ import {
   IS_DEV,
 } from "../lib/api";
 import { COLORS } from "../ui/theme";
-import { getToken } from "../lib/auth";
+import { getToken, getAuthState } from "../lib/auth";
 import { queueLegacyRecoveryPreview } from "../lib/offlineQueue";
 import { recoverLegacyQueueConfirmed } from "../lib/sync";
 
@@ -231,18 +231,38 @@ type LocalProject = {
   createdAt: number;
 };
 
+async function localProjectStorageKey(): Promise<string> {
+  const state = await getAuthState("NUR_APP");
+  const email = String(state?.email || "").trim().toLowerCase();
+  if (!email) throw new Error("LOCAL_PROJECT_IDENTITY_REQUIRED");
+  return `${KEY_LOCAL_PROJECTS}:${encodeURIComponent(email)}`;
+}
+
 async function loadLocalProjects(): Promise<LocalProject[]> {
   try {
-    const raw = await AsyncStorage.getItem(KEY_LOCAL_PROJECTS);
-    if (!raw) return [];
-    const j = JSON.parse(raw);
-    return Array.isArray(j) ? (j as LocalProject[]) : [];
+    const key = await localProjectStorageKey();
+    const raw = await AsyncStorage.getItem(key);
+    if (raw) {
+      const scoped = JSON.parse(raw);
+      return Array.isArray(scoped) ? (scoped as LocalProject[]) : [];
+    }
+    // Import previous unscoped projects only for the original local account.
+    const oldUserRaw = await AsyncStorage.getItem("rlc_mobile_local_user_v1");
+    const oldUser = oldUserRaw ? JSON.parse(oldUserRaw) : null;
+    const state = await getAuthState("NUR_APP");
+    if (!state?.email || String(oldUser?.email || "").trim().toLowerCase() !== String(state.email).trim().toLowerCase()) return [];
+    const legacy = await AsyncStorage.getItem(KEY_LOCAL_PROJECTS);
+    if (!legacy) return [];
+    const parsed = JSON.parse(legacy);
+    if (!Array.isArray(parsed)) return [];
+    await AsyncStorage.setItem(key, JSON.stringify(parsed));
+    return parsed as LocalProject[];
   } catch {
     return [];
   }
 }
 async function saveLocalProjects(list: LocalProject[]) {
-  await AsyncStorage.setItem(KEY_LOCAL_PROJECTS, JSON.stringify(list || []));
+  await AsyncStorage.setItem(await localProjectStorageKey(), JSON.stringify(list || []));
 }
 
 function localToProject(lp: LocalProject): Project {
