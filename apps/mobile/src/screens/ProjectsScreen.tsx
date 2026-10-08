@@ -56,13 +56,21 @@ const KEY_MODE = "rlc_mobile_mode";
 const KEY_LOCAL_PROJECTS = "rlc_mobile_local_projects_v1";
 
 // ✅ CHANGED: scope codemap by mode (prevents mixing NUR_APP <-> SERVER)
-const CODEMAP_KEY_BASE = "rlc_project_code_map_v1";
+const CODEMAP_KEY_BASE = "rlc_project_code_map_v2";
+
+async function codeMapKey(mode: "SERVER_SYNC" | "NUR_APP"): Promise<string> {
+  const state = await getAuthState(mode);
+  const userId = String(state?.userId || state?.email || "").trim().toLowerCase();
+  const companyId = mode === "SERVER_SYNC" ? String(state?.companyId || "").trim().toLowerCase() : "LOCAL";
+  if (!userId || !companyId) throw new Error("CODEMAP_ACCOUNT_REQUIRED");
+  return `${CODEMAP_KEY_BASE}:${mode}:${encodeURIComponent(companyId)}:${encodeURIComponent(userId)}`;
+}
 
 async function loadCodeMap(
   mode: "SERVER_SYNC" | "NUR_APP"
 ): Promise<Record<string, string>> {
   try {
-    const raw = await AsyncStorage.getItem(`${CODEMAP_KEY_BASE}:${mode}`);
+    const raw = await AsyncStorage.getItem(await codeMapKey(mode));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -73,7 +81,7 @@ async function saveCodeMap(
   map: Record<string, string>
 ) {
   await AsyncStorage.setItem(
-    `${CODEMAP_KEY_BASE}:${mode}`,
+    await codeMapKey(mode),
     JSON.stringify(map || {})
   );
 }
