@@ -1,5 +1,6 @@
 ﻿// apps/mobile/src/lib/offlineQueue.ts
 import { getJson, setJson, uid } from "./storage";
+import { getAuthMode, getAuthState } from "./auth";
 
 /** ===== Web-Align Types (aus ManuellFoto.tsx) ===== */
 export type DetectBox = {
@@ -174,8 +175,21 @@ export type QueueItem =
       };
     });
 
-const KEY = "rlc.queue.v2";
-const LOCK_KEY = "rlc.queue.v2.lock";
+const LEGACY_KEY = "rlc.queue.v2";
+
+// Server queues belong to a specific authenticated identity. Legacy data is
+// retained in-place for manual recovery, never silently adopted by a new user.
+async function queueKey(): Promise<string> {
+  const mode = await getAuthMode();
+  if (mode === "NUR_APP") return LEGACY_KEY;
+  const state = await getAuthState("SERVER_SYNC");
+  const identity = String(state?.userId || state?.email || "").trim().toLowerCase();
+  if (!identity) throw new Error("QUEUE_AUTH_REQUIRED");
+  return `rlc.queue.v3:SERVER_SYNC:${encodeURIComponent(identity)}`;
+}
+async function lockKey(): Promise<string> {
+  return `${await queueKey()}.lock`;
+}
 
 /** ============================================================
  * Small helpers
@@ -263,14 +277,14 @@ function isOfflineLikeMessage(msgLower: string) {
 
 async function clearLock() {
   try {
-    await setJson(LOCK_KEY, null as any);
+    await setJson(await lockKey(), null as any);
   } catch {
     // ignore
   }
 }
 
 async function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const lock = await getJson<{ at: number; id: string } | null>(LOCK_KEY, null);
+  const lock = await getJson<{ at: number; id: string } | null>(await lockKey(), null);
   const t = nowMs();
 
   // lock stale dopo 60s
@@ -279,12 +293,12 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 
   const lockId = uid("qlock");
-  await setJson(LOCK_KEY, { at: t, id: lockId });
+  await setJson(await lockKey(), { at: t, id: lockId });
 
   try {
     return await fn();
   } finally {
-    const cur = await getJson<{ at: number; id: string } | null>(LOCK_KEY, null);
+    const cur = await getJson<{ at: number; id: string } | null>(await lockKey(), null);
     if (cur?.id === lockId) {
       await clearLock();
     }
@@ -296,7 +310,7 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
  * ============================================================ */
 
 export async function queueList(): Promise<QueueItem[]> {
-  const list = await getJson<QueueItem[]>(KEY, []);
+  const list = await getJson<QueueItem[]>(await queueKey(), []);
   return Array.isArray(list) ? list : [];
 }
 
@@ -384,23 +398,23 @@ export async function queueAdd(
   };
 
   list.unshift(full);
-  await setJson(KEY, list);
+  await setJson(await queueKey(), list);
   return full;
 }
 
 export async function queueUpdate(id: string, patch: Partial<QueueItem>) {
   const list = await queueList();
   const next = list.map((x) => (x.id === id ? ({ ...x, ...patch } as any) : x));
-  await setJson(KEY, next);
+  await setJson(await queueKey(), next);
 }
 
 export async function queueRemove(id: string) {
   const list = await queueList();
-  await setJson(KEY, list.filter((x) => x.id !== id));
+  await setJson(await queueKey(), list.filter((x) => x.id !== id));
 }
 
 export async function queueClearAll() {
-  await setJson(KEY, []);
+  await setJson(await queueKey(), []);
   await clearLock();
 }
 
@@ -433,13 +447,13 @@ export async function queueRetryAll(projectId?: string) {
     if (key && x.projectId !== key) return x;
     return { ...x, status: "PENDING", error: undefined, nextTryAt: null } as any;
   });
-  await setJson(KEY, next);
+  await setJson(await queueKey(), next);
 }
 
 export async function queueCleanupDone() {
   const list = await queueList();
   const next = list.filter((x) => x.status !== "DONE");
-  await setJson(KEY, next);
+  await setJson(await queueKey(), next);
 }
 
 /**
@@ -485,7 +499,7 @@ export async function queueNormalizeExisting(): Promise<{ changed: number }> {
     return y as QueueItem;
   });
 
-  if (changed > 0) await setJson(KEY, next);
+  if (changed > 0) await setJson(await queueKey(), next);
   return { changed };
 }
 
@@ -654,7 +668,7 @@ export async function queueFlushProject(
  * ✅ Helper: check lock (per evitare doppio tap)
  */
 export async function queueIsLocked(): Promise<boolean> {
-  const lock = await getJson<{ at: number; id: string } | null>(LOCK_KEY, null);
+  const lock = await getJson<{ at: number; id: string } | null>(await lockKey(), null);
   if (!lock) return false;
   return nowMs() - lock.at < 60000;
 }
