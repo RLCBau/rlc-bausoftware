@@ -30,6 +30,8 @@ import {
 } from "../lib/api";
 import { COLORS } from "../ui/theme";
 import { getToken } from "../lib/auth";
+import { queueLegacyRecoveryPreview } from "../lib/offlineQueue";
+import { recoverLegacyQueueConfirmed } from "../lib/sync";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Projects">;
 
@@ -776,6 +778,34 @@ export default function ProjectsScreen({ navigation }: Props) {
     }
   }
 
+  async function requestLegacyRecovery() {
+    if (isStandalone) {
+      Alert.alert("Offline-Daten", "Für lokale Altbestände kann die Firmenzuordnung nicht automatisch nachgewiesen werden. Die Originaldaten bleiben erhalten.");
+      return;
+    }
+    try {
+      const preview = await queueLegacyRecoveryPreview();
+      if (!preview.total) {
+        Alert.alert("Offline-Daten", "Keine alten Warteschlangen gefunden.");
+        return;
+      }
+      Alert.alert(
+        "Alte Offline-Daten übernehmen?",
+        `${preview.total} Vorgänge aus diesen Projekten: ${preview.projects.join(", ")}. Bitte bestätigen Sie nur, wenn alle Projekte zu Ihrem aktuellen Firmenkonto gehören. Eine Sicherheitskopie bleibt erhalten.`,
+        [
+          { text: "Abbrechen", style: "cancel" },
+          { text: "Übernehmen", onPress: () => {
+            void recoverLegacyQueueConfirmed(preview.projects)
+              .then(result => Alert.alert("Offline-Daten", `${result.imported} Vorgänge übernommen; ${result.retained} bleiben in der alten Sicherung.`))
+              .catch(() => Alert.alert("Offline-Daten", "Projektzuordnung konnte nicht bestätigt werden. Keine Daten übertragen."));
+          } },
+        ]
+      );
+    } catch {
+      Alert.alert("Offline-Daten", "Altdaten können derzeit nicht geprüft werden.");
+    }
+  }
+
   function requestAccountDeletion() {
     Alert.alert(
       "Konto löschen beantragen",
@@ -806,6 +836,9 @@ export default function ProjectsScreen({ navigation }: Props) {
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
             <Pressable accessibilityRole="button" onPress={() => void submitPrivacyRequest("ACCESS")}>
               <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Datenauskunft</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void requestLegacyRecovery()}>
+              <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Offline-Daten</Text>
             </Pressable>
             <Pressable accessibilityRole="button" onPress={requestAccountDeletion}>
               <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>Konto löschen</Text>

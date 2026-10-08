@@ -16,6 +16,10 @@ function isContent(u: string) {
 export async function openPdfUri(rawUri: string) {
   const uri = String(rawUri || "").trim();
   if (!uri) throw new Error("openPdfUri: uri fehlt");
+  const isDev = typeof __DEV__ !== "undefined" && __DEV__;
+  if (!isFile(uri) && !isContent(uri) && !/^https:\/\//i.test(uri) && !(isDev && /^http:\/\//i.test(uri))) {
+    throw new Error("Unsichere oder nicht unterstützte PDF-Adresse.");
+  }
 
   // iOS: Linking.openURL(file:// or https://) works (Files/iCloud will hand back a readable URL)
   if (Platform.OS === "ios") {

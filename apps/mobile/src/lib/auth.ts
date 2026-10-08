@@ -85,8 +85,10 @@ function normalizeToken(t: any): string {
   const s = String(t ?? "").trim();
   if (!s) return "";
   if (s === "null" || s === "undefined") return "";
-  if (s.toLowerCase().startsWith("bearer ")) return s.slice(7).trim();
-  return s;
+  const candidate = s.toLowerCase().startsWith("bearer ") ? s.slice(7).trim() : s;
+  // Historic NUR_APP tokens are not real JWTs and must never reach the API.
+  if (candidate.toLowerCase().startsWith("local:")) return "";
+  return candidate;
 }
 
 export async function setToken(token: string) {
