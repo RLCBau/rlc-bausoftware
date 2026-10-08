@@ -9,10 +9,10 @@ import { requirePermission } from "../middleware/rbac";
 const r = Router();
 
 function cid(req:any){ return String(req?.auth?.companyId || "").trim(); }
-function root(companyId:string){ const d=path.join(COMPANIES_ROOT,companyId,"privacy-compliance"); fs.mkdirSync(d,{recursive:true}); return d; }
+function root(companyId:string){ const d=path.join(COMPANIES_ROOT,companyId,"privacy-compliance"); fs.mkdirSync(d,{recursive:true,mode:0o700}); return d; }
 function file(companyId:string){ return path.join(root(companyId),"data-subject-requests.json"); }
 function read(companyId:string):any[]{ try{const f=file(companyId);if(!fs.existsSync(f))return [];const v=JSON.parse(fs.readFileSync(f,"utf8"));return Array.isArray(v)?v:[];}catch{return [];} }
-function write(companyId:string,rows:any[]){ const f=file(companyId);const t=`${f}.tmp-${process.pid}-${Date.now()}`;fs.writeFileSync(t,JSON.stringify(rows,null,2),"utf8");fs.renameSync(t,f); }
+function write(companyId:string,rows:any[]){ const f=file(companyId);const t=`${f}.tmp-${process.pid}-${Date.now()}`;fs.writeFileSync(t,JSON.stringify(rows,null,2),{encoding:"utf8",mode:0o600});fs.renameSync(t,f);fs.chmodSync(f,0o600); }
 function addMonths(value:any,months:number){ const d=new Date(value||Date.now());if(Number.isNaN(d.getTime()))return null;d.setMonth(d.getMonth()+months);return d.toISOString(); }
 function canonical(v:any){ const c=JSON.parse(JSON.stringify(v||{}));delete c.updatedAt;delete c.compliance;return JSON.stringify(c); }
 
