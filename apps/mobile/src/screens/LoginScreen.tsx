@@ -17,6 +17,8 @@ import {
   Image,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as Crypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList, type ArbeitsmodusType } from "../navigation/types";
@@ -98,6 +100,27 @@ function hash32(input: string) {
 function passHash(email: string, pw: string) {
   const salt = String(email || "").trim().toLowerCase();
   return hash32(`${salt}::${pw}`);
+}
+
+const LOCAL_PASSWORD_VERIFIER_KEY = "rlc_local_password_verifier_v2";
+
+async function secureLocalPassword(email: string, pw: string): Promise<string> {
+  const salt = Array.from(Crypto.getRandomBytes(16)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${salt}:${email.trim().toLowerCase()}:${pw}`);
+  await SecureStore.setItemAsync(LOCAL_PASSWORD_VERIFIER_KEY, `${salt}:${digest}`);
+  return "v2:secure-store";
+}
+
+async function verifyLocalPassword(email: string, pw: string, stored: string): Promise<boolean> {
+  if (stored !== "v2:secure-store") return passHash(email, pw) === stored;
+  const verifier = await SecureStore.getItemAsync(LOCAL_PASSWORD_VERIFIER_KEY);
+  if (!verifier) return false;
+  const sep = verifier.indexOf(":");
+  if (sep < 0) return false;
+  const salt = verifier.slice(0, sep);
+  const expected = verifier.slice(sep + 1);
+  const candidate = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${salt}:${email.trim().toLowerCase()}:${pw}`);
+  return candidate === expected;
 }
 
 function code6() {
@@ -801,7 +824,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       const u: LocalUser = {
         email: e,
-        passHash: passHash(e, pw),
+        passHash: await secureLocalPassword(e, pw),
         createdAt: Date.now(),
       };
       await saveJson(KEY_LOCAL_USER, u);
@@ -904,8 +927,12 @@ export default function LoginScreen({ navigation, route }: Props) {
       }
 
       if (!passwordOnly && !name.trim()) throw new Error("Bitte Name eingeben.");
-      const h = passHash(e, password);
-      if (h !== existing.passHash) throw new Error("Passwort falsch.");
+      if (!(await verifyLocalPassword(e, password, existing.passHash))) throw new Error("Passwort falsch.");
+      if (existing.passHash !== "v2:secure-store") {
+        const migrated = { ...existing, passHash: await secureLocalPassword(e, password) };
+        await saveJson(KEY_LOCAL_USER, migrated);
+        setLocalUser(migrated);
+      }
 
       await persistEmail(e);
       await persistProfile(e);
@@ -951,6 +978,7 @@ export default function LoginScreen({ navigation, route }: Props) {
                 KEY_EMAIL_VERIFIED_AT,
                 KEY_EMAIL_VERIFIED_FOR,
               ]);
+              await SecureStore.deleteItemAsync(LOCAL_PASSWORD_VERIFIER_KEY).catch(() => undefined);
               setLocalUser(null);
               setEmailVerifiedAt("");
               setPassword("");
