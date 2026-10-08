@@ -62,8 +62,7 @@ const ADMIN_CODE_KEY_BASE = "rlc_admin_unlock_code_v1";
 const ADMIN_UNLOCKED_KEY_BASE = "rlc_admin_unlocked_v1";
 const COMPANY_NAME_KEY_BASE = "rlc_company_name_v1";
 
-// ✅ TEST CODE per te
-const TEST_ADMIN_CODE = "RLC-TEST-2026";
+// Admin access must be verified through the configured company/server flow.
 
 /** Roles */
 type SessionRole =
@@ -417,18 +416,6 @@ export default function LoginScreen({ navigation, route }: Props) {
 
     setAdminBusy(true);
     try {
-      if (code === TEST_ADMIN_CODE) {
-        await AsyncStorage.setItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m), cn);
-        await AsyncStorage.setItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m), code);
-        await AsyncStorage.setItem(
-          modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m),
-          "1"
-        );
-        setAdminUnlocked(true);
-        setPostVerifyStep("NONE");
-        return true;
-      }
-
       if (m === "NUR_APP") {
         await AsyncStorage.setItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m), cn);
         await AsyncStorage.setItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m), code);
@@ -1458,10 +1445,6 @@ export default function LoginScreen({ navigation, route }: Props) {
                       style={s.input}
                       editable={!adminBusy && !loading}
                     />
-
-                    {IS_DEV ? (
-                      <Text style={s.mutedSmall}>TEST (Roberto): {TEST_ADMIN_CODE}</Text>
-                    ) : null}
 
                     <Pressable
                       disabled={!canContinueFirmendaten || adminBusy || loading}
