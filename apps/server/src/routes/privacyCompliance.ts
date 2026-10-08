@@ -130,6 +130,48 @@ r.get("/:id/erasure-assessment", requirePermission("privacy:*"), async (req:any,
   return res.json({ok:true,assessment});
 });
 
+/** Destructive proof-of-concept restricted to explicitly marked disposable test tenants.
+ * Production accounts and retained construction records are never deleted here. */
+r.post("/:id/test-erasure", requirePermission("privacy:*"), async (req:any,res)=>{
+  const companyId=cid(req);
+  const rows=read(companyId);
+  const idx=rows.findIndex(x=>String(x.id)===String(req.params.id));
+  if(idx<0) return res.status(404).json({ok:false,error:"NOT_FOUND"});
+  const item=rows[idx];
+  if(String(item.requestType).toUpperCase()!=="ERASURE" || !item.subjectUserId)
+    return res.status(422).json({ok:false,error:"ERASURE_SUBJECT_REQUIRED"});
+  if(!item.identityVerifiedAt || item.legalHold || item.evidenceLock)
+    return res.status(409).json({ok:false,error:"IDENTITY_OR_RETENTION_BLOCK"});
+  const company=await prisma.company.findUnique({where:{id:companyId},select:{code:true}});
+  const user=await prisma.user.findFirst({where:{id:String(item.subjectUserId),companyId},select:{id:true,email:true}});
+  if(!company?.code.startsWith("DSGVO-ISOLATION-") ||
+     !user?.email.endsWith("@example.invalid") ||
+     !user.email.startsWith("dsgvo-isolation-"))
+    return res.status(403).json({ok:false,error:"REAL_ACCOUNT_ERASURE_DISABLED"});
+  if(String(req.body?.confirmation||"")!==String(item.id))
+    return res.status(400).json({ok:false,error:"CONFIRMATION_REQUIRED"});
+  const [activities,members,projectMembers,submissions]=await Promise.all([
+    prisma.activityLog.count({where:{userId:user.id}}),
+    prisma.companyMember.count({where:{userId:user.id}}),
+    prisma.projectMember.count({where:{userId:user.id}}),
+    prisma.projectSubmission.count({where:{userId:user.id}})
+  ]);
+  if(activities||members||projectMembers||submissions)
+    return res.status(409).json({ok:false,error:"LINKED_RECORDS_REQUIRE_REVIEW"});
+  await prisma.user.delete({where:{id:user.id}});
+  const now=new Date().toISOString();
+  const evidence={subjectUserId:user.id,deletedAt:now,scope:"DISPOSABLE_TEST_ACCOUNT_ONLY"};
+  rows[idx]={
+    ...item,subjectName:"[TEST ACCOUNT ERASED]",contact:"",description:"",
+    status:"COMPLETED",completedAt:now,responseReference:"TEST_ERASURE:"+item.id,
+    notes:"Synthetic account record removed; test-only operation.",updatedAt:now,
+    evidenceLock:{hash:crypto.createHash("sha256").update(JSON.stringify(evidence)).digest("hex"),
+      lockedAt:now,lockedBy:String(req.auth?.sub||""),reason:"Synthetic test erasure evidence"},
+  };
+  write(companyId,rows);
+  return res.json({ok:true,erased:true,requestId:item.id,scope:"TEST_ONLY"});
+});
+
 r.put("/:id", requirePermission("privacy:*"), async (req:any,res)=>{
   const companyId=cid(req); if(!companyId)return res.status(403).json({ok:false,error:"COMPANY_REQUIRED"});
   const rows=read(companyId); const idx=rows.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0)return res.status(404).json({ok:false,error:"NOT_FOUND"});
