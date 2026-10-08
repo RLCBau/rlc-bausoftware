@@ -101,6 +101,35 @@ r.post("/", requirePermission("privacy:*"), async (req:any,res)=>{
   return res.json({ok:true,item,compliance:compliance(item)});
 });
 
+/** Conservative erasure assessment. Never execute destructive actions unless every
+ * record category has been inventoried and retention has been independently cleared. */
+r.get("/:id/erasure-assessment", requirePermission("privacy:*"), async (req:any,res)=>{
+  const companyId=cid(req);
+  if (!companyId) return res.status(403).json({ok:false,error:"COMPANY_REQUIRED"});
+  const item=read(companyId).find(x=>String(x.id)===String(req.params.id));
+  if (!item) return res.status(404).json({ok:false,error:"NOT_FOUND"});
+  if (String(item.requestType).toUpperCase()!=="ERASURE") return res.status(400).json({ok:false,error:"NOT_ERASURE_REQUEST"});
+  if (!item.subjectUserId) return res.status(422).json({ok:false,error:"SUBJECT_ACCOUNT_NOT_LINKED"});
+  const user=await prisma.user.findFirst({where:{id:String(item.subjectUserId),companyId},select:{id:true,email:true}});
+  if (!user) return res.status(404).json({ok:false,error:"SUBJECT_NOT_FOUND"});
+  const [activities,companyMemberships,projectMemberships,submissions]=await Promise.all([
+    prisma.activityLog.count({where:{userId:user.id,companyId}}),
+    prisma.companyMember.count({where:{userId:user.id,companyId}}),
+    prisma.projectMember.count({where:{userId:user.id}}),
+    prisma.projectSubmission.count({where:{userId:user.id}})
+  ]);
+  const assessment={
+    accountId:user.id, companyId, identityVerified:Boolean(item.identityVerifiedAt),
+    legalHold:Boolean(item.legalHold), legalHoldReason:String(item.legalHoldReason||""),
+    linkedRecords:{activities,companyMemberships,projectMemberships,submissions},
+    retentionReviewRequired:true,
+    deletableNow:false,
+    executionEnabled:false,
+    reason:"Human-approved retention review and full data inventory required; no automatic deletion of construction, accounting, or audit records."
+  };
+  return res.json({ok:true,assessment});
+});
+
 r.put("/:id", requirePermission("privacy:*"), async (req:any,res)=>{
   const companyId=cid(req); if(!companyId)return res.status(403).json({ok:false,error:"COMPANY_REQUIRED"});
   const rows=read(companyId); const idx=rows.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0)return res.status(404).json({ok:false,error:"NOT_FOUND"});
