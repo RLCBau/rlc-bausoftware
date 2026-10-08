@@ -2,7 +2,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getToken } from "./auth";
 import { api } from "./api";
-import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
+import { queueList, queueUpdate, queueLegacyRecoveryPreview, queueRecoverLegacy, QueueItem, DateiMeta } from "./offlineQueue";
+
+/** Legacy migration requires explicit confirmation and a fresh server ACL. */
+export async function recoverLegacyQueueConfirmed(confirmedProjectIds: string[]) {
+  const preview = await queueLegacyRecoveryPreview();
+  const projects = await api.projects();
+  const allowedIds = projects.flatMap((p: any) => [String(p?.id || ""), String(p?.code || "")]).filter(Boolean);
+  if (!preview.projects.length || !preview.projects.every(id => confirmedProjectIds.includes(id) && allowedIds.includes(id))) {
+    throw new Error("RECOVERY_PROJECT_OWNERSHIP_NOT_CONFIRMED");
+  }
+  return queueRecoverLegacy(confirmedProjectIds, allowedIds);
+}
 
 /**
  * ✅ POLICY:

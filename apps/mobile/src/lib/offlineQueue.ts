@@ -317,6 +317,45 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
  * Public API
  * ============================================================ */
 
+export async function queueLegacyRecoveryPreview(): Promise<{ total: number; projects: string[] }> {
+  // Metadata only: legacy payloads may contain personal or financial information.
+  const rows = await getJson<QueueItem[]>("rlc.queue.v2", []);
+  if (!Array.isArray(rows)) return { total: 0, projects: [] };
+  return {
+    total: rows.length,
+    projects: [...new Set(rows.map(x => String(x?.projectId || "").trim()).filter(Boolean))],
+  };
+}
+
+/**
+ * Explicit recovery: caller must show the project list, verify the owner and
+ * receive confirmation from the signed-in user. Never delete the legacy copy.
+ * Refuse recovery if any legacy project is outside the active company.
+ */
+export async function queueRecoverLegacy(
+  confirmedProjectIds: string[],
+  serverAuthorizedProjectIds: string[]
+): Promise<{ imported: number; retained: number }> {
+  if ((await getAuthMode()) !== "SERVER_SYNC") throw new Error("RECOVERY_SERVER_LOGIN_REQUIRED");
+  const state = await getAuthState("SERVER_SYNC");
+  if (!state?.companyId || !(state.userId || state.email)) throw new Error("RECOVERY_IDENTITY_REQUIRED");
+  const rows = await getJson<QueueItem[]>("rlc.queue.v2", []);
+  if (!Array.isArray(rows) || !rows.length) return { imported: 0, retained: 0 };
+  const approved = new Set(confirmedProjectIds.map(x => String(x).trim()));
+  const authorized = new Set(serverAuthorizedProjectIds.map(x => String(x).trim()));
+  if (!rows.every(x => approved.has(String(x?.projectId || "").trim()) && authorized.has(String(x?.projectId || "").trim()))) {
+    throw new Error("RECOVERY_PROJECT_OWNERSHIP_NOT_CONFIRMED");
+  }
+  const key = await queueKey();
+  const existing = await getJson<QueueItem[]>(key, []);
+  const target = Array.isArray(existing) ? existing : [];
+  const seen = new Set(target.map(x => String(x.id)));
+  const toImport = rows.filter(x => x?.id && !seen.has(String(x.id)));
+  await setJson(key, [...target, ...toImport]);
+  return { imported: toImport.length, retained: rows.length };
+}
+
+
 export async function queueList(): Promise<QueueItem[]> {
   const list = await getJson<QueueItem[]>(await queueKey(), []);
   return Array.isArray(list) ? list : [];
