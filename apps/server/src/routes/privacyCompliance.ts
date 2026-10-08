@@ -24,6 +24,8 @@ function compliance(v:any){
   if(!String(v?.contact||"").trim()) warnings.push("Kontaktweg der betroffenen Person ist nicht dokumentiert.");
   if(String(v?.status||"").toUpperCase()==="COMPLETED" && !v?.identityVerifiedAt) errors.push("Identitätsprüfung ist vor Abschluss nicht dokumentiert.");
   if(String(v?.status||"").toUpperCase()==="COMPLETED" && !v?.completedAt) errors.push("Abschlussdatum fehlt.");
+  if(String(v?.status||"").toUpperCase()==="COMPLETED" && String(v?.requestType||"").toUpperCase()==="ERASURE" && !String(v?.responseReference||"").trim()) errors.push("Löschungsnachweis beziehungsweise begründete Aufbewahrungsentscheidung fehlt.");
+  if(String(v?.status||"").toUpperCase()==="COMPLETED" && v?.legalHold && !String(v?.legalHoldReason||"").trim()) errors.push("Aufbewahrungsgrund fehlt.");
   if(String(v?.status||"").toUpperCase()==="REJECTED" && !String(v?.rejectionReason||"").trim()) errors.push("Ablehnungsgrund fehlt.");
   if(v?.extended===true && !String(v?.extensionReason||"").trim()) errors.push("Begründung der Fristverlängerung fehlt.");
   if(v?.extended===true && !v?.extensionNotifiedAt) errors.push("Mitteilung der Fristverlängerung ist nicht dokumentiert.");
@@ -64,6 +66,8 @@ r.get("/self-service", async (req:any,res) => {
   const companyId=cid(req);
   const userId=String(req?.auth?.sub||"").trim();
   if (!companyId || !userId) return res.status(403).json({ok:false,error:"AUTH_COMPANY_REQUIRED"});
+  const owner=await prisma.user.findUnique({where:{id:userId},select:{companyId:true}});
+  if (String(owner?.companyId||"")!==companyId) return res.status(403).json({ok:false,error:"USER_COMPANY_MISMATCH"});
   return res.json({ok:true,items:read(companyId).filter(x=>x.subjectUserId===userId)
     .map(x=>({id:x.id,requestType:x.requestType,status:x.status,receivedAt:x.receivedAt,completedAt:x.completedAt||null}))});
 });
