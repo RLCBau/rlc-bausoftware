@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 ROOT="${1:-/opt/rlc-bausoftware}"
 failed=0
-for dir in "$ROOT/backups" "$ROOT/.rlc-backups"; do
+for dir in "$ROOT/backups" "$ROOT/.rlc-backups" "$ROOT/apps/server/data/companies" "$ROOT/apps/server/data/global-audit"; do
   if [[ ! -d "$dir" ]]; then echo "NOT_FOUND $dir"; continue; fi
   if find "$dir" -type f -perm /077 -print -quit | grep -q .; then
     echo "FAIL insecure_files $dir"
