@@ -1010,17 +1010,21 @@ export default function EingangPruefungScreen({
     }
     if (item.kind === "BAUTAGEBUCH") {
       const row = (item as any)?.payload?.row || (item as any)?.payload || {};
-      return serverRequest("/api/regie", {
-        method: "POST",
-        body: JSON.stringify({
-          ...row,
-          projectId: item.projectId,
-          projectCode: item.projectId,
-          date: String(row?.date || new Date().toISOString().slice(0, 10)),
-          reportType: "BAUTAGEBUCH",
-          workflowStatus: "EINGEREICHT"
-        })
-      });
+
+      return serverRequest(
+        `/api/inbox/${encodeURIComponent(item.projectId)}/BAUTAGEBUCH/submit`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...row,
+            projectId: item.projectId,
+            projectCode: item.projectId,
+            reportType: "BAUTAGEBUCH",
+            docType: "BAUTAGEBUCH",
+            workflowStatus: "EINGEREICHT"
+          })
+        }
+      );
     }
     if (item.kind === "ANGEBOT" || item.kind === "MENGENERMITTLUNG" || item.kind === "ABSCHLAGSRECHNUNG" || item.kind === "RECHNUNG" || item.kind === "KALKULATION" || item.kind === "OUTLIER_REPORT") {
       const row = (item as any)?.payload?.row || (item as any)?.payload || {};
@@ -1167,14 +1171,40 @@ export default function EingangPruefungScreen({
           ...srv
         };
       });
-      const regieOnly = mergedRegie.filter((item: any) => String(item?.reportType || "REGIE").trim().toUpperCase() === "REGIE");
-      const bautagebuchOnly = mergedRegie.filter((item: any) => String(item?.reportType || "REGIE").trim().toUpperCase() === "BAUTAGEBUCH");
+      const regieOnly = mergedRegie.filter(
+        (item: any) =>
+          String(item?.reportType || "REGIE").trim().toUpperCase() === "REGIE"
+      );
+
       setRegie(regieOnly);
-      setBautagebuch(bautagebuchOnly);
       await saveList(INBOX_KEY_REGIE(pk), regieOnly);
-      await saveList(INBOX_KEY_BAUTAGEBUCH(pk), bautagebuchOnly);
       okRegie = true;
     } catch {}
+    try {
+      const r = await serverRequest<InboxListResponse<any>>(
+        `/api/inbox/${encodeURIComponent(pk)}/BAUTAGEBUCH`
+      );
+
+      const items = Array.isArray(r?.items) ? r.items : [];
+
+      const normalized = items
+        .map((x: any) => ({
+          ...x,
+          kind: "BAUTAGEBUCH",
+          id: String(x?.id || x?.docId || "").trim(),
+          projectId: String(x?.projectId || pk),
+          projectCode: String(x?.projectCode || pk),
+          reportType: "BAUTAGEBUCH",
+          docType: "BAUTAGEBUCH",
+          workflowStatus:
+            (x?.workflowStatus || "EINGEREICHT") as WorkflowStatus
+        }))
+        .filter((x: any) => !!x.id);
+
+      setBautagebuch(normalized);
+      await saveList(INBOX_KEY_BAUTAGEBUCH(pk), normalized);
+    } catch {}
+
     try {
       const paths = [`/api/fotos/inbox/list?projectId=${encodeURIComponent(pk)}`, `/api/photos/inbox/list?projectId=${encodeURIComponent(pk)}`, `/api/inbox/${encodeURIComponent(pk)}/fotos/list`];
       let r: any = null;
@@ -1238,7 +1268,11 @@ export default function EingangPruefungScreen({
       okFotos = true;
     } catch {}
     try {
-      const paths = [`/api/regie/inbox/list?projectId=${encodeURIComponent(pk)}`, `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(pk)}`, `/api/tagesberichte/inbox/list?projectId=${encodeURIComponent(pk)}`, `/api/inbox/${encodeURIComponent(pk)}/tagesbericht/list`];
+      const paths = [
+        `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(pk)}`,
+        `/api/tagesberichte/inbox/list?projectId=${encodeURIComponent(pk)}`,
+        `/api/inbox/${encodeURIComponent(pk)}/tagesbericht/list`
+      ];
       let r: any = null;
       let lastErr: any = null;
       for (const p of paths) {
@@ -2095,10 +2129,13 @@ export default function EingangPruefungScreen({
       reason
     }];
     if (t === "BAUTAGEBUCH") {
-      await serverRequest(`/api/regie/inbox/${action}`, {
-        method: "POST",
-        body: JSON.stringify(bodies[0])
-      });
+      await serverRequest(
+        `/api/inbox/${encodeURIComponent(pk)}/BAUTAGEBUCH/${encodeURIComponent(id)}/${action}`,
+        {
+          method: "POST",
+          body: JSON.stringify(bodies[0])
+        }
+      );
       return true;
     }
     const paths = [`/api/inbox/${encodeURIComponent(pk)}/${encodeURIComponent(typeLower)}/${encodeURIComponent(id)}/${action}`, `/api/${typeLower}/inbox/${action}`, `/api/${typeLower}/${action}`];

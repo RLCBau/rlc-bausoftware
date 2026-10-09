@@ -4,6 +4,7 @@ import { View, Text, Pressable, SafeAreaView, ScrollView, Alert, Platform, Activ
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import { uploadProjectArtifactToDms } from "../lib/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList } from "../navigation/types";
@@ -211,6 +212,18 @@ export default function BautagebuchScreen({
       await FileSystem.writeAsStringAsync(uri, csv, {
         encoding: FileSystem.EncodingType.UTF8
       });
+      try {
+        await uploadProjectArtifactToDms({
+          projectIdOrCode: projectId || projectKey,
+          fileUri: uri,
+          fileName: `Bautagebuch_${projectKey}.csv`,
+          mimeType: "text/csv;charset=utf-8",
+          module: "BAUTAGEBUCH",
+        });
+      } catch (error) {
+        console.warn("[bautagebuch:csv:dms]", error);
+      }
+
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri);
       } else {
