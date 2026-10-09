@@ -3,7 +3,6 @@ Description=RLC erasure ledger change watcher
 
 [Path]
 PathChanged=/opt/rlc-bausoftware/apps/server/data/privacy-erasure-ledger.jsonl
-PathExists=/opt/rlc-bausoftware/apps/server/data/privacy-erasure-ledger.jsonl
 Unit=rlc-erasure-ledger-sync.service
 
 [Install]
