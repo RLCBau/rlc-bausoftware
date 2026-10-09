@@ -231,7 +231,11 @@ r.put("/:id", requirePermission("privacy:*"), async (req:any,res)=>{
   const companyId=cid(req); if(!companyId)return res.status(403).json({ok:false,error:"COMPANY_REQUIRED"});
   const rows=read(companyId); const idx=rows.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0)return res.status(404).json({ok:false,error:"NOT_FOUND"});
   if(rows[idx].evidenceLock)return res.status(409).json({ok:false,error:"PRIVACY_REQUEST_LOCKED",lock:rows[idx].evidenceLock});
-  const next={...rows[idx],...req.body,id:rows[idx].id,updatedAt:new Date().toISOString()};
+  // Never accept client-provided identifiers, subject bindings or evidence locks.
+  const editable=["status","description","contact","identityVerifiedAt","extended","extensionReason","extensionNotifiedAt","legalHold","legalHoldReason","rejectionReason","responseReference","completedAt","notes"];
+  const changes:any={};
+  for(const key of editable) if(Object.prototype.hasOwnProperty.call(req.body||{},key)) changes[key]=req.body[key];
+  const next={...rows[idx],...changes,id:rows[idx].id,updatedAt:new Date().toISOString()};
   if(next.extended!==true){next.extensionReason="";next.extensionNotifiedAt=null;}
   const check=compliance(next);
   const finalStatus=["COMPLETED","REJECTED","WITHDRAWN"].includes(String(next.status||"").toUpperCase());
