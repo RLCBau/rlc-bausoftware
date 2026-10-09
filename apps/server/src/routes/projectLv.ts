@@ -3188,10 +3188,15 @@ router.post("/collection/:collectionId/import", requireLvCollectionRole, async (
       let code = codeBase;
       let suffix = 2;
       while (await prisma.project.findFirst({ where: { companyId, code } })) code = `${codeBase.slice(0, 58)}-${suffix++}`;
-      const project = await prisma.project.create({ data: { companyId, code, name: String(parsedTech.parsed?.title || displayName).slice(0, 180), description: "GAEB-Sammelimport" } });
-
       const creatorRole = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
       const creatorUserId = String(req?.auth?.sub || "").trim();
+      if (!["ADMIN", "ADMINISTRATOR"].includes(creatorRole)) {
+        const creatorExists = creatorUserId
+          ? await prisma.user.findUnique({ where: { id: creatorUserId }, select: { id: true } })
+          : null;
+        if (!creatorExists) return res.status(403).json({ ok: false, error: "IMPORT_USER_NOT_FOUND" });
+      }
+      const project = await prisma.project.create({ data: { companyId, code, name: String(parsedTech.parsed?.title || displayName).slice(0, 180), description: "GAEB-Sammelimport" } });
       if (creatorUserId && !["ADMIN", "ADMINISTRATOR"].includes(creatorRole)) {
         const projectRole = creatorRole === "KALKULATOR" ? "KALKULATOR" : "BAULEITER";
         await prisma.projectMember.upsert({
