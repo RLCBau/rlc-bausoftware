@@ -25,7 +25,9 @@ r.post("/breaches",(req:any,res)=>{const id=company(req),b=req.body||{};if(!id)r
  const items=load(id);items.unshift(item);save(id,items);res.status(201).json({ok:true,item,compliance:evaluate(item)});
 });
 r.patch("/breaches/:id",(req:any,res)=>{const id=company(req),items=load(id),i=items.findIndex(x=>x.id===req.params.id);if(i<0)return res.status(404).json({ok:false,error:"NOT_FOUND"});
- const allowed=["risk","impact","mitigation","controllerNotifiedAt","authorityNotifiedAt","subjectsNotifiedAt","subjectNoticeException","delayReason"];const patch:any={};
+ const allowed=["risk","impact","mitigation","controllerNotifiedAt","authorityNotifiedAt","subjectsNotifiedAt","subjectNoticeException","delayReason","notificationEvidence"];const patch:any={};
+ const notificationFields=["controllerNotifiedAt","authorityNotifiedAt","subjectsNotifiedAt"];
+ if(notificationFields.some(k=>Object.prototype.hasOwnProperty.call(req.body||{},k)&&req.body[k]!==null)&& !String(req.body?.notificationEvidence||"").trim())return res.status(422).json({ok:false,error:"NOTIFICATION_DELIVERY_EVIDENCE_REQUIRED"});
  for(const k of allowed)if(Object.prototype.hasOwnProperty.call(req.body||{},k)){const v=req.body[k];if(k==="risk"&&!validRisk.has(v))return res.status(400).json({ok:false,error:"INVALID_RISK"});if(k.endsWith("At")&&v!==null&&(!Number.isFinite(Date.parse(v))||Date.parse(v)>Date.now()))return res.status(400).json({ok:false,error:"INVALID_TIMESTAMP"});patch[k]=k==="risk"||v===null?v:String(v).slice(0,5000);}
  const now=new Date().toISOString();items[i]={...items[i],...patch,updatedAt:now,events:[...items[i].events,{at:now,event:"UPDATED",fields:Object.keys(patch)}]};save(id,items);res.json({ok:true,item:items[i],compliance:evaluate(items[i])});
 });
