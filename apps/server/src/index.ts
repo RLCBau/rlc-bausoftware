@@ -70,6 +70,7 @@ import inboxWorkflowRouter from "./routes/inboxWorkflow";
 import photosRouter from "./routes/photos"; // legacy (lo teniamo come /api/photos-legacy)
 import regiePdfRoutes from "./routes/regiePdf";
 import privacyComplianceRoutes from "./routes/privacyCompliance";
+import privacyBreachRoutes from "./routes/privacyBreach";
 import tagesberichtRoutes from "./routes/tagesbericht";
 import sollistRoutes from "./routes/sollist";
 
@@ -846,6 +847,7 @@ app.use(
 app.use("/api/whoami", requireAuth, whoamiRoutes);
 app.use("/api/privacy-rights", requireAuth, requireCompany, privacyComplianceRoutes);
 app.use("/api/privacy-compliance", requireAuth, requireCompany, requireActiveSubscription, privacyComplianceRoutes);
+app.use("/api/privacy-compliance", requireAuth, requireCompany, requireActiveSubscription, privacyBreachRoutes);
 app.use("/api/license", requireAuth, licenseRoutes);
 
 /* mail (SERVER upgrade required + verified) */
