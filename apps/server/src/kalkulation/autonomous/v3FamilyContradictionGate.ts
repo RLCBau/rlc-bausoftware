@@ -1,0 +1,14 @@
+/** Contractual contradiction filter applied after advisory family matching. */
+export function familyContradictions(shortText:string,longText:string,family:string):string[]{
+ const text=(shortText+' '+longText).toLocaleLowerCase('de-DE');
+ const name=family.toLocaleLowerCase('de-DE');
+ const issues:string[]=[];
+ if(/asphalt|\bac\s*\d+\s*(?:td|d|t)\b|bitumin/.test(text)&&/ohne.bindemittel/.test(name))issues.push('bound_asphalt_mapped_to_unbound_layer');
+ if(/schachtwand|fertigteil.schacht|schacht\s+herstellen/.test(text)&&/steigeisen/.test(name)&&!/steigeisen/.test(text))issues.push('shaft_construction_mapped_to_steps');
+ if(/beleuchtung|leuchte|lichtmast/.test(text)&&/leistenstein|bordstein|pflaster/.test(name))issues.push('lighting_mapped_to_road_stone');
+ if(/kabelschutzrohr/.test(text)&&/passschnitt/.test(name)&&!/passschnitt|schnitt|kürzen|kuerzen/.test(text))issues.push('whole_pipe_mapped_to_cut');
+ if(/einbauen|wiedereinbau/.test(text)&&/belasteter.boden/.test(name)&&!/belastet|kontamin|schadstoff/.test(text))issues.push('contamination_unproven');
+ if(/ausbauen|abtragen|abbrechen|entsorgen/.test(text)&&/wiedereinbau|wiederverwend/.test(name)&&!/wiedereinbau|wiederverwend|erneut einbau/.test(text))issues.push('removal_mapped_to_reinstallation');
+ if(/erstbefüllung|befüllung.*netz|fernwärme/.test(text)&&/isybau|dokumentation/.test(name)&&!/dokumentation|isybau/.test(text))issues.push('network_filling_mapped_to_documentation');
+ return issues;
+}
