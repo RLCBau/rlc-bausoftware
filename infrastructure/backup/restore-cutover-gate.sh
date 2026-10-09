@@ -7,10 +7,8 @@ if [[ "$#" -lt 1 ]]; then
   exit 64
 fi
 if [[ "${RLC_RESTORE_GATE_TEST_MODE:-}" == "1" ]]; then
-  # Only permitted for standalone tests, not production cutover.
-  [[ "${RLC_ALLOW_TEST_GATE:-}" == "yes" ]] || { echo "BLOCK test_override_forbidden"; exit 2; }
-  [[ "${RLC_PRODUCTION_CUTOVER:-}" != "1" ]] || { echo "BLOCK production_test_override"; exit 2; }
-  "${RLC_GATE_TEST_COMMAND:?}"
+  echo "BLOCK test_override_disabled" >&2
+  exit 2
 else
   target="${RLC_RESTORE_TARGET_CONTAINER:-}"
   [[ "$target" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$ ]] || { echo "BLOCK restore_target_not_explicit"; exit 2; }
