@@ -59,6 +59,7 @@ RUN npm ci --include=dev
 
 COPY apps/server/prisma ./prisma
 COPY apps/server ./
+RUN node scripts/patchAwsXmlParserCompat.cjs
 
 ENV RLC_CAD_CONVERTER_COMMAND="dwg2dxf --overwrite --file {output} {input}"
 
