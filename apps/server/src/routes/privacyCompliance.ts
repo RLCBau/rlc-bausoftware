@@ -25,11 +25,15 @@ function compliance(v:any){
   if(!String(v?.contact||"").trim()) warnings.push("Kontaktweg der betroffenen Person ist nicht dokumentiert.");
   if(String(v?.status||"").toUpperCase()==="COMPLETED" && !v?.identityVerifiedAt) errors.push("Identitätsprüfung ist vor Abschluss nicht dokumentiert.");
   if(String(v?.status||"").toUpperCase()==="COMPLETED" && !v?.completedAt) errors.push("Abschlussdatum fehlt.");
+  if(String(v?.status||"").toUpperCase()==="COMPLETED" && !String(v?.responseReference||"").trim()) errors.push("Nachweis der Antwort an die betroffene Person fehlt.");
   if(String(v?.status||"").toUpperCase()==="COMPLETED" && String(v?.requestType||"").toUpperCase()==="ERASURE" && !String(v?.responseReference||"").trim()) errors.push("Löschungsnachweis beziehungsweise begründete Aufbewahrungsentscheidung fehlt.");
   if(String(v?.status||"").toUpperCase()==="COMPLETED" && v?.legalHold && !String(v?.legalHoldReason||"").trim()) errors.push("Aufbewahrungsgrund fehlt.");
   if(String(v?.status||"").toUpperCase()==="REJECTED" && !String(v?.rejectionReason||"").trim()) errors.push("Ablehnungsgrund fehlt.");
   if(v?.extended===true && !String(v?.extensionReason||"").trim()) errors.push("Begründung der Fristverlängerung fehlt.");
   if(v?.extended===true && !v?.extensionNotifiedAt) errors.push("Mitteilung der Fristverlängerung ist nicht dokumentiert.");
+  const received=Date.parse(String(v?.receivedAt||""));
+  if(!Number.isFinite(received)) errors.push("Eingangsdatum ist ungültig.");
+  if(v?.extended===true && Number.isFinite(received) && Date.parse(String(v?.extensionNotifiedAt||"")) > Date.parse(String(addMonths(v.receivedAt,1)))) errors.push("Fristverlängerung wurde nicht innerhalb der ursprünglichen Monatsfrist mitgeteilt.");
   const deadline=v?.extended===true ? addMonths(v?.receivedAt,3) : addMonths(v?.receivedAt,1);
   if(deadline && Date.parse(deadline)<Date.now() && !["COMPLETED","REJECTED","WITHDRAWN"].includes(String(v?.status||"").toUpperCase())) warnings.push("Bearbeitungsfrist ist überschritten.");
   return {valid:errors.length===0,errors,warnings,deadline};
@@ -235,6 +239,8 @@ r.put("/:id", requirePermission("privacy:*"), async (req:any,res)=>{
   const editable=["status","description","contact","identityVerifiedAt","extended","extensionReason","extensionNotifiedAt","legalHold","legalHoldReason","rejectionReason","responseReference","completedAt","notes"];
   const changes:any={};
   for(const key of editable) if(Object.prototype.hasOwnProperty.call(req.body||{},key)) changes[key]=req.body[key];
+  const allowedStatuses=new Set(["OPEN","IN_PROGRESS","PENDING","COMPLETED","REJECTED","WITHDRAWN"]);
+  if(changes.status!==undefined && !allowedStatuses.has(String(changes.status).toUpperCase())) return res.status(400).json({ok:false,error:"PRIVACY_STATUS_INVALID"});
   const next={...rows[idx],...changes,id:rows[idx].id,updatedAt:new Date().toISOString()};
   if(next.extended!==true){next.extensionReason="";next.extensionNotifiedAt=null;}
   const check=compliance(next);
