@@ -12,6 +12,7 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import mime from "mime-types";
 import { prisma } from "./lib/prisma";
+import { enforceRestoreGateOnStartup } from "./lib/restoreStartupGate";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -1396,7 +1397,9 @@ app.use(
 /* ======================= START ======================= */
 (async () => {
   try {
+    await enforceRestoreGateOnStartup();
     await ensureDevCompany();
+
 
     // âœ… MAILER VERIFY (punto 2): logga subito se SMTP Ã¨ rotto
     // Non blocca la partenza: se fallisce, stampa errore e continua.
