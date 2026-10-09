@@ -1,4 +1,10 @@
-import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader, outputPdfBlobWithCompanyHeader as outputRlcPdfBlobWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+import {
+  savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader,
+  outputPdfBlobWithCompanyHeader as outputRlcPdfBlobWithCompanyHeader,
+  openPdfBlobPreview,
+  reservePdfPreview
+} from "../../lib/pdf/companyPdfHeader";
+import { archiveWebPdf } from "../../lib/dmsArchive";
 import { API_BASE } from "../../lib/apiBase";
 // apps/web/src/pages/buchhaltung/AbschlagsrechnungDetail.tsx
 import React, { useEffect, useMemo, useState } from "react";
@@ -7,6 +13,61 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProject } from "../../store/useProject";
 import "./styles.css";
+
+
+
+
+
+
+
+import { renderRlcServerPdf } from "./serverPdfCore";
+function getRlcAuthToken() {
+  const keys = [
+    "rlc_token",
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_auth_token"
+  ];
+
+  for (const storage of [localStorage, sessionStorage]) {
+    for (const key of keys) {
+      const value = storage.getItem(key);
+
+      if (value && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+
+  return "";
+}
+
+async function rlcFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+) {
+  const headers = new Headers(init.headers || {});
+  const token = getRlcAuthToken();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return window.fetch(input, {
+    ...init,
+    headers,
+    credentials: "include"
+  });
+}
 
 function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -61,7 +122,7 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     ...(init?.headers || {})
   };
 
-  const res = await fetch(apiUrl(path), {
+  const res = await rlcFetch(apiUrl(path), {
     ...init,
     headers,
     credentials: "include"
@@ -123,29 +184,17 @@ lw = 0.6)
   doc.rect(x, y, w, h);
 }
 
-async function printJsPdf(doc: jsPDF) {
+async function printJsPdf(
+  doc: jsPDF,
+  previewWindow: Window | null = null
+) {
   const blob = await outputRlcPdfBlobWithCompanyHeader(doc);
-  const url = URL.createObjectURL(blob);
 
-  const w = window.open(url, "_blank", "noopener,noreferrer");
-  if (!w) {
-    saveRlcPdfWithCompanyHeader(doc, "document.pdf");
-    URL.revokeObjectURL(url);
-    return;
-  }
-
-  const timer = window.setInterval(() => {
-    try {
-      if (w.document?.readyState === "complete") {
-        window.clearInterval(timer);
-        w.focus();
-        w.print();
-        setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      }
-    } catch {
-
-      // ignore
-    }}, 200);
+  openPdfBlobPreview(
+    blob,
+    "Abschlagsrechnung.pdf",
+    previewWindow
+  );
 }
 
 function buildAbschlagPdf(args: {
@@ -438,28 +487,52 @@ export default function AbschlagsrechnungDetail() {
   }
 
   async function printNow() {
-    if (!current) return;
+  if (!current) return;
 
-    const doc = buildAbschlagPdf({
+  await renderRlcServerPdf({
+    documentType: "ABSCHLAGSRECHNUNG",
+
+    projectId: String(p?.code || ""),
+
+    fileName:
+      `${p?.code || "Projekt"}_Abschlag_${current.nr}.pdf`,
+
+    mode: "preview",
+
+    payload: {
+      ...current,
+      projectId: String(p?.code || ""),
       projectCode: String(p?.code || ""),
       projectName: String(p?.name || ""),
-      item: current
-    });
+      number: current.nr,
+      invoiceNumber: current.nr
+    }
+  });
+}
 
-    await printJsPdf(doc);
-  }
+  async function exportPdf() {
+  if (!current) return;
 
-  function exportPdf() {
-    if (!current) return;
+  await renderRlcServerPdf({
+    documentType: "ABSCHLAGSRECHNUNG",
 
-    const doc = buildAbschlagPdf({
+    projectId: String(p?.code || ""),
+
+    fileName:
+      `${p?.code || "Projekt"}_Abschlag_${current.nr}.pdf`,
+
+    mode: "download",
+
+    payload: {
+      ...current,
+      projectId: String(p?.code || ""),
       projectCode: String(p?.code || ""),
       projectName: String(p?.name || ""),
-      item: current
-    });
-
-    saveRlcPdfWithCompanyHeader(doc, `${p?.code || "Projekt"}_Abschlag_${current.nr}.pdf`);
-  }
+      number: current.nr,
+      invoiceNumber: current.nr
+    }
+  });
+}
 
   if (!p) {
     return (

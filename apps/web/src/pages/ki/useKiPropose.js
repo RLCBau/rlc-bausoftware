@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { apiUrl } from "../../lib/apiBase";
 const SYS_PROMPT = `Du bist Kalkulator für Tief-/Straßenbau. 
 Erzeuge eine Liste geeigneter LV-Positionen als JSON-Array.
 Jedes Element: { "posNr": "01.001" (optional), "kurztext": "...", "langtext": "...", "einheit": "m/m²/Stk", "menge": number, "preis": number (optional), "confidence": 0..1 }.
@@ -10,42 +11,31 @@ export function useKiPropose() {
             return [];
         setLoading(true);
         try {
-            // 1) tenta proxy server
-            const res = await fetch("/api/ki/propose", {
+            const token = (() => {
+                try {
+                    for (const key of ["rlc_token", "token", "authToken", "accessToken", "rlc_auth_token", "rlc_access_token"]) {
+                        for (const storage of [localStorage, sessionStorage]) {
+                            const value = storage.getItem(key);
+                            if (value?.trim())
+                                return value.trim();
+                        }
+                    }
+                }
+                catch { }
+                return "";
+            })();
+            const res = await fetch(apiUrl("/api/ki/propose"), {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
                 body: JSON.stringify({ text: projectText }),
             });
-            if (res.ok) {
-                const json = await res.json();
-                return normalize(json?.items || json);
-            }
-            // 2) fallback diretto OpenAI
-            const key = import.meta.env.VITE_OPENAI_API_KEY;
-            if (!key)
+            if (!res.ok)
                 return [];
-            const body = {
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: SYS_PROMPT },
-                    { role: "user", content: projectText }
-                ],
-                temperature: 0.2,
-                response_format: { type: "json_object" }, // riceviamo {items:[...]} o [...]
-            };
-            const r = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-                body: JSON.stringify(body),
-            });
-            if (!r.ok)
-                return [];
-            const data = await r.json();
-            const content = data.choices?.[0]?.message?.content;
-            const parsed = safeJson(content);
-            const arr = Array.isArray(parsed) ? parsed : parsed?.items;
-            return normalize(arr);
-        }
+            const json = await res.json();
+            return normalize(json?.items || json);
         catch {
             return [];
         }

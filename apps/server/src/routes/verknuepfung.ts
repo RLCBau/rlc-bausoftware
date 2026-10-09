@@ -7,8 +7,31 @@ import fs from "fs";
 import crypto from "crypto";
 import { prisma } from "../lib/prisma";
 import { PROJECTS_ROOT as PROJECTS_ROOT_LIB } from "../lib/projectsRoot";
+import { requireProjectMember } from "../middleware/guards";
 
 const r = Router();
+
+function verknuepfungRole(req:any): string {
+  return String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+}
+function requireNachtragWrite(req:any,res:any,next:any){
+  if(!["ADMIN","ADMINISTRATOR","BAULEITER","KALKULATOR"].includes(verknuepfungRole(req))){
+    return res.status(403).json({ok:false,error:"NACHTRAG_WRITE_FORBIDDEN"});
+  }
+  return next();
+}
+function requireNachtragApproval(req:any,res:any,next:any){
+  if(!["ADMIN","ADMINISTRATOR","BAULEITER"].includes(verknuepfungRole(req))){
+    return res.status(403).json({ok:false,error:"NACHTRAG_APPROVAL_FORBIDDEN"});
+  }
+  return next();
+}
+function requireAbschlagWrite(req:any,res:any,next:any){
+  if(!["ADMIN","ADMINISTRATOR","BAULEITER","BUCHHALTUNG"].includes(verknuepfungRole(req))){
+    return res.status(403).json({ok:false,error:"ABSCHLAG_WRITE_FORBIDDEN"});
+  }
+  return next();
+}
 
 const PROJECTS_ROOT =
   process.env.PROJECTS_ROOT ||
@@ -77,30 +100,35 @@ function safeFsKey(input: string) {
 }
 
 async function resolveProjectFsKey(input: string): Promise<string> {
-  const trimmed = String(input || "").trim();
-  if (!trimmed) return "UNKNOWN";
-
-  // FS-Key diretto: BA-2026-DEMO non deve interrogare Prisma
-  if (/^BA[-_]/i.test(trimmed)) return safeFsKey(trimmed);
-
-  try {
-    const dbLookup = prisma.project.findFirst({
-      where: { OR: [{ id: trimmed }, { code: trimmed }] },
-      select: { code: true },
-    });
-
-    const proj = await Promise.race([
-      dbLookup,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
-    ]);
-
-    const code = String((proj as any)?.code || "").trim();
-    if (code) return safeFsKey(code);
-  } catch {
-    // DB fallback
+  const trimmed=String(input||"").trim();
+  if(!trimmed) return "UNKNOWN";
+  try{
+    let project=await prisma.project.findUnique({where:{id:trimmed},select:{id:true,code:true}});
+    if(!project){
+      const matches=await prisma.project.findMany({where:{code:trimmed},select:{id:true,code:true},take:2});
+      if(matches.length!==1) return "UNKNOWN";
+      project=matches[0];
+    }
+    const canonical=safeFsKey(project.id);
+    const legacy=String(project.code||"").trim();
+    if(legacy && legacy!==project.id){
+      const duplicates=await prisma.project.count({where:{code:legacy}});
+      if(duplicates===1){
+        const legacyRoot=path.join(PROJECTS_ROOT,safeFsKey(legacy));
+        const canonicalRoot=path.join(PROJECTS_ROOT,canonical);
+        for(const parts of [["verknuepfung"],["soll-ist.json"],["aufmass","soll-ist.json"],["abschlaege.json"]]){
+          const src=path.join(legacyRoot,...parts), dst=path.join(canonicalRoot,...parts);
+          if(!fs.existsSync(src)||fs.existsSync(dst)) continue;
+          fs.mkdirSync(path.dirname(dst),{recursive:true});
+          if(fs.statSync(src).isDirectory()) fs.cpSync(src,dst,{recursive:true}); else fs.copyFileSync(src,dst);
+        }
+      }
+    }
+    return canonical;
+  }catch(e){
+    console.error("[verknuepfung] resolveProjectFsKey failed",e);
+    return "UNKNOWN";
   }
-
-  return safeFsKey(trimmed);
 }
 
 function pProjectResolved(fsKey: string) {
@@ -117,6 +145,8 @@ type SollIstRow = {
   ist: number;
   ep: number;
 };
+
+import { archiveProjectFileVersion } from "../services/dmsArchive";
 
 type NachtragStatus =
   | "offen"
@@ -137,6 +167,17 @@ type Nachtrag = {
   total: number;
   status: NachtragStatus;
   note?: string;
+  contractBasis?: "BGB" | "VOBB" | "OTHER";
+  changeRequestDate?: string;
+  changeRequestReceivedAt?: string;
+  bgbAgreementDeadline?: string;
+  agreementStatus?: "PENDING" | "AGREED" | "ORDERED" | "DISPUTED";
+  orderDate?: string;
+  orderTextFormConfirmed?: boolean;
+  orderReference?: string;
+  priceBasis?: "ACTUAL_COSTS_650C" | "URKALKULATION" | "VOBB" | "OTHER";
+  planningProvided?: boolean;
+  legalNote?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -274,6 +315,12 @@ function normalizeNachtragStatus(x: any): NachtragStatus {
   return "offen";
 }
 
+function isoDateOrEmpty(value:any){const raw=String(value||"").trim();if(!raw)return "";const d=new Date(raw);return Number.isNaN(d.getTime())?raw:d.toISOString();}
+function plusDaysIso(value:any,days:number){const raw=String(value||"").trim();if(!raw)return "";const d=new Date(raw);if(Number.isNaN(d.getTime()))return "";d.setDate(d.getDate()+days);return d.toISOString();}
+function isLockedNachtrag(row:any){return normalizeNachtragStatus(row?.status)==="freigegeben";}
+function nachtragCanonical(row:any){const copy=JSON.parse(JSON.stringify(row||{}));delete copy.updatedAt;return JSON.stringify(Object.keys(copy).sort().reduce((a:any,k)=>{a[k]=copy[k];return a;},{}));}
+function validateNachtragLegal(row:any){const errors:string[]=[];const warnings:string[]=[];const basis=String(row?.contractBasis||"").toUpperCase();if(!basis)errors.push("Vertragsgrundlage fehlt (BGB/VOB/B/sonstige).");if(!String(row?.note||"").trim())errors.push("Begründung des Nachtrags fehlt.");if(!String(row?.priceBasis||"").trim())errors.push("Preis-/Vergütungsgrundlage fehlt.");if(!String(row?.changeRequestReceivedAt||"").trim())errors.push("Eingang des Änderungsbegehrens ist nicht dokumentiert.");if(basis==="BGB"){const deadline=String(row?.bgbAgreementDeadline||"");if(deadline&&Date.parse(deadline)<Date.now()&&!row?.orderTextFormConfirmed&&String(row?.agreementStatus||"")!=="AGREED")warnings.push("BGB §650b: 30-Tage-Einigungsphase ist abgelaufen; Anordnung/weiteres Vorgehen dokumentieren.");if(String(row?.agreementStatus||"")==="ORDERED"&&!row?.orderTextFormConfirmed)errors.push("BGB §650b: Anordnung in Textform ist nicht bestätigt.");}if(basis==="VOBB")warnings.push("VOB/B gilt nur, wenn sie wirksam Vertragsbestandteil ist; Vertragsgrundlage prüfen.");return {valid:errors.length===0,errors,warnings};}
+
 function normalizeNachtrag(x: any, fsKey: string, existing?: Nachtrag[]): Nachtrag {
   const now = new Date().toISOString();
   const existingRows = Array.isArray(existing) ? existing : [];
@@ -310,6 +357,10 @@ function normalizeNachtrag(x: any, fsKey: string, existing?: Nachtrag[]): Nachtr
     x?.note ?? x?.begruendung ?? x?.reason ?? prev?.note ?? ""
   );
 
+  const contractBasisRaw=String(x?.contractBasis ?? prev?.contractBasis ?? "").toUpperCase();
+  const contractBasis=(contractBasisRaw==="BGB"||contractBasisRaw==="VOBB"?contractBasisRaw:(contractBasisRaw?"OTHER":undefined)) as Nachtrag["contractBasis"];
+  const changeRequestReceivedAt=isoDateOrEmpty(x?.changeRequestReceivedAt ?? prev?.changeRequestReceivedAt);
+  const bgbAgreementDeadline=contractBasis==="BGB"&&changeRequestReceivedAt?plusDaysIso(changeRequestReceivedAt,30):String(x?.bgbAgreementDeadline ?? prev?.bgbAgreementDeadline ?? "");
   return {
     id,
     projectKey: fsKey,
@@ -323,6 +374,17 @@ function normalizeNachtrag(x: any, fsKey: string, existing?: Nachtrag[]): Nachtr
     total,
     status: normalizeNachtragStatus(x?.status ?? prev?.status),
     note,
+    contractBasis,
+    changeRequestDate: isoDateOrEmpty(x?.changeRequestDate ?? prev?.changeRequestDate),
+    changeRequestReceivedAt,
+    bgbAgreementDeadline,
+    agreementStatus: String(x?.agreementStatus ?? prev?.agreementStatus ?? "PENDING").toUpperCase() as Nachtrag["agreementStatus"],
+    orderDate: isoDateOrEmpty(x?.orderDate ?? prev?.orderDate),
+    orderTextFormConfirmed: Boolean(x?.orderTextFormConfirmed ?? prev?.orderTextFormConfirmed ?? false),
+    orderReference: String(x?.orderReference ?? prev?.orderReference ?? ""),
+    priceBasis: String(x?.priceBasis ?? prev?.priceBasis ?? "").toUpperCase() as Nachtrag["priceBasis"],
+    planningProvided: Boolean(x?.planningProvided ?? prev?.planningProvided ?? false),
+    legalNote: String(x?.legalNote ?? prev?.legalNote ?? ""),
     createdAt: String(x?.createdAt ?? prev?.createdAt ?? now),
     updatedAt: now,
   };
@@ -337,6 +399,23 @@ function readNachtraege(fsKey: string): Nachtrag[] {
 function writeNachtraege(fsKey: string, items: Nachtrag[]) {
   const { nachtraege } = ensureProjectStructure(fsKey);
   writeJson(nachtraege, { items: Array.isArray(items) ? items : [] });
+}
+
+function archiveNachtraegeDms(fsKey: string) {
+  const { nachtraege } = ensureProjectStructure(fsKey);
+
+  void archiveProjectFileVersion({
+    projectIdOrCode: fsKey,
+    filename: "Nachtraege.json",
+    kind: "LV",
+    localPath: nachtraege,
+    meta: {
+      module: "KALKULATION",
+      source: "verknuepfung.nachtraege"
+    }
+  }).catch((error) => {
+    console.error("[nachtraege:dms]", error);
+  });
 }
 
 function readAbschlaegeArray(fsKey: string): { items: AbschlagItem[]; file: string } {
@@ -437,9 +516,9 @@ function buildLinking(fsKey: string) {
 /**
  * GET /api/verknuepfung/list/:projectKey
  */
-r.get("/verknuepfung/list/:projectKey", async (req, res) => {
+r.get("/verknuepfung/list/:projectKey", requireProjectMember("projectKey"), async (req, res) => {
   try {
-    const inputKey = s(req.params.projectKey);
+    const inputKey = s((req as any).resolvedProjectId || req.params.projectKey);
     if (!inputKey) {
       return res.status(400).json({ ok: false, error: "projectKey fehlt" });
     }
@@ -496,9 +575,9 @@ r.get("/verknuepfung/list/:projectKey", async (req, res) => {
 /**
  * GET /api/verknuepfung/nachtraege/:projectKey
  */
-r.get("/verknuepfung/nachtraege/:projectKey", async (req, res) => {
+r.get("/verknuepfung/nachtraege/:projectKey", requireProjectMember("projectKey"), async (req, res) => {
   try {
-    const inputKey = s(req.params.projectKey);
+    const inputKey = s((req as any).resolvedProjectId || req.params.projectKey);
     if (!inputKey) {
       return res.status(400).json({ ok: false, error: "projectKey fehlt" });
     }
@@ -527,9 +606,9 @@ r.get("/verknuepfung/nachtraege/:projectKey", async (req, res) => {
  * PUT /api/verknuepfung/nachtraege/:projectKey
  * body: { items: Nachtrag[] }
  */
-r.put("/verknuepfung/nachtraege/:projectKey", async (req, res) => {
+r.put("/verknuepfung/nachtraege/:projectKey", requireProjectMember("projectKey"), requireNachtragWrite, async (req, res) => {
   try {
-    const inputKey = s(req.params.projectKey);
+    const inputKey = s((req as any).resolvedProjectId || req.params.projectKey);
     if (!inputKey) {
       return res.status(400).json({ ok: false, error: "projectKey fehlt" });
     }
@@ -543,6 +622,9 @@ r.put("/verknuepfung/nachtraege/:projectKey", async (req, res) => {
 
     const existing = readNachtraege(fsKey);
 
+    const incomingIds=new Set(incoming.map((x:any)=>String(x?.id||"")));
+    for(const oldRow of existing){if(isLockedNachtrag(oldRow)&&!incomingIds.has(String(oldRow.id))){return res.status(409).json({ok:false,error:"NACHTRAG_LOCKED",message:`Freigegebener Nachtrag ${oldRow.number} darf nicht gelöscht werden.`});}}
+
     const cleaned: Nachtrag[] = incoming
       .map((x) => normalizeNachtrag(x, fsKey, existing))
       .filter(
@@ -553,7 +635,17 @@ r.put("/verknuepfung/nachtraege/:projectKey", async (req, res) => {
           String(n.note || "").trim().length > 0
       );
 
+    for(const oldRow of existing){
+      if(!isLockedNachtrag(oldRow)) continue;
+      const candidate=cleaned.find((x)=>String(x.id)===String(oldRow.id));
+      if(candidate&&nachtragCanonical(normalizeNachtrag(oldRow,fsKey,existing))!==nachtragCanonical(candidate)){return res.status(409).json({ok:false,error:"NACHTRAG_LOCKED",message:`Freigegebener Nachtrag ${oldRow.number} darf nicht verändert werden.`});}
+    }
+    const compliance=cleaned.map((row)=>({id:row.id,number:row.number,...validateNachtragLegal(row)}));
+    for(const row of cleaned){if(isLockedNachtrag(row)){const check=validateNachtragLegal(row);if(!check.valid)return res.status(422).json({ok:false,error:"NACHTRAG_LEGAL_VALIDATION_FAILED",id:row.id,number:row.number,errors:check.errors,warnings:check.warnings});}}
+
     writeNachtraege(fsKey, cleaned);
+
+    archiveNachtraegeDms(fsKey);
 
     return res.json({
       ok: true,
@@ -561,6 +653,7 @@ r.put("/verknuepfung/nachtraege/:projectKey", async (req, res) => {
       fsKey,
       items: cleaned,
       count: cleaned.length,
+      compliance,
     });
   } catch (e: any) {
     console.error("[verknuepfung:nachtraege:PUT]", e);
@@ -575,9 +668,9 @@ r.put("/verknuepfung/nachtraege/:projectKey", async (req, res) => {
  * POST /api/verknuepfung/nachtrag/:projectKey
  * body: { lvPos: string[] }
  */
-r.post("/verknuepfung/nachtrag/:projectKey", async (req, res) => {
+r.post("/verknuepfung/nachtrag/:projectKey", requireProjectMember("projectKey"), requireNachtragWrite, async (req, res) => {
   try {
-    const inputKey = s(req.params.projectKey);
+    const inputKey = s((req as any).resolvedProjectId || req.params.projectKey);
     const lvPos: string[] = Array.isArray(req.body?.lvPos)
       ? req.body.lvPos
       : [];
@@ -630,6 +723,11 @@ r.post("/verknuepfung/nachtrag/:projectKey", async (req, res) => {
         total: round2(diff * ep),
         status: "offen",
         note: `Automatisch erstellt aus Soll/Ist. Differenz: ${diff}`,
+        contractBasis: undefined,
+        agreementStatus: "PENDING",
+        orderTextFormConfirmed: false,
+        priceBasis: "URKALKULATION",
+        planningProvided: false,
         createdAt: now,
         updatedAt: now,
       };
@@ -639,6 +737,7 @@ r.post("/verknuepfung/nachtrag/:projectKey", async (req, res) => {
 
     const next = [...created, ...nachtraege];
     writeNachtraege(fsKey, next);
+    archiveNachtraegeDms(fsKey);
 
     return res.json({
       ok: true,
@@ -659,9 +758,9 @@ r.post("/verknuepfung/nachtrag/:projectKey", async (req, res) => {
 /**
  * POST /api/verknuepfung/freigeben/:projectKey
  */
-r.post("/verknuepfung/freigeben/:projectKey", async (req, res) => {
+r.post("/verknuepfung/freigeben/:projectKey", requireProjectMember("projectKey"), requireNachtragApproval, async (req, res) => {
   try {
-    const inputKey = s(req.params.projectKey);
+    const inputKey = s((req as any).resolvedProjectId || req.params.projectKey);
     if (!inputKey) {
       return res.status(400).json({ ok: false, error: "projectKey fehlt" });
     }
@@ -681,9 +780,30 @@ r.post("/verknuepfung/freigeben/:projectKey", async (req, res) => {
     const posSet = new Set(lvPos.map((x) => s(x)));
 
     const now = new Date().toISOString();
+    const actor = String((req as any)?.auth?.email || (req as any)?.auth?.sub || (req as any)?.auth?.userId || "").trim() || null;
     let updated = 0;
+    const current = readNachtraege(fsKey);
 
-    const next = readNachtraege(fsKey).map((n) => {
+    const selected = current.filter((n) =>
+      (n.id && idSet.has(String(n.id))) ||
+      (n.lvPos && posSet.has(s(n.lvPos)))
+    );
+    for (const row of selected) {
+      const candidate:any = { ...row, status: "freigegeben", updatedAt: now, approvedAt: now, approvedBy: actor };
+      const check = validateNachtragLegal(candidate);
+      if (!check.valid) {
+        return res.status(422).json({
+          ok:false,
+          error:"NACHTRAG_LEGAL_VALIDATION_FAILED",
+          id:row.id,
+          number:row.number,
+          errors:check.errors,
+          warnings:check.warnings
+        });
+      }
+    }
+
+    const next = current.map((n) => {
       const match =
         (n.id && idSet.has(String(n.id))) ||
         (n.lvPos && posSet.has(s(n.lvPos)));
@@ -696,10 +816,14 @@ r.post("/verknuepfung/freigeben/:projectKey", async (req, res) => {
         ...n,
         status: "freigegeben" as NachtragStatus,
         updatedAt: now,
-      };
+        approvedAt: now,
+        approvedBy: actor,
+      } as any;
     });
 
     writeNachtraege(fsKey, next);
+
+    archiveNachtraegeDms(fsKey);
 
     return res.json({
       ok: true,
@@ -721,9 +845,9 @@ r.post("/verknuepfung/freigeben/:projectKey", async (req, res) => {
  * POST /api/verknuepfung/abschlag/:projectKey
  * body: { lvPos: string[], nr?: number | null }
  */
-r.post("/verknuepfung/abschlag/:projectKey", async (req, res) => {
+r.post("/verknuepfung/abschlag/:projectKey", requireProjectMember("projectKey"), requireAbschlagWrite, async (req, res) => {
   try {
-    const inputKey = s(req.params.projectKey);
+    const inputKey = s((req as any).resolvedProjectId || req.params.projectKey);
     const lvPos: string[] = Array.isArray(req.body?.lvPos)
       ? req.body.lvPos
       : [];
@@ -781,6 +905,9 @@ r.post("/verknuepfung/abschlag/:projectKey", async (req, res) => {
 
       abItems.unshift(abschlag);
     } else {
+      if (String(abschlag.status || "Entwurf").toLowerCase() !== "entwurf") {
+        return res.status(409).json({ ok:false, error:"ABSCHLAG_LOCKED", message:"Freigegebene oder gebuchte Abschläge dürfen nicht über die Positionsauswahl verändert werden." });
+      }
       abschlag.rows = Array.isArray(abschlag.rows) ? abschlag.rows : [];
       if (!abschlag.mwst && abschlag.mwst !== 0) abschlag.mwst = 19;
       if (!abschlag.status) abschlag.status = "Entwurf";

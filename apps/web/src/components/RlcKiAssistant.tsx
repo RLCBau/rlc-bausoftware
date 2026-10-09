@@ -954,6 +954,15 @@ export default function RlcKiAssistant() {
 
   const [open, setOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    const openCopilot = () => {
+      setOpen(true);
+      setKiSignalPulse(false);
+    };
+    window.addEventListener("rlc:open-copilot", openCopilot);
+    return () => window.removeEventListener("rlc:open-copilot", openCopilot);
+  }, []);
+
   const [tab, setTab] = React.useState<"steuerung" | "support">("steuerung");
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -1921,8 +1930,8 @@ export default function RlcKiAssistant() {
   {
     keys: ["ressourcenplanung", "ressourcen"],
     path: "/buro/ressourcenplanung",
-    label: "Ressourcenplanung wird geöffnet.",
-    answer: "Ich öffne die Ressourcenplanung."
+    label: "Einsatzplanung wird geöffnet.",
+    answer: "Ich öffne die Einsatzplanung."
   },
   {
     keys: ["sicherheit", "unterweisungen", "unterweisung"],
@@ -5569,18 +5578,6 @@ export default function RlcKiAssistant() {
         </div> :
       null}
 
-      <button
-        type="button" className={rlcClass(null,
-        kiSignalPulse ? floatBtnPulse : floatBtn)}
-        onClick={() => {
-          setOpen(true);
-          setKiSignalPulse(false);
-        }}
-        aria-label="RLC Copilot öffnen"
-        title="RLC Copilot öffnen">
-        
-        <span className={rlcClass(null, floatAvatarRealPhoto)} aria-hidden="true" />
-      </button>
     </>);
 
 }

@@ -1,523 +1,1701 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
-import { GanttDB } from "./store.gantt";
-import { GanttTask } from "./types";
+import React from "react";
 
-const inp: React.CSSProperties = {
-  border: "1px solid var(--line)",
-  borderRadius: 6,
-  padding: "6px 8px",
-  fontSize: 13
+import { apiUrl } from "../../lib/apiBase";
+import { useProject } from "../../store/useProject";
+
+type Zoom = "day" | "week" | "month";
+
+type PlanTask = {
+  id: string;
+  name: string;
+  dauerTage: number;
+  start: string | null;
+  end: string | null;
+  progress: number;
+  notes: string;
+  assignee: string;
+  milestone: boolean;
+  deps: string[];
+  ressourcen: Record<string, number>;
 };
 
-const lbl: React.CSSProperties = {
-  fontSize: 12,
-  opacity: 0.8
+type LoadResponse = {
+  start?: string;
+  tasks?: PlanTask[];
+  capacity?: Record<string, number>;
+  version?: string;
+  canEdit?: boolean;
 };
 
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 10px",
-  borderBottom: "1px solid var(--line)",
-  fontSize: 13,
-  whiteSpace: "nowrap"
-};
-
-const td: React.CSSProperties = {
-  padding: "6px 10px",
-  borderBottom: "1px solid var(--line)",
-  fontSize: 13,
-  verticalAlign: "middle"
-};
-
-export default function Bauzeitenplan() {
-  const [all, setAll] = React.useState<GanttTask[]>(GanttDB.list());
-  const [sel, setSel] = React.useState<GanttTask | null>(null);
-  const [q, setQ] = React.useState("");
-  const [proj, setProj] = React.useState("");
-  const [zoom, setZoom] = React.useState<"day" | "week" | "month">("week");
-
-  const refresh = React.useCallback(() => {
-    setAll(GanttDB.list());
-  }, []);
-
-  const filtered = React.useMemo(() => {
-    return all.filter((t) => {
-      const s = `${t.name} ${t.projectId ?? ""}`.toLowerCase();
-      const okQ = !q || s.includes(q.toLowerCase());
-      const okP = !proj || (t.projectId ?? "") === proj;
-      return okQ && okP;
-    });
-  }, [all, q, proj]);
-
-  const projects = React.useMemo(
-    () => Array.from(new Set(all.map((t) => t.projectId).filter(Boolean))) as string[],
-    [all]
-  );
-
-  const newTask = React.useCallback(() => {
-    const t = GanttDB.create();
-    refresh();
-    setSel(t);
-  }, [refresh]);
-
-  const del = React.useCallback(() => {
-    if (!sel) return;
-    if (!confirm("Vorgang löschen?")) return;
-    GanttDB.remove(sel.id);
-    refresh();
-    setSel(null);
-  }, [sel, refresh]);
-
-  const update = React.useCallback(
-    (p: Partial<GanttTask>) => {
-      if (!sel) return;
-      const next = { ...sel, ...p };
-      GanttDB.upsert(next);
-      setSel(next);
-      refresh();
-    },
-    [sel, refresh]
-  );
-
-  const exportCSV = React.useCallback(() => {
-    download(
-      "text/csv;charset=utf-8",
-      "bauzeitenplan.csv",
-      GanttDB.exportCSV(filtered)
+function getToken() {
+  try {
+    return (
+      localStorage.getItem("rlc_token") ||
+      JSON.parse(
+        localStorage.getItem("rlc_auth") || "{}"
+      )?.token ||
+      ""
     );
-  }, [filtered]);
+  } catch {
+    return "";
+  }
+}
 
-  const importCSV = React.useCallback(() => {
-    pickFile(async (f) => {
-      const n = GanttDB.importCSV(await f.text());
-      alert(`Import: ${n} Vorgänge.`);
-      refresh();
-    });
-  }, [refresh]);
+async function request<T>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const token = getToken();
 
-  const tasks = React.useMemo(() => {
-    return filtered.
-    slice().
-    sort(
-      (a, b) =>
-      new Date(a.start).getTime() - new Date(b.start).getTime()
-    );
-  }, [filtered]);
-
-  const minDate = tasks.length ?
-  new Date(Math.min(...tasks.map((t) => new Date(t.start).getTime()))) :
-  new Date();
-
-  const maxDate = tasks.length ?
-  new Date(Math.max(...tasks.map((t) => new Date(t.end).getTime()))) :
-  new Date();
-
-  const padDays = 7;
-  const start = new Date(minDate.getTime() - padDays * 86400000);
-  const end = new Date(maxDate.getTime() + padDays * 86400000);
-
-  const dayWidth = zoom === "day" ? 28 : zoom === "week" ? 16 : 8;
-  const totalDays = Math.max(
-    1,
-    Math.ceil((end.getTime() - start.getTime()) / 86400000)
-  );
-  const width = totalDays * dayWidth + 140;
-  const rowH = 28;
-
-  const xFor = (iso: string) => {
-    const d = new Date(iso);
-    const days = (d.getTime() - start.getTime()) / 86400000;
-    return 140 + days * dayWidth;
-  };
-
-  const wFor = (a: string, b: string) =>
-  Math.max(
-    6,
-    (new Date(b).getTime() - new Date(a).getTime()) / 86400000 * dayWidth
-  );
-
-  const gridMarks = React.useMemo(() => {
-    const marks: {x: number;label: string;}[] = [];
-    const d = new Date(start);
-
-    while (d <= end) {
-      const x = 140 + (d.getTime() - start.getTime()) / 86400000 * dayWidth;
-      let label = "";
-
-      if (zoom === "day") label = `${d.getDate()}.${d.getMonth() + 1}.`;else
-      if (zoom === "week") label = `KW ${weekNumber(d)}`;else
-      label = `${d.getMonth() + 1}/${d.getFullYear()}`;
-
-      marks.push({ x, label });
-
-      if (zoom === "day") d.setDate(d.getDate() + 1);else
-      if (zoom === "week") d.setDate(d.getDate() + 7);else
-      {
-        d.setMonth(d.getMonth() + 1);
-        d.setDate(1);
-      }
+  const res = await fetch(apiUrl(path), {
+    credentials: "include",
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.body
+        ? { "Content-Type": "application/json" }
+        : {}),
+      ...(token
+        ? { Authorization: `Bearer ${token}` }
+        : {}),
+      ...(init?.headers || {})
     }
+  });
 
-    return marks;
-  }, [start, end, dayWidth, zoom]);
+  const text = await res.text();
 
-  return (
-    <div className="rlc-migrated-pages-buro-bauzeitenplan-tsx-439">
+  let data: any = {};
 
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = {};
+  }
 
+  if (!res.ok) {
+    throw new Error(
+      data?.error ||
+      data?.message ||
+      text ||
+      `HTTP ${res.status}`
+    );
+  }
 
-
-
-
-      
-      <div
-        className="card rlc-migrated-pages-buro-bauzeitenplan-tsx-440">
-
-        
-        <button className="btn" onClick={newTask}>
-          + Neuer Vorgang
-        </button>
-        <button className="btn" onClick={del} disabled={!sel}>
-          Löschen
-        </button>
-        <div className="rlc-migrated-pages-buro-bauzeitenplan-tsx-441" />
-        <input
-          placeholder="Suche Vorgang / Projekt…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
-          { ...inp, width: 280 })} />
-        
-        <select
-          value={proj}
-          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
-          { ...inp, width: 160 })}>
-          
-          <option value="">Alle Projekte</option>
-          {projects.map((p) =>
-          <option key={p} value={p}>
-              {p}
-            </option>
-          )}
-        </select>
-        <select
-          value={zoom}
-          onChange={(e) => setZoom(e.target.value as "day" | "week" | "month")} className={rlcClass(null,
-          { ...inp, width: 140 })}>
-          
-          <option value="day">Tag</option>
-          <option value="week">Woche</option>
-          <option value="month">Monat</option>
-        </select>
-        <button className="btn" onClick={importCSV}>
-          Import CSV
-        </button>
-        <button className="btn" onClick={exportCSV}>
-          Export CSV
-        </button>
-      </div>
-
-      <div className="rlc-migrated-pages-buro-bauzeitenplan-tsx-442">
-
-
-
-
-
-
-        
-        <div className="card rlc-migrated-pages-buro-bauzeitenplan-tsx-443">
-          <table className="rlc-migrated-pages-buro-bauzeitenplan-tsx-444">
-            <thead>
-              <tr>
-                <th className={rlcClass(null, th)}>Vorgang</th>
-                <th className={rlcClass(null, th)}>Projekt</th>
-                <th className={rlcClass(null, th)}>Start</th>
-                <th className={rlcClass(null, th)}>Ende</th>
-                <th className={rlcClass(null, th)}>Fortschritt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((t) =>
-              <tr
-                key={t.id}
-                onClick={() => setSel(t)} className={rlcClass(null,
-                {
-                  cursor: "pointer",
-                  background: sel?.id === t.id ? "#f1f5ff" : undefined
-                })}>
-                
-                  <td className={rlcClass(null, td)}>{t.name}</td>
-                  <td className={rlcClass(null, td)}>{t.projectId || "—"}</td>
-                  <td className={rlcClass(null, td)}>{fmt(t.start)}</td>
-                  <td className={rlcClass(null, td)}>{fmt(t.end)}</td>
-                  <td className={rlcClass(null, td)}>{t.progress ?? 0}%</td>
-                </tr>
-              )}
-              {tasks.length === 0 &&
-              <tr>
-                  <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={5}>
-                    Keine Vorgänge.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card rlc-migrated-pages-buro-bauzeitenplan-tsx-445">
-          {!sel ?
-          <div className="rlc-migrated-pages-buro-bauzeitenplan-tsx-446">
-              Links Vorgang wählen oder neu anlegen.
-            </div> :
-
-          <div className="rlc-migrated-pages-buro-bauzeitenplan-tsx-447">
-
-
-
-
-
-            
-              <label className={rlcClass(null, lbl)}>Vorgang</label>
-              <input className={rlcClass(null,
-            inp)}
-            value={sel.name}
-            onChange={(e) => update({ name: e.target.value })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Projekt-ID</label>
-              <input className={rlcClass(null,
-            inp)}
-            value={sel.projectId ?? ""}
-            onChange={(e) => update({ projectId: e.target.value })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Start</label>
-              <input
-              type="date" className={rlcClass(null,
-              inp)}
-              value={toDateInput(sel.start)}
-              onChange={(e) => update({ start: fromDateInput(e.target.value) })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Ende</label>
-              <input
-              type="date" className={rlcClass(null,
-              inp)}
-              value={toDateInput(sel.end)}
-              onChange={(e) => update({ end: fromDateInput(e.target.value) })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Fortschritt</label>
-              <input
-              type="number"
-              min={0}
-              max={100} className={rlcClass(null,
-              inp)}
-              value={sel.progress ?? 0}
-              onChange={(e) =>
-              update({ progress: clamp(Number(e.target.value), 0, 100) })
-              } />
-            
-
-              <label className={rlcClass(null, lbl)}>Abhängigkeiten</label>
-              <input className={rlcClass(null,
-            inp)}
-            placeholder="IDs kommagetrennt"
-            value={(sel.dependsOn ?? []).join(", ")}
-            onChange={(e) =>
-            update({
-              dependsOn: e.target.value.
-              split(",").
-              map((s) => s.trim()).
-              filter(Boolean)
-            })
-            } />
-            
-
-              <label className={rlcClass(null, lbl)}>Notizen</label>
-              <textarea className={rlcClass(null,
-            { ...inp, gridColumn: "1 / -1", minHeight: 80 })}
-            value={sel.notes ?? ""}
-            onChange={(e) => update({ notes: e.target.value })} />
-            
-            </div>
-          }
-        </div>
-      </div>
-
-      <div className="card rlc-migrated-pages-buro-bauzeitenplan-tsx-448">
-        <svg width={width} height={Math.max(120, (tasks.length + 1) * rowH + 40)}>
-          <rect x={0} y={0} width={width} height={32} fill="#f7f8fb" />
-          <rect x={0} y={0} width={140} height="100%" fill="#fafafa" stroke="var(--line)" />
-          <text x={12} y={22} fontSize="12" fontWeight={700}>
-            Vorgang
-          </text>
-
-          {gridMarks.map((m, i) =>
-          <g key={i}>
-              <line x1={m.x} y1={0} x2={m.x} y2={10000} stroke="#eceff3" />
-              <text x={m.x + 4} y={22} fontSize="11" fill="#61708b">
-                {m.label}
-              </text>
-            </g>
-          )}
-
-          {tasks.map((t, idx) =>
-          <g key={t.id}>
-              <line
-              x1={0}
-              y1={32 + idx * rowH}
-              x2={width}
-              y2={32 + idx * rowH}
-              stroke="#f0f2f7" />
-            
-              <text x={12} y={32 + idx * rowH + 18} fontSize="12">
-                {t.name}
-              </text>
-            </g>
-          )}
-
-          {tasks.map((t, idx) => {
-            const x = xFor(t.start);
-            const w = wFor(t.start, t.end);
-            const y = 32 + idx * rowH + 6;
-            const h = rowH - 12;
-            const progW = Math.max(0, Math.min(100, t.progress ?? 0)) / 100 * w;
-
-            return (
-              <g key={t.id}>
-                {(t.dependsOn || []).map((depId, i) => {
-                  const dep = tasks.find((item) => item.id === depId);
-                  if (!dep) return null;
-
-                  const depIndex = tasks.findIndex((item) => item.id === dep.id);
-                  if (depIndex < 0) return null;
-
-                  const dx = xFor(dep.end);
-                  const dy = 32 + depIndex * rowH + rowH / 2;
-                  const tx = x;
-                  const ty = y + h / 2;
-
-                  return (
-                    <path
-                      key={i}
-                      d={`M ${dx} ${dy} L ${tx - 6} ${ty}`}
-                      stroke="#b7c3d6"
-                      fill="none"
-                      markerEnd="url(#arrow)" />);
-
-
-                })}
-
-                <rect
-                  x={x}
-                  y={y}
-                  width={w}
-                  height={h}
-                  rx={4}
-                  ry={4}
-                  fill="#dbe7ff"
-                  stroke="#88aaff" />
-                
-                <rect
-                  x={x}
-                  y={y}
-                  width={progW}
-                  height={h}
-                  rx={4}
-                  ry={4}
-                  fill="#9fc2ff" />
-                
-                <text x={x + 4} y={y + h / 2 + 4} fontSize="11">
-                  {t.progress ?? 0}%
-                </text>
-              </g>);
-
-          })}
-
-          {(() => {
-            const todayX = xFor(new Date().toISOString());
-            return (
-              <line
-                x1={todayX}
-                y1={0}
-                x2={todayX}
-                y2={10000}
-                stroke="#ff6b6b"
-                strokeDasharray="4 4" />);
-
-
-          })()}
-
-          <defs>
-            <marker
-              id="arrow"
-              markerWidth="10"
-              markerHeight="6"
-              refX="10"
-              refY="3"
-              orient="auto">
-              
-              <path d="M 0 0 L 10 3 L 0 6 z" fill="#b7c3d6" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-    </div>);
-
+  return data as T;
 }
 
-/* utils */
-function fmt(iso?: string) {
-  return iso ? new Date(iso).toLocaleDateString() : "—";
+function uuid() {
+  return crypto.randomUUID();
 }
 
-function toDateInput(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const p = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+function dateInput(value?: string | null) {
+  if (!value) return "";
+  return new Date(value).toISOString().slice(0, 10);
 }
 
-function fromDateInput(v: string) {
-  if (!v) return "";
-  return `${v}T12:00:00.000Z`;
+function isoDate(value: string) {
+  if (!value) return null;
+
+  return new Date(
+    `${value}T12:00:00.000Z`
+  ).toISOString();
 }
 
-function weekNumber(d: Date) {
-  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = (dt.getUTCDay() + 6) % 7;
-  dt.setUTCDate(dt.getUTCDate() - day + 3);
-  const first = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+function addDays(value: Date, days: number) {
+  const d = new Date(value);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function dayDiff(a: string, b: string) {
+  const start = new Date(a).getTime();
+  const end = new Date(b).getTime();
+
+  return Math.max(
+    1,
+    Math.round(
+      (end - start) / 86400000
+    ) + 1
+  );
+}
+
+function clamp(value: number) {
+  return Math.max(
+    0,
+    Math.min(100, value)
+  );
+}
+
+function weekNumber(date: Date) {
+  const d = new Date(
+    Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    )
+  );
+
+  const day =
+    (d.getUTCDay() + 6) % 7;
+
+  d.setUTCDate(
+    d.getUTCDate() - day + 3
+  );
+
+  const first =
+    new Date(
+      Date.UTC(
+        d.getUTCFullYear(),
+        0,
+        4
+      )
+    );
+
   return (
     1 +
     Math.round(
-      ((dt.getTime() - first.getTime()) / 86400000 -
-      3 +
-      (first.getUTCDay() + 6) % 7) /
+      (
+        (
+          d.getTime() -
+          first.getTime()
+        ) /
+        86400000 -
+        3 +
+        (
+          first.getUTCDay() + 6
+        ) %
+        7
+      ) /
       7
-    ));
-
+    )
+  );
 }
 
-function clamp(n: number, a: number, b: number) {
-  return Math.min(b, Math.max(a, n));
+function displayDate(value?: string | null) {
+  if (!value) return "—";
+
+  return new Date(value)
+    .toLocaleDateString("de-DE");
 }
 
-function pickFile(onPick: (f: File) => void) {
-  const i = document.createElement("input");
-  i.type = "file";
-  i.onchange = () => {
-    const f = i.files?.[0];
-    if (f) onPick(f);
-  };
-  i.click();
+export default function Bauzeitenplan() {
+  const { getSelectedProject } = useProject();
+  const project = getSelectedProject();
+
+  const projectId =
+    String(project?.id || "").trim();
+
+  const projectLabel =
+    [project?.code, project?.name]
+      .filter(Boolean)
+      .join(" · ") ||
+    projectId ||
+    "—";
+
+  const [tasks, setTasks] =
+    React.useState<PlanTask[]>([]);
+
+  const [capacity, setCapacity] =
+    React.useState<Record<string, number>>({});
+
+  const [planStart, setPlanStart] =
+    React.useState(
+      new Date()
+        .toISOString()
+        .slice(0, 10)
+    );
+
+  const [selectedId, setSelectedId] =
+    React.useState<string | null>(null);
+
+  const [query, setQuery] =
+    React.useState("");
+
+  const [zoom, setZoom] =
+    React.useState<Zoom>("week");
+
+  const [loading, setLoading] =
+    React.useState(false);
+
+  const [saving, setSaving] =
+    React.useState(false);
+
+  const [dirty, setDirty] =
+    React.useState(false);
+
+  const [error, setError] =
+    React.useState("");
+
+  const [version,setVersion]=React.useState(''),[canEdit,setCanEdit]=React.useState(false),[history,setHistory]=React.useState<any>();
+  const generation=React.useRef(0),saveGuard=React.useRef(false),owner=React.useRef(projectId),versionRef=React.useRef(version),loadedOwner=React.useRef('');owner.current=projectId;versionRef.current=version;
+  const signature=JSON.stringify({start:planStart,tasks,capacity}),signatureRef=React.useRef(signature);signatureRef.current=signature;
+  const selected =
+    tasks.find(
+      (task) => task.id === selectedId
+    ) || null;
+
+  const load = React.useCallback(async () => {
+    const n=++generation.current;loadedOwner.current="";setVersion("");setCanEdit(false);setTasks([]);setCapacity({});setDirty(false);setSelectedId(null);
+    if (!projectId) {
+      setTasks([]);
+      setSelectedId(null);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const data =
+        await request<LoadResponse>(
+          "/api/buero/bauzeitenplan/load",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              projectId
+            })
+          }
+        );
+
+      if(n!==generation.current||owner.current!==projectId)return;
+      setVersion(data.version||"");setCanEdit(data.canEdit===true);loadedOwner.current=projectId;
+      const rows =
+        Array.isArray(data.tasks)
+          ? data.tasks.map((task) => ({
+              id: task.id,
+              name:
+                task.name ||
+                "Neuer Vorgang",
+              dauerTage:
+                Number(
+                  task.dauerTage || 0
+                ),
+              start:
+                task.start || null,
+              end:
+                task.end || null,
+              progress:
+                clamp(
+                  Number(
+                    task.progress || 0
+                  )
+                ),
+              notes:
+                task.notes || "",
+              assignee:
+                task.assignee || "",
+              milestone:
+                Boolean(
+                  task.milestone
+                ),
+              deps:
+                Array.isArray(task.deps)
+                  ? task.deps
+                  : [],
+              ressourcen:
+                task.ressourcen &&
+                typeof task.ressourcen ===
+                  "object"
+                  ? task.ressourcen
+                  : {}
+            }))
+          : [];
+
+      setTasks(rows);
+      setCapacity(
+        data.capacity || {}
+      );
+
+      if (data.start) {
+        setPlanStart(data.start);
+      }
+
+      setSelectedId((current) => {
+        if (
+          current &&
+          rows.some(
+            (task) =>
+              task.id === current
+          )
+        ) {
+          return current;
+        }
+
+        return rows[0]?.id || null;
+      });
+
+      setDirty(false);
+    } catch (e: any) {
+      if(n!==generation.current)return;
+      setError(
+        e?.message ||
+        "Bauzeitenplan konnte nicht geladen werden."
+      );
+    } finally {
+      if(n===generation.current)setLoading(false);
+    }
+  }, [projectId]);
+
+  React.useEffect(() => {
+    setHistory(undefined);void load();return()=>{generation.current++;};
+  }, [load]);
+
+  function newTask() {
+    if(!canEdit||loading||loadedOwner.current!==projectId)return;
+    const start =
+      new Date();
+
+    const end =
+      addDays(start, 4);
+
+    const task: PlanTask = {
+      id: uuid(),
+      name: "Neuer Vorgang",
+      dauerTage: 5,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      progress: 0,
+      notes: "",
+      assignee: "",
+      milestone: false,
+      deps: [],
+      ressourcen: {}
+    };
+
+    setTasks((current) => [
+      ...current,
+      task
+    ]);
+
+    setSelectedId(task.id);
+    setDirty(true);
+  }
+
+  function updateSelected(
+    patch: Partial<PlanTask>
+  ) {
+    if (!selectedId||!canEdit||loading||loadedOwner.current!==projectId) return;
+
+    setTasks((current) =>
+      current.map((task) => {
+        if (
+          task.id !== selectedId
+        ) {
+          return task;
+        }
+
+        const next = {
+          ...task,
+          ...patch
+        };
+
+        if(patch.milestone===true&&next.start){next.end=next.start;}
+        if (
+          next.start &&
+          next.end
+        ) {
+          next.dauerTage =
+            dayDiff(
+              next.start,
+              next.end
+            );
+        }
+
+        return next;
+      })
+    );
+
+    setDirty(true);
+  }
+
+  function moveSelectedToCalendar() {
+    if (!selected) return;
+
+    sessionStorage.setItem(
+      "rlc.calendar.prefill",
+      JSON.stringify({
+        projectId,
+        title: selected.name,
+        notes: selected.notes || "",
+        category: selected.milestone
+          ? "Frist"
+          : "Projekt",
+        sourceType: "bauzeitenplan",
+        sourceId: selected.id,
+        start: selected.start || "",
+        end: selected.end || "",
+        attendees: selected.assignee || ""
+      })
+    );
+
+    window.location.assign("/buro/outlook?new=1");
+  }
+
+  async function createTaskFromPlan() {
+    if (!selected) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await request("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId,
+          title: selected.name,
+          description: selected.notes || "",
+          due: selected.end || selected.start || null,
+          assignee: selected.assignee || null,
+          priority: selected.milestone ? "high" : "med",
+          tags: [
+            "Bauzeitenplan",
+            ...(selected.milestone
+              ? ["Meilenstein"]
+              : [])
+          ],
+          sourceType: "bauzeitenplan",
+          sourceId: selected.id
+        })
+      });
+
+      window.alert("Aufgabe wurde erstellt.");
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Aufgabe konnte nicht erstellt werden."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function removeSelected() {
+    if (!selected) return;
+
+    if (
+      !window.confirm(
+        `Vorgang "${selected.name}" wirklich löschen?`
+      )
+    ) {
+      return;
+    }
+
+    const remaining =
+      tasks.filter(
+        (task) =>
+          task.id !== selected.id
+      );
+
+    setTasks(
+      remaining.map((task) => ({
+        ...task,
+        deps:
+          task.deps.filter(
+            (id) =>
+              id !== selected.id
+          )
+      }))
+    );
+
+    setSelectedId(
+      remaining[0]?.id || null
+    );
+
+    setDirty(true);
+  }
+
+  async function save() {
+    if (!projectId||!canEdit||loading||saveGuard.current||loadedOwner.current!==projectId||!versionRef.current) return;
+    const sentSignature=signatureRef.current, sentVersion=versionRef.current;
+
+    for (const task of tasks) {
+      if (!task.name.trim()) {
+        window.alert(
+          "Jeder Vorgang benötigt einen Namen."
+        );
+        return;
+      }
+
+      if (
+        task.start &&
+        task.end &&
+        new Date(task.end).getTime() <
+          new Date(task.start).getTime()
+      ) {
+        window.alert(
+          `Enddatum vor Startdatum: ${task.name}`
+        );
+        return;
+      }
+    }
+
+    saveGuard.current=true;setSaving(true);
+    setError("");
+
+    try {
+      const data=await request<LoadResponse>(
+        "/api/buero/bauzeitenplan/save",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            projectId,
+            start: planStart,
+            tasks,
+            capacity,expectedVersion:sentVersion
+          })
+        }
+      );
+
+      if(owner.current!==projectId)return;
+      versionRef.current=data.version||"";setVersion(data.version||"");
+      if(signatureRef.current===sentSignature){setTasks(data.tasks||tasks);setCapacity(data.capacity||capacity);setDirty(false);}else{setDirty(true);}
+    } catch (e: any) {
+      if(owner.current!==projectId)return;
+      setError(
+        e?.message ||
+        "Bauzeitenplan konnte nicht gespeichert werden."
+      );
+    } finally {
+      saveGuard.current=false;setSaving(false);
+    }
+  }
+
+  React.useEffect(()=>{if(!dirty)return;const warn=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[dirty]);
+  async function showHistory(){const pid=projectId;try{const data:any=await request('/api/buero/bauzeitenplan/history',{method:'POST',body:JSON.stringify({projectId:pid})});if(owner.current===pid)setHistory(data);}catch(e:any){if(owner.current===pid)setError(e.message);}}
+
+  const filtered =
+    React.useMemo(() => {
+      const q =
+        query.trim().toLowerCase();
+
+      return [...tasks]
+        .filter((task) => {
+          if (!q) return true;
+
+          return [
+            task.name,
+            task.assignee,
+            task.notes
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(q);
+        })
+        .sort((a, b) => {
+          const aa =
+            a.start
+              ? new Date(
+                  a.start
+                ).getTime()
+              : Number.MAX_SAFE_INTEGER;
+
+          const bb =
+            b.start
+              ? new Date(
+                  b.start
+                ).getTime()
+              : Number.MAX_SAFE_INTEGER;
+
+          return aa - bb;
+        });
+    }, [tasks, query]);
+
+  const completed =
+    tasks.filter(
+      (task) =>
+        task.progress >= 100
+    ).length;
+
+  const milestones =
+    tasks.filter(
+      (task) =>
+        task.milestone
+    ).length;
+
+  const averageProgress =
+    tasks.length
+      ? Math.round(
+          tasks.reduce(
+            (sum, task) =>
+              sum +
+              Number(
+                task.progress || 0
+              ),
+            0
+          ) /
+          tasks.length
+        )
+      : 0;
+
+  return (
+    <div className="card">
+      <header className="rlc-page-hero rlc-page-hero--split">
+        <div>
+          <div className="rlc-page-hero__eyebrow">
+            Büro & Verwaltung
+          </div>
+
+          <h1>Bauzeitenplan</h1>
+
+          <p>
+            Vorgänge, Termine, Abhängigkeiten und Baufortschritt
+            zentral steuern · Projekt {projectLabel}
+          </p>
+        </div>
+
+        <div className="rlc-page-hero__actions">
+          <button
+            className="rlc-page-hero__button"
+            onClick={newTask}
+            disabled={!projectId||loading||!canEdit}
+          >
+            + Neuer Vorgang
+          </button>
+
+          <button
+            className="rlc-page-hero__button"
+            onClick={() =>
+              void save()
+            }
+            disabled={
+              !projectId || loading || !canEdit ||
+              saving ||
+              !dirty
+            }
+          >
+            {saving
+              ? "Speichert..."
+              : dirty
+                ? "Plan speichern"
+                : "Gespeichert"}
+          </button>
+        </div>
+      </header>
+
+      <div className="rlc-page-toolbar"><span className="muted">{canEdit?'Änderungen mit „Plan speichern“ sichern. Neue Änderungen während des Speicherns bleiben lokal erhalten.':'Plan in Leseansicht.'}</span><button className="btn" disabled={loading||saving||!version} onClick={()=>void showHistory()}>Änderungsverlauf</button></div>
+      {history&&<section className="card"><h2>Planverlauf</h2><button className="btn" onClick={()=>setHistory(undefined)}>Schließen</button><p className="muted">Bis zu 100 Speicherstände; für ältere Pläne ab der nächsten Änderung.</p>{history.items.map((h:any)=><p key={h.id}>{new Date(h.createdAt).toLocaleString('de-DE',{timeZone:'Europe/Berlin'})} · {h.meta?.after?.tasks?.length||0} Vorgänge · Start {h.meta?.before?.start||'–'} → {h.meta?.after?.start||'–'}</p>)}</section>}
+      {error ? (
+        <div
+          className="card"
+          style={{
+            marginBottom: 10,
+            borderColor: "#dc2626"
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(4,minmax(0,1fr))",
+          gap: 10,
+          marginBottom: 10
+        }}
+      >
+        <Kpi
+          label="Vorgänge"
+          value={tasks.length}
+        />
+
+        <Kpi
+          label="Erledigt"
+          value={completed}
+        />
+
+        <Kpi
+          label="Meilensteine"
+          value={milestones}
+        />
+
+        <Kpi
+          label="Fortschritt"
+          value={`${averageProgress}%`}
+        />
+      </section>
+
+      <div className="rlc-page-toolbar">
+        <input
+          className="rlc-page-toolbar__search"
+          value={query}
+          onChange={(e) =>
+            setQuery(e.target.value)
+          }
+          placeholder="Vorgang, Verantwortlicher oder Notiz suchen..."
+        />
+
+        <div
+          style={{
+            display: "flex",
+            gap: 5,
+            marginLeft: "auto"
+          }}
+        >
+          <ZoomButton
+            active={zoom === "day"}
+            onClick={() =>
+              setZoom("day")
+            }
+          >
+            Tag
+          </ZoomButton>
+
+          <ZoomButton
+            active={zoom === "week"}
+            onClick={() =>
+              setZoom("week")
+            }
+          >
+            Woche
+          </ZoomButton>
+
+          <ZoomButton
+            active={zoom === "month"}
+            onClick={() =>
+              setZoom("month")
+            }
+          >
+            Monat
+          </ZoomButton>
+        </div>
+
+        <button
+          className="btn"
+          onClick={() => {if(dirty&&!window.confirm("Ungespeicherte Änderungen verwerfen und aktuellen Serverstand laden?"))return;void load();}}
+          disabled={loading||saving}
+        >
+          Aktualisieren
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "300px minmax(620px,1fr) 315px",
+          gap: 10,
+          alignItems: "start"
+        }}
+      >
+        <section
+          className="card"
+          style={{
+            padding: 0,
+            overflow: "hidden",
+            height: 520,
+            display: "flex",
+            flexDirection: "column"
+          }}
+        >
+          <div className="rlc-page-section-head">
+            <strong>Vorgänge</strong>
+
+            <span>
+              {filtered.length}
+            </span>
+          </div>
+
+          <div
+            className="rlc-page-document-list"
+            style={{
+              flex: 1,
+              overflowY: "auto"
+            }}
+          >
+            {filtered.map((task) => (
+              <button
+                key={task.id}
+                type="button"
+                className={
+                  selectedId === task.id
+                    ? "rlc-page-document-row is-active"
+                    : "rlc-page-document-row"
+                }
+                onClick={() =>
+                  setSelectedId(
+                    task.id
+                  )
+                }
+              >
+                <div className="rlc-page-document-icon">
+                  {task.milestone
+                    ? "◆"
+                    : "V"}
+                </div>
+
+                <div className="rlc-page-document-copy">
+                  <strong>
+                    {task.name}
+                  </strong>
+
+                  <div className="rlc-page-document-meta">
+                    <span>
+                      {displayDate(
+                        task.start
+                      )}
+                    </span>
+
+                    <span>
+                      {displayDate(
+                        task.end
+                      )}
+                    </span>
+
+                    <span>
+                      {task.progress}%
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))}
+
+            {!loading &&
+            !filtered.length ? (
+              <div
+                style={{
+                  padding: 20,
+                  textAlign: "center",
+                  color: "#64748b"
+                }}
+              >
+                Keine Vorgänge vorhanden.
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section
+          className="card"
+          style={{
+            padding: 0,
+            overflow: "auto",
+            height: 520
+          }}
+        >
+          <Gantt
+            tasks={filtered}
+            zoom={zoom}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </section>
+
+        <aside
+          className="card"
+          style={{
+            padding: 0,
+            position: "sticky",
+            top: 10,
+            height: 520,
+            overflowY: "auto",
+            overflowX: "hidden"
+          }}
+        >
+          <fieldset disabled={!canEdit||loading} style={{border:0,padding:0,margin:0,minWidth:0}}>
+
+          {!selected ? (
+            <div
+              style={{
+                padding: 24,
+                color: "#64748b",
+                textAlign: "center"
+              }}
+            >
+              Vorgang auswählen oder neu anlegen.
+            </div>
+          ) : (
+            <>
+              <div className="rlc-page-section-head">
+                <strong>
+                  Vorgang bearbeiten
+                </strong>
+
+                <span>
+                  {selected.progress}%
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  padding: 14
+                }}
+              >
+                <Field label="Vorgang">
+                  <input
+                    value={selected.name}
+                    onChange={(e) =>
+                      updateSelected({
+                        name:
+                          e.target.value
+                      })
+                    }
+                  />
+                </Field>
+
+                <Field label="Verantwortlich">
+                  <input
+                    value={
+                      selected.assignee
+                    }
+                    onChange={(e) =>
+                      updateSelected({
+                        assignee:
+                          e.target.value
+                      })
+                    }
+                    placeholder="Mitarbeiter / Bauleiter"
+                  />
+                </Field>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "1fr 1fr",
+                    gap: 8
+                  }}
+                >
+                  <Field label="Start">
+                    <input
+                      type="date"
+                      value={dateInput(
+                        selected.start
+                      )}
+                      onChange={(e) =>
+                        updateSelected({
+                          start:
+                            isoDate(
+                              e.target.value
+                            )
+                        })
+                      }
+                    />
+                  </Field>
+
+                  <Field label="Ende">
+                    <input
+                      type="date"
+                      value={dateInput(
+                        selected.end
+                      )}
+                      onChange={(e) =>
+                        updateSelected({
+                          end:
+                            isoDate(
+                              e.target.value
+                            )
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
+
+                <Field label="Fortschritt">
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "1fr 60px",
+                      gap: 8,
+                      alignItems: "center"
+                    }}
+                  >
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={
+                        selected.progress
+                      }
+                      onChange={(e) =>
+                        updateSelected({
+                          progress:
+                            clamp(
+                              Number(
+                                e.target.value
+                              )
+                            )
+                        })
+                      }
+                    />
+
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={
+                        selected.progress
+                      }
+                      onChange={(e) =>
+                        updateSelected({
+                          progress:
+                            clamp(
+                              Number(
+                                e.target.value
+                              )
+                            )
+                        })
+                      }
+                    />
+                  </div>
+                </Field>
+
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    fontSize: 13
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      selected.milestone
+                    }
+                    onChange={(e) =>
+                      updateSelected({
+                        milestone:
+                          e.target.checked
+                      })
+                    }
+                  />
+
+                  Meilenstein
+                </label>
+
+                <Field label="Abhängigkeiten">
+                  <select
+                    multiple
+                    value={
+                      selected.deps
+                    }
+                    onChange={(e) =>
+                      updateSelected({
+                        deps:
+                          Array.from(
+                            e.target
+                              .selectedOptions
+                          ).map(
+                            (option) =>
+                              option.value
+                          )
+                      })
+                    }
+                    style={{
+                      minHeight: 90
+                    }}
+                  >
+                    {tasks
+                      .filter(
+                        (task) =>
+                          task.id !==
+                          selected.id
+                      )
+                      .map((task) => (
+                        <option
+                          key={task.id}
+                          value={task.id}
+                        >
+                          {task.name}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+
+                <Field label="Notizen">
+                  <textarea
+                    value={
+                      selected.notes
+                    }
+                    onChange={(e) =>
+                      updateSelected({
+                        notes:
+                          e.target.value
+                      })
+                    }
+                    style={{
+                      minHeight: 100,
+                      resize: "vertical"
+                    }}
+                  />
+                </Field>
+              </div>
+
+              <div
+                style={{
+                  padding:
+                    "0 14px 14px",
+                  display: "flex",
+                  gap: 8
+                }}
+              >
+                <button
+                  className="btn btn-primary"
+                  onClick={() =>
+                    void save()
+                  }
+                  disabled={
+                    saving || !dirty
+                  }
+                >
+                  Speichern
+                </button>
+
+                <button
+                  className="btn"
+                  onClick={moveSelectedToCalendar}
+                >
+                  In Kalender übernehmen
+                </button>
+
+                <button
+                  className="btn"
+                  onClick={() =>
+                    void createTaskFromPlan()
+                  }
+                  disabled={saving}
+                >
+                  Als Aufgabe erstellen
+                </button>
+
+                <button
+                  className="btn"
+                  onClick={
+                    removeSelected
+                  }
+                >
+                  Löschen
+                </button>
+              </div>
+            </>
+          )}
+          </fieldset>
+        </aside>
+      </div>
+    </div>
+  );
 }
 
-function download(type: string, name: string, data: string) {
-  const b = new Blob([data], { type });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(b);
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
+function Gantt({
+  tasks,
+  zoom,
+  selectedId,
+  onSelect
+}: {
+  tasks: PlanTask[];
+  zoom: Zoom;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const dated =
+    tasks.filter(
+      (task) =>
+        task.start &&
+        task.end
+    );
+
+  const today =
+    new Date();
+
+  const min =
+    dated.length
+      ? new Date(
+          Math.min(
+            ...dated.map(
+              (task) =>
+                new Date(
+                  task.start!
+                ).getTime()
+            )
+          )
+        )
+      : addDays(today, -7);
+
+  const max =
+    dated.length
+      ? new Date(
+          Math.max(
+            ...dated.map(
+              (task) =>
+                new Date(
+                  task.end!
+                ).getTime()
+            )
+          )
+        )
+      : addDays(today, 21);
+
+  const start =
+    addDays(min, -5);
+
+  const end =
+    addDays(max, 7);
+
+  const dayWidth =
+    zoom === "day"
+      ? 34
+      : zoom === "week"
+        ? 17
+        : 8;
+
+  const totalDays =
+    Math.max(
+      1,
+      Math.ceil(
+        (
+          end.getTime() -
+          start.getTime()
+        ) /
+        86400000
+      )
+    );
+
+  const labelWidth = 150;
+
+  const width =
+    labelWidth +
+    totalDays * dayWidth;
+
+  const rowHeight = 42;
+
+  const xFor = (
+    value: string
+  ) =>
+    labelWidth +
+    (
+      (
+        new Date(value).getTime() -
+        start.getTime()
+      ) /
+      86400000
+    ) *
+      dayWidth;
+
+  const marks: {
+    x: number;
+    label: string;
+  }[] = [];
+
+  const cursor =
+    new Date(start);
+
+  while (cursor <= end) {
+    const x =
+      labelWidth +
+      (
+        (
+          cursor.getTime() -
+          start.getTime()
+        ) /
+        86400000
+      ) *
+        dayWidth;
+
+    let label = "";
+
+    if (zoom === "day") {
+      label =
+        cursor.toLocaleDateString(
+          "de-DE",
+          {
+            day: "2-digit",
+            month: "2-digit"
+          }
+        );
+
+      cursor.setDate(
+        cursor.getDate() + 1
+      );
+    } else if (zoom === "week") {
+      label =
+        `KW ${weekNumber(cursor)}`;
+
+      cursor.setDate(
+        cursor.getDate() + 7
+      );
+    } else {
+      label =
+        cursor.toLocaleDateString(
+          "de-DE",
+          {
+            month: "short",
+            year: "2-digit"
+          }
+        );
+
+      cursor.setMonth(
+        cursor.getMonth() + 1,
+        1
+      );
+    }
+
+    marks.push({
+      x,
+      label
+    });
+  }
+
+  const height =
+    Math.max(
+      518,
+      38 +
+      tasks.length *
+        rowHeight
+    );
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      style={{
+        display: "block",
+        minWidth: "100%"
+      }}
+    >
+      <rect
+        x={0}
+        y={0}
+        width={width}
+        height={36}
+        fill="#f8fafc"
+      />
+
+      <rect
+        x={0}
+        y={0}
+        width={labelWidth}
+        height={height}
+        fill="#fff"
+        stroke="#e2e8f0"
+      />
+
+      <text
+        x={12}
+        y={23}
+        fontSize="12"
+        fontWeight="700"
+        fill="#334155"
+      >
+        Vorgang
+      </text>
+
+      {marks.map(
+        (mark, index) => (
+          <g key={index}>
+            <line
+              x1={mark.x}
+              y1={0}
+              x2={mark.x}
+              y2={height}
+              stroke="#e8eef5"
+            />
+
+            <text
+              x={mark.x + 5}
+              y={23}
+              fontSize="10"
+              fill="#64748b"
+            >
+              {mark.label}
+            </text>
+          </g>
+        )
+      )}
+
+      {tasks.map(
+        (task, index) => {
+          const y =
+            36 +
+            index *
+              rowHeight;
+
+          const selected =
+            task.id ===
+            selectedId;
+
+          return (
+            <g
+              key={task.id}
+              onClick={() =>
+                onSelect(task.id)
+              }
+              style={{
+                cursor: "pointer"
+              }}
+            >
+              <rect
+                x={0}
+                y={y}
+                width={width}
+                height={rowHeight}
+                fill={
+                  selected
+                    ? "#f3f7ff"
+                    : index % 2
+                      ? "#fbfdff"
+                      : "#fff"
+                }
+              />
+
+              <line
+                x1={0}
+                y1={y + rowHeight}
+                x2={width}
+                y2={y + rowHeight}
+                stroke="#edf2f7"
+              />
+
+              <text
+                x={12}
+                y={y + 25}
+                fontSize="11"
+                fontWeight={
+                  selected
+                    ? "700"
+                    : "500"
+                }
+                fill="#0f172a"
+              >
+                {task.name.length > 20
+                  ? task.name.slice(
+                      0,
+                      18
+                    ) + "…"
+                  : task.name}
+              </text>
+
+              {task.start &&
+              task.end ? (
+                task.milestone ? (
+                  <Milestone
+                    x={xFor(
+                      task.start
+                    )}
+                    y={
+                      y +
+                      rowHeight / 2
+                    }
+                  />
+                ) : (
+                  <TaskBar
+                    task={task}
+                    x={xFor(
+                      task.start
+                    )}
+                    y={y + 10}
+                    width={Math.max(
+                      9,
+                      (
+                        (
+                          new Date(
+                            task.end
+                          ).getTime() -
+                          new Date(
+                            task.start
+                          ).getTime()
+                        ) /
+                        86400000 +
+                        1
+                      ) *
+                        dayWidth
+                    )}
+                  />
+                )
+              ) : null}
+            </g>
+          );
+        }
+      )}
+
+      {(() => {
+        const x =
+          labelWidth +
+          (
+            (
+              today.getTime() -
+              start.getTime()
+            ) /
+            86400000
+          ) *
+            dayWidth;
+
+        return (
+          <line
+            x1={x}
+            y1={0}
+            x2={x}
+            y2={height}
+            stroke="#ef4444"
+            strokeWidth="1.5"
+            strokeDasharray="4 4"
+          />
+        );
+      })()}
+    </svg>
+  );
+}
+
+function TaskBar({
+  task,
+  x,
+  y,
+  width
+}: {
+  task: PlanTask;
+  x: number;
+  y: number;
+  width: number;
+}) {
+  const progressWidth =
+    width *
+    clamp(task.progress) /
+    100;
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={22}
+        rx={5}
+        fill="#dbeafe"
+        stroke="#60a5fa"
+      />
+
+      <rect
+        x={x}
+        y={y}
+        width={progressWidth}
+        height={22}
+        rx={5}
+        fill="#60a5fa"
+      />
+
+      <text
+        x={x + 6}
+        y={y + 15}
+        fontSize="10"
+        fontWeight="600"
+        fill="#0f3f82"
+      >
+        {task.progress}%
+      </text>
+    </g>
+  );
+}
+
+function Milestone({
+  x,
+  y
+}: {
+  x: number;
+  y: number;
+}) {
+  const size = 8;
+
+  return (
+    <polygon
+      points={`
+        ${x},${y - size}
+        ${x + size},${y}
+        ${x},${y + size}
+        ${x - size},${y}
+      `}
+      fill="#2563eb"
+    />
+  );
+}
+
+function Field({
+  label,
+  children
+}: {
+  label: string;
+  children: React.ReactElement<any>;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 5
+      }}
+    >
+      <label
+        style={{
+          fontSize: 12,
+          fontWeight: 650,
+          color: "#334155"
+        }}
+      >
+        {label}
+      </label>
+
+      {React.cloneElement(
+        children,
+        {
+          style: {
+            width: "100%",
+            boxSizing:
+              "border-box",
+            ...(children.props
+              ?.style || {})
+          }
+        }
+      )}
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="card">
+      <div className="muted">
+        {label}
+      </div>
+
+      <strong
+        style={{
+          fontSize: 23
+        }}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function ZoomButton({
+  active,
+  onClick,
+  children
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={
+        active
+          ? "btn btn-primary"
+          : "btn"
+      }
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }

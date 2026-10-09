@@ -27,6 +27,8 @@ type Abschlag = {
   nr: number;
   datum: string;
   betrag: number;
+  status?: "DRAFT" | "FREIGEGEBEN";
+  evidenceLock?: any;
 };
 
 type BuchhaltungSaveBody = {
@@ -129,7 +131,9 @@ function normalizeAbschlag(item: unknown): Abschlag {
     projectId: String(x.projectId ?? ""),
     nr: toNumber(x.nr, 0),
     datum: String(x.datum ?? ""),
-    betrag: toNumber(x.betrag, 0)
+    betrag: toNumber(x.betrag, 0),
+    status: x.status === "FREIGEGEBEN" ? "FREIGEGEBEN" : "DRAFT",
+    evidenceLock: x.evidenceLock || null
   };
 }
 
@@ -341,7 +345,7 @@ export default function AbrechnungAuto() {
 
     try {
       setError(null);
-      await api<unknown>(`/api/abrechnung/${a.id}`, { method: "DELETE" });
+      await api<unknown>(`/api/abrechnung/${a.id}?projectId=${encodeURIComponent(effectiveProjectId)}`, { method: "DELETE" });
       setAbschlaege((prev) => prev.filter((x) => x.id !== a.id));
     } catch (e) {
       setError(
@@ -350,6 +354,16 @@ export default function AbrechnungAuto() {
         "Abschlag konnte nicht gelöscht werden."
       );
     }
+  }
+
+  async function finalizeAbschlag(a: Abschlag) {
+    if (!a.id || !effectiveProjectId || a.status === "FREIGEGEBEN") return;
+    if (!window.confirm(`Abschlag Nr. ${a.nr} freigeben? Danach ist der Datensatz unveränderlich.`)) return;
+    try {
+      setError(null);
+      const res = await api<{ok:boolean;item:Abschlag}>(`/api/abrechnung/${a.id}/finalize`, { method:"POST", body:JSON.stringify({projectId:effectiveProjectId}) });
+      setAbschlaege((prev)=>prev.map((x)=>x.id===a.id?normalizeAbschlag(res.item):x));
+    } catch(e) { setError(e instanceof Error ? e.message : "Abschlag konnte nicht freigegeben werden."); }
   }
 
   /* ----------------------- Export CSV ----------------------- */
@@ -418,11 +432,20 @@ export default function AbrechnungAuto() {
     join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const fileName = `Abrechnung_${effectiveProjectId}.csv`;
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Abrechnung_${effectiveProjectId}.csv`;
+    link.download = fileName;
     link.click();
     URL.revokeObjectURL(link.href);
+
+    if (effectiveProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) =>
+          archiveWebFile(effectiveProjectId, fileName, blob)
+        )
+        .catch((error) => console.error("[AutoAbrechnung:CSV:DMS]", error));
+    }
   }
 
   /* ----------------------- Export PDF + Buchhaltung ----------------------- */
@@ -546,7 +569,7 @@ export default function AbrechnungAuto() {
       y += 6;
       doc.text(`Differenz Netto (Ist − Soll): ${num(diffNetto)} €`, 14, y);
 
-      saveRlcPdfWithCompanyHeader(doc, `Abrechnung_${effectiveProjectId}.pdf`);
+      saveRlcPdfWithCompanyHeader(doc, `Abrechnung_${effectiveProjectId}.pdf`, effectiveProjectId);
 
       if (andSendToBuchhaltung) {
         const body: BuchhaltungSaveBody = {
@@ -794,9 +817,14 @@ export default function AbrechnungAuto() {
                     {num(a.betrag * (1 + toNumber(mwst, 0) / 100))}
                   </td>
                   <td className={rlcClass(null, td)}>
-                    <button className="btn" onClick={() => void delAbschlag(a)}>
-                      🗑️
-                    </button>
+                    {a.status === "FREIGEGEBEN" ? (
+                      <span style={{fontSize:12,fontWeight:700,color:"#067647"}}>Freigegeben · gesperrt</span>
+                    ) : (
+                      <div style={{display:"flex",gap:6}}>
+                        <button className="btn" onClick={() => void finalizeAbschlag(a)}>Freigeben</button>
+                        <button className="btn" onClick={() => void delAbschlag(a)}>🗑️</button>
+                      </div>
+                    )}
                   </td>
                 </tr>
             )}

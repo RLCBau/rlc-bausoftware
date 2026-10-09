@@ -186,6 +186,7 @@ type RecipeReturnContext = {
   auftragType?: "haupt" | "unter" | string;
   returnTo?: string;
   ts?: string;
+  initialDraft?: DraftPosition;
 };
 
 type DraftPosition = {
@@ -446,11 +447,23 @@ function normSearch(value: unknown): string {
 }
 
 function getProject(projectCtx: any): ProjectLike | null {
+  let stored: any = null;
+  try {
+    stored = JSON.parse(localStorage.getItem("rlc_current_project") || "null");
+  } catch {}
+
+  const selected =
+    typeof projectCtx?.getSelectedProject === "function" ?
+    projectCtx.getSelectedProject() :
+    null;
+
   const p =
   projectCtx?.project ||
   projectCtx?.currentProject ||
   projectCtx?.selectedProject ||
-  projectCtx?.current ||
+  selected ||
+  stored ||
+  (globalThis as any).__RLC_CURRENT_PROJECT ||
   projectCtx;
 
   if (!p || typeof p !== "object") return null;
@@ -880,28 +893,55 @@ function isSurchargeLike(row: Partial<RecipeLine>): boolean {
 
 }
 
+function isPercentSurcharge(row: Partial<RecipeLine>): boolean {
+  return String(row.group || "").trim() === "Zuschläge" || String(row.unit || "").trim() === "%";
+}
+
+function isFixedSurchargeCost(row: Partial<RecipeLine>): boolean {
+  const group = String(row.group || "").trim();
+  return !isPercentSurcharge(row) && (group === "Gemeinkosten" || group === "Risiko" || group === "Gewinn");
+}
+
 function lineTotal(row: RecipeLine): number {
-  if (isSurchargeLike(row)) return 0;
+  // Monetary Gemeinkosten/Risiko/Gewinn lines from the KI priceBreakdown are real
+  // cost components. Only percentage rows are non-monetary here.
+  if (isPercentSurcharge(row)) return 0;
   return round2(n(row.qty) * n(row.price));
 }
 
 function directTotal(lines: RecipeLine[]): number {
   return round2(
     lines.
-    filter((r) => !isSurchargeLike(r)).
+    filter((r) => !isPercentSurcharge(r) && !isFixedSurchargeCost(r)).
+    reduce((s, r) => s + lineTotal(r), 0)
+  );
+}
+
+function fixedSurchargeTotal(lines: RecipeLine[]): number {
+  return round2(
+    lines.
+    filter((r) => isFixedSurchargeCost(r)).
     reduce((s, r) => s + lineTotal(r), 0)
   );
 }
 
 function surchargePercent(lines: RecipeLine[]): number {
-  return lines.
-  filter((x) => x.group === "Zuschläge" && x.unit === "%").
-  reduce((s, x) => s + n(x.price), 0);
+  const explicitPct = lines.
+    filter((x) => x.group === "Zuschläge" && x.unit === "%").
+    reduce((s, x) => s + n(x.price), 0);
+  const base = directTotal(lines);
+  const fixed = fixedSurchargeTotal(lines);
+  const fixedPct = base > 0 ? fixed / base * 100 : 0;
+  return round2(explicitPct + fixedPct);
 }
 
 function totalWithSurcharges(lines: RecipeLine[]): number {
   const base = directTotal(lines);
-  return round2(base * (1 + surchargePercent(lines) / 100));
+  const fixed = fixedSurchargeTotal(lines);
+  const explicitPct = lines.
+    filter((x) => x.group === "Zuschläge" && x.unit === "%").
+    reduce((s, x) => s + n(x.price), 0);
+  return round2(base + fixed + base * (explicitPct / 100));
 }
 
 function unitPrice(total: number, qty: number): number {
@@ -3719,7 +3759,21 @@ export default function Recipes() {
   const [lvRows, setLvRows] = useState<LVPos[]>(() => LV.list());
   const [selectedId, setSelectedId] = useState<string>("");
   const [query, setQuery] = useState("");
-  const [draftPos, setDraftPos] = useState<DraftPosition>(() => makeDefaultDraft());
+  const [draftPos, setDraftPos] = useState<DraftPosition>(() => {
+    const incoming = recipeContext.initialDraft;
+    if (incoming && typeof incoming === "object") {
+      return {
+        ...makeDefaultDraft(),
+        ...incoming,
+        posNr: String(incoming.posNr || ""),
+        kurztext: String(incoming.kurztext || ""),
+        langtext: String(incoming.langtext || ""),
+        einheit: String(incoming.einheit || "m"),
+        menge: Math.max(n(incoming.menge, 1), 1),
+      };
+    }
+    return makeDefaultDraft();
+  });
 
   const [ctx, setCtx] = useState<ContextValues>({
     depthM: 0,
@@ -3739,6 +3793,104 @@ export default function Recipes() {
   const [globalUrkDone, setGlobalUrkDone] = useState(false);
   const [globalUrkProgress, setGlobalUrkProgress] = useState({ done: 0, total: 0, changed: 0 });
   const [companyRecipes, setCompanyRecipes] = useState<CompanyRecipe[]>(() => loadCompanyRecipes());
+
+  useEffect(() => {
+    if (!projectKey) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const token = getAuthToken();
+        const res = await fetch(
+          apiUrl(`/api/kalkulation/storage/urkalkulation/${encodeURIComponent(projectKey)}`),
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          }
+        );
+        if (!res.ok) return;
+        const payload = await res.json().catch(() => null);
+        const data = payload?.data ?? payload?.snapshot?.data ?? payload;
+        const savedRows = Array.isArray(data?.rows) ? data.rows : [];
+        if (!savedRows.length || cancelled) return;
+
+        const current = LV.list();
+        const byId = new Map<string, any>(savedRows.map((r: any) => [String(r?.id || "").trim(), r]));
+        const byPos = new Map<string, any>(savedRows.map((r: any) => [String(r?.posNr || r?.positionNumber || "").trim(), r]));
+        const mergeRow = (row: any, saved: any) => ({
+          ...row,
+          ...saved,
+          id: saved.id || row.id || saved.posNr || saved.positionNumber,
+          posNr: saved.posNr || saved.positionNumber || row.posNr,
+          kurztext: saved.kurztext ?? saved.shortText ?? row.kurztext,
+          langtext: saved.langtext ?? saved.longText ?? row.langtext,
+          einheit: saved.einheit ?? saved.unit ?? row.einheit,
+          menge: saved.menge ?? saved.quantity ?? row.menge,
+          priceBreakdown: Array.isArray(saved.priceBreakdown) ? saved.priceBreakdown : row.priceBreakdown,
+          recipeLines: Array.isArray(saved.recipeLines) ? saved.recipeLines : row.recipeLines
+        }) as LVPos;
+
+        const used = new Set<string>();
+        const merged = current.map((row) => {
+          const saved = byId.get(String(row.id || "").trim()) || byPos.get(String(row.posNr || "").trim());
+          if (!saved) return row;
+          used.add(String(saved.id || saved.posNr || saved.positionNumber || ""));
+          return mergeRow(row, saved);
+        });
+
+        // Recipes può essere aperto direttamente: in quel caso LV.list() è vuoto.
+        // Ricostruisci l'intero LV dallo snapshot server, senza perdere alcuna posizione.
+        savedRows.forEach((saved: any) => {
+          const key = String(saved.id || saved.posNr || saved.positionNumber || "");
+          if (!used.has(key) && !current.some((row: any) =>
+            String(row.id || "") === String(saved.id || "") ||
+            String(row.posNr || "") === String(saved.posNr || saved.positionNumber || "")
+          )) {
+            merged.push(mergeRow({}, saved));
+          }
+        });
+
+        LV.setAll(merged);
+        if (!cancelled) {
+          setLvRows(merged);
+
+          // Wenn Recipes gezielt aus der Datenbank geöffnet wurde, darf das
+          // Projekt-Snapshot niemals die übergebene Bibliotheksposition mit
+          // der ersten LV-Position überschreiben.
+          if (recipeContext.initialDraft) {
+            setSelectedId("");
+            setDraftPos((current) => ({
+              ...current,
+              ...recipeContext.initialDraft,
+              id: String(recipeContext.initialDraft?.id || ""),
+              posNr: String(recipeContext.initialDraft?.posNr || ""),
+              kurztext: String(recipeContext.initialDraft?.kurztext || ""),
+              langtext: String(recipeContext.initialDraft?.langtext || ""),
+              einheit: String(recipeContext.initialDraft?.einheit || "m"),
+              menge: Math.max(n(recipeContext.initialDraft?.menge, 1), 1),
+            }));
+            setLines([]);
+          } else {
+            const first = merged.find(isGlobalUrkRealLvRow) || merged[0];
+            if (first) {
+              setSelectedId(String((first as any).id || ""));
+              setDraftPos(draftFromLv(first));
+              setLines(Array.isArray((first as any).recipeLines) ? (first as any).recipeLines : []);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("[RLC Urkalkulation] Server-Snapshot konnte nicht geladen werden", error);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [projectKey, recipeContext]);
 
   const [libraryRows, setLibraryRows] = useState<ExternalLibraryItem[]>(() =>
   loadRecipeLibraryRows()
@@ -3855,6 +4007,8 @@ export default function Recipes() {
 
   useEffect(() => {
     setInfo(
+      recipeContext.source === "datenbank" && recipeContext.initialDraft ?
+      `Datenbankposition geladen: ${recipeContext.initialDraft.kurztext || "Position"}.` :
       recipeContext.auftragName ?
       `Position wird für ${activeAuftragLabel} erstellt.` :
       "Neue Position wird ohne Auftrag-Kontext erstellt."
@@ -3919,47 +4073,27 @@ export default function Recipes() {
   }
 
   function loadExistingPosition(row: LVPos) {
+    // Auswahl ist rein lesend: „Neue Kalkulation erstellen“ erzeugt und
+    // speichert den vollständigen Preisaufbau. Ein Klick in Recipes darf
+    // niemals das LV neu berechnen oder den Browser-Speicher erneut füllen.
     setSelectedId(String(row.id || ""));
     setDraftPos(draftFromLv(row));
 
-    let nextLines = createKiSuggestion(row, ctx);
+    const savedLines = Array.isArray((row as any).recipeLines) && (row as any).recipeLines.length
+      ? ((row as any).recipeLines as RecipeLine[])
+      : recipeLinesFromServerPriceBreakdown(row as any);
 
-    if (!nextLines.length) {
-      nextLines = createRlcMinimalReviewUrkalkulation(row);
-    }
+    const displayLines = savedLines.length
+      ? savedLines
+      : createRlcMinimalReviewUrkalkulation(row);
 
-    setLines(nextLines.map((line) => ({ ...line, id: line.id || safeId() })));
+    setLines(displayLines.map((line) => ({ ...line, id: line.id || safeId() })));
     setLibraryQuery(String(row.kurztext || ""));
-
-    const pb = buildPriceBreakdown(nextLines, row);
-    const ep = round2(pb.reduce((sum, line) => sum + n(line.total), 0));
-    const gp = round2(n(row.menge) * ep);
-
-    LV.upsert({
-      ...(row as any),
-      // Beim Öffnen einer Position darf Recipes den Kalkulationspreis nicht ändern.
-      urkalkulationUnitPrice: ep,
-      urkalkulationTotal: gp,
-
-      preis: (row as any).preis,
-      ep: (row as any).ep,
-      finalUnitPrice: (row as any).finalUnitPrice,
-      suggestedUnitPrice: (row as any).suggestedUnitPrice,
-      rlcKiUnitPrice: (row as any).rlcKiUnitPrice,
-      gp: (row as any).gp,
-      gesamt: (row as any).gesamt,
-      totalNet: (row as any).totalNet,
-
-      priceBreakdown: pb,
-      recipeLines: nextLines,
-      source: "recipes-auto-recalc-on-load",
-      calculationStatus: "recipes_ready",
-      updatedAt: new Date().toISOString()
-    } as any);
-
-    setLvRows(LV.list());
-
-    setInfo(`Position ${row.posNr || "—"} automatisch neu berechnet: EP ${money(ep)}.`);
+    setInfo(
+      savedLines.length
+        ? `Position ${row.posNr || "—"} aus gespeicherter Urkalkulation geladen.`
+        : `Position ${row.posNr || "—"} hat noch keinen gespeicherten Preisaufbau.`
+    );
   }
 
   async function autoFillLangtext() {
@@ -4427,12 +4561,20 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
 
     const warning = riskLevel === "high" ? "Erschwerte Bedingungen aus Rezept erkannt." : "";
 
+    const existingLvRow =
+      LV.list().find((r) => String(r.id || "") === String(id || "")) ||
+      LV.list().find((r) => String(r.posNr || "") === String(draftPos.posNr || ""));
+
     const payload = {
+      ...(existingLvRow || {}),
       ...selectedRow,
       id,
-      auftragId: recipeContext.auftragId || "",
-      auftragName: recipeContext.auftragName || "",
-      auftragType: recipeContext.auftragType || "",
+      // Speichern darf die bestehende Auftrag-/Sortierzuordnung nicht verlieren.
+      auftragId: (existingLvRow as any)?.auftragId || recipeContext.auftragId || "",
+      auftragName: (existingLvRow as any)?.auftragName || recipeContext.auftragName || "",
+      auftragType: (existingLvRow as any)?.auftragType || recipeContext.auftragType || "",
+      sortIndex: (existingLvRow as any)?.sortIndex ?? (selectedRow as any)?.sortIndex,
+      parentPosNr: (existingLvRow as any)?.parentPosNr ?? (selectedRow as any)?.parentPosNr,
       posNr: draftPos.posNr,
       kurztext: draftPos.kurztext,
       langtext: draftPos.langtext || suggestLangtextForDraft(draftPos, ctx),
@@ -4650,7 +4792,6 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
       const updated = createGlobalUrkalkulationForRow(row);
 
       if (updated) {
-        LV.upsert(updated);
         changed.push(updated);
       } else {
         skippedInvalid++;
@@ -4664,6 +4805,17 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
 
       await new Promise((resolve) => window.setTimeout(resolve, 18));
     }
+
+    // Gesamtes LV atomar übernehmen: gleiche Anzahl/IDs wie vor der Urkalkulation.
+    // Damit kann kein Eintrag während der globalen Berechnung verschwinden.
+    const changedById = new Map(changed.map((r) => [String(r.id || ""), r] as const));
+    const changedByPos = new Map(changed.map((r) => [String(r.posNr || ""), r] as const));
+    const finalRows = current.map((row) =>
+      changedById.get(String(row.id || "")) ||
+      changedByPos.get(String(row.posNr || "")) ||
+      row
+    );
+    LV.setAll(finalRows);
 
     const refreshedLv = LV.list();
     setLvRows(refreshedLv);
@@ -4710,8 +4862,69 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
     setGlobalUrkDone(true);
     setGlobalUrkProgress({ done: candidates.length, total: candidates.length, changed: changed.length });
 
+    // Kanonischer Urkalkulations-Snapshot: muss Navigation, Reload und Gerätewechsel überleben.
+    try {
+      const token = getAuthToken();
+      // Snapshot completo: mantiene anche titoli/strutture GAEB per avere lo stesso
+      // numero di righe in Kalkulation e Recipes. Le strutture non hanno Urkalkulation.
+      const persistedRows = LV.list().map((row: any) => ({
+        isStructural: !isGlobalUrkRealLvRow(row),
+        id: row.id,
+        posNr: row.posNr,
+        positionNumber: row.positionNumber,
+        auftragId: row.auftragId,
+        auftragName: row.auftragName,
+        auftragType: row.auftragType,
+        sortIndex: row.sortIndex,
+        parentPosNr: row.parentPosNr,
+        kurztext: row.kurztext,
+        einheit: row.einheit,
+        menge: row.menge,
+        priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [],
+        recipeLines: Array.isArray(row.recipeLines) ? row.recipeLines : [],
+        urkalkulationUnitPrice: row.urkalkulationUnitPrice,
+        urkalkulationTotal: row.urkalkulationTotal,
+        materialCost: row.materialCost,
+        laborCost: row.laborCost,
+        machineCost: row.machineCost,
+        transportCost: row.transportCost,
+        subcontractorCost: row.subcontractorCost,
+        disposalCost: row.disposalCost,
+        overheadCost: row.overheadCost,
+        riskCost: row.riskCost,
+        profitCost: row.profitCost,
+        source: row.source,
+        calculationStatus: row.calculationStatus,
+        riskLevel: row.riskLevel,
+        confidence: row.confidence,
+        updatedAt: row.updatedAt
+      }));
+      const response = await fetch(
+        apiUrl(`/api/kalkulation/storage/urkalkulation/${encodeURIComponent(projectKey)}/save`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            data: {
+              projectKey,
+              projectTitle,
+              savedAt: new Date().toISOString(),
+              rows: persistedRows
+            }
+          })
+        }
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      console.warn("[RLC Urkalkulation] Server-Snapshot konnte nicht gespeichert werden", error);
+    }
+
     setInfo(
-      `Globale Urkalkulation abgeschlossen: ${changed.length} Position(en) erstellt und erste Position automatisch geladen. Übersprungen: ${skippedExisting} bestehend, ${skippedInvalid} nicht kalkulierbar.`
+      `Globale Urkalkulation abgeschlossen und gespeichert: ${changed.length} Position(en) erstellt. Übersprungen: ${skippedExisting} bestehend, ${skippedInvalid} nicht kalkulierbar.`
     );
   }
 
@@ -4783,6 +4996,7 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
     setLvRows(refreshedLv);
 
     const refreshedSelected =
+    refreshedLv.find((r) => String(r.id || "") === String(payload.id || "")) ||
     refreshedLv.find((r) => String(r.id || "") === String(selectedId || "")) ||
     refreshedLv.find((r) => String(r.posNr || "") === String(draftPos.posNr || "")) ||
     refreshedLv[0];
@@ -4834,6 +5048,52 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
   }
 
   async function saveUrkalkulation() {
+    // Nach "Urkalkulation gesamtes LV" bedeutet Speichern: ALLE Positionen sichern.
+    // Die aktuell markierte Position darf dabei weder verändert noch neu einsortiert werden.
+    if (globalUrkDone) {
+      if (!projectKey) {
+        setInfo("Gesamte Urkalkulation lokal gespeichert. Kein Projekt ausgewählt.");
+        return;
+      }
+
+      try {
+        const token = getAuthToken();
+        const allRows = LV.list();
+        const response = await fetch(
+          apiUrl(`/api/kalkulation/storage/urkalkulation/${encodeURIComponent(projectKey)}/save`),
+          {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              ok: true,
+              version: "RLC_URKALKULATION_PROJECT_V2_ALL",
+              source: "recipes-global",
+              projectKey,
+              projectCode: projectKey,
+              projectTitle,
+              savedAt: new Date().toISOString(),
+              selectedId: selectedId || null,
+              rows: allRows,
+              context: ctx,
+              recipeContext
+            })
+          }
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setLvRows(allRows);
+        setInfo(`Gesamte Urkalkulation gespeichert: ${allRows.length} LV-Positionen. Auswahl bleibt unverändert.`);
+      } catch (error: any) {
+        console.error("[Recipes] globale Urkalkulation save failed", error);
+        setInfo(`Globale Urkalkulation lokal vorhanden. Serverfehler: ${error?.message || "unbekannt"}`);
+      }
+      return;
+    }
+
     const ok = saveForHandoff();
     if (!ok) return;
 
@@ -5336,7 +5596,9 @@ Bitte den Kurztext genauer formulieren, z. B. "Asphalt fräsen 4 cm", "Asphalttr
           <div className={rlcClass(null, sectionHead)}>
             <div>
               <h2 className={rlcClass(null, sectionTitle)}>LV als Vorlage</h2>
-              <div className={rlcClass(null, sectionText)}>Bestehende Position laden oder neue Position frei erfassen.</div>
+              <div className={rlcClass(null, sectionText)}>
+                {lvRows.length} LV-Positionen · {lvRows.filter(isGlobalUrkRealLvRow).length} kalkulierbar · {lvRows.length - lvRows.filter(isGlobalUrkRealLvRow).length} Strukturpositionen
+              </div>
             </div>
           </div>
 
@@ -5873,10 +6135,10 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }

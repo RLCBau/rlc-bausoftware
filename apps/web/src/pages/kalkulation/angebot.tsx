@@ -9,6 +9,11 @@ import { API_BASE } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 import { LV, type LVPos } from "./store.lv";
 import {
+  listDocuments as listServerDocuments,
+  initDocument as initServerDocument,
+  uploadFileDirect as uploadServerFileDirect
+} from "../../api/files";
+import {
   openPdfBlobPreview,
   reservePdfPreview } from
 "../../lib/pdf/companyPdfHeader";
@@ -233,6 +238,130 @@ function authHeaders(extra?: Record<string, string>): HeadersInit {
     ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 }
+
+function extractKalkulationRows(payload: any): any[] {
+  const candidates = [
+    payload,
+    payload?.rows,
+    payload?.items,
+    payload?.data,
+    payload?.data?.rows,
+    payload?.data?.items,
+    payload?.snapshot,
+    payload?.snapshot?.rows,
+    payload?.snapshot?.data,
+    payload?.snapshot?.data?.rows,
+    payload?.snapshot?.data?.items
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  return [];
+}
+
+function kalkulationRowToLv(row: any, index: number): LVPos {
+  const ep =
+    n(
+      row?.finalUnitPrice ??
+      row?.rlcKiUnitPrice ??
+      row?.suggestedUnitPrice ??
+      row?.baseUnitPrice ??
+      row?.unitPrice ??
+      row?.preis ??
+      row?.ep,
+      0
+    );
+
+  return {
+    ...row,
+    id: String(row?.id || `server-kalk-${index + 1}`),
+    posNr: String(
+      row?.posNr ??
+      row?.positionNumber ??
+      row?.position ??
+      row?.pos ??
+      index + 1
+    ),
+    kurztext: String(
+      row?.kurztext ??
+      row?.shortText ??
+      row?.text ??
+      row?.beschreibung ??
+      ""
+    ),
+    langtext: String(
+      row?.langtext ??
+      row?.longText ??
+      row?.beschreibung ??
+      row?.text ??
+      ""
+    ),
+    einheit: String(
+      row?.einheit ??
+      row?.unit ??
+      ""
+    ),
+    menge: n(
+      row?.menge ??
+      row?.quantity ??
+      row?.qty,
+      0
+    ),
+    preis: ep,
+    source: row?.source || "server-kalkulation"
+  } as LVPos;
+}
+
+async function loadKalkulationRowsFromServer(projectKey: string): Promise<LVPos[]> {
+  if (!projectKey) return [];
+
+  const paths = [
+    `/api/kalkulation/storage/kalkulation-mit-ki/${encodeURIComponent(projectKey)}`,
+    `/api/kalkulation/storage/ki/${encodeURIComponent(projectKey)}`,
+    `/api/kalkulation/${encodeURIComponent(projectKey)}/ki`
+  ];
+
+  for (const path of paths) {
+    try {
+      const response = await fetch(apiUrl(path), {
+        method: "GET",
+        credentials: "include",
+        headers: authHeaders({
+          Accept: "application/json"
+        })
+      });
+
+      if (!response.ok) continue;
+
+      const payload = await response.json().catch(() => null);
+      const rawRows = extractKalkulationRows(payload);
+
+      if (!rawRows.length) continue;
+
+      const rows = rawRows
+        .map(kalkulationRowToLv)
+        .filter((row) =>
+          String(row.posNr || row.kurztext || row.langtext || "").trim()
+        );
+
+      if (rows.length) {
+        console.log("[Angebot] Kalkulation vom Server geladen", {
+          path,
+          rows: rows.length
+        });
+
+        return rows;
+      }
+    } catch (error) {
+      console.warn("[Angebot] Kalkulation-Adapter fehlgeschlagen", path, error);
+    }
+  }
+
+  return [];
+}
+
 
 function getCurrentProject(projectCtx: any): ProjectLike | null {
   const project =
@@ -581,8 +710,27 @@ export default function AngebotPage() {
   const [status, setStatus] = useState("");
   const [kiStatus, setKiStatus] = useState("");
 
-  function refreshAll() {
-    setRows(LV.list());
+  async function refreshAll() {
+    try {
+      const serverRows = await loadKalkulationRowsFromServer(projectKey);
+
+      if (serverRows.length) {
+        LV.setAll(serverRows);
+        setRows(serverRows);
+        setStatus(`Kalkulation geladen · ${serverRows.length} Positionen`);
+      } else {
+        const localRows = LV.list();
+        setRows(localRows);
+
+        if (!localRows.length) {
+          setStatus("Keine Kalkulationspositionen gefunden");
+        }
+      }
+    } catch (error) {
+      console.error("Kalkulation konnte nicht geladen werden", error);
+      setRows(LV.list());
+    }
+
     setNachtraege(loadNachtraegeForProject(pid, projectKey));
     setNachtragOnlyBuffer(loadNachtragOnlyBuffer(projectKey));
   }
@@ -595,10 +743,15 @@ export default function AngebotPage() {
   }
 
   useEffect(() => {
-    refreshAll();
+    void refreshAll();
 
-    const onFocus = () => refreshAll();
-    const onStorage = () => refreshAll();
+    const onFocus = () => {
+      void refreshAll();
+    };
+
+    const onStorage = () => {
+      void refreshAll();
+    };
 
     window.addEventListener("focus", onFocus);
     window.addEventListener("storage", onStorage);
@@ -853,8 +1006,40 @@ export default function AngebotPage() {
         return;
       }
 
-      setStatus("Angebot gespeichert · lokal für Angebotsverfolgung verfügbar");
-      setTimeout(() => setStatus(""), 2200);
+      try {
+        setStatus("Gespeichert · prüfe Server-Snapshot …");
+
+        const verification = await verifySnapshotOnServer(
+          projectKey,
+          snapshot
+        );
+
+        if (!verification.ok) {
+          console.error(
+            "Angebot Snapshot Verify FAILED",
+            verification.failed
+          );
+
+          setStatus(
+            `Server-Abweichung · ${verification.failed
+              .map((x) => `${x.label}: ${x.actual}/${x.expected}`)
+              .join(" · ")}`
+          );
+
+          return;
+        }
+
+        setStatus(
+          `Server geprüft ✓ · ${snapshot.rows.length} Positionen · ` +
+          `${money(snapshot.totals.netto)} netto · ` +
+          `${money(snapshot.totals.brutto)} brutto`
+        );
+      } catch (verifyError) {
+        console.error("Angebot Snapshot Verify Error", verifyError);
+        setStatus("Angebot gespeichert · Server-Prüfung fehlgeschlagen");
+      }
+
+      setTimeout(() => setStatus(""), 5000);
     } catch {
       localStorage.setItem(localBackupKey(projectKey), JSON.stringify(snapshot));
       setStatus("Fehler · lokal gesichert");
@@ -928,7 +1113,94 @@ export default function AngebotPage() {
     }
   }
 
-  function applySnapshot(snapshot: any) {
+  
+function extractLatestServerSnapshot(json: any): any {
+  const serverSnapshots = Array.isArray(json) ? json : null;
+
+  if (serverSnapshots) {
+    return [...serverSnapshots].sort((a: any, b: any) => {
+      const timeOf = (value: any) =>
+        typeof value === "number"
+          ? value
+          : Date.parse(String(value || "")) || 0;
+
+      const ta = timeOf(a?.updatedAt || a?.meta?.savedAt || a?.createdAt);
+      const tb = timeOf(b?.updatedAt || b?.meta?.savedAt || b?.createdAt);
+
+      return tb - ta;
+    })[0] || null;
+  }
+
+  return json?.data || json?.snapshot || json || null;
+}
+
+function assertOfferSnapshotEqual(expected: OfferSnapshot, actual: any) {
+  const actualRows = Array.isArray(actual?.rows) ? actual.rows : [];
+  const actualTotals = actual?.totals || {};
+
+  const checks = [
+    {
+      label: "Positionen",
+      expected: expected.rows.length,
+      actual: actualRows.length
+    },
+    {
+      label: "LV Netto",
+      expected: round2(expected.totals.lvNetto),
+      actual: round2(n(actualTotals.lvNetto))
+    },
+    {
+      label: "Netto Gesamt",
+      expected: round2(expected.totals.netto),
+      actual: round2(n(actualTotals.netto))
+    },
+    {
+      label: "Brutto Gesamt",
+      expected: round2(expected.totals.brutto),
+      actual: round2(n(actualTotals.brutto))
+    }
+  ];
+
+  const failed = checks.filter(
+    (x) => Math.abs(Number(x.expected) - Number(x.actual)) > 0.01
+  );
+
+  return {
+    ok: failed.length === 0,
+    checks,
+    failed
+  };
+}
+
+async function verifySnapshotOnServer(
+  projectKey: string,
+  expected: OfferSnapshot
+) {
+  const response = await fetch(
+    apiUrl(`/api/kalkulation/angebot/${encodeURIComponent(projectKey)}`),
+    {
+      method: "GET",
+      credentials: "include",
+      headers: authHeaders()
+    }
+  );
+
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok || json?.ok === false) {
+    throw new Error(`Verify HTTP ${response.status}`);
+  }
+
+  const latest = extractLatestServerSnapshot(json);
+
+  if (!latest) {
+    throw new Error("Kein Server-Snapshot gefunden");
+  }
+
+  return assertOfferSnapshotEqual(expected, latest);
+}
+
+function applySnapshot(snapshot: any) {
     const loadedRows = Array.isArray(snapshot?.rows) ?
     snapshot.rows.map((row: any, index: number) => ({
       ...row,
@@ -1074,15 +1346,85 @@ export default function AngebotPage() {
     const prefix = isNachtragOnlyMode ? "Nachtrag_Angebot" : "Angebot";
     const filename = `${prefix}_${safeFileName(projectKey || opts.dateISO)}.xlsx`;
 
-    downloadBlob(
-      new Blob([data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      }),
-      filename
-    );
+    const blob = new Blob([data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    downloadBlob(blob, filename);
+
+    const dmsProjectId = String(project?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, filename, blob))
+        .catch((error) => console.warn("[angebot:xlsx:dms]", error));
+    }
 
     setStatus("Excel-Datei wurde erzeugt.");
     setKiStatus("Excel-Datei wurde erzeugt.");
+  }
+
+
+  async function archiveAngebotPdfToDocuments(
+    blob: Blob,
+    pdfFileName: string
+  ): Promise<{ documentId: string; versioned: boolean } | null> {
+    const dmsProjectId = String(project?.id || "").trim();
+
+    if (!dmsProjectId) {
+      console.warn(
+        "[Angebot:DMS] Keine Projekt-ID vorhanden; PDF wird nur geöffnet."
+      );
+      return null;
+    }
+
+    const documents: any[] = await listServerDocuments(dmsProjectId);
+
+    const normalizedName = pdfFileName.trim().toLowerCase();
+
+    const existing = (Array.isArray(documents) ? documents : []).find(
+      (doc: any) =>
+        !doc?.deletedAt &&
+        String(doc?.name || "").trim().toLowerCase() === normalizedName
+    );
+
+    let documentId = String(existing?.id || "").trim();
+    let versioned = Boolean(documentId);
+
+    if (!documentId) {
+      const created = await initServerDocument(
+        dmsProjectId,
+        "PDF" as any,
+        pdfFileName
+      );
+
+      documentId = String(created?.documentId || "").trim();
+
+      if (!documentId) {
+        throw new Error("Dokumenten-ID wurde nicht erzeugt.");
+      }
+
+      versioned = false;
+    }
+
+    const file = new File([blob], pdfFileName, {
+      type: "application/pdf"
+    });
+
+    await uploadServerFileDirect(
+      documentId,
+      file
+    );
+
+    console.log("[Angebot:DMS]", {
+      projectId: dmsProjectId,
+      documentId,
+      pdfFileName,
+      versioned
+    });
+
+    return {
+      documentId,
+      versioned
+    };
   }
 
   async function exportPDF() {
@@ -1157,7 +1499,44 @@ export default function AngebotPage() {
       }
 
       const blob = await response.blob();
+
       openPdfBlobPreview(blob, pdfFileName, preview);
+
+      try {
+        setStatus("PDF erzeugt · speichere in Dokumente …");
+
+        const archived = await archiveAngebotPdfToDocuments(
+          blob,
+          pdfFileName
+        );
+
+        if (archived) {
+          setStatus(
+            archived.versioned
+              ? "PDF erzeugt · neue Dokument-Version gespeichert ✓"
+              : "PDF erzeugt · in Dokumente gespeichert ✓"
+          );
+          setKiStatus(
+            archived.versioned
+              ? "Angebot-PDF als neue Dokument-Version gespeichert."
+              : "Angebot-PDF in Dokumente gespeichert."
+          );
+        } else {
+          setStatus("PDF erzeugt · keine Projekt-ID für Dokumentenablage");
+        }
+      } catch (archiveError: any) {
+        console.error("[Angebot:DMS] Archivierung fehlgeschlagen", archiveError);
+
+        /*
+         * PDF bleibt trotzdem gültig und geöffnet.
+         * DMS-Fehler darf die PDF-Erzeugung nicht zerstören.
+         */
+        setStatus(
+          `PDF erzeugt · Dokumentenablage fehlgeschlagen: ${
+            archiveError?.message || archiveError
+          }`
+        );
+      }
     } catch (e: any) {
       if (preview && !preview.closed) preview.close();
       alert(`PDF Export fehlgeschlagen: ${e?.message || e}`);
@@ -1207,15 +1586,39 @@ export default function AngebotPage() {
     const filename = `${prefix}_${safeFileName(projectKey || opts.dateISO)}.csv`;
     const csv = "\uFEFF" + [header, ...lvLines, ...ntLines].join("\r\n");
 
-    downloadBlob(
-      new Blob([csv], {
-        type: "text/csv;charset=utf-8"
-      }),
-      filename
-    );
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8"
+    });
+    downloadBlob(blob, filename);
+
+    const dmsProjectId = String(project?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, filename, blob))
+        .catch((error) => console.warn("[angebot:csv:dms]", error));
+    }
 
     setStatus("CSV-Datei wurde erzeugt.");
     setKiStatus("CSV-Datei wurde erzeugt.");
+  }
+
+  function openGaebExport() {
+    const rows = [
+      ...offerRows.map((row: any) => ({
+        posNr: row.posNr || row.positionNumber || "", kurztext: row.kurztext || "", langtext: row.langtext || "",
+        einheit: row.einheit || "", menge: n(row.menge), preis: n(row.preis), gesamt: n(row.menge) * n(row.preis)
+      })),
+      ...activeNachtraege.map((row: any) => ({
+        posNr: row.posNr || "", kurztext: row.kurztext || "", langtext: row.langtext || "",
+        einheit: row.einheit || "", menge: n(row.mengeDelta), preis: n(row.preis), gesamt: n(row.mengeDelta) * n(row.preis)
+      }))
+    ];
+    if (!rows.length) { setStatus("Keine Positionen für GAEB-Export vorhanden."); return; }
+    sessionStorage.setItem("rlc_gaeb_export_handoff_v1", JSON.stringify({
+      source: "angebot", sourceLabel: isNachtragOnlyMode ? "Nachtragsangebot" : "Angebot",
+      projectCode: projectKey, projectName, mode: "X84", rows, createdAt: new Date().toISOString()
+    }));
+    navigate(`/kalkulation/gaeb?projectCode=${encodeURIComponent(projectKey || "")}&source=${isNachtragOnlyMode ? "nachtrag" : "angebot"}&mode=X84`);
   }
 
   const hasExportRows = offerRows.length > 0 || activeNachtraege.length > 0;
@@ -1640,58 +2043,102 @@ export default function AngebotPage() {
         </section> :
       null}
 
-      <section className={rlcClass("rlc-page-hero", heroCard)}>
-        <div>
-          <div className={rlcClass(null, eyebrow)}>
-            {isNachtragOnlyMode ?
-            "Nachtragsangebot · PDF / Excel / CSV" :
-            "Angebot · PDF / Excel / Nachträge / Server"}
+      <section className={rlcClass("card", {
+        padding: 14
+      })}>
+        <div className={rlcClass(null, {
+          ...sectionHead,
+          alignItems: "center",
+          gap: 12
+        })}>
+          <div>
+            <div className="rlc-page-detail-kicker">
+              {isNachtragOnlyMode
+                ? "Nachtragsangebot · PDF / Excel / CSV"
+                : "Angebot · PDF / Excel / Nachträge / Server"}
+            </div>
+
+            <h2>
+              {isNachtragOnlyMode
+                ? "Nachtragsangebot"
+                : "Angebotsausgabe"}
+            </h2>
+
+            <div className={rlcClass(null, sectionText)}>
+              {isNachtragOnlyMode
+                ? "Dieses Angebot enthält ausschließlich die ausgewählten Nachtragspositionen."
+                : "Ausgabe, Export und Serverspeicherung des aktuellen Angebots."}
+            </div>
           </div>
-          <h1 className={rlcClass(null, title)}>
-            {isNachtragOnlyMode ? "Nachtragsangebot" : "Angebotsausgabe"}
-          </h1>
-          <p className={rlcClass(null, subtitle)}>
-            {isNachtragOnlyMode ?
-            "Dieses Angebot enthält ausschließlich die ausgewählten Nachtragspositionen." :
-            "Das Angebot wird aus der aktuellen RLC-KI-Kalkulation und den vorhandenen Nachträgen erzeugt."}
-          </p>
+
+          <div className="rlc-page-toolbar__group">
+            <button
+              className="btn btn-primary"
+              onClick={exportPDF}
+              disabled={!hasExportRows}
+            >
+              PDF erzeugen
+            </button>
+
+            <button
+              className="btn"
+              onClick={exportXLSX}
+              disabled={!hasExportRows}
+            >
+              Excel exportieren
+            </button>
+
+            <button
+              className="btn"
+              onClick={exportCSV}
+              disabled={!hasExportRows}
+            >
+              CSV exportieren
+            </button>
+
+            <button className="btn" onClick={openGaebExport} disabled={!hasExportRows}>
+              GAEB Export
+            </button>
+
+            <button
+              className="btn"
+              onClick={saveSnapshotToServer}
+              disabled={serverBusy || !projectKey}
+            >
+              Speichern
+            </button>
+
+            <button
+              className="btn"
+              onClick={loadSnapshotFromServer}
+              disabled={serverBusy || !projectKey}
+            >
+              Laden
+            </button>
+
+            <button
+              className="btn"
+              onClick={refreshAll}
+            >
+              Neu laden
+            </button>
+
+            {isNachtragOnlyMode ? (
+              <button
+                className="btn"
+                onClick={clearNachtragOnlyMode}
+              >
+                Komplettes Angebot
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        <div className={rlcClass(null, heroActions)}>
-          <button className={rlcClass(null, btnPrimary)} onClick={exportPDF} disabled={!hasExportRows}>
-            PDF erzeugen
-          </button>
-          <button className={rlcClass(null, btnSecondary)} onClick={exportXLSX} disabled={!hasExportRows}>
-            Excel exportieren
-          </button>
-          <button className={rlcClass(null, btnSecondary)} onClick={exportCSV} disabled={!hasExportRows}>
-            CSV exportieren
-          </button>
-          <button className={rlcClass(null,
-          btnSecondary)}
-          onClick={saveSnapshotToServer}
-          disabled={serverBusy || !projectKey}>
-            
-            Speichern
-          </button>
-          <button className={rlcClass(null,
-          btnSecondary)}
-          onClick={loadSnapshotFromServer}
-          disabled={serverBusy || !projectKey}>
-            
-            Laden
-          </button>
-          <button className={rlcClass(null, btnSecondary)} onClick={refreshAll}>
-            Neu laden
-          </button>
-          {isNachtragOnlyMode ?
-          <button className={rlcClass(null, btnSecondary)} onClick={clearNachtragOnlyMode}>
-              Komplettes Angebot
-            </button> :
-          null}
-        </div>
-
-        <div className={rlcClass(null, heroMeta)}>
+        <div className={rlcClass(null, {
+          marginTop: 6,
+          color: "#64748b",
+          fontSize: 12
+        })}>
           Projekt: <b>{projectKey || "—"}</b>
           {projectName ? <span> · {projectName}</span> : null}
           {status ? <span> · {status}</span> : null}
@@ -1713,8 +2160,14 @@ export default function AngebotPage() {
         <KpiCard label="Brutto Gesamt" value={money(totals.brutto)} sub={`${totals.mwst}% MwSt`} />
       </section>
 
-      <section className={rlcClass(null, card)}>
-        <div className={rlcClass(null, sectionHead)}>
+      <section className={rlcClass(null, {
+        ...card,
+        padding: 14
+      })}>
+        <div className={rlcClass(null, {
+          ...sectionHead,
+          marginBottom: 10
+        })}>
           <div>
             <h2 className={rlcClass(null, sectionTitle)}>Angebotsdaten</h2>
             <div className={rlcClass(null, sectionText)}>
@@ -1778,7 +2231,7 @@ export default function AngebotPage() {
         <div className="rlc-migrated-pages-kalkulation-angebot-tsx-849">
           <Field label="Zahlungsbedingungen / Notizen">
             <textarea className={rlcClass(null,
-            { ...input, minHeight: 76 })}
+            { ...input, minHeight: 58 })}
             value={opts.payment}
             onChange={(e) =>
             setOpts((v) => ({ ...v, payment: e.target.value }))
@@ -1787,7 +2240,11 @@ export default function AngebotPage() {
           </Field>
         </div>
 
-        <div className={rlcClass(null, checkRow)}>
+        <div className={rlcClass(null, {
+          ...checkRow,
+          marginTop: 10,
+          gap: 12
+        })}>
           {!isNachtragOnlyMode ?
           <>
               <label className={rlcClass(null, checkLabel)}>
@@ -1883,8 +2340,8 @@ export default function AngebotPage() {
           <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/nachtraege")}>
             Nachträge
           </button>
-          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/gaeb")}>
-            GAEB
+          <button className={rlcClass(null, btnSecondary)} onClick={openGaebExport} disabled={!hasExportRows}>
+            GAEB Export
           </button>
         </div>
       </section>
@@ -2123,10 +2580,10 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }

@@ -2,12 +2,16 @@
 // apps/server/src/routes/regie.ts
 import { Router } from "express";
 import multer from "multer";
+import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import mime from "mime-types";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { requireProjectMember } from "../middleware/guards";
+import { requirePermission } from "../middleware/rbac";
 import { recordProjectSubmission } from "../lib/projectSubmission";
 import { recognizeFromFiles } from "../services/photoRecognition";
 import { parseLieferschein } from "../services/lieferscheinParser";
@@ -25,6 +29,100 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 
 const router = Router();
+
+router.use((req:any,res,next)=>{
+  if(req.method === "GET" || req.method === "HEAD") return next();
+  return requirePermission("reports:write")(req,res,next);
+});
+
+const REGIE_MULTIPART_PATHS = new Set(["/upload"]);
+
+function cleanupRegieStaging(req: any) {
+  const files: any[] = [];
+  if (req?.file) files.push(req.file);
+  if (Array.isArray(req?.files)) files.push(...req.files);
+  else if (req?.files && typeof req.files === "object") {
+    for (const group of Object.values(req.files)) {
+      if (Array.isArray(group)) files.push(...group);
+    }
+  }
+  for (const file of files) {
+    const candidate = String(file?.path || "").trim();
+    if (!candidate) continue;
+    try {
+      if (fs.existsSync(candidate)) fs.unlinkSync(candidate);
+    } catch {}
+  }
+}
+
+const regieMultipartUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req?.auth?.sub || ipKeyGenerator(req.ip || "127.0.0.1")),
+});
+
+const preAuthorizeRegieMultipart = async (req: any, res: any, next: any) => {
+  const token = String(req.query?.projectId || req.query?.projectCode || "").trim();
+  if (!token) {
+    return res.status(400).json({ ok: false, error: "projectId query parameter required before upload" });
+  }
+  req.params = req.params || {};
+  req.params.__projectAccess = token;
+  return requireProjectMember("__projectAccess")(req, res, next);
+};
+
+const requireRegieProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(
+    req.body?.projectId ||
+    req.body?.projectCode ||
+    req.query?.projectId ||
+    req.query?.projectCode ||
+    req.query?.project ||
+    ""
+  ).trim();
+  if (!token) {
+    cleanupRegieStaging(req);
+    return res.status(400).json({ ok:false, error:"projectId required" });
+  }
+
+  req.params = req.params || {};
+  req.params.__projectAccess = token;
+
+  let authorized = false;
+  const cleanupOnReject = () => {
+    if (!authorized) cleanupRegieStaging(req);
+  };
+  res.once("finish", cleanupOnReject);
+
+  return requireProjectMember("__projectAccess")(req, res, (err?: any) => {
+    if (err) return next(err);
+    authorized = true;
+    res.off("finish", cleanupOnReject);
+
+    const resolvedId = String(req.resolvedProjectId || token);
+    const resolvedCode = String(req.resolvedProjectCode || "").trim();
+
+    if (req.body && typeof req.body === "object") {
+      req.body.projectId = resolvedId;
+      if (resolvedCode) req.body.projectCode = resolvedCode;
+    }
+    try {
+      if (req.query && typeof req.query === "object") {
+        req.query.projectId = resolvedId;
+        if (resolvedCode) req.query.projectCode = resolvedCode;
+      }
+    } catch {}
+
+    return next();
+  });
+};
+
+router.use((req: any, res: any, next: any) => {
+  if (req.is("multipart/form-data") && REGIE_MULTIPART_PATHS.has(req.path)) return next();
+  return requireRegieProjectAccess(req, res, next);
+});
 console.log("[regie] router loaded");
 
 /* =========================================================
@@ -67,9 +165,6 @@ function forwardedCompanyHeaders(req: any): Record<string, string> {
   for (const name of [
     "authorization",
     "cookie",
-    "x-company-id",
-    "x-rlc-company-id",
-    "x-tenant-id",
     "x-request-id",
   ]) {
     const raw = req?.headers?.[name];
@@ -258,19 +353,60 @@ async function resolveProjectFsKey(input: string): Promise<string> {
   const trimmed = String(input || "").trim();
   if (!trimmed) return "UNKNOWN";
 
-  // già un code BA-...
-  if (/^BA-\d{4}[-_]/i.test(trimmed)) return safeFsKey(trimmed);
-
   try {
-    const proj = await prisma.project.findFirst({
-      where: { OR: [{ id: trimmed }, { code: trimmed }] },
-      select: { code: true },
+    let project = await prisma.project.findUnique({
+      where: { id: trimmed },
+      select: { id: true, code: true },
     });
-    const code = String((proj as any)?.code || "").trim();
-    if (code) return safeFsKey(code);
-  } catch {}
 
-  return "UNKNOWN";
+    if (!project) {
+      const matches = await prisma.project.findMany({
+        where: { code: trimmed },
+        select: { id: true, code: true },
+        take: 2,
+      });
+      if (matches.length !== 1) {
+        console.warn("[regie] project code is missing or not globally unique", {
+          input: trimmed,
+          matches: matches.length,
+        });
+        return "UNKNOWN";
+      }
+      project = matches[0];
+    }
+
+    const canonicalKey = safeFsKey(project.id);
+    const legacyCode = String(project.code || "").trim();
+    const legacyKey = legacyCode ? safeFsKey(legacyCode) : "";
+
+    if (legacyKey && legacyKey !== canonicalKey) {
+      const duplicates = await prisma.project.count({ where: { code: legacyCode } });
+      if (duplicates === 1) {
+        const legacyRoot = path.join(PROJECTS_ROOT, legacyKey);
+        const canonicalRoot = path.join(PROJECTS_ROOT, canonicalKey);
+        const regieDirs = [
+          ["eingangspruefung", "regie"],
+          ["regie"],
+          ["regieberichte"],
+          ["raw"],
+        ];
+
+        for (const parts of regieDirs) {
+          const src = path.join(legacyRoot, ...parts);
+          const dst = path.join(canonicalRoot, ...parts);
+          if (fs.existsSync(src) && !fs.existsSync(dst)) {
+            fs.mkdirSync(path.dirname(dst), { recursive: true });
+            fs.cpSync(src, dst, { recursive: true });
+          }
+        }
+      }
+    }
+
+    return canonicalKey;
+  } catch (error) {
+    console.error("[regie] resolveProjectFsKey failed", error);
+    return "UNKNOWN";
+  }
 }
 
 /**
@@ -449,6 +585,10 @@ async function createDocumentVersion(opts: {
   }
 
   const stat = fs.statSync(localPath);
+  const fileSha256 = crypto
+    .createHash("sha256")
+    .update(fs.readFileSync(localPath))
+    .digest("hex");
 
   const storageKey = s3Key
     ? s3Key
@@ -461,7 +601,7 @@ async function createDocumentVersion(opts: {
     where: { id: storageId },
     update: {
       size: BigInt(stat.size),
-      sha256: "sha256-dev",
+      sha256: fileSha256,
       mime: (mime.lookup(filename) || "application/octet-stream") as string,
     },
     create: {
@@ -469,7 +609,7 @@ async function createDocumentVersion(opts: {
       bucket: S3_BUCKET,
       key: storageKey,
       size: BigInt(stat.size),
-      sha256: "sha256-dev",
+      sha256: fileSha256,
       mime: (mime.lookup(filename) || "application/octet-stream") as string,
     },
   });
@@ -671,6 +811,12 @@ async function persistOfficialRegiebericht(opts: {
     savedAt: new Date(now).toISOString(),
     reportId,
   };
+  const payloadEvidenceHash = crypto.createHash("sha256").update(JSON.stringify(payload), "utf8").digest("hex");
+  (payload as any).evidenceLock = {
+    hash: payloadEvidenceHash,
+    lockedAt: new Date(now).toISOString(),
+    reason: "Regiebericht freigegeben – Original unveränderlich",
+  };
 
   writeJson(jsonPath, payload);
 
@@ -688,7 +834,7 @@ async function persistOfficialRegiebericht(opts: {
     localPath: jsonPath,
     s3Key: jsonS3Key,
     uploadedBy: opts.approvedBy || null,
-    meta: { source: opts.sourceLabel, reportId, sourceDocId: opts.sourceDocId || null },
+    meta: { source: opts.sourceLabel, reportId, sourceDocId: opts.sourceDocId || null, evidenceLocked: true, evidenceHash: payloadEvidenceHash },
   });
 
   await createRegieberichtPdf(
@@ -714,7 +860,7 @@ async function persistOfficialRegiebericht(opts: {
     localPath: pdfPath,
     s3Key: pdfS3Key,
     uploadedBy: opts.approvedBy || null,
-    meta: { source: `${opts.sourceLabel}.pdf`, reportId, sourceDocId: opts.sourceDocId || null },
+    meta: { source: `${opts.sourceLabel}.pdf`, reportId, sourceDocId: opts.sourceDocId || null, evidenceLocked: true, evidenceHash: payloadEvidenceHash },
   });
 
   const pdfUrl = `/projects/${encodeURIComponent(fsKey)}/regieberichte/${encodeURIComponent(pdfName)}`;
@@ -735,7 +881,10 @@ ensureDir(STAGING_RAW);
     },
   }),
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100 MB pro Datei
+    fileSize: 30 * 1024 * 1024,
+    files: 20,
+    fields: 30,
+    parts: 50,
   },
 });
 
@@ -1113,7 +1262,7 @@ router.post(
           ...obj,
           rejectionReason: null,
         },
-        approvedBy: String(body.approvedBy || "").trim() || null,
+        approvedBy: String((req as any)?.auth?.email || (req as any)?.auth?.sub || "").trim() || null,
         sourceDocId: body.docId,
         sourceLabel: "regie.inbox.approve",
         company,
@@ -1583,12 +1732,29 @@ router.post(
       const { jsonName, pdfName, reportId } = nextRegieFile(dir, body.date);
       const jsonPath = path.join(dir, jsonName);
 
-      const payload = {
+      const preferId =
+        String(body.workflowDocId || "").trim() ||
+        String(body.sourceDocId || "").trim() ||
+        String(body.docId || "").trim();
+      const payloadBase = {
         ...body,
         projectId: dbId ?? body.projectId,
         projectCode: fsKey,
         projectFsKey: fsKey,
         reportId,
+        workflowStatus: "FREIGEGEBEN",
+        revisionOf: preferId || null,
+        revisionCreatedAt: new Date().toISOString(),
+        revisionCreatedBy: String((req as any)?.auth?.email || (req as any)?.auth?.sub || "").trim() || null,
+      };
+      const evidenceHash = crypto.createHash("sha256").update(JSON.stringify(payloadBase), "utf8").digest("hex");
+      const payload = {
+        ...payloadBase,
+        evidenceLock: {
+          hash: evidenceHash,
+          lockedAt: new Date().toISOString(),
+          reason: preferId ? "Regiebericht Revision – Original bleibt unverändert" : "Regiebericht gespeichert – revisionssichere Version",
+        },
       };
 
       fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2), "utf8");
@@ -1607,7 +1773,7 @@ router.post(
         localPath: jsonPath,
         s3Key: jsonS3Key,
         uploadedBy: null,
-        meta: { source: "regie.commit", reportId },
+        meta: { source: "regie.commit", reportId, evidenceLocked: true, evidenceHash, revisionOf: preferId || null },
       });
 
       const pdfPath = path.join(dir, pdfName);
@@ -1650,21 +1816,13 @@ router.post(
         localPath: pdfPath,
         s3Key: pdfS3Key,
         uploadedBy: null,
-        meta: { source: "regie.commit.pdf", reportId },
+        meta: { source: "regie.commit.pdf", reportId, evidenceLocked: true, revisionOf: preferId || null },
       });
 
-      // ✅ CLEANUP ROBUSTO in /regie
-      const preferId =
-        String(body.workflowDocId || "").trim() ||
-        String(body.sourceDocId || "").trim() ||
-        String(body.docId || "").trim();
-
-      const cleanup = cleanupFreigegeben({
-        fsKey,
-        preferId,
-        regieNummer: body.regieNummer,
-        date: body.date,
-      });
+      // Revisionssicherheit: ein bereits FREIGEGEBENER Workflow-Nachweis
+      // wird niemals gelöscht. Jede spätere Speicherung erzeugt eine neue
+      // offizielle Version und verweist optional über revisionOf auf den Ursprung.
+      const cleanup = { skipped: true, reason: "FREIGEGEBEN_ORIGINAL_PRESERVED", preferId: preferId || null };
 
       const pdfUrl = `/projects/${encodeURIComponent(fsKey)}/regieberichte/${encodeURIComponent(
         pdfName
@@ -1694,7 +1852,10 @@ router.post(
   requireAuth,
   requireMode("SERVER_SYNC"),
   requireEmailVerified,
+  regieMultipartUploadLimiter,
+  preAuthorizeRegieMultipart,
   upload.array("files", 20),
+  requireRegieProjectAccess,
   async (req, res) => {
     try {
       const projectId = String((req.body as any)?.projectId || "").trim();

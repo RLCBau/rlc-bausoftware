@@ -5,11 +5,82 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { prisma } from "../lib/prisma";
 import { recordProjectSubmission } from "../lib/projectSubmission";
 import { createFotoDokumentationPdf } from "../services/pdf/fotoDokumentationPdf";
 import { loadRlcPdfCompanyFromRequest } from "../services/pdf/pdfCompanyContext";
+import { archiveProjectFileVersion } from "../services/dmsArchive";
+import { requireProjectMember } from "../middleware/guards";
+import { requirePermission } from "../middleware/rbac";
+import { rejectActiveContentUpload, signatureCheckedDiskStorage, signatureCheckedMemoryStorage } from "../lib/uploadSecurity";
 
 const router = express.Router();
+
+router.use((req:any,res,next)=>{
+  if(req.method==="GET" || req.method==="HEAD") return next();
+  return requirePermission("reports:write")(req,res,next);
+});
+
+const requireFotoProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(
+    req.params?.projectId ||
+    req.body?.projectId ||
+    req.body?.projectCode ||
+    req.query?.projectId ||
+    req.query?.projectCode ||
+    ""
+  ).trim();
+  if (!token) return res.status(400).json({ error: "projectId fehlt" });
+
+  req.params = req.params || {};
+  req.params.__fotoProject = token;
+
+  return requireProjectMember("__fotoProject")(req, res, async (err?: any) => {
+    if (err) return next(err);
+
+    const projectId = String(req.resolvedProjectId || "").trim();
+    const projectCode = String(req.resolvedProjectCode || "").trim();
+    if (!projectId) return res.status(403).json({ error: "PROJECT_RESOLUTION_FAILED" });
+
+    if (projectCode && projectCode !== projectId) {
+      try {
+        const duplicates = await prisma.project.count({ where: { code: projectCode } });
+        if (duplicates === 1) {
+          const legacyRoot = path.join(PROJECTS_ROOT, projectCode);
+          const canonicalRoot = path.join(PROJECTS_ROOT, projectId);
+          for (const parts of [
+            ["fotos"],
+            ["eingangspruefung", "fotos"],
+            ["lieferscheine", "files"],
+          ]) {
+            const src = path.join(legacyRoot, ...parts);
+            const dst = path.join(canonicalRoot, ...parts);
+            if (fs.existsSync(src) && !fs.existsSync(dst)) {
+              fs.mkdirSync(path.dirname(dst), { recursive: true });
+              fs.cpSync(src, dst, { recursive: true });
+            }
+          }
+        }
+      } catch (migrationError) {
+        console.error("[fotos] legacy tenant migration failed", migrationError);
+      }
+    }
+
+    if (req.params?.projectId) req.params.projectId = projectId;
+    if (req.body && typeof req.body === "object") {
+      req.body.projectId = projectId;
+      if (projectCode) req.body.projectCode = projectCode;
+    }
+    try {
+      if (req.query && typeof req.query === "object") {
+        req.query.projectId = projectId;
+        if (projectCode) req.query.projectCode = projectCode;
+      }
+    } catch {}
+
+    return next();
+  });
+};
 
 /**
  * =========================================================
@@ -349,8 +420,9 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
-  storage,
+  storage: signatureCheckedDiskStorage(storage),
   limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: rejectActiveContentUpload,
 });
 
 /**
@@ -377,8 +449,9 @@ const notesStorage = multer.diskStorage({
 });
 
 const notesUpload = multer({
-  storage: notesStorage,
+  storage: signatureCheckedDiskStorage(notesStorage),
   limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: rejectActiveContentUpload,
 });
 
 /**
@@ -387,34 +460,10 @@ const notesUpload = multer({
  * - saves to: projects/<BA>/eingangspruefung/fotos/<docId>/... and .../files/
  * =========================================================
  */
-const inboxNotesStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
-    const docId = String(req.body?.docId || req.body?.id || "").trim();
-    if (!projectId) return cb(new Error("projectId fehlt"), "");
-    if (!docId) return cb(new Error("docId fehlt"), "");
-
-    try {
-      const isMain = String(file.fieldname || "").toLowerCase() === "main";
-      const dir = isMain
-        ? inboxDocDir(projectId, docId)
-        : inboxDocFilesDir(projectId, docId);
-      ensureDir(dir);
-      cb(null, dir);
-    } catch (e: any) {
-      cb(e, "");
-    }
-  },
-  filename: (_req, file, cb) => {
-    const base = safeName(file.originalname || "file.bin");
-    const filename = `${Date.now()}-${base}`;
-    cb(null, filename);
-  },
-});
-
 const inboxNotesUpload = multer({
-  storage: inboxNotesStorage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  storage: signatureCheckedMemoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 20 },
+  fileFilter: rejectActiveContentUpload,
 });
 
 /* =========================================================
@@ -422,7 +471,7 @@ const inboxNotesUpload = multer({
  * =======================================================*/
 
 /* ---- Liste aller Fotos eines Projekts (legacy) ---- */
-router.get("/projects/:projectId/fotos", (req, res) => {
+router.get("/projects/:projectId/fotos", requireFotoProjectAccess, (req, res) => {
   const { projectId } = req.params;
   if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
 
@@ -431,7 +480,7 @@ router.get("/projects/:projectId/fotos", (req, res) => {
 });
 
 /* ---- Einzelnes Foto ausliefern (legacy) ---- */
-router.get("/projects/:projectId/fotos/notes", (req, res) => {
+router.get("/projects/:projectId/fotos/notes", requireFotoProjectAccess, (req, res) => {
   const { projectId } = req.params;
   if (!projectId) {
     return res.status(400).json({ error: "projectId fehlt" });
@@ -440,13 +489,17 @@ router.get("/projects/:projectId/fotos/notes", (req, res) => {
   const list = readNotes(projectId);
   return res.json({ ok: true, items: list });
 });
-router.get("/projects/:projectId/fotos/:file", (req, res) => {
+router.get("/projects/:projectId/fotos/:file", requireFotoProjectAccess, (req, res) => {
   const { projectId, file } = req.params;
   if (!projectId || !file) {
     return res.status(400).json({ error: "projectId oder file fehlt" });
   }
 
-  const filePath = path.join(resolveTargetDir(projectId, "FOTOS"), file);
+  const safeFile = path.basename(String(file));
+  if (safeFile !== file) {
+    return res.status(400).json({ error: "Ungültiger Dateiname" });
+  }
+  const filePath = path.join(resolveTargetDir(projectId, "FOTOS"), safeFile);
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: "Datei nicht gefunden" });
   }
@@ -455,7 +508,7 @@ router.get("/projects/:projectId/fotos/:file", (req, res) => {
 });
 
 /* ---- Foto + Meta speichern (legacy) ---- */
-router.post("/projects/:projectId/fotos", upload.single("file"), (req, res) => {
+router.post("/projects/:projectId/fotos", requireFotoProjectAccess, upload.single("file"), (req, res) => {
   const { projectId } = req.params;
   if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
   if (!req.file) return res.status(400).json({ error: "keine Datei gesendet" });
@@ -522,7 +575,7 @@ router.post("/projects/:projectId/fotos", upload.single("file"), (req, res) => {
 });
 
 /* ---- Foto + Meta lÃ¶schen (legacy) ---- */
-router.delete("/projects/:projectId/fotos/:id", (req, res) => {
+router.delete("/projects/:projectId/fotos/:id", requireFotoProjectAccess, (req, res) => {
   const { projectId, id } = req.params;
   if (!projectId || !id) return res.status(400).json({ error: "projectId oder id fehlt" });
 
@@ -551,6 +604,7 @@ router.delete("/projects/:projectId/fotos/:id", (req, res) => {
 
 router.post(
   "/projects/:projectId/fotos/notes",
+  requireFotoProjectAccess,
   notesUpload.fields([{ name: "main", maxCount: 1 },{ name: "files", maxCount: 50 },{ name: "file", maxCount: 50 },{ name: "photos", maxCount: 50 },{ name: "attachments", maxCount: 50 }]),
   (req, res) => {
     const { projectId } = req.params;
@@ -634,7 +688,7 @@ router.post(
  */
 
 // SUBMIT -> crea voce INBOX e ritorna docId
-router.post("/inbox/submit", express.json(), async (req, res) => {
+router.post("/inbox/submit", express.json(), requireFotoProjectAccess, async (req, res) => {
   const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
   if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
 
@@ -696,6 +750,7 @@ router.post("/inbox/submit", express.json(), async (req, res) => {
 router.post(
   "/inbox/upload",
   inboxNotesUpload.fields([{ name: "main", maxCount: 1 },{ name: "files", maxCount: 50 },{ name: "file", maxCount: 50 },{ name: "photos", maxCount: 50 },{ name: "attachments", maxCount: 50 }]),
+  requireFotoProjectAccess,
   (req, res) => {
     const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
     const docId = String(req.body?.docId || req.body?.id || "").trim();
@@ -716,21 +771,25 @@ router.post(
 
     const pickedMain = mainFile || derivedMain;
 
-    const main = pickedMain
-      ? {
-          file: pickedMain.filename,
-          name: pickedMain.originalname,
-          publicUrl: mainFile
-            ? makeInboxMainPublicUrl(projectId, docId, pickedMain.filename)
-            : makeInboxPublicUrl(projectId, docId, pickedMain.filename),
-        }
-      : null;
+    const persistInboxFile = (f: any, isMain: boolean) => {
+      if (!f) return null;
+      const filename = `${Date.now()}-${safeName(f.originalname || "file.bin")}`;
+      const dir = isMain ? inboxDocDir(projectId, docId) : inboxDocFilesDir(projectId, docId);
+      ensureDir(dir);
+      fs.writeFileSync(path.join(dir, filename), f.buffer);
+      return {
+        file: filename,
+        name: f.originalname,
+        publicUrl: isMain
+          ? makeInboxMainPublicUrl(projectId, docId, filename)
+          : makeInboxPublicUrl(projectId, docId, filename),
+      };
+    };
 
-    const files = (remainingFiles || []).map((f: any) => ({
-      file: f.filename,
-      name: f.originalname,
-      publicUrl: makeInboxPublicUrl(projectId, docId, f.filename),
-    }));
+    const main = pickedMain ? persistInboxFile(pickedMain, !!mainFile) : null;
+    const files = (remainingFiles || [])
+      .map((f: any) => persistInboxFile(f, false))
+      .filter(Boolean);
 
     const list = readInboxNotes(projectId);
     const idx = list.findIndex((x: any) => String(x?.id) === String(docId));
@@ -768,7 +827,7 @@ router.post(
 );
 
 // LIST INBOX
-router.get("/inbox/list", (req, res) => {
+router.get("/inbox/list", requireFotoProjectAccess, (req, res) => {
   const projectId = String(req.query?.projectId || "").trim();
   if (!projectId) return res.status(400).json({ error: "projectId fehlt" });
   const list = readInboxNotes(projectId).map((it: any) => decorateInboxItem(projectId, it));
@@ -777,7 +836,7 @@ router.get("/inbox/list", (req, res) => {
 
 
 // READ INBOX DOC
-router.get("/inbox/read", (req, res) => {
+router.get("/inbox/read", requireFotoProjectAccess, (req, res) => {
   const projectId = String(req.query?.projectId || "").trim();
   const docId = String(req.query?.docId || req.query?.id || "").trim();
 
@@ -801,7 +860,7 @@ router.get("/inbox/read", (req, res) => {
 
 
 // UPDATE INBOX DOC -> Änderungen aus dem Fachmodul speichern
-router.post("/inbox/update", express.json({ limit: "25mb" }), (req, res) => {
+router.post("/inbox/update", express.json({ limit: "25mb" }), requireFotoProjectAccess, (req, res) => {
   const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
   const docId = String(req.body?.docId || req.body?.id || "").trim();
 
@@ -929,6 +988,18 @@ async function commitInboxDoc(projectId: string, docIdRaw: string, req?: any) {
     pdfFileName: pdfResult.fileName,
   };
 
+  await archiveProjectFileVersion({
+    projectIdOrCode: projectId,
+    filename: pdfName,
+    kind: "PDF",
+    localPath: pdfPath,
+    meta: {
+      source: "fotodokumentation",
+      docId: realDocId,
+      date: safeDate
+    }
+  });
+
   if (finalIdx >= 0) finalList[finalIdx] = officialEntry;
   else finalList.unshift(officialEntry);
   writeNotes(projectId, finalList);
@@ -941,21 +1012,21 @@ async function commitInboxDoc(projectId: string, docIdRaw: string, req?: any) {
 
 // Einheitlicher Workflow-Endpunkt für die Web-Übersicht.
 // Freigegebene Fotos sind zugleich dauerhaft in der Projektakte registriert.
-router.get("/freigegeben/list", (req, res) => {
+router.get("/freigegeben/list", requireFotoProjectAccess, (req, res) => {
   const projectId = String(req.query?.projectId || req.query?.projectCode || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
   const items = readNotes(projectId);
   return res.json({ ok: true, projectId, items, count: items.length });
 });
 
-router.get("/final/list", (req, res) => {
+router.get("/final/list", requireFotoProjectAccess, (req, res) => {
   const projectId = String(req.query?.projectId || req.query?.projectCode || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
   const items = readNotes(projectId);
   return res.json({ ok: true, projectId, items, count: items.length });
 });
 
-router.post("/inbox/approve", express.json(), async (req, res) => {
+router.post("/inbox/approve", express.json(), requireFotoProjectAccess, async (req, res) => {
   try {
     const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
     const docId = String(req.body?.docId || req.body?.id || "").trim();
@@ -972,7 +1043,7 @@ router.post("/inbox/approve", express.json(), async (req, res) => {
 });
 
 // alias
-router.post("/commit", express.json(), async (req, res) => {
+router.post("/commit", express.json(), requireFotoProjectAccess, async (req, res) => {
   try {
     const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
     const docId = String(req.body?.docId || req.body?.id || "").trim();
@@ -989,7 +1060,7 @@ router.post("/commit", express.json(), async (req, res) => {
 });
 
 // RLC PDF CORE - Vorschau / Export
-router.post("/preview", express.json({ limit: "25mb" }), async (req, res) => {
+router.post("/preview", express.json({ limit: "25mb" }), requireFotoProjectAccess, async (req, res) => {
   try {
     const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
     if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
@@ -1016,7 +1087,7 @@ router.post("/preview", express.json({ limit: "25mb" }), async (req, res) => {
   }
 });
 
-router.post("/inbox/reject", express.json(), (req, res) => {
+router.post("/inbox/reject", express.json(), requireFotoProjectAccess, (req, res) => {
   const projectId = String(req.body?.projectId || req.body?.projectCode || "").trim();
   const docId = String(req.body?.docId || req.body?.id || "").trim();
   const reason = String(req.body?.reason || "").trim();

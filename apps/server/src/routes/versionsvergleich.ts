@@ -1,15 +1,24 @@
 import express, { Request, Response } from "express";
 import ExcelJS from "exceljs";
-import PDFDocument from "pdfkit";
 import { prisma } from "../lib/prisma";
+import { archiveProjectBufferVersion } from "../services/dmsArchive";
+import { requireProjectMember } from "../middleware/guards";
 
 const router = express.Router();
+
+const requireVersionsProjectAccess = async (req:any,res:any,next:any) => {
+  return requireProjectMember("projectId")(req,res,(err?:any)=>{
+    if(err) return next(err);
+    req.params.projectId = String(req.resolvedProjectId || req.params.projectId || "").trim();
+    return next();
+  });
+};
 
 /**
  * GET /versionsvergleich/:projectId
  * Restituisce tutte le versioni esistenti per un progetto
  */
-router.get("/:projectId", async (req: Request, res: Response) => {
+router.get("/:projectId", requireVersionsProjectAccess, async (req: Request, res: Response) => {
   try {
     const projectId = req.params.projectId; // STRING
 
@@ -32,7 +41,7 @@ router.get("/:projectId", async (req: Request, res: Response) => {
 /**
  * EXPORT EXCEL
  */
-router.get("/:projectId/excel", async (req: Request, res: Response) => {
+router.get("/:projectId/excel", requireVersionsProjectAccess, async (req: Request, res: Response) => {
   try {
     const projectId = req.params.projectId;
 
@@ -54,17 +63,23 @@ router.get("/:projectId/excel", async (req: Request, res: Response) => {
       ]);
     });
 
+    const fileName = `versionsvergleich_${projectId}.xlsx`;
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+
+    void archiveProjectBufferVersion({
+      projectIdOrCode: projectId,
+      filename: fileName,
+      kind: "DOC",
+      buffer,
+      meta: { module: "KALKULATION", source: "versionsvergleich.excel.export" },
+    }).catch((error) => console.error("[versionsvergleich:xlsx:dms]", error));
+
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="versionsvergleich_${projectId}.xlsx"`
-    );
-
-    await workbook.xlsx.write(res);
-    res.end();
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    return res.send(buffer);
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ ok: false, error: err.message });
@@ -74,39 +89,9 @@ router.get("/:projectId/excel", async (req: Request, res: Response) => {
 /**
  * EXPORT PDF
  */
-router.get("/:projectId/pdf", async (req: Request, res: Response) => {
-  try {
-    const projectId = req.params.projectId;
-
-    const versions = await prisma.offerVersion.findMany({
-      where: { projectId },
-      orderBy: { createdAt: "asc" },
-    });
-
-    const doc = new PDFDocument({ margin: 40 });
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="versionsvergleich_${projectId}.pdf"`
-    );
-
-    doc.pipe(res);
-
-    doc.fontSize(20).text("Versionsvergleich", { underline: true });
-    doc.moveDown();
-
-    versions.forEach((v) => {
-      doc.fontSize(14).text(`Version ID: ${v.id}`);
-      doc.text(`Datum: ${v.createdAt.toISOString()}`);
-      doc.text(`Dateiname: ${v.filename || "—"}`);
-      doc.moveDown();
-    });
-
-    doc.end();
-  } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
+router.get("/:projectId/pdf", requireVersionsProjectAccess, async (req: Request, res: Response) => {
+  const projectId = encodeURIComponent(String(req.params.projectId || ""));
+  return res.redirect(307, `/api/pdf/versionsvergleich/${projectId}`);
 });
 
 export default router;

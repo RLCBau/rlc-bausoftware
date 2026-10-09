@@ -477,51 +477,6 @@ function detectLeistungsart(text: string): { leistungsart: string; bauverfahren:
 
 
   // MAXI_BLOCK_J_RESTMODULE_PARSER_FIX
-  if (t.includes("personaleinsatzplanung") || t.includes("personal einsatzplanung")) return { gewerk: "Maxi Block J", leistungsart: "Personaleinsatzplanung erstellen", bauverfahren: "Personaleinsatzplanung erstellen" };
-  if (t.includes("zeiterfassung prüfen") || t.includes("zeiterfassung pruefen")) return { gewerk: "Maxi Block J", leistungsart: "Zeiterfassung prüfen", bauverfahren: "Zeiterfassung prüfen" };
-  if (t.includes("urlaubsplanung") || t.includes("abwesenheit verwalten")) return { gewerk: "Maxi Block J", leistungsart: "Urlaubsplanung / Abwesenheit verwalten", bauverfahren: "Urlaubsplanung / Abwesenheit verwalten" };
-  if (t.includes("mitarbeiterschulung") || t.includes("schulung dokumentieren")) return { gewerk: "Maxi Block J", leistungsart: "Mitarbeiterschulung dokumentieren", bauverfahren: "Mitarbeiterschulung dokumentieren" };
-  if (t.includes("sicherheitsunterweisung") || t.includes("unterweisung durchführen")) return { gewerk: "Maxi Block J", leistungsart: "Sicherheitsunterweisung durchführen", bauverfahren: "Sicherheitsunterweisung durchführen" };
-  if (t.includes("fuhrpark einsatzplanung") || t.includes("fahrzeug einsatzplanung")) return { gewerk: "Maxi Block J", leistungsart: "Fuhrpark Einsatzplanung erstellen", bauverfahren: "Fuhrpark Einsatzplanung erstellen" };
-  if (t.includes("fahrzeugakte") || t.includes("fahrzeug akte")) return { gewerk: "Maxi Block J", leistungsart: "Fahrzeugakte pflegen", bauverfahren: "Fahrzeugakte pflegen" };
-  if (t.includes("tüv termin") || t.includes("tuev termin") || t.includes("uvv termin")) return { gewerk: "Maxi Block J", leistungsart: "TÜV / UVV Termin überwachen", bauverfahren: "TÜV / UVV Termin überwachen" };
-  if (t.includes("kilometerstand") || t.includes("betriebsstunden erfassen")) return { gewerk: "Maxi Block J", leistungsart: "Kilometerstand / Betriebsstunden erfassen", bauverfahren: "Kilometerstand / Betriebsstunden erfassen" };
-  if (t.includes("kraftstoffverbrauch") || t.includes("dieselverbrauch")) return { gewerk: "Maxi Block J", leistungsart: "Kraftstoffverbrauch erfassen", bauverfahren: "Kraftstoffverbrauch erfassen" };
-  if (t.includes("gerätewartung") || t.includes("geraetewartung") || t.includes("wartung planen")) return { gewerk: "Maxi Block J", leistungsart: "Gerätewartung planen", bauverfahren: "Gerätewartung planen" };
-  if (t.includes("geräteprüfung") || t.includes("geraetepruefung") || t.includes("prüfung gerät")) return { gewerk: "Maxi Block J", leistungsart: "Geräteprüfung dokumentieren", bauverfahren: "Geräteprüfung dokumentieren" };
-  if (t.includes("gerätereparatur") || t.includes("geraetereparatur") || t.includes("reparatur koordinieren")) return { gewerk: "Maxi Block J", leistungsart: "Gerätereparatur koordinieren", bauverfahren: "Gerätereparatur koordinieren" };
-  if (t.includes("gerätedisposition") || t.includes("geraetedisposition") || t.includes("geräte disponieren")) return { gewerk: "Maxi Block J", leistungsart: "Gerätedisposition erstellen", bauverfahren: "Gerätedisposition erstellen" };
-  if (t.includes("gerätemiete") || t.includes("geraetemiete") || t.includes("maschine mieten")) return { gewerk: "Maxi Block J", leistungsart: "Gerätemiete organisieren", bauverfahren: "Gerätemiete organisieren" };
-  if (t.includes("arbeitssicherheit dokumentation") || t.includes("sicherheitsdokumentation")) return { gewerk: "Maxi Block J", leistungsart: "Arbeitssicherheitsdokumentation erstellen", bauverfahren: "Arbeitssicherheitsdokumentation erstellen" };
-  if (t.includes("dpi kontrolle") || t.includes("psa kontrolle") || t.includes("schutzausrüstung")) return { gewerk: "Maxi Block J", leistungsart: "DPI / PSA Kontrolle durchführen", bauverfahren: "DPI / PSA Kontrolle durchführen" };
-  if (t.includes("gefährdungsbeurteilung") || t.includes("gefaehrdungsbeurteilung")) return { gewerk: "Maxi Block J", leistungsart: "Gefährdungsbeurteilung erstellen", bauverfahren: "Gefährdungsbeurteilung erstellen" };
-  if (t.includes("baustellensicherheitskontrolle") || t.includes("sicherheitskontrolle")) return { gewerk: "Maxi Block J", leistungsart: "Baustellensicherheitskontrolle durchführen", bauverfahren: "Baustellensicherheitskontrolle durchführen" };
-  if (t.includes("sicherheitsmangel") || t.includes("mangel sicherheit")) return { gewerk: "Maxi Block J", leistungsart: "Sicherheitsmangel dokumentieren", bauverfahren: "Sicherheitsmangel dokumentieren" };
-  if (t.includes("mangel aufnehmen") || t.includes("mangel dokumentieren")) return { gewerk: "Maxi Block J", leistungsart: "Mangel aufnehmen / dokumentieren", bauverfahren: "Mangel aufnehmen / dokumentieren" };
-  if (t.includes("nacharbeit koordinieren") || t.includes("nacharbeit")) return { gewerk: "Maxi Block J", leistungsart: "Nacharbeit koordinieren", bauverfahren: "Nacharbeit koordinieren" };
-  if (t.includes("abnahme vorbereiten") || t.includes("bauabnahme")) return { gewerk: "Maxi Block J", leistungsart: "Abnahme vorbereiten", bauverfahren: "Abnahme vorbereiten" };
-  if (t.includes("qualitätsprüfung") || t.includes("qualitaetspruefung")) return { gewerk: "Maxi Block J", leistungsart: "Qualitätsprüfung durchführen", bauverfahren: "Qualitätsprüfung durchführen" };
-  if (t.includes("qualitätscheckliste") || t.includes("qualitaetscheckliste")) return { gewerk: "Maxi Block J", leistungsart: "Qualitätscheckliste bearbeiten", bauverfahren: "Qualitätscheckliste bearbeiten" };
-  if (t.includes("bauzeitenplan") || t.includes("terminplan bau")) return { gewerk: "Maxi Block J", leistungsart: "Bauzeitenplan erstellen", bauverfahren: "Bauzeitenplan erstellen" };
-  if (t.includes("gantt") || t.includes("gantt plan")) return { gewerk: "Maxi Block J", leistungsart: "Gantt-Plan aktualisieren", bauverfahren: "Gantt-Plan aktualisieren" };
-  if (t.includes("projektstatusbericht") || t.includes("statusbericht")) return { gewerk: "Maxi Block J", leistungsart: "Projektstatusbericht erstellen", bauverfahren: "Projektstatusbericht erstellen" };
-  if (t.includes("baubesprechungsprotokoll") || t.includes("besprechungsprotokoll")) return { gewerk: "Maxi Block J", leistungsart: "Baubesprechungsprotokoll erstellen", bauverfahren: "Baubesprechungsprotokoll erstellen" };
-  if (t.includes("projektkoordination") || t.includes("koordination projekt")) return { gewerk: "Maxi Block J", leistungsart: "Projektkoordination durchführen", bauverfahren: "Projektkoordination durchführen" };
-  if (t.includes("dokument ablegen") || t.includes("dokument archivieren")) return { gewerk: "Maxi Block J", leistungsart: "Dokument ablegen / archivieren", bauverfahren: "Dokument ablegen / archivieren" };
-  if (t.includes("dokumentenfreigabe") || t.includes("freigabe dokument")) return { gewerk: "Maxi Block J", leistungsart: "Dokumentenfreigabe bearbeiten", bauverfahren: "Dokumentenfreigabe bearbeiten" };
-  if (t.includes("schriftverkehr zuordnen") || t.includes("email zuordnen") || t.includes("e-mail zuordnen")) return { gewerk: "Maxi Block J", leistungsart: "E-Mail / Schriftverkehr zuordnen", bauverfahren: "E-Mail / Schriftverkehr zuordnen" };
-  if (t.includes("datev export") || t.includes("excel export") || t.includes("pdf export")) return { gewerk: "Maxi Block J", leistungsart: "Export PDF / Excel / DATEV vorbereiten", bauverfahren: "Export PDF / Excel / DATEV vorbereiten" };
-  if (t.includes("projektarchiv") || t.includes("archiv pflegen")) return { gewerk: "Maxi Block J", leistungsart: "Projektarchiv pflegen", bauverfahren: "Projektarchiv pflegen" };
-  if (t.includes("kundendaten") || t.includes("kunde pflegen")) return { gewerk: "Maxi Block J", leistungsart: "Kundendaten pflegen", bauverfahren: "Kundendaten pflegen" };
-  if (t.includes("angebotsnachverfolgung") || t.includes("angebot nachverfolgen")) return { gewerk: "Maxi Block J", leistungsart: "Angebotsnachverfolgung durchführen", bauverfahren: "Angebotsnachverfolgung durchführen" };
-  if (t.includes("sales pipeline") || t.includes("vertrieb pipeline")) return { gewerk: "Maxi Block J", leistungsart: "Sales Pipeline aktualisieren", bauverfahren: "Sales Pipeline aktualisieren" };
-  if (t.includes("kundenkontakt") || t.includes("kontakt dokumentieren")) return { gewerk: "Maxi Block J", leistungsart: "Kundenkontakt dokumentieren", bauverfahren: "Kundenkontakt dokumentieren" };
-  if (t.includes("akquise") || t.includes("lead bearbeiten")) return { gewerk: "Maxi Block J", leistungsart: "Akquise / Lead bearbeiten", bauverfahren: "Akquise / Lead bearbeiten" };
-  if (t.includes("bim modellprüfung") || t.includes("bim modellpruefung")) return { gewerk: "Maxi Block J", leistungsart: "BIM-Modellprüfung durchführen", bauverfahren: "BIM-Modellprüfung durchführen" };
-  if (t.includes("5d bim") || t.includes("kostenmodell bim")) return { gewerk: "Maxi Block J", leistungsart: "5D-BIM Kostenmodell bearbeiten", bauverfahren: "5D-BIM Kostenmodell bearbeiten" };
-  if (t.includes("4d bim") || t.includes("terminmodell bim")) return { gewerk: "Maxi Block J", leistungsart: "4D-BIM Terminmodell bearbeiten", bauverfahren: "4D-BIM Terminmodell bearbeiten" };
-  if (t.includes("ki datenprüfung") || t.includes("ki datenpruefung")) return { gewerk: "Maxi Block J", leistungsart: "KI-Datenprüfung durchführen", bauverfahren: "KI-Datenprüfung durchführen" };
-  if (t.includes("supportanfrage") || t.includes("support anfrage")) return { gewerk: "Maxi Block J", leistungsart: "Supportanfrage bearbeiten", bauverfahren: "Supportanfrage bearbeiten" };
 
 
   // BLOCK_I_MATERIAL_EINKAUF_PARSER_FIX
@@ -602,7 +557,7 @@ function detectLeistungsart(text: string): { leistungsart: string; bauverfahren:
   if (t.includes("dwg erstellen") || t.includes("cad plan erstellen")) return { gewerk: "CAD", leistungsart: "DWG-Plan erstellen", bauverfahren: "DWG-Plan erstellen" };
   if (t.includes("dwg bearbeiten") || t.includes("cad bearbeiten")) return { gewerk: "CAD", leistungsart: "DWG-Plan bearbeiten", bauverfahren: "DWG-Plan bearbeiten" };
   if (t.includes("pdf plan digitalisieren") || t.includes("plan digitalisieren")) return { gewerk: "CAD", leistungsart: "PDF-Plan digitalisieren", bauverfahren: "PDF-Plan digitalisieren" };
-  if (t.includes("as-built plan") || t.includes("bestandsplan erstellen")) return { gewerk: "CAD / As-Built", leistungsart: "As-Built Plan", bauverfahren: "As-Built Plan erstellen" };
+  if (t.includes("as-built plan") || (t.includes("bestandsplan erstellen") || t.includes("bestandspläne erstellen") || t.includes("bestandsplaene erstellen"))) return { gewerk: "CAD / As-Built", leistungsart: "As-Built Plan", bauverfahren: "As-Built Plan erstellen" };
 
   if (t.includes("dgm erstellen") || t.includes("3d geländemodell") || t.includes("3d gelaendemodell")) return { gewerk: "3D", leistungsart: "DGM / 3D-Geländemodell", bauverfahren: "DGM / 3D-Geländemodell erstellen" };
   if (t.includes("landxml") || t.includes("land xml")) return { gewerk: "Export", leistungsart: "LandXML Export", bauverfahren: "LandXML Export erstellen" };
@@ -634,6 +589,15 @@ function detectLeistungsart(text: string): { leistungsart: string; bauverfahren:
   if (t.includes("mehrmengen") || t.includes("mindermengen") || t.includes("mengenänderung")) return { gewerk: "Nachtrag", leistungsart: "Mehrmengen / Mindermengen bewerten", bauverfahren: "Mehrmengen / Mindermengen bewerten" };
 
   if (t.includes("as-built") || t.includes("as built") || t.includes("bestandsdokumentation")) return { gewerk: "Dokumentation", leistungsart: "As-Built Dokumentation", bauverfahren: "As-Built Dokumentation abrechnungsreif erstellen" };
+  if (
+    t.includes("baustellendokumentation") &&
+    (t.includes("foto") || t.includes("digitalkamera"))
+  ) return {
+    gewerk: "Dokumentation",
+    leistungsart: "Fotodokumentation",
+    bauverfahren: "Fotodokumentation für Abrechnung erstellen"
+  };
+
   if (t.includes("fotodokumentation") || t.includes("fotodoku")) return { gewerk: "Dokumentation", leistungsart: "Fotodokumentation", bauverfahren: "Fotodokumentation für Abrechnung erstellen" };
   if (t.includes("prüfprotokoll") || t.includes("pruefprotokoll")) return { gewerk: "Dokumentation", leistungsart: "Prüfprotokoll erstellen", bauverfahren: "Prüfprotokoll erstellen" };
 
@@ -698,8 +662,9 @@ function detectLeistungsart(text: string): { leistungsart: string; bauverfahren:
     return { gewerk: "Nebenleistungen", leistungsart: "Tagesbaustelle einrichten", bauverfahren: "Tagesbaustelle einrichten" };
   }
 
-  if (t.includes("baustelleneinrichtung") || t.includes("baustelle einrichten") || t.includes("be einrichten")) return { gewerk: "Baustelleneinrichtung", leistungsart: "Baustelleneinrichtung", bauverfahren: "Baustelleneinrichtung pauschal" };
+  // Spezifische Räumung muss vor allgemeiner Baustelleneinrichtung geprüft werden.
   if (t.includes("baustelle räumen") || t.includes("baustelle raeumen") || t.includes("baustellenräumung")) return { gewerk: "Baustelleneinrichtung", leistungsart: "Baustelle räumen", bauverfahren: "Baustelle räumen" };
+  if (t.includes("baustelleneinrichtung") || t.includes("baustelle einrichten") || t.includes("be einrichten")) return { gewerk: "Baustelleneinrichtung", leistungsart: "Baustelleneinrichtung", bauverfahren: "Baustelleneinrichtung pauschal" };
   if (t.includes("baustellencontainer") || t.includes("container stellen")) return { gewerk: "Baustelleneinrichtung", leistungsart: "Baustellencontainer stellen", bauverfahren: "Baustellencontainer stellen" };
   if (t.includes("baustrom")) return { gewerk: "Baustelleneinrichtung", leistungsart: "Baustrom herstellen", bauverfahren: "Baustrom herstellen / vorhalten" };
   if (t.includes("bauwasser")) return { gewerk: "Baustelleneinrichtung", leistungsart: "Bauwasser herstellen", bauverfahren: "Bauwasser herstellen / vorhalten" };
@@ -889,7 +854,7 @@ function detectLeistungsart(text: string): { leistungsart: string; bauverfahren:
   if (t.includes("mehrsparten") || t.includes("hauseinführung") || t.includes("hauseinfuehrung")) return { gewerk: "Tiefbau / Hauseinführung", leistungsart: "Hauseinführung herstellen", bauverfahren: "Mehrsparten-Hauseinführung herstellen" };
 
   if (t.includes("trasse abstecken") || t.includes("absteckung")) return { gewerk: "Vermessung", leistungsart: "Trasse abstecken", bauverfahren: "Trasse abstecken" };
-  if (t.includes("bestandsplan") || t.includes("as-built") || t.includes("as built")) return { gewerk: "Dokumentation", leistungsart: "Bestandsdokumentation erstellen", bauverfahren: "Bestandsplan / As-Built Dokumentation erstellen" };
+  if (t.includes("bestandsplan") || t.includes("bestandspläne") || t.includes("bestandsplaene") || t.includes("as-built") || t.includes("as built")) return { gewerk: "Dokumentation", leistungsart: "Bestandsdokumentation erstellen", bauverfahren: "Bestandsplan / As-Built Dokumentation erstellen" };
   if (t.includes("leitungsortung") || t.includes("leitung orten") || t.includes("ortung")) return { gewerk: "Vermessung", leistungsart: "Leitungsortung durchführen", bauverfahren: "Leitungsortung durchführen" };
 
 

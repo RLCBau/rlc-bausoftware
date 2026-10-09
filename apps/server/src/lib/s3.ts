@@ -20,3 +20,8 @@ export function presignPut(key: string, contentType = "application/octet-stream"
 export function presignGet(key: string) {
   return storage.presignGet(key, 900);
 }
+
+/** Generic DMS downloads must never be rendered inline by the browser. */
+export function presignDownload(key: string) {
+  return storage.presignGet(key, 900, 'attachment; filename="download"');
+}

@@ -7,7 +7,7 @@ export function requireEmailVerified(
   res: Response,
   next: NextFunction
 ) {
-  const devOn = (process.env.DEV_AUTH || "").toLowerCase() === "on";
+  const devOn = process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on";
   if (devOn) return next();
 
   const verified =

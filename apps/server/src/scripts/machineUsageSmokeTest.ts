@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import express from "express";
+import http from "node:http";
+import {usageAmount,usageInput,moneyText} from "../domain/machineUsage";
+assert.equal(usageAmount("7,50","123.45"),"925.88");assert.equal(moneyText(-5n),"-0.05");
+for(const hours of ["0","-1","25","NaN","1e2","1.001",true])assert.throws(()=>usageInput({machineId:"m",date:"2026-10-01",hours,hourlyRate:"10",activity:"Use"}));
+const url=new URL(process.env.DATABASE_URL!);url.pathname=process.env.RLC_TEST_DATABASE||"/rlc_usage_validation_20261009";process.env.DATABASE_URL=url.toString();process.env.DEV_AUTH="off";process.env.COMPANIES_ROOT="/tmp/rlc-usage-test-companies";
+const {prisma}=require("../lib/prisma"),addons=require("../routes/officeAddons").default,costs=require("../routes/resources.costs").default;
+async function main(){
+ await prisma.company.createMany({data:[{id:"usage-company-a",name:"Usage A",code:"USAGE-A"},{id:"usage-company-b",name:"Usage B",code:"USAGE-B"}]});
+ await prisma.user.create({data:{id:"usage-user",email:"test@usage.invalid",password:"test",companyId:"usage-company-a"}});
+ await prisma.project.createMany({data:[{id:"usage-project-a",code:"USAGE-A",name:"A",companyId:"usage-company-a"},{id:"usage-project-hidden",code:"USAGE-HIDDEN",name:"Hidden",companyId:"usage-company-a"},{id:"usage-project-b",code:"USAGE-B",name:"B",companyId:"usage-company-b"}]});
+ await prisma.projectMember.create({data:{projectId:"usage-project-a",userId:"usage-user",role:"BAULEITER"}});
+ await prisma.companyMachine.createMany({data:[{id:"usage-machine-a",companyId:"usage-company-a",projectId:"usage-project-a",name:"Machine A",hours:9999,hourlyRate:"100"},{id:"usage-machine-hidden",companyId:"usage-company-a",projectId:"usage-project-hidden",name:"Hidden",hours:123,hourlyRate:"20"},{id:"usage-machine-b",companyId:"usage-company-b",projectId:"usage-project-b",name:"Foreign B",hours:300,hourlyRate:"20"}]});
+ await prisma.resourceAssignment.create({data:{companyId:"usage-company-a",projectId:"usage-project-hidden",resourceId:"usage-machine-a",resourceType:"MACHINE",date:new Date("2026-10-02T12:00:00Z"),hours:8}});
+ await prisma.projectCostCenter.createMany({data:[{companyId:"usage-company-a",projectId:"usage-project-a",code:"CC-A",description:"A",mainArea:"Machine"},{companyId:"usage-company-a",projectId:"usage-project-hidden",code:"CC-H",description:"Hidden",mainArea:"Machine"}]});
+ await prisma.companyMachineMaintenance.create({data:{companyId:"usage-company-a",machineId:"usage-machine-a",date:new Date("2026-10-03T12:00:00Z"),costNet:"50",type:"Service"}});
+ const app=express();app.use(express.json());app.use((req:any,_res,next)=>{req.auth={sub:"usage-user",companyId:req.headers["x-company"]||"usage-company-a",companyRole:req.headers["x-role"]||"BAULEITER"};next();});app.use("/addons",addons);app.use("/costs",costs);app.use((e:any,_req:any,res:any,_next:any)=>res.status(500).json({error:e.message}));
+ const server=http.createServer(app);await new Promise<void>(r=>server.listen(0,"127.0.0.1",r));const port=(server.address() as any).port;
+ async function call(path:string,method="GET",body?:any,headers:any={}){
+  const response=await fetch("http://127.0.0.1:"+port+path,{method,headers:{"Content-Type":"application/json",...headers},...(body!==undefined?{body:JSON.stringify(body)}:{})});
+  return {status:response.status,data:await response.json() as any};
+ }
+ const base="/addons/machine-usage",admin={"x-role":"ADMIN"},payload={projectId:"usage-project-a",machineId:"usage-machine-a",date:"2026-10-01",hours:"8",hourlyRate:"100",activity:"Excavation",costCenter:"CC-A",notes:"",documentId:""};
+ const period="/costs/machine-costs?from=2026-10-01&to=2026-10-31&projectId=usage-project-a";
+ try{
+  assert.equal((await call(base,"POST",{...payload,machineId:"usage-machine-b"})).status,400);
+  assert.equal((await call(base,"POST",{...payload,costCenter:"CC-H"})).status,400);
+  assert.equal((await call(base,"POST",{...payload,documentId:"foreign"})).status,400);
+  assert.equal((await call(base,"POST",payload,{"x-role":"MITARBEITER"})).status,403);
+  assert.equal((await call(base,"POST",{...payload,status:"Gebucht"})).status,400);
+  const initial=await call(period);assert.equal(initial.status,200,JSON.stringify(initial.data));assert.equal(initial.data.totals.usageCost,0);assert.equal(initial.data.items[0].counterHours,9999);
+  const key="00112233-4455-4677-8899-aabbccddeeff";
+  const creation=await Promise.all([call(base,"POST",{...payload,requestId:key}),call(base,"POST",{...payload,requestId:key})]);
+  assert.deepEqual(creation.map(r=>r.status),[201,201]);let row=creation[0].data.item;assert.equal(row.amount,"800");assert.equal(creation[1].data.item.id,row.id);
+  assert.equal(await prisma.auditLog.count({where:{resource:"machine-usage:"+row.id}}),1);
+  assert.equal((await call(base,"POST",{...payload,requestId:key,hours:"7"})).status,409);
+  assert.equal((await call(base+"/"+row.id+"/book","POST",{revision:row.revision})).status,403);
+  assert.equal((await call(period)).data.totals.usageCost,0);
+  const booked=await call(base+"/"+row.id+"/book","POST",{revision:row.revision},admin);assert.equal(booked.status,200,JSON.stringify(booked.data));row=booked.data.item;
+  await prisma.companyMachine.update({where:{id:"usage-machine-a"},data:{hourlyRate:"200"}});
+  const report=await call(period);assert.equal(report.data.totals.usageCost,800);assert.equal(report.data.items[0].operatingHours,8);assert.equal(report.data.items[0].hourlyRate,200);assert.equal(report.data.totals.maintenanceCost,0);assert.equal(report.data.maintenanceIncluded,false);
+  const summary=await call("/costs/summary?projectId=USAGE-A");assert.equal(summary.status,200);assert.equal(summary.data.machineCost,800);assert.equal(summary.data.byCostCenter["CC-A"],800);assert.equal(summary.data.machineItems[0].date,"2026-10-01");
+  assert.equal((await call("/costs/machine-costs?from=2026-09-01&to=2026-09-30&projectId=usage-project-a")).data.totals.usageCost,0);
+  assert.equal((await call("/costs/machine-costs?from=2026-02-30&to=2026-10-31")).status,400);
+  assert.equal((await call("/costs/machine-costs?projectId=usage-project-hidden")).status,403);
+  assert.equal((await call("/costs/machine-costs?projectId=usage-project-b", "GET",undefined,admin)).status,403);
+  const own=await call("/costs/machine-costs?from=2026-10-01&to=2026-10-31");assert.equal(own.data.items.some((x:any)=>x.machineId==="usage-machine-hidden"),false);
+  const company=await call("/costs/machine-costs?from=2026-10-01&to=2026-10-31","GET",undefined,admin);assert.equal(company.data.totals.maintenanceCost,50);assert.equal(company.data.maintenanceIncluded,true);
+  assert.equal((await call(base+"/"+row.id,"PUT",{...payload,hours:"9",revision:row.revision})).status,400);
+  assert.equal((await call(base+"/"+row.id+"/history","GET",undefined,{"x-company":"usage-company-b"})).status,404);
+  assert.equal((await call(base+"/"+row.id+"/cancel","POST",{revision:row.revision,reason:"Correction"})).status,403);
+  assert.equal((await call(base+"/"+row.id+"/cancel","POST",{revision:row.revision},admin)).status,400);
+  const cancelled=await call(base+"/"+row.id+"/cancel","POST",{revision:row.revision,reason:"Correction"},admin);assert.equal(cancelled.status,200);assert.equal(cancelled.data.item.amount,"800");assert.equal((await call(period)).data.totals.usageCost,0);
+  const future=await call(base,"POST",{...payload,date:"2099-10-01"});assert.equal(future.status,201);assert.equal((await call(base+"/"+future.data.item.id+"/book","POST",{revision:1},admin)).status,400);
+  const a=await call(base,"POST",{...payload,date:"2026-10-02",hours:"16"});
+  const h=await call(base,"POST",{...payload,projectId:"usage-project-hidden",costCenter:"CC-H",date:"2026-10-02",hours:"16"},admin);
+  assert.equal(a.status,201);assert.equal(h.status,201);
+  const race=await Promise.all([call(base+"/"+a.data.item.id+"/book","POST",{revision:1},admin),call(base+"/"+h.data.item.id+"/book","POST",{revision:1},admin)]);
+  assert.deepEqual(race.map(x=>x.status).sort(),[200,400]);
+  const sums=await prisma.machineUsageEntry.aggregate({where:{companyId:"usage-company-a",machineId:"usage-machine-a",date:new Date("2026-10-02T00:00:00Z"),status:"Gebucht"},_sum:{hours:true}});assert.equal(String(sums._sum.hours),"16");
+  const single=await call(base,"POST",{...payload,date:"2026-10-03",hours:"8"});
+  const double=await Promise.all([call(base+"/"+single.data.item.id+"/book","POST",{revision:1},admin),call(base+"/"+single.data.item.id+"/book","POST",{revision:1},admin)]);
+  assert.deepEqual(double.map(x=>x.status).sort(),[200,409]);
+  const edit=await call(base,"POST",{...payload,date:"2026-10-04",hours:"1"});
+  const edits=await Promise.all([call(base+"/"+edit.data.item.id,"PUT",{...payload,date:"2026-10-04",hours:"2",revision:1}),call(base+"/"+edit.data.item.id,"PUT",{...payload,date:"2026-10-04",hours:"3",revision:1})]);
+  assert.deepEqual(edits.map(x=>x.status).sort(),[200,409]);
+  assert.equal((await call(base+"/"+row.id+"/history")).data.items.length,3);
+  const history=await prisma.machineUsageEntry.findUnique({where:{id:row.id}});assert.equal(history.status,"Storniert");assert.equal(String(history.hourlyRate),"100");
+  console.log("PASS POSTGRESQL MACHINE USAGE: exact amounts/rounding, tenant/project/role/link scopes, draft exclusion, idempotent creation, frozen rates, dated costs and cost centers, scoped maintenance, reasoned cancellation/audit, future-booking rejection, simultaneous edits/bookings and 24h cap across projects.");
+ }finally{await new Promise<void>(r=>server.close(()=>r()));await prisma.$disconnect();}
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});

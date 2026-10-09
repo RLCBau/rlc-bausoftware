@@ -3,14 +3,121 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import multer from "multer";
+import { rateLimit, ipKeyGenerator } from "express-rate-limit";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { requireProjectMember } from "../middleware/guards";
+import { requirePermission } from "../middleware/rbac";
 import { createLieferscheinPdf } from "../services/pdf/lieferscheinPdf";
 import { loadRlcPdfCompanyFromRequest } from "../services/pdf/pdfCompanyContext";
+import { archiveProjectFileVersion } from "../services/dmsArchive";
 
 const router = express.Router();
+
+router.use((req:any,res,next)=>{
+  if(req.method==="GET" || req.method==="HEAD") return next();
+  return requirePermission("reports:write")(req,res,next);
+});
+
+function requireLsApprovalRole(req:any,res:any,next:any){
+  const role=String(req?.auth?.companyRole||req?.auth?.role||"").trim().toUpperCase();
+  if(!["ADMIN","ADMINISTRATOR","BAULEITER"].includes(role)){
+    return res.status(403).json({ok:false,error:"LIEFERSCHEIN_APPROVAL_FORBIDDEN"});
+  }
+  return next();
+}
+
+const LS_MULTIPART_PATHS = new Set(["/inbox/upload", "/freigegeben/upload", "/upload"]);
+
+function cleanupLsStaging(req: any) {
+  const files: any[] = [];
+  if (req?.file) files.push(req.file);
+  if (Array.isArray(req?.files)) files.push(...req.files);
+  else if (req?.files && typeof req.files === "object") {
+    for (const group of Object.values(req.files)) {
+      if (Array.isArray(group)) files.push(...group);
+    }
+  }
+  for (const file of files) {
+    const candidate = String(file?.path || "").trim();
+    if (!candidate) continue;
+    try {
+      if (fs.existsSync(candidate)) fs.unlinkSync(candidate);
+    } catch {}
+  }
+}
+
+const lsMultipartUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req?.auth?.sub || ipKeyGenerator(req.ip || "127.0.0.1")),
+});
+
+const preAuthorizeLsMultipart = async (req: any, res: any, next: any) => {
+  const token = String(req.query?.projectId || req.query?.projectCode || "").trim();
+  if (!token) {
+    return res.status(400).json({ ok:false, error:"projectId query parameter required before upload" });
+  }
+  req.params = req.params || {};
+  req.params.__projectAccess = token;
+  return requireProjectMember("__projectAccess")(req, res, next);
+};
+
+const requireLsProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(
+    req.body?.projectId ||
+    req.body?.projectCode ||
+    req.query?.projectId ||
+    req.query?.projectCode ||
+    req.query?.project ||
+    ""
+  ).trim();
+  if (!token) {
+    cleanupLsStaging(req);
+    return res.status(400).json({ ok:false, error:"projectId required" });
+  }
+
+  req.params = req.params || {};
+  req.params.__projectAccess = token;
+
+  let authorized = false;
+  const cleanupOnReject = () => {
+    if (!authorized) cleanupLsStaging(req);
+  };
+  res.once("finish", cleanupOnReject);
+
+  return requireProjectMember("__projectAccess")(req, res, (err?: any) => {
+    if (err) return next(err);
+    authorized = true;
+    res.off("finish", cleanupOnReject);
+
+    const resolvedId = String(req.resolvedProjectId || token);
+    const resolvedCode = String(req.resolvedProjectCode || "").trim();
+
+    if (req.body && typeof req.body === "object") {
+      req.body.projectId = resolvedId;
+      if (resolvedCode) req.body.projectCode = resolvedCode;
+    }
+    try {
+      if (req.query && typeof req.query === "object") {
+        req.query.projectId = resolvedId;
+        if (resolvedCode) req.query.projectCode = resolvedCode;
+      }
+    } catch {}
+
+    return next();
+  });
+};
+
+router.use((req: any, res: any, next: any) => {
+  if (req.is("multipart/form-data") && LS_MULTIPART_PATHS.has(req.path)) return next();
+  return requireLsProjectAccess(req, res, next);
+});
 console.log("[ls] router loaded");
 
 /* =========================================================
@@ -72,13 +179,21 @@ function safeFsKey(input: string) {
 }
 
 async function resolveProjectDbId(input: string): Promise<string | null> {
-  if (!input) return null;
+  const trimmed = String(input || "").trim();
+  if (!trimmed) return null;
   try {
-    const proj = await prisma.project.findFirst({
-      where: { OR: [{ id: input }, { code: input }] },
+    const byId = await prisma.project.findUnique({
+      where: { id: trimmed },
       select: { id: true },
     });
-    return proj?.id ?? null;
+    if (byId) return byId.id;
+
+    const matches = await prisma.project.findMany({
+      where: { code: trimmed },
+      select: { id: true },
+      take: 2,
+    });
+    return matches.length === 1 ? matches[0].id : null;
   } catch {
     return null;
   }
@@ -94,47 +209,57 @@ async function resolveProjectFsKey(input: string): Promise<string> {
   const trimmed = String(input || "").trim();
   if (!trimmed) return "UNKNOWN";
 
-  // 1) se è già fsKey BA-..., ok
-  if (/^BA-\d{4}[-_]/i.test(trimmed)) return safeFsKey(trimmed);
-
-  // 2) prova DB (id o code)
   try {
-    const proj = await prisma.project.findFirst({
-      where: { OR: [{ id: trimmed }, { code: trimmed }] },
-      select: { code: true },
+    let project = await prisma.project.findUnique({
+      where: { id: trimmed },
+      select: { id: true, code: true },
     });
-    const code = String((proj as any)?.code || "").trim();
-    if (code) return safeFsKey(code);
-  } catch {
-    // ignore -> fallback FS sotto
-  }
 
-  // 3) fallback filesystem: scan project.json per match su id
-  try {
-    if (fs.existsSync(PROJECTS_ROOT)) {
-      const entries = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true });
-      for (const e of entries) {
-        if (!e.isDirectory()) continue;
-        const fsKeyCandidate = e.name;
-        if (!/^BA-\d{4}[-_]/i.test(fsKeyCandidate)) continue; // riduce scan inutile
+    if (!project) {
+      const matches = await prisma.project.findMany({
+        where: { code: trimmed },
+        select: { id: true, code: true },
+        take: 2,
+      });
+      if (matches.length !== 1) {
+        console.warn("[ls] project code is missing or not globally unique", {
+          input: trimmed,
+          matches: matches.length,
+        });
+        return "UNKNOWN";
+      }
+      project = matches[0];
+    }
 
-        const pj = path.join(PROJECTS_ROOT, fsKeyCandidate, "project.json");
-        if (!fs.existsSync(pj)) continue;
+    const canonicalKey = safeFsKey(project.id);
+    const legacyCode = String(project.code || "").trim();
+    const legacyKey = legacyCode ? safeFsKey(legacyCode) : "";
 
-        const data = readJson<any>(pj, null);
-        const id = String(data?.id || "").trim();
-        if (id && id === trimmed) return safeFsKey(fsKeyCandidate);
-
-        // (opzionale) se qualcuno salva projectCode dentro project.json
-        const code = String(data?.code || "").trim();
-        if (code && code === trimmed) return safeFsKey(fsKeyCandidate);
+    if (legacyKey && legacyKey !== canonicalKey) {
+      const duplicates = await prisma.project.count({ where: { code: legacyCode } });
+      if (duplicates === 1) {
+        const legacyRoot = path.join(PROJECTS_ROOT, legacyKey);
+        const canonicalRoot = path.join(PROJECTS_ROOT, canonicalKey);
+        for (const parts of [
+          ["eingangspruefung", "ls"],
+          ["ls"],
+          ["lieferscheine"],
+        ]) {
+          const src = path.join(legacyRoot, ...parts);
+          const dst = path.join(canonicalRoot, ...parts);
+          if (fs.existsSync(src) && !fs.existsSync(dst)) {
+            fs.mkdirSync(path.dirname(dst), { recursive: true });
+            fs.cpSync(src, dst, { recursive: true });
+          }
+        }
       }
     }
-  } catch {
-    // ignore
-  }
 
-  return "UNKNOWN";
+    return canonicalKey;
+  } catch (error) {
+    console.error("[ls] resolveProjectFsKey failed", error);
+    return "UNKNOWN";
+  }
 }
 
 async function resolveProjectIds(inputProjectIdOrCode: string) {
@@ -315,7 +440,12 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: {
+    fileSize: 30 * 1024 * 1024,
+    files: 20,
+    fields: 30,
+    parts: 50,
+  },
 });
 
 /* =========================================================
@@ -456,7 +586,7 @@ router.post("/", async (req, res) => {
  * Salva in: data/projects/<fsKey>/eingangspruefung/ls/<docId>/files/<filename>
  * e mantiene/aggiorna: data/projects/<fsKey>/eingangspruefung/ls/<docId>.json
  */
-router.post("/inbox/upload", upload.array("files", 20), async (req, res) => {
+router.post("/inbox/upload", lsMultipartUploadLimiter, preAuthorizeLsMultipart, upload.array("files", 20), requireLsProjectAccess, async (req, res) => {
   try {
     const projectId = String((req.body as any)?.projectId || "").trim();
     if (!projectId) return res.status(400).json({ ok: false, error: "projectId required" });
@@ -617,7 +747,7 @@ router.get("/inbox/read", async (req, res) => {
 /**
  * POST /api/ls/inbox/reject
  */
-router.post("/inbox/reject", async (req, res) => {
+router.post("/inbox/reject", requireLsApprovalRole, async (req, res) => {
   try {
     const schema = z.object({
       projectId: z.string().min(1),
@@ -655,7 +785,7 @@ router.post("/inbox/reject", async (req, res) => {
  * -> sposta files (se presenti) da eingangspruefung/ls/<docId>/files -> lieferscheine/files
  *    e riscrive gli URL degli allegati verso /lieferscheine/files
  */
-router.post("/inbox/approve", async (req, res) => {
+router.post("/inbox/approve", requireLsApprovalRole, async (req, res) => {
   try {
     const schema = z.object({
       projectId: z.string().min(1),
@@ -747,7 +877,7 @@ router.post("/inbox/approve", async (req, res) => {
 
       workflowStatus: "FREIGEGEBEN",
       approvedAt: now,
-      approvedBy: String(body.approvedBy || "").trim() || null,
+      approvedBy: String((req as any)?.auth?.email || (req as any)?.auth?.sub || "").trim() || null,
       rejectionReason: null,
       savedAt: new Date().toISOString(),
 
@@ -787,6 +917,38 @@ router.post("/inbox/approve", async (req, res) => {
 
     writeJson(jsonPath, official);
     writeJson(dst, official);
+
+    await archiveProjectFileVersion({
+      projectIdOrCode: body.projectId,
+      filename: jsonName,
+      kind: "DOC",
+      localPath: jsonPath,
+      uploadedBy: official.approvedBy,
+      meta: {
+        source: "lieferschein",
+        reportId,
+        date,
+        evidenceLocked: true,
+        evidenceHash,
+        sourceDocId: body.docId
+      }
+    });
+
+    await archiveProjectFileVersion({
+      projectIdOrCode: body.projectId,
+      filename: pdfName,
+      kind: "PDF",
+      localPath: pdfPath,
+      uploadedBy: official.approvedBy,
+      meta: {
+        source: "lieferschein",
+        reportId,
+        date,
+        evidenceLocked: true,
+        evidenceHash,
+        sourceDocId: body.docId
+      }
+    });
 
     try {
       fs.unlinkSync(src);
@@ -889,7 +1051,7 @@ router.get("/read", async (req, res) => {
  * - aggiorna il doc in /ls/<docId>.json
  * - eventuali nuovi file vanno in /lieferscheine/files (stabile)
  * =======================================================*/
-router.post("/freigegeben/upload", upload.array("files", 20), async (req, res) => {
+router.post("/freigegeben/upload", requireLsApprovalRole, lsMultipartUploadLimiter, preAuthorizeLsMultipart, upload.array("files", 20), requireLsProjectAccess, async (req, res) => {
   try {
     const projectId = String((req.body as any)?.projectId || "").trim();
     const docId = String((req.body as any)?.docId || "").trim();
@@ -1092,7 +1254,68 @@ router.get("/list", async (req, res) => {
  * - salva in /lieferscheine/Lieferschein_YYYY-MM-DD_XXX.json
  * - elimina /ls/<docId>.json (sparisce da Freigegeben)
  * =======================================================*/
-router.post("/freigegeben/commit", async (req, res) => {
+
+/* =========================================================
+ * BUCHHALTUNG: flache Liste der finalen Lieferscheine
+ * Quelle: Mobile/Cloud /api/ls, nie localStorage.
+ * =======================================================*/
+router.get("/accounting-list", async (req, res) => {
+  try {
+    const projectId = String((req.query as any)?.projectId || "").trim();
+    if (!projectId) return res.json({ ok: true, items: [] });
+
+    const { fsKey, dir } = await ensureHistoryDirs(projectId);
+    const items = fs.readdirSync(dir)
+      .filter((filename) => /^Lieferschein_.*\.json$/i.test(filename))
+      .map((filename) => {
+        const full = path.join(dir, filename);
+        let source: any = {};
+        try { source = JSON.parse(fs.readFileSync(full, "utf8")); } catch {}
+
+        const rows = Array.isArray(source?.rows) && source.rows.length
+          ? source.rows
+          : Array.isArray(source?.items?.lieferscheine)
+            ? source.items.lieferscheine
+            : [];
+        const first = rows[0] || source || {};
+        const stat = fs.statSync(full);
+
+        return {
+          key: `${fsKey}:${filename}`,
+          filename,
+          projectId: source?.projectId || projectId,
+          projectCode: source?.projectCode || fsKey,
+          sourceDocId: source?.sourceDocId || source?.docId || null,
+          reportId: source?.reportId || "",
+          number: String(source?.lieferscheinNummer || first?.lieferscheinNummer || source?.number || "").trim(),
+          date: safeDate(source?.date || first?.date || ""),
+          supplier: String(source?.supplier || source?.lieferant || first?.supplier || first?.lieferant || "").trim(),
+          material: String(source?.material || first?.material || "").trim(),
+          quantity: source?.quantity ?? source?.qty ?? first?.quantity ?? first?.qty ?? null,
+          unit: String(source?.unit || first?.unit || "").trim(),
+          costCenter: String(source?.kostenstelle || source?.costCenter || first?.kostenstelle || "").trim(),
+          lvItemPos: String(source?.lvItemPos || first?.lvItemPos || "").trim(),
+          workflowStatus: String(source?.workflowStatus || "FREIGEGEBEN"),
+          rowsCount: rows.length || 1,
+          attachmentsCount: Array.isArray(source?.attachments) ? source.attachments.length : 0,
+          pdfUrl: source?.pdfUrl || (
+            fs.existsSync(path.join(dir, filename.replace(/\.json$/i, ".pdf")))
+              ? `/projects/${encodeURIComponent(fsKey)}/lieferscheine/${encodeURIComponent(filename.replace(/\.json$/i, ".pdf"))}`
+              : null
+          ),
+          savedAt: source?.savedAt || stat.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
+
+    return res.json({ ok: true, items });
+  } catch (error: any) {
+    console.error("GET /api/ls/accounting-list failed:", error);
+    return res.status(500).json({ ok: false, error: error?.message || "LS accounting list failed" });
+  }
+});
+
+router.post("/freigegeben/commit", requireLsApprovalRole, async (req, res) => {
   try {
     const schema = z.object({
       projectId: z.string().min(1),
@@ -1125,26 +1348,55 @@ router.post("/freigegeben/commit", async (req, res) => {
       })
     );
 
-    const payload = {
+    const payloadBase = {
       kind: "lieferschein",
       ...freig,
       workflowStatus: "FREIGEGEBEN",
       date,
       reportId,
       savedAt: new Date().toISOString(),
-      // attachments già normalizzati a /lieferscheine/files in approve/upload
+      sourceDocId: body.docId,
       attachments: normalizeAttachments({ attachments: freig?.attachments }),
       pdfUrl: pdfResult.pdfUrl,
       pdfFileName: pdfResult.fileName,
     };
+    const evidenceHash = crypto.createHash("sha256").update(JSON.stringify(payloadBase), "utf8").digest("hex");
+    const payload = { ...payloadBase, evidenceLock: { hash:evidenceHash, lockedAt:new Date().toISOString(), lockedBy:String((req as any)?.auth?.email || (req as any)?.auth?.sub || "").trim() || null, reason:"Lieferschein freigegeben – Original unveränderlich" } };
 
     fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2), "utf8");
 
-    try {
-      fs.unlinkSync(freigPath);
-    } catch {}
+    await archiveProjectFileVersion({
+      projectIdOrCode: body.projectId,
+      filename: jsonName,
+      kind: "DOC",
+      localPath: jsonPath,
+      meta: {
+        source: "lieferschein",
+        reportId,
+        date
+      }
+    });
 
-    return res.json({ ok: true, fsKey, filename: jsonName, reportId, pdfUrl: payload.pdfUrl });
+    await archiveProjectFileVersion({
+      projectIdOrCode: body.projectId,
+      filename: path.basename(pdfPath),
+      kind: "PDF",
+      localPath: pdfPath,
+      meta: {
+        source: "lieferschein",
+        reportId,
+        date
+      }
+    });
+
+
+    return res.json({
+      ok: true,
+      fsKey,
+      filename: jsonName,
+      reportId,
+      pdfUrl: payload.pdfUrl
+    });
   } catch (e: any) {
     console.error("POST /api/ls/freigegeben/commit failed:", e);
     return res.status(500).json({
@@ -1244,7 +1496,7 @@ function cleanupFreigegeben(opts: {
   return { dir, tried, deleted };
 }
 
-router.post("/commit/lieferschein", async (req, res) => {
+router.post("/commit/lieferschein", requireLsApprovalRole, async (req, res) => {
   try {
     const schema = z.object({
       projectId: z.string().min(1),
@@ -1292,26 +1544,23 @@ router.post("/commit/lieferschein", async (req, res) => {
         company,
       })
     );
-    const payload = {
-      ...basePayload,
-      pdfUrl: pdfResult.pdfUrl,
-      pdfFileName: pdfResult.fileName,
-    };
-
-    fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2), "utf8");
-
-    // cleanup freigegeben (/ls)
     const preferId =
       String(body.workflowDocId || "").trim() ||
       String(body.sourceDocId || "").trim() ||
       String(body.docId || "").trim();
+    const payloadBase2 = {
+      ...basePayload,
+      workflowStatus: "FREIGEGEBEN",
+      revisionOf: preferId || null,
+      pdfUrl: pdfResult.pdfUrl,
+      pdfFileName: pdfResult.fileName,
+    };
+    const evidenceHash = crypto.createHash("sha256").update(JSON.stringify(payloadBase2), "utf8").digest("hex");
+    const payload = { ...payloadBase2, evidenceLock:{ hash:evidenceHash, lockedAt:new Date().toISOString(), lockedBy:String((req as any)?.auth?.email || (req as any)?.auth?.sub || "").trim() || null, reason: preferId ? "Lieferschein Revision – Original bleibt unverändert" : "Lieferschein gespeichert – revisionssichere Version" } };
 
-    const cleanup = cleanupFreigegeben({
-      fsKey,
-      preferId,
-      lieferscheinNummer: body.lieferscheinNummer,
-      date: body.date,
-    });
+    fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2), "utf8");
+
+    const cleanup = { skipped:true, reason:"FREIGEGEBEN_ORIGINAL_PRESERVED", preferId:preferId || null };
 
     return res.json({
       ok: true,
@@ -1374,7 +1623,7 @@ router.post("/preview", async (req, res) => {
  * -> mantiene endpoint, ma salva SEMPRE in /lieferscheine/files (stabile)
  *    (non crea history json da solo)
  * =======================================================*/
-router.post("/upload", upload.array("files", 20), async (req, res) => {
+router.post("/upload", lsMultipartUploadLimiter, preAuthorizeLsMultipart, upload.array("files", 20), requireLsProjectAccess, async (req, res) => {
   try {
     const projectId = String(
       (req.body as any)?.projectId || (req.query as any)?.projectId || ""

@@ -172,12 +172,12 @@ function Kpi({
 
 }: {label: string;value: string;sub?: string;danger?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-<div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+<div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }

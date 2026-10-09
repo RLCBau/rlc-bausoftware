@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { apiUrl } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 
-type DeliveryFormat = "pdf" | "xlsx" | "csv" | "json" | "xml" | "zip";
+type DeliveryFormat = "pdf" | "xlsx" | "csv" | "json" | "xml" | "zip" | "xrechnung";
 
 type DeliveryFile = {
   name: string;
@@ -40,8 +40,9 @@ const ALL_FORMATS: Array<{key: DeliveryFormat;label: string;}> = [
 { key: "xlsx", label: "XLSX" },
 { key: "csv", label: "CSV" },
 { key: "json", label: "JSON" },
-{ key: "xml", label: "XML" },
-{ key: "zip", label: "ZIP" }];
+{ key: "xml", label: "XML (RLC-Datenexport)" },
+{ key: "zip", label: "ZIP" },
+{ key: "xrechnung", label: "XRechnung 3.0.2" }];
 
 
 const EXCLUDED_PATHS = [
@@ -156,7 +157,7 @@ function moduleFromPath(pathname: string): ModuleDescriptor {
     return {
       key: "rechnungen",
       label: "Rechnungen",
-      specialist: ["XRechnung", "ZUGFeRD"]
+      specialist: ["XRechnung 3.0.2 / EN16931"]
     };
   }
   if (path.includes("cad")) {
@@ -369,6 +370,10 @@ async function loadStructuredModuleData(module: ModuleDescriptor, projectKey: st
       return fetchFirstAvailable([
       `/api/kalkulation/angebot/${encodeURIComponent(projectKey)}`]
       );
+    case "rechnungen":
+      return fetchFirstAvailable([
+      `/api/kalkulation/rechnung/${encodeURIComponent(projectKey)}`]
+      );
     case "regieberichte":
       return fetchFirstAvailable([
       `/api/regie/list?projectId=${encodeURIComponent(projectKey)}`]
@@ -458,6 +463,18 @@ export default function DocumentDeliveryCenter() {
   const [lastExport, setLastExport] = React.useState<ExportResponse | null>(null);
 
   React.useEffect(() => {
+    const openDelivery = () => setOpen(true);
+    window.addEventListener("rlc:open-document-delivery", openDelivery);
+    return () => window.removeEventListener("rlc:open-document-delivery", openDelivery);
+  }, []);
+
+  React.useEffect(() => {
+    setFormats((current) => {
+      const next = new Set(current);
+      if (module.key === "rechnungen") next.add("xrechnung");
+      else next.delete("xrechnung");
+      return next;
+    });
     setSubject(`${module.label} · ${projectKey || "Projekt"}`);
     setMessage(`Anbei erhalten Sie den Export aus RLC Bausoftware.\n\nProjekt: ${projectKey || "—"}\nModul: ${module.label}`);
     setError("");
@@ -506,7 +523,8 @@ export default function DocumentDeliveryCenter() {
     }
     const structured = await loadStructuredModuleData(module, projectKey);
     const params = new URLSearchParams(location.search);
-    const documentId = params.get("docId") || params.get("id") || dom.documentId || "";
+    const selectedInvoiceId = module.key === "rechnungen" ? String(sessionStorage.getItem("rlc_delivery_invoice_id") || "").trim() : "";
+    const documentId = selectedInvoiceId || params.get("docId") || params.get("id") || dom.documentId || "";
     const dateValue =
     Object.entries(dom.fields).find(([key]) => /datum|date/i.test(key))?.[1] ||
     new Date().toISOString().slice(0, 10);
@@ -623,27 +641,6 @@ export default function DocumentDeliveryCenter() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        title="E-Mail und externer Dokumentexport" className="rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-35">
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-        Senden / Exportieren
-      </button>
 
       {open ?
       <div
@@ -718,7 +715,7 @@ export default function DocumentDeliveryCenter() {
               <div>
                 <div className="rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-45">Exportformate</div>
                 <div className="rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-46">
-                  {ALL_FORMATS.map((format) =>
+                  {ALL_FORMATS.filter((format) => format.key !== "xrechnung" || module.key === "rechnungen").map((format) =>
                 <label
                   key={format.key} className={rlcClass(null,
                   {
@@ -744,7 +741,8 @@ export default function DocumentDeliveryCenter() {
                 </div>
                 {module.specialist?.length ?
               <div className="rlc-migrated-components-document-delivery-documentdeliverycenter-tsx-47">
-                    Fachformate bleiben zusätzlich im Fachmodul verfügbar: {module.specialist.join(" · ")}
+                    Fachformate: {module.specialist.join(" · ")}
+                    {module.key === "rechnungen" ? <><br /><b>XRechnung wird vor Export automatisch mit KoSIT 1.6.3 geprüft.</b> Öffnen Sie zuerst die gewünschte Rechnung.</> : null}
                   </div> :
               null}
               </div>

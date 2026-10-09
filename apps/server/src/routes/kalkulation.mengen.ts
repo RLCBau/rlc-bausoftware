@@ -2,8 +2,28 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { requireProjectMember } from "../middleware/guards";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
+
+router.use("/:projectKey", requireProjectMember("projectKey"), async (req:any, _res, next) => {
+  const projectId=String(req.resolvedProjectId||"").trim();
+  const projectCode=String(req.resolvedProjectCode||"").trim();
+  if(!projectId) return next(new Error("RESOLVED_PROJECT_ID_MISSING"));
+  if(projectCode && projectCode!==projectId){
+    try{
+      const duplicates=await prisma.project.count({where:{code:projectCode}});
+      if(duplicates===1){
+        const src=path.join(PROJECTS_ROOT,projectCode,"kalkulation","mengen");
+        const dst=path.join(PROJECTS_ROOT,projectId,"kalkulation","mengen");
+        if(fs.existsSync(src)&&!fs.existsSync(dst)){fs.mkdirSync(path.dirname(dst),{recursive:true});fs.cpSync(src,dst,{recursive:true});}
+      }
+    }catch(e){console.error("[mengen] legacy tenant migration failed",e);}
+  }
+  req.params.projectKey=projectId;
+  next();
+});
 
 /* =========================
    UTILS

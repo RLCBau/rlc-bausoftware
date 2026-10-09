@@ -357,7 +357,7 @@ function csvCell(value: unknown): string {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-function exportCsv(rows: Offer[]) {
+function exportCsv(rows: Offer[], projectId = "") {
   const header = [
   "AngebotNr",
   "ProjectCode",
@@ -402,11 +402,18 @@ function exportCsv(rows: Offer[]) {
     type: "text/csv;charset=utf-8"
   });
 
+  const fileName = "Angebotsverfolgung.csv";
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "Angebotsverfolgung.csv";
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(a.href);
+
+  if (projectId) {
+    void import("../../lib/dmsArchive")
+      .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+      .catch((error) => console.warn("[crm:csv:dms]", error));
+  }
 }
 
 function buildRiskAnalysis(rows: Offer[]): CrmRiskResult {
@@ -499,7 +506,7 @@ function emitKiResult(result: CrmRiskResult) {
   );
 }
 
-function exportPdfReport(rows: Offer[], totals: any) {
+function exportPdfReport(rows: Offer[], totals: any, projectId = "") {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
 
   const pageW = doc.internal.pageSize.getWidth();
@@ -731,12 +738,13 @@ function exportPdfReport(rows: Offer[], totals: any) {
     });
   }
 
-  saveRlcPdfWithCompanyHeader(doc, "Angebotsverfolgung_Report.pdf");
+  saveRlcPdfWithCompanyHeader(doc, "Angebotsverfolgung_Report.pdf", projectId);
 }
 
 /* ================= COMPONENT ================= */
 
 export default function CRMAngebotsverfolgungPage() {
+  const [showCreate, setShowCreate] = useState(false);
   const navigate = useNavigate();
   const projectCtx: any = useProject();
   const project = getProject(projectCtx);
@@ -754,6 +762,7 @@ export default function CRMAngebotsverfolgungPage() {
   const [sortBy, setSortBy] = useState<SortBy>("datum");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [info, setInfo] = useState("");
+  const [editOffer, setEditOffer] = useState<Offer | null>(null);
 
   const [form, setForm] = useState<Partial<Offer>>({
     angebotNr: `ANG-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
@@ -1139,6 +1148,17 @@ export default function CRMAngebotsverfolgungPage() {
     );
   }
 
+  function openEditOffer(offer: Offer) {
+    setEditOffer({ ...offer });
+  }
+
+  function saveEditOffer() {
+    if (!editOffer) return;
+    updateOffer(editOffer.id, editOffer);
+    setEditOffer(null);
+  }
+
+
   function updateMany(ids: string[], patch: Partial<Offer>) {
     if (!ids.length) {
       setInfo("Keine Angebote ausgewählt.");
@@ -1322,7 +1342,7 @@ export default function CRMAngebotsverfolgungPage() {
         setInfo("Keine Angebote für PDF-Export vorhanden.");
         return;
       }
-      exportPdfReport(filtered, totals);
+      exportPdfReport(filtered, totals, String(project?.id || ""));
       setInfo("PDF-Report wurde erzeugt.");
       return;
     }
@@ -1368,36 +1388,11 @@ export default function CRMAngebotsverfolgungPage() {
           <button type="button" className={rlcClass(null, btnPrimary)} onClick={importFromAngebot}>
             Aus Angebot übernehmen
           </button>
-          <button type="button" className={rlcClass(null, btnSecondary)} onClick={saveOffersToServer} disabled={!offers.length}>
-            Server speichern
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/nachtraege")}>
+            Nachtragsangebot erstellen
           </button>
-
-          <button type="button" className={rlcClass(null, btnSecondary)} onClick={loadOffersFromServer}>
-            Server laden
-          </button>
-
-          <button type="button" className={rlcClass(null, btnSecondary)} onClick={selectVisible} disabled={!filtered.length}>
-            Sichtbare auswählen
-          </button>
-
-          <button type="button" className={rlcClass(null, btnSecondary)} onClick={clearSelection} disabled={!selectedIds.length}>
-            Auswahl löschen ({selectedIds.length})
-          </button>
-
-          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => runRiskAnalysis(filtered)} disabled={!filtered.length}>
-            Risikoanalyse
-          </button>
-
-          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => exportCsv(filtered)} disabled={!filtered.length}>
-            CSV exportieren
-          </button>
-
-          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => exportPdfReport(filtered, totals)} disabled={!filtered.length}>
-            PDF-Report
-          </button>
-
-          <button type="button" className={rlcClass(null, btnDanger)} onClick={clearAll} disabled={!offers.length}>
-            Alles löschen
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => setShowCreate((v) => !v)}>
+            {showCreate ? "Externe Eingabe schließen" : "Externes Angebot erfassen"}
           </button>
         </div>
 
@@ -1407,27 +1402,46 @@ export default function CRMAngebotsverfolgungPage() {
         </div>
       </section>
 
+      <section className={rlcClass(null, crmFlow)}>
+        <div className={rlcClass(null, crmFlowTitle)}>Standardablauf</div>
+        <div className={rlcClass(null, crmFlowSteps)}>
+          <span>Kalkulation / Nachträge</span><b>→</b><span>Angebot erstellen</span><b>→</b><span>Angebotsverfolgung</span>
+        </div>
+        <div className={rlcClass(null, crmFlowHint)}>
+          Hier werden fertige Angebote verfolgt. Manuelle Eingabe ist nur für externe Angebote gedacht.
+        </div>
+      </section>
+
       {info ? <div className={rlcClass(null, infoBox)}>{info}</div> : null}
 
       <section className={rlcClass(null, kpiGrid)}>
         <Kpi label="Angebote" value={String(totals.count)} />
-        <Kpi label="Ausgewählt" value={String(selectedIds.length)} />
         <Kpi label="Volumen gesamt" value={money(totals.total)} />
         <Kpi label="Offenes Volumen" value={money(totals.sumOpen)} />
         <Kpi label="Gewichtet" value={money(totals.weighted)} />
-        <Kpi label="Zuschlag gesamt" value={money(totals.sumWon)} />
-        <Kpi label="Abgelehnt gesamt" value={money(totals.sumLost)} danger />
-        <Kpi label="Follow-up 7 Tage" value={String(totals.due7)} />
         <Kpi label="Überfällig" value={String(totals.overdue)} danger={totals.overdue > 0} />
         <Kpi label="Erfolgsquote" value={`${totals.quote}%`} />
       </section>
 
+      <section className={rlcClass(null, managementBar)}>
+        <div className={rlcClass(null, managementLabel)}>Verwaltung & Auswertung</div>
+        <div className={rlcClass(null, managementActions)}>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={saveOffersToServer} disabled={!offers.length}>Server speichern</button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={loadOffersFromServer}>Server laden</button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => runRiskAnalysis(filtered)} disabled={!filtered.length}>Risikoanalyse</button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => exportCsv(filtered, String(project?.id || ""))} disabled={!filtered.length}>CSV</button>
+          <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => exportPdfReport(filtered, totals, String(project?.id || ""))} disabled={!filtered.length}>PDF-Report</button>
+          <button type="button" className={rlcClass(null, btnDanger)} onClick={clearAll} disabled={!offers.length}>Alles löschen</button>
+        </div>
+      </section>
+
+      {showCreate ? (
       <form onSubmit={addOffer} className={rlcClass(null, card)}>
         <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 className={rlcClass(null, sectionTitle)}>Neues Angebot erfassen</h2>
+            <h2 className={rlcClass(null, sectionTitle)}>Externes Angebot erfassen</h2>
             <div className={rlcClass(null, sectionText)}>
-              Für manuelle Einträge oder Angebote, die nicht automatisch aus der Kalkulation kommen.
+              Nur für Angebote, die außerhalb von RLC erstellt wurden. RLC-Angebote bitte über „Aus Angebot übernehmen“ importieren.
             </div>
           </div>
         </div>
@@ -1587,6 +1601,8 @@ export default function CRMAngebotsverfolgungPage() {
           </button>
         </div>
       </form>
+      ) : null}
+
 
       <section className={rlcClass(null, card)}>
         <div className={rlcClass(null, toolbar)}>
@@ -1723,7 +1739,7 @@ export default function CRMAngebotsverfolgungPage() {
         null}
 
         <div className={rlcClass(null, tableWrap)}>
-          <table className={rlcClass(null, table)}>
+          <table className={rlcClass("rlc-row-table", table)}>
             <thead>
               <tr>
                 <th className={rlcClass(null, th)}>
@@ -1755,163 +1771,48 @@ export default function CRMAngebotsverfolgungPage() {
             </thead>
 
             <tbody>
-              {filtered.map((offer, i) =>
-              <tr
-                key={offer.id} className={rlcClass(null,
-                { background: i % 2 ? "#FCFCFC" : "#FFFFFF" })}>
-                
-                  <td className={rlcClass(null, td)}>
-                    <input
-                    type="checkbox"
-                    checked={!!selected[offer.id]}
-                    onChange={(e) =>
-                    setSelected((prev) => ({
-                      ...prev,
-                      [offer.id]: e.target.checked
-                    }))
-                    } />
-                  
+              {filtered.map((offer, i) => (
+                <tr
+                  key={offer.id}
+                  className={rlcClass(selected[offer.id] ? "rlc-row rlc-row--selected" : "rlc-row", {
+                    background: selected[offer.id] ? "#EAF2FF" : i % 2 ? "#FCFCFC" : "#FFFFFF"
+                  })}>
+                  <td className={rlcClass("rlc-row-td", td)}>
+                    <input type="checkbox" checked={!!selected[offer.id]}
+                      onChange={(e) => setSelected((prev) => ({ ...prev, [offer.id]: e.target.checked }))} />
                   </td>
-
-                  <td className={rlcClass(null, tdStrong)}>
+                  <td className={rlcClass("rlc-row-td", tdStrong)}>
                     {offer.angebotNr || "—"}
                     <div className={rlcClass(null, tiny)}>Quelle: {offer.source}</div>
-                    {offer.pdfUrl ? <div className={rlcClass(null, tinyOk)}>PDF vorhanden</div> : null}
                   </td>
-
-                  <td className={rlcClass(null, td)}>
+                  <td className={rlcClass("rlc-row-td", td)}>
                     <b>{offer.projectCode || "—"}</b>
                     <div className={rlcClass(null, tiny)}>{offer.projectName || "—"}</div>
                   </td>
-
-                  <td className={rlcClass(null, td)}>{offer.kunde || "—"}</td>
-                  <td className={rlcClass(null, tdRight)}>{money(offer.betragNetto)}</td>
-                  <td className={rlcClass(null, tdRight)}>{money(offer.betragBrutto)}</td>
-                  <td className={rlcClass(null, td)}>{fmtDate(offer.datum)}</td>
-
-                  <td className={rlcClass(null, td)}>
-                    <select
-                    value={offer.status}
-                    onChange={(e) =>
-                    updateOffer(offer.id, {
-                      status: e.target.value as OfferStatus
-                    })
-                    } className={rlcClass(null,
-                    smallSelect)}>
-                    
-                      {STATUS_OPTIONS.map((status) =>
-                    <option key={status}>{status}</option>
-                    )}
-                    </select>
-                    <div className="rlc-migrated-pages-kalkulation-crm-tsx-858">
-                      <span className={rlcClass(null, statusStyle(offer.status))}>{offer.status}</span>
-                    </div>
+                  <td className={rlcClass("rlc-row-td", td)}>{offer.kunde || "—"}</td>
+                  <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}>{money(offer.betragNetto)}</td>
+                  <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}>{money(offer.betragBrutto)}</td>
+                  <td className={rlcClass("rlc-row-td", td)}>{fmtDate(offer.datum)}</td>
+                  <td className={rlcClass("rlc-row-td", td)}><span className={rlcClass(null, statusStyle(offer.status))}>{offer.status}</span></td>
+                  <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}>{offer.wahrscheinlichkeit} %</td>
+                  <td className={rlcClass("rlc-row-td", td)}>
+                    <div>{offer.followUp ? fmtDate(offer.followUp) : "—"}</div>
+                    <span className={rlcClass(null, followUpStyle(offer))}>{followUpLabel(offer)}</span>
                   </td>
-
-                  <td className={rlcClass(null, tdRight)}>
-                    <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={offer.wahrscheinlichkeit}
-                    onChange={(e) =>
-                    updateOffer(offer.id, {
-                      wahrscheinlichkeit: n(e.target.value)
-                    })
-                    } className={rlcClass(null,
-                    chanceInput)} />
-                  
-                    %
+                  <td className={rlcClass("rlc-row-td", td)}>{offer.nextAction || "—"}</td>
+                  <td className={rlcClass("rlc-row-td", td)}>
+                    <div>{offer.kontakt || "—"}</div>
+                    {offer.notiz ? <div className={rlcClass(null, tiny)}>{offer.notiz.slice(0, 80)}{offer.notiz.length > 80 ? "…" : ""}</div> : null}
                   </td>
-
-                  <td className={rlcClass(null, td)}>
-                    <input
-                    type="date"
-                    value={offer.followUp || ""}
-                    onChange={(e) =>
-                    updateOffer(offer.id, { followUp: e.target.value })
-                    } className={rlcClass(null,
-                    dateInput)} />
-                  
-                    <div className="rlc-migrated-pages-kalkulation-crm-tsx-859">
-                      <span className={rlcClass(null, followUpStyle(offer))}>
-                        {followUpLabel(offer)}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className={rlcClass(null, td)}>
-                    <textarea
-                    value={offer.nextAction}
-                    onChange={(e) =>
-                    updateOffer(offer.id, { nextAction: e.target.value })
-                    }
-                    placeholder="Nächste Aktion" className={rlcClass(null,
-                    miniTextarea)} />
-                  
-                  </td>
-
-                  <td className={rlcClass(null, td)}>
-                    <input
-                    value={offer.kontakt}
-                    onChange={(e) =>
-                    updateOffer(offer.id, { kontakt: e.target.value })
-                    }
-                    placeholder="Kontakt" className={rlcClass(null,
-                    miniInput)} />
-                  
-                    <textarea
-                    value={offer.notiz}
-                    onChange={(e) =>
-                    updateOffer(offer.id, { notiz: e.target.value })
-                    }
-                    placeholder="Notiz" className={rlcClass(null,
-                    miniTextarea)} />
-                  
-                    <input
-                    value={offer.pdfUrl}
-                    onChange={(e) =>
-                    updateOffer(offer.id, { pdfUrl: e.target.value })
-                    }
-                    placeholder="PDF-Link optional" className={rlcClass(null,
-                    miniInputLast)} />
-                  
-                  </td>
-
-                  <td className={rlcClass(null, td)}>
-                    <div className={rlcClass(null, actionCol)}>
-                      <button
-                      type="button" className={rlcClass(null,
-                      btnMini)}
-                      onClick={() => openOffer(offer)}>
-                      
-                        Angebot öffnen
-                      </button>
-
-                      <button
-                      type="button" className={rlcClass(null,
-                      btnMini)}
-                      onClick={() =>
-                      updateOffer(offer.id, {
-                        followUp: addDaysISO(7),
-                        nextAction: "Angebot nachfassen"
-                      })
-                      }>
-                      
-                        Follow-up +7
-                      </button>
-
-                      <button
-                      type="button" className={rlcClass(null,
-                      btnDangerMini)}
-                      onClick={() => deleteOffer(offer.id)}>
-                      
-                        Löschen
-                      </button>
+                  <td className={rlcClass("rlc-row-td", td)}>
+                    <div className={rlcClass(null, actionColCompact)}>
+                      <button type="button" className={rlcClass(null, btnMini)} onClick={() => openEditOffer(offer)}>Bearbeiten</button>
+                      <button type="button" className={rlcClass(null, btnMini)} onClick={() => openOffer(offer)}>Angebot öffnen</button>
+                      <button type="button" className={rlcClass(null, btnDangerMini)} onClick={() => deleteOffer(offer.id)}>Löschen</button>
                     </div>
                   </td>
                 </tr>
-              )}
+              ))}
 
               {!filtered.length ?
               <tr>
@@ -1924,6 +1825,44 @@ export default function CRMAngebotsverfolgungPage() {
           </table>
         </div>
       </section>
+
+      {editOffer ? (
+        <div className={rlcClass(null, editOverlay)} onMouseDown={(e) => { if (e.target === e.currentTarget) setEditOffer(null); }}>
+          <section className={rlcClass(null, editModal)}>
+            <div className={rlcClass(null, editHead)}>
+              <div>
+                <div className={rlcClass(null, editEyebrow)}>ANGEBOTSVERFOLGUNG</div>
+                <h2 className={rlcClass(null, editTitle)}>Angebot bearbeiten</h2>
+                <div className={rlcClass(null, editSub)}>{editOffer.angebotNr} · {editOffer.projectCode}</div>
+              </div>
+              <button className={rlcClass(null, btnSecondary)} onClick={() => setEditOffer(null)}>Schließen</button>
+            </div>
+
+            <div className={rlcClass(null, editGrid)}>
+              <Field label="Status"><select className={rlcClass(null, input)} value={editOffer.status} onChange={(e) => setEditOffer({ ...editOffer, status: e.target.value as OfferStatus })}>{STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}</select></Field>
+              <Field label="Chance %"><input type="number" min={0} max={100} className={rlcClass(null, input)} value={editOffer.wahrscheinlichkeit} onChange={(e) => setEditOffer({ ...editOffer, wahrscheinlichkeit: n(e.target.value) })} /></Field>
+              <Field label="Follow-up"><input type="date" className={rlcClass(null, input)} value={editOffer.followUp || ""} onChange={(e) => setEditOffer({ ...editOffer, followUp: e.target.value })} /></Field>
+              <Field label="Kontakt"><input className={rlcClass(null, input)} value={editOffer.kontakt} onChange={(e) => setEditOffer({ ...editOffer, kontakt: e.target.value })} /></Field>
+            </div>
+            <div className={rlcClass(null, editGrid)}>
+              <Field label="Kunde / Auftraggeber"><input className={rlcClass(null, input)} value={editOffer.kunde} onChange={(e) => setEditOffer({ ...editOffer, kunde: e.target.value })} /></Field>
+              <Field label="PDF / Link"><input className={rlcClass(null, input)} value={editOffer.pdfUrl} onChange={(e) => setEditOffer({ ...editOffer, pdfUrl: e.target.value })} /></Field>
+              <div className={rlcClass(null, editValue)}><span>Netto</span><strong>{money(editOffer.betragNetto)}</strong></div>
+              <div className={rlcClass(null, editValue)}><span>Brutto</span><strong>{money(editOffer.betragBrutto)}</strong></div>
+            </div>
+            <Field label="Nächste Aktion"><input className={rlcClass(null, input)} value={editOffer.nextAction} onChange={(e) => setEditOffer({ ...editOffer, nextAction: e.target.value })} /></Field>
+            <Field label="Notiz"><textarea className={rlcClass(null, editTextarea)} value={editOffer.notiz} onChange={(e) => setEditOffer({ ...editOffer, notiz: e.target.value })} /></Field>
+
+            <div className={rlcClass(null, editFooter)}>
+              <button className={rlcClass(null, btnSecondary)} onClick={() => setEditOffer({ ...editOffer, followUp: addDaysISO(7), nextAction: "Angebot nachfassen" })}>Follow-up +7</button>
+              <div className={rlcClass(null, editFooterRight)}>
+                <button className={rlcClass(null, btnSecondary)} onClick={() => setEditOffer(null)}>Abbrechen</button>
+                <button className={rlcClass(null, btnPrimary)} onClick={saveEditOffer}>Speichern</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>);
 
 }
@@ -1940,9 +1879,9 @@ function Kpi({
 
 }: {label: string;value: string;danger?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
     </div>);
@@ -1968,17 +1907,17 @@ function Field({
 
 const page: React.CSSProperties = {
   display: "grid",
-  gap: 16,
-  padding: 16
+  gap: 10,
+  padding: 12
 };
 
 const heroCard: React.CSSProperties = {
   background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
   color: "#FFFFFF",
-  borderRadius: 18,
-  padding: 22,
+  borderRadius: 14,
+  padding: 16,
   display: "grid",
-  gap: 14,
+  gap: 9,
   boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
 };
 
@@ -1992,7 +1931,7 @@ const eyebrow: React.CSSProperties = {
 
 const title: React.CSSProperties = {
   margin: "4px 0",
-  fontSize: 30,
+  fontSize: 24,
   fontWeight: 700
 };
 
@@ -2000,12 +1939,12 @@ const subtitle: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
   opacity: 0.88,
-  lineHeight: 1.55
+  lineHeight: 1.35
 };
 
 const heroActions: React.CSSProperties = {
   display: "flex",
-  gap: 10,
+  gap: 6,
   flexWrap: "wrap"
 };
 
@@ -2013,6 +1952,34 @@ const heroMeta: React.CSSProperties = {
   fontSize: 13,
   opacity: 0.9
 };
+
+const crmFlow: React.CSSProperties = {
+  display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 10,
+  padding: "8px 10px", border: "1px solid #DCE4EF", borderRadius: 10, background: "#F8FAFC"
+};
+const crmFlowTitle: React.CSSProperties = { fontSize: 11, fontWeight: 800, color: "#334155", whiteSpace: "nowrap" };
+const crmFlowSteps: React.CSSProperties = { display: "flex", alignItems: "center", gap: 7, fontSize: 11.5, fontWeight: 700, color: "#0F172A" };
+const crmFlowHint: React.CSSProperties = { fontSize: 10.5, color: "#64748B", textAlign: "right" };
+
+const actionColCompact: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4, alignItems: "stretch" };
+const editOverlay: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15,23,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 };
+const editModal: React.CSSProperties = { width: "min(900px,96vw)", maxHeight: "90vh", overflowY: "auto", background: "#FFFFFF", borderRadius: 16, border: "1px solid #DCE4EF", boxShadow: "0 24px 80px rgba(15,23,42,.32)", padding: 16 };
+const editHead: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, paddingBottom: 10, marginBottom: 10, borderBottom: "1px solid #E2E8F0" };
+const editEyebrow: React.CSSProperties = { fontSize: 9.5, fontWeight: 800, letterSpacing: ".06em", color: "#146EF5" };
+const editTitle: React.CSSProperties = { margin: "2px 0", fontSize: 21, color: "#0F172A" };
+const editSub: React.CSSProperties = { fontSize: 11.5, color: "#64748B" };
+const editGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 8, marginBottom: 8 };
+const editValue: React.CSSProperties = { display: "grid", gap: 4, padding: "7px 9px", border: "1px solid #E2E8F0", background: "#F8FAFC", borderRadius: 8, fontSize: 10.5, color: "#64748B" };
+const editTextarea: React.CSSProperties = { width: "100%", minHeight: 100, resize: "vertical", fontFamily: "inherit", lineHeight: 1.4, border: "1px solid #CBD5E1", borderRadius: 8, padding: "7px 9px", fontSize: 11.5, color: "#0F172A", background: "#FFFFFF", boxSizing: "border-box" };
+const editFooter: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, paddingTop: 10, marginTop: 4, borderTop: "1px solid #E2E8F0" };
+const editFooterRight: React.CSSProperties = { display: "flex", gap: 6 };
+
+const managementBar: React.CSSProperties = {
+  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+  padding: "8px 10px", border: "1px solid #E2E8F0", background: "#FFFFFF", borderRadius: 10
+};
+const managementLabel: React.CSSProperties = { fontSize: 11, fontWeight: 800, color: "#475569", whiteSpace: "nowrap" };
+const managementActions: React.CSSProperties = { display: "flex", gap: 5, flexWrap: "nowrap", alignItems: "center", justifyContent: "flex-end" };
 
 const infoBox: React.CSSProperties = {
   border: "1px solid #BED6FF",
@@ -2026,8 +1993,8 @@ const infoBox: React.CSSProperties = {
 
 const kpiGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-  gap: 12
+  gridTemplateColumns: "repeat(6,minmax(0,1fr))",
+  gap: 7
 };
 
 const kpiCard: React.CSSProperties = {

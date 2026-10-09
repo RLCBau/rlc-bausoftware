@@ -422,13 +422,14 @@ export function openCadImport(projectIdRaw: string): {
 
   const dwg = findFirstDwg(projectRoot);
 
-  const args = ["/c", "start", '""', exe, ...(dwg ? [dwg] : [])];
-
-  const child = spawn("cmd.exe", args, {
+  // Start the configured CAD executable directly. Avoid cmd.exe /c start:
+  // command interpreters can treat metacharacters in user-controlled filenames as commands.
+  const child = spawn(exe, dwg ? [dwg] : [], {
     cwd: projectRoot,
     detached: true,
     stdio: "ignore",
     windowsHide: false,
+    shell: false,
   });
 
   child.unref();

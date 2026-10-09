@@ -1,17 +1,115 @@
 import { learnCompanyRecipeFromKiRow } from "../kalkulation/companyRecipeLearning";
+import { getBaupreisIndexFactor } from "../kalkulation/priceIndex/baupreisIndexService";
 import { Router } from "express";
+import crypto from "node:crypto";
 import { prisma } from "../lib/prisma";
+import { filterUsableRlcPriceSources } from "../kalkulation/quality/priceSourceQualityGate";
 import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreisBibliothek";
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
 import { annotateExistingCalculation } from "../kalkulation/constructionIntelligenceEngine";
 import { resolveRlcAutonomousCalculation, mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
+import { runRlcGenerativeKalkulation } from "../kalkulation/generative/rlcGenerativeKalkulation";
 import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalculationPipeline";
 import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
 import * as ciFs from "node:fs";
 import * as ciPath from "node:path";
-import { completeRlcAiText } from "../services/ai/rlcAiGateway";
+import { COMPANIES_ROOT } from "../lib/companiesRoot";
+import { completeRlcAiText, completeRlcMarketReviewWithWeb } from "../services/ai/rlcAiGateway";
+import { requireProjectMember } from "../middleware/guards";
 
 const router = Router();
+
+function marketRole(req: any): string {
+  return String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+}
+
+function requireMarketReviewAccess(req: any, res: any, next: any) {
+  if (!["ADMIN", "ADMINISTRATOR", "KALKULATOR"].includes(marketRole(req))) {
+    return res.status(403).json({ ok: false, error: "MARKET_REVIEW_FORBIDDEN" });
+  }
+  return next();
+}
+
+function requireMarketCreditOrderWrite(req: any, res: any, next: any) {
+  if (!["ADMIN", "ADMINISTRATOR"].includes(marketRole(req))) {
+    return res.status(403).json({ ok: false, error: "MARKET_CREDIT_ORDER_FORBIDDEN" });
+  }
+  return next();
+}
+
+const requireOptionalMarketProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(req.body?.projectId || "").trim();
+  if (!token) return next();
+  req.params = req.params || {};
+  req.params.__marketProject = token;
+  return requireProjectMember("__marketProject")(req, res, (err?: any) => {
+    if (err) return next(err);
+    req.body.projectId = String(req.resolvedProjectId || token).trim();
+    return next();
+  });
+};
+
+const requireOptionalKalkulationProjectAccess = async (req:any,res:any,next:any) => {
+  const token = String(req.body?.projectCode || req.body?.projectKey || "").trim();
+  if (!token) return next();
+  req.params = req.params || {};
+  req.params.__kalkulationProject = token;
+  return requireProjectMember("__kalkulationProject")(req,res,(err?:any)=>{
+    if(err) return next(err);
+    const id = String(req.resolvedProjectId || "").trim();
+    const code = String(req.resolvedProjectCode || "").trim();
+    if(id) req.body.projectKey=id;
+    if(code) req.body.projectCode=code;
+    return next();
+  });
+};
+
+const requireKiProjectPathAccess = async (req:any,res:any,next:any) => {
+  return requireProjectMember("projectKey")(req,res,(err?:any)=>{
+    if(err) return next(err);
+    req.params.projectKey = String(req.resolvedProjectId || req.params.projectKey || "").trim();
+    return next();
+  });
+};
+
+
+function appendAiPrivacyAudit(companyId: string, event: any) {
+  try {
+    const cid = String(companyId || "").trim();
+    if (!cid) return;
+    const dir = ciPath.join(COMPANIES_ROOT, cid, "privacy-compliance");
+    ciFs.mkdirSync(dir, { recursive: true });
+    const file = ciPath.join(dir, "ai-processing-audit.json");
+    let rows: any[] = [];
+    try {
+      if (ciFs.existsSync(file)) {
+        const parsed = JSON.parse(ciFs.readFileSync(file, "utf8"));
+        if (Array.isArray(parsed)) rows = parsed;
+      }
+    } catch {}
+    rows.push({
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      provider: String(event?.provider || "unknown"),
+      model: String(event?.model || "unknown"),
+      purpose: String(event?.purpose || "kalkulation"),
+      feature: String(event?.feature || "KALKULATION_KI"),
+      projectCode: String(event?.projectCode || "") || null,
+      positionId: String(event?.positionId || "") || null,
+      inputTokens: Math.max(0, Number(event?.inputTokens || 0)),
+      outputTokens: Math.max(0, Number(event?.outputTokens || 0)),
+      totalTokens: Math.max(0, Number(event?.totalTokens || 0)),
+      fallbackUsed: event?.fallbackUsed === true,
+      contentStored: false,
+    });
+    if (rows.length > 10_000) rows = rows.slice(rows.length - 10_000);
+    const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+    ciFs.writeFileSync(tmp, JSON.stringify(rows, null, 2), "utf8");
+    ciFs.renameSync(tmp, file);
+  } catch (error) {
+    console.error("[RLC-KI][privacy-audit]", error);
+  }
+}
 
 type RiskLevel = "low" | "medium" | "high";
 type CalcStatus = "ok" | "warning" | "critical" | "manual";
@@ -95,7 +193,10 @@ function companyIdFromReq(req: Express.Request): string {
   return String(
     (req.auth as any)?.companyId ||
       (req.auth as any)?.company ||
-      process.env.DEV_COMPANY_ID ||
+      (req.user as any)?.companyId ||
+      (req.user as any)?.company ||
+      (req as any)?.company?.id ||
+      (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on" ? process.env.DEV_COMPANY_ID : "") ||
       ""
   ).trim();
 }
@@ -120,19 +221,6 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function appendUniqueSourceFlag(sourceRaw: any, flag: string): string {
-  const parts = String(sourceRaw || "rule-engine")
-    .split("+")
-    .map((x) => x.trim())
-    .filter(Boolean);
-
-  if (!parts.includes(flag)) {
-    parts.push(flag);
-  }
-
-  return Array.from(new Set(parts)).join("+");
-}
-
 function cleanRlcSourceFlags(sourceRaw: any): string {
   return Array.from(
     new Set(
@@ -154,7 +242,87 @@ function cleanRlcWarningText(warningRaw: any): string {
   return Array.from(new Set(parts)).join(" · ");
 }
 
-function cleanRlcOutputRow(row: any): any {
+export function reconcileFinalPriceEvidence(row: any): any {
+  if (!row || typeof row !== "object") return row;
+
+  const breakdown = Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [];
+  const breakdownEp = round2(
+    breakdown.reduce((sum: number, line: any) => sum + n(line?.total), 0)
+  );
+  const finalEp = round2(
+    n(row.rlcKiUnitPrice) ||
+    n(row.finalUnitPrice) ||
+    n(row.unitPrice) ||
+    n(row.preis) ||
+    n(row.suggestedUnitPrice)
+  );
+
+  if (!(breakdownEp > 0) || !(finalEp > 0)) return row;
+
+  const deltaPct = round2(
+    Math.abs(finalEp - breakdownEp) / Math.max(Math.abs(finalEp), Math.abs(breakdownEp), 0.01) * 100
+  );
+
+  if (deltaPct > 2) return row;
+
+  const evidenceText = `${s(row.warning)} ${s(row.aiReason)}`;
+  if (!/RLC Price-Evidence-Gate/i.test(evidenceText)) return row;
+
+  const hasIndependentReviewGuard =
+    /Family-Mismatch-Guard|No-X84 Outlier-Guard|Plausibilitätsstopp|Kleinteile\/Zulagen-Guard|Angebotsbasis-Guard|company-calibration-blocked|RLC Block\+Recalculate/i.test(evidenceText);
+
+  if (hasIndependentReviewGuard) {
+    return {
+      ...row,
+      priceEvidenceStatus: "breakdown-consistent",
+      priceEvidenceFinalEp: finalEp,
+      priceEvidenceBreakdownEp: breakdownEp,
+      priceEvidenceDeltaPct: deltaPct,
+    };
+  }
+
+  const nativeRisk = riskFromText(
+    `${s(row.kurztext)} ${s(row.langtext)}`,
+    s(row.einheit),
+    n(row.menge)
+  );
+  const sourceRaw = s(row.source);
+  const confidenceSource: CalcSource =
+    sourceRaw.includes("database") ? "database" :
+    sourceRaw.includes("openai") ? "openai" :
+    "rule-engine";
+  const restoredConfidence = confidenceFrom(row as InputRow, nativeRisk, [], confidenceSource);
+
+  const cleanedWarning = cleanRlcWarningText(
+    s(row.warning)
+      .split(" · ")
+      .filter((part) => !/RLC Price-Evidence-Gate/i.test(part))
+      .join(" · ")
+  );
+
+  const cleanedReason = s(row.aiReason)
+    .split(/\n\n+/)
+    .filter((part) => !/RLC Price-Evidence-Gate/i.test(part))
+    .join("\n\n");
+
+  return {
+    ...row,
+    priceEvidenceStatus: "breakdown-consistent",
+    priceEvidenceFinalEp: finalEp,
+    priceEvidenceBreakdownEp: breakdownEp,
+    priceEvidenceDeltaPct: deltaPct,
+    riskLevel: nativeRisk,
+    confidence: restoredConfidence,
+    calculationStatus: nativeRisk === "high" ? "needs_review" : "ok",
+    warning: cleanedWarning,
+    aiReason: [
+      cleanedReason,
+      `RLC Price-Evidence-Recheck FINAL: EP ${finalEp} EUR = Preisaufbau ${breakdownEp} EUR (${deltaPct} % Abweichung). Alter Price-Evidence-Downgrade entfernt.`
+    ].filter(Boolean).join("\n\n"),
+  };
+}
+
+export function cleanRlcOutputRow(row: any): any {
   if (!row || typeof row !== "object") {
     return row;
   }
@@ -195,21 +363,21 @@ function detectGewerk(text: string): string {
   const t = norm(text);
 
   if (
-    t.includes("aushub") ||
-    t.includes("graben") ||
-    t.includes("boden") ||
-    t.includes("verfüll")
-  ) {
-    return "Tiefbau / Erdarbeiten";
-  }
-
-  if (
     t.includes("rohr") ||
     t.includes("leitung") ||
     t.includes("speedpipe") ||
     t.includes("kabel")
   ) {
     return "Tiefbau / Leitungsbau";
+  }
+
+  if (
+    t.includes("aushub") ||
+    t.includes("graben") ||
+    t.includes("boden") ||
+    t.includes("verfüll")
+  ) {
+    return "Tiefbau / Erdarbeiten";
   }
 
   if (t.includes("asphalt") || t.includes("pflaster") || t.includes("decke")) {
@@ -307,6 +475,13 @@ function applyNoX84LinearPriceGuard(input: {
   epRaw: any;
   hasRealX84?: boolean;
 }): { applied: boolean; ep: number; warning: string } {
+  /*
+   * A text-pattern cap is not a price source. It must never overwrite an EP.
+   * Exact prices need a compatible company source or a traceable Urkalkulation.
+   */
+  const originalEp = Number(input.epRaw || 0);
+  return { applied: false, ep: originalEp, warning: "" };
+
   const text = rlcNoX84Norm(input.textRaw);
   const unit = rlcNoX84Norm(input.unitRaw);
   const menge = Number(input.mengeRaw || 0);
@@ -569,71 +744,330 @@ function scoreDbMatch(row: InputRow, db: any): DbMatch {
   const dbText = `${s(db.positionNumber)} ${s(db.shortText)} ${s(db.longText)}`;
 
   const rowTokens = tokenize(rowText);
-  const dbTokens = new Set(tokenize(dbText));
-  const tokenHits = rowTokens.filter((t) => dbTokens.has(t)).length;
+  const dbTokensArray = tokenize(dbText);
+  const dbTokens = new Set(dbTokensArray);
 
+  const tokenHits = rowTokens.filter((t) => dbTokens.has(t)).length;
+  const tokenUnion = new Set([...rowTokens, ...dbTokensArray]).size;
+  const tokenOverlap = tokenUnion > 0 ? tokenHits / tokenUnion : 0;
+
+  const rowUnit = normUnit(row.einheit);
+  const dbUnit = normUnit(db.unit);
+
+  // Positionsnummer ist nur ein Signal, kein technischer Beweis.
   if (s(row.posNr) && norm(row.posNr) === norm(db.positionNumber)) {
-    score += 35;
+    score += 18;
     reasons.push("Positionsnummer identisch");
   }
 
-  if (s(row.einheit) && norm(row.einheit) === norm(db.unit)) {
-    score += 15;
-    reasons.push("Einheit identisch");
+  // Einheit ist ein starkes Vergleichskriterium.
+  if (rowUnit && dbUnit) {
+    if (norm(rowUnit) === norm(dbUnit)) {
+      score += 15;
+      reasons.push("Einheit identisch");
+    } else {
+      score -= 30;
+      reasons.push(`Einheit abweichend: ${rowUnit} / ${dbUnit}`);
+    }
   }
 
+  // Textähnlichkeit relativ statt nur absolute Token-Treffer.
   if (tokenHits > 0) {
-    score += Math.min(30, tokenHits * 6);
-    reasons.push(`${tokenHits} Text-Treffer`);
+    const tokenScore = Math.min(
+      20,
+      Math.round(tokenOverlap * 20) + Math.min(8, tokenHits * 2)
+    );
+    score += tokenScore;
+    reasons.push(
+      `${tokenHits} Text-Treffer (${Math.round(tokenOverlap * 100)}% Token-Overlap)`
+    );
   }
 
-  if (s(db.trade) && norm(detectGewerk(rowText)) === norm(db.trade)) {
-    score += 8;
-    reasons.push("Gewerk ähnlich");
+  const rowGewerk = detectGewerk(rowText);
+  const dbGewerk = s(db.trade) || detectGewerk(dbText);
+
+  if (
+    rowGewerk !== "Allgemein" &&
+    dbGewerk !== "Allgemein"
+  ) {
+    if (norm(rowGewerk) === norm(dbGewerk)) {
+      score += 10;
+      reasons.push("Gewerk identisch");
+    } else {
+      score -= 10;
+      reasons.push(`Gewerk abweichend: ${rowGewerk} / ${dbGewerk}`);
+    }
   }
 
+  const rowLeistung = detectLeistungsart(rowText);
+  const dbLeistung = detectLeistungsart(dbText);
+
+  if (
+    rowLeistung !== "Sonstige Leistung" &&
+    dbLeistung !== "Sonstige Leistung"
+  ) {
+    if (norm(rowLeistung) === norm(dbLeistung)) {
+      score += 12;
+      reasons.push("Leistungsart identisch");
+    } else {
+      score -= 12;
+      reasons.push(
+        `Leistungsumfang abweichend: ${rowLeistung} / ${dbLeistung}`
+      );
+    }
+  }
+
+  const rowFacts = rlcExtractTechnicalFacts(rowText);
+  const dbFacts = rlcExtractTechnicalFacts(dbText);
+  const factOverlap = rlcFactOverlapScore(rowFacts, dbFacts);
+
+  if (rowFacts.size && dbFacts.size) {
+    if (factOverlap >= 0.75) {
+      score += 18;
+      reasons.push(
+        `Technische Merkmale stark vergleichbar (${Math.round(factOverlap * 100)}%)`
+      );
+    } else if (factOverlap >= 0.5) {
+      score += 10;
+      reasons.push(
+        `Technische Merkmale teilweise vergleichbar (${Math.round(factOverlap * 100)}%)`
+      );
+    } else {
+      score -= 15;
+      reasons.push(
+        `Technische Merkmale schwach vergleichbar (${Math.round(factOverlap * 100)}%)`
+      );
+    }
+  }
+
+  const rowValues = rlcExtractTechnicalValues(rowText);
+  const dbValues = rlcExtractTechnicalValues(dbText);
+
+  if (rowValues.dimensions.size && dbValues.dimensions.size) {
+    const dimOverlap = rlcSetOverlap(
+      rowValues.dimensions,
+      dbValues.dimensions
+    );
+
+    if (dimOverlap > 0) {
+      score += 12;
+      reasons.push("Abmessung/DN vergleichbar");
+    } else {
+      score -= 20;
+      reasons.push("Abmessung/DN abweichend");
+    }
+  }
+
+  if (rowValues.materials.size && dbValues.materials.size) {
+    const materialOverlap = rlcSetOverlap(
+      rowValues.materials,
+      dbValues.materials
+    );
+
+    if (materialOverlap > 0) {
+      score += 10;
+      reasons.push("Material vergleichbar");
+    } else {
+      score -= 18;
+      reasons.push("Material abweichend");
+    }
+  }
+
+  // Historische Nutzung ist nur noch ein kleiner Zusatzbonus.
   if (n(db.useCount) > 0) {
-    score += Math.min(8, n(db.useCount));
+    score += Math.min(4, n(db.useCount));
     reasons.push(`${n(db.useCount)}x verwendet`);
   }
 
   if (n(db.confidence) > 0) {
-    score += Math.min(8, Math.round(n(db.confidence) * 8));
+    score += Math.min(4, Math.round(n(db.confidence) * 4));
   }
 
-  const qgBonus = qualityGateScoreBonus(db);
+  // Quality Gate bestätigt Zuverlässigkeit, ersetzt aber keine technische Ähnlichkeit.
+  const qgBonus = Math.min(20, qualityGateScoreBonus(db));
   if (qgBonus > 0) {
     score += qgBonus;
     reasons.push(`Quality Gate: ${qualityGateStatusOf(db)}`);
   }
 
+  let finalScore = Math.max(0, Math.min(100, score));
+
+  const unitMismatch =
+    !!rowUnit &&
+    !!dbUnit &&
+    norm(rowUnit) !== norm(dbUnit);
+
+  const dimensionMismatch =
+    rowValues.dimensions.size > 0 &&
+    dbValues.dimensions.size > 0 &&
+    rlcSetOverlap(rowValues.dimensions, dbValues.dimensions) === 0;
+
+  const materialMismatch =
+    rowValues.materials.size > 0 &&
+    dbValues.materials.size > 0 &&
+    rlcSetOverlap(rowValues.materials, dbValues.materials) === 0;
+
+  /*
+   * Harte technische Inkompatibilität:
+   * Quality Gate / PosNr / UseCount dürfen einen technisch falschen
+   * Vergleich niemals wieder zu einem starken DB-Treffer machen.
+   */
+  if (unitMismatch) {
+    finalScore = Math.min(finalScore, 20);
+    reasons.push("Hard Stop: Einheit technisch nicht vergleichbar");
+  }
+
+  if (dimensionMismatch) {
+    finalScore = Math.min(finalScore, 30);
+    reasons.push("Hard Stop: Abmessung/DN technisch nicht vergleichbar");
+  }
+
+  if (materialMismatch) {
+    finalScore = Math.min(finalScore, 30);
+    reasons.push("Hard Stop: Material technisch nicht vergleichbar");
+  }
+
   return {
     row: db,
-    score: Math.min(100, score),
+    score: finalScore,
     reasons,
   };
 }
 
-async function findDbMatches(companyId: string, row: InputRow): Promise<DbMatch[]> {
+function rlcDbSearchTokens(row: InputRow): string[] {
+  const text = `${s(row.posNr)} ${s(row.kurztext)} ${s(row.langtext)}`;
+  const all = tokenize(text);
+
+  const stop = new Set([
+    "und",
+    "oder",
+    "der",
+    "die",
+    "das",
+    "den",
+    "dem",
+    "des",
+    "ein",
+    "eine",
+    "einer",
+    "einen",
+    "mit",
+    "ohne",
+    "nach",
+    "aus",
+    "für",
+    "von",
+    "bis",
+    "inkl",
+    "einschl",
+    "liefern",
+    "herstellen",
+    "leistung",
+    "arbeiten",
+  ]);
+
+  const technicalValues = rlcExtractTechnicalValues(text);
+
+  const priority = new Set<string>();
+
+  for (const value of technicalValues.dimensions) {
+    priority.add(value);
+  }
+
+  for (const value of technicalValues.materials) {
+    priority.add(value);
+  }
+
+  const technicalWords = all.filter((token) =>
+    /^(dn|da)\d+/.test(token) ||
+    token.includes("rohr") ||
+    token.includes("leitung") ||
+    token.includes("kabel") ||
+    token.includes("asphalt") ||
+    token.includes("pflaster") ||
+    token.includes("beton") ||
+    token.includes("aushub") ||
+    token.includes("graben") ||
+    token.includes("verfüll") ||
+    token.includes("entsorg") ||
+    token.includes("transport") ||
+    token.includes("schacht") ||
+    token.includes("frostschutz") ||
+    token.includes("schotter")
+  );
+
+  for (const token of technicalWords) {
+    priority.add(token);
+  }
+
+  const useful = all
+    .filter((token) => !stop.has(token))
+    .filter((token) => token.length >= 4)
+    .sort((a, b) => b.length - a.length);
+
+  return Array.from(
+    new Set([
+      ...priority,
+      ...useful,
+    ])
+  ).slice(0, 12);
+}
+
+export async function findDbMatches(companyId: string, row: InputRow): Promise<DbMatch[]> {
   const posNr = s(row.posNr);
   const kurztext = s(row.kurztext);
-  const langtext = s(row.langtext);
-  const tokens = tokenize(`${posNr} ${kurztext} ${langtext}`).slice(0, 6);
+  const tokens = rlcDbSearchTokens(row);
 
   const or: any[] = [];
 
   if (posNr) {
-    or.push({ positionNumber: { contains: posNr, mode: "insensitive" } });
+    or.push({
+      positionNumber: {
+        contains: posNr,
+        mode: "insensitive",
+      },
+    });
   }
 
+  /*
+   * Kurztext bleibt wichtig, aber nicht als einzige Suchbasis.
+   */
   if (kurztext) {
-    or.push({ shortText: { contains: kurztext.slice(0, 80), mode: "insensitive" } });
-    or.push({ longText: { contains: kurztext.slice(0, 80), mode: "insensitive" } });
+    const shortSearch = kurztext.slice(0, 80);
+
+    or.push({
+      shortText: {
+        contains: shortSearch,
+        mode: "insensitive",
+      },
+    });
+
+    or.push({
+      longText: {
+        contains: shortSearch,
+        mode: "insensitive",
+      },
+    });
   }
 
+  /*
+   * Technische Suchbegriffe werden bewusst einzeln gesucht.
+   * Ranking + Hard Stops entscheiden anschließend über Vergleichbarkeit.
+   */
   for (const token of tokens) {
-    or.push({ shortText: { contains: token, mode: "insensitive" } });
-    or.push({ longText: { contains: token, mode: "insensitive" } });
+    or.push({
+      shortText: {
+        contains: token,
+        mode: "insensitive",
+      },
+    });
+
+    or.push({
+      longText: {
+        contains: token,
+        mode: "insensitive",
+      },
+    });
   }
 
   if (!or.length) return [];
@@ -643,8 +1077,18 @@ async function findDbMatches(companyId: string, row: InputRow): Promise<DbMatch[
       companyId,
       OR: or,
     },
-    orderBy: [{ useCount: "desc" }, { updatedAt: "desc" }],
-    take: 30,
+
+    /*
+     * Größere Kandidatenmenge:
+     * Relevanz wird danach durch scoreDbMatch() entschieden,
+     * nicht durch useCount allein.
+     */
+    orderBy: [
+      { updatedAt: "desc" },
+      { useCount: "desc" },
+    ],
+
+    take: 80,
   });
 
   return rows
@@ -652,7 +1096,7 @@ async function findDbMatches(companyId: string, row: InputRow): Promise<DbMatch[
     .map((db) => scoreDbMatch(row, db))
     .filter((x) => x.score >= 12 && n(x.row.unitPriceNet) > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 8);
+    .slice(0, 12);
 }
 
 function weightedDbPrice(matches: DbMatch[], unit: string): number {
@@ -722,6 +1166,60 @@ function rlcExtractTechnicalFacts(value: string): Set<string> {
   return facts;
 }
 
+
+function rlcExtractTechnicalValues(value: string): {
+  dimensions: Set<string>;
+  materials: Set<string>;
+} {
+  const t = norm(value);
+
+  const dimensions = new Set<string>();
+  const materials = new Set<string>();
+
+  const dimensionMatches =
+    t.match(
+      /\b(?:dn|da|d)\s*\d+(?:[.,]\d+)?\b|\b\d+(?:[.,]\d+)?\s*(?:mm|cm)\b/g
+    ) || [];
+
+  for (const value of dimensionMatches) {
+    dimensions.add(
+      value
+        .replace(/\s+/g, "")
+        .replace(",", ".")
+    );
+  }
+
+  const materialMatches =
+    t.match(
+      /\b(?:pe[-\s]*hd|pehd|pvc|pp|stahl|beton|kunststoff|guss|steinzeug)\b/g
+    ) || [];
+
+  for (const value of materialMatches) {
+    const canonicalMaterial = value
+      .replace(/[-\s]+/g, "")
+      .toLowerCase();
+
+    materials.add(canonicalMaterial);
+  }
+
+  return {
+    dimensions,
+    materials,
+  };
+}
+
+function rlcSetOverlap(a: Set<string>, b: Set<string>): number {
+  if (!a.size || !b.size) return 0;
+
+  let hits = 0;
+
+  for (const value of a) {
+    if (b.has(value)) hits++;
+  }
+
+  return hits / Math.max(a.size, b.size);
+}
+
 function rlcFactOverlapScore(a: Set<string>, b: Set<string>): number {
   if (!a.size && !b.size) return 0.5;
   if (!a.size || !b.size) return 0;
@@ -753,32 +1251,133 @@ function checkDbPriceComparability(row: any, db: any, match?: DbMatch) {
     reasons.push("LV-Text oder Datenbank-Langtext fehlt.");
   }
 
+  /*
+   * HARD GUARD 1:
+   * Einheit muss technisch identisch sein.
+   */
   if (rowUnitNorm && dbUnitNorm && rowUnitNorm !== dbUnitNorm) {
-    reasons.push(`Einheit nicht vergleichbar: LV=${rowUnit || "—"}, DB=${dbUnit || "—"}.`);
+    reasons.push(
+      `Einheit nicht vergleichbar: LV=${rowUnit || "—"}, DB=${dbUnit || "—"}.`
+    );
   }
 
   if (/psch|pausch/.test(rowUnitNorm) || /psch|pausch/.test(dbUnitNorm)) {
-    reasons.push("Pauschalposition: Datenbankwert darf nur als Vergleich dienen.");
+    reasons.push(
+      "Pauschalposition: Datenbankwert darf nur als Vergleich dienen."
+    );
   }
 
   if (isContextSensitivePosition(rowText, rowUnit)) {
-    reasons.push("Context-sensitive Position: Preis hängt von Dauer, Entfernung, Logistik, Personal/Geräten und Projektgröße ab.");
+    reasons.push(
+      "Context-sensitive Position: Preis hängt von Dauer, Entfernung, Logistik, Personal/Geräten und Projektgröße ab."
+    );
   }
 
+  /*
+   * Allgemeine technische Merkmale.
+   */
   const rowFacts = rlcExtractTechnicalFacts(rowText);
   const dbFacts = rlcExtractTechnicalFacts(dbText);
   const overlap = rlcFactOverlapScore(rowFacts, dbFacts);
 
   if (overlap < 0.55) {
-    reasons.push(`Technische Bestandteile nicht ausreichend vergleichbar (${Math.round(overlap * 100)}%).`);
+    reasons.push(
+      `Technische Bestandteile nicht ausreichend vergleichbar (${Math.round(
+        overlap * 100
+      )}%).`
+    );
   } else {
-    notes.push(`Technische Bestandteile vergleichbar (${Math.round(overlap * 100)}%).`);
+    notes.push(
+      `Technische Bestandteile vergleichbar (${Math.round(
+        overlap * 100
+      )}%).`
+    );
   }
 
-  const rowHasLiefern = fullRowNorm.includes("liefern") || fullRowNorm.includes("lieferung");
-  const dbHasLiefern = fullDbNorm.includes("liefern") || fullDbNorm.includes("lieferung");
-  const rowHasEinbau = /verlegen|einbauen|montieren|setzen|herstellen/.test(fullRowNorm);
-  const dbHasEinbau = /verlegen|einbauen|montieren|setzen|herstellen/.test(fullDbNorm);
+  /*
+   * Exakte technische Werte.
+   * Diese Prüfung ist bewusst unabhängig vom Ranking.
+   */
+  const rowValues = rlcExtractTechnicalValues(rowText);
+  const dbValues = rlcExtractTechnicalValues(dbText);
+
+  if (
+    rowValues.dimensions.size > 0 &&
+    dbValues.dimensions.size > 0
+  ) {
+    const dimensionOverlap = rlcSetOverlap(
+      rowValues.dimensions,
+      dbValues.dimensions
+    );
+
+    if (dimensionOverlap === 0) {
+      reasons.push(
+        `Abmessung/DN nicht vergleichbar: LV=${Array.from(
+          rowValues.dimensions
+        ).join(", ")}, DB=${Array.from(dbValues.dimensions).join(", ")}.`
+      );
+    } else {
+      notes.push("Abmessung/DN technisch vergleichbar.");
+    }
+  }
+
+  if (
+    rowValues.materials.size > 0 &&
+    dbValues.materials.size > 0
+  ) {
+    const materialOverlap = rlcSetOverlap(
+      rowValues.materials,
+      dbValues.materials
+    );
+
+    if (materialOverlap === 0) {
+      reasons.push(
+        `Material nicht vergleichbar: LV=${Array.from(
+          rowValues.materials
+        ).join(", ")}, DB=${Array.from(dbValues.materials).join(", ")}.`
+      );
+    } else {
+      notes.push("Material technisch vergleichbar.");
+    }
+  }
+
+  /*
+   * Leistungsart / Umfang.
+   */
+  const rowLeistungsart = detectLeistungsart(rowText);
+  const dbLeistungsart = detectLeistungsart(dbText);
+
+  if (
+    rowLeistungsart &&
+    dbLeistungsart &&
+    rowLeistungsart !== "Sonstige Leistung" &&
+    dbLeistungsart !== "Sonstige Leistung"
+  ) {
+    if (rowLeistungsart !== dbLeistungsart) {
+      reasons.push(
+        `Leistungsart nicht vergleichbar: LV=${rowLeistungsart}, DB=${dbLeistungsart}.`
+      );
+    } else {
+      notes.push(`Leistungsart vergleichbar: ${rowLeistungsart}.`);
+    }
+  }
+
+  /*
+   * Zusätzliche Scope-Prüfung.
+   */
+  const rowHasLiefern =
+    fullRowNorm.includes("liefern") ||
+    fullRowNorm.includes("lieferung");
+
+  const dbHasLiefern =
+    fullDbNorm.includes("liefern") ||
+    fullDbNorm.includes("lieferung");
+
+  const rowHasEinbau =
+    /verlegen|einbauen|montieren|setzen|herstellen/.test(fullRowNorm);
+
+  const dbHasEinbau =
+    /verlegen|einbauen|montieren|setzen|herstellen/.test(fullDbNorm);
 
   if (rowHasLiefern !== dbHasLiefern) {
     reasons.push("Leistungsumfang Lieferung ist nicht gleich.");
@@ -789,21 +1388,29 @@ function checkDbPriceComparability(row: any, db: any, match?: DbMatch) {
   }
 
   const rowMenge = n(row?.menge);
+
   if (rowMenge <= 0) {
     reasons.push("Menge fehlt oder ist 0.");
   }
 
   const score = n(match?.score);
+
   if (match && score < 65) {
     reasons.push(`Datenbank-Matchscore zu niedrig (${score}).`);
   }
 
   const rowPos = s(row?.posNr);
   const dbPos = s(db?.positionNumber);
-  const posExact = rowPos && dbPos && norm(rowPos) === norm(dbPos);
+
+  const posExact =
+    !!rowPos &&
+    !!dbPos &&
+    norm(rowPos) === norm(dbPos);
 
   if (!posExact && overlap < 0.7) {
-    reasons.push("Keine identische Positionsnummer und technische Ähnlichkeit nicht stark genug.");
+    reasons.push(
+      "Keine identische Positionsnummer und technische Ähnlichkeit nicht stark genug."
+    );
   }
 
   return {
@@ -814,6 +1421,12 @@ function checkDbPriceComparability(row: any, db: any, match?: DbMatch) {
     posExact,
     rowFacts: Array.from(rowFacts),
     dbFacts: Array.from(dbFacts),
+    rowDimensions: Array.from(rowValues.dimensions),
+    dbDimensions: Array.from(dbValues.dimensions),
+    rowMaterials: Array.from(rowValues.materials),
+    dbMaterials: Array.from(dbValues.materials),
+    rowLeistungsart,
+    dbLeistungsart,
   };
 }
 
@@ -992,8 +1605,22 @@ function isStructuralTitleRow(row: InputRow): boolean {
   if (!text) return false;
 
   /*
+   * Reale LV-Position schlägt Positionsnummer-Form.
+   * Manche GAEB/LV verwenden echte Leistungspositionen als 1, 2, 1.10 usw.
+   * Eine Position mit Menge > 0, Einheit und technischem Text darf deshalb
+   * niemals allein wegen der kurzen OZ als Titel/Gliederung behandelt werden.
+   */
+  const hasRealText =
+    kurz.length >= 8 ||
+    lang.length >= 18 ||
+    /(aushub|abfuhr|verfüll|verfull|pflaster|asphalt|rohr|leitung|schacht|beton|baustell|boden|trag|entsorg|einbau|ausbau)/i.test(text);
+
+  if (menge > 0 && unit && hasRealText) return false;
+
+  /*
    * Reine Gliederungsnummern:
-   * 01, 02, 03, 04 oder 01.00 / 02.00 sind Titel/Abschnitte.
+   * 01, 02, 03, 04 oder 01.00 / 02.00 sind Titel/Abschnitte,
+   * aber nur wenn sie keine reale Leistungsposition sind.
    */
   if (/^\d{1,2}$/.test(pos)) return true;
   if (/^\d{1,2}\.0{1,3}$/.test(pos)) return true;
@@ -1079,2996 +1706,10 @@ function isStructuralTitleRow(row: InputRow): boolean {
 
   return false;
 }
-function plausibilityMinEp(text: string, unit: string): number {
-  const light = lightSurfaceRange(text, unit);
-  if (light.min > 0) return light.min;
 
-  const t = norm(text);
-  const u = normUnit(unit);
 
-  if (u === "m²") {
-    if (t.includes("schneiden") || t.includes("fugenschnitt")) return 5;
-    if (t.includes("splittbett") || t.includes("splitt")) return 10;
-    if (t.includes("sandbett") || t.includes("bettung")) return 8;
-    if (t.includes("frostschutz") || t.includes("frostschutzschicht")) return 18;
-    if (t.includes("schottertragschicht") || t.includes("tragschicht")) return 18;
-    if (t.includes("asphalttragschicht") || t.includes("ac 22")) return 18;
-    if (t.includes("asphalt")) return 8;
-    if (t.includes("pflaster aufnehmen")) return 10;
-    if (t.includes("pflaster") && (t.includes("wiederverlegen") || t.includes("wiederherstellen"))) return 35;
-    if (t.includes("pflaster") && (t.includes("liefern") || t.includes("neu"))) return 55;
-    if (t.includes("pflaster")) return 35;
-    if (t.includes("schalung")) return 25;
-    if (t.includes("bewehrung")) return 4;
-    if (t.includes("beton")) return 25;
-    return 0;
-  }
 
-  if (u === "m³") {
-    if (t.includes("handschachtung") || t.includes("handschacht")) return 75;
-    if (t.includes("aushub") || t.includes("baugrube") || t.includes("auskofferung")) return 18;
-    if (t.includes("fels")) return 90;
-    if (t.includes("verfüll") || t.includes("verfuell")) return 28;
-    if (t.includes("frostschutz") || t.includes("kies") || t.includes("schotter")) return 35;
-    if (t.includes("sand")) return 28;
-    if (t.includes("beton")) return 120;
-    return 0;
-  }
 
-  if (u === "m") {
-    if (t.includes("asphalt") && (t.includes("schneiden") || t.includes("fugenschnitt"))) return 5;
-    if (t.includes("speedpipe") || t.includes("microduct")) return 6;
-    if (t.includes("kabelschutzrohr")) return 14;
-    if (t.includes("leerrohr")) return 10;
-    if (t.includes("wasser") || t.includes("pe-hd") || t.includes("pehd")) return 28;
-    if (t.includes("kanal") || t.includes("kg rohr") || t.includes("dn")) return 35;
-    if (t.includes("bordstein") || t.includes("randstein") || t.includes("leistenstein")) return 55;
-    return 0;
-  }
-
-  if (u === "t") {
-    if (t.includes("asphalt")) return 35;
-    if (t.includes("boden") || t.includes("erde") || t.includes("aushub")) return 18;
-    if (t.includes("bauschutt")) return 35;
-    if (t.includes("teer") || t.includes("pak")) return 120;
-    return 0;
-  }
-
-  if (u === "St") {
-    if (t.includes("hausanschluss")) return 350;
-    if (t.includes("schacht")) return 750;
-    if (t.includes("ablauf") || t.includes("sinkkasten")) return 250;
-    if (t.includes("bogen") || t.includes("abzweig") || t.includes("formstück")) return 35;
-    return 0;
-  }
-
-  return 0;
-}
-
-function plausibilityMaxEp(text: string, unit: string): number {
-  const light = lightSurfaceRange(text, unit);
-  if (light.max > 0) return light.max;
-
-  const t = norm(text);
-  const u = normUnit(unit);
-
-  if (u === "m²") {
-    if (t.includes("schneiden") || t.includes("fugenschnitt")) return 18;
-    if (t.includes("splittbett") || t.includes("splitt")) return 32;
-    if (t.includes("sandbett") || t.includes("bettung")) return 28;
-    if (t.includes("frostschutz") || t.includes("frostschutzschicht")) return 65;
-    if (t.includes("schottertragschicht") || t.includes("tragschicht")) return 65;
-    if (t.includes("asphalttragschicht") || t.includes("ac 22")) return 55;
-    if (t.includes("asphalt")) return 35;
-    if (t.includes("pflaster aufnehmen")) return 35;
-    if (t.includes("pflaster") && (t.includes("wiederverlegen") || t.includes("wiederherstellen"))) return 95;
-    if (t.includes("pflaster") && (t.includes("liefern") || t.includes("neu"))) return 145;
-    if (t.includes("pflaster")) return 120;
-    if (t.includes("rasengitter")) return 165;
-    if (t.includes("plattenbelag") || t.includes("betonplatten")) return 130;
-    if (t.includes("naturstein")) return 240;
-    if (t.includes("schalung")) return 85;
-    if (t.includes("bewehrung")) return 12;
-    if (t.includes("beton")) return 95;
-    return 0;
-  }
-
-  if (u === "m³") {
-    if (t.includes("handschachtung") || t.includes("handschacht")) return 240;
-    if (t.includes("aushub") || t.includes("baugrube") || t.includes("auskofferung")) return 85;
-    if (t.includes("fels")) return 280;
-    if (t.includes("verfüll") || t.includes("verfuell")) return 95;
-    if (t.includes("frostschutz") || t.includes("kies") || t.includes("schotter")) return 125;
-    if (t.includes("sand")) return 95;
-    if (t.includes("beton")) return 260;
-    return 0;
-  }
-
-  if (u === "m") {
-    if (t.includes("asphalt") && (t.includes("schneiden") || t.includes("fugenschnitt"))) return 18;
-    if (t.includes("speedpipe") || t.includes("microduct")) return 35;
-    if (t.includes("kabelschutzrohr")) return 75;
-    if (t.includes("leerrohr")) return 55;
-    if (t.includes("wasser") || t.includes("pe-hd") || t.includes("pehd")) return 160;
-    if (t.includes("kanal") || t.includes("kg rohr") || t.includes("dn")) return 260;
-    if (t.includes("bordstein") || t.includes("randstein") || t.includes("leistenstein")) return 180;
-    return 0;
-  }
-
-  if (u === "t") {
-    if (t.includes("asphalt")) return 120;
-    if (t.includes("boden") || t.includes("erde") || t.includes("aushub")) return 75;
-    if (t.includes("bauschutt")) return 140;
-    if (t.includes("teer") || t.includes("pak")) return 420;
-    return 0;
-  }
-
-  if (u === "St") {
-    if (t.includes("hausanschluss")) return 2500;
-    if (t.includes("schacht")) return 8500;
-    if (t.includes("ablauf") || t.includes("sinkkasten")) return 1500;
-    if (t.includes("bogen") || t.includes("abzweig") || t.includes("formstück")) return 350;
-    return 0;
-  }
-
-  return 0;
-}
-
-
-function isKleinteileZulagenGuardPosition(textRaw: string, unitRaw: string): boolean {
-  const t = norm(textRaw);
-  const u = norm(unitRaw);
-
-  const isSmallUnit =
-    /^(st|stk|stück|stueck|cm|m|lfm|laufmeter|meter|kg|psch)$/.test(u);
-
-  const hasSmallPartText =
-    /dichtkappe|dichtkappen|endstopfen|stopfen|kappe|kappen|muffe|muffen|doppelsteckmuffe|einzelzugabdichtung|abdichtung|ringraumdichtung|isolierbinde|messingkupplung|messingquetschverschraubung|rohrabschluss|formstück|formstueck|bogen|boegen|passstück|passstueck|hinweisschild|hinweisstein|haube|bohrprotokoll/.test(t);
-
-  const hasAddonText =
-    /zulage|mehrpreis|minderpreis|mehr- oder minderpreis|erschwernis|mehr-\/minderpreis|mindertiefe|schachtzulage/.test(t);
-
-  const isCmSensitive = /^(cm)$/.test(u) && /kernbohrung|mehr|minder|tiefe|schacht|zulage/.test(t);
-
-  return isSmallUnit && (hasSmallPartText || hasAddonText || isCmSensitive);
-}
-
-function x84AnchorEpFromRow(row: any): number {
-  return (
-    n(row?.angebotUnitPrice) ||
-    n(row?.x84UnitPrice) ||
-    n(row?.originalPreKiPrice) ||
-    n(row?.originalUnitPrice) ||
-    n(row?.einzelpreis) ||
-    n(row?.ep ??
-      row?.preis
-  ) ||
-    n(row?.preis)
-  );
-}
-
-
-
-
-function applyRlcAutonomousSmallPositionGuard(row: any, result: any): any {
-  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
-    return result;
-  }
-
-  if (!result || typeof result !== "object") return result;
-
-  const rawText = norm([
-    row?.posNr,
-    row?.kurztext,
-    row?.shortText,
-    row?.text,
-    row?.langtext,
-  ].join(" "));
-
-  const text = norm([
-    rawText,
-    result?.kurztext,
-    result?.langtext,
-    result?.leistungsart,
-    result?.bauverfahren,
-  ].join(" "));
-
-  const unit = norm(row?.einheit ?? row?.unit ?? result?.einheit ?? result?.unit);
-  const qty = n(row?.menge ?? row?.quantity ?? result?.menge ?? result?.quantity, 1);
-
-  const currentEp =
-    n(result?.finalUnitPrice) ||
-    n(result?.rlcKiUnitPrice) ||
-    n(result?.suggestedUnitPrice) ||
-    n(result?.unitPrice) ||
-    n(result?.preis);
-
-  if (currentEp <= 0 || qty <= 0) return result;
-
-  let targetEp = 0;
-  let reason = "";
-
-  const isSt = /^(st|stk|stück|stueck)$/.test(unit);
-  const isCm = /^cm$/.test(unit);
-  const isKg = /^kg$/.test(unit);
-  const isM3 = /^(m3|m³|cbm|kubikmeter)$/.test(unit);
-  const isM = /^(m|lfm|meter|laufmeter|laufende meter)$/.test(unit);
-  const isM2 = /^(m2|m²|qm|quadratmeter)$/.test(unit);
-  const isT = /^(t|to|tonne|tonnen)$/.test(unit);
-  const isH = /^(h|std|stunde|stunden)$/.test(unit);
-  const isKm = /^(km|kilometer)$/.test(unit);
-
-  if (isSt && /dichtkappe|dichtkappen/.test(text)) {
-    targetEp = 6.5;
-    reason = "Dichtkappen als kleines Zubehörteil St plausibilisiert.";
-  } else if (isSt && /endstopfen|stopfen/.test(text)) {
-    targetEp = 8;
-    reason = "Endstopfen als kleines Zubehörteil St plausibilisiert.";
-  } else if (isSt && /einzelzugabdichtung|zugabdichtung/.test(text)) {
-    targetEp = 12;
-    reason = "Einzelzugabdichtung als kleines Zubehörteil St plausibilisiert.";
-  } else if (isSt && /doppelsteckmuffe|steckmuffe/.test(text)) {
-    targetEp = 14;
-    reason = "Doppelsteckmuffe als Verbindungsteil St plausibilisiert.";
-  } else if (isSt && /muffe|kupplung|messingkupplung|messingquetschverschraubung/.test(text)) {
-    targetEp = 18;
-    reason = "Muffe/Kupplung als Verbindungsteil St plausibilisiert.";
-  } else if (isSt && /isolierbinde/.test(text)) {
-    targetEp = 31.9;
-    reason = "Isolierbinde als Zubehör-/Montageteil St plausibilisiert.";
-  } else if (isSt && /hinweisschild|hinweisschilder|hinweisstein/.test(text)) {
-    targetEp = 75;
-    reason = "Hinweisschild/Hinweisstein als kleines St-Element plausibilisiert.";
-  } else if (isSt && /passstück|passstueck|formstück|formstueck|bogen|boegen/.test(text)) {
-    targetEp = 45;
-    reason = "Passstück/Formstück/Bogen als Rohrzubehör St plausibilisiert.";
-  } else if (isSt && /losflansch/.test(text)) {
-    targetEp = 75;
-    reason = "Losflansch als Rohrzubehör St plausibilisiert.";
-  } else if (isSt && /bohrprotokoll|niederschrift/.test(text)) {
-    targetEp = 120;
-    reason = "Bohrprotokoll/Niederschrift als Dokumentations-St-Position plausibilisiert.";
-  }
-
-  if (isCm && /(mehr- oder minderpreis|mehr.*minderpreis|minderpreis|mehrpreis|schachtzulage|tiefe)/.test(text)) {
-    targetEp = 3;
-    reason = "Mehr-/Minderpreis cm als Zuschlagsposition plausibilisiert.";
-  } else if (isCm && /kernbohrung|kernbohrungen/.test(text)) {
-    targetEp = 4.5;
-    reason = "Kernbohrung cm als längenbezogener Zuschlag plausibilisiert.";
-  }
-
-  if (isKg && /baustahl|bewehrung|500\/550|b500/.test(text)) {
-    targetEp = 0.95;
-    reason = "Baustahl kg als Material-/Einbauansatz plausibilisiert.";
-  }
-
-  if (isM3 && /auffüllmaterial|auffuellmaterial/.test(rawText)) {
-    if (/liefern und einbauen|einbauen|lagenweise verdichten|verdichtung/.test(rawText)) {
-      targetEp = 28;
-      reason = "Auffüllmaterial m³ inkl. Einbau/Verdichtung plausibilisiert.";
-    } else {
-      targetEp = 4.5;
-      reason = "Auffüllmaterial m³ als reine Material-/Zulageposition plausibilisiert.";
-    }
-  }
-
-  if (isM && /flächen einzäunen|flaechen einzaeunen|einzäunen|einzaeunen/.test(text)) {
-    targetEp = 3;
-    reason = "Flächen einzäunen als leichte m-Position plausibilisiert.";
-  } else if (isM && /mikrorohrhausanschlussleitung/.test(text)) {
-    targetEp = 4.8;
-    reason = "Mikrorohrhausanschlussleitung als lineare Rohr-/Mikroduct-Position plausibilisiert.";
-  }
-
-  if (isH && /motorflex/.test(text)) {
-    targetEp = 15;
-    reason = "Motorflex h als Kleingerät-/Stundenansatz plausibilisiert.";
-  }
-
-  if (isH && /tieflader/.test(rawText)) {
-    targetEp = 50;
-    reason = "Tieflader h als Geräte-/Transportstundensatz plausibilisiert.";
-  } else if (isH && /meißel|meissel/.test(rawText)) {
-    targetEp = 31.9;
-    reason = "Meißel h als Anbaugerät-/Kleingerätesatz plausibilisiert.";
-  } else if (isH && /stromaggregat/.test(rawText)) {
-    targetEp = 30;
-    reason = "Stromaggregat h als Gerätestundensatz plausibilisiert.";
-  }
-
-  if (isSt && /zulage.*schachtzulauf|schachtzulauf/.test(rawText)) {
-    targetEp = 450;
-    reason = "Zulage Schachtzulauf St plausibilisiert.";
-  } else if (isSt && /vorflut.*hausansch/.test(rawText)) {
-    targetEp = 120;
-    reason = "Vorflut Hausanschluss St plausibilisiert.";
-  } else if (isSt && /pumpensumpf.*0.*2/.test(rawText)) {
-    targetEp = 65;
-    reason = "Pumpensumpf 0-2 m St plausibilisiert.";
-  } else if (isSt && /pumpensumpf.*2.*4/.test(rawText)) {
-    targetEp = 125;
-    reason = "Pumpensumpf 2-4 m St plausibilisiert.";
-  } else if (isSt && /anschluss und verbindung/.test(rawText)) {
-    targetEp = 31.9;
-    reason = "Anschluss und Verbindung St plausibilisiert.";
-  } else if (isSt && /schachtabdeckung.*pp.*klasse d|zulage schachtabdeckung.*klasse d/.test(rawText)) {
-    targetEp = 120;
-    reason = "Schachtabdeckung PP Klasse D / Zulage Klasse D St plausibilisiert.";
-  } else if (isSt && /straßenkappe|strassenkappe/.test(rawText)) {
-    targetEp = 195;
-    reason = "Straßenkappe St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^dokumentation$/.test(rawText.replace(/^\d+\s*/, "").trim())) {
-    targetEp = 250;
-    reason = "Einfache Dokumentation Psch plausibilisiert.";
-  } else if (/^psch$/.test(unit) && /baustellendokumentation/.test(rawText)) {
-    targetEp = 1500;
-    reason = "Baustellendokumentation Psch plausibilisiert.";
-  }
-
-  if (isM && /^\d*\s*erdleitung$/.test(rawText.replace(/^\d+\s*/, "").trim())) {
-    targetEp = 2.8;
-    reason = "Erdleitung m als leichte lineare Position plausibilisiert.";
-  }
-
-  if (/^m²$/.test(unit) && /flächen auflockern|flaechen auflockern/.test(rawText)) {
-    targetEp = 0.8;
-    reason = "Flächen auflockern m² plausibilisiert.";
-  }
-
-  if (isM && /trassenwarnband/.test(rawText)) {
-    targetEp = 0.16;
-    reason = "Trassenwarnband m plausibilisiert.";
-  }
-
-  if (isM && /kalibrierung speedpipe/.test(rawText)) {
-    targetEp = 0.08;
-    reason = "Kalibrierung Speedpipe m plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V3:
-   * zusätzliche technische Familien aus BA-2026-027 Benchmark.
-   * Keine X84-Übernahme, sondern autonome Plausibilitätswerte je Textfamilie.
-   */
-  if (isM && /erdleitung/.test(rawText)) {
-    targetEp = 2.8;
-    reason = "Erdleitung m als leichte lineare Position plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /(^|\s)dokumentation(\s|$)/.test(rawText) && !/baustellendokumentation|beweissicherung|vermessung|bestandsplan|as-built/.test(rawText)) {
-    targetEp = 250;
-    reason = "Einfache Dokumentation Psch plausibilisiert.";
-  }
-
-  if (isM3 && /auffüllmaterial|auffuellmaterial/.test(rawText)) {
-    targetEp = 4.5;
-    reason = "Auffüllmaterial m³ als leichte Material-/Zulageposition plausibilisiert.";
-  }
-
-  if (isSt && /zulage.*erschwernis.*asphaltierung|erschwernis asphaltierung/.test(rawText)) {
-    targetEp = 70;
-    reason = "Zulage Erschwernis Asphaltierung St plausibilisiert.";
-  }
-
-  if (isSt && /paßstücke|passstücke|passstuecke|passstück|passstueck/.test(rawText)) {
-    targetEp = 45;
-    reason = "Passstücke St plausibilisiert.";
-  }
-
-  if (isSt && /hydrantenfußkrümmer|hydrantenfusskruemmer/.test(rawText)) {
-    targetEp = /hausanschluss/.test(rawText) ? 210 : 300;
-    reason = "Hydrantenfußkrümmer St plausibilisiert.";
-  }
-
-  if (isSt && /bäume fällen|baeume faellen|baum fällen|baum faellen/.test(rawText)) {
-    targetEp = /31\s*-\s*50|31.*50/.test(rawText) ? 165 : 85;
-    reason = "Bäume fällen St plausibilisiert.";
-  }
-
-  if (isSt && /hecken|buschwerk/.test(rawText)) {
-    targetEp = 5;
-    reason = "Hecken/Buschwerk roden plausibilisiert.";
-  }
-
-  if (isSt && /haube/.test(rawText)) {
-    targetEp = 130;
-    reason = "Haube als Zulage zu Rohrposition St plausibilisiert.";
-  }
-
-  if (isSt && /spülen und entkeimen|spuelung und entkeimung|entkeimung.*spülung|entkeimung.*spuelung/.test(rawText)) {
-    targetEp = 120;
-    reason = "Spülen und Entkeimen St plausibilisiert.";
-  }
-
-  if (isSt && /zulage.*krümmung|zulage.*kruemmung/.test(rawText)) {
-    targetEp = 90;
-    reason = "Zulage Krümmung St plausibilisiert.";
-  }
-
-  if (isSt && /schmutzfänger|schmutzfaenger/.test(rawText)) {
-    targetEp = 35;
-    reason = "Schmutzfänger St plausibilisiert.";
-  }
-
-  if (isSt && /anschluss an best.*durchlass|anschluss.*durchlass/.test(rawText)) {
-    targetEp = 110;
-    reason = "Anschluss an bestehenden Durchlass St plausibilisiert.";
-  }
-
-  if (isSt && /zulage.*weitere zuläufe|zulage.*weitere zulaeufe|weitere zuläufe|weitere zulaeufe/.test(rawText)) {
-    targetEp = 95;
-    reason = "Zulage weitere Zuläufe St plausibilisiert.";
-  }
-
-  if (isSt && /schutzmaßnahme.*bäumen|schutzmassnahme.*baeumen/.test(rawText)) {
-    targetEp = /31\s*-\s*50|31.*50/.test(rawText) ? 295 : 210;
-    reason = "Schutzmaßnahme an Bäumen St plausibilisiert.";
-  }
-
-  if (isM2 && /ads aus ac 11|asphaltdeckschicht|ac 11/.test(rawText)) {
-    targetEp = 20;
-    reason = "ADS aus AC 11 m² plausibilisiert.";
-  }
-
-  if (isSt && /hausanschluss lwl-kabel|lwl-kabel/.test(rawText)) {
-    targetEp = 115;
-    reason = "Hausanschluss LWL-Kabel St plausibilisiert.";
-  }
-
-  if (isM && /wasserhaltung.*leitungsverlegung/.test(rawText)) {
-    targetEp = 2.5;
-    reason = "Wasserhaltung Leitungsverlegung m plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /beweissicherung.*trasse|beweissicherung.*zufahrtsstraße|beweissicherung.*zufahrtsstrasse/.test(rawText)) {
-    targetEp = 1150;
-    reason = "Beweissicherung Trasse/Zufahrtsstraße Psch plausibilisiert.";
-  }
-
-  if (isM && /pp-rohr.*dn\s*160/.test(rawText)) {
-    targetEp = 29;
-    reason = "PP-Rohr DN 160 m plausibilisiert.";
-  }
-
-  if (isSt && /verzinkte fittings/.test(rawText)) {
-    targetEp = 38;
-    reason = "Verzinkte Fittings St plausibilisiert.";
-  }
-
-  if (isM && /hdpe.*schutzrohre.*da\s*50|hdpe.*schutzrohr.*da\s*50/.test(rawText)) {
-    targetEp = 14;
-    reason = "HDPE Schutzrohr DA 50 m plausibilisiert.";
-  }
-
-  if (isSt && /zuschlag kabellehrrohr|zuschlag kabel.*lehrrohr/.test(rawText)) {
-    targetEp = 15;
-    reason = "Zuschlag Kabelleerrohr St plausibilisiert.";
-  }
-
-  if (isSt && /weidezaungerät|weidezaungeraet/.test(rawText)) {
-    targetEp = 310;
-    reason = "Weidezaungerät St plausibilisiert.";
-  }
-
-  if (isSt && /zulage seitl.*zulauf/.test(rawText)) {
-    targetEp = 180;
-    reason = "Zulage seitlicher Zulauf St plausibilisiert.";
-  }
-
-  if (isM && /runddraht/.test(rawText)) {
-    targetEp = 3.0;
-    reason = "Runddraht m plausibilisiert.";
-  }
-
-  if (isM && /entkeimung.*spülung|entkeimung.*spuelung/.test(rawText)) {
-    targetEp = 1.8;
-    reason = "Entkeimung/Spülung m plausibilisiert.";
-  }
-
-  if (isT && /riesel/.test(rawText)) {
-    targetEp = 32;
-    reason = "Riesel t plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V4:
-   * weitere autonome Familienkorrekturen + Schutz gegen falsches Absenken großer Schachtpositionen.
-   */
-  if (isM2 && /hecken|buschwerk/.test(rawText)) {
-    targetEp = 5;
-    reason = "Hecken und Buschwerk roden m² plausibilisiert.";
-  }
-
-  if (isSt && /betonsockel/.test(rawText)) {
-    targetEp = 1320;
-    reason = "Betonsockel C25/30 St plausibilisiert.";
-  }
-
-  if (isSt && /wasserhaltung.*baugrube/.test(rawText)) {
-    targetEp = 320;
-    reason = "Wasserhaltung Baugrube St plausibilisiert.";
-  }
-
-  if (isSt && /böschungsstück|boeschungsstueck|böschungsstueck|boeschungsstück/.test(rawText)) {
-    targetEp = 125;
-    reason = "Böschungsstück bis DN 300 St plausibilisiert.";
-  }
-
-  if (isT && /schroppen/.test(rawText)) {
-    targetEp = 32;
-    reason = "Schroppen t plausibilisiert.";
-  }
-
-  if (isKg && /baustahl.*500\/550|500\/550/.test(rawText)) {
-    targetEp = 0.35;
-    reason = "Baustahl 500/550 kg als LV-spezifischer Ansatz plausibilisiert.";
-  }
-
-  if (isM && /schichtenverbund/.test(rawText)) {
-    targetEp = 2;
-    reason = "Zulage Schichtenverbund m plausibilisiert.";
-  }
-
-  if (isSt && /ringraumdichtung/.test(rawText)) {
-    targetEp = /dn\s*150/.test(rawText) ? 260 : 230;
-    reason = "Ringraumdichtung St plausibilisiert.";
-  }
-
-  if (isM && /drainageleitungen|drainageleitung/.test(rawText)) {
-    targetEp = 11;
-    reason = "Drainageleitung m plausibilisiert.";
-  }
-
-  if (isM && /wanderweg/.test(rawText)) {
-    targetEp = 8.5;
-    reason = "Zulage Wanderweg wiederherstellen m plausibilisiert.";
-  }
-
-  if (isSt && /gusseiserne schachtabdeckung|schachtabdeckung.*gusseisen|schachtabdeckung.*kl\.?d/.test(rawText)) {
-    targetEp = 340;
-    reason = "Gusseiserne Schachtabdeckung Klasse D St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /abbau und abfuhr/.test(rawText)) {
-    targetEp = 1250;
-    reason = "Abbau und Abfuhr Psch plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstücke|pe-hd.*formstuecke/.test(rawText)) {
-    targetEp = 18;
-    reason = "PE-HD Formstücke St plausibilisiert.";
-  }
-
-  if (isM3 && /handschachtung/.test(rawText)) {
-    targetEp = 90;
-    reason = "Handschachtung m³ plausibilisiert.";
-  }
-
-  if (isM && /verlegung hausanschlussleitung/.test(rawText)) {
-    targetEp = 5.8;
-    reason = "Verlegung Hausanschlussleitung m plausibilisiert.";
-  }
-
-  if (isM && /hdpe.*rohre.*da\s*63|hdpe.*rohr.*da\s*63/.test(rawText)) {
-    targetEp = 6.5;
-    reason = "HDPE Rohr DA 63 m plausibilisiert.";
-  }
-
-  if (isM && /hdpe.*rohre.*da\s*75|hdpe.*rohr.*da\s*75/.test(rawText)) {
-    targetEp = 7.2;
-    reason = "HDPE Rohr DA 75 m plausibilisiert.";
-  }
-
-  if (isM && /asphalt trennen/.test(rawText)) {
-    targetEp = 3.6;
-    reason = "Asphalt trennen m plausibilisiert.";
-  }
-
-  if (isSt && /beweissicherung gebäude|beweissicherung gebaeude/.test(rawText)) {
-    targetEp = 370;
-    reason = "Beweissicherung Gebäude St plausibilisiert.";
-  }
-
-  if (isM && /zwischenplanum/.test(rawText)) {
-    targetEp = 0.85;
-    reason = "Zwischenplanum m plausibilisiert.";
-  }
-
-  if (isSt && /warnanlage/.test(rawText)) {
-    targetEp = 410;
-    reason = "Warnanlage St plausibilisiert.";
-  }
-
-  if (isM2 && /ats aus ac 22|ac 22 tn/.test(rawText)) {
-    targetEp = 32;
-    reason = "ATS aus AC 22 TN m² plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /zusätzliche anreise|zusaetzliche anreise/.test(rawText)) {
-    targetEp = 345;
-    reason = "Zusätzliche Anreise Psch plausibilisiert.";
-  }
-
-  /*
-   * Schutz: große Schacht-/Pumpwerkspositionen dürfen nicht durch Kleinteile-Regeln
-   * auf 8/18/45 EUR fallen.
-   */
-  if (isSt && /pumpschacht|doppelpumpstation|betonfertigteilschacht|druckerhöhungsschacht|druckerhoehungsschacht|druckleitungsendschacht|energieumwandlungsschacht|kabelzugschacht|bentonitver|betonitver/.test(rawText)) {
-    if (/pumpschacht|doppelpumpstation/.test(rawText)) {
-      targetEp = 51500;
-      reason = "Pumpschacht/Doppelpumpstation als Großposition St plausibilisiert.";
-    } else if (/betonfertigteilschacht.*pw\s*1|druckerhöhung.*pw\s*1|druckerhoehung.*pw\s*1/.test(rawText)) {
-      targetEp = 54500;
-      reason = "Betonfertigteilschacht/Druckerhöhung PW1 St plausibilisiert.";
-    } else if (/betonfertigteilschacht.*pw\s*2|druckerhöhung.*pw\s*2|druckerhoehung.*pw\s*2/.test(rawText)) {
-      targetEp = 39500;
-      reason = "Betonfertigteilschacht/Druckerhöhung PW2 St plausibilisiert.";
-    } else if (/druckleitungsendschacht/.test(rawText)) {
-      targetEp = 4850;
-      reason = "Druckleitungsendschacht St plausibilisiert.";
-    } else if (/energieumwandlungsschacht/.test(rawText)) {
-      targetEp = 3650;
-      reason = "Energieumwandlungsschacht St plausibilisiert.";
-    } else if (/kabelzugschacht/.test(rawText)) {
-      targetEp = 1400;
-      reason = "Kabelzugschacht PP St plausibilisiert.";
-    } else if (/bentonitver|betonitver/.test(rawText)) {
-      targetEp = 22500;
-      reason = "Bentonitver- und Entsorgung St plausibilisiert.";
-    }
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis.*kührointer|erschwernis.*kuehrointer/.test(rawText)) {
-    targetEp = 77500;
-    reason = "Erschwernis Alter Kührointer Weg Psch plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis vermessung/.test(rawText)) {
-    targetEp = 12100;
-    reason = "Erschwernis Vermessung Psch plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V5:
-   * harte Großpositions-Korrektur NACH allen Kleinteile-Regeln.
-   * Dadurch dürfen Schacht-/Pumpwerk-/Elektro-/Sonderpositionen nicht auf 8/18/45 EUR fallen.
-   */
-  if (isSt && /zulage schachtzulauf|schachtzulauf/.test(rawText)) {
-    targetEp = 470;
-    reason = "Zulage Schachtzulauf DN 160 St plausibilisiert.";
-  }
-
-  if (isSt && /betonsockel/.test(rawText)) {
-    targetEp = 1320;
-    reason = "Betonsockel C25/30 St plausibilisiert.";
-  }
-
-  if (isSt && /übergangsstück|uebergangsstueck|übergangsstueck|uebergangsstück/.test(rawText)) {
-    targetEp = 90;
-    reason = "Übergangsstück DN 50 St plausibilisiert.";
-  }
-
-  if (isSt && /statik.*druckerhöhungsschacht|statik.*druckerhoehungsschacht/.test(rawText)) {
-    targetEp = 4100;
-    reason = "Statik Druckerhöhungsschacht St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis.*kührointer|erschwernis.*kuehrointer/.test(rawText)) {
-    targetEp = 77500;
-    reason = "Erschwernis Alter Kührointer Weg Psch plausibilisiert.";
-  }
-
-  if (isSt && /bentonitver|betonitver/.test(rawText)) {
-    targetEp = 22500;
-    reason = "Bentonitver- und Entsorgung DA 180 St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis vermessung/.test(rawText)) {
-    targetEp = /395/.test(rawText) ? 120 : 12100;
-    reason = "Erschwernis Vermessung Psch plausibilisiert.";
-  }
-
-  if (isSt && /überdachung einstieg|ueberdachung einstieg/.test(rawText)) {
-    targetEp = 11700;
-    reason = "Überdachung Einstieg St plausibilisiert.";
-  }
-
-  if (isSt && /revisionsschacht/.test(rawText)) {
-    if (/dn\s*1000/.test(rawText)) {
-      targetEp = 1180;
-      reason = "Revisionsschacht DN 1000 St plausibilisiert.";
-    } else if (/zu- und ablauf/.test(rawText)) {
-      targetEp = 2800;
-      reason = "Revisionsschacht Zu- und Ablauf St plausibilisiert.";
-    } else {
-      targetEp = 2450;
-      reason = "Revisionsschacht St plausibilisiert.";
-    }
-  }
-
-  if (isSt && /kabelzugschacht/.test(rawText)) {
-    targetEp = 1400;
-    reason = "Kabelzugschacht PP St plausibilisiert.";
-  }
-
-  if (isSt && /formstücke.*gg.*auslaufklappe|formstuecke.*gg.*auslaufklappe/.test(rawText)) {
-    targetEp = 915;
-    reason = "Formstücke GG Auslaufklappe St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /transport und montage pumpensteuerung/.test(rawText)) {
-    targetEp = 4950;
-    reason = "Transport und Montage Pumpensteuerung Psch plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /elektroverteilung/.test(rawText)) {
-    targetEp = 14000;
-    reason = "Elektroverteilung Psch plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstück.*abzweig|pe-hd.*formstueck.*abzweig/.test(rawText)) {
-    targetEp = 690;
-    reason = "PE-HD Formstück Abzweig DA 180 St plausibilisiert.";
-  }
-
-  if (isSt && /zuschlag fabrikat simona/.test(rawText)) {
-    targetEp = 22600;
-    reason = "Zuschlag Fabrikat Simona St plausibilisiert.";
-  }
-
-  if (isSt && /paßstück.*dn\s*600|passstück.*dn\s*600|passstueck.*dn\s*600/.test(rawText)) {
-    targetEp = 315;
-    reason = "Paßstück bis DN 600 Kunststoffrohr St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis zufahrt/.test(rawText)) {
-    targetEp = 22400;
-    reason = "Erschwernis Zufahrt zur Baustelle Psch plausibilisiert.";
-  }
-
-  if (isSt && /niveaumessung/.test(rawText)) {
-    targetEp = 2175;
-    reason = "Niveaumessung St plausibilisiert.";
-  }
-
-  if (isSt && /magnetisch induktiver durchflussmesser/.test(rawText)) {
-    targetEp = 3070;
-    reason = "Magnetisch induktiver Durchflussmesser St plausibilisiert.";
-  }
-
-  if (isSt && /auskreuzen/.test(rawText)) {
-    targetEp = 1340;
-    reason = "Auskreuzen St plausibilisiert.";
-  }
-
-  if (isCm && /mehr- oder mindertiefe.*pw\s*1/.test(rawText)) {
-    targetEp = 87;
-    reason = "Mehr-/Mindertiefe PW1 cm plausibilisiert.";
-  }
-
-  if (isCm && /mehr- oder mindertiefe.*pw\s*2|mehr- oder mindertiefe/.test(rawText)) {
-    targetEp = 62.61;
-    reason = "Mehr-/Mindertiefe cm V19 plausibilisiert.";
-  }
-
-  if (isM2 && /straßenaufbruch|strassenaufbruch/.test(rawText)) {
-    targetEp = 17;
-    reason = "Straßenaufbruch m² plausibilisiert.";
-  }
-
-  if (isSt && /systemdeckel/.test(rawText)) {
-    targetEp = 205;
-    reason = "Systemdeckel St plausibilisiert.";
-  }
-
-  if (isM3 && /mutterboden liefern und andecken/.test(rawText)) {
-    targetEp = 49;
-    reason = "Mutterboden liefern und andecken m³ plausibilisiert.";
-  }
-
-  if (isM && /bauzaun/.test(rawText)) {
-    targetEp = 11;
-    reason = "Bauzaun lfm plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /verkehrssicherung/.test(rawText)) {
-    targetEp = 7400;
-    reason = "Verkehrssicherung Psch plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis beengte bauweise/.test(rawText)) {
-    targetEp = 12250;
-    reason = "Erschwernis beengte Bauweise Psch plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V7:
-   * weitere Ziel-Familien aus Benchmarkauswertung, ohne X84 als Berechnungsbasis.
-   */
-  if (isSt && /schachtabdeckung.*pp-schacht.*klasse d|schachtabdeckung.*pp.*klasse d/.test(rawText)) {
-    targetEp = 112;
-    reason = "Schachtabdeckung PP-Schacht Klasse D St plausibilisiert.";
-  }
-
-  if (isSt && /schachtabdeckung.*pp-schacht.*b125|schachtabdeckung.*pp.*b125/.test(rawText)) {
-    targetEp = 462;
-    reason = "Schachtabdeckung PP-Schacht B125 St plausibilisiert.";
-  }
-
-  if (isSt && /einsteighilfe/.test(rawText)) {
-    targetEp = 266;
-    reason = "Einsteighilfe St plausibilisiert.";
-  }
-
-  if (isSt && /revisionsschächte.*dn\s*1000|revisionsschaechte.*dn\s*1000/.test(rawText)) {
-    targetEp = 1180;
-    reason = "Revisionsschächte DN1000 St plausibilisiert.";
-  }
-
-  if (isSt && /paßstück.*dn\s*600|passstück.*dn\s*600|passstueck.*dn\s*600/.test(rawText)) {
-    targetEp = 315;
-    reason = "Paßstück DN600 Kunststoffrohr St plausibilisiert.";
-  }
-
-  if (isSt && /paßstück.*dn\s*300|passstück.*dn\s*300|passstueck.*dn\s*300/.test(rawText)) {
-    targetEp = 115;
-    reason = "Paßstück DN300 Kunststoffrohr St plausibilisiert.";
-  }
-
-  if (isSt && /formstücke.*gg.*bögen|formstuecke.*gg.*boegen|formstücke.*ggg.*bögen|formstuecke.*ggg.*boegen/.test(rawText)) {
-    targetEp = 350;
-    reason = "Formstücke GG/GGG Bögen St plausibilisiert.";
-  }
-
-  if (isSt && /besprechungsraum/.test(rawText)) {
-    targetEp = 7080;
-    reason = "Besprechungsraum St plausibilisiert.";
-  }
-
-  if (isSt && /mmb-stück|mmb-stueck/.test(rawText)) {
-    targetEp = 760;
-    reason = "MMB-Stück St plausibilisiert.";
-  }
-
-  if (isSt && /entwässerungsrinne|entwaesserungsrinne/.test(rawText)) {
-    targetEp = /4\s*-\s*5|4-5/.test(rawText) ? 1000 : 760;
-    reason = "Entwässerungsrinne St plausibilisiert.";
-  }
-
-  if (isSt && /start- und zielgrube|start.*zielgrube/.test(rawText)) {
-    targetEp = 1485;
-    reason = "Start- und Zielgrube St plausibilisiert.";
-  }
-
-  if (isM && /anschluss mit fugenband/.test(rawText)) {
-    targetEp = 8;
-    reason = "Anschluss mit Fugenband m plausibilisiert.";
-  }
-
-  if (isH && /stillstandszeiten.*da\s*180/.test(rawText)) {
-    targetEp = 630;
-    reason = "Stillstandszeiten DA180 h plausibilisiert.";
-  }
-
-  if (isSt && /böschungsstück.*dn\s*800|boeschungsstueck.*dn\s*800/.test(rawText)) {
-    targetEp = 617;
-    reason = "Böschungsstück DN800 St plausibilisiert.";
-  }
-
-  if (isSt && /böschungsstück.*dn\s*600|boeschungsstueck.*dn\s*600/.test(rawText)) {
-    targetEp = 556;
-    reason = "Böschungsstück DN600 St plausibilisiert.";
-  }
-
-  if (isSt && /stromantrag/.test(rawText)) {
-    targetEp = 222;
-    reason = "Stromantrag St plausibilisiert.";
-  }
-
-  if (isSt && /schachtabdeckung dps/.test(rawText)) {
-    targetEp = 9940;
-    reason = "Schachtabdeckung DPS St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /fernwirktechnik/.test(rawText)) {
-    targetEp = 7880;
-    reason = "Fernwirktechnik Psch plausibilisiert.";
-  }
-
-  if (isM && /druckprobe/.test(rawText)) {
-    targetEp = 2.94;
-    reason = "Druckprobe lfm plausibilisiert.";
-  }
-
-  if (isM3 && /sauberkeitsschicht/.test(rawText)) {
-    targetEp = 520;
-    reason = "Sauberkeitsschicht m³ plausibilisiert.";
-  }
-
-  if (isM && /polyethylenrohr.*pe-r.*weich|pe-r\.weich/.test(rawText)) {
-    targetEp = 24.4;
-    reason = "Polyethylenrohr PE-R weich m plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustelleneinrichtung horizontalbohrung/.test(rawText)) {
-    targetEp = 13900;
-    reason = "Baustelleneinrichtung Horizontalbohrung Psch plausibilisiert.";
-  }
-
-  if (isM2 && /feinplanie/.test(rawText)) {
-    targetEp = 8.6;
-    reason = "Feinplanie m² plausibilisiert.";
-  }
-
-  if (isSt && /rohrabschluss/.test(rawText)) {
-    targetEp = 81;
-    reason = "Rohrabschluss St plausibilisiert.";
-  }
-
-  if (isM && /zuschlag zur pilotbohrung/.test(rawText)) {
-    targetEp = 610;
-    reason = "Zuschlag zur Pilotbohrung m plausibilisiert.";
-  }
-
-  if (isSt && /bauschild/.test(rawText)) {
-    targetEp = 3370;
-    reason = "Bauschild St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /instandhaltung verkehrsflächen|instandhaltung verkehrsflaechen/.test(rawText)) {
-    targetEp = 10730;
-    reason = "Instandhaltung Verkehrsflächen Psch plausibilisiert.";
-  }
-
-  if (isSt && /ggg-formstück flanschverbindung|ggg-formstueck flanschverbindung/.test(rawText)) {
-    targetEp = 426;
-    reason = "GGG-Formstück Flanschverbindung St plausibilisiert.";
-  }
-
-  if (isSt && /zuschlag pumpenfabrikat/.test(rawText)) {
-    targetEp = 8930;
-    reason = "Zuschlag Pumpenfabrikat St plausibilisiert.";
-  }
-
-  if (isSt && /unterflurhydrant/.test(rawText)) {
-    targetEp = 1486;
-    reason = "Unterflurhydrant St plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V8:
-   * weitere Benchmark-Familien, ohne X84 als Berechnungsbasis im Produktivmodus.
-   */
-  if (isM && /druckprobe speedpipe/.test(rawText)) {
-    targetEp = 0.20;
-    reason = "Druckprobe Speedpipe m plausibilisiert.";
-  }
-
-  if (isM3 && /baugrubenaushub/.test(rawText)) {
-    targetEp = 39;
-    reason = "Baugrubenaushub m³ plausibilisiert.";
-  }
-
-  if (isSt && /mehrpreis bauschild/.test(rawText)) {
-    targetEp = 285;
-    reason = "Mehrpreis Bauschild St plausibilisiert.";
-  }
-
-  if (isSt && /straßenkappe|strassenkappe/.test(rawText)) {
-    targetEp = 192;
-    reason = "Straßenkappe UFH St plausibilisiert.";
-  }
-
-  if (isSt && /entwässerungsrinne ausbauen|entwaesserungsrinne ausbauen/.test(rawText)) {
-    targetEp = 158;
-    reason = "Entwässerungsrinne ausbauen St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis vermessung/.test(rawText)) {
-    if (/345|372/.test(rawText)) {
-      targetEp = 3025;
-      reason = "Erschwernis Vermessung Psch klein plausibilisiert.";
-    } else if (/395/.test(rawText)) {
-      targetEp = 120;
-      reason = "Erschwernis Vermessung Psch klein plausibilisiert.";
-    } else {
-      targetEp = 12100;
-      reason = "Erschwernis Vermessung Psch groß plausibilisiert.";
-    }
-  }
-
-  if (isM && /entwässerungsmulde|entwaesserungsmulde/.test(rawText)) {
-    targetEp = 6.1;
-    reason = "Entwässerungsmulde m plausibilisiert.";
-  }
-
-  if (isT && /sand 0\s*-\s*4/.test(rawText)) {
-    targetEp = 30.5;
-    reason = "Sand 0-4 t plausibilisiert.";
-  }
-
-  if (isSt && /paßstücke.*dn\s*500|passstücke.*dn\s*500|passstuecke.*dn\s*500/.test(rawText)) {
-    targetEp = 42;
-    reason = "Paßstücke DN500 St plausibilisiert.";
-  }
-
-  if (isH && /pumpenstunden/.test(rawText)) {
-    targetEp = 23;
-    reason = "Pumpenstunden h plausibilisiert.";
-  }
-
-  if (isM3 && /sauberkeitsschicht/.test(rawText)) {
-    targetEp = /315/.test(rawText) ? 242 : 520;
-    reason = "Sauberkeitsschicht m³ plausibilisiert.";
-  }
-
-  if (isSt && /pumpschacht.*doppelpumpstation/.test(rawText)) {
-    targetEp = 51500;
-    reason = "Pumpschacht Doppelpumpstation St plausibilisiert.";
-  }
-
-  if (isSt && /bentonitver|betonitver/.test(rawText)) {
-    targetEp = 22500;
-    reason = "Bentonitver- und Entsorgung DA180 St plausibilisiert.";
-  }
-
-  if (isM3 && /suchschlitze/.test(rawText)) {
-    targetEp = 250;
-    reason = "Suchschlitze m³ plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^(\d+\s*)?baustelleneinrichtung$/.test(rawText)) {
-    targetEp = 1400;
-    reason = "Baustelleneinrichtung Psch klein plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustelleneinrichtung abbauen|baustelle räumen|baustelle raeumen/.test(rawText)) {
-    targetEp = 9060;
-    reason = "Baustelleneinrichtung abbauen/räumen Psch plausibilisiert.";
-  }
-
-  if (isSt && /besucherinformation/.test(rawText)) {
-    targetEp = 940;
-    reason = "Besucherinformation St plausibilisiert.";
-  }
-
-  if (isSt && /paßstücke.*dn\s*800|passstücke.*dn\s*800|passstuecke.*dn\s*800/.test(rawText)) {
-    targetEp = 340;
-    reason = "Paßstücke DN800 St plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstücke|pe-hd.*formstuecke/.test(rawText)) {
-    targetEp = /251/.test(rawText) ? 135 : 18;
-    reason = "PE-HD Formstücke St plausibilisiert.";
-  }
-
-  if (isM && /sohlbettung pe/.test(rawText)) {
-    targetEp = 7.5;
-    reason = "Sohlbettung PE m plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /bestandspläne|bestandsplaene/.test(rawText)) {
-    targetEp = 30260;
-    reason = "Bestandspläne Psch plausibilisiert.";
-  }
-
-  if (isSt && /schachtabdeckung liefern und einbauen/.test(rawText)) {
-    targetEp = 5925;
-    reason = "Schachtabdeckung liefern und einbauen St plausibilisiert.";
-  }
-
-  if (isM && /kabelleerrohr.*dn\s*110/.test(rawText)) {
-    targetEp = 36;
-    reason = "Kabelleerrohr DN110 m plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /tüv-abnahme|tuv-abnahme/.test(rawText)) {
-    targetEp = 4480;
-    reason = "TÜV-Abnahme Psch plausibilisiert.";
-  }
-
-  if (isM && /trassenwarnband breitband/.test(rawText)) {
-    targetEp = 1.03;
-    reason = "Trassenwarnband Breitband m plausibilisiert.";
-  }
-
-  if (isM2 && /böschungssteine|boeschungssteine/.test(rawText)) {
-    targetEp = 325;
-    reason = "Böschungssteine m² plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /bestandszeichnung/.test(rawText)) {
-    targetEp = 1200;
-    reason = "Bestandszeichnung Psch plausibilisiert.";
-  }
-
-  if (isSt && /zuschlag rückschlagklappe|zuschlag rueckschlagklappe/.test(rawText)) {
-    targetEp = 4560;
-    reason = "Zuschlag Rückschlagklappe St plausibilisiert.";
-  }
-
-  if (isM && /durchlass herstellen/.test(rawText)) {
-    targetEp = 222;
-    reason = "Durchlass herstellen m plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /aufrechterhalten des anliegerverkehrs/.test(rawText)) {
-    targetEp = 7720;
-    reason = "Aufrechterhalten des Anliegerverkehrs Psch plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V9 FINAL OVERRIDE:
-   * harte Korrektur NACH allen vorherigen Familienregeln.
-   * Wichtig: keine X84-Übernahme, sondern LV-Familienwerte für Benchmark-Stabilisierung.
-   */
-  if (isSt && /zulage schachtzulauf.*dn\s*160|schachtzulauf.*dn\s*160/.test(rawText)) {
-    targetEp = 470;
-    reason = "Zulage Schachtzulauf DN160 St final plausibilisiert.";
-  }
-
-  if (isM3 && /baugrubenaushub/.test(rawText)) {
-    targetEp = 39;
-    reason = "Baugrubenaushub m³ final plausibilisiert.";
-  }
-
-  if (isM && /trassenwarnband breitband/.test(rawText)) {
-    targetEp = /399/.test(rawText) ? 0.16 : 1.03;
-    reason = "Trassenwarnband Breitband m final plausibilisiert.";
-  }
-
-  if (isM && /durchlass herstellen.*dn\s*300/.test(rawText)) {
-    targetEp = 108;
-    reason = "Durchlass herstellen DN300 m final plausibilisiert.";
-  }
-
-  if (isM3 && /suchschlitze/.test(rawText)) {
-    targetEp = 124;
-    reason = "Suchschlitze m³ final plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstück.*abzweig.*da\s*180|pe-hd.*formstueck.*abzweig.*da\s*180/.test(rawText)) {
-    targetEp = 690;
-    reason = "PE-HD Formstück Abzweig DA180 St final plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^(\d+\s*)?baustelleneinrichtung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 1400;
-    reason = "Baustelleneinrichtung klein Psch final plausibilisiert.";
-  }
-
-  if (isSt && /schachtabdeckung liefern und einbauen/.test(rawText)) {
-    targetEp = 5925;
-    reason = "Schachtabdeckung liefern und einbauen St final plausibilisiert.";
-  }
-
-  if (isSt && /zulage.*anschluss druckleitung/.test(rawText)) {
-    targetEp = 290;
-    reason = "Zulage Anschluss Druckleitung St final plausibilisiert.";
-  }
-
-  if (isSt && /^(\d+\s*)?schachtabdeckung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 460;
-    reason = "Schachtabdeckung St final plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?kabelschutzrohr$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 2.9;
-    reason = "Kabelschutzrohr lfm final plausibilisiert.";
-  }
-
-  if (isSt && /messingkupplungen/.test(rawText)) {
-    targetEp = 97;
-    reason = "Messingkupplungen St final plausibilisiert.";
-  }
-
-  if (isSt && /auskreuzen/.test(rawText)) {
-    targetEp = 1340;
-    reason = "Auskreuzen St final plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erkundung.*abstimmung.*sprengarbeiten/.test(rawText)) {
-    targetEp = 2950;
-    reason = "Erkundung/Abstimmung Sprengarbeiten Psch final plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /freiluftschrank/.test(rawText)) {
-    targetEp = 7760;
-    reason = "Freiluftschrank Psch final plausibilisiert.";
-  }
-
-  if (isM2 && /rasen oder humus/.test(rawText)) {
-    targetEp = 6.2;
-    reason = "Rasen oder Humus m² final plausibilisiert.";
-  }
-
-  if (isSt && /ggg-formstücke|ggg-formstuecke/.test(rawText)) {
-    targetEp = 225;
-    reason = "GGG-Formstücke St final plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstücke|pe-hd.*formstuecke/.test(rawText)) {
-    targetEp = /266/.test(rawText) ? 88 : /257/.test(rawText) ? 81 : 135;
-    reason = "PE-HD Formstücke St final plausibilisiert.";
-  }
-
-  if (isSt && /mehr- oder minderpreis.*beton/.test(rawText)) {
-    targetEp = 87;
-    reason = "Mehr-/Minderpreis Beton St final plausibilisiert.";
-  }
-
-  if (isSt && /90 grad-bogen/.test(rawText)) {
-    targetEp = 217;
-    reason = "90 Grad-Bogen St final plausibilisiert.";
-  }
-
-  if (isM && /sandüberdeckung|sandueberdeckung/.test(rawText)) {
-    targetEp = 31;
-    reason = "Sandüberdeckung m final plausibilisiert.";
-  }
-
-  if (isSt && /übergangsstück da 90|uebergangsstueck da 90/.test(rawText)) {
-    targetEp = 430;
-    reason = "Übergangsstück DA90-DA50 St final plausibilisiert.";
-  }
-
-  if (isSt && /absperrschieber dn\s*50/.test(rawText)) {
-    targetEp = 775;
-    reason = "Absperrschieber DN50 St final plausibilisiert.";
-  }
-
-  if (isSt && /doppelsteckmuffen permanent/.test(rawText)) {
-    targetEp = 8;
-    reason = "Doppelsteckmuffen permanent St final plausibilisiert.";
-  }
-
-  if (isSt && /böschungsstück.*dn\s*500|boeschungsstueck.*dn\s*500/.test(rawText)) {
-    targetEp = 530;
-    reason = "Böschungsstück DN500 St final plausibilisiert.";
-  }
-
-  if (isSt && /hinweissäulen|hinweissaeulen/.test(rawText)) {
-    targetEp = 317;
-    reason = "Hinweissäulen St final plausibilisiert.";
-  }
-
-  if (isSt && /messingquetschverschraubung/.test(rawText)) {
-    targetEp = 74;
-    reason = "Messingquetschverschraubung St final plausibilisiert.";
-  }
-
-  if (isM && /erschwerniszuschlag.*senkrechte kreuzung/.test(rawText)) {
-    targetEp = 41;
-    reason = "Erschwerniszuschlag senkrechte Kreuzung m final plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V10:
-   * Korrektur zu breiter V8/V9-Regeln.
-   */
-  if (isSt && /zulage schachtzulauf.*dn\s*160/.test(rawText)) {
-    targetEp = /181/.test(rawText) ? 282 : 470;
-    reason = "Zulage Schachtzulauf DN160 St V10 plausibilisiert.";
-  }
-
-  if (isSt && /schachtabdeckung liefern und einbauen/.test(rawText)) {
-    targetEp = /219/.test(rawText) ? 217 : 5925;
-    reason = "Schachtabdeckung liefern und einbauen St V10 plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstück.*bögen.*da\s*180|pe-hd.*formstueck.*boegen.*da\s*180/.test(rawText)) {
-    targetEp = 17;
-    reason = "PE-HD Formstück Bögen DA180 St V10 plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstücke\s+e|pe-hd.*formstuecke\s+e/.test(rawText)) {
-    targetEp = /245/.test(rawText) ? 18.5 : /266/.test(rawText) ? 88 : /257/.test(rawText) ? 81 : 135;
-    reason = "PE-HD Formstücke St V10 plausibilisiert.";
-  }
-
-  if (isSt && /hinweisschilder/.test(rawText)) {
-    targetEp = 70;
-    reason = "Hinweisschilder St V10 plausibilisiert.";
-  }
-
-  if (isM && /bestehenden durchlass ausbauen.*dn\s*300/.test(rawText)) {
-    targetEp = 11;
-    reason = "Bestehenden Durchlass ausbauen DN300 m V10 plausibilisiert.";
-  }
-
-  if (isM && /sandüberdeckung|sandueberdeckung/.test(rawText)) {
-    if (/pe dn50|pe dn75|ggg dn 80/.test(rawText)) {
-      targetEp = 11.5;
-    } else {
-      targetEp = 18.5;
-    }
-    reason = "Sandüberdeckung m V10 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustelleneinrich\s*tung|baustelleneinrichtung/.test(rawText) && !/abbauen|räumen|raeumen|horizontalbohrung/.test(rawText)) {
-    targetEp = 1400;
-    reason = "Baustelleneinrichtung klein Psch V10 plausibilisiert.";
-  }
-
-  if (isSt && /^(\d+\s*)?schachtabdeckung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 460;
-    reason = "Schachtabdeckung St V10 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?kabelschutzrohr$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 2.9;
-    reason = "Kabelschutzrohr m V10 plausibilisiert.";
-  }
-
-  if (isSt && /anschluss an best.*durchlass.*dn\s*800/.test(rawText)) {
-    targetEp = 395;
-    reason = "Anschluss an best. Durchlass DN800 St V10 plausibilisiert.";
-  }
-
-  if (isM && /pilotbohrung da\s*180/.test(rawText)) {
-    targetEp = 291;
-    reason = "Pilotbohrung DA180 m V10 plausibilisiert.";
-  }
-
-  if (isSt && /mauerrohr/.test(rawText)) {
-    targetEp = 357;
-    reason = "Mauerrohr St V10 plausibilisiert.";
-  }
-
-  if (isM && /duktile gussrohre/.test(rawText)) {
-    targetEp = 122;
-    reason = "Duktile Gussrohre m V10 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?kabelleerrohr$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 18;
-    reason = "Kabelleerrohr m V10 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?sohlbettung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 31.9;
-    reason = "Sohlbettung m V10 plausibilisiert.";
-  }
-
-  if (isSt && /anschluss an best.*durchlass.*dn\s*600/.test(rawText)) {
-    targetEp = 366;
-    reason = "Anschluss an best. Durchlass DN600 St V10 plausibilisiert.";
-  }
-
-  if (isSt && /wurzelstock roden/.test(rawText)) {
-    targetEp = 49;
-    reason = "Wurzelstock roden St V10 plausibilisiert.";
-  }
-
-  if (isM && /verlegung ortsnetzkabel/.test(rawText)) {
-    targetEp = 5.6;
-    reason = "Verlegung Ortsnetzkabel m V10 plausibilisiert.";
-  }
-
-  if (isSt && /zuschlag schachtabdeckung/.test(rawText)) {
-    targetEp = 2585;
-    reason = "Zuschlag Schachtabdeckung St V10 plausibilisiert.";
-  }
-
-  if (isM2 && /schichtenverbund herstellen/.test(rawText)) {
-    targetEp = 0.6;
-    reason = "Schichtenverbund herstellen m² V10 plausibilisiert.";
-  }
-
-  if (isSt && /anschluss an best.*leitung/.test(rawText)) {
-    targetEp = 267;
-    reason = "Anschluss an best. Leitung St V10 plausibilisiert.";
-  }
-
-  if (isSt && /weichdichtender ovalschieber/.test(rawText)) {
-    targetEp = 564;
-    reason = "Weichdichtender Ovalschieber St V10 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V11:
-   * Korrektur zu breiter Regeln aus V9/V10.
-   */
-  if (/^psch$/.test(unit) && /baustelleneinrichtung herstellen.*vorhalten.*betreiben/.test(rawText)) {
-    targetEp = 132000;
-    reason = "Große Baustelleneinrichtung mit Herstellen/Vorhalten/Betreiben plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^(\d+\s*)?baustelleneinrich\s*tung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = /394/.test(rawText) ? 140 : 1400;
-    reason = "Einfache Baustelleneinrichtung Psch V11 plausibilisiert.";
-  }
-
-  if (isSt && /pumpschacht.*doppelpumpstation/.test(rawText)) {
-    targetEp = 51500;
-    reason = "Pumpschacht Doppelpumpstation St V11 plausibilisiert.";
-  }
-
-  if (isSt && /zuschlag schachtabdeckung/.test(rawText)) {
-    targetEp = /156/.test(rawText) ? 700 : 2585;
-    reason = "Zuschlag Schachtabdeckung St V11 plausibilisiert.";
-  }
-
-  if (isSt && /^(\d+\s*)?schachtabdeckung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 461;
-    reason = "Schachtabdeckung St V11 plausibilisiert.";
-  }
-
-  if (isSt && /schachtabdeckung liefern und einbauen/.test(rawText)) {
-    targetEp = /219/.test(rawText) ? 217 : 5925;
-    reason = "Schachtabdeckung liefern/einbauen St V11 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?kabelschutzrohr$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 2.9;
-    reason = "Kabelschutzrohr m V11 plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstück.*abzweig.*da\s*180|pe-hd.*formstueck.*abzweig.*da\s*180/.test(rawText)) {
-    targetEp = 690;
-    reason = "PE-HD Abzweig DA180 St V11 plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstück.*bögen.*da\s*180|pe-hd.*formstueck.*boegen.*da\s*180/.test(rawText)) {
-    targetEp = 17;
-    reason = "PE-HD Bögen DA180 St V11 plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstück.*da\s*75|pe-hd.*formstueck.*da\s*75/.test(rawText)) {
-    targetEp = 60;
-    reason = "PE-HD Formstück DA75 St V11 plausibilisiert.";
-  }
-
-  if (isSt && /pe-hd.*formstücke\s+e|pe-hd.*formstuecke\s+e/.test(rawText)) {
-    targetEp = /245/.test(rawText) ? 18.5 : /266/.test(rawText) ? 88 : /257/.test(rawText) ? 81 : 135;
-    reason = "PE-HD Formstücke e St V11 plausibilisiert.";
-  }
-
-  if (isSt && /hinweisschilder/.test(rawText)) {
-    targetEp = 70;
-    reason = "Hinweisschilder St V11 plausibilisiert.";
-  }
-
-  if (isSt && /hinweissäulen|hinweissaeulen/.test(rawText)) {
-    targetEp = 317;
-    reason = "Hinweissäulen St V11 plausibilisiert.";
-  }
-
-  if (isM && /bestehenden durchlass ausbauen.*dn\s*300/.test(rawText)) {
-    targetEp = 11;
-    reason = "Bestehenden Durchlass DN300 ausbauen m V11 plausibilisiert.";
-  }
-
-  if (isM && /bestehenden durchlass ausbauen.*dn\s*500/.test(rawText)) {
-    targetEp = 48;
-    reason = "Bestehenden Durchlass DN500 ausbauen m V11 plausibilisiert.";
-  }
-
-  if (isM && /sandüberdeckung|sandueberdeckung/.test(rawText)) {
-    if (/pe dn50|pe dn75|ggg dn 80/.test(rawText)) targetEp = 11.5;
-    else targetEp = 18.5;
-    reason = "Sandüberdeckung m V11 plausibilisiert.";
-  }
-
-  if (isM && /rohrumhüllung sand|rohrumhuellung sand/.test(rawText)) {
-    targetEp = /hdpe da 50/.test(rawText) ? 5.6 : 26.3;
-    reason = "Rohrumhüllung Sand m V11 plausibilisiert.";
-  }
-
-  if (isM && /kabelleerrohr/.test(rawText)) {
-    targetEp = /dn\s*110/.test(rawText) ? 36 : 18;
-    reason = "Kabelleerrohr m V11 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?sohlbettung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 31.9;
-    reason = "Sohlbettung m V11 plausibilisiert.";
-  }
-
-  if (isM && /erschwerniszuschlag.*leitungsquerungen/.test(rawText)) {
-    targetEp = 41;
-    reason = "Erschwerniszuschlag Leitungsquerungen m V11 plausibilisiert.";
-  }
-
-  if (isM && /trassenwarnband breitband/.test(rawText)) {
-    targetEp = /399/.test(rawText) ? 0.16 : /438/.test(rawText) ? 0.59 : 1.03;
-    reason = "Trassenwarnband Breitband m V11 plausibilisiert.";
-  }
-
-  if (isSt && /überfahrten.*pkw|ueberfahrten.*pkw/.test(rawText)) {
-    targetEp = 105;
-    reason = "Überfahrten PKW St V11 plausibilisiert.";
-  }
-
-  if (isSt && /formstücke.*pp-rohr.*dn\s*160|formstuecke.*pp-rohr.*dn\s*160/.test(rawText)) {
-    targetEp = 65;
-    reason = "Formstücke PP-Rohr DN160 St V11 plausibilisiert.";
-  }
-
-  if (isSt && /anschluss an best.*durchlass.*dn\s*500|anschluss an best.*durchlass bis dn\s*500/.test(rawText)) {
-    targetEp = 321;
-    reason = "Anschluss an best. Durchlass DN500 St V11 plausibilisiert.";
-  }
-
-  if (isSt && /schmutzfänger|schmutzfaenger/.test(rawText)) {
-    targetEp = /198/.test(rawText) ? 97 : 35;
-    reason = "Schmutzfänger St V11 plausibilisiert.";
-  }
-
-  if (isM && /runddraht/.test(rawText)) {
-    targetEp = /162/.test(rawText) ? 8.3 : 3;
-    reason = "Runddraht m V11 plausibilisiert.";
-  }
-
-  if (isM && /trassenwarnband kabel|zulage trassenwarnband$/.test(rawText)) {
-    targetEp = 0.44;
-    reason = "Trassenwarnband Kabel m V11 plausibilisiert.";
-  }
-
-  if (isSt && /losflansch pn\s*40/.test(rawText)) {
-    targetEp = 198;
-    reason = "Losflansch PN40 St V11 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /besucherführung|besucherfuehrung/.test(rawText)) {
-    targetEp = 3590;
-    reason = "Besucherführung Psch V11 plausibilisiert.";
-  }
-
-  if (isM && /ortungsband/.test(rawText)) {
-    targetEp = 1.14;
-    reason = "Ortungsband m V11 plausibilisiert.";
-  }
-
-  if (isCm && /^(\d+\s*)?mehr- oder minderpreis$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 7.3;
-    reason = "Mehr-/Minderpreis cm V11 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V12:
-   * harte Korrektur für verbleibende Überschreiber aus V11.
-   */
-  if (isSt && /zulage schachtzulauf.*dn\s*160/.test(rawText)) {
-    targetEp = /181/.test(rawText) ? 282 : 468;
-    reason = "Zulage Schachtzulauf DN160 St V12 plausibilisiert.";
-  }
-
-  if (isM && /zwischenplanum/.test(rawText)) {
-    targetEp = 0.83;
-    reason = "Zwischenplanum lfm V12 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^(\d+\s*)?baustelleneinrichtung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = /394/.test(rawText) ? 140 : 1400;
-    reason = "Kleine Baustelleneinrichtung Psch V12 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustelleneinrichtung herstellen.*vorhalten.*betreiben/.test(rawText)) {
-    targetEp = 132000;
-    reason = "Große Baustelleneinrichtung Herstellen/Vorhalten/Betreiben Psch V12 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustellenabsicherung/.test(rawText)) {
-    targetEp = 6220;
-    reason = "Baustellenabsicherung Psch V12 plausibilisiert.";
-  }
-
-  if (isM && /mikrokabelleerrohrverbund/.test(rawText)) {
-    targetEp = 4.37;
-    reason = "Mikrokabelleerrohrverbund m V12 plausibilisiert.";
-  }
-
-  if (isM && /rohrumhüllung sand hdpe da 50|rohrumhuellung sand hdpe da 50/.test(rawText)) {
-    targetEp = /350|376|400/.test(rawText) ? 1.88 : 5.64;
-    reason = "Rohrumhüllung Sand HDPE DA50 m V12 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?rohrumhüllung sand$|^(\d+\s*)?rohrumhuellung sand$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = /426|432/.test(rawText) ? 9.4 : 16.9;
-    reason = "Rohrumhüllung Sand m V12 plausibilisiert.";
-  }
-
-  if (isM && /ortungsband/.test(rawText)) {
-    targetEp = /142/.test(rawText) ? 0.57 : 1.14;
-    reason = "Ortungsband m V12 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?kabelschutzrohr$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = /441/.test(rawText) ? 3.35 : 2.9;
-    reason = "Kabelschutzrohr lfm V12 plausibilisiert.";
-  }
-
-  if (isM && /^(\d+\s*)?sohlbettung$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 25.4;
-    reason = "Sohlbettung m V12 plausibilisiert.";
-  }
-
-  if (isM && /zulage trassenwarnband$|trassenwarnband kabel/.test(rawText)) {
-    targetEp = 0.44;
-    reason = "Trassenwarnband Kabel/Zulage m V12 plausibilisiert.";
-  }
-
-  if (isCm && /^(\d+\s*)?mehr- oder minderpreis$/.test(rawText.replace(/\s+/g, " ").trim())) {
-    targetEp = 7.3;
-    reason = "Mehr-/Minderpreis cm V12 plausibilisiert.";
-  }
-
-  if (isM && /zuschlag zur pilotbohrung s1|zuschlag zur pilotbohrung s3/.test(rawText)) {
-    targetEp = 384;
-    reason = "Zuschlag Pilotbohrung S1/S3 m V12 plausibilisiert.";
-  }
-
-  if (isM3 && /baugrubenaushub.*6\/7/.test(rawText)) {
-    targetEp = 95;
-    reason = "Baugrubenaushub Bodenklasse 6/7 m³ V12 plausibilisiert.";
-  }
-
-  if (isSt && /mehr- oder minderpreis pp-schacht/.test(rawText)) {
-    targetEp = 44;
-    reason = "Mehr-/Minderpreis PP-Schacht St V12 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /erschwernis vorgegebene bauzeiten/.test(rawText)) {
-    targetEp = 3360;
-    reason = "Erschwernis vorgegebene Bauzeiten Psch V12 plausibilisiert.";
-  }
-
-  if (isSt && /revisionsschacht.*zu- und ablauf/.test(rawText)) {
-    targetEp = 2800;
-    reason = "Revisionsschacht Zu-/Ablauf St V12 plausibilisiert.";
-  }
-
-  if (isSt && /revisionsschacht/.test(rawText) && !/zu- und ablauf/.test(rawText)) {
-    targetEp = 2520;
-    reason = "Revisionsschacht St V12 plausibilisiert.";
-  }
-
-  if (isM && /durchlass herstellen.*dn\s*500/.test(rawText)) {
-    targetEp = /stahlbetonrohr/.test(rawText) ? 254 : 222;
-    reason = "Durchlass herstellen DN500 m V12 plausibilisiert.";
-  }
-
-  if (isM && /durchlass herstellen.*dn\s*600/.test(rawText)) {
-    targetEp = 480;
-    reason = "Durchlass herstellen DN600 m V12 plausibilisiert.";
-  }
-
-  if (isSt && /ringraumdichtung.*dn\s*168/.test(rawText)) {
-    targetEp = 505;
-    reason = "Ringraumdichtung DN168 St V12 plausibilisiert.";
-  }
-
-  if (isH && /lkw-stunden/.test(rawText)) {
-    targetEp = 88;
-    reason = "LKW-Stunden h V12 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V13:
-   * gezielte Korrektur der aktuellen Worst-40-Familien aus BA-2026-027.
-   * Keine Übernahme einer X84 als Berechnungsbasis, sondern harte Plausibilisierung
-   * erkannter LV-Familien nach Text/Pos/Einheit.
-   */
-  if (/^psch$/.test(unit) && /^394\b/.test(rawText) && /baustelleneinrichtung/.test(rawText)) {
-    targetEp = 140;
-    reason = "Baustelleneinrichtung klein Psch V13 plausibilisiert.";
-  }
-
-  if (isSt && /hinweisschilder/.test(rawText)) {
-    targetEp = 70;
-    reason = "Hinweisschilder St V13 plausibilisiert.";
-  }
-
-  if (isM && /rohrumhüllung sand|rohrumhuellung sand/.test(rawText)) {
-    if (/^426\b|^432\b/.test(rawText)) targetEp = 9.4;
-    else if (/^429\b/.test(rawText)) targetEp = 16.9;
-    else targetEp = 16.9;
-    reason = "Rohrumhüllung Sand lfm V13 plausibilisiert.";
-  }
-
-  if (isSt && /^200\b/.test(rawText) && /schachtabdeckung/.test(rawText)) {
-    targetEp = 461;
-    reason = "Schachtabdeckung St V13 plausibilisiert.";
-  }
-
-  if (isM && /kabelschutzrohr/.test(rawText)) {
-    if (/^441\b/.test(rawText)) targetEp = 3.35;
-    else targetEp = 2.9;
-    reason = "Kabelschutzrohr lfm V13 plausibilisiert.";
-  }
-
-  if (isM && /durchlass herstellen.*dn\s*600/.test(rawText)) {
-    targetEp = 278;
-    reason = "Durchlass herstellen DN600 m V13 plausibilisiert.";
-  }
-
-  if (isM && /^212\b/.test(rawText) && /sohlbettung/.test(rawText)) {
-    targetEp = 25.4;
-    reason = "Sohlbettung m V13 plausibilisiert.";
-  }
-
-  if (isM && /^435\b/.test(rawText) && /trassenwarnband/.test(rawText)) {
-    targetEp = 0.44;
-    reason = "Zulage Trassenwarnband lfm V13 plausibilisiert.";
-  }
-
-  if (isCm && /^191\b/.test(rawText) && /mehr- oder minderpreis/.test(rawText)) {
-    targetEp = 7.3;
-    reason = "Mehr-/Minderpreis cm V13 plausibilisiert.";
-  }
-
-  if (isM && /splittüberdeckung|splittueberdeckung/.test(rawText)) {
-    targetEp = 16.9;
-    reason = "Splittüberdeckung m V13 plausibilisiert.";
-  }
-
-  if (isM2 && /straßenbauvlies|strassenbauvlies/.test(rawText)) {
-    targetEp = 1.9;
-    reason = "Straßenbauvlies m² V13 plausibilisiert.";
-  }
-
-  if (isSt && /losflansch pn\s*25/.test(rawText)) {
-    targetEp = 159;
-    reason = "Losflansch PN25 St V13 plausibilisiert.";
-  }
-
-  if (isSt && /losflansch da\s*75/.test(rawText)) {
-    targetEp = 49.5;
-    reason = "Losflansch DA75 St V13 plausibilisiert.";
-  }
-
-  if (isSt && /anbohrarmaturen.*dn\s*80.*da\s*90/.test(rawText)) {
-    targetEp = 408;
-    reason = "Anbohrarmaturen DN80/DA90 St V13 plausibilisiert.";
-  }
-
-  if (isSt && /starre verbindung/.test(rawText)) {
-    targetEp = 143;
-    reason = "Starre Verbindung St V13 plausibilisiert.";
-  }
-
-  if (isM3 && /mineralbeton/.test(rawText)) {
-    targetEp = 100;
-    reason = "Mineralbeton m³ V13 plausibilisiert.";
-  }
-
-  if (isM && /erschwerniszuschlag.*senkrechte kreuzung/.test(rawText)) {
-    targetEp = 82.5;
-    reason = "Erschwerniszuschlag senkrechte Kreuzung m V13 plausibilisiert.";
-  }
-
-  if (isM2 && /unterlage reinigen.*schichtenverbund/.test(rawText)) {
-    targetEp = 0.66;
-    reason = "Unterlage reinigen vor Schichtenverbund m² V13 plausibilisiert.";
-  }
-
-  if (isM3 && /suchschlitze/.test(rawText)) {
-    targetEp = 248;
-    reason = "Suchschlitze m³ V13 plausibilisiert.";
-  }
-
-  if (isM && /^030\b/.test(rawText) && /mutterboden/.test(rawText)) {
-    targetEp = 7.4;
-    reason = "Mutterboden m V13 plausibilisiert.";
-  }
-
-  if (isKg && /baustahl.*500\/550|500\/550/.test(rawText)) {
-    targetEp = 0.68;
-    reason = "Baustahl 500/550 kg V13 plausibilisiert.";
-  }
-
-  if (isSt && /mauerdurchführung|mauerdurchfuehrung/.test(rawText)) {
-    targetEp = 45.8;
-    reason = "Mauerdurchführung St V13 plausibilisiert.";
-  }
-
-  if (isSt && /einbinden der kabelleerrohre/.test(rawText)) {
-    targetEp = 34.2;
-    reason = "Einbinden Kabelleerrohre St V13 plausibilisiert.";
-  }
-
-  if (isM && /wanderweg wiederherstellen/.test(rawText)) {
-    targetEp = 15.5;
-    reason = "Wanderweg wiederherstellen m V13 plausibilisiert.";
-  }
-
-  if (isM && /erschwerniszuschlag.*kabelquerungen/.test(rawText)) {
-    targetEp = 49.5;
-    reason = "Erschwerniszuschlag Kabelquerungen m V13 plausibilisiert.";
-  }
-
-  if (isM && /hdpe.*rohre.*da\s*90|hdpe.*rohr.*da\s*90/.test(rawText)) {
-    targetEp = 9.72;
-    reason = "HDPE Rohr DA90 m V13 plausibilisiert.";
-  }
-
-  if (isM3 && /bettungssand/.test(rawText)) {
-    targetEp = 94;
-    reason = "Bettungssand m³ V13 plausibilisiert.";
-  }
-
-  if (isM3 && /zulage.*bd-kl.*2.*6.*7|zulage.*bodenklasse.*2.*6.*7|kabelgrabenaushub.*zulage/.test(rawText)) {
-    targetEp = 28.5;
-    reason = "Zulage Bodenklasse/Kabelgrabenaushub m³ V13 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /elektroverteilung/.test(rawText)) {
-    targetEp = 14036;
-    reason = "Elektroverteilung Psch V13 plausibilisiert.";
-  }
-
-  if (isM && /erschwerniszuschlag.*lange kreuzungen.*kabel/.test(rawText)) {
-    targetEp = 49.5;
-    reason = "Erschwerniszuschlag lange Kreuzungen Kabel m V13 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /zulage verlegung hdpe-rohr/.test(rawText)) {
-    targetEp = 1237.5;
-    reason = "Zulage Verlegung HDPE-Rohr Psch V13 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V14:
-   * gezielte Korrektur der aktuellen Worst-Familien nach V13.
-   */
-  if (isM && /rohrumhüllung sand hdpe da\s*50|rohrumhuellung sand hdpe da\s*50/.test(rawText)) {
-    if (/^350\b|^376\b|^400\b/.test(rawText)) targetEp = 1.88;
-    else if (/^439\b/.test(rawText)) targetEp = 5.64;
-    else targetEp = 5.64;
-    reason = "Rohrumhüllung Sand HDPE DA50 lfm V14 plausibilisiert.";
-  }
-
-  if (isM3 && /^207\b|^292\b/.test(rawText) && /suchschlitze/.test(rawText)) {
-    targetEp = 124;
-    reason = "Suchschlitze m³ klein V14 plausibilisiert.";
-  }
-
-  if (isM && /^109\b/.test(rawText) && /senkrechte kreuzung.*dn\s*100/.test(rawText)) {
-    targetEp = 41.25;
-    reason = "Erschwerniszuschlag senkrechte Kreuzung DN100 m V14 plausibilisiert.";
-  }
-
-  if (isKg && /^321\b/.test(rawText) && /baustahl.*500\/550|500\/550/.test(rawText)) {
-    targetEp = 0.35;
-    reason = "Baustahl 500/550 kg klein V14 plausibilisiert.";
-  }
-
-  if (isM && /^071\b/.test(rawText) && /zulage wanderweg wiederherstellen/.test(rawText)) {
-    targetEp = 8.5;
-    reason = "Zulage Wanderweg wiederherstellen m V14 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /freiluftschrank/.test(rawText)) {
-    targetEp = 7757;
-    reason = "Freiluftschrank Psch V14 plausibilisiert.";
-  }
-
-  if (isSt && /hinweissäulen|hinweissaeulen/.test(rawText)) {
-    targetEp = 317;
-    reason = "Hinweissäulen St V14 plausibilisiert.";
-  }
-
-  if (isSt && /energieumwandlungsschacht/.test(rawText)) {
-    targetEp = 3633;
-    reason = "Energieumwandlungsschacht St V14 plausibilisiert.";
-  }
-
-  if (isM3 && /^398\b/.test(rawText) && /bettungssand/.test(rawText)) {
-    targetEp = 54.5;
-    reason = "Bettungssand m³ klein V14 plausibilisiert.";
-  }
-
-  if (isM3 && /zulage baugrubenaushub|kabelgrabenaushub.*zulage|rohr- \/ kabelgrabenaushub.*zulage/.test(rawText)) {
-    if (/^146\b|^312\b|^347\b|^374\b/.test(rawText)) targetEp = 56.9;
-    else targetEp = 28.5;
-    reason = "Zulage Baugrubenaushub/Bodenklasse m³ V14 plausibilisiert.";
-  }
-
-  if (isSt && /übergangsstück dn\s*80.*dn\s*50|uebergangsstueck dn\s*80.*dn\s*50/.test(rawText)) {
-    targetEp = 156;
-    reason = "Übergangsstück DN80/DN50 St V14 plausibilisiert.";
-  }
-
-  if (isM && /sohlbettung riesel/.test(rawText)) {
-    if (/ggg-rohr dn\s*150/.test(rawText)) targetEp = 13.2;
-    else if (/pehd 180/.test(rawText)) targetEp = 12.25;
-    else targetEp = 13;
-    reason = "Sohlbettung Riesel m V14 plausibilisiert.";
-  }
-
-  if (isSt && /losflansch pn\s*16/.test(rawText)) {
-    targetEp = 130;
-    reason = "Losflansch PN16 St V14 plausibilisiert.";
-  }
-
-  if (isM && /durchlass herstellen.*kunststoffrohre.*dn\s*600/.test(rawText)) {
-    targetEp = 480;
-    reason = "Durchlass Kunststoffrohr DN600 m V14 plausibilisiert.";
-  }
-
-  if (isM && /kanal spülen|kanal spuelen/.test(rawText)) {
-    targetEp = 2.46;
-    reason = "Kanal spülen m V14 plausibilisiert.";
-  }
-
-  if (isM && /mikrorohrhausanschlussleitung/.test(rawText)) {
-    targetEp = 3.39;
-    reason = "Mikrorohrhausanschlussleitung m V14 plausibilisiert.";
-  }
-
-  if (isM && /sandüberdeckung|sandueberdeckung/.test(rawText)) {
-    if (/^213\b/.test(rawText)) targetEp = 31.0;
-    else targetEp = 18.5;
-    reason = "Sandüberdeckung m V14 plausibilisiert.";
-  }
-
-  if (isSt && /wurzelstock roden.*31.*50/.test(rawText)) {
-    targetEp = 81;
-    reason = "Wurzelstock roden 31-50 cm St V14 plausibilisiert.";
-  }
-
-  if (isM3 && /sohl- und ummantelungsbeton/.test(rawText)) {
-    targetEp = 282;
-    reason = "Sohl- und Ummantelungsbeton m³ V14 plausibilisiert.";
-  }
-
-  if (isSt && /hinweissteine/.test(rawText)) {
-    targetEp = 54.5;
-    reason = "Hinweissteine St V14 plausibilisiert.";
-  }
-
-  if (isSt && /niederschrift beweissicherung/.test(rawText)) {
-    targetEp = 87;
-    reason = "Niederschrift Beweissicherung St V14 plausibilisiert.";
-  }
-
-  if (isSt && /fettfreie isolierbinde/.test(rawText)) {
-    targetEp = 39.6;
-    reason = "Fettfreie Isolierbinde St V14 plausibilisiert.";
-  }
-
-  if (isM && /schutzmatte.*kabelverlegungen/.test(rawText)) {
-    targetEp = 28.4;
-    reason = "Schutzmatte Kabelverlegungen m V14 plausibilisiert.";
-  }
-
-  if (isM && /rohrschutz schutzmatte/.test(rawText)) {
-    targetEp = 40.3;
-    reason = "Rohrschutz Schutzmatte m V14 plausibilisiert.";
-  }
-
-  if (isM && /rohrumhüllung sand.*hdpe\s*75|rohrumhuellung sand.*hdpe\s*75/.test(rawText)) {
-    targetEp = 26.3;
-    reason = "Rohrumhüllung Sand HDPE75 m V14 plausibilisiert.";
-  }
-
-  if (isM && /hdpe.*rohre\s*180|hdpe.*rohr\s*180/.test(rawText)) {
-    targetEp = 29.15;
-    reason = "HDPE Rohr 180 m V14 plausibilisiert.";
-  }
-
-  if (isCm && /mehr- oder minderpreis/.test(rawText)) {
-    if (/^180\b|^190\b|^193\b|^217\b/.test(rawText)) targetEp = 2.22;
-    reason = "Mehr-/Minderpreis cm V14 plausibilisiert.";
-  }
-
-  if (isM && /durchlass herstellen.*stahlbetonrohr.*dn\s*800/.test(rawText)) {
-    targetEp = 340;
-    reason = "Durchlass Stahlbetonrohr DN800 m V14 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V15:
-   * gezielte Korrektur der Rest-Familien nach V14.
-   */
-  if (isSt && /^277\b/.test(rawText) && /hinweisschilder/.test(rawText)) {
-    targetEp = 62.61;
-    reason = "Hinweisschilder St V15 plausibilisiert.";
-  }
-
-  if (isSt && /^258\b/.test(rawText) && /losflansch pn\s*16/.test(rawText)) {
-    targetEp = 61.1;
-    reason = "Losflansch PN16 klein St V15 plausibilisiert.";
-  }
-
-  if (isM && /sandüberdeckung pe dn50|sandueberdeckung pe dn50|sandüberdeckung pe dn75|sandueberdeckung pe dn75/.test(rawText)) {
-    targetEp = 11.3;
-    reason = "Sandüberdeckung PE DN50/DN75 lfm V15 plausibilisiert.";
-  }
-
-  if (isSt && /^307\b/.test(rawText) && /fettfreie isolierbinde/.test(rawText)) {
-    targetEp = 25.8;
-    reason = "Fettfreie Isolierbinde St V15 plausibilisiert.";
-  }
-
-  if (isM && /schutzmatte.*kabelverlegungen/.test(rawText)) {
-    if (/^351\b|^377\b|^401\b/.test(rawText)) targetEp = 20.15;
-    else targetEp = 28.4;
-    reason = "Schutzmatte Kabelverlegungen m V15 plausibilisiert.";
-  }
-
-  if (isM && /^282\b/.test(rawText) && /sandüberdeckung ggg dn\s*80|sandueberdeckung ggg dn\s*80/.test(rawText)) {
-    targetEp = 13.17;
-    reason = "Sandüberdeckung GGG DN80 lfm V15 plausibilisiert.";
-  }
-
-  if (isSt && /^170\b/.test(rawText) && /zuschlag.*steuerung/.test(rawText)) {
-    targetEp = 640.4;
-    reason = "Zuschlag Steuerung St V15 plausibilisiert.";
-  }
-
-  if (isM && /^032\b/.test(rawText) && /zuschlag.*vlies/.test(rawText)) {
-    targetEp = 2.19;
-    reason = "Zuschlag Vlies m V15 plausibilisiert.";
-  }
-
-  if (isM && /^106\b|^107\b/.test(rawText) && /lange kreuzungen/.test(rawText)) {
-    targetEp = 61.9;
-    reason = "Erschwerniszuschlag lange Kreuzungen m V15 plausibilisiert.";
-  }
-
-  if (isM && /^297\b/.test(rawText) && /sohlbettung/.test(rawText)) {
-    targetEp = 11.3;
-    reason = "Sohlbettung klein m V15 plausibilisiert.";
-  }
-
-  if (isH && /stundensätze bauvorarbeiter|stundensaetze bauvorarbeiter/.test(rawText)) {
-    targetEp = 77;
-    reason = "Stundensatz Bauvorarbeiter h V15 plausibilisiert.";
-  }
-
-  if (isM && /^247\b/.test(rawText) && /hdpe.*rohre da\s*75/.test(rawText)) {
-    targetEp = 10.4;
-    reason = "HDPE Rohr DA75 PN25 m V15 plausibilisiert.";
-  }
-
-  if (isSt && /^183\b/.test(rawText) && /zulage.*anschluss ableitung hdpe dn\s*180/.test(rawText)) {
-    targetEp = 760;
-    reason = "Zulage Anschluss Ableitung HDPE DN180 St V15 plausibilisiert.";
-  }
-
-  if (isH && /lkw-stunden.*über 5|lkw-stunden.*ueber 5/.test(rawText)) {
-    targetEp = 126.5;
-    reason = "LKW-Stunden über 5 m³ h V15 plausibilisiert.";
-  }
-
-  if (isSt && /kreuzung durchläße|kreuzung durchlaesse|bachquerung/.test(rawText)) {
-    targetEp = 476;
-    reason = "Kreuzung Durchlässe/Bachquerung St V15 plausibilisiert.";
-  }
-
-  if (isM3 && /^050\b/.test(rawText) && /rohrgrabenaushub.*bd-kl.*3.*5/.test(rawText)) {
-    targetEp = 49.7;
-    reason = "Rohrgrabenaushub Bd-Kl. 3-5 m³ V15 plausibilisiert.";
-  }
-
-  if (isH && /verrechnungssätz bohrlafette|verrechnungssaetz bohrlafette/.test(rawText)) {
-    targetEp = 55;
-    reason = "Verrechnungssatz Bohrlafette h V15 plausibilisiert.";
-  }
-
-  if (isM3 && /auffüllmaterial|auffuellmaterial/.test(rawText)) {
-    targetEp = 3.5;
-    reason = "Auffüllmaterial m³ V15 plausibilisiert.";
-  }
-
-  if (isM && /^338\b/.test(rawText) && /ggg-rohre/.test(rawText)) {
-    targetEp = 138.7;
-    reason = "GGG-Rohre m V15 plausibilisiert.";
-  }
-
-  if (isSt && /^201\b/.test(rawText) && /anschluss am bestehenden schacht/.test(rawText)) {
-    targetEp = 990;
-    reason = "Anschluss am bestehenden Schacht St V15 plausibilisiert.";
-  }
-
-  if (isM3 && /^422\b/.test(rawText) && /rohr- kabelgrabenaushub|rohr.*kabelgrabenaushub/.test(rawText)) {
-    targetEp = 56.9;
-    reason = "Rohr-/Kabelgrabenaushub m³ V15 plausibilisiert.";
-  }
-
-  if (isSt && /ringraumdichtungen/.test(rawText)) {
-    targetEp = 203.6;
-    reason = "Ringraumdichtungen St V15 plausibilisiert.";
-  }
-
-  if (isH && /stundensätze polierstunde|stundensaetze polierstunde/.test(rawText)) {
-    targetEp = 79.2;
-    reason = "Polierstunde h V15 plausibilisiert.";
-  }
-
-  if (isKm && /fahrzeugkosten pkw|fahrzeugkosten werkstattwagen/.test(rawText)) {
-    targetEp = 0.55;
-    reason = "Fahrzeugkosten km V15 plausibilisiert.";
-  }
-
-  if (isSt && /hydrantenfußkrümmer|hydrantenfusskruemmer/.test(rawText)) {
-    targetEp = 282.8;
-    reason = "Hydrantenfußkrümmer St V15 plausibilisiert.";
-  }
-
-  if (isM3 && /bruchschotter.*straßenunterbau|bruchschotter.*strassenunterbau/.test(rawText)) {
-    targetEp = 62.61;
-    reason = "Bruchschotter Straßenunterbau m³ V15 plausibilisiert.";
-  }
-
-  if (isM3 && /grobkies/.test(rawText)) {
-    targetEp = 80.8;
-    reason = "Grobkies m³ V15 plausibilisiert.";
-  }
-
-  if (isSt && /absperrschieber dn\s*50/.test(rawText)) {
-    targetEp = 625;
-    reason = "Absperrschieber DN50 St V15 plausibilisiert.";
-  }
-
-  if (isM && /zäune abbauen|zaeune abbauen/.test(rawText)) {
-    targetEp = 6.6;
-    reason = "Zäune abbauen m V15 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V16:
-   * Feinschliff der Restpositionen nach V15.
-   */
-  if (isSt && /^269\b/.test(rawText) && /hydrantenfußkrümmer|hydrantenfusskruemmer/.test(rawText)) {
-    targetEp = 198.4;
-    reason = "Hydrantenfußkrümmer 2x Hausanschluss St V16 plausibilisiert.";
-  }
-
-  if (isM && /^433\b/.test(rawText) && /^433\b.*schutzmatte/.test(rawText)) {
-    targetEp = 20.8;
-    reason = "Schutzmatte lfm V16 plausibilisiert.";
-  }
-
-  if (isSt && /^092\b/.test(rawText) && /paßstücke.*dn\s*600|passstücke.*dn\s*600|passstuecke.*dn\s*600/.test(rawText)) {
-    targetEp = 255;
-    reason = "Paßstücke DN600 Stahlbetonrohr St V16 plausibilisiert.";
-  }
-
-  if (isCm && /^222\b/.test(rawText) && /kernbohrungen/.test(rawText)) {
-    targetEp = 3.9;
-    reason = "Kernbohrungen cm V16 plausibilisiert.";
-  }
-
-  if (isM && /^035\b/.test(rawText) && /flächen einzäunen|flaechen einzaeunen/.test(rawText)) {
-    targetEp = 2.46;
-    reason = "Flächen einzäunen m V16 plausibilisiert.";
-  }
-
-  if (isCm && /^317\b/.test(rawText) && /mehr- oder mindertiefe.*pw\s*1/.test(rawText)) {
-    targetEp = 86.9;
-    reason = "Mehr-/Mindertiefe PW1 cm V16 plausibilisiert.";
-  }
-
-  if (isM && /^108\b/.test(rawText) && /senkrechte kreuzung.*kabel/.test(rawText)) {
-    targetEp = 41.25;
-    reason = "Erschwerniszuschlag senkrechte Kreuzung Kabel m V16 plausibilisiert.";
-  }
-
-  if (isSt && /^287\b/.test(rawText) && /absperrschieber dn\s*50.*pn\s*25/.test(rawText)) {
-    targetEp = 773;
-    reason = "Absperrschieber DN50 PN25 St V16 plausibilisiert.";
-  }
-
-  if (isM3 && /frostsicheres kiesmaterial|frostsicheres material|frostschutzkies/.test(rawText)) {
-    targetEp = 60.6;
-    reason = "Frostschutz/Frostsicheres Material m³ V16 plausibilisiert.";
-  }
-
-  if (isM && /^430\b/.test(rawText) && /^430\b.*schutzmatte/.test(rawText)) {
-    targetEp = 31.5;
-    reason = "Schutzmatte lfm groß V16 plausibilisiert.";
-  }
-
-  if (isM2 && /^031\b/.test(rawText) && /zulage abtrag/.test(rawText)) {
-    targetEp = 4.95;
-    reason = "Zulage Abtrag m² V16 plausibilisiert.";
-  }
-
-  if (isH && /^114\b/.test(rawText) && /pumpenstunden/.test(rawText)) {
-    targetEp = 28;
-    reason = "Pumpenstunden h V16 plausibilisiert.";
-  }
-
-  if (isM && /lwl miko-kabel|lwl mikro-kabel/.test(rawText)) {
-    targetEp = 1.5;
-    reason = "LWL Mikro-Kabel m V16 plausibilisiert.";
-  }
-
-  if (isSt && /^436\b/.test(rawText) && /kabelmuffen/.test(rawText)) {
-    targetEp = 21.8;
-    reason = "Erschwernisse Kabelmuffen St V16 plausibilisiert.";
-  }
-
-  if (isM && /^124\b/.test(rawText) && /rohrschutz schutzmatte/.test(rawText)) {
-    targetEp = 34.35;
-    reason = "Rohrschutz Schutzmatte m V16 plausibilisiert.";
-  }
-
-  if (isSt && /^188\b/.test(rawText) && /revisionsschacht/.test(rawText)) {
-    targetEp = 2163;
-    reason = "Revisionsschacht Beton St V16 plausibilisiert.";
-  }
-
-  if (isSt && /dichtkappen/.test(rawText)) {
-    targetEp = 5.6;
-    reason = "Dichtkappen St V16 plausibilisiert.";
-  }
-
-  if (isSt && /endstopfen permanent 14/.test(rawText)) {
-    targetEp = 6.9;
-    reason = "Endstopfen permanent 14 mm St V16 plausibilisiert.";
-  }
-
-  if (isSt && /^324\b/.test(rawText) && /anschluss und verbindung/.test(rawText)) {
-    targetEp = 21.6;
-    reason = "Anschluss und Verbindung St V16 plausibilisiert.";
-  }
-
-  if (isM2 && /flächen auflockern|flaechen auflockern/.test(rawText)) {
-    targetEp = 0.69;
-    reason = "Flächen auflockern m² V16 plausibilisiert.";
-  }
-
-  if (isSt && /einzelzugabdichtung 14/.test(rawText)) {
-    targetEp = 10.4;
-    reason = "Einzelzugabdichtung 14 mm St V16 plausibilisiert.";
-  }
-
-  if (isH && /^457\b/.test(rawText) && /motorflex/.test(rawText)) {
-    targetEp = 13.2;
-    reason = "Motorflex h V16 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^239\b/.test(rawText) && /abbau und abfuhr/.test(rawText)) {
-    targetEp = 1238;
-    reason = "Abbau und Abfuhr Psch V16 plausibilisiert.";
-  }
-
-  if (isM && /^055\b/.test(rawText) && /zuschlag rückverfüllung|zuschlag rueckverfuellung/.test(rawText)) {
-    targetEp = 6.73;
-    reason = "Zuschlag Rückverfüllung lfm V16 plausibilisiert.";
-  }
-
-  if (isM && /schutzmatte für pe dn50|schutzmatte fuer pe dn50/.test(rawText)) {
-    targetEp = 29.6;
-    reason = "Schutzmatte PE DN50 lfm V16 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Family Guard V17:
-   * finale Korrektur der letzten 19 Positionen nach V16.
-   */
-  if (isM2 && /^034\b/.test(rawText) && /flächen auflockern|flaechen auflockern/.test(rawText)) {
-    targetEp = 0.83;
-    reason = "Flächen auflockern Pos.034 m² V17 plausibilisiert.";
-  }
-
-  if (isSt && /^273\b/.test(rawText) && /absperrschieber dn\s*50.*pn\s*25/.test(rawText)) {
-    targetEp = 724;
-    reason = "Absperrschieber DN50 PN25 Pos.273 St V17 plausibilisiert.";
-  }
-
-  if (isM && /^078\b/.test(rawText) && /bestehenden durchlass ausbauen.*dn\s*800/.test(rawText)) {
-    targetEp = 55.3;
-    reason = "Bestehenden Durchlass ausbauen DN800 m V17 plausibilisiert.";
-  }
-
-  if (isM && /^265\b/.test(rawText) && /schutzmatte.*pe dn75/.test(rawText)) {
-    targetEp = 29.6;
-    reason = "Schutzmatte PE DN75 lfm V17 plausibilisiert.";
-  }
-
-  if (isM && /^427\b/.test(rawText) && /^427\b.*schutzmatte/.test(rawText)) {
-    targetEp = 29.6;
-    reason = "Schutzmatte Pos.427 lfm V17 plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^027\b/.test(rawText) && /erschwernis trasse.*steigen/.test(rawText)) {
-    targetEp = 153300;
-    reason = "Erschwernis Trasse innerhalb von Steigen Psch V17 plausibilisiert.";
-  }
-
-  if (isH && /^445\b/.test(rawText) && /stundensätze baufacharbeiter|stundensaetze baufacharbeiter/.test(rawText)) {
-    targetEp = 74.8;
-    reason = "Stundensatz Baufacharbeiter h V17 plausibilisiert.";
-  }
-
-  if (isM && /^248\b/.test(rawText) && /sohlbettung pe dn50/.test(rawText)) {
-    targetEp = 8.47;
-    reason = "Sohlbettung PE DN50 lfm V17 plausibilisiert.";
-  }
-
-  if (isM && /^263\b/.test(rawText) && /sohlbettung pe dn75/.test(rawText)) {
-    targetEp = 8.47;
-    reason = "Sohlbettung PE DN75 lfm V17 plausibilisiert.";
-  }
-
-  if (isM3 && /^346\b|^373\b|^396\b|^421\b/.test(rawText) && /rohr.*kabelgrabenaushub|rohr- \/ kabelgrabenaushub/.test(rawText)) {
-    targetEp = 46.1;
-    reason = "Rohr-/Kabelgrabenaushub m³ V17 plausibilisiert.";
-  }
-
-  if (isH && /^449\b/.test(rawText) && /lkw-stunden.*4.*5/.test(rawText)) {
-    targetEp = 99;
-    reason = "LKW-Stunden 4 bis 5 m³ h V17 plausibilisiert.";
-  }
-
-  if (isSt && /^310\b/.test(rawText) && /ringraumdichtung/.test(rawText)) {
-    targetEp = 229;
-    reason = "Ringraumdichtung Pos.310 St V17 plausibilisiert.";
-  }
-
-  if (isCm && /^333\b|^336\b/.test(rawText) && /kernbohrungen dn\s*2/.test(rawText)) {
-    targetEp = 3.35;
-    reason = "Kernbohrungen DN200/DN225 cm V17 plausibilisiert.";
-  }
-
-  if (isM && /^136\b/.test(rawText) && /ggg-rohre dn\s*150/.test(rawText)) {
-    targetEp = 89.8;
-    reason = "GGG-Rohre DN150 m V17 plausibilisiert.";
-  }
-
-  if (isH && /^444\b/.test(rawText) && /stundensätze spezialbaufacharbeiter|stundensaetze spezialbaufacharbeiter/.test(rawText)) {
-    targetEp = 75.9;
-    reason = "Stundensatz Spezialbaufacharbeiter h V17 plausibilisiert.";
-  }
-
-
-  /*
-   * RLC No-X84 Outlier Guard V18:
-   * verhindert falsche Firmenkalibrierung bei Entsorgung / Boden / Oberboden.
-   * X84 wird NICHT verwendet. Es sind autonome Plausibilitätsgrenzen.
-   */
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*0/.test(rawText)) {
-    targetEp = 47.15;
-    reason = "No-X84 V18: Belasteter Boden Z0 m³ plausibilisiert.";
-  }
-
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?1/.test(rawText)) {
-    targetEp = 85;
-    reason = "No-X84 V18: Belasteter Boden Z1.1 m³ plausibilisiert; historische Firmenkalibrierung zu hoch.";
-  }
-
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?2/.test(rawText)) {
-    targetEp = 95;
-    reason = "No-X84 V18: Belasteter Boden Z1.2 m³ plausibilisiert; historische Firmenkalibrierung zu hoch.";
-  }
-
-  if (isM3 && /oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern/.test(rawText)) {
-    targetEp = 23.5;
-    reason = "No-X84 V18: Oberboden abtragen/zwischenlagern m³ plausibilisiert; Firmenkalibrierung zu hoch.";
-  }
-
-  if (isM3 && /boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText)) {
-    targetEp = 36;
-    reason = "No-X84 V18: Boden lösen und zwischenlagern m³ plausibilisiert.";
-  }
-
-
-  /*
-   * RLC Same-Year Benchmark Guard V19:
-   * autonome Plausibilisierung für aktuelle X83/X84-Gegenprüfung BA-2026-029.
-   * X84 wird NICHT als Berechnungsbasis verwendet; diese Werte sind Familien-Plausibilitäten
-   * für sehr kleine/enge Kanal- und Straßenbau-LV.
-   */
-  if (isM2 && /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen/.test(rawText)) {
-    targetEp = 12;
-    reason = "V19: Gebundenen Oberbau aufbrechen m² plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer/.test(rawText)) {
-    targetEp = 1250;
-    reason = "V19: Verkehrssicherung längerer Dauer Psch plausibilisiert.";
-  }
-
-  if (isSt && /straßenablauf fertigteil ausb\./.test(rawText)) {
-    targetEp = 120;
-    reason = "V19: Straßenablauf Fertigteil ausbauen St plausibilisiert.";
-  }
-
-  if (isM && /kanal-tv.*dn\s*300/.test(rawText)) {
-    targetEp = 7;
-    reason = "V19: Kanal-TV bis DN300 m plausibilisiert.";
-  }
-
-  if (isSt && /erschwernis.*anschluss.*best.*schacht/.test(rawText)) {
-    targetEp = 7.2;
-    reason = "V19: Erschwerniszuschlag Anschluss Bestandsschacht St plausibilisiert.";
-  }
-
-  if (isM3 && /boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText)) {
-    targetEp = 6.1;
-    reason = "V19: Boden lösen/zwischenlagern m³ kleines LV plausibilisiert.";
-  }
-
-  if (isM3 && /fss herstellen.*50\s*cm/.test(rawText)) {
-    targetEp = 74.3;
-    reason = "V19: FSS d=50 cm m³ plausibilisiert.";
-  }
-
-  if (isM2 && /asphalt feinfräsen|asphalt feinfrasen|asphalt feinfräsen/.test(rawText)) {
-    targetEp = 2.2;
-    reason = "V19: Asphalt feinfräsen m² plausibilisiert.";
-  }
-
-  if (isM3 && /leitungsgraben herstellen/.test(rawText)) {
-    targetEp = 55;
-    reason = "V19: Leitungsgraben herstellen m³ plausibilisiert.";
-  }
-
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?1/.test(rawText)) {
-    targetEp = 8.3;
-    reason = "V19: Belasteter Boden Z1.1 m³ kleines LV plausibilisiert.";
-  }
-
-  if (isSt && /aufsatz ausbauen/.test(rawText)) {
-    targetEp = 120;
-    reason = "V19: Aufsatz ausbauen St plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustelleneinricht\.\s*vorhalten/.test(rawText)) {
-    targetEp = 185;
-    reason = "V19: Baustelleneinrichtung vorhalten Psch kleines LV plausibilisiert.";
-  }
-
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?2/.test(rawText)) {
-    targetEp = 41.8;
-    reason = "V19: Belasteter Boden Z1.2 m³ kleines LV plausibilisiert.";
-  }
-
-  if (isM3 && /\bhandschacht\b/.test(rawText)) {
-    targetEp = 11.5;
-    reason = "V19: Handschacht m³ kleines LV plausibilisiert.";
-  }
-
-  if (isM2 && /zuschlag hand ads/.test(rawText)) {
-    targetEp = 5;
-    reason = "V19: Zuschlag Hand ADS m² plausibilisiert.";
-  }
-
-  if (isT && /zulage asphalt.*verunreinigt/.test(rawText)) {
-    targetEp = 27.5;
-    reason = "V19: Zulage Asphalt gering verunreinigt t plausibilisiert.";
-  }
-
-
-  /*
-   * RLC Same-Year Benchmark Guard V20:
-   * Feinkorrektur für kleine Kanal-/Straßenbau-LV aus BA-2026-029.
-   * Nur autonome Familien-Plausibilitäten; X84 bleibt Benchmark, nicht Kalkulationsbasis.
-   */
-  if (isM && /rl ausbauen.*300/.test(rawText)) {
-    targetEp = 31.5;
-    reason = "V20: RL ausbauen bis DN300 m plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustelleneinricht\.\s*herstellen/.test(rawText)) {
-    targetEp = 1940;
-    reason = "V20: Baustelleneinrichtung herstellen Psch kleines LV plausibilisiert.";
-  }
-
-  if (isM2 && /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen/.test(rawText)) {
-    targetEp = 11.2;
-    reason = "V20: Gebundenen Oberbau aufbrechen m² fein plausibilisiert.";
-  }
-
-  if (isM2 && /zuschlag hand ats/.test(rawText)) {
-    targetEp = 28;
-    reason = "V20: Zuschlag Hand ATS m² plausibilisiert.";
-  }
-
-  if (isM3 && /verdichtbares material.*liefern.*einbauen/.test(rawText)) {
-    targetEp = 85;
-    reason = "V20: Verdichtbares Material m³ plausibilisiert.";
-  }
-
-  if (isM && /asphalt trennen.*12.*18/.test(rawText)) {
-    targetEp = 6.3;
-    reason = "V20: Asphalt trennen 12-18 m plausibilisiert.";
-  }
-
-  if (isSt && /straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen/.test(rawText)) {
-    targetEp = 447;
-    reason = "V20: Straßenablauf Klasse D400 St plausibilisiert.";
-  }
-
-  if (isM3 && /oberboden.*zwischengelagert.*andecken/.test(rawText)) {
-    targetEp = 8;
-    reason = "V20: Oberboden andecken m³ plausibilisiert.";
-  }
-
-  if (isSt && /übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300/.test(rawText)) {
-    targetEp = 402;
-    reason = "V20: Übergangsstück PP-Beton DN300 St plausibilisiert.";
-  }
-
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*0/.test(rawText)) {
-    targetEp = 44;
-    reason = "V20: Belasteter Boden Z0 m³ fein plausibilisiert.";
-  }
-
-  if (isSt && /aufsatz liefern.*einbauen/.test(rawText)) {
-    targetEp = 426;
-    reason = "V20: Aufsatz liefern/einbauen St plausibilisiert.";
-  }
-
-  if (isSt && /probenahme.*deklarationsanalyse/.test(rawText)) {
-    targetEp = 350;
-    reason = "V20: Probenahme und Deklarationsanalyse St plausibilisiert.";
-  }
-
-  if (isSt && /straßenablauf fertigteil ausb\./.test(rawText)) {
-    targetEp = 38;
-    reason = "V20: Straßenablauf Fertigteil ausbauen St fein plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /spartenerkundung/.test(rawText)) {
-    targetEp = 120;
-    reason = "V20: Spartenerkundung Psch plausibilisiert.";
-  }
-
-  if (isM3 && /oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern/.test(rawText)) {
-    targetEp = 5.5;
-    reason = "V20: Oberboden abtragen/zwischenlagern m³ fein plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /^003\b.*(baustelle räumen|baustelle raeumen)/.test(rawText)) {
-    targetEp = 1435;
-    reason = "V20: Baustelle räumen Psch plausibilisiert.";
-  }
-
-  if (isSt && /pp-bogen dn\s*300/.test(rawText)) {
-    targetEp = 12;
-    reason = "V20: PP-Bogen DN300 St plausibilisiert.";
-  }
-
-  if (isM3 && /bankett herstellen/.test(rawText)) {
-    targetEp = 80;
-    reason = "V20: Bankett herstellen m³ plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer/.test(rawText)) {
-    targetEp = 1150;
-    reason = "V20: Verkehrssicherung längerer Dauer Psch fein plausibilisiert.";
-  }
-
-  if (isM && /kunststoffrohr.*dn\s*160/.test(rawText)) {
-    targetEp = 88;
-    reason = "V20: Kunststoffrohrleitung DN160 m plausibilisiert.";
-  }
-
-  if (isSt && /pp-abzweig dn\s*300\/160/.test(rawText)) {
-    targetEp = 45;
-    reason = "V20: PP-Abzweig DN300/160 St plausibilisiert.";
-  }
-
-  if (isSt && /höhenfestpunkt herstellen|hoehenfestpunkt herstellen/.test(rawText)) {
-    targetEp = 75;
-    reason = "V20: Höhenfestpunkt herstellen St plausibilisiert.";
-  }
-
-  if (isSt && /pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300/.test(rawText)) {
-    targetEp = 35;
-    reason = "V20: PP-Überschiebmuffe DN300 St plausibilisiert.";
-  }
-
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?2/.test(rawText)) {
-    targetEp = 39;
-    reason = "V20: Belasteter Boden Z1.2 m³ fein plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /absperrung herstellen/.test(rawText)) {
-    targetEp = 890;
-    reason = "V20: Absperrung herstellen Psch plausibilisiert.";
-  }
-
-  if (isM && /kanal-tv.*dn\s*300/.test(rawText)) {
-    targetEp = 6.5;
-    reason = "V20: Kanal-TV DN300 m fein plausibilisiert.";
-  }
-
-  if (isM3 && /boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText)) {
-    targetEp = 5.6;
-    reason = "V20: Boden lösen/zwischenlagern m³ fein plausibilisiert.";
-  }
-
-  if (isM2 && /schichtenverbund herstellen/.test(rawText)) {
-    targetEp = 0.57;
-    reason = "V20: Schichtenverbund herstellen m² plausibilisiert.";
-  }
-
-  if (isM && /bauzaun herstellen.*vorhalten.*abb/.test(rawText)) {
-    targetEp = 9.0;
-    reason = "V20: Bauzaun herstellen/vorhalten/abbauen m plausibilisiert.";
-  }
-
-  if (isSt && /erschwerniszuschlag leitungskreuzung/.test(rawText)) {
-    targetEp = 80;
-    reason = "V20: Erschwerniszuschlag Leitungskreuzung St plausibilisiert.";
-  }
-
-
-  /*
-   * RLC Same-Year Benchmark Guard V21:
-   * letzte Feinkorrektur BA-2026-029.
-   */
-  if (isM3 && /leitungsgraben herstellen/.test(rawText)) {
-    targetEp = 55;
-    reason = "V21: Leitungsgraben herstellen m³ darf nicht durch Boden-lösen-Guard überschrieben werden.";
-  }
-
-  if (isM && /trassenwarnband liefern.*verlegen/.test(rawText)) {
-    targetEp = 0.6;
-    reason = "V21: Trassenwarnband m plausibilisiert.";
-  }
-
-  if (isSt && /pp-gelenkstück dn\s*300|pp-gelenkstueck dn\s*300/.test(rawText)) {
-    targetEp = 38;
-    reason = "V21: PP-Gelenkstück DN300 St plausibilisiert.";
-  }
-
-  if (isT && /zulage asphalt.*verunreinigt/.test(rawText)) {
-    targetEp = 31.9;
-    reason = "V21: Zulage Asphalt gering verunreinigt t fein plausibilisiert.";
-  }
-
-  if (isM2 && /zuschlag hand ads/.test(rawText)) {
-    targetEp = 4.5;
-    reason = "V21: Zuschlag Hand ADS m² fein plausibilisiert.";
-  }
-
-  if (isSt && /aufsatz ausbauen/.test(rawText)) {
-    targetEp = 109.45;
-    reason = "V21: Aufsatz ausbauen St fein plausibilisiert.";
-  }
-
-  if (/^psch$/.test(unit) && /baustelleneinricht\.\s*vorhalten/.test(rawText)) {
-    targetEp = 168.17;
-    reason = "V21: Baustelleneinrichtung vorhalten Psch fein plausibilisiert.";
-  }
-
-  if (isM3 && /belast.*boden.*entsorgen.*z\s*1\.?1/.test(rawText)) {
-    targetEp = 7.56;
-    reason = "V21: Belasteter Boden Z1.1 m³ fein plausibilisiert.";
-  }
-
-  if (isM3 && /\bhandschacht\b/.test(rawText)) {
-    targetEp = 10.5;
-    reason = "V21: Handschacht m³ fein plausibilisiert.";
-  }
-
-  if (isSt && /erschwernis.*anschluss.*best.*schacht/.test(rawText)) {
-    targetEp = 6.5;
-    reason = "V21: Erschwerniszuschlag Anschluss Bestandsschacht St fein plausibilisiert.";
-  }
-
-
-  /*
-   * RLC V23b:
-   * Suchschlitz herstellen darf nicht als Boden-lösen/Database-Kleinstpreis enden.
-   */
-  if (isM3 && /suchschlitz herstellen/.test(rawText) && !/suchschlitze/.test(rawText)) {
-    targetEp = 55.04;
-    reason = "V26: Suchschlitz herstellen m³ plausibilisiert.";
-  }
-
-  if (targetEp <= 0) return result;
-  if (currentEp <= targetEp * 1.25) {
-    const mustStillNormalize =
-      (isCm && /(mehr- oder minderpreis|mehr.*minderpreis|minderpreis|mehrpreis|schachtzulage|tiefe|kernbohrung|kernbohrungen)/.test(text)) ||
-      (isM3 && /auffüllmaterial|auffuellmaterial/.test(text));
-
-    const mustForceGrossNormalize =
-      /druckerhöhungsschacht|druckerhoehungsschacht|erschwernis alter|erschwernis vermessung|bentonitver|betonitver|überdachung|ueberdachung|revisionsschacht|kabelzugschacht|pumpensteuerung|elektroverteilung|fabrikat simona|zufahrt zur baustelle|niveaumessung|durchflussmesser|straßenaufbruch|strassenaufbruch|mutterboden|verkehrssicherung|beengte bauweise|besprechungsraum|entwässerungsrinne|entwaesserungsrinne|schachtabdeckung dps|fernwirktechnik|baustelleneinrichtung horizontalbohrung|freiluftschrank/.test(rawText);
-
-    const mustForceFamilyV7Normalize =
-      /schachtabdeckung.*pp|einsteighilfe|revisionsschächte|revisionsschaechte|paßstück|passstück|passstueck|formstücke.*gg|formstuecke.*gg|besprechungsraum|mmb-stück|mmb-stueck|entwässerungsrinne|entwaesserungsrinne|start- und zielgrube|fugenband|stillstandszeiten|böschungsstück|boeschungsstueck|stromantrag|schachtabdeckung dps|fernwirktechnik|druckprobe|sauberkeitsschicht|polyethylenrohr|baustelleneinrichtung horizontalbohrung|feinplanie|rohrabschluss|pilotbohrung|bauschild|instandhaltung verkehrsflächen|instandhaltung verkehrsflaechen|ggg-formstück|ggg-formstueck|pumpenfabrikat|unterflurhydrant|speedpipe|baugrubenaushub|mehrpreis bauschild|straßenkappe|strassenkappe|entwässerungsmulde|entwaesserungsmulde|sand 0|pumpenstunden|pumpschacht|bentonitver|betonitver|suchschlitze|baustelleneinrichtung|besucherinformation|sohlbettung pe|bestandspläne|bestandsplaene|kabelleerrohr|tüv-abnahme|tuv-abnahme|trassenwarnband breitband|böschungssteine|boeschungssteine|bestandszeichnung|rückschlagklappe|rueckschlagklappe|durchlass herstellen|anliegerverkehrs/.test(rawText);
-
-    const mustForceFamilyV9Normalize =
-      /zulage schachtzulauf|baugrubenaushub|trassenwarnband breitband|durchlass herstellen.*dn\s*300|suchschlitze|pe-hd.*formstück.*abzweig|pe-hd.*formstueck.*abzweig|baustelleneinrichtung|schachtabdeckung liefern|zulage.*anschluss druckleitung|kabelschutzrohr|messingkupplungen|auskreuzen|sprengarbeiten|freiluftschrank|rasen oder humus|ggg-formstücke|ggg-formstuecke|pe-hd.*formstücke|pe-hd.*formstuecke|mehr- oder minderpreis.*beton|90 grad-bogen|sandüberdeckung|sandueberdeckung|übergangsstück da 90|uebergangsstueck da 90|absperrschieber dn\s*50|doppelsteckmuffen permanent|böschungsstück.*dn\s*500|boeschungsstueck.*dn\s*500|hinweissäulen|hinweissaeulen|messingquetschverschraubung|senkrechte kreuzung/.test(rawText);
-
-    const mustForceFamilyV10Normalize =
-      /zulage schachtzulauf|schachtabdeckung liefern|pe-hd.*formstück|pe-hd.*formstueck|hinweisschilder|bestehenden durchlass ausbauen|sandüberdeckung|sandueberdeckung|baustelleneinrich|kabelschutzrohr|pilotbohrung|mauerrohr|duktile gussrohre|kabelleerrohr|sohlbettung|wurzelstock|ortsnetzkabel|zuschlag schachtabdeckung|schichtenverbund herstellen|anschluss an best.*leitung|ovalschieber/.test(rawText);
-
-    const mustForceFamilyV11Normalize =
-      /baustelleneinrichtung|pumpschacht|zuschlag schachtabdeckung|schachtabdeckung|kabelschutzrohr|pe-hd.*formstück|pe-hd.*formstueck|pe-hd.*formstücke|pe-hd.*formstuecke|hinweisschilder|hinweissäulen|hinweissaeulen|durchlass ausbauen|sandüberdeckung|sandueberdeckung|rohrumhüllung sand|rohrumhuellung sand|kabelleerrohr|sohlbettung|leitungsquerungen|trassenwarnband|überfahrten|ueberfahrten|formstücke.*pp|formstuecke.*pp|anschluss an best.*durchlass|schmutzfänger|schmutzfaenger|runddraht|losflansch pn\s*40|besucherführung|besucherfuehrung|ortungsband|mehr- oder minderpreis/.test(rawText);
-
-    const mustForceFamilyV12Normalize =
-      /zulage schachtzulauf|zwischenplanum|baustelleneinrichtung|baustellenabsicherung|mikrokabelleerrohrverbund|rohrumhüllung sand|rohrumhuellung sand|ortungsband|kabelschutzrohr|sohlbettung|trassenwarnband|mehr- oder minderpreis|pilotbohrung s1|pilotbohrung s3|baugrubenaushub.*6\/7|pp-schacht|vorgegebene bauzeiten|revisionsschacht|durchlass herstellen.*dn\s*500|durchlass herstellen.*dn\s*600|ringraumdichtung.*168|lkw-stunden/.test(rawText);
-
-    const mustForceFamilyV13Normalize =
-      /baustelleneinrichtung|hinweisschilder|rohrumhüllung sand|rohrumhuellung sand|schachtabdeckung|kabelschutzrohr|durchlass herstellen.*dn\s*600|sohlbettung|trassenwarnband|mehr- oder minderpreis|splittüberdeckung|splittueberdeckung|straßenbauvlies|strassenbauvlies|losflansch|anbohrarmaturen|starre verbindung|mineralbeton|senkrechte kreuzung|unterlage reinigen.*schichtenverbund|suchschlitze|mutterboden|baustahl|mauerdurchführung|mauerdurchfuehrung|einbinden der kabelleerrohre|wanderweg wiederherstellen|kabelquerungen|hdpe.*da\s*90|bettungssand|kabelgrabenaushub.*zulage|elektroverteilung|lange kreuzungen.*kabel|zulage verlegung hdpe-rohr/.test(rawText);
-
-    const mustForceFamilyV14Normalize =
-      /rohrumhüllung sand hdpe da\s*50|rohrumhuellung sand hdpe da\s*50|suchschlitze|senkrechte kreuzung.*dn\s*100|baustahl.*500\/550|500\/550|zulage wanderweg wiederherstellen|freiluftschrank|hinweissäulen|hinweissaeulen|energieumwandlungsschacht|bettungssand|zulage baugrubenaushub|kabelgrabenaushub.*zulage|rohr- \/ kabelgrabenaushub.*zulage|übergangsstück dn\s*80|uebergangsstueck dn\s*80|sohlbettung riesel|losflansch pn\s*16|durchlass herstellen.*kunststoffrohre.*dn\s*600|kanal spülen|kanal spuelen|mikrorohrhausanschlussleitung|sandüberdeckung|sandueberdeckung|wurzelstock roden|sohl- und ummantelungsbeton|hinweissteine|niederschrift beweissicherung|fettfreie isolierbinde|schutzmatte|rohrschutz schutzmatte|rohrumhüllung sand.*hdpe\s*75|rohrumhuellung sand.*hdpe\s*75|hdpe.*rohre\s*180|hdpe.*rohr\s*180|mehr- oder minderpreis|durchlass herstellen.*stahlbetonrohr.*dn\s*800/.test(rawText);
-
-    const mustForceFamilyV15Normalize =
-      /hinweisschilder|losflansch pn\s*16|sandüberdeckung pe|sandueberdeckung pe|fettfreie isolierbinde|schutzmatte.*kabelverlegungen|sandüberdeckung ggg|sandueberdeckung ggg|zuschlag.*steuerung|zuschlag.*vlies|lange kreuzungen|sohlbettung|bauvorarbeiter|hdpe.*rohre da\s*75|anschluss ableitung hdpe dn\s*180|lkw-stunden|bachquerung|rohrgrabenaushub.*bd-kl|bohrlafette|auffüllmaterial|auffuellmaterial|ggg-rohre|anschluss am bestehenden schacht|rohr.*kabelgrabenaushub|ringraumdichtungen|polierstunde|fahrzeugkosten|hydrantenfußkrümmer|hydrantenfusskruemmer|bruchschotter|grobkies|absperrschieber dn\s*50|zäune abbauen|zaeune abbauen/.test(rawText);
-
-    const mustForceFamilyV16Normalize =
-      /hydrantenfußkrümmer|hydrantenfusskruemmer|schutzmatte|paßstücke.*dn\s*600|passstücke.*dn\s*600|passstuecke.*dn\s*600|kernbohrungen|flächen einzäunen|flaechen einzaeunen|mehr- oder mindertiefe.*pw\s*1|senkrechte kreuzung.*kabel|absperrschieber dn\s*50.*pn\s*25|frostsicheres kiesmaterial|frostsicheres material|frostschutzkies|zulage abtrag|pumpenstunden|lwl miko-kabel|lwl mikro-kabel|kabelmuffen|revisionsschacht|dichtkappen|endstopfen permanent 14|anschluss und verbindung|flächen auflockern|flaechen auflockern|einzelzugabdichtung 14|motorflex|abbau und abfuhr|zuschlag rückverfüllung|zuschlag rueckverfuellung|schutzmatte für pe dn50|schutzmatte fuer pe dn50/.test(rawText);
-
-    const mustForceFamilyV17Normalize =
-      /flächen auflockern|flaechen auflockern|absperrschieber dn\s*50.*pn\s*25|bestehenden durchlass ausbauen.*dn\s*800|schutzmatte.*pe dn75|erschwernis trasse.*steigen|stundensätze baufacharbeiter|stundensaetze baufacharbeiter|sohlbettung pe dn50|sohlbettung pe dn75|rohr.*kabelgrabenaushub|rohr- \/ kabelgrabenaushub|lkw-stunden.*4.*5|ringraumdichtung|kernbohrungen dn\s*2|ggg-rohre dn\s*150|stundensätze spezialbaufacharbeiter|stundensaetze spezialbaufacharbeiter/.test(rawText);
-
-    const mustForceFamilyV18Normalize =
-      /belast.*boden.*entsorgen.*z\s*0|belast.*boden.*entsorgen.*z\s*1\.?1|belast.*boden.*entsorgen.*z\s*1\.?2|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern/.test(rawText);
-
-    const mustForceFamilyV19Normalize =
-      /gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer|straßenablauf fertigteil ausb\.|kanal-tv.*dn\s*300|erschwernis.*anschluss.*best.*schacht|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|fss herstellen.*50\s*cm|asphalt feinfräsen|asphalt feinfrasen|leitungsgraben herstellen|belast.*boden.*entsorgen.*z\s*1\.?1|aufsatz ausbauen|baustelleneinricht\.\s*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?2|\bhandschacht\b|zuschlag hand ads|zulage asphalt.*verunreinigt/.test(rawText);
-
-    const mustForceFamilyV20Normalize =
-      /rl ausbauen.*300|baustelleneinricht\.\s*herstellen|gebundenen ober.*bau aufbrechen|gebundenen oberbau aufbrechen|zuschlag hand ats|verdichtbares material.*liefern.*einbauen|asphalt trennen.*12.*18|straßenablauf klasse d\s*400 herstellen|strassenablauf klasse d\s*400 herstellen|oberboden.*zwischengelagert.*andecken|übergangsstück pp-beton dn\s*300|uebergangsstueck pp-beton dn\s*300|belast.*boden.*entsorgen.*z\s*0|aufsatz liefern.*einbauen|probenahme.*deklarationsanalyse|straßenablauf fertigteil ausb\.|spartenerkundung|oberboden.*abtragen.*zwischenlagern|oberboden.*zwischenlagern|baustelle räumen|baustelle raeumen|pp-bogen dn\s*300|bankett herstellen|verkehrssicherung v\. längerer dauer|verkehrssicherung v\. laengerer dauer|kunststoffrohr.*dn\s*160|pp-abzweig dn\s*300\/160|höhenfestpunkt herstellen|hoehenfestpunkt herstellen|pp-überschiebmuffe dn\s*300|pp-ueberschiebmuffe dn\s*300|belast.*boden.*entsorgen.*z\s*1\.?2|absperrung herstellen|kanal-tv.*dn\s*300|boden lösen.*zwischenlagern|boden loesen.*zwischenlagern|schichtenverbund herstellen|bauzaun herstellen.*vorhalten.*abb|erschwerniszuschlag leitungskreuzung/.test(rawText);
-
-    const mustForceFamilyV21Normalize =
-      /leitungsgraben herstellen|trassenwarnband liefern.*verlegen|pp-gelenkstück dn\s*300|pp-gelenkstueck dn\s*300|zulage asphalt.*verunreinigt|zuschlag hand ads|aufsatz ausbauen|baustelleneinricht\.\s*vorhalten|belast.*boden.*entsorgen.*z\s*1\.?1|\bhandschacht\b|erschwernis.*anschluss.*best.*schacht/.test(rawText);
-
-    if (!mustStillNormalize && !mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && !mustForceFamilyV19Normalize && !mustForceFamilyV20Normalize && !mustForceFamilyV21Normalize) return result;
-    if (!mustForceGrossNormalize && !mustForceFamilyV7Normalize && !mustForceFamilyV9Normalize && !mustForceFamilyV10Normalize && !mustForceFamilyV11Normalize && !mustForceFamilyV12Normalize && !mustForceFamilyV13Normalize && !mustForceFamilyV14Normalize && !mustForceFamilyV15Normalize && !mustForceFamilyV16Normalize && !mustForceFamilyV17Normalize && !mustForceFamilyV18Normalize && !mustForceFamilyV19Normalize && !mustForceFamilyV20Normalize && !mustForceFamilyV21Normalize && currentEp <= targetEp) return result;
-  }
-
-  const factor = targetEp / currentEp;
-  const total = round2(targetEp * qty);
-
-  const scale = (v: any) => {
-    const x = n(v);
-    return x > 0 ? round2(x * factor) : x;
-  };
-
-  const priceBreakdown = Array.isArray(result.priceBreakdown)
-    ? result.priceBreakdown.map((line: any) => ({
-        ...line,
-        price: scale(line.price),
-        total: scale(line.total),
-        note: [
-          s(line.note),
-          `RLC No-X84 Autonomous Family Guard: ${reason} EP von ${round2(currentEp)} EUR auf ${round2(targetEp)} EUR plausibilisiert.`
-        ].filter(Boolean).join(" · "),
-      }))
-    : result.priceBreakdown;
-
-  return {
-    ...result,
-
-    materialCost: scale(result.materialCost),
-    laborCost: scale(result.laborCost),
-    machineCost: scale(result.machineCost),
-    subcontractorCost: scale(result.subcontractorCost),
-    disposalCost: scale(result.disposalCost),
-    overheadCost: scale(result.overheadCost),
-    riskCost: scale(result.riskCost),
-    profitCost: scale(result.profitCost),
-
-    baseUnitPrice: round2(targetEp),
-    suggestedUnitPrice: round2(targetEp),
-    finalUnitPrice: round2(targetEp),
-    rlcKiUnitPrice: round2(targetEp),
-    unitPrice: round2(targetEp),
-    preis: round2(targetEp),
-
-    totalNet: total,
-    rlcKiTotal: total,
-    gesamt: total,
-
-    priceBreakdown,
-
-    confidence: Math.min(n(result.confidence, 0.62), 0.72),
-    calculationStatus: "warning",
-    riskLevel: "medium",
-    source: cleanRlcSourceFlags(appendUniqueSourceFlag(s(result.source) || "server", "no-x84-family-guard")),
-
-    warning: [
-      s(result.warning),
-      `RLC No-X84 Autonomous Family Guard aktiv: ${reason} Keine X84-/Angebotsbasis verwendet; Position bleibt prüfpflichtig.`
-    ].filter(Boolean).join(" · "),
-
-    aiReason: [
-      s(result.aiReason),
-      `RLC autonome Familienplausibilisierung: ${reason} Der vorherige EP ${round2(currentEp)} EUR war für Textfamilie und Einheit unplausibel hoch. Es wurde kein X84-/Angebotspreis übernommen.`
-    ].filter(Boolean).join("\n\n"),
-  };
-}
-
-
-function oldReferenceEp(row: InputRow, matches: DbMatch[]): number {
-  const oldEp = n(row.preis);
-  const dbEp = weightedDbPrice(matches, s(row.einheit));
-  return Math.max(oldEp, dbEp);
-}
-
-function applyPlausibilityGuard(row: InputRow, matches: DbMatch[], aiRow: any, forceRecalculate = false): any {
-  const text = `${s(row.kurztext)} ${s(row.langtext)}`.trim();
-  const unit = s(row.einheit);
-  const minEp = plausibilityMinEp(text, unit);
-  const maxEp = plausibilityMaxEp(text, unit);
-
-  /*
-   * Bei KI-Neuberechnung oder bei offensichtlich explodierten Altpreisen
-   * darf der vorhandene EP nicht als stabiler Referenzpreis blockieren.
-   */
-  const existingRowEp = n(row.preis);
-  const explodedExistingEp =
-    maxEp > 0 && existingRowEp > maxEp * 1.15;
-
-  const rowEp =
-    forceRecalculate || explodedExistingEp
-      ? 0
-      : existingRowEp;
-
-  const rawOldEp =
-    forceRecalculate || explodedExistingEp
-      ? 0
-      : oldReferenceEp(row, matches);
-
-  /*
-   * Vecchio EP/Datenbank-EP viene usato come Referenz solo se plausibile.
-   * Esempio: Speedpipe vecchio 55 €/m contro Mindestansatz 8,50 €/m non deve bloccare la KI.
-   */
-  const oldEp =
-    minEp > 0 && rawOldEp > minEp * 3
-      ? 0
-      : rawOldEp;
-
-  const aiEp = n(aiRow?.finalUnitPrice);
-
-  let guardedEp = aiEp;
-  const notes: string[] = [];
-
-  const kleinteileGuardText = `${s((row as any).kurztext)} ${s((row as any).langtext)}`;
-  const kleinteileGuardUnit = s((row as any).einheit);
-  const kleinteileGuardActive = isKleinteileZulagenGuardPosition(kleinteileGuardText, kleinteileGuardUnit);
-  const x84AnchorEp = x84AnchorEpFromRow(row as any);
-
-  /*
-   * RLC Kleinteile/Zulagen Soft Guard:
-   * Kleine Zubehör-, Zulagen-, Mehr-/Minderpreis- und cm-Positionen dürfen nicht
-   * unbemerkt mit schwerer Komponentenkalkulation oder universellem Preisresolver
-   * auf ein Vielfaches des X84-/Angebots-EP springen.
-   *
-   * Wichtig: Soft Guard ändert den EP noch nicht. Er markiert nur fachlich prüfpflichtig.
-   */
-  const kleinteileRatio =
-    kleinteileGuardActive && x84AnchorEp > 0 && guardedEp > 0
-      ? guardedEp / x84AnchorEp
-      : 0;
-
-  if (kleinteileRatio >= 5) {
-    notes.push(
-      `RLC Kleinteile/Zulagen-Guard: EP ${round2(guardedEp)} € liegt ${round2(kleinteileRatio)}x über X84-/Angebots-EP ${round2(x84AnchorEp)} €. Position fachlich prüfen; keine automatische OK-Freigabe.`
-    );
-  }
-
-  /*
-   * RLC Preisgruppen-Guard:
-   * Materialpreise aus der Preisbibliothek dürfen den finalen EP nicht deckeln.
-   * Material dient nur als Urkalkulations-/Materialansatz.
-   * Finalpreis-Deckelung ist nur sinnvoll bei Transport, Maschinen,
-   * Fremdleistung oder kompletten Oberflächenleistungen.
-   */
-  const rlcGroup = s(aiRow?.rlcPreisGroup).toLowerCase();
-  const hasRlcGroup = rlcGroup.length > 0;
-  const rlcCanLimitFinalPrice =
-    !hasRlcGroup ||
-    rlcGroup.includes("transport") ||
-    rlcGroup.includes("maschine") ||
-    rlcGroup.includes("fremdleistung") ||
-    rlcGroup.includes("oberfläche") ||
-    rlcGroup.includes("oberflaeche");
-
-  /*
-   * Direct Technical Recipe Override:
-   * Diese Fälle wurden bewusst fachlich eindeutig erkannt.
-   * Alte LV-Preise dürfen diese Korrektur nicht durch die Stabilitätsbremse blockieren.
-   */
-  const isDirectTechnicalRecipeOverride =
-    s(aiRow?.leistungsart).toLowerCase().includes("direkte technische rezeptlogik") ||
-    s(aiRow?.warning).toLowerCase().includes("direkte technische rlc-rezeptlogik") ||
-    s(aiRow?.aiReason).toLowerCase().includes("direkte rlc-rezeptlogik");
-
-  /*
-   * RLC-KI Pipeline:
-   * Der vorhandene LV-/X84-EP darf die eigentliche RLC-KI nicht blockieren.
-   * X84 bleibt Vergleichswert im Frontend, aber nicht Server-Wahrheit für finalUnitPrice.
-   */
-
-  const guardContextText = norm(`${s((row as any).kurztext)} ${s((row as any).langtext)}`);
-
-  const isSpecialCivilGuardContext =
-    /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/i.test(guardContextText);
-
-  const isHouseConnectionGuardContext =
-    /hausanschluss|hausanschlüsse|hausanschluesse|kernbohrung|wanddurchführung|wanddurchfuehrung|hauseinführung|hauseinfuehrung|gebäudeeinführung|gebaeudeeinfuehrung|innenhof|privatgrund|privatfläche|privatflaeche|eigentümer|eigentuemer|handschachtung|wiederherstellung.*privat|arbeiten am bestand|bestand/i.test(guardContextText);
-
-  if (!isHouseConnectionGuardContext && !isSpecialCivilGuardContext && !isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && minEp > 0 && guardedEp > 0 && guardedEp < minEp) {
-    notes.push(
-      `Plausibilitätsgrenze aktiv: KI-EP ${round2(guardedEp)} EUR liegt unter Mindestansatz ${round2(minEp)} EUR.`
-    );
-    guardedEp = minEp;
-  }
-
-  if (!isHouseConnectionGuardContext && !isSpecialCivilGuardContext && !isDirectTechnicalRecipeOverride && rlcCanLimitFinalPrice && maxEp > 0 && guardedEp > maxEp) {
-    notes.push(
-      `Plausibilitätsdeckel aktiv: KI-EP ${round2(guardedEp)} EUR liegt über dem fachlichen Maximalansatz ${round2(maxEp)} EUR. Finaler EP wurde gedeckelt.`
-    );
-    guardedEp = maxEp;
-  }
-
-  /*
-   * Kein oldEp/X84-Preis-Limit mehr:
-   * RLC-KI muss unabhängig rechnen. Alter LV-/X84-EP wird nur im Frontend verglichen.
-   */
-
-  /*
-   * Keine Stabilitätsbremse gegen alten Referenz-EP:
-   * RLC-KI muss ihren eigenen EP liefern. Abweichungen werden im Frontend verglichen.
-   */
-
-  if (!guardedEp || guardedEp <= 0 || guardedEp === aiEp) {
-    return aiRow;
-  }
-
-  const factor = aiEp > 0 ? guardedEp / aiEp : 1;
-
-  const priceBreakdown = Array.isArray(aiRow.priceBreakdown)
-    ? aiRow.priceBreakdown.map((line: PriceBreakdownLine) => ({
-        ...line,
-        price: round2(n(line.price) * factor),
-        total: round2(n(line.total) * factor),
-        note: [s(line.note), "Plausibilitätsanpassung"].filter(Boolean).join(" · "),
-      }))
-    : aiRow.priceBreakdown;
-
-  return {
-    ...aiRow,
-    materialCost: round2(n(aiRow.materialCost) * factor),
-    laborCost: round2(n(aiRow.laborCost) * factor),
-    machineCost: round2(n(aiRow.machineCost) * factor),
-    subcontractorCost: round2(n(aiRow.subcontractorCost) * factor),
-    disposalCost: round2(n(aiRow.disposalCost) * factor),
-    overheadCost: round2(n(aiRow.overheadCost) * factor),
-    riskCost: round2(n(aiRow.riskCost) * factor),
-    profitCost: round2(n(aiRow.profitCost) * factor),
-
-    baseUnitPrice: round2(guardedEp),
-    suggestedUnitPrice: round2(guardedEp),
-    finalUnitPrice: round2(guardedEp),
-
-    calculationStatus: notes.some((x) => x.includes("Kleinteile/Zulagen-Guard"))
-      ? "needs_review"
-      : aiRow.calculationStatus === "critical"
-        ? "critical"
-        : "warning",
-    riskLevel: notes.some((x) => x.includes("Kleinteile/Zulagen-Guard"))
-      ? "high"
-      : aiRow.riskLevel === "high"
-        ? "high"
-        : "medium",
-
-    warning: [s(aiRow.warning), ...notes].filter(Boolean).join(" · "),
-    aiReason: [s(aiRow.aiReason), ...notes].filter(Boolean).join("\n\n"),
-    priceBreakdown,
-  };
-}
 
 function firstLayerCm(text: string, keys: string[]): number {
   const t = norm(text);
@@ -4460,30 +2101,6 @@ function sanitizeOverheadRiskProfit(
   return out;
 }
 
-function rejectClearlyUnrealisticBreakdown(lines: PriceBreakdownLine[]): boolean {
-  const total = sumBreakdown(lines);
-  if (total <= 0) return true;
-
-  const directTotal = round2(
-    lines
-      .filter((x) =>
-        ["Material", "Personal", "Maschinen", "LKW / Transport", "Entsorgung", "Fremdleistung"].includes(x.group)
-      )
-      .reduce((sum, x) => sum + n(x.total), 0)
-  );
-
-  const overheadRiskProfit = round2(
-    lines
-      .filter((x) => ["Gemeinkosten", "Risiko", "Gewinn"].includes(x.group))
-      .reduce((sum, x) => sum + n(x.total), 0)
-  );
-
-  if (directTotal > 0 && overheadRiskProfit > directTotal * 0.45) return true;
-  if (total > 500 && directTotal < total * 0.25) return true;
-
-  return false;
-}
-
 function sumBreakdownGroup(
   lines: PriceBreakdownLine[],
   groups: PriceBreakdownGroup[]
@@ -4537,42 +2154,6 @@ function calculationStatusFrom(warnings: string[], riskLevel: RiskLevel, confide
   return "ok";
 }
 
-
-function enrichFinalRowWithKnowledgeHub(row: any, result: any): any {
-  if (!result || typeof result !== "object") return result;
-
-  try {
-    const knowledgeHub = resolveRlcKnowledgeHub({
-      kurztext: row?.kurztext,
-      langtext: row?.langtext,
-      text: `${row?.kurztext || ""} ${row?.langtext || ""}`,
-      unit: row?.einheit,
-      family: result?.rlcFamily || result?.family || result?.gewerk || result?.source
-    });
-
-    console.log("[RLC KnowledgeHub FINAL CHECK]", {
-      posNr: row?.posNr,
-      kurztext: row?.kurztext,
-      matches: knowledgeHub.externalMatches.length,
-      confidence: knowledgeHub.externalKnowledgeConfidence
-    });
-
-    if (!knowledgeHub.hasExternalKnowledge) return result;
-
-    return {
-      ...result,
-      externalKnowledge: knowledgeHub.externalMatches,
-      externalKnowledgeConfidence: knowledgeHub.externalKnowledgeConfidence,
-      aiReason: [
-        String(result.aiReason || ""),
-        ...knowledgeHub.technicalNotes
-      ].filter(Boolean).join("\n\n")
-    };
-  } catch (e: any) {
-    console.warn("[RLC KnowledgeHub FINAL ERROR]", row?.posNr, e?.message || e);
-    return result;
-  }
-}
 
 function calcRuleRow(row: InputRow, matches: DbMatch[], sourceOverride?: CalcSource) {
   const posNr = s(row.posNr);
@@ -4724,7 +2305,12 @@ function extractJson(text: string): any | null {
   return null;
 }
 
-async function openAiCalcRow(row: InputRow, matches: DbMatch[]): Promise<any | null> {
+async function openAiCalcRow(row: InputRow, matches: DbMatch[], companyId = "", projectCode = ""): Promise<any | null> {
+  if (process.env.RLC_RECIPE_DEBUG === "1") {
+    console.log("[RLC_RECIPE_DEBUG] openAiCalcRow SKIPPED - OpenAI disabled");
+    return null;
+  }
+
   const posNr = s(row.posNr);
   const kurztext = s(row.kurztext);
   const langtext = s(row.langtext);
@@ -4735,7 +2321,13 @@ async function openAiCalcRow(row: InputRow, matches: DbMatch[]): Promise<any | n
   const gewerk = detectGewerk(text);
   const leistungsart = detectLeistungsart(text);
   const bauverfahren = detectBauverfahren(text, einheit);
-  const rlcPreisTreffer = findRlcPreisItems({ text, unit: einheit, limit: 12 });
+  // Suggestions shown to KI must be auditable price sources, not historic values.
+  const rlcPreisTreffer = findRlcPreisItems({
+    text,
+    unit: einheit,
+    limit: 12,
+    documentedOnly: true,
+  });
   const rlcPreisRange = rlcPreisRangeForText(text, einheit);
   const contextHint = contextSensitiveAiHint(text, einheit);
 
@@ -5338,6 +2930,19 @@ JSON-Schema:
         content: prompt,
       },
     ],
+  });
+
+  appendAiPrivacyAudit(companyId, {
+    provider: completion.provider,
+    model: completion.model,
+    purpose: "kalkulation",
+    feature: "KALKULATION_KI_ROW",
+    projectCode,
+    positionId: row.id || row.posNr || "",
+    inputTokens: completion.usage?.inputTokens,
+    outputTokens: completion.usage?.outputTokens,
+    totalTokens: completion.usage?.totalTokens,
+    fallbackUsed: completion.fallbackUsed,
   });
 
   const content = completion.text || "";
@@ -7633,41 +5238,120 @@ JSON-Schema:
   };
 }
 
+function marketReviewFingerprint(row: InputRow): string {
+  const ref: any = (row as any).referencePosition || null;
+  const normalized = JSON.stringify({
+    posNr: s(row.posNr).toLowerCase(),
+    kurztext: s(row.kurztext).replace(/\s+/g, " ").toLowerCase(),
+    langtext: s(row.langtext).replace(/\s+/g, " ").toLowerCase(),
+    einheit: s(row.einheit).toLowerCase(),
+    menge: n(row.menge),
+    referencePosition: ref ? {
+      posNr: s(ref.posNr).toLowerCase(),
+      kurztext: s(ref.kurztext).replace(/\s+/g, " ").toLowerCase(),
+      langtext: s(ref.langtext).replace(/\s+/g, " ").toLowerCase(),
+      einheit: s(ref.einheit).toLowerCase(),
+      menge: n(ref.menge),
+    } : null,
+  });
+  return crypto.createHash("sha256").update(normalized).digest("hex");
+}
 
-function isSimpleKnownRow(row: InputRow): boolean {
-  const text = `${s(row.kurztext)} ${s(row.langtext)}`.toLowerCase();
-  const unit = s(row.einheit);
+async function independentOpenAiReview(row: InputRow): Promise<any | null> {
+  const posNr = s(row.posNr);
+  const kurztext = s(row.kurztext);
+  const langtext = s(row.langtext);
+  const einheit = s(row.einheit);
   const menge = n(row.menge);
+  const reference = (row as any).referencePosition || null;
+  const referenceText = reference
+    ? `\nBezug aus vorheriger LV-Position (nur Leistungsumfang, ohne Preise):\nPosition: ${s(reference?.posNr) || "—"}\nKurztext: ${s(reference?.kurztext) || "—"}\nLangtext: ${s(reference?.langtext) || "—"}\nEinheit: ${s(reference?.einheit) || "—"}\nMenge: ${n(reference?.menge)}\n`
+    : "";
 
-  if (!text || !unit || menge <= 0) return false;
+  if (!kurztext || !einheit) return null;
 
-  const known =
-    text.includes("speedpipe") ||
-    text.includes("kabelschutzrohr") ||
-    text.includes("rohr") ||
-    text.includes("aushub") ||
-    text.includes("verfüll") ||
-    text.includes("frostschutz") ||
-    text.includes("kies") ||
-    text.includes("asphalt") ||
-    text.includes("pflaster") ||
-    text.includes("rasengitter") ||
-    text.includes("bordstein") ||
-    text.includes("randstein") ||
-    text.includes("leistenstein");
+  const prompt = `Du bist ein unabhängiger deutscher Baukalkulator.
+Erstelle eine zweite, eigenständige Markt-Plausibilisierung für genau eine LV-Position.
 
-  const complex =
-    text.includes("nach bedarf") ||
-    text.includes("bauseits") ||
-    text.includes("unbekannt") ||
-    text.includes("kontaminiert") ||
-    text.includes("grundwasser") ||
-    text.includes("bestand") ||
-    text.includes("anschluss") ||
-    text.includes("sonder") ||
-    text.includes("provisorisch");
+WICHTIG: Du erhältst absichtlich KEINEN RLC-Preis, KEINEN X84-Preis, KEINE Datenbankpreise und KEINE bestehende Urkalkulation. Berechne nicht durch Rückgabe oder Anpassung eines vorhandenen Preises. Recherchiere aktuelle deutsche Marktpreise im Web und leite daraus zusammen mit LV-Text, Einheit, Menge und Bauwissen einen eigenständigen plausiblen Netto-Einheitspreis ab. Bevorzuge belastbare Hersteller-, Händler-, Preislisten- und öffentliche Ausschreibungsquellen. Berücksichtige Preisstand 2026, soweit verfügbar.
 
-  return known && !complex;
+Position: ${posNr || "—"}
+Kurztext: ${kurztext}
+Langtext: ${langtext || "—"}
+Menge: ${menge}
+Einheit: ${einheit}
+${referenceText}
+Antworte ausschließlich als JSON:
+{
+  "suggestedUnitPrice": number,
+  "confidence": number,
+  "reason": string,
+  "assumptions": string,
+  "warning": string
+}
+
+Der Preis ist netto pro ${einheit}; nenne knappe, nachvollziehbare Annahmen. Bevorzuge mehrere fachlich vergleichbare Quellen und vermeide Extremwerte. Wenn Angaben fehlen, schätze konservativ und benenne die Unsicherheit.`;
+
+  const completion = await completeRlcMarketReviewWithWeb({
+    purpose: "market_review",
+    temperature: 0.2,
+    responseFormat: "json",
+    maxTokens: 600,
+    messages: [
+      { role: "system", content: "Du bist ein unabhängiger Baupreis-Gutachter. Antworte nur mit validem JSON." },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  const parsed = extractJson(completion.text || "");
+  const rawMarketPrice = round2(n(parsed?.suggestedUnitPrice));
+  if (rawMarketPrice <= 0) {
+    console.error("[RLC-KI][market-review-empty-price]", { posNr, kurztext, model: completion.model, text: String(completion.text || "").slice(0, 800) });
+    return null;
+  }
+
+  const rlcRange = rlcPreisRangeForText(`${kurztext} ${langtext}`.trim(), einheit);
+  const rlcMin = round2(n(rlcRange.min));
+  const rlcAvg = round2(n(rlcRange.avg));
+  const rlcMax = round2(n(rlcRange.max));
+  const hasVerifiedRlcRange = rlcMin > 0 && rlcAvg > 0 && rlcMax > 0;
+  const outsideVerifiedRange = hasVerifiedRlcRange && (rawMarketPrice < rlcMin || rawMarketPrice > rlcMax);
+
+  // RLC Quality Gate: documented/calibrated RLC market ranges are the economic
+  // safety rail. A volatile web-only estimate may inform the result but may not
+  // become an adoptable final price when it falls outside that verified range.
+  const suggestedUnitPrice = outsideVerifiedRange ? rlcAvg : rawMarketPrice;
+  const gateNote = outsideVerifiedRange
+    ? `RLC Quality Gate: externer Marktwert ${rawMarketPrice} €/EH liegt außerhalb des verifizierten RLC-Marktbereichs ${rlcMin}–${rlcMax} €/EH. Verwendet wird der RLC-Mittelwert ${rlcAvg} €/EH.`
+    : hasVerifiedRlcRange
+      ? `RLC Quality Gate: Marktwert liegt innerhalb des verifizierten RLC-Marktbereichs ${rlcMin}–${rlcMax} €/EH.`
+      : "RLC Quality Gate: Kein dokumentierter RLC-Marktbereich verfügbar; Ergebnis bleibt prüfpflichtig.";
+
+  return {
+    id: row.id,
+    posNr,
+    suggestedUnitPrice,
+    finalUnitPrice: suggestedUnitPrice,
+    rawMarketPrice,
+    rlcMarketMin: rlcMin,
+    rlcMarketAvg: rlcAvg,
+    rlcMarketMax: rlcMax,
+    rlcPreisMin: rlcMin,
+    rlcPreisAvg: rlcAvg,
+    rlcPreisMax: rlcMax,
+    rlcPreisSource: hasVerifiedRlcRange ? "RLC verifizierter Marktbereich" : "",
+    rlcPreisGroup: hasVerifiedRlcRange ? (rlcRange.matches?.[0]?.group || "") : "",
+    qualityGateAdjusted: outsideVerifiedRange,
+    confidence: outsideVerifiedRange ? Math.min(n(parsed?.confidence) || 0.6, 0.85) : n(parsed?.confidence) || 0.6,
+    aiReason: [s(parsed?.reason), s(parsed?.assumptions), gateNote].filter(Boolean).join(" · "),
+    warning: [s(parsed?.warning), !hasVerifiedRlcRange ? "RLC-Marktbereich nicht dokumentiert – fachliche Prüfung erforderlich." : ""].filter(Boolean).join(" · "),
+    source: "openai-independent",
+    aiProvider: completion.provider,
+    aiModel: completion.model,
+    aiUsage: completion.usage || null,
+    webSearchCalls: completion.webSearchCalls || 0,
+    marketSources: completion.sources || [],
+  };
 }
 
 function shouldUseOpenAIForRow(
@@ -7826,20 +5510,6 @@ function rlcBlocksTechnicalParser(row: any): boolean {
   return false;
 }
 
-function rlcNoX84CalibrationFloor(row: any, ep: number): number {
-  const family = rlcCriticalTextFamily(row);
-  const unit = norm(row?.einheit ?? row?.unit);
-
-  if (family === "rohrgrabenaushub" && /(m3|m³|cbm)/.test(unit)) return Math.max(ep, 32);
-  if (family === "rohrgrabenzuschlag" && /(m3|m³|cbm)/.test(unit)) return Math.max(ep, 24);
-  if (family === "schutzmatte" && /(m|lfm|meter)/.test(unit)) return Math.max(ep, 18);
-  if (family === "kabelschutzrohr" && /(m|lfm|meter)/.test(unit)) return Math.min(Math.max(ep, 2.5), 8);
-  if (family === "mikro_leerrohr" && /(m|lfm|meter)/.test(unit)) return Math.min(Math.max(ep, 3.5), 8);
-  if (family === "rohrumhuellung" && /(m|lfm|meter)/.test(unit)) return Math.min(Math.max(ep, 2.5), 9);
-
-  return ep;
-}
-
 
 
 
@@ -7975,112 +5645,6 @@ function globalKnowledgeSimilarity(row: InputRow, item: any): number {
   return score;
 }
 
-function blockBadCompanyCalibrationByGlobalKnowledge(row: InputRow, result: any): any {
-  const source = s((result as any)?.source).toLowerCase();
-  const calibrationText = norm([
-    source,
-    s((result as any)?.gewerk),
-    s((result as any)?.leistungsart),
-    s((result as any)?.bauverfahren),
-    s((result as any)?.aiReason),
-    s((result as any)?.warning),
-    JSON.stringify((result as any)?.priceBreakdown ?? []),
-  ].join(" "));
-
-  const isCompanyCalibration =
-    source.includes("company-calibration") ||
-    calibrationText.includes("firmenkalibrierung") ||
-    calibrationText.includes("firmeneigenen x84") ||
-    calibrationText.includes("rlc firmenkalibrierung aus x84");
-
-  if (!isCompanyCalibration) {
-    return result;
-  }
-
-  const gk = (result as any)?.globalKnowledgeMatch;
-  if (!gk) return result;
-
-  const rowUnit = normUnit(s((row as any).einheit));
-  const gkUnit = normUnit(s((gk as any).unit));
-  const sameUnit = !!rowUnit && !!gkUnit && rowUnit === gkUnit;
-
-  const rowText = norm(`${s((row as any).posNr)} ${s((row as any).kurztext)} ${s((row as any).langtext)}`);
-  const gkText = norm(`${s((gk as any).shortText)} ${s((gk as any).longText)} ${s((gk as any).category)} ${s((gk as any).gewerk)} ${s((gk as any).normalizedKey)}`);
-
-  const rowIsBaustelle = /baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(rowText);
-  const gkIsBaustelle = /baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(gkText);
-  const resultIsBaustelle = /baustelleneinrichtung|baustelle.*einrichten|baustellen.*einrichtung|baustellengemeinkosten|vorhaltung/.test(calibrationText);
-
-  const rowIsRohrgraben = /rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(rowText);
-  const gkIsRohrgraben = /rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(gkText);
-  const resultIsRohrgraben = /rohrgraben|rohrgrabenaushub|leitungsgraben|grabenaushub/.test(calibrationText);
-
-  const comparableFamily =
-    (rowIsBaustelle && gkIsBaustelle && resultIsBaustelle) ||
-    (rowIsRohrgraben && gkIsRohrgraben && resultIsRohrgraben);
-
-  const gkConfidence = n((gk as any).confidence);
-  const gkMax = n((gk as any).priceMax);
-  const ep = n(
-    (result as any).finalUnitPrice ??
-    (result as any).rlcKiUnitPrice ??
-    (result as any).suggestedUnitPrice ??
-    (result as any).unitPrice ??
-    (result as any).preis
-  );
-
-  const mustBlock =
-    sameUnit &&
-    gkConfidence >= 0.7 &&
-    gkMax > 0 &&
-    ep > gkMax * 3 &&
-    !comparableFamily;
-
-  if (!mustBlock) return result;
-
-  const warn =
-    `Firmenkalibrierung blockiert: Global Knowledge zeigt starken Vergleich (${gkConfidence}), ` +
-    `aber die Preisbasis ist nicht vergleichbar. KI-EP ${round2(ep)} €/Einheit liegt über ` +
-    `GlobalMax ${round2(gkMax)} €/Einheit × 3. Preis bleibt prüfpflichtig.`;
-
-  const gkAvg = n((gk as any).priceAvg);
-  const gkMin = n((gk as any).priceMin);
-  const fallbackEp = gkAvg > 0 ? gkAvg : gkMin > 0 ? gkMin : 0;
-  const qty = n((row as any).menge ?? (row as any).quantity ?? (result as any).menge ?? (result as any).quantity);
-  const recalculatedTotal = fallbackEp > 0 && qty > 0 ? round2(fallbackEp * qty) : n((result as any).totalNet ?? (result as any).gesamt);
-
-  const recalcNote = fallbackEp > 0
-    ? `RLC Block+Recalculate: blockierter Firmenpreis wurde nicht als finaler EP verwendet. Neuer prüfpflichtiger EP aus Global Knowledge Ø ${round2(fallbackEp)} €/Einheit.`
-    : `RLC Block+Recalculate: blockierter Firmenpreis wurde entfernt, aber kein belastbarer Alternativ-EP gefunden.`;
-
-  return {
-    ...result,
-    source: cleanRlcSourceFlags("company-calibration-blocked-by-global-knowledge-recalculated"),
-    confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
-    riskLevel: "high",
-    calculationStatus: "needs_review",
-    suggestedUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).suggestedUnitPrice,
-    finalUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).finalUnitPrice,
-    baseUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).baseUnitPrice,
-    rlcKiUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).rlcKiUnitPrice,
-    unitPrice: fallbackEp > 0 ? round2(fallbackEp) : (result as any).unitPrice,
-    preis: fallbackEp > 0 ? round2(fallbackEp) : (result as any).preis,
-    totalNet: recalculatedTotal,
-    rlcKiTotal: recalculatedTotal,
-    gesamt: recalculatedTotal,
-    totalPrice: recalculatedTotal,
-    warning: [s((result as any).warning), warn, recalcNote].filter(Boolean).join(" · "),
-    aiReason: [s((result as any).aiReason), warn, recalcNote].filter(Boolean).join("\n\n"),
-    globalKnowledgeCompanyCalibrationBlocked: true,
-    globalKnowledgeCompanyCalibrationBlockReason: warn,
-    recalculatedAfterBlock: fallbackEp > 0,
-    recalculatedUnitPrice: fallbackEp > 0 ? round2(fallbackEp) : null,
-    recalculatedTotalNet: recalculatedTotal,
-    recalculationSource: fallbackEp > 0 ? "global-knowledge-average" : "none",
-    blockedOriginalUnitPrice: round2(ep),
-  };
-}
-
 
 function recalcBlockedTechnicalAfterGlobalKnowledge(row: InputRow, result: any): any {
   const blocked =
@@ -8144,499 +5708,6 @@ function recalcBlockedTechnicalAfterGlobalKnowledge(row: InputRow, result: any):
     recalculationSource: "global-knowledge-average-after-hint",
     blockedOriginalUnitPrice: round2(oldEp),
   };
-}
-
-
-function rlcFamilyFallbackEp(row: InputRow, result: any): { ep: number; source: string; reason: string } {
-  const rowText = [
-    (row as any).posNr,
-    (row as any).kurztext,
-    (row as any).shortText,
-    (row as any).text,
-    (row as any).langtext,
-    (row as any).longText,
-  ].join(" ");
-
-  const family = rlcGlobalKnowledgeFamilyKey(rowText);
-  const unit = normUnit(s((row as any).einheit));
-  const rowNorm = norm(rowText);
-
-  // RLC V30: Final-Outlier Pack BA-2026-028.
-  if (
-    /^(m|lfm|meter)$/.test(unit) &&
-    /(forststraßen wiederherstellen|forststrassen wiederherstellen|kiesstraßen|kiesstrassen)/.test(rowNorm) &&
-    !/zulage|wanderweg/.test(rowNorm)
-  ) {
-    return {
-      ep: 24.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-forststrasse-v30"),
-      reason: "Forst-/Kiesstraße wiederherstellen mit Bindekies, Fertiger, Bankettanpassung: V30-Fallback 24,50 €/m.",
-    };
-  }
-
-  if (/^(m2|m²|qm|quadratmeter)$/.test(unit) && /(flächen und wege wiederherstellen|flaechen und wege wiederherstellen|bindekies|kleinflächen|kleinflaechen|almen)/.test(rowNorm)) {
-    return {
-      ep: 14.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-flaechen-wege-v30"),
-      reason: "Flächen/Wege wiederherstellen mit Bindekies, Planieren/Verdichten, Kleinflächen/Almen: V30-Fallback 14,50 €/m².",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /(gußeiserne schachtabdeckung|gusseiserne schachtabdeckung|schachtabdeckung.*klasse\s*b|klasse\s*b)/.test(rowNorm)) {
-    return {
-      ep: 200,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-guss-klasse-b"),
-      reason: "Gusseiserne Schachtabdeckung Klasse B, rund DN625: V30-Fallback 200 €/St statt D400-Fallback 420 €/St.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /(betonsockel.*c\s*25\/30|betonsockel)/.test(rowNorm) && /(2,300|2\.300|0,4|0\.4|1,5|1\.5|apparateschrank|leerrohre\s*dn\s*100)/.test(rowNorm)) {
-    return {
-      ep: 1200,
-      source: cleanRlcSourceFlags("rlc-family-fallback-betonsockel-gross-v30"),
-      reason: "Großer Betonsockel C25/30 inkl. Erdarbeiten und Leerrohre DN100: V30-Fallback 1200 €/St.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /(zuschlag.*elektroverteilung|elektroverteilung|notstromeinspeisung|netztrennschalter|schaltschrank)/.test(rowNorm)) {
-    return {
-      ep: 770,
-      source: cleanRlcSourceFlags("rlc-family-fallback-elektroverteilung-zuschlag-v30"),
-      reason: "Zuschlag Elektroverteilung mit Notstromeinspeisung/Netztrennschalter im Schaltschrank: V30-Fallback 770 €/St.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /(überfahrten|ueberfahrten|brückenklasse\s*30|brueckenklasse\s*30|30\s*t|30\s*to|schrammbord|geländer|gelaender)/.test(rowNorm)) {
-    return {
-      ep: 300,
-      source: cleanRlcSourceFlags("rlc-family-fallback-ueberfahrt-30t-v30"),
-      reason: "Überfahrt über offenen Rohrgraben, Brückenklasse 30 t, Schrammbord/Geländer: V30-Fallback 300 €/St.",
-    };
-  }
-
-  if (/^(lfm|m|meter)$/.test(unit) && /(mittelspannungskabel|na2xs|12\/20kv|einzeladern|kabelbinder)/.test(rowNorm)) {
-    return {
-      ep: 8.1,
-      source: cleanRlcSourceFlags("rlc-family-fallback-mittelspannungskabel-v30"),
-      reason: "Verlegung Mittelspannungskabel ohne Tiefbau, Bündeln/Einlegen im vorhandenen Graben: V30-Fallback 8,10 €/lfm.",
-    };
-  }
-
-  if (/^(m|lfm|meter)$/.test(unit) && /(hdpe.*da\s*63|pe.*da\s*63|pn\s*16|sdr\s*11)/.test(rowNorm)) {
-    return {
-      ep: 5.8,
-      source: cleanRlcSourceFlags("rlc-family-fallback-hdpe-da63-pn16-v30"),
-      reason: "HDPE DA63 PN16/SDR11 liefern und verlegen: V30-Fallback 5,80 €/m.",
-    };
-  }
-
-  // RLC V27: Outlier-Pack >15% BA-2026-028.
-  if (/^(m|lfm|meter)$/.test(unit) && /(pp-rohr\s*dn\s*160|pp.*kanal.*dn\s*160|vollwand-pp.*dn\s*160)/.test(rowNorm)) {
-    return {
-      ep: 27,
-      source: cleanRlcSourceFlags("rlc-family-fallback-pp-rohr-dn160"),
-      reason: "PP-Rohr DN160 SN8 liefern und verlegen: V27-Fallback 27 €/m statt falschem Kanal-DN150-Fallback.",
-    };
-  }
-
-  if (/^(m)$/.test(unit) && /(zulage.*schichtenverbund|schichtenverbund.*borde|borde.*rinnen.*asphaltkante)/.test(rowNorm)) {
-    return {
-      ep: 2,
-      source: cleanRlcSourceFlags("rlc-family-fallback-zulage-schichtenverbund"),
-      reason: "Zulage Schichtenverbund an Bord/Rinne/Asphaltkante: V27-Fallback 2 €/m statt Bordstein-Komplettpreis.",
-    };
-  }
-
-  if (/^(m3|m³|cbm|kubikmeter)$/.test(unit) && /(sohl.*ummantelungsbeton|ummantelungsbeton|stützbeton|stuetzbeton|sohlbeton)/.test(rowNorm)) {
-    return {
-      ep: 260,
-      source: cleanRlcSourceFlags("rlc-family-fallback-sohl-ummantelungsbeton"),
-      reason: "Sohl-/Ummantelungsbeton C25/30 liefern und einbauen: V27-Fallback 260 €/m³ statt Betonsockel-Fallback.",
-    };
-  }
-
-  if (/^(m|lfm|meter)$/.test(unit) && /(mikrorohrhausanschlussleitung|mikro.*hausanschluss.*leerrohr|2\s*leerrohre.*7\s*mm)/.test(rowNorm)) {
-    return {
-      ep: 3.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-mikrorohr-hausanschluss"),
-      reason: "Mikrorohrhausanschlussleitung 2x7 mm: V27-Fallback 3,50 €/m statt Kabelschutzrohr-Fallback.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /(zuschlag.*schachtabdeckung)/.test(rowNorm) && /(klasse\s*d|ausführung\s*in\s*klasse\s*d|ausfuehrung\s*in\s*klasse\s*d)/.test(rowNorm)) {
-    return {
-      ep: 2350,
-      source: cleanRlcSourceFlags("rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d"),
-      reason: "Zuschlag Schachtabdeckung Klasse D: V27-Fallback 2350 €/St statt normaler 420 €/St.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /(statik.*druckerhöhungsschacht|statik.*druckerhoehungsschacht|statische berechnung.*druckerhöhungsschacht|statische berechnung.*druckerhoehungsschacht)/.test(rowNorm)) {
-    return {
-      ep: 3750,
-      source: cleanRlcSourceFlags("rlc-family-fallback-statik-druckerhoehungsschacht-v27"),
-      reason: "Statik Druckerhöhungsschacht inkl. Bewehrungspläne/Stahllisten: V27-Fallback 3750 €/St.",
-    };
-  }
-
-  if (/^(m|lfm|meter)$/.test(unit) && /(asphalt.*trennen|asphaltoberbau.*schneiden|trenntiefe.*20\s*cm)/.test(rowNorm)) {
-    return {
-      ep: 3.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-asphalt-trennen-v27"),
-      reason: "Asphalt trennen/schneiden ca. 20 cm: V27-Fallback 3,50 €/m statt 11 €/m.",
-    };
-  }
-
-  if (/^(m2|m²|qm|quadratmeter)$/.test(unit) && /(flächen und wege wiederherstellen|flaechen und wege wiederherstellen|bindekies|kieswege|almen)/.test(rowNorm)) {
-    return {
-      ep: 14.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-flaechen-wege-wiederherstellen"),
-      reason: "Flächen/Wege wiederherstellen mit Bindekies, Planieren/Verdichten: V27-Fallback 14,50 €/m².",
-    };
-  }
-
-  // RLC V21: Top-Outlier Spezialfälle aus BA-2026-028.
-  if (/^(m|lfm|meter)$/.test(unit) && /(forststraßen wiederherstellen|forststrassen wiederherstellen|kiesstraßen|kiesstrassen)/.test(rowNorm)) {
-    return {
-      ep: 24,
-      source: cleanRlcSourceFlags("rlc-family-fallback-kiesstrasse-wiederherstellen"),
-      reason: "Kies-/Forststraße wiederherstellen: profilieren, planieren, verdichten, ca. 10 cm Bindekies, Breite 4–5 m. V21-Fallback 24 €/m statt pauschal 35 €/m.",
-    };
-  }
-
-  if (/^(m3|m³|cbm|kubikmeter)$/.test(unit) && /(zuschlag.*rohrgrabenaushub.*bd-kl.*6|zuschlag.*rohrgrabenaushub.*bkl.*6|bodenklassen\s*6|homogenbreich\s*b4|homogenbereich\s*b4)/.test(rowNorm)) {
-    return {
-      ep: 31.9,
-      source: cleanRlcSourceFlags("rlc-family-fallback-zuschlag-rohrgrabenaushub-bkl6"),
-      reason: "Zuschlag Rohrgrabenaushub Bodenklasse 6 / Homogenbereich B4 inkl. Zerkleinern: V21-Fallback 31,90 €/m³.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /schachtabdeckung/.test(rowNorm) && /(v2a|edelstahl|1000\s*x\s*1000|1000x1000|gasdruckfeder|tagwasserdicht|regensicher|rechteckig|klasse\s*d)/.test(rowNorm)) {
-    return {
-      ep: 5400,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-v2a-sonder"),
-      reason: "Sonder-Schachtabdeckung V2A/Edelstahl, Klasse D, rechteckig 1000x1000, regensicher/tagwasserdicht: V21-Fallback 5400 €/St statt generischem 420 €/St.",
-    };
-  }
-
-  // RLC V17: Präzise Spezialfälle vor generischen Family-Fallbacks.
-  // Diese Positionen dürfen nicht in Kabelschutzrohr/Forststraße/Schachtabdeckung pauschalisiert werden.
-  if (/^(m|lfm|meter)$/.test(unit) && /mikrokabelleerrohrverbund|mikrokabelleerrohr|mikrokabel.*leerrohr|leerrohrverbund/.test(rowNorm)) {
-    return {
-      ep: 4.37,
-      source: cleanRlcSourceFlags("rlc-family-fallback-mikrokabelleerrohrverbund"),
-      reason: "Mikrokabelleerrohrverbund: präziser Mikro-Leerrohrverbund-Fallback 4,37 €/m statt generischem Kabelschutzrohr-Fallback.",
-    };
-  }
-
-  if (/^(m|lfm|meter)$/.test(unit) && /lwl.*miko|lwl.*mikro|miko-kabel|mikro-kabel|12\s*fasern/.test(rowNorm)) {
-    return {
-      ep: 1.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-lwl-mikro-kabel"),
-      reason: "LWL Mikro-Kabel: präziser Kabel-Fallback 1,50 €/m statt generischem LWL/Mikrorohr-Fallback.",
-    };
-  }
-
-  if (/^(m3|m³|cbm|kubikmeter)$/.test(unit) && /auffüllmaterial|auffuellmaterial|füllmaterial|fuellmaterial/.test(rowNorm)) {
-    const shortNorm = norm(s((row as any).kurztext));
-
-    /*
-     * RLC V20:
-     * Wenn der Kurztext eindeutig nur "Auffüllmaterial" lautet,
-     * ist das eine Material-/Zulageposition. Der Langtext darf sie
-     * nicht automatisch zu "liefern und einbauen" hochstufen.
-     */
-    const isBareShortAuffuellmaterial =
-      /^\d*\s*auffüllmaterial\s*$/.test(shortNorm.trim()) ||
-      /^\d*\s*auffuellmaterial\s*$/.test(shortNorm.trim());
-
-    const isBareAuffuellmaterial =
-      isBareShortAuffuellmaterial ||
-      /^\d*\s*auffüllmaterial\s*$/.test(rowNorm.trim()) ||
-      /^\d*\s*auffuellmaterial\s*$/.test(rowNorm.trim()) ||
-      /\bauffüllmaterial\b/.test(rowNorm) && !/liefern|einbauen|lagenweise|verdicht|verdichtung|transport|entsorgung|kippe/.test(rowNorm);
-
-    const fullInstall =
-      !isBareAuffuellmaterial &&
-      /liefern.*einbauen|einbauen|lagenweise|verdicht|verdichtung/.test(rowNorm);
-
-    return {
-      ep: fullInstall ? 28 : 3.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-auffuellmaterial"),
-      reason: fullInstall
-        ? "Auffüllmaterial inkl. Einbau/Verdichtung: präziser Fallback 28 €/m³ statt Forststraßen-Fallback."
-        : "Auffüllmaterial reine Material-/Zulageposition V20: präziser Fallback 3,50 €/m³ statt Forststraßen-Fallback.",
-    };
-  }
-
-  if (/^(cm)$/.test(unit) && /(mehr- oder mindertiefe|mindertiefe|mehrtiefe)/.test(rowNorm)) {
-    return {
-      ep: 62.61,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schacht-mindertiefe-cm"),
-      reason: "Mehr-/Mindertiefe Schacht cm: präziser Tiefenzuschlag 62,61 €/cm statt falschem Stückpreis-Fallback.",
-    };
-  }
-
-  if (/^(cm)$/.test(unit) && /(mehr- oder minderpreis|mehr.*minderpreis|minderpreis|mehrpreis)/.test(rowNorm)) {
-    return {
-      ep: 2.22,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schacht-cm-zuschlag"),
-      reason: "Mehr-/Minderpreis Schacht cm: präziser cm-Zuschlag 2,22 €/cm statt falschem Stückpreis-Fallback.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /schachtabdeckung.*dps|dps.*schachtabdeckung/.test(rowNorm)) {
-    return {
-      ep: 7500,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-dps"),
-      reason: "Schachtabdeckung DPS/Sonderabdeckung: prüfpflichtiger Sonder-Fallback 7500 €/St statt generischem 420 €/St.",
-    };
-  }
-
-  if (/^(st|stk|stück|stueck)$/.test(unit) && /kabelzugschacht.*abdeckung|kabelzugschacht/.test(rowNorm)) {
-    return {
-      ep: 1385,
-      source: cleanRlcSourceFlags("rlc-family-fallback-kabelzugschacht-abdeckung"),
-      reason: "Kabelzugschacht inkl. Abdeckung: präziser Fallback 1385 €/St statt generischer Schachtabdeckung 420 €/St.",
-    };
-  }
-
-  if (/statik.*druckerh[oö]hungsschacht|druckerh[oö]hungsschacht.*statik/.test(rowNorm)) {
-    return {
-      ep: 3750,
-      source: cleanRlcSourceFlags("rlc-family-fallback-statik-druckerhoehungsschacht"),
-      reason: "Statik Druckerhöhungsschacht: V29-Fallback 3750 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (/betonsockel|sockel.*c\s*25|c\s*25\/30/.test(rowNorm)) {
-    return {
-      ep: 450,
-      source: cleanRlcSourceFlags("rlc-family-fallback-betonsockel"),
-      reason: "Betonsockel C25/30: technischer Fallback 450 €/Einheit prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (/forststra[sß]e|forststrasse|forststraßen|forststrassen/.test(rowNorm)) {
-    return {
-      ep: 24.5,
-      source: cleanRlcSourceFlags("rlc-family-fallback-forststrasse"),
-      reason: "Forststraße wiederherstellen: technischer Fallback 35 €/Einheit prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (/kabelzugschacht.*abdeckung|kabelzugschacht/.test(rowNorm)) {
-    return {
-      ep: 1385.25,
-      source: cleanRlcSourceFlags("rlc-family-fallback-kabelzugschacht-abdeckung"),
-      reason: "Kabelzugschacht inkl. Abdeckung: präziser Fallback 1385,25 €/St statt generischer Schachtabdeckung 420 €/St.",
-    };
-  }
-
-  if (/schachtabdeckung.*dps|dps.*schachtabdeckung/.test(rowNorm)) {
-    return {
-      ep: 7500,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-dps"),
-      reason: "Schachtabdeckung DPS/Sonderabdeckung: prüfpflichtiger Sonder-Fallback 7500 €/St statt generischem 420 €/St.",
-    };
-  }
-
-  // RLC V24: Schachtabdeckung sauber trennen.
-  // Klasse D allein ist KEINE Sonderabdeckung. Sonderpreis nur bei V2A/Edelstahl + Sondermerkmalen.
-  if (/schachtabdeckung/.test(rowNorm) && /(v2a|edelstahl)/.test(rowNorm) && /(1000\s*1000|1000\s*x\s*1000|1000x1000|gasdruckfeder|tagwasserdicht|regensicher|rechteckig)/.test(rowNorm)) {
-    return {
-      ep: 5400,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-v2a-sonder"),
-      reason: "Sonder-Schachtabdeckung V2A/Edelstahl mit Sondermerkmalen: V24-Fallback 5400 €/St.",
-    };
-  }
-
-  if (/zulage.*schachtabdeckung|schachtabdeckung.*zulage/.test(rowNorm)) {
-    return {
-      ep: 120,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-zulage-klasse-d"),
-      reason: "Zulage Schachtabdeckung / Klasse D: V24-Fallback 120 €/St statt Sonderabdeckung 5400 €/St.",
-    };
-  }
-
-  if (/gusseiserne schachtabdeckung|perbunan|einlage|abd\.d\.kl\.d/.test(rowNorm)) {
-    return {
-      ep: 320,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung-guss-klasse-d"),
-      reason: "Gusseiserne Schachtabdeckung Klasse D mit Einlage: V25-Fallback 320 €/St statt Sonderabdeckung 5400 €/St.",
-    };
-  }
-
-  if (/zuschlag/.test(rowNorm) && /(klasse\s*d|ausführung\s*in\s*klasse\s*d|ausfuehrung\s*in\s*klasse\s*d)/.test(rowNorm)) {
-    return {
-      ep: 2350,
-      source: cleanRlcSourceFlags("rlc-family-fallback-zuschlag-schachtabdeckung-klasse-d"),
-      reason: "Zuschlag Schachtabdeckung Klasse D: V29-Fallback 2350 €/St statt normaler 420 €/St.",
-    };
-  }
-
-  if (/schachtabdeckung|abdeckung.*d400|d400/.test(rowNorm)) {
-    return {
-      ep: 420,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung"),
-      reason: "Normale Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (/strassenablauf|straßenablauf/.test(rowNorm)) {
-    return {
-      ep: 850,
-      source: cleanRlcSourceFlags("rlc-family-fallback-strassenablauf"),
-      reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (/kabelschacht/.test(rowNorm)) {
-    return {
-      ep: 900,
-      source: cleanRlcSourceFlags("rlc-family-fallback-kabelschacht"),
-      reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "kabelschutzrohr" && unit === "m") {
-    return {
-      ep: 18,
-      source: cleanRlcSourceFlags("rlc-family-fallback-kabelschutzrohr"),
-      reason: "Kabelschutzrohr DN/Schutzrohr als Meterleistung: Mindestansatz 18 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "bordstein" && unit === "m") {
-    return {
-      ep: 95,
-      source: cleanRlcSourceFlags("rlc-family-fallback-bordstein"),
-      reason: "Bordstein setzen inkl. Rückenstütze: technischer Fallback 95 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "entsorgung" && (unit === "m³" || unit === "m3")) {
-    return {
-      ep: 45,
-      source: cleanRlcSourceFlags("rlc-family-fallback-entsorgung"),
-      reason: "Aushub/Boden entsorgen inkl. Laden, Transport und Kippe: technischer Fallback 45 €/m³ prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "kanal" && unit === "m") {
-    return {
-      ep: 145,
-      source: cleanRlcSourceFlags("rlc-family-fallback-kanal-dn150"),
-      reason: "Kanalrohr DN150 verlegen inkl. Bettung: technischer Fallback 145 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "suchschlitz" && unit === "m") {
-    return {
-      ep: 55,
-      source: cleanRlcSourceFlags("rlc-family-fallback-suchschlitz"),
-      reason: "Suchschlitz zur Leitungserkundung: technischer Fallback 55 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "gasleitung" && unit === "m") {
-    return {
-      ep: 42,
-      source: cleanRlcSourceFlags("rlc-family-fallback-gasleitung"),
-      reason: "Gasleitung PE als Meterleistung: technischer Fallback 42 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if ((family === "lwl_mikrorohr" || family === "lwl_glasfaser") && unit === "m") {
-    return {
-      ep: 10,
-      source: cleanRlcSourceFlags("rlc-family-fallback-lwl-mikrorohr"),
-      reason: "LWL/Mikrorohrverband als Meterleistung: technischer Fallback 10 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "strom_kabel" && unit === "m") {
-    return {
-      ep: 32,
-      source: cleanRlcSourceFlags("rlc-family-fallback-stromkabel"),
-      reason: "Strom-/Mittelspannungskabel als Meterleistung: technischer Fallback 32 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "asphalt_schneiden" && /^(m|lfm|meter)$/.test(unit)) {
-    return {
-      ep: 11,
-      source: cleanRlcSourceFlags("rlc-family-fallback-asphalt-schneiden"),
-      reason: "Asphalt schneiden als Meterleistung: technischer Fallback 11 €/m prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "strassenablauf" && /^(st|stk|stück|stueck)$/.test(unit)) {
-    return {
-      ep: 850,
-      source: cleanRlcSourceFlags("rlc-family-fallback-strassenablauf"),
-      reason: "Straßenablauf setzen inkl. Anschluss: technischer Fallback 850 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "schacht" && /^(st|stk|stück|stueck)$/.test(unit)) {
-    return {
-      ep: 1800,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schacht"),
-      reason: "Fertigteilschacht setzen: technischer Fallback 1800 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "schachtabdeckung" && /^(st|stk|stück|stueck)$/.test(unit)) {
-    return {
-      ep: 420,
-      source: cleanRlcSourceFlags("rlc-family-fallback-schachtabdeckung"),
-      reason: "Schachtabdeckung D400 liefern und einbauen: technischer Fallback 420 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "kabelschacht" && /^(st|stk|stück|stueck)$/.test(unit)) {
-    return {
-      ep: 900,
-      source: cleanRlcSourceFlags("rlc-family-fallback-kabelschacht"),
-      reason: "Kabelschacht liefern und setzen: technischer Fallback 900 €/St prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "transport_lkw" && unit === "h") {
-    return {
-      ep: 95,
-      source: cleanRlcSourceFlags("rlc-family-fallback-lkw-transport"),
-      reason: "LKW Transport auf Nachweis: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "regie_personal" && unit === "h") {
-    return {
-      ep: 58,
-      source: cleanRlcSourceFlags("rlc-family-fallback-regie-personal"),
-      reason: "Regiestunde Facharbeiter: technischer Fallback 58 €/h prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (family === "regie_bagger" && unit === "h") {
-    return {
-      ep: 95,
-      source: cleanRlcSourceFlags("rlc-family-fallback-regie-bagger"),
-      reason: "Regiestunde Bagger inkl. Fahrer: technischer Fallback 95 €/h prüfpflichtig gesetzt.",
-    };
-  }
-
-  if (/fels|klasse 6|klasse 7/.test(norm([row?.kurztext, row?.langtext, (row as any)?.text].join(" "))) && (unit === "m³" || unit === "m3")) {
-    return {
-      ep: 95,
-      source: cleanRlcSourceFlags("rlc-family-fallback-fels"),
-      reason: "Fels/Bodenklasse 6-7 lösen/laden/entsorgen: technischer Fallback 95 €/m³ prüfpflichtig gesetzt.",
-    };
-  }
-
-  return { ep: 0, source: "", reason: "" };
 }
 
 
@@ -8717,102 +5788,7 @@ function cleanRohrgrabenaushubTechnicalSource(row: InputRow, result: any): any {
 }
 
 
-function recalcBlockedOrTooLowByFamilyFallback(row: InputRow, result: any): any {
-  const source = s((result as any)?.source);
-  const blocked =
-    (result as any)?.technicalParserBlocked === true ||
-    (result as any)?.companyCalibrationBlocked === true ||
-    (result as any)?.globalKnowledgeCompanyCalibrationBlocked === true ||
-    source.includes("blocked-by-family-mismatch") ||
-    source.includes("blocked-by-global-knowledge");
-
-  const currentEp = n(
-    (result as any).finalUnitPrice ??
-    (result as any).rlcKiUnitPrice ??
-    (result as any).unitPrice ??
-    (result as any).preis
-  );
-
-  const fallback = rlcFamilyFallbackEp(row, result);
-  if (fallback.ep <= 0) return result;
-
-  const rowText = [
-    (row as any).posNr,
-    (row as any).kurztext,
-    (row as any).shortText,
-    (row as any).text,
-    (row as any).langtext,
-    (row as any).longText,
-  ].join(" ");
-
-  const family = rlcGlobalKnowledgeFamilyKey(rowText);
-
-  const tooLow =
-    (family === "kabelschutzrohr" && currentEp > 0 && currentEp < 12) ||
-    (family === "bordstein" && currentEp > 0 && currentEp < 45) ||
-    (family === "entsorgung" && currentEp > 0 && currentEp > 250) ||
-    (family === "kanal" && currentEp > 0 && currentEp < 80) ||
-    (family === "suchschlitz" && currentEp > 0 && (currentEp < 25 || currentEp > 120)) ||
-    (family === "gasleitung" && currentEp > 0 && currentEp < 18) ||
-    ((family === "lwl_mikrorohr" || family === "lwl_glasfaser") && currentEp > 0 && currentEp < 7) ||
-    (family === "strom_kabel" && currentEp > 0 && currentEp < 20) ||
-    (family === "asphalt_schneiden" && currentEp > 0 && currentEp < 5) ||
-    (family === "strassenablauf" && currentEp > 0 && currentEp < 250) ||
-    (family === "schacht" && currentEp > 0 && currentEp < 500) ||
-    (family === "schachtabdeckung" && currentEp > 0 && currentEp < 180) ||
-    (family === "kabelschacht" && currentEp > 0 && currentEp < 400) ||
-    (family === "regie_personal" && currentEp > 0 && currentEp < 42) ||
-    (family === "regie_bagger" && currentEp > 0 && currentEp < 65) ||
-    (family === "transport_lkw" && currentEp > 0 && (currentEp < 65 || currentEp > 180));
-
-  const forceFamilyFallback =
-    family === "strassenablauf" ||
-    family === "schachtabdeckung" ||
-    family === "kabelschacht" ||
-    family === "asphalt_schneiden" ||
-    family === "transport_lkw" ||
-    family === "statik_druckerhoehungsschacht" ||
-    family === "betonsockel" ||
-    family === "forststrasse";
-
-  if (!blocked && !tooLow && !forceFamilyFallback) return result;
-
-  const qty = n((row as any).menge ?? (row as any).quantity ?? (result as any).menge ?? (result as any).quantity);
-  const total = qty > 0 ? round2(fallback.ep * qty) : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
-
-  const note =
-    `RLC Family-Fallback-Recalculate: ${fallback.reason} ` +
-    `Alter EP ${round2(currentEp)} €/Einheit wurde nicht als sicher übernommen.`;
-
-  return {
-    ...result,
-    source: cleanRlcSourceFlags(`${fallback.source}-recalculated`),
-    confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
-    riskLevel: "high",
-    calculationStatus: "needs_review",
-    suggestedUnitPrice: round2(fallback.ep),
-    finalUnitPrice: round2(fallback.ep),
-    baseUnitPrice: round2(fallback.ep),
-    rlcKiUnitPrice: round2(fallback.ep),
-    unitPrice: round2(fallback.ep),
-    preis: round2(fallback.ep),
-    totalNet: total,
-    rlcKiTotal: total,
-    gesamt: total,
-    totalPrice: total,
-    warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
-    aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
-    recalculatedAfterBlock: true,
-    recalculatedUnitPrice: round2(fallback.ep),
-    recalculatedTotalNet: total,
-    recalculationSource: fallback.source,
-    blockedOriginalUnitPrice: round2(currentEp),
-    familyFallbackApplied: true,
-    familyFallbackReason: fallback.reason,
-  };
-}
-
-async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any> {
+export async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any> {
   try {
     const text = s(`${row.kurztext ?? ""} ${row.langtext ?? ""}`);
     const unit = s(row.einheit);
@@ -8860,7 +5836,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
       .sort((a: any, b: any) => b.globalKnowledgeSimilarity - a.globalKnowledgeSimilarity);
 
     const best = scoredMatches[0];
-    if (!best) return recalcBlockedOrTooLowByFamilyFallback(row, result);
+    if (!best) return result;
 
     const note = `Global Knowledge Vergleich: ${best.priceMin ?? "-"}–${best.priceMax ?? "-"} €/` +
       `${(best.unit ?? unit) || "Einheit"}, Ø ${best.priceAvg ?? "-"} €/` +
@@ -8922,7 +5898,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
         : `Global Knowledge Confidence-Guard: starker Vergleichstreffer (${gkConfidence}) bestätigt Plausibilität. Preis bleibt KI-/Regel-Ergebnis, Global Knowledge ist nur Kontrollwert.`
       : "";
 
-    return recalcBlockedTechnicalAfterGlobalKnowledge(row, blockBadCompanyCalibrationByGlobalKnowledge(row, {
+    return recalcBlockedTechnicalAfterGlobalKnowledge(row, {
       ...result,
       confidence: boostedConfidence,
       riskLevel: boostedRiskLevel,
@@ -8936,7 +5912,7 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
       globalKnowledgeSource: Array.isArray(best.sources) ? best.sources.join(', ') : '',
       warning: [s(result?.warning), note, trustNote].filter(Boolean).join(" · "),
       aiReason: [s(result?.aiReason), note, trustNote].filter(Boolean).join("\n\n"),
-    }));
+    });
   } catch (e: any) {
     return {
       ...result,
@@ -8948,13 +5924,50 @@ async function applyGlobalKnowledgeHint(row: InputRow, result: any): Promise<any
   }
 }
 
-async function calcSmartRow(
+const RLC_LEGACY_DATABASE_PRICE_ENABLED = false;
+const RLC_LEGACY_RULE_ENGINE_PRICE_ENABLED = false;
+
+function buildUnresolvedV2Row(row: InputRow, reason: string) {
+  return {
+    ...row,
+    materialCost: 0,
+    laborCost: 0,
+    machineCost: 0,
+    subcontractorCost: 0,
+    disposalCost: 0,
+    overheadCost: 0,
+    riskCost: 0,
+    profitCost: 0,
+    baseUnitPrice: 0,
+    suggestedUnitPrice: 0,
+    finalUnitPrice: 0,
+    rlcKiUnitPrice: 0,
+    unitPrice: 0,
+    preis: 0,
+    totalNet: 0,
+    rlcKiTotal: 0,
+    gesamt: 0,
+    confidence: 0.35,
+    riskLevel: "high",
+    calculationStatus: "needs_review",
+    warning: cleanRlcWarningText(
+      "Keine freigegebene RLC-v2-/Recipe-Preisermittlung verfügbar. Legacy DB/v1/rule-engine dürfen den EP nicht mehr bestimmen."
+    ),
+    aiReason: reason,
+    source: cleanRlcSourceFlags("rlc-v2-unresolved"),
+    priceBreakdown: [],
+  };
+}
+
+export async function calcSmartRow(
   row: InputRow,
-  matches: DbMatch[],
+  matches: DbMatch[] | null,
   companyId: string,
   useOpenAI: boolean,
   openAiBudgetLeft = 999,
-  forceRecalculate = false
+  forceRecalculate = false,
+  allRows: InputRow[] = [],
+  projectCode?: string
 ) {
   if (isStructuralTitleRow(row)) {
     return {
@@ -8988,6 +6001,85 @@ async function calcSmartRow(
     };
   }
 
+  const autoPosNr = s((row as any).posNr || (row as any).pos).toUpperCase();
+  const autoPlaceholderText = norm(
+    [s((row as any).kurztext), s((row as any).langtext)].filter(Boolean).join(" ")
+  );
+  const autoPlaceholderSearchText = autoPlaceholderText
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss");
+  const isUnresolvedAutoKiPlaceholder =
+    autoPosNr.startsWith("AUTO.") &&
+    autoPlaceholderSearchText.includes("keine ausreichend aehnliche lv-position gefunden");
+
+  if (isUnresolvedAutoKiPlaceholder) {
+    return buildUnresolvedV2Row(
+      row,
+      "AutoKI-Position ohne belastbare Leistungsbeschreibung: Kein EP bis Beschreibung fachlich bestätigt oder korrigiert wurde."
+    );
+  }
+
+  /*
+   * RLC V2 PRIMARY ABSOLUTE:
+   * Der Family Catalog v2 ist die erste und maßgebliche Preisquelle.
+   * Technical Parser, Recipe-Legacy, DB, Cache und OpenAI dürfen nur greifen,
+   * wenn v2 für diese Position kein belastbares Ergebnis liefert.
+   */
+  const primaryAutonomousResolved = resolveRlcAutonomousCalculation(
+    row as any,
+    (allRows.length ? allRows : [row]) as any,
+    projectCode
+  );
+  const primaryAutonomousRow = mapAutonomousResultToKiRow(
+    row as any,
+    primaryAutonomousResolved
+  );
+  const primaryAutonomousEp = n(
+    (primaryAutonomousRow as any)?.rlcKiUnitPrice ??
+    (primaryAutonomousRow as any)?.finalUnitPrice
+  );
+
+  // Auch ein bewusster V2-Prüffall ohne EP ist ein gültiges Resultat:
+  // Er darf niemals in einen alten Bibliotheks-/Rule-Engine-Preis fallen.
+  if (
+    primaryAutonomousRow &&
+    s((primaryAutonomousRow as any).calculationStatus) === "needs_review" &&
+    s((primaryAutonomousRow as any).source).includes("rlc-autonomous-urkalkulation-v2")
+  ) {
+    return {
+      ...primaryAutonomousRow,
+      source: cleanRlcSourceFlags((primaryAutonomousRow as any).source),
+      aiReason: [
+        s((primaryAutonomousRow as any).aiReason),
+        "RLC V2 PRIMARY: fachlicher Prüfstatus vor allen Fallbacks geschützt."
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
+
+  if (
+    primaryAutonomousRow &&
+    primaryAutonomousEp > 0 &&
+    s((primaryAutonomousRow as any).source).includes("rlc-autonomous-urkalkulation-v2")
+  ) {
+    return {
+      ...primaryAutonomousRow,
+      source: cleanRlcSourceFlags((primaryAutonomousRow as any).source),
+      aiReason: [
+        s((primaryAutonomousRow as any).aiReason),
+        "RLC V2 PRIMARY ABSOLUTE: Family Catalog v2 vor Technical Parser, Cache, DB, Recipe-Legacy und OpenAI verwendet."
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
+
+  /*
+   * RLC SPEED: Firmen-/Historik-DB erst laden, wenn Family Catalog V2
+   * die Position nicht bereits belastbar gelöst hat. Mit vollständigem
+   * GAEB-Langtext ist findDbMatches() absichtlich gründlich, aber teuer.
+   */
+  matches = matches ?? await findDbMatches(companyId, row);
+
   const unit = s(row.einheit);
   const hasStrongDb = strongDatabaseHit(matches, unit);
 
@@ -9011,7 +6103,7 @@ async function calcSmartRow(
    * Freigegebene / geprüfte Kalkulationsdaten sind stärker als Cache und OpenAI.
    * Ein vom Kalkulator freigegebener Wert darf nicht durch alte KI-Cachewerte überschrieben werden.
    */
-  if (approvedMatch && hasStrongDb && !forceRecalculate) {
+  if (RLC_LEGACY_DATABASE_PRICE_ENABLED && approvedMatch && hasStrongDb && !forceRecalculate) {
     const dbRow = calcRuleRow(row, matches, "database");
     return {
       ...dbRow,
@@ -9045,7 +6137,7 @@ async function calcSmartRow(
    */
   const directDbPosition = s(row.posNr);
   if (directDbPosition) {
-    const directDbCandidates = await prisma.kalkulationsDbEntry.findMany({
+    const directDbCandidatesRaw = await prisma.kalkulationsDbEntry.findMany({
       where: {
         companyId,
         positionNumber: directDbPosition,
@@ -9054,6 +6146,9 @@ async function calcSmartRow(
       take: 30,
       orderBy: [{ confidence: "desc" }, { updatedAt: "desc" }],
     });
+
+    const directDbCandidates =
+      filterUsableRlcPriceSources(directDbCandidatesRaw);
 
     // RLC_V30_STRICT_APPROVED_DB_ONLY
     // RLC_V27_TRUSTED_DB_CANDIDATES
@@ -9117,7 +6212,9 @@ async function calcSmartRow(
         return n(candidate.unitPriceNet) > 0 && unitOk && hits >= 2;
       });
 
-    if (directDb) {
+    const preferDedicatedUrkalkulationOverDb = /paßstück|passstück|passstueck|böschungsstück|boeschungsstueck|sohl- und ummantelungsbeton|beton c 20\/25|sauberkeitsschicht herstellen|pumpenstunden|stampfbetonpfeiler|übergangsstück dn 80|uebergangsstueck dn 80|übergangsstück dn 50|uebergangsstueck dn 50|übergangsstück da 90|uebergangsstueck da 90|t-stück|t-stueck|unterflurhydrant|hinweissäulen|hinweissaeulen|anbohrarmaturen|starre verbindung|mauerdurchführung|mauerdurchfuehrung|systemdeckel|90 grad-bogen|90 grad bogen|einsteigleiter|einsteighilfe|ggg-rohre|bettungssand|verlegung ortsnetzkabel|statik druckerhöhungsschacht|statik druckerhoehungsschacht|zuschlag fabrikat simona|straßenaufbruch|strassenaufbruch|baustahl 500\/550|runddraht|erdleitung|ats aus ac 22 tn herstellen|ads aus ac 11 dn herstellen straße|ads aus ac 11 dn herstellen strasse|entwässerungsrinne ausbauen|entwaesserungsrinne ausbauen|zulage abtrag|zulage krümmung|zulage kruemmung|überdachung einstieg|ueberdachung einstieg|fettfreie isolierbinde|messingkupplungen|messingquetschverschraubung|straßenkappe ufh|strassenkappe ufh|zuschlag rückschlagklappe|zuschlag rueckschlagklappe|bestehenden durchlass ausbauen|durchlass ausbauen|durchlass herstellen|bestandspläne|bestandsplaene|bauzaun|asphalt trennen|lkw-stunden bis 4 m3|lkw-stunden 4 bis 5 m3|lkw-stunden über 5 m3|lkw-stunden ueber 5 m3|baggerstunden für tieflöffel 0,25 - 0,5 m3|baggerstunden fuer tiefloeffel 0,25 - 0,5 m3|baggerstunden für tieflöffel 0,5 - 1,00 m3|baggerstunden fuer tiefloeffel 0,5 - 1,00 m3|stundensätze polierstunde|stundensaetze polierstunde|verrechnungssätze meißel|verrechnungssaetze meissel|radlader|äste zurückschneiden|aeste zurueckschneiden|überfahrten - pkw|ueberfahrten - pkw|ggg-formstück flanschverbindung|ggg-formstueck flanschverbindung|ggg-formstücke|ggg-formstuecke|schmutzfänger|schmutzfaenger|losflansch pn 16|weidezaungerät|weidezaungeraet|kalibrierung speedpipe|zulage - anschluss druckleitung da 75|zulage anschluss druckleitung da 75|frostsicheres kiesmaterial|frostschutzkies|frostschutzmaterial|stromantrag|stromanschlussantrag|zuschlag für steuerung|zuschlag fuer steuerung|zulage schachtzulauf dn 160|druckprobe speedpipe|zulage trassenwarnband breitband|zulage trassenwarnband|schutzmatte|rohrschutz schutzmatte|baustelleneinrichtung horizontalbohrung|rundholzlage herstellen|auskreuzen|ringraumdichtung|bestandszeichnung|kompressorstunden|mauerrohr dn 50|abbau und abfuhr|wurzelstock roden|wurzelstöcke roden|wurzelstoecke roden|verzinkte fittings aller art|anschluss am bestehenden schacht herstellen|zulage - anschluss ableitung hdpe dn 180|zulage anschluss ableitung hdpe dn 180|losflansch pn 40|losflansch pn 25|hausanschluss lwl-kabel|mmb-stück dn 125\/80|mmb-stueck dn 125\/80|niederschrift beweissicherung|start- und zielgrube|start und zielgrube|mehrpreis bauschild|bäume fällen|baeume faellen|feinplanie herstellen|feinplanie|erkundung und abstimmung sprengarbeiten|sprengarbeiten|magnetisch induktiver durchflussmesser|durchflußmesser|durchflussmesser|be- und entlüftungsrohr|be- und entlueftungsrohr|einbinden der kabelleerrohre|stillstandszeiten da 180|stillstandzeiten bei bohrung|zäune abbauen|zaeune abbauen|grabenaushub - zulage bd-kl. 2, 6, 7|grabenaushub zulage bd-kl. 2, 6, 7|anschluss an best. durchlass|anschluss an bestehenden durchlass|kabelleerrohr|hecken und buschwerk roden|statische berechnung da 180|lehmpfeiler|ringraumdichtung dn 168,3|ringraumdichtung dn 168.3|überfahrten - 30 to|ueberfahrten - 30 to|baustellenkoordination|tüv-abnahme|tuev-abnahme|baustellendokumentation|besucherinformation|bauschild|erschwernis vorgegebene bauzeiten|zusätzliche anreise|zusaetzliche anreise|mikrorohrhausanschlussleitung|polyethylenrohr pe-r.weich|polyethylenrohr|besucherführung|besucherfuehrung|mutterboden|pp-rohr dn 160|pp rohr dn 160|hdpe - schutzrohre da 50|hdpe-schutzrohre da 50|mehr- oder minderpreis|baustellenabsicherung|besprechungsraum|beweissicherung gebäude|beweissicherung gebaeude|beweissicherung trasse|beweissicherung zufahrtsstraße|beweissicherung zufahrtsstrasse|abstimmung mit projektbeteiligten|wartungs- und bedienungsanleitung|wartungs und bedienungsanleitung|vorflut aufrechterhalten|revisionsschächte dn 1000|revisionsschacht dn 1000|druckleitungsendschacht|gusseiserne schachtabdeckung|zulage wanderweg wiederherstellen|wanderweg wiederherstellen|zuschlag rückverfüllung|zuschlag rueckverfuellung|schachtabdeckung|elektroverteilung|mehr- oder mindertiefe|betonfertigteilschacht druckerhöhung|betonfertigteilschacht druckerhohung|energieumwandlungsschacht|betonsockel|instandhaltung verkehrsflächen|instandhaltung verkehrsflaechen|aufrechterhalten des anliegerverkehrs|anliegerverkehr aufrechterhalten|auffüllmaterial|auffuellmaterial|bentonitver|bentonit entsorgung|zuschlag für vlies|zuschlag fuer vlies|freiluftschrank|absperrschieber|erschwernis|kabelschutzrohr|wasserbausteine|baugrubenaushub|rohrgrabenaushub|rohr- \/ kabelgrabenaushub|rohr-\/kabelgrabenaushub|rohr- kabelgrabenaushub|kabelgrabenaushub|zuschlag rohrgrabenaushub|duktile gussrohre|duktile gußrohre|pilotbohrung|spülbohrung|spuelbohrung|entwässerungsmulde|entwaesserungsmulde|bruchschotter für straßenunterbau|bruchschotter fuer strassenunterbau|dichtkappen|flächen auflockern|flaechen auflockern|kernbohrung|anschluss und verbindung|insektensicherem edelstahlsieb|lwl miko-kabel 12 fasern|lwl-micro kabel 12 fasern|kabelleerrohrverlegearbeiten|pe-hd - formstück|pe-hd - formstueck/.test(norm(s((row as any).kurztext)));
+
+    if (RLC_LEGACY_DATABASE_PRICE_ENABLED && directDb && !preferDedicatedUrkalkulationOverDb) {
       const dbCheck = checkDbPriceComparability(row, directDb);
 
       if (dbCheck.ok || directDb) {
@@ -9182,7 +6279,9 @@ async function calcSmartRow(
     return dbEp > 0 && (posOk || (unitOk && m.score >= 60));
   });
 
-  if (strongCompanyDbMatch) {
+  const preferDedicatedUrkalkulationOverStrongDb = /paßstück|passstück|passstueck|böschungsstück|boeschungsstueck|sohl- und ummantelungsbeton|beton c 20\/25|sauberkeitsschicht herstellen|pumpenstunden|stampfbetonpfeiler|übergangsstück dn 80|uebergangsstueck dn 80|übergangsstück dn 50|uebergangsstueck dn 50|übergangsstück da 90|uebergangsstueck da 90|t-stück|t-stueck|unterflurhydrant|hinweissäulen|hinweissaeulen|anbohrarmaturen|starre verbindung|mauerdurchführung|mauerdurchfuehrung|systemdeckel|90 grad-bogen|90 grad bogen|einsteigleiter|einsteighilfe|ggg-rohre|bettungssand|verlegung ortsnetzkabel|statik druckerhöhungsschacht|statik druckerhoehungsschacht|zuschlag fabrikat simona|straßenaufbruch|strassenaufbruch|baustahl 500\/550|runddraht|erdleitung|ats aus ac 22 tn herstellen|ads aus ac 11 dn herstellen straße|ads aus ac 11 dn herstellen strasse|entwässerungsrinne ausbauen|entwaesserungsrinne ausbauen|zulage abtrag|zulage krümmung|zulage kruemmung|überdachung einstieg|ueberdachung einstieg|fettfreie isolierbinde|messingkupplungen|messingquetschverschraubung|straßenkappe ufh|strassenkappe ufh|zuschlag rückschlagklappe|zuschlag rueckschlagklappe|bestehenden durchlass ausbauen|durchlass ausbauen|durchlass herstellen|bestandspläne|bestandsplaene|bauzaun|asphalt trennen|lkw-stunden bis 4 m3|lkw-stunden 4 bis 5 m3|lkw-stunden über 5 m3|lkw-stunden ueber 5 m3|baggerstunden für tieflöffel 0,25 - 0,5 m3|baggerstunden fuer tiefloeffel 0,25 - 0,5 m3|baggerstunden für tieflöffel 0,5 - 1,00 m3|baggerstunden fuer tiefloeffel 0,5 - 1,00 m3|stundensätze polierstunde|stundensaetze polierstunde|verrechnungssätze meißel|verrechnungssaetze meissel|radlader|äste zurückschneiden|aeste zurueckschneiden|überfahrten - pkw|ueberfahrten - pkw|ggg-formstück flanschverbindung|ggg-formstueck flanschverbindung|ggg-formstücke|ggg-formstuecke|schmutzfänger|schmutzfaenger|losflansch pn 16|weidezaungerät|weidezaungeraet|kalibrierung speedpipe|zulage - anschluss druckleitung da 75|zulage anschluss druckleitung da 75|frostsicheres kiesmaterial|frostschutzkies|frostschutzmaterial|stromantrag|stromanschlussantrag|zuschlag für steuerung|zuschlag fuer steuerung|zulage schachtzulauf dn 160|druckprobe speedpipe|zulage trassenwarnband breitband|zulage trassenwarnband|schutzmatte|rohrschutz schutzmatte|baustelleneinrichtung horizontalbohrung|rundholzlage herstellen|auskreuzen|ringraumdichtung|bestandszeichnung|kompressorstunden|mauerrohr dn 50|abbau und abfuhr|wurzelstock roden|wurzelstöcke roden|wurzelstoecke roden|verzinkte fittings aller art|anschluss am bestehenden schacht herstellen|zulage - anschluss ableitung hdpe dn 180|zulage anschluss ableitung hdpe dn 180|losflansch pn 40|losflansch pn 25|hausanschluss lwl-kabel|mmb-stück dn 125\/80|mmb-stueck dn 125\/80|niederschrift beweissicherung|start- und zielgrube|start und zielgrube|mehrpreis bauschild|bäume fällen|baeume faellen|feinplanie herstellen|feinplanie|erkundung und abstimmung sprengarbeiten|sprengarbeiten|magnetisch induktiver durchflussmesser|durchflußmesser|durchflussmesser|be- und entlüftungsrohr|be- und entlueftungsrohr|einbinden der kabelleerrohre|stillstandszeiten da 180|stillstandzeiten bei bohrung|zäune abbauen|zaeune abbauen|grabenaushub - zulage bd-kl. 2, 6, 7|grabenaushub zulage bd-kl. 2, 6, 7|anschluss an best. durchlass|anschluss an bestehenden durchlass|kabelleerrohr|hecken und buschwerk roden|statische berechnung da 180|lehmpfeiler|ringraumdichtung dn 168,3|ringraumdichtung dn 168.3|überfahrten - 30 to|ueberfahrten - 30 to|baustellenkoordination|tüv-abnahme|tuev-abnahme|baustellendokumentation|besucherführung|besucherfuehrung|mutterboden|pp-rohr dn 160|pp rohr dn 160|hdpe - schutzrohre da 50|hdpe-schutzrohre da 50|mehr- oder minderpreis|baustellenabsicherung|besprechungsraum|beweissicherung gebäude|beweissicherung gebaeude|beweissicherung trasse|beweissicherung zufahrtsstraße|beweissicherung zufahrtsstrasse|abstimmung mit projektbeteiligten|wartungs- und bedienungsanleitung|wartungs und bedienungsanleitung|vorflut aufrechterhalten|revisionsschächte dn 1000|revisionsschacht dn 1000|druckleitungsendschacht|gusseiserne schachtabdeckung|zulage wanderweg wiederherstellen|wanderweg wiederherstellen|zuschlag rückverfüllung|zuschlag rueckverfuellung|schachtabdeckung|elektroverteilung|mehr- oder mindertiefe|betonfertigteilschacht druckerhöhung|betonfertigteilschacht druckerhohung|energieumwandlungsschacht|betonsockel|instandhaltung verkehrsflächen|instandhaltung verkehrsflaechen|aufrechterhalten des anliegerverkehrs|anliegerverkehr aufrechterhalten|auffüllmaterial|auffuellmaterial|bentonitver|bentonit entsorgung|zuschlag für vlies|zuschlag fuer vlies|freiluftschrank|absperrschieber|erschwernis|kabelschutzrohr|wasserbausteine|baugrubenaushub|rohrgrabenaushub|rohr- \/ kabelgrabenaushub|rohr-\/kabelgrabenaushub|rohr- kabelgrabenaushub|kabelgrabenaushub|zuschlag rohrgrabenaushub|duktile gussrohre|duktile gußrohre|pilotbohrung|spülbohrung|spuelbohrung|entwässerungsmulde|entwaesserungsmulde|bruchschotter für straßenunterbau|bruchschotter fuer strassenunterbau|dichtkappen|flächen auflockern|flaechen auflockern|kernbohrung|anschluss und verbindung|insektensicherem edelstahlsieb|lwl miko-kabel 12 fasern|lwl-micro kabel 12 fasern|kabelleerrohrverlegearbeiten|pe-hd - formstück|pe-hd - formstueck/.test(norm(s((row as any).kurztext)));
+
+  if (RLC_LEGACY_DATABASE_PRICE_ENABLED && strongCompanyDbMatch && !preferDedicatedUrkalkulationOverStrongDb) {
     const dbCheck = checkDbPriceComparability(row, strongCompanyDbMatch.row, strongCompanyDbMatch);
 
     if (dbCheck.ok) {
@@ -9227,17 +6326,19 @@ async function calcSmartRow(
   }
 
 
+  const preferDedicatedUrkalkulationOverLegacyDb = /paßstück|passstück|passstueck|böschungsstück|boeschungsstueck|sohl- und ummantelungsbeton|beton c 20\/25|sauberkeitsschicht herstellen|pumpenstunden|stampfbetonpfeiler|übergangsstück dn 80|uebergangsstueck dn 80|übergangsstück dn 50|uebergangsstueck dn 50|übergangsstück da 90|uebergangsstueck da 90|t-stück|t-stueck|unterflurhydrant|hinweissäulen|hinweissaeulen|anbohrarmaturen|starre verbindung|mauerdurchführung|mauerdurchfuehrung|systemdeckel|90 grad-bogen|90 grad bogen|einsteigleiter|einsteighilfe|ggg-rohre|bettungssand|verlegung ortsnetzkabel|statik druckerhöhungsschacht|statik druckerhoehungsschacht|zuschlag fabrikat simona|straßenaufbruch|strassenaufbruch|baustahl 500\/550|runddraht|erdleitung|ats aus ac 22 tn herstellen|ads aus ac 11 dn herstellen straße|ads aus ac 11 dn herstellen strasse|entwässerungsrinne ausbauen|entwaesserungsrinne ausbauen|zulage abtrag|zulage krümmung|zulage kruemmung|überdachung einstieg|ueberdachung einstieg|fettfreie isolierbinde|messingkupplungen|messingquetschverschraubung|straßenkappe ufh|strassenkappe ufh|zuschlag rückschlagklappe|zuschlag rueckschlagklappe|bestehenden durchlass ausbauen|durchlass ausbauen|durchlass herstellen|bestandspläne|bestandsplaene|bauzaun|asphalt trennen|lkw-stunden bis 4 m3|lkw-stunden 4 bis 5 m3|lkw-stunden über 5 m3|lkw-stunden ueber 5 m3|baggerstunden für tieflöffel 0,25 - 0,5 m3|baggerstunden fuer tiefloeffel 0,25 - 0,5 m3|baggerstunden für tieflöffel 0,5 - 1,00 m3|baggerstunden fuer tiefloeffel 0,5 - 1,00 m3|stundensätze polierstunde|stundensaetze polierstunde|verrechnungssätze meißel|verrechnungssaetze meissel|radlader|äste zurückschneiden|aeste zurueckschneiden|überfahrten - pkw|ueberfahrten - pkw|ggg-formstück flanschverbindung|ggg-formstueck flanschverbindung|ggg-formstücke|ggg-formstuecke|schmutzfänger|schmutzfaenger|losflansch pn 16|weidezaungerät|weidezaungeraet|kalibrierung speedpipe|zulage - anschluss druckleitung da 75|zulage anschluss druckleitung da 75|frostsicheres kiesmaterial|frostschutzkies|frostschutzmaterial|stromantrag|stromanschlussantrag|zuschlag für steuerung|zuschlag fuer steuerung|zulage schachtzulauf dn 160|druckprobe speedpipe|zulage trassenwarnband breitband|zulage trassenwarnband|schutzmatte|rohrschutz schutzmatte|baustelleneinrichtung horizontalbohrung|rundholzlage herstellen|auskreuzen|ringraumdichtung|bestandszeichnung|kompressorstunden|mauerrohr dn 50|abbau und abfuhr|wurzelstock roden|wurzelstöcke roden|wurzelstoecke roden|verzinkte fittings aller art|anschluss am bestehenden schacht herstellen|zulage - anschluss ableitung hdpe dn 180|zulage anschluss ableitung hdpe dn 180|losflansch pn 40|losflansch pn 25|hausanschluss lwl-kabel|mmb-stück dn 125\/80|mmb-stueck dn 125\/80|niederschrift beweissicherung|start- und zielgrube|start und zielgrube|mehrpreis bauschild|bäume fällen|baeume faellen|feinplanie herstellen|feinplanie|erkundung und abstimmung sprengarbeiten|sprengarbeiten|magnetisch induktiver durchflussmesser|durchflußmesser|durchflussmesser|be- und entlüftungsrohr|be- und entlueftungsrohr|einbinden der kabelleerrohre|stillstandszeiten da 180|stillstandzeiten bei bohrung|zäune abbauen|zaeune abbauen|grabenaushub - zulage bd-kl. 2, 6, 7|grabenaushub zulage bd-kl. 2, 6, 7|anschluss an best. durchlass|anschluss an bestehenden durchlass|kabelleerrohr|hecken und buschwerk roden|statische berechnung da 180|lehmpfeiler|ringraumdichtung dn 168,3|ringraumdichtung dn 168.3|überfahrten - 30 to|ueberfahrten - 30 to|baustellenkoordination|tüv-abnahme|tuev-abnahme|baustellendokumentation|besucherführung|besucherfuehrung|mutterboden|pp-rohr dn 160|pp rohr dn 160|hdpe - schutzrohre da 50|hdpe-schutzrohre da 50|mehr- oder minderpreis|baustellenabsicherung|besprechungsraum|beweissicherung gebäude|beweissicherung gebaeude|beweissicherung trasse|beweissicherung zufahrtsstraße|beweissicherung zufahrtsstrasse|abstimmung mit projektbeteiligten|wartungs- und bedienungsanleitung|wartungs und bedienungsanleitung|vorflut aufrechterhalten|revisionsschächte dn 1000|revisionsschacht dn 1000|druckleitungsendschacht|gusseiserne schachtabdeckung|zulage wanderweg wiederherstellen|wanderweg wiederherstellen|zuschlag rückverfüllung|zuschlag rueckverfuellung|schachtabdeckung|elektroverteilung|mehr- oder mindertiefe|betonfertigteilschacht druckerhöhung|betonfertigteilschacht druckerhohung|energieumwandlungsschacht|betonsockel|instandhaltung verkehrsflächen|instandhaltung verkehrsflaechen|aufrechterhalten des anliegerverkehrs|anliegerverkehr aufrechterhalten|auffüllmaterial|auffuellmaterial|bentonitver|bentonit entsorgung|zuschlag für vlies|zuschlag fuer vlies|freiluftschrank|absperrschieber|erschwernis|kabelschutzrohr|wasserbausteine|baugrubenaushub|rohrgrabenaushub|rohr- \/ kabelgrabenaushub|rohr-\/kabelgrabenaushub|rohr- kabelgrabenaushub|kabelgrabenaushub|zuschlag rohrgrabenaushub|duktile gussrohre|duktile gußrohre|pilotbohrung|spülbohrung|spuelbohrung|entwässerungsmulde|entwaesserungsmulde|bruchschotter für straßenunterbau|bruchschotter fuer strassenunterbau|dichtkappen|flächen auflockern|flaechen auflockern|kernbohrung|anschluss und verbindung|insektensicherem edelstahlsieb|lwl miko-kabel 12 fasern|lwl-micro kabel 12 fasern|kabelleerrohrverlegearbeiten|pe-hd - formstück|pe-hd - formstueck/.test(norm(s((row as any).kurztext)));
+
   // RLC_V23_COMPANY_DB_BEFORE_TECHNICAL_PARSER
   // Firmen-Datenbank Exact/Strong Match gewinnt VOR Technical Parser, Guards und Market-Index.
   // X84 wird NICHT als Kalkulationsbasis verwendet.
-  {
+  if (!preferDedicatedUrkalkulationOverLegacyDb) {
     const rowPos = s((row as any).posNr);
     const rowUnitRaw = s((row as any).einheit);
     const rowUnitNorm = norm(rowUnitRaw).replace("m3", "m³");
     const rowTextNorm = norm(`${s((row as any).kurztext)} ${s((row as any).langtext)}`);
 
     if (rowPos) {
-      const candidates = await prisma.kalkulationsDbEntry.findMany({
+      const candidatesRaw = await prisma.kalkulationsDbEntry.findMany({
         where: {
           companyId,
           positionNumber: rowPos,
@@ -9246,6 +6347,9 @@ async function calcSmartRow(
         take: 50,
         orderBy: [{ updatedAt: "desc" }],
       });
+
+      const candidates =
+        filterUsableRlcPriceSources(candidatesRaw);
 
       const picked = candidates.find((c: any) => {
         const dbUnitNorm = norm(s(c.unit)).replace("m3", "m³");
@@ -9345,7 +6449,7 @@ async function calcSmartRow(
       /spezialtiefbau|baugrubenverbau|spundwand|bohrpfahl|unterfangung|wasserhaltung|bodenverbesserung|hdi|injektion|pressung|microtunneling|rohrvortrieb|vortrieb|pressanlage|bohrgerät|bohrgeraet|injektionsanlage/.test(norm(technicalContextText));
 
     const technicalPreferAutonomousFamily =
-      /glasfaser|lwl|mikro(?:rohr|kabel|leerrohr)|speedpipe|leerrohrverbund|telekom|vodafone|bayernwerk/.test(norm(technicalContextText));
+      /paßstück|passstück|passstueck|böschungsstück|boeschungsstueck|sohl- und ummantelungsbeton|beton c 20\/25|sauberkeitsschicht herstellen|pumpenstunden|stampfbetonpfeiler|übergangsstück dn 80|uebergangsstueck dn 80|übergangsstück dn 50|uebergangsstueck dn 50|übergangsstück da 90|uebergangsstueck da 90|t-stück|t-stueck|unterflurhydrant|hinweissäulen|hinweissaeulen|anbohrarmaturen|starre verbindung|mauerdurchführung|mauerdurchfuehrung|systemdeckel|90 grad-bogen|90 grad bogen|einsteigleiter|einsteighilfe|ggg-rohre|bettungssand|verlegung ortsnetzkabel|statik druckerhöhungsschacht|statik druckerhoehungsschacht|zuschlag fabrikat simona|straßenaufbruch|strassenaufbruch|baustahl 500\/550|runddraht|erdleitung|ats aus ac 22 tn herstellen|ads aus ac 11 dn herstellen straße|ads aus ac 11 dn herstellen strasse|entwässerungsrinne ausbauen|entwaesserungsrinne ausbauen|zulage abtrag|zulage krümmung|zulage kruemmung|überdachung einstieg|ueberdachung einstieg|fettfreie isolierbinde|messingkupplungen|messingquetschverschraubung|straßenkappe ufh|strassenkappe ufh|zuschlag rückschlagklappe|zuschlag rueckschlagklappe|bestehenden durchlass ausbauen|durchlass ausbauen|durchlass herstellen|bestandspläne|bestandsplaene|bauzaun|asphalt trennen|lkw-stunden bis 4 m3|lkw-stunden 4 bis 5 m3|lkw-stunden über 5 m3|lkw-stunden ueber 5 m3|baggerstunden für tieflöffel 0,25 - 0,5 m3|baggerstunden fuer tiefloeffel 0,25 - 0,5 m3|baggerstunden für tieflöffel 0,5 - 1,00 m3|baggerstunden fuer tiefloeffel 0,5 - 1,00 m3|stundensätze polierstunde|stundensaetze polierstunde|verrechnungssätze meißel|verrechnungssaetze meissel|radlader|äste zurückschneiden|aeste zurueckschneiden|überfahrten - pkw|ueberfahrten - pkw|ggg-formstück flanschverbindung|ggg-formstueck flanschverbindung|ggg-formstücke|ggg-formstuecke|schmutzfänger|schmutzfaenger|losflansch pn 16|weidezaungerät|weidezaungeraet|kalibrierung speedpipe|zulage - anschluss druckleitung da 75|zulage anschluss druckleitung da 75|frostsicheres kiesmaterial|frostschutzkies|frostschutzmaterial|stromantrag|stromanschlussantrag|zuschlag für steuerung|zuschlag fuer steuerung|zulage schachtzulauf dn 160|druckprobe speedpipe|zulage trassenwarnband breitband|zulage trassenwarnband|schutzmatte|rohrschutz schutzmatte|baustelleneinrichtung horizontalbohrung|rundholzlage herstellen|auskreuzen|ringraumdichtung|bestandszeichnung|kompressorstunden|mauerrohr dn 50|abbau und abfuhr|wurzelstock roden|wurzelstöcke roden|wurzelstoecke roden|verzinkte fittings aller art|anschluss am bestehenden schacht herstellen|zulage - anschluss ableitung hdpe dn 180|zulage anschluss ableitung hdpe dn 180|losflansch pn 40|losflansch pn 25|hausanschluss lwl-kabel|mmb-stück dn 125\/80|mmb-stueck dn 125\/80|niederschrift beweissicherung|start- und zielgrube|start und zielgrube|mehrpreis bauschild|bäume fällen|baeume faellen|feinplanie herstellen|feinplanie|erkundung und abstimmung sprengarbeiten|sprengarbeiten|magnetisch induktiver durchflussmesser|durchflußmesser|durchflussmesser|be- und entlüftungsrohr|be- und entlueftungsrohr|einbinden der kabelleerrohre|stillstandszeiten da 180|stillstandzeiten bei bohrung|zäune abbauen|zaeune abbauen|grabenaushub - zulage bd-kl. 2, 6, 7|grabenaushub zulage bd-kl. 2, 6, 7|anschluss an best. durchlass|anschluss an bestehenden durchlass|hecken und buschwerk roden|statische berechnung da 180|lehmpfeiler|ringraumdichtung dn 168,3|ringraumdichtung dn 168.3|überfahrten - 30 to|ueberfahrten - 30 to|baustellenkoordination|tüv-abnahme|tuev-abnahme|baustellendokumentation|besucherinformation|bauschild|erschwernis vorgegebene bauzeiten|zusätzliche anreise|zusaetzliche anreise|mikrorohrhausanschlussleitung|polyethylenrohr pe-r.weich|polyethylenrohr|besucherführung|besucherfuehrung|mutterboden|pp-rohr dn 160|pp rohr dn 160|hdpe - schutzrohre da 50|hdpe-schutzrohre da 50|mehr- oder minderpreis|baustellenabsicherung|besprechungsraum|beweissicherung gebäude|beweissicherung gebaeude|beweissicherung trasse|beweissicherung zufahrtsstraße|beweissicherung zufahrtsstrasse|abstimmung mit projektbeteiligten|wartungs- und bedienungsanleitung|wartungs und bedienungsanleitung|vorflut aufrechterhalten|revisionsschächte dn 1000|revisionsschacht dn 1000|druckleitungsendschacht|gusseiserne schachtabdeckung|glasfaser|lwl|mikro(?:rohr|kabel|leerrohr)|speedpipe|leerrohrverbund|telekom|vodafone|bayernwerk|mittelspannung|niederspannung|stromkabel|erdkabel|kabelverlegung|kabel verlegen|kabelschutzrohr|kabelleerrohr|kabellehrrohr|elektroverteilung|mehr- oder mindertiefe|betonfertigteilschacht druckerhöhung|betonfertigteilschacht druckerhohung|energieumwandlungsschacht|betonsockel|instandhaltung verkehrsflächen|instandhaltung verkehrsflaechen|aufrechterhalten des anliegerverkehrs|anliegerverkehr aufrechterhalten|auffüllmaterial|auffuellmaterial|bentonitver|bentonit entsorgung|zuschlag für vlies|zuschlag fuer vlies|freiluftschrank|absperrschieber|erschwernis|schachtabdeckung|zuschlag rückverfüllung|zuschlag rueckverfuellung|ortungsband|warnband|trassenwarnband|kanal\s*spül|kanal\s*spuel|entkeim|desinfektion|druckprobe|druckprüfung|druckpruefung|straßenbauvlies|strassenbauvlies|wanderweg wiederherstellen|forststraße wiederherstellen|forststrasse wiederherstellen|forststraßen wiederherstellen|forststrassen wiederherstellen|kiesstraße wiederherstellen|kiesstrasse wiederherstellen|kiesstraßen wiederherstellen|kiesstrassen wiederherstellen|flächen und wege wiederherstellen|flaechen und wege wiederherstellen|rohrumhüllung|rohrumhuellung|sohlbettung|sandüberdeckung|sandueberdeckung|splittüberdeckung|splittueberdeckung|zwischenplanum|wasserhaltung|drainageleitungen|drainageleitung|gesondertes haufwerk|hdpe - rohre|hdpe-rohre|pe-trinkwasserdruckrohr|flächen einzäunen|flaechen einzaeunen|fahrzeugkosten werkstattwagen|fahrzeugkosten pkw|personenkraftwagen|wasserbausteine|baugrubenaushub|rohrgrabenaushub|rohr- \/ kabelgrabenaushub|rohr-\/kabelgrabenaushub|rohr- kabelgrabenaushub|kabelgrabenaushub|zuschlag rohrgrabenaushub|duktile gussrohre|duktile gußrohre|pilotbohrung|spülbohrung|spuelbohrung|entwässerungsmulde|entwaesserungsmulde|bruchschotter für straßenunterbau|bruchschotter fuer strassenunterbau|dichtkappen|flächen auflockern|flaechen auflockern|kernbohrung|anschluss und verbindung|insektensicherem edelstahlsieb|lwl miko-kabel 12 fasern|lwl-micro kabel 12 fasern|kabelleerrohrverlegearbeiten|pe-hd - formstück|pe-hd - formstueck/.test(norm(technicalContextText));
 
 const technicalRecipeInput =
     x83PriorityKurztext.includes("fsk korrigieren") ||
@@ -9359,9 +6463,14 @@ const technicalRecipeInput =
         }
       : row;
 
-  const technicalRecipeRow = await calcRecipeKalkulationRow(technicalRecipeInput);
+  const technicalRecipeRow = await calcRecipeKalkulationRow(technicalRecipeInput, {
+    companyId,
+    projectCode,
+    allowResourceComposer: useOpenAI,
+  });
 
   if (
+    !s((row as any).langtext) &&
     !technicalContextSensitive &&
     !technicalSpecialCivilSensitive &&
     !technicalPreferAutonomousFamily &&
@@ -9425,7 +6534,7 @@ const technicalRecipeInput =
         : technicalRow;
     const finalTechnicalRowWithFallback = cleanRohrgrabenaushubTechnicalSource(
       row,
-      recalcBlockedOrTooLowByFamilyFallback(row, finalTechnicalRow)
+      finalTechnicalRow
     );
 
     const technicalCacheKey = cacheKeyForRow(row);
@@ -9436,8 +6545,18 @@ const technicalRecipeInput =
 
   const cacheKey = cacheKeyForRow(row);
   const cached = kalkulationAiCache.get(cacheKey);
+  const cachedSource = s((cached as any)?.source).toLowerCase();
+  const cachedIsAutonomousV2 =
+    cachedSource.includes("rlc-autonomous-urkalkulation-v2") ||
+    cachedSource.includes("rlc-v2");
 
-  if (cached && !forceRecalculate) {
+  /*
+   * RLC V2 PRIMARY:
+   * Family-Catalog-v2 ist lokal/schnell und wird immer frisch gerechnet.
+   * Alte Cachewerte dürfen nach Rezept-/Marktpreisänderungen keinen EP mehr konservieren.
+   * Cache bleibt nur für teure/nicht-v2 Pfade (z.B. OpenAI) aktiv.
+   */
+  if (cached && !forceRecalculate && !cachedIsAutonomousV2) {
     return cloneCachedRow(
       {
         ...cached,
@@ -9447,10 +6566,11 @@ const technicalRecipeInput =
     );
   }
 
-  if (cached && forceRecalculate) {
-    console.log("[kalkulation.ki] KI-Cache bypassed by forceRecalculate", {
+  if (cached && (forceRecalculate || cachedIsAutonomousV2)) {
+    console.log("[kalkulation.ki] KI-Cache bypassed", {
       posNr: s(row.posNr),
       kurztext: s(row.kurztext).slice(0, 80),
+      reason: forceRecalculate ? "forceRecalculate" : "autonomous-v2-always-fresh",
     });
   }
 
@@ -9459,7 +6579,11 @@ const technicalRecipeInput =
    * RLC-KI nutzt interne Rezeptlogik + RLC Preisbibliothek vor OpenAI.
    * OpenAI bleibt Expertprüfung/Fallback, nicht Hauptquelle.
    */
-  const recipeRow = await calcRecipeKalkulationRow(row);
+  const recipeRow = await calcRecipeKalkulationRow(row, {
+    companyId,
+    projectCode,
+    allowResourceComposer: useOpenAI,
+  });
 
   const knowledgeHub = resolveRlcKnowledgeHub({
     kurztext: (row as any)?.kurztext,
@@ -9476,7 +6600,7 @@ const technicalRecipeInput =
     confidence: knowledgeHub.externalKnowledgeConfidence
   });
 
-  if (knowledgeHub.hasExternalKnowledge) {
+  if (knowledgeHub.hasExternalKnowledge && recipeRow) {
     (recipeRow as any).externalKnowledge = knowledgeHub.externalMatches;
     (recipeRow as any).externalKnowledgeConfidence = knowledgeHub.externalKnowledgeConfidence;
     (recipeRow as any).aiReason = [
@@ -9485,25 +6609,69 @@ const technicalRecipeInput =
     ].filter(Boolean).join("\n\n");
   }
 
-  const autonomousResolved = resolveRlcAutonomousCalculation(row as any, [row as any], undefined);
-  const autonomousRow = mapAutonomousResultToKiRow(row as any, autonomousResolved);
+  // RLC SPEED: dieselbe autonome Analyse wurde oben bereits mit exakt
+  // denselben Parametern ausgeführt. Ergebnis wiederverwenden statt
+  // ProjectContext + Agents + Family Engine ein zweites Mal zu rechnen.
+  const autonomousResolved = primaryAutonomousResolved;
+  const autonomousRow = primaryAutonomousRow;
   const autonomousEp = n((autonomousRow as any)?.rlcKiUnitPrice ?? (autonomousRow as any)?.finalUnitPrice);
   const recipeSourceForAutonomous = s((recipeRow as any)?.source);
   const recipeEpForAutonomous = n((recipeRow as any)?.rlcKiUnitPrice ?? (recipeRow as any)?.finalUnitPrice ?? (recipeRow as any)?.suggestedUnitPrice);
   const autonomousText = norm(`${s((row as any)?.kurztext)} ${s((row as any)?.langtext)}`);
+  const autonomousNeedsReview = s((autonomousRow as any)?.calculationStatus) === "needs_review";
+  const recipeBreakdown = Array.isArray((recipeRow as any)?.priceBreakdown)
+    ? (recipeRow as any).priceBreakdown
+    : [];
+  const recipeBreakdownTotal = round2(
+    recipeBreakdown.reduce((sum: number, line: any) => sum + n(line?.total), 0)
+  );
+  const recipeHasTraceableResolvedUrkalkulation =
+    // Recipe-Resolver may still label the generic 19.45 EUR fallback as
+    // RESOLVED. Only the Technical Parser has a component-level Urkalkulation
+    // proven here; generic recipe/library outputs must remain unresolved.
+    recipeSourceForAutonomous === "technical-parser" &&
+    recipeEpForAutonomous > 0 &&
+    recipeBreakdown.length > 0 &&
+    Math.abs(recipeBreakdownTotal - recipeEpForAutonomous) <= Math.max(0.02, recipeEpForAutonomous * 0.02);
+
+  // Ein fachlich begründeter V2-Prüffall bleibt geschützt. Ausnahme:
+  // ein Recipe mit vollständig aufgelösten Ressourcen und stimmiger
+  // Urkalkulation darf den Null-EP ersetzen – nie ein Bibliotheks-/Legacy-Fallback.
+  if (autonomousRow && autonomousNeedsReview && !recipeHasTraceableResolvedUrkalkulation) {
+    return {
+      ...autonomousRow,
+      source: cleanRlcSourceFlags((autonomousRow as any).source || "rlc-autonomous-urkalkulation-v2"),
+      warning: cleanRlcWarningText(s((autonomousRow as any).warning)),
+      aiReason: [
+        s((autonomousRow as any).aiReason),
+        "RLC V2 Prüfstatus geschützt: kein generischer Preisbibliotheks-Fallback."
+      ].filter(Boolean).join("\n\n"),
+    };
+  }
   const autonomousImportantFamily =
-    /wasserhaltung|verkehrssicherung|rsa|deponie|entsorgung|dk\s*[0i1]|belastet|glasfaser|lwl|mikro(?:rohr|kabel|leerrohr)|speedpipe|leerrohrverbund|hdd|spülbohr|spuelbohr|horizontalbohr|grabenlos|spezialtiefbau|verbau|baustellenlogistik|zufahrt|vermessung|dokumentation/.test(autonomousText);
+    /wasserhaltung|verkehrssicherung|rsa|deponie|entsorgung|dk\s*[0i1]|belastet|glasfaser|lwl|mikro(?:rohr|kabel|leerrohr)|speedpipe|leerrohrverbund|mittelspannung|niederspannung|kabelverlegung|ortungsband|warnband|schutzmatte|hdd|spülbohr|spuelbohr|horizontalbohr|grabenlos|spezialtiefbau|verbau|baustellenlogistik|zufahrt|vermessung|dokumentation|baugrubenaushub|rohrgrabenaushub|rohr- \/ kabelgrabenaushub|rohr-\/kabelgrabenaushub|rohr- kabelgrabenaushub|kabelgrabenaushub|zuschlag rohrgrabenaushub|duktile gussrohre|duktile gußrohre|pilotbohrung|entwässerungsmulde|entwaesserungsmulde|bruchschotter für straßenunterbau|bruchschotter fuer strassenunterbau|dichtkappen|flächen auflockern|flaechen auflockern|kernbohrung|anschluss und verbindung|insektensicherem edelstahlsieb|lwl miko-kabel 12 fasern|lwl-micro kabel 12 fasern|kabelleerrohrverlegearbeiten|pe-hd - formstück|pe-hd - formstueck|bäume fällen|baeume faellen|feinplanie|feinplanum|pumpensumpf|zulage verlegung hdpe-rohr|zulage verlegung ggg-rohr|böschungssteine|boeschungssteine|suchschlitze|suchschlitz|erschwerniszuschlag|baustelleneinrichtung herstellen|bestandspläne|bestandsplaene|erschwernis vermessung|erschwernis beengte bauweise|erschwernis zufahrt|trasse innerhalb von steigen|pumpschacht doppelpumpstation|betonfertigteilschacht druckerhöhung|betonfertigteilschacht druckerhohung|revisionsschacht beton|revisionsschacht pe|rohrgrabenaushub|zuschlag rückverfüllung|zuschlag rueckverfuellung|frostsicheres kiesmaterial|frostschutzkies|frostschutzmaterial|schachtabdeckung liefern|zuschlag schachtabdeckung|kabelzugschacht|warnanlage|fernwirktechnik|fernwirkanlage|transport und montage pumpensteuerung|verlegung hausanschlussleitung|hausanschlussleitung|schutzmaßnahme an bäumen|schutzmassnahme an baeumen|stammschutz|tv-abnahme|kanaluntersuchung des neu gebauten|isybau 2013|straßenablauf|strassenablauf|schlitzrinne|stirnwand geschlossen|schmelzband|entsorgen asphaltabbruch|asphaltaufbruch|bogen pp-md|abzweig pp-md|rohrgraben bis|zulage für handarbeit|zulage fuer handarbeit/.test(autonomousText);
+  const cableRecipeMismatch =
+    recipeSourceForAutonomous.includes("recipe") &&
+    /(mittelspannung|niederspannung|kabelverlegung|verlegung[^.]{0,40}kabel|ortungsband|warnband)/.test(autonomousText);
   const legacyResultTooWeak =
     !recipeRow ||
     recipeSourceForAutonomous.includes("rlc-family-fallback-lwl") ||
     recipeSourceForAutonomous.includes("rule-engine") ||
+    cableRecipeMismatch ||
     (autonomousEp > 0 && recipeEpForAutonomous > 0 && recipeEpForAutonomous < autonomousEp * 0.45);
 
-  if (autonomousRow && autonomousEp > 0 && (technicalContextSensitive || technicalSpecialCivilSensitive || (autonomousImportantFamily && legacyResultTooWeak))) {
-    const guardedAutonomousRow = applyPlausibilityGuard(
-      row,
-      matches,
-      {
+  // Una Urkalkulation V2 con almeno due componenti di costo e senza
+  // ambiguità tecnica è la fonte primaria: è stata classificata sul Langtext,
+  // non sul Kurztext, non su X84 e non su un vecchio EP.
+  const autonomousHasTraceableUrkalkulation =
+    Array.isArray((autonomousRow as any)?.priceBreakdown) &&
+    (autonomousRow as any).priceBreakdown.length >= 2 &&
+    !/kein eindeutiger|gewerk und bauverfahren konnten nicht eindeutig|family fallback/i.test(
+      s((autonomousRow as any)?.warning)
+    );
+
+  if (autonomousRow && autonomousEp > 0 && (autonomousHasTraceableUrkalkulation || technicalPreferAutonomousFamily || technicalContextSensitive || technicalSpecialCivilSensitive || (autonomousImportantFamily && legacyResultTooWeak))) {
+    const guardedAutonomousRow = {
         ...autonomousRow,
         source: cleanRlcSourceFlags((autonomousRow as any).source || "rlc-autonomous-urkalkulation-v1"),
         warning: cleanRlcWarningText([
@@ -9512,27 +6680,26 @@ const technicalRecipeInput =
         ].filter(Boolean).join(" · ")),
         aiReason: [
           s((autonomousRow as any).aiReason),
-          "RLC Autonomous Kalkulator wurde vor OpenAI/Rule-Engine-Fallback verwendet, aber nur bei Context-/Risiko-Familien oder schwachen Legacy-Fallbacks.",
+          "RLC Autonomous Urkalkulation ist primär, weil Langtext, Familie und Kostenbestandteile vollständig erkannt wurden.",
         ].filter(Boolean).join("\n\n"),
-      },
-      forceRecalculate
-    );
+      };
 
     kalkulationAiCache.set(cacheKey, guardedAutonomousRow);
     scheduleKalkulationAiCacheSave();
     return guardedAutonomousRow;
   }
 
-  if (!technicalContextSensitive && !technicalSpecialCivilSensitive && recipeRow) {
-    const guardedRecipeRow = applyPlausibilityGuard(
-      row,
-      matches,
-      {
-        ...recipeRow,
-        source: cleanRlcSourceFlags(recipeRow.source || "recipe"),
-      },
-      forceRecalculate
-    );
+  if (
+    recipeRow &&
+    (
+      recipeHasTraceableResolvedUrkalkulation ||
+      (!technicalPreferAutonomousFamily && !technicalContextSensitive && !technicalSpecialCivilSensitive)
+    )
+  ) {
+    const guardedRecipeRow = {
+      ...recipeRow,
+      source: cleanRlcSourceFlags(recipeRow.source || "recipe"),
+    };
     kalkulationAiCache.set(cacheKey, guardedRecipeRow);
     scheduleKalkulationAiCacheSave();
     return guardedRecipeRow;
@@ -9544,7 +6711,7 @@ const technicalRecipeInput =
 
   if (useOpenAIForThisRow) {
     try {
-      const aiRow = await openAiCalcRow(row, matches);
+      const aiRow = await openAiCalcRow(row, matches, companyId, projectCode || "");
 
       if (aiRow) {
         if (hasStrongDb) {
@@ -9567,9 +6734,7 @@ const technicalRecipeInput =
             .join("\n\n");
         }
 
-        const guarded = applyPlausibilityGuard(row, matches, aiRow, forceRecalculate);
-        const finalGuarded = guardNoX84ImplausibleKiResult(row, guarded);
-        const finalGuardedCleaned = cleanRohrgrabenaushubTechnicalSource(row, finalGuarded);
+        const finalGuardedCleaned = cleanRohrgrabenaushubTechnicalSource(row, aiRow);
 
         kalkulationAiCache.set(cacheKey, finalGuardedCleaned);
         scheduleKalkulationAiCacheSave();
@@ -9580,19 +6745,27 @@ const technicalRecipeInput =
     }
   }
 
-  if (hasStrongDb) {
-      const dbRow = calcRuleRow(row, matches, "database");
-      const guardedDbRow = applyPlausibilityGuard(row, matches, dbRow, forceRecalculate);
-      kalkulationAiCache.set(cacheKey, guardedDbRow);
-      scheduleKalkulationAiCacheSave();
-      return guardedDbRow;
-    }
-
-  const ruleRow = calcRuleRow(row, matches, "rule-engine");
-    const guardedRuleRow = applyPlausibilityGuard(row, matches, ruleRow, forceRecalculate);
-    kalkulationAiCache.set(cacheKey, guardedRuleRow);
+  if (RLC_LEGACY_DATABASE_PRICE_ENABLED && hasStrongDb) {
+    const dbRow = calcRuleRow(row, matches, "database");
+    kalkulationAiCache.set(cacheKey, dbRow);
     scheduleKalkulationAiCacheSave();
-    return guardedRuleRow;
+    return dbRow;
+  }
+
+  if (RLC_LEGACY_RULE_ENGINE_PRICE_ENABLED) {
+    const ruleRow = calcRuleRow(row, matches, "rule-engine");
+    kalkulationAiCache.set(cacheKey, ruleRow);
+    scheduleKalkulationAiCacheSave();
+    return ruleRow;
+  }
+
+  const unresolvedRow = buildUnresolvedV2Row(
+    row,
+    "RLC v2 primary mode: Family Catalog v2 / Recipe / OpenAI konnten keinen belastbaren EP liefern. Legacy DB/v1/rule-engine wurden nur als Diagnosepfad beibehalten und nicht als Preisquelle verwendet."
+  );
+  kalkulationAiCache.set(cacheKey, unresolvedRow);
+  scheduleKalkulationAiCacheSave();
+  return unresolvedRow;
 }
 
 
@@ -9624,6 +6797,86 @@ function isValidLearningRow(row: any): boolean {
   return true;
 }
 
+
+function validateKiLearningBreakdown(row: any): {
+  valid: boolean;
+  reason: string;
+  ep: number;
+  breakdownTotal: number;
+  deltaPct: number;
+} {
+  const ep = n(
+    row?.finalUnitPrice ??
+    row?.rlcKiUnitPrice ??
+    row?.suggestedUnitPrice ??
+    row?.baseUnitPrice
+  );
+
+  const breakdown = Array.isArray(row?.priceBreakdown)
+    ? row.priceBreakdown
+    : [];
+
+  if (!(ep > 0)) {
+    return {
+      valid: false,
+      reason: "LEARNING_EP_MISSING",
+      ep,
+      breakdownTotal: 0,
+      deltaPct: 100,
+    };
+  }
+
+  /*
+   * Kein Breakdown = keine belastbare Urkalkulation.
+   * Solche Preise dürfen nicht als CompanyRecipe gelernt werden.
+   */
+  if (!breakdown.length) {
+    return {
+      valid: false,
+      reason: "LEARNING_BREAKDOWN_MISSING",
+      ep,
+      breakdownTotal: 0,
+      deltaPct: 100,
+    };
+  }
+
+  const breakdownTotal = round2(
+    breakdown.reduce(
+      (sum: number, line: any) => sum + n(line?.total),
+      0
+    )
+  );
+
+  if (!(breakdownTotal > 0)) {
+    return {
+      valid: false,
+      reason: "LEARNING_BREAKDOWN_EMPTY",
+      ep,
+      breakdownTotal,
+      deltaPct: 100,
+    };
+  }
+
+  const deltaPct = Math.abs(breakdownTotal - ep) / ep * 100;
+
+  /*
+   * Rundungsdifferenzen sind erlaubt.
+   * EP und Urkalkulation müssen aber dieselbe Kalkulation darstellen.
+   */
+  const tolerance = Math.max(0.02, ep * 0.02);
+  const valid = Math.abs(breakdownTotal - ep) <= tolerance;
+
+  return {
+    valid,
+    reason: valid
+      ? "OK"
+      : "LEARNING_EP_BREAKDOWN_MISMATCH",
+    ep: round2(ep),
+    breakdownTotal,
+    deltaPct: round2(deltaPct),
+  };
+}
+
 async function saveKiLearningRows(
   companyId: string,
   projectKey: string,
@@ -9639,13 +6892,24 @@ async function saveKiLearningRows(
       })
     : null;
 
-  let saved = 0;
-
-  for (const row of rows) {
+  async function processLearningRow(row: any): Promise<number> {
     const learningSource = s(row?.source);
-    if (learningSource.includes("rlc-autonomous-urkalkulation")) continue;
-    if (isStructuralTitleRow(row)) continue;
-    if (!isValidLearningRow(row)) continue;
+    if (learningSource.includes("rlc-autonomous-urkalkulation")) return 0;
+    if (isStructuralTitleRow(row)) return 0;
+    if (!isValidLearningRow(row)) return 0;
+
+    const learningBreakdownGate = validateKiLearningBreakdown(row);
+    if (!learningBreakdownGate.valid) {
+      console.warn("[RLC KI Learning BLOCKED]", {
+        posNr: s(row?.posNr),
+        kurztext: s(row?.kurztext),
+        reason: learningBreakdownGate.reason,
+        ep: learningBreakdownGate.ep,
+        breakdownTotal: learningBreakdownGate.breakdownTotal,
+        deltaPct: learningBreakdownGate.deltaPct,
+      });
+      return 0;
+    }
 
     const posNr = s(row.posNr);
     const kurztext = s(row.kurztext);
@@ -9653,7 +6917,7 @@ async function saveKiLearningRows(
     const einheit = s(row.einheit);
     const menge = n(row.menge);
     const ep = n(row.finalUnitPrice ?? row.suggestedUnitPrice ?? row.baseUnitPrice);
-    const gp = round2(ep * Math.max(1, menge));
+    const gp = round2(ep * Math.max(0, menge));
 
     const qualityGateStatus = "KI-Vorschlag";
 
@@ -9760,7 +7024,7 @@ async function saveKiLearningRows(
 
       if (existing.source === "x84-company-baseline") {
 
-        continue;
+        return 0;
 
       }
 
@@ -9776,7 +7040,7 @@ async function saveKiLearningRows(
         existingStatus === "Gesperrt" ||
         existingStatus === "Nicht verwenden"
       ) {
-        continue;
+        return 0;
       }
 
       await prisma.kalkulationsDbEntry.update({
@@ -9795,14 +7059,30 @@ async function saveKiLearningRows(
       });
     }
 
-    saved += 1;
+    return 1;
   }
 
-  return saved;
+  let nextLearningIndex = 0;
+  const learningConcurrency = Math.min(6, Math.max(1, rows.length));
+
+  async function learningWorker(): Promise<number> {
+    let workerSaved = 0;
+    while (nextLearningIndex < rows.length) {
+      const index = nextLearningIndex++;
+      workerSaved += await processLearningRow(rows[index]);
+    }
+    return workerSaved;
+  }
+
+  const savedByWorker = await Promise.all(
+    Array.from({ length: learningConcurrency }, () => learningWorker())
+  );
+
+  return savedByWorker.reduce((sum, value) => sum + value, 0);
 }
 
 
-function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
+export function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
   const groups = new Map<string, any[]>();
 
   for (const row of rows) {
@@ -9832,6 +7112,7 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
     totalSum: number;
     posList: string;
     label: string;
+    exactPositionDuplicate: boolean;
   }>();
 
   for (const [key, items] of groups.entries()) {
@@ -9858,12 +7139,19 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
       (isLinear && qtySum >= 5000 && totalSum >= 50000) ||
       totalSum >= 100000
     ) {
+      const posValues = items
+        .map((r) => s(r?.posNr || r?.position || r?.pos))
+        .filter(Boolean);
+      const exactPositionDuplicate =
+        posValues.length > 1 && new Set(posValues).size < posValues.length;
+
       duplicateKeys.set(key, {
         count: items.length,
         qtySum: round2(qtySum),
         totalSum: round2(totalSum),
-        posList: items.map((r) => s(r?.posNr || r?.position || r?.pos)).filter(Boolean).join(", "),
+        posList: posValues.join(", "),
         label: s(items[0]?.kurztext || items[0]?.shortText || items[0]?.text || "Position"),
+        exactPositionDuplicate,
       });
     }
   }
@@ -9909,13 +7197,10 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
       const warningText =
         `RLC Kleinteile/Zulagen-Guard: Position ist als Mehr-/Minderpreis, Zulage oder Zuschlag je ${unit} erkennbar. ` +
         `KI-/Bibliothekspreis ${ep} EUR/${unit}, Angebotsbasis ${offerEp} EUR/${unit}, Faktor ${round2(ep / offerEp)}. ` +
-        `Angebotsbasis wurde beibehalten; Position muss fachlich geprüft werden.`;
+        `Angebotsbasis dient nur als Benchmark; der RLC-EP wird nicht automatisch ersetzt. Position muss fachlich geprüft werden.`;
 
       return {
         ...row,
-        baseUnitPrice: offerEp,
-        suggestedUnitPrice: offerEp,
-        finalUnitPrice: offerEp,
         calculationStatus: "needs_review",
         riskLevel: "high",
         confidence: Math.min(n(row?.confidence, 0.5), 0.45),
@@ -9973,13 +7258,10 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
 
         const warningText =
           `RLC Angebotsbasis-Guard (${guardType}): KI-/Parser-EP ${ep} EUR/${unit}, Angebotsbasis ${offerEp} EUR/${unit}, Faktor ${factorAgainstOffer}, GP-Differenz ${gpDiffAgainstOffer} EUR. ` +
-          `Ohne echte Urkalkulation mit Projektdauer, Entfernung, Bauablauf, Geräten, Personal und Logistik darf RLC die Angebotsbasis nicht automatisch überschreiben. Angebotsbasis wurde beibehalten; Position bleibt prüfpflichtig.`;
+          `Die Angebotsbasis dient nur als Benchmark. Der RLC-EP wird nicht automatisch durch X84/Angebot ersetzt; Position bleibt prüfpflichtig.`;
 
         return {
           ...row,
-          baseUnitPrice: offerEp,
-          suggestedUnitPrice: offerEp,
-          finalUnitPrice: offerEp,
           calculationStatus: "needs_review",
           riskLevel: "high",
           confidence: Math.min(n(row?.confidence, 0.5), 0.45),
@@ -10032,9 +7314,16 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
 
     return {
       ...row,
-      calculationStatus: "needs_review",
-      riskLevel: "high",
-      confidence: Math.min(n(row?.confidence, 0.5), 0.45),
+      // Gleicher Text/EP in verschiedenen LV-Positionen ist bei wiederkehrenden
+      // Bauabschnitten normal. Nur identische Positionsnummern gelten als echter
+      // Import-/Cache-Duplikatfehler und dürfen Confidence/Risk verschlechtern.
+      ...(dup.exactPositionDuplicate
+        ? {
+            calculationStatus: "needs_review",
+            riskLevel: "high",
+            confidence: Math.min(n(row?.confidence, 0.5), 0.45),
+          }
+        : {}),
       warning: [
         s(row?.warning),
         warningText,
@@ -10044,7 +7333,8 @@ function applyDuplicateQuantityOutlierGuard(rows: any[]): any[] {
         warningText,
       ].filter(Boolean).join("\n\n"),
       duplicateQuantityGuard: {
-        applied: true,
+        applied: dup.exactPositionDuplicate,
+        informational: !dup.exactPositionDuplicate,
         count: dup.count,
         qtySum: dup.qtySum,
         totalSum: dup.totalSum,
@@ -10089,149 +7379,6 @@ function hasHistoricalOfferBaseline(row: any): boolean {
 
 
 
-function guardNoX84UnsafeOkResult(row: any, result: any) {
-  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
-    return result;
-  }
-
-  // RLC_V24_COMPANY_DB_EXACT_SKIP_NO_X84_GUARD
-  // Firmen-Datenbank-Exact-Match ist ein finaler Firmenwert.
-  // Er darf nicht durch No-X84 Guard, Technical Parser oder Market-Index überschrieben werden.
-  if (
-    s(result?.source) === "company-database-exact" ||
-    (result as any)?._rlcLockFinalPrice === true
-  ) {
-    return result;
-  }
-
-  if (hasHistoricalOfferBaseline(row)) return result;
-
-  const source = s(result?.source);
-  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
-
-  const status = s(result?.calculationStatus).toLowerCase();
-  const risk = s(result?.riskLevel).toLowerCase();
-
-  const qty = n(row?.menge ?? result?.menge);
-  const ep =
-    n(result?.finalUnitPrice) ||
-    n(result?.rlcKiUnitPrice) ||
-    n(result?.suggestedUnitPrice) ||
-    n(result?.unitPrice);
-  const gp = round2(ep * qty);
-
-  const unit = norm(row?.einheit ?? result?.einheit);
-  const text = norm([
-    row?.posNr,
-    row?.position,
-    row?.kurztext,
-    row?.langtext,
-    result?.kurztext,
-    result?.langtext,
-    result?.bauverfahren,
-    result?.leistungsart,
-    result?.aiReason,
-  ].join(" "));
-
-  const riskyByPattern =
-    /(mehr- oder minderpreis|mehr.*minderpreis|mehr-.*mindertiefe|fahrzeugkosten|werkstattwagen|pkw|tieflader|verrechnungssaetze|verrechnungssätze|zwischenplanum|kabelschutzrohr|schutzrohr|kabelleerrohr|kabellehrrohr|mikrokabelleerrohr|auffuellmaterial|auffüllmaterial|dokumentation|bestandszeichnung|bohrprotokoll|hausanschluss|kabelmuffen|isolierbinde|rohrabschluss|anschluss und verbindung|verlegung ortsnetzkabel|verlegung hausanschlussleitung|zulage.*grabenaushub|rohr-.*kabelgrabenaushub|erdleitung|einbinden.*kabelleerrohre|hinweisschilder|hinweissteine|messingquetsch|messingkupplung|passstuecke|paßstücke|formstueck|formstück|boegen|bögen|strassenkappe|straßenkappe|schachtabdeckung|dichtkappen|haube|flaechen auflockern|flächen auflockern|baeume faellen|bäume fällen|betonsockel|pumpensumpf|durchlass|motorflex|endstopfen|verzinkte fittings|zulage.*zulauf|zulage.*kruemmung|zulage.*krümmung|hdpe.*schutzrohr|hdpe.*rohre|weidezaun|runddraht|schmutzfaenger|schmutzfänger|stromantrag|stromaggregat|riesel|sand 0|schroppen|trassenwarnband|pumpenstunden|ringraumdichtung|ringraumdichtungen|einsteighilfe|asphalt trennen|warnanlage|zusaetzliche anreise|zusätzliche anreise|losflansch|statik|druckerhoehungsschacht|druckerhöhungsschacht|spuelen|spülen|entkeimung|doppelsteckmuffen|einzelzugabdichtung|edelstahl.*dichtung|strassenbauvlies|straßenbauvlies|erschwernis|verkehrssicherung|mineralbeton|sprengarbeiten|besucherinformation|betonit|bentonit|bauschild|anliegerverkehr|bauzeiten|baustelleneinrichtung|besprechungsraum|transport und montage|zuschlag fabrikat|mutterboden|bachquerung|fugenband|steuerung|ferwirktechnik|fernwirktechnik|feinplanie|systemdeckel|pilotbohrung|schutzmassnahme|schutzmaßnahme|zulage.*asphaltierung|abstimmung.*projektbeteiligten|be- und entlueftungsrohr|be- und entlüftungsrohr|zulage mid|wasserbausteine|statische berechnung|wurzelstock|entwaesserungsrinne|entwässerungsrinne|lehm.*pfeiler|grenzsteine|flaechen und wege|flächen und wege|aeste zurueckschneiden|äste zurückschneiden|baustellenkoordination|ueberfahrten|überfahrten|frostsicheres kiesmaterial|frostschutzkies|frostsicheres material|90 grad-bogen|stampfbetonpfeiler|abdeckplatte|baggerstunden|kompressorstunden|zaehlerplatz|zählerplatz|elektroverteilung|wartungs- und bedienungsanleitung|einsteigleiter)/i.test(text);
-
-  const riskyByScale =
-    ((/(m|lfm|meter)/i.test(unit) && qty >= 500 && ep > 25) ||
-     (/(kg)/i.test(unit) && qty >= 500 && ep > 8) ||
-     (/(cm)/i.test(unit) && ep > 50) ||
-     (gp > 25000 && (risk === "" || risk === "low" || risk === "medium")));
-
-  if ((riskyByPattern || riskyByScale) && (status === "" || status === "ok" || status === "warning") && (risk === "" || risk === "low" || risk === "medium")) {
-    const guarded = applyNoX84LinearPriceGuard({
-      textRaw: text,
-      unitRaw: unit,
-      mengeRaw: qty,
-      epRaw: ep,
-      hasRealX84: false,
-    });
-
-    const finalEp = guarded.applied ? round2(guarded.ep) : round2(ep);
-    const finalGp = round2(finalEp * qty);
-
-    return {
-      ...result,
-      baseUnitPrice: finalEp,
-      suggestedUnitPrice: finalEp,
-      finalUnitPrice: finalEp,
-      rlcKiUnitPrice: finalEp,
-      unitPrice: finalEp,
-      preis: finalEp,
-      totalNet: finalGp,
-      rlcKiTotal: finalGp,
-      gesamt: finalGp,
-      calculationStatus: "needs_review",
-      riskLevel: "high",
-      confidence: Math.min(n(result?.confidence, 0.5), 0.45),
-      warning: [
-        s(result?.warning),
-        "RLC No-X84 Outlier-Guard: Position ohne X84/Angebotsbasis darf nicht automatisch als sicher bewertet werden.",
-        guarded.applied ? guarded.warning : "",
-        `Menge ${round2(qty)} ${row?.einheit || result?.einheit || ""}, EP ${round2(finalEp)}, GP ${round2(finalGp)}.`,
-      ].filter(Boolean).join(" · "),
-      aiReason: [
-        s(result?.aiReason),
-        "RLC No-X84 Outlier-Guard: Ergebnis bleibt prüfpflichtig, weil keine historische Angebotsbasis vorhanden ist und Muster/Menge/Preis ein hohes Abweichungsrisiko zeigen.",
-        guarded.applied ? `RLC No-X84 Preisdeckel angewendet: ursprünglicher EP ${round2(ep)} -> geprüfter EP ${round2(finalEp)}.` : "",
-      ].filter(Boolean).join("\n\n"),
-    };
-  }
-
-  return result;
-}
-
-
-
-type NoX84CompanyCalibrationItem = {
-  posNr?: string;
-  match?: string;
-  unit?: string;
-  calibratedEp?: number;
-  title?: string;
-};
-
-let noX84CompanyCalibrationCache: NoX84CompanyCalibrationItem[] | null = null;
-
-function noX84NormText(value: any): string {
-  return String(value ?? "")
-    .toLowerCase()
-    .replace(/ä/g, "ae")
-    .replace(/ö/g, "oe")
-    .replace(/ü/g, "ue")
-    .replace(/ß/g, "ss")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function loadNoX84CompanyCalibration(): NoX84CompanyCalibrationItem[] {
-  if (noX84CompanyCalibrationCache) return noX84CompanyCalibrationCache;
-
-  const candidates = [
-    path.join(process.cwd(), "src/kalkulation/data/noX84CompanyCalibration.json"),
-    path.join(__dirname, "../kalkulation/data/noX84CompanyCalibration.json"),
-  ];
-
-  for (const file of candidates) {
-    try {
-      if (fs.existsSync(file)) {
-        const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
-        noX84CompanyCalibrationCache = Array.isArray(parsed) ? parsed : [];
-        return noX84CompanyCalibrationCache;
-      }
-    } catch (e) {
-      console.warn("[kalkulation.ki] noX84CompanyCalibration load failed", file, e);
-    }
-  }
-
-  noX84CompanyCalibrationCache = [];
-  return noX84CompanyCalibrationCache;
-}
 
 
 function rlcNoX84FamilyKey(textRaw: any): string {
@@ -10341,448 +7488,174 @@ function rlcNoX84CompanyCalibrationMismatch(row: any, result: any, hit: any): st
 }
 
 
-function applyNoX84CompanyCalibration(row: any, result: any) {
-  if (hasHistoricalOfferBaseline(row)) return result;
+export function applyRlcPriceEvidenceGate(row: any, result: any): any {
+  if (!result || typeof result !== "object") return result;
 
-  const source = s(result?.source);
-  if (!["technical-parser", "recipe", "rule-engine"].includes(source)) return result;
+  const finalEp =
+    n((result as any).rlcKiUnitPrice) ||
+    n((result as any).finalUnitPrice) ||
+    n((result as any).unitPrice) ||
+    n((result as any).preis);
 
-  const list = loadNoX84CompanyCalibration();
-  if (!list.length) return result;
+  const breakdown = Array.isArray((result as any).priceBreakdown)
+    ? (result as any).priceBreakdown
+    : [];
+  const breakdownEp = round2(
+    breakdown.reduce((sum: number, line: any) => sum + n(line?.total), 0)
+  );
 
-  const rowPos = s(row?.posNr || row?.position).replace(/^0+/, "");
-  const rowUnit = noX84NormText(row?.einheit || result?.einheit);
-  const rowText = noX84NormText([
-    row?.kurztext,
-    row?.langtext,
-    result?.kurztext,
-    result?.langtext,
-    result?.bauverfahren,
-    result?.leistungsart,
-  ].join(" "));
-
-  const hit = list.find((x) => {
-    const p = s(x.posNr).replace(/^0+/, "");
-    const u = noX84NormText(x.unit);
-    const m = noX84NormText(x.match || x.title);
-
-    const posOk = p && rowPos && p === rowPos;
-    const unitOk = !u || !rowUnit || u === rowUnit;
-    const textOk = m && (rowText.includes(m) || m.includes(rowText));
-
-    // Sicherheitsregel:
-    // Firmenkalibrierung aus alter X84 darf bei No-X84 zunächst NUR über exakte PosNr greifen.
-    // Textmatch wie "Zuschlag" ist zu gefährlich und hat Preise auf falsche Positionen übertragen.
-    if (posOk) return true;
-
-    return false;
-  });
-
-  const ep = n(hit?.calibratedEp);
-  const qty = n(row?.menge ?? result?.menge);
-
-  if (!hit || ep <= 0 || qty <= 0) return result;
-
-  const mismatchReason = rlcNoX84CompanyCalibrationMismatch(row, result, hit);
-  if (mismatchReason) {
+  if (finalEp <= 0 || breakdownEp <= 0) {
     return {
       ...result,
-      source: cleanRlcSourceFlags("company-calibration-blocked-by-family-mismatch"),
-      confidence: Math.min(n(result?.confidence, 0.5), 0.45),
-      riskLevel: "high",
+      priceEvidenceStatus: "missing-price-evidence",
       calculationStatus: "needs_review",
-      warning: [s(result?.warning), mismatchReason].filter(Boolean).join(" · "),
-      aiReason: [s(result?.aiReason), mismatchReason].filter(Boolean).join("\n\n"),
-      companyCalibrationBlocked: true,
-      companyCalibrationBlockReason: mismatchReason,
+      riskLevel: "high",
+      confidence: Math.min(n((result as any).confidence, 0.5), 0.4),
+      warning: [
+        s((result as any).warning),
+        "RLC Price-Evidence-Gate: finaler EP oder nachvollziehbarer Preisaufbau fehlt. Kein automatischer Preisentscheid."
+      ].filter(Boolean).join(" · ")
     };
   }
 
-  const total = round2(ep * qty);
+  const delta = round2(breakdownEp - finalEp);
+  const deltaPct = round2(Math.abs(delta) / Math.max(Math.abs(finalEp), Math.abs(breakdownEp), 0.01) * 100);
 
-  const noX84GuardedEp = applyNoX84LinearPriceGuard({
-    textRaw: `${row.kurztext || row.shortText || row.text || ""} ${row.langtext || ""}`,
-    unitRaw: row.einheit || row.unit,
-    mengeRaw: row.menge || row.quantity,
-    epRaw: ep,
-    hasRealX84:
-      Number((row as any).angebotUnitPrice || 0) > 0 ||
-      Number((row as any).angebotTotal || 0) > 0 ||
-      Number((row as any).originalPreKiPrice || 0) > 0 ||
-      Number((row as any).x84UnitPrice || 0) > 0 ||
-      String((row as any).gaebType || (row as any).importType || (row as any).importSource || "")
-        .toLowerCase()
-        .includes("x84"),
-  });
+  if (deltaPct <= 2) {
+    const evidenceText = s((result as any).warning) + " " + s((result as any).aiReason);
+    const hadStalePriceEvidencePenalty =
+      /RLC Price-Evidence-Gate/i.test(evidenceText) &&
+      n((result as any).confidence) <= 0.4 &&
+      s((result as any).riskLevel) === "high";
 
-  const noX84FinalEp = noX84GuardedEp.applied ? noX84GuardedEp.ep : round2(ep);
+    const hasIndependentReviewGuard =
+      /Family-Mismatch-Guard|No-X84 Outlier-Guard|Plausibilitätsstopp|Kleinteile\/Zulagen-Guard|Angebotsbasis-Guard|company-calibration-blocked|RLC Block\+Recalculate/i.test(evidenceText);
+
+    // Ein vom Family Catalog ausdrücklich gesetzter Prüfstatus bleibt bestehen.
+    // Diese Bereinigung betrifft nur alte Price-Evidence-Downgrades.
+    if (
+      hadStalePriceEvidencePenalty &&
+      !hasIndependentReviewGuard &&
+      s((result as any).calculationStatus) !== "needs_review"
+    ) {
+      const nativeRisk = riskFromText(
+        s((row as any).kurztext) + " " + s((row as any).langtext),
+        s((row as any).einheit),
+        n((row as any).menge)
+      );
+      const sourceRaw = s((result as any).source);
+      const confidenceSource: CalcSource =
+        sourceRaw.includes("database") ? "database" :
+        sourceRaw.includes("openai") ? "openai" :
+        "rule-engine";
+      const restoredConfidence = confidenceFrom(row as InputRow, nativeRisk, [], confidenceSource);
+      const restoredStatus =
+        nativeRisk === "high"
+          ? "needs_review"
+          : ((result as any).calculationStatus === "critical" ? "critical" : "ok");
+
+      return {
+        ...result,
+        priceEvidenceStatus: "breakdown-consistent",
+        priceEvidenceFinalEp: finalEp,
+        priceEvidenceBreakdownEp: breakdownEp,
+        priceEvidenceDeltaPct: deltaPct,
+        riskLevel: nativeRisk,
+        confidence: restoredConfidence,
+        calculationStatus: restoredStatus,
+        warning: cleanRlcWarningText(
+          s((result as any).warning)
+            .split(" · ")
+            .filter((part) => !/RLC Price-Evidence-Gate/i.test(part))
+            .join(" · ")
+        ),
+        aiReason: [
+          s((result as any).aiReason),
+          "RLC Price-Evidence-Recheck: finaler EP " + finalEp + " EUR und Preisaufbau " + breakdownEp + " EUR sind konsistent (" + deltaPct + " %). Ein früherer Price-Evidence-Downgrade wurde deshalb aufgehoben; fachliches Restrisiko bleibt " + nativeRisk + "."
+        ].filter(Boolean).join("\n\n")
+      };
+    }
+
+    return {
+      ...result,
+      priceEvidenceStatus: "breakdown-consistent",
+      priceEvidenceFinalEp: finalEp,
+      priceEvidenceBreakdownEp: breakdownEp,
+      priceEvidenceDeltaPct: deltaPct
+    };
+  }
 
   return {
     ...result,
-    source: cleanRlcSourceFlags("company-calibration"),
-    baseUnitPrice: noX84FinalEp,
-    suggestedUnitPrice: noX84FinalEp,
-    finalUnitPrice: noX84FinalEp,
-    rlcKiUnitPrice: round2(ep),
-    unitPrice: round2(ep),
-    preis: round2(ep),
-    totalNet: total,
-    rlcKiTotal: total,
-    gesamt: total,
-    confidence: Math.min(n(result?.confidence, 0.62), 0.62),
+    priceEvidenceStatus: "breakdown-mismatch",
+    priceEvidenceFinalEp: finalEp,
+    priceEvidenceBreakdownEp: breakdownEp,
+    priceEvidenceDeltaPct: deltaPct,
     calculationStatus: "needs_review",
     riskLevel: "high",
+    confidence: Math.min(n((result as any).confidence, 0.5), 0.4),
     warning: [
-      s(result?.warning),
-      "RLC No-X84 Company Calibration: Preis aus historischem Firmenwert + Preissteigerung abgeleitet.",
-      "Kein X84 im aktuellen Projekt vorhanden; Position bleibt prüfpflichtig.",
+      s((result as any).warning),
+      `RLC Price-Evidence-Gate: EP ${round2(finalEp)} stimmt nicht mit Preisaufbau ${round2(breakdownEp)} überein (${deltaPct} %). Preis nicht automatisch ändern.`
     ].filter(Boolean).join(" · "),
     aiReason: [
-      s(result?.aiReason),
-      `RLC No-X84 Company Calibration: Match ${hit.posNr || ""} / ${hit.title || hit.match || ""}. Kalibrierter EP: ${round2(ep)}.`,
-    ].filter(Boolean).join("\n\n"),
+      s((result as any).aiReason),
+      "RLC Price-Evidence-Gate blockiert die automatische Preisfreigabe, bis Quelle, Einheit und Urkalkulation konsistent sind."
+    ].filter(Boolean).join("\n\n")
   };
 }
 
+type X84BenchmarkResolution = {
+  unitPrice: number;
+  total: number;
+  quantity: number;
+  quality: "coherent" | "derived_from_total" | "unusable";
+  note: string;
+};
 
-function applyNoX84TechnicalUnitNormalizer(row: any, result: any) {
-  if (hasHistoricalOfferBaseline(row)) return result;
-
-  const source = s(result?.source);
-
-  const text = norm(
-    [
-      row?.posNr,
-      row?.position,
-      row?.kurztext,
-      row?.langtext,
-      result?.kurztext,
-      result?.langtext,
-      result?.bauverfahren,
-      result?.leistungsart,
-    ].join(" ")
+/**
+ * X84 è uno storico di confronto, mai un prezzo RLC. Gli import precedenti
+ * contengono casi in cui il GP è stato scritto anche nel campo EP: in quei
+ * casi il benchmark usa GP / quantità solo in memoria e lo rende esplicito.
+ */
+function resolveX84Benchmark(row: any, result?: any): X84BenchmarkResolution {
+  const quantity = n(row?.menge ?? row?.qty ?? row?.quantity ?? result?.menge ?? result?.quantity);
+  const rawUnitPrice = n(
+    row?.angebotUnitPrice ?? row?.x84UnitPrice ?? row?.x84Ep ??
+    result?.angebotUnitPrice ?? result?.x84UnitPrice
   );
+  const total = n(row?.angebotTotal ?? row?.x84Total ?? result?.angebotTotal ?? result?.x84Total);
 
-  const unit = norm(row?.einheit ?? result?.einheit);
-  const qty = n(row?.menge ?? result?.menge);
-
-  if (qty <= 0) return result;
-  if (!/(m|lfm|meter|kg)/i.test(unit)) return result;
-
-  const oldEp =
-    n(result?.finalUnitPrice) ||
-    n(result?.rlcKiUnitPrice) ||
-    n(result?.suggestedUnitPrice) ||
-    n(result?.unitPrice);
-
-  if (oldEp <= 0) return result;
-
-  let normalizedEp = 0;
-  let reason = "";
-
-  /*
-   * WICHTIG:
-   * Diese Werte sind keine endgültige Firmenkalkulation.
-   * Sie verhindern nur die falsche Umrechnung von St/Pauschal auf m/lfm/kg.
-   * Später werden sie durch echte Firmen-Erfahrungswerte + Urkalkulation ersetzt.
-   */
-  if (/(druckprobe|druckpruefung|druckprüfung)/i.test(text) && /(speedpipe|mikro|kabel|leer|pe|hdpe)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 0.25;
-    reason = "Druckprobe/Speedpipe wurde als Meterleistung normalisiert; St-/Pauschalansatz darf nicht als €/m übernommen werden.";
-  } else if (/(kalibrierung)/i.test(text) && /(speedpipe|mikro|kabel|leer)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 0.18;
-    reason = "Kalibrierung Speedpipe wurde als Meterleistung normalisiert.";
-  } else if (/(ortungsband|trassenwarnband|warnband)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 0.45;
-    reason = "Ortungs-/Warnband wurde als Meterleistung normalisiert.";
-  } else if (/(kanal.*spuelen|kanal.*spülen|spuelen|spülen)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 3.50;
-    reason = "Kanalspülung wurde als Meterleistung normalisiert.";
-  } else if (/(baustahl|bewehrung|stahl)/i.test(text) && /kg/i.test(unit)) {
-    normalizedEp = 2.80;
-    reason = "Baustahl kg wurde auf plausiblen kg-Ansatz normalisiert.";
-  } else if (/(wasserhaltung).*leitungsverlegung/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 8.50;
-    reason = "Wasserhaltung/Leitungsverlegung wurde als Meterleistung normalisiert.";
-  } else if (/(rohrumhuellung|rohrumhüllung|sandueberdeckung|sandüberdeckung|sohlbettung|splittueberdeckung|splittüberdeckung)/i.test(text) && /(hdpe|pe|dn|da|rohr)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 6.50;
-    reason = "Rohrbettung/Rohrumhüllung wurde als Meterleistung kalibriert; 14,50 €/m war für diese LV-Familie zu hoch.";
-  } else if (/(schutzmatte|rohrschutz|kabelschutzmatte)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 22.00;
-    reason = "Schutzmatte wurde als Meterleistung realistisch kalibriert; alte 6,50 €/m waren für Schutzmatten zu niedrig.";
-  } else if (/(drainageleitung|drainageleitungen)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 28.00;
-    reason = "Drainageleitung wurde als Meterleistung normalisiert; technischer Parser hatte falsche schwere Bauleistung übernommen.";
-  } else if (/(polyethylenrohr|pe-trinkwasserdruckrohr|pe 100|hdpe|pehd).*dn|dn.*(polyethylenrohr|pe-trinkwasserdruckrohr|pe 100|hdpe|pehd)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 38.00;
-    reason = "PE/HDPE-Rohr wurde als Meterleistung normalisiert; extrem hoher Parserwert wurde blockiert.";
-  } else if (/(polyethylenrohr|pe-rohr|pehd|pe-r\.weich)/i.test(text) && /(m|lfm|meter)/i.test(unit) && oldEp > 120) {
-    normalizedEp = 42.00;
-    reason = "PE-Rohr Meterposition wurde normalisiert; Parserwert war ohne X84 unplausibel hoch.";
-  } else if (/(forststrassen|forststraßen).*wiederherstellen/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 24.50;
-    reason = "Forststraßen-Wiederherstellung wurde aus historischer Plausibilität als Meterleistung normalisiert.";
-  } else if (/(gesondertes haufwerk|zulage.*haufwerk)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    normalizedEp = 12.50;
-    reason = "Zulage Haufwerk wurde als Meter-Zulage normalisiert; technischer Parserwert war zu hoch.";
-  } else if (/(flaechen auflockern|flächen auflockern)/i.test(text) && /(m²|m2|qm)/i.test(unit)) {
-    normalizedEp = 2.50;
-    reason = "Flächen auflockern wurde als leichte Flächenleistung normalisiert.";
-  } else if (/(kernbohrung|kernbohrungen)/i.test(text) && /cm/i.test(unit) && oldEp > 100) {
-    normalizedEp = 18.00;
-    reason = "Kernbohrung in cm wurde normalisiert; Parserwert €/cm war unplausibel.";
-  } else if (/(zulage baugrubenaushub|baugrubenaushub)/i.test(text) && /(m³|m3|cbm)/i.test(unit) && oldEp > 150) {
-    normalizedEp = 85.00;
-    reason = "Baugrubenaushub wurde auf plausiblen m³-Ansatz normalisiert.";
+  if (quantity <= 0 || (rawUnitPrice <= 0 && total <= 0)) {
+    return { unitPrice: 0, total: 0, quantity, quality: "unusable", note: "X84 ohne verwertbare Menge bzw. Preisbasis." };
   }
 
-  if (normalizedEp <= 0) return result;
+  if (rawUnitPrice > 0 && total > 0) {
+    const expected = rawUnitPrice * quantity;
+    const tolerance = Math.max(0.02, Math.abs(expected) * 0.005);
+    if (Math.abs(expected - total) <= tolerance) {
+      return { unitPrice: rawUnitPrice, total, quantity, quality: "coherent", note: "X84-EP und X84-GP sind mengenlogisch kohärent." };
+    }
+    if (quantity > 0) {
+      return {
+        unitPrice: round2(total / quantity), total, quantity, quality: "derived_from_total",
+        note: "X84-EP ist inkohärent zu Menge und GP; Benchmark-EP nur aus X84-GP / Menge abgeleitet. RLC-Preis unverändert."
+      };
+    }
+  }
 
-  normalizedEp = rlcNoX84CalibrationFloor(row, normalizedEp);
+  if (rawUnitPrice > 0 && total <= 0) {
+    return { unitPrice: rawUnitPrice, total: round2(rawUnitPrice * quantity), quantity, quality: "unusable", note: "X84-GP fehlt; Benchmark nicht freigabefähig." };
+  }
 
-  if (oldEp <= normalizedEp * 2) return result;
-
-  const total = round2(normalizedEp * qty);
-
-  const noX84GuardedNormalizedEp = applyNoX84LinearPriceGuard({
-    textRaw: `${row.kurztext || row.shortText || row.text || ""} ${row.langtext || ""}`,
-    unitRaw: row.einheit || row.unit,
-    mengeRaw: row.menge || row.quantity,
-    epRaw: normalizedEp,
-    hasRealX84:
-      Number((row as any).angebotUnitPrice || 0) > 0 ||
-      Number((row as any).angebotTotal || 0) > 0 ||
-      Number((row as any).originalPreKiPrice || 0) > 0 ||
-      Number((row as any).x84UnitPrice || 0) > 0 ||
-      String((row as any).gaebType || (row as any).importType || (row as any).importSource || "")
-        .toLowerCase()
-        .includes("x84"),
-  });
-
-  const noX84FinalNormalizedEp = noX84GuardedNormalizedEp.applied
-    ? noX84GuardedNormalizedEp.ep
-    : round2(normalizedEp);
-
-  return {
-    ...result,
-    baseUnitPrice: noX84FinalNormalizedEp,
-    suggestedUnitPrice: noX84FinalNormalizedEp,
-    finalUnitPrice: noX84FinalNormalizedEp,
-    rlcKiUnitPrice: round2(normalizedEp),
-    unitPrice: round2(normalizedEp),
-    preis: round2(normalizedEp),
-    totalNet: total,
-    rlcKiTotal: total,
-    gesamt: total,
-    confidence: Math.min(n(result?.confidence, 0.55), 0.55),
-    calculationStatus: "needs_review",
-    riskLevel: "high",
-    warning: [
-      s(result?.warning),
-      "RLC No-X84 Unit-Normalisierung: technischer St-/Pauschalansatz wurde nicht als EP der LV-Einheit übernommen.",
-      reason,
-      `Alter EP ${round2(oldEp)} wurde auf ${round2(normalizedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " normalisiert.",
-    ].filter(Boolean).join(" · "),
-    aiReason: [
-      s(result?.aiReason),
-      "RLC No-X84 Technical Unit Normalizer: Ohne X84/Angebotsbasis wurde eine offensichtliche Einheitenverwechslung korrigiert. Ergebnis bleibt prüfpflichtig.",
-    ].filter(Boolean).join("\n\n"),
-  };
+  return { unitPrice: 0, total: 0, quantity, quality: "unusable", note: "X84-Benchmark nicht verwertbar." };
 }
 
-
-
-
-function applyRlcProjectOutlierFinalOverride(row: any, result: any): any {
+export function applyRlcX84BenchmarkLearningSignal(row: any, result: any): any {
   if (!result || typeof result !== "object") return result;
 
-  const unit = norm(s((row as any)?.einheit || (result as any)?.einheit));
-  const rowNorm = norm([
-    s((row as any)?.posNr),
-    s((row as any)?.kurztext),
-    s((row as any)?.langtext),
-    s((result as any)?.kurztext),
-    s((result as any)?.langtext),
-  ].filter(Boolean).join(" "));
-
-  const qty = n((row as any)?.menge ?? (row as any)?.quantity ?? (result as any)?.menge ?? (result as any)?.quantity);
-  if (qty <= 0) return result;
-
-  let ep = 0;
-  let source = "";
-  let reason = "";
-
-  // RLC V35: Rest-Outlier nur über exakte Positionsnummern.
-  const posNrExact = s((row as any)?.posNr || (result as any)?.posNr).trim();
-
-  if (posNrExact === "130") {
-    ep = 29.15;
-    source = "rlc-final-override-pos-130-hdpe-da180-v35";
-    reason = "RLC V35 Final Override: Pos. 130 HDPE-Rohre 180 x 16,4 mm auf 29,15 €/m gesetzt.";
-  } else if (posNrExact === "256") {
-    ep = 25.0;
-    source = "rlc-final-override-pos-256-schutzmatte-v35";
-    reason = "RLC V35 Final Override: Pos. 256 Schutzmatte PE DN50/DA63 auf 25,00 €/lfm gesetzt.";
-  } else if (posNrExact === "158") {
-    ep = 2790;
-    source = "rlc-final-override-pos-158-mid-v35";
-    reason = "RLC V35 Final Override: Pos. 158 magnetisch induktiver Durchflussmesser auf 2790 €/St gesetzt.";
-  } else if (posNrExact === "155") {
-    ep = 9000;
-    source = "rlc-final-override-pos-155-dps-v35";
-    reason = "RLC V35 Final Override: Pos. 155 Schachtabdeckung DPS auf 9000 €/St gesetzt.";
-  } else if (posNrExact === "111") {
-    ep = 2.1;
-    source = "rlc-final-override-pos-111-wasserhaltung-v35";
-    reason = "RLC V35 Final Override: Pos. 111 Wasserhaltung Leitungsverlegung auf 2,10 €/m gesetzt.";
-  } else if (posNrExact === "064") {
-    ep = 17.0;
-    source = "rlc-final-override-pos-064-ads-ac11-v35";
-    reason = "RLC V35 Final Override: Pos. 064 ADS AC 11 DN Straße auf 17,00 €/m² gesetzt.";
-  } else if (posNrExact === "281") {
-    ep = 6.5;
-    source = "rlc-final-override-pos-281-sohlbettung-v35";
-    reason = "RLC V35 Final Override: Pos. 281 Sohlbettung GGG DN80 auf 6,50 €/lfm gesetzt.";
-  }
-
-  if (
-    /^(m|lfm|meter)$/.test(unit) &&
-    /(forststraßen wiederherstellen|forststrassen wiederherstellen|kiesstraßen|kiesstrassen)/.test(rowNorm) &&
-    !/zulage|wanderweg/.test(rowNorm)
-  ) {
-    ep = 24.5;
-    source = "rlc-final-override-forststrasse-v31";
-    reason = "RLC V31 Final Override: Forst-/Kiesstraße wiederherstellen auf 24,50 €/m gesetzt.";
-  } else if (/^(m2|m²|qm|quadratmeter)$/.test(unit) && /(flächen und wege wiederherstellen|flaechen und wege wiederherstellen|bindekies|kleinflächen|kleinflaechen|almen)/.test(rowNorm)) {
-    ep = 14.5;
-    source = "rlc-final-override-flaechen-wege-v31";
-    reason = "RLC V31 Final Override: Flächen/Wege mit Bindekies auf 14,50 €/m² gesetzt.";
-  } else if (
-    /^(st|stk|stück|stueck)$/.test(unit) &&
-    /(gußeiserne schachtabdeckung|gusseiserne schachtabdeckung|schachtabdeckung.*klasse\s*b|klasse\s*b)/.test(rowNorm) &&
-    !/(dps|klasse\s*d|pp-schacht|b125|v2a|edelstahl|1000\s*x\s*1000|gasdruckfeder|tagwasserdicht)/.test(rowNorm)
-  ) {
-    ep = 200;
-    source = "rlc-final-override-schachtabdeckung-klasse-b-v31";
-    reason = "RLC V31 Final Override: Schachtabdeckung Klasse B auf 200 €/St gesetzt.";
-  } else if (/^(st|stk|stück|stueck)$/.test(unit) && /(betonsockel.*c\s*25\/30|betonsockel)/.test(rowNorm) && /(2,300|2\.300|0,4|0\.4|1,5|1\.5|apparateschrank|leerrohre\s*dn\s*100)/.test(rowNorm)) {
-    ep = 1200;
-    source = "rlc-final-override-betonsockel-gross-v31";
-    reason = "RLC V31 Final Override: großer Betonsockel C25/30 auf 1200 €/St gesetzt.";
-  } else if (/^(st|stk|stück|stueck)$/.test(unit) && /(zuschlag.*elektroverteilung|elektroverteilung|notstromeinspeisung|netztrennschalter|schaltschrank)/.test(rowNorm)) {
-    ep = 770;
-    source = "rlc-final-override-elektroverteilung-v31";
-    reason = "RLC V31 Final Override: Zuschlag Elektroverteilung auf 770 €/St gesetzt.";
-  } else if (
-    /^(st|stk|stück|stueck)$/.test(unit) &&
-    /(überfahrten|ueberfahrten|brückenklasse\s*30|brueckenklasse\s*30|30\s*t|30\s*to|schrammbord|geländer|gelaender)/.test(rowNorm) &&
-    !/(pkw|personenwagen)/.test(rowNorm)
-  ) {
-    ep = 300;
-    source = "rlc-final-override-ueberfahrt-30t-v31";
-    reason = "RLC V31 Final Override: Überfahrt 30 t auf 300 €/St gesetzt.";
-  } else if (
-    /^(lfm|m|meter)$/.test(unit) &&
-    /(mittelspannungskabel|na2xs|12\/20kv|12\s*20kv)/.test(rowNorm) &&
-    !/(druckprobe|speedpipe|kalibrierung)/.test(rowNorm)
-  ) {
-    ep = 8.1;
-    source = "rlc-final-override-mittelspannungskabel-v31";
-    reason = "RLC V31 Final Override: Mittelspannungskabel-Verlegung auf 8,10 €/lfm gesetzt.";
-  } else if (
-    /^(m|lfm|meter)$/.test(unit) &&
-    /(hdpe.*da\s*63|pe.*da\s*63)/.test(rowNorm) &&
-    !/(da\s*90|da\s*180|dn\s*180|schutzmatte|sandüberdeckung|sandueberdeckung|sohlbettung|pilotbohrung|druckprobe|speedpipe)/.test(rowNorm)
-  ) {
-    ep = 5.8;
-    source = "rlc-final-override-hdpe-da63-pn16-v31";
-    reason = "RLC V31 Final Override: HDPE DA63 PN16 auf 5,80 €/m gesetzt.";
-  }
-
-  // RLC V36: exakte Positionsnummern müssen ganz am Ende nochmals gewinnen,
-  // weil breite V31-Regeln z.B. Pos. 158 sonst wieder auf Elektroverteilung 770 setzen.
-  const posNrFinal = s((row as any)?.posNr || (result as any)?.posNr).trim();
-
-  if (posNrFinal === "130") {
-    ep = 29.15;
-    source = "rlc-final-override-pos-130-hdpe-da180-v36";
-    reason = "RLC V36 Final Reapply: Pos. 130 HDPE-Rohre 180 x 16,4 mm auf 29,15 €/m gesetzt.";
-  } else if (posNrFinal === "256") {
-    ep = 25.0;
-    source = "rlc-final-override-pos-256-schutzmatte-v36";
-    reason = "RLC V36 Final Reapply: Pos. 256 Schutzmatte PE DN50/DA63 auf 25,00 €/lfm gesetzt.";
-  } else if (posNrFinal === "158") {
-    ep = 2790;
-    source = "rlc-final-override-pos-158-mid-v36";
-    reason = "RLC V36 Final Reapply: Pos. 158 magnetisch induktiver Durchflussmesser auf 2790 €/St gesetzt.";
-  } else if (posNrFinal === "155") {
-    ep = 9000;
-    source = "rlc-final-override-pos-155-dps-v36";
-    reason = "RLC V36 Final Reapply: Pos. 155 Schachtabdeckung DPS auf 9000 €/St gesetzt.";
-  } else if (posNrFinal === "111") {
-    ep = 2.1;
-    source = "rlc-final-override-pos-111-wasserhaltung-v36";
-    reason = "RLC V36 Final Reapply: Pos. 111 Wasserhaltung Leitungsverlegung auf 2,10 €/m gesetzt.";
-  } else if (posNrFinal === "064") {
-    ep = 17.0;
-    source = "rlc-final-override-pos-064-ads-ac11-v36";
-    reason = "RLC V36 Final Reapply: Pos. 064 ADS AC 11 DN Straße auf 17,00 €/m² gesetzt.";
-  } else if (posNrFinal === "281") {
-    ep = 6.5;
-    source = "rlc-final-override-pos-281-sohlbettung-v36";
-    reason = "RLC V36 Final Reapply: Pos. 281 Sohlbettung GGG DN80 auf 6,50 €/lfm gesetzt.";
-  }
-
-  // RLC V36: exakte Positionsnummern gewinnen ganz am Ende.
-  // Wichtig: X84 ist Benchmark/Lernsignal, aber diese Overrides korrigieren nur bekannte Fehlklassifizierungen.
-
-  if (posNrFinal === "158") {
-    ep = 2790;
-    source = "rlc-final-override-pos-158-mid-v36";
-    reason = "RLC V36 Final Reapply: Pos. 158 magnetisch induktiver Durchflussmesser auf 2790 €/St gesetzt; falsche Elektroverteilung-Klassifizierung blockiert.";
-  }
-
-  if (ep <= 0) return result;
-
-  const total = round2(ep * qty);
-
-  return {
-    ...result,
-    baseUnitPrice: ep,
-    suggestedUnitPrice: ep,
-    finalUnitPrice: ep,
-    rlcKiUnitPrice: ep,
-    unitPrice: ep,
-    preis: ep,
-    totalNet: total,
-    rlcKiTotal: total,
-    gesamt: total,
-    totalPrice: total,
-    source,
-    riskLevel: "high",
-    calculationStatus: "needs_review",
-    recalculatedAfterBlock: true,
-    recalculatedUnitPrice: ep,
-    recalculatedTotalNet: total,
-    recalculationSource: source,
-    familyFallbackApplied: true,
-    familyFallbackReason: reason,
-    warning: [s((result as any)?.warning), reason].filter(Boolean).join(" · "),
-    aiReason: [s((result as any)?.aiReason), reason].filter(Boolean).join("\n\n"),
-  };
-}
-
-
-
-function applyRlcX84BenchmarkLearningSignal(row: any, result: any): any {
-  if (!result || typeof result !== "object") return result;
-
-  const qty = n(
-    (row as any)?.menge ??
-    (row as any)?.quantity ??
-    (result as any)?.menge ??
-    (result as any)?.quantity
-  );
+  const benchmark = resolveX84Benchmark(row, result);
+  const qty = benchmark.quantity;
 
   const rlcEp = n(
     (result as any)?.rlcKiUnitPrice ??
@@ -10790,18 +7663,11 @@ function applyRlcX84BenchmarkLearningSignal(row: any, result: any): any {
     (result as any)?.unitPrice ??
     (result as any)?.preis
   );
+  const x84Ep = benchmark.unitPrice;
 
-  const x84Ep = n(
-    (row as any)?.x84UnitPrice ??
-    (row as any)?.angebotUnitPrice ??
-    (row as any)?.originalPreKiPrice ??
-    (row as any)?.x84Ep ??
-    (row as any)?.originalUnitPrice
-  );
+  if (benchmark.quality === "unusable" || qty <= 0 || rlcEp <= 0 || x84Ep <= 0) return result;
 
-  if (qty <= 0 || rlcEp <= 0 || x84Ep <= 0) return result;
-
-  const x84Gp = round2(x84Ep * qty);
+  const x84Gp = benchmark.total || round2(x84Ep * qty);
   const rlcGp = round2(rlcEp * qty);
   const diffGp = round2(rlcGp - x84Gp);
   const diffPct = round2(((rlcEp - x84Ep) / x84Ep) * 100);
@@ -10831,6 +7697,9 @@ function applyRlcX84BenchmarkLearningSignal(row: any, result: any): any {
 
     x84BenchmarkEp: x84Ep,
     x84BenchmarkGp: x84Gp,
+    x84BenchmarkQuality: benchmark.quality,
+    x84BenchmarkDerived: benchmark.quality === "derived_from_total",
+    x84BenchmarkIntegrityNote: benchmark.note,
     x84BenchmarkDiffPct: diffPct,
     x84BenchmarkDiffGp: diffGp,
     x84BenchmarkStatus: status,
@@ -10842,839 +7711,11 @@ function applyRlcX84BenchmarkLearningSignal(row: any, result: any): any {
 }
 
 
-function applyRlcFinalSuchschlitzGuard(row: any, result: any) {
-  const rawText = String(
-    [
-      row?.posNr,
-      row?.positionNumber,
-      row?.kurztext,
-      row?.shortText,
-      row?.langtext,
-      row?.longText,
-      result?.kurztext,
-      result?.shortText,
-      result?.langtext,
-      result?.longText,
-    ]
-      .filter(Boolean)
-      .join(" ")
-  ).toLowerCase();
-
-  const unit = String(row?.einheit ?? row?.unit ?? result?.einheit ?? result?.unit ?? "").toLowerCase();
-  const isM3 = unit === "m³" || unit === "m3" || unit === "cbm";
-
-  if (!isM3 || !/suchschlitz herstellen/.test(rawText)) {
-    return result;
-  }
-
-  const qtyRaw = row?.menge ?? row?.quantity ?? result?.menge ?? result?.quantity ?? 1;
-  const qty = Number(String(qtyRaw).replace(",", ".")) || 1;
-  const ep = 55.04;
-  const gp = Number((qty * ep).toFixed(2));
-
-  return {
-    ...result,
-    source: cleanRlcSourceFlags(appendUniqueSourceFlag(result?.source || "rule-engine", "no-x84-family-guard")),
-    suggestedUnitPrice: ep,
-    finalUnitPrice: ep,
-    rlcKiUnitPrice: ep,
-    unitPriceNet: ep,
-    baseUnitPrice: ep,
-    totalNet: gp,
-    rlcKiTotal: gp,
-    calculationStatus: "ok",
-    riskLevel: "low",
-    warning: [
-      String(result?.warning || "").trim(),
-      "RLC V25 Final Guard: Suchschlitz herstellen m³ plausibilisiert."
-    ].filter(Boolean).join(" · "),
-  };
-}
-
-
-function guardNoX84ImplausibleKiResult(row: any, result: any) {
-  const forstRowText = norm([
-    (row as any)?.posNr,
-    (row as any)?.kurztext,
-    (row as any)?.langtext,
-    (row as any)?.text,
-  ].join(" "));
-
-  const forstSource = s((result as any)?.source);
-
-  if (
-    forstSource === "technical-parser" &&
-    /forststra[sß]e|forststrasse|forststraßen|forststrassen/.test(forstRowText)
-  ) {
-    const ep = 35;
-    const qty = n(
-      (row as any).menge ??
-      (row as any).quantity ??
-      (result as any).menge ??
-      (result as any).quantity
-    );
-
-    const total = ep > 0 && qty > 0
-      ? round2(ep * qty)
-      : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
-
-    const note =
-      "RLC Source-Cleanup: Forststraße wiederherstellen wurde als eigene technische Position erkannt. " +
-      "Falsche Firmenkalibrierung/technical-parser-Basis wurde durch prüfpflichtigen Forststraßen-Fallback ersetzt.";
-
-    return {
-      ...result,
-      source: cleanRlcSourceFlags("rlc-family-fallback-forststrasse-recalculated"),
-      confidence: Math.min(n((result as any).confidence, 0.5), 0.52),
-      riskLevel: "high",
-      calculationStatus: "needs_review",
-      suggestedUnitPrice: ep,
-      finalUnitPrice: ep,
-      baseUnitPrice: ep,
-      rlcKiUnitPrice: ep,
-      unitPrice: ep,
-      preis: ep,
-      totalNet: total,
-      rlcKiTotal: total,
-      gesamt: total,
-      totalPrice: total,
-      warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
-      aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
-      familyFallbackApplied: true,
-      familyFallbackReason: note,
-      recalculatedAfterBlock: true,
-      recalculatedUnitPrice: ep,
-      recalculatedTotalNet: total,
-      recalculationSource: "rlc-family-fallback-forststrasse",
-    };
-  }
-
-
-  const guardRowText = norm([
-    (row as any)?.posNr,
-    (row as any)?.kurztext,
-    (row as any)?.langtext,
-    (row as any)?.text,
-  ].join(" "));
-
-  const guardSource = s((result as any)?.source);
-
-  if (
-    guardSource === "technical-parser" &&
-    /rohrgrabenaushub|zuschlag.*rohrgrabenaushub|rohrgrabenaushub.*bd-kl|bodenklasse|bd-kl/.test(guardRowText)
-  ) {
-    const ep = n(
-      (result as any).finalUnitPrice ??
-      (result as any).rlcKiUnitPrice ??
-      (result as any).unitPrice ??
-      (result as any).preis
-    );
-
-    const qty = n(
-      (row as any).menge ??
-      (row as any).quantity ??
-      (result as any).menge ??
-      (result as any).quantity
-    );
-
-    const total = ep > 0 && qty > 0
-      ? round2(ep * qty)
-      : n((result as any).totalNet ?? (result as any).gesamt ?? (result as any).totalPrice);
-
-        const forcedRohrgrabenEp =
-      /zuschlag.*rohrgrabenaushub.*(bd-kl|bodenklasse).*7|rohrgrabenaushub.*(bd-kl|bodenklasse).*7/.test(guardRowText)
-        ? 34.52
-        : /rohrgrabenaushub.*(bd-kl|bodenklasse).*3.*5|bd-kl\.\s*3\s*-\s*5|bodenklasse\s*3\s*bis\s*5/.test(guardRowText)
-          ? 35.10
-          : ep;
-
-    const finalEp = forcedRohrgrabenEp > 0 ? forcedRohrgrabenEp : ep;
-    const finalTotal = finalEp > 0 && qty > 0
-      ? round2(finalEp * qty)
-      : total;
-
-const note =
-      "RLC Source-Cleanup: Rohrgrabenaushub/Zuschlag wurde als technische Aushubposition erkannt. " +
-      "Source wurde von technical-parser auf prüfpflichtige Aushub-Kalkulation umgestellt.";
-
-    return {
-      ...result,
-      source: cleanRlcSourceFlags("technical-parser-rohrgrabenaushub-cleaned"),
-      confidence: Math.min(n((result as any).confidence, 0.5), 0.62),
-      riskLevel: "high",
-      calculationStatus: "needs_review",
-      finalUnitPrice: round2(finalEp),
-      suggestedUnitPrice: round2(finalEp),
-      baseUnitPrice: round2(finalEp),
-      rlcKiUnitPrice: round2(finalEp),
-      unitPrice: round2(finalEp),
-      preis: round2(finalEp),
-      totalNet: finalTotal,
-      rlcKiTotal: finalTotal,
-      gesamt: finalTotal,
-      totalPrice: finalTotal,
-      warning: [s((result as any).warning), note].filter(Boolean).join(" · "),
-      aiReason: [s((result as any).aiReason), note].filter(Boolean).join("\n\n"),
-      sourceCleanupApplied: true,
-      sourceCleanupReason: note,
-    };
-  }
-
-
-  if ((result as any)?.familyFallbackApplied === true || s((result as any)?.source).includes("rlc-family-fallback-")) {
-    return result;
-  }
-
-  if (hasHistoricalOfferBaseline(row)) return result;
-
-  const source = s(result?.source);
-
-  const text = norm(
-    [
-      row?.posNr,
-      row?.position,
-      row?.kurztext,
-      row?.langtext,
-      result?.kurztext,
-      result?.langtext,
-    ].join(" ")
-  );
-
-  const unit = norm(row?.einheit ?? result?.einheit);
-  const qty = n(row?.menge ?? result?.menge);
-  const ep =
-    n(result?.finalUnitPrice) ||
-    n(result?.rlcKiUnitPrice) ||
-    n(result?.suggestedUnitPrice) ||
-    n(result?.unitPrice);
-
-  const directPschText = norm([
-    row?.posNr,
-    row?.position,
-    row?.kurztext,
-    row?.shortText,
-    row?.text,
-    row?.langtext,
-  ].join(" "));
-
-  const rowUnitForPsch = norm(row?.einheit ?? row?.unit ?? result?.einheit);
-  const rowQtyForPsch = n(row?.menge ?? result?.menge, 1);
-  const isStrictPschUnit = /(psch|pausch)/.test(rowUnitForPsch);
-  const isSmallPschQty = rowQtyForPsch > 0 && rowQtyForPsch <= 2;
-
-  const directPschEp =
-    isStrictPschUnit &&
-    isSmallPschQty &&
-    /baustelleneinrichtung.*herstellen.*vorhalten.*betreiben/.test(directPschText) &&
-    !/(abbauen|räumen|raeumen)/.test(directPschText)
-      ? 85000
-      : isStrictPschUnit &&
-        isSmallPschQty &&
-        /erschwernis.*trasse.*steigen/.test(directPschText)
-        ? 55000
-        : 0;
-
-  let directLinearEp = 0;
-  let directLinearReason = "";
-
-  if (/schutzmatte|rohrschutz/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 22.00;
-    directLinearReason = "RLC Autonomous Guard V10 FIX: Schutzmatte/Rohrschutz vorrangig als Meterleistung kalibriert.";
-  } else if (/mikrokabelleerrohrverbund|kabelleerrohr|kabelschutzrohr/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = /mikrokabel/.test(directPschText) ? 4.80 : 4.50;
-    directLinearReason = "RLC Autonomous Guard V10 FIX: Kabel-/Mikro-Leerrohr als Meterleistung kalibriert.";
-  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 45.00;
-    directLinearReason = "RLC Autonomous Guard V10 FIX: Bettungssand als m³-Material inkl. Einbau plausibilisiert.";
-  } else if (/bettungssand/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 6.50;
-    directLinearReason = "RLC Autonomous Guard V10 FIX: Bettungssand als Meteransatz plausibilisiert.";
-  } else if (/schichtenverbund|haftkleber|bitumenemulsion/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
-    directLinearEp = /(m2|m²|qm)/.test(unit) ? 0.85 : 4.50;
-    directLinearReason = "RLC Calibration Guard V9: Schichtenverbund/Zulage ohne X84 als leichte Nebenleistung kalibriert.";
-  } else if (/losflansch/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
-    directLinearEp = 250.00;
-    directLinearReason = "RLC Calibration Guard V9: Losflansch ohne X84 auf realistischen Stückpreis kalibriert.";
-  } else if (/handschachtung|handschacht/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 180.00;
-    directLinearReason = "RLC Calibration Guard V9: Handschachtung ohne X84 auf realistischen m³-Ansatz kalibriert.";
-  } else if (/ringraumdichtung/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
-    directLinearEp = 450.00;
-    directLinearReason = "RLC Calibration Guard V9: Ringraumdichtung ohne X84 auf realistischen Stückpreis kalibriert.";
-  } else if (/hausanschluss.*lwl|lwl.*hausanschluss/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
-    directLinearEp = 1200.00;
-    directLinearReason = "RLC Calibration Guard V9: LWL-Hausanschluss ohne X84 auf prüfpflichtigen Stückansatz kalibriert.";
-  } else if (/spülen|spuelen|entkeimung/.test(directPschText) && /st|stk|stück|stueck/.test(unit)) {
-    directLinearEp = 650.00;
-    directLinearReason = "RLC Calibration Guard V9: Spülen/Entkeimung als Stückposition ohne X84 kalibriert.";
-  } else if (/(verlegung mittelspannungskabel|verlegung ortsnetzkabel)/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 8.00;
-    directLinearReason = "RLC Calibration Guard V8: Kabelverlegung als reine Meterposition kalibriert.";
-  } else if (/zwischenplanum/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 0.90;
-    directLinearReason = "RLC Calibration Guard V8: Zwischenplanum als leichte Zuschlagsposition kalibriert.";
-  } else if (/(kalibrierung).*speedpipe/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 0.18;
-    directLinearReason = "RLC Calibration Guard V8: Kalibrierung Speedpipe als Meter-Prüfleistung kalibriert.";
-  } else if (/(druckprobe).*speedpipe/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 0.25;
-    directLinearReason = "RLC Calibration Guard V8: Druckprobe Speedpipe als Meter-Prüfleistung kalibriert.";
-  } else if (/zulage abtrag/.test(directPschText) && /(m2|m²|qm)/.test(unit)) {
-    directLinearEp = 5.00;
-    directLinearReason = "RLC Calibration Guard V8: Zulage Abtrag als leichte Flächenzulage kalibriert.";
-  } else if (/zuschlag.*rueckverfuellung|zuschlag.*rückverfüllung/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 6.50;
-    directLinearReason = "RLC Calibration Guard V8: Zuschlag Rückverfüllung als Meterzuschlag kalibriert.";
-  } else if (/rohrumhuellung.*sand.*hdpe.*da 50|rohrumhüllung.*sand.*hdpe.*da 50/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 1.90;
-    directLinearReason = "RLC Calibration Guard V8: Rohrumhüllung Sand HDPE DA50 auf realistischen Meteransatz kalibriert.";
-  } else if (/lwl.*miko.*kabel|lwl.*mikro.*kabel/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 1.50;
-    directLinearReason = "RLC Calibration Guard V8: LWL-Mikrokabel als leichte Meterposition kalibriert.";
-  } else if (/fahrzeugkosten.*(pkw|werkstattwagen)/.test(directPschText) && /km/.test(unit)) {
-    directLinearEp = 0.60;
-    directLinearReason = "RLC Calibration Guard V8: Fahrzeugkosten pro km kalibriert.";
-  } else if (/unterlage reinigen.*schichtenverbund/.test(directPschText) && /(m2|m²|qm)/.test(unit)) {
-    directLinearEp = 0.70;
-    directLinearReason = "RLC Calibration Guard V8: Unterlage reinigen als leichte Flächenleistung kalibriert.";
-  } else if (/schichtenverbund herstellen/.test(directPschText) && /(m2|m²|qm)/.test(unit)) {
-    directLinearEp = 0.80;
-    directLinearReason = "RLC Calibration Guard V8: Schichtenverbund herstellen als leichte Flächenleistung kalibriert.";
-  } else if (/zaeune abbauen|zäune abbauen/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 7.00;
-    directLinearReason = "RLC Calibration Guard V8: Zäune abbauen als Meterleistung kalibriert.";
-  } else if (/entkeimung|spuelung|spülung|desinfektion/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 4.50;
-    directLinearReason = "RLC Autonomous Guard V10: Spülung/Entkeimung als laufende Meterleistung ohne X84 technisch kalibriert.";
-  } else if (/zulage.*wanderweg|wanderweg.*wiederherstellen/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 18.00;
-    directLinearReason = "RLC Autonomous Guard V10: Wanderweg-Zulage als einfache Wiederherstellung pro Meter kalibriert.";
-  } else if (/flaechen.*einzaeunen|flächen.*einzäunen|einzaeunen|einzäunen/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 18.50;
-    directLinearReason = "RLC Autonomous Guard V10: Flächen einzäunen als Bauzaun-/Zaunleistung pro Meter kalibriert.";
-  } else if (/zuschlag\s+(fuer|für).*vlies|strassenbauvlies|straßenbauvlies/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
-    directLinearEp = /(m2|m²|qm)/.test(unit) ? 2.50 : 2.50;
-    directLinearReason = "RLC Autonomous Guard V10: Nur echte Vlies-Position als leichte Zulage kalibriert.";
-  } else if (/frostsicheres kiesmaterial|frostschutz|kiesmaterial/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 42.00;
-    directLinearReason = "RLC Autonomous Guard V10: Frostsicheres Kiesmaterial als m³-Material inkl. Einbau plausibilisiert.";
-  } else if (/auffuellmaterial|auffüllmaterial/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 28.00;
-    directLinearReason = "RLC Autonomous Guard V10: Auffüllmaterial als m³-Ansatz plausibilisiert.";
-  } else if (/sohlbettung|splittueberdeckung|splittüberdeckung|rohrumhuellung sand|rohrumhüllung sand/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 6.50;
-    directLinearReason = "RLC Autonomous Guard V10: Bettung/Überdeckung/Rohrumhüllung als Meteransatz kalibriert.";
-  } else if (/schutzmatte|rohrschutz/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 22.00;
-    directLinearReason = "RLC Autonomous Guard V10: Schutzmatte/Rohrschutz als Meterleistung kalibriert.";
-  } else if (/bestandsplaene|bestandspläne|dokumentation/.test(directPschText) && /(psch|ps|pauschal)/.test(unit)) {
-    directLinearEp = 3500.00;
-    directLinearReason = "RLC Autonomous Guard V10: Bestandspläne/Dokumentation als prüfpflichtige Pauschale angesetzt.";
-  }
-
-
-  // RLC_AUTONOMOUS_GUARD_V11_FINAL_OVERRIDE
-  // Korrigiert zu breite Fallback-Treffer kurz vor Anwendung.
-  // X84 wird hier NICHT als Kalkulationsgrundlage verwendet.
-  if (/schutzmatte|rohrschutz/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 22.00;
-    directLinearReason = "RLC Autonomous Guard V11: Schutzmatte/Rohrschutz vorrangig als Meterleistung kalibriert.";
-  } else if (/mikrokabelleerrohrverbund|mikro.*leerrohrverbund/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 4.80;
-    directLinearReason = "RLC Autonomous Guard V11: Mikrokabel-Leerrohrverbund als Meterleistung kalibriert.";
-  } else if (/kabelleerrohr|kabelschutzrohr|leerrohr/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 4.50;
-    directLinearReason = "RLC Autonomous Guard V11: Kabel-/Leerrohr als Meterleistung kalibriert.";
-  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 45.00;
-    directLinearReason = "RLC Autonomous Guard V11: Bettungssand als m³-Material inkl. Einbau plausibilisiert.";
-  } else if (/bettungssand/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 6.50;
-    directLinearReason = "RLC Autonomous Guard V11: Bettungssand als Meteransatz plausibilisiert.";
-  } else if (/strassenbauvlies|straßenbauvlies|zuschlag.*vlies|vlies/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
-    directLinearEp = 2.50;
-    directLinearReason = "RLC Autonomous Guard V11: echte Vlies-Position als leichte Zulage kalibriert.";
-  }
-
-
-
-  // RLC_V25_SKIP_DIRECT_LINEAR_FOR_COMPANY_DB
-  // Firmen-Datenbank Exact Match darf nicht durch V12/V16 DirectLinear oder MarketIndex überschrieben werden.
-  if (
-    s((result as any)?.source) === "company-database-exact" ||
-    (result as any)?._rlcLockFinalPrice === true
-  ) {
-    return result;
-  }
-
-  // RLC_AUTONOMOUS_GUARD_V12_FAMILY_FINAL
-  // Finaler autonomer Familien-Guard ohne X84-Kalibrierung.
-  // Ziel: keine billigen 2,50/22,00-Fallbacks für technische Hauptleistungen.
-  if (/rohrgrabenaushub|grabenaushub|aushub.*bodenkl|bodenklasse/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 35.00;
-    directLinearReason = "RLC Autonomous Guard V12: Rohrgrabenaushub als m³-Leistung technisch plausibilisiert.";
-  } else if (/bruchschotter|schotter.*unterbau|strassenunterbau|straßenunterbau/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 45.00;
-    directLinearReason = "RLC Autonomous Guard V12: Bruchschotter/Straßenunterbau als m³-Leistung plausibilisiert.";
-  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 45.00;
-    directLinearReason = "RLC Autonomous Guard V12: Bettungssand als m³-Material inkl. Einbau plausibilisiert.";
-  } else if (/verlegung.*mittelspannungskabel|mittelspannungskabel/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 8.00;
-    directLinearReason = "RLC Autonomous Guard V12: Mittelspannungskabel-Verlegung als Meterleistung plausibilisiert.";
-  } else if (/verlegung.*hausanschlussleitung|hausanschlussleitung/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 11.40;
-    directLinearReason = "RLC Autonomous Guard V12: Hausanschlussleitung-Verlegung als Meterleistung plausibilisiert.";
-  } else if (/verlegung.*ortsnetzkabel|ortsnetzkabel/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 8.00;
-    directLinearReason = "RLC Autonomous Guard V12: Ortsnetzkabel-Verlegung als Meterleistung plausibilisiert.";
-  } else if (/zwischenplanum/.test(directPschText) && /(m|lfm|meter|m2|m²|qm)/.test(unit)) {
-    directLinearEp = 1.50;
-    directLinearReason = "RLC Autonomous Guard V12: Zwischenplanum als einfache Planumsleistung plausibilisiert.";
-  }
-
-
-  // RLC_AUTONOMOUS_GUARD_V13_BALANCE
-  // Autonome Plausibilitätskorrektur ohne X84 als Kalkulationsbasis.
-  // X84 dient nur als Diagnose, nicht als Preisquelle.
-
-  if (/hdpe.*rohre.*da\s*63|hdpe.*rohre.*da\s*75|hdpe.*rohre.*da\s*90|pe.*rohre.*da\s*63|pe.*rohre.*da\s*75|pe.*rohre.*da\s*90/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 12.00;
-    directLinearReason = "RLC Autonomous Guard V13: Kleine HDPE/PE-Rohre nicht als 0,25-EUR-Nebenleistung, sondern als Rohrlieferung/Verlegung pro Meter plausibilisiert.";
-  } else if (/bettungssand/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 45.00;
-    directLinearReason = "RLC Autonomous Guard V13: Bettungssand als m³-Material inkl. Lieferung/Einbau plausibilisiert.";
-  } else if (/bruchschotter|schotter.*unterbau|strassenunterbau|straßenunterbau/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 45.00;
-    directLinearReason = "RLC Autonomous Guard V13: Bruchschotter/Straßenunterbau als m³-Leistung plausibilisiert.";
-  } else if (/bauzaun/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 18.50;
-    directLinearReason = "RLC Autonomous Guard V13: Bauzaun als Meterleistung plausibilisiert, nicht als schwere Pauschale.";
-  } else if (/mehr.*mindertiefe|mehr.*minderpreis.*schacht/.test(directPschText) && /(cm)/.test(unit)) {
-    directLinearEp = 65.00;
-    directLinearReason = "RLC Autonomous Guard V13: Mehr-/Mindertiefe je cm plausibilisiert.";
-  } else if (/einbinden.*kabelleerrohre.*kabelzugsch/.test(directPschText) && /(st|stk|stück)/.test(unit)) {
-    directLinearEp = 85.00;
-    directLinearReason = "RLC Autonomous Guard V13: Einbinden Kabelleerrohre in Kabelzugschächte als Stückleistung plausibilisiert.";
-  } else if (/hausanschluss.*lwl|lwl.*hausanschluss/.test(directPschText) && /(st|stk|stück)/.test(unit)) {
-    directLinearEp = 350.00;
-    directLinearReason = "RLC Autonomous Guard V13: LWL-Hausanschluss als Stückleistung plausibilisiert.";
-  } else if (/betonfertigteilschacht.*druckerhoehung|betonfertigteilschacht.*druckerhöhung|pumpschacht.*doppelpumpstation/.test(directPschText) && /(st|stk|stück)/.test(unit)) {
-    directLinearEp = 18000.00;
-    directLinearReason = "RLC Autonomous Guard V13: Pump-/Druckerhöhungsschacht als technische Großkomponente prüfpflichtig plausibilisiert.";
-  }
-
-
-  // RLC_MARKET_INDEX_V14_2024_TO_2026
-  // Markt-/Baupreisindex für autonome RLC-Kalkulation.
-  // Kein X84-Preis wird übernommen. Faktor dient nur zur Aktualisierung alter Preisbasis.
-  const rlcMarketIndexFactorV14 = 1.17;
-
-  // RLC_AUTONOMOUS_GUARD_V16_AUSHUB_BALANCE
-  // Feinkorrektur Rohrgrabenaushub ohne X84 als Preisbasis.
-  // Werte sind Basiswerte vor Marktindex V15; Marktindex wird danach angewendet.
-  if (/rohrgrabenaushub/.test(directPschText) && /bd-kl\.\s*3\s*-\s*5/.test(directPschText) && !/zuschlag/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 30.00;
-    directLinearReason = "RLC Autonomous Guard V16: Rohrgrabenaushub Bodenklasse 3-5 als Hauptleistung technisch auf Basiswert 30,00 EUR/m³ gesetzt, Marktindex folgt separat.";
-  } else if (/zuschlag.*rohrgrabenaushub.*bd-kl\.\s*6/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 28.50;
-    directLinearReason = "RLC Autonomous Guard V16: Zuschlag Rohrgrabenaushub Bodenklasse 6 als Zuschlagsleistung technisch auf Basiswert 28,50 EUR/m³ gesetzt, Marktindex folgt separat.";
-  } else if (/zuschlag.*rohrgrabenaushub.*bd-kl\.\s*7/.test(directPschText) && /(m3|m³|cbm)/.test(unit)) {
-    directLinearEp = 29.50;
-    directLinearReason = "RLC Autonomous Guard V16: Zuschlag Rohrgrabenaushub Bodenklasse 7 als Zuschlagsleistung technisch auf Basiswert 29,50 EUR/m³ gesetzt, Marktindex folgt separat.";
-  }
-
-
-  // RLC_AUTONOMOUS_GUARD_V18_V17_NEUTRALIZED
-  // V17 war zu aggressiv und hat den Gesamtwert auf ca. 5,025 Mio gedrückt.
-  // Block bewusst neutralisiert. Familienkorrekturen werden ab jetzt kleiner und einzeln eingeführt.
-
-
-  // RLC_V32_V31_NEUTRALIZED
-  // V31 war zu aggressiv und wurde neutralisiert.
-  // Weitere Korrekturen erfolgen nur noch gezielt pro Einzelposition/Familie nach Report.
-
-
-  // RLC_V33_MICRO_ERSCHWERNIS_HDD
-  // Micro-Korrektur nach V32: nur die größten echten Unterbewertungen anheben.
-  // Ziel: ca. +95k, ohne Gruppenlogik breit zu verändern.
-  if (/erschwernis.*trasse.*steigen/.test(directPschText) && /(psch|pauschal)/.test(unit)) {
-    directLinearEp = 115000.00;
-    directLinearReason = "RLC V33: Erschwernis Trasse in Steigen als komplexe Pauschale plausibilisiert.";
-  } else if (/pilotbohrung.*da\s*180/.test(directPschText) && /(m|lfm|meter)/.test(unit)) {
-    directLinearEp = 70.00;
-    directLinearReason = "RLC V33: Pilotbohrung DA 180 vorsichtig angehoben, ohne HDD-Gruppe breit zu überschreiben.";
-  }
-
-  if (directLinearEp > 0 && Number.isFinite(directLinearEp)) {
-    directLinearEp = Math.round(directLinearEp * rlcMarketIndexFactorV14 * 100) / 100;
-    directLinearReason = `${directLinearReason || "RLC autonome Kalkulation"} · RLC Marktindex V15: Preisbasis 2024 auf aktuelle Kalkulation marktbedingt fortgeschrieben.`;
-  }
-
-  if (directLinearEp > 0) {
-    const total = round2(directLinearEp * Math.max(1, qty));
-
-    return {
-      ...result,
-      baseUnitPrice: directLinearEp,
-      suggestedUnitPrice: directLinearEp,
-      finalUnitPrice: directLinearEp,
-      rlcKiUnitPrice: directLinearEp,
-      unitPrice: directLinearEp,
-      preis: directLinearEp,
-      totalNet: total,
-      rlcKiTotal: total,
-      gesamt: total,
-      confidence: Math.min(n(result?.confidence, 0.58), 0.58),
-      calculationStatus: "needs_review",
-      riskLevel: "high",
-      warning: [
-        s(result?.warning),
-        directLinearReason,
-        ep > 0 ? (`Technischer Ziel-EP ${round2(directLinearEp)} €/` + (row?.einheit || result?.einheit || "EH") + " aus autonomer RLC-Kalkulation gesetzt.") : "",
-        "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
-      ].filter(Boolean).join(" · "),
-      aiReason: [
-        s(result?.aiReason),
-        "RLC Calibration Guard V8: Lineare No-X84-Position wurde anhand X84-Benchmark-Familie kalibriert, ohne X84 direkt zu kopieren.",
-      ].filter(Boolean).join("\n\n"),
-    };
-  }
-
-  if (directPschEp > 0) {
-    const total = round2(directPschEp * Math.max(1, qty));
-
-    return {
-      ...result,
-      baseUnitPrice: directPschEp,
-      suggestedUnitPrice: directPschEp,
-      finalUnitPrice: directPschEp,
-      rlcKiUnitPrice: directPschEp,
-      unitPrice: directPschEp,
-      preis: directPschEp,
-      totalNet: total,
-      rlcKiTotal: total,
-      gesamt: total,
-      confidence: Math.min(n(result?.confidence, 0.58), 0.58),
-      calculationStatus: "needs_review",
-      riskLevel: "high",
-      warning: [
-        s(result?.warning),
-        "RLC Calibration Guard V6: Context-sensitive Pauschale ohne X84 auf realistischen Mindestansatz kalibriert.",
-        ep > 0 ? (`Technischer Ziel-EP ${round2(directPschEp)} €/` + (row?.einheit || result?.einheit || "EH") + " aus autonomer RLC-Kalkulation gesetzt.") : "",
-        "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
-      ].filter(Boolean).join(" · "),
-      aiReason: [
-        s(result?.aiReason),
-        "RLC Calibration Guard V6: Pauschale wurde vor Zero-Return geprüft, damit OpenAI-Nullwerte nicht ungeprüft durchlaufen.",
-      ].filter(Boolean).join("\n\n"),
-    };
-  }
-
-  if (ep <= 0) return result;
-
-  const family = rlcCriticalTextFamily(row);
-
-  const calibrationText = norm([
-    row?.posNr,
-    row?.position,
-    row?.kurztext,
-    row?.shortText,
-    row?.text,
-    row?.langtext,
-    result?.kurztext,
-    result?.langtext,
-    result?.gewerk,
-    result?.leistungsart,
-    result?.bauverfahren,
-  ].join(" "));
-
-  const isBaustelleneinrichtungPsch =
-    /(baustelleneinrichtung.*herstellen.*vorhalten.*betreiben)/.test(directPschText) &&
-    !/(abbauen|räumen|raeumen)/.test(directPschText) &&
-    isStrictPschUnit &&
-    isSmallPschQty;
-
-  const isErschwernisPsch =
-    /erschwernis.*trasse.*steigen/.test(directPschText) &&
-    isStrictPschUnit &&
-    isSmallPschQty;
-
-  let calibratedEp = 0;
-  let calibrationReason = "";
-
-  if (family === "rohrgrabenaushub" && /(m3|m³|cbm)/.test(unit)) {
-    calibratedEp = 35.00;
-    calibrationReason = "RLC Calibration Guard: Rohrgrabenaushub ohne X84 auf realistischen m³-Ansatz kalibriert.";
-  } else if (family === "rohrgrabenzuschlag" && /(m3|m³|cbm)/.test(unit)) {
-    calibratedEp = 32.00;
-    calibrationReason = "RLC Calibration Guard: Zuschlag Rohrgrabenaushub ohne X84 auf realistischen m³-Ansatz kalibriert.";
-  } else if (family === "schutzmatte" && /(m|lfm|meter)/.test(unit)) {
-    calibratedEp = 22.00;
-    calibrationReason = "RLC Calibration Guard: Schutzmatte/Rohrschutz ohne X84 auf realistischen Meteransatz kalibriert.";
-  } else if (family === "kabelschutzrohr" && /(m|lfm|meter)/.test(unit)) {
-    calibratedEp = 4.50;
-    calibrationReason = "RLC Calibration Guard: Kabelschutzrohr ohne X84 auf realistischen Meteransatz kalibriert.";
-  } else if (family === "mikro_leerrohr" && /(m|lfm|meter)/.test(unit)) {
-    calibratedEp = 4.80;
-    calibrationReason = "RLC Calibration Guard: Mikrokabelleerrohr/Speedpipe ohne X84 auf realistischen Meteransatz kalibriert.";
-  } else if (family === "rohrumhuellung" && /(m|lfm|meter)/.test(unit)) {
-    calibratedEp = 6.50;
-    calibrationReason = "RLC Calibration Guard: Rohrumhüllung/Sohlbettung ohne X84 auf realistischen Meteransatz kalibriert.";
-  } else if (isBaustelleneinrichtungPsch) {
-    calibratedEp = Math.max(ep, 85000);
-    calibrationReason = "RLC Calibration Guard: Baustelleneinrichtung herstellen/vorhalten/betreiben als echte Psch-Position kalibriert.";
-  } else if (isErschwernisPsch) {
-    calibratedEp = Math.max(ep, 55000);
-    calibrationReason = "RLC Calibration Guard: Erschwernis Trasse innerhalb von Steigen als echte Psch-Position kalibriert.";
-  }
-
-  if (calibratedEp > 0 && Math.abs(calibratedEp - ep) > 0.01) {
-    const total = round2(calibratedEp * qty);
-
-    const familyMeta: Record<string, any> = {
-      rohrgrabenaushub: {
-        gewerk: "Erdarbeiten",
-        leistungsart: "Rohrgrabenaushub",
-        bauverfahren: "Leitungsgraben herstellen / Rohrgrabenaushub",
-        group: "Erdarbeiten",
-        name: "Rohrgrabenaushub Bodenklasse 3-5",
-        note: "RLC Calibration Guard: Rohrgrabenaushub als eigene Erdarbeiten-Familie kalibriert.",
-        fixWarning: "Falscher Resolver wurde fachlich auf Rohrgrabenaushub/Erdarbeiten korrigiert.",
-        fixReason: "RLC Familien-Fix: Position wurde als Rohrgrabenaushub erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
-      },
-      rohrgrabenzuschlag: {
-        gewerk: "Erdarbeiten",
-        leistungsart: "Zuschlag Rohrgrabenaushub",
-        bauverfahren: "Zuschlag Bodenklasse / Erschwernis Aushub",
-        group: "Erdarbeiten",
-        name: "Zuschlag Rohrgrabenaushub Bodenklasse",
-        note: "RLC Calibration Guard: Zuschlag Rohrgrabenaushub als eigene Erdarbeiten-Familie kalibriert.",
-        fixWarning: "Falscher Resolver wurde fachlich auf Zuschlag Rohrgrabenaushub korrigiert.",
-        fixReason: "RLC Familien-Fix: Position wurde als Zuschlag Rohrgrabenaushub erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
-      },
-      schutzmatte: {
-        gewerk: "Kabelschutz / Rohrschutz",
-        leistungsart: "Schutzmatte liefern und einbauen",
-        bauverfahren: "Mechanischer Rohrschutz mit Schutzmatte",
-        group: "Material",
-        name: "Rohrschutz Schutzmatte liefern und einbauen",
-        note: "RLC Calibration Guard: Schutzmatte/Rohrschutz als eigene Leistungsfamilie kalibriert.",
-        fixWarning: "Falscher Speedpipe-/Mikro-Leerrohr-Resolver wurde fachlich auf Schutzmatte/Rohrschutz korrigiert.",
-        fixReason: "RLC Schutzmatte-Fix: Position wurde als Rohrschutz/Schutzmatte erkannt. Speedpipe-Text aus dem generischen Resolver wurde überschrieben.",
-      },
-      kabelschutzrohr: {
-        gewerk: "Kabelschutz / Rohrschutz",
-        leistungsart: "Kabelschutzrohr",
-        bauverfahren: "Kabelschutzrohr liefern/verlegen nach LV-Text",
-        group: "Material",
-        name: "Kabelschutzrohr",
-        note: "RLC Calibration Guard: Kabelschutzrohr als eigene Leistungsfamilie kalibriert.",
-        fixWarning: "Falscher PE-Wasserleitungs-/Rohr-Resolver wurde fachlich auf Kabelschutzrohr korrigiert.",
-        fixReason: "RLC Familien-Fix: Position wurde als Kabelschutzrohr erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
-      },
-      mikro_leerrohr: {
-        gewerk: "Glasfaser / Speedpipe",
-        leistungsart: "Mikrokabelleerrohrverbund / Speedpipe",
-        bauverfahren: "Mikrorohrverbund verlegen",
-        group: "Material",
-        name: "Mikrokabelleerrohrverbund / Speedpipe",
-        note: "RLC Calibration Guard: Mikrokabelleerrohr/Speedpipe als eigene Leistungsfamilie kalibriert.",
-        fixWarning: "Falscher Leerrohr-/Kabelzug-Resolver wurde fachlich auf Mikrokabelleerrohrverbund korrigiert.",
-        fixReason: "RLC Familien-Fix: Position wurde als Mikrokabelleerrohrverbund/Speedpipe erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
-      },
-      rohrumhuellung: {
-        gewerk: "Leitungsbau / Rohrbettung",
-        leistungsart: "Rohrumhüllung / Bettungssand",
-        bauverfahren: "Rohrbettung und Rohrumhüllung herstellen",
-        group: "Material",
-        name: "Rohrumhüllung / Bettungssand herstellen",
-        note: "RLC Calibration Guard: Rohrumhüllung/Bettungssand als eigene Leistungsfamilie kalibriert.",
-        fixWarning: "Falscher Resolver wurde fachlich auf Rohrumhüllung/Bettungssand korrigiert.",
-        fixReason: "RLC Familien-Fix: Position wurde als Rohrumhüllung/Bettungssand erkannt. Falsche Resolver-Metadaten wurden überschrieben.",
-      },
-    };
-
-    const meta = familyMeta[family] || null;
-
-    const calibratedMainName = meta
-      ? meta.name
-      : s(result?.priceBreakdown?.[0]?.name) || s(result?.bauverfahren) || "Kalibrierte RLC-Leistung";
-
-    const calibratedGroup = meta
-      ? meta.group
-      : s(result?.priceBreakdown?.[0]?.group) || "Leistung";
-
-    const calibratedBreakdown = Array.isArray(result?.priceBreakdown) && result.priceBreakdown.length
-      ? result.priceBreakdown.map((line: any, index: number) => {
-          if (index !== 0) return line;
-          return {
-            ...line,
-            group: calibratedGroup,
-            name: calibratedMainName,
-            unit: row?.einheit || result?.einheit || line?.unit || "EH",
-            qty: 1,
-            price: round2(calibratedEp),
-            total: round2(calibratedEp),
-            note: meta
-              ? meta.note
-              : s(line?.note) || "RLC Calibration Guard",
-          };
-        })
-      : [
-          {
-            id: "rlc-calibration-main",
-            group: calibratedGroup,
-            name: calibratedMainName,
-            unit: row?.einheit || result?.einheit || "EH",
-            qty: 1,
-            price: round2(calibratedEp),
-            total: round2(calibratedEp),
-            note: "RLC Calibration Guard",
-          },
-        ];
-
-    return {
-      ...result,
-      gewerk: meta ? meta.gewerk : result?.gewerk,
-      leistungsart: meta ? meta.leistungsart : result?.leistungsart,
-      bauverfahren: meta ? meta.bauverfahren : result?.bauverfahren,
-      priceBreakdown: calibratedBreakdown,
-      rlcPreisGroup: meta ? meta.group : result?.rlcPreisGroup,
-      baseUnitPrice: round2(calibratedEp),
-      suggestedUnitPrice: round2(calibratedEp),
-      finalUnitPrice: round2(calibratedEp),
-      rlcKiUnitPrice: round2(calibratedEp),
-      unitPrice: round2(calibratedEp),
-      preis: round2(calibratedEp),
-      totalNet: total,
-      rlcKiTotal: total,
-      gesamt: total,
-      confidence: Math.min(n(result?.confidence, 0.58), 0.58),
-      calculationStatus: "needs_review",
-      riskLevel: "high",
-      warning: [
-        s(result?.warning),
-        calibrationReason,
-        meta ? meta.fixWarning : "",
-        ep > 0 ? (`Technischer Ziel-EP ${round2(calibratedEp)} €/` + (row?.einheit || result?.einheit || "EH") + " aus autonomer RLC-Kalkulation gesetzt.") : "",
-        "Kein X84 im aktuellen Projekt vorhanden; Wert bleibt prüfpflichtig.",
-      ].filter(Boolean).join(" · "),
-      aiReason: [
-        meta
-          ? meta.fixReason
-          : s(result?.aiReason),
-        "RLC Calibration Guard V2: X84-Benchmark wurde nicht kopiert, sondern zur Ableitung realistischer No-X84-Kalkulationsbereiche genutzt.",
-      ].filter(Boolean).join("\n\n"),
-    };
-  }
-
-  let maxEp = 0;
-  let reason = "";
-
-  // Sehr günstige Prüf-/Nebenleistungen dürfen nicht wie komplette Bauleistungen kalkuliert werden.
-  if (/(druckprobe|druckpruefung|kalibrierung|ortungsband|trassenwarnband)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    maxEp = 10;
-    reason = "Prüf-/Nebenleistung pro Meter ohne X84-Baseline darf nicht als schwere Bauleistung kalkuliert werden.";
-  }
-
-  // Spülen / Reinigung pro Meter darf nicht automatisch mehrere hundert EUR/m werden.
-  if (/(kanal.*spuelen|kanal.*spülen|spuelen|spülen)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    maxEp = 25;
-    reason = "Spül-/Reinigungsleistung pro Meter ohne X84-Baseline ist über dem Plausibilitätsrahmen.";
-  }
-
-  // Schutzmatten, Sandbettung, Rohrumhüllung sind bei großen Längen kritisch.
-  if (/(schutzmatte|rohrumhuellung|rohrumhüllung|sandueberdeckung|sandüberdeckung|sohlbettung|splittueberdeckung|splittüberdeckung)/i.test(text) && /(m|lfm|meter)/i.test(unit)) {
-    maxEp = 60;
-    reason = "Rohrbettung/Schutzlage pro Meter ohne X84-Baseline überschreitet Plausibilitätsrahmen.";
-  }
-
-  // Stahl kg darf nicht als Bauteil pauschal mit hunderten EUR/kg laufen.
-  if (/(baustahl|bewehrung|stahl)/i.test(text) && /kg/i.test(unit)) {
-    maxEp = 8;
-    reason = "Stahlposition in kg ohne X84-Baseline wurde zu hoch klassifiziert.";
-  }
-
-  // Generische Sicherheitsleine: große Mengen mit extremem EP nicht automatisch sicher.
-  if (!maxEp && qty >= 1000 && /(m|lfm|kg)/i.test(unit) && ep > 150) {
-    maxEp = 150;
-    reason = "Große Mengen ohne X84-Baseline mit sehr hohem EP müssen manuell geprüft werden.";
-  }
-
-  if (maxEp > 0 && ep > maxEp) {
-    const cappedEp = round2(maxEp);
-    const cappedTotal = round2(cappedEp * Math.max(1, qty));
-    const cappedBreakdown = Array.isArray(result?.priceBreakdown) && result.priceBreakdown.length
-      ? result.priceBreakdown.map((line: any, index: number) =>
-          index === 0
-            ? {
-                ...line,
-                unit: row?.einheit || result?.einheit || line?.unit || "EH",
-                qty: 1,
-                price: cappedEp,
-                total: cappedEp,
-                note: [s(line?.note), "RLC No-X84 Hard Cap angewendet"].filter(Boolean).join(" · "),
-              }
-            : {
-                ...line,
-                price: 0,
-                total: 0,
-                note: [s(line?.note), "Durch RLC No-X84 Hard Cap auf Hauptzeile konsolidiert"].filter(Boolean).join(" · "),
-              }
-        ).filter((line: any) => n(line.total) > 0)
-      : [
-          {
-            id: "rlc-no-x84-hardcap",
-            group: "Material",
-            name: "RLC No-X84 plausibilisierter Ansatz",
-            unit: row?.einheit || result?.einheit || "EH",
-            qty: 1,
-            price: cappedEp,
-            total: cappedEp,
-            note: "Automatisch gedeckelt, da kein X84/Angebot vorhanden ist.",
-          },
-        ];
-
-    return {
-      ...result,
-      baseUnitPrice: cappedEp,
-      suggestedUnitPrice: cappedEp,
-      finalUnitPrice: cappedEp,
-      rlcKiUnitPrice: cappedEp,
-      unitPrice: cappedEp,
-      preis: cappedEp,
-      totalNet: cappedTotal,
-      rlcKiTotal: cappedTotal,
-      gesamt: cappedTotal,
-      priceBreakdown: cappedBreakdown,
-      calculationStatus: "needs_review",
-      riskLevel: "high",
-      confidence: Math.min(n(result?.confidence, 0.5), 0.45),
-      warning: [
-        s(result?.warning),
-        "RLC Plausibilitätsstopp: KI-Preis ohne X84/Angebot wurde hart gedeckelt und bleibt prüfpflichtig.",
-        reason,
-        `EP ${round2(ep)} €/` + (row?.einheit || result?.einheit || "EH") + ` > Plausibilitätsgrenze ${round2(maxEp)}.`,
-      ].filter(Boolean).join(" "),
-      aiReason: [
-        s(result?.aiReason),
-        "RLC Guard No-X84: Der Preis wurde nicht als sicher freigegeben, weil keine historische Angebots-/X84-Baseline vorhanden ist und der technische Parser/Recipe einen unplausiblen EP erzeugt hat.",
-      ].filter(Boolean).join("\n"),
-    };
-  }
-
-  return result;
-}
 
 
 function evaluateDbComparability(row: any, result: any) {
-  const x84Ep =
-    n(row?.angebotUnitPrice) ||
-    n(row?.x84UnitPrice) ||
-    n(row?.preis) ||
-    n(row?.unitPrice) ||
-    0;
+  const benchmark = resolveX84Benchmark(row, result);
+  const x84Ep = benchmark.unitPrice;
 
   const kiEp =
     n(result?.rlcKiUnitPrice) ||
@@ -11722,12 +7763,68 @@ function evaluateDbComparability(row: any, result: any) {
 
   /*
    * Historische Angebotsbasis:
-   * Wenn X84/Angebotspreis vorhanden ist, kann er aus einem alten, real kalkulierten Projekt stammen.
-   * Für die aktuelle Plausibilitätsprüfung wird deshalb ein Preisindex angesetzt.
-   * Standard aktuell: +12% Preissteigerung, mit ±12% Toleranz.
+   * Kein pauschaler Preisindex.
+   *
+   * Wenn eine belastbare historische Bezugszeit vorhanden ist, wird die
+   * Preisentwicklung zeitabhängig berechnet. Fehlt eine solche Zeitbasis,
+   * bleibt der Faktor neutral bei 1.0 und X84 dient nur als Plausibilitäts-
+   * bzw. Benchmarkwert.
+   *
+   * Die Preisentwicklung wird über den offiziellen Destatis-Baupreisindex
+   * 61261-0004 ermittelt und dient ausschließlich der historischen Vergleichbarkeit.
    */
-  const historicalIndexFactor = 1.12;
-  const historicalTolerance = 0.12;
+  const historicalDateRaw =
+    row?.priceDate ??
+    result?.priceDate ??
+    null;
+
+  const historicalDate = historicalDateRaw
+    ? new Date(historicalDateRaw)
+    : null;
+
+  const historicalToleranceRaw = Number(
+    process.env.RLC_HISTORICAL_PRICE_TOLERANCE ?? "0.15"
+  );
+
+  const historicalTolerance = Number.isFinite(historicalToleranceRaw)
+    ? Math.max(0.05, Math.min(0.50, historicalToleranceRaw))
+    : 0.15;
+
+  let historicalAgeYears = 0;
+
+  if (
+    historicalDate &&
+    Number.isFinite(historicalDate.getTime()) &&
+    historicalDate.getTime() < Date.now()
+  ) {
+    historicalAgeYears =
+      (Date.now() - historicalDate.getTime()) /
+      (365.25 * 24 * 60 * 60 * 1000);
+  }
+
+  const historicalIndex = getBaupreisIndexFactor({
+    sourceDate: historicalDate,
+    targetDate: new Date(),
+    text: [
+      row?.kurztext,
+      row?.shortText,
+      row?.langtext,
+      row?.longText,
+      result?.kurztext,
+      result?.shortText,
+      result?.langtext,
+      result?.longText,
+      reverse?.workClass,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  });
+
+  const historicalIndexFactor =
+    historicalIndex.reliable
+      ? historicalIndex.factor
+      : 1;
+
   const expectedHistoricalEp = x84Ep * historicalIndexFactor;
   const minHistoricalEp = expectedHistoricalEp * (1 - historicalTolerance);
   const maxHistoricalEp = expectedHistoricalEp * (1 + historicalTolerance);
@@ -11742,11 +7839,20 @@ function evaluateDbComparability(row: any, result: any) {
       status: "needs_review",
       comparable: false,
       reason:
-        "Datenbankwert liegt außerhalb der historischen X84-Basis (+12% Preisindex, ±12% Toleranz). Prüfung über Langtext, Menge, Einheit und Urkalkulation erforderlich.",
+        historicalAgeYears > 0
+          ? "Datenbankwert liegt außerhalb der zeitbezogen indexierten historischen X84-Basis. Prüfung über Langtext, Menge, Einheit und Urkalkulation erforderlich."
+          : "Datenbankwert liegt außerhalb der historischen X84-Basis. Da keine belastbare Bezugszeit vorliegt, wurde kein pauschaler Preisindex angewendet.",
       x84UnitPrice: round2(x84Ep),
       expectedHistoricalUnitPrice: round2(expectedHistoricalEp),
       minOkUnitPrice: round2(minHistoricalEp),
       maxOkUnitPrice: round2(maxHistoricalEp),
+      historicalIndexFactor: round2(historicalIndexFactor),
+      historicalIndexReliable: historicalIndex.reliable,
+      historicalIndexFamily: historicalIndex.family,
+      historicalIndexSource: historicalIndex.source,
+      historicalSourceIndex: historicalIndex.sourceIndex,
+      historicalTargetIndex: historicalIndex.targetIndex,
+      historicalAgeYears: round2(historicalAgeYears),
       kiUnitPrice: round2(kiEp),
       factor: round2(kiEp / expectedHistoricalEp),
       workClass: reverse?.workClass || "",
@@ -11823,30 +7929,13 @@ function evaluateDbComparability(row: any, result: any) {
   };
 }
 
-function enrichRowWithReverseUrkalkulation(row: any, result: any) {
-  const x84UnitPrice =
-    n(row?.angebotUnitPrice) ||
-    n(row?.x84UnitPrice) ||
-    n(row?.preis) ||
-    n(row?.unitPrice) ||
-    n(result?.angebotUnitPrice) ||
-    n(result?.x84UnitPrice) ||
-    0;
+export function enrichRowWithReverseUrkalkulation(row: any, result: any) {
+  const benchmark = resolveX84Benchmark(row, result);
+  const x84UnitPrice = benchmark.unitPrice;
+  const menge = benchmark.quantity;
+  const x84Total = benchmark.total;
 
-  const menge =
-    n(row?.menge) ||
-    n(row?.qty) ||
-    n(row?.quantity) ||
-    n(result?.menge) ||
-    0;
-
-  const x84Total =
-    n(row?.angebotTotal) ||
-    n(row?.x84Total) ||
-    n(row?.gesamt) ||
-    (x84UnitPrice > 0 && menge > 0 ? x84UnitPrice * menge : 0);
-
-  if (!x84UnitPrice || !menge) {
+  if (benchmark.quality === "unusable" || !x84UnitPrice || !menge) {
     return {
       ...result,
       reverseUrkalkulation: null,
@@ -11874,9 +7963,22 @@ function enrichRowWithReverseUrkalkulation(row: any, result: any) {
   let enriched = {
     ...result,
     reverseUrkalkulation,
+    x84BenchmarkUnitPrice: round2(x84UnitPrice),
+    x84BenchmarkTotal: round2(x84Total),
+    x84BenchmarkQuality: benchmark.quality,
+    x84BenchmarkDerived: benchmark.quality === "derived_from_total",
+    x84BenchmarkIntegrityNote: benchmark.note,
+    x84BenchmarkUsedAsPrice: false,
+    priceDate:
+      row?.priceDate ??
+      result?.priceDate ??
+      null,
+    priceDateSource:
+      row?.priceDateSource ??
+      result?.priceDateSource ??
+      null,
   };
 
-  enriched = guardNoX84ImplausibleKiResult(row, enriched);
   const dbComparability = evaluateDbComparability(row, enriched);
 
   if (
@@ -11940,13 +8042,455 @@ function enrichRowWithReverseUrkalkulation(row: any, result: any) {
   };
 }
 
-router.post("/suggest-batch", async (req, res) => {
+
+router.post("/generate", requireOptionalKalkulationProjectAccess, async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
+    if (!companyId) {
+      return res.status(403).json({ ok: false, error: "NO_COMPANY" });
+    }
+
+    const text = s(req.body?.text);
+    const projectCode = s(req.body?.projectCode || req.body?.projectKey);
+
+    if (!text) {
+      return res.status(400).json({
+        ok: false,
+        error: "TEXT_REQUIRED",
+      });
+    }
+
+    const result = await runRlcGenerativeKalkulation({
+      text,
+      companyId,
+      projectCode: projectCode || undefined,
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    console.error("[RLC-KI][generate]", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "GENERATIVE_KALKULATION_FAILED",
+      message: String(error?.message || error),
+    });
+  }
+});
+
+function marketReviewEstimatedCostUsd(result: any): number {
+  if (String(result?.aiProvider || "").toLowerCase() !== "openai") return 0;
+  const inputTokens = n(result?.aiUsage?.inputTokens);
+  const outputTokens = n(result?.aiUsage?.outputTokens);
+  const inputPerMillion = Number(process.env.OPENAI_MARKET_REVIEW_INPUT_USD_PER_M || 0.10);
+  const outputPerMillion = Number(process.env.OPENAI_MARKET_REVIEW_OUTPUT_USD_PER_M || 0.50);
+  const webSearchPerCall = Number(process.env.OPENAI_WEB_SEARCH_USD_PER_CALL || 0.01);
+  const webSearchCalls = Math.max(0, Math.round(n(result?.webSearchCalls)));
+  return Math.round(((inputTokens / 1_000_000) * inputPerMillion + (outputTokens / 1_000_000) * outputPerMillion + webSearchCalls * webSearchPerCall) * 1_000_000) / 1_000_000;
+}
+
+type MarketCreditSource = "MONTHLY_INCLUDED" | "PURCHASED";
+
+function currentMarketCreditMonth(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
+async function marketCreditBalance(companyId: string) {
+  const monthKey = currentMarketCreditMonth();
+  await prisma.companySubscription.updateMany({
+    where: {
+      companyId,
+      OR: [{ aiMarketMonthKey: null }, { aiMarketMonthKey: { not: monthKey } }],
+    },
+    data: { aiMarketMonthKey: monthKey, aiMarketMonthlyUsed: 0 },
+  });
+  const sub = await prisma.companySubscription.findUnique({
+    where: { companyId },
+    select: {
+      status: true,
+      aiMarketMonthlyIncluded: true,
+      aiMarketMonthlyUsed: true,
+      aiMarketMonthKey: true,
+      aiMarketCreditsPurchased: true,
+    },
+  });
+  if (!sub || !["ACTIVE", "GRACE"].includes(String(sub.status))) {
+    return { active: false, monthKey, included: 0, used: 0, includedRemaining: 0, purchasedRemaining: 0, totalRemaining: 0 };
+  }
+  const included = Math.max(0, n(sub.aiMarketMonthlyIncluded));
+  const used = Math.max(0, n(sub.aiMarketMonthlyUsed));
+  const purchasedRemaining = Math.max(0, n(sub.aiMarketCreditsPurchased));
+  const includedRemaining = Math.max(0, included - used);
+  return { active: true, monthKey, included, used, includedRemaining, purchasedRemaining, totalRemaining: includedRemaining + purchasedRemaining };
+}
+
+async function reserveMarketCredits(companyId: string, count: number): Promise<MarketCreditSource[]> {
+  const wanted = Math.max(1, Math.floor(count));
+  const monthKey = currentMarketCreditMonth();
+  return prisma.$transaction(async (tx) => {
+    await tx.companySubscription.updateMany({
+      where: {
+      companyId,
+      OR: [{ aiMarketMonthKey: null }, { aiMarketMonthKey: { not: monthKey } }],
+    },
+      data: { aiMarketMonthKey: monthKey, aiMarketMonthlyUsed: 0 },
+    });
+
+    const reserved: MarketCreditSource[] = [];
+    for (let i = 0; i < wanted; i += 1) {
+      const included = await tx.$executeRawUnsafe(
+        `UPDATE "CompanySubscription"
+         SET "aiMarketMonthlyUsed" = "aiMarketMonthlyUsed" + 1, "updatedAt" = NOW()
+         WHERE "companyId" = $1
+           AND "status" IN ('ACTIVE','GRACE')
+           AND "aiMarketMonthKey" = $2
+           AND "aiMarketMonthlyUsed" < "aiMarketMonthlyIncluded"`,
+        companyId,
+        monthKey
+      );
+      if (included === 1) {
+        reserved.push("MONTHLY_INCLUDED");
+        continue;
+      }
+
+      const purchased = await tx.$executeRawUnsafe(
+        `UPDATE "CompanySubscription"
+         SET "aiMarketCreditsPurchased" = "aiMarketCreditsPurchased" - 1, "updatedAt" = NOW()
+         WHERE "companyId" = $1
+           AND "status" IN ('ACTIVE','GRACE')
+           AND "aiMarketCreditsPurchased" > 0`,
+        companyId
+      );
+      if (purchased === 1) {
+        reserved.push("PURCHASED");
+        continue;
+      }
+
+      const error: any = new Error("KI-Marktpreisprüfungen aufgebraucht");
+      error.code = "AI_MARKET_CREDITS_EXHAUSTED";
+      throw error;
+    }
+    return reserved;
+  });
+}
+
+async function refundMarketCredits(companyId: string, reserved: MarketCreditSource[]) {
+  if (!reserved.length) return;
+  const monthKey = currentMarketCreditMonth();
+  const included = reserved.filter((source) => source === "MONTHLY_INCLUDED").length;
+  const purchased = reserved.filter((source) => source === "PURCHASED").length;
+  await prisma.$transaction(async (tx) => {
+    if (included > 0) {
+      await tx.$executeRawUnsafe(
+        `UPDATE "CompanySubscription"
+         SET "aiMarketMonthlyUsed" = GREATEST(0, "aiMarketMonthlyUsed" - $3), "updatedAt" = NOW()
+         WHERE "companyId" = $1 AND "aiMarketMonthKey" = $2`,
+        companyId,
+        monthKey,
+        included
+      );
+    }
+    if (purchased > 0) {
+      await tx.companySubscription.updateMany({
+        where: { companyId },
+        data: { aiMarketCreditsPurchased: { increment: purchased } },
+      });
+    }
+  });
+}
+
+
+const MARKET_CREDIT_PACKAGES: Record<number, number> = {
+  100: 990,
+  500: 3900,
+  2000: 12900,
+};
+
+router.get("/market-credit-orders", requireMarketReviewAccess, async (req, res) => {
+  try {
+    const companyId = companyIdFromReq(req);
+    if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
+    const orders = await prisma.aiMarketCreditOrder.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+    });
+    return res.json({ ok: true, orders });
+  } catch (error: any) {
+    console.error("[RLC-KI][market-credit-orders]", error);
+    return res.status(500).json({ ok: false, error: "MARKET_CREDIT_ORDERS_FAILED" });
+  }
+});
+
+router.post("/market-credit-orders", requireMarketCreditOrderWrite, async (req, res) => {
+  try {
+    const companyId = companyIdFromReq(req);
+    if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
+    const credits = Math.floor(Number(req.body?.credits || 0));
+    const priceCents = MARKET_CREDIT_PACKAGES[credits];
+    if (!priceCents) return res.status(400).json({ ok: false, error: "INVALID_CREDIT_PACKAGE" });
+    const userId = String((req.auth as any)?.sub ?? (req.user as any)?.id ?? "").trim() || null;
+    const existing = await prisma.aiMarketCreditOrder.findFirst({
+      where: { companyId, credits, status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existing) return res.json({ ok: true, order: existing, reused: true });
+    const order = await prisma.aiMarketCreditOrder.create({
+      data: { companyId, userId, credits, priceCents, status: "PENDING" },
+    });
+    return res.json({ ok: true, order, reused: false });
+  } catch (error: any) {
+    console.error("[RLC-KI][market-credit-order-create]", error);
+    return res.status(500).json({ ok: false, error: "MARKET_CREDIT_ORDER_CREATE_FAILED" });
+  }
+});
+
+router.get("/market-review-usage", requireMarketReviewAccess, async (req, res) => {
+  try {
+    const companyId = companyIdFromReq(req);
+    if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
+    const from = req.query?.from ? new Date(String(req.query.from)) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const where = { companyId, createdAt: { gte: from } };
+    const [summary, byModel, balance] = await Promise.all([
+      prisma.aiMarketReviewUsage.aggregate({
+        where,
+        _sum: { creditsUsed: true, inputTokens: true, outputTokens: true, totalTokens: true, webSearchCalls: true, estimatedCostUsd: true },
+        _count: { _all: true },
+      }),
+      prisma.aiMarketReviewUsage.groupBy({
+        by: ["provider", "model"],
+        where,
+        _sum: { creditsUsed: true, inputTokens: true, outputTokens: true, totalTokens: true, estimatedCostUsd: true },
+        _count: { _all: true },
+      }),
+      marketCreditBalance(companyId),
+    ]);
+    return res.json({ ok: true, from, summary, byModel, balance });
+  } catch (error: any) {
+    console.error("[RLC-KI][market-review-usage]", error);
+    return res.status(500).json({ ok: false, error: "MARKET_REVIEW_USAGE_FAILED" });
+  }
+});
+
+router.post(
+  "/independent-openai-review",
+  requireMarketReviewAccess,
+  requireOptionalMarketProjectAccess,
+  async (req, res) => {
+  let companyId = "";
+  let reservedCredits: MarketCreditSource[] = [];
+  try {
+    companyId = companyIdFromReq(req) || "";
     if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
 
     const rows: InputRow[] = Array.isArray(req.body?.rows) ? req.body.rows : [];
     if (!rows.length) return res.status(400).json({ ok: false, error: "NO_ROWS" });
+    if (rows.length > 25) return res.status(400).json({ ok: false, error: "MAX_25_ROWS" });
+
+    const marketMonth = currentMarketCreditMonth();
+    const fingerprints = rows.map((row) => marketReviewFingerprint(row));
+    const cached = await prisma.aiMarketReviewCache.findMany({
+      where: { companyId, marketMonth, fingerprint: { in: fingerprints } },
+    });
+    const cacheMap = new Map(cached.map((entry: any) => [entry.fingerprint, entry.result as any]));
+    const missingIndexes = fingerprints.map((fp, index) => cacheMap.has(fp) ? -1 : index).filter((index) => index >= 0);
+    reservedCredits = missingIndexes.length ? await reserveMarketCredits(companyId, missingIndexes.length) : [];
+    const freshResults = missingIndexes.length
+      ? await Promise.all(missingIndexes.map((index) => independentOpenAiReview(rows[index])))
+      : [];
+    const validFresh = freshResults.filter(Boolean);
+    if (validFresh.length < reservedCredits.length) {
+      const unusedReservations = reservedCredits.slice(validFresh.length);
+      await refundMarketCredits(companyId, unusedReservations);
+      reservedCredits = reservedCredits.slice(0, validFresh.length);
+    }
+    for (let j = 0; j < missingIndexes.length; j += 1) {
+      const result: any = freshResults[j];
+      if (!result) continue;
+      const fp = fingerprints[missingIndexes[j]];
+      await prisma.aiMarketReviewCache.upsert({
+        where: { companyId_fingerprint_marketMonth: { companyId, fingerprint: fp, marketMonth } },
+        create: { companyId, fingerprint: fp, marketMonth, result },
+        update: { result },
+      });
+      cacheMap.set(fp, result);
+    }
+    const valid = rows.map((row, index) => {
+      const result: any = cacheMap.get(fingerprints[index]);
+      if (!result) return null;
+      return { ...result, id: row.id, posNr: s(row.posNr), cacheHit: !missingIndexes.includes(index) };
+    }).filter(Boolean);
+    if (!valid.length) {
+      if (reservedCredits.length) {
+        await refundMarketCredits(companyId, reservedCredits);
+        reservedCredits = [];
+      }
+      return res.status(502).json({ ok: false, error: "OPENAI_MARKET_REVIEW_EMPTY", message: "OpenAI hat keinen verwertbaren Marktpreis geliefert. Bitte erneut versuchen." });
+    }
+    const userId = String((req.auth as any)?.sub ?? (req.user as any)?.id ?? "").trim() || null;
+    const projectId = String(req.body?.projectId || "").trim() || null;
+
+    if (valid.length) {
+      await prisma.aiMarketReviewUsage.createMany({
+        data: valid.map((result: any, resultIndex: number) => ({
+          companyId,
+          userId,
+          projectId,
+          positionId: String(result?.id || "").trim() || null,
+          provider: String(result?.aiProvider || "unknown"),
+          model: String(result?.aiModel || "unknown"),
+          inputTokens: result?.cacheHit ? 0 : Math.max(0, Math.round(n(result?.aiUsage?.inputTokens))),
+          outputTokens: result?.cacheHit ? 0 : Math.max(0, Math.round(n(result?.aiUsage?.outputTokens))),
+          totalTokens: result?.cacheHit ? 0 : Math.max(0, Math.round(n(result?.aiUsage?.totalTokens))),
+          webSearchCalls: result?.cacheHit ? 0 : Math.max(0, Math.round(n(result?.webSearchCalls))),
+          creditsUsed: result?.cacheHit ? 0 : (String(result?.aiProvider || "").toLowerCase() === "openai" ? 1 : 0),
+          creditSource: result?.cacheHit ? "CACHE" : reservedCredits[resultIndex] || null,
+          estimatedCostUsd: result?.cacheHit ? 0 : marketReviewEstimatedCostUsd(result),
+          status: result?.cacheHit ? "CACHE_HIT" : "SUCCESS",
+        })),
+      });
+    }
+
+    const metering = valid.reduce((acc: any, result: any) => {
+      if (!result?.cacheHit && String(result?.aiProvider || "").toLowerCase() === "openai") acc.creditsUsed += 1;
+      if (!result?.cacheHit) {
+        acc.inputTokens += n(result?.aiUsage?.inputTokens);
+        acc.outputTokens += n(result?.aiUsage?.outputTokens);
+        acc.totalTokens += n(result?.aiUsage?.totalTokens);
+        acc.webSearchCalls += n(result?.webSearchCalls);
+        acc.estimatedCostUsd += marketReviewEstimatedCostUsd(result);
+      }
+      return acc;
+    }, { creditsUsed: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, webSearchCalls: 0, estimatedCostUsd: 0 });
+
+    const balance = await marketCreditBalance(companyId);
+    reservedCredits = [];
+    return res.json({ ok: true, rows: valid, source: "openai-independent", metering, balance });
+  } catch (error: any) {
+    if (companyId && reservedCredits.length) {
+      try {
+        await refundMarketCredits(companyId, reservedCredits);
+      } catch (refundError) {
+        console.error("[RLC-KI][market-credit-refund]", refundError);
+      }
+    }
+    console.error("[RLC-KI][independent-openai-review]", error);
+    if (error?.code === "AI_MARKET_CREDITS_EXHAUSTED") {
+      const balance = companyId ? await marketCreditBalance(companyId).catch(() => null) : null;
+      return res.status(402).json({
+        ok: false,
+        error: "AI_MARKET_CREDITS_EXHAUSTED",
+        message: "KI-Marktpreisprüfungen aufgebraucht. Bitte Zusatzkontingent buchen.",
+        balance,
+      });
+    }
+    return res.status(500).json({ ok: false, error: "INDEPENDENT_OPENAI_REVIEW_FAILED", message: String(error?.message || error) });
+  }
+});
+
+router.post("/suggest-batch", requireOptionalKalkulationProjectAccess, async (req, res) => {
+  try {
+    const companyId = companyIdFromReq(req);
+    if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
+
+    let rows: InputRow[] = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ ok: false, error: "NO_ROWS" });
+
+    /*
+     * RLC X84 PRICE-DATE LINK:
+     *
+     * Eine historische Bezugszeit wird nur übernommen, wenn der Client den
+     * konkreten LVHeader nennt. Wir nehmen NICHT automatisch den letzten LV
+     * des Projekts, weil X83/X84-Versionen zeitlich und fachlich voneinander
+     * abweichen können.
+     *
+     * LVHeader.priceDate stammt ausschließlich aus GAEB AwardInfo/BidDate.
+     * GAEB VersDate wird nicht als wirtschaftlicher Preisstand verwendet.
+     */
+    const batchProjectKey = s(req.body?.projectCode || req.body?.projectKey);
+    const batchLvHeaderId = s(
+      req.body?.lvHeaderId ||
+      req.body?.sourceLvHeaderId ||
+      req.body?.options?.lvHeaderId ||
+      req.body?.options?.sourceLvHeaderId
+    );
+
+    console.log("[RLC-KI][suggest-batch] SOURCE_LV", {
+      projectKey: batchProjectKey,
+      sourceLvHeaderId: batchLvHeaderId || null,
+      rows: rows.length,
+    });
+
+    if (batchProjectKey && batchLvHeaderId) {
+      const batchProject = await prisma.project.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { id: batchProjectKey },
+            { code: batchProjectKey },
+            { number: batchProjectKey },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (batchProject) {
+        const batchPositions = Array.from(
+          new Set(
+            rows
+              .map((row: any) => String(row?.posNr || row?.position || "").trim())
+              .filter(Boolean)
+          )
+        );
+
+        const sourceLvHeader = await prisma.lVHeader.findFirst({
+          where: {
+            id: batchLvHeaderId,
+            projectId: batchProject.id,
+          },
+          select: {
+            id: true,
+            priceDate: true,
+            priceDateSource: true,
+            positions: {
+              where: batchPositions.length ? { position: { in: batchPositions } } : undefined,
+              select: {
+                position: true,
+                kurztext: true,
+                langtext: true,
+                einheit: true,
+                menge: true,
+              },
+            },
+          },
+        });
+
+        if (sourceLvHeader) {
+          // The browser can contain a stale/minimal projection after GAEB import.
+          // Rehydrate missing technical fields from the explicitly selected X83 LV,
+          // never from X84 and never from a different project/version.
+          const sourceByPos = new Map(
+            sourceLvHeader.positions.map((position) => [String(position.position).trim(), position])
+          );
+          const sourcePriceDate = sourceLvHeader.priceDate?.toISOString();
+          rows = rows.map((row: any) => {
+            const source = sourceByPos.get(String(row?.posNr || row?.position || "").trim());
+            return {
+              ...row,
+              kurztext: s(row?.kurztext).trim() || source?.kurztext || "",
+              langtext: s(row?.langtext).trim() || source?.langtext || "",
+              einheit: s(row?.einheit).trim() || source?.einheit || "",
+              menge: n(row?.menge, 0) > 0 ? row.menge : Number(source?.menge || 0),
+              priceDate: row?.priceDate || sourcePriceDate,
+              priceDateSource:
+                row?.priceDateSource ||
+                sourceLvHeader.priceDateSource ||
+                (sourcePriceDate ? "LVHeader.priceDate" : undefined),
+            };
+          });
+        }
+      }
+    }
 
     const options = { ...(req.body || {}), ...(req.body?.options || {}) };
 
@@ -11987,25 +8531,44 @@ router.post("/suggest-batch", async (req, res) => {
 
       async function processRow(index: number) {
         const row = rows[index];
+        const rowStartedAt = Date.now();
 
         let budgetLeft = 0;
 
         try {
-          const matches = await findDbMatches(companyId, row);
+          // DB-Matches werden in calcSmartRow lazy geladen – erst NACH
+          // dem schnellen Family-Catalog-v2-Pfad.
+          const matches: DbMatch[] | null = null;
 
-          if (openAiUsed < maxOpenAiRowsPerBatch) {
+          // Eine Position ohne Kurz- und Langtext ist kein kalkulierbarer
+          // Leistungsinhalt. Sie darf niemals einen OpenAI-Slot belegen,
+          // sonst hängt ein 50er-Batch an leeren GAEB-Zeilen.
+          const hasTechnicalText = Boolean(
+            s((row as any)?.kurztext).trim() || s((row as any)?.langtext).trim()
+          );
+          if (hasTechnicalText && openAiUsed < maxOpenAiRowsPerBatch) {
             openAiUsed += 1;
             budgetLeft = 1;
           }
 
           const constructionIntelligenceStartedAt = performance.now();
-          out[index] = await calcSmartRow(row, matches, companyId, useOpenAIIfNoDatabaseHit,
+          const calcSmartStartedAt = Date.now();
+          out[index] = await calcSmartRow(
+            row,
+            matches,
+            companyId,
+            useOpenAIIfNoDatabaseHit,
             budgetLeft,
-            forceRecalculate
+            forceRecalculate,
+            rows,
+            s(req.body?.projectCode || req.body?.projectKey)
           );
+          const calcSmartMs = Date.now() - calcSmartStartedAt;
 
-          out[index] = applyRlcX84BenchmarkLearningSignal(row, applyRlcProjectOutlierFinalOverride(row, applyRlcFinalSuchschlitzGuard(row, applyRlcAutonomousSmallPositionGuard(row, out[index]))));
+          out[index] = applyRlcX84BenchmarkLearningSignal(row, out[index]);
+          const globalKnowledgeStartedAt = Date.now();
           out[index] = await applyGlobalKnowledgeHint(row, out[index]);
+          const globalKnowledgeMs = Date.now() - globalKnowledgeStartedAt;
           out[index] = annotateExistingCalculation(out[index], {
             startedAtMs: constructionIntelligenceStartedAt,
             stages: [
@@ -12023,7 +8586,22 @@ router.post("/suggest-batch", async (req, res) => {
               },
             ],
           });
+          const enrichStartedAt = Date.now();
           out[index] = enrichRlcCalculationPipeline({ row, baseResult: out[index] });
+          const enrichMs = Date.now() - enrichStartedAt;
+
+          const rowDurationMs = Date.now() - rowStartedAt;
+          if (rowDurationMs >= 1000) {
+            console.log("[RLC PERF ROW]", {
+              posNr: s(row?.posNr),
+              durationMs: rowDurationMs,
+              calcSmartMs,
+              globalKnowledgeMs,
+              enrichMs,
+              source: s(out[index]?.source),
+              family: s(out[index]?.rlcFamily || out[index]?.family || out[index]?.gewerk),
+            });
+          }
 
           if (out[index]?.source !== "openai" && budgetLeft > 0) {
             openAiUsed = Math.max(0, openAiUsed - 1);
@@ -12040,7 +8618,13 @@ router.post("/suggest-batch", async (req, res) => {
             error: rowError?.message || rowError,
           });
 
-          const finalRowBeforeKnowledgeHub = applyRlcX84BenchmarkLearningSignal(row, applyRlcProjectOutlierFinalOverride(row, applyRlcFinalSuchschlitzGuard(row, applyRlcAutonomousSmallPositionGuard(row, calcRuleRow(row, [], "rule-engine")))));
+          const finalRowBeforeKnowledgeHub = applyRlcX84BenchmarkLearningSignal(
+            row,
+            buildUnresolvedV2Row(
+              row,
+              "RLC v2 primary mode: Fehler im Positionslauf. Legacy rule-engine fallback wurde bewusst nicht als Preisquelle verwendet."
+            )
+          );
 
           const knowledgeHub = resolveRlcKnowledgeHub({
             kurztext: (row as any)?.kurztext,
@@ -12050,7 +8634,7 @@ router.post("/suggest-batch", async (req, res) => {
             family: (finalRowBeforeKnowledgeHub as any)?.rlcFamily || (finalRowBeforeKnowledgeHub as any)?.family || (finalRowBeforeKnowledgeHub as any)?.gewerk
           });
 
-          if (knowledgeHub.hasExternalKnowledge) {
+          if (knowledgeHub.hasExternalKnowledge && finalRowBeforeKnowledgeHub) {
             console.log("[RLC KnowledgeHub FINAL]", {
               posNr: (row as any)?.posNr,
               matches: knowledgeHub.externalMatches.length,
@@ -12085,14 +8669,15 @@ router.post("/suggest-batch", async (req, res) => {
       );
 
       const finalRows = out.map((r, index) => {
-        const base = r || calcRuleRow(rows[index], [], "rule-engine");
+        const base =
+          r ||
+          buildUnresolvedV2Row(
+            rows[index],
+            "RLC v2 primary mode: Kein Ergebnis im Batch-Puffer. Legacy rule-engine fallback wurde nicht als Preisquelle verwendet."
+          );
         const enriched = enrichRowWithReverseUrkalkulation(rows[index], base);
-        const normalized = applyNoX84TechnicalUnitNormalizer(rows[index], enriched);
-        const calibrated = applyNoX84CompanyCalibration(rows[index], normalized);
-        const unsafeGuarded = guardNoX84UnsafeOkResult(rows[index], calibrated);
-        const implausibleGuarded = guardNoX84ImplausibleKiResult(rows[index], unsafeGuarded);
-        const smallPositionGuarded = applyRlcAutonomousSmallPositionGuard(rows[index], implausibleGuarded);
-        return applyRlcX84BenchmarkLearningSignal(rows[index], applyRlcProjectOutlierFinalOverride(rows[index], applyRlcFinalSuchschlitzGuard(rows[index], smallPositionGuarded)));
+        const finalCandidate = applyRlcX84BenchmarkLearningSignal(rows[index], enriched);
+        return applyRlcPriceEvidenceGate(rows[index], finalCandidate);
       });
         const guardedFinalRows = applyDuplicateQuantityOutlierGuard(finalRows)
       .map(cleanRlcOutputRow);
@@ -12146,7 +8731,7 @@ router.post("/suggest-batch", async (req, res) => {
 
 
 // RLC_CONSTRUCTION_INTELLIGENCE_REANNOTATE_ENDPOINT_V2
-router.post("/construction-intelligence/reannotate/:projectKey", async (req, res) => {
+router.post("/construction-intelligence/reannotate/:projectKey", requireKiProjectPathAccess, async (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
 
@@ -12270,7 +8855,7 @@ router.post("/construction-intelligence/reannotate/:projectKey", async (req, res
 
 
 // RLC_CONSTRUCTION_INTELLIGENCE_STATUS_ENDPOINT_V2
-router.get("/construction-intelligence/status/:projectKey", async (req, res) => {
+router.get("/construction-intelligence/status/:projectKey", requireKiProjectPathAccess, async (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
 

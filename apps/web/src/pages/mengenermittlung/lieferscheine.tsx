@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { useProject } from "../../store/useProject";
 import { useNavigate } from "react-router-dom";
 import MengPageHeader from "./MengPageHeader";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 /* ===== Tipi ===== */
 type Datei = {id: string;name: string;url: string;type: string;};
@@ -224,8 +225,7 @@ preferType = "image/jpeg")
 /* ===== PDF Reader compatibile Vite ===== */
 async function readPdfText(file: File): Promise<string> {
   const pdfjsLib: any = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
   const array = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjsLib.getDocument({ data: array }).promise;
@@ -947,7 +947,8 @@ export default function Lieferscheine() {
         workflowStatus: "FREIGEGEBEN" as WorkflowStatus
       }));
 
-      setPdfUrl((data as any).pdfUrl ?? item.pdfUrl ?? null);
+      const savedPdfUrl = (data as any).pdfUrl ?? item.pdfUrl ?? null;
+      setPdfUrl(savedPdfUrl ? publicUrl(String(savedPdfUrl)) : null);
 
       setFinalPreview({ date: d, rows: list, filename: item.filename });
       setTab("FINAL");
@@ -1059,7 +1060,25 @@ export default function Lieferscheine() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Lieferscheine");
-    XLSX.writeFile(wb, `Lieferscheine_${projectId || "ohneProjekt"}.xlsx`);
+
+    const fileName = `Lieferscheine_${projectId || "ohneProjekt"}.xlsx`;
+    const blob = new Blob(
+      [XLSX.write(wb, { type: "array", bookType: "xlsx" })],
+      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    const dmsProjectId = String(selectedProject?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[lieferschein:xlsx:dms]", error));
+    }
   }
 
   async function requestServerPdf(list: LsRow[], preview: boolean) {

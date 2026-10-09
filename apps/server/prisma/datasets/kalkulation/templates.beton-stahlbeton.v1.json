@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "key": "BETON_BODENPLATTE_C25_30",
+      "title": "Stahlbeton-Bodenplatte herstellen",
+      "category": "BETON_STAHLBETON",
+      "unit": "m2",
+      "description": "Stahlbeton-Bodenplatte C25/30 herstellen. Betondicke wird aus dem LV-Text übernommen.",
+      "tags": [
+        "stahlbeton",
+        "beton",
+        "bodenplatte",
+        "betonplatte",
+        "c25/30"
+      ],
+      "paramsJson": {
+        "defaultParams": {
+          "thickness_cm": 0
+        }
+      },
+      "components": [
+        {
+          "type": "LABOR",
+          "refKey": "LABOR:BETONBAUER",
+          "qtyFormula": "0.05",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 10,
+          "note": "Arbeitszeit je m2"
+        },
+        {
+          "type": "MATERIAL",
+          "refKey": "MATERIAL:BETON_C25_30",
+          "qtyFormula": "params.thickness_m",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 20,
+          "note": "Betonmenge m3 je m2 aus Plattendicke"
+        }
+      ]
+    }
+  ]
+}

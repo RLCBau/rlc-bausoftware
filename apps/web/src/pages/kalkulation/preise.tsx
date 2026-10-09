@@ -1018,6 +1018,7 @@ export default function PreisePage() {
   const [stat, setStat] = useState("");
   const [kiLearningRows, setKiLearningRows] = useState<KiLearningEntry[]>([]);
   const [qualityBusyId, setQualityBusyId] = useState("");
+  const [kiDetail, setKiDetail] = useState<KiLearningEntry | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState("");
@@ -1166,7 +1167,7 @@ export default function PreisePage() {
     try {
       const csvText = datenbankCsvFromRows(validRows);
 
-      await fetch(apiUrl("/api/kalkulation/datenbank/import-csv"), {
+      const response = await fetch(apiUrl("/api/kalkulation/datenbank/import-csv"), {
         method: "POST",
         credentials: "include",
         headers: withAuthHeaders({
@@ -1178,6 +1179,10 @@ export default function PreisePage() {
           csvText
         })
       });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok === false) {
+        throw new Error(payload?.error || `Datenbank-Import fehlgeschlagen (HTTP ${response.status})`);
+      }
     } catch {
 
 
@@ -1197,9 +1202,11 @@ export default function PreisePage() {
         throw new Error(json?.error || "KI-Learning konnte nicht geladen werden.");
       }
 
-      const rows = Array.isArray(json.rows) ? json.rows : [];
+      const rows = (Array.isArray(json.rows) ? json.rows : []).filter((row: KiLearningEntry) =>
+        !row.parameter?.kiLearningTransferred && !row.parameter?.kiLearningTransferredAt
+      );
       setKiLearningRows(rows);
-      setStat(`KI-Learning geladen: ${rows.length.toLocaleString("de-DE")} Vorschläge.`);
+      setStat(`KI-Learning geladen: ${rows.length.toLocaleString("de-DE")} offene Vorschläge.`);
     } catch (e: any) {
       setErr(e?.message || "KI-Learning konnte nicht geladen werden.");
     }
@@ -1280,6 +1287,45 @@ export default function PreisePage() {
     clearCheck();
     setStat(`KI-Learning in Preisliste geladen: ${rows.length.toLocaleString("de-DE")} Positionen.`);
   }
+  async function markKiLearningUsed(id: string) {
+    const response = await fetch(apiUrl(`/api/kalkulation/datenbank/${id}/ki-transfer-complete`), {
+      method: "POST",
+      credentials: "include",
+      headers: withAuthHeaders()
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(payload?.error || `KI-Transfer konnte nicht abgeschlossen werden (HTTP ${response.status})`);
+    }
+  }
+
+  async function saveKiLearningEntryToDatenbank(entry: KiLearningEntry) {
+    const status = entry.parameter?.qualityGateStatus || "KI-Vorschlag";
+    if (status !== "Freigegeben") {
+      setStat("Bitte Position zuerst auf Freigegeben setzen.");
+      return;
+    }
+    await saveRowsToDatenbank([kiLearningToCatalog(entry)]);
+    await markKiLearningUsed(entry.id);
+    setKiLearningRows((prev) => prev.filter((row) => row.id !== entry.id));
+    setKiDetail((current) => current?.id === entry.id ? null : current);
+    setStat(`Freigegebene KI-Position in Datenbank übernommen: ${entry.posNr || entry.kurztext || "Position"}.`);
+  }
+
+  async function saveAllApprovedKiLearningToDatenbank() {
+    const approved = kiLearningRows.filter((entry) => (entry.parameter?.qualityGateStatus || "") === "Freigegeben");
+    if (!approved.length) {
+      setStat("Keine freigegebenen KI-Positionen vorhanden.");
+      return;
+    }
+    await saveRowsToDatenbank(approved.map(kiLearningToCatalog));
+    for (const entry of approved) await markKiLearningUsed(entry.id);
+    const ids = new Set(approved.map((entry) => entry.id));
+    setKiLearningRows((prev) => prev.filter((row) => !ids.has(row.id)));
+    setKiDetail((current) => current && ids.has(current.id) ? null : current);
+    setStat(`${approved.length.toLocaleString("de-DE")} freigegebene KI-Position(en) in Datenbank übernommen.`);
+  }
+
   function loadCatalog() {
     const rows = keepRowsAndEnsureIds(Catalog.list());
 
@@ -1780,8 +1826,8 @@ export default function PreisePage() {
   }, [cat]);
 
   const selectedRows = useMemo(
-    () => view.filter((row) => selected[getVisibleRowId(row)]),
-    [view, selected]
+    () => cat.filter((row) => selected[getVisibleRowId(row)]),
+    [cat, selected]
   );
 
   const selectedSum = useMemo(
@@ -1888,83 +1934,7 @@ export default function PreisePage() {
           </p>
         </div>
 
-        <div className={rlcClass(null, heroActions)}>
-          <button className={rlcClass(null,
-          btnSecondary)}
-          disabled={busy}
-          onClick={() => fileRef.current?.click()}>
-            
-            CSV / PDF importieren
-          </button>
 
-          <button className={rlcClass(null, btnSecondary)} disabled={busy} onClick={exportCSV}>
-            CSV-Export
-          </button>
-
-          <button className={rlcClass(null,
-          btnSecondary)}
-          disabled={busy}
-          onClick={() => runBusy("Katalog wird geladen…", loadCatalog)}>
-            
-            Katalog laden
-          </button>
-
-          <button className={rlcClass(null,
-          btnSecondary)}
-          disabled={busy}
-          onClick={() => runBusy("LV wird geladen…", loadFromLV)}>
-            
-            Aus LV laden
-          </button>
-
-          <button className={rlcClass(null,
-          btnSecondary)}
-          disabled={busy}
-          onClick={() => runBusy("KI/Manuell wird geladen…", loadFromKiOrManuell)}>
-            
-            Aus KI / Manuell laden
-          </button>
-
-          <button className={rlcClass(null,
-          btnWarning)}
-          disabled={busy || !cat.length}
-          onClick={() => runBusy("Preisprüfung läuft…", startPruefung)}>
-            
-            Prüfung starten
-          </button>
-
-          <button className={rlcClass(null,
-          btnWarning)}
-          disabled={busy || !pruefungDone}
-          onClick={selectDuplicatesForDelete}>
-            
-            Doppelte auswählen
-          </button>
-
-          <button className={rlcClass(null,
-          btnDanger)}
-          disabled={busy || !Object.values(selected).some(Boolean)}
-          onClick={deleteSelectedRows}>
-            
-            Ausgewählte löschen
-          </button>
-
-          <button className={rlcClass(null,
-          btnPrimary)}
-          disabled={busy || !selectedRows.length}
-          onClick={() => runBusy("Datenbank wird gespeichert…", saveSelectedToDatenbank)}>
-            
-            Auswahl in Datenbank speichern
-          </button>
-
-          <button className={rlcClass(null,
-          btnPrimary)}
-          disabled={busy || !selectedRows.length}
-          onClick={writeSelectedToLV}>
-            
-            Auswahl ins LV
-          </button>
-        </div>
 
         <div className={rlcClass(null, heroMeta)}>
           Projekt: <b>{projectLabel(project)}</b>
@@ -2025,6 +1995,50 @@ export default function PreisePage() {
           }
           sub={pruefungDone ? `${duplicateCount.toLocaleString("de-DE")} Doppelte` : "schneller Startmodus"} />
         
+      </section>
+
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
+          <div>
+            <h2 className={rlcClass(null, sectionTitle)}>Preislisten-Workflow</h2>
+            <div className={rlcClass(null, sectionText)}>
+              Firmenpreise aus Material, Personal, Maschinen und vorhandenen Positionen laden, prüfen und übernehmen.
+            </div>
+          </div>
+        </div>
+
+        <div className={rlcClass(null, workflowGrid)}>
+          <div className={rlcClass(null, workflowStep)}>
+            <div className={rlcClass(null, workflowHead)}><span>1</span><b>Quelle laden</b></div>
+            <div className={rlcClass(null, workflowText)}>Preislisten oder bestehende Firmendaten einlesen.</div>
+            <div className={rlcClass(null, workflowButtons)}>
+              <button className={rlcClass(null, btnSecondary)} disabled={busy} onClick={() => fileRef.current?.click()}>CSV / PDF</button>
+              <button className={rlcClass(null, btnSecondary)} disabled={busy} onClick={() => runBusy("Katalog wird geladen…", loadCatalog)}>Katalog</button>
+              <button className={rlcClass(null, btnSecondary)} disabled={busy} onClick={() => runBusy("LV wird geladen…", loadFromLV)}>Aus LV</button>
+              <button className={rlcClass(null, btnSecondary)} disabled={busy} onClick={() => runBusy("KI/Manuell wird geladen…", loadFromKiOrManuell)}>KI / Manuell</button>
+            </div>
+          </div>
+
+          <div className={rlcClass(null, workflowStep)}>
+            <div className={rlcClass(null, workflowHead)}><span>2</span><b>Prüfen & bereinigen</b></div>
+            <div className={rlcClass(null, workflowText)}>Einheiten, Preise und Dubletten vor der Übernahme prüfen.</div>
+            <div className={rlcClass(null, workflowButtons)}>
+              <button className={rlcClass(null, btnWarning)} disabled={busy || !cat.length} onClick={() => runBusy("Preisprüfung läuft…", startPruefung)}>Prüfung starten</button>
+              <button className={rlcClass(null, btnSecondary)} disabled={busy || !pruefungDone} onClick={selectDuplicatesForDelete}>Doppelte markieren</button>
+              <button className={rlcClass(null, btnDanger)} disabled={busy || !Object.values(selected).some(Boolean)} onClick={deleteSelectedRows}>Auswahl löschen</button>
+            </div>
+          </div>
+
+          <div className={rlcClass(null, workflowStep)}>
+            <div className={rlcClass(null, workflowHead)}><span>3</span><b>Übernehmen</b></div>
+            <div className={rlcClass(null, workflowText)}>Geprüfte Firmenpreise in Bibliothek oder aktuelles LV übernehmen.</div>
+            <div className={rlcClass(null, workflowButtons)}>
+              <button className={rlcClass(null, btnPrimary)} disabled={busy || !selectedRows.length} onClick={() => runBusy("Datenbank wird gespeichert…", saveSelectedToDatenbank)}>In Datenbank</button>
+              <button className={rlcClass(null, btnSecondary)} disabled={busy || !selectedRows.length} onClick={writeSelectedToLV}>Ins LV</button>
+              <button className={rlcClass(null, btnSecondary)} disabled={busy || !cat.length} onClick={exportCSV}>CSV Export</button>
+            </div>
+          </div>
+        </div>
       </section>
 
       {editor ?
@@ -2148,9 +2162,9 @@ export default function PreisePage() {
       <section className={rlcClass(null, card)}>
         <div className={rlcClass(null, sectionHead)}>
           <div>
-            <h2 className={rlcClass(null, sectionTitle)}>Neue Preisposition</h2>
+            <h2 className={rlcClass(null, sectionTitle)}>Einzelpreis manuell erfassen</h2>
             <div className={rlcClass(null, sectionText)}>
-              Neue Position wird direkt lokal gespeichert und in die Datenbank übernommen.
+              Für einzelne Firmenpreise, die nicht aus einer Preisliste importiert werden.
             </div>
           </div>
         </div>
@@ -2350,6 +2364,12 @@ export default function PreisePage() {
                 
                 In Preisliste anzeigen
               </button>
+
+              <button className={rlcClass(null, btnPrimary)}
+                disabled={busy || !kiLearningRows.some((entry) => (entry.parameter?.qualityGateStatus || "") === "Freigegeben")}
+                onClick={() => runBusy("Freigegebene KI-Positionen werden gespeichert…", saveAllApprovedKiLearningToDatenbank)}>
+                Alle Freigegebenen in Datenbank übernehmen
+              </button>
             </div>
 
             {kiLearningRows.length ?
@@ -2388,6 +2408,9 @@ export default function PreisePage() {
                     null}
 
                       <div className="rlc-migrated-pages-kalkulation-preise-tsx-930">
+                        <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => setKiDetail(entry)}>
+                          Prüfen / Details
+                        </button>
                         {QUALITY_GATE_STATUSES.map((s) =>
                       <button
                         key={s}
@@ -2399,6 +2422,13 @@ export default function PreisePage() {
                             {s}
                           </button>
                       )}
+                        <button
+                          type="button"
+                          className={rlcClass(null, status === "Freigegeben" ? btnPrimary : btnSecondary)}
+                          disabled={qualityBusyId === entry.id || status !== "Freigegeben"}
+                          onClick={() => runBusy("KI-Position wird in Datenbank übernommen…", () => saveKiLearningEntryToDatenbank(entry))}>
+                          In Datenbank übernehmen
+                        </button>
                       </div>
                     </div>);
 
@@ -2407,39 +2437,67 @@ export default function PreisePage() {
             null}
           </div>
         </div>
-        <div className={rlcClass(null, actionBox)}>
-          <button className={rlcClass(null,
-          btnWarning)}
-          disabled={busy || !selectedRows.length}
-          onClick={() => runBusy("Auswahl wird korrigiert…", autoCorrectSelected)}>
-            
-            Auswahl automatisch korrigieren
-          </button>
 
-          <button className={rlcClass(null,
-          btnWarning)}
-          disabled={busy || !pruefungDone}
-          onClick={selectDuplicatesForDelete}>
-            
-            Doppelte auswählen
-          </button>
 
-          <button className={rlcClass(null,
-          btnDanger)}
-          disabled={busy || !Object.values(selected).some(Boolean)}
-          onClick={deleteSelectedRows}>
-            
-            Ausgewählte löschen
-          </button>
+        {kiDetail ? (() => {
+          const detailStatus = kiDetail.parameter?.qualityGateStatus || "KI-Vorschlag";
+          const breakdown = Array.isArray(kiDetail.parameter?.priceBreakdown) ? kiDetail.parameter?.priceBreakdown : [];
+          const technicalEntries = Object.entries(kiDetail.parameter || {}).filter(([key]) => !["qualityGateStatus","warning","aiReason","priceBreakdown"].includes(key));
+          return (
+            <div className={rlcClass(null, kiDetailOverlay)} onMouseDown={(e) => { if (e.target === e.currentTarget) setKiDetail(null); }}>
+              <section className={rlcClass(null, kiDetailModal)}>
+                <div className={rlcClass(null, kiDetailHead)}>
+                  <div>
+                    <div className={rlcClass(null, editEyebrow)}>KI-VORSCHLAG PRÜFEN</div>
+                    <h2 className={rlcClass(null, editTitle)}>{kiDetail.posNr || "ohne Pos."} · {kiDetail.kurztext || "Ohne Kurztext"}</h2>
+                    <div className={rlcClass(null, editSub)}>Vor Freigabe technische Plausibilität und Preis prüfen.</div>
+                  </div>
+                  <button className={rlcClass(null, btnSecondary)} onClick={() => setKiDetail(null)}>Schließen</button>
+                </div>
 
-          <button className={rlcClass(null,
-          btnPrimary)}
-          disabled={busy || !selectedRows.length}
-          onClick={() => runBusy("Auswahl wird gespeichert…", saveSelectedToDatenbank)}>
-            
-            Auswahl in Datenbank speichern
-          </button>
-        </div>
+                <div className={rlcClass(null, kiDetailKpis)}>
+                  <div><span>EP netto</span><strong>{money(kiDetail.kosten?.epNetto)}</strong></div>
+                  <div><span>ME</span><strong>{kiDetail.einheit || "—"}</strong></div>
+                  <div><span>Vertrauen</span><strong>{Math.round(numberSafe(kiDetail.confidence) * 100)} %</strong></div>
+                  <div><span>Risiko</span><strong>{kiDetail.risiko || "—"}</strong></div>
+                  <div><span>Status</span><strong>{detailStatus}</strong></div>
+                </div>
+
+                <div className={rlcClass(null, kiDetailGrid)}>
+                  <div className={rlcClass(null, kiDetailBlock)}>
+                    <h3>Leistungsbeschreibung</h3>
+                    <div className={rlcClass(null, kiDetailText)}>{kiDetail.langtext || "Kein Langtext vorhanden."}</div>
+                  </div>
+                  <div className={rlcClass(null, kiDetailBlock)}>
+                    <h3>Prüfhinweis</h3>
+                    <div className={rlcClass(null, kiDetailText)}>{kiDetail.kiHinweis || kiDetail.parameter?.warning || kiDetail.parameter?.aiReason || "Kein Prüfhinweis vorhanden."}</div>
+                    {kiDetail.kalkulatorNotiz ? <><h3>Kalkulator-Notiz</h3><div className={rlcClass(null, kiDetailText)}>{kiDetail.kalkulatorNotiz}</div></> : null}
+                  </div>
+                </div>
+
+                {(breakdown.length || technicalEntries.length) ? (
+                  <div className={rlcClass(null, kiDetailGrid)}>
+                    <div className={rlcClass(null, kiDetailBlock)}>
+                      <h3>Preisaufbau / Ressourcen</h3>
+                      {breakdown.length ? breakdown.map((item:any, idx:number) => <div key={idx} className={rlcClass(null, kiDetailLine)}>{typeof item === "string" ? item : `${item?.label || item?.name || item?.type || "Komponente"}: ${item?.value ?? item?.amount ?? item?.price ?? "—"}`}</div>) : <div className={rlcClass(null, kiDetailText)}>Kein detaillierter Preisaufbau gespeichert.</div>}
+                    </div>
+                    <div className={rlcClass(null, kiDetailBlock)}>
+                      <h3>Technische Parameter</h3>
+                      {technicalEntries.length ? technicalEntries.map(([key,value]) => <div key={key} className={rlcClass(null, kiDetailLine)}><span>{key}</span><strong>{typeof value === "object" ? JSON.stringify(value) : String(value ?? "—")}</strong></div>) : <div className={rlcClass(null, kiDetailText)}>Keine zusätzlichen Parameter gespeichert.</div>}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className={rlcClass(null, kiDetailFooter)}>
+                  <div className={rlcClass(null, workflowButtons)}>
+                    {QUALITY_GATE_STATUSES.map((status) => <button key={status} className={rlcClass(null, status === detailStatus ? btnPrimary : btnSecondary)} disabled={qualityBusyId === kiDetail.id} onClick={async () => { await setQualityGateStatus(kiDetail, status); setKiDetail((current) => current ? { ...current, parameter: { ...(current.parameter || {}), qualityGateStatus: status } } : current); }}>{status}</button>)}
+                  </div>
+                  <button className={rlcClass(null, btnPrimary)} disabled={detailStatus !== "Freigegeben" || busy} onClick={() => runBusy("KI-Position wird in Datenbank übernommen…", () => saveKiLearningEntryToDatenbank(kiDetail))}>In Datenbank übernehmen</button>
+                </div>
+              </section>
+            </div>
+          );
+        })() : null}
 
         {err ? <div className={rlcClass(null, alertError)}>{err}</div> : null}
         {stat ? <div className={rlcClass(null, alertSuccess)}>{stat}</div> : null}
@@ -2454,6 +2512,14 @@ export default function PreisePage() {
             </div>
           </div>
 
+          <div className={rlcClass(null, priceTableActions)}>
+            <span className={rlcClass(null, selectionInfo)}>{selectedRows.length} ausgewählt</span>
+            <button className={rlcClass(null, btnWarning)} disabled={busy || !selectedRows.length} onClick={() => runBusy("Auswahl wird korrigiert…", autoCorrectSelected)}>Automatisch korrigieren</button>
+            <button className={rlcClass(null, btnWarning)} disabled={busy || !pruefungDone} onClick={selectDuplicatesForDelete}>Doppelte markieren</button>
+            <button className={rlcClass(null, btnDanger)} disabled={busy || !selectedRows.length} onClick={deleteSelectedRows}>Auswahl löschen</button>
+            <button className={rlcClass(null, btnPrimary)} disabled={busy || !selectedRows.length} onClick={() => runBusy("Auswahl wird gespeichert…", saveSelectedToDatenbank)}>In Datenbank speichern</button>
+          </div>
+
           <label className={rlcClass(null, selectAllBox)}>
             <input
               type="checkbox"
@@ -2465,20 +2531,18 @@ export default function PreisePage() {
         </div>
 
         <div className={rlcClass(null, tableWrap)}>
-          <table className={rlcClass(null, table)}>
+          <table className={rlcClass("rlc-row-table", table)}>
             <thead>
               <tr>
-                <th className={rlcClass(null, thSmall)}></th>
-                <th className={rlcClass(null, th)}>Prüfung</th>
-                <th className={rlcClass(null, th)}>PosNr</th>
-                <th className={rlcClass(null, th)}>Kurztext</th>
-                <th className={rlcClass(null, th)}>Langtext</th>
-                <th className={rlcClass(null, th)}>ME</th>
-                <th className={rlcClass(null, thRight)}>EP netto</th>
-                <th className={rlcClass(null, th)}>Gruppe</th>
-                <th className={rlcClass(null, th)}>Score</th>
-                <th className={rlcClass(null, th)}>refKey</th>
-                <th className={rlcClass(null, th)}>Aktion</th>
+                <th className={rlcClass("rlc-row-th", thSmall)}></th>
+                <th className={rlcClass("rlc-row-th", th)}>Prüfung</th>
+                <th className={rlcClass("rlc-row-th", th)}>Ref.</th>
+                <th className={rlcClass("rlc-row-th", th)}>Leistung / Beschreibung</th>
+                <th className={rlcClass("rlc-row-th", th)}>ME</th>
+                <th className={rlcClass("rlc-row-th rlc-row-th--right", thRight)}>EP netto</th>
+                <th className={rlcClass("rlc-row-th", th)}>Gruppe</th>
+                <th className={rlcClass("rlc-row-th", th)}>Score</th>
+                <th className={rlcClass("rlc-row-th", th)}>Aktion</th>
               </tr>
             </thead>
 
@@ -2491,7 +2555,7 @@ export default function PreisePage() {
 
                 return (
                   <tr
-                    key={rowId} className={rlcClass(null,
+                    key={rowId} className={rlcClass(isSelected ? "rlc-row rlc-row--selected" : "rlc-row",
                     {
                       background: isSelected ?
                       "#EAF2FF" :
@@ -2501,7 +2565,7 @@ export default function PreisePage() {
                     })}
                     onDoubleClick={() => !busy && startEdit(row)}>
                     
-                    <td className={rlcClass(null, tdCenter)}>
+                    <td className={rlcClass("rlc-row-td", tdCenter)}>
                       <input
                         type="checkbox"
                         disabled={busy}
@@ -2510,7 +2574,7 @@ export default function PreisePage() {
                       
                     </td>
 
-                    <td className={rlcClass(null, td)}>
+                    <td className={rlcClass("rlc-row-td", td)}>
                       {!pruefungDone ?
                       <span className={rlcClass(null, pillNeutral)}>—</span> :
                       meta?.status === "error" ?
@@ -2526,21 +2590,26 @@ export default function PreisePage() {
                       }
                     </td>
 
-                    <td className={rlcClass(null, tdMono)}>{normalized.posNr}</td>
-                    <td className={rlcClass(null, td)}>{normalized.kurztext}</td>
-                    <td className={rlcClass(null, tdMuted)}>
-                      {String((normalized as any).langtext || "").trim() || "—"}
+                    <td className={rlcClass("rlc-row-td", tdMono)}>{normalized.posNr || "—"}</td>
+                    <td className={rlcClass("rlc-row-td", td)}>
+                      <div className={rlcClass(null, priceTextCell)}>
+                        <strong>{normalized.kurztext || "—"}</strong>
+                        {String((normalized as any).langtext || "").trim() ? (
+                          <div className={rlcClass("rlc-row-lang-preview", priceLangPreview)}>
+                            {String((normalized as any).langtext || "").slice(0, 150)}{String((normalized as any).langtext || "").length > 150 ? "…" : ""}
+                          </div>
+                        ) : null}
+                      </div>
                     </td>
-                    <td className={rlcClass(null, td)}>{normalizeUnit(normalized.einheit)}</td>
-                    <td className={rlcClass(null, tdRight)}>{money((normalized as any).ep)}</td>
-                    <td className={rlcClass(null, td)}>
+                    <td className={rlcClass("rlc-row-td", td)}>{normalizeUnit(normalized.einheit)}</td>
+                    <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}>{money((normalized as any).ep)}</td>
+                    <td className={rlcClass("rlc-row-td", td)}>
                       <span className={rlcClass(null, groupBadge((normalized as any).gruppe))}>
                         {(normalized as any).gruppe || "—"}
                       </span>
                     </td>
-                    <td className={rlcClass(null, tdMono)}>{pruefungDone ? meta?.score ?? "—" : "—"}</td>
-                    <td className={rlcClass(null, tdMono)}>{toRefKey(normalized)}</td>
-                    <td className={rlcClass(null, td)}>
+                    <td className={rlcClass("rlc-row-td", tdMono)}>{pruefungDone ? meta?.score ?? "—" : "—"}</td>
+                    <td className={rlcClass("rlc-row-td", td)}>
                       <div className={rlcClass(null, rowActions)}>
                         <button className={rlcClass(null,
                         btnMini)}
@@ -2575,7 +2644,7 @@ export default function PreisePage() {
 
               {!view.length ?
               <tr>
-                  <td colSpan={11} className={rlcClass(null, emptyCell)}>
+                  <td colSpan={9} className={rlcClass(null, emptyCell)}>
                     Kein Ergebnis. Bitte CSV/PDF importieren, Preisposition erfassen
                     oder Daten aus LV / KI / Manuell laden.
                   </td>
@@ -2599,10 +2668,10 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }
@@ -2633,9 +2702,30 @@ function groupBadge(gruppe?: string): React.CSSProperties {
 
 const page: React.CSSProperties = {
   display: "grid",
-  gap: 16,
-  padding: 16
+  gap: 10,
+  padding: 12
 };
+
+const editEyebrow: React.CSSProperties = { fontSize: 9.5, fontWeight: 800, letterSpacing: ".06em", color: "#146EF5" };
+const editTitle: React.CSSProperties = { margin: "2px 0", fontSize: 21, lineHeight: 1.1, color: "#0F172A" };
+const editSub: React.CSSProperties = { fontSize: 11.5, color: "#64748B" };
+const kiDetailOverlay: React.CSSProperties = { position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15,23,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 22 };
+const kiDetailModal: React.CSSProperties = { width: "min(1050px,96vw)", maxHeight: "90vh", overflowY: "auto", background: "#FFFFFF", borderRadius: 16, border: "1px solid #DCE4EF", boxShadow: "0 24px 80px rgba(15,23,42,.32)", padding: 16 };
+const kiDetailHead: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", paddingBottom: 10, marginBottom: 10, borderBottom: "1px solid #E2E8F0" };
+const kiDetailKpis: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 7, marginBottom: 10 };
+const kiDetailGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 8, marginBottom: 8 };
+const kiDetailBlock: React.CSSProperties = { border: "1px solid #E2E8F0", borderRadius: 10, padding: 10, background: "#F8FAFC" };
+const kiDetailText: React.CSSProperties = { whiteSpace: "pre-wrap", fontSize: 11.5, lineHeight: 1.45, color: "#334155" };
+const kiDetailLine: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 10, padding: "4px 0", borderBottom: "1px solid #EEF2F7", fontSize: 10.5, color: "#475569" };
+const kiDetailFooter: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, paddingTop: 10, borderTop: "1px solid #E2E8F0", flexWrap: "wrap" };
+
+const workflowGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 };
+const workflowStep: React.CSSProperties = { border: "1px solid #E2E8F0", background: "#F8FAFC", borderRadius: 10, padding: 10, display: "grid", gap: 6 };
+const workflowHead: React.CSSProperties = { display: "flex", alignItems: "center", gap: 7, color: "#0F172A", fontSize: 12 };
+const workflowText: React.CSSProperties = { color: "#64748B", fontSize: 10.5, lineHeight: 1.3 };
+const workflowButtons: React.CSSProperties = { display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" };
+const priceTextCell: React.CSSProperties = { display: "grid", gap: 3, minWidth: 0 };
+const priceLangPreview: React.CSSProperties = { marginTop: 2, color: "#64748B", fontSize: 10.5, lineHeight: 1.3 };
 
 const busyOverlay: React.CSSProperties = {
   position: "fixed",
@@ -2811,9 +2901,10 @@ const toolbarGrid: React.CSSProperties = {
 
 const input: React.CSSProperties = {
   border: "1px solid #D1D5DB",
-  borderRadius: 10,
-  padding: "9px 11px",
-  fontSize: 13,
+  borderRadius: 8,
+  padding: "6px 9px",
+  minHeight: 34,
+  fontSize: 11.5,
   width: "100%",
   boxSizing: "border-box"
 };
@@ -2881,6 +2972,14 @@ const buttonRow: React.CSSProperties = {
   alignItems: "center"
 };
 
+const priceTableActions: React.CSSProperties = {
+  display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5,
+  flexWrap: "wrap", marginLeft: "auto"
+};
+const selectionInfo: React.CSSProperties = {
+  fontSize: 10.5, fontWeight: 700, color: "#475569", whiteSpace: "nowrap", padding: "0 4px"
+};
+
 const selectAllBox: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -2924,7 +3023,9 @@ const tableWrap: React.CSSProperties = {
 
 const table: React.CSSProperties = {
   width: "100%",
-  minWidth: 1380,
+  minWidth: 0,
+  maxWidth: "100%",
+  tableLayout: "fixed",
   borderCollapse: "collapse"
 };
 
@@ -2999,9 +3100,10 @@ const rowActions: React.CSSProperties = {
 
 const btnBase: React.CSSProperties = {
   border: "1px solid #D1D5DB",
-  borderRadius: 10,
-  padding: "9px 13px",
-  fontSize: 13,
+  borderRadius: 8,
+  padding: "6px 9px",
+  minHeight: 34,
+  fontSize: 11,
   fontWeight: 700,
   cursor: "pointer",
   whiteSpace: "nowrap"

@@ -2,6 +2,61 @@ import { API_BASE } from "../lib/apiBase";
 // src/api/files.ts
 type Kind = "PDF" | "CAD" | "IMAGE" | "OTHER";
 
+function getToken(): string {
+  try {
+    const directKeys = [
+      "rlc_token",
+      "token",
+      "authToken",
+      "accessToken",
+      "rlc_auth_token",
+      "rlc_access_token",
+      "rlc.auth.token",
+      "rlc_mobile_token"
+    ];
+
+    for (const key of directKeys) {
+      for (const storage of [localStorage, sessionStorage]) {
+        const value = storage.getItem(key);
+        if (value && value.trim()) return value.trim();
+      }
+    }
+
+    const jsonKeys = [
+      "rlc_auth",
+      "auth",
+      "user",
+      "session",
+      "rlc_session"
+    ];
+
+    for (const key of jsonKeys) {
+      for (const storage of [localStorage, sessionStorage]) {
+        const raw = storage.getItem(key);
+        if (!raw) continue;
+
+        try {
+          const parsed = JSON.parse(raw);
+          const token =
+            parsed?.token ??
+            parsed?.accessToken ??
+            parsed?.authToken ??
+            parsed?.jwt ??
+            parsed?.data?.token ??
+            parsed?.data?.accessToken;
+
+          if (typeof token === "string" && token.trim()) {
+            return token.trim();
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  return "";
+}
+
+
 export type DocumentVersionDto = {
   id: string;
   storageId?: string | null;
@@ -29,6 +84,15 @@ export type DocumentDto = {
 function apiUrl(path: string) {
   const p = path.startsWith("/") ? path : `/${path}`;
   return API_BASE ? `${API_BASE}${p}` : p;
+}
+
+function authHeaders(extra?: Record<string, string>): HeadersInit {
+  const token = getToken();
+
+  return {
+    ...(extra || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
 }
 
 async function readJsonSafe<T>(res: Response): Promise<T | null> {
@@ -75,6 +139,7 @@ export async function listDocuments(projectId: string) {
     await fetch(url, {
       method: "GET",
       credentials: "include",
+      headers: authHeaders(),
     })
   );
 }
@@ -85,14 +150,21 @@ export async function initDocument(
   kind: Kind,
   name: string
 ) {
-  const url = apiUrl(`/api/files/project/${encodeURIComponent(projectId)}/init`);
+  const url = apiUrl("/api/files/init");
 
-  return j<{ documentId: string }>(
+  return j<{ ok: true; documentId: string }>(
     await fetch(url, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind, name }),
+      headers: authHeaders({
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      }),
+      body: JSON.stringify({
+        projectId,
+        kind,
+        name
+      }),
     })
   );
 }
@@ -103,16 +175,28 @@ export async function getUploadUrl(
   fileName: string,
   mime: string
 ) {
-  const url = apiUrl(
-    `/api/files/document/${encodeURIComponent(documentId)}/presign`
-  );
+  const url = apiUrl("/api/files/upload-url");
 
-  return j<{ uploadUrl: string; storageId: string }>(
+  return j<{
+    ok: true;
+    uploadUrl: string;
+    key: string;
+    documentId: string;
+    version: number;
+    contentType: string;
+  }>(
     await fetch(url, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileName, mime }),
+      headers: authHeaders({
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      }),
+      body: JSON.stringify({
+        documentId,
+        filename: fileName,
+        contentType: mime
+      }),
     })
   );
 }
@@ -145,6 +229,7 @@ export async function softDeleteDocument(documentId: string) {
     await fetch(url, {
       method: "DELETE",
       credentials: "include",
+      headers: authHeaders(),
     })
   );
 
@@ -161,6 +246,7 @@ export async function restoreDocument(documentId: string) {
     await fetch(url, {
       method: "POST",
       credentials: "include",
+      headers: authHeaders(),
     })
   );
 
@@ -178,7 +264,7 @@ export async function updateDocument(
     await fetch(url, {
       method: "PATCH",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(patch),
     })
   );
@@ -192,6 +278,7 @@ export async function getDocumentViewUrl(documentId: string) {
     await fetch(url, {
       method: "GET",
       credentials: "include",
+      headers: authHeaders(),
     })
   );
 }
@@ -206,3 +293,118 @@ export async function getDocumentViewUrl(documentId: string) {
 
 
 
+
+
+export async function completeUpload(args: {
+  documentId: string;
+  key: string;
+  version: number;
+  contentType: string;
+  size?: number;
+}) {
+  const res = await fetch(apiUrl("/api/files/upload-complete"), {
+    method: "POST",
+    credentials: "include",
+    headers: authHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify(args),
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new Error(
+      data?.error || `Upload-Abschluss fehlgeschlagen (${res.status})`
+    );
+  }
+
+  return data;
+}
+
+
+/* ---------------- DIRECT SERVER UPLOAD ---------------- */
+export async function uploadFileDirect(
+  documentId: string,
+  file: File
+) {
+  const form = new FormData();
+
+  form.append("documentId", documentId);
+  form.append("file", file, file.name);
+
+  const res = await fetch(apiUrl("/api/files/upload-direct"), {
+    method: "POST",
+    credentials: "include",
+    headers: authHeaders(),
+    body: form
+  });
+
+  return j<{
+    ok: true;
+    documentId: string;
+    versionId: string;
+    version: number;
+    key: string;
+    size: number;
+  }>(res);
+}
+
+
+export type DocumentVersionHistoryDto = {
+  id: string;
+  version: number;
+  current: boolean;
+  storageId?: string | null;
+  key?: string;
+  mime?: string;
+  size?: number;
+  exists?: boolean;
+  createdAt?: string | null;
+};
+
+export async function getDocumentVersions(documentId: string) {
+  const url = apiUrl(
+    `/api/files/document/${encodeURIComponent(documentId)}/versions`
+  );
+
+  return j<{
+    ok: true;
+    documentId: string;
+    currentVid?: string | null;
+    versions: DocumentVersionHistoryDto[];
+  }>(
+    await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: authHeaders()
+    })
+  );
+}
+
+
+export async function restoreDocumentVersion(
+  documentId: string,
+  versionId: string
+) {
+  const url = apiUrl(
+    `/api/files/document/${encodeURIComponent(documentId)}/version/${encodeURIComponent(versionId)}/restore`
+  );
+
+  return j<{
+    ok: true;
+    documentId: string;
+    versionId: string;
+    version: number;
+  }>(
+    await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers: authHeaders({
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      })
+    })
+  );
+}

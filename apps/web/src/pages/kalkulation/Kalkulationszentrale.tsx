@@ -100,6 +100,12 @@ async function postJsonBody(path: string, body: unknown): Promise<any> {
   }
   return payload;
 }
+function rowsFromSnapshot(payload: any): CalcRow[] {
+  const data = payload?.data ?? payload?.snapshot?.data ?? payload;
+  const rows = Array.isArray(data) ? data : data?.rows || data?.items || data?.positions || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
 function readRows(key: string): CalcRow[] {
   for (const storageKey of [
   `rlc_kalkulation_mit_ki_elite_v1:${key}`,
@@ -107,9 +113,8 @@ function readRows(key: string): CalcRow[] {
   `RLC_POSITIONLV_${key}`])
   {
     try {
-      const parsed = JSON.parse(localStorage.getItem(storageKey) || "null");
-      const rows = Array.isArray(parsed) ? parsed : parsed?.rows || parsed?.items || parsed?.positions || [];
-      if (Array.isArray(rows) && rows.length) return rows;
+      const rows = rowsFromSnapshot(JSON.parse(localStorage.getItem(storageKey) || "null"));
+      if (rows.length) return rows;
     } catch {}
   }
   return [];
@@ -131,6 +136,16 @@ function gp(row: CalcRow): number {
 function confidence(row: CalcRow): number {
   const value = num(row?.confidence);
   return value > 1 ? value / 100 : value;
+}
+function priceBreakdownRequiresReview(row: CalcRow): boolean {
+  const lines = Array.isArray(row?.priceBreakdown) ? row.priceBreakdown : [];
+  if (!lines.length) return false;
+  const breakdownEp = Math.round(lines.reduce((sum: number, line: any) => sum + num(line?.total), 0) * 100) / 100;
+  const finalEp = num(row?.rlcKiUnitPrice) || num(row?.finalUnitPrice) || num(row?.preis) || num(row?.suggestedUnitPrice);
+  if (breakdownEp <= 0 || finalEp <= 0) return false;
+  const denominator = Math.max(Math.abs(finalEp), Math.abs(breakdownEp), 0.01);
+  const deltaPct = Math.round(Math.abs(breakdownEp - finalEp) / denominator * 10000) / 100;
+  return deltaPct > 2;
 }
 function structure(row: CalcRow): boolean {
   const text = `${row?.source || ""} ${row?.calculationStatus || ""} ${row?.aiReason || ""}`.toLowerCase();
@@ -1085,7 +1100,7 @@ export default function Kalkulationszentrale() {
   const [impactErrors, setImpactErrors] = React.useState<Record<string, string>>({});
   const [notice, setNotice] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [candidatePageSize, setCandidatePageSize] = React.useState<CandidatePageSize>(20);
+  const [candidatePageSize, setCandidatePageSize] = React.useState<CandidatePageSize>(10);
   const [selectedCandidateIds, setSelectedCandidateIds] = React.useState<string[]>([]);
   const [databaseSaving, setDatabaseSaving] = React.useState(false);
 
@@ -1095,6 +1110,9 @@ export default function Kalkulationszentrale() {
     key ?
     getJson(`/api/kalkulation/ki/construction-intelligence/status/${encodeURIComponent(key)}`) :
     Promise.resolve(null),
+    key ?
+    getJson(`/api/kalkulation/storage/ki/${encodeURIComponent(key)}`) :
+    Promise.resolve(null),
     getJson("/api/autonomous/status"),
     getJson("/api/autonomous/market/status"),
     getJson("/api/autonomous/market/events"),
@@ -1102,17 +1120,22 @@ export default function Kalkulationszentrale() {
     getJson("/api/autonomous/market/dashboard"),
     getJson("/api/autonomous/market/candidates?limit=500")]
     );
-    const dashboard = results[5].status === "fulfilled" ? results[5].value : null;
-    const rawEvents = results[3].status === "fulfilled" ? results[3].value : null;
-    const candidatePayload = results[6].status === "fulfilled" ? results[6].value : null;
+    const dashboard = results[6].status === "fulfilled" ? results[6].value : null;
+    const rawEvents = results[4].status === "fulfilled" ? results[4].value : null;
+    const candidatePayload = results[7].status === "fulfilled" ? results[7].value : null;
+    const serverRows = results[1].status === "fulfilled" ? rowsFromSnapshot(results[1].value) : [];
     setIntel(results[0].status === "fulfilled" ? results[0].value : null);
-    setObserver(results[1].status === "fulfilled" ? results[1].value : null);
-    setMarketStatus(results[2].status === "fulfilled" ? results[2].value : dashboard?.status || null);
+    setObserver(results[2].status === "fulfilled" ? results[2].value : null);
+    setMarketStatus(results[3].status === "fulfilled" ? results[3].value : dashboard?.status || null);
     setMarketDashboard(dashboard);
     setEvents(mergeMarketData(rawEvents, dashboard, candidatePayload));
-    setRejections(results[4].status === "fulfilled" ? arrayFrom(results[4].value) : []);
-    setRows(readRows(key));
-    const failed = results.slice(0, 5).filter((r) => r.status === "rejected").length;
+    setRejections(results[5].status === "fulfilled" ? arrayFrom(results[5].value) : []);
+    // La pagina KI aggiorna il proprio snapshot completo nel browser appena
+    // Recipes conclude l'Urkalkulation. Non sostituirlo con un handoff server
+    // più vecchio/parziale: il server resta solo fallback.
+    const localRows = readRows(key);
+    setRows(localRows.length ? localRows : serverRows);
+    const failed = results.filter((r) => r.status === "rejected").length;
     if (failed) setNotice(`${failed} Datenquelle(n) waren nicht erreichbar. Lokale Projektdaten bleiben sichtbar.`);
     setLoading(false);
   }, [key]);
@@ -1302,8 +1325,13 @@ export default function Kalkulationszentrale() {
   const calculated = relevant.filter((r) => ep(r) > 0).length;
   const missingEp = relevant.filter((r) => ep(r) <= 0).length;
   const missingUrk = relevant.filter((r) => !hasUrk(r)).length;
-  const review = relevant.filter((r) => ["warning", "critical"].includes(String(r?.calculationStatus || r?.status || "").toLowerCase()) ||
-  String(r?.riskLevel || "").toLowerCase() === "high" || confidence(r) < 0.7).length;
+  // Muss exakt dieselbe Definition wie Kalkulation mit KI verwenden.
+  // Warnungen, hohes Risiko und niedrige Confidence werden separat dargestellt
+  // und dürfen "Zur Prüfung" nicht künstlich aufblasen.
+  const review = relevant.filter((r) => {
+    const status = String(r?.calculationStatus || "").toLowerCase();
+    return status === "critical" || status === "needs_review" || priceBreakdownRequiresReview(r);
+  }).length;
   const avgConf = relevant.length ? relevant.reduce((s, r) => s + confidence(r), 0) / relevant.length : 0;
   const net = relevant.reduce((s, r) => s + gp(r), 0);
   const summary = intel?.summary || {};
@@ -1435,8 +1463,8 @@ export default function Kalkulationszentrale() {
           </button>
         </div>
       </div>
-      {dbCandidates.length ? <div className={rlcClass(null, S.tableWrap)}><table className={rlcClass(null, S.table)}><thead><tr>
-        <th className={rlcClass(null, S.checkCell)}>
+      {dbCandidates.length ? <div className={rlcClass("rlc-firmenwissen-table-wrap", { ...S.tableWrap, borderRadius: 4 })}><table className={rlcClass("rlc-firmenwissen-table", { ...S.table, lineHeight: 1.05 })}><thead><tr>
+        <th className={rlcClass(null, { ...S.checkCell, padding: "2px 3px", height: 28 })}>
           <input
                   type="checkbox"
                   aria-label="Alle sichtbaren Positionen auswählen"
@@ -1444,10 +1472,10 @@ export default function Kalkulationszentrale() {
                   onChange={toggleVisibleCandidates} />
                 
         </th>
-        <th className={rlcClass(null, S.th)}>Pos.</th><th className={rlcClass(null, S.th)}>Kurztext</th><th className={rlcClass(null, S.th)}>Quelle</th><th className={rlcClass(null, S.th)}>ME</th>
-        <th className={rlcClass(null, S.thR)}>EP</th><th className={rlcClass(null, S.thR)}>Vertrauensgrad</th></tr></thead><tbody>
+        <th className={rlcClass(null, { ...S.th, padding: "4px 6px", height: 28 })}>Pos.</th><th className={rlcClass(null, { ...S.th, padding: "4px 6px", height: 28 })}>Kurztext</th><th className={rlcClass(null, { ...S.th, padding: "4px 6px", height: 28 })}>Quelle</th><th className={rlcClass(null, { ...S.th, padding: "4px 6px", height: 28 })}>ME</th>
+        <th className={rlcClass(null, { ...S.thR, padding: "4px 6px", height: 28 })}>EP</th><th className={rlcClass(null, { ...S.thR, padding: "4px 6px", height: 28 })}>Vertrauensgrad</th></tr></thead><tbody>
         {visibleDbCandidates.map((c) => <tr key={c.id}>
-        <td className={rlcClass(null, S.checkCell)}>
+        <td className={rlcClass(null, { ...S.checkCell, padding: "2px 3px", height: 28 })}>
           <input
                   type="checkbox"
                   aria-label={`Position ${c.posNr} auswählen`}
@@ -1455,9 +1483,9 @@ export default function Kalkulationszentrale() {
                   onChange={() => toggleCandidate(c.id)} />
                 
         </td>
-        <td className={rlcClass(null, S.tdB)}>{c.posNr}</td><td className={rlcClass(null, S.td)}>{c.kurztext}</td>
-        <td className={rlcClass(null, S.td)}>{c.source}</td><td className={rlcClass(null, S.td)}>{c.einheit}</td><td className={rlcClass(null, S.tdR)}>{money(c.ep)}</td>
-        <td className={rlcClass(null, S.tdR)}>{pct(c.confidence * 100)}</td></tr>)}</tbody></table></div> : <Empty text="Keine freigabefähigen Kandidaten erkannt." />}
+        <td className={rlcClass(null, { ...S.tdB, padding: "2px 6px", height: 30 })}>{c.posNr}</td><td className={rlcClass(null, { ...S.td, padding: "2px 6px", height: 30 })}>{c.kurztext}</td>
+        <td className={rlcClass(null, { ...S.td, padding: "2px 6px", height: 30 })}>{c.source}</td><td className={rlcClass(null, { ...S.td, padding: "2px 6px", height: 30 })}>{c.einheit}</td><td className={rlcClass(null, { ...S.tdR, padding: "2px 6px", height: 30 })}>{money(c.ep)}</td>
+        <td className={rlcClass(null, { ...S.tdR, padding: "2px 6px", height: 30 })}>{pct(c.confidence * 100)}</td></tr>)}</tbody></table></div> : <Empty text="Keine freigabefähigen Kandidaten erkannt." />}
     </Panel>
 
     <section className={rlcClass(null, S.statusGrid)}>
@@ -1561,31 +1589,16 @@ export default function Kalkulationszentrale() {
         })}</div> : <Empty text="Die Marktbeobachtung hat noch keine Ereignisse geliefert." />}
     </Panel>
 
-    <section className={rlcClass(null, S.bottomGrid)}>
-      <Panel title="Änderungsprotokoll">
-        {latest.length ? latest.map((e: any, i: number) => {
-          const sourceUrl = eventUrl(e);
-          return <div key={i} className={rlcClass(null, S.log)}>
-            <span>{dateText(eventDate(e))}</span>
-            {sourceUrl ?
-            <a className={rlcClass(null, S.logLink)} href={sourceUrl} target="_blank" rel="noreferrer">{eventTitle(e)}</a> :
-            <strong>{eventTitle(e)}</strong>}
-            <small>{eventSource(e)}</small>
-          </div>;
-        }) : <Empty text="Noch keine autonomen Änderungen protokolliert." />}
-      </Panel>
-
-      <Panel title="Direkte Fachmodule"><div className={rlcClass(null, S.links)}>
-        <LinkButton label="LV / Positionen" onClick={() => navigate("/kalkulation/lv-import")} />
-        <LinkButton label="Kalkulation öffnen" onClick={() => navigate("/kalkulation/mit-ki")} />
-        <LinkButton label="Urkalkulation" onClick={() => navigate("/kalkulation/rezepte")} />
-        <LinkButton label="Datenbank öffnen" onClick={() => navigate("/kalkulation/datenbank")} />
-        <LinkButton label="Versionsvergleich" onClick={() => navigate("/kalkulation/versionsvergleich")} />
-        <LinkButton label="Nachträge" onClick={() => navigate("/kalkulation/nachtraege")} />
-        <LinkButton label="Angebot" onClick={() => navigate("/kalkulation/angebot")} />
-        <LinkButton label="GAEB" onClick={() => navigate("/kalkulation/gaeb")} />
-      </div></Panel>
-    </section>
+    <Panel title="Direkte Fachmodule"><div className={rlcClass(null, S.links)}>
+      <LinkButton label="LV / Positionen" onClick={() => navigate("/kalkulation/lv-import")} />
+      <LinkButton label="Kalkulation öffnen" onClick={() => navigate("/kalkulation/mit-ki")} />
+      <LinkButton label="Urkalkulation" onClick={() => navigate("/kalkulation/rezepte")} />
+      <LinkButton label="Datenbank öffnen" onClick={() => navigate("/kalkulation/datenbank")} />
+      <LinkButton label="Versionsvergleich" onClick={() => navigate("/kalkulation/versionsvergleich")} />
+      <LinkButton label="Nachträge" onClick={() => navigate("/kalkulation/nachtraege")} />
+      <LinkButton label="Angebot" onClick={() => navigate("/kalkulation/angebot")} />
+      <LinkButton label="GAEB" onClick={() => navigate("/kalkulation/gaeb")} />
+    </div></Panel>
   </main>;
 }
 

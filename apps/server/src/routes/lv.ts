@@ -41,7 +41,7 @@ router.get(
   validate(qList, "query"),
   async (req, res) => {
     const { page, pageSize } = req.query as any;
-    const projectId = String(req.params.projectId);
+    const projectId = String((req as any).resolvedProjectId || req.params.projectId);
 
     const [rows, total] = await Promise.all([
       prisma.lVHeader.findMany({
@@ -69,7 +69,7 @@ router.post(
   requireProjectMember("projectId"),
   validate(createSchema),
   async (req, res) => {
-    const projectId = String(req.params.projectId);
+    const projectId = String((req as any).resolvedProjectId || req.params.projectId);
 
     const max = await prisma.lVHeader.aggregate({
       where: { projectId },
@@ -124,7 +124,7 @@ router.post(
   requireProjectMember("projectId"),
   validate(importSchema),
   async (req, res) => {
-    const projectId = String(req.params.projectId);
+    const projectId = String((req as any).resolvedProjectId || req.params.projectId);
 
     const max = await prisma.lVHeader.aggregate({
       where: { projectId },
@@ -181,11 +181,11 @@ router.get(
   requirePermission("lv:*"),
   requireProjectMember("projectId"),
   async (req, res) => {
-    const projectId = String(req.params.projectId);
+    const projectId = String((req as any).resolvedProjectId || req.params.projectId);
     const lvId = String(req.params.lvId);
 
-    const lv = await prisma.lVHeader.findUnique({
-      where: { id: lvId },
+    const lv = await prisma.lVHeader.findFirst({
+      where: { id: lvId, projectId },
       include: { positions: true },
     });
 

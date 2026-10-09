@@ -1,4 +1,3 @@
-import copilotTtsRouter from "./routes/copilot.tts";
 // apps/server/src/index.ts
 import globalKnowledgeRouter from "./routes/globalKnowledge";
 import "dotenv/config";
@@ -17,10 +16,11 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { PROJECTS_ROOT } from "./lib/projectsRoot";
+import { archiveProjectBufferVersion } from "./services/dmsArchive";
 import { COMPANIES_ROOT } from "./lib/companiesRoot"; // âœ… NEW (company logo/header storage root)
 
 // âœ… MAILER VERIFY (punto 2)
-import { verifyMailerOnce } from "./lib/mailer";
+import { verifyMailerOnce, sendMailLogged } from "./lib/mailer";
 
 /* ---- ROUTES (base) ---- */
 import aufmassRoutes from "./routes/aufmass";
@@ -42,6 +42,7 @@ import copilotSttRoutes from "./routes/copilot.stt";
 import kiRoutes from "./routes/ki";
 import abrechnungRoutes from "./routes/abrechnung";
 import buchhaltungRoutes from "./routes/buchhaltung";
+import accountingHubRoutes from "./routes/accountingHub";
 import pdfRoutes from "./routes/pdf";
 import lookupRoutes from "./routes/lookup";
 
@@ -69,9 +70,23 @@ import inboxRouter from "./routes/inbox";
 import inboxWorkflowRouter from "./routes/inboxWorkflow";
 import photosRouter from "./routes/photos"; // legacy (lo teniamo come /api/photos-legacy)
 import regiePdfRoutes from "./routes/regiePdf";
+import diaryTimeExportRoutes from "./routes/diaryTimeExport";
+import tagesberichtRoutes from "./routes/tagesbericht";
+import personalRoutes from "./routes/personal";
+import safetyRoutes from "./routes/safety";
+import wasteComplianceRoutes from "./routes/wasteCompliance";
 import privacyComplianceRoutes from "./routes/privacyCompliance";
 import privacyBreachRoutes from "./routes/privacyBreach";
-import tagesberichtRoutes from "./routes/tagesbericht";
+import handoverRoutes from "./routes/handover";
+import contractsRoutes from "./routes/contracts";
+import officeAddonsRoutes from "./routes/officeAddons";
+import communicationRoutes from "./routes/communication";
+import projectTasksRoutes from "./routes/projectTasks";
+import projectNotesRoutes from "./routes/projectNotes";
+import officeCalendarRoutes from "./routes/officeCalendar";
+
+import resourceCostsRoutes from "./routes/resources.costs";
+import costCentersRoutes from "./routes/costCenters";
 import sollistRoutes from "./routes/sollist";
 
 import cadRoutes from "./routes/cad";
@@ -96,7 +111,7 @@ import { requireServerLicense } from "./middleware/license";
 import licenseRoutes from "./routes/license";
 
 /* âœ… COMPANY + SUBSCRIPTION (blocco totale) */
-import { requireCompany, requireActiveSubscription } from "./middleware/guards";
+import { requireCompany, requireActiveSubscription, requireProjectMember } from "./middleware/guards";
 import companyInvitesRoutes from "./routes/company.invites";
 import companyAdminRoutes from "./routes/company.admin";
 import companyMobileLicensesRoutes from "./routes/company.mobile-licenses";
@@ -112,7 +127,10 @@ import enterpriseRoutes from "./routes/enterprise";
 import aiRuntimeRoutes from "./routes/ai.runtime";
 
 /* ======================= CRASH SHIELD (NO BREAKING CHANGES) ======================= */
-const pdfUpload = multer({ storage: multer.memoryStorage() });
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
 const DEBUG_MEMORY = (process.env.DEBUG_MEMORY || "").toLowerCase() === "on";
 
 function fmtMB(n: number) {
@@ -167,15 +185,7 @@ const app = express();
 
 
 
-// =======================
-// Static: Projects (MUST be before routes / 404)
-// =======================
-app.use(
-  "/projects",
-  express.static(PROJECTS_ROOT, {
-    fallthrough: false, // se non trova il file -> 404 static (non JSON catch-all)
-  })
-);
+// Projektdateien werden weiter unten erst nach Auth/Company/Membership ausgeliefert.
 console.log("[DEBUG] PROJECTS_ROOT =", PROJECTS_ROOT);
 const PORT = Number(process.env.PORT || 4000);
 
@@ -185,7 +195,7 @@ const __devCompanyIdEffective =
   (process.env.DEV_COMPANY_ID || "").trim() || "dev-company";
 console.log("[ENV] PORT=", PORT);
 console.log("[ENV] DEV_AUTH=", __devAuthOn ? "on" : "off");
-console.log("[ENV] DEV_COMPANY_ID=", __devCompanyIdEffective);
+console.log("[ENV] DEV_COMPANY_ID=", __devAuthOn ? __devCompanyIdEffective : "<disabled>");
 /* ======================= /MINI DEBUG ENV ======================= */
 
 async function ensureDevCompany() {
@@ -239,11 +249,15 @@ app.use(
 );
 
 /* ----------------------- CORS ----------------------- */
+const IS_PRODUCTION = String(process.env.NODE_ENV || "").toLowerCase() === "production";
 const FRONTEND_ORIGINS = String(process.env.FRONTEND_ORIGIN || "")
   .split(",")
   .map((value) => value.trim())
-  .filter(Boolean);
-const ORIGIN_RE = [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/];
+  .filter(Boolean)
+  .filter((value) => !IS_PRODUCTION || !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(value));
+const ORIGIN_RE = IS_PRODUCTION
+  ? []
+  : [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/];
 
 app.use(
   cors({
@@ -263,7 +277,6 @@ app.use(
       "Authorization",
       "X-Requested-With",
       "X-Request-Id",
-      "x-company-id",
       "x-pricing-date",
       "X-App-Version",
       "X-App-Build",
@@ -279,7 +292,60 @@ app.options(/.*/, cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-app.use("/api/autonomous", autonomousRouter);
+const demoRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Zu viele Anfragen. Bitte später erneut versuchen." },
+});
+
+const copilotAudioLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => {
+    const company = String(req?.auth?.companyId || req?.auth?.company || "").trim();
+    const user = String(req?.auth?.sub || "").trim();
+    return `${company || "no-company"}:${user || "no-user"}`;
+  },
+  message: { ok: false, error: "COPILOT_AUDIO_RATE_LIMIT" },
+});
+
+app.post("/api/public/demo-anfrage", demoRequestLimiter, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (String(body.website || "").trim()) return res.status(200).json({ ok: true });
+
+    const firma = String(body.firma || "").trim().slice(0, 180);
+    const name = String(body.name || "").trim().slice(0, 180);
+    const email = String(body.email || "").trim().slice(0, 254);
+    const telefon = String(body.telefon || "").trim().slice(0, 80);
+    const einsatz = String(body.einsatzgebiet || "").trim().slice(0, 1200);
+
+    if (!firma || !name || !email || !/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ error: "Bitte Firma, Ansprechpartner und gültige E-Mail angeben." });
+    }
+
+    const esc = (v: string) => v.replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c] as string));
+    const subject = "RLC Demo-Anfrage – " + firma;
+    const html = "<h2>Neue RLC Demo-Anfrage</h2>"
+      + "<p><strong>Firma:</strong> " + esc(firma) + "</p>"
+      + "<p><strong>Ansprechpartner:</strong> " + esc(name) + "</p>"
+      + "<p><strong>E-Mail:</strong> " + esc(email) + "</p>"
+      + "<p><strong>Telefon:</strong> " + esc(telefon || "-") + "</p>"
+      + "<p><strong>Einsatzgebiet:</strong><br>" + esc(einsatz || "-").replace(/\n/g,"<br>") + "</p>";
+
+    await sendMailLogged({ to: "info@rlcbausoftware.com", subject, html });
+    return res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[demo-anfrage]", e);
+    return res.status(500).json({ error: "Anfrage konnte nicht gesendet werden." });
+  }
+});
+
+app.use("/api/autonomous", requireAuth, requireCompany, requireActiveSubscription, autonomousRouter);
 
 /* ======================= Project PDFs (mobile) ======================= */
 function isSafeFsKey(x: string) {
@@ -365,8 +431,14 @@ app.use((req, _res, next) => {
   next();
 });
 
-/* ======================= Static ======================= */
-app.use("/files", express.static(PROJECTS_ROOT, { fallthrough: true }));
+/* ======================= Geschützte Projektdateien ======================= */
+app.use(
+  "/projects",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  filesStaticRoutes
+);
 
 /* ======================= Health / Debug ======================= */
 app.get("/api/health", (_req, res) => {
@@ -377,7 +449,7 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "rlc-api", ts: Date.now(), alias: true });
 });
 
-app.get("/api/health/projects", (_req, res) => {
+app.get("/api/health/projects", requireAuth, requireCompany, requireActiveSubscription, (_req, res) => {
   res.json({
     ok: true,
     root: PROJECTS_ROOT,
@@ -385,7 +457,7 @@ app.get("/api/health/projects", (_req, res) => {
   });
 });
 
-app.get("/api/debug", (_req, res) => {
+app.get("/api/debug", requireAuth, requireCompany, requireActiveSubscription, (_req, res) => {
   res.json({
     ok: true,
     PROJECTS_ROOT,
@@ -478,8 +550,9 @@ app.get(
       const devOn = (process.env.DEV_AUTH || "").toLowerCase() === "on";
       const companyId = devOn
         ? (process.env.DEV_COMPANY_ID || "").trim() || "dev-company"
-        : null;
-      const where = companyId ? { companyId } : {};
+        : String((_req as any).auth?.companyId || "").trim();
+      if (!companyId) return res.status(403).json({ ok: false, error: "COMPANY_REQUIRED" });
+      const where = { companyId };
 
       const rows = await prisma.project.findMany({
         where,
@@ -497,7 +570,7 @@ app.get(
       });
 
       if (!rows || rows.length === 0) {
-        if (fsProjects.length > 0) {
+        if (devOn && fsProjects.length > 0) {
           return res.json({ ok: true, source: "FS", projects: fsProjects });
         }
         return res.json({ ok: true, source: "DB", projects: [] });
@@ -530,6 +603,7 @@ app.get(
   requireAuth,
   requireCompany,
   requireActiveSubscription,
+  requireProjectMember("fsKey"),
   async (req, res) => {
     try {
       const fsKey = String(req.params.fsKey || "").trim();
@@ -570,6 +644,7 @@ app.post(
   requireAuth,
   requireCompany,
   requireActiveSubscription,
+  requireProjectMember("fsKey"),
   pdfUpload.single("file"),
   async (req, res) => {
     try {
@@ -583,6 +658,13 @@ app.post(
         return res.status(400).json({ ok: false, error: "missing file" });
       }
 
+      if (
+        file.buffer.length < 5 ||
+        file.buffer.subarray(0, 5).toString("ascii") !== "%PDF-"
+      ) {
+        return res.status(415).json({ ok: false, error: "Ungültige PDF-Datei" });
+      }
+
       const original = String(file.originalname || "document.pdf").trim();
       const safeName = original.replace(/[^A-Za-z0-9._-]/g, "_");
       const finalName = safeName.toLowerCase().endsWith(".pdf")
@@ -594,6 +676,16 @@ app.post(
 
       const outAbs = path.join(dirAbs, finalName);
       fs.writeFileSync(outAbs, file.buffer);
+
+      const auth = (req as any).auth || {};
+      void archiveProjectBufferVersion({
+        projectIdOrCode: fsKey,
+        filename: finalName,
+        kind: "PDF",
+        buffer: file.buffer,
+        uploadedBy: String(auth.email || auth.userId || auth.sub || "").trim() || null,
+        meta: { module: "PROJEKTE", source: "index.projects.pdf.upload", folder: "pdfs" }
+      }).catch((error) => console.error("[index:projects-pdf-upload:dms]", error));
 
       return res.json({
         ok: true,
@@ -615,9 +707,10 @@ app.get(
   requireAuth,
   requireCompany,
   requireActiveSubscription,
+  requireProjectMember("id"),
   async (req, res) => {
     try {
-      const projectId = String(req.params.id);
+      const projectId = String((req as any).resolvedProjectId || req.params.id);
       const project = await prisma.project.findUnique({
         where: { id: projectId },
         select: {
@@ -828,26 +921,28 @@ app.get(
 // Pairing creation is protected by the router's auth/admin middleware.
 app.use("/api/enterprise", enterpriseRoutes);
 
-app.use("/api/aufmass", aufmassRoutes);
-app.use("/api/global-knowledge", globalKnowledgeRouter);
-app.use("/api/import", importRoutes);
-app.use("/api/gps", gpsRoutes);
-app.use("/api/fotos", fotosRoutes);
+app.use("/api/aufmass", requireAuth, requireCompany, requireActiveSubscription, aufmassRoutes);
+app.use("/api/global-knowledge", requireAuth, requireCompany, requireActiveSubscription, globalKnowledgeRouter);
+app.use("/api/import", requireAuth, requireCompany, requireActiveSubscription, importRoutes);
+app.use("/api/gps", requireAuth, requireCompany, requireActiveSubscription, gpsRoutes);
+app.use("/api/fotos", requireAuth, requireCompany, requireActiveSubscription, fotosRoutes);
 /* auth */
-app.use("/api/auth", adminAuthRoutes);
+if (!IS_PRODUCTION && String(process.env.DEV_AUTH || "").toLowerCase() === "on") {
+  app.use("/api/auth", adminAuthRoutes);
+}
 app.use("/api/auth", authRoutes);
 
 /* âœ… project-lv API */
 app.use(
   "/api/project-lv",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
   projectLvRoutes
 );
 
 /* whoami + license */
 app.use("/api/whoami", requireAuth, whoamiRoutes);
-app.use("/api/privacy-rights", requireAuth, requireCompany, privacyComplianceRoutes);
-app.use("/api/privacy-compliance", requireAuth, requireCompany, requireActiveSubscription, privacyComplianceRoutes);
-app.use("/api/privacy-compliance", requireAuth, requireCompany, requireActiveSubscription, privacyBreachRoutes);
 app.use("/api/license", requireAuth, licenseRoutes);
 
 /* mail (SERVER upgrade required + verified) */
@@ -859,7 +954,7 @@ app.use(
   mailRoutes
 );
 
-app.use("/api/openai", openaiRoutes);
+app.use("/api/openai", requireAuth, requireCompany, requireActiveSubscription, openaiRoutes);
 
 /* âœ… Tutto ciÃ² che Ã¨ "core app" va dietro Company + Abo */
 app.use(
@@ -912,6 +1007,14 @@ app.use(
   requireCompany,
   requireActiveSubscription,
   buchhaltungRoutes
+);
+
+app.use(
+  "/api/accounting",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  accountingHubRoutes
 );
 app.use(
   "/api/pdf",
@@ -1038,9 +1141,11 @@ app.use(
  * =========================================================
  */
 app.use(
-  "/api/photos",  
-   requireAuth,
-   fotosRoutes // âœ… alias: /api/photos/inbox/list -> routes/fotos.ts
+  "/api/photos",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
+  fotosRoutes // alias: /api/photos/inbox/list -> routes/fotos.ts
 );
 app.use(
   "/api/photos-legacy",
@@ -1058,6 +1163,8 @@ app.use(
 app.use(
   "/api/fotos",
   requireAuth,
+  requireCompany,
+  requireActiveSubscription,
   fotosRoutes
 );
 
@@ -1253,8 +1360,28 @@ app.use(
   requireActiveSubscription,
   kalkulationRechnungRoutes
 );
-app.use("/api/tagesbericht", tagesberichtRoutes);
-app.use("/api/tagesberichte", tagesberichtRoutes);
+app.use("/api/diary-time-export", requireAuth, requireCompany, requireActiveSubscription, diaryTimeExportRoutes);
+app.use("/api/tagesbericht", requireAuth, requireCompany, requireActiveSubscription, tagesberichtRoutes);
+app.use("/api/tagesberichte", requireAuth, requireCompany, requireActiveSubscription, tagesberichtRoutes);
+app.use("/api/personal", requireAuth, requireCompany, requireActiveSubscription, personalRoutes);
+app.use("/api/safety", requireAuth, requireCompany, requireActiveSubscription, safetyRoutes);
+app.use("/api/waste-compliance", requireAuth, requireCompany, requireActiveSubscription, wasteComplianceRoutes);
+app.use("/api/privacy-rights", requireAuth, requireCompany, privacyComplianceRoutes);
+app.use("/api/privacy-compliance", requireAuth, requireCompany, requireActiveSubscription, privacyComplianceRoutes);
+app.use("/api/privacy-compliance", requireAuth, requireCompany, requireActiveSubscription, privacyBreachRoutes);
+app.use("/api/handover", requireAuth, requireCompany, requireActiveSubscription, handoverRoutes);
+app.use("/api/contracts", requireAuth, requireCompany, requireActiveSubscription, contractsRoutes);
+app.use("/api/office-addons", requireAuth, requireCompany, requireActiveSubscription, officeAddonsRoutes);
+app.use("/api/communication", requireAuth, requireCompany, requireActiveSubscription, communicationRoutes);
+app.use("/api/tasks", requireAuth, requireCompany, requireActiveSubscription, projectTasksRoutes);
+app.use("/api/notes", requireAuth, requireCompany, requireActiveSubscription, projectNotesRoutes);
+app.use("/api/calendar", requireAuth, requireCompany, requireActiveSubscription, officeCalendarRoutes);
+app.use("/api/resource-costs", requireAuth, requireCompany, requireActiveSubscription, resourceCostsRoutes);
+import catalogAssignmentRoutes from "./routes/catalogAssignments";
+import masterCatalogRoutes from "./routes/masterCatalog";
+app.use("/api/master-catalog", requireAuth, requireCompany, requireActiveSubscription, masterCatalogRoutes);
+app.use("/api/catalog-assignments", requireAuth, requireCompany, requireActiveSubscription, catalogAssignmentRoutes);
+app.use("/api/cost-centers", requireAuth, requireCompany, requireActiveSubscription, costCentersRoutes);
 
 
 app.use(
@@ -1280,25 +1407,25 @@ app.use(
   requireActiveSubscription,
   kalkulationKiHandoffRoutes
 );
-app.use("/api/ki", kiLs);
+app.use("/api/ki", requireAuth, requireCompany, requireActiveSubscription, kiLs);
 
 /* static helper (extra) */
-app.use("/api/storage", storageRoutes);
-app.use("/files", filesStaticRoutes);
-app.use(kiDebug);
+app.use("/api/storage", requireAuth, requireCompany, requireActiveSubscription, storageRoutes);
+app.use("/files", requireAuth, requireCompany, requireActiveSubscription, filesStaticRoutes);
+app.use(requireAuth, requireCompany, requireActiveSubscription, kiDebug);
 
 /* ==== Alias/health per lâ€™import ==== */
-app.get("/api/import/_ping", (_req, res) => res.json({ ok: true }));
-app.get("/api/import/_projects-check", async (_req, res) => {
+app.get("/api/import/_ping", requireAuth, requireCompany, requireActiveSubscription, (_req, res) => res.json({ ok: true }));
+app.get("/api/import/_projects-check", requireAuth, requireCompany, requireActiveSubscription, async (_req, res) => {
   try {
     const devOn = (process.env.DEV_AUTH || "").toLowerCase() === "on";
     const companyId = devOn
       ? (process.env.DEV_COMPANY_ID || "").trim() || "dev-company"
-      : undefined;
-    const where = companyId ? { companyId } : {};
+      : String((_req as any).auth?.companyId || (_req as any).auth?.company || "").trim();
+    if (!companyId) return res.status(403).json({ ok: false, error: "COMPANY_REQUIRED" });
 
     const projects = await prisma.project.findMany({
-      where,
+      where: { companyId },
       take: 5,
       orderBy: { createdAt: "desc" },
     });
@@ -1319,7 +1446,7 @@ app.get("/api/import/_projects-check", async (_req, res) => {
 
 
 
-app.post("/api/copilot/tts", async (req, res) => {
+app.post("/api/copilot/tts", requireAuth, requireCompany, requireActiveSubscription, copilotAudioLimiter, async (req, res) => {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ ok: false, error: "OPENAI_API_KEY fehlt am Server." });
@@ -1346,7 +1473,8 @@ app.post("/api/copilot/tts", async (req, res) => {
 
     if (!response.ok) {
       const err = await response.text().catch(() => "");
-      return res.status(response.status).json({ ok: false, error: "OpenAI TTS Fehler", detail: err.slice(0, 1000) });
+      console.error("[copilot:tts] provider error", response.status, err.slice(0, 1000));
+      return res.status(502).json({ ok: false, error: "TTS_PROVIDER_ERROR" });
     }
 
     const audioBuffer = Buffer.from(await response.arrayBuffer());
@@ -1360,12 +1488,15 @@ app.post("/api/copilot/tts", async (req, res) => {
 
 
 
-app.get("/api/copilot/ping", (_req, res) => {
+app.get("/api/copilot/ping", requireAuth, requireCompany, requireActiveSubscription, (_req, res) => {
   res.json({ ok: true, route: "copilot-ping" });
 });
 
 app.use(
   "/api/document-delivery",
+  requireAuth,
+  requireCompany,
+  requireActiveSubscription,
   documentDeliveryRoutes
 );
 
@@ -1378,7 +1509,7 @@ app.use(
 );
 
 /* ======================= 404 & Error Handler ======================= */
-app.use("/api/copilot", copilotSttRoutes);
+app.use("/api/copilot", requireAuth, requireCompany, requireActiveSubscription, copilotAudioLimiter, copilotSttRoutes);
 app.use((_req, res) => res.status(404).json({ error: "Not Found" }));
 app.use(
   (
@@ -1401,7 +1532,6 @@ app.use(
   try {
     await enforceRestoreGateOnStartup();
     await ensureDevCompany();
-
 
     // âœ… MAILER VERIFY (punto 2): logga subito se SMTP Ã¨ rotto
     // Non blocca la partenza: se fallisce, stampa errore e continua.

@@ -12,6 +12,14 @@ import L from "leaflet";
 import proj4 from "proj4";
 import "leaflet/dist/leaflet.css";
 import {
+  initDocument as initDmsDocument,
+  getUploadUrl as getDmsUploadUrl,
+  putToStorage as putDmsToStorage,
+  completeUpload as completeDmsUpload,
+  detectKind as detectDmsKind
+} from "../../api/files";
+
+import {
   cloneCadFeatures,
   createCadId,
   createCadDocument,
@@ -68,14 +76,14 @@ import {
 /* NATIVE_PIXEL_CURSOR_FIX_V15_28_3 */
 /* DETERMINISTIC_LOD_NO_DISAPPEAR_V15_33 */
 /* =========================================================
-   RLC CAD V1.10 Â· Fullscreen, Direct Selection and Workspace Restore
+   RLC CAD V1.10 · Fullscreen, Direct Selection and Workspace Restore
    - Autonomous RLC geometry engine
    - Direct ASCII DXF import without BricsCAD
    - Layer control, selection, snap, zoom, pan, fit, grid and labels
    - Drawing, copy, move, rotate, scale, offset, vertex editing and history
    - Distance / area / point measurement tools
    - UTM point visualization
-   - LV mapping and transfer to AufmaÃŸ
+   - LV mapping and transfer to Aufmaß
    - GeoJSON / CSV export
    ========================================================= */
 
@@ -1807,9 +1815,9 @@ function featureTextLines(feature: TakeoffFeature) {
   return String(feature.text || feature.name || "Text")
     .replace(/\\P/gi, "\n")
     .replace(/\\~/g, " ")
-    .replace(/%%d/gi, "Â°")
-    .replace(/%%p/gi, "Â±")
-    .replace(/%%c/gi, "Ã˜")
+    .replace(/%%d/gi, "°")
+    .replace(/%%p/gi, "±")
+    .replace(/%%c/gi, "Ø")
     .replace(/\r/g, "")
     .split("\n");
 }
@@ -2007,7 +2015,7 @@ async function decodeDxfFile(file: File) {
     .join("");
   if (signatureText.startsWith("AutoCAD Binary DXF")) {
     throw new Error(
-      "BinÃ¤res DXF erkannt. Bitte die Zeichnung als ASCII-DXF speichern."
+      "Binäres DXF erkannt. Bitte die Zeichnung als ASCII-DXF speichern."
     );
   }
 
@@ -2040,7 +2048,7 @@ function cadDrawingSafeId(value: unknown) {
   return String(value ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9Ã¤Ã¶Ã¼ÃŸ._-]+/gi, "_")
+    .replace(/[^a-z0-9äöüß._-]+/gi, "_")
     .replace(/^_+|_+$/g, "") || "zeichnung";
 }
 
@@ -2122,7 +2130,7 @@ function extractCadDrawingList(value: any): CadDrawingListItem[] {
       );
       // Le righe restituite da /api/cad/drawings sono normalmente
       // solo metadati. drawingName/fileName non significano che la
-      // geometria sia giÃ  incorporata.
+      // Die Geometrie ist bereits integriert.
       const hasEmbeddedData =
         embeddedCount > 0 ||
         Array.isArray((embedded as any)?.features) ||
@@ -2332,7 +2340,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
   ]);
 
   // Eine Datenzeile darf nicht nur wegen eines Punktcodes wie "ak-ls"
-  // (normalisiert: "akls") irrtÃ¼mlich als Kopfzeile erkannt werden.
+  // (normalisiert: "akls") irrtümlich als Kopfzeile erkannt werden.
   // Header nur akzeptieren, wenn echte Koordinatenspalten vorhanden sind.
   const hasEastingHeader = headerKeys.some((key) => eastingHeaderWords.has(key));
   const hasNorthingHeader = headerKeys.some((key) => northingHeaderWords.has(key));
@@ -2354,7 +2362,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
     ? findHeader(["n", "north", "northing", "hochwert", "hw", "y", "nord", "ycoord", "ykoordinate"])
     : -1;
   const hIdx = hasHeader
-    ? findHeader(["height", "hoehe", "hÃ¶he", "z", "elevation", "altitude", "orthometricheight"])
+    ? findHeader(["height", "hoehe", "höhe", "z", "elevation", "altitude", "orthometricheight"])
     : -1;
   const codeIdx = hasHeader
     ? findHeader(["code", "punktcode", "pointcode", "artcode", "objektcode", "featurecode", "symbolcode", "kenncode", "akls"])
@@ -2367,7 +2375,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
     if (!rawColumns.length) return;
 
     // Toleranter Vermessungsparser wie im GPS-Modul: repariert u. a.
-    // Punktname,Easting Northing,HÃ¶he,Code sowie gemischte Leerzeichen/Kommas.
+    // Punktname,Easting Northing,Höhe,Code sowie gemischte Leerzeichen/Kommas.
     let columns = [...rawColumns];
     if (!hasHeader && columns.length === 4) {
       const pair = String(columns[1] ?? "").trim().split(/\s+/).filter(Boolean);
@@ -2389,7 +2397,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
       northing = nIdx >= 0 ? parsePointNumber(columns[nIdx]) : undefined;
       height = hIdx >= 0 ? parsePointNumber(columns[hIdx]) : undefined;
     } else {
-      // Standard survey format: Punktname, Rechtswert, Hochwert, HÃ¶he, Code.
+      // Standard survey format: Punktname, Rechtswert, Hochwert, Höhe, Code.
       id = String(columns[0] ?? "").replace(/^\uFEFF/, "").trim();
       code = columns.length >= 2 ? String(columns[columns.length - 1] ?? "").trim() : "";
 
@@ -2399,7 +2407,7 @@ function parseUtmCsvFlexible(text: string): UTMPoint[] {
         height = parsePointNumber(columns[3]);
       }
 
-      // Quoted combined coordinate field: Punktname,"Rechtswert Hochwert",HÃ¶he,Code.
+      // Quoted combined coordinate field: Punktname,"Rechtswert Hochwert",Höhe,Code.
       if ((!Number.isFinite(easting) || !Number.isFinite(northing)) && columns.length >= 4) {
         const pair = String(columns[1] ?? "").trim().split(/\s+/).filter(Boolean);
         if (pair.length >= 2) {
@@ -2502,13 +2510,13 @@ function normalizePositionKey(value: unknown) {
 
 function normalizeLvUnit(value: unknown): "m" | "m2" | "Stk" {
   const unitValue = String(value ?? "").trim().toLowerCase();
-  if (unitValue === "mÂ²" || unitValue === "m2" || unitValue.includes("qm")) {
+  if (unitValue === "m²" || unitValue === "m2" || unitValue.includes("qm")) {
     return "m2";
   }
   if (
     unitValue === "stk" ||
     unitValue === "st" ||
-    unitValue.includes("stÃ¼ck") ||
+    unitValue.includes("stück") ||
     unitValue.includes("stueck")
   ) {
     return "Stk";
@@ -2571,7 +2579,7 @@ function extractAufmassRows(data: any): AufmassCadRow[] {
     formula: String(
       row.rechenansatz ?? row.formula ?? row.ansatz ?? row.expression ?? ""
     ),
-    source: String(row.source ?? row.quelle ?? "AufmaÃŸ"),
+    source: String(row.source ?? row.quelle ?? "Aufmaß"),
   }));
 }
 
@@ -2580,7 +2588,7 @@ function normText(s: string) {
   return String(s || "")
     .toLowerCase()
     .replace(/[_\-./\\]+/g, " ")
-    .replace(/[^a-z0-9Ã¤Ã¶Ã¼ÃŸ\s]+/gi, " ")
+    .replace(/[^a-z0-9äöüß\s]+/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -2609,20 +2617,20 @@ function scoreMatch(query: string, text: string) {
 
 function pickLayerGroup(layer?: string) {
   const s = String(layer || "").trim();
-  if (!s) return "â€”";
+  if (!s) return "—";
   const t = normText(s).split(" ").filter(Boolean);
   return t.slice(0, Math.min(2, t.length)).join(" ") || s;
 }
 
 function uiUnitLabel(u: string) {
-  return u === "m2" ? "mÂ²" : u;
+  return u === "m2" ? "m²" : u;
 }
 
 function snapKindLabel(kind?: SnapResult["kind"]) {
   if (kind === "endpoint") return "Endpunkt";
   if (kind === "midpoint") return "Mittelpunkt";
   if (kind === "center") return "Zentrum";
-  if (kind === "vertex") return "StÃ¼tzpunkt";
+  if (kind === "vertex") return "Stützpunkt";
   if (kind === "surveyPoint") return "Vermessungspunkt";
   return "Objektfang";
 }
@@ -2689,7 +2697,7 @@ export default function CADViewer() {
       });
     });
 
-  const cadConfirm = (message: string, title = "BestÃ¤tigung") =>
+  const cadConfirm = (message: string, title = "Bestätigung") =>
     new Promise<boolean>((resolve) => {
       cadDialogResolverRef.current = (value) => resolve(value === true);
       setCadDialog({
@@ -2964,7 +2972,7 @@ export default function CADViewer() {
   >(null);
 
   const [pos, setPos] = useState("001");
-  const [kurz, setKurz] = useState("RLC CAD AufmaÃŸ");
+  const [kurz, setKurz] = useState("RLC CAD Aufmaß");
   const [unit, setUnit] = useState<"m" | "m2" | "Stk">("m");
   const [factor, setFactor] = useState(1);
 
@@ -2983,7 +2991,7 @@ export default function CADViewer() {
   const [kiSelectedKey, setKiSelectedKey] = useState("");
   const [chosenLvPos, setChosenLvPos] = useState("");
   const [kiPos, setKiPos] = useState("001");
-  const [kiText, setKiText] = useState("KI: â€”");
+  const [kiText, setKiText] = useState("KI: —");
   const [kiUnit, setKiUnit] = useState<"m" | "m2" | "Stk">("m");
   const [kiFactor, setKiFactor] = useState(1);
 
@@ -3123,9 +3131,9 @@ export default function CADViewer() {
   useEffect(() => {
     const targetProject = projectId.trim();
     if (!targetProject || !features.length) return;
-    // GroÃŸe DXF/DWG-Zeichnungen niemals komplett in localStorage serialisieren.
+    // Große DXF/DWG-Zeichnungen niemals komplett in localStorage serialisieren.
     // JSON.stringify auf zehntausenden Objekten blockiert sonst den UI-Thread
-    // und kann zusÃ¤tzlich die Browser-Quota Ã¼berschreiten.
+    // und kann zusätzlich die Browser-Quota überschreiten.
     if (features.length > 25000) return;
     const timer = window.setTimeout(() => {
       try {
@@ -3456,7 +3464,7 @@ export default function CADViewer() {
       })
     );
     setDirty(true);
-    setStatus(`${field} geÃ¤ndert`);
+    setStatus(`${field} geändert`);
   };
 
   const updateSelectedFeatureGlobalWidth = (value: number) => {
@@ -3545,15 +3553,15 @@ export default function CADViewer() {
       value: isDimension
         ? Number(groupMeta.dimensionValue || 0)
         : Number(groupMeta.measurementArea || 0),
-      unit: isDimension ? "m" : "mÂ²",
+      unit: isDimension ? "m" : "m²",
       textHeight: Number(
         textMeta.height || textMeta.textHeight || groupMeta.textHeight || 2.5
       ),
       typeLabel: isDimension
         ? String(groupMeta.generatedBy || "").includes("aligned")
-          ? "Ausgerichtete BemaÃŸung"
-          : "Lineare BemaÃŸung"
-        : "FlÃ¤chenmessung",
+          ? "Ausgerichtete Bemaßung"
+          : "Lineare Bemaßung"
+        : "Flächenmessung",
       layer: String(groupFeatures[0].layer || "0"),
     };
   }, [features, selectedFeatures]);
@@ -3592,7 +3600,7 @@ export default function CADViewer() {
       })
     );
     setDirty(true);
-    setStatus(`TexthÃ¶he auf ${formatNumber(nextHeight)} gesetzt`);
+    setStatus(`Texthöhe auf ${formatNumber(nextHeight)} gesetzt`);
   };
 
   useEffect(() => {
@@ -3740,7 +3748,7 @@ export default function CADViewer() {
     setDirty(true);
     syncHistoryButtons();
     setHistoryTick((value) => value + 1);
-    setStatus("RÃ¼ckgÃ¤ngig");
+    setStatus("Rückgängig");
   };
 
   const redoDrawing = () => {
@@ -3773,12 +3781,12 @@ export default function CADViewer() {
     }
     setSelectedFeatureIds([]);
     setSelectedFeatureId("");
-    setStatus(`${featureIds.size + pointIds.size} Objekt(e)/Punkt(e) gelÃ¶scht`);
+    setStatus(`${featureIds.size + pointIds.size} Objekt(e)/Punkt(e) gelöscht`);
   };
 
   const explodeSelection = () => {
     if (!selectedFeatureIds.length) {
-      setStatus("Explodieren: zuerst Objekt auswÃ¤hlen");
+      setStatus("Explodieren: zuerst Objekt auswählen");
       return;
     }
 
@@ -3807,7 +3815,7 @@ export default function CADViewer() {
           { x: end.x, y: end.y },
         ],
         radius: undefined,
-        name: `${String(source.name || "Objekt")} Â· Segment ${segmentIndex + 1}`,
+        name: `${String(source.name || "Objekt")} · Segment ${segmentIndex + 1}`,
         meta: {
           ...(source.meta || {}),
           generatedBy: "explode",
@@ -3937,12 +3945,12 @@ export default function CADViewer() {
         continue;
       }
 
-      // Nicht zerlegbare Einzelobjekte bleiben unverÃ¤ndert.
+      // Nicht zerlegbare Einzelobjekte bleiben unverändert.
       nextFeatures.push(feature);
     }
 
     if (!explodedObjects) {
-      setStatus("Explodieren: Auswahl enthÃ¤lt keine zerlegbaren Objekte");
+      setStatus("Explodieren: Auswahl enthält keine zerlegbaren Objekte");
       return;
     }
 
@@ -4034,7 +4042,7 @@ export default function CADViewer() {
     const firstPts = featurePathPoints(first);
     const secondPts = featurePathPoints(second);
     if (firstPts.length < 2 || secondPts.length < 2) {
-      setStatus("Verbinden: nur Linien und Polylinien mÃ¶glich");
+      setStatus("Verbinden: nur Linien und Polylinien möglich");
       completeModifyCommand();
       return;
     }
@@ -4152,7 +4160,7 @@ export default function CADViewer() {
       setSelectedFeatureIds([boundaryId]);
       setSelectedFeatureId(boundaryId);
       setStatus(
-        "Objekt gestutzt Â· weiteres Objekt wÃ¤hlen Â· Rechtsklick beendet Stutzen"
+        "Objekt gestutzt · weiteres Objekt wählen · Rechtsklick beendet Stutzen"
       );
       return;
     }
@@ -4161,7 +4169,7 @@ export default function CADViewer() {
     setSelectedFeatureIds([boundaryId]);
     setSelectedFeatureId(boundaryId);
     setStatus(
-      "Objekt gedehnt Â· weiteres Objekt wÃ¤hlen Â· Rechtsklick beendet Dehnen"
+      "Objekt gedehnt · weiteres Objekt wählen · Rechtsklick beendet Dehnen"
     );
     return;
   };
@@ -4171,14 +4179,14 @@ export default function CADViewer() {
     const second = features.find((feature) => String(feature.id || "") === secondId);
     if (!first || !second) return;
 
-    const radiusValue = await cadPrompt("Abrunden Â· Radius eingeben", "1.00");
+    const radiusValue = await cadPrompt("Abrunden · Radius eingeben", "1.00");
     if (radiusValue === null) {
       completeModifyCommand();
       return;
     }
     const radius = Number(String(radiusValue).replace(",", "."));
     if (!Number.isFinite(radius) || radius <= 0) {
-      setStatus("Abrunden: ungÃ¼ltiger Radius");
+      setStatus("Abrunden: ungültiger Radius");
       completeModifyCommand();
       return;
     }
@@ -4292,7 +4300,7 @@ export default function CADViewer() {
     keepOriginal: boolean
   ) => {
     if (!selectedFeatureIds.length) {
-      setStatus("Spiegeln: keine Objekte ausgewÃ¤hlt");
+      setStatus("Spiegeln: keine Objekte ausgewählt");
       completeModifyCommand();
       return;
     }
@@ -4340,7 +4348,7 @@ export default function CADViewer() {
     setSelectedFeatureIds(mirroredIds);
     setSelectedFeatureId(mirroredIds[0] || "");
     setStatus(
-      `${mirroredIds.length} Objekt(e) um ${angleDegrees}Â° gespiegelt`
+      `${mirroredIds.length} Objekt(e) um ${angleDegrees}° gespiegelt`
     );
     completeModifyCommand();
   };
@@ -4348,24 +4356,24 @@ export default function CADViewer() {
   const finishMirrorAtPoint = async () => {
     const center = mirrorAxisPts[0];
     if (!center) {
-      setStatus("Spiegeln: zuerst Spiegelpunkt wÃ¤hlen");
+      setStatus("Spiegeln: zuerst Spiegelpunkt wählen");
       return;
     }
 
     const angleInput = await cadPrompt(
-      "Spiegelwinkel eingeben (normalerweise 180Â° oder 360Â°)",
+      "Spiegelwinkel eingeben (normalerweise 180° oder 360°)",
       String(Math.round(mirrorPreviewAngle))
     );
     if (angleInput === null) return;
 
     const angle = Number(String(angleInput).replace(",", "."));
     if (!Number.isFinite(angle)) {
-      setStatus("Spiegeln: ungÃ¼ltiger Winkel");
+      setStatus("Spiegeln: ungültiger Winkel");
       return;
     }
 
     const keepOriginal = await cadConfirm(
-      "Originale Objekte beibehalten?\nOK = Ja Â· Abbrechen = Nein"
+      "Originale Objekte beibehalten?\nOK = Ja · Abbrechen = Nein"
     );
 
     mirrorSelectedByPoint(center, angle, keepOriginal);
@@ -4381,17 +4389,17 @@ export default function CADViewer() {
       setMirrorPhase("confirm-selection");
       setStatus(
         selectedFeatureIds.length
-          ? "Spiegeln: Auswahl mit rechter Maustaste bestÃ¤tigen"
-          : "Spiegeln: Objekt mit dem Quadrat auswÃ¤hlen"
+          ? "Spiegeln: Auswahl mit rechter Maustaste bestätigen"
+          : "Spiegeln: Objekt mit dem Quadrat auswählen"
       );
       return;
     }
 
     const labels = {
-      trim: "Stutzen: Schneidkante wÃ¤hlen Â· danach mehrere Objekte Â· Rechtsklick beendet",
-      extend: "Dehnen: Grenzkante wÃ¤hlen Â· danach mehrere Objekte Â· Rechtsklick beendet",
-      join: "Verbinden: erstes und zweites Objekt wÃ¤hlen",
-      fillet: "Abrunden: erste und zweite Linie wÃ¤hlen",
+      trim: "Stutzen: Schneidkante wählen · danach mehrere Objekte · Rechtsklick beendet",
+      extend: "Dehnen: Grenzkante wählen · danach mehrere Objekte · Rechtsklick beendet",
+      join: "Verbinden: erstes und zweites Objekt wählen",
+      fillet: "Abrunden: erste und zweite Linie wählen",
     };
     setStatus(labels[command]);
   };
@@ -4413,7 +4421,7 @@ export default function CADViewer() {
     setStatus(
       selectedFeatureIds.length
         ? "Versetzen: Abstand eingeben"
-        : "Versetzen: Objekt mit dem Quadrat auswÃ¤hlen"
+        : "Versetzen: Objekt mit dem Quadrat auswählen"
     );
   };
 
@@ -4422,7 +4430,7 @@ export default function CADViewer() {
     setStatus(
       selectedFeatureIds.length
         ? "Explodieren: Auswahl wird zerlegt"
-        : "Explodieren: Objekt mit dem Quadrat auswÃ¤hlen"
+        : "Explodieren: Objekt mit dem Quadrat auswählen"
     );
     if (selectedFeatureIds.length) {
       explodeSelection();
@@ -4444,17 +4452,17 @@ export default function CADViewer() {
         setSelectedFeatureIds([featureId]);
         setSelectedFeatureId(featureId);
         setStatus(
-          `${label}: ${boundaryLabel} gewÃ¤hlt Â· jetzt mehrere Objekte wÃ¤hlen Â· Rechtsklick beendet`
+          `${label}: ${boundaryLabel} gewählt · jetzt mehrere Objekte wählen · Rechtsklick beendet`
         );
         return true;
       }
 
       if (featureId === boundaryId) {
-        setStatus(`${label}: ${boundaryLabel} ist bereits gewÃ¤hlt`);
+        setStatus(`${label}: ${boundaryLabel} ist bereits gewählt`);
         return true;
       }
 
-      setStatus(`${label}: Objekt wird ${actionLabel} â€¦`);
+      setStatus(`${label}: Objekt wird ${actionLabel} …`);
       runExtendOrTrim(tool, boundaryId, featureId);
       return true;
     }
@@ -4467,8 +4475,8 @@ export default function CADViewer() {
     if (nextIds.length < 2) {
       setStatus(
         tool === "join"
-          ? "Verbinden: zweites Objekt wÃ¤hlen"
-          : "Abrunden: zweite Linie wÃ¤hlen"
+          ? "Verbinden: zweites Objekt wählen"
+          : "Abrunden: zweite Linie wählen"
       );
       return true;
     }
@@ -4497,12 +4505,12 @@ export default function CADViewer() {
 
     const length = dist(start, end);
     if (length < 1e-9) {
-      setStatus("BemaÃŸung: Start- und Endpunkt sind identisch");
+      setStatus("Bemaßung: Start- und Endpunkt sind identisch");
       return;
     }
 
     const textHeightInput = await cadPrompt(
-      "TexthÃ¶he der BemaÃŸung",
+      "Texthöhe der Bemaßung",
       String(Math.max(Number(textHeight) || 2.5, 0.1))
     );
     if (textHeightInput === null) return;
@@ -4520,7 +4528,7 @@ export default function CADViewer() {
     let dimensionTextRotation =
       mode === "aligned" ? (Math.atan2(dy, dx) * 180) / Math.PI : 0;
 
-    // CAD-Lesbarkeit: Text niemals kopfÃ¼ber darstellen.
+    // CAD-Lesbarkeit: Text niemals kopfüber darstellen.
     while (dimensionTextRotation > 180) dimensionTextRotation -= 360;
     while (dimensionTextRotation <= -180) dimensionTextRotation += 360;
     if (dimensionTextRotation > 90) dimensionTextRotation -= 180;
@@ -4567,7 +4575,7 @@ export default function CADViewer() {
         kind: "line",
         pts: [start, dimStart],
         layer: activeLayer,
-        name: "BemaÃŸung Â· Hilfslinie",
+        name: "Bemaßung · Hilfslinie",
         meta: commonMeta,
       },
       {
@@ -4575,7 +4583,7 @@ export default function CADViewer() {
         kind: "line",
         pts: [end, dimEnd],
         layer: activeLayer,
-        name: "BemaÃŸung Â· Hilfslinie",
+        name: "Bemaßung · Hilfslinie",
         meta: commonMeta,
       },
       {
@@ -4583,7 +4591,7 @@ export default function CADViewer() {
         kind: "line",
         pts: [dimStart, dimEnd],
         layer: activeLayer,
-        name: mode === "linear" ? "Lineare BemaÃŸung" : "Ausgerichtete BemaÃŸung",
+        name: mode === "linear" ? "Lineare Bemaßung" : "Ausgerichtete Bemaßung",
         meta: commonMeta,
       },
       {
@@ -4594,7 +4602,7 @@ export default function CADViewer() {
           { x: dimStart.x + nx * tick, y: dimStart.y + ny * tick },
         ],
         layer: activeLayer,
-        name: "BemaÃŸungsstrich",
+        name: "Bemaßungsstrich",
         meta: commonMeta,
       },
       {
@@ -4605,7 +4613,7 @@ export default function CADViewer() {
           { x: dimEnd.x + nx * tick, y: dimEnd.y + ny * tick },
         ],
         layer: activeLayer,
-        name: "BemaÃŸungsstrich",
+        name: "Bemaßungsstrich",
         meta: commonMeta,
       },
       {
@@ -4636,13 +4644,13 @@ export default function CADViewer() {
     setDimensionDraft(null);
     setTool("select");
     setStatus(
-      `${mode === "linear" ? "Lineare" : "Ausgerichtete"} BemaÃŸung als Block erstellt`
+      `${mode === "linear" ? "Lineare" : "Ausgerichtete"} Bemaßung als Block erstellt`
     );
   };
 
   const confirmClosedAreaMeasurement = async () => {
     if (tool !== "area" || measurePts.length < 3) {
-      setStatus("FlÃ¤che messen: zuerst in eine geschlossene FlÃ¤che klicken");
+      setStatus("Fläche messen: zuerst in eine geschlossene Fläche klicken");
       return;
     }
 
@@ -4666,7 +4674,7 @@ export default function CADViewer() {
     }
 
     const textHeightInput = await cadPrompt(
-      "TexthÃ¶he der FlÃ¤chenmessung",
+      "Texthöhe der Flächenmessung",
       String(Math.max(Number(textHeight) || 2.5, 0.1))
     );
     if (textHeightInput === null) return;
@@ -4683,7 +4691,7 @@ export default function CADViewer() {
         closed: true,
         pts: measurePts.map((point) => ({ ...point })),
         layer: activeLayer,
-        name: "FlÃ¤chenmessung",
+        name: "Flächenmessung",
         meta: {
           generatedBy: "area-measurement",
           measurementGroupId: groupId,
@@ -4698,8 +4706,8 @@ export default function CADViewer() {
         id: `${groupId}_text`,
         kind: "text",
         pts: [center],
-        text: `${formatNumber(area)} mÂ²`,
-        name: `${formatNumber(area)} mÂ²`,
+        text: `${formatNumber(area)} m²`,
+        name: `${formatNumber(area)} m²`,
         layer: activeLayer,
         meta: {
           generatedBy: "area-measurement",
@@ -4719,7 +4727,7 @@ export default function CADViewer() {
     setSelectedFeatureId(String(areaFeatures[0].id));
     setMeasurePts([]);
     setTool("select");
-    setStatus(`FlÃ¤che bestÃ¤tigt: ${formatNumber(area)} mÂ²`);
+    setStatus(`Fläche bestätigt: ${formatNumber(area)} m²`);
   };
 
   const addFeature = (feature: TakeoffFeature) => {
@@ -4749,8 +4757,8 @@ export default function CADViewer() {
     if (draftPts.length < minimum) {
       setStatus(
         closed
-          ? "Polygon benÃ¶tigt mindestens 3 Punkte"
-          : "Polylinie benÃ¶tigt mindestens 2 Punkte"
+          ? "Polygon benötigt mindestens 3 Punkte"
+          : "Polylinie benötigt mindestens 2 Punkte"
       );
       return;
     }
@@ -4769,12 +4777,12 @@ export default function CADViewer() {
     const tolerance = Math.max(viewBox.width, viewBox.height) * 0.00002;
     const polygon = boundaryPolygonAtPoint(visibleFeatures, point, Math.max(tolerance, 0.0001));
     if (!polygon) {
-      setStatus("Keine geschlossene FlÃ¤che gefunden");
+      setStatus("Keine geschlossene Fläche gefunden");
       return;
     }
     if (mode === "boundary") {
       // Eine Umgrenzung ist eine einzige geschlossene Polylinie,
-      // kein separates Polygon-/FlÃ¤chenobjekt.
+      // kein separates Polygon-/Flächenobjekt.
       addFeature({
         kind: "polyline",
         closed: true,
@@ -4790,7 +4798,7 @@ export default function CADViewer() {
       setStatus("Geschlossene Umgrenzungspolylinie erstellt");
     } else {
       setPendingHatchBoundary(polygon);
-      setStatus("Schraffurmuster auswÃ¤hlen");
+      setStatus("Schraffurmuster auswählen");
     }
   };
 
@@ -4853,7 +4861,7 @@ export default function CADViewer() {
     setStatus(
       selectedFeatureIds.length
         ? "Drehen: Drehpunkt im CAD anklicken"
-        : "Drehen: Objekt mit dem Quadrat auswÃ¤hlen"
+        : "Drehen: Objekt mit dem Quadrat auswählen"
     );
   };
 
@@ -4870,7 +4878,7 @@ export default function CADViewer() {
     setStatus(
       selectedFeatureIds.length
         ? "Skalieren: Basispunkt im CAD anklicken"
-        : "Skalieren: Objekt mit dem Quadrat auswÃ¤hlen"
+        : "Skalieren: Objekt mit dem Quadrat auswählen"
     );
   };
 
@@ -4919,7 +4927,7 @@ export default function CADViewer() {
     if (!numericCommand || !selectedFeatureIds.length) return;
     const value = Number(String(numericCommand.value).replace(",", "."));
     if (!Number.isFinite(value)) {
-      setStatus("UngÃ¼ltiger Wert");
+      setStatus("Ungültiger Wert");
       return;
     }
     const center = centerOfFeatures(selectedFeatures);
@@ -4948,7 +4956,7 @@ export default function CADViewer() {
       });
       setTool("select");
       setNumericCommand(null);
-      setStatus(`Auswahl um ${formatNumber(value, 2)}Â° gedreht`);
+      setStatus(`Auswahl um ${formatNumber(value, 2)}° gedreht`);
       return;
     }
 
@@ -4991,7 +4999,7 @@ export default function CADViewer() {
       setFeatures(
         rotateCadFeatures(features, selectedFeatureIds, center, value)
       );
-      setStatus(`Auswahl um ${formatNumber(value, 2)}Â° gedreht`);
+      setStatus(`Auswahl um ${formatNumber(value, 2)}° gedreht`);
     } else if (numericCommand.kind === "scale") {
       if (Math.abs(value) < 0.000001) {
         undoStackRef.current.pop();
@@ -5006,7 +5014,7 @@ export default function CADViewer() {
       const distance = Math.abs(value);
       if (distance < 0.000001) {
         undoStackRef.current.pop();
-        setStatus("Versetzen: Abstand muss grÃ¶ÃŸer als 0 sein");
+        setStatus("Versetzen: Abstand muss größer als 0 sein");
         return;
       }
 
@@ -5014,7 +5022,7 @@ export default function CADViewer() {
       const testResult = offsetCadFeatures(original, selectedFeatureIds, distance);
       if (!testResult.createdIds.length) {
         undoStackRef.current.pop();
-        setStatus("Versetzen ist nur fÃ¼r Linien und Polylinien verfÃ¼gbar");
+        setStatus("Versetzen ist nur für Linien und Polylinien verfügbar");
         return;
       }
 
@@ -5028,7 +5036,7 @@ export default function CADViewer() {
         createdIds: [],
       });
       setNumericCommand(null);
-      setStatus("Versetzen LIVE: Maus auf die gewÃ¼nschte Seite bewegen Â· Linksklick bestÃ¤tigt");
+      setStatus("Versetzen LIVE: Maus auf die gewünschte Seite bewegen · Linksklick bestätigt");
       return;
     }
     setNumericCommand(null);
@@ -5295,7 +5303,7 @@ export default function CADViewer() {
         maxZoom: 22,
         updateWhenZooming: true,
         keepBuffer: 4,
-        attribution: "Â© OpenStreetMap",
+        attribution: "© OpenStreetMap",
         crossOrigin: true,
       }
     ).addTo(map);
@@ -5372,7 +5380,7 @@ export default function CADViewer() {
       });
     }
 
-    // Auch leere, neu angelegte Layer mÃ¼ssen in der Layerstruktur erscheinen.
+    // Auch leere, neu angelegte Layer müssen in der Layerstruktur erscheinen.
     const knownLayerNames = new Set<string>([
       "0",
       activeLayer || "0",
@@ -5484,10 +5492,10 @@ export default function CADViewer() {
       return bounds ? boundsIntersect(bounds, viewportBounds) : false;
     });
 
-    // V15.33: niemals mehr nach Array-Index ausdÃ¼nnen. Bei weitem Zoom
-    // verschwanden dadurch komplette StraÃŸen-/AchszÃ¼ge, weil zufÃ¤llig nur
-    // Punkte oder kurze Hilfsgeometrien Ã¼brig blieben. Stattdessen werden die
-    // visuell wichtigsten Objekte deterministisch nach ihrer BildschirmgrÃ¶ÃŸe
+    // V15.33: niemals mehr nach Array-Index ausdünnen. Bei weitem Zoom
+    // verschwanden dadurch komplette Straßen-/Achszüge, weil zufällig nur
+    // Punkte oder kurze Hilfsgeometrien übrig blieben. Stattdessen werden die
+    // visuell wichtigsten Objekte deterministisch nach ihrer Bildschirmgröße
     // priorisiert. Beim Hineinzoomen erscheinen automatisch wieder alle Details.
     const maxViewportNodes = 5200;
     if (nearby.length <= maxViewportNodes) return nearby;
@@ -5565,7 +5573,7 @@ export default function CADViewer() {
         continue;
       }
 
-      // Testi, tratteggi e riempimenti sono i nodi SVG piÃ¹ costosi.
+      // Texte, Schraffuren und Füllungen sind die aufwendigsten SVG-Knoten.
       if (kind === "text" || kind === "hatch") continue;
       background.push(feature);
     }
@@ -5722,7 +5730,7 @@ export default function CADViewer() {
           return;
         }
       } catch {
-        // Continue with the next compatible AufmaÃŸ endpoint.
+        // Continue with the next compatible Aufmaß endpoint.
       }
     }
 
@@ -5771,7 +5779,7 @@ export default function CADViewer() {
   const loadDrawingLibrary = async () => {
     const targetProject = projectId.trim();
     if (!targetProject) {
-      void cadAlert("Kein Projekt gewÃ¤hlt.");
+      void cadAlert("Kein Projekt gewählt.");
       return;
     }
     localStorage.setItem("rlc_projectId", targetProject);
@@ -5862,7 +5870,7 @@ export default function CADViewer() {
     setDrawingListError(
       merged.length
         ? ""
-        : "Keine gespeicherten Zeichnungen fÃ¼r dieses Projekt gefunden."
+        : "Keine gespeicherten Zeichnungen für dieses Projekt gefunden."
     );
   };
 
@@ -5870,7 +5878,7 @@ export default function CADViewer() {
     if (
       dirty &&
       !await cadConfirm(
-        "Ungespeicherte Ã„nderungen verwerfen und eine andere Zeichnung Ã¶ffnen?"
+        "Ungespeicherte Änderungen verwerfen und eine andere Zeichnung öffnen?"
       )
     ) {
       return;
@@ -5880,12 +5888,12 @@ export default function CADViewer() {
     if (!targetProject) return;
 
     setOpeningDrawingId(item.id);
-    setStatus(`Zeichnung â€ž${item.drawingName}â€ wird geÃ¶ffnetâ€¦`);
+    setStatus(`Zeichnung „${item.drawingName}” wird geöffnet…`);
 
     try {
       let payload: TakeoffPayload | null = null;
 
-      // Solo una Browser-Sicherung puÃ² essere aperta direttamente dal localStorage.
+      // Nur eine Browser-Sicherung kann direkt aus dem localStorage geöffnet werden.
       if (item.source === "browser" && item.localStorageId) {
         const localPayload = readLocalCadDrawing(
           targetProject,
@@ -5934,7 +5942,7 @@ export default function CADViewer() {
             try {
               decoded = raw ? JSON.parse(raw) : {};
             } catch {
-              lastError = "UngÃ¼ltige JSON-Antwort";
+              lastError = "Ungültige JSON-Antwort";
               continue;
             }
 
@@ -5947,7 +5955,7 @@ export default function CADViewer() {
             }
 
             lastError =
-              `Server lieferte 0 Objekte fÃ¼r â€ž${item.drawingName}â€`;
+              `Server lieferte 0 Objekte für „${item.drawingName}”`;
           } catch (error: any) {
             lastError = String(error?.message || error);
           }
@@ -5956,7 +5964,7 @@ export default function CADViewer() {
         if (!payload) {
           throw new Error(
             lastError ||
-              `Zeichnung â€ž${item.drawingName}â€ konnte nicht vollstÃ¤ndig geladen werden.`
+              `Zeichnung „${item.drawingName}” konnte nicht vollständig geladen werden.`
           );
         }
       }
@@ -5965,7 +5973,7 @@ export default function CADViewer() {
 
       if (!nextFeatures.length) {
         throw new Error(
-          `Zeichnung â€ž${item.drawingName}â€ wurde geladen, enthÃ¤lt aber keine Geometrie.`
+          `Zeichnung „${item.drawingName}” wurde geladen, enthält aber keine Geometrie.`
         );
       }
 
@@ -6030,10 +6038,10 @@ export default function CADViewer() {
       });
 
       setStatus(
-        `Zeichnung â€ž${payload.drawingName || item.drawingName}â€ geÃ¶ffnet (${nextFeatures.length} Objekte)`
+        `Zeichnung „${payload.drawingName || item.drawingName}” geöffnet (${nextFeatures.length} Objekte)`
       );
     } catch (error: any) {
-      setStatus("Zeichnung konnte nicht geÃ¶ffnet werden");
+      setStatus("Zeichnung konnte nicht geöffnet werden");
       void cadAlert(String(error?.message || error));
     } finally {
       setOpeningDrawingId("");
@@ -6041,7 +6049,7 @@ export default function CADViewer() {
   };
 
   const createNewDrawing = async () => {
-    if (dirty && !await cadConfirm("Ungespeicherte Ã„nderungen verwerfen und eine neue Zeichnung beginnen?")) {
+    if (dirty && !await cadConfirm("Ungespeicherte Änderungen verwerfen und eine neue Zeichnung beginnen?")) {
       return;
     }
     const knownDrawings = mergeDrawingLists(
@@ -6081,12 +6089,12 @@ export default function CADViewer() {
     initialFitDoneRef.current = false;
     resetHistory();
     setDrawingBrowserOpen(false);
-    setStatus(`Neue ungespeicherte Zeichnung â€ž${nextName}â€`);
+    setStatus(`Neue ungespeicherte Zeichnung „${nextName}”`);
   };
 
   const loadUtm = async (silent = false) => {
-    if (!projectId) return void cadAlert("Kein Projekt gewÃ¤hlt.");
-    setStatus("UTM-Punkte werden geladenâ€¦");
+    if (!projectId) return void cadAlert("Kein Projekt gewählt.");
+    setStatus("UTM-Punkte werden geladen…");
     try {
       const j = await fetchJson(
         apiUrl(`/api/bricscad/utm?projectId=${encodeURIComponent(projectId)}`)
@@ -6106,8 +6114,8 @@ export default function CADViewer() {
   };
 
   const loadTakeoff = async (silent = false) => {
-    if (!projectId) return void cadAlert("Kein Projekt gewÃ¤hlt.");
-    setStatus("CAD-Daten werden geladenâ€¦");
+    if (!projectId) return void cadAlert("Kein Projekt gewählt.");
+    setStatus("CAD-Daten werden geladen…");
     try {
       let payload: TakeoffPayload | null = null;
       let sourceLabel = "";
@@ -6118,7 +6126,7 @@ export default function CADViewer() {
           url: `/api/cad/load?projectId=${encodeURIComponent(projectId)}`,
         },
         {
-          label: "RLC CAD KompatibilitÃ¤t",
+          label: "RLC CAD Kompatibilität",
           url: `/api/cad-compat/load?projectId=${encodeURIComponent(
             projectId
           )}`,
@@ -6185,7 +6193,7 @@ export default function CADViewer() {
         setUtmCsv(String((payload as any)?.utmCsv || ""));
         setShowUtm(true);
       }
-      setStatus(`${sourceLabel} geladen (${feats.length} Objekte${restoredPoints.length ? ` Â· ${restoredPoints.length} Punkte` : ""})`);
+      setStatus(`${sourceLabel} geladen (${feats.length} Objekte${restoredPoints.length ? ` · ${restoredPoints.length} Punkte` : ""})`);
       return true;
 
     } catch (e: any) {
@@ -6206,7 +6214,7 @@ export default function CADViewer() {
   ) => {
     const silent = Boolean(options?.silent);
     if (!projectId) {
-      if (!silent) void cadAlert("Kein Projekt gewÃ¤hlt.");
+      if (!silent) void cadAlert("Kein Projekt gewählt.");
       return false;
     }
     const activeDrawingId =
@@ -6230,8 +6238,8 @@ export default function CADViewer() {
 
     setStatus(
       silent
-        ? "Ã„nderungen werden automatisch gespeichertâ€¦"
-        : "RLC CAD wird gespeichertâ€¦"
+        ? "Änderungen werden automatisch gespeichert…"
+        : "RLC CAD wird gespeichert…"
     );
     try {
       let savedOnServer = false;
@@ -6287,7 +6295,7 @@ export default function CADViewer() {
       setStatus(
         savedOnServer
           ? `${silent ? "Automatisch gespeichert" : "Gespeichert"} (${drawingFeatures.length} Objekte)`
-          : `Im Browser separat gespeichert Â· Server-Mehrfachspeicherung nicht verfÃ¼gbar`
+          : `Im Browser separat gespeichert · Server-Mehrfachspeicherung nicht verfügbar`
       );
       return true;
     } catch (error: any) {
@@ -6312,7 +6320,7 @@ export default function CADViewer() {
 
   const saveCadDrawingAs = async () => {
     if (!projectId.trim()) {
-      void cadAlert("Kein Projekt gewÃ¤hlt.");
+      void cadAlert("Kein Projekt gewählt.");
       return;
     }
     const requested = await cadPrompt("Name der Zeichnung", drawingName || "Zeichnung 1");
@@ -6337,7 +6345,7 @@ export default function CADViewer() {
       layerColors,
     } as TakeoffPayload;
 
-    setStatus(`Speichern unter: ${nextName}â€¦`);
+    setStatus(`Speichern unter: ${nextName}…`);
     let saved = false;
     let lastError = "";
     for (const endpoint of ["/api/cad/save-as"]) {
@@ -6370,8 +6378,8 @@ export default function CADViewer() {
     setDirty(false);
     setStatus(
       saved
-        ? `Gespeichert unter â€ž${nextName}â€`
-        : `â€ž${nextName}â€ separat im Browser gespeichert Â· Server-Mehrfachspeicherung nicht verfÃ¼gbar`
+        ? `Gespeichert unter „${nextName}”`
+        : `„${nextName}” separat im Browser gespeichert · Server-Mehrfachspeicherung nicht verfügbar`
     );
   };
 
@@ -6394,8 +6402,8 @@ export default function CADViewer() {
 
   useEffect(() => {
     if (!dirty || (!features.length && !utmPoints.length) || !projectId.trim()) return;
-    // Bei groÃŸen Zeichnungen kein automatisches JSON.stringify/Upload im
-    // Hauptthread. Manuelles Speichern bleibt verfÃ¼gbar.
+    // Bei großen Zeichnungen kein automatisches JSON.stringify/Upload im
+    // Hauptthread. Manuelles Speichern bleibt verfügbar.
     if (features.length > 25000) return;
     const timer = window.setTimeout(() => {
       void persistCadDrawing(features, {
@@ -6410,7 +6418,7 @@ export default function CADViewer() {
 
   const openPointFile = () => {
     if (!projectId) {
-      void cadAlert("Kein Projekt gewÃ¤hlt.");
+      void cadAlert("Kein Projekt gewählt.");
       return;
     }
     pointFileInputRef.current?.click();
@@ -6424,11 +6432,11 @@ export default function CADViewer() {
     try {
       const csv = await file.text();
       const pts = parseUtmCsvFlexible(csv);
-      if (!pts.length) throw new Error("Keine Punkte erkannt. Erwartet werden Punktname, Rechtswert, Hochwert, HÃ¶he und optional Code.");
+      if (!pts.length) throw new Error("Keine Punkte erkannt. Erwartet werden Punktname, Rechtswert, Hochwert, Höhe und optional Code.");
       setUtmCsv(csv);
       setUtmPoints(pts);
       setShowUtm(true);
-      setStatus(`Punktdatei geladen (${pts.length} Punkte) Â· Speichern erforderlich`);
+      setStatus(`Punktdatei geladen (${pts.length} Punkte) · Speichern erforderlich`);
       setDirty(true);
     } catch (error: any) {
       void cadAlert(String(error?.message || error));
@@ -6437,7 +6445,7 @@ export default function CADViewer() {
 
   const openCadFile = () => {
     if (!projectId) {
-      void cadAlert("Kein Projekt gewÃ¤hlt.");
+      void cadAlert("Kein Projekt gewählt.");
       return;
     }
     cadFileInputRef.current?.click();
@@ -6452,14 +6460,14 @@ export default function CADViewer() {
 
     if (!file) return;
     if (!projectId) {
-      void cadAlert("Kein Projekt gewÃ¤hlt.");
+      void cadAlert("Kein Projekt gewählt.");
       return;
     }
 
     const extension = file.name.split(".").pop()?.toLowerCase() || "";
 
     try {
-      setStatus(`CAD-Datei wird geÃ¶ffnet: ${file.name}`);
+      setStatus(`CAD-Datei wird geöffnet: ${file.name}`);
 
       if (extension === "json" || extension === "geojson") {
         const parsed = JSON.parse(await file.text());
@@ -6481,7 +6489,7 @@ export default function CADViewer() {
         setStatus(
           saved
             ? `CAD-Datei geladen und gespeichert (${feats.length} Objekte)`
-            : `CAD-Datei geladen Â· Speichern erforderlich`
+            : `CAD-Datei geladen · Speichern erforderlich`
         );
         return;
       }
@@ -6513,9 +6521,9 @@ export default function CADViewer() {
         replaceDrawing(feats, cleanedPayload);
         setDirty(true);
         const isLargeDxf = file.size > 20 * 1024 * 1024 || feats.length > 25000;
-        // GroÃŸe DXF zuerst stabil anzeigen. Das unmittelbare Serialisieren und
-        // Hochladen derselben Geometrie verdoppelt den Speicherbedarf und lÃ¤sst
-        // Chrome bei 40â€“50 MB DXF hÃ¤ufig als â€žreagiert nichtâ€œ erscheinen.
+        // Große DXF zuerst stabil anzeigen. Das unmittelbare Serialisieren und
+        // Hochladen derselben Geometrie verdoppelt den Speicherbedarf und lässt
+        // Chrome bei 40–50 MB DXF häufig als „reagiert nicht“ erscheinen.
         const saved = isLargeDxf
           ? false
           : await persistCadDrawing(feats, {
@@ -6534,20 +6542,20 @@ export default function CADViewer() {
           ? document.source?.unsupportedTypes.length
           : 0;
         setStatus(
-          `DXF geÃ¶ffnet${saved ? " und gespeichert" : ""} (${
+          `DXF geöffnet${saved ? " und gespeichert" : ""} (${
             feats.length
           } Objekte${
-            paper ? ` Â· ${paper} Layout-Objekte ausgeblendet` : ""
-          }${unsupported ? ` Â· ${unsupported} nicht darstellbare Typen` : ""}${
+            paper ? ` · ${paper} Layout-Objekte ausgeblendet` : ""
+          }${unsupported ? ` · ${unsupported} nicht darstellbare Typen` : ""}${
             spatialCleanup.removed
-              ? ` Â· ${spatialCleanup.removed} rÃ¤umliche StÃ¶robjekte entfernt`
+              ? ` · ${spatialCleanup.removed} räumliche Störobjekte entfernt`
               : ""
           }${
             visualCleanup.removed
-              ? ` Â· ${visualCleanup.removed} nicht unterstÃ¼tzte Hilfsobjekte ausgeblendet`
+              ? ` · ${visualCleanup.removed} nicht unterstützte Hilfsobjekte ausgeblendet`
               : ""
           }${
-            isLargeDxf ? " Â· GroÃŸdatei-Modus: bitte manuell speichern" : ""
+            isLargeDxf ? " · Großdatei-Modus: bitte manuell speichern" : ""
           })`
         );
         return;
@@ -6568,7 +6576,7 @@ export default function CADViewer() {
 
       if (!["dwg", "dgn", "xml", "landxml", "pdf"].includes(extension)) {
         throw new Error(
-          "UnterstÃ¼tzte Formate: DXF, DWG, DGN, LandXML/XML, PDF, JSON, GeoJSON, CSV, TXT und GSI."
+          "Unterstützte Formate: DXF, DWG, DGN, LandXML/XML, PDF, JSON, GeoJSON, CSV, TXT und GSI."
         );
       }
 
@@ -6625,10 +6633,10 @@ export default function CADViewer() {
 
       throw new Error(
         lastError ||
-          "Der universelle Server-Konverter ist fÃ¼r dieses Format noch nicht verfÃ¼gbar."
+          "Der universelle Server-Konverter ist für dieses Format noch nicht verfügbar."
       );
     } catch (error: any) {
-      setStatus("CAD-Datei konnte nicht geÃ¶ffnet werden");
+      setStatus("CAD-Datei konnte nicht geöffnet werden");
       void cadAlert(String(error?.message || error));
     }
   };
@@ -6734,7 +6742,7 @@ export default function CADViewer() {
       excludedFeatureIds
     );
 
-    // Objektfang gilt auch fÃ¼r geladene Vermessungspunkte.
+    // Objektfang gilt auch für geladene Vermessungspunkte.
     let pointSnap: SnapResult | null = null;
     if (showUtm) {
       const snapSurveyPoints =
@@ -6810,7 +6818,7 @@ export default function CADViewer() {
       });
     }
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    setStatus(tool === "copy" ? "Kopie platzierenâ€¦" : "Objekt verschiebenâ€¦");
+    setStatus(tool === "copy" ? "Kopie platzieren…" : "Objekt verschieben…");
     return true;
   };
 
@@ -6823,7 +6831,7 @@ export default function CADViewer() {
       event.stopPropagation();
       selectFeature(featureId);
       setRotateSession((previous) => ({ ...previous, phase: "pick-base" }));
-      setStatus("Drehen: Objekt gewÃ¤hlt Â· jetzt Drehpunkt anklicken");
+      setStatus("Drehen: Objekt gewählt · jetzt Drehpunkt anklicken");
       return;
     }
 
@@ -6832,7 +6840,7 @@ export default function CADViewer() {
       event.stopPropagation();
       selectFeature(featureId);
       setScaleSession((previous) => ({ ...previous, phase: "pick-base" }));
-      setStatus("Skalieren: Objekt gewÃ¤hlt Â· jetzt Basispunkt anklicken");
+      setStatus("Skalieren: Objekt gewählt · jetzt Basispunkt anklicken");
       return;
     }
 
@@ -6841,7 +6849,7 @@ export default function CADViewer() {
       event.stopPropagation();
       selectFeature(featureId);
       setMirrorPhase("confirm-selection");
-      setStatus("Spiegeln: Objekt gewÃ¤hlt Â· Rechtsklick bestÃ¤tigt die Auswahl");
+      setStatus("Spiegeln: Objekt gewählt · Rechtsklick bestätigt die Auswahl");
       return;
     }
 
@@ -6866,7 +6874,7 @@ export default function CADViewer() {
       event.stopPropagation();
       setSelectedFeatureIds([featureId]);
       setSelectedFeatureId(featureId);
-      // AusfÃ¼hrung im nÃ¤chsten Render-Takt, damit die Auswahl sicher gesetzt ist.
+      // Ausführung im nächsten Render-Takt, damit die Auswahl sicher gesetzt ist.
       window.setTimeout(() => {
         setSelectedFeatureIds([featureId]);
         setSelectedFeatureId(featureId);
@@ -6875,7 +6883,7 @@ export default function CADViewer() {
           setTool("select");
         }, 0);
       }, 0);
-      setStatus("Explodieren: Objekt gewÃ¤hlt");
+      setStatus("Explodieren: Objekt gewählt");
       return;
     }
 
@@ -6915,13 +6923,13 @@ export default function CADViewer() {
       setSelectedFeatureIds(blockIds);
       setSelectedFeatureId(blockIds[0] || "");
       setRightTab("properties");
-      setStatus(`Messblock ausgewÃ¤hlt (${blockIds.length} Elemente)`);
+      setStatus(`Messblock ausgewählt (${blockIds.length} Elemente)`);
       return;
     }
 
     selectFeature(featureId, event.ctrlKey || event.metaKey);
     setRightTab("properties");
-    setStatus("1 Objekt ausgewÃ¤hlt");
+    setStatus("1 Objekt ausgewählt");
   };
 
   const beginVertexMove = (
@@ -6936,7 +6944,7 @@ export default function CADViewer() {
     beginMutation(original);
     setVertexDrag({ featureId, vertexIndex, original });
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    setStatus(`Griff ${vertexIndex + 1} frei verschiebenâ€¦`);
+    setStatus(`Griff ${vertexIndex + 1} frei verschieben…`);
   };
 
   const zoomAt = (factorZoom: number, anchorRatio?: V2) => {
@@ -6948,8 +6956,8 @@ export default function CADViewer() {
   };
 
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    // Der rechte Mausklick beendet Befehle ausschlieÃŸlich Ã¼ber onContextMenu.
-    // Er darf niemals als zusÃ¤tzlicher Zeichenpunkt Ã¼bernommen werden.
+    // Der rechte Mausklick beendet Befehle ausschließlich über onContextMenu.
+    // Er darf niemals als zusätzlicher Zeichenpunkt übernommen werden.
     if (e.button === 2) {
       e.preventDefault();
       e.stopPropagation();
@@ -6989,14 +6997,14 @@ export default function CADViewer() {
     }
     if (tool === "mirror") {
       if (mirrorPhase !== "pick-point") {
-        setStatus("Spiegeln: zuerst Auswahl mit rechter Maustaste bestÃ¤tigen");
+        setStatus("Spiegeln: zuerst Auswahl mit rechter Maustaste bestätigen");
         return;
       }
 
       setMirrorAxisPts([p]);
       setMirrorPreviewAngle(180);
       setMirrorPhase("confirm-point");
-      setStatus("Spiegeln LIVE Â· Maus bewegen fÃ¼r Winkel Â· Rechtsklick bestÃ¤tigt");
+      setStatus("Spiegeln LIVE · Maus bewegen für Winkel · Rechtsklick bestätigt");
       return;
     }
 
@@ -7009,7 +7017,7 @@ export default function CADViewer() {
           angle: 0,
           original: null,
         });
-        setStatus("Drehen: Drehpunkt gewÃ¤hlt Â· Rechtsklick bestÃ¤tigt");
+        setStatus("Drehen: Drehpunkt gewählt · Rechtsklick bestätigt");
         return;
       }
 
@@ -7028,11 +7036,11 @@ export default function CADViewer() {
         });
         setNumericCommand(null);
         setTool("select");
-        setStatus(`Drehen bestÃ¤tigt Â· ${formatNumber(rotateSession.angle, 2)}Â°`);
+        setStatus(`Drehen bestätigt · ${formatNumber(rotateSession.angle, 2)}°`);
         return;
       }
 
-      setStatus("Drehen: zuerst Drehpunkt wÃ¤hlen und mit Rechtsklick bestÃ¤tigen");
+      setStatus("Drehen: zuerst Drehpunkt wählen und mit Rechtsklick bestätigen");
       return;
     }
 
@@ -7045,7 +7053,7 @@ export default function CADViewer() {
           factor: 1,
           original: null,
         });
-        setStatus("Skalieren: Basispunkt gewÃ¤hlt Â· Rechtsklick bestÃ¤tigt");
+        setStatus("Skalieren: Basispunkt gewählt · Rechtsklick bestätigt");
         return;
       }
 
@@ -7065,12 +7073,12 @@ export default function CADViewer() {
         setNumericCommand(null);
         setTool("select");
         setStatus(
-          `Skalieren bestÃ¤tigt Â· Faktor ${formatNumber(scaleSession.factor, 3)}`
+          `Skalieren bestätigt · Faktor ${formatNumber(scaleSession.factor, 3)}`
         );
         return;
       }
 
-      setStatus("Skalieren: zuerst Basispunkt wÃ¤hlen und mit Rechtsklick bestÃ¤tigen");
+      setStatus("Skalieren: zuerst Basispunkt wählen und mit Rechtsklick bestätigen");
       return;
     }
 
@@ -7097,7 +7105,7 @@ export default function CADViewer() {
       });
       setTool("select");
       setStatus(
-        `Versetzen ${formatNumber(Math.abs(offsetSession.signedDistance))} m bestÃ¤tigt`
+        `Versetzen ${formatNumber(Math.abs(offsetSession.signedDistance))} m bestätigt`
       );
       return;
     }
@@ -7105,7 +7113,7 @@ export default function CADViewer() {
     if (tool === "line") {
       if (!draftPts.length) {
         setDraftPts([p]);
-        setStatus("Linie: Endpunkt wÃ¤hlen");
+        setStatus("Linie: Endpunkt wählen");
       } else {
         addFeature({
           kind: "line",
@@ -7113,18 +7121,18 @@ export default function CADViewer() {
           name: "Linie",
         });
         setDraftPts([]);
-        setStatus("Linie erstellt Â· nÃ¤chsten Startpunkt wÃ¤hlen");
+        setStatus("Linie erstellt · nächsten Startpunkt wählen");
       }
     } else if (tool === "polyline") {
       setDraftPts((prev) => {
         const last = prev[prev.length - 1];
         return last && dist(last, p) < 1e-9 ? prev : [...prev, p];
       });
-      setStatus("Polylinie: weitere Punkte Â· Enter beendet");
+      setStatus("Polylinie: weitere Punkte · Enter beendet");
     } else if (tool === "rectangle") {
       if (!draftPts.length) {
         setDraftPts([p]);
-        setStatus("Rechteck: gegenÃ¼berliegende Ecke wÃ¤hlen");
+        setStatus("Rechteck: gegenüberliegende Ecke wählen");
       } else {
         const start = draftPts[0];
         addFeature({
@@ -7144,7 +7152,7 @@ export default function CADViewer() {
     } else if (tool === "circle") {
       if (!draftPts.length) {
         setDraftPts([p]);
-        setStatus("Kreis: Radius wÃ¤hlen");
+        setStatus("Kreis: Radius wählen");
       } else {
         const center = draftPts[0];
         addFeature({
@@ -7158,11 +7166,11 @@ export default function CADViewer() {
       }
     } else if (tool === "text") {
       setTextAnchor(p);
-      setStatus("Text eingeben und bestÃ¤tigen");
+      setStatus("Text eingeben und bestätigen");
     } else if (tool === "distance") {
       setMeasurePts((previous) => {
         if (!previous.length || previous.length >= 2) {
-          setStatus("Strecke messen: Endpunkt wÃ¤hlen");
+          setStatus("Strecke messen: Endpunkt wählen");
           return [p];
         }
 
@@ -7179,11 +7187,11 @@ export default function CADViewer() {
       );
       if (!polygon) {
         setMeasurePts([]);
-        setStatus("FlÃ¤che messen: keine geschlossene FlÃ¤che gefunden");
+        setStatus("Fläche messen: keine geschlossene Fläche gefunden");
       } else {
         setMeasurePts(polygon.map((point) => ({ ...point })));
         setStatus(
-          `FlÃ¤che erkannt: ${formatNumber(polyArea(polygon))} mÂ² Â· Rechtsklick bestÃ¤tigt`
+          `Fläche erkannt: ${formatNumber(polyArea(polygon))} m² · Rechtsklick bestätigt`
         );
       }
     } else if (tool === "dimLinear" || tool === "dimAligned") {
@@ -7201,8 +7209,8 @@ export default function CADViewer() {
         if (!previous.length) {
           setStatus(
             tool === "dimLinear"
-              ? "Lineare BemaÃŸung: zweiten Punkt wÃ¤hlen"
-              : "Ausgerichtete BemaÃŸung: zweiten Punkt wÃ¤hlen"
+              ? "Lineare Bemaßung: zweiten Punkt wählen"
+              : "Ausgerichtete Bemaßung: zweiten Punkt wählen"
           );
           return [p];
         }
@@ -7222,7 +7230,7 @@ export default function CADViewer() {
           end: endPoint,
           placing: false,
         });
-        setStatus("BemaÃŸung: Rechtsklick, dann Linie live positionieren");
+        setStatus("Bemaßung: Rechtsklick, dann Linie live positionieren");
         return [previous[0], endPoint];
       });
     } else if (tool === "point") {
@@ -7304,9 +7312,9 @@ export default function CADViewer() {
       if (!allowGeometryFrame) return;
       lastInteractionGeometryUpdateRef.current = frameNow;
       // Direkte freie Griffbearbeitung:
-      // Nur der gewÃ¤hlte End-/StÃ¼tzpunkt bewegt sich.
-      // Alle Ã¼brigen Punkte bleiben unverÃ¤ndert, damit sich die Linie
-      // frei drehen und gleichzeitig verlÃ¤ngern/verkÃ¼rzen kann.
+      // Nur der gewählte End-/Stützpunkt bewegt sich.
+      // Alle übrigen Punkte bleiben unverändert, damit sich die Linie
+      // frei drehen und gleichzeitig verlängern/verkürzen kann.
       const p = rawPoint;
       setActiveSnap(null);
       setCursorWorld(p);
@@ -7377,7 +7385,7 @@ export default function CADViewer() {
         )
       );
       if (allowUiFrame) {
-        setStatus(`Drehen LIVE Â· ${formatNumber(angle, 1)}Â° Â· Linksklick bestÃ¤tigt`);
+        setStatus(`Drehen LIVE · ${formatNumber(angle, 1)}° · Linksklick bestätigt`);
       }
       return;
     }
@@ -7419,7 +7427,7 @@ export default function CADViewer() {
       );
       if (allowUiFrame) {
         setStatus(
-          `Skalieren LIVE Â· Faktor ${formatNumber(factor, 3)} Â· Linksklick bestÃ¤tigt`
+          `Skalieren LIVE · Faktor ${formatNumber(factor, 3)} · Linksklick bestätigt`
         );
       }
       return;
@@ -7489,7 +7497,7 @@ export default function CADViewer() {
       setFeatures(result.features);
       if (allowUiFrame) {
         setStatus(
-          `Versetzen LIVE Â· ${formatNumber(offsetSession.distance)} m Â· Seite mit Maus wÃ¤hlen Â· Linksklick bestÃ¤tigt`
+          `Versetzen LIVE · ${formatNumber(offsetSession.distance)} m · Seite mit Maus wählen · Linksklick bestätigt`
         );
       }
       return;
@@ -7504,7 +7512,7 @@ export default function CADViewer() {
     let p = showSnapPreview ? snappedWorldPoint(rawPoint) : rawPoint;
     if (!showSnapPreview && activeSnap) setActiveSnap(null);
 
-    // Ortho muss bereits wÃ¤hrend der Vorschau wirken:
+    // Ortho muss bereits während der Vorschau wirken:
     // Nach dem ersten Punkt folgt der Cursor sofort horizontal oder vertikal.
     if (
       orthoEnabled &&
@@ -7515,8 +7523,8 @@ export default function CADViewer() {
     }
 
     if (tool === "select" && !selectionDrag && !dragStart) {
-      // Native Bildschirm-Pixel-Cursor: keine CAD-Einheiten-SprÃ¼nge,
-      // keine AbhÃ¤ngigkeit von SVG-Transform, UTM oder Objektfang.
+      // Native Bildschirm-Pixel-Cursor: keine CAD-Einheiten-Sprünge,
+      // keine Abhängigkeit von SVG-Transform, UTM oder Objektfang.
       if (smoothSelectCursorRef.current) {
         smoothSelectCursorRef.current.style.visibility = "hidden";
       }
@@ -7544,7 +7552,7 @@ export default function CADViewer() {
       const snappedAngle = Math.round(normalized / 5) * 5;
       setMirrorPreviewAngle(snappedAngle);
       setStatus(
-        `Spiegeln LIVE Â· Winkel ${snappedAngle}Â° Â· Rechtsklick bestÃ¤tigt`
+        `Spiegeln LIVE · Winkel ${snappedAngle}° · Rechtsklick bestätigt`
       );
     }
 
@@ -7638,7 +7646,7 @@ export default function CADViewer() {
           setSelectedFeatureId(next[0] || "");
           return next;
         });
-        setStatus(`${ids.length} Objekte Â· ${utmIds.length} Punkte im Auswahlfenster`);
+        setStatus(`${ids.length} Objekte · ${utmIds.length} Punkte im Auswahlfenster`);
       }
     }
     if (objectDrag) {
@@ -7646,7 +7654,7 @@ export default function CADViewer() {
         objectDrag.mode === "copy" ? "Kopie erstellt" : "Objekt verschoben"
       );
     }
-    if (vertexDrag) setStatus("End-/StÃ¼tzpunkt geÃ¤ndert");
+    if (vertexDrag) setStatus("End-/Stützpunkt geändert");
     setDragStart(null);
     setSelectionDrag(null);
     setObjectDrag(null);
@@ -7665,8 +7673,8 @@ export default function CADViewer() {
   );
 
   // UTM-Punktsymbol als echte CAD-X:
-  // SymbolgrÃ¶ÃŸe 1 = ungefÃ¤hr 1 Zeichnungseinheit GesamtgrÃ¶ÃŸe.
-  // Dadurch wÃ¤chst die X beim Hineinzoomen und wird beim Herauszoomen kleiner.
+  // Symbolgröße 1 = ungefähr 1 Zeichnungseinheit Gesamtgröße.
+  // Dadurch wächst die X beim Hineinzoomen und wird beim Herauszoomen kleiner.
   const utmXNominalHalfSize = Math.max(
     0.05,
     Math.min(50, Number(utmSymbolSize) || 1) * 0.5
@@ -7728,17 +7736,19 @@ export default function CADViewer() {
   }) => {
     const fsProjectKey = String(current?.code || projectId || "").trim();
     if (!fsProjectKey) {
-      void cadAlert("Kein Projekt gewÃ¤hlt.");
+      void cadAlert("Kein Projekt gewählt.");
       return false;
     }
 
-    const finalPos = String(override?.pos ?? pos).trim();
+    const finalPos = String(
+      override?.pos ?? selectedLvPosition?.pos ?? pos
+    ).trim();
     if (!finalPos) {
       void cadAlert("Positionsnummer fehlt.");
       return false;
     }
     if (!selectedFeatures.length && typeof override?.qty !== "number") {
-      void cadAlert("Kein CAD-Objekt ausgewÃ¤hlt.");
+      void cadAlert("Kein CAD-Objekt ausgewählt.");
       return false;
     }
 
@@ -7767,7 +7777,7 @@ export default function CADViewer() {
         : 1;
     const qtyFinal = baseQty * finalFactor;
     const finalText = String(
-      override?.text ?? kurz ?? "RLC CAD AufmaÃŸ"
+      override?.text ?? kurz ?? "RLC CAD Aufmaß"
     ).trim();
 
     const row = {
@@ -7831,7 +7841,7 @@ export default function CADViewer() {
       };
     };
 
-    setStatus("Ãœbernahme in AufmaÃŸâ€¦");
+    setStatus("Übernahme in Aufmaß…");
 
     const attempts = [
       () =>
@@ -7887,11 +7897,11 @@ export default function CADViewer() {
       try {
         const r = await attempt();
         if (r.ok) {
-          setStatus("In AufmaÃŸ Ã¼bernommen");
+          setStatus("In Aufmaß übernommen");
           void cadAlert(
-            `${row.pos} â€“ ${row.text}\n${formatNumber(row.qty)} ${uiUnitLabel(
+            `${row.pos} – ${row.text}\n${formatNumber(row.qty)} ${uiUnitLabel(
               row.unit
-            )}\n\nIn AufmaÃŸ Ã¼bernommen.`
+            )}\n\nIn Aufmaß übernommen.`
           );
           void loadPositionAufmass(row.pos);
           return true;
@@ -7902,8 +7912,8 @@ export default function CADViewer() {
       }
     }
 
-    setStatus("Ãœbernahme fehlgeschlagen");
-    void cadAlert(`Ãœbernahme fehlgeschlagen.\n${lastError}`);
+    setStatus("Übernahme fehlgeschlagen");
+    void cadAlert(`Übernahme fehlgeschlagen.\n${lastError}`);
     return false;
   };
 
@@ -7991,13 +8001,13 @@ export default function CADViewer() {
       finalPos = chosen.pos;
       finalText = chosen.text;
       const u = String(chosen.unit || "").toLowerCase();
-      if (u.includes("m2") || u.includes("mÂ²")) finalUnit = "m2";
+      if (u.includes("m2") || u.includes("m²")) finalUnit = "m2";
       else if (u.includes("stk") || u === "st") finalUnit = "Stk";
       else finalUnit = "m";
     }
 
     setKiPos(finalPos || "001");
-    setKiText(finalText || "KI: â€”");
+    setKiText(finalText || "KI: —");
     setKiUnit(finalUnit);
     setKiFactor(1);
   }, [kiSelected, chosenLvPos, lvSuggestions]);
@@ -8062,9 +8072,87 @@ export default function CADViewer() {
     );
   };
 
+
+  /* CAD_DMS_EXPORT_V1 */
+  const archiveCadExportToDms = async (
+    filename: string,
+    blob: Blob
+  ) => {
+    try {
+      const pid = String(projectId || "").trim();
+
+      if (!pid) return;
+
+      const file = new File(
+        [blob],
+        filename,
+        {
+          type:
+            blob.type ||
+            "application/octet-stream"
+        }
+      );
+
+      const kind = detectDmsKind(file);
+
+      const created =
+        await initDmsDocument(
+          pid,
+          kind,
+          filename
+        );
+
+      const documentId =
+        String(
+          created?.documentId || ""
+        ).trim();
+
+      if (!documentId) {
+        throw new Error(
+          "DMS-Dokument-ID fehlt."
+        );
+      }
+
+      const upload =
+        await getDmsUploadUrl(
+          documentId,
+          file.name,
+          file.type ||
+            "application/octet-stream"
+        );
+
+      await putDmsToStorage(
+        upload.uploadUrl,
+        file,
+        file.type ||
+          "application/octet-stream"
+      );
+
+      await completeDmsUpload({
+        documentId,
+        key: upload.key,
+        version: upload.version,
+        contentType:
+          upload.contentType ||
+          file.type ||
+          "application/octet-stream",
+        size: file.size
+      });
+    } catch (error) {
+      console.error(
+        "[CAD DMS Export]",
+        error
+      );
+
+      setStatus(
+        "CAD exportiert · DMS-Archivierung fehlgeschlagen"
+      );
+    }
+  };
+
   const exportDxf = () => {
     // Robustes ASCII-DXF R12 (AC1009): derselbe elementare Entity-Satz,
-    // den der RLC-Importer zuverlÃ¤ssig lesen kann und BricsCAD direkt Ã¶ffnet.
+    // den der RLC-Importer zuverlässig lesen kann und BricsCAD direkt öffnet.
     const rows: string[] = [];
     const push = (...values: Array<string | number>) => values.forEach((value) => rows.push(String(value)));
     const num = (value: unknown) => Number.isFinite(Number(value)) ? Number(value).toFixed(6).replace(/\.?0+$/, "") : "0";
@@ -8114,8 +8202,32 @@ export default function CADViewer() {
       push(0,"TEXT",8,"RLC_PUNKT_TEXTE",10,num(point.x+cross*1.9),20,num(point.y+cross*1.3),30,z,40,"0.20",1,safe(`${point.label || point.id}${point.code ? ` ${point.code}` : ""}`),7,"STANDARD");
     }
     push(0,"ENDSEC",0,"EOF");
-    downloadText(`${(drawingName || projectId || "cad").replace(/[^a-zA-Z0-9._-]+/g, "_")}-export.dxf`, `${rows.join("\r\n")}\r\n`, "application/dxf");
-    setStatus(`DXF R12 exportiert (${features.length} Objekte Â· ${utmPoints.length} Punkte)`);
+    const filename =
+      `${(drawingName || projectId || "cad")
+        .replace(/[^a-zA-Z0-9._-]+/g, "_")}-export.dxf`;
+
+    const dxfText =
+      `${rows.join("\r\n")}\r\n`;
+
+    const dxfBlob =
+      new Blob(
+        [dxfText],
+        { type: "application/dxf" }
+      );
+
+    downloadBlob(
+      filename,
+      dxfBlob
+    );
+
+    void archiveCadExportToDms(
+      filename,
+      dxfBlob
+    );
+
+    setStatus(
+      `DXF R12 exportiert (${features.length} Objekte · ${utmPoints.length} Punkte) · DMS`
+    );
   };
 
   const exportCsv = () => {
@@ -8163,7 +8275,7 @@ export default function CADViewer() {
   const exportSnapshotPng = async () => {
     const svg = svgRef.current;
     if (!svg) return;
-    setStatus("Snapshot wird erstelltâ€¦");
+    setStatus("Snapshot wird erstellt…");
     try {
       const clone = svg.cloneNode(true) as SVGSVGElement;
       const rect = svg.getBoundingClientRect();
@@ -8191,7 +8303,7 @@ export default function CADViewer() {
       canvas.width = width;
       canvas.height = height;
       const context = canvas.getContext("2d");
-      if (!context) throw new Error("Canvas nicht verfÃ¼gbar.");
+      if (!context) throw new Error("Canvas nicht verfügbar.");
       context.fillStyle = ui.cadBg;
       context.fillRect(0, 0, width, height);
       context.drawImage(image, 0, 0, width, height);
@@ -8206,7 +8318,18 @@ export default function CADViewer() {
           "image/png"
         );
       });
-      downloadBlob(`${projectId || "cad"}-snapshot.png`, png);
+      const filename =
+        `${projectId || "cad"}-snapshot.png`;
+
+      downloadBlob(
+        filename,
+        png
+      );
+
+      void archiveCadExportToDms(
+        filename,
+        png
+      );
       setStatus("snapshot.png exportiert");
     } catch (error: any) {
       setStatus("Snapshot fehlgeschlagen");
@@ -8221,7 +8344,7 @@ export default function CADViewer() {
         : visibleFeatures.map((feature) => String(feature.id || "")).filter(Boolean)
     );
     if (!targetIds.size) {
-      setStatus("Keine CAD-Objekte fÃ¼r die LV-Zuordnung");
+      setStatus("Keine CAD-Objekte für die LV-Zuordnung");
       return;
     }
     commitDrawing(
@@ -8239,7 +8362,7 @@ export default function CADViewer() {
       )
     );
     setStatus(
-      `LV ${pos.trim() || "â€”"} auf ${targetIds.size} Objekte angewendet`
+      `LV ${pos.trim() || "—"} auf ${targetIds.size} Objekte angewendet`
     );
   };
 
@@ -8256,11 +8379,11 @@ export default function CADViewer() {
   const prepareSelectionTakeoff = () => {
     if (!selectedFeatureIds.length) {
       activateTool("select");
-      setStatus("Mengenermittlung: Objekte im CAD auswÃ¤hlen");
+      setStatus("Mengenermittlung: Objekte im CAD auswählen");
       return;
     }
     setRightTab("aufmass");
-    setStatus(`${selectedFeatureIds.length} Objekte fÃ¼r Mengenermittlung ausgewÃ¤hlt`);
+    setStatus(`${selectedFeatureIds.length} Objekte für Mengenermittlung ausgewählt`);
   };
 
   const selectedFeatureCenter = selectedFeature?.pts?.length
@@ -8289,11 +8412,11 @@ export default function CADViewer() {
   const assignSelectionToLvPosition = async () => {
     if (!selectedLvPosition) {
       setLeftTab("lv");
-      return void cadAlert("Bitte zuerst eine LV-Position wÃ¤hlen.");
+      return void cadAlert("Bitte zuerst eine LV-Position wählen.");
     }
     if (!selectedFeatures.length) {
       activateTool("select");
-      return void cadAlert("Bitte zuerst CAD-Objekte oder einen Layer auswÃ¤hlen.");
+      return void cadAlert("Bitte zuerst CAD-Objekte oder einen Layer auswählen.");
     }
 
     const ids = new Set(
@@ -8324,7 +8447,7 @@ export default function CADViewer() {
       );
       setLeftTab("lv");
       setStatus(
-        `Position ${selectedLvPosition.pos} zugeordnet Â· ${formatNumber(
+        `Position ${selectedLvPosition.pos} zugeordnet · ${formatNumber(
           selectedCadQty
         )} ${uiUnitLabel(selectedLvUnit)}`
       );
@@ -8410,18 +8533,18 @@ export default function CADViewer() {
       )
     );
     setDirty(true);
-    setStatus(`Layerfarbe ${layerName} geÃ¤ndert`);
+    setStatus(`Layerfarbe ${layerName} geändert`);
   };
 
   const deleteLayer = (layerName: string) => {
     const layer = layerStates.find((entry) => entry.name === layerName);
     if (!layer) return;
     if (layerName === "0") {
-      setStatus("Layer 0 kann nicht gelÃ¶scht werden");
+      setStatus("Layer 0 kann nicht gelöscht werden");
       return;
     }
     if (layer.count > 0) {
-      setStatus(`Layer ${layerName} enthÃ¤lt ${layer.count} Objekte und kann nicht gelÃ¶scht werden`);
+      setStatus(`Layer ${layerName} enthält ${layer.count} Objekte und kann nicht gelöscht werden`);
       return;
     }
 
@@ -8444,7 +8567,7 @@ export default function CADViewer() {
     if (activeLayer === layerName) setActiveLayer("0");
     if (isolatedLayer === layerName) setIsolatedLayer("");
     setDirty(true);
-    setStatus(`Layer ${layerName} gelÃ¶scht`);
+    setStatus(`Layer ${layerName} gelöscht`);
   };
 
   const activateTool = (nextTool: ViewerTool) => {
@@ -8497,7 +8620,7 @@ export default function CADViewer() {
     if (command === "hatch") {
       setPendingHatchBoundary(null);
       activateTool("hatch");
-      setStatus("Schraffieren: Innenpunkt einer geschlossenen FlÃ¤che wÃ¤hlen");
+      setStatus("Schraffieren: Innenpunkt einer geschlossenen Fläche wählen");
       return;
     }
 
@@ -8512,7 +8635,7 @@ export default function CADViewer() {
       setActiveSnap(null);
       setStatus(
         next
-          ? "Objektfang aktiv Â· Endpunkt, Mittelpunkt, Zentrum, StÃ¼tzpunkt, Vermessungspunkt"
+          ? "Objektfang aktiv · Endpunkt, Mittelpunkt, Zentrum, Stützpunkt, Vermessungspunkt"
           : "Objektfang ausgeschaltet"
       );
       return next;
@@ -8522,7 +8645,7 @@ export default function CADViewer() {
   const toggleOrtho = () => {
     setOrthoEnabled((value) => {
       const next = !value;
-      setStatus(next ? "Ortho aktiv (F8) Â· horizontal/vertikal" : "Ortho ausgeschaltet (F8)");
+      setStatus(next ? "Ortho aktiv (F8) · horizontal/vertikal" : "Ortho ausgeschaltet (F8)");
       return next;
     });
   };
@@ -8708,8 +8831,8 @@ export default function CADViewer() {
               }}
             >
               {current
-                ? `${current.code} â€“ ${current.name} Â· ${drawingName}`
-                : `${projectId || "Kein Projekt gewÃ¤hlt"} Â· ${drawingName}`}
+                ? `${current.code} – ${current.name} · ${drawingName}`
+                : `${projectId || "Kein Projekt gewählt"} · ${drawingName}`}
             </span>
           </div>
 
@@ -8759,7 +8882,7 @@ export default function CADViewer() {
             background: "#111821",
           }}
         >
-          <CadRibbonGroup title="Projekt Â· Zeichnungen">
+          <CadRibbonGroup title="Projekt · Zeichnungen">
             <Input
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
@@ -8788,25 +8911,25 @@ export default function CADViewer() {
             />
             <CadRibbonButton
               icon="openProject"
-              label="Ã–ffnen"
+              label="Öffnen"
               onClick={() => void loadDrawingLibrary()}
               primary
-              title="Gespeicherte Zeichnungen dieses Projekts Ã¶ffnen"
+              title="Gespeicherte Zeichnungen dieses Projekts öffnen"
             />
           </CadRibbonGroup>
 
-          <CadRibbonGroup title="Dateien Ã¶ffnen">
+          <CadRibbonGroup title="Dateien öffnen">
             <CadRibbonButton
               icon="openCad"
               label="CAD-Datei"
               onClick={openCadFile}
-              title="CAD-Datei Ã¶ffnen"
+              title="CAD-Datei öffnen"
             />
             <CadRibbonButton
               icon="openPoints"
               label="Punktdatei"
               onClick={openPointFile}
-              title="Punktdatei Ã¶ffnen"
+              title="Punktdatei öffnen"
             />
           </CadRibbonGroup>
 
@@ -8934,7 +9057,7 @@ export default function CADViewer() {
                   cursor: "pointer",
                 }}
               >
-                Ã—
+                ×
               </button>
             </div>
 
@@ -9030,7 +9153,7 @@ export default function CADViewer() {
                   cursor: "pointer",
                 }}
               >
-                {cadDialog.type === "alert" ? "OK" : cadDialog.type === "confirm" ? "Ja" : "Ãœbernehmen"}
+                {cadDialog.type === "alert" ? "OK" : cadDialog.type === "confirm" ? "Ja" : "Übernehmen"}
               </button>
             </div>
           </div>
@@ -9087,7 +9210,7 @@ export default function CADViewer() {
                   Gespeicherte Zeichnungen
                 </div>
                 <div style={{ marginTop: 2, color: cadPalette.sub, fontSize: 10.5 }}>
-                  Projekt {projectId || "â€”"} Â· Zeichnung auswÃ¤hlen oder neu anlegen
+                  Projekt {projectId || "—"} · Zeichnung auswählen oder neu anlegen
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -9116,7 +9239,7 @@ export default function CADViewer() {
                 </button>
                 <button
                   type="button"
-                  title="SchlieÃŸen"
+                  title="Schließen"
                   onClick={() => setDrawingBrowserOpen(false)}
                   style={{
                     width: 32,
@@ -9129,7 +9252,7 @@ export default function CADViewer() {
                     fontSize: 17,
                   }}
                 >
-                  Ã—
+                  ×
                 </button>
               </div>
             </div>
@@ -9145,7 +9268,7 @@ export default function CADViewer() {
             >
               {drawingListState === "loading" ? (
                 <div style={{ padding: 24, textAlign: "center", color: cadPalette.sub }}>
-                  Zeichnungen werden geladenâ€¦
+                  Zeichnungen werden geladen…
                 </div>
               ) : drawingList.length ? (
                 <div style={{ display: "grid", gap: 7 }}>
@@ -9204,7 +9327,7 @@ export default function CADViewer() {
                       </div>
                       <CadRibbonButton
                         icon="openProject"
-                        label={openingDrawingId === item.id ? "Ladenâ€¦" : "Ã–ffnen"}
+                        label={openingDrawingId === item.id ? "Laden…" : "Öffnen"}
                         onClick={() => void openSavedDrawing(item)}
                         disabled={Boolean(openingDrawingId)}
                         primary={(currentDrawingId ? item.id === currentDrawingId : item.drawingName === drawingName)}
@@ -9260,17 +9383,17 @@ export default function CADViewer() {
         {/* PROJECT STRUCTURE BELOW THE DRAWING */}
         <Card
           title="Projektstruktur"
-          subtitle={`${features.length} Objekte Â· ${layerStates.length} Layer`}
+          subtitle={`${features.length} Objekte · ${layerStates.length} Layer`}
           tone="cadDark"
           compact
           action={
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 10, color: projectDockTheme.sub }}>
-                {features.length} Objekte Â· {layerStates.length} Layer
+                {features.length} Objekte · {layerStates.length} Layer
               </span>
               <button
                 type="button"
-                title={projectDockCollapsed ? "Projektstruktur Ã¶ffnen" : "Projektstruktur minimieren"}
+                title={projectDockCollapsed ? "Projektstruktur öffnen" : "Projektstruktur minimieren"}
                 onClick={() => setProjectDockCollapsed((value) => !value)}
                 style={{
                   width: 24,
@@ -9284,7 +9407,7 @@ export default function CADViewer() {
                   lineHeight: 1,
                 }}
               >
-                {projectDockCollapsed ? "â–´" : "â–¾"}
+                {projectDockCollapsed ? "▴" : "▾"}
               </button>
             </div>
           }
@@ -9315,7 +9438,7 @@ export default function CADViewer() {
               <div
                 role="separator"
                 aria-orientation="horizontal"
-                title="HÃ¶he der Projektstruktur Ã¤ndern"
+                title="Höhe der Projektstruktur ändern"
                 onMouseDown={(event) => {
                   event.preventDefault();
                   const startY = event.clientY;
@@ -9357,7 +9480,7 @@ export default function CADViewer() {
                 }}
               >
                 {[
-                  ["lv", "LV Â· AufmaÃŸ"],
+                  ["lv", "LV · Aufmaß"],
                   ["takeoff", "Allgemeine Mengen"],
                   ["utm", "UTM"],
                 ].map(([key, label]) => {
@@ -9412,8 +9535,8 @@ export default function CADViewer() {
                     }
                     placeholder={
                       leftTab === "lv"
-                        ? "LV-Position oder Text suchenâ€¦"
-                        : "Layer suchenâ€¦"
+                        ? "LV-Position oder Text suchen…"
+                        : "Layer suchen…"
                     }
                     style={projectDockInputStyle}
                   />
@@ -9452,8 +9575,8 @@ export default function CADViewer() {
                         color: projectDockTheme.sub,
                       }}
                     >
-                      VollstÃ¤ndige Mengen je Layer. Auswahl kann direkt dem
-                      AufmaÃŸ Ã¼bergeben werden.
+                      Vollständige Mengen je Layer. Auswahl kann direkt dem
+                      Aufmaß übergeben werden.
                     </div>
 
                     {layerStates.map((layer) => {
@@ -9582,7 +9705,7 @@ export default function CADViewer() {
                               <b style={{ color: projectDockTheme.text }}>
                                 {formatNumber(layer.area)}
                               </b>{" "}
-                              mÂ²
+                              m²
                             </span>
                             <span>
                               T{" "}
@@ -9642,7 +9765,7 @@ export default function CADViewer() {
                                 width: "100%",
                               }}
                             >
-                              AuswÃ¤hlen
+                              Auswählen
                             </Btn>
                             <Btn
                               primary
@@ -9652,7 +9775,7 @@ export default function CADViewer() {
                                 width: "100%",
                               }}
                             >
-                              â†’ AufmaÃŸ
+                              → Aufmaß
                             </Btn>
                           </div>
                         </div>
@@ -9716,7 +9839,7 @@ export default function CADViewer() {
                         <span>Projekt-LV</span>
                         <span style={{ color: projectDockTheme.sub }}>
                           {lvState === "loading"
-                            ? "wird geladenâ€¦"
+                            ? "wird geladen…"
                             : `${filteredLvPositions.length} / ${lvPositions.length}`}
                         </span>
                       </div>
@@ -9757,7 +9880,7 @@ export default function CADViewer() {
                                 fontSize: 11,
                               }}
                             >
-                              <b>{position.pos || "â€”"}</b>
+                              <b>{position.pos || "—"}</b>
                               <span
                                 style={{
                                   minWidth: 0,
@@ -9898,7 +10021,7 @@ export default function CADViewer() {
                                 `${formatNumber(
                                   selectedLvPosition.ep,
                                   2
-                                )} â‚¬`,
+                                )} €`,
                               ],
                               [
                                 "CAD-Auswahl",
@@ -9958,7 +10081,7 @@ export default function CADViewer() {
                               <b style={{ color: projectDockTheme.text }}>
                                 {formatNumber(rlcTakeoffArea)}
                               </b>{" "}
-                              mÂ²
+                              m²
                             </span>
                             <span>
                               Ziel{" "}
@@ -9977,7 +10100,7 @@ export default function CADViewer() {
                             fontSize: 11,
                           }}
                         >
-                          Links eine Position aus dem Projekt-LV wÃ¤hlen.
+                          Links eine Position aus dem Projekt-LV wählen.
                         </div>
                       )}
                     </div>
@@ -10149,7 +10272,7 @@ export default function CADViewer() {
                               fontSize: 10,
                             }}
                           >
-                            AufmaÃŸ wird geladenâ€¦
+                            Aufmaß wird geladen…
                           </div>
                         ) : positionAufmassState === "error" ? (
                           <div
@@ -10159,7 +10282,7 @@ export default function CADViewer() {
                               fontSize: 10,
                             }}
                           >
-                            AufmaÃŸ konnte nicht geladen werden.
+                            Aufmaß konnte nicht geladen werden.
                           </div>
                         ) : !positionAufmassRows.length ? (
                           <div
@@ -10169,7 +10292,7 @@ export default function CADViewer() {
                               fontSize: 10,
                             }}
                           >
-                            FÃ¼r diese Position ist noch kein AufmaÃŸ vorhanden.
+                            Für diese Position ist noch kein Aufmaß vorhanden.
                           </div>
                         ) : null}
                       </div>
@@ -10238,7 +10361,7 @@ export default function CADViewer() {
                             width: "100%",
                           }}
                         >
-                          Punktdatei Ã¶ffnen
+                          Punktdatei öffnen
                         </Btn>
                         <Btn
                           onClick={() => void loadUtm()}
@@ -10302,7 +10425,7 @@ export default function CADViewer() {
                               )
                             )
                           }
-                          title="SymbolgrÃ¶ÃŸe"
+                          title="Symbolgröße"
                           style={{
                             ...projectDockInputStyle,
                             width: "100%",
@@ -10357,7 +10480,7 @@ export default function CADViewer() {
                               color: projectDockTheme.sub,
                             }}
                           >
-                            E {formatNumber(point.x)} Â· N{" "}
+                            E {formatNumber(point.x)} · N{" "}
                             {formatNumber(point.y)}
                           </div>
                           <div
@@ -10370,8 +10493,8 @@ export default function CADViewer() {
                             H{" "}
                             {Number.isFinite(point.height)
                               ? formatNumber(Number(point.height))
-                              : "â€”"}
-                            {point.code ? ` Â· Code ${point.code}` : ""}
+                              : "—"}
+                            {point.code ? ` · Code ${point.code}` : ""}
                           </div>
                         </div>
                       ))}
@@ -10402,8 +10525,8 @@ export default function CADViewer() {
 
         {/* FULL-WIDTH CAD VIEWPORT */}
         <Card
-          title="RLC CAD Â· Zeichenbereich"
-          subtitle="RLC Geometry Â· Projektdatei cad.json"
+          title="RLC CAD · Zeichenbereich"
+          subtitle="RLC Geometry · Projektdatei cad.json"
           tone="cadDark"
           style={{
             gridArea: "cad",
@@ -10451,21 +10574,21 @@ export default function CADViewer() {
               disabled={!selectedFeatureIds.length}
               title="Entf"
             >
-              LÃ¶schen
+              Löschen
             </Btn>
             <IconBtn
               onClick={undoDrawing}
               disabled={!canUndo}
-              title="RÃ¼ckgÃ¤ngig (Ctrl+Z)"
+              title="Rückgängig (Ctrl+Z)"
             >
-              â†¶
+              ↶
             </IconBtn>
             <IconBtn
               onClick={redoDrawing}
               disabled={!canRedo}
               title="Wiederholen (Ctrl+Y)"
             >
-              â†·
+              ↷
             </IconBtn>
             <Btn
               active={tool === "distance"}
@@ -10483,7 +10606,7 @@ export default function CADViewer() {
                 activateTool("area");
               }}
             >
-              FlÃ¤che
+              Fläche
             </Btn>
             <Btn
               active={tool === "point"}
@@ -10504,11 +10627,11 @@ export default function CADViewer() {
               }}
             />
 
-            <IconBtn onClick={() => zoomAt(0.8)} title="VergrÃ¶ÃŸern">
+            <IconBtn onClick={() => zoomAt(0.8)} title="Vergrößern">
               +
             </IconBtn>
             <IconBtn onClick={() => zoomAt(1.25)} title="Verkleinern">
-              âˆ’
+              −
             </IconBtn>
             <Btn onClick={fitDrawing}>Alles anzeigen</Btn>
             <Btn
@@ -10548,7 +10671,7 @@ export default function CADViewer() {
             <Btn active={snapEnabled} onClick={toggleSnap}>
               Snap
             </Btn>
-            <Btn onClick={() => setMeasurePts([])}>Messung lÃ¶schen</Btn>
+            <Btn onClick={() => setMeasurePts([])}>Messung löschen</Btn>
           </div>
 
           <div
@@ -10593,7 +10716,7 @@ export default function CADViewer() {
                     <CadToolButton icon="rlcPanel" title="RLC Panel" active={rightTab === "rlc"} onClick={() => setRightTab("rlc")} />
                     <CadToolButton
                       icon="newLayer"
-                      title="Layerverwaltung Ã¶ffnen"
+                      title="Layerverwaltung öffnen"
                       active={rightTab === "layers"}
                       onClick={() => setRightTab("layers")}
                     />
@@ -10691,7 +10814,7 @@ export default function CADViewer() {
                             borderLeft: "1px solid #44505e",
                           }}
                         >
-                          â–¾
+                          ▾
                         </span>
                       </button>
                       {activeLayerMenuOpen
@@ -10736,7 +10859,7 @@ export default function CADViewer() {
                                 Layerliste
                               </div>
                               <div style={{ fontSize: 10, color: "#8fa3b9" }}>
-                                Aktivieren, Farbe Ã¤ndern, ein/aus
+                                Aktivieren, Farbe ändern, ein/aus
                               </div>
                             </div>
                             <button
@@ -10800,12 +10923,12 @@ export default function CADViewer() {
                                       cursor: "pointer",
                                     }}
                                   >
-                                    {layer.visible ? "â—‰" : "â—‹"}
+                                    {layer.visible ? "◉" : "○"}
                                   </button>
                                   <input
                                     type="color"
                                     value={layer.color || "#ffffff"}
-                                    title="Layerfarbe Ã¤ndern"
+                                    title="Layerfarbe ändern"
                                     onClick={(event) => event.stopPropagation()}
                                     onChange={(event) => {
                                       applyLayerColor(layer.name, event.target.value);
@@ -10866,7 +10989,7 @@ export default function CADViewer() {
                   </CadToolbarGroup>
 
                   <CadToolbarGroup label="Verlauf">
-                    <CadToolButton icon="undo" title="ZurÃ¼ck (Ctrl+Z)" disabled={!canUndo} onClick={undoDrawing} />
+                    <CadToolButton icon="undo" title="Zurück (Ctrl+Z)" disabled={!canUndo} onClick={undoDrawing} />
                     <CadToolButton icon="redo" title="Nach vorne (Ctrl+Y)" disabled={!canRedo} onClick={redoDrawing} />
                   </CadToolbarGroup>
 
@@ -10875,7 +10998,7 @@ export default function CADViewer() {
                     <CadToolButton icon="pan" title="Ansicht verschieben (P)" active={tool === "pan"} onClick={() => activateTool("pan")} />
                     <CadToolButton icon="move" title="Verschieben (V)" active={tool === "move"} onClick={() => activateTool("move")} />
                     <CadToolButton icon="copy" title="Kopieren (K)" active={tool === "copy"} disabled={!selectedFeatureIds.length} onClick={() => activateTool("copy")} />
-                    <CadToolButton icon="delete" tone="red" title="LÃ¶schen (Entf)" disabled={!selectedFeatureIds.length} onClick={deleteSelection} />
+                    <CadToolButton icon="delete" tone="red" title="Löschen (Entf)" disabled={!selectedFeatureIds.length} onClick={deleteSelection} />
                   </CadToolbarGroup>
 
                   <CadToolbarGroup label="Zeichnen">
@@ -10884,14 +11007,14 @@ export default function CADViewer() {
                     <CadToolButton icon="rectangle" tone="green" title="Rechteck (R)" active={tool === "rectangle"} onClick={() => activateTool("rectangle")} />
                     <CadToolButton icon="circle" tone="green" title="Kreis (C)" active={tool === "circle"} onClick={() => activateTool("circle")} />
                     <CadToolButton icon="text" tone="green" title="Text (T)" active={tool === "text"} onClick={() => activateTool("text")} />
-                    <CadToolButton icon="hatch" tone="green" title="Schraffieren Â· Innenpunkt wÃ¤hlen" active={tool === "hatch"} onClick={() => {
+                    <CadToolButton icon="hatch" tone="green" title="Schraffieren · Innenpunkt wählen" active={tool === "hatch"} onClick={() => {
                       setPendingHatchBoundary(null);
                       activateTool("hatch");
-                      setStatus("Schraffieren: Innenpunkt einer geschlossenen FlÃ¤che wÃ¤hlen");
+                      setStatus("Schraffieren: Innenpunkt einer geschlossenen Fläche wählen");
                     }} />
-                    <CadToolButton icon="boundary" tone="green" title="Umgrenzungslinie Â· Innenpunkt wÃ¤hlen" active={tool === "boundary"} onClick={() => {
+                    <CadToolButton icon="boundary" tone="green" title="Umgrenzungslinie · Innenpunkt wählen" active={tool === "boundary"} onClick={() => {
                       activateTool("boundary");
-                      setStatus("Umgrenzung: Innenpunkt einer geschlossenen FlÃ¤che wÃ¤hlen");
+                      setStatus("Umgrenzung: Innenpunkt einer geschlossenen Fläche wählen");
                     }} />
                   </CadToolbarGroup>
                 </div>
@@ -10901,31 +11024,31 @@ export default function CADViewer() {
                     <CadToolButton icon="distance" tone="violet" title="Strecke messen (M)" active={tool === "distance"} onClick={() => {
                       setMeasurePts([]);
                       activateTool("distance");
-                      setStatus("Strecke messen: Startpunkt wÃ¤hlen");
+                      setStatus("Strecke messen: Startpunkt wählen");
                     }} />
-                    <CadToolButton icon="area" tone="violet" title="FlÃ¤che messen (A)" active={tool === "area"} onClick={() => {
+                    <CadToolButton icon="area" tone="violet" title="Fläche messen (A)" active={tool === "area"} onClick={() => {
                       setMeasurePts([]);
                       activateTool("area");
-                      setStatus("FlÃ¤che messen: in eine geschlossene FlÃ¤che klicken");
+                      setStatus("Fläche messen: in eine geschlossene Fläche klicken");
                     }} />
                     <CadToolButton icon="point" tone="violet" title="Punkt messen" active={tool === "point"} onClick={() => {
                       setMeasurePts([]);
                       activateTool("point");
-                      setStatus("Punkt messen: Punkt wÃ¤hlen");
+                      setStatus("Punkt messen: Punkt wählen");
                     }} />
-                    <CadToolButton icon="dimLinear" tone="violet" title="Lineare BemaÃŸung" active={tool === "dimLinear"} onClick={() => {
+                    <CadToolButton icon="dimLinear" tone="violet" title="Lineare Bemaßung" active={tool === "dimLinear"} onClick={() => {
                       setMeasurePts([]);
                       activateTool("dimLinear");
-                      setStatus("Lineare BemaÃŸung: Startpunkt wÃ¤hlen");
+                      setStatus("Lineare Bemaßung: Startpunkt wählen");
                     }} />
-                    <CadToolButton icon="dimAligned" tone="violet" title="Ausgerichtete BemaÃŸung" active={tool === "dimAligned"} onClick={() => {
+                    <CadToolButton icon="dimAligned" tone="violet" title="Ausgerichtete Bemaßung" active={tool === "dimAligned"} onClick={() => {
                       setMeasurePts([]);
                       activateTool("dimAligned");
-                      setStatus("Ausgerichtete BemaÃŸung: Startpunkt wÃ¤hlen");
+                      setStatus("Ausgerichtete Bemaßung: Startpunkt wählen");
                     }} />
                   </CadToolbarGroup>
 
-                  <CadToolbarGroup label="Ã„ndern">
+                  <CadToolbarGroup label="Ändern">
                     <CadToolButton icon="rotate" tone="amber" title="Drehen" active={tool === "rotate"} onClick={startRotateCommand} />
                     <CadToolButton icon="scale" tone="amber" title="Skalieren" active={tool === "scale"} onClick={startScaleCommand} />
                     <CadToolButton icon="offset" tone="amber" title="Versetzen" active={tool === "offset"} onClick={startOffsetCommand} />
@@ -10944,17 +11067,17 @@ export default function CADViewer() {
                   </CadToolbarGroup>
 
                   <CadToolbarGroup label="Ansicht">
-                    <CadToolButton icon="zoomIn" title="VergrÃ¶ÃŸern" onClick={() => zoomAt(0.8)} />
+                    <CadToolButton icon="zoomIn" title="Vergrößern" onClick={() => zoomAt(0.8)} />
                     <CadToolButton icon="zoomOut" title="Verkleinern" onClick={() => zoomAt(1.25)} />
                     <CadToolButton icon="fit" title="Zeichnung einpassen (F)" onClick={fitDrawing} />
-                    <CadToolButton icon="fullscreen" title={cadFullscreen ? "Vollbild schlieÃŸen" : "Vollbild Ã¶ffnen"} active={cadFullscreen} onClick={() => setCadFullscreen((value) => !value)} />
+                    <CadToolButton icon="fullscreen" title={cadFullscreen ? "Vollbild schließen" : "Vollbild öffnen"} active={cadFullscreen} onClick={() => setCadFullscreen((value) => !value)} />
                     <CadToolButton icon="grid" title="Raster (G)" active={showGrid} onClick={() => setShowGrid((value) => !value)} />
                     <CadToolButton icon="label" title="Beschriftung" active={showLabels} onClick={() => setShowLabels((value) => !value)} />
                     <CadToolButton icon="text" title="DXF-Texte" active={showCadTexts} onClick={() => setShowCadTexts((value) => !value)} />
                     <CadToolButton icon="utm" title="UTM-Punkte" active={showUtm} onClick={() => setShowUtm((value) => !value)} />
-                    <CadToolButton icon="snap" title={`Objektfang F3 Â· ${snapEnabled ? "Ein" : "Aus"}`} active={snapEnabled} onClick={toggleSnap} />
-                    <CadToolButton icon="ortho" title={`Ortho F8 Â· ${orthoEnabled ? "Ein" : "Aus"}`} active={orthoEnabled} onClick={toggleOrtho} />
-                    <CadToolButton icon="clear" title="Messung lÃ¶schen" disabled={!measurePts.length} onClick={() => setMeasurePts([])} />
+                    <CadToolButton icon="snap" title={`Objektfang F3 · ${snapEnabled ? "Ein" : "Aus"}`} active={snapEnabled} onClick={toggleSnap} />
+                    <CadToolButton icon="ortho" title={`Ortho F8 · ${orthoEnabled ? "Ein" : "Aus"}`} active={orthoEnabled} onClick={toggleOrtho} />
+                    <CadToolButton icon="clear" title="Messung löschen" disabled={!measurePts.length} onClick={() => setMeasurePts([])} />
                   </CadToolbarGroup>
                 </div>
               </div>
@@ -10986,7 +11109,7 @@ export default function CADViewer() {
                   style={{ width: "100%", height: 34, background: "#0f1720", color: "#fff", border: "1px solid #526273", borderRadius: 5, padding: "0 8px" }}
                 >
                   <option value="solid">Solid</option>
-                  <option value="lines">Linien 45Â°</option>
+                  <option value="lines">Linien 45°</option>
                   <option value="cross">Kreuzschraffur</option>
                   <option value="dots">Punkte</option>
                 </select>
@@ -11015,10 +11138,10 @@ export default function CADViewer() {
               >
                 <div style={{ marginBottom: 7, fontSize: 12, fontWeight: 900 }}>
                   {numericCommand.kind === "rotate"
-                    ? "Drehen â€“ Winkel Â° (optional)"
+                    ? "Drehen – Winkel ° (optional)"
                     : numericCommand.kind === "scale"
-                    ? "Skalieren â€“ Faktor"
-                    : "Parallele / Offset â€“ Abstand m"}
+                    ? "Skalieren – Faktor"
+                    : "Parallele / Offset – Abstand m"}
                 </div>
                 <div
                   style={{
@@ -11053,7 +11176,7 @@ export default function CADViewer() {
                     onClick={() => setNumericCommand(null)}
                     style={{ height: 32, padding: "0 9px" }}
                   >
-                    Ã—
+                    ×
                   </Btn>
                 </div>
               </div>
@@ -11083,8 +11206,8 @@ export default function CADViewer() {
                   }}
                 >
                   {textAnchor
-                    ? "EinfÃ¼gepunkt gewÃ¤hlt"
-                    : "EinfÃ¼gepunkt in der Zeichnung wÃ¤hlen"}
+                    ? "Einfügepunkt gewählt"
+                    : "Einfügepunkt in der Zeichnung wählen"}
                 </div>
                 <div style={{ display: "grid", gap: 7 }}>
                   <Input
@@ -11097,7 +11220,7 @@ export default function CADViewer() {
                     style={{ height: 32 }}
                   />
                   <div style={{ display: "grid", gridTemplateColumns: "90px 1fr auto", gap: 6 }}>
-                    <Input value={textHeight} onChange={(event) => setTextHeight(event.target.value)} placeholder="HÃ¶he" title="TexthÃ¶he" style={{ height: 32 }} />
+                    <Input value={textHeight} onChange={(event) => setTextHeight(event.target.value)} placeholder="Höhe" title="Texthöhe" style={{ height: 32 }} />
                     <Select value={textFont} onChange={(event) => setTextFont(event.target.value)} style={{ height: 32 }}>
                       <option value="Arial Narrow">Arial Narrow</option>
                       <option value="Arial">Arial</option>
@@ -11138,7 +11261,7 @@ export default function CADViewer() {
                       lineHeight: 1.5,
                     }}
                   >
-                    Projekt Ã¶ffnen oder â€žCAD-Datei Ã¶ffnenâ€œ wÃ¤hlen.
+                    Projekt öffnen oder „CAD-Datei öffnen“ wählen.
                     <br />
                     DXF wird direkt in RLC Geometry umgewandelt.
                   </div>
@@ -11157,9 +11280,9 @@ export default function CADViewer() {
                 onPointerDown={(event) => event.stopPropagation()}
               >
                 {[
-                  ["Esc Â· Befehl abbrechen", () => { cancelCurrentCommand(); setTool("select"); }],
-                  ["Auswahl lÃ¶schen", deleteSelection],
-                  ["RÃ¼ckgÃ¤ngig", undoDrawing],
+                  ["Esc · Befehl abbrechen", () => { cancelCurrentCommand(); setTool("select"); }],
+                  ["Auswahl löschen", deleteSelection],
+                  ["Rückgängig", undoDrawing],
                   ["Wiederholen", redoDrawing],
                   [`F3 Objektfang: ${snapEnabled ? "EIN" : "AUS"}`, toggleSnap],
                   [`F8 Ortho: ${orthoEnabled ? "EIN" : "AUS"}`, toggleOrtho],
@@ -11276,12 +11399,12 @@ export default function CADViewer() {
                       original: cloneCadFeatures(features),
                     });
                     setNumericCommand({ kind: "rotate", value: "0" });
-                    setStatus("Drehen LIVE Â· Maus bewegen Â· Linksklick bestÃ¤tigt Â· Winkel optional");
+                    setStatus("Drehen LIVE · Maus bewegen · Linksklick bestätigt · Winkel optional");
                     return;
                   }
 
                   if (rotateSession.phase === "live") {
-                    setStatus("Drehen LIVE Â· Linksklick bestÃ¤tigt oder Winkel eingeben");
+                    setStatus("Drehen LIVE · Linksklick bestätigt oder Winkel eingeben");
                     return;
                   }
 
@@ -11312,14 +11435,14 @@ export default function CADViewer() {
                     });
                     setNumericCommand({ kind: "scale", value: "1,000" });
                     setStatus(
-                      "Skalieren LIVE Â· Maus bewegen Â· Linksklick bestÃ¤tigt Â· Faktor optional"
+                      "Skalieren LIVE · Maus bewegen · Linksklick bestätigt · Faktor optional"
                     );
                     return;
                   }
 
                   if (scaleSession.phase === "live") {
                     setStatus(
-                      "Skalieren LIVE Â· Linksklick bestÃ¤tigt oder Faktor eingeben"
+                      "Skalieren LIVE · Linksklick bestätigt oder Faktor eingeben"
                     );
                     return;
                   }
@@ -11340,7 +11463,7 @@ export default function CADViewer() {
                     }
 
                     setMirrorPhase("pick-point");
-                    setStatus("Spiegeln Â· Punkt anklicken, an dem gespiegelt wird");
+                    setStatus("Spiegeln · Punkt anklicken, an dem gespiegelt wird");
                     return;
                   }
 
@@ -11359,8 +11482,8 @@ export default function CADViewer() {
                   if (!modifyPickIds[0]) {
                     setStatus(
                       tool === "trim"
-                        ? "Stutzen: keine Schneidkante gewÃ¤hlt"
-                        : "Dehnen: keine Grenzkante gewÃ¤hlt"
+                        ? "Stutzen: keine Schneidkante gewählt"
+                        : "Dehnen: keine Grenzkante gewählt"
                     );
                     completeModifyCommand();
                     return;
@@ -11388,7 +11511,7 @@ export default function CADViewer() {
                       placing: true,
                     });
                     setStatus(
-                      "BemaÃŸung LIVE Â· Linie bewegen Â· Linksklick bestÃ¤tigt"
+                      "Bemaßung LIVE · Linie bewegen · Linksklick bestätigt"
                     );
                   }
                   return;
@@ -11397,10 +11520,10 @@ export default function CADViewer() {
                 if (tool === "polyline") {
                   if (draftPts.length >= 2) {
                     finishPolyline(false);
-                    setStatus("Polylinie am letzten bestÃ¤tigten Punkt beendet Â· Rechtsklick wiederholt");
+                    setStatus("Polylinie am letzten bestätigten Punkt beendet · Rechtsklick wiederholt");
                   } else {
                     setDraftPts([]);
-                    setStatus("Polylinie abgebrochen Â· Rechtsklick wiederholt");
+                    setStatus("Polylinie abgebrochen · Rechtsklick wiederholt");
                   }
 
                   setTool("select");
@@ -11413,7 +11536,7 @@ export default function CADViewer() {
                   cancelCurrentCommand();
                   setTool("select");
                   setCadContextMenu(null);
-                  setStatus(`${finishedCommand} beendet Â· Rechtsklick wiederholt den Befehl`);
+                  setStatus(`${finishedCommand} beendet · Rechtsklick wiederholt den Befehl`);
                   return;
                 }
 
@@ -11989,7 +12112,7 @@ export default function CADViewer() {
                           stroke="#111827"
                           strokeWidth={2.4}
                         >
-                          {Math.round(mirrorPreviewAngle)}Â°
+                          {Math.round(mirrorPreviewAngle)}°
                         </text>
                       </>
                     );
@@ -12084,12 +12207,12 @@ export default function CADViewer() {
                     fontWeight={850}
                   >
                     {mirrorPhase === "confirm-selection"
-                      ? "SPIEGELN Â· Rechtsklick: Auswahl bestÃ¤tigen"
+                      ? "SPIEGELN · Rechtsklick: Auswahl bestätigen"
                       : mirrorPhase === "pick-point"
-                      ? "SPIEGELN Â· Spiegelpunkt anklicken"
-                      : `SPIEGELN LIVE Â· ${Math.round(
+                      ? "SPIEGELN · Spiegelpunkt anklicken"
+                      : `SPIEGELN LIVE · ${Math.round(
                           mirrorPreviewAngle
-                        )}Â° Â· Rechtsklick: bestÃ¤tigen`}
+                        )}° · Rechtsklick: bestätigen`}
                   </text>
                 </g>
               ) : null}
@@ -12199,7 +12322,7 @@ export default function CADViewer() {
                         setSelectedFeatureId("");
                         setSelectedFeatureIds([]);
                         setRightTab("properties");
-                        setStatus(`Punkt ${p.id} ausgewÃ¤hlt`);
+                        setStatus(`Punkt ${p.id} ausgewählt`);
                       }}
                       onClick={(event) => {
                         if (tool !== "select") return;
@@ -12280,7 +12403,7 @@ export default function CADViewer() {
                             x={renderPoint.x + utmLabelOffsetX}
                             dy={adaptivePointLabelSize * 1.05}
                           >
-                            H {Number.isFinite(p.height) ? formatNumber(Number(p.height)) : "â€”"}{p.code ? ` Â· ${p.code}` : ""}
+                            H {Number.isFinite(p.height) ? formatNumber(Number(p.height)) : "—"}{p.code ? ` · ${p.code}` : ""}
                           </tspan>
                         </text>
                       ) : null}
@@ -12535,7 +12658,7 @@ export default function CADViewer() {
                   background: "rgba(15,23,42,0.88)",
                   boxShadow: "0 8px 24px rgba(0,0,0,0.28)",
                 }}
-                title="MiniMap â€“ klicken zum Zentrieren"
+                title="MiniMap – klicken zum Zentrieren"
               >
                 <svg
                   viewBox={`${drawingBounds.minX} ${drawingBounds.minY} ${Math.max(1, drawingBounds.maxX - drawingBounds.minX)} ${Math.max(1, drawingBounds.maxY - drawingBounds.minY)}`}
@@ -12596,10 +12719,10 @@ export default function CADViewer() {
               }}
             >
               {cursorWorld
-                ? `X ${formatNumber(cursorWorld.x)} Â· Y ${formatNumber(
+                ? `X ${formatNumber(cursorWorld.x)} · Y ${formatNumber(
                     cursorWorld.y
                   )}`
-                : "X â€” Â· Y â€”"}
+                : "X — · Y —"}
             </div>
 
             <div
@@ -12619,14 +12742,14 @@ export default function CADViewer() {
               {tool === "distance" && measurePts.length
                 ? `Strecke: ${formatNumber(measurementLength)} m`
                 : tool === "area" && measurePts.length
-                ? `FlÃ¤che: ${formatNumber(measurementArea)} mÂ²`
+                ? `Fläche: ${formatNumber(measurementArea)} m²`
                 : tool === "point" && measurePts[0]
                 ? `Punkt: ${formatNumber(measurePts[0].x)} / ${formatNumber(
                     measurePts[0].y
                   )}`
                 : activeSnap
-                ? `F3 Â· ${snapKindLabel(activeSnap.kind)}`
-                : `Ansicht: ${formatNumber(viewBox.width, 1)} Ã— ${formatNumber(
+                ? `F3 · ${snapKindLabel(activeSnap.kind)}`
+                : `Ansicht: ${formatNumber(viewBox.width, 1)} × ${formatNumber(
                     viewBox.height,
                     1
                   )}`}
@@ -12658,7 +12781,7 @@ export default function CADViewer() {
               <b style={{ color: cadPalette.text }}>{renderedFeatures.length}</b> /{" "}
               {features.length}
               {!showCadTexts
-                ? ` Â· ${visibleFeatures.length - renderedFeatures.length} Texte ausgeblendet`
+                ? ` · ${visibleFeatures.length - renderedFeatures.length} Texte ausgeblendet`
                 : ""}
             </div>
             <div>
@@ -12670,7 +12793,7 @@ export default function CADViewer() {
         {/* DOCKED EDITING PALETTE INSIDE THE CAD WORKSPACE */}
         <Card
           title="Bearbeitung"
-          subtitle={selectedFeatureIds.length > 1 ? `${selectedFeatureIds.length} Objekte ausgewÃ¤hlt` : selectedFeature ? String(selectedFeature.id) : "Keine Auswahl"}
+          subtitle={selectedFeatureIds.length > 1 ? `${selectedFeatureIds.length} Objekte ausgewählt` : selectedFeature ? String(selectedFeature.id) : "Keine Auswahl"}
           tone="cadDark"
           style={{
             gridArea: "cad",
@@ -12694,7 +12817,7 @@ export default function CADViewer() {
           <div
             onMouseDown={startEditingPanelResize}
             onDoubleClick={resetEditingPanelWidth}
-            title="Bearbeitung verbreitern oder verschmÃ¤lern"
+            title="Bearbeitung verbreitern oder verschmälern"
             style={{
               position: "absolute",
               left: 0,
@@ -12731,7 +12854,7 @@ export default function CADViewer() {
             {[
               ["properties", "Eigenschaften"],
               ["layers", "Layer"],
-              ["aufmass", "AufmaÃŸ"],
+              ["aufmass", "Aufmaß"],
               ["ki", "KI"],
               ["rlc", "RLC"],
               ["geo", "Georeferenz"],
@@ -12772,26 +12895,26 @@ export default function CADViewer() {
             >
               {selectedMeasurementBlock ? (
                 <div style={{ marginBottom: 12, padding: 10, borderRadius: 7, background: cadPalette.accentSoft, color: "#8bd2f8", fontSize: 12, fontWeight: 900 }}>
-                  {selectedMeasurementBlock.typeLabel} Â· {formatNumber(selectedMeasurementBlock.value)} {selectedMeasurementBlock.unit}
+                  {selectedMeasurementBlock.typeLabel} · {formatNumber(selectedMeasurementBlock.value)} {selectedMeasurementBlock.unit}
                 </div>
               ) : selectedFeatureIds.length > 1 ? (
                 <div style={{ marginBottom: 12, padding: 10, borderRadius: 7, background: cadPalette.accentSoft, color: "#8bd2f8", fontSize: 12, fontWeight: 900 }}>
-                  {selectedFeatureIds.length} Objekte ausgewÃ¤hlt Â· GesamtlÃ¤nge {formatNumber(selectedFeatures.reduce((s, f) => s + Number(f.length || 0), 0))} m Â· GesamtflÃ¤che {formatNumber(selectedFeatures.reduce((s, f) => s + Number(f.area || 0), 0))} mÂ²
+                  {selectedFeatureIds.length} Objekte ausgewählt · Gesamtlänge {formatNumber(selectedFeatures.reduce((s, f) => s + Number(f.length || 0), 0))} m · Gesamtfläche {formatNumber(selectedFeatures.reduce((s, f) => s + Number(f.area || 0), 0))} m²
                 </div>
               ) : null}
               {selectedUtmIds.length > 1 ? (
                 <div style={{ display: "grid", gap: 8 }}>
                   <div style={{ border: `1px solid ${cadPalette.border}`, borderRadius: 5, overflow: "hidden" }}>
                     <div style={{ padding: "7px 9px", background: "#202833", color: "#dce6f0", fontSize: 12, fontWeight: 900 }}>
-                      UTM Â· Mehrfachauswahl
+                      UTM · Mehrfachauswahl
                     </div>
                     <div style={{ padding: 10, display: "grid", gap: 10, borderTop: `1px solid ${cadPalette.border}` }}>
                       <div style={{ padding: 10, borderRadius: 5, background: cadPalette.accentSoft, color: "#8bd2f8", fontSize: 12, fontWeight: 900 }}>
-                        {selectedUtmIds.length} Punkte ausgewÃ¤hlt
+                        {selectedUtmIds.length} Punkte ausgewählt
                       </div>
 
                       <label style={{ display: "grid", gridTemplateColumns: "112px 1fr 62px", alignItems: "center", gap: 8, fontSize: 12 }}>
-                        <span style={{ color: cadPalette.sub }}>GrÃ¶ÃŸe X/Text</span>
+                        <span style={{ color: cadPalette.sub }}>Größe X/Text</span>
                         <input
                           type="range"
                           min="0.1"
@@ -12896,7 +13019,7 @@ export default function CADViewer() {
                       </div>
 
                       <div style={{ fontSize: 11, color: cadPalette.sub, lineHeight: 1.45 }}>
-                        Ã„ndert X-Symbol und Text der ausgewÃ¤hlten Punkte gemeinsam, ohne die Koordinaten zu verÃ¤ndern.
+                        Ändert X-Symbol und Text der ausgewählten Punkte gemeinsam, ohne die Koordinaten zu verändern.
                       </div>
 
                       <Btn
@@ -12918,13 +13041,13 @@ export default function CADViewer() {
                     lineHeight: 1.5,
                   }}
                 >
-                  Objekt in der Zeichnung oder Objektliste auswÃ¤hlen.
+                  Objekt in der Zeichnung oder Objektliste auswählen.
                 </div>
               ) : selectedUtmPoint ? (
                 <div style={{ display: "grid", gap: 8 }}>
                   <div style={{ border: `1px solid ${cadPalette.border}`, borderRadius: 5, overflow: "hidden" }}>
                     <div style={{ padding: "7px 9px", background: "#202833", color: "#dce6f0", fontSize: 12, fontWeight: 900 }}>
-                      Allgemein Â· XYZ
+                      Allgemein · XYZ
                     </div>
                     {[
                       ["Punktname", "label", selectedUtmPoint.label || selectedUtmPoint.id],
@@ -12948,7 +13071,7 @@ export default function CADViewer() {
                     {[
                       ["Rechtswert X", "x", selectedUtmPoint.x],
                       ["Hochwert Y", "y", selectedUtmPoint.y],
-                      ["HÃ¶he Z", "height", selectedUtmPoint.height ?? 0],
+                      ["Höhe Z", "height", selectedUtmPoint.height ?? 0],
                     ].map(([label, field, value]) => (
                       <label key={String(field)} style={{ display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "center", minHeight: 34, borderTop: `1px solid ${cadPalette.border}`, fontSize: 12 }}>
                         <span style={{ padding: "0 9px", color: cadPalette.sub }}>{label}</span>
@@ -12965,7 +13088,7 @@ export default function CADViewer() {
 
                   <div style={{ border: `1px solid ${cadPalette.border}`, borderRadius: 5, overflow: "hidden" }}>
                     <div style={{ padding: "7px 9px", background: "#202833", color: "#dce6f0", fontSize: 12, fontWeight: 900 }}>
-                      UTM Â· Darstellung
+                      UTM · Darstellung
                     </div>
                     <div style={{ padding: 10, display: "grid", gap: 10, borderTop: `1px solid ${cadPalette.border}` }}>
                       <Btn
@@ -12975,15 +13098,15 @@ export default function CADViewer() {
                           setSelectedFeatureId("");
                           setSelectedFeatureIds([]);
                           setRightTab("properties");
-                          setStatus(`${allIds.length} UTM-Punkte ausgewÃ¤hlt`);
+                          setStatus(`${allIds.length} UTM-Punkte ausgewählt`);
                         }}
                         primary
                       >
-                        Alle Punkte auswÃ¤hlen
+                        Alle Punkte auswählen
                       </Btn>
 
                       <label style={{ display: "grid", gridTemplateColumns: "112px 1fr 62px", alignItems: "center", gap: 8, fontSize: 12 }}>
-                        <span style={{ color: cadPalette.sub }}>GrÃ¶ÃŸe X/Text</span>
+                        <span style={{ color: cadPalette.sub }}>Größe X/Text</span>
                         <input
                           type="range"
                           min="0.1"
@@ -13088,8 +13211,8 @@ export default function CADViewer() {
                       </div>
 
                       <div style={{ fontSize: 11, color: cadPalette.sub, lineHeight: 1.45 }}>
-                        Verkleinert oder vergrÃ¶ÃŸert X-Symbol und UTM-Text gemeinsam,
-                        ohne die ursprÃ¼nglichen Punktkoordinaten zu verÃ¤ndern.
+                        Verkleinert oder vergrößert X-Symbol und UTM-Text gemeinsam,
+                        ohne die ursprünglichen Punktkoordinaten zu verändern.
                       </div>
                     </div>
                   </div>
@@ -13109,7 +13232,7 @@ export default function CADViewer() {
                     ["Layer", selectedMeasurementBlock.layer],
                     ["Typ", selectedMeasurementBlock.typeLabel],
                     [
-                      selectedMeasurementBlock.isArea ? "FlÃ¤che" : "MaÃŸ",
+                      selectedMeasurementBlock.isArea ? "Fläche" : "Maß",
                       `${formatNumber(selectedMeasurementBlock.value)} ${selectedMeasurementBlock.unit}`,
                     ],
                     ["Elemente", String(selectedMeasurementBlock.features.length)],
@@ -13143,7 +13266,7 @@ export default function CADViewer() {
                       fontSize: 12,
                     }}
                   >
-                    <span style={{ color: cadPalette.sub }}>TexthÃ¶he</span>
+                    <span style={{ color: cadPalette.sub }}>Texthöhe</span>
                     <input
                       type="number"
                       min="0.05"
@@ -13177,7 +13300,7 @@ export default function CADViewer() {
                 <div style={{ display: "grid", gap: 8 }}>
                   <div style={{ border: `1px solid ${cadPalette.border}`, borderRadius: 5, overflow: "hidden" }}>
                     <div style={{ padding: "7px 9px", background: "#202833", color: "#dce6f0", fontSize: 12, fontWeight: 900 }}>
-                      Allgemein Â· XYZ
+                      Allgemein · XYZ
                     </div>
                     <label style={{ display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "center", minHeight: 38, borderTop: `1px solid ${cadPalette.border}`, fontSize: 12 }}>
                       <span style={{ padding: "0 9px", color: cadPalette.sub }}>Farbe</span>
@@ -13231,7 +13354,7 @@ export default function CADViewer() {
                     </label>
 
                     <label style={{ display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "center", minHeight: 38, borderTop: `1px solid ${cadPalette.border}`, fontSize: 12 }}>
-                      <span style={{ padding: "0 9px", color: cadPalette.sub }}>LinienstÃ¤rke</span>
+                      <span style={{ padding: "0 9px", color: cadPalette.sub }}>Linienstärke</span>
                       <select
                         value={selectedFeatureStyleValue("lineweight")}
                         onChange={(event) => updateSelectedFeatureStyle("lineweight", event.target.value)}
@@ -13254,11 +13377,11 @@ export default function CADViewer() {
                       Geometrie
                     </div>
                     {[
-                      ["Typ", selectedFeature.kind || "â€”"],
+                      ["Typ", selectedFeature.kind || "—"],
                       ["Geschlossen", selectedFeature.closed ? "Ja" : "Nein"],
-                      ["StÃ¼tzpunkte", String(selectedFeature.pts?.length || 0)],
-                      ["LÃ¤nge", `${formatNumber(Number(selectedFeature.length || 0))} m`],
-                      ["FlÃ¤che", `${formatNumber(Number(selectedFeature.area || 0))} mÂ²`],
+                      ["Stützpunkte", String(selectedFeature.pts?.length || 0)],
+                      ["Länge", `${formatNumber(Number(selectedFeature.length || 0))} m`],
+                      ["Fläche", `${formatNumber(Number(selectedFeature.area || 0))} m²`],
                       ...(String(selectedFeature.kind || "").toLowerCase() === "circle"
                         ? [["Radius", `${formatNumber(Number(selectedFeature.radius || 0))} m`]]
                         : []),
@@ -13270,7 +13393,7 @@ export default function CADViewer() {
                     ))}
                     {String(selectedFeature.kind || "").toLowerCase() === "circle" ? (
                       <label style={{ display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "center", minHeight: 34, borderTop: `1px solid ${cadPalette.border}`, fontSize: 12 }}>
-                        <span style={{ padding: "0 9px", color: cadPalette.sub }}>Radius Ã¤ndern</span>
+                        <span style={{ padding: "0 9px", color: cadPalette.sub }}>Radius ändern</span>
                         <input type="number" step="0.001" min="0" value={Number(selectedFeature.radius || 0)} onChange={(event) => updateSelectedFeatureRadius(Number(event.target.value))} style={{ height: 32, border: 0, borderLeft: `1px solid ${cadPalette.border}`, background: cadPalette.bg2, color: cadPalette.text, padding: "0 9px", outline: "none", fontWeight: 800 }} />
                       </label>
                     ) : null}
@@ -13349,8 +13472,8 @@ export default function CADViewer() {
                       Verschiedenes
                     </div>
                     {[
-                      ["ID", selectedFeature.id || "â€”"],
-                      ["Name", selectedFeature.name || "â€”"],
+                      ["ID", selectedFeature.id || "—"],
+                      ["Name", selectedFeature.name || "—"],
                     ].map(([label, value]) => (
                       <div key={label} style={{ display: "grid", gridTemplateColumns: "112px 1fr", alignItems: "center", minHeight: 34, borderTop: `1px solid ${cadPalette.border}`, fontSize: 12 }}>
                         <span style={{ padding: "0 9px", color: cadPalette.sub }}>{label}</span>
@@ -13386,7 +13509,7 @@ export default function CADViewer() {
                     Dokument: <b>{dirty ? "nicht gespeichert" : "gespeichert"}</b>
                   </div>
                   <div>
-                    Verlauf: <b>{undoStackRef.current.length}</b> rÃ¼ckgÃ¤ngig Â·{" "}
+                    Verlauf: <b>{undoStackRef.current.length}</b> rückgängig ·{" "}
                     <b>{redoStackRef.current.length}</b> wiederholen
                   </div>
                   <div>
@@ -13418,7 +13541,7 @@ export default function CADViewer() {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Layer suchenâ€¦"
+                  placeholder="Layer suchen…"
                   style={{
                     ...cadPaletteInputStyle,
                     height: 22,
@@ -13430,7 +13553,7 @@ export default function CADViewer() {
                 />
                 <button
                   type="button"
-                  title="Suche zurÃ¼cksetzen"
+                  title="Suche zurücksetzen"
                   onClick={() => setSearch("")}
                   style={{
                     height: 22,
@@ -13443,7 +13566,7 @@ export default function CADViewer() {
                     fontWeight: 900,
                   }}
                 >
-                  Ã—
+                  ×
                 </button>
               </div>
 
@@ -13477,7 +13600,7 @@ export default function CADViewer() {
                 </button>
                 <button
                   type="button"
-                  title="Aktiven Layer lÃ¶schen"
+                  title="Aktiven Layer löschen"
                   onClick={() => deleteLayer(activeLayer)}
                   style={{
                     width: 20,
@@ -13490,7 +13613,7 @@ export default function CADViewer() {
                     cursor: "pointer",
                   }}
                 >
-                  ðŸ—‘
+                  🗑
                 </button>
                 <button
                   type="button"
@@ -13547,13 +13670,13 @@ export default function CADViewer() {
                   zIndex: 2,
                 }}
               >
-                <span title="Aktiver Layer">â—</span>
-                <span title="Ein/Aus">â˜¼</span>
-                <span title="Sperren">ðŸ”’</span>
-                <span title="Farbe">â– </span>
+                <span title="Aktiver Layer">●</span>
+                <span title="Ein/Aus">☼</span>
+                <span title="Sperren">🔒</span>
+                <span title="Farbe">■</span>
                 <span>Name</span>
                 <span>Linientyp</span>
-                <span>LinienstÃ¤rke</span>
+                <span>Linienstärke</span>
               </div>
 
               <div style={{ overflow: "auto", minHeight: 0 }}>
@@ -13598,7 +13721,7 @@ export default function CADViewer() {
                             fontSize: 7.5,
                           }}
                         >
-                          {isActive ? "â—" : "â—‹"}
+                          {isActive ? "●" : "○"}
                         </button>
 
                         <button
@@ -13620,7 +13743,7 @@ export default function CADViewer() {
                             fontSize: 7.5,
                           }}
                         >
-                          {layer.visible ? "â˜¼" : "â—‹"}
+                          {layer.visible ? "☼" : "○"}
                         </button>
 
                         <button
@@ -13642,11 +13765,11 @@ export default function CADViewer() {
                             fontSize: 10,
                           }}
                         >
-                          {isLocked ? "ðŸ”’" : "ðŸ”“"}
+                          {isLocked ? "🔒" : "🔓"}
                         </button>
 
                         <label
-                          title="Layerfarbe Ã¤ndern"
+                          title="Layerfarbe ändern"
                           style={{
                             position: "relative",
                             width: 12,
@@ -13721,7 +13844,7 @@ export default function CADViewer() {
                         </select>
 
                         <select
-                          title="LinienstÃ¤rke"
+                          title="Linienstärke"
                           defaultValue="VonLayer"
                           onChange={() => setDirty(true)}
                           style={{
@@ -13758,7 +13881,7 @@ export default function CADViewer() {
               }}
             >
               <div style={{ fontSize: 12, color: cadPalette.sub, lineHeight: 1.5 }}>
-                AusgewÃ¤hltes CAD-Objekt direkt als AufmaÃŸzeile speichern.
+                Ausgewähltes CAD-Objekt direkt als Aufmaßzeile speichern.
               </div>
               <Input
                 value={pos}
@@ -13785,7 +13908,7 @@ export default function CADViewer() {
                   style={cadPaletteInputStyle}
                 >
                   <option value="m">m</option>
-                  <option value="m2">mÂ²</option>
+                  <option value="m2">m²</option>
                   <option value="Stk">Stk</option>
                 </Select>
                 <Input
@@ -13828,11 +13951,11 @@ export default function CADViewer() {
                 disabled={!selectedFeature || !pos.trim() || !projectId}
                 style={{ height: 46 }}
               >
-                In AufmaÃŸ Ã¼bernehmen
+                In Aufmaß übernehmen
               </Btn>
 
               <div style={{ fontSize: 11, color: cadPalette.sub }}>
-                Speicherung erfolgt serverseitig Ã¼ber den AufmaÃŸ-Endpunkt.
+                Speicherung erfolgt serverseitig über den Aufmaß-Endpunkt.
               </div>
             </div>
           ) : rightTab === "ki" ? (
@@ -13860,7 +13983,7 @@ export default function CADViewer() {
                 ) : (
                   kiRows.map((r) => (
                     <option key={r.key} value={r.key}>
-                      {r.layerGroup} Â· {formatNumber(r.qty)}{" "}
+                      {r.layerGroup} · {formatNumber(r.qty)}{" "}
                       {uiUnitLabel(r.unit)}
                     </option>
                   ))
@@ -13878,7 +14001,7 @@ export default function CADViewer() {
                 }}
               >
                 <div>
-                  Gruppe: <b>{kiSelected?.layerGroup || "â€”"}</b>
+                  Gruppe: <b>{kiSelected?.layerGroup || "—"}</b>
                 </div>
                 <div>
                   Menge:{" "}
@@ -13892,13 +14015,13 @@ export default function CADViewer() {
                   <b>
                     {kiSelected
                       ? `${Math.round(kiSelected.confidenceA * 100)} %`
-                      : "â€”"}
+                      : "—"}
                   </b>
                 </div>
               </div>
 
               <div style={{ fontSize: 11, fontWeight: 900 }}>
-                LV-VorschlÃ¤ge
+                LV-Vorschläge
               </div>
               <div
                 style={{
@@ -13961,7 +14084,7 @@ export default function CADViewer() {
                     }}
                   >
                     {lvState === "loading"
-                      ? "LV wird geladenâ€¦"
+                      ? "LV wird geladen…"
                       : "Keine passenden Positionen."}
                   </div>
                 ) : null}
@@ -13992,7 +14115,7 @@ export default function CADViewer() {
                   style={cadPaletteInputStyle}
                 >
                   <option value="m">m</option>
-                  <option value="m2">mÂ²</option>
+                  <option value="m2">m²</option>
                   <option value="Stk">Stk</option>
                 </Select>
                 <Input
@@ -14026,7 +14149,7 @@ export default function CADViewer() {
                 }
                 style={{ height: 46 }}
               >
-                KI-Ergebnis Ã¼bernehmen
+                KI-Ergebnis übernehmen
               </Btn>
             </div>
           ) : rightTab === "geo" ? (
@@ -14055,7 +14178,7 @@ export default function CADViewer() {
                     color: cadPalette.sub,
                   }}
                 >
-                  KARTENEBENEN Â· MEHRFACHAUSWAHL
+                  KARTENEBENEN · MEHRFACHAUSWAHL
                 </div>
 
                 <div
@@ -14068,9 +14191,9 @@ export default function CADViewer() {
                 >
                   {([
                     ["osm", "OpenStreetMap", "Basis"],
-                    ["aerial", "Bayern Luftbild", "Basis Â· UTM-genau"],
-                    ["parcels", "Flurkarte / Parzellen", "Overlay Â· UTM-genau"],
-                    ["borders", "Verwaltungsgrenzen", "Overlay Â· UTM-genau"],
+                    ["aerial", "Bayern Luftbild", "Basis · UTM-genau"],
+                    ["parcels", "Flurkarte / Parzellen", "Overlay · UTM-genau"],
+                    ["borders", "Verwaltungsgrenzen", "Overlay · UTM-genau"],
                   ] as Array<[GeoLayerKey, string, string]>).map(
                     ([key, label, detail]) => {
                       const active = geoLayers[key];
@@ -14120,7 +14243,7 @@ export default function CADViewer() {
                               fontWeight: 950,
                             }}
                           >
-                            {active ? "âœ“" : ""}
+                            {active ? "✓" : ""}
                           </span>
                           <span style={{ minWidth: 0 }}>
                             <span
@@ -14159,7 +14282,7 @@ export default function CADViewer() {
                     lineHeight: 1.4,
                   }}
                 >
-                  Ebenen kÃ¶nnen kombiniert werden. Bei gleichzeitigem OSM und
+                  Ebenen können kombiniert werden. Bei gleichzeitigem OSM und
                   Luftbild wird das Luftbild transparent eingeblendet.
                 </div>
               </div>
@@ -14233,9 +14356,9 @@ export default function CADViewer() {
                 {!hasGeoLayers
                   ? "Keine Kartenebene aktiv."
                   : !geoProjectedBounds
-                  ? "Keine gÃ¼ltige Georeferenz erkannt. Erwartet werden UTM-Koordinaten im gewÃ¤hlten System."
+                  ? "Keine gültige Georeferenz erkannt. Erwartet werden UTM-Koordinaten im gewählten System."
                   : hasBayernWmsLayers
-                  ? "Bayern Luftbild, Flurkarte und Grenzen werden direkt in EPSG:25832 fÃ¼r den exakten CAD-BBOX angefordert. Dadurch entfallen die bisherigen Web-Mercator-Verschiebungen."
+                  ? "Bayern Luftbild, Flurkarte und Grenzen werden direkt in EPSG:25832 für den exakten CAD-BBOX angefordert. Dadurch entfallen die bisherigen Web-Mercator-Verschiebungen."
                   : "OpenStreetMap wird automatisch mit Zoom und Pan synchronisiert. OSM ist kartografisch orientierend; amtliche Genauigkeit liefern die Bayern-WMS-Ebenen."}
               </div>
 
@@ -14248,7 +14371,7 @@ export default function CADViewer() {
                   }
                   if (!geoProjectedBounds) {
                     setStatus(
-                      "Keine gÃ¼ltigen UTM-Koordinaten fÃ¼r die Georeferenz erkannt."
+                      "Keine gültigen UTM-Koordinaten für die Georeferenz erkannt."
                     );
                     return;
                   }
@@ -14265,7 +14388,7 @@ export default function CADViewer() {
                   color: "#8ed8ff",
                 }}
               >
-                âŒ– Mit CAD-Ausschnitt synchronisieren
+                ⌖ Mit CAD-Ausschnitt synchronisieren
               </button>
 
               <button
@@ -14300,7 +14423,7 @@ export default function CADViewer() {
               >
                 Bayern-WMS-Ebenen werden im UTM-System des CAD angefordert und
                 pixelgenau auf den Zeichenbereich gelegt. OpenStreetMap bleibt
-                eine ergÃ¤nzende Webkarte.
+                eine ergänzende Webkarte.
               </div>
             </div>
           ) : (
@@ -14364,19 +14487,19 @@ export default function CADViewer() {
                     }}
                   >
                     <span style={{ color: cadPalette.sub }}>Projekt</span>
-                    <b>{projectId || "â€”"}</b>
+                    <b>{projectId || "—"}</b>
                     <span style={{ color: cadPalette.sub }}>LV-Ziel</span>
-                    <b>{selectedLvPosition?.pos || "unten wÃ¤hlen"}</b>
+                    <b>{selectedLvPosition?.pos || "unten wählen"}</b>
                   </div>
 
                   <button type="button" onClick={() => setLeftTab("lv")} style={rlcPanelButtonStyle}>
-                    LV Â· AufmaÃŸ Ã¶ffnen
+                    LV · Aufmaß öffnen
                   </button>
                   <button type="button" onClick={prepareSelectionTakeoff} style={rlcPanelButtonStyle}>
                     Auswahl messen
                   </button>
                   <button type="button" onClick={takeoffActiveLayer} style={rlcPanelButtonStyle}>
-                    Layer â€ž{activeLayer}â€ messen
+                    Layer „{activeLayer}” messen
                   </button>
 
                   <div
@@ -14394,7 +14517,7 @@ export default function CADViewer() {
                   >
                     <span>Auswahl <b>{selectedFeatures.length}</b></span>
                     <span>L <b>{formatNumber(rlcTakeoffLength)}</b> m</span>
-                    <span>F <b>{formatNumber(rlcTakeoffArea)}</b> mÂ²</span>
+                    <span>F <b>{formatNumber(rlcTakeoffArea)}</b> m²</span>
                   </div>
 
                   <button
@@ -14432,7 +14555,7 @@ export default function CADViewer() {
               ) : (
                 <div style={{ display: "grid", gap: 6 }}>
                   <button type="button" onClick={openPointFile} style={rlcPanelButtonStyle}>
-                    Punktdatei Ã¶ffnen
+                    Punktdatei öffnen
                   </button>
                   <button type="button" onClick={() => void loadUtm()} style={rlcPanelButtonStyle}>
                     Punkte vom Server laden
@@ -14478,7 +14601,7 @@ export default function CADViewer() {
                           padding: "5px 7px",
                         }}
                       >
-                        <b>{point.id}</b> Â· E {formatNumber(point.x)} Â· N {formatNumber(point.y)}
+                        <b>{point.id}</b> · E {formatNumber(point.x)} · N {formatNumber(point.y)}
                       </button>
                     ))}
                   </div>
@@ -14498,7 +14621,7 @@ export default function CADViewer() {
           marginTop: 10,
         }}
       >
-        <Card title="CAD Engine" subtitle="RLC CAD V1 Â· aktive Komponenten">
+        <Card title="CAD Engine" subtitle="RLC CAD V1 · aktive Komponenten">
           <div
             style={{
               padding: 12,
@@ -14511,7 +14634,7 @@ export default function CADViewer() {
               ["Geometry", `${features.length} Objekte`],
               ["Layers", `${layerStates.length} Layer`],
               ["Renderer", "SVG Vektor"],
-              ["Selection", `${selectedFeatureIds.length} gewÃ¤hlt`],
+              ["Selection", `${selectedFeatureIds.length} gewählt`],
               ["Snap", snapEnabled ? "Aktiv" : "Aus"],
               ["Camera", "Zoom / Pan / Fit"],
               ["Import", "DXF direkt"],
@@ -14590,7 +14713,7 @@ export default function CADViewer() {
                     {formatNumber(row.length)} m
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    {formatNumber(row.area)} mÂ²
+                    {formatNumber(row.area)} m²
                   </div>
                 </div>
               ))}
@@ -14622,7 +14745,7 @@ export default function CADViewer() {
         }}
       >
         <div>
-          Projekt: <b style={{ color: ui.text }}>{projectId || "â€”"}</b>
+          Projekt: <b style={{ color: ui.text }}>{projectId || "—"}</b>
         </div>
         <div>
           LV:{" "}
@@ -14641,8 +14764,8 @@ export default function CADViewer() {
         <div>
           Serverstatus: <b style={{ color: ui.text }}>{status}</b>
         </div>
-        <div title="TastaturkÃ¼rzel">
-          KÃ¼rzel: <b style={{ color: ui.text }}>F</b> Fit Â· <b style={{ color: ui.text }}>S</b> Auswahl Â· <b style={{ color: ui.text }}>V</b> Verschieben Â· <b style={{ color: ui.text }}>E</b> StÃ¼tzpunkt Â· <b style={{ color: ui.text }}>Entf</b> LÃ¶schen Â· <b style={{ color: ui.text }}>Ctrl+Z</b> ZurÃ¼ck Â· <b style={{ color: ui.text }}>Ctrl+Y</b> Nach vorne Â· <b style={{ color: ui.text }}>Rechtsklick</b> Beenden/Wiederholen Â· <b style={{ color: ui.text }}>Ctrl+S</b> Speichern
+        <div title="Tastaturkürzel">
+          Kürzel: <b style={{ color: ui.text }}>F</b> Fit · <b style={{ color: ui.text }}>S</b> Auswahl · <b style={{ color: ui.text }}>V</b> Verschieben · <b style={{ color: ui.text }}>E</b> Stützpunkt · <b style={{ color: ui.text }}>Entf</b> Löschen · <b style={{ color: ui.text }}>Ctrl+Z</b> Zurück · <b style={{ color: ui.text }}>Ctrl+Y</b> Nach vorne · <b style={{ color: ui.text }}>Rechtsklick</b> Beenden/Wiederholen · <b style={{ color: ui.text }}>Ctrl+S</b> Speichern
         </div>
       </div>
     </div>

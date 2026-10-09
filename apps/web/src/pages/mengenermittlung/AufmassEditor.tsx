@@ -30,6 +30,8 @@ type AufmassEntry = {
   nr?: number;
   reb?: string;
   messzahl?: number;
+  rebMarker?: "" | "H" | "Z";
+  rebFactorRaw?: string;
   ortId?: string;
 };
 
@@ -208,7 +210,7 @@ function angebotRowsToAufmassRows(rows: AngebotSnapshotRow[]): LVRow[] {
    Helper
    ============================================================ */
 
-const fmtEUR = (v: number) => "€ " + (isFinite(v) ? v.toFixed(2) : "0.00");
+const fmtEUR = (v: number) => `${(isFinite(v) ? v : 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 function nrmNumber(v: any, fallback = 0) {
   const x = Number(String(v ?? "").replace(",", "."));
@@ -443,6 +445,33 @@ function rebAddress(index: number): string {
   return `${String(sheet).padStart(4, "0")}${letter}${digit}00001`;
 }
 
+function rebAddressField(value: number | string): string {
+  if (typeof value === "string") return value.trim().slice(0, 6).padEnd(11, " ");
+  return rebAddress(value);
+}
+
+function nextRebAddress(value: string, firstAfterImported = false): string {
+  const match = String(value || "").trim().match(/^(\d{4})([A-Z])(\d)$/i);
+  if (!match) return "0001A0";
+  const sheet = match[1];
+  let letter = match[2].toUpperCase().charCodeAt(0);
+  const digit = Number(match[3]);
+  if (firstAfterImported) {
+    letter += 1;
+    return `${sheet}${String.fromCharCode(letter)}0`;
+  }
+  if (digit < 5) return `${sheet}${String.fromCharCode(letter)}5`;
+  letter += 1;
+  return `${sheet}${String.fromCharCode(letter)}0`;
+}
+
+function rebRawAddress(entry: AufmassEntry): string {
+  const raw = String(entry.reb || "");
+  const fromRaw = raw.length >= 75 ? raw.slice(69, 75).trim().toUpperCase() : "";
+  const fromSource = safeTrim(entry.sourceId).toUpperCase();
+  return /^(\d{4})[A-Z]\d$/.test(fromRaw) ? fromRaw : /^(\d{4})[A-Z]\d$/.test(fromSource) ? fromSource : "";
+}
+
 function normalizeRebExpression(value: unknown): string {
   return String(value ?? "").
   trim().
@@ -460,19 +489,19 @@ function formatRebValue(value: number): string {
 
 function buildRebRow80(
 content: string,
-addressIndex: number,
+addressIndex: number | string,
 label = "")
 : string {
   const safeLabel = String(label || "").replace(/\r?\n/g, " ").slice(0, 16);
   const left = `${" ".repeat(13)}${safeLabel.padEnd(16, " ")}${content}`.
   slice(0, 69).
   padEnd(69, " ");
-  return `${left}${rebAddress(addressIndex)}`.slice(0, 80).padEnd(80, " ");
+  return `${left}${rebAddressField(addressIndex)}`.slice(0, 80).padEnd(80, " ");
 }
 
 function buildRebCommentRow80(
 comment: unknown,
-addressIndex: number)
+addressIndex: number | string)
 : string {
   const text = String(comment ?? "").
   replace(/\r?\n/g, " ").
@@ -483,7 +512,7 @@ addressIndex: number)
   slice(0, 69).
   padEnd(69, " ");
 
-  return `${left}${rebAddress(addressIndex)}`.
+  return `${left}${rebAddressField(addressIndex)}`.
   slice(0, 80).
   padEnd(80, " ");
 }
@@ -491,7 +520,7 @@ addressIndex: number)
 function buildRebFormulaRow80(
 expression: unknown,
 result: number,
-addressIndex: number,
+addressIndex: number | string,
 label = "")
 : string {
   let normalized = normalizeRebExpression(expression);
@@ -506,6 +535,96 @@ label = "")
   }
 
   return buildRebRow80(formula, addressIndex, label);
+}
+
+function effectiveRebFactor(raw: unknown): number {
+  const value = nrmNumber(raw, 1) || 1;
+  return value === 999 ? 1 : value;
+}
+
+function buildRebSpecificFormulaRow80(args: {
+  expression: unknown;
+  result: number;
+  addressIndex: number | string;
+  label?: string;
+  formulaNo?: number | string;
+  marker?: string;
+  factorRaw?: string;
+}): string {
+  const formulaNo = String(args.formulaNo ?? 91).replace(/\D/g, "").padStart(2, "0").slice(-2);
+  let expression = String(args.expression ?? "").trim().replace(/^AUFMASS:/i, "").replace(/^=/, "");
+  if (!expression) expression = formatRebValue(args.result);
+  if (formulaNo === "91" && !expression.includes("=")) expression += "=";
+  const marker = args.marker === "H" || args.marker === "Z" ? args.marker : " ";
+  const label = String(args.label || "").replace(/\r?\n/g, " ").slice(0, 9).padEnd(9, " ");
+  const factorValue = String(args.factorRaw || "").trim();
+  const factorField = factorValue && factorValue !== "1"
+    ? (factorValue === "999" ? "999" : String(Math.round(nrmNumber(factorValue, 1) * 1000))).padStart(6, " ").slice(-6)
+    : "      ";
+  const left = `${" ".repeat(12)}${marker}${label} ${factorField}${formulaNo}${expression}`.slice(0, 69).padEnd(69, " ");
+  return `${left}${rebAddressField(args.addressIndex)}`.slice(0, 80).padEnd(80, " ");
+}
+
+function calculateRebEditorValue(expression: unknown, formulaNo: unknown, helperEntries: AufmassEntry[] = []): number {
+  const no = String(formulaNo ?? "91").replace(/\D/g, "").padStart(2, "0").slice(-2);
+  const raw = String(expression ?? "").trim().replace(/^AUFMASS:/i, "").replace(/=$/, "");
+  if (!raw) return 0;
+  if (no === "04") {
+    const values = (raw.match(/[+-]?\d+(?:[,.]\d+)?/g) || []).map((v) => nrmNumber(v, NaN)).filter(Number.isFinite);
+    if (values.length < 2) return 0;
+    return values.slice(0, 3).reduce((acc, value) => acc * value, 1);
+  }
+  if (no === "91") {
+    let expanded = raw;
+    const firstHelper = helperEntries.find((entry) => entry.rebMarker === "H");
+    if (firstHelper) expanded = expanded.replace(/\b(?:HILFSWERT|@H)\b/gi, String(firstHelper.menge || 0));
+    for (const entry of helperEntries) {
+      const address = safeTrim(entry.sourceId);
+      if (!address || entry.rebMarker !== "H") continue;
+      expanded = expanded.replace(new RegExp(`\\b${address}\\b`, "gi"), String(entry.menge || 0));
+    }
+    return calc(expanded);
+  }
+  return parseMassEditorLines(raw);
+}
+
+function encodeRebFixedExpression(expression: unknown): string {
+  const raw = formulaToMassText(String(expression || "")).trim();
+  if (!raw) return "";
+  return raw
+    .replace(/([+-]?\d+[,.]\d+)/g, (token) => {
+      const n = Number(token.replace(",", "."));
+      if (!Number.isFinite(n)) return token;
+      return String(Math.round(n * 1000));
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildRebTypedFormulaRow80(
+  entry: AufmassEntry,
+  expression: unknown,
+  result: number,
+  addressIndex: number | string
+): string {
+  const marker = entry.rebMarker === "H" || entry.rebMarker === "Z" ? entry.rebMarker : " ";
+  const explanation = safeTrim(entry.label).slice(0, 9).padEnd(9, " ");
+  const factorRaw = safeTrim(entry.rebFactorRaw ?? "");
+  const factorValue = factorRaw ? Number(factorRaw.replace(",", ".")) : Number(entry.factor ?? 1);
+  const factorField = factorRaw === "999" || factorValue === 999
+    ? "   999"
+    : Number.isFinite(factorValue) && Math.abs(factorValue - 1) > 0.0000001
+      ? String(Math.round(factorValue * 1000)).padStart(6, " ").slice(-6)
+      : " ".repeat(6);
+  const formulaNo = String(Math.max(0, Math.min(99, Math.trunc(Number(entry.messzahl ?? 91) || 91)))).padStart(2, "0");
+  const source = formulaNo === "91"
+    ? (normalizeRebExpression(expression) || formatRebValue(result))
+    : encodeRebFixedExpression(expression);
+  const expr = (source + (source.includes("=") ? "" : "=")).slice(0, 38).padEnd(38, " ");
+  const left = (`${" ".repeat(12)}${marker}${explanation} ${factorField}${formulaNo}${expr}`)
+    .slice(0, 69)
+    .padEnd(69, " ");
+  return `${left}${rebAddressField(addressIndex)}`.slice(0, 80).padEnd(80, " ");
 }
 
 function buildRebExportLines(rows: LVRow[]): RebExportLine[] {
@@ -537,6 +656,8 @@ function buildRebExportLines(rows: LVRow[]): RebExportLine[] {
 
       return (
         Boolean(formula) ||
+        Boolean(safeTrim(entry.note)) ||
+        Boolean(entry.reb) ||
         Math.abs(quantity) > 0.0000001);
 
     }) :
@@ -562,16 +683,79 @@ function buildRebExportLines(rows: LVRow[]): RebExportLine[] {
       factor: row.factor ?? 1
     } as AufmassEntry];
 
+    const fixedAddresses = entries.map(rebRawAddress).filter(Boolean).sort();
+    let nextGeneratedAddress = fixedAddresses.length
+      ? nextRebAddress(fixedAddresses[fixedAddresses.length - 1], true)
+      : "";
+    const addressPlans = new Map<string, { comments: string[]; formulas: string[] }>();
+    const allocateAddress = () => {
+      if (!nextGeneratedAddress) {
+        const first = rebAddress(addressIndex++).slice(0, 6);
+        nextGeneratedAddress = nextRebAddress(first, false);
+        return first;
+      }
+      const current = nextGeneratedAddress;
+      nextGeneratedAddress = nextRebAddress(current, false);
+      addressIndex += 1;
+      return current;
+    };
+
     entries.forEach((entry, entryIndex) => {
+      if (entry.source === "GAEB-X31" && String(entry.reb || "").length === 80) return;
+      const plannedNotes = Array.from(new Set([
+        safeTrim(entry.note),
+        entryIndex === 0 ? safeTrim(row.note) : ""
+      ].filter(Boolean)));
+      const plannedFormulas = String(entry.formula || "")
+        .replace(/^AUFMASS:/i, "")
+        .split(/\r?\n|\\n/g)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      addressPlans.set(entry.id, {
+        comments: plannedNotes.map(() => allocateAddress()),
+        formulas: plannedFormulas.map(() => allocateAddress())
+      });
+    });
+
+    entries.forEach((entry, entryIndex) => {
+      const originalReb = String(entry.reb || "");
+      if (entry.source === "GAEB-X31" && originalReb.length === 80) {
+        const originalLeft = originalReb.slice(0, 69).trim();
+        const originalIsComment = originalLeft.startsWith("*");
+        const currentFormula = formulaToMassText(String(entry.formula || "")).trim();
+        const currentNote = safeTrim(entry.note);
+        const originalNote = originalIsComment ? originalLeft.replace(/^\*/, "").trim() : "";
+        const originalMarker = originalReb.slice(12, 13).trim();
+        const originalLabel = originalReb.slice(13, 22).trim();
+        const originalFormulaNo = Number(originalReb.slice(29, 31).trim() || 0);
+        const originalFactorRaw = originalReb.slice(23, 29).trim();
+        const originalFactor = originalFactorRaw === "999" ? 1 : originalFactorRaw ? Number(originalFactorRaw) / 1000 : 1;
+        const structuredUnchanged =
+          (entry.rebMarker || "") === originalMarker &&
+          safeTrim(entry.label) === originalLabel &&
+          Number(entry.messzahl ?? originalFormulaNo) === originalFormulaNo &&
+          safeTrim(entry.rebFactorRaw || "") === originalFactorRaw &&
+          Math.abs(Number(entry.factor ?? 1) - originalFactor) < 0.0000001;
+        const unchanged = originalIsComment
+          ? !currentFormula && currentNote === originalNote
+          : currentFormula === originalLeft && !currentNote && structuredUnchanged;
+        if (unchanged) {
+          pushLine(row, originalReb, originalIsComment ? "COMMENT" : "FORMULA");
+          addressIndex += 1;
+          return;
+        }
+      }
+
       const noteParts = [
       safeTrim(entry.note),
       entryIndex === 0 ? safeTrim(row.note) : ""].
       filter(Boolean);
 
-      Array.from(new Set(noteParts)).forEach((note) => {
+      Array.from(new Set(noteParts)).forEach((note, noteIndex) => {
+        const planned = addressPlans.get(entry.id)?.comments[noteIndex];
         pushLine(
           row,
-          buildRebCommentRow80(note, addressIndex++),
+          buildRebCommentRow80(note, planned || addressIndex++),
           "COMMENT"
         );
       });
@@ -582,40 +766,43 @@ function buildRebExportLines(rows: LVRow[]): RebExportLine[] {
       map((line) => line.trim()).
       filter(Boolean);
 
-      const entryFactor = Number(entry.factor ?? 1) || 1;
+      const entryFactor = effectiveRebFactor(entry.rebFactorRaw ?? entry.factor ?? 1);
       const result = Number(entry.menge || 0);
 
       if (formulaLines.length) {
         formulaLines.forEach((formulaLine, formulaIndex) => {
-          const calculated = parseMassEditorLines(formulaLine) * entryFactor;
-          const exportedResult = Number.isFinite(calculated) ?
-          calculated :
-          result;
-
-          const withFactor =
-          entryFactor !== 1 ?
-          `(${formulaLine})*${String(entryFactor).replace(".", ",")}` :
-          formulaLine;
+          const helperEntry = entries.slice(entryIndex + 1).find((candidate) => candidate.rebMarker === "H")
+            || entries.find((candidate) => candidate.rebMarker === "H");
+          const helperAddress = helperEntry
+            ? (addressPlans.get(helperEntry.id)?.formulas[0] || rebRawAddress(helperEntry))
+            : "";
+          const resolvedFormulaLine = helperAddress
+            ? formulaLine.replace(/\b(?:HILFSWERT|@H)\b/gi, helperAddress)
+            : formulaLine;
+          const calculated = calculateRebEditorValue(resolvedFormulaLine, entry.messzahl ?? 91, entries) * entryFactor;
+          const exportedResult = Number.isFinite(calculated) ? calculated : result;
+          const planned = addressPlans.get(entry.id)?.formulas[formulaIndex];
 
           pushLine(
             row,
-            buildRebFormulaRow80(
-              withFactor,
+            buildRebTypedFormulaRow80(
+              { ...entry, label: formulaIndex === 0 ? safeTrim(entry.label) : "" },
+              resolvedFormulaLine,
               exportedResult,
-              addressIndex++,
-              formulaIndex === 0 ? safeTrim(entry.label) : ""
+              planned || addressIndex++
             ),
             "FORMULA"
           );
         });
-      } else {
+      } else if (!noteParts.length) {
+        const planned = addressPlans.get(entry.id)?.formulas[0];
         pushLine(
           row,
-          buildRebFormulaRow80(
+          buildRebTypedFormulaRow80(
+            entry,
             "",
             result,
-            addressIndex++,
-            safeTrim(entry.label)
+            planned || addressIndex++
           ),
           "FORMULA"
         );
@@ -798,7 +985,7 @@ const heroIcon: React.CSSProperties = {
 };
 
 const eyebrow: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 11.5,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   opacity: 0.82,
@@ -1045,7 +1232,7 @@ const tableWrap: React.CSSProperties = {
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 12px",
+  padding: "7px 6px",
   borderBottom: "1px solid #E5EAF3",
   fontSize: 12,
   whiteSpace: "nowrap",
@@ -1055,9 +1242,9 @@ const th: React.CSSProperties = {
 };
 
 const td: React.CSSProperties = {
-  padding: "8px 12px",
+  padding: "7px 6px",
   borderBottom: "1px solid #EDF2F7",
-  fontSize: 13,
+  fontSize: 11.5,
   verticalAlign: "middle",
   color: "#0F172A"
 };
@@ -1105,13 +1292,17 @@ const sectionGrid: React.CSSProperties = {
 
 const modalWrap: React.CSSProperties = {
   position: "fixed",
-  inset: 0,
+  top: 148,
+  left: 0,
+  right: 0,
+  bottom: 0,
   background: "rgba(15,23,42,.42)",
-  zIndex: 999,
+  zIndex: 20000,
   display: "grid",
-  placeItems: "center",
-  padding: 20,
-  backdropFilter: "blur(4px)"
+  placeItems: "start center",
+  padding: "14px 20px 20px",
+  backdropFilter: "blur(4px)",
+  overflow: "hidden"
 };
 
 const modalBox: React.CSSProperties = {
@@ -1529,34 +1720,52 @@ lvRows: LvPosition[],
 projectCode?: string | null)
 : LVRow[] {
   const localMap = loadLvLangtextMap(projectCode);
-  const exactMap = new Map<string, string>();
-  const normalizedMap = new Map<string, string>();
+  const exactMap = new Map<string, LvPosition>();
+  const normalizedMap = new Map<string, LvPosition>();
+  const signatureMap = new Map<string, LvPosition[]>();
+
+  const signatureOf = (text: unknown, unit: unknown) =>
+    `${safeTrim(text).toLowerCase().replace(/\s+/g, " ")}|${safeTrim(unit).toLowerCase()}`;
 
   for (const lv of Array.isArray(lvRows) ? lvRows : []) {
-    const lang = extractLvLangtext(lv);
-    if (!lang) continue;
-
     const exact = safeTrim(lv.pos);
-    if (exact) exactMap.set(exact, lang);
+    if (exact) exactMap.set(exact, lv);
 
     const normalized = normPosKey(lv.pos);
-    if (normalized) normalizedMap.set(normalized, lang);
+    if (normalized) normalizedMap.set(normalized, lv);
+
+    const sig = signatureOf(lv.text, lv.unit);
+    if (sig !== "|") {
+      const list = signatureMap.get(sig) || [];
+      list.push(lv);
+      signatureMap.set(sig, list);
+    }
   }
 
   return (rows || []).map((row) => {
-    const existing =
-    safeTrim((row as any).langtext) || safeTrim((row as any).longText);
-    if (existing) return row;
+    const exact = exactMap.get(safeTrim(row.pos));
+    const normalized = normalizedMap.get(normPosKey(row.pos));
+    const sigMatches = signatureMap.get(signatureOf(row.text, row.unit)) || [];
+    const matchedLv = exact || normalized || (sigMatches.length === 1 ? sigMatches[0] : undefined);
 
+    const existingLang =
+      safeTrim((row as any).langtext) || safeTrim((row as any).longText);
     const lang =
-    exactMap.get(safeTrim(row.pos)) ||
-    normalizedMap.get(normPosKey(row.pos)) ||
-    localMap.get(normPosKey(row.pos));
+      existingLang ||
+      (matchedLv ? extractLvLangtext(matchedLv) : "") ||
+      localMap.get(normPosKey(row.pos)) ||
+      "";
 
-    if (!lang) return row;
+    if (!matchedLv && !lang) return row;
 
     return {
       ...row,
+      // LV ist die einzige Quelle der Wahrheit für Positionsnummer und Stammdaten.
+      pos: matchedLv ? matchedLv.pos : row.pos,
+      text: matchedLv?.text || row.text,
+      unit: matchedLv?.unit || row.unit,
+      soll: matchedLv && Number.isFinite(Number(matchedLv.quantity)) ? Number(matchedLv.quantity) : row.soll,
+      ep: matchedLv && Number(matchedLv.ep) > 0 ? Number(matchedLv.ep) : row.ep,
       langtext: lang,
       longText: lang
     } as LVRow;
@@ -1823,9 +2032,23 @@ ep = 0)
 
 function entriesSum(entries?: AufmassEntry[]) {
   return (Array.isArray(entries) ? entries : []).reduce(
-    (s, e) => s + nrmNumber(e?.menge),
+    (s, e) => s + (e?.rebMarker === "H" ? 0 : nrmNumber(e?.menge)),
     0
   );
+}
+
+function isPauschalUnit(unit: unknown): boolean {
+  const value = String(unit || "").trim().toLowerCase();
+  return value === "psch" || value === "pausch" || value === "pauschal" || value === "stk pausch";
+}
+
+function effectiveIstForDisplay(row: { unit?: string; soll?: number; ist?: number }): number {
+  const rawIst = Number(row?.ist || 0);
+  const soll = Number(row?.soll || 0);
+  if (isPauschalUnit(row?.unit) && soll > 0 && soll <= 1.000001 && rawIst > 1.000001 && rawIst <= 100.000001) {
+    return rawIst / 100;
+  }
+  return rawIst;
 }
 
 function entriesToFormula(entries?: AufmassEntry[]) {
@@ -2242,6 +2465,8 @@ export default function AufmassEditor() {
   const [lvError, setLvError] = React.useState<string | null>(null);
 
   const [rows, setRows] = React.useState<LVRow[]>([]);
+  const [x31VersDate, setX31VersDate] = React.useState<"2021-05" | "2023-01">("2023-01");
+  const [x31SourceName, setX31SourceName] = React.useState<string>("");
   const [selId, setSelId] = React.useState<string | null>(null);
 
   const [editOpen, setEditOpen] = React.useState(false);
@@ -2249,6 +2474,8 @@ export default function AufmassEditor() {
   const [massLabelBuffer, setMassLabelBuffer] = React.useState("");
   const [massNoteBuffer, setMassNoteBuffer] = React.useState("");
   const [massFactorBuffer, setMassFactorBuffer] = React.useState("1");
+  const [massMesszahlBuffer, setMassMesszahlBuffer] = React.useState("91");
+  const [massMarkerBuffer, setMassMarkerBuffer] = React.useState<"" | "H" | "Z">("");
   const [massKreisBuffer, setMassKreisBuffer] = React.useState("1");
   const [massBlattBuffer, setMassBlattBuffer] = React.useState("1");
   const [massOrtBuffer, setMassOrtBuffer] = React.useState("");
@@ -2285,12 +2512,18 @@ export default function AufmassEditor() {
   const fotoImportedRef = React.useRef(false);
   const cadImportedRef = React.useRef(false);
   const gpsImportedRef = React.useRef(false);
+  const x31ImportInputRef = React.useRef<HTMLInputElement | null>(null);
+  const x31ImageInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [x31Images, setX31Images] = React.useState<Record<string, string>>({});
 
   const saveTimerRef = React.useRef<number | null>(null);
   const serverSaveTimerRef = React.useRef<number | null>(null);
   const rowsRef = React.useRef<LVRow[]>([]);
   const serverSaveGenerationRef = React.useRef(0);
   const orteLoadedRef = React.useRef(false);
+  const orteRevisionRef = React.useRef<string | null>(null);
+  const orteProjectKeyRef = React.useRef(serverProjectKey); orteProjectKeyRef.current = serverProjectKey;
+  const [orteSyncError, setOrteSyncError] = React.useState("");
   const orteSaveTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -2443,6 +2676,8 @@ export default function AufmassEditor() {
 
   React.useEffect(() => {
     orteLoadedRef.current = false;
+    orteRevisionRef.current = null;
+    setOrteSyncError("");
     if (orteSaveTimerRef.current) {
       window.clearTimeout(orteSaveTimerRef.current);
       orteSaveTimerRef.current = null;
@@ -2478,13 +2713,14 @@ export default function AufmassEditor() {
         setOrtPositions(Array.isArray(data?.links) ? data.links : []);
         setActiveOrtId(null);
         setCheckedRowIds(new Set());
+        orteRevisionRef.current = data.revision || null;
+        setOrteSyncError("");
         orteLoadedRef.current = true;
       } catch (error) {
         console.error("Orte konnten nicht vom Server geladen werden", error);
         if (cancelled) return;
-        setOrte([]);
-        setOrtPositions([]);
-        orteLoadedRef.current = true;
+        orteLoadedRef.current = false;
+        setOrteSyncError("Orte konnten nicht geladen werden. Automatisches Speichern ist gesperrt. Bitte neu laden.");
       }
     };
 
@@ -2512,12 +2748,15 @@ export default function AufmassEditor() {
               "Content-Type": "application/json",
               ...getHistorieAuthHeaders()
             },
-            body: JSON.stringify({ orte, links: ortPositions })
+            body: JSON.stringify({ orte, links: ortPositions, baseRevision: orteRevisionRef.current })
           }
         );
         const txt = await res.text().catch(() => "");
         if (!res.ok) throw new Error(txt || `Orte HTTP ${res.status}`);
+        const saved = txt ? JSON.parse(txt) : {};
+        if (orteProjectKeyRef.current === serverProjectKey) {orteRevisionRef.current = saved.revision || orteRevisionRef.current;setOrteSyncError("");}
       } catch (error) {
+        if (orteProjectKeyRef.current === serverProjectKey) {orteLoadedRef.current=false;setOrteSyncError("Orte konnten nicht gespeichert werden. Bitte neu laden; lokale Änderungen bleiben erhalten.");}
         console.error("Orte konnten nicht auf dem Server gespeichert werden", error);
       } finally {
         orteSaveTimerRef.current = null;
@@ -2647,6 +2886,8 @@ export default function AufmassEditor() {
         throw new Error("Kein Projekt gewählt");
       }
 
+      if (!orteLoadedRef.current) throw new Error("Orte sind nicht sicher geladen. Bitte neu laden.");
+
       const res = await fetch(
         apiUrl(`/api/aufmass/orte/${encodeURIComponent(serverProjectKey)}`),
         {
@@ -2656,14 +2897,17 @@ export default function AufmassEditor() {
             "Content-Type": "application/json",
             ...getHistorieAuthHeaders()
           },
-          body: JSON.stringify({ orte: payloadOrte, links: payloadLinks })
+          body: JSON.stringify({ orte: payloadOrte, links: payloadLinks, baseRevision: orteRevisionRef.current })
         }
       );
 
       const text = await res.text().catch(() => "");
       if (!res.ok) {
+        if(orteProjectKeyRef.current===serverProjectKey){orteLoadedRef.current=false;setOrteSyncError("Orte konnten nicht gespeichert werden. Bitte neu laden; lokale Änderungen bleiben erhalten.");}
         throw new Error(text || `Orte Server-Fehler (${res.status})`);
       }
+      const data=text ? JSON.parse(text) : {};
+      if(orteProjectKeyRef.current===serverProjectKey){orteRevisionRef.current=data.revision || orteRevisionRef.current;setOrteSyncError("");}
     },
     [serverProjectKey]
   );
@@ -2875,8 +3119,16 @@ export default function AufmassEditor() {
         const kalkulationPrice = priceOf(match);
         if (!(kalkulationPrice > 0)) return position;
 
+        const canonicalPos = safeTrim(
+          match?.posNr ?? match?.pos ?? match?.position ?? match?.positionsnummer
+        );
+
         return {
           ...position,
+          pos: canonicalPos || position.pos,
+          text: safeTrim(match?.kurztext ?? match?.text ?? match?.title) || position.text,
+          unit: safeTrim(match?.einheit ?? match?.unit ?? match?.me) || position.unit,
+          quantity: Number(match?.menge ?? match?.quantity ?? position.quantity ?? 0),
           ep: kalkulationPrice
         };
       });
@@ -4080,12 +4332,7 @@ export default function AufmassEditor() {
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        ...(localStorage.getItem("token") ?
-        {
-          Authorization:
-          `Bearer ${localStorage.getItem("token")}`
-        } :
-        {})
+        ...getHistorieAuthHeaders()
       },
       body: JSON.stringify({
         projectId: projectCode,
@@ -4321,25 +4568,34 @@ export default function AufmassEditor() {
       61
     );
 
-    const rebRows = rows.
-    slice().
-    sort(byPosAsc).
-    map((row, index) => {
-      const ist = toNumber(row.ist);
-      const faktor = toNumber(row.factor ?? 1) || 1;
-      const ergebnis = ist * faktor;
-
-      return [
-      String(index + 1).padStart(4, "0"),
-      String(row.pos || ""),
-      getOrtLabel(String(row.pos || "")) || "Nicht zugeordnet",
-      String(row.text || ""),
-      "Freier Ansatz",
-      `${formatNumber(faktor)} × ${formatNumber(ist)}`,
-      formatNumber(ergebnis),
-      String(row.unit || ""),
-      String(row.note || "")];
-
+    const rebRows: any[][] = [];
+    rows.slice().sort(byPosAsc).forEach((row) => {
+      rebRows.push([
+        String(row.pos || ""), "", "", "", "", String(row.text || ""), `${fmtNumDE(row.ist, 3)} ${String(row.unit || "")}`
+      ]);
+      (row.entries || []).forEach((entry, entryIndex) => {
+        const raw = String(entry.reb || "").padEnd(80, " ").slice(0, 80);
+        const address = safeTrim(entry.sourceId || raw.slice(69, 75) || `000${String(entryIndex + 1).padStart(2, "0")}`);
+        const marker = safeTrim(entry.rebMarker || raw.slice(12, 13));
+        const explanation = safeTrim(entry.label || raw.slice(13, 22));
+        const originalFactorRaw = raw.slice(23, 29).trim();
+        const shownFactor = Number(entry.factor) === 999 ? "" :
+          Math.abs(Number(entry.factor ?? 1) - 1) > 0.0000001 ? fmtNumDE(Number(entry.factor), 3) :
+          originalFactorRaw ? fmtNumDE(Number(originalFactorRaw) / 1000, 3) : "";
+        const formulaNo = String(entry.messzahl ?? raw.slice(29, 31).trim() ?? "").padStart(2, "0");
+        const rawCalculation = raw.slice(31, 69).trim();
+        const calculation = entry.source === "GAEB-X31" && String(entry.formula || "").startsWith("AUFMASS:")
+          ? rawCalculation
+          : formulaToMassText(entry.formula);
+        const isHelper = marker === "H";
+        const result = Number(entry.menge || 0);
+        rebRows.push([
+          address, marker, explanation, shownFactor, formulaNo,
+          safeTrim(entry.note) && !calculation ? entry.note : calculation,
+          Number.isFinite(result) ? `${isHelper ? "(" : ""}${fmtNumDE(result, 3)}${isHelper ? ")" : ""}` : ""
+        ]);
+      });
+      rebRows.push(["", "", "", "", "", `Summe Position ${row.pos}`, `${fmtNumDE(row.ist, 3)} ${String(row.unit || "")}`]);
     });
 
     autoTable(pdf, {
@@ -4350,16 +4606,7 @@ export default function AufmassEditor() {
         top: 48,
         bottom: 17
       },
-      head: [[
-      "Zeile",
-      "LV-Pos.",
-      "Ort / Unterort",
-      "Kurztext",
-      "Formelart",
-      "Rechenansatz",
-      "Ergebnis",
-      "ME",
-      "Bemerkung"]],
+      head: [["Adresse", "Kz", "Erl.", "Fakt.", "Fn", "Berechnung", "Ergebnis"]],
 
       body: rebRows,
       styles: {
@@ -4380,15 +4627,13 @@ export default function AufmassEditor() {
         fillColor: [248, 250, 252]
       },
       columnStyles: {
-        0: { cellWidth: 13, halign: "right" },
-        1: { cellWidth: 18, fontStyle: "bold" },
-        2: { cellWidth: 37 },
-        3: { cellWidth: 57 },
-        4: { cellWidth: 23 },
-        5: { cellWidth: 36, halign: "right" },
-        6: { cellWidth: 24, halign: "right", fontStyle: "bold" },
-        7: { cellWidth: 12 },
-        8: { cellWidth: 45 }
+        0: { cellWidth: 24, fontStyle: "bold" },
+        1: { cellWidth: 10, halign: "center" },
+        2: { cellWidth: 28 },
+        3: { cellWidth: 20, halign: "right" },
+        4: { cellWidth: 12, halign: "center" },
+        5: { cellWidth: 137 },
+        6: { cellWidth: 36, halign: "right", fontStyle: "bold" }
       },
       didDrawPage: () => {
         if (pdf.getNumberOfPages() > 1) {
@@ -4403,13 +4648,7 @@ export default function AufmassEditor() {
       (pdf as any).lastAutoTable?.finalY || 70
     );
 
-    const totalMenge = rows.reduce(
-      (sum, row) =>
-      sum +
-      toNumber(row.ist) * (
-      toNumber(row.factor ?? 1) || 1),
-      0
-    );
+    const totalMenge = rows.reduce((sum, row) => sum + toNumber(row.ist), 0);
 
     if (finalY + 15 < pageHeight - 17) {
       pdf.setFillColor(239, 246, 255);
@@ -4435,13 +4674,34 @@ export default function AufmassEditor() {
       );
     }
 
+    const referencedImages = new Set<string>();
+    rows.forEach((row) => (row.entries || []).forEach((entry) => {
+      const match = String(entry.note || "").match(/#Bild\s+([^\s]+)/i);
+      if (match?.[1]) referencedImages.add(match[1]);
+    }));
+    referencedImages.forEach((name) => {
+      const src = x31Images[String(name).toLowerCase()];
+      if (!src) return;
+      pdf.addPage("a4", "landscape");
+      drawRebPageHeader();
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text(`Anlage / X31-Bild: ${name}`, 14, 52);
+      try { pdf.addImage(src, 14, 58, 150, 110, undefined, "FAST"); } catch {}
+      drawRebFooter();
+    });
+
     const filenameProject = projectCode.
     replace(/[<>:"/\\|?*]/g, "_").
     replace(/\s+/g, "_");
 
     saveRlcPdfWithCompanyHeader(
       pdf,
-      `REB_Aufmassblatt_${filenameProject}.pdf`
+      /pruefdatei.*mengenermittlung/i.test(x31SourceName)
+        ? "Ausgabe Pruefdatei GAEB DA XML 3.3 – Mengenermittlung.PDF"
+        : `REB_Aufmassblatt_${filenameProject}.pdf`,
+      projectId
     );
   }, [
   rows,
@@ -4449,115 +4709,264 @@ export default function AufmassEditor() {
   ortPositions,
   project?.code,
   stickyCode,
-  projectId]
+  projectId,
+  x31Images,
+  x31SourceName]
   );
 
-  const exportX31 = React.useCallback(() => {
+  const importX31ImageFile = React.useCallback(async (file: File) => {
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name)) {
+      showRlcMessage("Für X31-Bilder werden JPG, PNG oder WebP unterstützt.");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("Bild konnte nicht gelesen werden."));
+      reader.readAsDataURL(file);
+    });
+    const key = file.name.trim().toLowerCase();
+    setX31Images((prev) => ({ ...prev, [key]: dataUrl }));
+    showRlcMessage(`X31-Bild importiert: ${file.name}`);
+  }, []);
+
+  const importX31File = React.useCallback(async (file: File) => {
+    const projectKey = serverProjectKey || projectFsKey || projectId || "";
+    if (!projectKey) {
+      showRlcMessage("Kein Projekt gewählt.");
+      return;
+    }
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const response = await fetch(
+        apiUrl(`/api/project-lv/${encodeURIComponent(projectKey)}/parse-x31`),
+        { method: "POST", credentials: "include", body: form }
+      );
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json?.error || "X31-Import fehlgeschlagen");
+      const imported = Array.isArray(json?.rows) ? json.rows : [];
+      const importedVersDate = String(json?.gaebVersDate || "").trim();
+      setX31VersDate(importedVersDate === "2021-05" ? "2021-05" : "2023-01");
+      setX31SourceName(String(json?.sourceName || file.name || "").trim());
+      const now = new Date().toISOString();
+
+      setRows((previous) => {
+        const base = reconcileAufmassRowsWithLv(previous, lvRows);
+        const byPos = new Map(base.map((row) => [safeTrim(row.pos), row]));
+
+        for (const sourceRow of imported) {
+          const pos = safeTrim(sourceRow?.pos);
+          if (!pos) continue;
+          const lv = lvRows.find((entry) => safeTrim(entry.pos) === pos);
+          const existing = byPos.get(pos) || (lv ? buildRowFromLv(lv) : {
+            id: safeUUID(), pos, text: "", unit: "", ep: 0, soll: 0,
+            formula: "", ist: 0, note: "", factor: 1, entries: []
+          } as LVRow);
+          const qRows: string[] = Array.isArray(sourceRow?.qTakeoffRows) ? sourceRow.qTakeoffRows : [];
+          const evaluatedLines: any[] = Array.isArray(sourceRow?.evaluatedLines) ? sourceRow.evaluatedLines : [];
+          const entries: AufmassEntry[] = qRows.map((rawValue, index) => {
+            const raw = String(rawValue || "").padEnd(80, " ").slice(0, 80);
+            const evaluated = evaluatedLines[index] || {};
+            const left = raw.slice(0, 69).trim();
+            const isComment = Boolean(evaluated?.comment ?? left.startsWith("*"));
+            const rebResult = Number(evaluated?.result);
+            const helper = Boolean(evaluated?.helper);
+            return {
+              id: safeUUID(),
+              label: String(evaluated?.explanation || "").trim(),
+              formula: isComment ? "" : `AUFMASS:${left}`,
+              menge: !isComment && !helper && Number.isFinite(rebResult) ? rebResult : 0,
+              note: isComment ? left.replace(/^\*/, "").trim() : "",
+              factor: Number.isFinite(Number(evaluated?.factor)) ? Number(evaluated.factor) : 1,
+              rebFactorRaw: String(evaluated?.factorRaw || "").trim(),
+              unit: existing.unit,
+              ep: existing.ep,
+              createdAt: now,
+              sourceId: String(evaluated?.address || raw.slice(69, 75)).trim(),
+              source: "GAEB-X31",
+              reb: raw,
+              messzahl: Number.isFinite(Number(evaluated?.formulaNo)) ? Number(evaluated.formulaNo) : undefined,
+              rebMarker: evaluated?.marker === "H" || evaluated?.marker === "Z" ? evaluated.marker : "",
+              nr: index + 1
+            };
+          });
+          byPos.set(pos, {
+            ...existing,
+            pos,
+            text: lv?.text || existing.text,
+            unit: lv?.unit || existing.unit,
+            soll: lv ? Number(lv.quantity || 0) : existing.soll,
+            ep: lv ? Number(lv.ep || 0) : existing.ep,
+            langtext: lv ? extractLvLangtext(lv) : existing.langtext,
+            entries,
+            formula: entries.find((entry) => entry.formula)?.formula || "",
+            ist: Number.isFinite(Number(sourceRow?.calculatedQuantity)) ? Number(sourceRow.calculatedQuantity) : entriesSum(entries),
+            note: entries.filter((entry) => entry.note).map((entry) => entry.note).join(" · "),
+          });
+        }
+        return Array.from(byPos.values()).sort(byPosAsc);
+      });
+
+      showRlcMessage(`X31 importiert • ${Number(json?.count || imported.length)} Position(en)`);
+    } catch (error: any) {
+      showRlcMessage(`X31-Import fehlgeschlagen:\n${error?.message || error}`);
+    }
+  }, [serverProjectKey, projectFsKey, projectId, lvRows]);
+
+  const exportX31 = React.useCallback(async () => {
     if (!rows.length) {
       showRlcMessage("Keine Aufmaßzeilen für X31 vorhanden.");
       return;
     }
 
-    const projectCode = String(project?.code || stickyCode || projectId || "Projekt");
+    const projectKey = serverProjectKey || projectFsKey || projectId || "";
+    if (!projectKey) {
+      showRlcMessage("Kein Projekt gewählt.");
+      return;
+    }
+
     const officialLvPositions = new Set(
       lvRows.map((lv) => safeTrim(lv.pos)).filter(Boolean)
     );
-
     const exportRows = reconcileAufmassRowsWithLv(rows, lvRows).filter((row) =>
-    officialLvPositions.has(safeTrim(row.pos))
+      officialLvPositions.has(safeTrim(row.pos))
     );
-
     const lines = buildRebExportLines(exportRows);
     if (!lines.length) {
       showRlcMessage("Keine gültigen Aufmaßzeilen für X31 vorhanden.");
       return;
     }
 
-    const grouped = new Map<string, Map<string, Map<string, RebExportLine[]>>>();
-    lines.forEach((line) => {
-      const [l1, l2] = line.levels;
-      if (!grouped.has(l1)) grouped.set(l1, new Map());
-      const level2 = grouped.get(l1)!;
-      if (!level2.has(l2)) level2.set(l2, new Map());
-      const items = level2.get(l2)!;
-      const itemKey = `${line.item}|${line.index}`;
-      if (!items.has(itemKey)) items.set(itemKey, []);
-      items.get(itemKey)!.push(line);
+    const grouped = new Map<string, string[]>();
+    for (const line of lines) {
+      const pos = safeTrim(line.position);
+      if (!pos) continue;
+      const list = grouped.get(pos) || [];
+      list.push(String(line.row80 || "").slice(0, 80).padEnd(80, " "));
+      grouped.set(pos, list);
+    }
+    const payloadRows = Array.from(grouped.entries()).map(([pos, qTakeoffRows]) => ({
+      pos,
+      qTakeoffRows,
+    }));
+
+    try {
+      const response = await fetch(
+        apiUrl(`/api/project-lv/${encodeURIComponent(projectKey)}/export-x31`),
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rows: payloadRows,
+            versDate: x31VersDate,
+            sourceName: x31SourceName,
+            methodDescription: "REB23003-2009",
+          }),
+        }
+      );
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || "X31-Export fehlgeschlagen");
+      }
+
+      const blob = await response.blob();
+      const disposition = String(response.headers.get("content-disposition") || "");
+      const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      const projectCode = String(project?.code || stickyCode || projectId || "Projekt");
+      const fallbackName = `Mengenermittlung_${projectCode.replace(/[<>:"/\\|?*]/g, "_").replace(/\s+/g, "_")}.X31`;
+      const fileName = filenameMatch?.[1] || fallbackName;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+
+      showRlcMessage(`${lines.length} Aufmaßzeile(n) als GAEB X31 exportiert.`);
+    } catch (error: any) {
+      showRlcMessage(`X31-Export fehlgeschlagen:\n${error?.message || error}`);
+    }
+  }, [rows, lvRows, serverProjectKey, projectFsKey, projectId, project?.code, stickyCode, x31VersDate, x31SourceName]);
+
+  const exportBvbsPruefausdruck = React.useCallback(async () => {
+    if (!rows.length) {
+      showRlcMessage("Keine Aufmaßzeilen für den BVBS-Prüfausdruck vorhanden.");
+      return;
+    }
+
+    const officialLvPositions = new Set(lvRows.map((lv) => safeTrim(lv.pos)).filter(Boolean));
+    const exportRows = reconcileAufmassRowsWithLv(rows, lvRows).filter((row) =>
+      officialLvPositions.has(safeTrim(row.pos))
+    );
+    const lines = buildRebExportLines(exportRows);
+    if (!lines.length) {
+      showRlcMessage("Keine gültigen REB-/X31-Zeilen für den BVBS-Prüfausdruck vorhanden.");
+      return;
+    }
+
+    const grouped = new Map<string, string[]>();
+    for (const line of lines) {
+      const pos = safeTrim(line.position);
+      if (!pos) continue;
+      const list = grouped.get(pos) || [];
+      list.push(String(line.row80 || "").slice(0, 80).padEnd(80, " "));
+      grouped.set(pos, list);
+    }
+
+    const rowByPos = new Map(exportRows.map((row) => [safeTrim(row.pos), row]));
+    const positions = Array.from(grouped.entries()).map(([pos, qTakeoffRows]) => {
+      const row = rowByPos.get(pos);
+      return {
+        pos,
+        text: row?.text || "",
+        unit: row?.unit || "",
+        qTakeoffRows,
+      };
     });
 
-    let idCounter = 1;
-    const nextId = () => `ID${String(idCounter++).padStart(6, "0")}`;
-    const boqId = nextId();
-    const body: string[] = [];
-
-    grouped.forEach((level2Map, level1) => {
-      body.push(`    <BoQCtgy RNoPart="${xmlEscape(level1)}" ID="${nextId()}">`);
-      body.push("     <BoQBody>");
-      level2Map.forEach((itemMap, level2) => {
-        body.push(`      <BoQCtgy RNoPart="${xmlEscape(level2)}" ID="${nextId()}">`);
-        body.push("       <BoQBody>");
-        body.push("        <Itemlist>");
-        itemMap.forEach((itemLines, itemKey) => {
-          const [item, itemIndex] = itemKey.split("|");
-          const indexAttribute = safeTrim(itemIndex) ?
-          ` RNoIndex="${xmlEscape(itemIndex)}"` :
-          "";
-          body.push(`         <Item RNoPart="${xmlEscape(item)}"${indexAttribute} ID="${nextId()}">`);
-          body.push("          <QtyDeterm>");
-          itemLines.forEach((line) => {
-            body.push("           <QDetermItem>");
-            body.push(`            <QTakeoff Row="${xmlEscape(line.row80)}"/>`);
-            body.push("           </QDetermItem>");
-          });
-          body.push("          </QtyDeterm>");
-          body.push("         </Item>");
-        });
-        body.push("        </Itemlist>");
-        body.push("       </BoQBody>");
-        body.push("      </BoQCtgy>");
+    try {
+      const response = await fetch(apiUrl("/api/pdf/bvbs-pruefausdruck"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectKey: serverProjectKey || projectFsKey || projectId || "",
+          project: {
+            id: projectId,
+            code: project?.code || stickyCode || projectId || "Projekt",
+            name: project?.name || project?.code || stickyCode || "Mengenermittlung GAEB-Zertifizierung",
+          },
+          gaebVersion: "3.3",
+          positions,
+          images: x31Images,
+        }),
       });
-      body.push("     </BoQBody>");
-      body.push("    </BoQCtgy>");
-    });
-
-    const now = new Date();
-    const date = now.toISOString().slice(0, 10);
-    const time = now.toTimeString().slice(0, 8);
-    const xml = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA31/3.3">',
-    ' <GAEBInfo>',
-    '  <Version>3.3</Version>',
-    '  <VersDate>2023-01</VersDate>',
-    `  <Date>${date}</Date>`,
-    `  <Time>${time}</Time>`,
-    '  <ProgSystem>RLC Bausoftware</ProgSystem>',
-    '  <ProgName>RLC Aufmaß-Editor</ProgName>',
-    ' </GAEBInfo>',
-    ' <QtyDeterm>',
-    '  <QtyDetermInfo>',
-    '   <MethodDescription>REB23003-2009</MethodDescription>',
-    `   <OrdDescr>${xmlEscape(projectCode)}</OrdDescr>`,
-    '  </QtyDetermInfo>',
-    '  <DP>31</DP>',
-    `  <BoQ ID="${boqId}">`,
-    '   <BoQBkdn><Type>BoQLevel</Type><Length>2</Length><Num>Yes</Num></BoQBkdn>',
-    '   <BoQBkdn><Type>BoQLevel</Type><Length>2</Length><Num>Yes</Num></BoQBkdn>',
-    '   <BoQBkdn><Type>Item</Type><Length>4</Length><Num>Yes</Num></BoQBkdn>',
-    '   <BoQBkdn><Type>Index</Type><Length>1</Length><Num>No</Num></BoQBkdn>',
-    '   <BoQBody>',
-    ...body,
-    '   </BoQBody>',
-    '  </BoQ>',
-    ' </QtyDeterm>',
-    '</GAEB>',
-    ''].
-    join("\r\n");
-
-    const safeProject = projectCode.replace(/[<>:"/\\|?*]/g, "_").replace(/\s+/g, "_");
-    downloadTextFile(`Mengenermittlung_${safeProject}.X31`, xml, "application/xml;charset=utf-8");
-    showRlcMessage(`${lines.length} Aufmaßzeile(n) als X31 exportiert.`);
-  }, [rows, lvRows, project?.code, stickyCode, projectId]);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "BVBS-Prüfausdruck konnte nicht erzeugt werden.");
+      }
+      const blob = await response.blob();
+      const disposition = String(response.headers.get("content-disposition") || "");
+      const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      const fallback = `BVBS_Pruefausdruck_${String(project?.code || stickyCode || projectId || "Projekt").replace(/[<>:"/\\|?*]/g, "_")}.pdf`;
+      const fileName = filenameMatch?.[1] || fallback;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      showRlcMessage(`BVBS-Prüfausdruck erstellt • ${positions.length} Position(en)`);
+    } catch (error: any) {
+      showRlcMessage(`BVBS-Prüfausdruck fehlgeschlagen:\n${error?.message || error}`);
+    }
+  }, [rows, lvRows, serverProjectKey, projectFsKey, projectId, project?.code, project?.name, stickyCode, x31Images]);
 
   const exportDa11 = React.useCallback(() => {
     if (!rows.length) {
@@ -4584,13 +4993,41 @@ export default function AufmassEditor() {
     join("\r\n") + "\r\n";
 
     const safeProject = projectCode.replace(/[<>:"/\\|?*]/g, "_").replace(/\s+/g, "_");
-    downloadBinaryFile(
-      `Mengenermittlung_${safeProject}.D11`,
-      encodeWindows1252(da11),
-      "application/octet-stream"
-    );
+    const fileName = `Mengenermittlung_${safeProject}.D11`;
+    const mime = "application/octet-stream";
+    const binary = encodeWindows1252(da11);
+    downloadBinaryFile(fileName, binary, mime);
+
+    if (projectId) {
+      const sourceBuffer = binary.buffer as ArrayBuffer;
+      const payload = sourceBuffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength);
+      const blob = new Blob([payload], { type: mime });
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(String(projectId), fileName, blob))
+        .catch((error) => console.warn("[aufmass:da11:dms]", error));
+    }
+
     showRlcMessage(`${lines.length} Aufmaßzeile(n) als DA11 exportiert.`);
   }, [rows, lvRows, project?.code, stickyCode, projectId]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const requested = String(params.get("gaebExport") || "").trim().toUpperCase();
+    if (requested !== "X31" && requested !== "DA11") return;
+    if (!rows.length || !lvRows.length) return;
+
+    params.delete("gaebExport");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (query ? `?${query}` : "") + window.location.hash
+    );
+
+    if (requested === "X31") exportX31();
+    else exportDa11();
+  }, [rows.length, lvRows.length, exportX31, exportDa11]);
 
   const exportCsv = React.useCallback(() => {
     const header = [
@@ -4637,10 +5074,17 @@ export default function AufmassEditor() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "aufmass.csv";
+    const fileName = "aufmass.csv";
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(a.href);
-  }, [rows]);
+
+    if (projectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(String(projectId), fileName, blob))
+        .catch((error) => console.warn("[aufmass:csv:dms]", error));
+    }
+  }, [rows, projectId]);
 
   const onFormulaChange = React.useCallback(
     (id: string, formula: string) => {
@@ -5060,7 +5504,7 @@ export default function AufmassEditor() {
     const filename = `${safeTrim(activeOrt.nummer)}_${activeOrt.name}`.
     replace(/[<>:"/\|?*]/g, "_").
     replace(/\s+/g, "_");
-    saveRlcPdfWithCompanyHeader(pdf, `Aufmass_Ort_${filename}.pdf`);
+    saveRlcPdfWithCompanyHeader(pdf, `Aufmass_Ort_${filename}.pdf`, projectId);
   }, [activeOrt, activeOrtExportRows, project?.code, stickyCode, projectId]);
 
   const exportActiveOrtCsv = React.useCallback(() => {
@@ -5099,10 +5543,17 @@ export default function AufmassEditor() {
     const filename = `${safeTrim(activeOrt.nummer)}_${activeOrt.name}`.
     replace(/[<>:"/\|?*]/g, "_").
     replace(/\s+/g, "_");
-    a.download = `Aufmass_Ort_${filename}.csv`;
+    const fileName = `Aufmass_Ort_${filename}.csv`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(a.href);
-  }, [activeOrt, activeOrtExportRows]);
+
+    if (projectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(String(projectId), fileName, blob))
+        .catch((error) => console.warn("[aufmass:ort-csv:dms]", error));
+    }
+  }, [activeOrt, activeOrtExportRows, projectId]);
 
   const createOrt = React.useCallback(() => {
     const nummer = safeTrim(newOrtNummer);
@@ -5408,8 +5859,8 @@ export default function AufmassEditor() {
     if (!selected) return;
 
     const formulaText = safeTrim(editBuffer);
-    if (!formulaText) {
-      showRlcMessage("Bitte einen Rechenansatz eingeben.");
+    if (!formulaText && !safeTrim(massNoteBuffer)) {
+      showRlcMessage("Bitte einen Rechenansatz oder einen Kommentar eingeben.");
       return;
     }
 
@@ -5428,7 +5879,10 @@ export default function AufmassEditor() {
         throw new Error("Ausgewählte Aufmaßposition wurde nicht gefunden.");
       }
 
-      const entryFactor = nrmNumber(massFactorBuffer, 1) || 1;
+      const entryFactorRaw = safeTrim(massFactorBuffer) || "1";
+      const entryFactor = effectiveRebFactor(entryFactorRaw);
+      const entryMesszahl = Math.max(0, Math.min(99, Math.trunc(nrmNumber(massMesszahlBuffer, 91) || 91)));
+      const entryMarker = massMarkerBuffer === "H" || massMarkerBuffer === "Z" ? massMarkerBuffer : "";
       const kreis = Math.max(1, Math.trunc(nrmNumber(massKreisBuffer, 1)));
       const blatt = Math.max(1, Math.trunc(nrmNumber(massBlattBuffer, 1)));
 
@@ -5448,10 +5902,13 @@ export default function AufmassEditor() {
             note: massNoteBuffer,
             formula: formulaText,
             factor: entryFactor,
+            rebFactorRaw: entryFactorRaw,
+            messzahl: entryMesszahl,
+            rebMarker: entryMarker,
             kreis,
             blatt,
             ortId: massOrtBuffer || undefined,
-            menge: parseMassEditorLines(formulaText) * entryFactor,
+            menge: calculateRebEditorValue(formulaText, entryMesszahl, oldEntries) * entryFactor,
             unit: row.unit,
             ep: row.ep
           }
@@ -5470,6 +5927,11 @@ export default function AufmassEditor() {
           {
             ...nextEntry,
             label: safeTrim(massLabelBuffer) || nextEntry.label,
+            factor: entryFactor,
+            rebFactorRaw: entryFactorRaw,
+            messzahl: entryMesszahl,
+            rebMarker: entryMarker,
+            menge: calculateRebEditorValue(formulaText, entryMesszahl, oldEntries) * entryFactor,
             kreis,
             blatt,
             ortId: massOrtBuffer || undefined
@@ -5533,6 +5995,8 @@ export default function AufmassEditor() {
       setMassLabelBuffer("");
       setMassNoteBuffer("");
       setMassFactorBuffer("1");
+      setMassMesszahlBuffer("91");
+      setMassMarkerBuffer("");
       setMassKreisBuffer("1");
       setMassBlattBuffer("1");
       setMassOrtBuffer("");
@@ -5554,6 +6018,8 @@ export default function AufmassEditor() {
   massLabelBuffer,
   massNoteBuffer,
   massFactorBuffer,
+  massMesszahlBuffer,
+  massMarkerBuffer,
   massKreisBuffer,
   massBlattBuffer,
   massOrtBuffer,
@@ -5570,7 +6036,9 @@ export default function AufmassEditor() {
       setEditBuffer(entry.formula || "");
       setMassLabelBuffer(entry.label || "");
       setMassNoteBuffer(entry.note || "");
-      setMassFactorBuffer(String(entry.factor ?? 1).replace(".", ","));
+      setMassFactorBuffer(String(entry.rebFactorRaw ?? entry.factor ?? 1).replace(".", ","));
+      setMassMesszahlBuffer(String(entry.messzahl ?? 91));
+      setMassMarkerBuffer(entry.rebMarker === "H" || entry.rebMarker === "Z" ? entry.rebMarker : "");
       setMassKreisBuffer(String(entry.kreis ?? 1));
       setMassBlattBuffer(String(entry.blatt ?? 1));
       const linkedOrt = ortPositions.find(
@@ -5625,6 +6093,18 @@ export default function AufmassEditor() {
     },
     []
   );
+
+  const moveMassEntry = React.useCallback((rowId: string, entryId: string, direction: -1 | 1) => {
+    setRows((prev) => prev.map((row) => {
+      if (row.id !== rowId) return row;
+      const entries = [...(row.entries || [])];
+      const index = entries.findIndex((entry) => entry.id === entryId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= entries.length) return row;
+      [entries[index], entries[target]] = [entries[target], entries[index]];
+      return { ...row, entries, formula: entriesToFormula(entries), ist: entriesSum(entries) };
+    }));
+  }, []);
 
   const openNoteEditor = React.useCallback(() => {
     if (!selected) return;
@@ -5723,6 +6203,7 @@ export default function AufmassEditor() {
           <div>
             <div className={rlcClass(null, heroTitleRow)}>
               <h1 className={rlcClass(null, title)}>Aufmaß-Editor</h1>
+              {orteSyncError && <div className="card" role="alert">{orteSyncError}</div>}
             </div>
             <p className={rlcClass(null, subtitle)}>
               Erfassen, bearbeiten und verwalten Sie Aufmaße. Übernehmen Sie
@@ -5792,6 +6273,10 @@ export default function AufmassEditor() {
             REB-Aufmaßblatt 23.003
           </button>
 
+          <button className={rlcClass(null, btnHero)} type="button" onClick={() => void exportBvbsPruefausdruck()}>
+            BVBS-Prüfausdruck PDF
+          </button>
+
           <button className={rlcClass(null, btnHero)} type="button" onClick={exportX31}>
             X31 exportieren
           </button>
@@ -5816,7 +6301,7 @@ export default function AufmassEditor() {
       </section>
 
       <section className={rlcClass(null, kpiGrid)}>
-        <div className={rlcClass(null, kpiCard)}>
+        <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
           <div className={rlcClass(null,
           {
             ...kpiIconBase,
@@ -5826,15 +6311,15 @@ export default function AufmassEditor() {
             <RlcDocumentIcon />
           </div>
           <div>
-            <div className={rlcClass(null, kpiLabel)}>LV-Positionen</div>
-            <div className={rlcClass(null, kpiValue)}>
+            <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>LV-Positionen</div>
+            <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>
               {lvRows.length} / {lvRows.length}
             </div>
             <div className={rlcClass(null, kpiHint)}>Gesamtpositionen</div>
           </div>
         </div>
 
-        <div className={rlcClass(null, kpiCard)}>
+        <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
           <div className={rlcClass(null,
           {
             ...kpiIconBase,
@@ -5844,15 +6329,15 @@ export default function AufmassEditor() {
             <RlcMeasureIcon />
           </div>
           <div>
-            <div className={rlcClass(null, kpiLabel)}>Aufgemessen (Ist)</div>
-            <div className={rlcClass(null, kpiValue)}>
+            <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>Aufgemessen (Ist)</div>
+            <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>
               {rows.filter((r) => Math.abs(r.ist || 0) > 0).length}
             </div>
             <div className={rlcClass(null, kpiHint)}>Positionen mit Ist-Menge</div>
           </div>
         </div>
 
-        <div className={rlcClass(null, kpiCard)}>
+        <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
           <div className={rlcClass(null,
           {
             ...kpiIconBase,
@@ -5862,8 +6347,8 @@ export default function AufmassEditor() {
             <RlcPlusMinusIcon />
           </div>
           <div>
-            <div className={rlcClass(null, kpiLabel)}>Differenz RLC-KI / Abgerechnet</div>
-            <div className={rlcClass(null, kpiValue)}>{fmtEUR(totals.diffSum)}</div>
+            <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>Differenz RLC-KI / Abgerechnet</div>
+            <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{fmtEUR(totals.diffSum)}</div>
             <div className={rlcClass(null, kpiHint)}>
               {Math.abs(totals.diffSum) < 0.005 ?
               "Keine Abweichung" :
@@ -5872,7 +6357,7 @@ export default function AufmassEditor() {
           </div>
         </div>
 
-        <div className={rlcClass(null, kpiCard)}>
+        <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
           <div className={rlcClass(null,
           {
             ...kpiIconBase,
@@ -5882,8 +6367,8 @@ export default function AufmassEditor() {
             <RlcCheckIcon />
           </div>
           <div>
-            <div className={rlcClass(null, kpiLabel)}>Letzte Speicherung</div>
-            <div className={rlcClass(null, { ...kpiValue, fontSize: 22 })}>{lastSavedLabel}</div>
+            <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>Letzte Speicherung</div>
+            <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, fontSize: 22 })}>{lastSavedLabel}</div>
             <div className={rlcClass(null, kpiHint)}>Auto-Save aktiv · Ctrl+S</div>
           </div>
         </div>
@@ -6603,12 +7088,30 @@ export default function AufmassEditor() {
             height: "min(76vh, 880px)",
             minHeight: 720,
             maxHeight: 880,
-            overflow: "auto",
+            overflowY: "auto",
+            overflowX: "hidden",
             background: "#FFFFFF",
             marginTop: 14
           })}>
             
-              <table className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1141">
+              <table className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1141 rlc-aufmass-flat-table">
+                <colgroup>
+                  <col style={{ width: "3%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "28%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "8%" }} />
+                </colgroup>
 
 
 
@@ -6622,7 +7125,6 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 44,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6634,7 +7136,6 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 145,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6646,7 +7147,6 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 560,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6658,7 +7158,6 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 105,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6670,7 +7169,6 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 120,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6682,7 +7180,6 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 120,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6696,7 +7193,6 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 120,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6708,19 +7204,17 @@ export default function AufmassEditor() {
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 170,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
                     background: "#F8FAFC"
                   })}>
                     
-                      EP (€)
+                      EP
                     </th>
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 130,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6729,24 +7223,22 @@ export default function AufmassEditor() {
                     
                       Faktor
                     </th>
-                    <th className={rlcClass(null, { ...th, width: 165, position: "sticky", top: 0, zIndex: 5, background: "#F8FAFC" })}>GP LV (€)</th>
+                    <th className={rlcClass(null, { ...th, width: 165, position: "sticky", top: 0, zIndex: 5, background: "#F8FAFC" })}>GP LV</th>
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 170,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
                     background: "#F8FAFC"
                   })}>
                     
-                      GP Aufmaß (€)
+                      GP Aufmaß
                     </th>
                     <th className={rlcClass(null, { ...th, width: 140, position: "sticky", top: 0, zIndex: 5, background: "#F8FAFC" })}>Status</th>
                     <th className={rlcClass(null,
                   {
                     ...th,
-                    width: 120,
                     position: "sticky",
                     top: 0,
                     zIndex: 5,
@@ -6783,17 +7275,18 @@ export default function AufmassEditor() {
                   join(", ") || "Nicht zugeordnet";
                   const factor = r.factor ?? 1;
                   const effEP = r.ep * factor;
-                  const total = r.ist * effEP;
-                  const diff = r.soll - r.ist;
+                  const effectiveIst = effectiveIstForDisplay(r);
+                  const total = effectiveIst * effEP;
+                  const diff = r.soll - effectiveIst;
                   const offenMenge = Math.max(0, diff);
                   const gpLv = r.soll * r.ep;
                   const active = r.id === selId;
                   const fulfillment =
                   Number(r.soll || 0) > 0 ?
-                  Number(r.ist || 0) / Number(r.soll || 0) * 100 :
+                  effectiveIst / Number(r.soll || 0) * 100 :
                   0;
                   const statusLabel =
-                  Math.abs(Number(r.ist || 0)) < 0.0001 ?
+                  Math.abs(effectiveIst) < 0.0001 ?
                   "Ohne Aufmaß" :
                   fulfillment > 100.0001 ?
                   "Übererfüllt" :
@@ -6801,7 +7294,7 @@ export default function AufmassEditor() {
                   "Erledigt" :
                   "Offen";
                   const statusBackground =
-                  Math.abs(Number(r.ist || 0)) < 0.0001 ?
+                  Math.abs(effectiveIst) < 0.0001 ?
                   "#F8FAFC" :
                   fulfillment > 100.0001 ?
                   "#FEF2F2" :
@@ -6864,11 +7357,8 @@ export default function AufmassEditor() {
                         <td className={rlcClass(null,
                         {
                           ...td,
-                          fontWeight: 700,
-                          width: 145,
-                          minWidth: 145,
-                          maxWidth: 145,
-                          overflow: "hidden",
+                          fontWeight: 600,
+                          overflow: "visible",
                           whiteSpace: "nowrap"
                         })}>
                           
@@ -6929,9 +7419,7 @@ export default function AufmassEditor() {
                         <td className={rlcClass(null,
                         {
                           ...td,
-                          width: 560,
-                          minWidth: 560,
-                          overflow: "hidden"
+                          overflow: "visible"
                         })}>
                           
                           <input
@@ -6976,7 +7464,7 @@ export default function AufmassEditor() {
 
                         <td className={rlcClass(null, { ...td, fontWeight: 700 })}>
                           {safeTrim(r.formula) ?
-                          <span>{fmtNumDE(r.ist)}</span> :
+                          <span>{fmtNumDE(effectiveIst)}</span> :
 
                           <input
                             type="number"
@@ -7008,14 +7496,22 @@ export default function AufmassEditor() {
 
                         <td className={rlcClass(null, td)}>
                           <input
-                            type="number"
-                            step="0.01"
-                            value={r.ep}
-                            onChange={(e) => onEPChange(r.id, e.target.value)} className={rlcClass(null,
+                            key={`ep-${r.id}-${r.ep}`}
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={fmtNumDE(r.ep, 2)}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={(e) => {
+                              const value = nrmNumber(e.currentTarget.value, 0);
+                              onEPChange(r.id, String(value));
+                              e.currentTarget.value = fmtNumDE(value, 2);
+                            }}
+                            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                            className={rlcClass(null,
                             {
                               ...inpBase,
                               width: "100%",
-                              minWidth: 132,
+                              minWidth: 0,
                               fontVariantNumeric: "tabular-nums"
                             })} />
                           
@@ -7032,7 +7528,7 @@ export default function AufmassEditor() {
                             {
                               ...inpBase,
                               width: "100%",
-                              minWidth: 96,
+                              minWidth: 0,
                               fontVariantNumeric: "tabular-nums"
                             })} />
                           
@@ -7055,8 +7551,7 @@ export default function AufmassEditor() {
                         </td>
 
                         <td className={rlcClass(null, { ...td, whiteSpace: "nowrap" })}>
-                          <button className={rlcClass(null,
-                          btnPrimary)}
+                          <button className={rlcClass("rlc-aufmass-action-btn", btn)}
                           type="button"
                           onClick={(ev) => {
                             ev.stopPropagation();
@@ -7090,7 +7585,9 @@ export default function AufmassEditor() {
                                   setEditBuffer("");
                                   setMassLabelBuffer(`Aufmaß ${(r.entries?.length || 0) + 1}`);
                                   setMassNoteBuffer("");
-                                  setMassFactorBuffer(String(r.factor ?? 1).replace(".", ","));
+                                  setMassFactorBuffer("1");
+                                  setMassMesszahlBuffer("91");
+                                  setMassMarkerBuffer("");
                                   setEditOpen(true);
                                 }}>
                                 
@@ -7116,7 +7613,7 @@ export default function AufmassEditor() {
                                 
                                     <thead>
                                       <tr>
-                                        {["Kreis", "Blatt", "Nr.", "REB", "Messzahl", "Orte", "Pos.", "Kurztext", "Bezeichnung", "Beschriftung", "Rechenansatz / Masse", "Menge", "Einheit", "Faktor", "Ergebnis", "Aktion"].map((label) =>
+                                        {["Kreis", "Blatt", "Nr.", "REB", "Messzahl", "Orte", "Pos.", "Kurztext", "Bezeichnung", "Beschr.", "Rechenansatz", "Menge", "Einheit", "Faktor", "Ergebnis", "Aktion"].map((label) =>
                                     <th
                                       key={label} className={rlcClass(null,
                                       {
@@ -7159,10 +7656,12 @@ export default function AufmassEditor() {
                                             <td className={rlcClass(null, { ...td, fontFamily: "ui-monospace, Menlo, Consolas, monospace", whiteSpace: "pre-wrap", minWidth: 260 })}>{entry.formula}</td>
                                             <td className={rlcClass(null, { ...td, fontWeight: 700 })}>{fmtNumDE(entry.menge)}</td>
                                             <td className={rlcClass(null, td)}>{entry.unit || r.unit}</td>
-                                            <td className={rlcClass(null, td)}>{fmtNumDE(entry.factor ?? 1, 2)}</td>
-                                            <td className={rlcClass(null, { ...td, fontWeight: 700 })}>{fmtEUR(entry.menge * r.ep * (entry.factor ?? 1))}</td>
+                                            <td className={rlcClass(null, td)}>{entry.rebFactorRaw === "999" ? "999" : fmtNumDE(entry.factor ?? 1, 2)}</td>
+                                            <td className={rlcClass(null, { ...td, fontWeight: 700 })}>{fmtEUR(entry.menge * r.ep * effectiveRebFactor(entry.rebFactorRaw ?? entry.factor ?? 1))}</td>
                                             <td className={rlcClass(null, { ...td, whiteSpace: "nowrap" })}>
-                                              <button type="button" className={rlcClass(null, btn)} onClick={(ev) => {ev.stopPropagation();editMassEntry(r, entry);}}>Bearbeiten</button>
+                                              <button type="button" className={rlcClass(null, btn)} disabled={entryIndex === 0} onClick={(ev) => {ev.stopPropagation();moveMassEntry(r.id, entry.id, -1);}}>↑</button>
+                                              <button type="button" className={rlcClass(null, { ...btn, marginLeft: 4 })} disabled={entryIndex >= (r.entries?.length || 0) - 1} onClick={(ev) => {ev.stopPropagation();moveMassEntry(r.id, entry.id, 1);}}>↓</button>
+                                              <button type="button" className={rlcClass(null, { ...btn, marginLeft: 4 })} onClick={(ev) => {ev.stopPropagation();editMassEntry(r, entry);}}>Bearbeiten</button>
                                               <button type="button" className={rlcClass(null, { ...btnDanger, marginLeft: 6 })} onClick={(ev) => {ev.stopPropagation();removeMassEntry(r.id, entry.id);}}>Löschen</button>
                                             </td>
                                           </tr>
@@ -7184,6 +7683,21 @@ export default function AufmassEditor() {
                                   }
                                     </tbody>
                                   </table>
+                                  {(() => {
+                                    const refs = (r.entries || [])
+                                      .map((entry) => String(entry.note || "").match(/#Bild\s+([^\s]+)/i)?.[1] || "")
+                                      .filter(Boolean);
+                                    if (!refs.length) return null;
+                                    return <div style={{ display: "grid", gap: 10, padding: "12px" }}>
+                                      {Array.from(new Set(refs)).map((name) => {
+                                        const src = x31Images[String(name).toLowerCase()];
+                                        return <div key={name} style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: 10, background: "#FFF" }}>
+                                          <div style={{ fontWeight: 800, marginBottom: 8 }}>X31-Bild · {name}</div>
+                                          {src ? <img src={src} alt={name} style={{ display: "block", maxWidth: "720px", width: "100%", height: "auto", borderRadius: 8 }} /> : <div style={{ color: "#B45309" }}>Bildreferenz vorhanden – Datei „{name}“ noch importieren.</div>}
+                                        </div>;
+                                      })}
+                                    </div>;
+                                  })()}
                                 </div>
                               </div>
                             </td>
@@ -7213,6 +7727,35 @@ export default function AufmassEditor() {
               </table>
             </div>
             <div className={rlcClass(null, { ...toolbar, marginTop: 14, marginBottom: 14 })}>
+              <input
+                ref={x31ImportInputRef}
+                type="file"
+                accept=".x31,.X31"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) void importX31File(file);
+                }}
+              />
+              <button className={rlcClass(null, btn)} onClick={() => x31ImportInputRef.current?.click()} type="button">
+                X31 importieren
+              </button>
+              <input
+                ref={x31ImageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) void importX31ImageFile(file);
+                }}
+              />
+              <button className={rlcClass(null, btn)} onClick={() => x31ImageInputRef.current?.click()} type="button">
+                X31 Bild importieren
+              </button>
+
               <button className={rlcClass(null, btn)} onClick={addRow} type="button">
                 + Zeile
               </button>
@@ -7707,7 +8250,26 @@ export default function AufmassEditor() {
 
 
                   
-                      <table className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1171">
+                      <table className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1171 rlc-aufmass-lines-table">
+                        <colgroup>
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "5%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "3%" }} />
+                          <col style={{ width: "7%" }} />
+                          <col style={{ width: "7%" }} />
+                          <col style={{ width: "17%" }} />
+                          <col style={{ width: "8%" }} />
+                          <col style={{ width: "7%" }} />
+                          <col style={{ width: "11%" }} />
+                          <col style={{ width: "4%" }} />
+                          <col style={{ width: "5%" }} />
+                          <col style={{ width: "8%" }} />
+                          <col style={{ width: "8%" }} />
+                        </colgroup>
+                        
 
 
 
@@ -7717,7 +8279,7 @@ export default function AufmassEditor() {
                         <thead>
                           <tr className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1172">
                             {[
-                        "Kreis", "Blatt", "Nr.", "REB", "Messzahl", "Orte"].
+                        "Kreis", "Blatt", "Nr.", "REB", "Messzahl", "Kz", "Orte"].
                         map((label) =>
                         <th key={label} className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1173">
                                 {label}
@@ -7833,17 +8395,18 @@ export default function AufmassEditor() {
                         { key: "blatt", value: e.blatt ?? 1, width: 70 },
                         { key: "nr", value: e.nr ?? idx + 1, width: 80 },
                         { key: "reb", value: e.reb ?? `000${String(idx + 1).padStart(2, "0")}`, width: 105 },
-                        { key: "messzahl", value: e.messzahl ?? 91, width: 90 }].
+                        { key: "messzahl", value: e.messzahl ?? 91, width: 90 },
+                        { key: "rebMarker", value: e.rebMarker ?? "", width: 54 }].
                         map((field) =>
                         <td key={field.key} className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1183">
                                     <input
                             value={field.value}
                             onChange={(event) =>
                             updateMassEntry(selected.id, e.id, {
-                              [field.key]: field.key === "reb" ? event.target.value : nrmNumber(event.target.value, 0)
+                              [field.key]: field.key === "reb" || field.key === "rebMarker" ? event.target.value.toUpperCase().slice(0, 1) : nrmNumber(event.target.value, 0)
                             } as Partial<AufmassEntry>)
                             } className={rlcClass(null,
-                            { ...inpBase, width: field.width, padding: "7px 8px" })} />
+                            { ...inpBase, width: "100%", minWidth: 0, padding: "5px 4px" })} />
                           
                                   </td>
                         )}
@@ -7904,8 +8467,8 @@ export default function AufmassEditor() {
                           padding: "10px 12px",
                           borderBottom: "1px solid #EDF2F7",
                           verticalAlign: "top",
-                          minWidth: 220,
-                          lineHeight: 1.4,
+                          minWidth: 0,
+                          lineHeight: 1.35,
                           color: e.note ? "#0F172A" : "#94A3B8"
                         })}>
                           
@@ -7926,7 +8489,7 @@ export default function AufmassEditor() {
                                   <textarea
                             value={e.formula}
                             onChange={(event) => updateMassEntry(selected.id, e.id, { formula: event.target.value })} className={rlcClass(null,
-                            { ...inpBase, width: "100%", minWidth: 260, minHeight: 54, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", resize: "vertical" })} />
+                            { ...inpBase, width: "100%", minWidth: 0, minHeight: 30, height: 30, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", resize: "none", overflow: "hidden", whiteSpace: "nowrap" })} />
                           
                                 </td>
                                 <td className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1190">
@@ -8028,17 +8591,17 @@ export default function AufmassEditor() {
       e.target === e.currentTarget && setEditOpen(false)
       }>
         
-          <div className={rlcClass(null,
+          <div className={rlcClass("rlc-aufmass-line-modal",
         {
           ...modalBox,
-          width: "min(1180px, calc(100vw - 28px))",
-          maxHeight: "calc(100vh - 24px)",
-          overflow: "auto",
-          padding: 14,
+          width: "min(1280px, calc(100vw - 32px))",
+          maxHeight: "calc(100vh - 174px)",
+          overflow: "hidden",
+          padding: 12,
           fontSize: 12
         })}>
           
-            <div className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1196">
+            <div className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1196 rlc-aufmass-line-modal-header">
 
 
 
@@ -8196,9 +8759,9 @@ export default function AufmassEditor() {
                     <textarea className={rlcClass(null,
                 {
                   ...modalTextarea,
-                  height: 62,
-                  minHeight: 62,
-                  lineHeight: 1.45
+                  height: 48,
+                  minHeight: 48,
+                  lineHeight: 1.35
                 })}
                 value={massNoteBuffer}
                 onChange={(e) => setMassNoteBuffer(e.target.value)}
@@ -8234,6 +8797,30 @@ export default function AufmassEditor() {
                   </div>
 
                   <div>
+                    <div className={rlcClass(null, { ...lbl, marginBottom: 6 })}>Formel-Nr.</div>
+                    <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  step="1" className={rlcClass(null,
+                  { ...inpBase, width: "100%", fontWeight: 700 })}
+                  value={massMesszahlBuffer}
+                  onChange={(e) => setMassMesszahlBuffer(e.target.value)}
+                  placeholder="91" />
+                  </div>
+
+                  <div>
+                    <div className={rlcClass(null, { ...lbl, marginBottom: 6 })}>Kennzeichen</div>
+                    <select className={rlcClass(null, { ...inpBase, width: "100%", fontWeight: 700 })}
+                    value={massMarkerBuffer}
+                    onChange={(e) => setMassMarkerBuffer((e.target.value === "H" || e.target.value === "Z") ? e.target.value : "")}>
+                      <option value="">Normal</option>
+                      <option value="H">H · Hilfswert</option>
+                      <option value="Z">Z · Zwischensumme</option>
+                    </select>
+                  </div>
+
+                  <div>
                     <div className={rlcClass(null, { ...lbl, marginBottom: 6 })}>Faktor</div>
                     <input
                   type="text"
@@ -8253,16 +8840,16 @@ export default function AufmassEditor() {
                   <textarea className={rlcClass(null,
               {
                 ...modalTextarea,
-                height: "20vh",
-                minHeight: 135,
-                lineHeight: 1.4
+                height: 92,
+                minHeight: 92,
+                maxHeight: 92,
+                lineHeight: 1.35,
+                resize: "none"
               })}
               value={editBuffer}
               onChange={(e) => setEditBuffer(e.target.value)}
               autoFocus
-              placeholder={
-              "Masse / Rechenansatz eintragen…\nz. B. 12.50 * 2 + 8.40\noder 5.20 * 1.10 * 0.30"
-              } />
+              placeholder="Rechenansatz / Masse eingeben…" />
               
                 </div>
 
@@ -8280,14 +8867,14 @@ export default function AufmassEditor() {
                   <div>
                     <div className={rlcClass(null, { ...lbl, marginBottom: 4 })}>Ansatz-Menge</div>
                     <div className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1203">
-                      {fmtNumDE(parseMassEditorLines(editBuffer))}
+                      {fmtNumDE(calculateRebEditorValue(editBuffer, massMesszahlBuffer, selected.entries || []))}
                     </div>
                   </div>
 
                   <div>
                     <div className={rlcClass(null, { ...lbl, marginBottom: 4 })}>Faktor</div>
                     <div className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1204">
-                      {fmtNumDE(nrmNumber(massFactorBuffer, 1) || 1)}
+                      {fmtNumDE(effectiveRebFactor(massFactorBuffer))}
                     </div>
                   </div>
 
@@ -8314,8 +8901,7 @@ export default function AufmassEditor() {
                     <div className={rlcClass(null, { ...lbl, marginBottom: 4 })}>Zeilenbetrag</div>
                     <div className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1207">
                       {fmtEUR(
-                    parseMassEditorLines(editBuffer) * (
-                    nrmNumber(massFactorBuffer, 1) || 1) * (
+                    calculateRebEditorValue(editBuffer, massMesszahlBuffer, selected.entries || []) * effectiveRebFactor(massFactorBuffer) * (
                     selected.ep * (selected.factor ?? 1))
                   )}
                     </div>
@@ -8331,15 +8917,9 @@ export default function AufmassEditor() {
 
               
                   <div className={rlcClass(null, { ...pill, background: "#EAF2FF", borderColor: "#BED6FF" })}>
-                    Ergebnis: <b>{fmtNumDE(parseMassEditorLines(editBuffer) * (nrmNumber(massFactorBuffer, 1) || 1))}</b> {selected.unit}
+                    Ergebnis: <b>{fmtNumDE(calculateRebEditorValue(editBuffer, massMesszahlBuffer, selected.entries || []) * effectiveRebFactor(massFactorBuffer))}</b> {selected.unit}
                   </div>
-                  <button
-                type="button" className={rlcClass(null,
-                btnPrimary)}
-                onClick={() => void addMassEntryToSelected()}>
-                
-                    Berechnen & speichern
-                  </button>
+
                 </div>
 
                 <div className="rlc-migrated-pages-mengenermittlung-aufmasseditor-tsx-1209">
@@ -8378,6 +8958,8 @@ export default function AufmassEditor() {
                   setEditBuffer("");
                   setMassNoteBuffer("");
                   setMassFactorBuffer("1");
+                  setMassMesszahlBuffer("91");
+                  setMassMarkerBuffer("");
                   setMassKreisBuffer("1");
                   setMassBlattBuffer("1");
                   setMassOrtBuffer("");

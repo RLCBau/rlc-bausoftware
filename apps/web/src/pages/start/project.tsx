@@ -10,8 +10,10 @@ import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 import {
+  createContract,
   createProject as apiCreateProject,
   deleteProject,
+  fetchContracts,
   fetchProjects,
   importProjectZip } from
 "../../api/projects";
@@ -40,6 +42,8 @@ type ProjectItem = {
   client?: string | null;
   place?: string | null;
   createdAt?: string;
+  year?: number | null;
+  totalNet?: number | null;
 };
 
 type NewProjectForm = {
@@ -47,6 +51,18 @@ type NewProjectForm = {
   name: string;
   client: string;
   place: string;
+  orderType: "Hauptauftrag" | "Unterauftrag";
+  existingProjectId: string;
+  parentContractId: string;
+  lvName: string;
+};
+
+type ContractItem = {
+  id: string;
+  projectId: string;
+  title: string;
+  contractType?: string | null;
+  parentContractId?: string | null;
 };
 
 type ApiProjectEnvelope = {
@@ -127,6 +143,26 @@ function fmtDate(value?: string): string {
   });
 }
 
+function fmtMoney(value?: number | null): string {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "Preis unbekannt";
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(value));
+}
+
+function projectYear(p: ProjectItem): number | null {
+  if (p.year !== null && p.year !== undefined && Number.isFinite(Number(p.year))) {
+    return Number(p.year);
+  }
+
+  const source = `${p.code || ""} ${p.name || ""}`;
+  const four = source.match(/(?:^|[^0-9])(20(?:2[0-9]|3[0-5]))(?:[^0-9]|$)/)?.[1];
+  if (four) return Number(four);
+
+  const two = source.match(/(?:^|[^0-9])(2[0-9])(?:[^0-9]|$)/)?.[1];
+  if (two) return 2000 + Number(two);
+
+  return null;
+}
+
 function readRecentIds(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_KEY);
@@ -144,6 +180,7 @@ const ProjectStartPage: React.FC = () => {
   const projectCtx: any = useProject();
 
   const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [contracts, setContracts] = useState<ContractItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,6 +194,9 @@ const ProjectStartPage: React.FC = () => {
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [placeFilter, setPlaceFilter] = useState("");
+  const [sizeFilter, setSizeFilter] = useState("all");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [recentIds, setRecentIds] = useState<string[]>(() => readRecentIds());
 
@@ -164,12 +204,16 @@ const ProjectStartPage: React.FC = () => {
     code: computeNextProjectCode([]),
     name: "Neues Projekt",
     client: "",
-    place: ""
+    place: "",
+    orderType: "Hauptauftrag",
+    existingProjectId: "",
+    parentContractId: "",
+    lvName: ""
   });
 
   function saveRecent(projectId: string) {
     try {
-      const next = [projectId, ...recentIds.filter((x) => x !== projectId)].slice(0, 6);
+      const next = [projectId, ...recentIds.filter((x) => x !== projectId)].slice(0, 4);
       setRecentIds(next);
       localStorage.setItem(RECENT_KEY, JSON.stringify(next));
     } catch {
@@ -246,23 +290,56 @@ const ProjectStartPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (newForm.orderType !== "Unterauftrag" || !newForm.existingProjectId) {
+      setContracts([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const data: any = await fetchContracts(newForm.existingProjectId);
+        setContracts(Array.isArray(data?.items) ? data.items : []);
+      } catch (e) {
+        console.error("Aufträge konnten nicht geladen werden:", e);
+        setContracts([]);
+      }
+    })();
+  }, [newForm.orderType, newForm.existingProjectId]);
+
+  const availableMainContracts = useMemo(() =>
+    contracts.filter((c) => c.contractType === "Hauptauftrag"),
+  [contracts]);
+
+  const availableYears = useMemo(() => {
+    return Array.from(new Set(projects.map(projectYear).filter((y): y is number => y !== null)))
+      .sort((a, b) => b - a);
+  }, [projects]);
+
   const filteredProjects = useMemo(() => {
     const q = normalizeText(search);
-    if (!q) return projects;
+    const placeQ = normalizeText(placeFilter);
 
     return projects.filter((p) => {
-      return (
+      const matchesSearch = !q || (
         normalizeText(p.code).includes(q) ||
         normalizeText(p.name).includes(q) ||
         normalizeText(p.client).includes(q) ||
         normalizeText(p.place).includes(q));
+      const matchesYear = yearFilter === "all" || String(projectYear(p) ?? "") === yearFilter;
+      const matchesPlace = !placeQ || normalizeText(`${p.place || ""} ${p.name || ""}`).includes(placeQ);
+      const total = p.totalNet;
+      const matchesSize = sizeFilter === "all" ||
+        (sizeFilter === "small" && total !== null && total !== undefined && total <= 50000) ||
+        (sizeFilter === "large" && total !== null && total !== undefined && total > 50000) ||
+        (sizeFilter === "unknown" && (total === null || total === undefined));
 
+      return matchesSearch && matchesYear && matchesPlace && matchesSize;
     });
-  }, [projects, search]);
+  }, [projects, search, yearFilter, placeFilter, sizeFilter]);
 
   const recentProjects = useMemo(() => {
     const map = new Map(projects.map((p) => [p.id, p]));
-    return recentIds.map((id) => map.get(id)).filter(Boolean) as ProjectItem[];
+    return recentIds.slice(0, 4).map((id) => map.get(id)).filter(Boolean) as ProjectItem[];
   }, [projects, recentIds]);
 
   const selectedProject = useMemo(() => {
@@ -378,6 +455,27 @@ const ProjectStartPage: React.FC = () => {
     setCreating(true);
 
     try {
+      if (newForm.orderType === "Unterauftrag") {
+        const project = projects.find((p) => p.id === newForm.existingProjectId);
+        if (!project) throw new Error("Projekt fehlt.");
+        if (!newForm.parentContractId) throw new Error("Hauptauftrag fehlt.");
+        if (!newForm.lvName.trim()) throw new Error("LV-/Unterauftrag-Bezeichnung fehlt.");
+
+        await createContract({
+          projectId: project.id,
+          title: newForm.lvName.trim(),
+          contractType: "Unterauftrag",
+          parentContractId: newForm.parentContractId,
+          partner: project.client || "",
+          status: "Entwurf"
+        });
+
+        setCurrentEverywhere(project);
+        saveRecent(project.id);
+        navigate("/projekt/uebersicht");
+        return;
+      }
+
       const payload = {
         code: newForm.code.trim(),
         name: newForm.name.trim(),
@@ -390,17 +488,23 @@ const ProjectStartPage: React.FC = () => {
 
       const res = await apiCreateProject(payload);
       const created = extractCreatedProject(res);
+      if (!created?.id) throw new Error("Projekt wurde angelegt, konnte aber nicht geöffnet werden.");
+
+      await createContract({
+        projectId: created.id,
+        title: newForm.lvName.trim() || `${payload.name} – Hauptauftrag`,
+        contractType: "Hauptauftrag",
+        partner: payload.client,
+        status: "Entwurf"
+      });
 
       await loadList();
-
-      if (created?.id) {
-        setCurrentEverywhere(created);
-        saveRecent(created.id);
-        navigate("/projekt/uebersicht");
-      }
+      setCurrentEverywhere(created);
+      saveRecent(created.id);
+      navigate("/projekt/uebersicht");
     } catch (e: any) {
       console.error(e);
-      setCreateError(e?.message || "Fehler beim Erstellen des Projekts");
+      setCreateError(e?.message || "Fehler beim Erstellen des Projekts/Auftrags");
     } finally {
       setCreating(false);
     }
@@ -565,6 +669,35 @@ const ProjectStartPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 14 }}>
+              <div>
+                <FieldLabel>Jahr</FieldLabel>
+                <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className={rlcClass(null, input)}>
+                  <option value="all">Alle Jahre</option>
+                  {availableYears.map((year) => <option key={year} value={String(year)}>{year}</option>)}
+                </select>
+              </div>
+              <div>
+                <FieldLabel>Ort</FieldLabel>
+                <input
+                  type="text"
+                  value={placeFilter}
+                  onChange={(e) => setPlaceFilter(e.target.value)}
+                  placeholder="z. B. Inzell, Traunstein ..."
+                  className={rlcClass(null, input)}
+                />
+              </div>
+              <div>
+                <FieldLabel>Projektgröße netto</FieldLabel>
+                <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)} className={rlcClass(null, input)}>
+                  <option value="all">Alle Größen</option>
+                  <option value="small">Bis 50.000 €</option>
+                  <option value="large">Über 50.000 €</option>
+                  <option value="unknown">Ohne Preis</option>
+                </select>
+              </div>
+            </div>
           </section>
 
           {recentProjects.length > 0 ?
@@ -640,7 +773,9 @@ const ProjectStartPage: React.FC = () => {
 
                       <div>
                         <b>{p.name}</b>
-                        <div className={rlcClass(null, tiny)}>Erstellt: {fmtDate(p.createdAt)}</div>
+                        <div className={rlcClass(null, tiny)}>
+                          Jahr: {projectYear(p) ?? "—"} · {fmtMoney(p.totalNet)} · Erstellt: {fmtDate(p.createdAt)}
+                        </div>
                       </div>
 
                       <div>{p.client || "—"}</div>
@@ -679,14 +814,43 @@ const ProjectStartPage: React.FC = () => {
           <section id="create-project-card" className={rlcClass(null, card)}>
             <div className={rlcClass(null, sectionHead)}>
               <div>
-                <h2 className={rlcClass(null, sectionTitle)}>Projekt erstellen</h2>
+                <h2 className={rlcClass(null, sectionTitle)}>Projekt / Auftrag erstellen</h2>
                 <div className={rlcClass(null, sectionText)}>
-                  Neues Projekt direkt mit Projektnummer, Name, Kunde und Ort anlegen.
+                  Hauptauftrag als neues Projekt oder Unterauftrag/LV zu einem bestehenden Hauptauftrag anlegen.
                 </div>
               </div>
             </div>
 
             <form onSubmit={handleCreateProject} className={rlcClass(null, formStack)}>
+              <Field label="Auftragstyp">
+                <select
+                  value={newForm.orderType}
+                  onChange={(e) => setNewForm((prev) => ({ ...prev, orderType: e.target.value as "Hauptauftrag" | "Unterauftrag", existingProjectId: "", parentContractId: "" }))}
+                  className={rlcClass(null, input)}>
+                  <option value="Hauptauftrag">Hauptauftrag / neues Projekt</option>
+                  <option value="Unterauftrag">Unterauftrag / weiteres LV</option>
+                </select>
+              </Field>
+
+              {newForm.orderType === "Unterauftrag" ? <>
+                <Field label="Projekt">
+                  <select value={newForm.existingProjectId} onChange={(e) => setNewForm((prev) => ({ ...prev, existingProjectId: e.target.value, parentContractId: "" }))} className={rlcClass(null, input)}>
+                    <option value="">Projekt auswählen...</option>
+                    {projects.map((p) => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
+                  </select>
+                </Field>
+
+                <Field label="Zugehöriger Hauptauftrag">
+                  <select value={newForm.parentContractId} onChange={(e) => setNewForm((prev) => ({ ...prev, parentContractId: e.target.value }))} className={rlcClass(null, input)} disabled={!newForm.existingProjectId}>
+                    <option value="">Hauptauftrag auswählen...</option>
+                    {availableMainContracts.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                  </select>
+                </Field>
+
+                <Field label="LV / Unterauftrag-Bezeichnung">
+                  <input type="text" name="lvName" value={newForm.lvName} onChange={handleNewChange} placeholder="z. B. Kanalbau, Straßenbau, Los 02" className={rlcClass(null, input)} />
+                </Field>
+              </> : <>
               <Field label="Projektnummer">
                 <input
                   type="text"
@@ -705,6 +869,16 @@ const ProjectStartPage: React.FC = () => {
                   onChange={handleNewChange} className={rlcClass(null,
                   input)} />
                 
+              </Field>
+
+              <Field label="Hauptauftrag / LV-Bezeichnung">
+                <input
+                  type="text"
+                  name="lvName"
+                  value={newForm.lvName}
+                  onChange={handleNewChange}
+                  placeholder="optional, z. B. Tiefbau Hauptauftrag"
+                  className={rlcClass(null, input)} />
               </Field>
 
               <Field label="Kunde / Auftraggeber">
@@ -726,9 +900,10 @@ const ProjectStartPage: React.FC = () => {
                   input)} />
                 
               </Field>
+              </>}
 
               <button type="submit" className={rlcClass(null, btnPrimaryFull)} disabled={creating}>
-                {creating ? "Wird angelegt..." : "Projekt anlegen"}
+                {creating ? "Wird angelegt..." : newForm.orderType === "Unterauftrag" ? "Unterauftrag anlegen" : "Projekt + Hauptauftrag anlegen"}
               </button>
             </form>
           </section>
@@ -805,9 +980,9 @@ export default ProjectStartPage;
 
 function Kpi({ label, value }: {label: string;value: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
     </div>);
 
 }
@@ -1018,23 +1193,24 @@ const quickSelectRow: React.CSSProperties = {
 
 const recentGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 10
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 12
 };
 
 const recentCard: React.CSSProperties = {
-  border: "0",
-  borderBottom: "1px solid #DDE5F0",
+  border: "1px solid #DCE6F5",
   background: "#FFFFFF",
-  borderRadius: 0,
-  padding: "11px 2px",
+  borderRadius: 14,
+  padding: "14px 16px",
+  minHeight: 96,
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: 10,
+  gap: 14,
   textAlign: "left",
   color: "#0F172A",
-  cursor: "pointer"
+  cursor: "pointer",
+  boxShadow: "0 2px 8px rgba(15,23,42,0.05)"
 };
 
 const projectCode: React.CSSProperties = {

@@ -8,7 +8,12 @@ const r = express.Router();
 // =========================================================
 
 function jwtSecret() {
-  return process.env.JWT_SECRET || "dev_secret_change_me";
+  const secret = String(process.env.JWT_SECRET || "").trim();
+  if (secret) return secret;
+  if ((process.env.NODE_ENV || "").toLowerCase() === "production") {
+    throw new Error("JWT_SECRET_REQUIRED_IN_PRODUCTION");
+  }
+  return "dev_secret_change_me";
 }
 
 function normEmail(x: any) {
@@ -80,6 +85,12 @@ function signToken(u: UserLike, mode: Mode, extra?: TokenExtra) {
  * =========================================================
  */
 r.post("/admin-login", (req, res) => {
+  const devAuth = String(process.env.DEV_AUTH || "").toLowerCase() === "on";
+  const isProduction = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+  if (isProduction || !devAuth) {
+    return res.status(404).json({ error: "Not Found" });
+  }
+
   const key = String(req.headers["x-admin-key"] || "").trim();
   const must = String(process.env.ADMIN_BYPASS_KEY || "").trim();
 

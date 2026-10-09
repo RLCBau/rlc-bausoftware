@@ -188,7 +188,7 @@ function saveRows(projectKey: string, key: "A" | "B", rows: Pos[]) {
   localStorage.setItem(storageKey(projectKey, key), JSON.stringify(rows));
 }
 
-function exportCsv(rows: DiffRow[], projectKey: string) {
+function exportCsv(rows: DiffRow[], projectKey: string, projectId = "") {
   const head = [
   "Position",
   "Kurztext",
@@ -225,17 +225,32 @@ function exportCsv(rows: DiffRow[], projectKey: string) {
     type: "text/csv;charset=utf-8"
   });
 
+  const fileName = `Versionsvergleich_${projectKey || "Projekt"}.csv`;
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `Versionsvergleich_${projectKey || "Projekt"}.csv`;
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(a.href);
+
+  if (projectId) {
+    void import("../../lib/dmsArchive")
+      .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+      .catch((error) => console.warn("[vergleich-legacy:csv:dms]", error));
+  }
 }
 
 export default function Versionsvergleich() {
   const navigate = useNavigate();
   const projectCtx: any = useProject() as any;
   const activeProjectKey = getProjectKey(projectCtx);
+  const activeProjectId = String(
+    projectCtx?.project?.id ||
+    projectCtx?.currentProject?.id ||
+    projectCtx?.selectedProject?.id ||
+    projectCtx?.current?.id ||
+    projectCtx?.projectId ||
+    ""
+  ).trim();
 
   const [projectKey, setProjectKey] = useState(
     activeProjectKey || "PROJ-ANG-001"
@@ -386,7 +401,7 @@ export default function Versionsvergleich() {
           </button>
           <button className={rlcClass(null,
           btnPrimary)}
-          onClick={() => exportCsv(filtered, projectKey)}
+          onClick={() => exportCsv(filtered, projectKey, activeProjectId)}
           disabled={!filtered.length}>
             
             Ergebnis exportieren
@@ -631,8 +646,8 @@ function Kpi({
 
 }: {label: string;value: string;sub?: string;danger?: boolean;ok?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
       <div className={rlcClass(null,
       {
         ...kpiValue,
@@ -641,7 +656,7 @@ function Kpi({
         
         {value}
       </div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }

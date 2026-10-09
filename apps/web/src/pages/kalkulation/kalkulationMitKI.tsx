@@ -13,7 +13,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useProject } from "../../store/useProject";
 import { API_BASE } from "../../lib/apiBase";
-import { LV, AuftragStore, type Auftrag, type LVPos } from "./store.lv";
+import { LV, AuftragStore, gaebPositionCountsInTotal, gaebPositionTypeLabel, type Auftrag, type LVPos } from "./store.lv";
 import { Catalog, type CatalogPos } from "./catalogStore";
 import {
   useKiSuggest,
@@ -59,6 +59,7 @@ type EliteRow = LVPos & {
   angebotUnitPrice?: number;
   angebotTotal?: number;
   x84UnitPrice?: number;
+  x84Total?: number;
 
   rlcKiUnitPrice?: number;
   rlcKiTotal?: number;
@@ -117,12 +118,14 @@ type ViewFilter =
 "kritisch" |
 "warnungen" |
 "hochrisiko" |
+"pruefung" |
 "ohneDb" |
 "sicher" |
 "mengeFehlt" |
 "preisFehlt" |
 "einheitFehlt" |
 "urkalkulationFehlt" |
+"preisaufbauAbweichung" |
 "doppelte";
 
 type KiRowClass = "structure" | "real-position" | "incomplete" | "review";
@@ -240,6 +243,13 @@ function money(value: unknown): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })} €`;
+}
+
+function priceValue(value: unknown): string {
+  return n(value).toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
 function qty(value: unknown): string {
@@ -369,6 +379,11 @@ function kiIsStructuralRow(row: Partial<EliteRow>): boolean {
   gewerk.includes("gliederung") ||
   leistungsart.includes("struktur");
 
+  // Una vera posizione LV con quantità > 0, unità e testo tecnico non può
+  // diventare "Struktur" solo perché il numero posizione è corto (es. "1").
+  // Alcuni GAEB reali usano 1 / 1.2 / 1.10 invece di 01.01.0001.
+  if (n(row.menge) > 0 && unit && hasRealText) return false;
+
   if (structuralText) return true;
   if (pureChapter && !hasRealText) return true;
   if (placeholder && !hasRealText && n(row.menge) <= 0) return true;
@@ -461,15 +476,46 @@ function sumBreakdown(lines: PriceBreakdownLine[] | undefined): number {
   return round2(lines.reduce((sum, line) => sum + n(line.total), 0));
 }
 
+type PriceBreakdownAudit = {
+  hasBreakdown: boolean;
+  finalUnitPrice: number;
+  breakdownUnitPrice: number;
+  delta: number;
+  deltaPct: number;
+  requiresReview: boolean;
+};
+
+function getPriceBreakdownAudit(row: EliteRow): PriceBreakdownAudit {
+  const breakdownUnitPrice = sumBreakdown(row.priceBreakdown);
+  const finalUnitPrice =
+    n(row.rlcKiUnitPrice) ||
+    n(row.finalUnitPrice) ||
+    n(row.preis) ||
+    n(row.suggestedUnitPrice);
+  const delta = round2(breakdownUnitPrice - finalUnitPrice);
+  const denominator = Math.max(Math.abs(finalUnitPrice), Math.abs(breakdownUnitPrice), 0.01);
+  const deltaPct = round2(Math.abs(delta) / denominator * 100);
+
+  return {
+    hasBreakdown: Array.isArray(row.priceBreakdown) && row.priceBreakdown.length > 0,
+    finalUnitPrice,
+    breakdownUnitPrice,
+    delta,
+    deltaPct,
+    // Binding quality gate: final EP and price breakdown may deviate by max. 2%.
+    requiresReview: breakdownUnitPrice > 0 && finalUnitPrice > 0 && deltaPct > 2
+  };
+}
+
 function getUnitPrice(row: EliteRow): number {
   const decision = String((row as any).priceDecision || "").trim();
 
   const angebot = getOfferUnitPrice(row);
   const rlcKi = getRlcKiUnitPrice(row);
 
-  if (decision === "rlcKi" && rlcKi > 0) return rlcKi;
+  if ((decision === "rlcKi" || decision === "urkalkulation") && rlcKi > 0) return rlcKi;
 
-  // Standard: X84/Angebot bleibt finaler Preis.
+  // Nur im Angebots-/X84-Prüfmodus bleibt der importierte Angebotspreis final.
   if (angebot > 0) return angebot;
 
   const breakdown = sumBreakdown(row.priceBreakdown);
@@ -477,6 +523,7 @@ function getUnitPrice(row: EliteRow): number {
 }
 
 function lineNet(row: EliteRow): number {
+  if (!gaebPositionCountsInTotal(row)) return 0;
   const raw = n(row.menge) * getUnitPrice(row);
   const rab = n(row.rabatt);
   return round2(raw * (1 - rab / 100));
@@ -1210,6 +1257,7 @@ function clearOldKiProposalFields(row: EliteRow): EliteRow {
     openAiSuggestedReason: undefined,
     openAiSuggestedWarning: undefined,
     openAiSuggestedPriceBreakdown: undefined,
+    openAiSuggestedSources: undefined,
 
     openAiRejected: true,
 
@@ -1705,6 +1753,16 @@ function normalizeEliteRow(row: Partial<EliteRow>): EliteRow {
   const rawBreakdown = normalizeBreakdown(row.priceBreakdown);
   const breakdownSum = sumBreakdown(rawBreakdown);
   const unitPrice = n(row.finalUnitPrice ?? row.preis ?? row.suggestedUnitPrice, breakdownSum);
+  const incomingStatus = row.calculationStatus || "manual";
+  const technicalNote = `${row.warning || ""}\n${row.aiReason || ""}`;
+  const explicitTechnicalReview =
+    incomingStatus !== "critical" &&
+    /technische parameter fehlen|erst nach klärung|herstellerpreis[^\\n]*fehlt|nicht mit generischem|technische klärung/i.test(
+      technicalNote,
+    );
+  // Alte Snapshots können vor dem Review-Gate als "ok" gespeichert worden sein.
+  // Ein ausdrücklicher technischer Hinweis bleibt deshalb immer sichtbar als Prüfung.
+  const normalizedStatus = explicitTechnicalReview ? "needs_review" : incomingStatus;
 
   return {
     id: String(row.id || safeId()),
@@ -1763,7 +1821,7 @@ function normalizeEliteRow(row: Partial<EliteRow>): EliteRow {
     priceDecision: ((row as any).priceDecision || "x84") as any,
 
     riskLevel: row.riskLevel || "medium",
-    calculationStatus: row.calculationStatus || "manual",
+    calculationStatus: normalizedStatus,
 
     gewerk: row.gewerk || "",
     leistungsart: row.leistungsart || "",
@@ -1780,6 +1838,7 @@ function normalizeEliteRow(row: Partial<EliteRow>): EliteRow {
     openAiSuggestedReason: (row as any).openAiSuggestedReason,
     openAiSuggestedWarning: (row as any).openAiSuggestedWarning,
     openAiSuggestedPriceBreakdown: (row as any).openAiSuggestedPriceBreakdown,
+    openAiSuggestedSources: (row as any).openAiSuggestedSources,
 
     preisManuellGeprueft: (row as any).preisManuellGeprueft,
     preisManuellGeprueftAt: (row as any).preisManuellGeprueftAt,
@@ -1954,14 +2013,22 @@ mode: "offer-check" | "new-calculation" = "offer-check")
    */
   const angebotEp = existingOfferEp || (mode === "offer-check" ? resultOfferEp : 0);
 
-  const serverEp =
-  n((result as any).rlcKiUnitPrice) ||
-  n(result.finalUnitPrice) ||
-  n(result.suggestedUnitPrice) ||
-  n(result.baseUnitPrice) ||
-  n((result as any).unitPrice) ||
-  n((result as any).preis) ||
-  0;
+  // Un "da verificare" con EP esplicitamente 0 è un blocco tecnico,
+  // non un valore mancante: non deve riesumare il vecchio prezzo/X84.
+  const explicitNoPriceReview =
+    String((result as any).calculationStatus || "") === "needs_review" &&
+    Object.prototype.hasOwnProperty.call(result as any, "rlcKiUnitPrice") &&
+    n((result as any).rlcKiUnitPrice) === 0;
+
+  const serverEp = explicitNoPriceReview
+    ? 0
+    : n((result as any).rlcKiUnitPrice) ||
+      n(result.finalUnitPrice) ||
+      n(result.suggestedUnitPrice) ||
+      n(result.baseUnitPrice) ||
+      n((result as any).unitPrice) ||
+      n((result as any).preis) ||
+      0;
 
   const normalizedResult = {
     ...result,
@@ -2046,12 +2113,12 @@ mode: "offer-check" | "new-calculation" = "offer-check")
     riskLevel:
     mode === "offer-check" && Math.abs(diffPct) >= 35 ?
     "high" :
-    result.riskLevel ?? oldRow.riskLevel ?? "medium",
+    result.riskLevel ?? (mode === "new-calculation" ? "medium" : oldRow.riskLevel ?? "medium"),
 
     calculationStatus:
     mode === "offer-check" && Math.abs(diffPct) >= 35 ?
     "warning" :
-    result.calculationStatus ?? oldRow.calculationStatus ?? "manual",
+    result.calculationStatus ?? (mode === "new-calculation" ? "ok" : oldRow.calculationStatus ?? "manual"),
 
     gewerk: result.gewerk ?? oldRow.gewerk,
     leistungsart: result.leistungsart ?? oldRow.leistungsart,
@@ -2103,30 +2170,102 @@ mode: "offer-check" | "new-calculation" = "offer-check")
     const strictDiffPct =
     angebotEp > 0 ? round2(strictDiff / angebotEp * 100) : 0;
 
+    const strictBreakdown =
+      resultBreakdown.length ? resultBreakdown : normalizeBreakdown(enhanced.priceBreakdown);
+    const strictBreakdownEp = sumBreakdown(strictBreakdown);
+    const strictEvidenceDeltaPct =
+      strictServerEp > 0 && strictBreakdownEp > 0
+        ? Math.abs(strictServerEp - strictBreakdownEp) /
+          Math.max(Math.abs(strictServerEp), Math.abs(strictBreakdownEp), 0.01) * 100
+        : 999;
+
+    const evidenceText = [
+      String((result as any).warning || enhanced.warning || ""),
+      String((result as any).aiReason || enhanced.aiReason || "")
+    ].join(" ");
+
+    const stalePriceEvidence =
+      /RLC Price-Evidence-Gate/i.test(evidenceText) &&
+      strictEvidenceDeltaPct <= 2;
+
+    const hasIndependentReviewGuard =
+      /Family-Mismatch-Guard|No-X84 Outlier-Guard|Plausibilitätsstopp|Kleinteile\/Zulagen-Guard|Angebotsbasis-Guard|company-calibration-blocked|RLC Block\+Recalculate/i.test(evidenceText);
+
+    let reconciledRisk = ((result as any).riskLevel || enhanced.riskLevel || "medium") as RiskLevel;
+    let reconciledStatus = ((result as any).calculationStatus || enhanced.calculationStatus || "ok") as CalcStatus;
+    let reconciledConfidence = n((result as any).confidence) || enhanced.confidence;
+    let reconciledWarning = String((result as any).warning ?? enhanced.warning ?? "");
+    let reconciledReason = String((result as any).aiReason ?? enhanced.aiReason ?? "");
+
+    // Un "needs_review" imposto dal motore tecnico è un blocco reale:
+    // la UI può ripulire solo vecchi falsi downgrade di Price-Evidence,
+    // mai trasformare un controllo tecnico esplicito in "ok".
+    if (
+      stalePriceEvidence &&
+      !hasIndependentReviewGuard &&
+      reconciledStatus !== "needs_review"
+    ) {
+      const riskText = (String(result.kurztext || oldRow.kurztext || "") + " " + String(result.langtext ?? oldRow.langtext ?? "")).toLowerCase();
+      const riskUnit = String(result.einheit || oldRow.einheit || "");
+      const riskQty = n(result.menge ?? oldRow.menge);
+
+      reconciledRisk =
+        !riskText || !riskUnit || riskQty <= 0 ||
+        /unbekannt|bodenklasse|kontaminiert|bestand|anschluss|grundwasser|entsorgung|nach bedarf|bauseits/.test(riskText)
+          ? "high"
+          : riskText.length < 12 || riskQty > 1000
+            ? "medium"
+            : "low";
+
+      const sourceRaw = String((result as any).source || "").toLowerCase();
+      let restoredConfidence =
+        sourceRaw.includes("database") ? 0.76 :
+        sourceRaw.includes("openai") ? 0.82 :
+        0.62;
+
+      if (String(result.posNr || oldRow.posNr || "")) restoredConfidence += 0.03;
+      if (String(result.kurztext || oldRow.kurztext || "").length >= 12) restoredConfidence += 0.06;
+      if (String(result.langtext ?? oldRow.langtext ?? "").length >= 30) restoredConfidence += 0.04;
+      if (riskUnit) restoredConfidence += 0.03;
+      if (riskQty > 0) restoredConfidence += 0.03;
+      if (reconciledRisk === "medium") restoredConfidence -= 0.06;
+      if (reconciledRisk === "high") restoredConfidence -= 0.14;
+
+      reconciledConfidence = Math.max(0.25, Math.min(0.98, round2(restoredConfidence)));
+      reconciledStatus = reconciledRisk === "high" ? "warning" : "ok";
+
+      reconciledWarning = reconciledWarning
+        .split(" · ")
+        .filter((part) => !/RLC Price-Evidence-Gate/i.test(part))
+        .join(" · ");
+
+      reconciledReason = reconciledReason
+        .split(/\n\n+/)
+        .filter((part) => !/RLC Price-Evidence-Gate/i.test(part))
+        .concat([
+          "RLC Price-Evidence-Recheck FINAL UI: EP " + strictServerEp + " EUR = Preisaufbau " + round2(strictBreakdownEp) + " EUR. Alter Price-Evidence-Downgrade entfernt."
+        ])
+        .join("\n\n");
+    }
+
     return normalizeEliteRow({
       ...enhanced,
-
       rlcKiUnitPrice: strictServerEp,
       rlcKiTotal: strictServerTotal,
-
       baseUnitPrice: n((result as any).baseUnitPrice) || strictServerEp,
       suggestedUnitPrice: n((result as any).suggestedUnitPrice) || strictServerEp,
-
-      // Server-KI ist immer der RLC-KI-Preis. X84 bleibt separat in angebotUnitPrice/x84UnitPrice.
       finalUnitPrice: strictServerEp,
       preis: strictServerEp,
       gesamt: strictServerTotal,
-
       priceDifference: strictDiff,
       priceDifferencePct: strictDiffPct,
-
       source: (result as any).source || enhanced.source,
-      warning: (result as any).warning ?? enhanced.warning,
-      aiReason: (result as any).aiReason ?? enhanced.aiReason,
-      riskLevel: ((result as any).riskLevel || enhanced.riskLevel) as RiskLevel,
-      calculationStatus: ((result as any).calculationStatus || enhanced.calculationStatus) as CalcStatus,
-      confidence: n((result as any).confidence) || enhanced.confidence,
-      priceBreakdown: resultBreakdown.length ? resultBreakdown : enhanced.priceBreakdown
+      warning: reconciledWarning,
+      aiReason: reconciledReason,
+      riskLevel: reconciledRisk,
+      calculationStatus: reconciledStatus,
+      confidence: reconciledConfidence,
+      priceBreakdown: strictBreakdown
     } as any);
   }
 
@@ -2209,10 +2348,77 @@ function normalizeKiWarningRows(input: EliteRow[]): EliteRow[] {
   return input.map((r) => normalizeKiWarningStatus(r));
 }
 
+function alignNewCalculationToUrkalkulation(row: EliteRow): EliteRow {
+  if (kiIsStructuralRow(row)) return row;
+
+  const source = String((row as any).source || "").toLowerCase();
+  if (source.includes("rlc-v2-unresolved")) {
+    return normalizeEliteRow({
+      ...row,
+      priceBreakdown: [],
+      recipeLines: [],
+      urkalkulationUnitPrice: 0,
+      urkalkulationTotal: 0,
+      baseUnitPrice: 0,
+      suggestedUnitPrice: 0,
+      finalUnitPrice: 0,
+      preis: 0,
+      gesamt: 0,
+      totalNet: 0,
+      rlcKiUnitPrice: 0,
+      rlcKiTotal: 0,
+      priceDecision: "needs_review",
+      calculationStatus: "needs_review"
+    } as any);
+  }
+
+  const pb = normalizeBreakdown((row as any).priceBreakdown);
+  if (!pb.length) return row;
+
+  const urkEp = round2(pb.reduce((sum, line) => sum + n((line as any).total), 0));
+  if (!(urkEp > 0)) return row;
+
+  const qty = n((row as any).menge);
+  const total = round2(qty * urkEp);
+
+  return normalizeEliteRow({
+    ...row,
+    priceBreakdown: pb,
+    urkalkulationUnitPrice: urkEp,
+    urkalkulationTotal: total,
+    baseUnitPrice: urkEp,
+    suggestedUnitPrice: urkEp,
+    finalUnitPrice: urkEp,
+    preis: urkEp,
+    gesamt: total,
+    totalNet: total,
+    rlcKiUnitPrice: urkEp,
+    rlcKiTotal: total,
+    priceDecision: "urkalkulation",
+    // Ein fachlicher Prüfstatus darf beim Übernehmen der Urkalkulation
+    // nicht verloren gehen. Preisaufbau vorhanden != fachlich freigegeben.
+    calculationStatus:
+      (row as any).calculationStatus === "needs_review"
+        ? "needs_review"
+        : (row as any).calculationStatus === "critical"
+          ? "critical"
+          : "ok",
+    riskLevel:
+      (row as any).calculationStatus === "needs_review"
+        ? "high"
+        : (row as any).riskLevel,
+    aiReason: [
+      (row as any).aiReason,
+      `RLC Preisfluss: EP ${urkEp.toFixed(2)} € wurde direkt aus der Urkalkulation / dem Preisaufbau übernommen.`
+    ].filter(Boolean).join("\n\n")
+  } as any);
+}
+
 function statusLabel(status?: CalcStatus): string {
   if (status === "ok") return "OK";
   if (status === "warning") return "Warnung";
   if (status === "critical") return "Kritisch";
+  if (status === "needs_review") return "Zur Prüfung";
   return "Manuell";
 }
 
@@ -2258,6 +2464,10 @@ function rowProblem(row: EliteRow): string {
   if (!String(row.langtext || "").trim()) return "Langtext fehlt";
   if (!String(row.einheit || "").trim()) return "Einheit fehlt";
   if (!row.priceBreakdown?.length) return "Preisaufbau fehlt";
+  const breakdownAudit = getPriceBreakdownAudit(row);
+  if (breakdownAudit.requiresReview) {
+    return `EP weicht um ${breakdownAudit.deltaPct.toFixed(2)} % vom Preisaufbau ab`;
+  }
   if (n(row.menge) <= 0) return "Menge fehlt oder ist 0";
   if (getUnitPrice(row) <= 0) return "Einheitspreis fehlt";
   if (row.calculationStatus === "critical") {
@@ -2287,9 +2497,9 @@ function isSafeRow(row: EliteRow): boolean {
     String(row.einheit || "").trim().length > 0 &&
     Array.isArray(row.priceBreakdown) &&
     row.priceBreakdown.length > 0 &&
-    n(row.confidence) >= 0.75 &&
+    !getPriceBreakdownAudit(row).requiresReview &&
     row.calculationStatus !== "critical" &&
-    row.riskLevel !== "high");
+    String(row.calculationStatus || "").toLowerCase() !== "needs_review");
 
 }
 
@@ -2842,6 +3052,10 @@ serverItems: any[])
       langtext,
       einheit,
       menge,
+      // X84 rimane sempre riferimento esterno: non sostituisce il prezzo RLC.
+      x84UnitPrice: n(src?.x84UnitPrice ?? old?.x84UnitPrice),
+      x84Total: n(src?.x84Total ?? old?.x84Total),
+      angebotUnitPrice: n(src?.x84UnitPrice ?? old?.angebotUnitPrice),
       updatedAt: new Date().toISOString()
     });
   });
@@ -2868,6 +3082,13 @@ export default function KalkulationMitKI() {
   ).trim();
   const { eliteCalculateRows, loading } = useKiSuggest();
   const navigate = useNavigate();
+
+  /*
+   * Preisstand/X84:
+   * ID des tatsächlich geladenen LVHeaders.
+   * Niemals automatisch "letzten LVHeader" verwenden.
+   */
+  const [sourceLvHeaderId, setSourceLvHeaderId] = React.useState("");
 
   const csvInputRef = React.useRef<HTMLInputElement | null>(null);
   const selectedDetailRef = React.useRef<HTMLElement | null>(null);
@@ -2958,6 +3179,12 @@ export default function KalkulationMitKI() {
           if (!response.ok) break;
 
           const payload = await response.json().catch(() => null);
+
+          const loadedHeaderId = String(payload?.header?.id || "").trim();
+          if (loadedHeaderId) {
+            setSourceLvHeaderId(loadedHeaderId);
+          }
+
           const pageItems = extractServerLvItems(payload);
           if (!pageItems.length) break;
 
@@ -2980,6 +3207,12 @@ export default function KalkulationMitKI() {
       );
 
       const payload = await response.json().catch(() => null);
+
+      const loadedHeaderId = String(payload?.header?.id || "").trim();
+      if (loadedHeaderId) {
+        setSourceLvHeaderId(loadedHeaderId);
+      }
+
       if (!response.ok) {
         throw new Error(payload?.error || `LV HTTP ${response.status}`);
       }
@@ -3044,6 +3277,75 @@ export default function KalkulationMitKI() {
     };
   }, [projectKey, projectUuid]);
 
+  React.useEffect(() => {
+    if (!projectKey) return;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch(
+          apiUrl(`/api/kalkulation/storage/urkalkulation/${encodeURIComponent(projectKey)}`),
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+            headers: authJsonHeaders()
+          }
+        );
+        if (!response.ok) return;
+        const payload = await response.json().catch(() => null);
+        const data = payload?.data ?? payload?.snapshot?.data ?? payload;
+        const urkRows = Array.isArray(data?.rows) ? data.rows : [];
+        if (!urkRows.length || cancelled) return;
+
+        const byId = new Map(urkRows.map((r: any) => [String(r?.id || "").trim(), r]));
+        const byPos = new Map(urkRows.map((r: any) => [String(r?.posNr || r?.positionNumber || "").trim(), r]));
+
+        setRows((previous) => {
+          let changed = false;
+          const merged = previous.map((row: any) => {
+            const urk = byId.get(String(row?.id || "").trim()) || byPos.get(String(row?.posNr || row?.positionNumber || "").trim());
+            if (!urk || !Array.isArray((urk as any).priceBreakdown) || !(urk as any).priceBreakdown.length) return row;
+            const nextPb = (urk as any).priceBreakdown;
+            const same = Array.isArray(row.priceBreakdown) && JSON.stringify(row.priceBreakdown) === JSON.stringify(nextPb);
+            if (same) return row;
+            changed = true;
+            return normalizeEliteRow({
+              ...row,
+              priceBreakdown: nextPb,
+              recipeLines: Array.isArray((urk as any).recipeLines) ? (urk as any).recipeLines : row.recipeLines,
+              urkalkulationUnitPrice: (urk as any).urkalkulationUnitPrice,
+              urkalkulationTotal: (urk as any).urkalkulationTotal,
+              materialCost: (urk as any).materialCost ?? row.materialCost,
+              laborCost: (urk as any).laborCost ?? row.laborCost,
+              machineCost: (urk as any).machineCost ?? row.machineCost,
+              transportCost: (urk as any).transportCost ?? row.transportCost,
+              subcontractorCost: (urk as any).subcontractorCost ?? row.subcontractorCost,
+              disposalCost: (urk as any).disposalCost ?? row.disposalCost,
+              overheadCost: (urk as any).overheadCost ?? row.overheadCost,
+              riskCost: (urk as any).riskCost ?? row.riskCost,
+              profitCost: (urk as any).profitCost ?? row.profitCost
+            });
+          });
+          if (!changed) return previous;
+          const safe = sanitizeRowsForStorage(merged);
+          try {
+            localStorage.setItem(localBackupKey(projectKey), JSON.stringify({
+              version: "elite-v4-urkalkulation-hydrated",
+              meta: { projectKey, updatedAt: new Date().toISOString() },
+              rows: compactKiRowsForStorage(safe, projectKey)
+            }));
+          } catch {}
+          return safe;
+        });
+      } catch (error) {
+        console.warn("[RLC-KI] Urkalkulations-Snapshot konnte nicht geladen werden", error);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [projectKey]);
+
   const [selectedId, setSelectedId] = React.useState<string>("");
   const [auftraege, setAuftraege] = React.useState<Auftrag[]>(() => {
     AuftragStore.ensureDefault(projectKey);
@@ -3076,8 +3378,75 @@ export default function KalkulationMitKI() {
     () => auftraege.find((a) => a.id === selectedAuftragId) || null,
     [auftraege, selectedAuftragId]
   );
+
+  React.useEffect(() => {
+    if (!projectKey || !rows.length) return;
+
+    const haupt = AuftragStore.ensureDefault(projectKey);
+    const needsRepair = rows.some((r) => !String(r.auftragId || "").trim());
+
+    if (!needsRepair) return;
+
+    const repaired = rows.map((r) =>
+      String(r.auftragId || "").trim()
+        ? r
+        : normalizeEliteRow({
+            ...r,
+            auftragId: haupt.id,
+            auftragName: haupt.name,
+            auftragType: haupt.type
+          })
+    );
+
+    // Importierte LV-Positionen gehören standardmäßig zum Hauptauftrag.
+    // Ohne diese Reparatur zeigte die Auftragsstruktur 0 Positionen,
+    // obwohl darunter alle LV-Zeilen vorhanden waren.
+    persistRows(repaired);
+  }, [projectKey, rows.length]);
   const [serverBusy, setServerBusy] = React.useState(false);
   const [serverStatus, setServerStatus] = React.useState("");
+  const [marketCreditBalance, setMarketCreditBalance] = React.useState<any>(null);
+  const [showCreditBooking, setShowCreditBooking] = React.useState(false);
+  const [creditBookingBusy, setCreditBookingBusy] = React.useState(false);
+
+  const refreshMarketCreditBalance = React.useCallback(async () => {
+    try {
+      const response = await fetch(apiUrl("/api/kalkulation/ki/market-review-usage"), {
+        credentials: "include",
+        headers: authJsonHeaders()
+      });
+      const payload = await response.json().catch(() => null);
+      if (response.ok && payload?.ok) setMarketCreditBalance(payload.balance || null);
+    } catch {
+      // Die Kalkulation darf bei einer reinen Kontingent-Anzeige nicht blockieren.
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void refreshMarketCreditBalance();
+  }, [refreshMarketCreditBalance]);
+
+  async function bookOpenAiCredits(credits: 100 | 500 | 2000) {
+    setCreditBookingBusy(true);
+    try {
+      const response = await fetch(apiUrl("/api/kalkulation/ki/market-credit-orders"), {
+        method: "POST",
+        credentials: "include",
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ credits })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+      const price = credits === 100 ? "9,90 €" : credits === 500 ? "39,00 €" : "129,00 €";
+      setServerStatus(`Buchung vorgemerkt: ${credits} RLC Marktpreis-Credits für ${price}. Freischaltung nach Zahlungseingang.`);
+      setShowCreditBooking(false);
+    } catch (e: any) {
+      setServerStatus(`Credit-Buchung fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
+    } finally {
+      setCreditBookingBusy(false);
+    }
+  }
+
   const [activeAction, setActiveAction] = React.useState<{
     id: string;
     label: string;
@@ -3137,7 +3506,6 @@ export default function KalkulationMitKI() {
    * - LV-Aktionen werden kompakt in ein Menü gelegt.
    * - Optionale Tabellen-Spalten können ausgeblendet bleiben.
    */
-  const [showQuickActions, setShowQuickActions] = React.useState(false);
   const [showLvActions, setShowLvActions] = React.useState(false);
   const [showAdvancedLvColumns, setShowAdvancedLvColumns] =
   React.useState(false);
@@ -3146,7 +3514,7 @@ export default function KalkulationMitKI() {
   const [selectedDuplicateIds, setSelectedDuplicateIds] = React.useState<string[]>([]);
   const [selectedOpenAiIds, setSelectedOpenAiIds] = React.useState<string[]>([]);
   const [lvPage, setLvPage] = React.useState(1);
-  const [lvPageSize, setLvPageSize] = React.useState(5);
+  const [lvPageSize, setLvPageSize] = React.useState(25);
   const [showCommercialSettings, setShowCommercialSettings] =
   React.useState(false);
   const [showChapterSettings, setShowChapterSettings] = React.useState(false);
@@ -3277,6 +3645,17 @@ export default function KalkulationMitKI() {
       if (viewFilter === "kritisch") return !kiIsStructuralRow(r) && r.calculationStatus === "critical";
       if (viewFilter === "warnungen") return !kiIsStructuralRow(r) && r.calculationStatus === "warning";
       if (viewFilter === "hochrisiko") return !kiIsStructuralRow(r) && r.riskLevel === "high";
+      if (viewFilter === "pruefung") {
+        const status = String(r.calculationStatus || "").toLowerCase();
+        return !kiIsStructuralRow(r) && (
+          status === "critical" ||
+          status === "needs_review" ||
+          getPriceBreakdownAudit(r).requiresReview
+        );
+      }
+      if (viewFilter === "preisaufbauAbweichung") {
+        return !kiIsStructuralRow(r) && getPriceBreakdownAudit(r).requiresReview;
+      }
       if (viewFilter === "sicher") return !kiIsStructuralRow(r) && isSafeRow(r);
 
       if (viewFilter === "ohneDb") {
@@ -3306,6 +3685,13 @@ export default function KalkulationMitKI() {
   React.useLayoutEffect(() => {
     if (!projectKey) return;
     importHandoff();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey]);
+
+  React.useEffect(() => {
+    if (!projectKey) return;
+    void loadFromProjectServer();
+    // Der Server-Snapshot ist verbindlich; X83/LV bleibt nur Fallback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectKey]);
 
@@ -3532,11 +3918,44 @@ export default function KalkulationMitKI() {
         parsedKiBackup.rows :
         [];
 
+        // Il backup KI contiene prezzi/stato, ma i dati base del LV
+        // (Pos., Kurz-/Langtext, Einheit, Menge) devono sempre venire dal LV
+        // corrente. In questo modo un vecchio snapshot che aveva marcato per
+        // errore "1" come Struktur non può azzerare la quantità reale.
+        const authoritativeLvRows = LV.list() as any[];
+        const lvByKey = new Map<string, any>();
+        for (const lvRow of authoritativeLvRows) {
+          for (const k of [
+            String(lvRow?.id || "").trim(),
+            String(lvRow?.posNr || lvRow?.pos || "").trim()
+          ].filter(Boolean)) {
+            lvByKey.set(k, lvRow);
+          }
+        }
+
+        const hydratedBackupRows = backupRows.map((x: any) => {
+          const lv =
+            lvByKey.get(String(x?.id || "").trim()) ||
+            lvByKey.get(String(x?.posNr || x?.pos || "").trim());
+          if (!lv) return x;
+
+          return {
+            ...x,
+            posNr: lv.posNr ?? lv.pos ?? x.posNr,
+            positionNumber: lv.positionNumber ?? lv.posNr ?? lv.pos ?? x.positionNumber,
+            kurztext: lv.kurztext ?? x.kurztext,
+            langtext: lv.langtext ?? x.langtext,
+            einheit: lv.einheit ?? x.einheit,
+            menge: lv.menge ?? x.menge
+          };
+        });
+
         const backupSafeRows = sanitizeRowsForStorage(
-          backupRows.map((x: any) => normalizeEliteRow(x))
+          hydratedBackupRows.map((x: any) => normalizeEliteRow(x))
         );
 
         const backupKiNet = backupSafeRows.reduce((sum: number, r: any) => {
+          if (!gaebPositionCountsInTotal(r)) return sum;
           return sum + n(r.rlcKiTotal ?? r.totalNet ?? r.gesamt);
         }, 0);
 
@@ -3673,8 +4092,8 @@ export default function KalkulationMitKI() {
         for (const k of keys) urkByKey.set(k, u);
       }
 
-      if (!urkByKey.size) return;
-
+      // Auch ohne Recipes-Einträge müssen bereits vorhandene Preisaufbauten
+      // gegen alte Price-Evidence-Downgrades revalidiert werden.
       let changed = false;
 
       const merged = rows.map((r: any) => {
@@ -3684,24 +4103,46 @@ export default function KalkulationMitKI() {
         String((r as any).pos || "").trim()].
         filter(Boolean);
 
+        // Der Recheck darf nicht davon abhängen, ob Recipes für diese
+        // Position einen Eintrag hat: der finale Preisaufbau kann bereits
+        // serverseitig im Snapshot vorliegen.
+        if (Array.isArray((r as any).priceBreakdown) && (r as any).priceBreakdown.length > 0) {
+          const current = normalizeEliteRow(r as any);
+          const rechecked = mergeEliteResult(
+            current,
+            current as EliteKalkulationResultRow,
+            "new-calculation"
+          );
+          const reviewState = (row: any) => JSON.stringify([
+            row.warning,
+            row.aiReason,
+            row.riskLevel,
+            row.calculationStatus,
+            row.confidence
+          ]);
+          if (reviewState(rechecked) !== reviewState(current)) {
+            changed = true;
+            return rechecked;
+          }
+        }
+
         const u = keys.map((k) => urkByKey.get(k)).find(Boolean);
         if (!u) return r;
 
+        // Neue Architektur: Kalkulation mit KI erzeugt ihre Urkalkulation selbst.
+        // Recipes darf einen frischen serverseitigen Preisaufbau niemals wieder
+        // mit einem alten Snapshot überschreiben. Nur fehlende Breakdowns ergänzen.
+        if (Array.isArray((r as any).priceBreakdown) && (r as any).priceBreakdown.length > 0) return r;
+
         const pb = normalizeBreakdown((u as any).priceBreakdown || []);
         if (!pb.length) return r;
-
-        const already =
-        Array.isArray((r as any).priceBreakdown) &&
-        JSON.stringify((r as any).priceBreakdown) === JSON.stringify(pb);
-
-        if (already) return r;
 
         changed = true;
 
         const menge = n((r as any).menge ?? (u as any).menge);
         const ep = sumBreakdown(pb);
 
-        return normalizeEliteRow({
+        const recipeMerged = normalizeEliteRow({
           ...(r as any),
 
           // Nur Info / Preisaufbau aus Recipes
@@ -3729,6 +4170,14 @@ export default function KalkulationMitKI() {
             "Preisaufbau aus Recipes als Info übernommen. Kalkulationspreis unverändert."
           )
         } as any);
+
+        // Erst nach Recipes-Merge ist der Preisaufbau vollständig. Deshalb muss
+        // ein alter Price-Evidence-Downgrade jetzt erneut bewertet werden.
+        return mergeEliteResult(
+          recipeMerged,
+          recipeMerged as EliteKalkulationResultRow,
+          "new-calculation"
+        );
       });
 
       if (!changed) return;
@@ -3736,6 +4185,9 @@ export default function KalkulationMitKI() {
       const safeRows = sanitizeRowsForStorage(merged);
       setRows(safeRows);
       persistRows(safeRows);
+      // Wichtig: der nach Recipes-Merge gültige Prüfstand muss auch serverseitig
+      // gespeichert werden, damit Übersicht und Kalkulationszentrale denselben Stand sehen.
+      scheduleKiAutoSaveAfterCalculation(safeRows);
 
       setServerStatus("Preisaufbau aus Recipes übernommen · RLC-KI Preise unverändert");
       setTimeout(() => setServerStatus(""), 3000);
@@ -3751,9 +4203,14 @@ export default function KalkulationMitKI() {
     if (lvPage > lvTotalPages) setLvPage(lvTotalPages);
   }, [lvPage, lvTotalPages]);
 
+  React.useEffect(() => {
+    setLvPage(1);
+  }, [viewFilter, selectedAuftragId]);
+
   const visibleLvRows = React.useMemo(() => {
-    return filteredRows;
-  }, [filteredRows]);
+    const start = (lvPage - 1) * lvPageSize;
+    return filteredRows.slice(start, start + lvPageSize);
+  }, [filteredRows, lvPage, lvPageSize]);
 
   const filteredChapters = React.useMemo(() => {
     const map = new Map<string, EliteRow[]>();
@@ -3770,12 +4227,57 @@ export default function KalkulationMitKI() {
   const problemCounts = React.useMemo(() => {
     const relevantRows = rows.filter((r) => !kiIsStructuralRow(r));
 
+    // Beim ersten Render kann der lokale KI-Cache noch keinen Preisaufbau enthalten.
+    // Für die Prüfung sofort den bereits vorhandenen LV/Recipes-Preisaufbau verwenden,
+    // damit "Zur Prüfung" nicht erst 96 und Sekunden später 226 zeigt.
+    const lvBreakdownByKey = new Map<string, PriceBreakdownLine[]>();
+    try {
+      for (const lvRow of LV.list() as any[]) {
+        const pb = normalizeBreakdown((lvRow as any).priceBreakdown || []);
+        if (!pb.length) continue;
+        for (const key of [
+          String((lvRow as any).id || "").trim(),
+          String((lvRow as any).posNr || "").trim(),
+          String((lvRow as any).pos || "").trim()
+        ].filter(Boolean)) {
+          lvBreakdownByKey.set(key, pb);
+        }
+      }
+    } catch {
+      // Lokaler LV-Fallback ist optional.
+    }
+
+    const auditForRow = (r: EliteRow): PriceBreakdownAudit => {
+      if (Array.isArray(r.priceBreakdown) && r.priceBreakdown.length > 0) {
+        return getPriceBreakdownAudit(r);
+      }
+      const fallback = [
+        String((r as any).id || "").trim(),
+        String((r as any).posNr || "").trim(),
+        String((r as any).pos || "").trim()
+      ].filter(Boolean).map((key) => lvBreakdownByKey.get(key)).find(Boolean);
+      return fallback ? getPriceBreakdownAudit({ ...(r as any), priceBreakdown: fallback } as EliteRow) : getPriceBreakdownAudit(r);
+    };
+
     return {
       kritisch: relevantRows.filter((r) => r.calculationStatus === "critical").length,
+      // Prüfhinweise = echte Kalkulationswarnungen. Hohes Baustellenrisiko
+      // wird separat als hochrisiko geführt und nicht doppelt gezählt.
       warnungen: relevantRows.filter(
-        (r) => r.calculationStatus === "warning" || r.riskLevel === "high"
+        (r) => r.calculationStatus === "warning"
       ).length,
       hochrisiko: relevantRows.filter((r) => r.riskLevel === "high").length,
+      pruefung: relevantRows.filter((r) => {
+        const status = String(r.calculationStatus || "").toLowerCase();
+        return (
+          status === "critical" ||
+          status === "needs_review" ||
+          getPriceBreakdownAudit(r).requiresReview
+        );
+      }).length,
+      preisaufbauAbweichung: relevantRows.filter(
+        (r) => auditForRow(r).requiresReview
+      ).length,
       ohneDb: relevantRows.filter(
         (r) => rowHasNoDb(r) && r.calculationStatus !== "manual"
       ).length,
@@ -3785,9 +4287,10 @@ export default function KalkulationMitKI() {
       kurztextFehlt: relevantRows.filter((r) => !String(r.kurztext || "").trim()).length,
       langtextFehlt: relevantRows.filter((r) => !String(r.langtext || "").trim()).length,
       preisFehlt: relevantRows.filter((r) => round2(getUnitPrice(r)) <= 0).length,
-      preisaufbauFehlt: relevantRows.filter(
-        (r) => !Array.isArray(r.priceBreakdown) || r.priceBreakdown.length === 0
-      ).length,
+      preisaufbauFehlt: relevantRows.filter((r) => {
+        const audit = auditForRow(r);
+        return !audit.hasBreakdown;
+      }).length,
       mengeFehlt: relevantRows.filter((r) => n(r.menge) <= 0).length
     };
   }, [rows]);
@@ -4015,8 +4518,12 @@ export default function KalkulationMitKI() {
   }, [rows, chapterTotals, globalMarkup, mwst]);
 
   const selectedAuftragSummary = React.useMemo(() => {
+    const selectedById = auftraege.find((a) => a.id === selectedAuftragId);
     const list = selectedAuftragId ?
-    rows.filter((r) => r.auftragId === selectedAuftragId) :
+    rows.filter((r) =>
+      r.auftragId === selectedAuftragId ||
+      (!!selectedById && String(r.auftragName || "").trim() === selectedById.name && String(r.auftragType || "") === selectedById.type)
+    ) :
     rows;
 
     const net = round2(list.reduce((sum, r) => sum + lineNet(r), 0));
@@ -4024,7 +4531,7 @@ export default function KalkulationMitKI() {
     const priced = list.filter((r) => getUnitPrice(r) > 0).length;
 
     return { net, count, priced };
-  }, [rows, selectedAuftragId]);
+  }, [rows, selectedAuftragId, auftraege]);
 
   const priceDiffRows = React.useMemo(() => {
     return rows.
@@ -4380,6 +4887,12 @@ export default function KalkulationMitKI() {
       overheadCost: r.overheadCost,
       riskCost: r.riskCost,
       profitCost: r.profitCost,
+
+      // Prüfstand muss beim Reload vollständig erhalten bleiben.
+      priceBreakdown: Array.isArray(r.priceBreakdown) ? r.priceBreakdown : [],
+      recipeLines: Array.isArray(r.recipeLines) ? r.recipeLines : [],
+      urkalkulationUnitPrice: r.urkalkulationUnitPrice,
+      urkalkulationTotal: r.urkalkulationTotal,
 
       baseUnitPrice: r.baseUnitPrice,
       suggestedUnitPrice: r.suggestedUnitPrice,
@@ -5319,7 +5832,7 @@ export default function KalkulationMitKI() {
 
     if (source.includes("company-calibration")) return "RLC-KI · Firmenkalibrierung";
     if (source.includes("database")) return "Datenbank";
-    if (source.includes("openai")) return "OpenAI";
+    if (source.includes("openai")) return "RLC Marktprüfung";
     if (source.includes("technical-parser")) return "RLC-KI · technische Kalkulation";
     if (source.includes("recipe")) return "RLC-KI · Rezept/Urkalkulation";
     if (source.includes("rule")) return "RLC-KI · Regelwerk";
@@ -6221,6 +6734,7 @@ export default function KalkulationMitKI() {
       projectKey,
       projectCode: projectKey,
       projectTitle,
+      sourceLvHeaderId: sourceLvHeaderId || undefined,
       savedAt: new Date().toISOString(),
       source: "rlc-ki-autosave",
       mode: modeOverride || kiMode,
@@ -6244,7 +6758,8 @@ export default function KalkulationMitKI() {
         mwst,
         globalMarkup,
         projectKey,
-        projectTitle
+        projectTitle,
+        sourceLvHeaderId: sourceLvHeaderId || undefined
       }
     };
 
@@ -6519,8 +7034,8 @@ export default function KalkulationMitKI() {
     filter((x: any) => x && Math.abs(x.diffGp) > 0.01).
     sort((a: any, b: any) => Math.abs(b.diffGp) - Math.abs(a.diffGp));
 
-    const oldTotal = round2(currentRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
-    const newTotal = round2(expertRows.reduce((sum, r) => sum + n((r as any).rlcKiTotal ?? lineNet(r)), 0));
+    const oldTotal = round2(currentRows.reduce((sum, r) => gaebPositionCountsInTotal(r) ? sum + n((r as any).rlcKiTotal ?? lineNet(r)) : sum, 0));
+    const newTotal = round2(expertRows.reduce((sum, r) => gaebPositionCountsInTotal(r) ? sum + n((r as any).rlcKiTotal ?? lineNet(r)) : sum, 0));
     const diffTotal = round2(newTotal - oldTotal);
     const diffPctTotal = oldTotal > 0 ? round2(diffTotal / oldTotal * 100) : 0;
 
@@ -6626,6 +7141,72 @@ export default function KalkulationMitKI() {
       if (event.target === overlay) close();
     });
   }
+  async function saveUrkalkulationSnapshotFromKi(inputRows: EliteRow[]) {
+    if (!projectKey) return;
+
+    const savedAt = new Date().toISOString();
+    // Snapshot sempre completo: Recipes deve ricevere le stesse righe del LV.
+    // Le posizioni strutturali rimangono senza prezzo, ma non spariscono.
+    const urkRows = inputRows
+      .map((row: any) => ({
+        isStructural: !kiIsRealCalcRow(row),
+        id: row.id,
+        posNr: row.posNr,
+        positionNumber: row.positionNumber,
+        kurztext: row.kurztext,
+        langtext: row.langtext,
+        einheit: row.einheit,
+        menge: row.menge,
+        auftragId: row.auftragId,
+        auftragName: row.auftragName,
+        auftragType: row.auftragType,
+        sortIndex: row.sortIndex,
+        parentPosNr: row.parentPosNr,
+        priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [],
+        recipeLines: Array.isArray(row.recipeLines) ? row.recipeLines : [],
+        urkalkulationUnitPrice: n(row.urkalkulationUnitPrice) || n(row.rlcKiUnitPrice) || n(row.finalUnitPrice) || n(row.preis),
+        urkalkulationTotal: n(row.urkalkulationTotal) || n(row.rlcKiTotal) || n(row.gesamt),
+        materialCost: row.materialCost,
+        laborCost: row.laborCost,
+        machineCost: row.machineCost,
+        transportCost: row.transportCost,
+        subcontractorCost: row.subcontractorCost,
+        disposalCost: row.disposalCost,
+        overheadCost: row.overheadCost,
+        riskCost: row.riskCost,
+        profitCost: row.profitCost,
+        source: "kalkulation-mit-ki-auto-urkalkulation-v1",
+        calculationStatus: row.calculationStatus,
+        riskLevel: row.riskLevel,
+        confidence: row.confidence,
+        updatedAt: savedAt
+      }));
+
+    const response = await fetch(
+      apiUrl(`/api/kalkulation/storage/urkalkulation/${encodeURIComponent(projectKey)}/save`),
+      {
+        method: "POST",
+        credentials: "include",
+        headers: authJsonHeaders(),
+        body: JSON.stringify({
+          data: {
+            version: "RLC_URKALKULATION_FROM_KI_V1",
+            source: "kalkulation-mit-ki",
+            projectKey,
+            projectTitle,
+            savedAt,
+            rows: urkRows
+          }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Urkalkulation-Snapshot HTTP ${response.status}: ${text.slice(0, 200)}`);
+    }
+  }
+
   async function runEliteCalculation(forceRecalculate = false, expertMode = false, modeOverride?: "offer-check" | "new-calculation") {
     const effectiveKiMode = modeOverride || kiMode;
     if (!rows.length) {
@@ -6708,9 +7289,13 @@ export default function KalkulationMitKI() {
       ).length;
 
       const fullPayload = {
+        projectKey,
+        sourceLvHeaderId: sourceLvHeaderId || undefined,
         forceRecalculate,
         rows: fullRequestRows,
         maxParallelRows: expertMode ? 4 : 10,
+        // Neue Kalkulation muss auch ohne Datenbanktreffer einen Preisaufbau liefern.
+        // Begrenzter Fallback statt eines massenhaften OpenAI-Laufs.
         maxOpenAiRowsPerBatch: expertMode ? Math.min(batchSize, 10) : 0,
         expertMode,
         useOpenAIIfNoDatabaseHit: expertMode,
@@ -6764,6 +7349,8 @@ export default function KalkulationMitKI() {
           ).length;
 
           const payload = {
+            projectKey,
+            sourceLvHeaderId: sourceLvHeaderId || undefined,
             forceRecalculate,
             rows: requestRows,
             maxParallelRows: expertMode ? 4 : 10,
@@ -6859,15 +7446,60 @@ export default function KalkulationMitKI() {
         const from = i * batchSize + 1;
         const to = Math.min(rowsForKi.length, from + batch.length - 1);
 
-        setServerStatus(`Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`);
-        kiEmitProgress(
-          Math.min(82, Math.round(22 + i / Math.max(1, batches.length) * 58)),
-          `Server-KI Batch ${i + 1}/${batches.length} · Position ${from}-${to}`
+        const batchLabel = `Batch ${i + 1}/${batches.length} · Position ${from}-${to}`;
+        const batchProgress = Math.min(92, Math.round(18 + (i / Math.max(1, batches.length)) * 74));
+
+        setServerStatus(`Server-KI ${batchLabel}`);
+        setActiveAction((prev) =>
+          prev && prev.status === "running"
+            ? { ...prev, label: batchLabel, progress: batchProgress }
+            : prev
         );
+        kiEmitProgress(batchProgress, `Server-KI ${batchLabel}`);
 
         const json = await callServerKiBatch(batch, i + 1);
+        setActiveAction((prev) =>
+          prev && prev.status === "running"
+            ? {
+                ...prev,
+                label: `${batchLabel} · fertig`,
+                progress: Math.min(94, Math.round(18 + ((i + 1) / Math.max(1, batches.length)) * 74)),
+              }
+            : prev
+        );
         allServerRows.push(...json.rows);
         batchSummaries.push(json.summary || {});
+
+        /*
+         * RLC UX: Ergebnisse eines fertigen 50er-Batches sofort sichtbar machen.
+         * Es wird hier bewusst noch NICHT persistiert; gespeichert wird weiterhin
+         * erst nach erfolgreichem Gesamtlauf. So sieht der Kalkulator live,
+         * dass Batch 1, 2, 3 ... wirklich übernommen werden.
+         */
+        const batchResultByKey = new Map<string, EliteKalkulationResultRow>();
+        for (const item of json.rows as EliteKalkulationResultRow[]) {
+          const id = (item as any).id;
+          const pos = (item as any).posNr;
+          if (id) batchResultByKey.set(String(id), item);
+          if (pos) batchResultByKey.set(String(pos), item);
+        }
+
+        setRows((currentRows) =>
+          currentRows.map((currentRow) => {
+            const result =
+              batchResultByKey.get(String(currentRow.id)) ||
+              batchResultByKey.get(String(currentRow.posNr || ""));
+            if (!result) return currentRow;
+
+            const merged = mergeEliteResult(currentRow, result, effectiveKiMode);
+            return {
+              ...merged,
+              auftragId: currentRow.auftragId || selectedAuftragId,
+              auftragName: currentRow.auftragName || selectedAuftrag?.name || "",
+              auftragType: currentRow.auftragType || selectedAuftrag?.type,
+            };
+          })
+        );
       }
 
       const returnedById = new Set<string>();
@@ -6970,6 +7602,18 @@ export default function KalkulationMitKI() {
       saveRlcX84LearningReport(cleanedNextWithX84Learning, projectKey);
       void saveRlcX84LearningApprovalDraft(cleanedNextWithX84Learning, projectKey);
 
+      // RLC PREISFLUSS: Bei einer neuen Kalkulation ist die Urkalkulation die
+      // Preisquelle. Der EP in Kalkulation MUSS dem Preisaufbau entsprechen.
+      const finalCalculatedRows =
+        effectiveKiMode === "new-calculation"
+          ? cleanedNextWithX84Learning.map((row) => alignNewCalculationToUrkalkulation(row))
+          : cleanedNextWithX84Learning;
+
+      if (!expertMode && effectiveKiMode === "new-calculation") {
+        kiEmitProgress(91, "Urkalkulation wird automatisch gespeichert…");
+        await saveUrkalkulationSnapshotFromKi(finalCalculatedRows);
+      }
+
       if (expertMode) {
         try {
           localStorage.setItem(
@@ -6979,15 +7623,15 @@ export default function KalkulationMitKI() {
               projectKey,
               projectTitle,
               createdAt: new Date().toISOString(),
-              rows: sanitizeRowsForStorage(cleanedNextWithX84Learning)
+              rows: sanitizeRowsForStorage(finalCalculatedRows)
             })
           );
         } catch {}
 
-        showExpertReviewModal(beforeRows, cleanedNextWithX84Learning);
+        showExpertReviewModal(beforeRows, finalCalculatedRows);
       } else {
-        persistRows(cleanedNextWithX84Learning, effectiveKiMode);
-        scheduleKiAutoSaveAfterCalculation(cleanedNextWithX84Learning, effectiveKiMode);
+        persistRows(finalCalculatedRows, effectiveKiMode);
+        scheduleKiAutoSaveAfterCalculation(finalCalculatedRows, effectiveKiMode);
       }
 
       // saveRowsToDatenbank(cleanedNext, projectKey, projectTitle); // deaktiviert: KI-Kalkulation darf Datenbank nicht automatisch füllen
@@ -6995,7 +7639,7 @@ export default function KalkulationMitKI() {
       const durationMs = Date.now() - startedAt;
       const openAiUsed = batchSummaries.reduce((sum, x) => sum + n(x?.openAiUsed), 0);
       const serverSummary = {
-        totalNet: round2(cleanedNext.reduce((sum, r) => sum + n(r.rlcKiTotal), 0)),
+        totalNet: round2(finalCalculatedRows.reduce((sum, r) => gaebPositionCountsInTotal(r) ? sum + n(r.rlcKiTotal) : sum, 0)),
         durationMs,
         openAiUsed,
         batchCount: batches.length,
@@ -7019,10 +7663,12 @@ export default function KalkulationMitKI() {
       join(" · ");
 
       setServerStatus(
-        `KI-Prüfung abgeschlossen · Server-KI · ${rowsForKi.length} Position(en) · ${kiSpeedInfo}`
+        effectiveKiMode === "new-calculation"
+          ? `Kalkulation + Urkalkulation abgeschlossen · ${rowsForKi.length} Position(en) · ${kiSpeedInfo}`
+          : `KI-Prüfung abgeschlossen · Server-KI · ${rowsForKi.length} Position(en) · ${kiSpeedInfo}`
       );
       kiEmitProgress(96, "Änderungsprotokoll wird erstellt…");
-      kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, cleanedNext, serverSummary);
+      kiEmitResult("KI-Kalkulation abgeschlossen", beforeRows, finalCalculatedRows, serverSummary);
 
       setTimeout(() => setServerStatus(""), 3500);
     } catch (e) {
@@ -7326,6 +7972,8 @@ export default function KalkulationMitKI() {
       const kurztext = String((r as any).kurztext || (r as any).text || "").trim();
       const menge = n((r as any).menge);
       const ep =
+      n((r as any).rlcKiUnitPrice) ||
+      n((r as any).suggestedUnitPrice) ||
       n((r as any).angebotUnitPrice) ||
       n((r as any).originalPreKiPrice) ||
       n((r as any).preis) ||
@@ -7353,7 +8001,7 @@ export default function KalkulationMitKI() {
       setServerStatus("Lade…");
 
       const r = await fetch(
-        apiUrl(`${KALKULATION_API_BASE}/${encodeURIComponent(projectKey)}/ki`),
+        apiUrl(`/api/kalkulation/storage/ki/${encodeURIComponent(projectKey)}`),
         {
           method: "GET",
           credentials: "include",
@@ -7689,6 +8337,7 @@ export default function KalkulationMitKI() {
 
       exportUrkalkulationPdfLocal({
         projectKey,
+        projectId: projectUuid,
         projectTitle,
         rows: pdfRows,
         summary: pdfSummary,
@@ -7780,7 +8429,7 @@ export default function KalkulationMitKI() {
 
   function clearOpenAiSelection() {
     setSelectedOpenAiIds([]);
-    setServerStatus("OpenAI-Auswahl gelöscht");
+    setServerStatus("Marktpreis-Auswahl gelöscht");
     setTimeout(() => setServerStatus(""), 1800);
   }
 
@@ -7797,17 +8446,28 @@ export default function KalkulationMitKI() {
     map((r) => r.id);
 
     setSelectedOpenAiIds(Array.from(new Set(ids)));
-    setServerStatus(`${ids.length} Position(en) für OpenAI-Prüfung ausgewählt`);
+    setServerStatus(`${ids.length} Position(en) für RLC Marktpreisprüfung ausgewählt`);
     setTimeout(() => setServerStatus(""), 2500);
   }
 
-  async function runSelectedOpenAiCheck() {
+  async function waitForMarketResultRender(rowIds: string[], timeoutMs = 60000) {
+    if (!rowIds.length || typeof document === "undefined") return;
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const rendered = rowIds.some((id) => document.getElementById(`rlc-market-result-${id}`));
+      if (rendered) return;
+      kiEmitProgress(98, "RLC Marktpreisvorschlag wird dargestellt…");
+      await new Promise((resolve) => window.setTimeout(resolve, 120));
+    }
+  }
+
+  async function runSelectedOpenAiCheck(checkAll = false, singleRowId = "") {
     const selectedRows = rows.filter(
-      (r) => selectedOpenAiIds.includes(r.id) && !kiIsStructuralRow(r)
+      (r) => !kiIsStructuralRow(r) && (checkAll || r.id === singleRowId || selectedOpenAiIds.includes(r.id))
     );
 
     if (!selectedRows.length) {
-      setServerStatus("Keine Positionen für OpenAI ausgewählt");
+      setServerStatus("Keine Positionen für die RLC Marktpreisprüfung ausgewählt");
       setTimeout(() => setServerStatus(""), 2200);
       return;
     }
@@ -7815,19 +8475,51 @@ export default function KalkulationMitKI() {
     const beforeRows = kiCloneRows(rows);
 
     try {
-      kiEmitStart("Ausgewählte Positionen werden mit OpenAI geprüft…");
+      kiEmitStart("RLC Marktpreisprüfung wird gestartet…");
       kiEmitProgress(15, `${selectedRows.length} ausgewählte Position(en) werden vorbereitet…`);
 
-      setServerStatus(`${selectedRows.length} Position(en) werden mit OpenAI geprüft…`);
+      setServerStatus(`${selectedRows.length} Position(en) werden mit der RLC Marktpreisprüfung geprüft…`);
 
-      const res = await eliteCalculateRows(projectKey, selectedRows, {
-        forceRecalculate: true,
-        expertMode: true,
-        useOpenAIIfNoDatabaseHit: true,
-        forceOpenAIReview: true,
-        maxParallelRows: 3,
-        maxOpenAiRowsPerBatch: Math.min(selectedRows.length, 50)
+      // Independent review receives only LV scope. RLC-KI, X84 and all existing
+      // price components are intentionally stripped before the request.
+      const reviewRows = selectedRows.map((row) => {
+        const rowIndex = rows.findIndex((candidate) => candidate.id === row.id);
+        const previous = rowIndex > 0
+          ? rows.slice(0, rowIndex).reverse().find((candidate) => !kiIsStructuralRow(candidate))
+          : undefined;
+        const rowText = `${row.kurztext || ""} ${row.langtext || ""}`.toLowerCase();
+        const needsPreviousScope = /wie\s+(?:in\s+)?vorposition|wie\s+vorherige/.test(rowText);
+        return {
+          id: row.id,
+          posNr: row.posNr,
+          kurztext: row.kurztext,
+          langtext: row.langtext,
+          einheit: row.einheit,
+          menge: row.menge,
+          referencePosition: needsPreviousScope && previous ? {
+            posNr: previous.posNr,
+            kurztext: previous.kurztext,
+            langtext: previous.langtext,
+            einheit: previous.einheit,
+            menge: previous.menge
+          } : undefined
+        };
       });
+
+      const response = await fetch(apiUrl("/api/kalkulation/ki/independent-openai-review"), {
+        method: "POST",
+        credentials: "include",
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ rows: reviewRows })
+      });
+      const res = await response.json().catch(() => null);
+      if (!response.ok || !res?.ok) {
+        throw new Error(res?.message || res?.error || "RLC Marktpreisprüfung fehlgeschlagen");
+      }
+
+      if (!Array.isArray(res?.rows) || res.rows.length === 0) {
+        throw new Error(res?.message || "Die RLC Marktpreisprüfung hat keinen verwertbaren Marktpreis geliefert");
+      }
 
       const byId = new Map<string, EliteKalkulationResultRow>();
       const byPos = new Map<string, EliteKalkulationResultRow>();
@@ -7858,19 +8550,20 @@ export default function KalkulationMitKI() {
             ...r,
 
             // WICHTIG:
-            // OpenAI wird NICHT automatisch übernommen.
+            // Der Marktpreis wird NICHT automatisch übernommen.
             // Der bestehende EP bleibt unverändert.
             preis: currentEp,
             finalUnitPrice: currentEp,
             gesamt: round2(n(r.menge) * currentEp),
 
-            // OpenAI-Vorschlag wird separat gespeichert.
+            // RLC Marktpreisvorschlag wird separat gespeichert.
             openAiSuggestedUnitPrice: openAiEp,
             openAiSuggestedTotal: round2(n(r.menge) * openAiEp),
             openAiSuggestedAt: new Date().toISOString(),
             openAiSuggestedReason: result.aiReason || "",
             openAiSuggestedWarning: result.warning || "",
             openAiSuggestedPriceBreakdown: result.priceBreakdown || [],
+            openAiSuggestedSources: (result as any).marketSources || [],
 
             rlcPreisMin: (result as any).rlcPreisMin,
             rlcPreisAvg: (result as any).rlcPreisAvg,
@@ -7883,7 +8576,7 @@ export default function KalkulationMitKI() {
 
             warning: [
             cleanOpenAiProposalWarning(r.warning),
-            `OpenAI-Vorschlag vorhanden: ${openAiEp} €/EH statt aktuell ${currentEp} €/EH (${diff >= 0 ? "+" : ""}${diff} €, ${diffPct} % Abweichung). Bitte manuell übernehmen oder ablehnen.`].
+            `RLC Marktpreisvorschlag vorhanden: ${openAiEp} €/EH statt aktuell ${currentEp} €/EH (${diff >= 0 ? "+" : ""}${diff} €, ${diffPct} % Abweichung). Bitte manuell übernehmen oder ablehnen.`].
 
             filter(Boolean).
             join(" · ")
@@ -7893,19 +8586,34 @@ export default function KalkulationMitKI() {
 
       persistRows(normalizeKiWarningRows(next));
 
-      // Wichtig: OpenAI-Testwerte NICHT automatisch in Datenbank speichern.
+      // Wichtig: Marktpreis-Testwerte NICHT automatisch in Datenbank speichern.
       // saveRowsToDatenbank(next, projectKey, projectTitle);
 
-      kiEmitProgress(96, "OpenAI-Vorschläge werden gespeichert…");
-      kiEmitResult("OpenAI-Prüfung als Vorschlag gespeichert", beforeRows, next, res.summary);
+      kiEmitProgress(96, "RLC Marktpreisvorschläge werden gespeichert…");
+      const visibleIds = new Set(visibleLvRows.map((row) => row.id));
+      const expectedRenderedIds = selectedRows.map((row) => row.id).filter((id) => visibleIds.has(id));
+      await waitForMarketResultRender(expectedRenderedIds);
+      kiEmitResult("RLC Marktpreisprüfung als Vorschlag gespeichert", beforeRows, next, res.summary);
 
       setSelectedOpenAiIds([]);
-      setServerStatus(`${selectedRows.length} OpenAI-Vorschlag/Vorschläge gespeichert`);
+      if (res?.balance) setMarketCreditBalance(res.balance);
+      const usedCredits = n(res?.metering?.creditsUsed);
+      setServerStatus(
+        usedCredits > 0
+          ? `${selectedRows.length} RLC Marktpreisvorschlag/Vorschläge gespeichert · ${usedCredits} KI-Prüfung(en) erfasst`
+          : `${selectedRows.length} RLC Marktpreisvorschlag/Vorschläge gespeichert`
+      );
       setTimeout(() => setServerStatus(""), 3500);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setServerStatus("OpenAI-Prüfung fehlgeschlagen");
-      setTimeout(() => setServerStatus(""), 3500);
+      const message = String(e?.message || "");
+      setServerStatus(
+        message.includes("AI_MARKET_CREDITS_EXHAUSTED") || message.includes("aufgebraucht")
+          ? "RLC Marktpreisprüfungen aufgebraucht · Zusatzkontingent erforderlich"
+          : "RLC Marktpreisprüfung fehlgeschlagen"
+      );
+      void refreshMarketCreditBalance();
+      setTimeout(() => setServerStatus(""), 4500);
     }
   }
   function getRawOpenAiProposalPrice(row: EliteRow | null | undefined): number {
@@ -7963,6 +8671,7 @@ export default function KalkulationMitKI() {
           suggestedUnitPrice: proposal,
           gesamt: round2(n(r.menge) * proposal),
           source: "ki",
+          priceDecision: "manual" as any,
           priceBreakdown:
           Array.isArray(anyRow.openAiSuggestedPriceBreakdown) &&
           anyRow.openAiSuggestedPriceBreakdown.length ?
@@ -7973,14 +8682,14 @@ export default function KalkulationMitKI() {
           riskLevel: r.riskLevel === "high" ? "medium" : r.riskLevel,
           aiReason: [
           r.aiReason,
-          "OpenAI-Vorschlag wurde manuell für diese Position übernommen.",
+          "RLC Marktpreisvorschlag wurde manuell für diese Position übernommen.",
           anyRow.openAiSuggestedReason].
 
           filter(Boolean).
           join("\n\n"),
           preisManuellGeprueft: true,
           preisManuellGeprueftAt: new Date().toISOString(),
-          openAiRejected: true,
+          openAiRejected: false,
           openAiSuggestedUnitPrice: undefined,
           openAiSuggestedTotal: undefined,
           openAiSuggestedAt: undefined,
@@ -7992,7 +8701,7 @@ export default function KalkulationMitKI() {
     });
 
     persistRows(normalizeKiWarningRows(next));
-    setServerStatus("OpenAI-Preis für Position übernommen");
+    setServerStatus("RLC Marktpreis für Position übernommen");
     setTimeout(() => setServerStatus(""), 2500);
   }
 
@@ -8018,7 +8727,7 @@ export default function KalkulationMitKI() {
     });
 
     persistRows(normalizeKiWarningRows(next));
-    setServerStatus("OpenAI-Vorschlag abgelehnt");
+    setServerStatus("RLC Marktpreisvorschlag abgelehnt");
     setTimeout(() => setServerStatus(""), 2500);
   }
 
@@ -8047,7 +8756,7 @@ export default function KalkulationMitKI() {
         warning: "",
         aiReason: [
         target.aiReason,
-        "Als geprüfter Firmenwert aus OpenAI-Vorschlag gespeichert.",
+        "Als geprüfter Firmenwert aus RLC Marktpreisvorschlag gespeichert.",
         anyRow.openAiSuggestedReason].
 
         filter(Boolean).
@@ -8081,7 +8790,7 @@ export default function KalkulationMitKI() {
 
     const proposal = selectedOpenAiProposalPrice();
     if (proposal <= 0) {
-      setServerStatus("Kein OpenAI-Vorschlag für diese Position vorhanden");
+      setServerStatus("Kein RLC Marktpreisvorschlag für diese Position vorhanden");
       setTimeout(() => setServerStatus(""), 2200);
       return;
     }
@@ -8108,7 +8817,7 @@ export default function KalkulationMitKI() {
           warning: cleanedWarning,
           aiReason: [
           r.aiReason,
-          "OpenAI-Vorschlag wurde manuell übernommen.",
+          "RLC Marktpreisvorschlag wurde manuell übernommen.",
           anyRow.openAiSuggestedReason].
 
           filter(Boolean).
@@ -8128,7 +8837,7 @@ export default function KalkulationMitKI() {
     });
 
     persistRows(normalizeKiWarningRows(next));
-    setServerStatus("OpenAI-Vorschlag wurde übernommen");
+    setServerStatus("RLC Marktpreisvorschlag wurde übernommen");
     setTimeout(() => setServerStatus(""), 2500);
   }
 
@@ -8138,7 +8847,7 @@ export default function KalkulationMitKI() {
     persistRows(next);
 
     setSelectedOpenAiIds([]);
-    setServerStatus("Alle alten OpenAI/RLC-KI-Vorschläge wurden gelöscht. X84 bleibt final.");
+    setServerStatus("Alle alten Marktpreis-/RLC-KI-Vorschläge wurden gelöscht. X84 bleibt final.");
     setTimeout(() => setServerStatus(""), 3000);
   }
 
@@ -8147,7 +8856,7 @@ export default function KalkulationMitKI() {
 
     const proposal = selectedOpenAiProposalPrice();
     if (proposal <= 0) {
-      setServerStatus("Kein OpenAI-Vorschlag zum Speichern vorhanden");
+      setServerStatus("Kein RLC Marktpreisvorschlag zum Speichern vorhanden");
       setTimeout(() => setServerStatus(""), 2200);
       return;
     }
@@ -8170,7 +8879,7 @@ export default function KalkulationMitKI() {
         warning: "",
         aiReason: [
         selectedRow.aiReason,
-        "Als geprüfter Firmenwert aus OpenAI-Vorschlag gespeichert.",
+        "Als geprüfter Firmenwert aus RLC Marktpreisvorschlag gespeichert.",
         anyRow.openAiSuggestedReason].
 
         filter(Boolean).
@@ -8180,7 +8889,7 @@ export default function KalkulationMitKI() {
 
     const count = saveRowsToDatenbank([learnedRow], projectKey, projectTitle);
 
-    setServerStatus(`${count} OpenAI-Vorschlag als Firmenwert gespeichert`);
+    setServerStatus(`${count} RLC Marktpreisvorschlag als Firmenwert gespeichert`);
     setTimeout(() => setServerStatus(""), 3000);
   }
 
@@ -9003,168 +9712,26 @@ export default function KalkulationMitKI() {
           GAEB Import / Export
         </button>
 
+        <button
+            type="button" className={rlcClass(null, btnSecondary)}
+            onClick={() => navigate("/kalkulation/angebot")}
+            title="Angebot öffnen, prüfen und Angebotsunterlagen erzeugen.">
+          Angebot
+        </button>
 
         <button
-            type="button" className={rlcClass(null,
-            btnSecondary)}
-            onClick={() => setShowQuickActions((v) => !v)}>
-            
-          {showQuickActions ? "Funktionen schließen" : "Funktionen"}
+            type="button" className={rlcClass(null, btnSecondary)}
+            onClick={() => navigate("/kalkulation/nachtraege")}
+            title="Nachträge, Zusatzleistungen und Änderungen bearbeiten.">
+          Nachträge
         </button>
+
+
+
       </div>
       {serverStatus ? <div className={rlcClass(null, heroStatus)}>{serverStatus}</div> : null}
       {activeAction ? <RlcActionProgress action={activeAction} /> : null}
     </section>
-
-    {showQuickActions ?
-      <section className={rlcClass(null, compactActionPanel)}>
-        <div className={rlcClass(null, compactActionHeader)}>
-          <div>
-            <h2 className={rlcClass(null, sectionTitle)}>Funktionen</h2>
-<div className={rlcClass(null, sectionText)}>
-  Zentrale Funktionen für LV, Nachträge, Angebot, GAEB, Export und Einstellungen.
-</div>
-          </div>
-        </div>
-
-        <div className={rlcClass(null, compactActionGrid)}>
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => void runWithAction("ki-expert", "KI Expertprüfung", () => runEliteCalculation(true, true))}
-            disabled={loading || !rows.length}>
-            
-            <b>KI Expertprüfung</b>
-            <span>Langsame Tiefprüfung nur bei Bedarf</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={showRlcX84LearningApprovalDraft}
-            disabled={loading}>
-            
-            <b>Learning prüfen / freigeben</b>
-            <span>Geprüfte Kandidaten in Firmen-Datenbank übernehmen</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => void runWithAction("ki-complete", "Fehlende Daten prüfen", () => autoCompleteMissingFields())}
-            disabled={!rows.length}>
-            
-            <b>Fehlende Daten prüfen</b>
-            <span>Prüft fehlende Kurztexte, Langtexte, Einheiten, Mengen und Preisaufbau</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => void runWithAction("server-save", "Speichern", () => saveToProjectServer())}
-            disabled={serverBusy || !projectKey}>
-            
-            <b>Speichern</b>
-            <span>Aktuellen Stand manuell sichern</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => void runWithAction("server-load", "Laden", () => loadFromProjectServer())}
-            disabled={serverBusy || !projectKey}>
-            
-            <b>Laden</b>
-            <span>Gespeicherten Stand wiederherstellen</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => navigate("/kalkulation/lv-import")}>
-            
-            <b>LV / Positionen</b>
-            <span>Importieren und bearbeiten</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => navigate("/kalkulation/nachtraege")}>
-            
-  <b>Nachträge</b>
-  <span>Zusatzleistungen und Änderungen bearbeiten</span>
-</button>
-
-<button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => navigate("/kalkulation/angebot")}>
-            
-  <b>Angebot / Export</b>
-  <span>Angebot, PDF und Angebotsunterlagen erzeugen</span>
-</button>
-
-<button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => navigate("/kalkulation/gaeb")}>
-            
-  <b>GAEB Import / Export</b>
-  <span>GAEB-Dateien importieren, prüfen und alle Formate zentral exportieren</span>
-</button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => csvInputRef.current?.click()}>
-            
-            <b>CSV Import</b>
-            <span>Positionen aus CSV laden</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => downloadCsv(rows)}
-            disabled={!rows.length}>
-            
-            <b>CSV Export</b>
-            <span>Aktuelle Kalkulation exportieren</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => exportXlsx(rows, chapterTotals, summary, offer)}
-            disabled={!rows.length}>
-            
-            <b>XLSX</b>
-            <span>Kalkulation mit Preisaufbau</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => void runRlcAction("ki-pdf-angebot", "PDF Angebot erzeugen", () => handlePdfExport())}
-            disabled={!rows.length || pdfBusy}>
-            
-            <b>{pdfBusy ? "PDF…" : "PDF Angebot"}</b>
-            <span>Angebots-PDF erzeugen</span>
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            compactActionButton)}
-            onClick={() => void runRlcAction("ki-urkalkulation-pdf", "Urkalkulation PDF erzeugen", () => handleUrkalkulationPdfExport())}
-            disabled={!rows.length || pdfBusy}>
-            
-            <b>Urkalkulation PDF</b>
-            <span>Detailkalkulation exportieren</span>
-          </button>
-        </div>
-      </section> :
-      null}
 
     <section className={rlcClass(null, compactOrderCard)}>
       <div className={rlcClass(null, orderHead)}>
@@ -9223,41 +9790,15 @@ export default function KalkulationMitKI() {
 
     <section className={rlcClass(null, grid4Compact)}>
       <KpiCard
-          label="Angebot X84 netto"
-          value={(() => {
-            try {
-              const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
-              const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
-              const offerNet = x84OfferNet || summary.angebotNet;
-              return hasRealX84 && offerNet > 0 ? money(offerNet) : "Keine X84 geladen";
-            } catch {
-              return "Keine X84 geladen";
-            }
-          })()}
-          sub={(() => {
-            try {
-              const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
-              const hasRealX84 = String(parsed?.format || "").toUpperCase() === "X84";
-              const offerNet = x84OfferNet || summary.angebotNet;
-              return hasRealX84 && offerNet > 0 ?
-              `Brutto ${money(round2(offerNet * 1.19))}` :
-              "Nur X83/LV vorhanden · keine Angebotsdatei";
-            } catch {
-              return "Nur X83/LV vorhanden · keine Angebotsdatei";
-            }
-          })()} />
-        
-
-      <KpiCard
           label="RLC-KI netto"
           value={loading ? "Wird berechnet…" : summary.rlcKiNet > 0 ? money(summary.rlcKiNet) : "0,00 €"}
           sub={loading ? "Server-KI berechnet gerade echte RLC-Preise" : summary.rlcKiNet > 0 ? `Brutto ${money(summary.rlcKiGross)}` : "Noch keine RLC-KI berechnet"} />
         
 
       <KpiCard
-          label="Prüfen"
-          value={`${summary.critical + summary.highRisk}`}
-          sub={summary.highRisk > 0 ? "Bitte jede Position prüfen · fachliche Prüfung erforderlich · RLC-KI übernimmt keine Haftung" : `${summary.critical} kritisch · fachlich geprüft`} />
+          label="Zur Prüfung"
+          value={`${problemCounts.pruefung}`}
+          sub={problemCounts.pruefung > 0 ? "Fachliche Prüfung erforderlich · RLC-KI übernimmt keine Haftung" : "Fachlich geprüft"} />
         
 
       <KpiCard
@@ -9267,12 +9808,8 @@ export default function KalkulationMitKI() {
         
     </section>
     {(() => {
-        try {
-          const parsed = JSON.parse(localStorage.getItem(`rlc_gaeb_import_v1:${projectKey}`) || "null");
-          return String(parsed?.format || "").toUpperCase() === "X84";
-        } catch {
-          return false;
-        }
+        // X84 comparison deliberately stays outside the normal calculation editor.
+        return false;
       })() && priceDiffReport.counts.total > 0 ?
       <section className={rlcClass(null, { ...priceCompareCard, display: rows.some((r) => getOfferUnitPrice(r) > 0) ? undefined : "none" })}>
         <div className={rlcClass(null, sectionHead)}>
@@ -9482,10 +10019,9 @@ export default function KalkulationMitKI() {
 
               <div className={rlcClass(null, exportRow)}>
                 <button
-                type="button" className={rlcClass(null,
-                btnSecondary)}
-                onClick={addRow}>
-                
+                  type="button"
+                  className={rlcClass(null, btnSecondary)}
+                  onClick={addRow}>
                   Urkalkulation starten für neue und bestehende Positionen
                 </button>
 
@@ -9504,7 +10040,7 @@ export default function KalkulationMitKI() {
                     <button
                     type="button" className={rlcClass(null,
                     lvMenuItem)}
-                    onClick={() => downloadCsv(rows)}
+                    onClick={() => downloadCsv(rows, projectUuid)}
                     disabled={!rows.length}>
                     
                       CSV exportieren
@@ -9513,7 +10049,7 @@ export default function KalkulationMitKI() {
                     <button
                     type="button" className={rlcClass(null,
                     lvMenuItem)}
-                    onClick={() => exportXlsx(rows, chapterTotals, summary, offer)}
+                    onClick={() => exportXlsx(rows, chapterTotals, summary, offer, projectUuid)}
                     disabled={!rows.length}>
                     
                       XLSX exportieren
@@ -9582,12 +10118,18 @@ export default function KalkulationMitKI() {
               </FilterButton>
 
               <FilterButton
-              active={viewFilter === "hochrisiko"}
-              onClick={() => setViewFilter("hochrisiko")}>
+              active={viewFilter === "pruefung"}
+              onClick={() => setViewFilter("pruefung")}>
               
-                Prüfpflichtig {problemCounts.hochrisiko}
+                Zur Prüfung {problemCounts.pruefung}
               </FilterButton>
 
+              <FilterButton
+              active={viewFilter === "preisaufbauAbweichung"}
+              onClick={() => setViewFilter("preisaufbauAbweichung")}>
+              
+                EP ≠ Preisaufbau {problemCounts.preisaufbauAbweichung}
+              </FilterButton>
 
               <FilterButton
               active={viewFilter === "doppelte"}
@@ -9626,100 +10168,130 @@ export default function KalkulationMitKI() {
             <span className={rlcClass(null, lvDropdownHint)}>öffnen / schließen</span>
           </summary>
 
-          <div className={rlcClass(null, { ...exportRow, marginBottom: 10 })}>
-            <button
-                type="button" className={rlcClass(null,
-                btnSecondary)}
-                onClick={selectWarningsForOpenAi}
-                disabled={!rows.length}
-                title="Wählt Warnungen, kritische Positionen, Prüfpflichtig und Positionen ohne DB für OpenAI aus.">
-                
-              Prüfhinweise auswählen
-            </button>
-
-            <button
-                type="button" className={rlcClass(null,
-                btnPrimary)}
-                onClick={() => void runRlcAction("ki-openai-selected", "Auswahl mit OpenAI prüfen", () => runSelectedOpenAiCheck())}
-                disabled={loading || selectedOpenAiIds.length === 0}
-                title="Prüft nur die ausgewählten Positionen mit OpenAI.">
-                
-              Auswahl mit OpenAI prüfen ({selectedOpenAiIds.length})
-            </button>
-
-            <button
-                type="button" className={rlcClass(null,
-                btnSecondary)}
-                onClick={clearOpenAiSelection}
-                disabled={selectedOpenAiIds.length === 0}>
-                
-              Auswahl löschen
-            </button>
-
-            <button
-                type="button" className={rlcClass(null,
-                btnPrimary)}
-                onClick={acceptSelectedOpenAiSuggestion}
-                disabled={!selectedHasOpenAiProposal()}
-                title="Übernimmt den OpenAI-Vorschlag nur für die aktuell ausgewählte Position.">
-                
-              OpenAI übernehmen
-            </button>
-
-            <button
-                type="button" className={rlcClass(null,
-                btnSecondary)}
-                onClick={rejectSelectedOpenAiSuggestion}
-                disabled={!selectedHasOpenAiProposal()}>
-                
-              OpenAI ablehnen
-            </button>
-
-            <button
-                type="button" className={rlcClass(null,
-                btnSecondary)}
-                onClick={saveSelectedOpenAiSuggestionAsKnowledge}
-                disabled={!selectedHasOpenAiProposal()}
-                title="Speichert den OpenAI-Vorschlag als geprüften Firmenwert in der lokalen Kalkulationsdatenbank.">
-                
-              Als Firmenwert speichern
-            </button>
-
-            <button
-                type="button" className={rlcClass(null,
-                btnPrimary)}
-                onClick={() => void runRlcAction("ki-save-knowledge", "In Datenbank übertragen", () => saveAllToKnowledge())}
-                disabled={!rows.length}
-                title="Überträgt alle aktuell kalkulierten LV-Positionen in die Kalkulationsdatenbank.">
-                
-              In Datenbank übertragen ({rows.length})
-            </button>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 14,
+            alignItems: "center",
+            padding: "9px 12px",
+            marginBottom: 10,
+            background: "#f8fbff",
+            border: "1px solid #dbe7f5",
+            borderRadius: 10,
+            flexWrap: "wrap"
+          }}>
+            <span className={rlcClass(null, filterMeta)} style={{ minWidth: 0 }}>
+              X84 ist nur Vergleich · RLC Marktpreisvorschläge ändern den RLC-Preis nie automatisch.
+            </span>
+            <span className={rlcClass(null, filterMeta)} style={{ whiteSpace: "nowrap" }}>
+              Marktpreis-Auswahl: <b>{selectedOpenAiIds.length}</b> Position(en)
+            </span>
+          </div>
+          {showCreditBooking ? (
+            <div style={{ marginBottom: 12, padding: 16, border: "2px solid #2563eb", background: "#eff6ff", borderRadius: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontWeight: 950, fontSize: 16, color: "#1e3a8a" }}>RLC Marktpreis-Credits kaufen</div>
+                  <div style={{ marginTop: 4, fontSize: 12, color: "#475569" }}>Nur „RLC Marktpreisprüfung“ verbraucht Credits. Die normale RLC-Kalkulation bleibt inklusive.</div>
+                </div>
+                <button type="button" className={rlcClass(null, btnSecondary)} onClick={() => setShowCreditBooking(false)}>Schließen</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginTop: 14 }}>
+                {[
+                  { credits: 100 as const, price: "9,90 €" },
+                  { credits: 500 as const, price: "39,00 €" },
+                  { credits: 2000 as const, price: "129,00 €" }
+                ].map((pkg) => (
+                  <button key={pkg.credits} type="button" disabled={creditBookingBusy}
+                    onClick={() => void bookOpenAiCredits(pkg.credits)}
+                    style={{ padding: 14, borderRadius: 11, border: "1px solid #93c5fd", background: "white", cursor: creditBookingBusy ? "wait" : "pointer", textAlign: "left" }}>
+                    <div style={{ fontWeight: 950, color: "#0f172a" }}>{pkg.credits.toLocaleString("de-DE")} Prüfungen</div>
+                    <div style={{ marginTop: 3, fontWeight: 900, color: "#1d4ed8" }}>{pkg.price} einmalig</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ marginTop: 10, fontSize: 12, color: "#64748b" }}>Nach der Buchung wird der Auftrag vorgemerkt. Die Credits werden nach bestätigtem Zahlungseingang freigeschaltet.</div>
+            </div>
+          ) : null}
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 10
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" className={rlcClass(null, btnPrimary)}
+                style={{ minHeight: 40, paddingInline: 16, whiteSpace: "nowrap" }}
+                onClick={() => void runSelectedOpenAiCheck()}
+                disabled={loading || !!(marketCreditBalance && selectedOpenAiIds.length > n(marketCreditBalance.totalRemaining))}
+                title={selectedOpenAiIds.length ? "Prüft die ausgewählten Positionen mit der RLC Marktpreisprüfung und aktuellen Marktquellen." : "Bitte zuerst mindestens eine Position über die KI-Checkbox auswählen."}>
+                RLC Marktpreisprüfung starten
+              </button>
+              <button type="button" className={rlcClass(null, btnPrimary)}
+                style={{ minHeight: 40, paddingInline: 14, whiteSpace: "nowrap" }}
+                onClick={() => setShowCreditBooking((v) => !v)}
+                title="Zusätzliche RLC Marktpreisprüfungen kaufen">
+                RLC Marktpreis-Credits kaufen
+              </button>
+              {marketCreditBalance ? (
+                <div title="Monatskontingent + zugekaufte Firmenprüfungen" style={{
+                  minHeight: 40, display: "flex", alignItems: "center", gap: 7,
+                  padding: "0 12px", borderRadius: 9, border: "1px solid #93c5fd",
+                  background: "#eff6ff", color: "#1e3a8a", fontWeight: 850, whiteSpace: "nowrap"
+                }}>
+                  <span style={{ fontSize: 12, color: "#475569" }}>KI-Credits</span>
+                  <strong style={{ fontSize: 17 }}>{n(marketCreditBalance.totalRemaining)}</strong>
+                  <span style={{ fontSize: 11, color: "#64748b" }}>({n(marketCreditBalance.includedRemaining)} Monat + {n(marketCreditBalance.purchasedRemaining)} Zusatz)</span>
+                </div>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+              <span className={rlcClass(null, filterMeta)} style={{ whiteSpace: "nowrap", marginRight: 4 }}>
+                Seite {lvPage} von {lvTotalPages} · {visibleLvRows.length} von {filteredRows.length} Positionen
+              </span>
+              <button
+                type="button"
+                className={rlcClass(null, btnSecondary)}
+                onClick={() => setLvPage((page) => Math.max(1, page - 1))}
+                disabled={lvPage <= 1}>
+                ← Zurück
+              </button>
+              <button
+                type="button"
+                className={rlcClass(null, btnSecondary)}
+                onClick={() => setLvPage((page) => Math.min(lvTotalPages, page + 1))}
+                disabled={lvPage >= lvTotalPages}>
+                Weiter →
+              </button>
+            </div>
           </div>
           <div className={rlcClass(null, lvTableScroll)}>
-            <table className={rlcClass(null, lvTable)}>
+            <table className={rlcClass("rlc-kalkulation-flat-table", lvTable)}>
                 <colgroup>
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-878" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-879" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-880" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-881" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-882" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-883" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-884" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-885" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-886" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-887" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-888" />
-                  <col className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-889" />
+                  <col style={{ width: "3%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "35%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "5%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "6%" }} />
                 </colgroup>
                 <thead>
                   <tr>
-                    <th className={rlcClass(null, lvTh)}>OpenAI</th>
+                    <th className={rlcClass(null, lvTh)} title="Für RLC Marktpreisprüfung auswählen">KI</th>
                     <th className={rlcClass(null, lvTh)}>Auftrag</th>
                     <th className={rlcClass(null, lvTh)}>Pos.</th>
                     <th className={rlcClass(null, lvTh)}>Kurztext</th>
                     <th className={rlcClass(null, lvThRight)}>Menge</th>
                     <th className={rlcClass(null, lvTh)}>ME</th>
-                    <th className={rlcClass(null, lvThRight)}>{hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}</th>
+                    <th className={rlcClass(null, lvThRight)}>X84</th>
                     <th className={rlcClass(null, lvThRight)}>EP RLC-KI</th>
                     <th className={rlcClass(null, lvThRight)}>EP final</th>
                     <th className={rlcClass(null, lvThRight)}>GP final</th>
@@ -9757,21 +10329,22 @@ export default function KalkulationMitKI() {
                         }}>
                         
                         <td className={rlcClass(null, lvTd)}>
-                          <input
-                            type="checkbox"
+                          <input type="checkbox"
                             checked={selectedOpenAiIds.includes(r.id)}
-                            disabled={kiIsStructuralRow(r)}
+                            onChange={(e) => toggleOpenAiSelection(r.id, e.target.checked)}
                             onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
-                            toggleOpenAiSelection(r.id, e.target.checked)
-                            } />
-                          
+                            disabled={kiIsStructuralRow(r)}
+                            title="Diese Position für die RLC Marktpreisprüfung auswählen" />
                         </td>
 
                         <td className={rlcClass(null, lvTd)}>
                           <select className={rlcClass(null,
                           lvSelect)}
-                          value={r.auftragId || ""}
+                          value={
+                            auftraege.some((a) => a.id === r.auftragId)
+                              ? (r.auftragId || "")
+                              : (auftraege.find((a) => a.name === r.auftragName && a.type === r.auftragType)?.id || "")
+                          }
                           onChange={(e) => {
                             const a = auftraege.find(
                               (x) => x.id === e.target.value
@@ -9789,7 +10362,6 @@ export default function KalkulationMitKI() {
 
                             {auftraege.map((a) =>
                             <option key={a.id} value={a.id}>
-                                {a.type === "haupt" ? "Haupt" : "Unter"} ·{" "}
                                 {a.name}
                               </option>
                             )}
@@ -9804,6 +10376,11 @@ export default function KalkulationMitKI() {
                           updateRow(r.id, { posNr: e.target.value })
                           }
                           onClick={(e) => e.stopPropagation()} />
+                          {gaebPositionTypeLabel(r) ? (
+                            <div style={{ fontSize: 9.5, opacity: 0.72, marginTop: 3 }}>
+                              {gaebPositionTypeLabel(r)}
+                            </div>
+                          ) : null}
                           
                         </td>
 
@@ -9825,8 +10402,8 @@ export default function KalkulationMitKI() {
 
     <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-890">
       <button
-                                type="button" className={rlcClass(null,
-                                { ...btnMini, minHeight: 26, padding: "3px 7px", fontSize: 9.5, lineHeight: 1.05 })}
+                                type="button" className={rlcClass("rlc-kalkulation-action-btn",
+                                { ...btnMini, minHeight: 26, padding: "3px 8px", fontSize: 9.5, lineHeight: 1.05, border: "1px solid #93C5FD", background: "#EFF6FF", boxShadow: "none", color: "#0B5BD3", textDecoration: "none", borderRadius: 7 })}
                                 onClick={(e) => {
                                   e.stopPropagation();
 
@@ -9838,7 +10415,6 @@ export default function KalkulationMitKI() {
                                   r.langtext || "—",
                                   "",
                                   `Menge: ${qty(r.menge)} ${r.einheit || "EH"}`,
-                                  `${hasRealX84ForProject(projectKey) ? "EP X84" : "EP Angebot"}: ${hasRealX84ForProject(projectKey) ? money(getOfferUnitPrice(r)) : "—"}`,
                                   `EP RLC-KI: ${money(getRlcKiUnitPrice(r))}`,
                                   `EP final: ${money(getUnitPrice(r))}`,
                                   `Gesamt netto: ${money(lineNet(r))}`].
@@ -9849,6 +10425,14 @@ export default function KalkulationMitKI() {
                                 
         Langtext / Summe
       </button>
+      <button
+        type="button" className={rlcClass("rlc-kalkulation-action-btn",
+        { ...btnMini, minHeight: 26, padding: "3px 8px", fontSize: 9.5, lineHeight: 1.05, marginLeft: 8, border: "1px solid #93C5FD", background: "#EFF6FF", boxShadow: "none", color: "#0B5BD3", textDecoration: "none", borderRadius: 7 })}
+        onClick={(e) => { e.stopPropagation(); void runSelectedOpenAiCheck(false, r.id); }}
+        disabled={loading || kiIsStructuralRow(r) || (marketCreditBalance && n(marketCreditBalance.totalRemaining) <= 0)}
+        title="Prüft diese Position mit der RLC Marktpreisprüfung. Der Vorschlag wird nicht automatisch übernommen.">
+        RLC Marktpreisprüfung
+      </button>
     </div>
   </div> :
                           null}
@@ -9858,7 +10442,7 @@ export default function KalkulationMitKI() {
                           null}
 
                           {rowHasOpenAiProposal(r) ?
-                          <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-891">
+                          <div id={`rlc-market-result-${r.id}`} className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-891">
 
 
 
@@ -9872,7 +10456,7 @@ export default function KalkulationMitKI() {
 
                             
                               <div>
-  OpenAI-Vorschlag: {money(getOpenAiProposalPrice(r))} / EH
+  RLC Marktpreisvorschlag: {money(getOpenAiProposalPrice(r))} / EH
 </div>
 
 <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-892">
@@ -9881,7 +10465,7 @@ export default function KalkulationMitKI() {
 </div>
 
 <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-893">
-  Differenz OpenAI zu X84:{" "}
+  Differenz Marktpreis zu X84:{" "}
   {money(round2(getOpenAiProposalPrice(r) - getOfferUnitPrice(r)))} ·{" "}
   {getOfferUnitPrice(r) > 0 ?
                               `${round2(Math.abs(getOpenAiProposalPrice(r) - getOfferUnitPrice(r)) / getOfferUnitPrice(r) * 100)} %` :
@@ -9889,7 +10473,7 @@ export default function KalkulationMitKI() {
 </div>
 
 <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-894">
-  Differenz OpenAI zu RLC-KI:{" "}
+  Differenz Marktpreis zu RLC-KI:{" "}
   {money(round2(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)))} ·{" "}
   {getRlcKiUnitPrice(r) > 0 ?
                               `${round2(Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r) * 100)} %` :
@@ -9907,15 +10491,27 @@ export default function KalkulationMitKI() {
                               <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-896">
                                 Bewertung:{" "}
                                 {getRawOpenAiProposalPrice(r) !== getOpenAiProposalPrice(r) ?
-                              "OpenAI wurde automatisch gegen RLC-Bibliothek plausibilisiert" :
+                              "RLC Marktpreis wurde automatisch gegen die RLC-Bibliothek plausibilisiert" :
                               getRlcKiUnitPrice(r) <= 0 ?
                               "kein RLC-KI EP vorhanden" :
                               Math.abs(getOpenAiProposalPrice(r) - getRlcKiUnitPrice(r)) / getRlcKiUnitPrice(r) < 0.1 ?
                               "nahe am aktuellen Preis" :
                               getOpenAiProposalPrice(r) > getRlcKiUnitPrice(r) ?
-                              "OpenAI sieht aktuellen Preis eher zu niedrig" :
-                              "OpenAI sieht aktuellen Preis eher zu hoch"}
+                              "Marktprüfung bewertet den aktuellen Preis eher zu niedrig" :
+                              "Marktprüfung bewertet den aktuellen Preis eher zu hoch"}
                               </div>
+
+                              {String((r as any).openAiSuggestedReason || "").trim() ?
+                              <div style={{ marginTop: 6, fontSize: 11.5, lineHeight: 1.4, color: "#334155" }}>
+                                <strong>Begründung:</strong>{" "}
+                                {String((r as any).openAiSuggestedReason || "").trim().slice(0, 420)}
+                                {String((r as any).openAiSuggestedReason || "").trim().length > 420 ? "…" : ""}
+                              </div> : null}
+
+                              {Array.isArray((r as any).openAiSuggestedSources) && (r as any).openAiSuggestedSources.length > 0 ?
+                              <div style={{ marginTop: 5, fontSize: 10, lineHeight: 1.35, color: "#64748b", fontWeight: 700 }}>
+                                Marktquellen geprüft: {(r as any).openAiSuggestedSources.length}
+                              </div> : null}
 
                               <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-897">
                                 <button
@@ -9926,7 +10522,7 @@ export default function KalkulationMitKI() {
                                   acceptOpenAiSuggestionForRow(r.id);
                                 }}>
                                 
-                                  OpenAI-Preis übernehmen
+                                  RLC Marktpreis übernehmen
                                 </button>
 
                                 <button
@@ -9979,7 +10575,9 @@ export default function KalkulationMitKI() {
                         </td>
 
                         <td className={rlcClass(null, lvTdRight)}>
-                          <b>{money(getOfferUnitPrice(r))}</b>
+                          <span title="Preis aus X84: nur Vergleich, niemals automatische Übernahme.">
+                            {getOfferUnitPrice(r) > 0 ? money(getOfferUnitPrice(r)) : "—"}
+                          </span>
                         </td>
 
                         <td className={rlcClass(null, lvTdRight)}>
@@ -10000,27 +10598,32 @@ export default function KalkulationMitKI() {
 
                                 {ki.valid > 0 ?
                                 <button
-                                  type="button" className={rlcClass(null,
+                                  type="button" className={rlcClass("rlc-kalkulation-action-btn",
                                   {
                                     ...btnMini,
-                                    width: "100%",
+                                    width: "auto",
                                     maxWidth: "100%",
                                     minWidth: 0,
-                                    minHeight: 26,
-                                    padding: "3px 4px",
+                                    minHeight: 24,
+                                    padding: "2px 7px",
                                     fontSize: 9.5,
-                                    lineHeight: 1.05,
-                                    whiteSpace: "normal",
-                                    overflowWrap: "anywhere",
+                                    lineHeight: 1,
+                                    whiteSpace: "nowrap",
+                                    overflowWrap: "normal",
                                     textAlign: "center",
-                                    boxSizing: "border-box"
+                                    boxSizing: "border-box",
+                                    border: "1px solid #93C5FD",
+                                    background: "#EFF6FF",
+                                    color: "#0B5BD3",
+                                    textDecoration: "none",
+                                    borderRadius: 7
                                   })}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     applyKiSuggestedPrice(r.id);
                                   }}>
                                   
-                                    KI übernehmen
+                                    Übernehmen
                                   </button> :
                                 null}
                               </div>);
@@ -10030,16 +10633,24 @@ export default function KalkulationMitKI() {
 
                         <td className={rlcClass(null, lvTdRight)}>
                           <input
-                            type="number" className={rlcClass(null,
-                            lvPriceInput)}
-                            value={getUnitPrice(r)}
-                            onChange={(e) =>
-                            updateRow(r.id, {
-                              finalUnitPrice: n(e.target.value),
-                              preis: n(e.target.value),
-                              priceDecision: "manual" as any
-                            })
-                            }
+                            key={`final-price-${r.id}-${getUnitPrice(r)}`}
+                            type="text"
+                            inputMode="decimal"
+                            className={rlcClass(null, lvPriceInput)}
+                            defaultValue={priceValue(getUnitPrice(r))}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={(e) => {
+                              const value = n(e.currentTarget.value);
+                              updateRow(r.id, {
+                                finalUnitPrice: value,
+                                preis: value,
+                                priceDecision: "manual" as any
+                              });
+                              e.currentTarget.value = priceValue(value);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") e.currentTarget.blur();
+                            }}
                             onClick={(e) => e.stopPropagation()} />
                           
                         </td>
@@ -10049,15 +10660,15 @@ export default function KalkulationMitKI() {
                         </td>
 
                         <td className={rlcClass(null, lvTd)}>
-                          <span className={rlcClass(null, statusStyle(r.calculationStatus))}>
-                            {kiIsStructuralRow(r) ? "Struktur" : statusLabel(r.calculationStatus)}
+                          <span className={rlcClass(null, getPriceBreakdownAudit(r).requiresReview ? badgeWarn : statusStyle(r.calculationStatus))}>
+                            {kiIsStructuralRow(r) ? "Struktur" : getPriceBreakdownAudit(r).requiresReview ? "Preisaufbau prüfen" : statusLabel(r.calculationStatus)}
                           </span>
                         </td>
 
                         <td className={rlcClass(null, lvTd)}>
                           <button
                             type="button" className={rlcClass(null,
-                            { ...btnDangerMini, minHeight: 26, padding: "3px 6px", fontSize: 9.5, lineHeight: 1, whiteSpace: "nowrap" })}
+                            { ...btnDangerMini, minHeight: 20, padding: "1px 0", fontSize: 9.5, lineHeight: 1, whiteSpace: "nowrap", border: "0", background: "transparent", boxShadow: "none", borderRadius: 0, textDecoration: "underline" })}
                             onClick={(e) => {
                               e.stopPropagation();
                               deleteRow(r.id);
@@ -10349,8 +10960,8 @@ export default function KalkulationMitKI() {
             <span className={rlcClass(null, riskStyle(selectedRow.riskLevel))}>
               Risiko: {riskLabel(selectedRow.riskLevel)}
             </span>
-            <span className={rlcClass(null, statusStyle(selectedRow.calculationStatus))}>
-              {statusLabel(selectedRow.calculationStatus)}
+            <span className={rlcClass(null, getPriceBreakdownAudit(selectedRow).requiresReview ? badgeWarn : statusStyle(selectedRow.calculationStatus))}>
+              {getPriceBreakdownAudit(selectedRow).requiresReview ? "Preisaufbau prüfen" : statusLabel(selectedRow.calculationStatus)}
             </span>
           </div>
 
@@ -10366,10 +10977,13 @@ export default function KalkulationMitKI() {
             <Detail label="Quelle" value={selectedRow.source || "—"} />
             <Detail label="Finaler EP" value={money(getUnitPrice(selectedRow))} />
             <Detail label="Zeilensumme" value={money(lineNet(selectedRow))} />
-            <Detail label="EP Angebot X84" value={money(getOfferUnitPrice(selectedRow))} />
             <Detail label="EP RLC-KI" value={money(getRlcKiUnitPrice(selectedRow))} />
-            <Detail label="Differenz EP" value={`${money(getPriceDifference(selectedRow))} · ${getPriceDifferencePct(selectedRow)}%`} />
-            <Detail label="Differenz GP" value={money(lineNet(selectedRow) - offerLineNet(selectedRow))} />
+            <Detail
+              label="Preisaufbau-Delta"
+              value={(() => {
+                const audit = getPriceBreakdownAudit(selectedRow);
+                return audit.hasBreakdown ? `${money(audit.delta)} · ${audit.deltaPct.toFixed(2)} %` : "—";
+              })()} />
           </div>
 
           <div className={rlcClass(null, separator)} />
@@ -10623,14 +11237,25 @@ function RlcActionProgress({
   return (
     <div className={rlcClass(null, rlcActionProgressWrap)}>
       <div className={rlcClass(null, rlcActionProgressTop)}>
-        <b>
+        <b style={{ color: "#0F172A", fontWeight: 800, opacity: 1 }}>
           {action.status === "running" ?
           "RLC arbeitet…" :
           action.status === "success" ?
           "Abgeschlossen" :
           "Fehler"}
         </b>
-        <span>{action.label} · {progress}%</span>
+        <span style={{ color: "#0F172A", fontWeight: 700, opacity: 1 }}>{progress}%</span>
+      </div>
+
+      <div style={{
+        fontSize: 15,
+        fontWeight: 800,
+        color: "#0F172A",
+        marginBottom: 9,
+        whiteSpace: "normal",
+        overflowWrap: "anywhere"
+      }}>
+        {action.label}
       </div>
 
       <div className={rlcClass(null, rlcActionProgressTrack)}>
@@ -10682,10 +11307,10 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }
@@ -10746,7 +11371,7 @@ function QuickAction({
 
 /* ================= EXPORT ================= */
 
-function downloadCsv(rows: EliteRow[]) {
+function downloadCsv(rows: EliteRow[], projectId = "") {
   const header = [
   "PosNr",
   "Kurztext",
@@ -10802,14 +11427,22 @@ function downloadCsv(rows: EliteRow[]) {
   const blob = new Blob([[header.join(";"), ...lines].join("\n")], {
     type: "text/csv;charset=utf-8"
   });
-  downloadBlob(blob, "ki-kalkulation-elite.csv");
+  const fileName = "ki-kalkulation-elite.csv";
+  downloadBlob(blob, fileName);
+
+  if (projectId) {
+    void import("../../lib/dmsArchive")
+      .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+      .catch((error) => console.warn("[ki-kalkulation:csv:dms]", error));
+  }
 }
 
 function exportXlsx(
 rows: EliteRow[],
 chapterTotals: Record<string, any>,
 summary: any,
-offer: OfferData)
+offer: OfferData,
+projectId = "")
 {
   const wsRows = XLSX.utils.json_to_sheet(
     rows.map((r) => ({
@@ -10883,7 +11516,18 @@ offer: OfferData)
   XLSX.utils.book_append_sheet(wb, wsChapters, "Kapitel");
   XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
-  XLSX.writeFile(wb, `Elite_Kalkulation_${safeFileName(offer.number)}.xlsx`);
+  const fileName = `Elite_Kalkulation_${safeFileName(offer.number)}.xlsx`;
+  const blob = new Blob(
+    [XLSX.write(wb, { type: "array", bookType: "xlsx" })],
+    { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+  );
+  downloadBlob(blob, fileName);
+
+  if (projectId) {
+    void import("../../lib/dmsArchive")
+      .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+      .catch((error) => console.warn("[ki-kalkulation:xlsx:dms]", error));
+  }
 }
 
 
@@ -11171,6 +11815,7 @@ async function exportPdfLocal(opts: {
 
 function exportUrkalkulationPdfLocal(opts: {
   projectKey: string;
+  projectId?: string;
   projectTitle: string;
   rows: EliteRow[];
   summary: any;
@@ -11182,6 +11827,7 @@ function exportUrkalkulationPdfLocal(opts: {
 }) {
   const {
     projectKey,
+    projectId,
     projectTitle,
     rows,
     summary,
@@ -11701,7 +12347,7 @@ function exportUrkalkulationPdfLocal(opts: {
     doc.text(`Seite ${i}/${pages}`, pageW - mx, pageH - 4, { align: "right" });
   }
 
-  saveRlcPdfWithCompanyHeader(doc, `Urkalkulation_${safeFileName(offer.number || projectKey)}.pdf`);
+  saveRlcPdfWithCompanyHeader(doc, `Urkalkulation_${safeFileName(offer.number || projectKey)}.pdf`, projectId);
 }
 /* ================= STYLES ================= */
 
@@ -12743,6 +13389,7 @@ const lvStickyHeader: React.CSSProperties = {
 };
 const lvTable: React.CSSProperties = {
   width: "100%",
+  minWidth: 0,
   maxWidth: "100%",
   tableLayout: "fixed",
   borderCollapse: "collapse"
@@ -12753,14 +13400,14 @@ const lvTh: React.CSSProperties = {
   top: 0,
   zIndex: 5,
   textAlign: "left",
-  padding: "4px 4px",
-  fontSize: 9.5,
+  padding: "4px 3px",
+  fontSize: 9.2,
   color: "#475569",
   background: "#F8FAFC",
   borderBottom: "1px solid #DDE3EC",
-  whiteSpace: "normal",
-  overflowWrap: "anywhere",
-  lineHeight: 1.05,
+  whiteSpace: "nowrap",
+  overflowWrap: "normal",
+  lineHeight: 1.1,
   fontWeight: 700
 };
 
@@ -12793,19 +13440,20 @@ const lvRowStructure: React.CSSProperties = {
 };
 
 const lvTd: React.CSSProperties = {
-  padding: "4px 4px",
-  fontSize: 10.5,
-  lineHeight: 1.15,
+  padding: "3px 2px",
+  fontSize: 11.5,
+  lineHeight: 1.35,
+  color: "#0F172A",
   borderBottom: "1px solid #EEF2F7",
   verticalAlign: "middle",
   minWidth: 0,
-  overflow: "hidden",
-  overflowWrap: "anywhere"
+  overflow: "visible",
+  overflowWrap: "normal"
 };
 
 const lvTextTd: React.CSSProperties = {
   ...lvTd,
-  minWidth: 280
+  minWidth: 0
 };
 
 const lvTdRight: React.CSSProperties = {
@@ -12816,44 +13464,65 @@ const lvTdRight: React.CSSProperties = {
 
 const lvSelect: React.CSSProperties = {
   ...cellInput,
-  width: 142,
-  minHeight: 28,
-  height: 28,
-  padding: "3px 5px",
-  fontSize: 10.5,
-  lineHeight: 1.1
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  minHeight: 32,
+  height: 32,
+  padding: "4px 2px",
+  fontSize: 11.5,
+  lineHeight: 1.45,
+  border: "0",
+  boxShadow: "none",
+  outline: "none",
+  borderRadius: 0,
+  background: "transparent",
+  appearance: "none"
 };
 
 const lvPosInput: React.CSSProperties = {
   ...cellInput,
-  width: 84,
+  width: "100%",
+  maxWidth: "none",
+  minWidth: 92,
   minHeight: 28,
   height: 28,
-  padding: "3px 5px",
-  fontSize: 10.5
+  padding: "2px 3px",
+  fontSize: 11.5,
+  border: "0",
+  boxShadow: "none",
+  outline: "none",
+  borderRadius: 0,
+  background: "transparent"
 };
 
 const lvKurztextInput: React.CSSProperties = {
   ...cellInput,
   width: "100%",
-  minWidth: 330,
-  fontWeight: 700
+  minWidth: 0,
+  fontWeight: 700,
+  border: "0",
+  boxShadow: "none",
+  outline: "none",
+  borderRadius: 0,
+  background: "transparent",
+  padding: "2px 0"
 };
 
 const lvLangPreview: React.CSSProperties = {
   marginTop: 4,
-  fontSize: 11,
-  color: "#64748B",
+  fontSize: 11.5,
+  color: "#0F172A",
   lineHeight: 1.35,
   maxWidth: 680
 };
 
 const lvMiniWarning: React.CSSProperties = {
   marginTop: 2,
-  fontSize: 9,
-  color: "#B45309",
-  lineHeight: 1.15,
-  fontWeight: 650
+  fontSize: 11.5,
+  color: "#0F172A",
+  lineHeight: 1.35,
+  fontWeight: 500
 };
 
 const lvPriceCompareInline: React.CSSProperties = {
@@ -12865,31 +13534,47 @@ const lvPriceCompareInline: React.CSSProperties = {
 };
 const lvNumberInput: React.CSSProperties = {
   ...cellInput,
-  width: 66,
-  minHeight: 28,
-  height: 28,
-  padding: "3px 5px",
-  fontSize: 10.5,
-  textAlign: "right"
+  width: "100%",
+  minHeight: 26,
+  height: 26,
+  padding: "2px 3px",
+  fontSize: 11.5,
+  textAlign: "right",
+  border: "0",
+  boxShadow: "none",
+  outline: "none",
+  borderRadius: 0,
+  background: "transparent"
 };
 
 const lvUnitInput: React.CSSProperties = {
   ...cellInput,
-  width: 54,
-  minHeight: 28,
-  height: 28,
-  padding: "3px 5px",
-  fontSize: 10.5
+  width: "100%",
+  minHeight: 30,
+  height: 30,
+  padding: "4px 2px",
+  fontSize: 11.5,
+  lineHeight: 1.45,
+  border: "0",
+  boxShadow: "none",
+  outline: "none",
+  borderRadius: 0,
+  background: "transparent"
 };
 
 const lvPriceInput: React.CSSProperties = {
   ...cellInput,
-  width: 82,
-  minHeight: 28,
-  height: 28,
-  padding: "3px 5px",
-  fontSize: 10.5,
-  textAlign: "right"
+  width: "100%",
+  minHeight: 26,
+  height: 26,
+  padding: "2px 3px",
+  fontSize: 11.5,
+  textAlign: "right",
+  border: "0",
+  boxShadow: "none",
+  outline: "none",
+  borderRadius: 0,
+  background: "transparent"
 };
 
 const pagerBarCompact: React.CSSProperties = {
@@ -13464,7 +14149,9 @@ const rlcActionProgressWrap: React.CSSProperties = {
   padding: "12px 14px",
   borderRadius: 14,
   border: "1px solid rgba(191,219,254,0.95)",
-  background: "rgba(239,246,255,0.98)",
+  background: "#EFF6FF",
+  color: "#0F172A",
+  opacity: 1,
   boxShadow: "0 8px 22px rgba(15,23,42,0.08)"
 };
 

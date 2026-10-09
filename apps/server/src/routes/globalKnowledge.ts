@@ -5,6 +5,14 @@ import { PrismaClient } from "@prisma/client";
 const router = Router();
 const prisma = new PrismaClient();
 
+function requireGlobalKnowledgeWrite(req: any, res: any, next: any) {
+  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+  if (!["ADMIN", "ADMINISTRATOR", "KALKULATOR"].includes(role)) {
+    return res.status(403).json({ ok: false, error: "GLOBAL_KNOWLEDGE_WRITE_FORBIDDEN" });
+  }
+  return next();
+}
+
 function norm(s: any): string {
   return String(s ?? "")
     .toLowerCase()
@@ -56,7 +64,7 @@ router.get("/search", async (req, res) => {
   }
 });
 
-router.post("/import", async (req, res) => {
+router.post("/import", requireGlobalKnowledgeWrite, async (req, res) => {
   try {
     const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
     const sourceName = String(req.body?.sourceName ?? "manual-import");

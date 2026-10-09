@@ -1,4 +1,31 @@
 // apps/web/src/pages/kalkulation/store.lv.ts
+export function gaebPositionTypeLabel(row) {
+    const provis = String(row?.gaebProvis || "").trim().toLowerCase();
+    const accepted = String(row?.gaebAccepted || "").trim().toLowerCase();
+    const serRaw = row?.gaebAlnSerNo;
+    const ser = serRaw === null || serRaw === undefined || serRaw === "" ? null : Number(serRaw);
+    if (provis === "withouttotal") return "Bedarf · ohne GB";
+    if (provis === "withtotal") return "Bedarfsposition";
+    if (Number.isFinite(ser) && Number(ser) > 0) return accepted === "altaccept" ? "Alternative · beauftragt" : "Alternativposition";
+    if (Number.isFinite(ser) && Number(ser) === 0) return accepted === "basreject" ? "Grundposition · verworfen" : "Grundposition";
+    const legacyText = String([row?.kurztext, row?.langtext].filter(Boolean).join(" ")).toLowerCase();
+    if (/wie\s+pos\.?\s+vor.*jedoch|wie\s+vor.*jedoch/.test(legacyText)) return "Legacy · mögliche Alternative prüfen";
+    if (legacyText.includes("gegen nachweis zur ausführung kommen") || legacyText.includes("gegen nachweis zur anwendung kommen") || legacyText.includes("material gegen rechnungsnachweis")) return "Legacy · Bedarf/Regie prüfen";
+    return "";
+}
+export function gaebPositionCountsInTotal(row) {
+    const provis = String(row?.gaebProvis || "").trim().toLowerCase();
+    const provisAccpt = String(row?.gaebProvisAccpt || "").trim().toLowerCase();
+    const accepted = String(row?.gaebAccepted || "").trim().toLowerCase();
+    const serRaw = row?.gaebAlnSerNo;
+    const ser = serRaw === null || serRaw === undefined || serRaw === "" ? null : Number(serRaw);
+    if (provis === "withouttotal") return false;
+    if (provis && provisAccpt === "no") return false;
+    if (accepted === "altaccept") return true;
+    if (accepted === "basreject") return false;
+    if (Number.isFinite(ser) && Number(ser) > 0) return false;
+    return true;
+}
 const KEY = "rlc_lv_data_v1";
 function currentLvProjectKey() {
     try {
@@ -263,18 +290,26 @@ function dedupeAuftraege(rows) {
     }
     return out;
 }
+// Auftragsdaten sind UI-Metadaten. Bei vollem Browser-Speicher darf die
+// Kalkulationsseite deshalb niemals abstürzen.
+const auftraegeMemory = new Map();
 function readAuftraege() {
     try {
         const key = auftragKey();
         if (!key)
             return [];
+        const inMemory = auftraegeMemory.get(key);
+        if (inMemory?.length)
+            return sortAuftraege(dedupeAuftraege(inMemory));
         const raw = localStorage.getItem(key);
         if (!raw)
             return [];
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed))
             return [];
-        return sortAuftraege(dedupeAuftraege(parsed.map(makeAuftrag)));
+        const rows = sortAuftraege(dedupeAuftraege(parsed.map(makeAuftrag)));
+        auftraegeMemory.set(key, rows);
+        return rows;
     }
     catch {
         return [];
@@ -284,7 +319,14 @@ function writeAuftraege(rows) {
     const key = auftragKey();
     if (!key)
         return;
-    localStorage.setItem(key, JSON.stringify(sortAuftraege(dedupeAuftraege(rows))));
+    const normalized = sortAuftraege(dedupeAuftraege(rows));
+    auftraegeMemory.set(key, normalized);
+    try {
+        localStorage.setItem(key, JSON.stringify(normalized));
+    }
+    catch (error) {
+        console.warn("[Auftrag] Browser-Speicher voll oder nicht verfügbar. Auftragsstruktur bleibt für diese Sitzung im Speicher.", error);
+    }
 }
 function findAuftrag(id) {
     if (!id)
@@ -314,6 +356,11 @@ function makeRow(row) {
         kurztext: normalizeText(row.kurztext),
         langtext: normalizeText(row.langtext),
         bemerkung: normalizeText(row.bemerkung),
+        gaebAlnGroupNo: Number.isFinite(Number(row.gaebAlnGroupNo)) ? Number(row.gaebAlnGroupNo) : null,
+        gaebAlnSerNo: Number.isFinite(Number(row.gaebAlnSerNo)) ? Number(row.gaebAlnSerNo) : null,
+        gaebProvis: normalizeText(row.gaebProvis) || null,
+        gaebProvisAccpt: normalizeText(row.gaebProvisAccpt) || null,
+        gaebAccepted: normalizeText(row.gaebAccepted) || null,
         einheit: normalizeText(row.einheit),
         menge,
         preis,
@@ -361,6 +408,11 @@ function parseStoredRow(input) {
         kurztext: input?.kurztext,
         langtext: input?.langtext,
         bemerkung: input?.bemerkung,
+        gaebAlnGroupNo: input?.gaebAlnGroupNo,
+        gaebAlnSerNo: input?.gaebAlnSerNo,
+        gaebProvis: input?.gaebProvis,
+        gaebProvisAccpt: input?.gaebProvisAccpt,
+        gaebAccepted: input?.gaebAccepted,
         einheit: input?.einheit,
         menge: input?.menge,
         preis: input?.preis,

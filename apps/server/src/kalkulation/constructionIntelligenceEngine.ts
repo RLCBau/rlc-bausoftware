@@ -9,6 +9,7 @@
 
 import { performance } from "node:perf_hooks";
 import { calcRecipeKalkulationRow } from "./kalkulationsRecipeEngine";
+import { validateRecipeFamilyCompatibility } from "./autonomous/recipeFamilyCompatibility";
 import {
   resolveRlcAutonomousCalculation,
   mapAutonomousResultToKiRow,
@@ -429,7 +430,21 @@ export async function runConstructionIntelligence(
   });
 
   if (recipe && unitPrice(recipe as any) > 0) {
-    alternatives.push(recipe as any);
+    const recipeCompatibility = validateRecipeFamilyCompatibility(
+      row as any,
+      recipe as any
+    );
+
+    if (recipeCompatibility.compatible) {
+      alternatives.push(recipe as any);
+    } else {
+      trace.push({
+        stage: "recipe-family-guard",
+        status: "skipped",
+        durationMs: 0,
+        reason: recipeCompatibility.reason,
+      } as any);
+    }
   }
 
   const autonomous = await runStage(

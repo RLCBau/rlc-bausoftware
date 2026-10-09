@@ -12,6 +12,15 @@ import { slugifyLocal } from "../lib/slugifyLocal";
 
 const router = express.Router();
 
+router.use((req: any, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD") return next();
+  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+  if (!["ADMIN", "ADMINISTRATOR", "BAULEITER", "KALKULATOR"].includes(role)) {
+    return res.status(403).json({ ok: false, error: "IMPORT_FORBIDDEN" });
+  }
+  return next();
+});
+
 // ---- libs extra per il parsing dei file ----
 const DxfParser = require("dxf-parser");
 const { parseStringPromise } = require("xml2js");
@@ -21,7 +30,10 @@ const { parse: csvParse } = require("csv-parse/sync");
 const pdfParse = require("pdf-parse");
 
 // === Upload (in RAM) ===
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
+});
 
 // === Root per salvare project.json opzionale ===
 const PROJECTS_ROOT =
@@ -58,50 +70,23 @@ function isP2002Slug(e: any) {
  * Helper: company (id + code) – logica come in projects.ts
  * --------------------------------------------------- */
 async function ensureCompany(req: any): Promise<{ id: string; code: string }> {
-  const auth = (req as any)?.auth;
-
-  // 1) da auth
-  if (auth && typeof auth.company === "string") {
-    const found = await prisma.company.findUnique({
-      where: { id: auth.company },
-      select: { id: true, code: true },
-    });
-    if (found) return { id: found.id, code: String(found.code || "COMPANY") };
-  }
-
-  // 2) da ENV
-  if (process.env.DEV_COMPANY_ID) {
-    const found = await prisma.company.findUnique({
-      where: { id: process.env.DEV_COMPANY_ID },
-      select: { id: true, code: true },
-    });
-    if (found) return { id: found.id, code: String(found.code || "COMPANY") };
-  }
-
-  // 3) prima company se esiste
-  const first = await prisma.company.findFirst({
+  const auth = req?.auth || {};
+  const companyId = String(auth.companyId || auth.company || "").trim();
+  if (!companyId) throw new Error("COMPANY_REQUIRED");
+  const found = await prisma.company.findUnique({
+    where: { id: companyId },
     select: { id: true, code: true },
   });
-  if (first) return { id: first.id, code: String(first.code || "COMPANY") };
-
-  // 4) se non c’è niente, crea company standard
-  const created = await prisma.company.create({
-    data: {
-      name: "Standard Firma",
-      code: "STANDARD",
-    },
-    select: { id: true, code: true },
-  });
-
-  return { id: created.id, code: String(created.code || "STANDARD") };
+  if (!found) throw new Error("AUTH_COMPANY_NOT_FOUND");
+  return { id: found.id, code: String(found.code || "COMPANY") };
 }
 
 /* ---------------------------------------------------
  * Helper: salva project.json in folder progetto (FS-key = project.code)
  * --------------------------------------------------- */
-function saveProjectJsonBackup(projectCode: string, json: any) {
+function saveProjectJsonBackup(projectId: string, json: any) {
   try {
-    const dir = path.join(PROJECTS_ROOT, safeFsKey(projectCode));
+    const dir = path.join(PROJECTS_ROOT, safeFsKey(projectId));
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, "project.json"),
@@ -163,6 +148,26 @@ async function upsertProjectFromJson(req: any, json: any) {
   const baseSlug = slugifyLocal(`${companyCode}-${code}`);
   let slug = baseSlug;
 
+  // Progetti esistenti possono essere aggiornati solo da admin o membri del progetto.
+  const existingProject = await prisma.project.findUnique({
+    where: { code_companyId: { code, companyId } },
+    select: { id: true },
+  });
+  if (existingProject) {
+    const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+    const isAdmin = role === "ADMIN" || role === "ADMINISTRATOR";
+    if (!isAdmin) {
+      const userId = String(req?.auth?.sub || req?.auth?.userId || "").trim();
+      const member = userId
+        ? await prisma.projectMember.findFirst({
+            where: { projectId: existingProject.id, userId },
+            select: { id: true },
+          })
+        : null;
+      if (!member) throw new Error("PROJECT_MEMBER_REQUIRED");
+    }
+  }
+
   // upsert usando la unique [code, companyId]
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
@@ -201,8 +206,28 @@ async function upsertProjectFromJson(req: any, json: any) {
         },
       });
 
-      // backup json su FS-key = project.code
-      saveProjectJsonBackup(project.code, json);
+      // Se questo import ha creato un nuovo progetto, il creatore non-admin
+      // deve diventarne membro; altrimenti le route progetto/LV lo bloccherebbero subito.
+      if (!existingProject) {
+        const creatorRole = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+        const creatorUserId = String(req?.auth?.sub || req?.auth?.userId || "").trim();
+        if (creatorUserId && !["ADMIN", "ADMINISTRATOR"].includes(creatorRole)) {
+          const projectRole = creatorRole === "KALKULATOR" ? "KALKULATOR" : "BAULEITER";
+          await prisma.projectMember.upsert({
+            where: { projectId_userId: { projectId: project.id, userId: creatorUserId } },
+            update: { role: projectRole as any },
+            create: {
+              projectId: project.id,
+              userId: creatorUserId,
+              role: projectRole as any,
+              canDownload: true,
+            },
+          });
+        }
+      }
+
+      // backup JSON su FS-key canonico = project.id (evita collisioni cross-company)
+      saveProjectJsonBackup(project.id, json);
 
       return project;
     } catch (e: any) {
@@ -269,7 +294,14 @@ router.post("/project-zip", upload.single("file"), async (req, res) => {
       });
     }
 
+    const uncompressedSize = Number((entry as any)?.vars?.uncompressedSize || 0);
+    if (uncompressedSize > 5 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, error: "project.json im ZIP ist zu groß" });
+    }
     const content = await entry.buffer();
+    if (content.length > 5 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, error: "project.json im ZIP ist zu groß" });
+    }
     const json = JSON.parse(content.toString("utf8"));
     const project = await upsertProjectFromJson(req, json);
 

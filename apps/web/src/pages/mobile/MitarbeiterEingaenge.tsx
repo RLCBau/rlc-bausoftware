@@ -17,7 +17,7 @@ const SOURCES: SourceConfig[] = [
   { key: "LIEFERSCHEIN", title: "Lieferscheine", to: "/buro/lieferscheine", endpoints: ["/api/ls/inbox/list?projectId={project}"] },
   { key: "FOTOS", title: "Fotos / Notizen", to: "/buro/fotos", endpoints: ["/api/fotos/inbox/list?projectId={project}", "/api/photos/inbox/list?projectId={project}"] },
   { key: "TAGESBERICHT", title: "Tagesberichte", to: "/buro/tagesberichte", endpoints: ["/api/tagesbericht/inbox/list?projectId={project}", "/api/regie/inbox/list?projectId={project}"] },
-  { key: "BAUTAGEBUCH", title: "Bautagebuch", to: "/buro/bautagebuch", endpoints: ["/api/regie/inbox/list?projectId={project}"] },
+  { key: "BAUTAGEBUCH", title: "Bautagebuch", to: "/buro/bautagebuch", endpoints: ["/api/tagesbericht/inbox/list?projectId={project}"] },
   { key: "MENGENERMITTLUNG", title: "Mengenermittlung", to: "/mobile/pruefung/MENGENERMITTLUNG", endpoints: ["/api/inbox/{project}/MENGENERMITTLUNG"] },
 ];
 

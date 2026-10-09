@@ -7,8 +7,7 @@ import {
   Link,
   useLocation,
   useParams,
-  Outlet } from
-"react-router-dom";
+  Outlet, useNavigate } from "react-router-dom";
 
 import "./styles.css";
 import "./rlc-web-system.css";
@@ -45,19 +44,31 @@ const CADViewer = React.lazy(() => import("./pages/cad/CADViewer"));
 const AsBuilt = React.lazy(() => import("./pages/cad/asbuild"));
 /* ------------------ BÜRO ------------------ */
 const BuroLayout = React.lazy(() => import("./pages/buro"));
-const Projekte = React.lazy(() => import("./pages/buro/projekte"));
 const Dokumente = React.lazy(() => import("./pages/buro/dokumente"));
+const Baustellendokumentation = React.lazy(() => import("./pages/buro/baustellendokumentation"));
+const BueroKommunikation = React.lazy(() => import("./pages/buro/bueroKommunikation"));
 const Vertraege = React.lazy(() => import("./pages/buro/vertraege"));
+const OperationsCockpit = React.lazy(() => import("./pages/buro/OperationsCockpit"));
+const Shipments = React.lazy(() => import("./pages/buro/Shipments"));
+const MachineUsage = React.lazy(() => import("./pages/buro/MachineUsage"));
+const MachineReleases = React.lazy(() => import("./pages/buro/MachineReleases"));
+const OfficeAddons = React.lazy(() => import("./pages/buro/OfficeAddons"));
+const Preisspiegel = React.lazy(() => import("./pages/kalkulation/Preisspiegel"));
 const Tasks = React.lazy(() => import("./pages/buro/tasks"));
 const Kommunikation = React.lazy(() => import("./pages/buro/kommunikation"));
+const Notizen = React.lazy(() => import("./pages/buro/notizen"));
 const Nutzerverwaltung = React.lazy(() => import("./pages/buro/Nutzerverwaltung"));
 const OutlookKalender = React.lazy(() => import("./pages/buro/outlookKalender"));
 const Bauzeitenplan = React.lazy(() => import("./pages/buro/bauzeitenplan"));
+const PersonnelQualifications = React.lazy(() => import("./pages/buro/PersonnelQualifications"));
 const Personalverwaltung = React.lazy(() => import("./pages/buro/personalverwaltung"));
 const Maschinenverwaltung = React.lazy(() => import("./pages/buro/maschinenverwaltung"));
 const Materialverwaltung = React.lazy(() => import("./pages/buro/materialverwaltung"));
 const Sicherheit = React.lazy(() => import("./pages/buro/sicherheit"));
-const Ressourcenplanung = React.lazy(() => import("./pages/buro/ressourcenplanung"));
+const CatalogAssignments = React.lazy(() => import("./pages/buro/CatalogAssignments"));
+const MasterCatalog = React.lazy(() => import("./pages/buro/MasterCatalog"));
+const NonWorkingDays = React.lazy(() => import("./pages/buro/NonWorkingDays"));
+const Einsatzplanung = React.lazy(() => import("./pages/buro/ressourcenplanung"));
 const Uebergabe = React.lazy(() => import("./pages/buro/uebergabe"));
 const Lager = React.lazy(() => import("./pages/buro/lager"));
 const VorlagenCenter = React.lazy(() => import("./pages/buro/VorlagenCenter"));
@@ -114,6 +125,7 @@ const Kostenuebersicht = React.lazy(() => import("./pages/buchhaltung/Kostenuebe
 const Rechnungen = React.lazy(() => import("./pages/buchhaltung/rechnungen"));
 const Zahlungen = React.lazy(() => import("./pages/buchhaltung/zahlungen"));
 const Eingang = React.lazy(() => import("./pages/buchhaltung/eingang"));
+const Dauerbuchungen = React.lazy(() => import("./pages/buchhaltung/Dauerbuchungen"));
 const Kassenbuch = React.lazy(() => import("./pages/buchhaltung/kassenbuch"));
 const Kostenstellen = React.lazy(() => import("./pages/buchhaltung/kostenstellen"));
 const Mahnwesen = React.lazy(() => import("./pages/buchhaltung/mahnwesen"));
@@ -223,6 +235,7 @@ const SECTIONS: Section[] = [
   { key: "mit-ki", label: "Kalkulation" },
   { key: "datenbank", label: "Kalkulationsdatenbank" },
   { key: "versionsvergleich", label: "Versionsvergleich / Analyse" },
+  { key: "preisspiegel", label: "Preisspiegel / Vergabe" },
   { key: "crm", label: "CRM / Angebotsverfolgung" }]
 
 },
@@ -249,33 +262,24 @@ const SECTIONS: Section[] = [
   key: "buro",
   title: "4. Büro / Verwaltung",
   items: [
-  { key: "projekte", label: "Projektverwaltung" },
-  { key: "regieberichte", label: "Regieberichte" },
-  { key: "lieferscheine", label: "Lieferscheine" },
-  { key: "fotos", label: "Projektakte / Fotos" },
-  { key: "tagesberichte", label: "Tagesberichte" },
-  { key: "bautagebuch", label: "Bautagebuch" },
-  { key: "arbeitszeiten", label: "Arbeitszeiten" },
-  { key: "angebote", label: "Angebote" },
-  { key: "vorlagen", label: "Vorlagen-Center" },
-  { key: "dokumente", label: "Dokumentenverwaltung (Versionierung)" },
-  { key: "vertraege", label: "Vertragsverwaltung (digitale Signatur)" },
-  { key: "kommunikation", label: "Kommunikation / Notizen / Aufgaben" },
-  { key: "outlook", label: "Outlook / Kalender-Integration" },
-  { key: "nutzerverwaltung", label: "Nutzerverwaltung & Rechte" },
-  { key: "bauzeitenplan", label: "Bauzeitenplan (Gantt)" },
+  { key: "baustellendokumentation", label: "Baustellendokumentation" },
+  { key: "buero-kommunikation", label: "Büro & Kommunikation" },
+  { key: "buergschaften", label: "Bürgschaftsverwaltung" },
+  { key: "nachunternehmer", label: "NU-Management / Nachweise" },
+  { key: "personalnachweise", label: "Personal / Nachweise & Fristen" },
   { key: "personalverwaltung", label: "Personalverwaltung" },
-  { key: "maschinenverwaltung", label: "Maschinenverwaltung (Wartung)" },
-  { key: "materialverwaltung", label: "Materialverwaltung (Barcode/RFID)" },
-  { key: "ressourcenplanung", label: "Ressourcenplanung" },
-  { key: "sicherheit", label: "Sicherheit & Unterweisungen" },
-  { key: "uebergabe", label: "Digitale Übergabe & Abnahmeprotokolle" },
-  { key: "lager", label: "Lagerbestand & Einkauf" },
-  { key: "tasks", label: "Aufgaben" },
-  { key: "ki-sprachsteuerung", label: "Sprachsteuerung für Regieberichte" },
-  { key: "ki-regie-auto", label: "Regieberichte automatisch generieren" },
-  { key: "ki-optimierung", label: "Optimierung Bauzeiten & Ressourcen" },
-  { key: "ki-maengel", label: "Mängelmanagement KI-gestützt" }]
+  { key: "maschinenverwaltung", label: "Maschinenverwaltung" },
+  { key: "cockpit", label: "Projekt-Cockpit" },
+  { key: "feiertage", label: "Feiertage & Betriebsruhe" },
+  { key: "stammdaten", label: "Stammdaten-Kataloge" },
+  { key: "zuordnungen", label: "Führerscheine / Gefahrenklassen" },
+  { key: "versanderfassung", label: "Versanderfassung" },
+  { key: "freimeldungen", label: "Geräte / Freimeldungen" },
+  { key: "geraeteverrechnung", label: "Geräteverrechnung" },
+  { key: "materialverwaltung", label: "Materialverwaltung" },
+  { key: "sicherheit", label: "Sicherheit" },
+  { key: "bauzeitenplan", label: "Bauzeitenplan (Gantt)" },
+  { key: "nutzerverwaltung", label: "Nutzerverwaltung & Rechte" }]
 
 },
 {
@@ -298,18 +302,11 @@ const SECTIONS: Section[] = [
   key: "buchhaltung",
   title: "7. Buchhaltung",
   items: [
-  { key: "kostenuebersicht", label: "Kostenübersicht pro Projekt (live)" },
-  { key: "rechnungen", label: "Rechnungen / Abschläge" },
-  { key: "abschlagsrechnungen", label: "Abschlagsrechnungen" },
-  { key: "zahlungen", label: "Zahlungseingänge / Offene Posten" },
+  { key: "rechnungen", label: "Rechnungen" },
   { key: "eingang", label: "Eingangsrechnungen" },
-  { key: "kassenbuch", label: "Kassenbuch" },
-  { key: "kostenstellen", label: "Projekt-Kostenstellenstruktur" },
-  { key: "mahnwesen", label: "Mahnwesen" },
-  { key: "reports", label: "Dokumente & Belege verwalten" },
-  { key: "datev", label: "DATEV / Lexware / SAP Export" },
-  { key: "ust", label: "USt.-Übersicht" },
-  { key: "lieferscheine", label: "Lieferscheine (Kosten)" }]
+  { key: "zahlungen", label: "Zahlungen & Offene Posten" },
+  { key: "kostenuebersicht", label: "Kosten & Kostenstellen" }
+]
 
 },
 {
@@ -335,7 +332,7 @@ const SECTIONS: Section[] = [
 /* ------------------ ÜBERSICHT MAP ------------------ */
 
 const OVERVIEW: Record<string, React.ReactElement> = {
-  kalkulation: <Navigate to="/kalkulation/kalkulationszentrale" replace />,
+  kalkulation: <KalkulationUebersicht />,
   mengenermittlung: <MengenermittlungUebersicht />,
   cad: <Navigate to="/cad/viewer" replace />,
   buro: <BueroUebersicht />,
@@ -560,6 +557,45 @@ function SubsectionEmpty() {
 
 function AppShell() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  const showBackButton =
+    pathname !== "/" &&
+    pathname !== "/start";
+
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    window.location.href = "https://rlcbausoftware.com";
+  };
+
+  const backButton = showBackButton ? (
+    <button
+      type="button"
+      onClick={goBack}
+      aria-label="Zurück"
+      style={{
+        position: "fixed",
+        top: 14,
+        left: 14,
+        zIndex: 10000,
+        padding: "9px 14px",
+        borderRadius: 10,
+        border: "1px solid #cbd5e1",
+        background: "#ffffff",
+        color: "#0f1f3d",
+        fontWeight: 800,
+        fontSize: 13,
+        cursor: "pointer",
+        boxShadow: "0 4px 14px rgba(15,31,61,.10)"
+      }}
+    >
+      ← Zurück
+    </button>
+  ) : null;
   const isPlatformPath =
     pathname === "/portal" ||
     pathname === "/platform/admin";
@@ -568,6 +604,7 @@ function AppShell() {
   if (isPublicPath(pathname)) {
     return (
       <div className="app rlc-app-shell">
+        {backButton}
         <React.Suspense fallback={<RouteLoadingFallback />}>
           <Routes>
             <Route path="/" element={<PricingPage />} />
@@ -585,6 +622,7 @@ function AppShell() {
     return (
       <RequireAuth>
         <div className="app rlc-app-shell">
+          {backButton}
           <React.Suspense fallback={<RouteLoadingFallback />}>
             <Routes>
               <Route path="/portal" element={<PlatformAdmin />} />
@@ -602,6 +640,7 @@ function AppShell() {
   return (
     <RequireAuth>
       <div className="app rlc-app-shell">
+        {backButton}
         <div
           className="header rlc-topbar rlc-migrated-app-tsx-7">
 
@@ -634,15 +673,35 @@ function AppShell() {
 
           <SideNav />
 
-          <div
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              paddingRight: 14,
-            }}
-          >
+          <div className="rlc-header-actions">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("rlc:open-document-delivery"))}
+              title="E-Mail und externer Dokumentexport"
+              style={{
+                padding: "8px 12px",
+                borderRadius: 9,
+                border: "1px solid #cbd5e1",
+                background: "#fff",
+                color: "#334155",
+                fontWeight: 800,
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Senden / Exportieren
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("rlc:open-copilot"))}
+              title="RLC Copilot öffnen"
+              aria-label="RLC Copilot öffnen"
+              className="rlc-header-copilot-button"
+            >
+              <span className="rlc-header-copilot-avatar" aria-hidden="true" />
+            </button>
+
             <Link
               to="/info/support"
               style={{
@@ -781,7 +840,20 @@ function AppShell() {
                   path="/mengenermittlung/stammdaten"
                   element={<Navigate to="/kalkulation/datenbank/preise" replace />} />
                 
+              <Route path="/kalkulation/preisspiegel" element={<Preisspiegel />} />
               {/* BÜRO */}
+              <Route path="/buro/geraeteverrechnung" element={<BuroLayout><MachineUsage /></BuroLayout>} />
+              <Route path="/buro/personalnachweise" element={<BuroLayout><PersonnelQualifications /></BuroLayout>} />
+              <Route path="/buro/stammdaten" element={<BuroLayout><MasterCatalog /></BuroLayout>} />
+              <Route path="/buro/zuordnungen" element={<BuroLayout><CatalogAssignments /></BuroLayout>} />
+              <Route path="/buro/feiertage" element={<BuroLayout><NonWorkingDays /></BuroLayout>} />
+              <Route path="/buro/cockpit" element={<BuroLayout><OperationsCockpit /></BuroLayout>} />
+              <Route path="/buro/versanderfassung" element={<BuroLayout><Shipments /></BuroLayout>} />
+              <Route path="/buro/freimeldungen" element={<BuroLayout><MachineReleases /></BuroLayout>} />
+              <Route path="/buro/buergschaften" element={<BuroLayout><OfficeAddons kind="guarantees" /></BuroLayout>} />
+              <Route path="/buro/nachunternehmer" element={<BuroLayout><OfficeAddons kind="certificates" /></BuroLayout>} />
+              <Route path="/buro/baustellendokumentation" element={<Baustellendokumentation />} />
+              <Route path="/buro/buero-kommunikation" element={<BueroKommunikation />} />
               <Route path="/buro/regieberichte" element={<Regieberichte />} />
               <Route path="/buro/lieferscheine" element={<Lieferscheine />} />
               <Route path="/buro/fotos" element={<ProjektakteFotos />} />
@@ -796,13 +868,7 @@ function AppShell() {
                   </BuroLayout>
                   } />
                 
-              <Route
-                  path="/buro/projekte"
-                  element={
-                  <BuroLayout>
-                    <Projekte />
-                  </BuroLayout>
-                  } />
+              <Route path="/buro/projekte" element={<Navigate to="/start" replace />} />
                 
               <Route
                   path="/buro/dokumente"
@@ -817,6 +883,14 @@ function AppShell() {
                   element={
                   <BuroLayout>
                     <Kommunikation />
+                  </BuroLayout>
+                  } />
+
+              <Route
+                  path="/buro/notizen"
+                  element={
+                  <BuroLayout>
+                    <Notizen />
                   </BuroLayout>
                   } />
                 
@@ -880,7 +954,7 @@ function AppShell() {
                   path="/buro/ressourcenplanung"
                   element={
                   <BuroLayout>
-                    <Ressourcenplanung />
+                    <Einsatzplanung />
                   </BuroLayout>
                   } />
                 
@@ -1015,6 +1089,7 @@ function AppShell() {
                 
 
               {/* Büro / Verwaltung */}
+              <Route path="/buro/arbeitszeiten" element={<MobileArbeitszeiten finalOnly />} />
               <Route
                   path="/buro/ki-sprachsteuerung"
                   element={<Navigate to="/ki/sprachsteuerung" replace />} />
@@ -1077,6 +1152,7 @@ function AppShell() {
                   
                 <Route path="zahlungen" element={<Zahlungen />} />
                 <Route path="eingang" element={<Eingang />} />
+                <Route path="dauerbuchungen" element={<Dauerbuchungen />} />
                 <Route path="kassenbuch" element={<Kassenbuch />} />
                 <Route path="kostenstellen" element={<Kostenstellen />} />
                 <Route path="mahnwesen" element={<Mahnwesen />} />
@@ -1093,7 +1169,14 @@ function AppShell() {
               <Route path="/mobile/fotos" element={<Navigate to="/mobile/pruefung/FOTOS" replace />} />
               <Route path="/mobile/tagesberichte" element={<Navigate to="/mobile/pruefung/TAGESBERICHT" replace />} />
               <Route path="/mobile/bautagebuch" element={<Navigate to="/mobile/pruefung/BAUTAGEBUCH" replace />} />
-              <Route path="/mobile/arbeitszeiten" element={<MobileArbeitszeiten />} />
+              <Route
+                path="/mobile/arbeitszeiten"
+                element={<Navigate to="/mobile/pruefung/ARBEITSZEIT" replace />}
+              />
+              <Route
+                path="/mobile/arbeitszeiten/uebersicht"
+                element={<MobileArbeitszeiten />}
+              />
 <Route path="/mobile/arbeitszeiten/mitarbeiter" element={<MobileMitarbeiterEingaenge />} />
               <Route path="/mobile/mengenermittlung" element={<Navigate to="/mobile/pruefung/MENGENERMITTLUNG" replace />} />
               <Route path="/mobile/kalkulation" element={<Navigate to="/kalkulation/mit-ki" replace />} />

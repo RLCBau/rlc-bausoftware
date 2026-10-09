@@ -7,6 +7,10 @@ type Subscription = {
   webSeatsPurchased: number;
   mobileSeatsPurchased: number;
   cloudEnabled: boolean;
+  aiMarketMonthlyIncluded?: number;
+  aiMarketMonthlyUsed?: number;
+  aiMarketMonthKey?: string | null;
+  aiMarketCreditsPurchased?: number;
   currentPeriodStart?: string | null;
   currentPeriodEnd?: string | null;
 };
@@ -80,6 +84,25 @@ type Project = {
   client?: string | null;
   place?: string | null;
   createdAt: string;
+};
+
+type AiMarketOrder = {
+  id: string;
+  credits: number;
+  priceCents: number;
+  status: string;
+  createdAt: string;
+  paidAt?: string | null;
+  creditedAt?: string | null;
+};
+
+type AiMarketOverview = {
+  monthKey: string;
+  summary?: { _count?: { _all?: number }; _sum?: Record<string, any> };
+  balance?: { included: number; used: number; includedRemaining: number; purchasedRemaining: number; totalRemaining: number };
+  orders?: AiMarketOrder[];
+  byModel?: any[];
+  sales?: { paidRevenueCentsMonth: number; paidCreditsMonth: number; paidOrdersMonth: number; pendingOrders: number };
 };
 
 type CompanyDetail = {
@@ -158,26 +181,26 @@ async function apiRequest(
 const card: React.CSSProperties = {
   background: "white",
   border: "1px solid #dbe4f0",
-  borderRadius: 16,
+  borderRadius: 12,
   overflow: "hidden",
 };
 
 const sectionHead: React.CSSProperties = {
-  padding: "15px 18px",
+  padding: "10px 14px",
   background: "#f8fafc",
   borderBottom: "1px solid #e2e8f0",
 };
 
 const grid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
-  gap: 12,
+  gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+  gap: 8,
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
-  padding: "10px 11px",
+  padding: "8px 10px",
   borderRadius: 9,
   border: "1px solid #cbd5e1",
   background: "white",
@@ -226,14 +249,14 @@ function Stat({
   return (
     <div
       style={{
-        padding: 14,
+        padding: 10,
         borderRadius: 12,
         background: "#f8fafc",
         border: "1px solid #e2e8f0",
       }}
     >
       <div style={{ color: "#64748b", fontSize: 12 }}>{label}</div>
-      <div style={{ marginTop: 4, fontWeight: 950, fontSize: 22 }}>
+      <div style={{ marginTop: 3, fontWeight: 950, fontSize: 18 }}>
         {value}
       </div>
     </div>
@@ -252,6 +275,7 @@ export default function PlatformAdmin() {
   const [companies, setCompanies] = React.useState<CompanyListItem[]>([]);
   const [selectedId, setSelectedId] = React.useState("");
   const [company, setCompany] = React.useState<CompanyDetail | null>(null);
+  const [aiOverview, setAiOverview] = React.useState<AiMarketOverview | null>(null);
 
   const [loading, setLoading] = React.useState(true);
   const [detailLoading, setDetailLoading] = React.useState(false);
@@ -316,6 +340,19 @@ export default function PlatformAdmin() {
     }
   }, []);
 
+  const loadAiOverview = React.useCallback(async (companyId: string) => {
+    if (!companyId) {
+      setAiOverview(null);
+      return;
+    }
+    try {
+      const data = await apiRequest(`/api/platform/admin/companies/${encodeURIComponent(companyId)}/ai-market-overview`);
+      setAiOverview(data as AiMarketOverview);
+    } catch (e: any) {
+      setError(e?.message || "KI-Marktverbrauch konnte nicht geladen werden.");
+    }
+  }, []);
+
   const loadCompany = React.useCallback(async (companyId: string) => {
     if (!companyId) {
       setCompany(null);
@@ -354,13 +391,14 @@ export default function PlatformAdmin() {
   React.useEffect(() => {
     if (selectedId) {
       void loadCompany(selectedId);
+      void loadAiOverview(selectedId);
     }
-  }, [selectedId, loadCompany]);
+  }, [selectedId, loadCompany, loadAiOverview]);
 
   async function refreshSelected() {
     await loadCompanies();
     if (selectedId) {
-      await loadCompany(selectedId);
+      await Promise.all([loadCompany(selectedId), loadAiOverview(selectedId)]);
     }
   }
 
@@ -452,6 +490,34 @@ export default function PlatformAdmin() {
     } finally {
       setSaving("");
     }
+  }
+
+  async function confirmAiMarketOrder(order: AiMarketOrder) {
+    if (!company) return;
+    if (!window.confirm(`${order.credits} RLC Marktpreis-Credits als bezahlt markieren und freischalten?`)) return;
+    setSaving(order.id);
+    setError("");
+    setMessage("");
+    try {
+      await apiRequest(`/api/platform/admin/companies/${company.id}/ai-market-orders/${order.id}/confirm`, { method: "POST" });
+      setMessage(`${order.credits} RLC Marktpreis-Credits wurden freigeschaltet.`);
+      await refreshSelected();
+    } catch (e: any) {
+      setError(e?.message || "Credits konnten nicht freigeschaltet werden.");
+    } finally { setSaving(""); }
+  }
+
+  async function cancelAiMarketOrder(order: AiMarketOrder) {
+    if (!company) return;
+    if (!window.confirm(`Offene Buchung über ${order.credits} Credits stornieren?`)) return;
+    setSaving(order.id);
+    try {
+      await apiRequest(`/api/platform/admin/companies/${company.id}/ai-market-orders/${order.id}/cancel`, { method: "POST" });
+      setMessage("Buchung wurde storniert.");
+      await refreshSelected();
+    } catch (e: any) {
+      setError(e?.message || "Buchung konnte nicht storniert werden.");
+    } finally { setSaving(""); }
   }
 
   async function createInvite() {
@@ -602,17 +668,17 @@ export default function PlatformAdmin() {
   return (
     <div
       style={{
-        padding: 24,
+        padding: 16,
         display: "grid",
-        gap: 18,
-        maxWidth: 1600,
+        gap: 12,
+        maxWidth: 1500,
         margin: "0 auto",
       }}
     >
       <section
         style={{
-          padding: 24,
-          borderRadius: 20,
+          padding: 16,
+          borderRadius: 14,
           color: "white",
           background:
             "linear-gradient(135deg,#071b47,#0f3d91,#2563eb)",
@@ -738,10 +804,10 @@ export default function PlatformAdmin() {
         </div>
       </section>
 
-      <section style={card}>
-        <div style={sectionHead}>
-          <strong>Neue Firma anlegen</strong>
-        </div>
+      <details style={card}>
+        <summary style={{ ...sectionHead, cursor: "pointer", fontWeight: 900 }}>
+          Neue Firma anlegen
+        </summary>
 
         <div style={{ padding: 16, display: "grid", gap: 14 }}>
           <div style={grid}>
@@ -859,7 +925,7 @@ export default function PlatformAdmin() {
             </button>
           </div>
         </div>
-      </section>
+      </details>
 
       {detailLoading ? (
         <div style={{ padding: 20 }}>Firmendaten werden geladen...</div>
@@ -875,6 +941,10 @@ export default function PlatformAdmin() {
             <div style={{ padding: 16, ...grid }}>
               <Stat label="Web-Lizenzen" value={sub?.webSeatsPurchased ?? 0} />
               <Stat label="Mobile-Lizenzen" value={sub?.mobileSeatsPurchased ?? 0} />
+              <Stat
+                label="RLC Marktprüfungen"
+                value={`${Math.max(0, Number(sub?.aiMarketMonthlyIncluded || 0) - Number(sub?.aiMarketMonthlyUsed || 0))} Monat + ${sub?.aiMarketCreditsPurchased ?? 0} Zusatz`}
+              />
               <Stat label="Benutzer" value={company.members.length} />
               <Stat label="Projekte" value={company.projects.length} />
               <Stat
@@ -891,6 +961,59 @@ export default function PlatformAdmin() {
                     : "Abgelaufen"
                 }
               />
+            </div>
+          </section>
+
+          <section style={card}>
+            <div style={sectionHead}>
+              <strong>RLC Marktpreisprüfung · Verbrauch & Buchungen</strong>
+            </div>
+            <div style={{ padding: 16, display: "grid", gap: 16 }}>
+              <div style={grid}>
+                <Stat label="Im Monat verbraucht" value={aiOverview?.balance?.used ?? sub?.aiMarketMonthlyUsed ?? 0} />
+                <Stat label="Monatlich noch frei" value={aiOverview?.balance?.includedRemaining ?? Math.max(0, Number(sub?.aiMarketMonthlyIncluded || 0) - Number(sub?.aiMarketMonthlyUsed || 0))} />
+                <Stat label="Zusatz-Credits verfügbar" value={aiOverview?.balance?.purchasedRemaining ?? sub?.aiMarketCreditsPurchased ?? 0} />
+                <Stat label="Gesamt verfügbar" value={aiOverview?.balance?.totalRemaining ?? 0} />
+                <Stat label="Web Searches im Monat" value={Number(aiOverview?.summary?._sum?.webSearchCalls || 0)} />
+                <Stat label="Tokens im Monat" value={Number(aiOverview?.summary?._sum?.totalTokens || 0).toLocaleString("de-DE")} />
+                <Stat label="KI-/Recherchekosten geschätzt" value={`$${Number(aiOverview?.summary?._sum?.estimatedCostUsd || 0).toFixed(4)}`} />
+                <Stat label="Prüfungen protokolliert" value={Number(aiOverview?.summary?._count?._all || 0)} />
+                <Stat label="Credit-Umsatz im Monat" value={`${Number((aiOverview?.sales?.paidRevenueCentsMonth || 0) / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`} />
+                <Stat label="Offene Buchungen" value={Number(aiOverview?.sales?.pendingOrders || 0)} />
+              </div>
+
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ fontWeight: 900 }}>Credit-Buchungen</div>
+                {(aiOverview?.orders || []).length ? (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead><tr>
+                        <th style={{ textAlign: "left", padding: 8 }}>Datum</th>
+                        <th style={{ textAlign: "right", padding: 8 }}>Credits</th>
+                        <th style={{ textAlign: "right", padding: 8 }}>Betrag</th>
+                        <th style={{ textAlign: "left", padding: 8 }}>Status</th>
+                        <th style={{ textAlign: "right", padding: 8 }}>Aktion</th>
+                      </tr></thead>
+                      <tbody>
+                        {(aiOverview?.orders || []).map((order) => (
+                          <tr key={order.id} style={{ borderTop: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: 8 }}>{fmtDate(order.createdAt)}</td>
+                            <td style={{ padding: 8, textAlign: "right", fontWeight: 900 }}>{order.credits}</td>
+                            <td style={{ padding: 8, textAlign: "right" }}>{(order.priceCents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                            <td style={{ padding: 8 }}>{order.status === "PENDING" ? "Offen" : order.status === "PAID" ? "Bezahlt / freigeschaltet" : "Storniert"}</td>
+                            <td style={{ padding: 8, textAlign: "right" }}>
+                              {order.status === "PENDING" ? <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                                <button type="button" style={primaryButton} disabled={saving === order.id} onClick={() => void confirmAiMarketOrder(order)}>Bezahlt & Credits freischalten</button>
+                                <button type="button" style={buttonStyle} disabled={saving === order.id} onClick={() => void cancelAiMarketOrder(order)}>Stornieren</button>
+                              </div> : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : <div style={{ color: "#64748b" }}>Noch keine Credit-Buchungen für diese Firma.</div>}
+              </div>
             </div>
           </section>
 
@@ -1062,6 +1185,54 @@ export default function PlatformAdmin() {
                     })
                   }
                 />
+              </Label>
+
+              <Label title="RLC Marktprüfungen / Monat">
+                <input
+                  type="number"
+                  min={0}
+                  style={inputStyle}
+                  value={sub?.aiMarketMonthlyIncluded ?? 50}
+                  onChange={(e) =>
+                    setCompany((p) =>
+                      p && p.subscription
+                        ? {
+                            ...p,
+                            subscription: {
+                              ...p.subscription,
+                              aiMarketMonthlyIncluded: Number(e.target.value),
+                            },
+                          }
+                        : p
+                    )
+                  }
+                  onBlur={(e) =>
+                    void updateSubscription({
+                      aiMarketMonthlyIncluded: Number(e.target.value),
+                    })
+                  }
+                />
+              </Label>
+
+              <Label title="KI-Zusatzkontingent">
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ ...inputStyle, background: "#f8fafc" }}>
+                    {sub?.aiMarketCreditsPurchased ?? 0} Prüfungen verfügbar
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {[100, 500, 2000].map((credits) => (
+                      <button
+                        key={credits}
+                        type="button"
+                        style={buttonStyle}
+                        disabled={saving === "subscription"}
+                        onClick={() => void updateSubscription({ addAiMarketCredits: credits })}
+                      >
+                        +{credits}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </Label>
 
               <Label title="Laufzeit bis">

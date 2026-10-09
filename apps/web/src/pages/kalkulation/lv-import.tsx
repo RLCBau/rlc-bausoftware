@@ -485,6 +485,32 @@ function suggestLangtext(row: LVPos): string {
 
   return parts.join(" ");
 }
+function calcPriceBreakdownRequiresReview(row: any): boolean {
+  const lines = Array.isArray(row?.priceBreakdown) ? row.priceBreakdown : [];
+  if (!lines.length) return false;
+  const breakdownEp = round2(lines.reduce((sum: number, line: any) => sum + toNumber(line?.total), 0));
+  const finalEp =
+    toNumber(row?.rlcKiUnitPrice) ||
+    toNumber(row?.finalUnitPrice) ||
+    toNumber(row?.preis) ||
+    toNumber(row?.suggestedUnitPrice);
+  if (breakdownEp <= 0 || finalEp <= 0) return false;
+  const denominator = Math.max(Math.abs(finalEp), Math.abs(breakdownEp), 0.01);
+  return Math.abs(breakdownEp - finalEp) / denominator * 100 > 2;
+}
+
+function calcRequiresReview(row: any): boolean {
+  // Exakt dieselbe fachliche Logik wie in Kalkulation mit KI:
+  // Warning, Risiko und Confidence werden separat angezeigt und dürfen
+  // "Prüfen" nicht künstlich aufblasen.
+  const status = String(row?.calculationStatus || "").toLowerCase();
+  return (
+    status === "critical" ||
+    status === "needs_review" ||
+    calcPriceBreakdownRequiresReview(row)
+  );
+}
+
 function rowStatus(row: LVPos): "ok" | "warning" | "critical" {
   if (!String(row.posNr || "").trim() || !String(row.kurztext || "").trim()) {
     return "critical";
@@ -493,6 +519,8 @@ function rowStatus(row: LVPos): "ok" | "warning" | "critical" {
   if (!String(row.einheit || "").trim() || toNumber(row.menge) <= 0) {
     return "warning";
   }
+
+  if (calcRequiresReview(row as any)) return "warning";
 
   return "ok";
 }
@@ -513,10 +541,10 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }
@@ -718,8 +746,118 @@ export default function LVImportPage() {
 
         if (cancelled) return;
 
+        // Kalkulations-Snapshot derselben Baustelle über das kanonische LV legen.
+        // Wahrheit im Browser = aktueller Kalkulation-mit-KI Stand.
+        // Der Server ist nur Fallback, damit LV / Positionen niemals einen älteren
+        // Preisstand gegen die gerade sichtbare Kalkulation ausspielt.
+        let kalkRows: any[] = [];
+        try {
+          const rawLocal = localStorage.getItem(`rlc_kalkulation_mit_ki_elite_v1:${projectCode}`);
+          if (rawLocal) {
+            const localPayload = JSON.parse(rawLocal);
+            const localRows = Array.isArray(localPayload)
+              ? localPayload
+              : localPayload?.rows || localPayload?.data?.rows || [];
+            if (Array.isArray(localRows) && localRows.length) kalkRows = localRows;
+          }
+        } catch {
+          kalkRows = [];
+        }
+
+        if (!kalkRows.length) {
+          try {
+            const kalkResponse = await fetch(
+              apiUrl(`/api/kalkulation/storage/ki/${encodeURIComponent(projectCode)}`),
+              {
+                method: "GET",
+                credentials: "include",
+                cache: "no-store",
+                headers: withAuthHeaders({ Accept: "application/json" })
+              }
+            );
+            if (kalkResponse.ok) {
+              const kalkPayload = await kalkResponse.json().catch(() => null);
+              const kalkData = kalkPayload?.data ?? kalkPayload?.snapshot?.data ?? kalkPayload;
+              const candidateRows = Array.isArray(kalkData)
+                ? kalkData
+                : kalkData?.rows || kalkData?.items || kalkData?.positions || [];
+              kalkRows = Array.isArray(candidateRows) ? candidateRows : [];
+            }
+          } catch {
+            kalkRows = [];
+          }
+        }
+
+        const kalkById = new Map<string, any>();
+        const kalkByPos = new Map<string, any>();
+        const kalkByTextUnit = new Map<string, any>();
+        const ambiguousTextUnits = new Set<string>();
+        const textUnitKey = (row: any) => {
+          const text = String(row?.kurztext || row?.shortText || row?.text || "")
+            .toLowerCase().replace(/\s+/g, " ").trim();
+          const unit = String(row?.einheit || row?.unit || row?.me || "")
+            .toLowerCase().replace(/\s+/g, "").trim();
+          return text ? `${text}||${unit}` : "";
+        };
+
+        for (const row of kalkRows) {
+          const id = String(row?.id || row?.positionId || "").trim();
+          const pos = String(row?.posNr || row?.positionNumber || row?.pos || "").trim();
+          const textKey = textUnitKey(row);
+          if (id) kalkById.set(id, row);
+          if (pos) kalkByPos.set(pos, row);
+          if (textKey) {
+            if (kalkByTextUnit.has(textKey)) ambiguousTextUnits.add(textKey);
+            else kalkByTextUnit.set(textKey, row);
+          }
+        }
+        for (const key of ambiguousTextUnits) kalkByTextUnit.delete(key);
+
+        const connectedServerRows = serverRows.map((row: any, index: number) => {
+          const textKey = textUnitKey(row);
+          const indexedKalk = kalkRows[index];
+          const indexMatches = indexedKalk && textUnitKey(indexedKalk) === textKey ? indexedKalk : null;
+          const kalk =
+            kalkById.get(String(row?.id || "").trim()) ||
+            kalkByPos.get(String(row?.posNr || "").trim()) ||
+            (textKey ? kalkByTextUnit.get(textKey) : null) ||
+            indexMatches;
+          if (!kalk) return row;
+
+          const kalkEp =
+            toNumber(kalk?.finalUnitPrice) ||
+            toNumber(kalk?.rlcKiUnitPrice) ||
+            toNumber(kalk?.preis) ||
+            toNumber(kalk?.suggestedUnitPrice) ||
+            toNumber(kalk?.unitPriceNet) ||
+            toNumber(kalk?.ep);
+          const qty = toNumber(row?.menge);
+
+          return {
+            ...row,
+            // Kalkulation ist die kanonische Positionsreferenz, wenn das alte
+            // Server-LV nur Kurznummern wie 001/002 enthält.
+            posNr: String(kalk?.posNr || kalk?.positionNumber || row.posNr || "").trim(),
+            preis: kalkEp > 0 ? kalkEp : row.preis,
+            gesamt: kalkEp > 0 ? round2(qty * kalkEp) : row.gesamt,
+            finalUnitPrice: kalk?.finalUnitPrice,
+            rlcKiUnitPrice: kalk?.rlcKiUnitPrice,
+            suggestedUnitPrice: kalk?.suggestedUnitPrice,
+            confidence: kalk?.confidence,
+            riskLevel: kalk?.riskLevel,
+            calculationStatus: kalk?.calculationStatus,
+            status: kalk?.status,
+            warning: kalk?.warning,
+            pruefHinweis: kalk?.pruefHinweis,
+            priceBreakdown: kalk?.priceBreakdown,
+            recipeLines: kalk?.recipeLines,
+            source: kalk?.source || row.source,
+            meta: { ...row.meta, kalkulation: kalk }
+          } as any;
+        });
+
         if (serverRows.length > 0) {
-          const storedRows = LV.setAll(serverRows);
+          const storedRows = LV.setAll(connectedServerRows);
           const selection = resolveRequestedLvRow(storedRows, selectionRequest);
           setRows(storedRows);
           setSelectedId(selection.row?.id || storedRows[0]?.id || "");
@@ -954,11 +1092,20 @@ export default function LVImportPage() {
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
+    const fileName = projectCode ? `${projectCode}-lv.csv` : "lv.csv";
     a.href = url;
-    a.download = projectCode ? `${projectCode}-lv.csv` : "lv.csv";
+    a.download = fileName;
     a.click();
 
     URL.revokeObjectURL(url);
+
+    const dmsProjectId = String(currentProject?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[lv-import:csv:dms]", error));
+    }
+
     setInfo("CSV exportiert.");
   }
 
@@ -1033,11 +1180,20 @@ export default function LVImportPage() {
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
+    const fileName = projectCode ? `${projectCode}-lv.xlsx` : "lv.xlsx";
     a.href = url;
-    a.download = projectCode ? `${projectCode}-lv.xlsx` : "lv.xlsx";
+    a.download = fileName;
     a.click();
 
     URL.revokeObjectURL(url);
+
+    const dmsProjectId = String(currentProject?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[lv-import:xlsx:dms]", error));
+    }
+
     setInfo("XLSX exportiert.");
   }
 

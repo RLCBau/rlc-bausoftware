@@ -1,10 +1,8 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";
 // apps/web/src/pages/kalkulation/Versionsvergleich.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiUrl } from "../../lib/apiBase";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import { useProject } from "../../store/useProject";
 import { LV, type LVPos } from "./store.lv";
 import Widersprueche from "../ki/Widersprueche";
@@ -710,7 +708,7 @@ function analyseCompare(rows: CompareRow[], versions: VersionRow[]): AnalysisRes
   };
 }
 
-function exportCompareCsv(rows: CompareRow[], versions: VersionRow[], projectKey: string) {
+function exportCompareCsv(rows: CompareRow[], versions: VersionRow[], projectKey: string, projectId: string) {
   const header = [
   "PosNr",
   "Kurztext",
@@ -749,142 +747,72 @@ function exportCompareCsv(rows: CompareRow[], versions: VersionRow[], projectKey
     type: "text/csv;charset=utf-8"
   });
 
+  const fileName = `Versionsvergleich_${projectKey}.csv`;
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `Versionsvergleich_${projectKey}.csv`;
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(a.href);
+
+  if (projectId) {
+    void import("../../lib/dmsArchive")
+      .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+      .catch((error) => console.error("[Versionsvergleich:CSV:DMS]", error));
+  }
 }
 
-function exportComparePdf(
-rows: CompareRow[],
-versions: VersionRow[],
-projectKey: string,
-projectName: string,
-stats: {
-  rows: number;
-  priceDiff: number;
-  qtyDiff: number;
-  unitDiff: number;
-  textDiff: number;
-})
-{
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const mx = 14;
-
-  doc.setFillColor(15, 23, 42);
-  doc.rect(0, 0, pageW, 18, "F");
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Versionsvergleich / Angebotsanalyse", mx, 33);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text(`Projekt: ${projectKey}${projectName ? " · " + projectName : ""}`, mx, 41);
-  doc.text(`Datum: ${todayDE()}`, pageW - mx, 41, { align: "right" });
-
-  doc.setDrawColor(203, 213, 225);
-  doc.line(mx, 48, pageW - mx, 48);
-
-  const kpis = [
-  ["Positionen", String(stats.rows)],
-  ["Preisabweichungen", String(stats.priceDiff)],
-  ["Mengenabweichungen", String(stats.qtyDiff)],
-  ["Einheitsabweichungen", String(stats.unitDiff)],
-  ["Textabweichungen", String(stats.textDiff)],
-  ["Versionen", String(versions.length)]];
-
-
-  const boxW = 42;
-  const boxH = 18;
-  const gap = 5;
-  const y = 56;
-
-  kpis.forEach(([label, value], i) => {
-    const x = mx + i * (boxW + gap);
-
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(x, y, boxW, boxH, 3, 3, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.8);
-    doc.setTextColor(100, 116, 139);
-    doc.text(label, x + 3, y + 6);
-
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text(value, x + 3, y + 14);
-  });
-
-  const body = rows.map((r) => {
-    const a = r.cells[0];
-    const b = r.cells[1];
-
-    return [
-    r.posNr || "—",
-    r.kurztext || "—",
-    a ? qty(a.menge) : "—",
-    b ? qty(b.menge) : "—",
-    a?.einheit || "—",
-    b?.einheit || "—",
-    a ? money(a.preis) : "—",
-    b ? money(b.preis) : "—",
-    [
-    r.diffQty ? "Menge" : "",
-    r.diffUnit ? "ME" : "",
-    r.diffPrice ? "Preis" : "",
-    r.diffText ? "Text" : ""].
-
-    filter(Boolean).
-    join(", ") || "—"];
-
-  });
-
-  autoTable(doc, {
-    startY: 84,
-    margin: { left: mx, right: mx },
-    theme: "grid",
-    head: [["PosNr", "Kurztext", "Menge V1", "Menge V2", "ME V1", "ME V2", "EP V1", "EP V2", "Abweichung"]],
-    body,
-    styles: {
-      font: "helvetica",
-      fontSize: 7.2,
-      cellPadding: 1.8,
-      lineColor: [226, 232, 240],
-      lineWidth: 0.1,
-      overflow: "linebreak",
-      valign: "middle"
-    },
-    headStyles: {
-      fillColor: [30, 64, 175],
-      textColor: [255, 255, 255],
-      fontStyle: "bold"
-    },
-    alternateRowStyles: {
-      fillColor: [248, 250, 252]
+async function exportComparePdf(
+  rows: CompareRow[],
+  versions: VersionRow[],
+  projectKey: string,
+  projectName: string,
+  stats: {
+    rows: number;
+    priceDiff: number;
+    qtyDiff: number;
+    unitDiff: number;
+    textDiff: number;
+  },
+  projectIdOrCode: string
+) {
+  const response = await fetch(
+    apiUrl("/api/pdf/versionsvergleich"),
+    {
+      method: "POST",
+      credentials: "include",
+      headers: getVersionAuthHeaders({
+        "Content-Type": "application/json"
+      }),
+      body: JSON.stringify({
+        projectId: projectIdOrCode || projectKey,
+        projectKey,
+        project: {
+          id: projectIdOrCode || projectKey,
+          code: projectKey,
+          name: projectName
+        },
+        rows,
+        versions,
+        stats
+      })
     }
-  });
+  );
 
-  const pages = doc.getNumberOfPages();
-
-  for (let i = 1; i <= pages; i += 1) {
-    doc.setPage(i);
-    doc.setDrawColor(226, 232, 240);
-    doc.line(mx, pageH - 13, pageW - mx, pageH - 13);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text("RLC Bausoftware · Versionsvergleich", mx, pageH - 7);
-    doc.text(`Seite ${i}/${pages}`, pageW - mx, pageH - 7, { align: "right" });
+  if (!response.ok) {
+    const message = await response.text().catch(() => "");
+    throw new Error(message || `PDF Export fehlgeschlagen (${response.status})`);
   }
 
-  saveRlcPdfWithCompanyHeader(doc, `Versionsvergleich_${projectKey}.pdf`);
+  const blob = await response.blob();
+  const fileName = `Versionsvergleich_${projectKey || "Projekt"}.pdf`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /* ================= COMPONENT ================= */
@@ -911,6 +839,10 @@ function VersionsvergleichCore() {
     setViewMode("all");
     setAnalysis(loadAnalysisResult(projectKey));
     setAnalysisBusy(false);
+
+    // Il server è la fonte delle versioni condivise: carica subito
+    // all'apertura della pagina e quando cambia il progetto.
+    void loadVersionsFromServer();
   }, [projectKey]);
 
   function persist(next: VersionRow[]) {
@@ -993,7 +925,18 @@ function VersionsvergleichCore() {
       setVersions(reconciledServerVersions);
       setSelected(json?.data?.selected || {});
       setViewMode(json?.data?.viewMode || "all");
-      setInfo(`Versionsvergleich vom Server geladen · ${serverVersions.length} Version(en). Lokaler Browser-Speicher wurde nicht überschrieben.`);
+      // Se il server contiene versioni, usa quelle come stato effettivo della pagina.
+      // Con zero versioni non cancelliamo eventuali bozze locali non ancora salvate.
+      if (serverVersions.length > 0) {
+        persist(serverVersions);
+        setSelected({});
+      }
+
+      setInfo(
+        serverVersions.length > 0
+          ? `Versionsvergleich automatisch vom Server geladen · ${serverVersions.length} Version(en).`
+          : "Server enthält noch keine gespeicherten Versionen."
+      );
     } catch (e: any) {
       setInfo(`Server-Laden fehlgeschlagen: ${e?.message || "Unbekannter Fehler"}`);
     }
@@ -1267,7 +1210,16 @@ function VersionsvergleichCore() {
       return;
     }
 
-    exportComparePdf(filteredRows, selectedVersions, projectKey, projectName, stats);
+    void exportComparePdf(
+      filteredRows,
+      selectedVersions,
+      projectKey,
+      projectName,
+      stats,
+      String(project?.id || projectKey || "")
+    ).catch((error) => {
+      setInfo(`PDF-Export fehlgeschlagen: ${error?.message || error}`);
+    });
   }
 
   useEffect(() => {
@@ -1372,7 +1324,7 @@ function VersionsvergleichCore() {
           <button className={rlcClass(null,
           btnSecondary)}
           disabled={selectedVersions.length < 2}
-          onClick={() => exportCompareCsv(filteredRows, selectedVersions, projectKey)}>
+          onClick={() => exportCompareCsv(filteredRows, selectedVersions, projectKey, String(project?.id || ""))}>
             
             CSV exportieren
           </button>
@@ -1708,9 +1660,9 @@ function Kpi({
 
 }: {label: string;value: string;danger?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
     </div>);

@@ -1,0 +1,3 @@
+import{PrismaClient}from'@prisma/client';const p=new PrismaClient();
+const q=[['GAEB-24-068180','1.5'],['GAEB-24-068180','2.4.11'],['GAEB-5-10735-LV-KOHLBRENN','1.5.0027'],['GAEB-241115-KSS-LV-BEREICH-SUD-TIEF-BELAGSARBEITEN','1.2.1.3.1'],['GAEB-24-044843','1.13.16']];
+(async()=>{for(const [code,pos] of q){const pr=await p.project.findFirst({where:{code},select:{lvSets:{take:1,orderBy:{version:'desc'},select:{positions:{where:{position:pos},select:{position:true,kurztext:true,langtext:true,einheit:true,menge:true,x84UnitPrice:true}}}}}});console.log('\n'+code+' '+pos);console.log(JSON.stringify(pr?.lvSets[0]?.positions,null,2));}await p.$disconnect()})()

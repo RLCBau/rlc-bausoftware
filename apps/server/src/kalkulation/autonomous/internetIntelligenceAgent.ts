@@ -624,10 +624,24 @@ export async function runInternetIntelligenceCycle(force = false): Promise<Inter
   return status;
 }
 
-export function startInternetIntelligenceAgent(): void {
+export function startInternetIntelligenceAgent(
+  afterCycle?: () => Promise<void> | void
+): void {
   if (timer) return;
-  void runInternetIntelligenceCycle(false);
-  timer = setInterval(() => { void runInternetIntelligenceCycle(true); }, INTERVAL_MS);
+
+  const run = async (force: boolean) => {
+    await runInternetIntelligenceCycle(force);
+    if (afterCycle) {
+      try {
+        await afterCycle();
+      } catch (error) {
+        console.error("[autonomous-market] Synchronisierung fehlgeschlagen:", error);
+      }
+    }
+  };
+
+  void run(false);
+  timer = setInterval(() => { void run(true); }, INTERVAL_MS);
   timer.unref?.();
   console.log(`[autonomous-market] Agent aktiv, Intervall ${Math.round(INTERVAL_MS / 3_600_000)} Stunden.`);
 }

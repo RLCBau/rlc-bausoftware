@@ -13,6 +13,13 @@ export type PutInput = {
   metadata?: Record<string, string>;
 };
 
+export type StorageObjectStat = {
+  size: number;
+  contentType?: string;
+  etag?: string;
+  metadata?: Record<string, string>;
+};
+
 export interface StorageProvider {
   readonly name: string;
   health(): Promise<StorageHealth>;
@@ -20,6 +27,7 @@ export interface StorageProvider {
   get(key: string): Promise<Buffer>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
+  stat(key: string): Promise<StorageObjectStat | null>;
   presignPut(key: string, contentType?: string, expiresIn?: number): Promise<string>;
-  presignGet(key: string, expiresIn?: number): Promise<string>;
+  presignGet(key: string, expiresIn?: number, contentDisposition?: string): Promise<string>;
 }

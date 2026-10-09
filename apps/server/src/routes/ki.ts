@@ -1,6 +1,7 @@
 // apps/server/src/routes/ki.ts
 import express from "express";
 import multer from "multer";
+import { requireProjectMember } from "../middleware/guards";
 import { createRlcAiCompatClient } from "../services/ai/rlcAiCompatClient";
 import { isRlcAiTextConfigured } from "../services/ai/rlcAiGateway";
 
@@ -9,8 +10,81 @@ import fs from "fs";
 import sharp from "sharp";
 import { z } from "zod";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { analyzeRlcProjectContext } from "../kalkulation/autonomous/projectContextAnalyzer";
+import { resolveRlcAutonomousCalculation, mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
 
 const router = express.Router();
+
+const requireKiBodyProjectAccess = (required: boolean = true) => async (req: any, res: any, next: any) => {
+  const token = String(
+    req.body?.projectId ||
+    req.body?.projectCode ||
+    req.body?.projectFsKey ||
+    req.query?.projectId ||
+    req.query?.projectCode ||
+    ""
+  ).trim();
+  if (!token) {
+    if (!required) return next();
+    return res.status(400).json({ ok: false, error: "projectId required" });
+  }
+
+  req.params = req.params || {};
+  req.params.__kiProject = token;
+  return requireProjectMember("__kiProject")(req, res, async (err?: any) => {
+    if (err) return next(err);
+    const resolvedId = String(req.resolvedProjectId || token).trim();
+    const resolvedCode = String(req.resolvedProjectCode || "").trim();
+    if(!resolvedId) return res.status(403).json({ok:false,error:"PROJECT_RESOLUTION_FAILED"});
+    if(resolvedCode && resolvedCode!==resolvedId){
+      try{
+        const { prisma } = await import("../lib/prisma");
+        const duplicates=await prisma.project.count({where:{code:resolvedCode}});
+        if(duplicates===1){
+          const legacyRoot=path.join(PROJECTS_ROOT,resolvedCode), canonicalRoot=path.join(PROJECTS_ROOT,resolvedId);
+          for(const parts of [["ki","vision"],["kalkulation","ki-kalkulation.json"]]){
+            const src=path.join(legacyRoot,...parts), dst=path.join(canonicalRoot,...parts);
+            if(!fs.existsSync(src)||fs.existsSync(dst)) continue;
+            fs.mkdirSync(path.dirname(dst),{recursive:true});
+            if(fs.statSync(src).isDirectory()) fs.cpSync(src,dst,{recursive:true}); else fs.copyFileSync(src,dst);
+          }
+        }
+      }catch(e){console.error("[ki] legacy tenant migration failed",e);}
+    }
+    if (req.body && typeof req.body === "object") {
+      req.body.projectId = resolvedId;
+      req.body.projectFsKey = resolvedId;
+      if (resolvedCode) req.body.projectCode = resolvedCode;
+    }
+    return next();
+  });
+};
+
+const requireKiPathProjectAccess = (param: string = "projectKey") => async (req:any,res:any,next:any) => {
+  return requireProjectMember(param)(req,res,async (err?:any)=>{
+    if(err) return next(err);
+    const projectId=String(req.resolvedProjectId||"").trim();
+    const projectCode=String(req.resolvedProjectCode||"").trim();
+    if(!projectId) return res.status(403).json({ok:false,error:"PROJECT_RESOLUTION_FAILED"});
+    if(projectCode && projectCode!==projectId){
+      try{
+        const { prisma } = await import("../lib/prisma");
+        const duplicates=await prisma.project.count({where:{code:projectCode}});
+        if(duplicates===1){
+          const legacyRoot=path.join(PROJECTS_ROOT,projectCode), canonicalRoot=path.join(PROJECTS_ROOT,projectId);
+          for(const parts of [["ki","vision"],["kalkulation","ki-kalkulation.json"]]){
+            const src=path.join(legacyRoot,...parts), dst=path.join(canonicalRoot,...parts);
+            if(!fs.existsSync(src)||fs.existsSync(dst)) continue;
+            fs.mkdirSync(path.dirname(dst),{recursive:true});
+            if(fs.statSync(src).isDirectory()) fs.cpSync(src,dst,{recursive:true}); else fs.copyFileSync(src,dst);
+          }
+        }
+      }catch(e){console.error("[ki:path] legacy tenant migration failed",e);}
+    }
+    req.params[param]=projectId;
+    return next();
+  });
+};
 
 /**
  * ✅ hard limit per evitare crash RAM
@@ -113,8 +187,10 @@ function listVisionJson(projectKey: string) {
 }
 
 function readVisionJson(projectKey: string, id: string) {
+  const safeVisionId = String(id || "").trim();
+  if (!/^[A-Za-z0-9_-]{6,120}$/.test(safeVisionId)) return null;
   const dir = getVisionDir(projectKey);
-  const file = path.join(dir, `${id}.json`);
+  const file = path.join(dir, `${safeVisionId}.json`);
   if (!fs.existsSync(file)) return null;
   try {
     const raw = fs.readFileSync(file, "utf-8");
@@ -999,7 +1075,7 @@ router.post("/lieferschein-parse", async (req, res) => {
 /**
  * ✅ PHOTO ANALYZE (Responses API)
  */
-router.post("/photo-analyze", upload.single("file"), async (req, res) => {
+router.post("/photo-analyze", upload.single("file"), requireKiBodyProjectAccess(false), async (req, res) => {
   try {
     if (!requireOpenAiKeyOrRespond(res)) return;
 
@@ -1099,7 +1175,7 @@ Gib NUR JSON:
 /**
  * ✅ VISION-FILES
  */
-router.post("/vision-files", upload.any(), async (req, res) => {
+router.post("/vision-files", upload.any(), requireKiBodyProjectAccess(true), async (req, res) => {
   try {
     if (!requireOpenAiKeyOrRespond(res)) return;
 
@@ -1694,21 +1770,27 @@ router.post("/propose", async (req, res) => {
   try {
     if (!requireRlcAiTextOrRespond(res)) return;
 
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ error: "Text fehlt" });
+    const { text, projectCode } = req.body || {};
+    const description = String(text || "").trim();
+    if (!description) return res.status(400).json({ error: "Text fehlt" });
 
-    const prompt = `Erzeuge LV-Positionen als JSON-Array (realistisch, deutsch).
-Antworte als JSON-Objekt mit Feld "items" (Array).
-Beispiel:
-{"items":[{"posNr":"01.001","kurztext":"Kabelgraben 60cm tief","einheit":"m","menge":120,"preis":12.5,"confidence":0.9}]}
+    const prompt = `Erzeuge fachlich vollständige LV-Positionen auf Deutsch.
+Antworte ausschließlich als JSON-Objekt mit Feld "items".
+WICHTIG:
+- KEINE Preise erfinden.
+- Jede Position braucht posNr, kurztext, langtext, einheit und menge.
+- Langtext muss die technisch preisrelevanten Merkmale enthalten (Material, Abmessung/DN, Schichtdicke/Tiefe, Klasse, Einbau/Rückbau, Entsorgung soweit aus der Beschreibung ableitbar).
+- Wenn Menge oder technische Ausführung nicht genannt ist: menge = 0 und fehlende Information im langtext klar kennzeichnen.
+Schema:
+{"items":[{"posNr":"01.001","kurztext":"...","langtext":"...","einheit":"m","menge":120}]}
 
 Beschreibung:
-${text}`;
+${description}`;
 
     const out = await ai.chat.completions.create({
       model: pickTextModel(),
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
+      temperature: 0.1,
       response_format: { type: "json_object" },
     });
 
@@ -1719,15 +1801,47 @@ ${text}`;
       parsed = {};
     }
 
-    const items = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed?.items)
+    const rawItems = Array.isArray(parsed?.items)
       ? parsed.items
       : Array.isArray(parsed?.positions)
       ? parsed.positions
       : [];
 
-    res.json({ items });
+    const rows = rawItems
+      .filter((it: any) => String(it?.kurztext || "").trim() && String(it?.einheit || "").trim())
+      .map((it: any, index: number) => ({
+        id: String(it?.id || `copilot-${index + 1}`),
+        posNr: String(it?.posNr || `01.${String(index + 1).padStart(3, "0")}`),
+        kurztext: String(it?.kurztext || "").trim(),
+        langtext: String(it?.langtext || "").trim(),
+        einheit: String(it?.einheit || "").trim(),
+        menge: Number.isFinite(Number(it?.menge)) ? Number(it.menge) : 0,
+      }));
+
+    if (!rows.length) return res.json({ items: [] });
+
+    const ctx = analyzeRlcProjectContext(rows as any[], String(projectCode || "COPILOT-LV"));
+    const items = rows.map((row: any) => {
+      const result = resolveRlcAutonomousCalculation(row, rows as any[], String(projectCode || "COPILOT-LV"));
+      const calc: any = mapAutonomousResultToKiRow(row, result);
+      return {
+        ...row,
+        preis: Number(calc?.rlcKiUnitPrice || 0),
+        confidence: Number(calc?.confidence || 0),
+        calculationStatus: calc?.calculationStatus || "needs_review",
+        riskLevel: calc?.riskLevel || "high",
+        gewerk: calc?.gewerk || null,
+        priceBreakdown: calc?.priceBreakdown || [],
+        warnings: calc?.warnings || [],
+        aiReason: calc?.aiReason || "",
+        projectContext: {
+          projectType: ctx.projectType,
+          trade: ctx.trade,
+        },
+      };
+    });
+
+    return res.json({ items });
   } catch (err: any) {
     console.error("propose error:", err);
     return res.status(500).json(openAiErrorPayload(err));
@@ -1996,7 +2110,8 @@ Antworte NUR als JSON:
 });
 
 // GET /kalkulation/:projectKey/ki
-router.get("/kalkulation/:projectKey/ki", async (req, res) => {
+router.get("/kalkulation/:projectKey/ki", requireKiPathProjectAccess("projectKey"), async (req, res) => {
+  req.params.projectKey = String((req as any).resolvedProjectId || req.params.projectKey || "").trim();
   try {
     const projectKey = assertSafeProjectKey(req.params.projectKey);
     const file = getKalkulationKiFile(projectKey);
@@ -2013,7 +2128,8 @@ router.get("/kalkulation/:projectKey/ki", async (req, res) => {
 });
 
 // POST /kalkulation/:projectKey/ki/save
-router.post("/kalkulation/:projectKey/ki/save", async (req, res) => {
+router.post("/kalkulation/:projectKey/ki/save", requireKiPathProjectAccess("projectKey"), async (req, res) => {
+  req.params.projectKey = String((req as any).resolvedProjectId || req.params.projectKey || "").trim();
   try {
     const projectKey = assertSafeProjectKey(req.params.projectKey);
 
@@ -2053,7 +2169,8 @@ router.post("/kalkulation/:projectKey/ki/save", async (req, res) => {
  * ============================================================ */
 
 // GET /api/ki/vision/:projectKey/list
-router.get("/vision/:projectKey/list", async (req, res) => {
+router.get("/vision/:projectKey/list", requireKiPathProjectAccess("projectKey"), async (req, res) => {
+  req.params.projectKey = String((req as any).resolvedProjectId || req.params.projectKey || "").trim();
   try {
     const projectKey = assertSafeProjectKey(req.params.projectKey);
     const items = listVisionJson(projectKey);
@@ -2066,7 +2183,8 @@ router.get("/vision/:projectKey/list", async (req, res) => {
 });
 
 // GET /api/ki/vision/:projectKey/:id
-router.get("/vision/:projectKey/:id", async (req, res) => {
+router.get("/vision/:projectKey/:id", requireKiPathProjectAccess("projectKey"), async (req, res) => {
+  req.params.projectKey = String((req as any).resolvedProjectId || req.params.projectKey || "").trim();
   try {
     const projectKey = assertSafeProjectKey(req.params.projectKey);
     const id = String(req.params.id || "").trim();

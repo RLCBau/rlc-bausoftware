@@ -336,3 +336,416 @@
     flex: 1 1 100%;
   }
 }
+
+
+/* Rechnungen kompakt */
+
+.bh-page .bh-actions {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  align-items: center;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.bh-page .bh-actions > button,
+.bh-page .bh-actions > a {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.bh-page .bh-header-row {
+  gap: 12px;
+  align-items: center;
+}
+
+.bh-page .bh-filters {
+  display: grid !important;
+  grid-template-columns:
+    minmax(150px, .8fr)
+    minmax(180px, 1fr)
+    minmax(180px, 1fr)
+    minmax(150px, .7fr);
+  gap: 14px !important;
+  align-items: end;
+}
+
+.bh-page .bh-filters > div {
+  min-width: 0;
+}
+
+.bh-page .bh-filters input,
+.bh-page .bh-filters select {
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .bh-page .bh-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+
+/* ABSCHLAGSRECHNUNG DETAIL REAL UI */
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-73 {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 22px 28px 34px;
+}
+
+/* Kopf + Aktionen */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-74 {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-75 {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-76 {
+  margin: 0 0 5px;
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-77 {
+  font-size: 14px;
+  color: #475569;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-78 {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+/* KPI */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-82 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 230px));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-83,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-86,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-89 {
+  min-height: 82px;
+  padding: 14px 16px;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-84,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-87,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-90 {
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-85,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-88,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-91 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* Bearbeitungsbereich */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-92 {
+  overflow: hidden;
+  border: 1px solid #dbe4ef;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-93 {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e7edf5;
+  background: #fbfdff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-94 {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 190px 170px;
+  gap: 12px;
+  align-items: end;
+  flex: 1;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-95,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-97,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-99 {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-96,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-98,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-100 {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid #d6e0eb;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-101 {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+/* Tabelle */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-102 {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-103 {
+  background: #f5f8fc;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-104,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-105,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-106,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-107,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-108,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-109,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-110 {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  color: #334155;
+  border-bottom: 1px solid #dfe7f0;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-111,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-113,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-115,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-117,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-119,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-121,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-122 {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-112,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-114,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-116,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-118,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-120 {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid #d8e1eb;
+  border-radius: 8px;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-123 {
+  padding: 22px 14px !important;
+  text-align: center;
+  color: #64748b;
+}
+
+/* Info */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-81 {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-74 {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-94 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-82 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+
+
+/* ABSCHLAGSRECHNUNG BUTTON SYSTEM */
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-73 button,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-69 button,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-66 button {
+  appearance: none;
+  border: 1px solid #d6e0eb;
+  background: #ffffff;
+  color: #0f172a;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .16s ease;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-73 button:hover,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-69 button:hover,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-66 button:hover {
+  background: #f8fbff;
+  border-color: #b8c9dc;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .07);
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-73 button:active,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-69 button:active,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-66 button:active {
+  transform: translateY(1px);
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-73 button:disabled,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-69 button:disabled,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-66 button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+/* Speichern / PDF / primäre Aktionen */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(3),
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(5),
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-101 {
+  background: #146ef5;
+  border-color: #146ef5;
+  color: #ffffff;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(3):hover,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(5):hover,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-101:hover {
+  background: #0f61dc;
+  border-color: #0f61dc;
+}
+
+/* Löschen */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-122 button:last-child {
+  color: #c62828;
+  border-color: #efb8b8;
+}
+
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-122 button:last-child:hover {
+  background: #fff5f5;
+  border-color: #e89090;
+}
+
+/* Auch Tabellen-/Listenbuttons sauber */
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-122 button,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-123 button {
+  cursor: pointer;
+}
+
+
+
+/* ABSCHLAGSRECHNUNG GLOBAL BUTTONS V3 */
+
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-"] button,
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-"] button {
+  appearance: none !important;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #d7e1ec !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  color: #142033 !important;
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer !important;
+  box-shadow: none !important;
+  transition: .15s ease;
+}
+
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-"] button:hover,
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-"] button:hover {
+  background: #f4f8fd !important;
+  border-color: #adc3da !important;
+}
+
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-"] button:disabled,
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-"] button:disabled {
+  cursor: not-allowed !important;
+  opacity: .55;
+}
+
+/* Primäre Aktionen */
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-"] button:last-child,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(3),
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(5),
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-101 {
+  background: #146ef5 !important;
+  border-color: #146ef5 !important;
+  color: #fff !important;
+}
+
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-"] button:last-child:hover,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(3):hover,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-80 button:nth-child(5):hover,
+.rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-101:hover {
+  background: #0d61df !important;
+  border-color: #0d61df !important;
+}
+
+/* Selects ebenfalls im RLC-Stil */
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungen-tsx-"] select,
+[class*="rlc-migrated-pages-buchhaltung-abschlagsrechnungdetail-tsx-"] select {
+  min-height: 38px;
+  border: 1px solid #d7e1ec;
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+}

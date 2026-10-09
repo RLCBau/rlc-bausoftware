@@ -13,8 +13,9 @@ import {
   rlcText,
 } from "./pdf/rlcPdfCore";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { buildXRechnungUbl, runKositXRechnungValidator, type XRechnungInvoice } from "./xrechnung";
 
-export type DeliveryFormat = "pdf" | "xlsx" | "csv" | "json" | "xml" | "zip";
+export type DeliveryFormat = "pdf" | "xlsx" | "csv" | "json" | "xml" | "zip" | "xrechnung";
 
 export type DeliveryAttachment = {
   name?: string;
@@ -664,7 +665,7 @@ async function writeSpecializedModulePdf(
     title: input.title,
     date: input.date,
     moduleKey: input.moduleKey,
-    company: data.company,
+    company: data.company || data.__sellerCompany,
     data,
     payload: data,
     document: data,
@@ -685,6 +686,87 @@ async function writeSpecializedModulePdf(
   return true;
 }
 
+function selectedInvoiceFromDeliveryData(input: BuildDeliveryInput): any {
+  const data:any = input.data || {};
+  const list = Array.isArray(data?.structured) ? data.structured : Array.isArray(data?.invoices) ? data.invoices : [];
+  const wanted = String(input.documentId || "").trim();
+  if (!wanted) throw new Error("XRECHNUNG_RECHNUNG_NICHT_GEWAEHLT: Bitte zuerst eine Rechnung öffnen.");
+  const invoice = list.find((row:any) => String(row?.id ?? row?.nr ?? "") === wanted || String(row?.nr || "") === wanted);
+  if (!invoice) throw new Error(`XRECHNUNG_RECHNUNG_NICHT_GEFUNDEN: ${wanted}`);
+  return invoice;
+}
+
+function xrechnungFromDeliveryInput(input: BuildDeliveryInput): XRechnungInvoice {
+  const invoice:any = selectedInvoiceFromDeliveryData(input);
+  const seller:any = (input.data as any)?.__sellerCompany || {};
+  const positions = Array.isArray(invoice?.positions) ? invoice.positions : [];
+  const invoiceKind = String(invoice?.typ || invoice?.documentType || "RECHNUNG").trim().toUpperCase();
+  const invoiceTypeCode = invoiceKind === "KORREKTUR" ? 384 : invoiceKind === "SCHLUSS" ? 877 : invoiceKind === "ABSCHLAG" ? 875 : 380;
+  const advanceDeductions = Array.isArray(invoice?.advanceDeductions) ? invoice.advanceDeductions : [];
+  const prepaidAmount = String(invoice?.typ || "").toUpperCase() === "SCHLUSS"
+    ? advanceDeductions.reduce((sum: number, item: any) => sum + Number(item?.brutto || 0), 0)
+    : 0;
+  const supportingPdf = prepaidAmount > 0
+    ? String(input.pdfFileName || `${String(invoice?.nr || invoice?.rechnungNr || "Schlussrechnung").trim()}.pdf`)
+    : "";
+  return {
+    number: String(invoice?.nr || invoice?.rechnungNr || "").trim(),
+    issueDate: String(invoice?.datum || invoice?.date || "").trim(),
+    dueDate: String(invoice?.faellig || invoice?.dueDate || "").trim(),
+    deliveryDate: String(invoice?.leistungsdatum || invoice?.deliveryDate || invoice?.serviceDate || "").trim(),
+    buyerReference: String(invoice?.buyerReference || invoice?.leitwegId || invoice?.customerReference || "").trim(),
+    invoiceTypeCode,
+    precedingInvoiceReference: invoiceTypeCode === 384 ? String(invoice?.originalInvoiceNumber || invoice?.precedingInvoiceReference || "").trim() : undefined,
+    buyer: {
+      name: String(invoice?.kunde || invoice?.customerName || "").trim(),
+      street: String(invoice?.customerStreet || invoice?.buyerStreet || "").trim(),
+      postalCode: String(invoice?.customerPostalCode || invoice?.buyerPostalCode || "").trim(),
+      city: String(invoice?.customerCity || invoice?.buyerCity || "").trim(),
+      country: String(invoice?.customerCountry || invoice?.buyerCountry || "DE").trim(),
+      email: String(invoice?.customerEmail || invoice?.buyerEmail || "").trim(),
+      vatId: String(invoice?.customerVatId || invoice?.buyerVatId || invoice?.kundeUstId || "").trim(),
+    },
+    seller: {
+      name: String(seller?.legalName || seller?.name || "").trim(),
+      street: String(seller?.street || "").trim(),
+      postalCode: String(seller?.postalCode || "").trim(),
+      city: String(seller?.city || "").trim(),
+      country: String(seller?.country || "DE").trim(),
+      email: String(seller?.email || "").trim(),
+      vatId: String(seller?.vatId || "").trim(),
+      taxNumber: String(seller?.taxNumber || "").trim(),
+      iban: String(seller?.iban || "").replace(/\s+/g, "").trim(),
+      bic: String(seller?.bic || "").replace(/\s+/g, "").trim(),
+      bankName: String(seller?.bankName || "").trim(),
+      contactName: String(seller?.managingDirector || seller?.name || "").trim(),
+      phone: String(seller?.phone || seller?.mobile || "").trim(),
+    },
+    vatRate: invoice?.taxTreatment === "REVERSE_CHARGE_13B" ? 0 : Number(invoice?.mwstPct ?? invoice?.mwst ?? 19),
+    taxTreatment: invoice?.taxTreatment === "REVERSE_CHARGE_13B" ? "REVERSE_CHARGE_13B" : "STANDARD",
+    netAmount: Number(invoice?.netto ?? 0),
+    prepaidAmount,
+    supportingDocument: prepaidAmount > 0 ? {
+      id: "ENDRECHNUNG-TEILENTGELTE",
+      description: "Absetzung der vereinnahmten Teilentgelte und darauf entfallenden Steuerbeträge gemäß § 14 Abs. 5 UStG – siehe beigefügte Schlussrechnung",
+      filename: supportingPdf,
+    } : undefined,
+    lines: positions.map((p:any, index:number) => ({
+      id: String(p?.id || index + 1),
+      pos: String(p?.pos || p?.position || index + 1),
+      text: String(p?.text || p?.beschreibung || p?.kurztext || "").trim(),
+      unit: String(p?.unit || p?.einheit || "St").trim(),
+      qty: Number(p?.qty ?? p?.quantity ?? p?.menge ?? 0),
+      unitPrice: Number(p?.ep ?? p?.price ?? 0),
+      total: Number(p?.total ?? 0),
+    })),
+    currency: "EUR",
+    note: [
+      String(invoice?.hinweis || "").trim(),
+      prepaidAmount > 0 ? `Absetzung vereinnahmter Teilentgelte siehe Anlage ${supportingPdf}.` : ""
+    ].filter(Boolean).join(" | "),
+  };
+}
+
 export async function buildDeliveryPackage(input: BuildDeliveryInput): Promise<BuildDeliveryResult> {
   const projectId = safeKey(input.projectId, "project");
   const moduleKey = safeKey(input.moduleKey, "document").toLowerCase();
@@ -702,6 +784,7 @@ export async function buildDeliveryPackage(input: BuildDeliveryInput): Promise<B
   const baseName = safeKey(`${moduleLabel(moduleKey)}_${input.documentId || input.date || exportId}`, moduleKey);
   const requested = new Set<DeliveryFormat>(((input.formats?.length ? input.formats : ["pdf", "xlsx", "csv", "json", "xml", "zip"]).filter(Boolean)) as DeliveryFormat[]);
   const generatedPaths: string[] = [];
+  let xrechnungValidation: { standard: string; validator: string; valid: boolean } | null = null;
 
   if (requested.has("json")) {
     const jsonPath = path.join(outputDir, `${baseName}.json`);
@@ -743,6 +826,8 @@ export async function buildDeliveryPackage(input: BuildDeliveryInput): Promise<B
     }), "utf8");
     generatedPaths.push(xmlPath);
   }
+
+
 
   if (requested.has("csv")) {
     const csvPath = path.join(outputDir, `${baseName}.csv`);
@@ -824,6 +909,37 @@ export async function buildDeliveryPackage(input: BuildDeliveryInput): Promise<B
     generatedPaths.push(pdfPath);
   }
 
+  if (requested.has("xrechnung")) {
+    if (moduleKey !== "rechnungen" && moduleKey !== "rechnung") {
+      throw new Error("XRechnung ist nur im Modul Rechnungen verfügbar.");
+    }
+    const xInvoice = xrechnungFromDeliveryInput(input);
+    if (xInvoice.supportingDocument) {
+      const supportingPdfPath = generatedPaths.find((filePath) => /\.pdf$/i.test(filePath));
+      if (!supportingPdfPath || !fs.existsSync(supportingPdfPath)) {
+        throw new Error("SCHLUSSRECHNUNG_ANLAGE_FEHLT: PDF-Anlage für die Absetzung der Teilentgelte wurde nicht erzeugt.");
+      }
+      xInvoice.supportingDocument.filename = path.basename(supportingPdfPath);
+      xInvoice.supportingDocument.contentBase64 = fs.readFileSync(supportingPdfPath).toString("base64");
+    }
+    const xml = buildXRechnungUbl(xInvoice);
+    const xPath = path.join(outputDir, `${safeKey(`XRechnung_${xInvoice.number}`, "XRechnung")}.xml`);
+    fs.writeFileSync(xPath, xml, "utf8");
+    const validation = runKositXRechnungValidator(xPath);
+    if (!validation.valid) {
+      try { fs.unlinkSync(xPath); } catch {}
+      throw new Error(`XRECHNUNG_KOSIT_INVALID: ${validation.errors.join(" | ").slice(0, 6000)}`);
+    }
+    xrechnungValidation = { standard: "XRechnung 3.0.2 / EN16931", validator: "KoSIT 1.6.3", valid: true };
+    generatedPaths.push(xPath);
+    if (validation.reportPath && fs.existsSync(validation.reportPath)) {
+      const reportPath = path.join(outputDir, `${safeKey(`XRechnung_${xInvoice.number}`, "XRechnung")}_KoSIT-Validierungsbericht.xml`);
+      fs.copyFileSync(validation.reportPath, reportPath);
+      generatedPaths.push(reportPath);
+    }
+  }
+
+
   const attachmentDir = path.join(outputDir, "Anlagen");
   const copiedAttachments: string[] = [];
   for (const attachment of input.attachments || []) {
@@ -859,13 +975,16 @@ export async function buildDeliveryPackage(input: BuildDeliveryInput): Promise<B
     exportedAt: nowIso(),
     createdBy: input.createdBy || "",
     files: preliminaryFiles.map(({ name, url, mime, size, sha256 }) => ({ name, url, mime, size, sha256 })),
+    xrechnungValidation,
     specialistFormats: moduleKey.includes("kalkulation") || moduleKey === "angebot" || moduleKey === "gaeb"
       ? ["GAEB X83/X84/X86/X89 via Fachmodul"]
       : moduleKey === "aufmass"
         ? ["REB X31", "DA11 via Fachmodul"]
         : moduleKey === "cad"
           ? ["DWG", "DXF", "IFC", "BCF", "LandXML via Fachmodul"]
-          : [],
+          : moduleKey === "rechnungen" || moduleKey === "rechnung"
+            ? ["XRechnung 3.0.2 / EN16931"]
+            : [],
   };
 
   const manifestPath = path.join(outputDir, "manifest.json");

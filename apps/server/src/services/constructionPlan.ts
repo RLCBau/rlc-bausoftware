@@ -1,0 +1,17 @@
+import crypto from 'crypto';import fs from 'fs';import path from 'path';import {berlinToday} from '../domain/machineUsage';import {planDay,PlanError} from '../domain/constructionPlan';
+const stable=(v:any):any=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.keys(v).sort().reduce((a:any,k)=>{a[k]=stable(v[k]);return a;},{}):v;
+export function planVersion(v:any){return crypto.createHash('sha256').update(JSON.stringify(stable(v))).digest('hex');}
+export async function loadConstructionPlan(tx:any,projectId:string){
+ const rows=await tx.planTask.findMany({where:{projectId},orderBy:{id:'asc'}}),caps=await tx.resourceCapacity.findMany({where:{projectId},orderBy:{name:'asc'}}),snapshot=await tx.planSnapshot.findFirst({where:{projectId,json:{path:['source'],equals:'BUERO_PLAN'}},orderBy:[{createdAt:'desc'},{id:'desc'}]});
+ const tasks=rows.map((r:any)=>({...r,start:r.start?.toISOString()||null,end:r.end?.toISOString()||null,notes:r.notes||'',assignee:r.assignee||'',deps:JSON.parse(r.depsJson),ressourcen:JSON.parse(r.ressJson)})).map(({projectId,depsJson,ressJson,...r}:any)=>r);
+ const capacity=Object.fromEntries(caps.map((r:any)=>[r.name,r.capacity]));let start=snapshot?.start.toISOString().slice(0,10)||berlinToday();
+ if(!snapshot){const dir=path.join(process.cwd(),'uploads',projectId,'optimierung');if(fs.existsSync(dir)){const files=fs.readdirSync(dir).filter(n=>/^plan_.*\.json$/.test(n)).sort().reverse();if(files.length){try{const legacy=JSON.parse(fs.readFileSync(path.join(dir,files[0]),'utf8'));start=planDay(legacy.start)!.toISOString().slice(0,10);}catch{throw new PlanError('Ältere Planmetadaten nicht lesbar.',503);}}}}
+ const data={start,tasks,capacity};return {...data,version:planVersion({...data,snapshotId:snapshot?.id||null})};
+}
+export async function storeConstructionPlan(tx:any,project:any,req:any,data:any,before:any){
+ const foreign=await tx.planTask.findFirst({where:{id:{in:data.tasks.map((t:any)=>t.id)},projectId:{not:project.id}},select:{id:true}});if(foreign)throw new PlanError('Vorgangs-ID kann nicht verwendet werden.',409);
+ await tx.planTask.deleteMany({where:{projectId:project.id}});if(data.tasks.length)await tx.planTask.createMany({data:data.tasks.map((t:any)=>({id:t.id,projectId:project.id,name:t.name,dauerTage:t.dauerTage,start:t.start,end:t.end,progress:t.progress,notes:t.notes||null,assignee:t.assignee||null,milestone:t.milestone,depsJson:JSON.stringify(t.deps),ressJson:JSON.stringify(t.ressourcen)}))});
+ await tx.resourceCapacity.deleteMany({where:{projectId:project.id}});const caps=Object.entries(data.capacity);if(caps.length)await tx.resourceCapacity.createMany({data:caps.map(([name,capacity])=>({projectId:project.id,name,capacity}))});
+ const prior=await tx.planSnapshot.findFirst({where:{projectId:project.id},orderBy:{createdAt:'desc'},select:{createdAt:true}});await tx.planSnapshot.create({data:{projectId:project.id,start:new Date(data.start+'T12:00Z'),ende:new Date((data.tasks.map((t:any)=>t.end?.slice(0,10)).filter(Boolean).sort().pop()||data.start)+'T12:00Z'),json:{source:'BUERO_PLAN',start:data.start},createdAt:new Date(Math.max(Date.now(),(prior?.createdAt.getTime()||0)+1))}});
+ const after=await loadConstructionPlan(tx,project.id);await tx.auditLog.create({data:{companyId:project.companyId,userId:String(req.auth.sub||req.auth.userId),action:'CONSTRUCTION_PLAN_SAVE',resource:'construction-plan:'+project.id,meta:{kind:'CONSTRUCTION_PLAN',before,after}}});return after;
+}

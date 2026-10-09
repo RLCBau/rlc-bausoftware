@@ -330,6 +330,8 @@ function toManualRows(rows: LVPos[]): ManualRow[] {
 export default function Manuell() {
   const nav = useNavigate();
   const projectCtx: any = useProject() as any;
+  const currentProject = getCurrentProject(projectCtx);
+  const projectId = String(currentProject?.id || projectCtx?.projectId || "").trim();
   const projectKey = getProjectKey(projectCtx);
   const projectName = getProjectName(projectCtx);
 
@@ -629,11 +631,18 @@ export default function Manuell() {
   }
 
   function exportCSV() {
-    const csv = LV.exportCSV(rows);
-    downloadBlob(
-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
-      `kalkulation_manuell_${safeFileName(offer.number)}.csv`
-    );
+    const fileName = `kalkulation_manuell_${safeFileName(offer.number)}.csv`;
+    const blob = new Blob([LV.exportCSV(rows)], {
+      type: "text/csv;charset=utf-8"
+    });
+
+    downloadBlob(blob, fileName);
+
+    if (projectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+        .catch((error) => console.error("[Manuell:CSV:DMS]", error));
+    }
   }
 
   function importCSVFile(file: File) {
@@ -679,7 +688,21 @@ export default function Manuell() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsRows, "Manuelle Kalkulation");
     XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
-    XLSX.writeFile(wb, `Manuelle_Kalkulation_${safeFileName(offer.number)}.xlsx`);
+    const fileName = `Manuelle_Kalkulation_${safeFileName(offer.number)}.xlsx`;
+    const blob = new Blob(
+      [XLSX.write(wb, { type: "array", bookType: "xlsx" })],
+      {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    );
+
+    downloadBlob(blob, fileName);
+
+    if (projectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+        .catch((error) => console.error("[Manuell:XLSX:DMS]", error));
+    }
   }
 
   async function exportPDF() {
@@ -1204,10 +1227,10 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }

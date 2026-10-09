@@ -1,0 +1,2 @@
+import React from 'react';import {officeAddonRequest as request} from './OfficeAddons';
+export function useMasterCatalog(kind:string){const [items,setItems]=React.useState<any[]>([]),[error,setError]=React.useState('');React.useEffect(()=>{let live=true;request('/api/master-catalog?kind='+encodeURIComponent(kind)).then(d=>{if(live){setItems(d.items||[]);setError('');}}).catch(e=>{if(live){setItems([]);setError(e.message);}});return()=>{live=false;};},[kind]);return {items,error};}

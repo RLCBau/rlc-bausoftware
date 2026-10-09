@@ -23,7 +23,8 @@ function getCompanyIdFromReq(req: Express.Request) {
 }
 
 function isDevAuth() {
-  return (process.env.DEV_AUTH || "").toLowerCase() === "on";
+  return process.env.NODE_ENV !== "production" &&
+    (process.env.DEV_AUTH || "").toLowerCase() === "on";
 }
 
 function withTimeout<T>(promise: Promise<T>, ms = 2000, label = "DB_TIMEOUT"): Promise<T> {
@@ -97,30 +98,49 @@ export function requireProjectMember(param: string = "id") {
   ) => {
     if (isDevAuth()) return next();
 
-    const projectId = String((req as any).params?.[param] || "");
-    if (!projectId) {
+    const projectToken = String((req as any).params?.[param] || "").trim();
+    if (!projectToken) {
       return res.status(400).json({ error: "ProjectId fehlt" });
     }
 
     const userId = req.auth?.sub;
-    if (!userId) {
-      return res.status(401).json({ error: "Auth fehlt" });
-    }
+    const companyId = getCompanyIdFromReq(req);
+    if (!userId) return res.status(401).json({ error: "Auth fehlt" });
+    if (!companyId) return res.status(403).json({ error: "Keine Firma im Token" });
 
     try {
+      const project = await withTimeout(
+        prisma.project.findFirst({
+          where: {
+            companyId,
+            OR: [{ id: projectToken }, { code: projectToken }],
+          },
+          select: { id: true, companyId: true, code: true },
+        }),
+        2000,
+        "DB_TIMEOUT_PROJECT_TENANT"
+      );
+
+      if (!project) {
+        return res.status(403).json({ error: "Projekt gehört nicht zur Firma oder existiert nicht" });
+      }
+
+      (req as any).resolvedProjectId = project.id;
+      (req as any).resolvedProjectCode = project.code;
+
+      const role = String(req.auth?.companyRole || req.auth?.role || "").toUpperCase();
+      if (role === "ADMIN" || role === "ADMINISTRATOR") return next();
+
       const member = await withTimeout(
         prisma.projectMember.findFirst({
-          where: { projectId, userId },
+          where: { projectId: project.id, userId },
           select: { id: true },
         }),
         2000,
         "DB_TIMEOUT_PROJECT_MEMBER"
       );
 
-      if (!member && String(req.auth?.role || "").toUpperCase() !== "ADMIN") {
-        return res.status(403).json({ error: "Nicht im Projekt" });
-      }
-
+      if (!member) return res.status(403).json({ error: "Nicht im Projekt" });
       return next();
     } catch (e: any) {
       console.error("[guard:requireProjectMember]", e?.message || e);

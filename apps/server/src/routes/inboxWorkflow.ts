@@ -5,9 +5,44 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { COMPANIES_ROOT } from "../lib/companiesRoot";
 import { recordProjectSubmission } from "../lib/projectSubmission";
+import { archiveProjectFileVersion, archiveProjectBufferVersion } from "../services/dmsArchive";
+import { buildDeliveryPackage } from "../services/documentDeliveryService";
+import { requireProjectMember } from "../middleware/guards";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
+
+router.use("/:projectKey", requireProjectMember("projectKey"), async (req:any, _res, next) => {
+  const projectId=String(req.resolvedProjectId||"").trim();
+  const projectCode=String(req.resolvedProjectCode||"").trim();
+  if(!projectId) return next(new Error("RESOLVED_PROJECT_ID_MISSING"));
+  if(projectCode && projectCode!==projectId){
+    try{
+      const duplicates=await prisma.project.count({where:{code:projectCode}});
+      if(duplicates===1){
+        const legacyRoot=path.join(PROJECTS_ROOT,projectCode);
+        const canonicalRoot=path.join(PROJECTS_ROOT,projectId);
+        for(const parts of [
+          ["mobile-workflow"],
+          ["privacy","employee-gps"],
+          ["arbeitszeiten"],
+          ["abschlaege.json"],
+          ["kalkulation","ki-kalkulation.json"],
+          ["ki","outlier-reports.json"],
+        ]){
+          const src=path.join(legacyRoot,...parts), dst=path.join(canonicalRoot,...parts);
+          if(!fs.existsSync(src)||fs.existsSync(dst)) continue;
+          fs.mkdirSync(path.dirname(dst),{recursive:true});
+          if(fs.statSync(src).isDirectory()) fs.cpSync(src,dst,{recursive:true}); else fs.copyFileSync(src,dst);
+        }
+      }
+    }catch(e){console.error("[inboxWorkflow] legacy tenant migration failed",e);}
+  }
+  req.params.projectKey=projectId;
+  next();
+});
 
 type WorkflowType =
   | "ANGEBOT"
@@ -15,7 +50,9 @@ type WorkflowType =
   | "ABSCHLAGSRECHNUNG"
   | "RECHNUNG"
   | "KALKULATION"
-  | "OUTLIER_REPORT";
+  | "OUTLIER_REPORT"
+  | "ARBEITSZEIT"
+  | "BAUTAGEBUCH";
 
 type WorkflowStage = "inbox" | "approved";
 
@@ -33,6 +70,10 @@ const TYPE_ALIASES: Record<string, WorkflowType> = {
   OUTLIER: "OUTLIER_REPORT",
   OUTLIER_REPORT: "OUTLIER_REPORT",
   "OUTLIER-REPORT": "OUTLIER_REPORT",
+  ARBEITSZEIT: "ARBEITSZEIT",
+  ARBEITSZEITEN: "ARBEITSZEIT",
+  BAUTAGEBUCH: "BAUTAGEBUCH",
+  BAUTAGEBUECHER: "BAUTAGEBUCH",
 };
 
 function safePart(value: any) {
@@ -69,6 +110,108 @@ function writeJson(file: string, value: any) {
   const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), "utf8");
   fs.renameSync(tmp, file);
+}
+
+function readEmployeeGpsPolicy(companyId: any) {
+  const cid = safePart(companyId);
+  if (!cid) return { employeeGpsEnabled: false, employeeGpsPurpose: "", employeeGpsLegalBasis: "", employeeGpsRetentionDays: 0 };
+  const file = path.join(COMPANIES_ROOT, cid, "privacy-profile.json");
+  const raw = readJson<any>(file, {});
+  return {
+    employeeGpsEnabled: raw?.employeeGpsEnabled === true,
+    employeeGpsPurpose: String(raw?.employeeGpsPurpose || "").trim(),
+    employeeGpsLegalBasis: String(raw?.employeeGpsLegalBasis || "").trim(),
+    employeeGpsRetentionDays: Math.max(0, Math.min(365, Number(raw?.employeeGpsRetentionDays || 0))),
+  };
+}
+
+function hasEmployeeGps(value: any): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (value?.gps && typeof value.gps === "object") {
+    const lat = Number(value.gps.latitude ?? value.gps.lat);
+    const lng = Number(value.gps.longitude ?? value.gps.lng ?? value.gps.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return true;
+  }
+  const lat = Number(value?.latitude ?? value?.lat);
+  const lng = Number(value?.longitude ?? value?.lng ?? value?.lon);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return true;
+  if (Array.isArray(value)) return value.some(hasEmployeeGps);
+  return Object.values(value).some((entry) => entry && typeof entry === "object" && hasEmployeeGps(entry));
+}
+
+function gpsEvidence(value: any): any[] {
+  const out: any[] = [];
+  const events = Array.isArray(value?.events) ? value.events : Array.isArray(value?.timeEvents) ? value.timeEvents : [];
+  for (const event of events) {
+    const lat = Number(event?.gps?.latitude ?? event?.gps?.lat ?? event?.latitude ?? event?.lat);
+    const lng = Number(event?.gps?.longitude ?? event?.gps?.lng ?? event?.gps?.lon ?? event?.longitude ?? event?.lng ?? event?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    out.push({
+      type: String(event?.type || event?.eventType || "").trim(),
+      timestamp: event?.timestamp || event?.time || null,
+      latitude: lat,
+      longitude: lng,
+      accuracy: event?.gps?.accuracy ?? event?.accuracy ?? null,
+    });
+  }
+  return out;
+}
+
+function stripGpsFromWorktime(document: any) {
+  const clone = JSON.parse(JSON.stringify(document || {}));
+  const scrub = (entry: any) => {
+    if (!entry || typeof entry !== "object") return;
+    delete entry.gps;
+    delete entry.latitude; delete entry.longitude; delete entry.lat; delete entry.lng; delete entry.lon; delete entry.accuracy;
+  };
+  scrub(clone);
+  for (const key of ["events", "timeEvents"]) {
+    if (Array.isArray(clone[key])) clone[key].forEach(scrub);
+  }
+  clone.employeeGpsSeparated = true;
+  return clone;
+}
+
+function employeeGpsDir(projectKey: string) {
+  return path.join(projectDir(projectKey), "privacy", "employee-gps");
+}
+
+function cleanupExpiredEmployeeGps(projectKey: string) {
+  const dir = employeeGpsDir(projectKey);
+  if (!fs.existsSync(dir)) return;
+  const now = Date.now();
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith(".json")) continue;
+    const file = path.join(dir, name);
+    const row = readJson<any>(file, null);
+    const expires = Date.parse(String(row?.expiresAt || ""));
+    if (Number.isFinite(expires) && expires <= now) {
+      try { fs.unlinkSync(file); } catch {}
+    }
+  }
+}
+
+function storeEmployeeGpsEvidence(projectKey: string, id: string, current: any, policy: any, actor: string, now: number) {
+  cleanupExpiredEmployeeGps(projectKey);
+  const evidence = gpsEvidence(current);
+  if (!evidence.length) return null;
+  const days = Math.max(1, Number(policy.employeeGpsRetentionDays || 0));
+  const expiresAt = new Date(now + days * 86400000).toISOString();
+  const file = path.join(employeeGpsDir(projectKey), `${safePart(id)}.json`);
+  writeJson(file, {
+    schema: "RLC-EMPLOYEE-GPS-EVIDENCE-1.0",
+    projectKey,
+    documentId: id,
+    employee: workEmployeeKey(current),
+    purpose: policy.employeeGpsPurpose,
+    legalBasis: policy.employeeGpsLegalBasis,
+    retentionDays: days,
+    createdAt: new Date(now).toISOString(),
+    expiresAt,
+    separatedBy: actor || null,
+    evidence,
+  });
+  return { count: evidence.length, expiresAt, purpose: policy.employeeGpsPurpose, legalBasis: policy.employeeGpsLegalBasis };
 }
 
 function projectDir(projectKey: string) {
@@ -124,6 +267,173 @@ function num(value: any, fallback = 0) {
     : raw.replace(/\s/g, "");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseWorkDate(value: any): Date | null {
+  const raw = String(value || "").trim();
+  let m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
+  m = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), 0, 0, 0, 0);
+  return null;
+}
+
+function parseClockMinutes(value: any): number | null {
+  const raw = String(value || "").trim();
+  const m = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+function workEmployeeKey(document: any): string {
+  return String(
+    document?.employeeId ||
+    document?.employeeName ||
+    document?.mitarbeiterName ||
+    document?.mitarbeiter ||
+    document?.employee ||
+    document?.submittedBy?.employeeId ||
+    document?.submittedBy?.employeeName ||
+    ""
+  ).trim().toLocaleLowerCase("de-DE");
+}
+
+function addYears(date: Date, years: number): Date {
+  const next = new Date(date.getTime());
+  next.setFullYear(next.getFullYear() + years);
+  return next;
+}
+
+function endOfCalendarYearPlusYears(value: any, years: number): string {
+  const parsed = parseWorkDate(value) || new Date();
+  return new Date(Date.UTC(parsed.getFullYear() + years, 11, 31, 23, 59, 59, 999)).toISOString();
+}
+
+function workflowRetentionMeta(type: WorkflowType, document: any): Record<string, any> {
+  if (type === "RECHNUNG" || type === "ABSCHLAGSRECHNUNG") {
+    return {
+      retentionLocked: true,
+      retentionUntil: endOfCalendarYearPlusYears(document?.date || document?.datum, 8),
+      retentionReason: "§ 14b UStG / § 147 AO / § 257 HGB – Rechnungs-/Buchungsbeleg 8 Jahre",
+      retentionCategory: "TAX_INVOICE_8Y",
+    };
+  }
+  if (type === "ARBEITSZEIT") {
+    return {
+      retentionLocked: true,
+      retentionUntil: document?.compliance?.retentionUntil || document?.retentionUntil || addYears(new Date(), 2).toISOString(),
+      retentionReason: "MiLoG § 17 – Arbeitszeitaufzeichnungen mindestens 2 Jahre",
+      retentionCategory: "WORKTIME_2Y",
+    };
+  }
+  return {};
+}
+
+function validateArbeitszeitForApproval(projectKey: string, document: any, approvedAt: number) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const date = parseWorkDate(document?.date || document?.datum);
+  const start = parseClockMinutes(document?.start || document?.arbeitsbeginn);
+  const end = parseClockMinutes(document?.end || document?.arbeitsende);
+  const breakMinutes = Math.max(0, num(document?.breakMinutes ?? document?.pauseMinutes, 0));
+
+  if (!date) errors.push("Arbeitsdatum fehlt oder ist ungültig.");
+  if (start === null) errors.push("Arbeitsbeginn fehlt oder ist ungültig.");
+  if (end === null) errors.push("Arbeitsende fehlt oder ist ungültig.");
+
+  let grossMinutes = 0;
+  let netMinutes = 0;
+  if (start !== null && end !== null) {
+    grossMinutes = end - start;
+    if (grossMinutes < 0) grossMinutes += 24 * 60;
+    if (grossMinutes <= 0 || grossMinutes > 24 * 60) errors.push("Arbeitszeitspanne ist ungültig.");
+    netMinutes = Math.max(0, grossMinutes - breakMinutes);
+
+    if (netMinutes > 6 * 60 && netMinutes <= 9 * 60 && breakMinutes < 30) {
+      errors.push("ArbZG § 4: Bei mehr als 6 bis 9 Stunden sind mindestens 30 Minuten Pause erforderlich.");
+    }
+    if (netMinutes > 9 * 60 && breakMinutes < 45) {
+      errors.push("ArbZG § 4: Bei mehr als 9 Stunden sind mindestens 45 Minuten Pause erforderlich.");
+    }
+
+    if (netMinutes > 10 * 60) {
+      const exceptionBasis = String(document?.arbzgExceptionBasis || document?.arbeitszeitExceptionBasis || "").trim();
+      if (!exceptionBasis) {
+        errors.push("ArbZG § 3: Mehr als 10 Stunden tägliche Arbeitszeit erfordern eine dokumentierte gesetzliche/tarifliche Ausnahmegrundlage.");
+      } else {
+        warnings.push(`Arbeitszeit > 10 h – Ausnahmegrundlage dokumentiert: ${exceptionBasis}`);
+      }
+    }
+
+    const reportedHours = num(document?.hours ?? document?.netHours ?? document?.nettoHours, NaN);
+    if (Number.isFinite(reportedHours)) {
+      const calculatedHours = netMinutes / 60;
+      if (Math.abs(reportedHours - calculatedHours) > 0.15) {
+        errors.push(`Gemeldete Nettoarbeitszeit (${reportedHours.toFixed(2)} h) stimmt nicht mit Beginn/Ende/Pause (${calculatedHours.toFixed(2)} h) überein.`);
+      }
+    }
+  }
+
+  const employeeKey = workEmployeeKey(document);
+  if (!employeeKey) errors.push("Mitarbeiter ist nicht eindeutig angegeben.");
+
+  if (date && start !== null && employeeKey) {
+    const officialFile = path.join(projectDir(projectKey), "arbeitszeiten", "arbeitszeiten.json");
+    const previousRows = readJson<any[]>(officialFile, []);
+    let previous: { date: Date; end: number; raw: any } | null = null;
+    for (const row of Array.isArray(previousRows) ? previousRows : []) {
+      if (workEmployeeKey(row) !== employeeKey) continue;
+      const rowDate = parseWorkDate(row?.date || row?.datum);
+      const rowEnd = parseClockMinutes(row?.end || row?.arbeitsende);
+      if (!rowDate || rowEnd === null || rowDate >= date) continue;
+      if (!previous || rowDate > previous.date) previous = { date: rowDate, end: rowEnd, raw: row };
+    }
+    if (previous) {
+      const prevEnd = new Date(previous.date.getTime());
+      prevEnd.setMinutes(previous.end);
+      const currentStart = new Date(date.getTime());
+      currentStart.setMinutes(start);
+      const restHours = (currentStart.getTime() - prevEnd.getTime()) / 3600000;
+      if (restHours < 11) {
+        const exceptionBasis = String(document?.ruhezeitExceptionBasis || "").trim();
+        if (!exceptionBasis) {
+          errors.push(`ArbZG § 5: Ruhezeit zur vorherigen Schicht beträgt nur ${restHours.toFixed(2)} h; grundsätzlich sind 11 h erforderlich.`);
+        } else {
+          warnings.push(`Ruhezeit < 11 h – Ausnahmegrundlage dokumentiert: ${exceptionBasis}`);
+        }
+      }
+    }
+  }
+
+  let lateRecording = false;
+  if (date) {
+    const submittedAt = Number(document?.submittedAt || document?.createdAt || approvedAt);
+    const deadline = new Date(date.getTime());
+    deadline.setDate(deadline.getDate() + 7);
+    deadline.setHours(23, 59, 59, 999);
+    if (submittedAt > deadline.getTime()) {
+      lateRecording = true;
+      warnings.push("MiLoG § 17: Arbeitszeit wurde später als bis zum Ablauf des 7. Folgetages aufgezeichnet/eingereicht.");
+    }
+  }
+
+  const retentionBase = new Date(Number(document?.submittedAt || approvedAt));
+  const retentionUntil = addYears(retentionBase, 2).toISOString();
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    grossMinutes,
+    netMinutes,
+    calculatedNetHours: Number((netMinutes / 60).toFixed(2)),
+    lateRecording,
+    retentionUntil,
+    legalBasis: ["ArbZG §§ 3-5", "MiLoG § 17"],
+  };
 }
 
 function upsertById(list: any[], document: any) {
@@ -409,17 +719,214 @@ function finalizeOutlier(projectKey: string, document: any) {
   return { module: "KI_OUTLIER_REPORT", file };
 }
 
+function finalizeArbeitszeit(projectKey: string, document: any) {
+  const file = path.join(
+    projectDir(projectKey),
+    "arbeitszeiten",
+    "arbeitszeiten.json"
+  );
+
+  const official = {
+    ...document,
+    id: String(document?.id || document?.docId),
+    docId: String(document?.docId || document?.id),
+    projectKey,
+    projectCode: projectKey,
+    type: "ARBEITSZEIT",
+    docType: "ARBEITSZEIT",
+    status: "FREIGEGEBEN",
+    workflowStatus: "FREIGEGEBEN",
+    mobileApprovedAt: document?.approvedAt || Date.now(),
+    compliance: document?.compliance || null,
+    retentionUntil: document?.compliance?.retentionUntil || document?.retentionUntil || null,
+    retentionReason: "MiLoG § 17 – Arbeitszeitaufzeichnungen mindestens 2 Jahre",
+  };
+
+  writeOfficialList(file, official);
+
+  return {
+    module: "BUERO_ARBEITSZEITEN",
+    file,
+  };
+}
+
+
+function finalizeBautagebuch(projectKey: string, document: any) {
+  const id = safePart(document?.id || document?.docId || `bautagebuch_${Date.now()}`);
+  const file = path.join(
+    projectDir(projectKey),
+    "bautagebuch",
+    `${id}.json`
+  );
+
+  const official = {
+    ...document,
+    id,
+    docId: id,
+    projectKey,
+    projectCode: projectKey,
+    type: "BAUTAGEBUCH",
+    docType: "BAUTAGEBUCH",
+    workflowStatus: "FREIGEGEBEN",
+  };
+
+  writeJson(file, official);
+
+  return {
+    module: "BUERO_BAUTAGEBUCH",
+    file,
+  };
+}
+
 function finalizeDocument(projectKey: string, type: WorkflowType, document: any) {
-  if (type === "ANGEBOT") return finalizeAngebot(projectKey, document);
+  if (type === "ARBEITSZEIT") {
+    return finalizeArbeitszeit(projectKey, document);
+  }
+
+  if (type === "BAUTAGEBUCH") {
+    return finalizeBautagebuch(projectKey, document);
+  }
+
+  if (type === "ANGEBOT") {
+    return finalizeAngebot(projectKey, document);
+  }
+
   if (type === "MENGENERMITTLUNG") {
     return finalizeMengenermittlung(projectKey, document);
   }
-  if (type === "RECHNUNG") return finalizeRechnung(projectKey, document);
+
+  if (type === "RECHNUNG") {
+    return finalizeRechnung(projectKey, document);
+  }
+
   if (type === "ABSCHLAGSRECHNUNG") {
     return finalizeAbschlagsrechnung(projectKey, document);
   }
-  if (type === "KALKULATION") return finalizeKalkulation(projectKey, document);
-  return finalizeOutlier(projectKey, document);
+
+  if (type === "KALKULATION") {
+    return finalizeKalkulation(projectKey, document);
+  }
+
+  if (type === "OUTLIER_REPORT") {
+    return finalizeOutlier(projectKey, document);
+  }
+
+  throw new Error(`UNSUPPORTED_WORKFLOW_TYPE:${type}`);
+}
+
+
+async function archiveApprovedWorkflowDocument(
+  projectKey: string,
+  type: WorkflowType,
+  document: any,
+  uploadedBy?: string | null
+) {
+  const id = safePart(
+    document?.id ||
+    document?.docId ||
+    `${type.toLowerCase()}_${Date.now()}`
+  );
+
+  const date = String(
+    document?.date ||
+    document?.datum ||
+    document?.createdAt ||
+    new Date().toISOString()
+  ).slice(0, 10);
+
+  const labels: Record<WorkflowType, string> = {
+    ANGEBOT: "Angebot",
+    MENGENERMITTLUNG: "Mengenermittlung",
+    ABSCHLAGSRECHNUNG: "Abschlagsrechnung",
+    RECHNUNG: "Rechnung",
+    KALKULATION: "Kalkulation",
+    OUTLIER_REPORT: "Outlier_Report",
+    ARBEITSZEIT: "Arbeitszeit",
+    BAUTAGEBUCH: "Bautagebuch",
+  };
+
+  const modules: Record<WorkflowType, string> = {
+    ANGEBOT: "angebot",
+    MENGENERMITTLUNG: "mengenermittlung",
+    ABSCHLAGSRECHNUNG: "abschlagsrechnung",
+    RECHNUNG: "rechnung",
+    KALKULATION: "kalkulation",
+    OUTLIER_REPORT: "outlier",
+    ARBEITSZEIT: "arbeitszeit",
+    BAUTAGEBUCH: "bautagebuch",
+  };
+
+  const title = labels[type];
+  const moduleKey = modules[type];
+  const retentionMeta = workflowRetentionMeta(type, document);
+
+  const result = await buildDeliveryPackage({
+    projectId: projectKey,
+    projectName: String(
+      document?.projectName ||
+      document?.projectTitle ||
+      projectKey
+    ),
+    moduleKey,
+    documentId: id,
+    title,
+    date,
+    data: document,
+    formats: ["pdf"],
+    createdBy: uploadedBy || "workflow",
+  });
+
+  const pdf = result.files.find(
+    (file: any) =>
+      file?.mime === "application/pdf" ||
+      String(file?.name || "").toLowerCase().endsWith(".pdf")
+  );
+
+  if (!pdf?.filePath || !fs.existsSync(pdf.filePath)) {
+    throw new Error(`DMS_PDF_NOT_CREATED:${type}:${id}`);
+  }
+
+  const filename = `${title}_${id}.pdf`;
+
+  const pdfArchive = await archiveProjectFileVersion({
+    projectIdOrCode: projectKey,
+    filename,
+    kind: "PDF",
+    localPath: pdf.filePath,
+    uploadedBy: uploadedBy || null,
+    meta: {
+      source: "workflow",
+      docType: type,
+      documentId: id,
+      date,
+      tags: [
+        type,
+        title,
+        moduleKey
+      ],
+      ...retentionMeta
+    }
+  });
+
+  if (type === "ARBEITSZEIT") {
+    const structured = await archiveProjectBufferVersion({
+      projectIdOrCode: projectKey,
+      filename: `${title}_${id}.json`,
+      kind: "DOC",
+      buffer: Buffer.from(JSON.stringify(document, null, 2), "utf8"),
+      uploadedBy: uploadedBy || null,
+      meta: {
+        source: "workflow-structured",
+        docType: type,
+        documentId: id,
+        date,
+        ...retentionMeta
+      }
+    });
+    return { ...pdfArchive, structured };
+  }
+
+  return pdfArchive;
 }
 
 function resolveParams(req: any) {
@@ -448,7 +955,18 @@ router.post("/:projectKey/:type/submit", async (req, res, next) => {
       return res.status(400).json({ ok: false, error: "PROJECT_KEY_REQUIRED" });
     }
 
-    const raw = req.body?.doc ?? req.body?.data ?? req.body ?? {};
+    const incoming = req.body?.doc ?? req.body?.data ?? req.body ?? {};
+    const gpsPolicy = type === "ARBEITSZEIT" ? readEmployeeGpsPolicy(req?.auth?.companyId) : null;
+    const incomingHasGps = type === "ARBEITSZEIT" && hasEmployeeGps(incoming);
+
+    if (incomingHasGps && gpsPolicy?.employeeGpsEnabled &&
+        (!gpsPolicy.employeeGpsPurpose || !gpsPolicy.employeeGpsLegalBasis || gpsPolicy.employeeGpsRetentionDays < 1)) {
+      return res.status(422).json({ ok: false, error: "GPS_PRIVACY_CONFIGURATION_INCOMPLETE" });
+    }
+
+    const raw = incomingHasGps && !gpsPolicy?.employeeGpsEnabled
+      ? { ...stripGpsFromWorktime(incoming), employeeGpsRemovedByPrivacyPolicy: true }
+      : incoming;
     const now = Date.now();
     const id = safePart(raw?.id || raw?.docId || `${type.toLowerCase()}_${now}`);
     if (!id) return res.status(400).json({ ok: false, error: "DOC_ID_REQUIRED" });
@@ -467,6 +985,13 @@ router.post("/:projectKey/:type/submit", async (req, res, next) => {
       createdAt: raw?.createdAt || now,
       updatedAt: now,
       source: raw?.source || "RLC_MOBILE",
+      employeeGpsPrivacy: type === "ARBEITSZEIT" ? {
+        enabled: Boolean(gpsPolicy?.employeeGpsEnabled),
+        present: Boolean(incomingHasGps && gpsPolicy?.employeeGpsEnabled),
+        purpose: gpsPolicy?.employeeGpsEnabled ? gpsPolicy.employeeGpsPurpose : null,
+        legalBasis: gpsPolicy?.employeeGpsEnabled ? gpsPolicy.employeeGpsLegalBasis : null,
+        retentionDays: gpsPolicy?.employeeGpsEnabled ? gpsPolicy.employeeGpsRetentionDays : 0,
+      } : undefined,
     };
 
     writeJson(workflowDocFile(projectKey, type, "inbox", id), document);
@@ -499,6 +1024,20 @@ router.post("/:projectKey/:type/submit", async (req, res, next) => {
       message: String(error?.message || error),
     });
   }
+});
+
+router.get("/:projectKey/ARBEITSZEIT/:id/gps-evidence", (req: any, res) => {
+  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+  if (!["ADMIN", "ADMINISTRATOR", "BAULEITER"].includes(role) && !(process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on")) {
+    return res.status(403).json({ ok: false, error: "GPS_EVIDENCE_FORBIDDEN" });
+  }
+  const projectKey = safePart(req.params.projectKey);
+  const id = safePart(req.params.id);
+  cleanupExpiredEmployeeGps(projectKey);
+  const file = path.join(employeeGpsDir(projectKey), `${id}.json`);
+  const data = readJson<any>(file, null);
+  if (!data) return res.status(404).json({ ok: false, error: "GPS_EVIDENCE_NOT_FOUND_OR_EXPIRED" });
+  return res.json({ ok: true, data });
 });
 
 router.get("/:projectKey/:type/approved", (req, res, next) => {
@@ -537,7 +1076,7 @@ router.get("/:projectKey/:type", (req, res, next) => {
   return res.json({ ok: true, projectKey, type, items, count: items.length });
 });
 
-router.post("/:projectKey/:type/:id/approve", (req, res, next) => {
+router.post("/:projectKey/:type/:id/approve", async (req, res, next) => {
   try {
     const { projectKey, type } = resolveParams(req);
     if (!type) return next();
@@ -551,20 +1090,63 @@ router.post("/:projectKey/:type/:id/approve", (req, res, next) => {
     if (!current) return res.status(404).json({ ok: false, error: "DOC_NOT_FOUND" });
 
     const now = Date.now();
+    const actor = String(
+      req?.auth?.email || req?.auth?.userId || req?.auth?.sub || req?.user?.email || req?.user?.id || ""
+    ).trim();
+
+    const compliance = type === "ARBEITSZEIT"
+      ? validateArbeitszeitForApproval(projectKey, current, now)
+      : null;
+
+    if (compliance && !compliance.valid) {
+      appendWorkflowLog(projectKey, {
+        projectKey, type, id, action: "approve-blocked-compliance",
+        actor: actor || null, errors: compliance.errors, warnings: compliance.warnings, updatedAt: now,
+      });
+      return res.status(422).json({
+        ok: false,
+        error: "ARBEITSZEIT_COMPLIANCE_FAILED",
+        message: "Arbeitszeitnachweis erfüllt die gesetzlichen/konfigurierten Prüfkriterien nicht.",
+        compliance,
+      });
+    }
+
+    const approvalGpsPolicy = type === "ARBEITSZEIT" ? readEmployeeGpsPolicy(req?.auth?.companyId) : null;
+    const gpsSummary = type === "ARBEITSZEIT" && approvalGpsPolicy?.employeeGpsEnabled
+      ? storeEmployeeGpsEvidence(projectKey, id, current, approvalGpsPolicy, actor, now)
+      : null;
+    const approvalSource = type === "ARBEITSZEIT" ? stripGpsFromWorktime(current) : current;
+
     const approved = {
-      ...current,
+      ...approvalSource,
       workflowStatus: "FREIGEGEBEN",
       approvedAt: now,
-      approvedBy: String(req.body?.approvedBy || "").trim() || null,
+      approvedBy: actor || null,
+      compliance: compliance || current?.compliance || null,
+      retentionUntil: compliance?.retentionUntil || current?.retentionUntil || null,
+      employeeGpsEvidence: gpsSummary,
       rejectionReason: null,
       updatedAt: now,
     };
 
     const finalTarget = finalizeDocument(projectKey, type, approved);
+
+    const dms = await archiveApprovedWorkflowDocument(
+      projectKey,
+      type,
+      approved,
+      approved.approvedBy
+    );
+
     const completed = {
       ...approved,
       finalizedAt: now,
       finalTarget,
+      dms: {
+        documentId: dms.documentId,
+        versionId: dms.versionId,
+        version: dms.version,
+      },
     };
     writeJson(workflowDocFile(projectKey, type, "approved", id), completed);
     fs.unlinkSync(inboxFile);
@@ -575,6 +1157,8 @@ router.post("/:projectKey/:type/:id/approve", (req, res, next) => {
       id,
       action: "approve",
       workflowStatus: "FREIGEGEBEN",
+      actor: actor || null,
+      compliance: compliance || null,
       finalTarget,
       updatedAt: now,
     });

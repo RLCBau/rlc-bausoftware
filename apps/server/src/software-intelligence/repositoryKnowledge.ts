@@ -1135,7 +1135,12 @@ export function retrieveSoftwareIntelligence(
         chunk.file
       );
 
-    return !isTestFile && !isRetrievalImplementation;
+    const isSensitiveInternalSource =
+      /(^|[\\/])(?:middleware[\\/](?:auth|requireAuth|guards|rbac)|routes[\\/](?:admin\.auth|platform\.admin)|lib[\\/](?:storage|license)|services[\\/](?:enterpriseProvisioning)|.*\.env(?:\.|$)|docker-compose|backup|before-|\.bak)/i.test(
+        chunk.file
+      );
+
+    return !isTestFile && !isRetrievalImplementation && !isSensitiveInternalSource;
   });
 
   const ranked: RankedChunk[] = productionChunks
@@ -1178,7 +1183,7 @@ export function retrieveSoftwareIntelligence(
       apiRoutes: (x.routes || []).filter((r) => String(r).startsWith("/api/")),
       symbols: x.symbols || [],
       uiLabels: x.uiLabels || [],
-      content: x.content.slice(0, 5000),
+      content: "",
     })),
   };
 }
@@ -1249,8 +1254,8 @@ export function formatSoftwareIntelligenceContext(
       isTechnicalQuestion && match.symbols.length
         ? `Symbole: ${match.symbols.slice(0, 12).join(", ")}`
         : "",
-      showImplementation && isTechnicalQuestion
-        ? `Quellcode-Kontext:\n${match.content}`
+      isTechnicalQuestion
+        ? "Interne Implementierungsdetails und Quellcode werden aus Sicherheitsgründen nicht an Nutzer ausgegeben."
         : "",
       !isTechnicalQuestion && !isUserFacingSource
         ? "Technische Quelle nur zur fachlichen Validierung; keine API-, Datenbank-, ID- oder Implementierungsdetails an Nutzer ausgeben."
@@ -1276,6 +1281,7 @@ export function formatSoftwareIntelligenceContext(
     "- Keine generischen Schritte wie 'zur Nutzerverwaltung gehen', 'Code erstellen', 'Mitarbeiter ausw\u00e4hlen' oder 'Rolle zuweisen' erg\u00e4nzen, sofern diese Schritte nicht in den UI-Quellen stehen.",
     "- Wenn nur die technische Zuordnung belegt ist, klar sagen: Der aktuelle Repository-Kontext belegt keine konkrete Benutzeroberfl\u00e4che oder Schrittfolge f\u00fcr diese Aktion.",
     "- Bei nicht eindeutig belegbaren Aussagen ausdrücklich Unsicherheit nennen.",
+    "- Niemals Quellcode, Secrets, interne Konfigurationswerte, Dateisystempfade oder Authentifizierungslogik an Nutzer ausgeben.",
     "",
     ...blocks,
   ].join("\n\n");

@@ -1,4 +1,5 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { archiveWebPdfFromUrl } from "../../lib/dmsArchive";
+import React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { apiUrl } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
@@ -292,9 +293,7 @@ export default function Tagesberichte() {
   const [selected, setSelected] = React.useState<Tagesbericht | null>(null);
   const [savedSummary, setSavedSummary] =
   React.useState<Tagesbericht | null>(null);
-  const [month, setMonth] = React.useState(
-    new Date().toISOString().slice(0, 7)
-  );
+  const [month, setMonth] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -309,19 +308,10 @@ export default function Tagesberichte() {
 
     try {
       const responses = await Promise.all([
-      request(
-        `/api/regie/inbox/list?projectId=${encodeURIComponent(projectKey)}`
-      ).catch(() => ({ items: [] })),
-      request(
-        `/api/regie/freigegeben/list?projectId=${encodeURIComponent(projectKey)}`
-      ).catch(() => ({ items: [] })),
-      request(
-        `/api/regie/final/list?projectId=${encodeURIComponent(projectKey)}`
-      ).catch(() => ({ items: [] })),
-      request(
-        `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(projectKey)}`
-      ).catch(() => ({ items: [] }))]
-      );
+        request(
+          `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(projectKey)}`
+        ).catch(() => ({ items: [] }))
+      ]);
 
       const normalized = responses.
       flatMap(itemsOf).
@@ -332,10 +322,10 @@ export default function Tagesberichte() {
         item;
         return (
           String(
-            first?.reportType ||
             item?.reportType ||
-            first?.type ||
+            first?.reportType ||
             item?.type ||
+            first?.type ||
             ""
           ).toUpperCase() === "TAGESBERICHT");
 
@@ -529,13 +519,42 @@ export default function Tagesberichte() {
         rows: [nextReport]
       };
 
-      const payload = await request(
-        "/api/ki/regie/commit/regiebericht",
-        {
-          method: "POST",
-          body: JSON.stringify(snapshot)
-        }
+      const identity =
+        nextReport.sourceDocId || nextReport.id;
+
+      const existsOnServer = items.some(
+        (item) =>
+          item.id === identity ||
+          item.sourceDocId === identity
       );
+
+      const payload = existsOnServer
+        ? await request(
+            "/api/tagesbericht/inbox/update",
+            {
+              method: "POST",
+              body: JSON.stringify(snapshot)
+            }
+          )
+        : await request(
+            "/api/tagesbericht",
+            {
+              method: "POST",
+              body: JSON.stringify({
+                ...nextReport,
+                id: identity,
+                projectId: projectKey,
+                projectCode: projectKey,
+                reportType: "TAGESBERICHT",
+                workflowStatus:
+                  nextReport.workflowStatus || "EINGEREICHT",
+                inBautagebuch:
+                  Boolean(nextReport.inBautagebuch),
+                bautagebuchTransferredAt:
+                  nextReport.bautagebuchTransferredAt
+              })
+            }
+          );
 
       const returned =
       payload?.snapshot ||
@@ -643,9 +662,21 @@ export default function Tagesberichte() {
   async function exportPdf() {
     try {
       const url = await createPdf();
+      const fileName = `Tagesbericht_${selected?.date || "Export"}.pdf`;
+
+      const dmsProjectId = String(project?.id || "").trim();
+
+      if (dmsProjectId) {
+        await archiveWebPdfFromUrl(
+          dmsProjectId,
+          fileName,
+          url
+        );
+      }
+
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Tagesbericht_${selected?.date || "Export"}.pdf`;
+      link.download = fileName;
       link.target = "_blank";
       link.rel = "noreferrer";
       document.body.appendChild(link);
@@ -659,12 +690,12 @@ export default function Tagesberichte() {
   async function approve() {
     if (!selected) return;
 
-    await request("/api/regie/inbox/approve", {
+    await request("/api/tagesbericht/inbox/approve", {
       method: "POST",
       body: JSON.stringify({
         projectId: projectKey,
         docId: selected.sourceDocId || selected.id,
-        reportType: "TAGESBERICHT"
+        approvedBy: ""
       })
     });
 

@@ -40,7 +40,7 @@ export function requireServerLicense() {
         return next();
       }
     // ðŸ”“ DEV bypass totale
-    if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
+    if (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
 
     const mode = String(req?.user?.mode || "NUR_APP") as Mode;
 

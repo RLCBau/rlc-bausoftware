@@ -6,7 +6,7 @@ import { prisma } from "../lib/prisma";
  * Passa SEMPRE i permessi ("project:read"/"project:write") e, se serve, crea/ricicla la Company.
  */
 export async function devAuth(req: Request, _res: Response, next: NextFunction) {
-  if (process.env.DEV_AUTH !== "on") return next();
+  if (process.env.NODE_ENV === "production" || process.env.DEV_AUTH !== "on") return next();
 
   // trova o crea company di default e salva l'ID in env (una volta)
   if (!process.env.DEV_COMPANY_ID) {

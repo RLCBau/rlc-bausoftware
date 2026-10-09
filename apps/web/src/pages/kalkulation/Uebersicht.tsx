@@ -70,9 +70,37 @@ function rowPrice(row: LVPos): number {
 }
 
 function rowTotal(row: LVPos): number {
-  const stored = n(row.gesamt);
+  const stored = n((row as any).gesamt ?? (row as any).totalNet ?? (row as any).gp);
   if (stored > 0) return stored;
   return n(row.menge) * rowPrice(row);
+}
+
+function extractKiRows(payload: any): LVPos[] {
+  const candidates = [
+    payload?.rows,
+    payload?.data?.rows,
+    payload?.snapshot?.rows,
+    payload?.data?.snapshot?.rows,
+    payload?.positions,
+    payload?.data?.positions,
+    payload?.items,
+    payload?.data?.items
+  ];
+  for (const value of candidates) {
+    if (Array.isArray(value)) return value as LVPos[];
+  }
+  return [];
+}
+
+function readLocalKiRows(code: string): LVPos[] {
+  if (!code || typeof localStorage === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(`rlc_kalkulation_mit_ki_elite_v1:${code}`);
+    if (!raw) return [];
+    return extractKiRows(JSON.parse(raw));
+  } catch {
+    return [];
+  }
 }
 
 function norm(value: unknown): string {
@@ -171,12 +199,12 @@ function Kpi({
 
 }: {label: string;value: string;sub?: string;danger?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }
@@ -188,13 +216,48 @@ export default function KalkulationUebersicht() {
   const code = projectCode(currentProject);
   const name = projectName(currentProject);
 
-  const lvRows = React.useMemo(() => {
+  const [lvRows, setLvRows] = React.useState<LVPos[]>(() => {
+    const local = readLocalKiRows(code);
+    if (local.length) return local;
     try {
       return LV.list();
     } catch {
       return [];
     }
-  }, []);
+  });
+
+  React.useEffect(() => {
+    if (!code) {
+      setLvRows([]);
+      return;
+    }
+
+    const local = readLocalKiRows(code);
+    if (local.length) setLvRows(local);
+
+    let cancelled = false;
+    void fetch(`/api/kalkulation/storage/ki/${encodeURIComponent(code)}`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store"
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        const serverRows = extractKiRows(payload);
+        if (serverRows.length) setLvRows(serverRows);
+      })
+      .catch(() => {
+        // Lokaler KI-Stand bleibt sichtbar, wenn der Server kurz nicht erreichbar ist.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
 
   const dbRows = React.useMemo(() => {
     try {
@@ -369,148 +432,16 @@ export default function KalkulationUebersicht() {
         subtitle="Zentrale Steuerung für LV, KI-Kalkulation, Datenbank, GAEB und Angebot." />
       
 
-      <section className={rlcClass("rlc-page-hero", heroCard)}>
+      <section className={rlcClass(null, overviewIntro)}>
         <div>
           <div className={rlcClass(null, eyebrow)}>RLC Kalkulation</div>
-          <h1 className={rlcClass(null, heroTitle)}>Kalkulationszentrale</h1>
+          <h1 className={rlcClass(null, heroTitle)}>Kalkulation Übersicht</h1>
           <p className={rlcClass(null, heroText)}>
-            Diese Übersicht steuert den gesamten Kalkulationsprozess: LV prüfen,
-            KI-Kalkulation starten, Datenbank bereinigen, Urkalkulation aufbauen
-            und Angebot / GAEB vorbereiten.
+            Direkter Zugriff auf die Kalkulationsmodule des aktiven Projekts.
           </p>
         </div>
-
-        <div className={rlcClass(null, heroActions)}>
-          <button type="button" className={rlcClass(null, btnPrimary)} onClick={() => nav(nextStep.to)}>
-            Nächster Schritt
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            btnSecondary)}
-            onClick={() => nav("/kalkulation/lv-import")}>
-            
-            LV prüfen
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            btnSecondary)}
-            onClick={() => nav("/kalkulation/mit-ki")}>
-            
-            KI-Kalkulation
-          </button>
-
-          <button
-            type="button" className={rlcClass(null,
-            btnSecondary)}
-            onClick={() => nav("/kalkulation/datenbank")}>
-            
-            Datenbank
-          </button>
-        </div>
-
         <div className={rlcClass(null, heroMeta)}>
-          Projekt: <b>{code || "—"}</b>
-          {name ?
-          <>
-              {" "}
-              · <b>{name}</b>
-            </> :
-          null}
-        </div>
-      </section>
-
-      <section className={rlcClass(null, grid4)}>
-        <Kpi
-          label="LV-Positionen"
-          value={String(lvStats.total)}
-          sub={`${lvStats.ready} plausibel · ${lvStats.problems} prüfen`}
-          danger={lvStats.problems > 0} />
-        
-
-        <Kpi label="Netto aus LV" value={money(lvStats.net)} />
-
-        <Kpi
-          label="Datenbank"
-          value={String(dbStats.total)}
-          sub={`${dbStats.problems} Datenbank-Probleme`}
-          danger={dbStats.problems > 0} />
-        
-
-        <Kpi
-          label="Nächster Schritt"
-          value={nextStep.title}
-          sub={nextStep.text}
-          danger={lvStats.problems > 0 || dbStats.problems > 0} />
-        
-      </section>
-
-      <section className={rlcClass(null, workflowCard)}>
-        <div className={rlcClass(null, workflowStep)}>1. LV / Positionen</div>
-        <div className={rlcClass(null, workflowArrow)}>→</div>
-        <div className={rlcClass(null, workflowStep)}>2. KI-Kalkulation</div>
-        <div className={rlcClass(null, workflowArrow)}>→</div>
-        <div className={rlcClass(null, workflowStep)}>3. Datenbank / Preise</div>
-        <div className={rlcClass(null, workflowArrow)}>→</div>
-        <div className={rlcClass(null, workflowStep)}>4. Urkalkulation</div>
-        <div className={rlcClass(null, workflowArrow)}>→</div>
-        <div className={rlcClass(null, workflowStep)}>5. Angebot / GAEB</div>
-      </section>
-
-      <section className={rlcClass(null, diagnoseGrid)}>
-        <div className={rlcClass(null, card)}>
-          <h2 className={rlcClass(null, sectionTitle)}>LV-Kontrolle</h2>
-          <div className={rlcClass(null, miniStats)}>
-            <span>Positionen</span>
-            <b>{lvStats.total}</b>
-            <span>Menge fehlt / 0</span>
-            <b>{lvStats.missingQty}</b>
-            <span>Einheit fehlt</span>
-            <b>{lvStats.missingUnit}</b>
-            <span>EP fehlt</span>
-            <b>{lvStats.missingPrice}</b>
-            <span>Kurztext fehlt</span>
-            <b>{lvStats.missingText}</b>
-            <span>Langtext fehlt</span>
-            <b>{lvStats.missingLang}</b>
-            <span>Doppelte</span>
-            <b>{lvStats.duplicates}</b>
-          </div>
-
-          <button
-            type="button" className={rlcClass(null,
-            btnFull)}
-            onClick={() => nav("/kalkulation/lv-import")}>
-            
-            LV / Positionen öffnen
-          </button>
-        </div>
-
-        <div className={rlcClass(null, card)}>
-          <h2 className={rlcClass(null, sectionTitle)}>Datenbank-Kontrolle</h2>
-          <div className={rlcClass(null, miniStats)}>
-            <span>Einträge</span>
-            <b>{dbStats.total}</b>
-            <span>EP fehlt</span>
-            <b>{dbStats.missingEp}</b>
-            <span>Einheit fehlt</span>
-            <b>{dbStats.missingUnit}</b>
-            <span>Ressourcen fehlen</span>
-            <b>{dbStats.missingResources}</b>
-            <span>Risiko hoch/kritisch</span>
-            <b>{dbStats.highRisk}</b>
-            <span>Confidence niedrig</span>
-            <b>{dbStats.lowConfidence}</b>
-          </div>
-
-          <button
-            type="button" className={rlcClass(null,
-            btnFull)}
-            onClick={() => nav("/kalkulation/datenbank")}>
-            
-            Kalkulationsdatenbank öffnen
-          </button>
+          Projekt: <b>{code || "—"}</b>{name ? <> · <b>{name}</b></> : null}
         </div>
       </section>
 
@@ -537,6 +468,17 @@ export default function KalkulationUebersicht() {
 
 /* ===================== STYLES ===================== */
 
+const overviewIntro: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "10px 14px",
+  border: "1px solid #DCE4EF",
+  borderRadius: 12,
+  background: "#FFFFFF"
+};
+
 const page: React.CSSProperties = {
   display: "grid",
   gap: 16,
@@ -544,25 +486,27 @@ const page: React.CSSProperties = {
 };
 
 const heroCard: React.CSSProperties = {
-  background: "linear-gradient(135deg, #0B5BD3 0%, #0B5BD3 48%, #146EF5 100%)",
-  color: "#FFFFFF",
+  background: "#FFFFFF",
+  color: "#0F172A",
+  border: "1px solid #DCE5F2",
   borderRadius: 18,
   padding: 22,
   display: "grid",
   gap: 14,
-  boxShadow: "0 16px 40px rgba(15,23,42,0.18)"
+  boxShadow: "0 4px 16px rgba(15,23,42,0.06)"
 };
 
 const eyebrow: React.CSSProperties = {
   fontSize: 12,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
-  opacity: 0.82,
+  color: "#0B5BD3",
   fontWeight: 700
 };
 
 const heroTitle: React.CSSProperties = {
-  color: "#FFFFFF", margin: "4px 0",
+  color: "#0F172A",
+  margin: "4px 0",
   fontSize: 30,
   fontWeight: 700,
   lineHeight: 1.1
@@ -571,7 +515,7 @@ const heroTitle: React.CSSProperties = {
 const heroText: React.CSSProperties = {
   margin: 0,
   maxWidth: 980,
-  opacity: 0.9,
+  color: "#475569",
   lineHeight: 1.55
 };
 
@@ -583,7 +527,7 @@ const heroActions: React.CSSProperties = {
 
 const heroMeta: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.92
+  color: "#475569"
 };
 
 const btnBase: React.CSSProperties = {

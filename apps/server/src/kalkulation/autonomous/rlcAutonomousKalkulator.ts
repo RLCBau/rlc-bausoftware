@@ -14,15 +14,42 @@ export type RlcAutonomousResolveResult = {
   result: RlcAutonomousCalcResult | null;
 };
 
+/*
+ * RLC SPEED: allRows è la stessa array per tutte le posizioni di un batch.
+ * Il ProjectContext concatena/classifica l'intero LV e prima veniva ricalcolato
+ * per ogni singola posizione. WeakMap evita il costo O(posizioni × LV completo)
+ * senza conservare memoria oltre la vita del batch.
+ */
+const projectContextCache = new WeakMap<
+  RlcAutonomousCalcInput[],
+  Map<string, RlcAutonomousProjectContext>
+>();
+
+function getCachedProjectContext(
+  rows: RlcAutonomousCalcInput[],
+  projectCode?: string
+): RlcAutonomousProjectContext {
+  const key = String(projectCode || "");
+  let byProject = projectContextCache.get(rows);
+  if (!byProject) {
+    byProject = new Map<string, RlcAutonomousProjectContext>();
+    projectContextCache.set(rows, byProject);
+  }
+  const cached = byProject.get(key);
+  if (cached) return cached;
+
+  const context = analyzeRlcProjectContext(rows, projectCode);
+  byProject.set(key, context);
+  return context;
+}
+
 export function resolveRlcAutonomousCalculation(
   row: RlcAutonomousCalcInput,
   allRows: RlcAutonomousCalcInput[] = [],
   projectCode?: string
 ): RlcAutonomousResolveResult {
-  const context = analyzeRlcProjectContext(
-    allRows.length > 0 ? allRows : [row],
-    projectCode
-  );
+  const contextRows = allRows.length > 0 ? allRows : [row];
+  const context = getCachedProjectContext(contextRows, projectCode);
 
   const agents = runKalkulationAgents({
     row,
@@ -30,21 +57,26 @@ export function resolveRlcAutonomousCalculation(
     projectContext: context,
   });
 
-  const engineResult = calculateAutonomousUrkalkulation(row, context);
+  const engineResult = calculateAutonomousUrkalkulation(
+    row,
+    context,
+    allRows.length > 0 ? allRows : [row]
+  );
 
   const result = engineResult
     ? {
         ...engineResult,
-        confidence: Math.min(engineResult.confidence, agents.confidence),
-        riskLevel:
-          agents.summary.riskLevel === "high"
-            ? "high"
-            : engineResult.riskLevel,
-        calculationStatus: agents.summary.reviewRequired
-          ? "needs_review"
-          : engineResult.calculationStatus,
+        // Il Family Catalog V2 è l'autorità per rischio e Prüfstatus.
+        // Gli agenti restano controllo/diagnostica, ma non possono trasformare
+        // una posizione V2 risolta in needs_review solo per euristiche generiche.
+        confidence: engineResult.confidence,
+        riskLevel: engineResult.riskLevel,
+        calculationStatus: engineResult.calculationStatus,
         warnings: Array.from(
-          new Set([...engineResult.warnings, ...agents.warnings])
+          new Set([
+            ...engineResult.warnings,
+            ...(engineResult.calculationStatus === "needs_review" ? agents.warnings : []),
+          ])
         ),
         aiReason:
           `${engineResult.aiReason} ` +

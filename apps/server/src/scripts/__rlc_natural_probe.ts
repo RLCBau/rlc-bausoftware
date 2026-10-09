@@ -1,0 +1,4 @@
+import {PrismaClient} from '@prisma/client'; const p=new PrismaClient();
+function key(s:string){return (String(s).match(/\d+/g)||[]).map(Number)}
+function cmp(a:any,b:any){const A=key(a.position),B=key(b.position); for(let i=0;i<Math.max(A.length,B.length);i++){const x=A[i]??-1,y=B[i]??-1;if(x!==y)return x-y} return String(a.position).localeCompare(String(b.position))}
+(async()=>{const pr=await p.project.findFirst({where:{code:'GAEB-2014-001-2024-001'},select:{lvSets:{take:1,orderBy:{version:'desc'},select:{positions:{select:{position:true,kurztext:true,langtext:true,einheit:true}}}}}}); const rows=(pr?.lvSets[0]?.positions||[]).sort(cmp); for(const target of ['01.7.3','01.7.19','01.7.20','01.7.28','01.7.29','01.7.32']){const i=rows.findIndex(x=>x.position===target); console.log('\nTARGET',target); for(const x of rows.slice(Math.max(0,i-3),i+2)) console.log(x.position,'|',x.kurztext,'|',String(x.langtext||'').slice(0,100));} await p.$disconnect()})();

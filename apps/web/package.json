@@ -11,14 +11,13 @@
   "dependencies": {
     "@tmcw/togeojson": "^7.1.2",
     "@types/leaflet": "^1.9.20",
-    "axios": "^1.13.1",
+    "axios": "^1.20.0",
     "dxf-parser": "^1.1.2",
     "dxf-viewer": "^1.0.46",
-    "fabric": "^6.7.1",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
-    "jspdf": "^3.0.4",
-    "jspdf-autotable": "^5.0.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "leaflet": "^1.9.4",
     "leaflet-tilelayer-wmts": "^1.0.0",
     "leaflet.gridlayer.googlemutant": "^0.15.0",
@@ -32,9 +31,9 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-dxf-viewer": "^1.0.4",
-    "react-router-dom": "^6.26.2",
+    "react-router-dom": "^7.18.4",
     "three": "^0.180.0",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -44,5 +43,9 @@
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.6.3",
     "vite": "^7.1.9"
+  },
+  "overrides": {
+    "ws": "8.21.0",
+    "fflate": "0.8.3"
   }
 }

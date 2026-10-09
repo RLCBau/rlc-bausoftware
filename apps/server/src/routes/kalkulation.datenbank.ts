@@ -1,13 +1,32 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
+import { filterUsableRlcPriceSources, isRlcPriceSourceBlocked } from "../kalkulation/quality/priceSourceQualityGate";
 
 const router = Router();
+
+function kalkDbRole(req: any): string {
+  return String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+}
+
+function requireKalkDbWrite(req: any, res: any, next: any) {
+  if (!["ADMIN", "ADMINISTRATOR", "KALKULATOR", "BAULEITER"].includes(kalkDbRole(req))) {
+    return res.status(403).json({ ok: false, error: "KALK_DB_WRITE_FORBIDDEN" });
+  }
+  return next();
+}
+
+function requireKalkDbAdminWrite(req: any, res: any, next: any) {
+  if (!["ADMIN", "ADMINISTRATOR", "KALKULATOR"].includes(kalkDbRole(req))) {
+    return res.status(403).json({ ok: false, error: "KALK_DB_ADMIN_WRITE_FORBIDDEN" });
+  }
+  return next();
+}
 
 function companyIdFromReq(req: Express.Request): string {
   return String(
     (req.auth as any)?.companyId ||
       (req.auth as any)?.company ||
-      process.env.DEV_COMPANY_ID ||
+      (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on" ? process.env.DEV_COMPANY_ID : "") ||
       ""
   ).trim();
 }
@@ -37,6 +56,22 @@ async function resolveProject(companyId: string, projectKey?: string) {
       number: true,
     },
   });
+}
+
+async function resolveWritableProject(req: any, companyId: string, projectKey?: string) {
+  const project = await resolveProject(companyId, projectKey);
+  if (!project) return null;
+
+  const role = kalkDbRole(req);
+  if (role === "ADMIN" || role === "ADMINISTRATOR") return project;
+
+  const userId = String(req?.auth?.sub || "").trim();
+  if (!userId) return null;
+  const member = await prisma.projectMember.findFirst({
+    where: { projectId: project.id, userId },
+    select: { id: true },
+  });
+  return member ? project : null;
 }
 
 function normalizeRiskLevel(value: any): string {
@@ -138,7 +173,12 @@ async function refreshGlobalPriceKnowledgeForEntry(entryId: string): Promise<boo
     where: { id: entryId },
   });
 
-  if (!anchor || !anchor.shortText || Number(anchor.unitPriceNet || 0) <= 0) {
+  if (
+    !anchor ||
+    isRlcPriceSourceBlocked(anchor) ||
+    !anchor.shortText ||
+    Number(anchor.unitPriceNet || 0) <= 0
+  ) {
     return false;
   }
 
@@ -150,7 +190,7 @@ async function refreshGlobalPriceKnowledgeForEntry(entryId: string): Promise<boo
    * Recalculate only the affected global group.
    * No client/project names are copied. Global Knowledge stores only anonymized aggregates.
    */
-  const allRows = await prisma.kalkulationsDbEntry.findMany({
+  const allRowsRaw = await prisma.kalkulationsDbEntry.findMany({
     where: {
       unitPriceNet: { gt: 0 },
       shortText: { not: "" },
@@ -158,7 +198,11 @@ async function refreshGlobalPriceKnowledgeForEntry(entryId: string): Promise<boo
     orderBy: { updatedAt: "desc" },
   });
 
-  const group = allRows.filter((row) => globalKnowledgeKeyOf(row) === normalizedKey);
+  const allRows = filterUsableRlcPriceSources(allRowsRaw);
+
+  const group = allRows.filter(
+    (row) => globalKnowledgeKeyOf(row) === normalizedKey
+  );
   if (!group.length) return false;
 
   const prices = group
@@ -306,12 +350,17 @@ router.get("/datenbank", async (req, res) => {
 
     const q = s(req.query.q).toLowerCase();
     const projectKey = s(req.query.projectKey);
+    const source = s(req.query.source);
     const limit = Math.min(Math.max(n(req.query.limit, 200), 1), 1000);
     const offset = Math.max(n(req.query.offset, 0), 0);
 
     const project = await resolveProject(companyId, projectKey);
 
     const where: any = { companyId };
+
+    if (source) {
+      where.source = source;
+    }
 
     if (projectKey && project?.id) {
       where.OR = [
@@ -412,7 +461,7 @@ router.get("/global-price-knowledge/search", async (req, res) => {
   }
 });
 
-router.post("/datenbank/bulk-upsert", async (req, res) => {
+router.post("/datenbank/bulk-upsert", requireKalkDbWrite, async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
     if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
@@ -423,7 +472,8 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
         ? req.body.items
         : [];
     const projectKey = s(req.body?.projectKey);
-    const project = await resolveProject(companyId, projectKey);
+    const project = projectKey ? await resolveWritableProject(req, companyId, projectKey) : null;
+    if (projectKey && !project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
 
     let saved = 0;
 
@@ -482,6 +532,40 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
       const incomingSource = s(r.quelle || r.source || "ki") || "ki";
 
       /*
+       * Wirtschaftlicher Preisstand:
+       * Nur explizit vom aufrufenden Client gelieferte Datumsfelder verwenden.
+       * Keine technischen Zeitstempel und kein sourceVersion/Stand ableiten.
+       */
+      const priceDateRaw =
+        r.priceDate ??
+        r.preisdatum ??
+        r.angebotsdatum ??
+        r.bidDate ??
+        r.price_date ??
+        r.preis_datum ??
+        null;
+
+      let priceDate: Date | null = null;
+
+      if (priceDateRaw) {
+        const parsedPriceDate = new Date(String(priceDateRaw));
+
+        if (!Number.isNaN(parsedPriceDate.getTime())) {
+          priceDate = parsedPriceDate;
+        }
+      }
+
+      const explicitPriceDateSource = s(
+        r.priceDateSource ??
+        r.preisdatumQuelle ??
+        r.price_date_source
+      );
+
+      const priceDateSource = priceDate
+        ? explicitPriceDateSource || "bulk-upsert.explicit-price-date"
+        : null;
+
+      /*
        * Keine Datenbank-Lerneinträge ohne echten EP.
        * EP 0 erzeugt nur schlechte Treffer und überschreibt KI-Learning.
        */
@@ -529,6 +613,18 @@ router.post("/datenbank/bulk-upsert", async (req, res) => {
 
         unitPriceNet: ep,
         totalNet: gp,
+
+        /*
+         * Wichtig: Felder nur mitsenden, wenn wirklich ein Preisdatum vorhanden ist.
+         * Dadurch wird bei Updates ein vorhandener Preisstand nicht versehentlich
+         * mit null überschrieben.
+         */
+        ...(priceDate
+          ? {
+              priceDate,
+              priceDateSource,
+            }
+          : {}),
 
         trade: s(r.gewerk || r.parameter?.gewerk),
         serviceType: s(r.leistungsart || r.parameter?.leistungsart),
@@ -621,7 +717,7 @@ function normalizeQualityGateStatus(value: any): string {
   return "";
 }
 
-router.patch("/datenbank/:id/quality-gate", async (req, res) => {
+router.patch("/datenbank/:id/quality-gate", requireKalkDbAdminWrite, async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
     if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
@@ -677,6 +773,32 @@ router.patch("/datenbank/:id/quality-gate", async (req, res) => {
   }
 });
 
+router.post("/datenbank/:id/ki-transfer-complete", requireKalkDbAdminWrite, async (req, res) => {
+  try {
+    const companyId = companyIdFromReq(req);
+    const id = s(req.params.id);
+    if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
+
+    const row = await prisma.kalkulationsDbEntry.findFirst({
+      where: { id, companyId },
+      select: { id: true, source: true, parameters: true },
+    });
+    if (!row) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+    if (row.source !== "ki-learning") return res.status(400).json({ ok: false, error: "NOT_KI_LEARNING" });
+
+    const parameters = {
+      ...((row.parameters as any) || {}),
+      kiLearningTransferredAt: new Date().toISOString(),
+      kiLearningTransferred: true,
+    };
+
+    await prisma.kalkulationsDbEntry.update({ where: { id }, data: { parameters } });
+    return res.json({ ok: true, id });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e?.message || "KI_TRANSFER_COMPLETE_FAILED" });
+  }
+});
+
 router.post("/datenbank/:id/used", async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
@@ -703,7 +825,7 @@ router.post("/datenbank/:id/used", async (req, res) => {
   }
 });
 
-router.delete("/datenbank/:id", async (req, res) => {
+router.delete("/datenbank/:id", requireKalkDbAdminWrite, async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
     const id = s(req.params.id);
@@ -741,7 +863,7 @@ router.get("/recipes-db", async (req, res) => {
   }
 });
 
-router.post("/recipes-db/upsert", async (req, res) => {
+router.post("/recipes-db/upsert", requireKalkDbWrite, async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
     if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
@@ -752,7 +874,9 @@ router.post("/recipes-db/upsert", async (req, res) => {
       return res.status(400).json({ ok: false, error: "SIGNATURE_REQUIRED" });
     }
 
-    const project = await resolveProject(companyId, s(req.body?.projectKey));
+    const projectKey = s(req.body?.projectKey);
+    const project = projectKey ? await resolveWritableProject(req, companyId, projectKey) : null;
+    if (projectKey && !project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
 
     const saved = await prisma.companyRecipeDb.upsert({
       where: {
@@ -789,7 +913,7 @@ router.post("/recipes-db/upsert", async (req, res) => {
   }
 });
 
-router.delete("/recipes-db/:id", async (req, res) => {
+router.delete("/recipes-db/:id", requireKalkDbAdminWrite, async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
     const id = s(req.params.id);
@@ -893,7 +1017,7 @@ function parsePriceCsv(csvText: string) {
   return rows;
 }
 
-router.post("/datenbank/import-csv", async (req, res) => {
+router.post("/datenbank/import-csv", requireKalkDbAdminWrite, async (req, res) => {
   try {
     const companyId = companyIdFromReq(req);
     if (!companyId) return res.status(403).json({ ok: false, error: "NO_COMPANY" });
@@ -903,7 +1027,8 @@ router.post("/datenbank/import-csv", async (req, res) => {
 
     const source = s(req.body?.source || req.body?.quelle || "company") || "company";
     const projectKey = s(req.body?.projectKey);
-    const project = await resolveProject(companyId, projectKey);
+    const project = projectKey ? await resolveWritableProject(req, companyId, projectKey) : null;
+    if (projectKey && !project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
 
     const parsed = parsePriceCsv(csvText);
 
@@ -921,6 +1046,33 @@ router.post("/datenbank/import-csv", async (req, res) => {
       const sourceVersion = pick(r, ["version", "sourceversion", "stand"]);
       const region = pick(r, ["region", "ort", "bundesland"]);
       const tagsRaw = pick(r, ["tags", "tag"]);
+
+      /*
+       * Wirtschaftlicher Preisstand:
+       * Nur explizite Datumsfelder verwenden.
+       * "Stand" / sourceVersion ist KEIN verlässliches Preisdatum.
+       */
+      const priceDateRaw = pick(r, [
+        "pricedate",
+        "preisdatum",
+        "angebotsdatum",
+        "biddate",
+        "price_date",
+        "preis_datum",
+      ]);
+
+      let priceDate: Date | null = null;
+
+      if (priceDateRaw) {
+        const parsedPriceDate = new Date(priceDateRaw);
+        if (!Number.isNaN(parsedPriceDate.getTime())) {
+          priceDate = parsedPriceDate;
+        }
+      }
+
+      const priceDateSource = priceDate
+        ? "CSV.explicit-price-date"
+        : null;
 
       const ep = csvNumber(
         pick(r, [
@@ -984,6 +1136,9 @@ router.post("/datenbank/import-csv", async (req, res) => {
 
         unitPriceNet: ep,
         totalNet: gp,
+
+        priceDate,
+        priceDateSource,
 
         trade: gewerk,
         serviceType: leistungsart,

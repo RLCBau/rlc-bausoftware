@@ -3,8 +3,17 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
+import { requireProjectMember } from "../middleware/guards";
 
 const router = Router();
+
+const requireGpsProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(req.query?.projectId || req.body?.projectId || "").trim();
+  if (!token) return res.status(400).json({ ok: false, error: "projectId fehlt" });
+  req.params = req.params || {};
+  req.params.__gpsProject = token;
+  return requireProjectMember("__gpsProject")(req, res, next);
+};
 
 const PROJECTS_ROOT =
   process.env.PROJECTS_ROOT || path.join(process.cwd(), "data", "projects");
@@ -80,14 +89,14 @@ type Assignment = {
    WORKSPACE / EDITOR STATE
 ========================= */
 
-router.get("/state", (req, res) => {
+router.get("/state", requireGpsProjectAccess, (req, res) => {
   const projectId = safeProjectId((req.query as any).projectId);
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
   const data = readJson<any>(workspaceFile(projectId), null);
   return res.json({ ok: true, data });
 });
 
-router.post("/state", (req, res) => {
+router.post("/state", requireGpsProjectAccess, (req, res) => {
   try {
     const projectId = safeProjectId(req.body?.projectId);
     if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
@@ -117,14 +126,14 @@ router.post("/state", (req, res) => {
   }
 });
 
-router.get("/aufmass-transfer", (req, res) => {
+router.get("/aufmass-transfer", requireGpsProjectAccess, (req, res) => {
   const projectId = safeProjectId((req.query as any).projectId);
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
   const data = readJson<any>(transferFile(projectId), null);
   return res.json({ ok: true, data });
 });
 
-router.post("/aufmass-transfer", (req, res) => {
+router.post("/aufmass-transfer", requireGpsProjectAccess, (req, res) => {
   try {
     const projectId = safeProjectId(req.body?.projectId);
     if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
@@ -148,7 +157,7 @@ router.post("/aufmass-transfer", (req, res) => {
   }
 });
 
-router.post("/aufmass-transfer/consume", (req, res) => {
+router.post("/aufmass-transfer/consume", requireGpsProjectAccess, (req, res) => {
   try {
     const projectId = safeProjectId(req.body?.projectId);
     if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
@@ -169,7 +178,7 @@ router.post("/aufmass-transfer/consume", (req, res) => {
    ASSIGNMENTS (EXISTING)
 ========================= */
 
-router.get("/list", (req, res) => {
+router.get("/list", requireGpsProjectAccess, (req, res) => {
   const projectId = safeProjectId((req.query as any).projectId);
   if (!projectId)
     return res.status(400).json({ ok: false, error: "projectId fehlt" });
@@ -184,7 +193,7 @@ router.get("/list", (req, res) => {
   return res.json({ ok: true, items });
 });
 
-router.post("/assign", (req, res) => {
+router.post("/assign", requireGpsProjectAccess, (req, res) => {
   const body = req.body as Assignment;
 
   const projectId = safeProjectId(body?.projectId);
@@ -220,7 +229,7 @@ router.post("/assign", (req, res) => {
   return res.json({ ok: true, item });
 });
 
-router.delete("/delete", (req, res) => {
+router.delete("/delete", requireGpsProjectAccess, (req, res) => {
   const projectId = safeProjectId((req.query as any).projectId);
   const id = String((req.query as any).id || "").trim();
 
@@ -250,7 +259,7 @@ router.delete("/delete", (req, res) => {
  * Body: { projectId: string, filenameHint?: string, pdfDataUrl: string }
  * -> salva /data/projects/<projectId>/gps/<filename>.pdf
  */
-router.post("/export-pdf", (req, res) => {
+router.post("/export-pdf", requireGpsProjectAccess, async (req, res) => {
   try {
     const projectId = safeProjectId(req.body?.projectId);
     const filenameHint = String(req.body?.filenameHint || "gpszuweisung.pdf");
@@ -267,6 +276,9 @@ router.post("/export-pdf", (req, res) => {
 
     const base64 = pdfDataUrl.split(",")[1] || "";
     const buf = Buffer.from(base64, "base64");
+    if (buf.length > 25 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, error: "PDF zu groß" });
+    }
     if (!buf || buf.length < 10) {
       return res.status(400).json({ ok: false, error: "pdf leer" });
     }
@@ -288,6 +300,29 @@ router.post("/export-pdf", (req, res) => {
 
     fs.writeFileSync(resolvedAbs, buf);
 
+    try {
+      const { archiveProjectFileVersion } = await import("../services/dmsArchive");
+      await archiveProjectFileVersion({
+        projectIdOrCode: projectId,
+        filename,
+        kind: "PDF",
+        localPath: resolvedAbs,
+        uploadedBy: String(
+          (req as any)?.auth?.email ||
+          (req as any)?.auth?.userId ||
+          (req as any)?.user?.email ||
+          (req as any)?.user?.id ||
+          ""
+        ).trim() || null,
+        meta: {
+          module: "GPS",
+          source: "gps.export-pdf"
+        }
+      });
+    } catch (dmsError) {
+      console.error("[gps:export-pdf:dms]", dmsError);
+    }
+
     const url = `/api/gps/pdf?projectId=${encodeURIComponent(
       projectId
     )}&filename=${encodeURIComponent(filename)}`;
@@ -304,7 +339,7 @@ router.post("/export-pdf", (req, res) => {
  * GET /api/gps/pdf?projectId=...&filename=...
  * -> restituisce PDF inline
  */
-router.get("/pdf", (req, res) => {
+router.get("/pdf", requireGpsProjectAccess, (req, res) => {
   try {
     const projectId = safeProjectId((req.query as any).projectId);
     const filename = safeFilename((req.query as any).filename);
@@ -335,7 +370,7 @@ router.get("/pdf", (req, res) => {
  * GET /api/gps/pdfs?projectId=...
  * -> lista PDF salvati in /gps
  */
-router.get("/pdfs", (req, res) => {
+router.get("/pdfs", requireGpsProjectAccess, (req, res) => {
   try {
     const projectId = safeProjectId((req.query as any).projectId);
     if (!projectId)
@@ -420,7 +455,7 @@ function dxfNumber(value: number) {
     : "0";
 }
 
-router.post("/vectorize-alkis", async (req, res) => {
+router.post("/vectorize-alkis", requireGpsProjectAccess, async (req, res) => {
   try {
     const projectId = safeProjectId(req.body?.projectId);
     const pngDataUrl = String(req.body?.pngDataUrl || "");
@@ -446,6 +481,9 @@ router.post("/vectorize-alkis", async (req, res) => {
       pngDataUrl.substring(pngDataUrl.indexOf(",") + 1),
       "base64"
     );
+    if (pngBuffer.length > 25 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, error: "PNG zu groß" });
+    }
 
     const threshold = Math.max(
       40,
@@ -467,7 +505,7 @@ router.post("/vectorize-alkis", async (req, res) => {
       Math.min(50, Number(req.body?.minLengthMeters || 2.0))
     );
 
-    const image = await sharp(pngBuffer)
+    const image = await sharp(pngBuffer, { limitInputPixels: 50_000_000 })
       .flatten({ background: "#ffffff" })
       .greyscale()
       .median(3)

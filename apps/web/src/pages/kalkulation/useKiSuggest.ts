@@ -1,10 +1,10 @@
 ﻿// apps/web/src/pages/kalkulation/useKiSuggest.ts
 import { useState } from "react";
 import { apiUrl } from "../../lib/apiBase";
-import type { LVPos, PriceBreakdownLine } from "./store.lv";
+import { gaebPositionCountsInTotal, type LVPos, type PriceBreakdownLine } from "./store.lv";
 
 export type RiskLevel = "low" | "medium" | "high";
-export type CalcStatus = "ok" | "warning" | "critical" | "manual";
+export type CalcStatus = "ok" | "warning" | "critical" | "manual" | "needs_review";
 
 export type SuggestResult = {
   unitPrice: number;
@@ -336,6 +336,12 @@ async function postKiSuggestBatchChunked(
         body: JSON.stringify({
           projectCode,
           projectKey: projectCode,
+          sourceLvHeaderId:
+            String(
+              options?.sourceLvHeaderId ||
+              options?.lvHeaderId ||
+              ""
+            ).trim() || undefined,
           rows: chunk,
           options: {
             ...options,
@@ -1288,7 +1294,7 @@ return {
 
 function buildSummary(rows: EliteKalkulationResultRow[]): EliteKalkulationSummary {
   const totalNet = rows.reduce(
-    (sum, r) => sum + n(r.finalUnitPrice) * n(r.menge),
+    (sum, r) => gaebPositionCountsInTotal(r) ? sum + n(r.finalUnitPrice) * n(r.menge) : sum,
     0
   );
 

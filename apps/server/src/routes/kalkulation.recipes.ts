@@ -2,7 +2,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { Parser } from "expr-eval";
+import jsep from "jsep";
 
 const router = Router();
 
@@ -169,27 +169,17 @@ function scoreVariantAgainstContext(
 }
 
 /* ============================================================
-   Formula eval (expr-eval)
+   Formula eval (safe AST evaluator)
    ============================================================ */
 
-const parser = new Parser({
-  operators: {
-    add: true,
-    subtract: true,
-    multiply: true,
-    divide: true,
-    remainder: true,
-    power: true,
-    comparison: true,
-    logical: true,
-    conditional: true,
-    // disabilitati:
-    factorial: false,
-    concatenate: false,
-    in: false,
-    assignment: false,
-  },
-});
+const SAFE_MATH: Record<string, (...args: number[]) => number> = {
+  max: Math.max,
+  min: Math.min,
+  ceil: Math.ceil,
+  floor: Math.floor,
+  round: Math.round,
+  abs: Math.abs,
+};
 
 function toNum(x: any, fallback = 0): number {
   const n = typeof x === "number" ? x : Number(String(x ?? "").replace(",", "."));
@@ -201,14 +191,99 @@ function safeNumber(x: any, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function evalFormula(formula: string, scope: Record<string, any>): number {
-  try {
-    const expr = parser.parse(String(formula || "0"));
-    const v = expr.evaluate(scope);
-    return toNum(v, 0);
-  } catch {
-    return 0;
+function safeLookup(scope: Record<string, any>, key: string): any {
+  if (["__proto__", "prototype", "constructor"].includes(key)) {
+    throw new Error("UNSAFE_PROPERTY");
   }
+  if (!Object.prototype.hasOwnProperty.call(scope, key)) return 0;
+  return scope[key];
+}
+
+function evalAst(node: any, scope: Record<string, any>): any {
+  switch (node?.type) {
+    case "Literal":
+      return node.value;
+    case "Identifier":
+      if (node.name === "true") return true;
+      if (node.name === "false") return false;
+      if (node.name === "null") return null;
+      return safeLookup(scope, String(node.name));
+    case "ArrayExpression":
+      return (node.elements || []).map((x: any) => evalAst(x, scope));
+    case "UnaryExpression": {
+      const v = evalAst(node.argument, scope);
+      switch (node.operator) {
+        case "+": return +v;
+        case "-": return -v;
+        case "!": return !v;
+        default: throw new Error("UNSUPPORTED_UNARY_OPERATOR");
+      }
+    }
+    case "BinaryExpression": {
+      const l = evalAst(node.left, scope);
+      const r = evalAst(node.right, scope);
+      switch (node.operator) {
+        case "+": return l + r;
+        case "-": return l - r;
+        case "*": return l * r;
+        case "/": return r === 0 ? 0 : l / r;
+        case "%": return r === 0 ? 0 : l % r;
+        case "**": return Math.pow(l, r);
+        case "==": return l == r;
+        case "!=": return l != r;
+        case "===": return l === r;
+        case "!==": return l !== r;
+        case ">": return l > r;
+        case ">=": return l >= r;
+        case "<": return l < r;
+        case "<=": return l <= r;
+        case "&&": return l && r;
+        case "||": return l || r;
+        default: throw new Error("UNSUPPORTED_BINARY_OPERATOR");
+      }
+    }
+    case "ConditionalExpression":
+      return evalAst(node.test, scope) ? evalAst(node.consequent, scope) : evalAst(node.alternate, scope);
+    case "MemberExpression": {
+      if (node.computed) throw new Error("COMPUTED_MEMBER_NOT_ALLOWED");
+      const prop = String(node.property?.name || "");
+      if (["__proto__", "prototype", "constructor"].includes(prop)) throw new Error("UNSAFE_PROPERTY");
+      if (node.object?.type === "Identifier" && node.object.name === "params") {
+        const params = scope.params && typeof scope.params === "object" ? scope.params : scope;
+        return safeLookup(params, prop);
+      }
+      if (node.object?.type === "Identifier" && node.object.name === "Math") {
+        if (!SAFE_MATH[prop]) throw new Error("UNSAFE_MATH_FUNCTION");
+        return SAFE_MATH[prop];
+      }
+      throw new Error("MEMBER_ACCESS_NOT_ALLOWED");
+    }
+    case "CallExpression": {
+      if (node.callee?.type !== "MemberExpression" || node.callee?.object?.name !== "Math") {
+        throw new Error("FUNCTION_CALL_NOT_ALLOWED");
+      }
+      const fnName = String(node.callee.property?.name || "");
+      const fn = SAFE_MATH[fnName];
+      if (!fn) throw new Error("UNSAFE_MATH_FUNCTION");
+      const args = (node.arguments || []).map((x: any) => toNum(evalAst(x, scope), 0));
+      return fn(...args);
+    }
+    default:
+      throw new Error(`UNSUPPORTED_EXPRESSION:${String(node?.type || "unknown")}`);
+  }
+}
+
+export function evalFormula(formula: string, scope: Record<string, any>): number {
+  const raw = String(formula || "0").trim();
+  if (!raw || raw.length > 500) return 0;
+  const ast = jsep(raw);
+  const safeScope = Object.create(null) as Record<string, any>;
+  for (const [k, v] of Object.entries(scope || {})) {
+    if (["__proto__", "prototype", "constructor"].includes(k)) continue;
+    safeScope[k] = v;
+  }
+  safeScope.params = safeScope;
+  return toNum(evalAst(ast, safeScope), 0);
 }
 
 /* ============================================================
@@ -232,45 +307,15 @@ function parsePricingDate(input: any): Date | null {
  * ensureCompanyId (ALIGN with projects.ts)
  * =======================================================*/
 async function ensureCompanyId(req: any): Promise<string> {
-  const auth: any = req?.auth;
-
-  if (auth && typeof auth.company === "string") {
-    const found = await prisma.company.findUnique({ where: { id: auth.company } });
-    if (found) return found.id;
-  }
-
-  if (process.env.DEV_COMPANY_ID) {
-    const found = await prisma.company.findUnique({ where: { id: process.env.DEV_COMPANY_ID } });
-    if (found) return found.id;
-  }
-
-  const first = await prisma.company.findFirst();
-  if (first) return first.id;
-
-  const created = await prisma.company.create({
-    data: { name: "Standard Firma", code: "STANDARD" },
-  });
-
-  return created.id;
+  const auth = req?.auth || {};
+  const companyId = String(auth.companyId || auth.company || "").trim();
+  if (!companyId) throw new Error("COMPANY_REQUIRED");
+  const found = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+  if (!found) throw new Error("AUTH_COMPANY_NOT_FOUND");
+  return found.id;
 }
 
-async function resolveCompanyId(req: any, bodyCompanyId?: string): Promise<string | null> {
-  // 1) body
-  if (bodyCompanyId) return bodyCompanyId;
-
-  // 2) header (utile per Postman/PowerShell)
-  const h = req.header?.("x-company-id");
-  if (h) return String(h);
-
-  // 3) auth user/company (allineato)
-  const auth: any = req?.auth;
-  if (auth?.company) return String(auth.company);
-
-  // 4) legacy user (se un domani)
-  const u = (req as any).user;
-  if (u?.companyId) return String(u.companyId);
-
-  // 5) fallback robust: garantisce esistenza Company
+async function resolveCompanyId(req: any, _bodyCompanyId?: string): Promise<string | null> {
   return await ensureCompanyId(req);
 }
 
@@ -817,8 +862,7 @@ router.post("/recipes/calc", async (req, res) => {
       let formulaError: string | null = null;
 
       try {
-        const expr = parser.parse(String(c.qtyFormula));
-        qtyComputed = safeNumber(expr.evaluate(env), 0);
+        qtyComputed = evalFormula(String(c.qtyFormula), env);
       } catch (e: any) {
         formulaOk = false;
         formulaError = e?.message || String(e);
@@ -999,7 +1043,7 @@ router.post("/recipes/calc-suggest", async (req, res) => {
       let formulaError: string | null = null;
 
       try {
-        qtyComputed = safeNumber(parser.parse(String(c.qtyFormula)).evaluate(env), 0);
+        qtyComputed = evalFormula(String(c.qtyFormula), env);
       } catch (e: any) {
         formulaOk = false;
         formulaError = e?.message || String(e);

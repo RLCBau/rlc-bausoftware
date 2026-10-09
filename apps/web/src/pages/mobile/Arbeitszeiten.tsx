@@ -180,18 +180,35 @@ function dateTime(value: unknown) {
   return new Date(numeric).toLocaleString("de-DE");
 }
 
-export default function Arbeitszeiten() {
+type ArbeitszeitenProps = {
+  finalOnly?: boolean;
+  embedded?: boolean;
+};
+
+export default function Arbeitszeiten({
+  finalOnly = false,
+  embedded = false
+}: ArbeitszeitenProps) {
   const { getSelectedProject } = useProject();
   const selectedProject = getSelectedProject();
   const location = useLocation();
 
   const search = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
   const projectFromUrl = String(search.get("projectId") || "").trim();
+  const [projectOverride, setProjectOverride] = React.useState("");
+  const [projects, setProjects] = React.useState<any[]>([]);
+
   const projectKey = String(
-    projectFromUrl || selectedProject?.code || selectedProject?.id || ""
+    projectFromUrl ||
+    projectOverride ||
+    selectedProject?.code ||
+    selectedProject?.id ||
+    ""
   ).trim();
   const requestedDocId = String(search.get("docId") || "").trim();
-  const requestedStage = String(search.get("stage") || "approved").toLowerCase();
+  const requestedStage = String(
+    search.get("stage") || (finalOnly ? "final" : "approved")
+  ).toLowerCase();
 
   const [stageRows, setStageRows] = React.useState<StageRows>(EMPTY_STAGE_ROWS);
   const [selected, setSelected] = React.useState<Row | null>(null);
@@ -199,6 +216,77 @@ export default function Arbeitszeiten() {
   const [dateFilter, setDateFilter] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [personalRows, setPersonalRows] = React.useState<any[]>([]);
+  const [gpsPrivacy, setGpsPrivacy] = React.useState<any>({ employeeGpsEnabled: false, employeeGpsPurpose: "", employeeGpsLegalBasis: "", employeeGpsRetentionDays: 0 });
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadPersonal() {
+      try {
+        const payload: any = await get("/api/personal/directory");
+        const rows = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.items)
+            ? payload.items
+            : [];
+
+        if (!cancelled) setPersonalRows(rows);
+      } catch (error) {
+        console.error("Personal konnte nicht geladen werden", error);
+        if (!cancelled) setPersonalRows([]);
+      }
+    }
+
+    void loadPersonal();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectKey]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const payload: any = await get("/api/projects");
+        const items =
+          Array.isArray(payload) ? payload :
+          Array.isArray(payload?.items) ? payload.items :
+          Array.isArray(payload?.projects) ? payload.projects :
+          Array.isArray(payload?.rows) ? payload.rows :
+          [];
+
+        if (!cancelled) {
+          setProjects(
+            items
+              .filter(Boolean)
+              .sort((a: any, b: any) =>
+                String(a?.code || a?.name || a?.id || "").localeCompare(
+                  String(b?.code || b?.name || b?.id || ""),
+                  "de"
+                )
+              )
+          );
+        }
+      } catch {
+        if (!cancelled) setProjects([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void get("/api/company/privacy-profile")
+      .then((payload: any) => { if (!cancelled) setGpsPrivacy(payload?.profile || {}); })
+      .catch(() => { if (!cancelled) setGpsPrivacy({ employeeGpsEnabled: false }); });
+    return () => { cancelled = true; };
+  }, []);
 
   const load = React.useCallback(async () => {
     if (!projectKey) return;
@@ -206,26 +294,39 @@ export default function Arbeitszeiten() {
     setError("");
     try {
       const base = `/api/inbox/${encodeURIComponent(projectKey)}/ARBEITSZEIT`;
-      const results = await Promise.allSettled([
-        get(base),
-        get(`${base}/approved`),
-        get(`${base}/final`),
-      ]);
 
-      const next: StageRows = {
-        inbox:
-          results[0].status === "fulfilled"
-            ? itemsOf(results[0].value).map((row) => normalizeRow(row, "inbox"))
-            : [],
-        approved:
-          results[1].status === "fulfilled"
-            ? itemsOf(results[1].value).map((row) => normalizeRow(row, "approved"))
-            : [],
-        final:
-          results[2].status === "fulfilled"
-            ? itemsOf(results[2].value).map((row) => normalizeRow(row, "final"))
-            : [],
-      };
+      let next: StageRows;
+
+      if (finalOnly) {
+        const payload = await get(`${base}/final`);
+
+        next = {
+          inbox: [],
+          approved: [],
+          final: itemsOf(payload).map((row) => normalizeRow(row, "final")),
+        };
+      } else {
+        const results = await Promise.allSettled([
+          get(base),
+          get(`${base}/approved`),
+          get(`${base}/final`),
+        ]);
+
+        next = {
+          inbox:
+            results[0].status === "fulfilled"
+              ? itemsOf(results[0].value).map((row) => normalizeRow(row, "inbox"))
+              : [],
+          approved:
+            results[1].status === "fulfilled"
+              ? itemsOf(results[1].value).map((row) => normalizeRow(row, "approved"))
+              : [],
+          final:
+            results[2].status === "fulfilled"
+              ? itemsOf(results[2].value).map((row) => normalizeRow(row, "final"))
+              : [],
+        };
+      }
 
       setStageRows(next);
 
@@ -248,15 +349,42 @@ export default function Arbeitszeiten() {
     } finally {
       setLoading(false);
     }
-  }, [projectKey, requestedDocId, requestedStage]);
+  }, [projectKey, requestedDocId, requestedStage, finalOnly]);
 
   React.useEffect(() => {
     void load();
   }, [load]);
 
   const allRows = React.useMemo(
-    () => [...stageRows.approved, ...stageRows.final, ...stageRows.inbox],
-    [stageRows]
+    () =>
+      finalOnly
+        ? [...stageRows.final]
+        : [...stageRows.approved, ...stageRows.final, ...stageRows.inbox],
+    [stageRows, finalOnly]
+  );
+
+  const employeeOptions = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        allRows
+          .map((row) => resolveMobileEmployee(row).label)
+          .filter((value) => value && value !== "Unbekannt")
+      )
+    ).sort((a, b) => a.localeCompare(b, "de"));
+  }, [allRows]);
+
+  const personnelFor = React.useCallback(
+    (row: Row) => {
+      const identity = resolveMobileEmployee(row);
+      const name = String(identity.label || "").trim().toLocaleLowerCase("de-DE");
+
+      return (
+        personalRows.find((employee: any) =>
+          String(employee?.name || "").trim().toLocaleLowerCase("de-DE") === name
+        ) || null
+      );
+    },
+    [personalRows]
   );
 
   const filteredRows = React.useMemo(() => {
@@ -264,9 +392,7 @@ export default function Arbeitszeiten() {
       const identity = resolveMobileEmployee(row);
       const matchesEmployee =
         !employeeFilter ||
-        identity.label.toLocaleLowerCase("de-DE").includes(
-          employeeFilter.toLocaleLowerCase("de-DE")
-        );
+        identity.label === employeeFilter;
       const matchesDate = !dateFilter || row.date === dateFilter;
       return matchesEmployee && matchesDate;
     });
@@ -278,51 +404,207 @@ export default function Arbeitszeiten() {
   );
 
   const totalHours = filteredRows.reduce((sum, row) => sum + Number(row.hours || 0), 0);
+
+  const totalPersonnelCost = filteredRows.reduce((sum, row) => {
+    const employee: any = personnelFor(row);
+    const rate = Number(employee?.hourlyRate || 0);
+    const hours = Number(row.hours || 0);
+    return sum + rate * hours;
+  }, 0);
   const employeeCount = new Set(
     filteredRows.map((row) => resolveMobileEmployee(row).key)
   ).size;
 
   return (
-    <div style={{ display: "grid", gap: 18, paddingBottom: 32 }}>
-      <div style={hero}>
-        <div>
-          <div style={eyebrow}>PERSONAL · FACHMODUL</div>
-          <h1 style={{ margin: "5px 0" }}>Arbeitszeiten</h1>
-          <div style={muted}>
-            Tagesnachweise, GPS-Zeitbuchungen und Mitarbeiterübersicht · Projekt{" "}
-            {projectKey || "—"}
+    <div
+      className={finalOnly ? "card" : undefined}
+      style={finalOnly ? undefined : { display: "grid", gap: 18, paddingBottom: 32 }}
+    >
+      {finalOnly ? (
+        <header className="rlc-page-hero rlc-page-hero--split">
+          <div>
+            <div className="rlc-page-hero__eyebrow">
+              Personal · Fachmodul
+            </div>
+
+            <h1>Arbeitszeiten</h1>
+
+            <p>
+              Tagesnachweise, GPS-Zeitbuchungen und Mitarbeiterübersicht ·
+              Projekt {projectKey || "—"}
+            </p>
+          </div>
+
+          <div className="rlc-page-hero__actions">
+            <button
+              type="button"
+              className="rlc-page-hero__button"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              {loading ? "Wird geladen …" : "Aktualisieren"}
+            </button>
+
+            <Link
+              to="/mobile/pruefung/ARBEITSZEIT"
+              className="rlc-page-hero__button"
+            >
+              Eingangsprüfung →
+            </Link>
+          </div>
+        </header>
+      ) : (
+        <div
+        style={
+          embedded
+            ? {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 14,
+                flexWrap: "wrap",
+                padding: "13px 15px",
+                background: "#fff",
+                border: "1px solid #dbe3ee",
+                borderRadius: 12,
+                boxShadow: "0 1px 2px rgba(15,23,42,.04)"
+              }
+            : hero
+        }
+      >
+          <div>
+            <div style={eyebrow}>PERSONAL · FACHMODUL</div>
+            <h1 style={{ margin: "5px 0" }}>Arbeitszeiten</h1>
+            <div style={muted}>
+              Tagesnachweise, GPS-Zeitbuchungen und Mitarbeiterübersicht · Projekt{" "}
+              {projectKey || "—"}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button style={button} onClick={() => void load()}>
+              {loading ? "Lädt …" : "Aktualisieren"}
+            </button>
+
+            <Link
+              to="/mobile/pruefung/ARBEITSZEIT"
+              style={{ ...button, background: "#1d4ed8", color: "white", textDecoration: "none" }}
+            >
+              Eingangsprüfung →
+            </Link>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <button style={button} onClick={() => void load()}>
-            {loading ? "Lädt …" : "Aktualisieren"}
-          </button>
-          <Link
-            to="/mobile/pruefung/ARBEITSZEIT"
-            style={{ ...button, background: "#1d4ed8", color: "white", textDecoration: "none" }}
-          >
-            Eingangsprüfung →
-          </Link>
-        </div>
+      )}
+
+      <div style={{
+        border: gpsPrivacy.employeeGpsEnabled ? "1px solid #bfdbfe" : "1px solid #dbe3ee",
+        background: gpsPrivacy.employeeGpsEnabled ? "#eff6ff" : "#f8fafc",
+        borderRadius: 10, padding: "9px 12px", fontSize: 12, color: "#334155"
+      }}>
+        <b>GPS-Datenschutz: {gpsPrivacy.employeeGpsEnabled ? "EIN" : "AUS"}</b>
+        {gpsPrivacy.employeeGpsEnabled ? (
+          <span> · Zweck: {gpsPrivacy.employeeGpsPurpose || "nicht dokumentiert"} · Rechtsgrundlage: {gpsPrivacy.employeeGpsLegalBasis || "nicht dokumentiert"} · Löschfrist: {Number(gpsPrivacy.employeeGpsRetentionDays || 0)} Tage. GPS wird getrennt vom Arbeitszeitnachweis gespeichert.</span>
+        ) : (
+          <span> · GPS-Daten aus Arbeitszeitbuchungen werden serverseitig nicht übernommen.</span>
+        )}
       </div>
 
-      <div style={stats}>
+      <div
+        style={
+          finalOnly
+            ? {
+                display: "grid",
+                gridTemplateColumns: "repeat(4,minmax(0,1fr))",
+                gap: 10,
+                marginBottom: 10
+              }
+            : stats
+        }
+      >
         <Stat label="Nachweise" value={String(filteredRows.length)} />
         <Stat label="Gesamtstunden" value={`${formatHours(totalHours)} h`} />
+        <Stat
+          label="Personalkosten"
+          value={`${totalPersonnelCost.toLocaleString("de-DE", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })} €`}
+        />
         <Stat label="Mitarbeiter" value={String(employeeCount)} />
       </div>
 
-      <div style={filterBar}>
-        <label style={filterLabel}>
+      <div
+        className={finalOnly ? "rlc-page-toolbar" : undefined}
+        style={
+          finalOnly
+            ? { marginBottom: 8, paddingBottom: 10 }
+            : filterBar
+        }
+      >
+        <label
+          className={finalOnly ? "rlc-page-toolbar__field" : undefined}
+          style={finalOnly ? undefined : filterLabel}
+        >
+          Projekt
+          <select
+            style={input}
+            value={projectKey}
+            onChange={(event) => {
+              setProjectOverride(event.target.value);
+              setEmployeeFilter("");
+              setDateFilter("");
+              setSelected(null);
+            }}
+          >
+            {!projectKey ? <option value="">Projekt wählen</option> : null}
+
+            {projects.map((project: any) => {
+              const value = String(project?.code || project?.id || "");
+              const label =
+                [project?.code, project?.name || project?.title]
+                  .filter(Boolean)
+                  .join(" · ") || value;
+
+              return (
+                <option key={String(project?.id || value)} value={value}>
+                  {label}
+                </option>
+              );
+            })}
+
+            {projectKey &&
+            !projects.some(
+              (project: any) =>
+                String(project?.code || project?.id || "") === projectKey
+            ) ? (
+              <option value={projectKey}>{projectKey}</option>
+            ) : null}
+          </select>
+        </label>
+
+        <label
+          className={finalOnly ? "rlc-page-toolbar__field" : undefined}
+          style={finalOnly ? undefined : filterLabel}
+        >
           Mitarbeiter
-          <input
+          <select
             style={input}
             value={employeeFilter}
             onChange={(event) => setEmployeeFilter(event.target.value)}
-            placeholder="Name suchen"
-          />
+          >
+            <option value="">Alle Mitarbeiter</option>
+            {employeeOptions.map((employee) => (
+              <option key={employee} value={employee}>
+                {employee}
+              </option>
+            ))}
+          </select>
         </label>
-        <label style={filterLabel}>
+
+        <label
+          className={finalOnly ? "rlc-page-toolbar__field" : undefined}
+          style={finalOnly ? undefined : filterLabel}
+        >
           Datum
           <input
             style={input}
@@ -331,8 +613,10 @@ export default function Arbeitszeiten() {
             onChange={(event) => setDateFilter(event.target.value)}
           />
         </label>
+
         <button
-          style={button}
+          className={finalOnly ? "btn" : undefined}
+          style={finalOnly ? undefined : button}
           onClick={() => {
             setEmployeeFilter("");
             setDateFilter("");
@@ -342,17 +626,61 @@ export default function Arbeitszeiten() {
         </button>
       </div>
 
+      {finalOnly && projectKey ? (
+        <div
+          className="rlc-page-toolbar__group"
+          style={{ marginBottom: 6 }}
+        >
+          <Link
+            to={`/buchhaltung/kostenuebersicht?projectId=${encodeURIComponent(projectKey)}${
+              employeeFilter
+                ? `&mitarbeiter=${encodeURIComponent(employeeFilter)}`
+                : ""
+            }`}
+            className="btn"
+          >
+            Kostenübersicht
+          </Link>
+
+          <Link
+            to={`/buchhaltung/kostenstellen?projectId=${encodeURIComponent(projectKey)}${
+              employeeFilter
+                ? `&mitarbeiter=${encodeURIComponent(employeeFilter)}`
+                : ""
+            }`}
+            className="btn"
+          >
+            Kostenstellen
+          </Link>
+
+          <Link
+            to={`/buro/personalverwaltung?projectId=${encodeURIComponent(projectKey)}${
+              employeeFilter
+                ? `&mitarbeiter=${encodeURIComponent(employeeFilter)}`
+                : ""
+            }`}
+            className="btn"
+          >
+            Personalverwaltung
+          </Link>
+        </div>
+      ) : null}
+
       {error ? <div style={err}>{error}</div> : null}
 
       {selected ? (
         <DetailPanel row={selected} onClose={() => setSelected(null)} />
       ) : null}
 
-      <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ display: "grid", gap: finalOnly ? 10 : 16 }}>
         {employeeGroups.map((group) => {
           const hours = group.rows.reduce((sum, row) => sum + Number(row.hours || 0), 0);
           return (
-            <section key={group.identity.key} style={employeeCard}>
+            <section
+              key={group.identity.key}
+              className={finalOnly ? "card" : undefined}
+              style={finalOnly ? undefined : employeeCard}
+            >
               <div style={employeeHeader}>
                 <div>
                   <div style={{ fontSize: 17, fontWeight: 900, color: "#0f172a" }}>
@@ -365,13 +693,16 @@ export default function Arbeitszeiten() {
               </div>
 
               <div style={tableWrap}>
-                <table style={table}>
+                <table style={finalOnly ? undefined : table}>
                   <thead>
                     <tr>
                       <Th>Datum</Th>
                       <Th>Zeit</Th>
                       <Th>Pause</Th>
                       <Th>Netto</Th>
+                      <Th>Std.-Satz</Th>
+                      <Th>Personalkosten</Th>
+                      <Th>Kostenstelle</Th>
                       <Th>Tätigkeit</Th>
                       <Th>GPS</Th>
                       <Th>Status</Th>
@@ -382,19 +713,38 @@ export default function Arbeitszeiten() {
                     {group.rows.map((row) => {
                       const events = Array.isArray(row.events) ? row.events : [];
                       const gpsCount = events.filter((event) => eventGps(event)).length;
+                      const personnel: any = personnelFor(row);
+                      const hourlyRate = Number(personnel?.hourlyRate || 0);
+                      const personnelCost = Number(row.hours || 0) * hourlyRate;
+                      const costCenter =
+                        row.kostenstelle ||
+                        row.costCenter ||
+                        personnel?.costCenter ||
+                        "";
                       return (
                         <tr key={`${row.__stage}:${row.id}`}>
                           <Td>{row.date || "—"}</Td>
                           <Td>{row.start || "—"}–{row.end || "—"}</Td>
                           <Td>{Number(row.breakMinutes || 0)} Min.</Td>
                           <Td strong>{formatHours(row.hours)} h</Td>
+                          <Td>{hourlyRate > 0 ? `${hourlyRate.toFixed(2)} €` : "—"}</Td>
+                          <Td strong>
+                            {hourlyRate > 0
+                              ? `${personnelCost.toFixed(2)} €`
+                              : "—"}
+                          </Td>
+                          <Td>{costCenter || "—"}</Td>
                           <Td>{row.activity || "—"}</Td>
                           <Td>{gpsCount} / {events.length}</Td>
                           <Td>
                             <span style={badge}>{stageLabel(row.__stage)}</span>
                           </Td>
                           <Td>
-                            <button style={smallButton} onClick={() => setSelected(row)}>
+                            <button
+                              className={finalOnly ? "btn" : undefined}
+                              style={finalOnly ? undefined : smallButton}
+                              onClick={() => setSelected(row)}
+                            >
                               Details
                             </button>
                           </Td>
@@ -444,6 +794,18 @@ function DetailPanel({ row, onClose }: { row: Row; onClose: () => void }) {
         <Detail label="Maschinen" value={row.machines || "—"} />
         <Detail label="Material" value={row.materials || "—"} />
         <Detail label="Bemerkung" value={row.note || "—"} />
+        <Detail
+          label="Kostenstelle"
+          value={row.kostenstelle || row.costCenter || "—"}
+        />
+        <Detail
+          label="LV-Position"
+          value={row.lvItemPos || row.lvPos || row.position || "—"}
+        />
+        <Detail
+          label="Regiebericht"
+          value={row.regieId || row.regieberichtId || "—"}
+        />
         <Detail label="Status" value={row.workflowStatus || stageLabel(row.__stage)} />
         <Detail label="Eingereicht" value={dateTime(row.submittedAt || row.createdAt)} />
       </div>

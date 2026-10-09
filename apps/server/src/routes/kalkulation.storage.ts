@@ -3,8 +3,30 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { archiveProjectFileVersion } from "../services/dmsArchive";
+import { requireProjectMember } from "../middleware/guards";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
+
+router.use("/:moduleName/:projectKey", requireProjectMember("projectKey"), async (req:any, _res, next) => {
+  const projectId=String(req.resolvedProjectId||"").trim();
+  const projectCode=String(req.resolvedProjectCode||"").trim();
+  const moduleName=String(req.params.moduleName||"").trim();
+  if(!projectId) return next(new Error("RESOLVED_PROJECT_ID_MISSING"));
+  if(projectCode && projectCode!==projectId && ALLOWED_MODULES.has(moduleName)){
+    try{
+      const duplicates=await prisma.project.count({where:{code:projectCode}});
+      if(duplicates===1){
+        const src=path.join(PROJECTS_ROOT,projectCode,"kalkulation",moduleName);
+        const dst=path.join(PROJECTS_ROOT,projectId,"kalkulation",moduleName);
+        if(fs.existsSync(src)&&!fs.existsSync(dst)){fs.mkdirSync(path.dirname(dst),{recursive:true});fs.cpSync(src,dst,{recursive:true});}
+      }
+    }catch(e){console.error("[kalkulation:storage] legacy tenant migration failed",e);}
+  }
+  req.params.projectKey=projectId;
+  next();
+});
 
 const ALLOWED_MODULES = new Set([
   "urkalkulation",
@@ -73,7 +95,23 @@ function writeDoc(projectKey: string, moduleName: string, body: any) {
     createdAt: body?.createdAt || nowIso(),
   };
 
-  fs.writeFileSync(getFile(projectKey, moduleName), JSON.stringify(doc, null, 2), "utf-8");
+  const savedFile = getFile(projectKey, moduleName);
+  fs.writeFileSync(savedFile, JSON.stringify(doc, null, 2), "utf-8");
+
+  void archiveProjectFileVersion({
+    projectIdOrCode: projectKey,
+    filename: `Kalkulation-${moduleName}.json`,
+    kind: "LV",
+    localPath: savedFile,
+    meta: {
+      module: "KALKULATION",
+      source: "kalkulation.storage",
+      snapshotType: moduleName
+    }
+  }).catch((error) => {
+    console.error("[kalkulation:storage:dms]", error);
+  });
+
   return doc;
 }
 

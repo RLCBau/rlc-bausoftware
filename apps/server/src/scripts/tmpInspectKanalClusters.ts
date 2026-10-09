@@ -1,0 +1,3 @@
+import { prisma } from "../lib/prisma";
+const terms=["Awaschacht DN 1000","Anschlussleitung herstellen DN 315","Muffenauflage liefern und montieren","Anpassung von Pflasterdecke herstellen","Absturz von Sammelleitung an Schacht herstellen","Sicherung Grenzstein","Provisorische Überfahrten herstellen","KGB PP DN160","KGEM PP SN10 DN160","KGMM HPP DN160","Handschacht","SchachtringeD 1000mm"];
+(async()=>{for(const t of terms){const v=await prisma.lVPosition.findFirst({where:{kurztext:{contains:t,mode:"insensitive"}}});console.log("\n###",t,"|",v?.position,v?.einheit,v?.kurztext);console.log(String(v?.langtext||"").replace(/\s+/g," ").slice(0,1100));}await prisma.$disconnect()})();

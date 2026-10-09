@@ -12,7 +12,7 @@ import { COMPANIES_ROOT } from "../lib/companiesRoot";
 const r = Router();
 
 function requireCompanyAdmin(req: any, res: any, next: any) {
-  if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
+  if (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
 
   const roleRaw = String(
     req?.auth?.role || req?.auth?.appRole || req?.auth?.companyRole || ""
@@ -28,6 +28,197 @@ function requireCompanyAdmin(req: any, res: any, next: any) {
 
 function ensureDir(dir: string) {
   fs.mkdirSync(dir, { recursive: true });
+}
+
+function eInvoiceProfileFile(companyId: string) {
+  return path.join(COMPANIES_ROOT, companyId, "einvoice-profile.json");
+}
+
+function privacyProfileFile(companyId: string) {
+  return path.join(COMPANIES_ROOT, companyId, "privacy-profile.json");
+}
+
+function defaultPrivacyProfile() {
+  return {
+    employeeGpsEnabled: false,
+    employeeGpsPurpose: "",
+    employeeGpsLegalBasis: "",
+    employeeGpsRetentionDays: 0,
+    aiExternalProcessingEnabled: false,
+    aiProviderName: "",
+    aiPurpose: "",
+    aiLegalBasis: "",
+    aiPersonalDataPolicy: "MINIMIZE",
+    aiRetentionDays: 0,
+    aiThirdCountryTransfer: false,
+    aiTransferMechanism: "",
+    avvSigned: false,
+    avvSignedAt: null,
+    avvReference: "",
+    tomReviewed: false,
+    tomReviewedAt: null,
+    tomReference: "",
+    vvtReviewed: false,
+    vvtReviewedAt: null,
+    vvtReference: "",
+    dsfaRequired: false,
+    dsfaCompleted: false,
+    dsfaCompletedAt: null,
+    dsfaReference: "",
+    deletionConceptReviewed: false,
+    deletionConceptReviewedAt: null,
+    deletionConceptReference: "",
+    privacyContact: "",
+    dpoContact: "",
+    updatedAt: null,
+  };
+}
+
+function readPrivacyProfile(companyId: string) {
+  try {
+    const file = privacyProfileFile(companyId);
+    if (!fs.existsSync(file)) return defaultPrivacyProfile();
+    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+    const base = defaultPrivacyProfile();
+    return {
+      ...base,
+      employeeGpsEnabled: raw?.employeeGpsEnabled === true,
+      employeeGpsPurpose: String(raw?.employeeGpsPurpose || "").trim(),
+      employeeGpsLegalBasis: String(raw?.employeeGpsLegalBasis || "").trim(),
+      employeeGpsRetentionDays: Math.max(0, Math.min(365, Number(raw?.employeeGpsRetentionDays || 0))),
+      aiExternalProcessingEnabled: raw?.aiExternalProcessingEnabled === true,
+      aiProviderName: String(raw?.aiProviderName || "").trim(),
+      aiPurpose: String(raw?.aiPurpose || "").trim(),
+      aiLegalBasis: String(raw?.aiLegalBasis || "").trim(),
+      aiPersonalDataPolicy: String(raw?.aiPersonalDataPolicy || "MINIMIZE").trim().toUpperCase(),
+      aiRetentionDays: Math.max(0, Math.min(3650, Number(raw?.aiRetentionDays || 0))),
+      aiThirdCountryTransfer: raw?.aiThirdCountryTransfer === true,
+      aiTransferMechanism: String(raw?.aiTransferMechanism || "").trim(),
+      avvSigned: raw?.avvSigned === true,
+      avvSignedAt: raw?.avvSignedAt || null,
+      avvReference: String(raw?.avvReference || "").trim(),
+      tomReviewed: raw?.tomReviewed === true,
+      tomReviewedAt: raw?.tomReviewedAt || null,
+      tomReference: String(raw?.tomReference || "").trim(),
+      vvtReviewed: raw?.vvtReviewed === true,
+      vvtReviewedAt: raw?.vvtReviewedAt || null,
+      vvtReference: String(raw?.vvtReference || "").trim(),
+      dsfaRequired: raw?.dsfaRequired === true,
+      dsfaCompleted: raw?.dsfaCompleted === true,
+      dsfaCompletedAt: raw?.dsfaCompletedAt || null,
+      dsfaReference: String(raw?.dsfaReference || "").trim(),
+      deletionConceptReviewed: raw?.deletionConceptReviewed === true,
+      deletionConceptReviewedAt: raw?.deletionConceptReviewedAt || null,
+      deletionConceptReference: String(raw?.deletionConceptReference || "").trim(),
+      privacyContact: String(raw?.privacyContact || "").trim(),
+      dpoContact: String(raw?.dpoContact || "").trim(),
+      updatedAt: raw?.updatedAt || null,
+    };
+  } catch {
+    return defaultPrivacyProfile();
+  }
+}
+
+function writePrivacyProfile(companyId: string, profile: any) {
+  const previous = readPrivacyProfile(companyId);
+  const merged = { ...previous, ...(profile || {}) };
+  const gpsEnabled = merged.employeeGpsEnabled === true;
+  const gpsPurpose = String(merged.employeeGpsPurpose || "").trim();
+  const gpsLegalBasis = String(merged.employeeGpsLegalBasis || "").trim();
+  const gpsRetentionDays = Math.max(0, Math.min(365, Number(merged.employeeGpsRetentionDays || 0)));
+  if (gpsEnabled && (!gpsPurpose || !gpsLegalBasis || gpsRetentionDays < 1)) {
+    throw new Error("GPS_PRIVACY_CONFIGURATION_INCOMPLETE");
+  }
+
+  const aiEnabled = merged.aiExternalProcessingEnabled === true;
+  const aiProviderName = String(merged.aiProviderName || "").trim();
+  const aiPurpose = String(merged.aiPurpose || "").trim();
+  const aiLegalBasis = String(merged.aiLegalBasis || "").trim();
+  const aiRetentionDays = Math.max(0, Math.min(3650, Number(merged.aiRetentionDays || 0)));
+  const aiThirdCountryTransfer = merged.aiThirdCountryTransfer === true;
+  const aiTransferMechanism = String(merged.aiTransferMechanism || "").trim();
+  if (aiEnabled && (!aiProviderName || !aiPurpose || !aiLegalBasis)) {
+    throw new Error("AI_PRIVACY_CONFIGURATION_INCOMPLETE");
+  }
+  if (aiEnabled && aiThirdCountryTransfer && !aiTransferMechanism) {
+    throw new Error("AI_TRANSFER_MECHANISM_REQUIRED");
+  }
+  const dsfaRequired = merged.dsfaRequired === true;
+  const dsfaCompleted = merged.dsfaCompleted === true;
+  if (dsfaRequired && dsfaCompleted && !String(merged.dsfaReference || "").trim()) {
+    throw new Error("DSFA_REFERENCE_REQUIRED");
+  }
+
+  const clean = {
+    employeeGpsEnabled: gpsEnabled,
+    employeeGpsPurpose: gpsEnabled ? gpsPurpose : "",
+    employeeGpsLegalBasis: gpsEnabled ? gpsLegalBasis : "",
+    employeeGpsRetentionDays: gpsEnabled ? gpsRetentionDays : 0,
+    aiExternalProcessingEnabled: aiEnabled,
+    aiProviderName: aiEnabled ? aiProviderName : "",
+    aiPurpose: aiEnabled ? aiPurpose : "",
+    aiLegalBasis: aiEnabled ? aiLegalBasis : "",
+    aiPersonalDataPolicy: String(merged.aiPersonalDataPolicy || "MINIMIZE").trim().toUpperCase(),
+    aiRetentionDays: aiEnabled ? aiRetentionDays : 0,
+    aiThirdCountryTransfer: aiEnabled && aiThirdCountryTransfer,
+    aiTransferMechanism: aiEnabled && aiThirdCountryTransfer ? aiTransferMechanism : "",
+    avvSigned: merged.avvSigned === true,
+    avvSignedAt: merged.avvSigned ? (merged.avvSignedAt || new Date().toISOString()) : null,
+    avvReference: String(merged.avvReference || "").trim(),
+    tomReviewed: merged.tomReviewed === true,
+    tomReviewedAt: merged.tomReviewed ? (merged.tomReviewedAt || new Date().toISOString()) : null,
+    tomReference: String(merged.tomReference || "").trim(),
+    vvtReviewed: merged.vvtReviewed === true,
+    vvtReviewedAt: merged.vvtReviewed ? (merged.vvtReviewedAt || new Date().toISOString()) : null,
+    vvtReference: String(merged.vvtReference || "").trim(),
+    dsfaRequired,
+    dsfaCompleted,
+    dsfaCompletedAt: dsfaCompleted ? (merged.dsfaCompletedAt || new Date().toISOString()) : null,
+    dsfaReference: String(merged.dsfaReference || "").trim(),
+    deletionConceptReviewed: merged.deletionConceptReviewed === true,
+    deletionConceptReviewedAt: merged.deletionConceptReviewed ? (merged.deletionConceptReviewedAt || new Date().toISOString()) : null,
+    deletionConceptReference: String(merged.deletionConceptReference || "").trim(),
+    privacyContact: String(merged.privacyContact || "").trim(),
+    dpoContact: String(merged.dpoContact || "").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+  const dir = path.join(COMPANIES_ROOT, companyId);
+  ensureDir(dir);
+  fs.writeFileSync(privacyProfileFile(companyId), JSON.stringify(clean, null, 2));
+  return clean;
+}
+
+function readEInvoiceProfile(companyId: string) {
+  try {
+    const file = eInvoiceProfileFile(companyId);
+    if (!fs.existsSync(file)) return {};
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeEInvoiceProfile(companyId: string, profile: any) {
+  const dir = path.join(COMPANIES_ROOT, companyId);
+  ensureDir(dir);
+  const clean = {
+    street: String(profile?.street || "").trim(),
+    postalCode: String(profile?.postalCode || "").trim(),
+    city: String(profile?.city || "").trim(),
+    country: String(profile?.country || "DE").trim().toUpperCase(),
+    vatId: String(profile?.vatId || "").trim(),
+    taxNumber: String(profile?.taxNumber || "").trim(),
+    iban: String(profile?.iban || "").replace(/\s+/g, "").trim(),
+    bic: String(profile?.bic || "").replace(/\s+/g, "").trim(),
+    bankName: String(profile?.bankName || "").trim(),
+    contactName: String(profile?.contactName || "").trim(),
+    phone: String(profile?.phone || "").trim(),
+    email: String(profile?.email || "").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+  fs.writeFileSync(eInvoiceProfileFile(companyId), JSON.stringify(clean, null, 2));
+  return clean;
 }
 
 function safeExtFromMime(mime?: string) {
@@ -156,6 +347,80 @@ r.get(
     } catch (e: any) {
       console.error("GET /api/company/header failed:", e);
       return res.status(500).json({ ok: false, error: e?.message || "failed" });
+    }
+  }
+);
+
+/**
+ * GET /api/company/einvoice-profile
+ */
+r.get(
+  "/einvoice-profile",
+  requireAuth,
+  requireVerifiedEmail,
+  requireCompany,
+  async (req: any, res) => {
+    const companyId = String(req.auth.companyId || "").trim();
+    if (!companyId) return res.status(400).json({ ok: false, error: "company missing" });
+    return res.json({ ok: true, profile: readEInvoiceProfile(companyId) });
+  }
+);
+
+/**
+ * PUT /api/company/einvoice-profile
+ */
+r.put(
+  "/einvoice-profile",
+  requireAuth,
+  requireVerifiedEmail,
+  requireCompany,
+  requireCompanyAdmin,
+  async (req: any, res) => {
+    try {
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) return res.status(400).json({ ok: false, error: "company missing" });
+      const profile = writeEInvoiceProfile(companyId, req.body || {});
+      return res.json({ ok: true, profile });
+    } catch (error: any) {
+      return res.status(500).json({ ok: false, error: error?.message || "save failed" });
+    }
+  }
+);
+
+/**
+ * GET /api/company/privacy-profile
+ */
+r.get(
+  "/privacy-profile",
+  requireAuth,
+  requireVerifiedEmail,
+  requireCompany,
+  async (req: any, res) => {
+    const companyId = String(req.auth.companyId || "").trim();
+    if (!companyId) return res.status(400).json({ ok: false, error: "company missing" });
+    return res.json({ ok: true, profile: readPrivacyProfile(companyId) });
+  }
+);
+
+/**
+ * PUT /api/company/privacy-profile
+ */
+r.put(
+  "/privacy-profile",
+  requireAuth,
+  requireVerifiedEmail,
+  requireCompany,
+  requireCompanyAdmin,
+  async (req: any, res) => {
+    try {
+      const companyId = String(req.auth.companyId || "").trim();
+      if (!companyId) return res.status(400).json({ ok: false, error: "company missing" });
+      const profile = writePrivacyProfile(companyId, req.body || {});
+      return res.json({ ok: true, profile });
+    } catch (error: any) {
+      const message = String(error?.message || "save failed");
+      const clientErrors = ["GPS_PRIVACY_CONFIGURATION_INCOMPLETE","AI_PRIVACY_CONFIGURATION_INCOMPLETE","AI_TRANSFER_MECHANISM_REQUIRED","DSFA_REFERENCE_REQUIRED"];
+      return res.status(clientErrors.includes(message) ? 400 : 500).json({ ok: false, error: message });
     }
   }
 );

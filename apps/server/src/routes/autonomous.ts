@@ -26,8 +26,19 @@ import { analyzeMarketCandidateImpact } from "../kalkulation/autonomous/marketIm
 
 const router = Router();
 
+function requireAutonomousMarketWrite(req: any, res: any, next: any) {
+  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+  if (!["ADMIN", "ADMINISTRATOR", "KALKULATOR"].includes(role)) {
+    return res.status(403).json({ error: "AUTONOMOUS_MARKET_WRITE_FORBIDDEN" });
+  }
+  return next();
+}
+
 startAutonomousAgent();
-startInternetIntelligenceAgent();
+startInternetIntelligenceAgent(async () => {
+  const result = await synchronizeMarketIntelligence();
+  console.log(`[autonomous-market] DB synchronisiert: ${result.imported} Events, ${result.candidates} neue Kandidaten.`);
+});
 
 router.get("/status", (_req, res) => {
   res.json(getAutonomousStatus());
@@ -65,7 +76,7 @@ router.get("/market/dashboard", async (_req, res) => {
   catch (error: any) { res.status(500).json({ error: "MARKET_DASHBOARD_FAILED", message: error?.message || String(error) }); }
 });
 
-router.post("/market/synchronize", async (_req, res) => {
+router.post("/market/synchronize", requireAutonomousMarketWrite, async (_req, res) => {
   try { res.json(await synchronizeMarketIntelligence()); }
   catch (error: any) { res.status(500).json({ error: "MARKET_SYNC_FAILED", message: error?.message || String(error) }); }
 });
@@ -75,7 +86,7 @@ router.get("/market/candidates", async (req, res) => {
   catch (error: any) { res.status(500).json({ error: "MARKET_CANDIDATES_FAILED", message: error?.message || String(error) }); }
 });
 
-router.post("/market/candidates/:id/review", async (req, res) => {
+router.post("/market/candidates/:id/review", requireAutonomousMarketWrite, async (req, res) => {
   try {
     const action = String(req.body?.action || "");
     if (action !== "APPROVE" && action !== "REJECT") return res.status(400).json({ error: "INVALID_REVIEW_ACTION" });
@@ -83,11 +94,11 @@ router.post("/market/candidates/:id/review", async (req, res) => {
   } catch (error: any) { res.status(500).json({ error: "MARKET_REVIEW_FAILED", message: error?.message || String(error) }); }
 });
 
-router.post("/market/candidates/:id/apply", async (req, res) => {
+router.post("/market/candidates/:id/apply", requireAutonomousMarketWrite, async (req, res) => {
   try {
-    const companyId = String(req.body?.companyId || (req as any).user?.companyId || (req as any).auth?.company || "");
-    if (!companyId) return res.status(400).json({ error: "COMPANY_ID_REQUIRED" });
-    res.json(await applyMarketCandidate(req.params.id, companyId, (req as any).user?.id));
+    const companyId = String((req as any).auth?.companyId || (req as any).auth?.company || "").trim();
+    if (!companyId) return res.status(403).json({ error: "COMPANY_ID_REQUIRED" });
+    res.json(await applyMarketCandidate(req.params.id, companyId, (req as any).auth?.sub || (req as any).user?.id));
   } catch (error: any) { res.status(400).json({ error: "MARKET_APPLY_FAILED", message: error?.message || String(error) }); }
 });
 
@@ -114,12 +125,12 @@ router.post("/run", async (req, res) => {
 });
 
 
-router.post("/market/candidates/:id/analyze-impact", async (req, res) => {
+router.post("/market/candidates/:id/analyze-impact", requireAutonomousMarketWrite, async (req, res) => {
   try {
     const companyId = String(
       (req.auth as any)?.companyId ||
       (req.auth as any)?.company ||
-      process.env.DEV_COMPANY_ID ||
+      (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on" ? process.env.DEV_COMPANY_ID : "") ||
       ""
     ).trim();
 

@@ -16,22 +16,18 @@ function isBinaryDxf(buffer: Buffer) {
   return buffer.subarray(0, 22).toString("latin1").startsWith("AutoCAD Binary DXF");
 }
 
-function quoteShell(value: string) {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-function runTemplate(commandTemplate: string, input: string, output: string) {
-  const command = commandTemplate
-    .replace(/\{input\}/g, quoteShell(input))
-    .replace(/\{output\}/g, quoteShell(output));
-  const result = spawnSync("/bin/sh", ["-lc", command], {
+function runConfiguredConverter(input: string, output: string) {
+  const executable = String(process.env.DWG2DXF_BIN || "dwg2dxf").trim();
+  const result = spawnSync(executable, ["--overwrite", "--file", output, input], {
     encoding: "utf8",
     timeout: 180000,
     maxBuffer: 8 * 1024 * 1024,
+    shell: false,
   });
   return {
     ok: result.status === 0 && fs.existsSync(output) && fs.statSync(output).size > 0,
     detail: String(result.stderr || result.stdout || "").trim(),
+    executable,
   };
 }
 
@@ -116,21 +112,18 @@ export function prepareCadImportBuffer(
   fs.writeFileSync(inputPath, sourceBuffer);
 
   const errors: string[] = [];
-  const template = String(process.env.RLC_CAD_CONVERTER_COMMAND || "").trim();
-  if (template) {
-    const result = runTemplate(template, inputPath, outputPath);
-    if (result.ok) {
-      return {
-        originalName,
-        effectiveName: path.basename(outputPath),
-        buffer: fs.readFileSync(outputPath),
-        converted: true,
-        converter: "RLC_CAD_CONVERTER_COMMAND",
-        temporaryDirectory: tempDirectory,
-      };
-    }
-    errors.push(`RLC_CAD_CONVERTER_COMMAND: ${result.detail || "fehlgeschlagen"}`);
+  const configured = runConfiguredConverter(inputPath, outputPath);
+  if (configured.ok) {
+    return {
+      originalName,
+      effectiveName: path.basename(outputPath),
+      buffer: fs.readFileSync(outputPath),
+      converted: true,
+      converter: configured.executable,
+      temporaryDirectory: tempDirectory,
+    };
   }
+  errors.push(`${configured.executable}: ${configured.detail || "nicht verfügbar/fehlgeschlagen"}`);
 
   const dwg2dxf = tryDwg2Dxf(inputPath, outputPath);
   if (dwg2dxf.ok) {

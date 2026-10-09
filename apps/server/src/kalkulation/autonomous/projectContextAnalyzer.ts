@@ -1,4 +1,9 @@
 import type { RlcAutonomousCalcInput, RlcAutonomousProjectContext, RlcRiskLevel } from "./types";
+import { getBaupreisIndexFactor } from "../priceIndex/baupreisIndexService";
+import {
+  detectRlcConstructionFamilies,
+  detectPrimaryRlcConstructionFamily,
+} from "../domain/constructionFamilyRegistry";
 
 function s(v: unknown): string {
   return String(v ?? "").toLowerCase();
@@ -17,17 +22,8 @@ function risk(high: boolean, medium: boolean): RlcRiskLevel {
 export function analyzeRlcProjectContext(rows: RlcAutonomousCalcInput[] = [], projectCode?: string): RlcAutonomousProjectContext {
   const joined = rows.map((r) => `${r.kurztext ?? ""} ${r.langtext ?? ""}`).join(" ").toLowerCase();
 
-  const isTiefbau = includesAny(joined, [
-    "rohrgraben",
-    "aushub",
-    "leitung",
-    "kanal",
-    "wasserleitung",
-    "kabel",
-    "schutzrohr",
-    "verfüllung",
-    "verdichtung",
-  ]);
+  const detectedFamilies = detectRlcConstructionFamilies(joined);
+  const primaryFamily = detectPrimaryRlcConstructionFamily(joined);
 
   const hasTraffic = includesAny(joined, [
     "verkehr",
@@ -82,21 +78,44 @@ export function analyzeRlcProjectContext(rows: RlcAutonomousCalcInput[] = [], pr
         : "low";
 
   const warnings: string[] = [];
+  const envBgk = Number(process.env.RLC_KALKULATION_BGK_RATE);
+  const envProfit = Number(process.env.RLC_KALKULATION_PROFIT_RATE);
+  const bgkRate = Number.isFinite(envBgk) && envBgk >= 0 ? envBgk : 0;
+  const profitRate = Number.isFinite(envProfit) && envProfit >= 0 ? envProfit : 0;
+  if (!Number.isFinite(envBgk) || !Number.isFinite(envProfit)) {
+    warnings.push("Kaufmännisches Zuschlagsprofil nicht konfiguriert: BGK/Gewinn werden nicht erfunden und bleiben 0 %. Bitte Firmenprofil konfigurieren.");
+  }
   if (hasTraffic) warnings.push("Verkehrsführung/Verkehrssicherung technisch und preislich prüfen.");
   if (hasDifficultLogistics) warnings.push("Logistik, Zufahrt und Arbeiten im Bestand erhöhen Kalkulationsrisiko.");
   if (hasLongDuration) warnings.push("Vorhaltung/Bauzeit beeinflusst Baustellengemeinkosten und Geräteansätze.");
   if (hasSpecialRisk) warnings.push("Sonderrisiken wie Verbau, Wasserhaltung, Fels, Deponie oder Altlasten prüfen.");
 
+  const marketIndex = getBaupreisIndexFactor({
+    sourceDate: "2024-02-01",
+    targetDate: new Date(),
+    text: joined,
+  });
+
+  const marketFactor =
+    marketIndex.reliable
+      ? marketIndex.factor
+      : 1;
+
   return {
     projectCode,
-    projectType: isTiefbau ? "Tiefbau / Leitungsbau" : "Allgemeine Bauleistung",
-    trade: isTiefbau ? "Tiefbau" : "Allgemein",
+    projectType:
+      detectedFamilies.length > 1
+        ? detectedFamilies.map((f) => f.label).join(" / ")
+        : primaryFamily.label,
+    trade: primaryFamily.trade,
     difficulty,
     logisticsRisk,
     trafficRisk,
     durationRisk,
-    marketFactor: 1.17,
+    marketFactor,
     distanceFactor: 1.0,
+    bgkRate,
+    profitRate,
     confidence: rows.length > 0 ? 0.7 : 0.45,
     warnings,
   };

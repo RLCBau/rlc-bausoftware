@@ -2,7 +2,6 @@ import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../lib/prisma";
 import { requireAuth } from "../middleware/auth";
-import { isAdminBypassEmail } from "../lib/license";
 
 const r = Router();
 
@@ -22,10 +21,11 @@ async function requirePlatformAdmin(req: any, res: any, next: any) {
       select: {
         id: true,
         email: true,
+        appRole: true,
       },
     });
 
-    if (!user?.email || !isAdminBypassEmail(user.email)) {
+    if (!user || String(user.appRole || "").toUpperCase() !== "PLATFORM_ADMIN") {
       return res.status(403).json({
         ok: false,
         error: "PLATFORM_ADMIN_REQUIRED",
@@ -265,6 +265,24 @@ r.patch(
         data.cloudEnabled = req.body.cloudEnabled;
       }
 
+      if (req.body?.aiMarketMonthlyIncluded !== undefined) {
+        data.aiMarketMonthlyIncluded = Math.max(
+          0,
+          Math.floor(Number(req.body.aiMarketMonthlyIncluded) || 0)
+        );
+      }
+
+      if (req.body?.aiMarketCreditsPurchased !== undefined) {
+        data.aiMarketCreditsPurchased = Math.max(
+          0,
+          Math.floor(Number(req.body.aiMarketCreditsPurchased) || 0)
+        );
+      }
+
+      const addAiMarketCredits = req.body?.addAiMarketCredits !== undefined
+        ? Math.max(0, Math.floor(Number(req.body.addAiMarketCredits) || 0))
+        : 0;
+
       if (req.body?.currentPeriodEnd !== undefined) {
         data.currentPeriodEnd = req.body.currentPeriodEnd
           ? new Date(req.body.currentPeriodEnd)
@@ -282,9 +300,16 @@ r.patch(
         update: data,
       });
 
+      const finalSubscription = addAiMarketCredits > 0
+        ? await prisma.companySubscription.update({
+            where: { companyId },
+            data: { aiMarketCreditsPurchased: { increment: addAiMarketCredits } },
+          })
+        : subscription;
+
       return res.json({
         ok: true,
-        subscription,
+        subscription: finalSubscription,
       });
     } catch (e: any) {
       return res.status(500).json({
@@ -295,6 +320,114 @@ r.patch(
   }
 );
 
+
+
+/**
+ * GET /api/platform/admin/companies/:companyId/ai-market-overview
+ */
+r.get(
+  "/companies/:companyId/ai-market-overview",
+  requireAuth,
+  requirePlatformAdmin,
+  async (req: any, res) => {
+    try {
+      const companyId = String(req.params.companyId || "").trim();
+      const monthKey = new Date().toISOString().slice(0, 7);
+      const from = new Date(`${monthKey}-01T00:00:00.000Z`);
+      const [summary, byModel, sub, orders, paidMonth, pendingOrders] = await Promise.all([
+        prisma.aiMarketReviewUsage.aggregate({
+          where: { companyId, createdAt: { gte: from } },
+          _sum: { creditsUsed: true, inputTokens: true, outputTokens: true, totalTokens: true, webSearchCalls: true, estimatedCostUsd: true },
+          _count: { _all: true },
+        }),
+        prisma.aiMarketReviewUsage.groupBy({
+          by: ["provider", "model"],
+          where: { companyId, createdAt: { gte: from } },
+          _sum: { creditsUsed: true, inputTokens: true, outputTokens: true, totalTokens: true, webSearchCalls: true, estimatedCostUsd: true },
+          _count: { _all: true },
+        }),
+        prisma.companySubscription.findUnique({ where: { companyId } }),
+        prisma.aiMarketCreditOrder.findMany({ where: { companyId }, orderBy: { createdAt: "desc" }, take: 30 }),
+        prisma.aiMarketCreditOrder.aggregate({
+          where: { companyId, status: "PAID", paidAt: { gte: from } },
+          _sum: { priceCents: true, credits: true },
+          _count: { _all: true },
+        }),
+        prisma.aiMarketCreditOrder.count({ where: { companyId, status: "PENDING" } }),
+      ]);
+      const included = Math.max(0, Number(sub?.aiMarketMonthlyIncluded || 0));
+      const used = sub?.aiMarketMonthKey === monthKey ? Math.max(0, Number(sub?.aiMarketMonthlyUsed || 0)) : 0;
+      const purchasedRemaining = Math.max(0, Number(sub?.aiMarketCreditsPurchased || 0));
+      const includedRemaining = Math.max(0, included - used);
+      return res.json({
+        ok: true,
+        monthKey,
+        summary,
+        byModel,
+        orders,
+        sales: {
+          paidRevenueCentsMonth: Number(paidMonth._sum.priceCents || 0),
+          paidCreditsMonth: Number(paidMonth._sum.credits || 0),
+          paidOrdersMonth: Number(paidMonth._count._all || 0),
+          pendingOrders: Number(pendingOrders || 0),
+        },
+        balance: { included, used, includedRemaining, purchasedRemaining, totalRemaining: includedRemaining + purchasedRemaining },
+      });
+    } catch (e: any) {
+      return res.status(500).json({ ok: false, error: e?.message || "AI_MARKET_OVERVIEW_FAILED" });
+    }
+  }
+);
+
+r.post(
+  "/companies/:companyId/ai-market-orders/:orderId/confirm",
+  requireAuth,
+  requirePlatformAdmin,
+  async (req: any, res) => {
+    try {
+      const companyId = String(req.params.companyId || "").trim();
+      const orderId = String(req.params.orderId || "").trim();
+      const result = await prisma.$transaction(async (tx) => {
+        const order = await tx.aiMarketCreditOrder.findFirst({ where: { id: orderId, companyId } });
+        if (!order) throw new Error("ORDER_NOT_FOUND");
+        if (order.status === "PAID" && order.creditedAt) return order;
+        if (order.status !== "PENDING") throw new Error("ORDER_NOT_PENDING");
+        await tx.companySubscription.upsert({
+          where: { companyId },
+          create: { companyId, status: "ACTIVE", plan: "MAX_UNLIMITED", aiMarketCreditsPurchased: order.credits },
+          update: { aiMarketCreditsPurchased: { increment: order.credits } },
+        });
+        return tx.aiMarketCreditOrder.update({
+          where: { id: order.id },
+          data: { status: "PAID", paidAt: new Date(), creditedAt: new Date() },
+        });
+      });
+      return res.json({ ok: true, order: result });
+    } catch (e: any) {
+      const msg = e?.message || "AI_MARKET_ORDER_CONFIRM_FAILED";
+      return res.status(msg === "ORDER_NOT_FOUND" ? 404 : 400).json({ ok: false, error: msg });
+    }
+  }
+);
+
+r.post(
+  "/companies/:companyId/ai-market-orders/:orderId/cancel",
+  requireAuth,
+  requirePlatformAdmin,
+  async (req: any, res) => {
+    try {
+      const companyId = String(req.params.companyId || "").trim();
+      const orderId = String(req.params.orderId || "").trim();
+      const order = await prisma.aiMarketCreditOrder.findFirst({ where: { id: orderId, companyId } });
+      if (!order) return res.status(404).json({ ok: false, error: "ORDER_NOT_FOUND" });
+      if (order.status !== "PENDING") return res.status(400).json({ ok: false, error: "ORDER_NOT_PENDING" });
+      const updated = await prisma.aiMarketCreditOrder.update({ where: { id: order.id }, data: { status: "CANCELLED" } });
+      return res.json({ ok: true, order: updated });
+    } catch (e: any) {
+      return res.status(500).json({ ok: false, error: e?.message || "AI_MARKET_ORDER_CANCEL_FAILED" });
+    }
+  }
+);
 
 function makePlatformInviteCode() {
   const a = crypto.randomBytes(2).toString("hex").toUpperCase();

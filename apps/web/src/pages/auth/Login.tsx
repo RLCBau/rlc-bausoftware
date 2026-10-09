@@ -296,9 +296,14 @@ export default function Login() {
   const [info, setInfo] = React.useState<string | null>(null);
   const [canResend, setCanResend] = React.useState(false);
 
+  const isCloudLogin = React.useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("mode") === "cloud";
+  }, [location.search]);
+
   const redirectTo = React.useMemo(
-    () => getRedirectTarget(location.state),
-    [location.state]
+    () => isCloudLogin ? "/cloud" : getRedirectTarget(location.state),
+    [isCloudLogin, location.state]
   );
 
   async function handleLogin(e?: React.FormEvent) {

@@ -291,9 +291,9 @@ body {
    RLC HERO – contrasto uniforme globale
    ========================================================= */
 
-[style*="linear-gradient"] h1,
-[style*="linear-gradient"] h2,
-[style*="linear-gradient"] h3,
+[style*="linear-gradient"]:not(.rlc-ki-dashboard-card) h1,
+[style*="linear-gradient"]:not(.rlc-ki-dashboard-card) h2,
+[style*="linear-gradient"]:not(.rlc-ki-dashboard-card) h3,
 [style*="linear-gradient"] [class*="heroTitle"],
 [style*="linear-gradient"] [class*="HeroTitle"],
 [style*="linear-gradient"] [class*="pageTitle"],
@@ -303,7 +303,7 @@ body {
   opacity: 1 !important;
 }
 
-[style*="linear-gradient"] p {
+[style*="linear-gradient"]:not(.rlc-ki-dashboard-card) p {
   color: rgba(255, 255, 255, 0.94) !important;
 }
 
@@ -860,5 +860,1411 @@ header nav a * {
 
   .rlc-app-shell .rlc-brand-subtitle {
     display: none;
+  }
+}
+
+
+/* =========================================================
+   RLC SHARED MODULE WORKSPACE V1
+   Gemeinsames Layout für Verwaltungs- und Fachmodule
+   ========================================================= */
+
+.rlc-page-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--rlc-border);
+}
+
+.rlc-page-toolbar__search {
+  flex: 1 1 360px;
+  min-width: 260px;
+}
+
+.rlc-page-toolbar__group {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rlc-page-toolbar__field {
+  display: grid;
+  gap: 4px;
+}
+
+.rlc-page-toolbar__field > span {
+  color: var(--rlc-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rlc-page-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 14px;
+}
+
+.rlc-page-filter {
+  min-height: 34px !important;
+  padding: 6px 11px !important;
+  border: 1px solid var(--rlc-border) !important;
+  background: var(--rlc-surface) !important;
+  color: var(--rlc-text) !important;
+}
+
+.rlc-page-filter.is-active {
+  border-color: var(--rlc-primary) !important;
+  background: var(--rlc-primary-soft) !important;
+  color: var(--rlc-primary-hover) !important;
+}
+
+.rlc-page-workspace {
+  display: grid;
+  grid-template-columns: 210px minmax(420px, .85fr) minmax(420px, 1.15fr);
+  min-height: 620px;
+  border-top: 1px solid var(--rlc-border);
+  border-bottom: 1px solid var(--rlc-border);
+  background: var(--rlc-surface);
+}
+
+.rlc-page-sidebar,
+.rlc-page-list,
+.rlc-page-detail {
+  min-width: 0;
+}
+
+.rlc-page-sidebar {
+  padding: 10px 8px 10px 0;
+  border-right: 1px solid var(--rlc-border);
+}
+
+.rlc-page-list {
+  border-right: 1px solid var(--rlc-border);
+}
+
+.rlc-page-detail {
+  background: #fff;
+}
+
+.rlc-page-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rlc-border);
+}
+
+.rlc-page-section-head strong {
+  color: var(--rlc-text);
+  font-size: 13px;
+}
+
+.rlc-page-section-head span {
+  color: var(--rlc-muted);
+  font-size: 11px;
+}
+
+.rlc-page-category {
+  width: 100%;
+  min-height: 38px !important;
+  margin: 0 0 3px;
+  padding: 7px 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--rlc-text) !important;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.rlc-page-category:hover {
+  background: var(--rlc-primary-faint) !important;
+}
+
+.rlc-page-category.is-active {
+  background: var(--rlc-primary-soft) !important;
+  color: var(--rlc-primary-hover) !important;
+}
+
+.rlc-page-document-list {
+  max-height: 690px;
+  overflow: auto;
+}
+
+.rlc-page-document-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #e8eef6 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  color: var(--rlc-text) !important;
+  text-align: left;
+}
+
+.rlc-page-document-row:hover {
+  background: var(--rlc-primary-faint) !important;
+}
+
+.rlc-page-document-row.is-active {
+  background: var(--rlc-primary-soft) !important;
+  box-shadow: inset 3px 0 var(--rlc-primary);
+}
+
+.rlc-page-document-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--rlc-primary-soft);
+  color: var(--rlc-primary-hover);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rlc-page-document-copy {
+  min-width: 0;
+}
+
+.rlc-page-document-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--rlc-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlc-page-document-meta {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  color: var(--rlc-muted);
+  font-size: 10px;
+}
+
+.rlc-page-document-version {
+  min-width: 32px;
+  padding: 3px 6px;
+  border: 1px solid var(--rlc-border);
+  border-radius: 999px;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.rlc-page-detail-head {
+  padding: 16px;
+  border-bottom: 1px solid var(--rlc-border);
+}
+
+.rlc-page-detail-head h2 {
+  margin: 3px 0 5px !important;
+  overflow-wrap: anywhere;
+}
+
+.rlc-page-detail-kicker {
+  color: var(--rlc-primary-hover);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.rlc-page-detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--rlc-border);
+}
+
+.rlc-page-preview {
+  min-height: 500px;
+  height: calc(100vh - 440px);
+  max-height: 700px;
+  background: #f3f6fa;
+}
+
+.rlc-page-preview iframe,
+.rlc-page-preview img {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.rlc-page-preview img {
+  object-fit: contain;
+}
+
+.rlc-page-empty {
+  min-height: 250px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 28px;
+  color: var(--rlc-muted);
+  text-align: center;
+}
+
+.rlc-page-empty strong {
+  color: var(--rlc-text);
+}
+
+@media (max-width: 1180px) {
+  .rlc-page-workspace {
+    grid-template-columns: 190px minmax(360px, 1fr);
+  }
+
+  .rlc-page-detail {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--rlc-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .rlc-page-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .rlc-page-sidebar,
+  .rlc-page-list {
+    border-right: 0;
+    border-bottom: 1px solid var(--rlc-border);
+  }
+
+  .rlc-page-sidebar {
+    padding-right: 0;
+  }
+
+  .rlc-page-preview {
+    height: 520px;
+  }
+}
+
+
+/* Personalverwaltung embedded modules */
+.rlc-personal-module {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-personal-module__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--rlc-border);
+  border-radius: var(--rlc-radius-lg);
+  background: var(--rlc-surface);
+  box-shadow: var(--rlc-shadow);
+}
+
+.rlc-personal-module__head h2 {
+  margin: 2px 0 3px !important;
+}
+
+.rlc-personal-module__eyebrow {
+  color: var(--rlc-primary);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.rlc-personal-module__embedded {
+  min-width: 0;
+}
+
+.rlc-personal-module__embedded > * {
+  min-width: 0;
+}
+
+.rlc-personal-module__embedded .rlc-page-hero {
+  display: none !important;
+}
+
+.rlc-personal-module__embedded > .card {
+  padding-top: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+
+/* Personalverwaltung · Arbeitszeiten */
+.rlc-personal-arbeitszeiten-full {
+  display: grid;
+  gap: 12px;
+}
+
+.rlc-personal-arbeitszeiten-full__body {
+  min-width: 0;
+}
+
+.rlc-personal-arbeitszeiten-full__body > * {
+  min-width: 0;
+}
+
+.rlc-personal-arbeitszeiten-full__body .rlc-page-hero {
+  display: none !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body > .card {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body h1 {
+  font-size: 22px !important;
+  margin: 0 0 4px !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body section.card,
+.rlc-personal-arbeitszeiten-full__body div.card {
+  border-radius: 12px;
+}
+
+.rlc-personal-arbeitszeiten-full__body table {
+  background: #fff;
+}
+
+.rlc-personal-arbeitszeiten-full__body table thead th {
+  background: #f4f7fb;
+}
+
+.rlc-personal-arbeitszeiten-full__body button,
+.rlc-personal-arbeitszeiten-full__body select,
+.rlc-personal-arbeitszeiten-full__body input {
+  min-height: 38px;
+}
+
+.rlc-personal-arbeitszeiten-full__body > div {
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .rlc-personal-arbeitszeiten-full__body {
+    overflow-x: auto;
+  }
+}
+
+
+/* Personalverwaltung · Arbeitszeiten kompakt */
+.rlc-personal-arbeitszeiten-full__body
+.rlc-page-section-header,
+.rlc-personal-arbeitszeiten-full__body
+.rlc-module-header,
+.rlc-personal-arbeitszeiten-full__body
+header:not(.rlc-page-hero) {
+  margin-top: 0 !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body
+.rlc-page-hero + * {
+  margin-top: 0 !important;
+}
+
+/* Doppelte Modulüberschrift ausblenden */
+.rlc-personal-arbeitszeiten-full__body
+.rlc-page-hero {
+  display: none !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body
+.rlc-page-hero + div > div:first-child {
+  margin-top: 0 !important;
+}
+
+/* KPI in einer Zeile */
+.rlc-personal-arbeitszeiten-full__body
+.rlc-kpi-grid,
+.rlc-personal-arbeitszeiten-full__body
+[style*="grid-template-columns"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+/* KPI kompakter */
+.rlc-personal-arbeitszeiten-full__body
+.card {
+  min-height: 0 !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body
+.card > .muted + strong,
+.rlc-personal-arbeitszeiten-full__body
+.card strong[style*="font-size"] {
+  font-size: 22px !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body
+section[style*="grid-template-columns"] > .card,
+.rlc-personal-arbeitszeiten-full__body
+div[style*="grid-template-columns"] > .card {
+  padding: 12px 14px !important;
+  min-height: 82px !important;
+}
+
+/* Filter kompakter */
+.rlc-personal-arbeitszeiten-full__body
+select,
+.rlc-personal-arbeitszeiten-full__body
+input,
+.rlc-personal-arbeitszeiten-full__body
+button {
+  min-height: 36px !important;
+}
+
+/* Abstand zwischen Kopf, KPI und Filtern reduzieren */
+.rlc-personal-arbeitszeiten-full__body > * {
+  margin-top: 0 !important;
+}
+
+.rlc-personal-arbeitszeiten-full__body {
+  display: grid;
+  gap: 10px !important;
+}
+
+@media (max-width: 1000px) {
+  .rlc-personal-arbeitszeiten-full__body
+  .rlc-kpi-grid,
+  .rlc-personal-arbeitszeiten-full__body
+  [style*="grid-template-columns"] {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  }
+}
+
+
+/* Materialverwaltung · eingebettetes Materialmodul */
+.rlc-material-core-embedded {
+  display: block;
+  min-width: 0;
+}
+
+.rlc-material-core-embedded > * {
+  min-width: 0;
+}
+
+/* Zweiten Modul-Hero im Hub entfernen */
+.rlc-material-core-embedded .rlc-page-hero {
+  display: none !important;
+}
+
+/* Äußeren Container des alten Fachmoduls neutralisieren */
+.rlc-material-core-embedded > .card {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* Material und Lager optisch auf gleiche Dichte bringen */
+.rlc-material-core-embedded .card {
+  border-radius: 12px;
+}
+
+.rlc-material-core-embedded input,
+.rlc-material-core-embedded select,
+.rlc-material-core-embedded button {
+  min-height: 38px;
+}
+
+.rlc-material-core-embedded table {
+  background: #fff;
+}
+
+.rlc-material-core-embedded table thead th {
+  background: #f4f7fb;
+}
+
+/* KPI und Werkzeugleisten kompakter */
+.rlc-material-core-embedded [style*="grid-template-columns"] {
+  gap: 10px !important;
+}
+
+.rlc-material-core-embedded [style*="padding"] {
+  box-sizing: border-box;
+}
+
+
+/* Materialverwaltung · eingebettetes Fachmodul */
+.rlc-material-core-embedded {
+  min-width: 0;
+  display: block;
+}
+
+.rlc-material-core-embedded > * {
+  min-width: 0;
+}
+
+/* Zweiten blauen Hero entfernen */
+.rlc-material-core-embedded .rlc-page-hero {
+  display: none !important;
+}
+
+/* Alten äußeren Modulcontainer neutralisieren */
+.rlc-material-core-embedded > .card {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+/* Kompakte und einheitliche Dichte */
+.rlc-material-core-embedded .card {
+  border-radius: 12px;
+}
+
+.rlc-material-core-embedded input,
+.rlc-material-core-embedded select,
+.rlc-material-core-embedded button {
+  min-height: 38px;
+}
+
+.rlc-material-core-embedded table {
+  background: #fff;
+}
+
+.rlc-material-core-embedded table thead th {
+  background: #f4f7fb;
+}
+
+.rlc-material-core-embedded [style*="grid-template-columns"] {
+  gap: 10px !important;
+}
+
+.rlc-material-core-embedded [style*="padding"] {
+  box-sizing: border-box;
+}
+
+
+/* Sicherheit · finale Oberfläche */
+.rlc-safety-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rlc-safety-page .rlc-page-hero {
+  margin: 0;
+}
+
+.rlc-safety-tabs {
+  display: flex !important;
+  gap: 6px !important;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px 12px !important;
+}
+
+.rlc-safety-tabs .btn {
+  min-height: 36px;
+  padding: 7px 13px;
+  white-space: nowrap;
+}
+
+.rlc-safety-page > section[style*="repeat(5"] {
+  gap: 10px !important;
+}
+
+.rlc-safety-page > section[style*="repeat(5"] > .card,
+.rlc-safety-page > section[style*="repeat(5"] > button.card {
+  min-height: 105px !important;
+  padding: 13px 15px !important;
+}
+
+.rlc-safety-page > section[style*="repeat(5"] .muted {
+  font-size: 12px;
+}
+
+.rlc-safety-page > section[style*="repeat(5"] [style*="font-size: 28"] {
+  font-size: 24px !important;
+}
+
+.rlc-safety-page .card {
+  border-radius: 12px;
+}
+
+.rlc-safety-page input,
+.rlc-safety-page select,
+.rlc-safety-page textarea,
+.rlc-safety-page button {
+  box-sizing: border-box;
+}
+
+.rlc-safety-page input,
+.rlc-safety-page select,
+.rlc-safety-page button.btn {
+  min-height: 36px;
+}
+
+.rlc-safety-page table {
+  width: 100%;
+  background: #fff;
+}
+
+.rlc-safety-page table thead th {
+  background: #f4f7fb;
+  font-size: 12px;
+}
+
+.rlc-safety-page table th,
+.rlc-safety-page table td {
+  padding: 8px 10px;
+}
+
+.rlc-safety-page h2,
+.rlc-safety-page h3 {
+  margin-top: 0;
+}
+
+.rlc-safety-page .rlc-personal-module__head,
+.rlc-safety-page [class*="module__head"] {
+  padding: 14px 16px;
+}
+
+.rlc-safety-page [style*="grid-template-columns: 1fr 1fr"] {
+  gap: 10px !important;
+}
+
+.rlc-safety-page [style*="minHeight: 130"],
+.rlc-safety-page [style*="min-height: 130"] {
+  min-height: 105px !important;
+}
+
+@media (max-width: 1250px) {
+  .rlc-safety-page > section[style*="repeat(5"] {
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+  }
+}
+
+@media (max-width: 850px) {
+  .rlc-safety-page > section[style*="repeat(5"] {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  }
+
+  .rlc-safety-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+}
+
+
+/* Bauzeitenplan · finale Oberfläche */
+
+.rlc-bauzeitenplan-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* KPI kompakter */
+.rlc-bauzeitenplan-page .rlc-kpi-grid {
+  gap: 10px !important;
+}
+
+.rlc-bauzeitenplan-page .rlc-kpi-grid > * {
+  min-height: 86px !important;
+  padding: 12px 14px !important;
+}
+
+/* Toolbar */
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 12px;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-toolbar input {
+  min-height: 40px;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-toolbar .btn {
+  min-height: 40px;
+  padding: 8px 14px;
+}
+
+/* Hauptbereich */
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-workspace {
+  display: grid;
+  grid-template-columns: 310px minmax(520px, 1fr) 330px;
+  gap: 10px;
+  align-items: stretch;
+  min-height: 540px;
+}
+
+/* Linke Vorgangsliste */
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-list {
+  overflow: hidden;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-list-item {
+  border-left: 3px solid transparent;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-list-item:hover {
+  background: #f6f9fd;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-list-item.is-selected {
+  background: #eaf3ff;
+  border-left-color: #146ef5;
+}
+
+/* Gantt */
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-gantt {
+  overflow: auto;
+  background: #fff;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-gantt-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #f7f9fc;
+  border-bottom: 1px solid #dfe7f1;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-gantt-row {
+  min-height: 44px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-gantt-row:hover {
+  background: #fafcff;
+}
+
+/* Rechter Editor */
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-editor {
+  min-width: 0;
+  overflow: auto;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-editor .card {
+  border-radius: 12px;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-editor input,
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-editor select,
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-editor textarea {
+  width: 100%;
+  min-height: 40px;
+}
+
+.rlc-bauzeitenplan-page .rlc-bauzeitenplan-editor textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+/* Buttons */
+.rlc-bauzeitenplan-page .btn {
+  border-radius: 10px;
+}
+
+.rlc-bauzeitenplan-page .btn-primary {
+  box-shadow: none;
+}
+
+/* Tabellen / Raster */
+.rlc-bauzeitenplan-page table {
+  width: 100%;
+  background: #fff;
+}
+
+.rlc-bauzeitenplan-page table thead th {
+  background: #f4f7fb;
+  font-size: 12px;
+}
+
+.rlc-bauzeitenplan-page table th,
+.rlc-bauzeitenplan-page table td {
+  padding: 8px 10px;
+}
+
+/* Fortschritt */
+.rlc-bauzeitenplan-page input[type="range"] {
+  accent-color: #146ef5;
+}
+
+/* Scrollbar dezenter */
+.rlc-bauzeitenplan-page * {
+  scrollbar-width: thin;
+}
+
+/* Responsive */
+@media (max-width: 1300px) {
+  .rlc-bauzeitenplan-page .rlc-bauzeitenplan-workspace {
+    grid-template-columns: 260px minmax(440px, 1fr) 300px;
+  }
+}
+
+@media (max-width: 1050px) {
+  .rlc-bauzeitenplan-page .rlc-bauzeitenplan-workspace {
+    grid-template-columns: 240px 1fr;
+  }
+
+  .rlc-bauzeitenplan-page .rlc-bauzeitenplan-editor {
+    grid-column: 1 / -1;
+  }
+}
+
+
+/* Nutzerverwaltung · finale Oberfläche */
+
+.rlc-user-admin-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rlc-user-admin-page .rlc-page-hero {
+  margin: 0;
+}
+
+.rlc-user-admin-page .card {
+  border-radius: 12px;
+}
+
+.rlc-user-admin-page input,
+.rlc-user-admin-page select,
+.rlc-user-admin-page button {
+  min-height: 38px;
+  box-sizing: border-box;
+}
+
+.rlc-user-admin-page .rlc-company-grid {
+  display: grid;
+  grid-template-columns: minmax(0,1.05fr) minmax(0,.95fr);
+  gap: 12px;
+}
+
+.rlc-user-admin-page .rlc-license-kpis {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 10px;
+}
+
+.rlc-user-admin-page .rlc-license-kpis > * {
+  min-height: 82px;
+  padding: 12px 14px;
+}
+
+.rlc-user-admin-page .rlc-company-form {
+  display: grid;
+  gap: 10px;
+}
+
+.rlc-user-admin-page .rlc-company-form-row {
+  display: grid;
+  grid-template-columns: 135px minmax(0,1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.rlc-user-admin-page .rlc-company-form-row label {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.rlc-user-admin-page .rlc-code-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+}
+
+.rlc-user-admin-page table {
+  width: 100%;
+  background: #fff;
+}
+
+.rlc-user-admin-page table thead th {
+  background: #f4f7fb;
+  font-size: 12px;
+}
+
+.rlc-user-admin-page table th,
+.rlc-user-admin-page table td {
+  padding: 8px 10px;
+}
+
+@media (max-width: 1050px) {
+  .rlc-user-admin-page .rlc-company-grid,
+  .rlc-user-admin-page .rlc-code-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .rlc-user-admin-page .rlc-license-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .rlc-user-admin-page .rlc-company-form-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+}
+
+
+/* Buchhaltung · Zentrale */
+
+.rlc-accounting-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rlc-accounting-page > .rlc-page-hero {
+  margin: 0;
+}
+
+.rlc-accounting-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 12px 14px !important;
+  align-items: flex-end;
+}
+
+.rlc-accounting-navigation__group {
+  display: grid;
+  gap: 5px;
+}
+
+.rlc-accounting-navigation__label {
+  padding-left: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.rlc-accounting-navigation__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rlc-accounting-tab {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.rlc-accounting-tab:hover {
+  background: #eef5ff;
+  border-color: #b8d2fa;
+}
+
+.rlc-accounting-tab.is-active {
+  background: #146ef5;
+  border-color: #146ef5;
+  color: #fff;
+}
+
+.rlc-accounting-module {
+  min-width: 0;
+}
+
+/* Untergeordnete Fachmodule verwenden den gemeinsamen Hauptkopf */
+.rlc-accounting-module > .rlc-page-hero,
+.rlc-accounting-module .rlc-page-hero:first-child {
+  display: none !important;
+}
+
+.rlc-accounting-module .card {
+  border-radius: 12px;
+}
+
+.rlc-accounting-module table {
+  width: 100%;
+  background: #fff;
+}
+
+.rlc-accounting-module table thead th {
+  background: #f4f7fb;
+}
+
+.rlc-accounting-module input,
+.rlc-accounting-module select,
+.rlc-accounting-module button {
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .rlc-accounting-navigation {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    align-items: stretch;
+  }
+
+  .rlc-accounting-navigation__group {
+    flex: 0 0 auto;
+  }
+}
+
+/* RLC GLOBAL COMPACT HERO + KPI STANDARD */
+.rlc-app-shell .rlc-page-hero {
+  margin-bottom: 10px !important;
+  padding: 12px 16px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 6px 18px rgba(20, 110, 245, 0.13) !important;
+}
+
+.rlc-app-shell .rlc-page-hero--split {
+  gap: 10px !important;
+}
+
+.rlc-app-shell .rlc-page-hero h1 {
+  margin: 1px 0 2px !important;
+  font-size: clamp(1.3rem, 1.7vw, 1.6rem) !important;
+  line-height: 1.08 !important;
+  font-weight: 700 !important;
+}
+
+.rlc-app-shell .rlc-page-hero p {
+  margin-top: 2px !important;
+  font-size: 11.5px !important;
+  line-height: 1.32 !important;
+}
+
+.rlc-app-shell .rlc-page-hero__eyebrow {
+  min-height: 20px !important;
+  margin-bottom: 1px !important;
+  padding: 2px 7px !important;
+  font-size: 9px !important;
+}
+
+.rlc-app-shell .rlc-page-hero__actions {
+  gap: 6px !important;
+}
+
+.rlc-app-shell .rlc-page-hero__button,
+.rlc-app-shell .rlc-page-hero .rlc-page-hero__button {
+  min-height: 32px !important;
+  padding: 5px 9px !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+}
+
+.rlc-app-shell .rlc-global-kpi-card {
+  min-width: 0 !important;
+  min-height: 62px !important;
+  max-width: 100% !important;
+  padding: 9px 12px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  box-shadow: 0 1px 2px rgba(15,23,42,.03) !important;
+}
+
+.rlc-app-shell .rlc-global-kpi-label {
+  margin: 0 !important;
+  font-size: 10.5px !important;
+  line-height: 1.1 !important;
+  font-weight: 700 !important;
+  letter-spacing: .035em !important;
+}
+
+.rlc-app-shell .rlc-global-kpi-value {
+  margin-top: 2px !important;
+  font-size: 18px !important;
+  line-height: 1.15 !important;
+  font-weight: 750 !important;
+}
+
+.rlc-app-shell .rlc-global-kpi-sub {
+  margin-top: 1px !important;
+  font-size: 10.5px !important;
+  line-height: 1.2 !important;
+}
+
+@media (max-width: 700px) {
+  .rlc-app-shell .rlc-page-hero {
+    padding: 10px 12px !important;
+    border-radius: 10px !important;
+  }
+  .rlc-app-shell .rlc-global-kpi-card {
+    min-height: 58px !important;
+    padding: 8px 10px !important;
+  }
+}
+
+/* RLC KI dashboard: strong contrast on light analysis panel */
+.rlc-app-shell .rlc-ki-dashboard-title {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  opacity: 1 !important;
+}
+.rlc-app-shell .rlc-ki-dashboard-workflow {
+  color: #475569 !important;
+}
+.rlc-app-shell .rlc-ki-dashboard-workflow b {
+  color: #1e3a8a !important;
+}
+.rlc-app-shell .rlc-ki-dashboard-meta {
+  color: #1f2937 !important;
+}
+
+/* RLC GLOBAL ROW SYSTEM — Kalkulation master */
+.rlc-app-shell .rlc-row-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
+.rlc-app-shell .rlc-row-table thead th,
+.rlc-app-shell .rlc-row-th {
+  text-align: left !important;
+  padding: 4px 3px !important;
+  font-size: 9.2px !important;
+  line-height: 1.1 !important;
+  color: #475569 !important;
+  background: #F8FAFC !important;
+  border-bottom: 1px solid #DDE3EC !important;
+  white-space: nowrap !important;
+  font-weight: 700 !important;
+}
+.rlc-app-shell .rlc-row-th--right { text-align:right !important; }
+.rlc-app-shell .rlc-row {
+  background:#fff !important;
+}
+.rlc-app-shell .rlc-row:hover {
+  background:#F8FBFF !important;
+}
+.rlc-app-shell .rlc-row--selected {
+  background:#EAF2FF !important;
+}
+.rlc-app-shell .rlc-row td,
+.rlc-app-shell .rlc-row-td {
+  padding:3px 2px !important;
+  font-size:11.5px !important;
+  line-height:1.35 !important;
+  color:#0F172A !important;
+  border-bottom:1px solid #EEF2F7 !important;
+  vertical-align:middle !important;
+  min-width:0 !important;
+}
+.rlc-app-shell .rlc-row-td--right { text-align:right !important; white-space:nowrap !important; }
+.rlc-app-shell .rlc-row-input {
+  width:100% !important;
+  min-width:0 !important;
+  min-height:28px !important;
+  height:28px !important;
+  padding:2px 3px !important;
+  border:0 !important;
+  box-shadow:none !important;
+  outline:none !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#0F172A !important;
+  font-size:11.5px !important;
+  box-sizing:border-box !important;
+}
+.rlc-app-shell .rlc-row-input--text {
+  font-weight:700 !important;
+  padding-left:0 !important;
+}
+.rlc-app-shell .rlc-row-input--number { text-align:right !important; }
+.rlc-app-shell .rlc-row-lang-preview {
+  margin-top:4px !important;
+  font-size:11.5px !important;
+  line-height:1.35 !important;
+  color:#0F172A !important;
+  max-width:680px !important;
+}
+.rlc-app-shell .rlc-row-action {
+  min-height:26px !important;
+  padding:3px 8px !important;
+  font-size:9.5px !important;
+  line-height:1.05 !important;
+  border:1px solid #93C5FD !important;
+  background:#EFF6FF !important;
+  color:#0B5BD3 !important;
+  border-radius:7px !important;
+  box-shadow:none !important;
+  font-weight:700 !important;
+  cursor:pointer !important;
+}
+.rlc-app-shell .rlc-row-delete {
+  border:0 !important;
+  background:transparent !important;
+  color:#B91C1C !important;
+  text-decoration:underline !important;
+  font-size:11.5px !important;
+  padding:2px 0 !important;
+  cursor:pointer !important;
+}
+.rlc-app-shell .rlc-row-status {
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-height:28px !important;
+  padding:2px 10px !important;
+  border-radius:999px !important;
+  border:1px solid #BBF7D0 !important;
+  background:#F0FDF4 !important;
+  color:#15803D !important;
+  font-size:11px !important;
+  font-weight:700 !important;
+  white-space:nowrap !important;
+}
+
+/* =========================================================
+   RLC GLOBAL HEADER V8 — una sola riga + strumenti globali
+   ========================================================= */
+@media (min-width: 1181px) {
+  .rlc-app-shell .rlc-topbar {
+    display: grid !important;
+    grid-template-columns: minmax(250px, 315px) minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: 58px !important;
+    padding: 6px 18px !important;
+  }
+
+  .rlc-app-shell .rlc-brand {
+    width: auto !important;
+    min-width: 250px !important;
+    max-width: 315px !important;
+    min-height: 48px !important;
+    padding: 5px 12px !important;
+    border-radius: 10px !important;
+  }
+
+  .rlc-app-shell .rlc-brand::after {
+    right: 5px !important;
+    width: 44% !important;
+    opacity: 0.30 !important;
+  }
+
+  .rlc-app-shell .rlc-brand-mark,
+  .rlc-app-shell .rlc-brand > span:first-child,
+  .rlc-app-shell .rlc-brand-mark svg {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+  }
+
+  .rlc-app-shell .rlc-brand-title,
+  .rlc-app-shell .rlc-brand-copy > .rlc-brand-title {
+    font-size: 19px !important;
+  }
+
+  .rlc-app-shell .rlc-brand-subtitle {
+    font-size: 8.5px !important;
+    letter-spacing: 0.05em !important;
+  }
+
+  .rlc-app-shell .rlc-top-nav {
+    min-width: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    gap: 3px !important;
+    scrollbar-width: thin;
+  }
+
+  .rlc-app-shell .rlc-top-nav-button {
+    min-height: 32px !important;
+    padding: 6px 7px !important;
+    font-size: 11px !important;
+    font-weight: 650 !important;
+  }
+
+  .rlc-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    min-width: max-content !important;
+    padding-right: 0 !important;
+  }
+
+  .rlc-header-actions > :is(button, a) {
+    min-height: 34px !important;
+    padding: 6px 9px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+  }
+}
+
+.rlc-header-copilot-button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  padding: 2px !important;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #146ef5;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #146ef5, #0b4ccb);
+  box-shadow: 0 4px 12px rgba(20, 110, 245, 0.22);
+  cursor: pointer;
+}
+
+.rlc-header-copilot-avatar {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: url('/assets/rlc-copilot-cartoon.webp') center / cover no-repeat;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55);
+}
+
+@media (max-width: 1500px) and (min-width: 1181px) {
+  .rlc-app-shell .rlc-topbar {
+    grid-template-columns: 235px minmax(0, 1fr) auto !important;
+    gap: 6px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  .rlc-app-shell .rlc-brand {
+    min-width: 235px !important;
+    max-width: 235px !important;
+  }
+  .rlc-app-shell .rlc-brand-subtitle {
+    display: none !important;
+  }
+  .rlc-app-shell .rlc-top-nav-button {
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+    font-size: 10.5px !important;
+  }
+  .rlc-header-actions > :is(button, a) {
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+    font-size: 10.5px !important;
   }
 }

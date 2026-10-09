@@ -38,9 +38,6 @@ function forwardedHeaders(req: Request): Record<string, string> {
   for (const name of [
     "authorization",
     "cookie",
-    "x-company-id",
-    "x-rlc-company-id",
-    "x-tenant-id",
     "x-request-id",
   ]) {
     const raw = req.headers[name];
@@ -85,6 +82,18 @@ export async function loadRlcPdfCompanyFromRequest(
   }
 
   const source = unwrap(rawHeader);
+
+  let eInvoiceProfile: any = {};
+  const eInvoiceResponse = await fetchInternal(req, ["/api/company/einvoice-profile"]);
+  if (eInvoiceResponse) {
+    try {
+      const payload = await eInvoiceResponse.json();
+      eInvoiceProfile = payload?.profile && typeof payload.profile === "object" ? payload.profile : {};
+    } catch {
+      eInvoiceProfile = {};
+    }
+  }
+
   const address =
     source?.address && typeof source.address === "object" ? source.address : {};
 
@@ -123,6 +132,7 @@ export async function loadRlcPdfCompanyFromRequest(
     ),
     legalName: first(source?.legalName, source?.companyLegalName),
     street: first(
+      eInvoiceProfile?.street,
       source?.street,
       source?.strasse,
       source?.adresse,
@@ -131,24 +141,26 @@ export async function loadRlcPdfCompanyFromRequest(
       address?.addressLine1
     ),
     postalCode: first(
+      eInvoiceProfile?.postalCode,
       source?.postalCode,
       source?.zip,
       source?.plz,
       address?.postalCode,
       address?.zip
     ),
-    city: first(source?.city, source?.ort, address?.city),
-    country: first(source?.country, source?.land, address?.country),
-    phone: first(source?.phone, source?.telefon, source?.contact?.phone),
+    city: first(eInvoiceProfile?.city, source?.city, source?.ort, address?.city),
+    country: first(eInvoiceProfile?.country, source?.country, source?.land, address?.country),
+    phone: first(eInvoiceProfile?.phone, source?.phone, source?.telefon, source?.contact?.phone),
     mobile: first(source?.mobile, source?.mobil, source?.contact?.mobile),
-    email: first(source?.email, source?.mail, source?.contact?.email),
+    email: first(eInvoiceProfile?.email, source?.email, source?.mail, source?.contact?.email),
     website: first(source?.website, source?.web, source?.url),
-    taxNumber: first(source?.taxNumber, source?.steuernummer),
-    vatId: first(source?.vatId, source?.ustId, source?.ustIdNr),
-    iban: first(source?.iban, source?.bank?.iban),
-    bic: first(source?.bic, source?.bank?.bic),
-    bankName: first(source?.bankName, source?.bank?.name),
+    taxNumber: first(eInvoiceProfile?.taxNumber, source?.taxNumber, source?.steuernummer),
+    vatId: first(eInvoiceProfile?.vatId, source?.vatId, source?.ustId, source?.ustIdNr),
+    iban: first(eInvoiceProfile?.iban, source?.iban, source?.bank?.iban),
+    bic: first(eInvoiceProfile?.bic, source?.bic, source?.bank?.bic),
+    bankName: first(eInvoiceProfile?.bankName, source?.bankName, source?.bank?.name),
     managingDirector: first(
+      eInvoiceProfile?.contactName,
       source?.managingDirector,
       source?.geschaeftsfuehrer,
       source?.owner

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
+import { COMPANIES_ROOT } from "../../lib/companiesRoot";
 
 export type RlcPdfCompany = {
   name?: string;
@@ -242,6 +243,8 @@ export function resolveRlcCompany(
   const source = stored?.company || stored?.header || stored?.data || stored;
 
   const company: RlcPdfCompany = {
+    // L'id è necessario per risolvere il logo della Company/tenant autenticata.
+    id: rlcFirstText(override?.id, nested(source, ["id", "companyId"])),
     name: rlcFirstText(
       override?.name,
       override?.legalName,
@@ -308,13 +311,39 @@ export function resolveRlcCompany(
     ),
   };
 
-  if (company.logoPath && !path.isAbsolute(company.logoPath)) {
-    const candidates = [
-      path.join(dataRoot, company.logoPath),
-      path.join(dataRoot, "company", company.logoPath),
-      path.join(context.projectRoot, company.logoPath),
-    ];
-    company.logoPath = candidates.find((candidate) => fs.existsSync(candidate));
+  /*
+   * Logo multi-tenant:
+   * la Company autenticata conserva logoPath nel DB, mentre il file risiede in
+   * COMPANIES_ROOT/<companyId>/<filename>. Il PDF Core deve usare quel logo,
+   * non un file della cartella progetto e non un logo globale.
+   */
+  const rawLogoPath = rlcText(company.logoPath);
+  if (rawLogoPath) {
+    const candidates: string[] = [];
+
+    if (path.isAbsolute(rawLogoPath)) {
+      candidates.push(rawLogoPath);
+    }
+
+    candidates.push(
+      path.join(dataRoot, rawLogoPath),
+      path.join(dataRoot, "company", rawLogoPath),
+      path.join(context.projectRoot, rawLogoPath)
+    );
+
+    const companyId = rlcText(company.id || override?.id);
+    if (companyId) {
+      const tenantRoot = path.resolve(COMPANIES_ROOT, companyId);
+      const tenantLogo = path.resolve(tenantRoot, path.basename(rawLogoPath));
+      const allowedTenantRoot = tenantRoot + path.sep;
+
+      if (tenantLogo.startsWith(allowedTenantRoot)) {
+        candidates.push(tenantLogo);
+      }
+    }
+
+    company.logoPath =
+      candidates.find((candidate) => fs.existsSync(candidate)) || "";
   }
 
   if (!company.logoPath) company.logoPath = resolveStoredLogo(dataRoot);
