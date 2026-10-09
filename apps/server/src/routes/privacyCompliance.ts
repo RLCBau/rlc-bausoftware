@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { prisma } from "../lib/prisma";
 import { COMPANIES_ROOT } from "../lib/companiesRoot";
 import { requirePermission } from "../middleware/rbac";
+import { appendErasureEvent, newErasureRecord, checkRestoredErasureState } from "../lib/erasureLedger";
 
 const r = Router();
 
@@ -205,6 +206,8 @@ r.post("/:id/test-erasure", requirePermission("privacy:*"), async (req:any,res)=
   const secondary=await secondaryUserReferences(user.id);
   if(activities||members||projectMembers||submissions||Object.values(secondary).some(n=>n>0))
     return res.status(409).json({ok:false,error:"LINKED_RECORDS_REQUIRE_REVIEW",linked:{activities,members,projectMembers,submissions,secondary}});
+  // Persist the erasure obligation before the destructive operation; retained across database restores.
+  appendErasureEvent(newErasureRecord(companyId,user.id,String(item.id)));
   await prisma.user.delete({where:{id:user.id}});
   const now=new Date().toISOString();
   const evidence={subjectUserId:user.id,deletedAt:now,scope:"DISPOSABLE_TEST_ACCOUNT_ONLY"};
@@ -217,6 +220,11 @@ r.post("/:id/test-erasure", requirePermission("privacy:*"), async (req:any,res)=
   };
   write(companyId,rows);
   return res.json({ok:true,erased:true,requestId:item.id,scope:"TEST_ONLY"});
+});
+
+r.get("/restore-gate/status", requirePermission("privacy:*"), async (_req:any,res)=>{
+  const result=await checkRestoredErasureState(prisma);
+  return res.status(result.ready?200:409).json({ok:result.ready,...result});
 });
 
 r.put("/:id", requirePermission("privacy:*"), async (req:any,res)=>{
