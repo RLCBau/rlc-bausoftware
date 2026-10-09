@@ -3,7 +3,7 @@ Stand 09.10.2026. Keine der folgenden Beziehungen wird allein durch technische N
 
 | Dienst | Im Projekt beobachteter Bezug | Vertragspartner / Vertrag | Land / Datenfluss | Freigabe |
 |---|---|---|---|---|
-| Hetzner | Hosting/Storage Box | genauer Rechtsträger, AVV und Subprozessoren prüfen | Rechenzentrum-/Backup-Region bestätigen | OFFEN |
+| Hetzner | Hosting/Storage Box | AVV personalisiert acquisito: Hetzner Online GmbH / titolare persona fisica attuale; versione 1.2, documento datato 09.10.2026; TOM Anlage 2 e subfornitori Anlage 3 presenti | Per servizi in regione UE il contratto dichiara trattamento server nella UE; verificare regione effettiva di server e backup | AVV_DOCUMENT_RECEIVED; ACCOUNT_CONTRACT_STATUS_TO_VERIFY |
 | Cloudflare | Website/DNS/CDN (Projektkontext) | DPA und Einstellungen prüfen | Drittland-/Zugriffsprüfung | OFFEN |
 | OpenAI/KI-Anbieter | Copilot/Marktpreisprüfung | API-Produkt, DPA, Datenverwendung prüfen | Datenübermittlungen/Transfergarantie | OFFEN |
 | SMTP/Mail | SMTP konfiguriert | tatsächlicher Anbieter, AVV prüfen | Mailmetadaten und Zustellregion | OFFEN |
