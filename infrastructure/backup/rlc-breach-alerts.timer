@@ -1,0 +1,11 @@
+[Unit]
+Description=RLC GDPR breach internal reminder scheduler
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+Persistent=true
+Unit=rlc-breach-alerts.service
+
+[Install]
+WantedBy=timers.target
