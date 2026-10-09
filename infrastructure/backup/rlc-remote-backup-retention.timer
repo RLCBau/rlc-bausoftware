@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily RLC remote backup retention check
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+Unit=rlc-remote-backup-retention.service
+
+[Install]
+WantedBy=timers.target

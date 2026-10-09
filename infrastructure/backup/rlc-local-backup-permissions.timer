@@ -1,0 +1,9 @@
+[Unit]
+Description=RLC local backup permissions periodic enforcement
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=10min
+Persistent=true
+Unit=rlc-local-backup-permissions.service
+[Install]
+WantedBy=timers.target

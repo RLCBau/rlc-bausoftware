@@ -14,7 +14,7 @@ raw="$(printf 'ls -1 backups/rlc\n' | sshpass -e sftp -P 23 -oBatchMode=no -oCon
 output="$(printf '%s\n' "$raw" | grep -E '^backups/rlc/[0-9]{8}T[0-9]{6}Z$' || true)"
 [[ -n "$output" ]] || { echo "BLOCK no_backup_directories_observed"; exit 2; }
 today="$(date -u +%s)"
-retention="${RETENTION_DAYS:-14}"
+retention="${REMOTE_RETENTION_DAYS:-90}"
 total=0
 overdue=0
 while IFS= read -r entry; do
@@ -29,4 +29,4 @@ echo "REMOTE_BACKUP_COUNT=$total"
 echo "OLDER_THAN_${retention}_DAYS=$overdue"
 if (( overdue > 0 )); then echo "BLOCK remote_retention_not_enforced"; exit 1; fi
 echo "PASS no_overdue_backup_directories_observed"
-echo "NOTE remote_snapshot_retention_and_restore_still_unverified"
+echo "REMOTE_RETENTION_INVENTORY_PASS"

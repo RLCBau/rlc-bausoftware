@@ -1,6 +1,7 @@
 [Unit]
 Description=RLC erasure ledger monotonic reference synchronization
 After=local-fs.target
+OnSuccess=rlc-erasure-ledger-offsite.service
 
 [Service]
 Type=oneshot
