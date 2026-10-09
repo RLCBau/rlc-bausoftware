@@ -6,7 +6,10 @@ import * as XLSX from "xlsx";
 import { createRlcAiCompatClient } from "../services/ai/rlcAiCompatClient";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 2 },
+});
 const ai = createRlcAiCompatClient();
 
 /** ===== In-Memory store per test (sostituisci con Prisma/DB) ===== */

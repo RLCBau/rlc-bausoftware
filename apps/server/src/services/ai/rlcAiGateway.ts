@@ -5,6 +5,7 @@ export type RlcAiProvider = "openai" | "ollama";
 export type RlcAiPurpose =
   | "copilot"
   | "kalkulation"
+  | "market_review"
   | "extraction"
   | "classification"
   | "generic";
@@ -76,10 +77,28 @@ export function getRlcAiMode(): RlcAiMode {
   return "HYBRID";
 }
 
+/*
+ * Optional cost guard for individual workloads while the installation stays
+ * in HYBRID mode. Example: RLC_AI_LOCAL_PURPOSES=kalkulation,classification
+ * keeps Copilot on its configured provider but prevents OpenAI calls from
+ * calculation and validation batches.
+ */
+function isForcedLocalPurpose(purpose: RlcAiPurpose | undefined): boolean {
+  const configured = clean(process.env.RLC_AI_LOCAL_PURPOSES)
+    .toLowerCase()
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const requested = clean(purpose || "generic").toLowerCase();
+  return configured.includes("*") || configured.includes(requested);
+}
+
 export function getOpenAiModel(purpose: RlcAiPurpose = "generic"): string {
   const byPurpose: Partial<Record<RlcAiPurpose, string | undefined>> = {
     copilot: process.env.OPENAI_MODEL_SUPPORT,
     kalkulation: process.env.OPENAI_KALKULATION_MODEL,
+    market_review: process.env.OPENAI_MARKET_REVIEW_MODEL || "gpt-6-luna",
     extraction: process.env.OPENAI_MODEL_EXTRACTION,
     classification: process.env.OPENAI_MODEL_CLASSIFICATION,
   };
@@ -95,6 +114,7 @@ export function getOllamaModel(purpose: RlcAiPurpose = "generic"): string {
   const byPurpose: Partial<Record<RlcAiPurpose, string | undefined>> = {
     copilot: process.env.OLLAMA_MODEL_COPILOT,
     kalkulation: process.env.OLLAMA_MODEL_KALKULATION,
+    market_review: process.env.OLLAMA_MODEL_KALKULATION,
     extraction: process.env.OLLAMA_MODEL_EXTRACTION,
     classification: process.env.OLLAMA_MODEL_CLASSIFICATION,
   };
@@ -177,9 +197,14 @@ async function completeWithOpenAi(
   const body: Record<string, unknown> = {
     model,
     messages: request.messages,
-    temperature:
-      typeof request.temperature === "number" ? request.temperature : 0.2,
   };
+
+  // GPT-5.6 currently accepts only the default temperature.
+  // Therefore do not send temperature for GPT-5.6 models.
+  if (!isGpt56Model(model)) {
+    body.temperature =
+      typeof request.temperature === "number" ? request.temperature : 0.2;
+  }
 
   if (request.responseFormat === "json") {
     body.response_format = { type: "json_object" };
@@ -278,6 +303,81 @@ async function completeWithOllama(
   }
 }
 
+export async function completeRlcMarketReviewWithWeb(
+  request: RlcAiTextRequest
+): Promise<RlcAiTextResult & { webSearchCalls: number; sources: Array<{ title: string; url: string }> }> {
+  const apiKey = clean(process.env.OPENAI_API_KEY);
+  if (!apiKey) throw new Error("OPENAI_API_KEY fehlt");
+
+  const model = clean(request.model) || getOpenAiModel("market_review");
+  const timeoutMs = request.timeoutMs || envNumber("RLC_AI_TIMEOUT_MS", 45_000, 3_000, 180_000);
+  const client = new OpenAI({ apiKey, timeout: timeoutMs, maxRetries: 0 });
+  const started = Date.now();
+
+  const response: any = await client.responses.create({
+    model,
+    input: request.messages.map((message) => ({ role: message.role, content: message.content })),
+    tools: [{
+      type: "web_search",
+      search_context_size: "low",
+      external_web_access: true,
+      user_location: { type: "approximate", country: "DE" },
+    }],
+    tool_choice: "required",
+    include: ["web_search_call.action.sources"],
+    reasoning: { effort: "low" },
+    ...(request.maxTokens ? { max_output_tokens: request.maxTokens } : {}),
+  } as any);
+
+  const rawText = clean(response?.output_text);
+  if (!rawText) throw new Error("OpenAI Web Search hat keine Textantwort geliefert");
+
+  const output = Array.isArray(response?.output) ? response.output : [];
+  const webSearchCalls = output.filter((item: any) => item?.type === "web_search_call" && item?.action?.type === "search").length ||
+    output.filter((item: any) => item?.type === "web_search_call").length;
+
+  const sourceMap = new Map<string, { title: string; url: string }>();
+  for (const item of output) {
+    if (item?.type === "web_search_call" && Array.isArray(item?.action?.sources)) {
+      for (const source of item.action.sources) {
+        const url = clean(source?.url);
+        if (url) sourceMap.set(url, { title: clean(source?.title) || url, url });
+      }
+    }
+    if (item?.type !== "message" || !Array.isArray(item?.content)) continue;
+    for (const content of item.content) {
+      const annotations = Array.isArray(content?.annotations) ? content.annotations : [];
+      for (const annotation of annotations) {
+        const citation = annotation?.type === "url_citation" ? annotation : annotation?.url_citation;
+        const url = clean(citation?.url);
+        if (!url) continue;
+        sourceMap.set(url, { title: clean(citation?.title) || url, url });
+      }
+    }
+  }
+
+  const usage: any = response?.usage || {};
+  const result: RlcAiTextResult & { webSearchCalls: number; sources: Array<{ title: string; url: string }> } = {
+    text: rawText,
+    provider: "openai",
+    model: clean(response?.model) || model,
+    mode: getRlcAiMode(),
+    fallbackUsed: false,
+    latencyMs: Date.now() - started,
+    usage: {
+      inputTokens: Number(usage.input_tokens) || undefined,
+      outputTokens: Number(usage.output_tokens) || undefined,
+      totalTokens: Number(usage.total_tokens) || undefined,
+    },
+    webSearchCalls,
+    sources: Array.from(sourceMap.values()).slice(0, 12),
+  };
+
+  recordOpenAiSuccess();
+  recordResult(result);
+  return result;
+}
+
 export async function completeRlcAiText(
   request: RlcAiTextRequest
 ): Promise<RlcAiTextResult> {
@@ -287,7 +387,7 @@ export async function completeRlcAiText(
 
   const mode = getRlcAiMode();
 
-  if (mode === "LOCAL") {
+  if (mode === "LOCAL" || (mode === "HYBRID" && isForcedLocalPurpose(request.purpose))) {
     const result = await completeWithOllama(request, false);
     recordResult(result);
     return result;

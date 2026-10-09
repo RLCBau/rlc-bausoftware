@@ -1,0 +1,3 @@
+import { prisma } from "../lib/prisma";
+const terms=["Asphalttragsch. aus AC 16 T S","Elektron. Marker liefern/einbauen","LKW AN entsorgen AVV170302","Anzeige pechhaltiger Straßenaufbr.","Probenentnahme","Zulage Haufwerk abdecken","einbringen B 10+/-5mm","Zustandserfassung","Fahrbahnränder angleichen","Asphalt fräsen","Materialprobe entn. und übergeben","Behelfsbrücke herstellen","Randabdichtung herstellen","DoB herstellen"];
+(async()=>{for(const t of terms){const v=await prisma.lVPosition.findFirst({where:{kurztext:{contains:t,mode:"insensitive"}}});console.log("\n###",t,"|",v?.position,v?.einheit,v?.kurztext);console.log(String(v?.langtext||"").replace(/\s+/g," ").slice(0,1400));}await prisma.$disconnect()})();

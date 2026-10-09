@@ -4,8 +4,25 @@ import { z } from "zod";
 import path from "path";
 import fs from "fs";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { requireProjectMember } from "../middleware/guards";
 
 const r = express.Router();
+
+const requireLieferscheinProjectAccess = async (req:any,res:any,next:any) => {
+  const token = String(req.body?.projectCode || req.body?.projectFsKey || "").trim();
+  if(!token) return res.status(400).json({error:"projectKey missing"});
+  req.params = req.params || {};
+  req.params.__lieferscheinProject = token;
+  return requireProjectMember("__lieferscheinProject")(req,res,(err?:any)=>{
+    if(err) return next(err);
+    const projectId = String(req.resolvedProjectId || "").trim();
+    const code = String(req.resolvedProjectCode || token).trim();
+    if(!projectId) return res.status(403).json({error:"PROJECT_RESOLUTION_FAILED"});
+    req.body.projectCode = code;
+    req.body.projectFsKey = projectId;
+    return next();
+  });
+};
 
 const BodySchema = z.object({
   projectFsKey: z.string().min(3),
@@ -18,7 +35,7 @@ const BodySchema = z.object({
   strict: z.boolean().optional().default(true),
 
   // NEW: the IDs returned by /api/ki/vision-files
-  visionFileIds: z.array(z.string().min(6)).optional(),
+  visionFileIds: z.array(z.string().min(6).max(120).regex(/^[A-Za-z0-9_-]+$/)).max(6).optional(),
   enableOcr: z.boolean().optional(),
   allowOcr: z.boolean().optional(),
   ocr: z.boolean().optional(),
@@ -224,7 +241,7 @@ function buildLieferscheinFieldPatches(args: {
   return fp;
 }
 
-r.post("/lieferschein/suggest", async (req, res) => {
+r.post("/lieferschein/suggest", requireLieferscheinProjectAccess, async (req, res) => {
   const parsed = BodySchema.safeParse(req.body);
   if (!parsed.success) {
     return res

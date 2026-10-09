@@ -1,5 +1,6 @@
 import { rlcClass } from "../../ui/rlcRuntimeStyle"; // apps/web/src/pages/kalkulation/gaeb.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { splitGaebArchiveForUpload } from "./gaebChunkUpload";
 
 import { runRlcAction } from "../../lib/rlcProgress";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -25,6 +26,7 @@ type Fmt =
 "X84" |
 "X85" |
 "X86" |
+"X87" |
 "X89" |
 "X94" |
 "X31" |
@@ -62,6 +64,7 @@ type GaebMode =
 "x84" |
 "x85" |
 "x86" |
+"x87" |
 "x89" |
 "x94" |
 "x31" |
@@ -94,6 +97,17 @@ type ImportedRow = {
   gesamt?: number;
   waehrung?: string;
   confidence?: number;
+  gaebAlnGroupNo?: number | null;
+  gaebAlnSerNo?: number | null;
+  gaebProvis?: string | null;
+  gaebProvisAccpt?: string | null;
+  gaebAccepted?: string | null;
+  gaebItemKind?: string | null;
+  gaebMarkupType?: string | null;
+  gaebTextComplements?: Array<{ markLbl?: string | null; kind?: string; caption?: string; body?: string; tail?: string }>;
+  gaebSubDescriptions?: Array<{ subDNo?: string | null; quantity?: number | null; unit?: string; kurztext?: string; langtext?: string }>;
+  gaebImages?: Array<{ name?: string | null; type?: string | null; width?: string | null; data?: string }>;
+  gaebQTakeoffRows?: string[];
 };
 
 type Detect = {
@@ -186,66 +200,67 @@ const EXPORT_FORMAT_ROWS: ExportFormatRow[] = [
 },
 {
   family: "xml",
-  code: "X80–X86 / X89 / X94",
-  title: "GAEB XML 3.x",
-  description: "Weitere XML-Austauschphasen über Legacy-/Server-Export.",
+  code: "X85",
+  title: "Nebenangebot",
+  description: "GAEB DA XML 3.3 · Nebenangebot.",
   kind: "legacy",
-  legacyFormat: "GAEBXML"
+  legacyFormat: "X85"
 },
 {
-  family: "gaeb2000",
-  code: "P81–P86 / P94",
-  title: "GAEB 2000",
-  description: "Klassische GAEB-2000-Formate für Import/Export.",
+  family: "xml",
+  code: "X86",
+  title: "Auftragserteilung",
+  description: "GAEB DA XML 3.3 · Auftragserteilung.",
   kind: "legacy",
-  legacyFormat: "GAEB2000"
+  legacyFormat: "X86"
 },
 {
-  family: "gaeb90",
-  code: "D81–D86",
-  title: "GAEB 90",
-  description: "Ältere GAEB-90-Formate für Bestandssysteme.",
+  family: "xml",
+  code: "X87",
+  title: "Auftragsbestätigung",
+  description: "GAEB DA XML 3.3 · Auftragsbestätigung.",
   kind: "legacy",
-  legacyFormat: "GAEB90"
+  legacyFormat: "X87"
 },
-{
-  family: "da",
-  code: "DA11 / X31",
-  title: "Aufmaß / REB",
-  description: "Aufmaß- und Abrechnungsdaten, soweit serverseitig unterstützt.",
-  kind: "legacy",
-  legacyFormat: "DA"
-}];
+{ family: "gaeb2000", code: "P81", title: "Leistungsbeschreibung", description: "GAEB DA 2000 · Leistungsbeschreibung.", kind: "legacy", legacyFormat: "P81" },
+{ family: "gaeb2000", code: "P82", title: "Kostenanschlag", description: "GAEB DA 2000 · Kostenanschlag.", kind: "legacy", legacyFormat: "P82" },
+{ family: "gaeb2000", code: "P83", title: "Angebotsaufforderung", description: "GAEB DA 2000 · Angebotsaufforderung.", kind: "legacy", legacyFormat: "P83" },
+{ family: "gaeb2000", code: "P84", title: "Angebotsabgabe", description: "GAEB DA 2000 · Angebotsabgabe.", kind: "legacy", legacyFormat: "P84" },
+{ family: "gaeb2000", code: "P85", title: "Nebenangebot", description: "GAEB DA 2000 · Nebenangebot.", kind: "legacy", legacyFormat: "P85" },
+{ family: "gaeb2000", code: "P86", title: "Auftragserteilung", description: "GAEB DA 2000 · Auftragserteilung.", kind: "legacy", legacyFormat: "P86" },
+{ family: "gaeb90", code: "D81", title: "Leistungsbeschreibung", description: "GAEB 90 · Leistungsbeschreibung.", kind: "legacy", legacyFormat: "D81" },
+{ family: "gaeb90", code: "D82", title: "Kostenanschlag", description: "GAEB 90 · Kostenanschlag.", kind: "legacy", legacyFormat: "D82" },
+{ family: "gaeb90", code: "D83", title: "Angebotsaufforderung", description: "GAEB 90 · Angebotsaufforderung.", kind: "legacy", legacyFormat: "D83" },
+{ family: "gaeb90", code: "D84", title: "Angebotsabgabe", description: "GAEB 90 · Angebotsabgabe.", kind: "legacy", legacyFormat: "D84" },
+{ family: "gaeb90", code: "D85", title: "Nebenangebot", description: "GAEB 90 · Nebenangebot.", kind: "legacy", legacyFormat: "D85" },
+{ family: "gaeb90", code: "D86", title: "Auftragserteilung", description: "GAEB 90 · Auftragserteilung.", kind: "legacy", legacyFormat: "D86" },
+{ family: "da", code: "X31", title: "Mengenermittlung", description: "GAEB XML · Mengenermittlung aus dem RLC Aufmaß-Editor.", kind: "legacy", legacyFormat: "X31" },
+{ family: "da", code: "DA11", title: "REB 23.003", description: "REB DA11 · Aufmaßdaten aus dem RLC Aufmaß-Editor.", kind: "legacy", legacyFormat: "DA11" }];
 
 
 const EXPORT_TARGETS: ExportTarget[] = [
-{ mode: "x80", label: "X80", description: "Universelle LV-Daten", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x81", label: "X81", description: "Leistungsbeschreibung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x82", label: "X82", description: "Kostenanschlag", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x83", label: "X83", description: "Angebotsaufforderung / Ausschreibung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x84", label: "X84", description: "Angebotsabgabe", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x85", label: "X85", description: "Nebenangebot", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x86", label: "X86", description: "Auftragserteilung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x89", label: "X89", description: "Rechnung", group: "GAEB XML", fallbackFormat: "GAEBXML" },
-{ mode: "x94", label: "X94", description: "Nachtrag / Austauschphase", group: "GAEB XML", fallbackFormat: "GAEBXML" },
+{ mode: "x83", label: "X83", description: "Angebotsaufforderung / Ausschreibung", group: "GAEB XML", fallbackFormat: "X83" },
+{ mode: "x84", label: "X84", description: "Angebotsabgabe", group: "GAEB XML", fallbackFormat: "X84" },
+{ mode: "x85", label: "X85", description: "Nebenangebot", group: "GAEB XML", fallbackFormat: "X85" },
+{ mode: "x86", label: "X86", description: "Auftragserteilung", group: "GAEB XML", fallbackFormat: "X86" },
+{ mode: "x87", label: "X87", description: "Auftragsbestätigung", group: "GAEB XML", fallbackFormat: "X87" },
 
-{ mode: "p81", label: "P81", description: "GAEB 2000 Leistungsbeschreibung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-{ mode: "p82", label: "P82", description: "GAEB 2000 Kostenanschlag", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-{ mode: "p83", label: "P83", description: "GAEB 2000 Angebotsaufforderung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-{ mode: "p84", label: "P84", description: "GAEB 2000 Angebotsabgabe", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-{ mode: "p85", label: "P85", description: "GAEB 2000 Nebenangebot", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-{ mode: "p86", label: "P86", description: "GAEB 2000 Auftragserteilung", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
-{ mode: "p94", label: "P94", description: "GAEB 2000 Nachtrag / Austausch", group: "GAEB 2000", fallbackFormat: "GAEB2000" },
+{ mode: "p81", label: "P81", description: "GAEB 2000 Leistungsbeschreibung", group: "GAEB 2000", fallbackFormat: "P81" },
+{ mode: "p82", label: "P82", description: "GAEB 2000 Kostenanschlag", group: "GAEB 2000", fallbackFormat: "P82" },
+{ mode: "p83", label: "P83", description: "GAEB 2000 Angebotsaufforderung", group: "GAEB 2000", fallbackFormat: "P83" },
+{ mode: "p84", label: "P84", description: "GAEB 2000 Angebotsabgabe", group: "GAEB 2000", fallbackFormat: "P84" },
+{ mode: "p85", label: "P85", description: "GAEB 2000 Nebenangebot", group: "GAEB 2000", fallbackFormat: "P85" },
+{ mode: "p86", label: "P86", description: "GAEB 2000 Auftragserteilung", group: "GAEB 2000", fallbackFormat: "P86" },
 
-{ mode: "d81", label: "D81", description: "GAEB 90 Leistungsbeschreibung", group: "GAEB 90", fallbackFormat: "GAEB90" },
-{ mode: "d82", label: "D82", description: "GAEB 90 Kostenanschlag", group: "GAEB 90", fallbackFormat: "GAEB90" },
-{ mode: "d83", label: "D83", description: "GAEB 90 Angebotsaufforderung", group: "GAEB 90", fallbackFormat: "GAEB90" },
-{ mode: "d84", label: "D84", description: "GAEB 90 Angebotsabgabe", group: "GAEB 90", fallbackFormat: "GAEB90" },
-{ mode: "d85", label: "D85", description: "GAEB 90 Nebenangebot", group: "GAEB 90", fallbackFormat: "GAEB90" },
-{ mode: "d86", label: "D86", description: "GAEB 90 Auftragserteilung", group: "GAEB 90", fallbackFormat: "GAEB90" },
+{ mode: "d81", label: "D81", description: "GAEB 90 Leistungsbeschreibung", group: "GAEB 90", fallbackFormat: "D81" },
+{ mode: "d82", label: "D82", description: "GAEB 90 Kostenanschlag", group: "GAEB 90", fallbackFormat: "D82" },
+{ mode: "d83", label: "D83", description: "GAEB 90 Angebotsaufforderung", group: "GAEB 90", fallbackFormat: "D83" },
+{ mode: "d84", label: "D84", description: "GAEB 90 Angebotsabgabe", group: "GAEB 90", fallbackFormat: "D84" },
+{ mode: "d85", label: "D85", description: "GAEB 90 Nebenangebot", group: "GAEB 90", fallbackFormat: "D85" },
+{ mode: "d86", label: "D86", description: "GAEB 90 Auftragserteilung", group: "GAEB 90", fallbackFormat: "D86" },
 
-{ mode: "x31", label: "X31", description: "Aufmaß / Mengenermittlung GAEB XML", group: "Aufmaß / REB", fallbackFormat: "DA" },
-{ mode: "da11", label: "DA11", description: "REB-Aufmaß / DA11", group: "Aufmaß / REB", fallbackFormat: "DA" }];
+{ mode: "x31", label: "X31", description: "Aufmaß / Mengenermittlung GAEB XML", group: "Aufmaß / REB", fallbackFormat: "X31" },
+{ mode: "da11", label: "DA11", description: "REB-Aufmaß / DA11", group: "Aufmaß / REB", fallbackFormat: "DA11" }];
 
 
 const ME_SUGGEST: Record<string, string> = {
@@ -281,7 +296,7 @@ const ACCEPT_TYPES =
 ".D81,.D82,.D83,.D84,.D85,.D86," +
 ".P81,.P82,.P83,.P84,.P85,.P86,.P94," +
 ".X80,.X81,.X82,.X83,.X84,.X85,.X86,.X89,.X94,.XML," +
-".DA11,.X31";
+".DA11,.X31,.MSG";
 
 const GAEB_IMPORT_STORAGE_PREFIX = "rlc_gaeb_import_v1";
 
@@ -654,6 +669,14 @@ function parseGaebXmlFallback(xmlText: string, fileName: string): Detect {
     parseGaebNumber(totalRaw) :
     Number((menge * preis).toFixed(2));
 
+    const alnGroupRaw = deepTextByLocalName(item, ["ALNGroupNo"]);
+    const alnSerRaw = deepTextByLocalName(item, ["ALNSerNo"]);
+    const gaebAlnGroupNo = alnGroupRaw !== "" && Number.isFinite(Number(alnGroupRaw)) ? Number(alnGroupRaw) : null;
+    const gaebAlnSerNo = alnSerRaw !== "" && Number.isFinite(Number(alnSerRaw)) ? Number(alnSerRaw) : null;
+    const gaebProvis = deepTextByLocalName(item, ["Provis"]) || null;
+    const gaebProvisAccpt = deepTextByLocalName(item, ["ProvisAccpt"]) || null;
+    const gaebAccepted = deepTextByLocalName(item, ["Accepted"]) || null;
+
     return {
       posNr,
       parentPosNr,
@@ -665,7 +688,12 @@ function parseGaebXmlFallback(xmlText: string, fileName: string): Detect {
       preis,
       gesamt,
       waehrung: "EUR",
-      confidence: 0.95
+      confidence: 0.95,
+      gaebAlnGroupNo,
+      gaebAlnSerNo,
+      gaebProvis,
+      gaebProvisAccpt,
+      gaebAccepted
     };
   }).
   filter((r) => r.posNr || r.kurztext || r.langtext);
@@ -700,6 +728,15 @@ function normalizeFormat(value: unknown, fileName?: string): Fmt {
   if (raw.startsWith("X")) return "GAEBXML";
 
   return "GAEBXML";
+}
+
+function isGaeb84Format(value: unknown): boolean {
+  return /^[XPD]84$/i.test(String(value || "").trim());
+}
+
+function isGaebReferenceOnlyFormat(value: unknown): boolean {
+  const fmt = String(value || "").trim().toUpperCase();
+  return /^[XPD]84$/.test(fmt) || /^[XPD](85|86|94)$/.test(fmt) || fmt === "X89";
 }
 
 function normalizeGaebUnit(value: unknown): string {
@@ -751,7 +788,18 @@ function mapImportedRows(rawRows: any[]): ImportedRow[] {
       preis,
       gesamt,
       waehrung: String(r?.waehrung ?? r?.currency ?? "EUR").trim(),
-      confidence: toFiniteNumber(r?.confidence, 0)
+      confidence: toFiniteNumber(r?.confidence, 0),
+      gaebAlnGroupNo: r?.gaebAlnGroupNo ?? null,
+      gaebAlnSerNo: r?.gaebAlnSerNo ?? null,
+      gaebProvis: r?.gaebProvis ?? null,
+      gaebProvisAccpt: r?.gaebProvisAccpt ?? null,
+      gaebAccepted: r?.gaebAccepted ?? null,
+      gaebItemKind: r?.gaebItemKind ?? null,
+      gaebMarkupType: r?.gaebMarkupType ?? null,
+      gaebTextComplements: Array.isArray(r?.gaebTextComplements) ? r.gaebTextComplements : [],
+      gaebSubDescriptions: Array.isArray(r?.gaebSubDescriptions) ? r.gaebSubDescriptions : [],
+      gaebImages: Array.isArray(r?.gaebImages) ? r.gaebImages : [],
+      gaebQTakeoffRows: Array.isArray(r?.gaebQTakeoffRows) ? r.gaebQTakeoffRows : []
     };
   }).
   filter((r) => r.posNr || r.kurztext || r.langtext);
@@ -1135,10 +1183,10 @@ function IssueTable({ rows }: {rows: GaebIssue[];}) {
 
 function KpiCard({ label, value, sub }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }
@@ -1155,6 +1203,15 @@ type RowIssue = {
   meSuggest?: string;
 };
 
+function handoffExportHistoryKey(handoff: any, format: string): string {
+  const project = String(handoff?.projectCode || "RLC").trim().toUpperCase();
+  const created = String(handoff?.createdAt || "").trim();
+  const source = String(handoff?.source || "handoff").trim().toLowerCase();
+  const rows = Array.isArray(handoff?.rows) ? handoff.rows : [];
+  const signature = created || rows.map((r: any) => String(r?.id || r?.posNr || r?.pos || "")).join("|");
+  return `rlc_gaeb_export_done_v1:${project}:${source}:${signature}:${String(format || "").toUpperCase()}`;
+}
+
 export default function GaebPage() {
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1169,8 +1226,13 @@ export default function GaebPage() {
 
   const [lvRows, setLvRows] = useState<LVPos[]>(() => LV.list());
   const [det, setDet] = useState<Detect | null>(null);
+  const [gaebRemarks, setGaebRemarks] = useState<Array<{ text?: string; detail?: string; outline?: string }>>([]);
+  const [gaebCategories, setGaebCategories] = useState<Array<{ path: string; level: number; label?: string }>>([]);
   const [info, setInfo] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [collectionPreview, setCollectionPreview] = useState<any | null>(null);
+  const [collectionUploading, setCollectionUploading] = useState(false);
+  const [collectionImporting, setCollectionImporting] = useState(false);
   const [openRows, setOpenRows] = useState<Record<number, boolean>>({});
   const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
   const [filterMode, setFilterMode] = useState<FilterMode>("alle");
@@ -1178,12 +1240,75 @@ export default function GaebPage() {
   const [gaebResult, setGaebResult] = useState<GaebValidationResponse | null>(null);
   const [selectedExportCode, setSelectedExportCode] = useState<string>("X84");
   const [activeExportFamily, setActiveExportFamily] = useState<ExportFamilyKey>("xml");
+  const [exportHandoff, setExportHandoff] = useState<any | null>(null);
+  const [handoffExportDone, setHandoffExportDone] = useState<{file:string;count:number;format:string;exportedAt:string;} | null>(null);
+  const [gaebOwner, setGaebOwner] = useState({ name: "", street: "", pcode: "", city: "" });
+
+  useEffect(() => {
+    try {
+      const key = `rlc_gaeb_owner_v1:${String(projectCode || currentProjectCode || "").toUpperCase()}`;
+      const saved = sessionStorage.getItem(key);
+      const parsed = saved ? JSON.parse(saved) : {};
+      setGaebOwner({
+        name: String(parsed?.name || (currentProject as any)?.client || ""),
+        street: String(parsed?.street || ""),
+        pcode: String(parsed?.pcode || ""),
+        city: String(parsed?.city || (currentProject as any)?.place || ""),
+      });
+    } catch {}
+  }, [projectCode, currentProjectCode]);
+
+  useEffect(() => {
+    const code = String(projectCode || currentProjectCode || "").toUpperCase();
+    if (!code) return;
+    try { sessionStorage.setItem(`rlc_gaeb_owner_v1:${code}`, JSON.stringify(gaebOwner)); } catch {}
+  }, [gaebOwner, projectCode, currentProjectCode]);
 
   useEffect(() => {
     if (!projectCode && currentProjectCode) {
       setProjectCode(currentProjectCode);
     }
   }, [currentProjectCode, projectCode]);
+
+  useEffect(() => {
+    if (!exportHandoff?.rows?.length) {
+      setHandoffExportDone(null);
+      return;
+    }
+    try {
+      const key = handoffExportHistoryKey(exportHandoff, selectedExportCode);
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed?.file && parsed?.format) {
+        setHandoffExportDone({
+          file: String(parsed.file),
+          count: Number(parsed.count || exportHandoff.rows.length),
+          format: String(parsed.format).toUpperCase(),
+          exportedAt: String(parsed.exportedAt || "")
+        });
+      } else {
+        setHandoffExportDone(null);
+      }
+    } catch {
+      setHandoffExportDone(null);
+    }
+  }, [exportHandoff, selectedExportCode]);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("rlc_gaeb_export_handoff_v1");
+      if (!raw) return;
+      const handoff = JSON.parse(raw);
+      if (!handoff || !Array.isArray(handoff.rows) || !handoff.rows.length) return;
+      setExportHandoff(handoff);
+      setHandoffExportDone(null);
+      if (handoff.projectCode) setProjectCode(String(handoff.projectCode).trim().toUpperCase());
+      const mode = String(handoff.mode || "X84").toUpperCase();
+      setSelectedExportCode(mode);
+      setActiveExportFamily(mode.startsWith("P") ? "gaeb2000" : mode.startsWith("D") ? "gaeb90" : "xml");
+      setInfo(`${handoff.sourceLabel || "RLC"}: ${handoff.rows.length.toLocaleString("de-DE")} Position(en) für ${mode}-Export übernommen.`);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const code = projectCode.trim().toUpperCase();
@@ -1511,6 +1636,11 @@ export default function GaebPage() {
       return;
     }
 
+    if (isGaebReferenceOnlyFormat(det.format)) {
+      setInfo(`${String(det.format).toUpperCase()} wurde bereits als GAEB-Referenz/Austauschphase verarbeitet und wird nicht als neues LV gespeichert.`);
+      return;
+    }
+
     const code = String(projectCode || "").trim().toUpperCase();
 
     if (code) {
@@ -1525,7 +1655,7 @@ export default function GaebPage() {
 
   async function transferX84PricesToDatabase() {
     if (!det?.rows?.length) {
-      setInfo("Kein X84-Import vorhanden.");
+      setInfo("Kein 84-Import vorhanden.");
       return;
     }
 
@@ -1535,7 +1665,7 @@ export default function GaebPage() {
     });
 
     if (!rowsWithPrice.length) {
-      setInfo("Keine X84-Preise zum Übertragen gefunden.");
+      setInfo("Keine Angebotspreise zum Übertragen gefunden.");
       return;
     }
 
@@ -1601,10 +1731,10 @@ export default function GaebPage() {
       await KalkulationsDatenbank.bulkUpsertServer(items as any);
 
       setInfo(
-        `X84-Preise in Firmen-Datenbank übertragen: ${items.length.toLocaleString("de-DE")} Position(en). Quelle: x84-company-baseline.`
+        `${String(det.format).toUpperCase()}-Preise in Firmen-Datenbank übertragen: ${items.length.toLocaleString("de-DE")} Position(en). Quelle: x84-company-baseline.`
       );
     } catch (e: any) {
-      setInfo(`X84-Datenbankübertragung fehlgeschlagen: ${e?.message || e}`);
+      setInfo(`${String(det.format).toUpperCase()}-Datenbankübertragung fehlgeschlagen: ${e?.message || e}`);
     } finally {
       setBusy(false);
     }
@@ -1613,6 +1743,8 @@ export default function GaebPage() {
     const code = projectCode.trim().toUpperCase();
 
     setDet(null);
+    setGaebRemarks([]);
+    setGaebCategories([]);
     setGaebResult(null);
     setSelectedRows({});
     setOpenRows({});
@@ -1716,6 +1848,95 @@ export default function GaebPage() {
     };
   }, [nav, projectCode, det, filteredPreview, selectedImportedRows, rowIssues]);
 
+  async function onCollectionUpload(files: File[]) {
+    if (!files.length) return;
+    setCollectionUploading(true);
+    setCollectionPreview(null);
+    setInfo("GAEB-Sammlung wird hochgeladen …");
+
+    try {
+      const start = await fetch(apiUrl("/api/project-lv/collection/start"), {
+        method: "POST",
+        credentials: "include",
+        headers: withAuthHeaders()
+      });
+      const started = await start.json().catch(() => null);
+      if (!start.ok || !started?.collectionId) throw new Error(started?.error || "Sammlung konnte nicht gestartet werden.");
+
+      const uploadParts = splitGaebArchiveForUpload(files);
+      for (let index = 0; index < uploadParts.length; index++) {
+        setInfo(`Archivteil ${index + 1}/${uploadParts.length} wird hochgeladen …`);
+        const form = new FormData();
+        form.append("file", uploadParts[index]);
+        const part = await fetch(apiUrl(`/api/project-lv/collection/${started.collectionId}/part`), {
+          method: "POST",
+          credentials: "include",
+          headers: withAuthHeaders(),
+          body: form
+        });
+        const partJson = await part.json().catch(() => null);
+        if (!part.ok || !partJson?.ok) throw new Error(partJson?.error || `ZIP-Teil ${index + 1} konnte nicht hochgeladen werden.`);
+      }
+
+      setInfo("ZIP wird geprüft und GAEB-Dateien werden zugeordnet …");
+      const previewResponse = await fetch(apiUrl(`/api/project-lv/collection/${started.collectionId}/preview`), {
+        method: "POST",
+        credentials: "include",
+        headers: withAuthHeaders()
+      });
+      const preview = await previewResponse.json().catch(() => null);
+      if (!previewResponse.ok || !preview?.ok) throw new Error(preview?.error || "GAEB-Sammlung konnte nicht gelesen werden.");
+
+      setCollectionPreview(preview);
+      setInfo(`Sammlung geprüft: ${preview.files?.length || 0} GAEB-Dateien in ${preview.groups?.length || 0} Projektgruppen gefunden.`);
+    } catch (e: any) {
+      setInfo("Importfehler: " + (e?.message || "GAEB-Sammlung konnte nicht verarbeitet werden."));
+    } finally {
+      setCollectionUploading(false);
+    }
+  }
+
+  async function importCollection() {
+    const collectionId = String(collectionPreview?.collectionId || "");
+    if (!collectionId) return;
+    setCollectionImporting(true);
+    setInfo("GAEB-Sammlung wird übernommen …");
+    try {
+      const response = await fetch(apiUrl(`/api/project-lv/collection/${collectionId}/import`), {
+        method: "POST",
+        credentials: "include",
+        headers: withAuthHeaders()
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.ok) throw new Error(result?.error || "Sammelübernahme fehlgeschlagen.");
+      setCollectionPreview((previous: any) => ({ ...previous, importResult: result }));
+      setInfo(`Sammelübernahme abgeschlossen: ${result.imported || 0} Projekte importiert, ${result.skipped || 0} ohne technisches LV übersprungen.`);
+    } catch (e: any) {
+      setInfo("Importfehler: " + (e?.message || "Sammelübernahme fehlgeschlagen."));
+    } finally {
+      setCollectionImporting(false);
+    }
+  }
+
+  async function openLatestCollection() {
+    setCollectionUploading(true);
+    setInfo("Letzte GAEB-Sammlung wird geöffnet …");
+    try {
+      const latestResponse = await fetch(apiUrl("/api/project-lv/collection/latest"), { credentials: "include", headers: withAuthHeaders() });
+      const latest = await latestResponse.json().catch(() => null);
+      if (!latestResponse.ok || !latest?.collectionId) throw new Error("Keine gespeicherte GAEB-Sammlung gefunden.");
+      const previewResponse = await fetch(apiUrl(`/api/project-lv/collection/${latest.collectionId}/preview`), { method: "POST", credentials: "include", headers: withAuthHeaders() });
+      const preview = await previewResponse.json().catch(() => null);
+      if (!previewResponse.ok || !preview?.ok) throw new Error(preview?.error || "Sammlung konnte nicht geöffnet werden.");
+      setCollectionPreview(preview);
+      setInfo(`Gespeicherte Sammlung geöffnet: ${preview.files?.length || 0} GAEB-Dateien.`);
+    } catch (e: any) {
+      setInfo("Importfehler: " + (e?.message || "Gespeicherte Sammlung konnte nicht geöffnet werden."));
+    } finally {
+      setCollectionUploading(false);
+    }
+  }
+
   async function onUpload(file: File) {
     setBusy(true);
     setInfo("Datei wird verarbeitet …");
@@ -1779,14 +2000,27 @@ export default function GaebPage() {
 
       const rawRows = serverJson ? extractImportRows(serverJson) : [];
       const mappedRows = mapImportedRows(rawRows);
+      setGaebRemarks(Array.isArray(serverJson?.gaebRemarks) ? serverJson.gaebRemarks : []);
+      setGaebCategories(Array.isArray(serverJson?.gaebCategories) ? serverJson.gaebCategories : []);
 
       let nextDet: Detect;
+
+      const is84ImportDetected = isGaeb84Format(detectedFormat);
 
       function importQuality(rows: ImportedRow[]): number {
         const seen = new Set<string>();
         let score = 0;
 
         for (const r of rows) {
+          if (is84ImportDetected) {
+            const pos84 = String(r.posNr || "").trim();
+            const ep84 = toFiniteNumber(r.preis, 0);
+            if (pos84) score += 8; else score -= 20;
+            if (ep84 > 0) score += 10; else score -= 8;
+            if (seen.has(pos84) && pos84) score -= 8;
+            if (pos84) seen.add(pos84);
+            continue;
+          }
           const pos = String(r.posNr || "").trim();
           const text = String(r.kurztext || r.langtext || "").trim();
           const unit = String(r.einheit || "").trim();
@@ -1831,6 +2065,9 @@ export default function GaebPage() {
         const unit = String(r.einheit || "").trim();
         const qty = toFiniteNumber(r.menge, 0);
         const ep = toFiniteNumber(r.preis, 0);
+        const pos = String(r.posNr || "").trim();
+
+        if (is84ImportDetected) return !pos || ep <= 0;
 
         return (
           /^[\d.,]+$/.test(text) ||
@@ -1872,10 +2109,16 @@ export default function GaebPage() {
           rows: mappedRows
         };
 
+        const sourcePath = String(serverJson?.sourcePath || "").trim();
+        const msgSubject = String(serverJson?.msgMeta?.subject || "").trim();
+        const serverWarning = String(serverJson?.warning || "").trim();
         setInfo(
           `Import erfolgreich: ${detectedFormat} • ${mappedRows.length.toLocaleString(
             "de-DE"
-          )} Positionen.`
+          )} Positionen.` +
+          (sourcePath ? ` Quelle: ${sourcePath}.` : "") +
+          (msgSubject ? ` Outlook: ${msgSubject}.` : "") +
+          (serverWarning ? ` Hinweis: ${serverWarning}` : "")
         );
       } else {
         throw new Error(
@@ -1885,7 +2128,7 @@ export default function GaebPage() {
       }
       const fmtUpper = String(nextDet.format || "").toUpperCase();
 
-      if (fmtUpper === "X84") {
+      if (isGaeb84Format(fmtUpper)) {
         const baseRows = LV.list();
         const enrichedRows = enrichPriceRowsWithLvBase(nextDet.rows, baseRows);
 
@@ -1899,13 +2142,13 @@ export default function GaebPage() {
 
         if (enrichedCount > 0) {
           setInfo(
-            `Import erfolgreich: X84 • ${enrichedRows.length.toLocaleString(
+            `Import erfolgreich: ${fmtUpper} • ${enrichedRows.length.toLocaleString(
               "de-DE"
             )} Preispositionen. Texte/Mengen aus vorhandenem LV ergänzt: ${enrichedCount.toLocaleString("de-DE")}.`
           );
         } else {
           setInfo(
-            `X84 enthält hauptsächlich Preise ohne LV-Texte. Bitte zuerst X81/X83 importieren und speichern, danach X84 erneut importieren.`
+            `${fmtUpper} enthält hauptsächlich Preise ohne LV-Texte. Bitte zuerst das zugehörige LV (81/83) importieren, danach ${fmtUpper} erneut importieren.`
           );
         }
       }
@@ -1955,6 +2198,11 @@ export default function GaebPage() {
           gesamt,
           waehrung: row.waehrung || existing.waehrung || "EUR",
           confidence: row.confidence != null ? Number(row.confidence) : existing.confidence,
+          gaebAlnGroupNo: row.gaebAlnGroupNo ?? existing.gaebAlnGroupNo ?? null,
+          gaebAlnSerNo: row.gaebAlnSerNo ?? existing.gaebAlnSerNo ?? null,
+          gaebProvis: row.gaebProvis ?? existing.gaebProvis ?? null,
+          gaebProvisAccpt: row.gaebProvisAccpt ?? existing.gaebProvisAccpt ?? null,
+          gaebAccepted: row.gaebAccepted ?? existing.gaebAccepted ?? null,
           source: existing.source || "gaeb"
         } as LVPos);
 
@@ -1976,6 +2224,11 @@ export default function GaebPage() {
           gesamt,
           waehrung: row.waehrung || "EUR",
           confidence: row.confidence != null ? Number(row.confidence) : undefined,
+          gaebAlnGroupNo: row.gaebAlnGroupNo ?? null,
+          gaebAlnSerNo: row.gaebAlnSerNo ?? null,
+          gaebProvis: row.gaebProvis ?? null,
+          gaebProvisAccpt: row.gaebProvisAccpt ?? null,
+          gaebAccepted: row.gaebAccepted ?? null,
           source: "gaeb"
         } as LVPos);
 
@@ -2005,7 +2258,12 @@ export default function GaebPage() {
       quantity: Number(r.menge ?? 0),
       ep: r.preis == null || !Number.isFinite(Number(r.preis)) ? null : Number(r.preis),
       total: r.gesamt == null || !Number.isFinite(Number(r.gesamt)) ? null : Number(r.gesamt),
-      currency: r.waehrung || "EUR"
+      currency: r.waehrung || "EUR",
+      gaebAlnGroupNo: r.gaebAlnGroupNo ?? null,
+      gaebAlnSerNo: r.gaebAlnSerNo ?? null,
+      gaebProvis: r.gaebProvis ?? null,
+      gaebProvisAccpt: r.gaebProvisAccpt ?? null,
+      gaebAccepted: r.gaebAccepted ?? null
     }));
 
     if (!payloadItems.length) {
@@ -2053,7 +2311,10 @@ export default function GaebPage() {
         method: "POST",
         credentials: "include",
         headers: withAuthHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ format, rows })
+        body: JSON.stringify({
+          format, rows, owner: gaebOwner,
+          project: { code: projectCode, name: String((currentProject as any)?.name || (currentProject as any)?.title || projectCode) }
+        })
       });
 
       if (!response.ok) {
@@ -2172,7 +2433,73 @@ export default function GaebPage() {
     }
   }
 
+  function validateExportHandoff(code: string): GaebValidationResponse {
+    const rows = Array.isArray(exportHandoff?.rows) ? exportHandoff.rows : [];
+    const errors: any[] = [];
+    rows.forEach((r: any, index: number) => {
+      if (!String(r?.posNr || r?.pos || "").trim()) errors.push({ type: "error", field: `rows.${index}.posNr`, message: "Positionsnummer fehlt." });
+      if (!String(r?.kurztext || r?.text || "").trim()) errors.push({ type: "error", field: `rows.${index}.kurztext`, message: "Kurztext fehlt." });
+      if (!String(r?.einheit || r?.unit || "").trim()) errors.push({ type: "error", field: `rows.${index}.einheit`, message: "Einheit fehlt." });
+      const qty = Number(r?.menge ?? r?.mengeDelta ?? r?.quantity ?? 0) || 0;
+      if (String(exportHandoff?.source || "").toLowerCase().includes("nachtrag") && qty === 0) {
+        errors.push({ type: "error", field: `rows.${index}.menge`, message: "Nachtragsmenge ist 0. Bitte Δ-Menge im Nachtrag korrigieren." });
+      }
+    });
+    if (["X86", "X87"].includes(String(code).toUpperCase())) {
+      if (!gaebOwner.name.trim()) errors.push({ type: "error", field: "owner.name", message: "Auftraggeber: Name fehlt." });
+      if (!gaebOwner.street.trim()) errors.push({ type: "error", field: "owner.street", message: "Auftraggeber: Straße fehlt." });
+      if (!gaebOwner.pcode.trim()) errors.push({ type: "error", field: "owner.pcode", message: "Auftraggeber: PLZ fehlt." });
+      if (!gaebOwner.city.trim()) errors.push({ type: "error", field: "owner.city", message: "Auftraggeber: Ort fehlt." });
+    }
+    return { mode: String(code).toLowerCase() as GaebMode, valid: errors.length === 0, errorCount: errors.length, warningCount: 0, errors, warnings: [] };
+  }
+
+  async function exportHandoffGaeb(code: string) {
+    const handoff = exportHandoff;
+    if (!handoff?.rows?.length) return;
+    setGaebBusy(String(code).toLowerCase() as GaebMode);
+    try {
+      const validation = validateExportHandoff(code);
+      setGaebResult(validation);
+      if (!validation.valid) {
+        setInfo(`Export ${code} blockiert. Fehler: ${validation.errorCount}.`);
+        return;
+      }
+      const response = await fetch(apiUrl("/api/gaeb/export"), {
+        method: "POST", credentials: "include",
+        headers: withAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          format: code,
+          project: { code: handoff.projectCode || projectCode, name: handoff.projectName || handoff.projectCode || projectCode },
+          rows: handoff.rows,
+          owner: gaebOwner
+        })
+      });
+      if (!response.ok) {
+        const json = await response.json().catch(() => ({}));
+        throw new Error(json?.error || `Export ${code} fehlgeschlagen`);
+      }
+      const exportFile = `${handoff.projectCode || projectCode || "RLC"}.${String(code).toLowerCase()}`;
+      await downloadBlobFromResponse(response, exportFile);
+      const exportedAt = new Date().toISOString();
+      const done = { file: exportFile, count: handoff.rows.length, format: String(code).toUpperCase(), exportedAt };
+      setHandoffExportDone(done);
+      try {
+        localStorage.setItem(handoffExportHistoryKey(handoff, code), JSON.stringify(done));
+      } catch {}
+      setInfo(`${handoff.sourceLabel || "RLC"}: ${code}-Export mit ${handoff.rows.length} Position(en) erstellt. Download gestartet.`);
+    } catch (e: any) {
+      setInfo(`Export-Fehler: ${e?.message || e}`);
+    } finally { setGaebBusy(null); }
+  }
+
   async function handleValidateRow(row: ExportFormatRow) {
+    if (exportHandoff?.rows?.length) {
+      const result = validateExportHandoff(row.code);
+      setGaebResult(result);
+      setInfo(result.valid ? `${row.code}: Übergabedaten sind vollständig.` : `${row.code}: ${result.errorCount} Fehler in den Übergabedaten.`);
+      return;
+    }
     if (row.projectMode) {
       await handleValidate(row.projectMode);
       return;
@@ -2196,6 +2523,14 @@ export default function GaebPage() {
   }
 
   async function handleExportRow(row: ExportFormatRow) {
+    if (row.family === "da" && (row.code === "X31" || row.code === "DA11")) {
+      nav(`/mengenermittlung/aufmasseditor?gaebExport=${encodeURIComponent(row.code)}`);
+      return;
+    }
+    if (exportHandoff?.rows?.length) {
+      await exportHandoffGaeb(row.code);
+      return;
+    }
     if (row.projectMode) {
       const target =
       EXPORT_TARGETS.find((x) => x.mode === row.projectMode) || {
@@ -2225,8 +2560,8 @@ export default function GaebPage() {
           <div className={rlcClass(null, eyebrow)}>RLC GAEB-Schnittstelle</div>
           <h1 className={rlcClass(null, title)}>GAEB Import / Export</h1>
           <p className={rlcClass(null, subtitle)}>
-            Zentrale GAEB- und Aufmaß-Schnittstelle für X80–X86, X89, X94,
-            P81–P86, D81–D86, X31 und DA11.
+            Zentrale GAEB- und Aufmaß-Schnittstelle für X83–X87,
+            P81–P86, D81–D86, X31 und DA11. Weitere X-Phasen werden nur nach vollständiger GAEB-Prüfung freigeschaltet.
           </p>
         </div>
 
@@ -2243,15 +2578,33 @@ export default function GaebPage() {
                 e.currentTarget.value = "";
               }}
               disabled={busy} className="rlc-migrated-pages-kalkulation-gaeb-tsx-861" />
-            
+
           </label>
+
+          <label className={rlcClass(null, btnHeroPrimary)} title="ZIP, 7Z oder alle Teile eines geteilten Archivs auswählen. Die Teile werden nacheinander hochgeladen und erst geprüft, nicht sofort importiert.">
+            GAEB-Sammlung (ZIP / 7Z) prüfen
+            <input
+              type="file"
+              accept="*/*"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length) void onCollectionUpload(files);
+                e.currentTarget.value = "";
+              }}
+              disabled={busy || collectionUploading}
+              className="rlc-migrated-pages-kalkulation-gaeb-tsx-861" />
+          </label>
+          <button type="button" className={rlcClass(null, btnHeroSecondary)} onClick={() => void openLatestCollection()} disabled={collectionUploading || collectionImporting}>
+            Letzte Sammlung öffnen
+          </button>
 
           <button
             type="button" className={rlcClass(null,
             btnHeroPrimary)}
             disabled={!det || busy}
             onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
-            
+
             Speichern am Server
           </button>
 
@@ -2285,104 +2638,44 @@ export default function GaebPage() {
         </div>
       </section>
 
+      {collectionPreview ? <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
+          <div>
+            <h2 className={rlcClass(null, sectionTitle)}>GAEB-Sammlung – Zuordnungsvorschau</h2>
+            <div className={rlcClass(null, sectionText)}>
+              {collectionPreview.files?.length || 0} Dateien erkannt. X83 bleibt das technische LV; X84 wird später ausschließlich als Preisvergleich verknüpft.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div className={rlcClass(null, badgeStyle("neutral"))}>
+              {collectionPreview.groups?.length || 0} Projektgruppen
+            </div>
+            <button type="button" className={rlcClass(null, btnHeroPrimary)} onClick={() => void importCollection()} disabled={collectionImporting || Boolean(collectionPreview.importResult)}>
+              {collectionImporting ? "Sammelübernahme läuft …" : collectionPreview.importResult ? "Sammelübernahme abgeschlossen" : "Technische LVs übernehmen"}
+            </button>
+          </div>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr><th style={{ textAlign: "left", padding: 8 }}>Zuordnung</th><th style={{ textAlign: "left", padding: 8 }}>X83 / P83 / D83</th><th style={{ textAlign: "left", padding: 8 }}>X84 / P84 / D84</th><th style={{ textAlign: "left", padding: 8 }}>Hinweis</th></tr></thead>
+            <tbody>{(collectionPreview.groups || []).map((group: any, index: number) => <tr key={`${group.projectCode}-${index}`} style={{ borderTop: "1px solid #dbe5f4" }}>
+              <td style={{ padding: 8, fontWeight: 700 }}>{group.projectCode}<div style={{ fontWeight: 400, color: "#64748b", marginTop: 3 }}>{group.grouping === "Dateiname" ? "Abgleich über Dateiname" : "Abgleich über Projektcode"}</div></td>
+              <td style={{ padding: 8 }}>{group.x83?.length ? group.x83.join(", ") : "—"}</td>
+              <td style={{ padding: 8 }}>{group.x84?.length ? group.x84.join(", ") : "—"}</td>
+              <td style={{ padding: 8 }}>{group.x83?.length && group.x84?.length ? "Paar gefunden" : "Unvollständig – vor Import prüfen"}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        <div className={rlcClass(null, sectionText)} style={{ marginTop: 10 }}>
+          Diese Prüfung speichert noch nichts in Projekten. Der nächste Schritt ist die bestätigte Sammelübernahme der erkannten Paare.
+        </div>
+      </section> : null}
+
       <section className={rlcClass(null, grid4)}>
         <KpiCard label="LV Positionen" value={String(lvRows.length)} />
         <KpiCard label="Importierte Positionen" value={String(importedTotal)} />
         <KpiCard label="Lokale Fehler" value={String(counts.localErrors)} />
         <KpiCard label="Server-Fehler" value={String(validationErrors)} sub={gaebHasResult ? "aus letzter Validierung" : "noch nicht validiert"} />
-      </section>
-
-      <section className={rlcClass(null, card)}>
-        <div className={rlcClass(null, sectionHead)}>
-          <div>
-            <h2 className={rlcClass(null, sectionTitle)}>Projektbezogener Export</h2>
-            <div className={rlcClass(null, sectionText)}>
-              GAEB-/REB-Export kompakt über Auswahlmenü. X83 und X84 werden projektbezogen geprüft,
-              ältere Formate laufen über die passende Legacy-/Fallback-Route.
-            </div>
-          </div>
-
-          <div className={rlcClass(null, badgeStyle(gaebIsValid ? "success" : gaebHasResult ? "error" : "neutral"))}>
-            {gaebHasResult ? gaebIsValid ? "Export freigegeben" : "Prüfung offen / Fehler" : "Nicht geprüft"}
-          </div>
-        </div>
-
-        <div className={rlcClass(null, gaebDropdownShell)}>
-          <div className={rlcClass(null, gaebSelectorGrid)}>
-            <label className={rlcClass(null, gaebSelectLabel)}>
-              Formatfamilie
-              <select className={rlcClass(null,
-              gaebSelect)}
-              value={activeExportFamily}
-              onChange={(e) => setActiveExportFamily(e.target.value as ExportFamilyKey)}>
-                
-                {EXPORT_FAMILY_TABS.map((tab) =>
-                <option key={tab.key} value={tab.key}>
-                    {tab.label}
-                  </option>
-                )}
-              </select>
-            </label>
-
-            <label className={rlcClass(null, gaebSelectLabel)}>
-              Ausgabeformat
-              <select className={rlcClass(null,
-              gaebSelect)}
-              value={selectedExportRow?.code || ""}
-              onChange={(e) => setSelectedExportCode(e.target.value)}>
-                
-                {visibleExportRows.map((row) =>
-                <option key={row.code} value={row.code}>
-                    {row.code.toUpperCase()} · {row.description}
-                  </option>
-                )}
-              </select>
-            </label>
-
-            <div className={rlcClass(null, selectedFormatBox)}>
-              <div className={rlcClass(null, selectedFormatCode)}>{selectedExportRow?.code?.toUpperCase() || "—"}</div>
-              <div className={rlcClass(null, selectedFormatText)}>{selectedExportRow?.description || "Kein Format gewählt"}</div>
-            </div>
-          </div>
-
-          <div className={rlcClass(null, gaebMainActions)}>
-            <button
-              type="button" className={rlcClass(null,
-              buttonBase)}
-              disabled={!selectedExportRow || !!gaebBusy}
-              onClick={() => selectedExportRow && void handleValidateRow(selectedExportRow)}>
-              
-              Prüfen
-            </button>
-
-            <button
-              type="button" className={rlcClass(null,
-              buttonPrimary)}
-              disabled={!selectedExportRow || !!gaebBusy}
-              onClick={() => selectedExportRow && void handleExportRow(selectedExportRow)}>
-              
-              Export
-            </button>
-          </div>
-
-          <details className={rlcClass(null, formatDetailsBox)}>
-            <summary className={rlcClass(null, formatDetailsSummary)}>Weitere Formate dieser Familie anzeigen</summary>
-
-            <div className={rlcClass(null, formatCompactList)}>
-              {visibleExportRows.map((row) =>
-              <button
-                key={row.code}
-                type="button" className={rlcClass(null,
-                String(row.code) === String(selectedExportRow?.code) ? formatCompactItemActive : formatCompactItem)}
-                onClick={() => setSelectedExportCode(String(row.code))}>
-                
-                  <b>{row.code.toUpperCase()}</b>
-                  <span>{row.description}</span>
-                </button>
-              )}
-            </div>
-          </details>
-        </div>
       </section>
 
       <section className={rlcClass(null, card)}>
@@ -2398,7 +2691,7 @@ export default function GaebPage() {
         <div className={rlcClass(null, actionGrid)}>
           <div className={rlcClass(null, actionCard)}>
             <div className={rlcClass(null, actionTitle)}>1. Datei importieren</div>
-            <div className={rlcClass(null, actionText)}>Unterstützt werden GAEB XML, GAEB 2000, GAEB 90, DA11 und X31.</div>
+            <div className={rlcClass(null, actionText)}>Unterstützt werden GAEB XML, GAEB 2000, GAEB 90, DA11, X31 und Outlook MSG mit LV-Anhang.</div>
 
             <div className={rlcClass(null, buttonRow)}>
               <label className={rlcClass(null, buttonPrimary)}>
@@ -2413,7 +2706,7 @@ export default function GaebPage() {
                     e.currentTarget.value = "";
                   }}
                   disabled={busy} className="rlc-migrated-pages-kalkulation-gaeb-tsx-862" />
-                
+
               </label>
             </div>
           </div>
@@ -2444,18 +2737,18 @@ export default function GaebPage() {
             <div className={rlcClass(null, actionText)}>Import bleibt lokal erhalten und kann gezielt gespeichert oder entfernt werden.</div>
 
             <div className={rlcClass(null, buttonRow)}>
-              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
+              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det || busy || isGaebReferenceOnlyFormat(det?.format)} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
                 Speichern am Server
               </button>
 
-              <button
-                type="button" className={rlcClass(null,
-                buttonPrimary)}
-                disabled={!det || busy}
-                onClick={() => void transferX84PricesToDatabase()}>
-                
-                X84 in Datenbank
-              </button>
+              {det && isGaeb84Format(det.format) ? (
+                <button
+                  type="button" className={rlcClass(null, buttonPrimary)}
+                  disabled={busy}
+                  onClick={() => void transferX84PricesToDatabase()}>
+                  {String(det.format).toUpperCase()}-Preise in Datenbank
+                </button>
+              ) : null}
               <button type="button" className={rlcClass(null, buttonBase)} disabled={!det} onClick={() => det && exportPreviewCSV(det.rows)}>
                 Vorschau CSV
               </button>
@@ -2543,7 +2836,7 @@ export default function GaebPage() {
               selectedCount > 0 ? dangerButton : buttonBase)}
               disabled={selectedCount <= 0}
               onClick={deleteSelectedImportedRowsFromLv}>
-              
+
                 Auswahl löschen ({selectedCount})
               </button>
 
@@ -2551,7 +2844,7 @@ export default function GaebPage() {
                 Fehler korrigieren
               </button>
 
-              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det || busy} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
+              <button type="button" className={rlcClass(null, buttonPrimary)} disabled={!det || busy || isGaebReferenceOnlyFormat(det?.format)} onClick={() => void runRlcAction("gaeb-save-server", "GAEB am Server speichern", () => saveCurrentImportToServer())}>
                 Speichern am Server
               </button>
 
@@ -2561,6 +2854,46 @@ export default function GaebPage() {
             </div>
           </section>
 
+          {gaebCategories.length ? (
+            <section className={rlcClass(null, card)}>
+              <div className={rlcClass(null, sectionHead)}>
+                <div>
+                  <h2 className={rlcClass(null, sectionTitle)}>LV-Struktur / Titel</h2>
+                  <div className={rlcClass(null, sectionText)}>Originale GAEB-Hierarchie. Für BVBS müssen unter anderem die Titel 002.000 und 999.999 erhalten bleiben.</div>
+                </div>
+                <div className={rlcClass(null, formatBadgeByFmt(det.format))}>{gaebCategories.length} Titel</div>
+              </div>
+              <div style={{ display: "grid", gap: 6 }}>
+                {gaebCategories.map((category) => (
+                  <div key={category.path} style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 12, alignItems: "center", padding: "7px 10px", borderBottom: "1px solid #E2E8F0" }}>
+                    <div style={{ fontWeight: 800, paddingLeft: Math.max(0, (Number(category.level || 1) - 1) * 14) }}>{category.path}</div>
+                    <div style={{ color: "#475569" }}>{category.label || "—"}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {gaebRemarks.length ? (
+            <section className={rlcClass(null, card)}>
+              <div className={rlcClass(null, sectionHead)}>
+                <div>
+                  <h2 className={rlcClass(null, sectionTitle)}>Hinweistexte / Remarks</h2>
+                  <div className={rlcClass(null, sectionText)}>GAEB-Hinweistexte in Originalreihenfolge. Für die BVBS-Prüfung muss insbesondere der Hinweistext am LV-Ende sichtbar bleiben.</div>
+                </div>
+                <div className={rlcClass(null, formatBadgeByFmt(det.format))}>{gaebRemarks.length} Hinweis(e)</div>
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {gaebRemarks.map((remark, index) => (
+                  <div key={`gaeb-remark-${index}`} style={{ border: "1px solid #E2E8F0", borderRadius: 8, padding: "10px 12px", background: "#F8FAFC", whiteSpace: "pre-wrap" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: "#475569", marginBottom: 4 }}>Hinweis {index + 1}{index === gaebRemarks.length - 1 ? " · LV-Ende" : ""}</div>
+                    <div style={{ fontSize: 12.5, color: "#0F172A", lineHeight: 1.45 }}>{String(remark.text || remark.outline || remark.detail || "")}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <section className={rlcClass(null, card)}>
             <div className={rlcClass(null, sectionHead)}>
               <div>
@@ -2569,114 +2902,308 @@ export default function GaebPage() {
               </div>
             </div>
 
-            <div className={rlcClass(null, tableWrap)}>
-              <table className={rlcClass(null, { ...table, minWidth: 1580 })}>
+            <div className={rlcClass(null, previewTableWrap)}>
+              <table className={rlcClass("rlc-kalkulation-flat-table", previewTable)}>
+                <colgroup>
+                  <col style={{ width: "4%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "37%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "8%" }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th className={rlcClass(null, th)}>Auswahl</th>
-                    <th className={rlcClass(null, th)}>PosNr</th>
-                    <th className={rlcClass(null, th)}>Kurztext</th>
-                    <th className={rlcClass(null, th)}>Langtext</th>
-                    <th className={rlcClass(null, th)}>ME</th>
-                    <th className={rlcClass(null, thRight)}>Menge</th>
-                    <th className={rlcClass(null, thRight)}>EP</th>
-                    <th className={rlcClass(null, thRight)}>Gesamt</th>
-                    <th className={rlcClass(null, th)}>Hinweise</th>
-                    <th className={rlcClass(null, th)}>Aktion</th>
+                    <th className={rlcClass(null, previewTh)}>✓</th>
+                    <th className={rlcClass(null, previewTh)}>Pos.</th>
+                    <th className={rlcClass(null, previewTh)}>Kurztext / Langtext</th>
+                    <th className={rlcClass(null, previewThRight)}>Menge</th>
+                    <th className={rlcClass(null, previewTh)}>ME</th>
+                    <th className={rlcClass(null, previewThRight)}>EP</th>
+                    <th className={rlcClass(null, previewThRight)}>Gesamt</th>
+                    <th className={rlcClass(null, previewTh)}>Status</th>
+                    <th className={rlcClass(null, previewTh)}></th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {filteredPreview.map(({ row, originalIndex }, i) => {
-                  const issue = rowIssues[originalIndex] || {};
-                  const open = !!openRows[originalIndex];
-                  const selectKey = importedRowKey(row, originalIndex);
-                  const selected = !!selectedRows[selectKey];
-                  const hasError = rowHasLocalError(row, issue);
+                    const issue = rowIssues[originalIndex] || {};
+                    const open = !!openRows[originalIndex];
+                    const selectKey = importedRowKey(row, originalIndex);
+                    const selected = !!selectedRows[selectKey];
+                    const hasError = rowHasLocalError(row, issue);
+                    const bg = hasError ? "#FFF5F5" : issue.dupInFile ? "#FFF9E8" : issue.existsInLV ? "#F6FAFF" : "#FFFFFF";
 
-                  const bg = hasError ?
-                  "#FFF5F5" :
-                  issue.dupInFile ?
-                  "#FFF9E8" :
-                  issue.existsInLV ?
-                  "#F6FAFF" :
-                  i % 2 ?
-                  "#FCFCFC" :
-                  "#FFFFFF";
-
-                  return (
-                    <tr key={`${row.posNr || "row"}-${originalIndex}-${i}`} className={rlcClass(null, { background: bg })}>
-                        <td className={rlcClass(null, td)}>
+                    return (
+                      <tr key={`${row.posNr || "row"}-${originalIndex}-${i}`} style={{ ...previewRow, background: bg }}>
+                        <td className={rlcClass(null, previewTd)}>
                           <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={(e) =>
-                          setSelectedRows((s) => ({
-                            ...s,
-                            [selectKey]: e.target.checked
-                          }))
-                          } />
-                        
+                            type="checkbox"
+                            checked={selected}
+                            onChange={(e) => setSelectedRows((state) => ({ ...state, [selectKey]: e.target.checked }))}
+                          />
                         </td>
-
-                        <td className={rlcClass(null, tdStrong)}>{row.posNr ?? ""}</td>
-                        <td className={rlcClass(null, td)}>{row.kurztext ?? ""}</td>
-
-                        <td className={rlcClass(null, td)}>
-                          {row.langtext ?
-                        <>
-                              <button type="button" className={rlcClass(null, textButton)} onClick={() => setOpenRows((s) => ({ ...s, [originalIndex]: !open }))}>
-                                {open ? "Langtext ausblenden" : "Langtext anzeigen"}
+                        <td className={rlcClass(null, previewTdStrong)}>{row.posNr ?? ""}</td>
+                        <td className={rlcClass(null, previewTextTd)}>
+                          <div style={{ fontWeight: 700 }}>{row.kurztext ?? ""}</div>
+                          {(row.gaebProvis || row.gaebItemKind === "MarkupItem" || row.gaebAlnGroupNo != null || /\.[0-9A-Za-z]$/.test(String(row.posNr || ""))) ? (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
+                              {row.gaebProvis ? <span className={rlcClass(null, previewBadgeWarn)}>Bedarfsposition mit GB</span> : null}
+                              {row.gaebItemKind === "MarkupItem" ? <span className={rlcClass(null, previewBadgeWarn)}>Zuschlagsposition</span> : null}
+                              {row.gaebAlnGroupNo != null && Number(row.gaebAlnSerNo || 0) === 0 ? <span className={rlcClass(null, previewBadgeNeutral)}>Grundposition</span> : null}
+                              {row.gaebAlnGroupNo != null && Number(row.gaebAlnSerNo || 0) > 0 ? <span className={rlcClass(null, previewBadgeNeutral)}>Alternativposition</span> : null}
+                              {/\.[0-9A-Za-z]$/.test(String(row.posNr || "")) ? <span className={rlcClass(null, previewBadgeNeutral)}>Indexposition</span> : null}
+                            </div>
+                          ) : null}
+                          {row.langtext ? (
+                            <div className={rlcClass(null, previewLangtext)}>
+                              {open ? String(row.langtext) : `${String(row.langtext).slice(0, 150)}${String(row.langtext).length > 150 ? "…" : ""}`}
+                              <button
+                                type="button"
+                                className={rlcClass(null, previewTextButton)}
+                                onClick={() => setOpenRows((state) => ({ ...state, [originalIndex]: !open }))}>
+                                {open ? "weniger" : "Langtext"}
                               </button>
-
-                              {open ? <div className={rlcClass(null, longTextBox)}>{String(row.langtext)}</div> : null}
-                            </> :
-
-                        <span className="rlc-migrated-pages-kalkulation-gaeb-tsx-864">—</span>
-                        }
+                            </div>
+                          ) : null}
                         </td>
-
-                        <td className={rlcClass(null, td)}>
+                        <td className={rlcClass(null, previewTdRight)}>{row.menge != null ? fmtNumber(row.menge) : ""}</td>
+                        <td className={rlcClass(null, previewTd)}>
                           {row.einheit ?? ""}
-                          {issue.meSuggest ?
-                        <span className={rlcClass(null, { ...miniBadge, marginLeft: 6 })}>ME → {issue.meSuggest}</span> :
-                        null}
+                          {issue.meSuggest ? <div style={{ fontSize: 9.5, color: "#64748B" }}>→ {issue.meSuggest}</div> : null}
                         </td>
-
-                        <td className={rlcClass(null, tdRight)}>{row.menge != null ? fmtNumber(row.menge) : ""}</td>
-                        <td className={rlcClass(null, tdRight)}>{row.preis != null ? fmtNumber(row.preis) : ""}</td>
-                        <td className={rlcClass(null, tdRight)}>{row.gesamt != null ? fmtNumber(row.gesamt) : ""}</td>
-
-                        <td className={rlcClass(null, td)}>
-                          {issue.empty ? <span className={rlcClass(null, badgeError)}>PosNr leer</span> : null}
-                          {hasError ? <span className={rlcClass(null, { ...badgeError, marginLeft: 6 })}>Fehler</span> : null}
-                          {issue.dupInFile ? <span className={rlcClass(null, { ...badgeWarn, marginLeft: 6 })}>Duplikat Datei</span> : null}
-                          {issue.existsInLV ? <span className={rlcClass(null, { ...badgeNeutral, marginLeft: 6 })}>im LV vorhanden</span> : null}
-                          {!hasError && !issue.dupInFile && !issue.existsInLV ? <span className={rlcClass(null, badgeOk)}>Neu</span> : null}
+                        <td className={rlcClass(null, previewTdRight)}>{row.preis != null ? fmtNumber(row.preis) : ""}</td>
+                        <td className={rlcClass(null, previewTdRight)}>{row.gesamt != null ? fmtNumber(row.gesamt) : ""}</td>
+                        <td className={rlcClass(null, previewTd)}>
+                          {issue.empty ? <span className={rlcClass(null, previewBadgeError)}>Fehler</span> : null}
+                          {!issue.empty && hasError ? <span className={rlcClass(null, previewBadgeError)}>Fehler</span> : null}
+                          {!hasError && issue.dupInFile ? <span className={rlcClass(null, previewBadgeWarn)}>Duplikat</span> : null}
+                          {!hasError && !issue.dupInFile && issue.existsInLV ? <span className={rlcClass(null, previewBadgeNeutral)}>vorhanden</span> : null}
+                          {!hasError && !issue.dupInFile && !issue.existsInLV ? <span className={rlcClass(null, previewBadgeOk)}>Neu</span> : null}
                         </td>
-
-                        <td className={rlcClass(null, td)}>
-                          <button type="button" className={rlcClass(null, smallButton)} onClick={() => editImportedRow(originalIndex)}>
+                        <td className={rlcClass(null, previewTd)}>
+                          <button type="button" className={rlcClass(null, previewEditButton)} onClick={() => editImportedRow(originalIndex)}>
                             Bearbeiten
                           </button>
                         </td>
-                      </tr>);
+                      </tr>
+                    );
+                  })}
 
-                })}
-
-                  {!filteredPreview.length ?
-                <tr>
-                      <td colSpan={10} className="rlc-migrated-pages-kalkulation-gaeb-tsx-865">
+                  {!filteredPreview.length ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 16, textAlign: "center", color: "#64748B" }}>
                         Keine Daten in der aktuellen Filteransicht.
                       </td>
-                    </tr> :
-                null}
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
           </section>
         </> :
       null}
+
+      {exportHandoff?.rows?.length ? (
+        <section className={rlcClass(null, handoffBanner)}>
+          <div>
+            <b>{exportHandoff.sourceLabel || "RLC Export"}</b> · {exportHandoff.rows.length} Position(en)
+            {handoffExportDone ? (
+              <div style={{ marginTop: 4, color: "#15803d", fontWeight: 800 }}>
+                ✓ Export erstellt: {handoffExportDone.file} · {handoffExportDone.count} Position(en) · Download gestartet
+              </div>
+            ) : null}
+          </div>
+          <div>GAEB-Format vorbereitet: <b>{String(exportHandoff.mode || selectedExportCode).toUpperCase()}</b></div>
+        </section>
+      ) : null}
+
+      {(["X86","X87"].includes(String(selectedExportCode).toUpperCase()) || String(selectedExportCode).toUpperCase().startsWith("P")) ? (
+        <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
+            <div>
+              <h2 className={rlcClass(null, sectionTitle)}>Auftraggeber für {String(selectedExportCode).toUpperCase()}</h2>
+              <div className={rlcClass(null, sectionText)}>Für diesen Export werden vollständige Auftraggeberdaten benötigt. Bei GAEB 2000 werden sie als AG, bei X86/X87 als OWN übertragen.</div>
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1.5fr", gap:8 }}>
+            {[
+              ["name","Name / Firma","z. B. Gemeinde Musterstadt"],
+              ["street","Straße / Hausnummer","Musterstraße 1"],
+              ["pcode","PLZ","12345"],
+              ["city","Ort","Musterstadt"],
+            ].map(([key,label,placeholder]) => (
+              <label key={key} style={{ display:"grid", gap:4, fontSize:11, fontWeight:700, color:"#334155" }}>
+                {label}
+                <input
+                  value={(gaebOwner as any)[key]}
+                  placeholder={placeholder}
+                  onChange={(e) => setGaebOwner((v) => ({ ...v, [key]: e.target.value }))}
+                  style={{ height:34, border:"1px solid #cbd5e1", borderRadius:7, padding:"0 9px", fontSize:12, color:"#0f172a", background:"#fff" }}
+                />
+              </label>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className={rlcClass(null, card)}>
+        <div className={rlcClass(null, sectionHead)}>
+          <div>
+            <h2 className={rlcClass(null, sectionTitle)}>Projektbezogener Export</h2>
+            <div className={rlcClass(null, sectionText)}>
+              GAEB-/REB-Export kompakt über Auswahlmenü. X83 und X84 werden projektbezogen geprüft,
+              ältere Formate laufen über die passende Legacy-/Fallback-Route.
+            </div>
+          </div>
+
+          <div className={rlcClass(null, badgeStyle(gaebIsValid ? "success" : gaebHasResult ? "error" : "neutral"))}>
+            {gaebHasResult ? gaebIsValid ? "Export freigegeben" : "Prüfung offen / Fehler" : "Nicht geprüft"}
+          </div>
+        </div>
+
+        <div className={rlcClass(null, gaebDropdownShell)}>
+          <div className={rlcClass(null, gaebSelectorGrid)}>
+            <label className={rlcClass(null, gaebSelectLabel)}>
+              Formatfamilie
+              <select className={rlcClass(null,
+              gaebSelect)}
+              value={activeExportFamily}
+              onChange={(e) => setActiveExportFamily(e.target.value as ExportFamilyKey)}>
+
+                {EXPORT_FAMILY_TABS.map((tab) =>
+                <option key={tab.key} value={tab.key}>
+                    {tab.label}
+                  </option>
+                )}
+              </select>
+            </label>
+
+            <label className={rlcClass(null, gaebSelectLabel)}>
+              Ausgabeformat
+              <select className={rlcClass(null,
+              gaebSelect)}
+              value={selectedExportRow?.code || ""}
+              onChange={(e) => setSelectedExportCode(e.target.value)}>
+
+                {visibleExportRows.map((row) =>
+                <option key={row.code} value={row.code}>
+                    {row.code.toUpperCase()} · {row.description}
+                  </option>
+                )}
+              </select>
+            </label>
+
+            <div className={rlcClass(null, selectedFormatBox)}>
+              <div className={rlcClass(null, selectedFormatCode)}>{selectedExportRow?.code?.toUpperCase() || "—"}</div>
+              <div className={rlcClass(null, selectedFormatText)}>{selectedExportRow?.description || "Kein Format gewählt"}</div>
+            </div>
+          </div>
+
+          <div className={rlcClass(null, gaebMainActions)}>
+            <button
+              type="button" className={rlcClass(null,
+              buttonBase)}
+              disabled={!selectedExportRow || !!gaebBusy}
+              onClick={() => selectedExportRow && void handleValidateRow(selectedExportRow)}>
+
+              Prüfen
+            </button>
+
+            <button
+              type="button" className={rlcClass(null,
+              buttonPrimary)}
+              disabled={!selectedExportRow || !!gaebBusy}
+              onClick={() => selectedExportRow && void handleExportRow(selectedExportRow)}>
+
+              {handoffExportDone && String(handoffExportDone.format).toUpperCase() === String(selectedExportRow?.code || "").toUpperCase() ? "Erneut exportieren" : "Export"}
+            </button>
+          </div>
+
+          <details className={rlcClass(null, formatDetailsBox)}>
+            <summary className={rlcClass(null, formatDetailsSummary)}>Weitere Formate dieser Familie anzeigen</summary>
+
+            <div className={rlcClass(null, formatCompactList)}>
+              {visibleExportRows.map((row) =>
+              <button
+                key={row.code}
+                type="button" className={rlcClass(null,
+                String(row.code) === String(selectedExportRow?.code) ? formatCompactItemActive : formatCompactItem)}
+                onClick={() => setSelectedExportCode(String(row.code))}>
+
+                  <b>{row.code.toUpperCase()}</b>
+                  <span>{row.description}</span>
+                </button>
+              )}
+            </div>
+          </details>
+        </div>
+      </section>
+
+      {exportHandoff?.rows?.length ? (
+        <section className={rlcClass(null, card)}>
+          <div className={rlcClass(null, sectionHead)}>
+            <div>
+              <h2 className={rlcClass(null, sectionTitle)}>Exportpositionen prüfen</h2>
+              <div className={rlcClass(null, sectionText)}>
+                Diese Positionen wurden aus {exportHandoff.sourceLabel || "RLC"} an den GAEB-Export übergeben.
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {handoffExportDone ? (
+                <div className={rlcClass(null, badgeStyle("success"))}>
+                  Bereits exportiert · {handoffExportDone.format}
+                  {handoffExportDone.exportedAt ? " · " + new Date(handoffExportDone.exportedAt).toLocaleString("de-DE") : ""}
+                </div>
+              ) : null}
+              <div className={rlcClass(null, badgeStyle("neutral"))}>{exportHandoff.rows.length} Position(en)</div>
+            </div>
+          </div>
+          {exportHandoff.rows.some((row:any) => (Number(row?.menge ?? row?.mengeDelta ?? row?.quantity ?? 0) || 0) === 0) && String(exportHandoff?.source || "").toLowerCase().includes("nachtrag") ? (
+            <div style={{ marginBottom: 8, padding: "8px 10px", border: "1px solid #fdba74", background: "#fff7ed", color: "#9a3412", borderRadius: 8, fontSize: 11.5, fontWeight: 700 }}>
+              Export blockiert: Mindestens eine Nachtragsposition hat Δ-Menge 0. Bitte zuerst im Nachtrag die Menge korrigieren.
+            </div>
+          ) : null}
+
+          <div className={rlcClass(null, handoffTableWrap)}>
+            <style>{`.gaeb-handoff-preview th{padding:7px 9px;background:#f1f5f9;color:#334155;font-size:10.5px;text-align:left;border-bottom:1px solid #e2e8f0}.gaeb-handoff-preview td{padding:8px 9px;border-bottom:1px solid #e2e8f0;color:#0f172a;vertical-align:top}.gaeb-handoff-preview tr:last-child td{border-bottom:0}`}</style>
+            <table className={`gaeb-handoff-preview ${rlcClass(null, handoffTable)}`}>
+              <thead>
+                <tr>
+                  <th>Pos.</th><th>Kurztext</th><th className={rlcClass(null, handoffRight)}>Menge</th><th>ME</th><th className={rlcClass(null, handoffRight)}>EP</th><th className={rlcClass(null, handoffRight)}>Gesamt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exportHandoff.rows.map((row:any, index:number) => {
+                  const qty = Number(row?.menge ?? row?.mengeDelta ?? row?.quantity ?? 0) || 0;
+                  const ep = Number(row?.preis ?? row?.ep ?? row?.finalUnitPrice ?? 0) || 0;
+                  const total = Number(row?.gesamt ?? row?.total ?? qty * ep) || 0;
+                  return (
+                    <tr key={`${row?.posNr || row?.pos || index}-${index}`} style={qty === 0 ? { background: "#fff7ed" } : undefined}>
+                      <td><b>{row?.posNr || row?.pos || index + 1}</b></td>
+                      <td>
+                        <b>{row?.kurztext || row?.text || "Position"}</b>
+                        {row?.langtext ? <div className={rlcClass(null, handoffLongtext)}>{String(row.langtext).slice(0,180)}{String(row.langtext).length > 180 ? "…" : ""}</div> : null}
+                      </td>
+                      <td className={rlcClass(null, handoffRight)}>
+                        <b style={qty === 0 ? { color: "#c2410c" } : undefined}>{qty.toLocaleString("de-DE", { maximumFractionDigits: 3 })}</b>
+                        {qty === 0 && String(exportHandoff?.source || "").toLowerCase().includes("nachtrag") ? <div style={{ color: "#c2410c", fontSize: 10, marginTop: 2 }}>Δ-Menge fehlt</div> : null}
+                      </td>
+                      <td>{row?.einheit || row?.unit || row?.me || "—"}</td>
+                      <td className={rlcClass(null, handoffRight)}>{ep.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                      <td className={rlcClass(null, handoffRight)}><b>{total.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</b></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       {gaebHasResult ?
       <section id="rlc-gaeb-pruefergebnis" className={rlcClass(null, card)}>
@@ -3001,6 +3528,71 @@ const longTextBox: React.CSSProperties = {
   padding: 10,
   background: "#F8FAFC"
 };
+
+const previewTableWrap: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  maxHeight: 560,
+  overflowY: "auto",
+  overflowX: "hidden",
+  border: "1px solid #E5E7EB",
+  borderRadius: 12,
+  background: "#FFFFFF",
+  boxSizing: "border-box"
+};
+
+const previewTable: React.CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  maxWidth: "100%",
+  tableLayout: "fixed",
+  borderCollapse: "collapse"
+};
+
+const previewTh: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 3,
+  textAlign: "left",
+  padding: "5px 4px",
+  fontSize: 9.5,
+  color: "#475569",
+  background: "#F8FAFC",
+  borderBottom: "1px solid #DDE3EC",
+  whiteSpace: "nowrap",
+  fontWeight: 700
+};
+const previewThRight: React.CSSProperties = { ...previewTh, textAlign: "right" };
+const previewRow: React.CSSProperties = { background: "#FFFFFF" };
+const previewTd: React.CSSProperties = {
+  padding: "5px 4px",
+  fontSize: 11.5,
+  lineHeight: 1.3,
+  color: "#0F172A",
+  borderBottom: "1px solid #EEF2F7",
+  verticalAlign: "middle",
+  minWidth: 0,
+  overflowWrap: "anywhere"
+};
+const previewTdStrong: React.CSSProperties = { ...previewTd, fontWeight: 700, whiteSpace: "nowrap" };
+const previewTdRight: React.CSSProperties = { ...previewTd, textAlign: "right", whiteSpace: "nowrap" };
+const previewTextTd: React.CSSProperties = { ...previewTd, minWidth: 0 };
+const previewLangtext: React.CSSProperties = { marginTop: 3, fontSize: 10.5, color: "#64748B", lineHeight: 1.3 };
+const previewTextButton: React.CSSProperties = { border: 0, background: "transparent", color: "#0B5BD3", fontSize: 9.5, fontWeight: 700, padding: "0 0 0 6px", cursor: "pointer" };
+const previewBadgeNeutral: React.CSSProperties = { display: "inline-flex", border: "1px solid #CBD5E1", background: "#F8FAFC", color: "#475569", borderRadius: 999, padding: "3px 6px", fontSize: 9.5, fontWeight: 700, whiteSpace: "nowrap" };
+const previewBadgeOk: React.CSSProperties = { ...previewBadgeNeutral, border: "1px solid #BBF7D0", background: "#F0FDF4", color: "#15803D" };
+const previewBadgeWarn: React.CSSProperties = { ...previewBadgeNeutral, border: "1px solid #FDE68A", background: "#FFFBEB", color: "#B45309" };
+const previewBadgeError: React.CSSProperties = { ...previewBadgeNeutral, border: "1px solid #FECACA", background: "#FEF2F2", color: "#B91C1C" };
+const previewEditButton: React.CSSProperties = { border: "1px solid #CBD5E1", background: "#FFFFFF", color: "#0F172A", borderRadius: 7, padding: "4px 8px", fontSize: 9.5, fontWeight: 700, cursor: "pointer", maxWidth: "100%", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center" };
+
+const handoffTableWrap: React.CSSProperties = { overflowX: "auto", border: "1px solid #E2E8F0", borderRadius: 10 };
+const handoffTable: React.CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: 11.5 };
+const handoffRight: React.CSSProperties = { textAlign: "right", whiteSpace: "nowrap" };
+const handoffLongtext: React.CSSProperties = { marginTop: 3, color: "#64748B", fontSize: 10.5, fontWeight: 400, lineHeight: 1.3 };
+
+const handoffBanner: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "9px 12px", border: "1px solid #93C5FD", background: "#EFF6FF", color: "#1E3A8A", borderRadius: 10, fontSize: 12 };
 
 const gaebDropdownShell: React.CSSProperties = {
   border: "1px solid #D7E3F5",

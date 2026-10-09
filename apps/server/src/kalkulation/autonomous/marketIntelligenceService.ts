@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { filterUsableRlcPriceSources } from "../quality/priceSourceQualityGate";
 import {
   getInternetIntelligenceEvents,
   getInternetIntelligenceStatus,
@@ -64,11 +65,14 @@ function isRelevantPriceEvent(event: InternetEvent) {
     event.marketImpact.trades.length > 0 ||
     event.marketImpact.lvTerms.length > 0;
 
+  // Eine Marktinformation darf bereits als Preis-/Kostenhinweis analysiert
+  // werden, wenn ein belastbarer LV-Bezug vorhanden ist. Eine konkrete
+  // Prozentänderung ist nur für die Preisberechnung erforderlich, nicht
+  // für die Anzeige potenziell betroffener Positionen.
   return (
     hasTarget &&
-    (isKnownDirection(event) || hasQuantifiedImpact(event)) &&
-    event.marketImpact.confidence >= 60 &&
-    event.totalScore >= 60
+    event.marketImpact.confidence >= 45 &&
+    event.totalScore >= 54
   );
 }
 
@@ -164,7 +168,7 @@ async function findDatabaseMatches(event: InternetEvent) {
 
   if (searchTokens.length < 2) return [];
 
-  const rows = await db.kalkulationsDbEntry.findMany({
+  const rowsRaw = await db.kalkulationsDbEntry.findMany({
     take: 500,
     orderBy: { updatedAt: "desc" },
     select: {
@@ -176,6 +180,8 @@ async function findDatabaseMatches(event: InternetEvent) {
       unitPriceNet: true,
     },
   });
+
+  const rows = filterUsableRlcPriceSources(rowsRaw);
 
   return rows
     .map((row: any) => ({
@@ -348,7 +354,7 @@ export async function synchronizeMarketIntelligence(limit = 500) {
 
     imported += 1;
 
-    const alertType = classifyExclusiveAlert(event);
+    const alertType = isRelevantPriceEvent(event) ? null : classifyExclusiveAlert(event);
 
     if (alertType) {
       const created = await createCandidateIfMissing(stored.id, alertType, {

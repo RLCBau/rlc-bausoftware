@@ -29,47 +29,6 @@ declare global {
 }
 
 export function authJwt(req: Request, res: Response, next: NextFunction) {
-  // RLC_DEV_PROJECT_LIST_PUBLIC_V1
-  // Solo sviluppo locale: GET /api/projects senza token
-  // ammesso solo da browser localhost/127.0.0.1.
-  // Da dominio pubblico o curl senza Origin resta protetto.
-  const origin = String(req.headers.origin || "");
-  const isLocalDevOrigin =
-    origin.startsWith("http://localhost:") ||
-    origin.startsWith("http://127.0.0.1:");
-
-  if (
-    req.method === "GET" &&
-    isLocalDevOrigin &&
-    (
-      req.originalUrl === "/api/projects" ||
-      req.originalUrl.startsWith("/api/projects?") ||
-      /^\/api\/projects\/[^/]+\/lv(?:\?|$)/.test(req.originalUrl)
-    )
-  ) {
-    req.auth = {
-      sub: "dev-user",
-      role: "ADMIN",
-      companyId: process.env.DEV_COMPANY_ID || "dev-company",
-      companyRole: "ADMIN",
-      mode: "SERVER_SYNC",
-      device: "dev-browser",
-      email: "dev@rlc.local",
-      emailVerified: true,
-    };
-
-    (req as any).user = {
-      id: "dev-user",
-      email: "dev@rlc.local",
-      role: "ADMIN",
-      mode: "SERVER_SYNC",
-      emailVerified: true,
-      emailVerifiedAt: new Date().toISOString(),
-    };
-
-    return next();
-  }
-
   const h = req.header("authorization");
   if (!h || !h.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Kein Token" });
@@ -105,7 +64,7 @@ export function requireVerifiedEmail(
   res: Response,
   next: NextFunction
 ) {
-  const devOn = (process.env.DEV_AUTH || "").toLowerCase() === "on";
+  const devOn = process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on";
   if (devOn && (req as any)?.user?.id) return next();
 
   const v =
@@ -113,6 +72,7 @@ export function requireVerifiedEmail(
     (req as any)?.user?.emailVerified ??
     ((req as any)?.user?.emailVerifiedAt ? true : undefined);
 
-  if (v === true || v === undefined || v === null) return next();
+  // Authentication tokens without an explicit verified-email claim must not pass.
+  if (v === true) return next();
   return res.status(403).json({ ok: false, error: "EMAIL_NOT_VERIFIED" });
 }

@@ -543,7 +543,7 @@ export default function PricingPage() {
                 <button
                   type="button" className={rlcClass(null,
                   ctaSecondary)}
-                  onClick={() => scrollToContact("enterprise")}>
+                  onClick={() => { window.location.href = "https://rlcbausoftware.com/demo-anfrage/"; }}>
                   
                   Demo anfragen
                 </button>
@@ -575,7 +575,41 @@ export default function PricingPage() {
           </div>
         </section>
 
+        <section
+          style={{
+            margin: "4px 0 34px",
+            padding: "24px 26px",
+            borderRadius: 22,
+            border: "1px solid #244b82",
+            background: "linear-gradient(135deg, #0f2748 0%, #153b70 100%)",
+            boxShadow: "0 14px 34px rgba(15,39,72,.16)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 22,
+            flexWrap: "wrap"
+          }}>
+          <div style={{ maxWidth: 820 }}>
+            <div style={{ ...badge, marginBottom: 10, background: "#294b78", borderColor: "#52729c", color: "#ffffff" }}>Pilotprogramm · vor dem Marktstart</div>
+            <h2 style={{ ...sectionTitle, marginBottom: 8, color: "#ffffff" }}>Testpiloten: M&auml;rz bis Mai 2027 kostenlos testen</h2>
+            <p style={{ ...sectionSub, color: "#dbeafe" }}>
+              Wir w&auml;hlen drei Bauunternehmen f&uuml;r die letzte Validierungsphase aus. Sie testen
+              RLC drei Monate kostenlos im realen Baualltag. Anschlie&szlig;end erhalten diese drei
+              Pilotunternehmen als Dank f&uuml;r ihre aktive Mitarbeit f&uuml;r 36 Monate 50&nbsp;% Rabatt
+              auf die regul&auml;ren RLC-Listenpreise. Der regul&auml;re Marktstart ist f&uuml;r Juni 2027 geplant.
+            </p>
+          </div>
+          <a
+            href="https://rlcbausoftware.com/pilotprogramm/"
+            style={{ ...ctaPrimary, marginTop: 0, whiteSpace: "nowrap", background: "#ffffff", color: "#124ea8", borderColor: "#ffffff" }}>
+            Pilotprogramm ansehen
+          </a>
+        </section>
+
         <section className="rlc-migrated-pages-site-pricingpage-tsx-1539">
+          <div style={{ marginBottom: 4 }}>
+            <div style={badge}>Preise zum geplanten Marktstart · Juni 2027</div>
+          </div>
           <div className={rlcClass(null, cardsGrid)}>
             <div className={rlcClass(null, cardBase)}>
               <div className={rlcClass(null, cardTitle)}>Mobile Local</div>
@@ -737,10 +771,81 @@ export default function PricingPage() {
               <button
                 type="button" className={rlcClass(null,
                 ctaDark)}
-                onClick={() => openMail("enterprise")}>
+                onClick={() => { window.location.href = "https://rlcbausoftware.com/demo-anfrage/"; }}>
                 
                 Enterprise anfragen
               </button>
+            </div>
+          </div>
+        </section>
+
+        <section style={{ marginTop: 44 }}>
+          <div style={badge}>RLC Marktpreisprüfung · Zusatzkontingente</div>
+          <h2 className={rlcClass(null, sectionTitle)}>Aktuelle Marktpreise mit der RLC Marktpreisprüfung</h2>
+          <p className={rlcClass(null, sectionSub)}>
+            Die normale RLC-Kalkulation bleibt davon unabhängig. <strong>Kosten bzw. Credits entstehen ausschließlich, wenn der Nutzer aktiv „RLC Marktpreisprüfung“ auswählt.</strong>
+            RLC-Kalkulation, Urkalkulation und normale Preisberechnung verbrauchen keine RLC Marktpreis-Credits.
+          </p>
+
+          <div style={{ margin: "22px 0 26px", border: "1px solid #dbe4f0", borderRadius: 18, overflow: "hidden", background: "#f8fafc", boxShadow: "0 16px 40px rgba(15,23,42,.08)" }}>
+            <div style={{ padding: "12px 16px", background: "#eaf2ff", borderBottom: "1px solid #dbe4f0", display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <div><strong>So sieht die Funktion in der RLC-Kalkulation aus</strong><div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Nur die RLC Marktpreisprüfung löst eine kostenpflichtige Prüfung aus.</div></div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e3a8a" }}>50 Prüfungen/Monat inklusive</div>
+            </div>
+            <div style={{ padding: 16, background: "white" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: "#475569" }}>Marktpreis-Auswahl: <b>1 Position</b></span>
+                <span style={{ fontSize: 13, color: "#475569" }}>RLC Prüfungen verfügbar: <b>50</b> (50 Monat + 0 Zusatz)</span>
+                <span style={{ marginLeft: "auto", padding: "8px 12px", borderRadius: 9, border: "1px solid #2563eb", background: "#eff6ff", color: "#1d4ed8", fontWeight: 900, fontSize: 13 }}>RLC Marktpreisprüfung</span>
+              </div>
+              <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 10 }}>
+                <table style={{ width: "100%", minWidth: 820, borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead><tr style={{ background: "#f8fafc" }}>
+                    {['KI','Pos.','Kurztext','EH','Menge','RLC EP','X84 EP','Diff.','Status'].map((h) => <th key={h} style={{ padding: 8, borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    <tr><td style={{ padding: 8 }}>☑</td><td style={{ padding: 8 }}>01.01.0010</td><td style={{ padding: 8, fontWeight: 700 }}>Boden lösen, laden und entsorgen</td><td style={{ padding: 8 }}>m³</td><td style={{ padding: 8 }}>125,00</td><td style={{ padding: 8 }}>38,40 €</td><td style={{ padding: 8 }}>40,10 €</td><td style={{ padding: 8 }}>-4,2%</td><td style={{ padding: 8 }}>Bereit zur Prüfung</td></tr>
+                    <tr style={{ background: "#fcfdff" }}><td style={{ padding: 8 }}>☐</td><td style={{ padding: 8 }}>01.01.0020</td><td style={{ padding: 8, fontWeight: 700 }}>Frostschutzschicht 0/32 liefern und einbauen</td><td style={{ padding: 8 }}>t</td><td style={{ padding: 8 }}>78,00</td><td style={{ padding: 8 }}>29,80 €</td><td style={{ padding: 8 }}>—</td><td style={{ padding: 8 }}>—</td><td style={{ padding: 8 }}>RLC-Kalkulation</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className={rlcClass(null, split2)}>
+            <div className={rlcClass(null, panel)}>
+              <h3 style={{ marginTop: 0 }}>50 Prüfungen inklusive</h3>
+              <p className={rlcClass(null, sectionSub)}>
+                In Mobile + Web + Cloud sowie RLC Enterprise sind pro Unternehmen und Monat
+                50 RLC Marktpreisprüfungen enthalten. Jede Prüfung kontrolliert genau eine
+                LV-Position und zeigt die verwendeten Marktquellen.
+              </p>
+              <p className={rlcClass(null, footerNote)}>
+                Nicht verbrauchte Monatsprüfungen werden nicht übertragen. Zusatzkontingente
+                gelten unternehmensweit.
+              </p>
+            </div>
+
+            <div className={rlcClass(null, panel)}>
+              <h3 style={{ marginTop: 0 }}>Zusatzkontingente</h3>
+              <div className={rlcClass(null, tableShell)}>
+                <table className={rlcClass(null, table)}>
+                  <thead>
+                    <tr>
+                      <th className={rlcClass(null, th)}>RLC Marktpreisprüfungen</th>
+                      <th className={rlcClass(null, th)}>Preis</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td className={rlcClass(null, td)}>100 Prüfungen</td><td className={rlcClass(null, td)}>9,90€ einmalig</td></tr>
+                    <tr><td className={rlcClass(null, td)}>500 Prüfungen</td><td className={rlcClass(null, td)}>39€ einmalig</td></tr>
+                    <tr><td className={rlcClass(null, td)}>2.000 Prüfungen</td><td className={rlcClass(null, td)}>129€ einmalig</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className={rlcClass(null, footerNote)}>
+                Ein Kontingent wird nur bei einer tatsächlich ausgeführten RLC Marktpreisprüfung belastet.
+              </p>
             </div>
           </div>
         </section>
@@ -881,7 +986,7 @@ export default function PricingPage() {
                 <button
                   type="button" className={rlcClass(null,
                   ctaPrimary)}
-                  onClick={() => openMail(plan)}>
+                  onClick={() => { window.location.href = "https://rlcbausoftware.com/demo-anfrage/"; }}>
                   
                   Angebot anfragen
                 </button>
@@ -1013,21 +1118,16 @@ export default function PricingPage() {
 
                 <div className="rlc-migrated-pages-site-pricingpage-tsx-1555">
                   <a
-                    href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-                      "Demo-Anfrage RLC Bausoftware"
-                    )}`} className={rlcClass(null,
-                    ctaPrimary)}>
-                    
-                    Demo per E-Mail anfragen
+                    href="https://rlcbausoftware.com/demo-anfrage/"
+                    className={rlcClass(null, ctaPrimary)}>
+                    Demo anfragen
                   </a>
 
-                  <button
-                    type="button" className={rlcClass(null,
-                    ctaSecondary)}
-                    onClick={() => openMail(plan)}>
-                    
+                  <a
+                    href="https://rlcbausoftware.com/demo-anfrage/"
+                    className={rlcClass(null, ctaSecondary)}>
                     Paket anfragen
-                  </button>
+                  </a>
                 </div>
               </div>
 
@@ -1071,7 +1171,7 @@ export default function PricingPage() {
                 <button
                   type="button" className={rlcClass(null,
                   ctaDark)}
-                  onClick={() => openMail("enterprise")}>
+                  onClick={() => { window.location.href = "https://rlcbausoftware.com/demo-anfrage/"; }}>
                   
                   Enterprise-Beratung anfragen
                 </button>

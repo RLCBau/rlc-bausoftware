@@ -1,100 +1,181 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+
+import {
+  accountingApi,
+  getAccountingProject,
+  setAccountingProject
+} from "./accountingApi";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import "./styles.css";
 
-type NavItem = {
-  to: string;
-  label: string;
-};
-
-const navItems: NavItem[] = [
-{ to: "/buchhaltung", label: "Übersicht" },
-{ to: "/buchhaltung/kostenuebersicht", label: "Kostenübersicht (live)" },
-{ to: "/buchhaltung/rechnungen", label: "Rechnungen / Abschläge" },
-{ to: "/buchhaltung/abschlagsrechnungen", label: "Abschlagsrechnungen" },
-{ to: "/buchhaltung/zahlungen", label: "Zahlungen" },
-{ to: "/buchhaltung/eingang", label: "Eingangsrechnungen" },
-{ to: "/buchhaltung/kassenbuch", label: "Kassenbuch" },
-{ to: "/buchhaltung/kostenstellen", label: "Kostenstellen" },
-{ to: "/buchhaltung/mahnwesen", label: "Mahnwesen" },
-{ to: "/buchhaltung/reports", label: "Belege / Reports" },
-{ to: "/buchhaltung/datev", label: "DATEV Export" },
-{ to: "/buchhaltung/ust", label: "USt.-Übersicht" },
-{ to: "/buchhaltung/lieferscheine", label: "Lieferscheine (Kosten)" }];
-
-
-function normalizePath(path: string) {
-  return String(path || "").replace(/\/+$/, "") || "/";
-}
-
-function isActivePath(pathname: string, to: string) {
-  const current = normalizePath(pathname);
-  const target = normalizePath(to);
-
-  if (target === "/buchhaltung") {
-    return current === "/buchhaltung";
+const groups = [
+  {
+    label: "Übersicht",
+    items: [
+      { to: "/buchhaltung", label: "Übersicht" }
+    ]
+  },
+  {
+    label: "Rechnungen",
+    items: [
+      { to: "/buchhaltung/rechnungen", label: "Ausgangsrechnungen" },
+      { to: "/buchhaltung/abschlagsrechnungen", label: "Abschlagsrechnungen" },
+      { to: "/buchhaltung/eingang", label: "Eingangsrechnungen" }
+    ]
+  },
+  {
+    label: "Zahlungen",
+    items: [
+      { to: "/buchhaltung/zahlungen", label: "Zahlungen & Offene Posten" },
+      { to: "/buchhaltung/mahnwesen", label: "Mahnwesen" },
+      { to: "/buchhaltung/kassenbuch", label: "Kassenbuch" },
+      { to: "/buchhaltung/dauerbuchungen", label: "Dauerbuchungen" }
+    ]
+  },
+  {
+    label: "Kosten",
+    items: [
+      { to: "/buchhaltung/kostenuebersicht", label: "Kostenübersicht" },
+      { to: "/buchhaltung/kostenstellen", label: "Kostenstellen" },
+      { to: "/buchhaltung/lieferscheine", label: "Lieferscheine" }
+    ]
+  },
+  {
+    label: "Steuern & Export",
+    items: [
+      { to: "/buchhaltung/ust", label: "USt." },
+      { to: "/buchhaltung/datev", label: "DATEV / Export" }
+    ]
   }
-
-  return current === target || current.startsWith(`${target}/`);
-}
+];
 
 export default function BuchhaltungLayout() {
-  const { pathname } = useLocation();
+  const location = useLocation();
+
+  const [projects, setProjects] = useState<any[]>([]);
+  const [accountingProject, setProject] =
+    useState(getAccountingProject());
+
+  useEffect(() => {
+    accountingApi("/api/accounting/projects")
+      .then((data) => {
+        const list = data.items || [];
+        setProjects(list);
+
+        if (!getAccountingProject() && list.length) {
+          const preferred =
+            list.find((p: any) => p.code === "BA-2026-028") ||
+            list[0];
+
+          setAccountingProject(preferred.code);
+          setProject(preferred.code);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const changeProject = (value: string) => {
+    setAccountingProject(value);
+    setProject(value);
+    window.location.reload();
+  };
 
   return (
-    <div className="bh-page">
-      <header className="rlc-page-hero">
+    <div className="rlc-accounting-page">
+      <section className="rlc-page-hero rlc-page-hero--split">
+        <div>
+          <div className="rlc-page-hero__eyebrow">
+            BUCHHALTUNG · FINANZEN
+          </div>
 
+          <h1>Buchhaltung</h1>
 
-
-
-
-
-        
-        <h1 className="rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-164">7. Buchhaltung</h1>
-        <div className="rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-165">
-          Übersicht, Rechnungen, Zahlungen, Kostenstellen, Belege und Exporte
+          <p>
+            Rechnungen, Zahlungen, Kosten, Belege und steuerliche Auswertungen
+            zentral verwalten.
+          </p>
+          <div
+            style={{
+              marginTop: 8,
+              fontWeight: 700,
+              fontSize: 13
+            }}
+          >
+            Aktives Buchhaltungsprojekt: {getAccountingProject()}
+          </div>
         </div>
-      </header>
 
-      <div
-        className="bh-module-nav rlc-migrated-pages-buchhaltung-buchhaltunglayout-tsx-166">
+        <div className="rlc-page-hero__actions">
+          <label style={{
+            display: "grid",
+            gap: 5,
+            minWidth: 260
+          }}>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 800
+            }}>
+              Buchhaltungsprojekt
+            </span>
 
-
-
-
-
-
-
-
-
-
-        
-        {navItems.map((it) => {
-          const active = isActivePath(pathname, it.to);
-
-          return (
-            <NavLink
-              key={it.to}
-              to={it.to}
-              className={`bh-btn ghost ${active ? "active" : ""}`}
+            <select
+              value={accountingProject}
+              onChange={(e) => changeProject(e.target.value)}
               style={{
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                border: active ? "1px solid var(--line, #d0d7de)" : undefined,
-                background: active ? "rgba(59,130,246,0.08)" : undefined,
-                fontWeight: active ? 700 : 600
-              }}>
-              
-              {it.label}
-            </NavLink>);
+                minHeight: 40,
+                borderRadius: 9,
+                padding: "0 10px"
+              }}
+            >
+              {projects.map((p: any) => (
+                <option key={p.id} value={p.code}>
+                  {p.code} · {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
 
-        })}
+      <section className="card rlc-accounting-navigation">
+        {groups.map((group) => (
+          <div
+            key={group.label}
+            className="rlc-accounting-navigation__group"
+          >
+            <span className="rlc-accounting-navigation__label">
+              {group.label}
+            </span>
+
+            <div className="rlc-accounting-navigation__items">
+              {group.items.map((item) => {
+                const active =
+                  item.to === "/buchhaltung"
+                    ? location.pathname === "/buchhaltung" ||
+                      location.pathname === "/buchhaltung/"
+                    : location.pathname.startsWith(item.to);
+
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={
+                      active
+                        ? "rlc-accounting-tab is-active"
+                        : "rlc-accounting-tab"
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <div className="rlc-accounting-module">
+        <Outlet />
       </div>
-
-      <Outlet />
-    </div>);
-
+    </div>
+  );
 }

@@ -183,7 +183,7 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(a.href);
 }
 
-function downloadCsv(rows: LVPos[], projectKey: string) {
+function downloadCsv(rows: LVPos[], projectKey: string, projectId: string) {
   const header = [
   "Position",
   "ParentPosition",
@@ -210,10 +210,16 @@ function downloadCsv(rows: LVPos[], projectKey: string) {
 
   const csv = [header.join(";"), ...body].join("\n");
 
-  downloadBlob(
-    new Blob([csv], { type: "text/csv;charset=utf-8" }),
-    `LV_ohne_Preise_${safeFileName(projectKey)}.csv`
-  );
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const fileName = `LV_ohne_Preise_${safeFileName(projectKey)}.csv`;
+
+  downloadBlob(blob, fileName);
+
+  if (projectId) {
+    void import("../../lib/dmsArchive")
+      .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+      .catch((error) => console.error("[LV:CSV:DMS]", error));
+  }
 }
 
 function xmlEscape(value: unknown): string {
@@ -343,7 +349,8 @@ rows: LVPos[],
 projectKey: string,
 projectName: string,
 client: string,
-place: string)
+place: string,
+projectId: string)
 {
   const doc = new jsPDF({
     unit: "mm",
@@ -460,12 +467,14 @@ place: string)
     );
   }
 
-  saveRlcPdfWithCompanyHeader(doc, `LV_ohne_Preise_${safeFileName(projectKey)}.pdf`);
+  saveRlcPdfWithCompanyHeader(doc, `LV_ohne_Preise_${safeFileName(projectKey)}.pdf`, projectId);
 }
 
 export default function LVOhnePreis() {
   const navigate = useNavigate();
   const projectCtx: any = useProject() as any;
+  const currentProject = getCurrentProject(projectCtx);
+  const projectId = String(currentProject?.id || projectCtx?.projectId || "").trim();
 
   const projectKey = getProjectKey(projectCtx);
   const projectName = getProjectName(projectCtx);
@@ -525,11 +534,11 @@ export default function LVOhnePreis() {
 
     try {
       if (format === "csv") {
-        downloadCsv(filtered, projectKey);
+        downloadCsv(filtered, projectKey, projectId);
       }
 
       if (format === "pdf") {
-        exportPdf(filtered, projectKey, projectName, projectClient, projectPlace);
+        exportPdf(filtered, projectKey, projectName, projectClient, projectPlace, projectId);
       }
 
       if (format === "gaeb-x83") {
@@ -700,9 +709,9 @@ function Kpi({
 
 }: {label: string;value: string;danger?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
     </div>);

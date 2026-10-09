@@ -3,9 +3,9 @@ import type { Request, Response, NextFunction } from "express";
 
 const ALLOW: Record<string, string[]> = {
   ADMIN: ["*"],
-  BAULEITER: ["project:*","lv:*","aufmass:*","cad:*","docs:*","reports:*","buchhaltung:read"],
-  CAPOCANTIERE: ["project:read","aufmass:*","reports:*","docs:read"],
-  MITARBEITER: ["project:read","aufmass:write","reports:write","docs:read"],
+  BAULEITER: ["project:*","lv:*","aufmass:*","cad:*","docs:*","reports:*","buchhaltung:read","safety:read","safety:write"],
+  CAPOCANTIERE: ["project:read","aufmass:*","reports:*","docs:read","safety:read","safety:write"],
+  MITARBEITER: ["project:read","aufmass:write","reports:write","docs:read","safety:read"],
   KALKULATOR: ["project:read","lv:*","angebote:*","docs:read"],
   BUCHHALTUNG: ["project:read","buchhaltung:*","datev:export","ust:report","mahnwesen:*"],
   GAST: ["project:read"]
@@ -19,14 +19,18 @@ function can(role: string, action: string) {
 export function requirePermission(action: string) {
   return (req: Request, res: Response, next: NextFunction) => {
     // 🔓 BYPASS in sviluppo: se DEV_AUTH=on, salta i controlli
-    if (process.env.DEV_AUTH === "on") {
+    if (process.env.NODE_ENV !== "production" && process.env.DEV_AUTH === "on") {
       // opzionale: imposta un ruolo fittizio per coerenza
       // @ts-ignore
       req.auth = req.auth || { role: "ADMIN", userId: "dev", companyId: process.env.DEV_COMPANY_ID || "dev-company" };
       return next();
     }
 
-    const role = (req as any).auth?.role as string | undefined;
+    const role = String(
+      (req as any).auth?.companyRole ||
+      (req as any).auth?.role ||
+      ""
+    ).trim().toUpperCase();
     if (!role || !can(role, action)) {
       return res.status(403).json({ error: "Keine Berechtigung" });
     }

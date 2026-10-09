@@ -5,6 +5,9 @@ import {
   rlcPreisRangeForText,
 } from "./rlcPreisBibliothek";
 import { parseRlcTechnicalPosition } from "./technicalParser/rlcTechnicalPositionParser";
+import { detectPrimaryRlcConstructionFamily } from "./domain/constructionFamilyRegistry";
+import { composeRlcResources } from "./resourceComposer/rlcResourceComposer";
+import { resolveRlcUnifiedResource } from "./resourceResolver/rlcUnifiedResourceResolver";
 
 type InputRow = {
   id?: string;
@@ -14,6 +17,33 @@ type InputRow = {
   einheit?: string;
   menge?: number;
   preis?: number;
+};
+
+export type RlcRecipeEngineContext = {
+  companyId?: string;
+  projectCode?: string;
+  allowResourceComposer?: boolean;
+};
+
+type RlcResourcePrice = {
+  price: number;
+  name: string;
+  unit: string;
+  source:
+    | "COMPANY_PRICE"
+    | "COMPANY_MATERIAL"
+    | "COMPANY_MACHINE"
+    | "COMPANY_EMPLOYEE"
+    | "RLC_TIEFBAU_CATALOG"
+    | "UNRESOLVED";
+};
+
+type RlcRecipePricingContext = {
+  companyPrices: Map<string, RlcResourcePrice>;
+  companyMaterials: Map<string, RlcResourcePrice>;
+  companyMachines: Map<string, RlcResourcePrice>;
+  companyEmployees: Map<string, RlcResourcePrice>;
+  allowTiefbauPriceCatalog: boolean;
 };
 
 type PriceBreakdownGroup =
@@ -40,6 +70,18 @@ type PriceBreakdownLine = {
 
 let templateCache: any[] | null = null;
 let cacheTs = 0;
+
+/*
+ * RLC SPEED: Stammdaten der Firma ändern sich nicht pro LV-Position.
+ * Ohne Cache wurden companyPrice/material/machine/employee für jede
+ * einzelne Position erneut aus PostgreSQL geladen (bis zu 200 Queries
+ * pro 50er-Batch). Kurze Promise-Cache verhindert auch Parallel-Stampede.
+ */
+const RECIPE_PRICING_CACHE_TTL_MS = 60_000;
+const recipePricingContextCache = new Map<
+  string,
+  { ts: number; promise: Promise<RlcRecipePricingContext> }
+>();
 
 function s(v: any): string {
   return String(v ?? "").trim();
@@ -152,45 +194,399 @@ function detectGroup(type: string, refKey: string): PriceBreakdownGroup {
   return "Material";
 }
 
-function defaultPriceFor(refKey: string, rowText: string, unit: string): { price: number; name: string; unit: string } {
+function defaultPriceFor(
+  refKey: string,
+  rowText: string,
+  unit: string,
+  pricing: RlcRecipePricingContext
+): RlcResourcePrice {
   const r = s(refKey);
 
-  if (r.startsWith("LABOR:FACHARBEITER")) return { price: 58, name: "Facharbeiter", unit: "h" };
-  if (r.startsWith("LABOR:HELFER")) return { price: 42, name: "Helfer", unit: "h" };
+  const companyPrice = pricing.companyPrices.get(r);
+  if (companyPrice) return companyPrice;
 
-  if (r.startsWith("MACHINE:BAGGER_8_14T")) return { price: 82, name: "Bagger 8–14 t", unit: "h" };
-  if (r.startsWith("MACHINE:RUETTELPLATTE")) return { price: 18, name: "Rüttelplatte / Verdichtung", unit: "h" };
+  if (r.toUpperCase().startsWith("LABOR:")) {
+    const laborName = norm(r.substring("LABOR:".length));
 
-  const key = norm(r.replace(/^RLC_PREIS:/i, ""));
-  const direct = RLC_PREIS_BIBLIOTHEK.find((x) => norm(x.id).includes(key) || key.includes(norm(x.id)));
+    const direct =
+      pricing.companyEmployees.get(`LABOR_NAME:${laborName}`);
 
-  if (direct) {
-    return {
-      price: n(direct.avgPrice),
-      name: direct.name,
-      unit: direct.unit,
-    };
+    if (direct) return direct;
+
+    for (const [key, value] of pricing.companyEmployees.entries()) {
+      const employeeKey = norm(key.replace("LABOR_NAME:", ""));
+
+      if (
+        employeeKey.includes(laborName) ||
+        laborName.includes(employeeKey)
+      ) {
+        return value;
+      }
+    }
+
+    /*
+     * Kleine Firmen:
+     * Wenn nur ein aktiver Mitarbeiter mit Stundensatz existiert,
+     * wird dieser als Standard-Lohnsatz verwendet.
+     */
+    const employees = Array.from(
+      new Set(
+        Array.from(pricing.companyEmployees.values())
+          .map((x) => JSON.stringify(x))
+      )
+    ).map((x) => JSON.parse(x));
+
+    if (employees.length === 1) {
+      return employees[0];
+    }
   }
 
-  const matches = findRlcPreisItems({ text: `${rowText} ${r}`, unit, limit: 1 });
-  if (matches[0]) {
-    return {
-      price: n(matches[0].avgPrice),
-      name: matches[0].name,
-      unit: matches[0].unit,
-    };
+  if (r.toUpperCase().startsWith("MACHINE:")) {
+    const machineName = norm(r.substring("MACHINE:".length));
+
+    const direct =
+      pricing.companyMachines.get(`MACHINE_NAME:${machineName}`) ||
+      pricing.companyMachines.get(`MACHINE_TYPE:${machineName}`);
+
+    if (direct) return direct;
+
+    for (const [key, value] of pricing.companyMachines.entries()) {
+      const machineKey = norm(
+        key
+          .replace("MACHINE_NAME:", "")
+          .replace("MACHINE_TYPE:", "")
+      );
+
+      if (
+        machineKey.includes(machineName) ||
+        machineName.includes(machineKey)
+      ) {
+        return value;
+      }
+    }
+
+    const machines = Array.from(
+      new Set(
+        Array.from(pricing.companyMachines.values())
+          .map((x) => JSON.stringify(x))
+      )
+    ).map((x) => JSON.parse(x));
+
+    if (machines.length === 1) {
+      return machines[0];
+    }
   }
 
-  const range = rlcPreisRangeForText(rowText, unit);
-  if (n(range.avg) > 0) {
-    return {
-      price: n(range.avg),
-      name: "RLC Preisbibliothek Richtwert",
-      unit: unit || "EH",
-    };
+  if (r.toUpperCase().startsWith("TRANSPORT:")) {
+
+    if (pricing.allowTiefbauPriceCatalog) {
+
+      const matches = findRlcPreisItems({
+        text: `${rowText} LKW Transport Anlieferung Mineralgemisch`,
+        unit: "h",
+        group: "LKW / Transport",
+        limit: 1,
+        // A historic value is not a price source. Transport must be sourced
+        // by a list price or by a documented company calibration.
+        documentedOnly: true,
+      });
+
+      if (matches[0]) {
+        return {
+          price: n(matches[0].avgPrice),
+          name: matches[0].name,
+          unit: matches[0].unit,
+          source: "RLC_TIEFBAU_CATALOG",
+        };
+      }
+    }
   }
 
-  return { price: 25, name: r || "Ressource", unit: unit || "EH" };
+  if (r.toUpperCase().startsWith("MATERIAL:")) {
+
+    const materialName = norm(
+      r.substring("MATERIAL:".length)
+    );
+
+    const direct =
+      pricing.companyMaterials.get(`MATERIAL_NAME:${materialName}`);
+
+    if (direct) return direct;
+
+    for (const [key, value] of pricing.companyMaterials.entries()) {
+      const materialKey = norm(
+        key.replace("MATERIAL_NAME:", "")
+      );
+
+      if (
+        materialKey.includes(materialName) ||
+        materialName.includes(materialKey)
+      ) {
+        return value;
+      }
+    }
+
+    if (pricing.allowTiefbauPriceCatalog) {
+
+      const matches = findRlcPreisItems({
+        text: `${rowText} ${r}`,
+        unit,
+        group: "Material",
+        limit: 1,
+        // Never price a recipe from legacy or family-derived library values.
+        documentedOnly: true,
+      });
+
+      if (matches[0]) {
+        return {
+          price: n(matches[0].avgPrice),
+          name: matches[0].name,
+          unit: matches[0].unit,
+          source: "RLC_TIEFBAU_CATALOG",
+        };
+      }
+    }
+  }
+
+  let companyMaterial = pricing.companyMaterials.get(r);
+
+  if (!companyMaterial && r.toUpperCase().startsWith("MATERIAL:")) {
+    const materialName = norm(r.substring("MATERIAL:".length));
+    companyMaterial = pricing.companyMaterials.get(`MATERIAL_NAME:${materialName}`);
+  }
+
+  if (companyMaterial) return companyMaterial;
+
+  let companyMachine = pricing.companyMachines.get(r);
+
+  if (!companyMachine && r.toUpperCase().startsWith("MACHINE:")) {
+    const machineName = norm(r.substring("MACHINE:".length));
+
+    companyMachine =
+      pricing.companyMachines.get(`MACHINE_NAME:${machineName}`) ||
+      pricing.companyMachines.get(`MACHINE_TYPE:${machineName}`);
+  }
+
+  if (companyMachine) return companyMachine;
+
+  /*
+   * Unified Resource Resolver:
+   * Company → Tiefbau Library → Composer
+   */
+  if (pricing.allowTiefbauPriceCatalog) {
+
+    const unified = resolveRlcUnifiedResource({
+      refKey: r,
+      text: rowText,
+      unit,
+      allowTiefbauLibrary: true,
+    });
+
+    if (unified.price > 0) {
+      return {
+        price: unified.price,
+        name: unified.name,
+        unit: unified.unit,
+        source: "RLC_TIEFBAU_CATALOG",
+      };
+    }
+  }
+
+  return {
+    price: 0,
+    name: r || "Ressource nicht bepreist",
+    unit: unit || "EH",
+    source: "UNRESOLVED",
+  };
+}
+
+async function loadRecipePricingContext(
+  companyId: string,
+  rowText: string
+): Promise<RlcRecipePricingContext> {
+  const family = detectPrimaryRlcConstructionFamily(rowText);
+
+  const allowTiefbauPriceCatalog = [
+    "ERDARBEITEN",
+    "KANALBAU",
+    "KABELBAU",
+    "STRASSENBAU",
+  ].includes(String(family?.id || family || ""));
+
+  const cacheKey = `${companyId || "__no_company__"}|${allowTiefbauPriceCatalog ? "tiefbau" : "other"}`;
+  const cached = recipePricingContextCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < RECIPE_PRICING_CACHE_TTL_MS) {
+    return cached.promise;
+  }
+
+  const promise = (async (): Promise<RlcRecipePricingContext> => {
+  const companyPrices = new Map<string, RlcResourcePrice>();
+  const companyMaterials = new Map<string, RlcResourcePrice>();
+  const companyMachines = new Map<string, RlcResourcePrice>();
+  const companyEmployees = new Map<string, RlcResourcePrice>();
+
+  if (companyId) {
+    const now = new Date();
+
+    const rows = await prisma.companyPrice.findMany({
+      where: {
+        companyId,
+        validFrom: { lte: now },
+        OR: [
+          { validTo: null },
+          { validTo: { gte: now } },
+        ],
+      },
+      orderBy: {
+        validFrom: "desc",
+      },
+    });
+
+    /*
+     * Neuester gültiger Preis pro exaktem refKey gewinnt.
+     */
+    for (const row of rows) {
+      const refKey = s(row.refKey);
+      if (!refKey || companyPrices.has(refKey)) continue;
+
+      const price = n(row.price);
+      if (price <= 0) continue;
+
+      companyPrices.set(refKey, {
+        price,
+        name: refKey,
+        unit: s(row.unit) || "EH",
+        source: "COMPANY_PRICE",
+      });
+    }
+
+    const materials = await prisma.companyMaterial.findMany({
+      where: {
+        companyId,
+        active: true,
+      },
+    });
+
+    for (const row of materials) {
+      const price = n(row.priceNet);
+      if (price <= 0) continue;
+
+      /*
+       * Sicherer V1-Match:
+       * CompanyMaterial.code muss dem Recipe-refKey entsprechen.
+       * Alternativ darf ein Name exakt dem Ressourcenbezeichner
+       * hinter MATERIAL: entsprechen.
+       */
+      const code = s(row.code);
+      const resourceName = norm(row.name);
+
+      if (code) {
+        const refKey = code.toUpperCase().startsWith("MATERIAL:")
+          ? code
+          : `MATERIAL:${code}`;
+
+        companyMaterials.set(refKey, {
+          price,
+          name: row.name,
+          unit: s(row.unit) || "EH",
+          source: "COMPANY_MATERIAL",
+        });
+      }
+
+      if (resourceName) {
+        companyMaterials.set(`MATERIAL_NAME:${resourceName}`, {
+          price,
+          name: row.name,
+          unit: s(row.unit) || "EH",
+          source: "COMPANY_MATERIAL",
+        });
+      }
+    }
+
+    const machines = await prisma.companyMachine.findMany({
+      where: {
+        companyId,
+        active: true,
+      },
+    });
+
+    for (const row of machines) {
+      const price = n(row.hourlyRate);
+      if (price <= 0) continue;
+
+      const machineName = norm(row.name);
+      const machineType = norm(row.type);
+
+      if (machineName) {
+        companyMachines.set(`MACHINE_NAME:${machineName}`, {
+          price,
+          name: row.name,
+          unit: "h",
+          source: "COMPANY_MACHINE",
+        });
+      }
+
+      if (machineType) {
+        companyMachines.set(`MACHINE_TYPE:${machineType}`, {
+          price,
+          name: row.name,
+          unit: "h",
+          source: "COMPANY_MACHINE",
+        });
+      }
+    }
+
+    const employees = await prisma.companyEmployee.findMany({
+      where: {
+        companyId,
+        active: true,
+      },
+    });
+
+    for (const row of employees) {
+      const price = n(row.hourlyRate);
+      if (price <= 0) continue;
+
+      const employeeName = norm(row.name);
+      const employeeRole = norm(row.role);
+
+      if (employeeName) {
+        companyEmployees.set(`LABOR_NAME:${employeeName}`, {
+          price,
+          name: row.name,
+          unit: "h",
+          source: "COMPANY_EMPLOYEE",
+        });
+      }
+
+      if (employeeRole) {
+        companyEmployees.set(`LABOR_NAME:${employeeRole}`, {
+          price,
+          name: row.name,
+          unit: "h",
+          source: "COMPANY_EMPLOYEE",
+        });
+      }
+    }
+  }
+
+  return {
+    companyPrices,
+    companyMaterials,
+    companyMachines,
+    companyEmployees,
+    allowTiefbauPriceCatalog,
+  };
+  })();
+
+  recipePricingContextCache.set(cacheKey, { ts: Date.now(), promise });
+
+  try {
+    return await promise;
+  } catch (error) {
+    recipePricingContextCache.delete(cacheKey);
+    throw error;
+  }
 }
 
 function evalQtyFormula(formula: string, params: any): number {
@@ -313,9 +709,66 @@ function scoreTemplate(tpl: any, rowText: string, unit: string): number {
   ].join(" "));
 
   let score = 0;
-  for (const tok of tokens(rowText)) {
-    if (hay.includes(tok)) score += 6;
+
+  /*
+   * Allgemeiner morphologischer Token-Abgleich.
+   * Deutsche Flexionsformen wie Steckdose/Steckdosen oder
+   * Leuchte/Leuchten sollen dieselbe fachliche Evidenz liefern,
+   * ohne gewerkspezifische Sonderregeln einzubauen.
+   */
+  const tokenMatchesHay = (token: string): boolean => {
+    const tok = norm(token);
+    if (!tok) return false;
+    if (hay.includes(tok)) return true;
+
+    if (tok.length < 6) return false;
+
+    const stems = new Set<string>();
+
+    for (const suffix of ["en", "er", "e", "n", "s"]) {
+      if (tok.endsWith(suffix) && tok.length - suffix.length >= 5) {
+        stems.add(tok.slice(0, -suffix.length));
+      }
+    }
+
+    for (const stem of stems) {
+      if (hay.includes(stem)) return true;
+    }
+
+    return false;
+  };
+
+  const rowTokens = tokens(rowText);
+
+  for (const tok of rowTokens) {
+    if (tokenMatchesHay(tok)) score += 6;
   }
+
+  /*
+   * Fachlicher Identitätsbonus:
+   * Ein längerer charakteristischer Begriff, der sowohl im LV-Text
+   * als auch im Template vorkommt, ist stärkere Evidenz als allgemeine
+   * Wörter wie "herstellen" oder "installieren".
+   *
+   * Der Bonus wird nur einmal vergeben und ist gewerksneutral.
+   */
+  const hasDistinctiveIdentityToken = rowTokens.some((token) => {
+    const tok = norm(token);
+    if (tok.length < 7) return false;
+
+    if (hay.includes(tok)) return true;
+
+    for (const suffix of ["en", "er", "e", "n", "s"]) {
+      if (tok.endsWith(suffix) && tok.length - suffix.length >= 6) {
+        const stem = tok.slice(0, -suffix.length);
+        if (hay.includes(stem)) return true;
+      }
+    }
+
+    return false;
+  });
+
+  if (hasDistinctiveIdentityToken) score += 8;
 
   const rt = norm(rowText);
 
@@ -330,6 +783,8 @@ function scoreTemplate(tpl: any, rowText: string, unit: string): number {
 
   const isEarthworkText =
     rt.includes("aushub") ||
+    rt.includes("ausheben") ||
+    rt.includes("graben ausheben") ||
     rt.includes("graben herstellen") ||
     rt.includes("baugrube") ||
     rt.includes("auskofferung") ||
@@ -468,8 +923,11 @@ function buildDirectTechnicalRecipeOverride(
   row: InputRow,
   text: string,
   einheit: string,
-  menge: number
+  menge: number,
+  pricing: RlcRecipePricingContext
 ): any | null {
+  if (!pricing.allowTiefbauPriceCatalog) return null;
+
   const t = norm(text);
   const range = rlcPreisRangeForText(text, einheit);
   const existingEp = n(row.preis);
@@ -655,8 +1113,11 @@ function buildUniversalRlcLibraryFallback(
   row: InputRow,
   text: string,
   einheit: string,
-  menge: number
+  menge: number,
+  pricing: RlcRecipePricingContext
 ): any | null {
+  if (!pricing.allowTiefbauPriceCatalog) return null;
+
   const range = rlcPreisRangeForText(text, einheit);
   const avgEp = round2(n(range.avg));
 
@@ -774,7 +1235,8 @@ function buildTechnicalComponentFallback(
   text: string,
   einheit: string,
   menge: number,
-  technical: any
+  technical: any,
+  pricing: RlcRecipePricingContext
 ): any | null {
   const t = norm(text);
   const u = normUnit(einheit);
@@ -1170,47 +1632,6 @@ function buildTechnicalComponentFallback(
     note: string;
   }> = [];
 
-  // X84_BLOCK_C_PLANUM_DIRECT_OVERRIDE
-  if (
-    (t.includes("planum herstellen") || t.includes("planie herstellen") || t === "planum") &&
-    isArea &&
-    menge >= 300
-  ) {
-    const ep = 0.8;
-    const total = Math.round(ep * menge * 100) / 100;
-
-    return {
-      ...(row as any),
-      id: (row as any)?.id,
-      posNr: (row as any)?.posNr || (row as any)?.pos || (row as any)?.position || "",
-      pos: (row as any)?.pos || (row as any)?.posNr || (row as any)?.position || "",
-      kurztext: (row as any)?.kurztext || (row as any)?.text || text,
-      text: (row as any)?.text || (row as any)?.kurztext || text,
-      einheit,
-      menge,
-
-      source: "technical-parser",
-      confidence: 0.98,
-      riskLevel: "low",
-      gewerk: "Straßenbau / Erdplanum",
-      leistungsart: "Planum herstellen",
-      bauverfahren: "Planum herstellen",
-      suggestedUnitPrice: ep,
-      finalUnitPrice: ep,
-      totalPrice: total,
-      priceBreakdown: [
-        {
-          group: "Fremdleistung",
-          label: "Planum Großfläche X84 Training",
-          qty: 1,
-          unitPrice: ep,
-          total: ep
-        }
-      ],
-      aiReason: "X84 Training: Planum Großfläche auf Firmenkalkulation kalibriert."
-    };
-  }
-
   function add(refKey: string, type: string, qty: number, note: string) {
     const q = round2(n(qty));
     if (q > 0) components.push({ refKey, type, qty: q, note });
@@ -1249,46 +1670,9 @@ function buildTechnicalComponentFallback(
   }
 
   /*
-   * X83 REAL FIX 1 — GAEB Testdatei erweitert.
    */
   const x83RealFix1Ref: Record<string, [string, string, string]> = {
-      "Baustelleneinrichtung vorhalten X84": ["RLC_PREIS:x83-baustelleneinrichtung-vorhalten-x84", "SUBCONTRACTOR", "Baustelleneinrichtung vorhalten X84"],
-      "Straßenablauf Fertigteil ausbauen": ["RLC_PREIS:x83-strassenablauf-fertigteil-ausbauen", "SUBCONTRACTOR", "Straßenablauf Fertigteil ausbauen"],
-    "Baustelleneinrichtung vorhalten kurz": ["RLC_PREIS:x83-baustelleneinrichtung-vorhalten-kurz", "SUBCONTRACTOR", "Baustelleneinrichtung vorhalten kurz"],
-    "Planum herstellen Großfläche": ["RLC_PREIS:x83-planum-grossflaeche", "SUBCONTRACTOR", "Planum herstellen Großfläche"],
-    "Suchschlitz herstellen": ["RLC_PREIS:x83-suchschlitz-herstellen", "SUBCONTRACTOR", "Suchschlitz herstellen"],
-    "Übergangsstück PP-Beton DN 300 einbauen": ["RLC_PREIS:x83-pp-gelenkstueck", "MATERIAL", "Übergangsstück PP-Beton DN 300 einbauen"],
     "Frostschutzschicht korrigieren": ["RLC_PREIS:blockb-verdichtung", "SUBCONTRACTOR", "Frostschutzschicht korrigieren"],
-    "Erschwerniszuschlag Anschluss Bestandsschacht": ["RLC_PREIS:x83-leitungskreuzung", "SUBCONTRACTOR", "Erschwerniszuschlag Anschluss Bestandsschacht"],
-    "Asphalt feinfräsen": ["RLC_PREIS:x83-unterlage-reinigen", "SUBCONTRACTOR", "Asphalt feinfräsen"],    "Reinigung von Straßen": ["RLC_PREIS:x83-strassen-reinigung", "SUBCONTRACTOR", "Reinigung von Straßen"],
-    "Spartenerkundung durchführen": ["RLC_PREIS:x83-spartenerkundung", "SUBCONTRACTOR", "Spartenerkundung durchführen"],
-    "Zulage Asphalt gering verunreinigt": ["RLC_PREIS:x83-asphalt-zulage-verunreinigt", "DISPOSAL", "Zulage Asphalt gering verunreinigt"],
-    "Fels aufbrechen / lösen": ["RLC_PREIS:x83-fels-aufbruch", "SUBCONTRACTOR", "Fels aufbrechen / lösen"],
-    "Ablaufaufsatz ausbauen": ["RLC_PREIS:x83-aufsatz-ausbauen", "SUBCONTRACTOR", "Ablaufaufsatz ausbauen"],
-    "Ablaufaufsatz liefern und einbauen": ["RLC_PREIS:x83-aufsatz-liefern-einbauen", "SUBCONTRACTOR", "Ablaufaufsatz liefern und einbauen"],
-    "Granitbord / Bordstein ausbauen": ["RLC_PREIS:x83-bord-ausbauen", "SUBCONTRACTOR", "Granitbord / Bordstein ausbauen"],
-    "Boden lösen und zwischenlagern": ["RLC_PREIS:x83-boden-loesen-zwischenlagern", "SUBCONTRACTOR", "Boden lösen und zwischenlagern"],
-    "Probenahme und Deklarationsanalyse": ["RLC_PREIS:x83-deklarationsanalyse", "SUBCONTRACTOR", "Probenahme und Deklarationsanalyse"],
-    "Erschwerniszuschlag Leitungskreuzung": ["RLC_PREIS:x83-leitungskreuzung", "SUBCONTRACTOR", "Erschwerniszuschlag Leitungskreuzung"],
-    "Mehraufwand vorhandene Leitungen": ["RLC_PREIS:x83-mehraufwand-leitungen", "SUBCONTRACTOR", "Mehraufwand vorhandene Leitungen"],
-    "Rohrleitung ausbauen bis DN 300": ["RLC_PREIS:x83-rohrleitung-ausbauen", "SUBCONTRACTOR", "Rohrleitung ausbauen bis DN 300"],
-    "Kunststoffrohrleitung DN 300 herstellen": ["RLC_PREIS:x83-kunststoffrohr-dn300", "MATERIAL", "Kunststoffrohrleitung DN 300 herstellen"],
-    "Kunststoffrohrleitung DN 160 herstellen": ["RLC_PREIS:x83-kunststoffrohr-dn160", "MATERIAL", "Kunststoffrohrleitung DN 160 herstellen"],
-    "PP-Überschiebmuffe DN 300 einbauen": ["RLC_PREIS:x83-pp-ueberschiebmuffe", "MATERIAL", "PP-Überschiebmuffe DN 300 einbauen"],
-    "PP-Gelenkstück DN 300 einbauen": ["RLC_PREIS:x83-pp-gelenkstueck", "MATERIAL", "PP-Gelenkstück DN 300 einbauen"],
-    "PP-Bogen DN 300 einbauen": ["RLC_PREIS:x83-pp-bogen", "MATERIAL", "PP-Bogen DN 300 einbauen"],
-    "PP-Abzweig DN 300/160 einbauen": ["RLC_PREIS:x83-pp-abzweig", "MATERIAL", "PP-Abzweig DN 300/160 einbauen"],
-    "PP-Schnitt DN 160 herstellen": ["RLC_PREIS:x83-pp-schnitt", "SUBCONTRACTOR", "PP-Schnitt DN 160 herstellen"],
-    "Rohrleitung reinigen bis DN 300": ["RLC_PREIS:x83-rohrleitung-reinigen", "SUBCONTRACTOR", "Rohrleitung reinigen bis DN 300"],
-    "Kanal-TV bis DN 300 durchführen": ["RLC_PREIS:x83-kanal-tv", "SUBCONTRACTOR", "Kanal-TV bis DN 300 durchführen"],
-    "Frostschutzschicht herstellen": ["RLC_PREIS:x83-fss-herstellen", "SUBCONTRACTOR", "Frostschutzschicht herstellen"],
-    "Zulage Mehr-/Minderstärke": ["RLC_PREIS:x83-mehr-minderstaerke", "SUBCONTRACTOR", "Zulage Mehr-/Minderstärke"],
-    "Zuschlag Handeinbau Asphalt": ["RLC_PREIS:x83-zuschlag-hand-asphalt", "SUBCONTRACTOR", "Zuschlag Handeinbau Asphalt"],
-    "Unterlage reinigen": ["RLC_PREIS:x83-unterlage-reinigen", "SUBCONTRACTOR", "Unterlage reinigen"],
-    "Schichtenverbund herstellen": ["RLC_PREIS:x83-schichtenverbund", "MATERIAL", "Schichtenverbund herstellen"],
-    "Anschluss als Fuge herstellen": ["RLC_PREIS:x83-anschluss-fuge", "SUBCONTRACTOR", "Anschluss als Fuge herstellen"],
-    "Granittiefbord herstellen": ["RLC_PREIS:x83-granit-tiefbord", "SUBCONTRACTOR", "Granittiefbord herstellen"],
-    "Flächenrüttler einsetzen": ["RLC_PREIS:x83-flaechenruettler", "MACHINE", "Flächenrüttler einsetzen"],
   };
 
   {
@@ -1299,54 +1683,8 @@ function buildTechnicalComponentFallback(
   }
 
   /*
-   * MAXI BLOCK J — Restmodule erweitert.
    */
   const blockJRef: Record<string, [string, string, string]> = {
-    "Personaleinsatzplanung erstellen": ["RLC_PREIS:blockj-personal-einsatzplanung", "LABOR", "Personaleinsatzplanung erstellen"],
-    "Zeiterfassung prüfen": ["RLC_PREIS:blockj-personal-zeiterfassung", "LABOR", "Zeiterfassung prüfen"],
-    "Urlaubsplanung / Abwesenheit verwalten": ["RLC_PREIS:blockj-personal-urlaubsplanung", "LABOR", "Urlaubsplanung / Abwesenheit verwalten"],
-    "Mitarbeiterschulung dokumentieren": ["RLC_PREIS:blockj-personal-schulung", "LABOR", "Mitarbeiterschulung dokumentieren"],
-    "Sicherheitsunterweisung durchführen": ["RLC_PREIS:blockj-personal-unterweisung", "LABOR", "Sicherheitsunterweisung durchführen"],
-    "Fuhrpark Einsatzplanung erstellen": ["RLC_PREIS:blockj-fuhrpark-einsatzplanung", "MACHINE", "Fuhrpark Einsatzplanung erstellen"],
-    "Fahrzeugakte pflegen": ["RLC_PREIS:blockj-fuhrpark-fahrzeugakte", "LABOR", "Fahrzeugakte pflegen"],
-    "TÜV / UVV Termin überwachen": ["RLC_PREIS:blockj-fuhrpark-tuev", "LABOR", "TÜV / UVV Termin überwachen"],
-    "Kilometerstand / Betriebsstunden erfassen": ["RLC_PREIS:blockj-fuhrpark-kilometer", "LABOR", "Kilometerstand / Betriebsstunden erfassen"],
-    "Kraftstoffverbrauch erfassen": ["RLC_PREIS:blockj-fuhrpark-kraftstoff", "LABOR", "Kraftstoffverbrauch erfassen"],
-    "Gerätewartung planen": ["RLC_PREIS:blockj-geraet-wartung", "MACHINE", "Gerätewartung planen"],
-    "Geräteprüfung dokumentieren": ["RLC_PREIS:blockj-geraet-pruefung", "MACHINE", "Geräteprüfung dokumentieren"],
-    "Gerätereparatur koordinieren": ["RLC_PREIS:blockj-geraet-reparatur", "MACHINE", "Gerätereparatur koordinieren"],
-    "Gerätedisposition erstellen": ["RLC_PREIS:blockj-geraet-disposition", "MACHINE", "Gerätedisposition erstellen"],
-    "Gerätemiete organisieren": ["RLC_PREIS:blockj-geraet-miete", "MACHINE", "Gerätemiete organisieren"],
-    "Arbeitssicherheitsdokumentation erstellen": ["RLC_PREIS:blockj-sicherheit-dokumentation", "LABOR", "Arbeitssicherheitsdokumentation erstellen"],
-    "DPI / PSA Kontrolle durchführen": ["RLC_PREIS:blockj-sicherheit-dpi", "LABOR", "DPI / PSA Kontrolle durchführen"],
-    "Gefährdungsbeurteilung erstellen": ["RLC_PREIS:blockj-sicherheit-gefaehrdung", "LABOR", "Gefährdungsbeurteilung erstellen"],
-    "Baustellensicherheitskontrolle durchführen": ["RLC_PREIS:blockj-sicherheit-baustellenkontrolle", "LABOR", "Baustellensicherheitskontrolle durchführen"],
-    "Sicherheitsmangel dokumentieren": ["RLC_PREIS:blockj-sicherheit-maengel", "LABOR", "Sicherheitsmangel dokumentieren"],
-    "Mangel aufnehmen / dokumentieren": ["RLC_PREIS:blockj-qm-maengel", "LABOR", "Mangel aufnehmen / dokumentieren"],
-    "Nacharbeit koordinieren": ["RLC_PREIS:blockj-qm-nacharbeit", "LABOR", "Nacharbeit koordinieren"],
-    "Abnahme vorbereiten": ["RLC_PREIS:blockj-qm-abnahme", "LABOR", "Abnahme vorbereiten"],
-    "Qualitätsprüfung durchführen": ["RLC_PREIS:blockj-qm-pruefung", "LABOR", "Qualitätsprüfung durchführen"],
-    "Qualitätscheckliste bearbeiten": ["RLC_PREIS:blockj-qm-checkliste", "LABOR", "Qualitätscheckliste bearbeiten"],
-    "Bauzeitenplan erstellen": ["RLC_PREIS:blockj-projekt-bauzeitenplan", "LABOR", "Bauzeitenplan erstellen"],
-    "Gantt-Plan aktualisieren": ["RLC_PREIS:blockj-projekt-gantt", "LABOR", "Gantt-Plan aktualisieren"],
-    "Projektstatusbericht erstellen": ["RLC_PREIS:blockj-projekt-status", "LABOR", "Projektstatusbericht erstellen"],
-    "Baubesprechungsprotokoll erstellen": ["RLC_PREIS:blockj-projekt-protokoll", "LABOR", "Baubesprechungsprotokoll erstellen"],
-    "Projektkoordination durchführen": ["RLC_PREIS:blockj-projekt-koordination", "LABOR", "Projektkoordination durchführen"],
-    "Dokument ablegen / archivieren": ["RLC_PREIS:blockj-buero-dokument", "LABOR", "Dokument ablegen / archivieren"],
-    "Dokumentenfreigabe bearbeiten": ["RLC_PREIS:blockj-buero-freigabe", "LABOR", "Dokumentenfreigabe bearbeiten"],
-    "E-Mail / Schriftverkehr zuordnen": ["RLC_PREIS:blockj-buero-email", "LABOR", "E-Mail / Schriftverkehr zuordnen"],
-    "Export PDF / Excel / DATEV vorbereiten": ["RLC_PREIS:blockj-buero-export", "LABOR", "Export PDF / Excel / DATEV vorbereiten"],
-    "Projektarchiv pflegen": ["RLC_PREIS:blockj-buero-archiv", "LABOR", "Projektarchiv pflegen"],
-    "Kundendaten pflegen": ["RLC_PREIS:blockj-crm-kunde", "LABOR", "Kundendaten pflegen"],
-    "Angebotsnachverfolgung durchführen": ["RLC_PREIS:blockj-crm-angebot", "LABOR", "Angebotsnachverfolgung durchführen"],
-    "Sales Pipeline aktualisieren": ["RLC_PREIS:blockj-crm-pipeline", "LABOR", "Sales Pipeline aktualisieren"],
-    "Kundenkontakt dokumentieren": ["RLC_PREIS:blockj-crm-kontakt", "LABOR", "Kundenkontakt dokumentieren"],
-    "Akquise / Lead bearbeiten": ["RLC_PREIS:blockj-crm-akquise", "LABOR", "Akquise / Lead bearbeiten"],
-    "BIM-Modellprüfung durchführen": ["RLC_PREIS:blockj-bim-modellpruefung", "LABOR", "BIM-Modellprüfung durchführen"],
-    "5D-BIM Kostenmodell bearbeiten": ["RLC_PREIS:blockj-bim-5d", "LABOR", "5D-BIM Kostenmodell bearbeiten"],
-    "4D-BIM Terminmodell bearbeiten": ["RLC_PREIS:blockj-bim-4d", "LABOR", "4D-BIM Terminmodell bearbeiten"],
-    "KI-Datenprüfung durchführen": ["RLC_PREIS:blockj-ki-datenpruefung", "LABOR", "KI-Datenprüfung durchführen"],
-    "Supportanfrage bearbeiten": ["RLC_PREIS:blockj-support-anfrage", "LABOR", "Supportanfrage bearbeiten"],
   };
 
   {
@@ -1630,7 +1968,6 @@ function buildTechnicalComponentFallback(
    */
   const blockBRef: Record<string, [string, string, string]> = {
     // X83_OBERBAU_AUFBRUCH_GROSSFLAECHE_OVERRIDE
-    "Gebundener Oberbau aufbrechen Großfläche": ["RLC_PREIS:x83-oberbau-aufbruch-grossflaeche", "SUBCONTRACTOR", "Gebundener Oberbau aufbrechen Großfläche"],
     "Asphaltbinderschicht herstellen": ["RLC_PREIS:blockb-asphalt-binder", "SUBCONTRACTOR", "Asphaltbinderschicht herstellen"],
     "Asphalt-Ausgleichsschicht herstellen": ["RLC_PREIS:blockb-asphalt-ausgleich", "SUBCONTRACTOR", "Asphalt-Ausgleichsschicht herstellen"],
     "Asphalt Kleinfläche von Hand herstellen": ["RLC_PREIS:blockb-asphalt-hand", "SUBCONTRACTOR", "Asphalt Kleinfläche von Hand herstellen"],
@@ -1680,7 +2017,7 @@ function buildTechnicalComponentFallback(
 
   if (isBlockBExactOnly && components.length > 0) {
     const directSum = round2(components.reduce((sum, c) => {
-      const priceInfo = defaultPriceFor(c.refKey, text, einheit);
+      const priceInfo = defaultPriceFor(c.refKey, text, einheit, pricing);
       return sum + round2(c.qty * n(priceInfo.price));
     }, 0));
 
@@ -1690,7 +2027,7 @@ function buildTechnicalComponentFallback(
     const finalUnitPrice = round2(directSum + overheadCost + riskCost + profitCost);
 
     const priceBreakdown: PriceBreakdownLine[] = components.map((c, index) => {
-      const priceInfo = defaultPriceFor(c.refKey, text, einheit);
+      const priceInfo = defaultPriceFor(c.refKey, text, einheit, pricing);
       const price = round2(n(priceInfo.price));
       const qty = round2(n(c.qty));
       return {
@@ -2005,7 +2342,7 @@ function buildTechnicalComponentFallback(
           ? "RLC_PREIS:kanal-kg-dn150-verlegen"
           : "RLC_PREIS:kanal-kg-dn100-verlegen";
 
-    const autoInfo = defaultPriceFor(autoKey, text, einheit);
+    const autoInfo = defaultPriceFor(autoKey, text, einheit, pricing);
     const hasAuto =
       n(autoInfo.price) > 0 &&
       !autoInfo.name.toLowerCase().includes("pauschaler ansatz");
@@ -2155,13 +2492,11 @@ function buildTechnicalComponentFallback(
     isAdsGrossflaeche4cm
   ) {
     components.length = 0;
-    add("RLC_PREIS:x83-ads-grossflaeche-4cm", "SUBCONTRACTOR", 1, "ADS AC 11 DS Großfläche 4 cm kalibriert");
   }
 
   // X83_ATS_GROSSFLAECHE_10CM_OVERRIDE
   if (isAtsGrossflaeche10cm) {
     components.length = 0;
-    add("RLC_PREIS:x83-ats-grossflaeche-10cm", "SUBCONTRACTOR", 1, "ATS AC 32 TS Großfläche 10 cm kalibriert");
   } else {
     if (technical.bauverfahren === "Asphalttragschicht herstellen") {
     add(
@@ -2432,7 +2767,7 @@ function buildTechnicalComponentFallback(
   const priceBreakdown: PriceBreakdownLine[] = [];
 
   for (const c of components) {
-    const priceInfo = defaultPriceFor(c.refKey, text, einheit);
+    const priceInfo = defaultPriceFor(c.refKey, text, einheit, pricing);
     const total = round2(c.qty * n(priceInfo.price));
 
     if (total <= 0) continue;
@@ -2535,392 +2870,28 @@ function buildTechnicalComponentFallback(
 
 
 
-// X84_COMPANY_CALIBRATION_BLOCK_D
-const X84_COMPANY_CALIBRATION_BLOCK_D: Record<string, {
-  ep: number;
-  kurztext: string;
-  einheit: string;
-  bauverfahren: string;
-}> = {
-  "001": {
-    "ep": 1943.13,
-    "kurztext": "Baustelleneinricht. herstellen",
-    "einheit": "Psch",
-    "bauverfahren": "Baustelleneinrichtung pauschal"
-  },
-  "003": {
-    "ep": 1434.36,
-    "kurztext": "Baustelle räumen",
-    "einheit": "Psch",
-    "bauverfahren": "Baustelle räumen"
-  },
-  "004": {
-    "ep": 8.89,
-    "kurztext": "Bauzaun herstellen vorhalten u. abb.",
-    "einheit": "m",
-    "bauverfahren": "Bauzaun stellen und vorhalten"
-  },
-  "005": {
-    "ep": 74.77,
-    "kurztext": "Höhenfestpunkt herstellen",
-    "einheit": "St",
-    "bauverfahren": "Bestandsaufnahme / Geländeaufnahme"
-  },
-  "006": {
-    "ep": 1131.81,
-    "kurztext": "Verkehrssicherung v. längerer Dauer",
-    "einheit": "Psch",
-    "bauverfahren": "Mobile Ampelanlage stellen"
-  },
-  "007": {
-    "ep": 844.5,
-    "kurztext": "Verk.Fl.unterh.",
-    "einheit": "psch",
-    "bauverfahren": "Verkehrssicherung einrichten und vorhalten"
-  },
-  "008": {
-    "ep": 875.98,
-    "kurztext": "Absperrung herstellen",
-    "einheit": "Psch",
-    "bauverfahren": "Absperrung / Absturzsicherung herstellen"
-  },
-  "009": {
-    "ep": 156.0,
-    "kurztext": "Reinigung von Straßen",
-    "einheit": "psch",
-    "bauverfahren": "Reinigung von Straßen"
-  },
-  "010": {
-    "ep": 119.61,
-    "kurztext": "Spartenerkundung",
-    "einheit": "Psch",
-    "bauverfahren": "Spartenerkundung durchführen"
-  },
-  "011": {
-    "ep": 6.32,
-    "kurztext": "Asphalt trennen 12-18",
-    "einheit": "m",
-    "bauverfahren": "Asphalt schneiden / trennen"
-  },
-  "012": {
-    "ep": 10.87,
-    "kurztext": "Gebundenen Ober- bau aufbrechen",
-    "einheit": "m2",
-    "bauverfahren": "Gebundener Oberbau aufbrechen Großfläche"
-  },
-  "013": {
-    "ep": 2.2,
-    "kurztext": "Asphalt feinfräsen",
-    "einheit": "m2",
-    "bauverfahren": "Asphalt feinfräsen"
-  },
-  "014": {
-    "ep": 25.0,
-    "kurztext": "Zulage Asphalt gering verunreinigt",
-    "einheit": "t",
-    "bauverfahren": "Zulage Asphalt gering verunreinigt"
-  },
-  "015": {
-    "ep": 191.31,
-    "kurztext": "Aufbruch Fels",
-    "einheit": "m3",
-    "bauverfahren": "Fels aufbrechen / lösen"
-  },
-  "016": {
-    "ep": 109.45,
-    "kurztext": "Aufsatz ausbauen",
-    "einheit": "St",
-    "bauverfahren": "Ablaufaufsatz ausbauen"
-  },
-  "019": {
-    "ep": 11.35,
-    "kurztext": "Granitbord ausbauen",
-    "einheit": "m",
-    "bauverfahren": "Granitbord / Bordstein ausbauen"
-  },
-  "021": {
-    "ep": 8.0,
-    "kurztext": "Oberboden zwischengelagert andecken",
-    "einheit": "m3",
-    "bauverfahren": "Boden lösen und zwischenlagern"
-  },
-  "022": {
-    "ep": 1.1,
-    "kurztext": "Rasenansaat auf Oberboden herst.",
-    "einheit": "m2",
-    "bauverfahren": "Rasenansaat herstellen"
-  },
-  "024": {
-    "ep": 4.5,
-    "kurztext": "FSK Korrigieren",
-    "einheit": "m²",
-    "bauverfahren": "Frostschutzschicht korrigieren"
-  },
-  "025": {
-    "ep": 80.0,
-    "kurztext": "Bankett herstellen",
-    "einheit": "m3",
-    "bauverfahren": "Bankett herstellen"
-  },
-  "027": {
-    "ep": 350.0,
-    "kurztext": "Probenahme und Deklarationsanalyse",
-    "einheit": "St",
-    "bauverfahren": "Probenahme und Deklarationsanalyse"
-  },
-  "028": {
-    "ep": 42.5,
-    "kurztext": "Belast.Boden entsorgen Z0",
-    "einheit": "m3",
-    "bauverfahren": "Boden Z0 entsorgen"
-  },
-  "031": {
-    "ep": 55.0,
-    "kurztext": "Leitungsgraben herstellen",
-    "einheit": "m3",
-    "bauverfahren": "Graben ausheben / Leitungsgraben herstellen"
-  },
-  "032": {
-    "ep": 85.0,
-    "kurztext": "Verdichtbares Material liefern und einbauen",
-    "einheit": "m3",
-    "bauverfahren": "Recyclingmaterial liefern und einbauen"
-  },
-  "033": {
-    "ep": 2.01,
-    "kurztext": "Planum herstellen 45",
-    "einheit": "m2",
-    "bauverfahren": "Planum herstellen"
-  },
-  "034": {
-    "ep": 195.5,
-    "kurztext": "Zuschlag zu allen Aushubpositionen Stahlbetonaufbruch",
-    "einheit": "m3",
-    "bauverfahren": "Betonfundament herstellen"
-  },
-  "035": {
-    "ep": 79.33,
-    "kurztext": "Erschwerniszuschlag Leitungskreuzung",
-    "einheit": "St",
-    "bauverfahren": "Erschwerniszuschlag Leitungskreuzung"
-  },
-  "037": {
-    "ep": 31.12,
-    "kurztext": "RL ausbauen bis 300",
-    "einheit": "m",
-    "bauverfahren": "Rohrleitung ausbauen bis DN 300"
-  },
-  "041": {
-    "ep": 88.0,
-    "kurztext": "Kunststoffrohrlleitung DN 160 herstellen",
-    "einheit": "m",
-    "bauverfahren": "Kunststoffrohrleitung DN 160 herstellen"
-  },
-  "043": {
-    "ep": 402.03,
-    "kurztext": "Übergangsstück PP-Beton DN 300",
-    "einheit": "Stk",
-    "bauverfahren": "Übergangsstück PP-Beton DN 300 einbauen"
-  },
-  "044": {
-    "ep": 38.0,
-    "kurztext": "PP-Gelenkstück DN 300",
-    "einheit": "St",
-    "bauverfahren": "PP-Gelenkstück DN 300 einbauen"
-  },
-  "046": {
-    "ep": 45.0,
-    "kurztext": "PP-Abzweig DN300/160",
-    "einheit": "St",
-    "bauverfahren": "PP-Abzweig DN 300/160 einbauen"
-  },
-  "047": {
-    "ep": 7.5,
-    "kurztext": "PP-Schnitt DN160",
-    "einheit": "St",
-    "bauverfahren": "PP-Schnitt DN 160 herstellen"
-  },
-  "048": {
-    "ep": 0.6,
-    "kurztext": "Trassenwarnband liefern und verlegen",
-    "einheit": "m",
-    "bauverfahren": "Warnband / Trassenband verlegen"
-  },
-  "049": {
-    "ep": 446.84,
-    "kurztext": "Straßenablauf Klasse D 400 herstellen",
-    "einheit": "St",
-    "bauverfahren": "Straßenablauf setzen"
-  },
-  "052": {
-    "ep": 6.35,
-    "kurztext": "Rohrleitung reinigen bis 300",
-    "einheit": "m",
-    "bauverfahren": "Rohrleitung reinigen bis DN 300"
-  },
-  "053": {
-    "ep": 6.35,
-    "kurztext": "Kanal-TV bis DN 300 und 50m, in Betr.",
-    "einheit": "m",
-    "bauverfahren": "Kanal-TV bis DN 300 durchführen"
-  },
-  "054": {
-    "ep": 74.34,
-    "kurztext": "FSS herstellen, d = 50 cm",
-    "einheit": "m3",
-    "bauverfahren": "Frostschutzschicht herstellen"
-  },
-  "055": {
-    "ep": 23.27,
-    "kurztext": "ATS aus AC 32 TS herstellen, 10 cm",
-    "einheit": "m2",
-    "bauverfahren": "Asphalttragschicht herstellen"
-  },
-  "058": {
-    "ep": 28.0,
-    "kurztext": "Zuschlag Hand ATS",
-    "einheit": "m2",
-    "bauverfahren": "Zuschlag Handeinbau Asphalt"
-  },
-  "059": {
-    "ep": 4.5,
-    "kurztext": "Zuschlag Hand ADS",
-    "einheit": "m2",
-    "bauverfahren": "Zuschlag Handeinbau Asphalt"
-  },
-  "060": {
-    "ep": 0.2,
-    "kurztext": "Unterlage reinigen",
-    "einheit": "m2",
-    "bauverfahren": "Unterlage reinigen"
-  },
-  "061": {
-    "ep": 0.57,
-    "kurztext": "Schichtenverbund herstellen",
-    "einheit": "m2",
-    "bauverfahren": "Schichtenverbund herstellen"
-  },
-  "063": {
-    "ep": 65.0,
-    "kurztext": "Granittiefbord herstellen",
-    "einheit": "m",
-    "bauverfahren": "Granittiefbord herstellen"
-  },
-  "064": {
-    "ep": 72.5,
-    "kurztext": "Werkpolier",
-    "einheit": "h",
-    "bauverfahren": "Polier / Vorarbeiter Regiestunde"
-  },
-  "065": {
-    "ep": 70.0,
-    "kurztext": "Gehob. Facharbeiter",
-    "einheit": "h",
-    "bauverfahren": "Facharbeiter Regiestunde"
-  },
-  "066": {
-    "ep": 100.0,
-    "kurztext": "Bagger 0,5",
-    "einheit": "h",
-    "bauverfahren": "Minibagger bis 3,5 t"
-  },
-  "067": {
-    "ep": 110.0,
-    "kurztext": "Bagger 1",
-    "einheit": "h",
-    "bauverfahren": "Minibagger bis 3,5 t"
-  },
-  "068": {
-    "ep": 130.0,
-    "kurztext": "Bagger>1",
-    "einheit": "h",
-    "bauverfahren": "Bagger 8–14 t"
-  },
-  "069": {
-    "ep": 95.0,
-    "kurztext": "Radlader",
-    "einheit": "h",
-    "bauverfahren": "Radlader"
-  },
-  "070": {
-    "ep": 25.0,
-    "kurztext": "Flächenrüttler",
-    "einheit": "h",
-    "bauverfahren": "Flächenrüttler einsetzen"
-  },
-  "071": {
-    "ep": 100.0,
-    "kurztext": "LKW 7t",
-    "einheit": "h",
-    "bauverfahren": "LKW Kipper"
-  },
-  "072": {
-    "ep": 120.0,
-    "kurztext": "Lkw 12t",
-    "einheit": "h",
-    "bauverfahren": "LKW Kipper"
-  }
-};
-
-function getX84CompanyCalibrationBlockD(row: InputRow, text: string, einheit: string, menge: number): any | null {
-  const pos =
-    String((row as any)?.posNr || (row as any)?.pos || (row as any)?.position || "").trim();
-
-  const hit = X84_COMPANY_CALIBRATION_BLOCK_D[pos];
-  if (!hit || !hit.ep || hit.ep <= 0) return null;
-
-  const ep = round2(hit.ep);
-  const qty = n(menge);
-  const total = round2(ep * qty);
-
-  return {
-    ...(row as any),
-    id: (row as any)?.id,
-    posNr: (row as any)?.posNr || pos,
-    pos: (row as any)?.pos || pos,
-    kurztext: (row as any)?.kurztext || hit.kurztext || text,
-    text: (row as any)?.text || (row as any)?.kurztext || hit.kurztext || text,
-    einheit: einheit || hit.einheit,
-    menge: qty,
-
-    source: "technical-parser",
-    confidence: 0.99,
-    riskLevel: "low",
-    gewerk: "RLC Firmenkalibrierung",
-    leistungsart: hit.kurztext || text,
-    bauverfahren: hit.bauverfahren || hit.kurztext || text,
-
-    suggestedUnitPrice: ep,
-    finalUnitPrice: ep,
-    totalPrice: total,
-
-    priceBreakdown: [
-      {
-        group: "Fremdleistung",
-        label: "RLC Firmenkalibrierung aus X84",
-        qty: 1,
-        unitPrice: ep,
-        total: ep,
-      },
-    ],
-
-    aiReason:
-      "RLC Firmenkalibrierung Block D: Diese Position wurde aus der firmeneigenen X84-Kalkulation gelernt und als technischer Firmenpreis übernommen.",
+export async function calcRecipeKalkulationRow(
+  row: InputRow,
+  context: RlcRecipeEngineContext = {}
+): Promise<any | null> {
+  const recipePerfStart = Date.now();
+  const recipePerf = (stage: string, started: number) => {
+    const ms = Date.now() - started;
+    if (ms >= 500) console.log("[RLC RECIPE PERF]", { posNr: s(row.posNr), stage, durationMs: ms });
   };
-}
-
-
-export async function calcRecipeKalkulationRow(row: InputRow): Promise<any | null> {
   const kurztext = s(row.kurztext);
   const langtext = s(row.langtext);
   const einheit = s(row.einheit);
   const menge = n(row.menge);
+  const companyId = s(context.companyId);
+  const projectCode = s(context.projectCode);
+  void companyId;
+  void projectCode;
 const text = `${kurztext} ${langtext}`.trim();
 
-  const x84CompanyCalibrationBlockD = getX84CompanyCalibrationBlockD(row, text, einheit, menge);
-  if (x84CompanyCalibrationBlockD) return x84CompanyCalibrationBlockD;
-
-
+  const pricingStarted = Date.now();
+  const pricing = await loadRecipePricingContext(companyId, text);
+  recipePerf("pricing", pricingStarted);
 
   if (!text || !einheit) return null;
 
@@ -2934,7 +2905,7 @@ const text = `${kurztext} ${langtext}`.trim();
 
   const asphaltTechnicalFallback =
     technical.surface === "ASPHALT"
-      ? buildTechnicalComponentFallback(row, text, einheit, menge, technical)
+      ? buildTechnicalComponentFallback(row, text, einheit, menge, technical, pricing)
       : null;
 
   /*
@@ -2943,7 +2914,7 @@ const text = `${kurztext} ${langtext}`.trim();
    */
   if (asphaltTechnicalFallback) return asphaltTechnicalFallback;
 
-  const blockBPriorityFallback = buildTechnicalComponentFallback(row, text, einheit, menge, technical);
+  const blockBPriorityFallback = buildTechnicalComponentFallback(row, text, einheit, menge, technical, pricing);
   if (
     blockBPriorityFallback &&
     [
@@ -2969,22 +2940,35 @@ const text = `${kurztext} ${langtext}`.trim();
 
   const directOverride = isBlockBExactTechnical
     ? null
-    : buildDirectTechnicalRecipeOverride(row, text, einheit, menge);
-
-  if (directOverride) return directOverride;
-
-  const technicalFallback = buildTechnicalComponentFallback(row, text, einheit, menge, technical);
+    : buildDirectTechnicalRecipeOverride(row, text, einheit, menge, pricing);
 
   /*
-   * Wichtig:
-   * Wenn der technische Parser einen echten Komponentenpreis bauen kann,
-   * gewinnt dieser vor alten Rezepttemplates.
-   * Grund: Langtext-Schichten, Aushub, Entsorgung, Transport usw. sind konkreter
-   * als ein allgemeines Template-Matching.
+   * Legacy DirectOverride bleibt erhalten, darf aber ein kompatibles
+   * RecipeTemplate mit echten Firmenressourcen nicht mehr übersteuern.
    */
-  if (technicalFallback) return technicalFallback;
+  const technicalFallback = buildTechnicalComponentFallback(row, text, einheit, menge, technical, pricing);
 
-  const libraryFallback = buildUniversalRlcLibraryFallback(row, text, einheit, menge);
+  if (
+    process.env.RLC_RECIPE_DEBUG === "1" &&
+    (norm(text).includes("radlader") || norm(text).includes("entwaesserungsmulde"))
+  ) {
+    console.log("[RLC_TARGET_DEBUG]", {
+      posNr: (row as any)?.posNr,
+      kurztext,
+      einheit,
+      bauverfahren: technical?.bauverfahren,
+      gewerk: technical?.gewerk,
+      technicalFallback: !!technicalFallback,
+      fallbackPrice: technicalFallback?.finalUnitPrice ?? null,
+    });
+  }
+
+  /*
+   * Der technische Parser bleibt als Legacy-Fallback erhalten.
+   * Ein kompatibles RecipeTemplate mit echten Firmenressourcen
+   * bekommt jedoch Vorrang.
+   */
+  const libraryFallback = buildUniversalRlcLibraryFallback(row, text, einheit, menge, pricing);
 
   /*
    * BLOCK B Exact darf niemals in alte Template-Rezepte fallen
@@ -2994,16 +2978,264 @@ const text = `${kurztext} ${langtext}`.trim();
     return libraryFallback;
   }
 
+  const templatesStarted = Date.now();
   const templates = await loadTemplates();
-  if (!templates.length) return libraryFallback;
+  recipePerf("templates", templatesStarted);
+  if (!templates.length) return directOverride || technicalFallback || libraryFallback;
+
+  /*
+   * Die Leistungsfamilie wird primär aus dem Kurztext bestimmt.
+   * Der Langtext enthält häufig nur Nebenbedingungen oder technische
+   * Begleitleistungen und darf die Hauptleistung nicht übersteuern.
+   *
+   * Nur wenn der Kurztext keine fachliche Familie liefert, wird der
+   * vollständige Positionstext als Fallback verwendet.
+   */
+  const kurztextFamily = detectPrimaryRlcConstructionFamily(kurztext);
+
+  const inputFamily =
+    String((kurztextFamily as any)?.id || kurztextFamily) !== "ALLGEMEIN"
+      ? kurztextFamily
+      : detectPrimaryRlcConstructionFamily(text);
 
   const ranked = templates
-    .map((tpl) => ({ tpl, score: scoreTemplate(tpl, text, einheit) }))
-    .filter((x) => x.score >= 35)
+    .filter((tpl) => {
+      if (!inputFamily) return true;
+
+      const templateText = [
+        tpl.category,
+        tpl.title,
+        ...(tpl.tags || []),
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const templateFamily =
+        detectPrimaryRlcConstructionFamily(templateText);
+
+      /*
+       * Sobald die LV-Position fachlich erkannt wurde,
+       * darf nur ein Template derselben Baufamilie konkurrieren.
+       * Unklassifizierbare Templates werden für bekannte Familien
+       * nicht als Legacy-Fallback zugelassen.
+       */
+      if (!templateFamily) return false;
+
+      const inputFamilyId =
+        String((inputFamily as any)?.id || inputFamily);
+
+      const templateFamilyId =
+        String((templateFamily as any)?.id || templateFamily);
+
+      return inputFamilyId === templateFamilyId;
+    })
+    .map((tpl) => {
+      let score = scoreTemplate(tpl, text, einheit);
+
+      /*
+       * Die Family-Kompatibilität wurde bereits als Hard Guard geprüft.
+       * Gleiche Einheit ist zusätzliche strukturelle Evidenz und darf
+       * einen fachlich passenden Kandidaten über die Mindestschwelle heben.
+       */
+      if (einheit && norm(tpl.unit) === norm(einheit)) {
+        score += 10;
+      }
+
+      return { tpl, score };
+    })
+
+  if (process.env.RLC_RECIPE_DEBUG === "1") {
+    console.log("[RLC_RECIPE_DEBUG]", {
+      text,
+      einheit,
+      inputFamily: String((inputFamily as any)?.id || inputFamily),
+      candidates: ranked.map((x) => ({
+        key: x.tpl.key,
+        title: x.tpl.title,
+        category: x.tpl.category,
+        unit: x.tpl.unit,
+        score: x.score,
+      })),
+    });
+  }
+
+
+  /*
+   * HARD DISAMBIGUATION TIEFBAU:
+   * Materialschichten dürfen niemals als Aushub/Graben
+   * interpretiert werden.
+   */
+  const isMaterialLayerText =
+    norm(text).includes("frostschutz") ||
+    norm(text).includes("mineralgemisch") ||
+    norm(text).includes("schottertragschicht") ||
+    norm(text).includes("schotter");
+
+  if (isMaterialLayerText) {
+    const filtered = ranked.filter((x: any) => {
+      const key = norm(x.tpl.key);
+      const title = norm(x.tpl.title);
+
+      return !(
+        key.includes("graben") ||
+        key.includes("aushub") ||
+        key.includes("ausheben") ||
+        title.includes("graben") ||
+        title.includes("aushub") ||
+        title.includes("ausheben")
+      );
+    });
+
+    ranked.splice(0, ranked.length, ...filtered);
+  }
+
+  const eligibleRanked = ranked
+    .filter((x) => {
+      const rt = norm(text);
+      const key = norm(x.tpl.key);
+      const title = norm(x.tpl.title);
+
+      const isFrostschutz =
+        rt.includes("frostschutz") ||
+        rt.includes("mineralgemisch") ||
+        rt.includes("schotter");
+
+      // Kabel verlegen ist keine Erdarbeit, auch wenn im Langtext "Rohrgraben"
+      // als bereits vorhandene Einbausituation erwähnt wird.
+      const isCableInstallation =
+        (rt.includes("kabel") || rt.includes("mittelspannung") || rt.includes("niederspannung")) &&
+        (rt.includes("verlegung") || rt.includes("verlegen") || rt.includes("einbauen"));
+
+      if (
+        isCableInstallation &&
+        (
+          key.includes("graben") ||
+          key.includes("aushub") ||
+          title.includes("graben") ||
+          title.includes("aushub")
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        isFrostschutz &&
+        (
+          key.includes("graben") ||
+          key.includes("aushub") ||
+          title.includes("graben") ||
+          title.includes("aushub")
+        )
+      ) {
+        return false;
+      }
+
+      /*
+       * Aushub abfahren ist Transport/Entsorgung.
+       * Kein Match auf reine Erdarbeiten zulassen.
+       */
+      const isAushubTransport =
+        rt.includes("abfahren") ||
+        rt.includes("abtransport") ||
+        rt.includes("entsorgen") ||
+        rt.includes("abfuhr");
+
+      if (
+        isAushubTransport &&
+        (
+          key.includes("graben") ||
+          key.includes("aushub") ||
+          title.includes("graben") ||
+          title.includes("aushub")
+        )
+      ) {
+        return false;
+      }
+
+      return x.score >= 35;
+    })
     .sort((a, b) => b.score - a.score);
 
-  const best = ranked[0]?.tpl;
-  if (!best) return libraryFallback;
+  let best: any = eligibleRanked[0]?.tpl || null;
+
+  /*
+   * Aushub abfahren = Transport/Entsorgung.
+   * Kein Rezept für Graben/Aushub-Ausführung verwenden.
+   */
+  const normalizedInput = norm(text);
+
+  if (
+    normalizedInput.includes("abfahren") ||
+    normalizedInput.includes("abtransport") ||
+    normalizedInput.includes("abfuhr") ||
+    normalizedInput.includes("entsorgen")
+  ) {
+    if (
+      best &&
+      (
+        norm(best.key).includes("graben") ||
+        norm(best.key).includes("aushub")
+      )
+    ) {
+      best = null;
+    }
+  }
+  let resourceComposerUsed = false;
+
+  /*
+   * Kein passendes RecipeTemplate, aber der technische Parser konnte
+   * bereits eine deterministische Kalkulation erzeugen:
+   * Diese hat Vorrang vor dem kostenpflichtigen Resource Composer.
+   */
+  if (!best && technicalFallback) {
+    if (process.env.RLC_RECIPE_DEBUG === "1") {
+      console.log("[RLC_RECIPE_DEBUG] TechnicalFallback used before Resource Composer");
+    }
+    return technicalFallback;
+  }
+
+  /*
+   * Kein passendes gespeichertes RecipeTemplate:
+   * Der generische Resource Composer erzeugt ausschließlich die
+   * Ressourcenstruktur. Preise und EP bleiben vollständig Sache
+   * dieser Recipe Engine.
+   */
+  if (!best && process.env.RLC_RECIPE_DEBUG === "1") {
+    console.log("[RLC_RECIPE_DEBUG] Resource Composer SKIPPED - OpenAI disabled");
+  }
+
+  if (!best && context.allowResourceComposer === true && process.env.RLC_RECIPE_DEBUG !== "1") {
+    const composerStarted = Date.now();
+    const composed = await composeRlcResources({
+      kurztext: s(row.kurztext),
+      langtext: s(row.langtext),
+      einheit,
+    });
+
+    if (composed && composed.components.length > 0) {
+      resourceComposerUsed = true;
+
+      best = {
+        id: null,
+        key: `AI:${composed.family}`,
+        title: composed.title,
+        category: composed.family,
+        unit: composed.unit,
+        tags: [],
+        paramsJson: { defaultParams: {} },
+        variants: [],
+        components: composed.components.map((component, index) => ({
+          id: `AI-${index + 1}`,
+          ...component,
+        })),
+        composerConfidence: composed.confidence,
+      };
+    }
+  }
+
+  if (!best) {
+    return directOverride || technicalFallback || libraryFallback;
+  }
 
   const variants = Array.isArray(best.variants) ? best.variants : [];
   const bestVariant =
@@ -3039,6 +3271,8 @@ const text = `${kurztext} ${langtext}`.trim();
     depth_m: technical.depth_m || n(variantParams.depth_m ?? defaultParams.depth_m, 1.2),
     width_m: technical.width_m || n(variantParams.width_m ?? defaultParams.width_m, 0.4),
     thickness_cm: technical.thickness_cm || n(variantParams.thickness_cm ?? defaultParams.thickness_cm, 0),
+    thickness_m:
+      (technical.thickness_cm || n(variantParams.thickness_cm ?? defaultParams.thickness_cm, 0)) / 100,
 
     surface:
       technical.surface && technical.surface !== "UNKNOWN"
@@ -3071,14 +3305,124 @@ const text = `${kurztext} ${langtext}`.trim();
     epMode: "PER_UNIT",
   };
 
+  /*
+   * CompanyProductivity:
+   * Firmenleistung für das gewählte RecipeTemplate.
+   *
+   * Unterstützte Semantik:
+   * - h/EH  = Arbeitsstunden je Leistungseinheit
+   * - EH/h  = Leistungseinheiten je Arbeitsstunde
+   *
+   * Eine variantenspezifische Produktivität hat Vorrang vor
+   * der allgemeinen Produktivität des Templates.
+   * Sie überschreibt ausschließlich LABOR-Mengen.
+   */
+  let companyProductivity: {
+    value: number;
+    unit: string;
+    source: string;
+    confidence: number;
+  } | null = null;
+
+  if (companyId && best.id && !resourceComposerUsed) {
+    const productivityStarted = Date.now();
+    const productivityRows = await prisma.companyProductivity.findMany({
+      where: {
+        companyId,
+        templateId: best.id,
+        OR: bestVariant
+          ? [
+              { variantId: bestVariant.id },
+              { variantId: null },
+            ]
+          : [
+              { variantId: null },
+            ],
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+    });
+
+    recipePerf("company-productivity", productivityStarted);
+
+    const selected =
+      (bestVariant
+        ? productivityRows.find((x: any) => x.variantId === bestVariant.id)
+        : null) ||
+      productivityRows.find((x: any) => x.variantId === null);
+
+    if (selected && n(selected.value) > 0) {
+      companyProductivity = {
+        value: n(selected.value),
+        unit: s(selected.unit),
+        source: s(selected.source),
+        confidence: n(selected.confidence),
+      };
+    }
+  }
+
   const priceBreakdown: PriceBreakdownLine[] = [];
+  const missingResources: Array<{
+    refKey: string;
+    type: string;
+    qty: number;
+    reason: string;
+  }> = [];
 
   for (const c of best.components || []) {
     let qty = round2(evalQtyFormula(c.qtyFormula, params));
     qty = technicalQtyOverride(c.refKey, qty, params);
-    if (qty <= 0) continue;
 
-    const priceInfo = defaultPriceFor(c.refKey, text, einheit);
+    const componentType = s(c.type).toUpperCase();
+
+    if (companyProductivity && componentType.includes("LABOR")) {
+      const productivityUnit = norm(companyProductivity.unit);
+      const productivityValue = n(companyProductivity.value);
+
+      if (
+        productivityUnit === "h eh" ||
+        productivityUnit === "h je eh"
+      ) {
+        qty = round2(productivityValue);
+      } else if (
+        productivityUnit === "eh h" ||
+        productivityUnit === "eh pro h"
+      ) {
+        qty = round2(1 / productivityValue);
+      }
+    }
+
+    /*
+     * Pflichtressourcen aus dem generischen Resource Composer dürfen
+     * nicht verschwinden, nur weil ihre Menge fachlich noch nicht
+     * sicher bestimmbar ist.
+     *
+     * Keine Menge wird erfunden: qty=0 bleibt 0 und blockiert den EP.
+     */
+    if (qty <= 0) {
+      if (c.mandatory !== false) {
+        missingResources.push({
+          refKey: s(c.refKey),
+          type: s(c.type),
+          qty: 0,
+          reason: "MANDATORY_RESOURCE_QUANTITY_MISSING",
+        });
+      }
+      continue;
+    }
+
+    const priceInfo = defaultPriceFor(c.refKey, text, einheit, pricing);
+
+    if (c.mandatory !== false && qty > 0 && n(priceInfo.price) <= 0) {
+      missingResources.push({
+        refKey: s(c.refKey),
+        type: s(c.type),
+        qty,
+        reason: "MANDATORY_RESOURCE_PRICE_MISSING",
+      });
+    }
+
     const total = round2(qty * n(priceInfo.price));
 
     priceBreakdown.push({
@@ -3093,19 +3437,41 @@ const text = `${kurztext} ${langtext}`.trim();
     });
   }
 
-  const rlcRange = rlcPreisRangeForText(text, einheit);
+  const rlcRange = pricing.allowTiefbauPriceCatalog
+    ? rlcPreisRangeForText(text, einheit)
+    : { min: 0, avg: 0, max: 0, matches: [] as any[] };
+
   let direct = round2(priceBreakdown.reduce((sum, x) => sum + n(x.total), 0));
 
-  if (direct <= 0) {
+  if (direct <= 0 && pricing.allowTiefbauPriceCatalog) {
     direct = round2(n(rlcRange.avg));
   }
 
-  if (direct <= 0) return libraryFallback;
+  /*
+   * Ein fachlich passendes RecipeTemplate mit fehlenden Pflichtressourcen
+   * bleibt eine PARTIAL-Urkalkulation.
+   *
+   * Es darf nicht in einen Legacy-Fallback verschwinden, nur weil aktuell
+   * noch kein direkter Ressourcenkostenanteil aufgelöst werden konnte.
+   */
+  if (direct <= 0 && missingResources.length === 0) {
+    return directOverride || technicalFallback || libraryFallback;
+  }
+
+  const resourceResolutionStatus =
+    missingResources.length > 0 ? "PARTIAL" : "RESOLVED";
 
   const overheadCost = round2(direct * 0.10);
   const riskCost = round2(direct * 0.04);
   const profitCost = round2((direct + overheadCost + riskCost) * 0.08);
-  const finalUnitPrice = round2(direct + overheadCost + riskCost + profitCost);
+
+  const calculatedPartialUnitPrice =
+    round2(direct + overheadCost + riskCost + profitCost);
+
+  const finalUnitPrice =
+    resourceResolutionStatus === "RESOLVED"
+      ? calculatedPartialUnitPrice
+      : 0;
 
   priceBreakdown.push(
     {
@@ -3161,11 +3527,16 @@ const text = `${kurztext} ${langtext}`.trim();
     suggestedUnitPrice: finalUnitPrice,
     finalUnitPrice,
 
-    confidence: 0.86,
-    riskLevel: "medium",
-    calculationStatus: "warning",
+    resourceResolutionStatus,
+    missingResources,
+    calculatedPartialUnitPrice,
 
-    gewerk: technical.gewerk || best.category || "Tiefbau",
+    confidence: resourceResolutionStatus === "RESOLVED" ? 0.86 : 0.45,
+    riskLevel: resourceResolutionStatus === "RESOLVED" ? "medium" : "high",
+    calculationStatus:
+      resourceResolutionStatus === "RESOLVED" ? "warning" : "incomplete",
+
+    gewerk: best.category || technical.gewerk || "ALLGEMEIN",
     leistungsart:
       technical.leistungsart && technical.leistungsart !== "Unbekannte Leistung"
         ? technical.leistungsart

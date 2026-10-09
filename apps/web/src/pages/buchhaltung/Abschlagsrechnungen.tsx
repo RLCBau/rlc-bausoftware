@@ -5,6 +5,56 @@ import { useNavigate } from "react-router-dom";
 import { useProject } from "../../store/useProject";
 import "./styles.css";
 
+
+
+function getRlcAuthToken() {
+  const keys = [
+    "rlc_token",
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_auth_token"
+  ];
+
+  for (const storage of [localStorage, sessionStorage]) {
+    for (const key of keys) {
+      const value = storage.getItem(key);
+
+      if (value && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+
+  return "";
+}
+
+async function rlcFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+) {
+  const headers = new Headers(init.headers || {});
+  const token = getRlcAuthToken();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  if (
+    init.body &&
+    !(init.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return window.fetch(input, {
+    ...init,
+    headers,
+    credentials: "include"
+  });
+}
+
 function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return API_BASE ? `${API_BASE}${p}` : p;
@@ -71,7 +121,7 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     ...(init?.headers || {})
   };
 
-  const res = await fetch(apiUrl(path), {
+  const res = await rlcFetch(apiUrl(path), {
     ...init,
     headers,
     credentials: "include"
@@ -252,6 +302,12 @@ export default function AbschlagsrechnungenPage() {
   };
 
   const remove = async (id: string) => {
+    const target = items.find((x) => x.id === id);
+    if (!target) return;
+    if (target.status !== "Entwurf") {
+      setInfo("Freigegebene oder gebuchte Abschlagsrechnungen dürfen nicht gelöscht werden. Verwenden Sie Korrektur/Storno.");
+      return;
+    }
     if (!confirm("Abschlagsrechnung löschen?")) return;
     const next = items.filter((x) => x.id !== id);
     setItems(next);
@@ -558,9 +614,9 @@ export default function AbschlagsrechnungenPage() {
                   
                     Öffnen
                   </button>{" "}
-                  <button onClick={() => void remove(a.id)} disabled={loading}>
+                  {a.status === "Entwurf" ? <button onClick={() => void remove(a.id)} disabled={loading}>
                     Löschen
-                  </button>
+                  </button> : <span className="bh-note">gesperrt</span>}
                 </td>
               </tr>
             )}

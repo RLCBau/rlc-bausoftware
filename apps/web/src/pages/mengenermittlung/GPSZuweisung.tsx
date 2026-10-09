@@ -3177,6 +3177,12 @@ export default function GPSZuweisung() {
 
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
+      if (serverProjectId) {
+        void import("../../lib/dmsArchive")
+          .then(({ archiveWebFile }) => archiveWebFile(serverProjectId, filename, blob))
+          .catch((error) => console.warn("[gps:dxf:dms]", error));
+      }
+
       setErr(`DXF lokal gespeichert: ${filename}`);
     } catch (error: any) {
       console.error("DXF export failed:", error);

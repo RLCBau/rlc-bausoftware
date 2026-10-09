@@ -1,52 +1,7 @@
-import { Router } from "express";
-import path from "path";
-import fs from "fs";
-import { loadTasks, saveTasks, loadCapacity, saveCapacity, saveSnapshot } from "../../services/dao/plannerRepo";
-
-const router = Router();
-
-/** POST /api/buero/bauzeitenplan/load  { projectId } */
-router.post("/load", async (req, res) => {
-  try {
-    const { projectId } = req.body as any;
-    // DB
-    const tasks = (await loadTasks(projectId)) ?? [];
-    const capacity = (await loadCapacity(projectId)) ?? {};
-    // Fallback: ultimo snapshot su file (per start)
-    const dir = path.join(process.cwd(), "uploads", String(projectId), "optimierung");
-    let start = new Date().toISOString().slice(0, 10);
-    try {
-      const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.startsWith("plan_") && f.endsWith(".json")) : [];
-      if (files.length) {
-        const last = JSON.parse(fs.readFileSync(path.join(dir, files.sort().reverse()[0]), "utf8"));
-        start = last.start || start;
-      }
-    } catch {}
-    res.json({ start, tasks, capacity });
-  } catch (e:any) {
-    console.error(e);
-    res.status(500).send(e?.message || "Büro Laden fehlgeschlagen");
-  }
-});
-
-/** POST /api/buero/bauzeitenplan/save  { projectId, start, tasks, capacity, result? } */
-router.post("/save", async (req, res) => {
-  try {
-    const { projectId, start, tasks, capacity, result } = req.body as any;
-    await saveTasks(projectId, tasks).catch(()=>{});
-    await saveCapacity(projectId, capacity).catch(()=>{});
-    if (result) await saveSnapshot(projectId, result.start, result.ende, result).catch(()=>{});
-
-    // Fallback file
-    const dir = path.join(process.cwd(), "uploads", String(projectId), "buero");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, `bauzeitenplan_${start}.json`), JSON.stringify({ start, tasks, capacity, result }, null, 2));
-
-    res.json({ ok: true });
-  } catch (e:any) {
-    console.error(e);
-    res.status(500).send(e?.message || "Büro Speichern fehlgeschlagen");
-  }
-});
-
-export default router;
+import {Router} from 'express';import {prisma} from '../../lib/prisma';import {InputError} from '../../domain/officeAddons';import {planInput,PlanError} from '../../domain/constructionPlan';import {loadConstructionPlan,storeConstructionPlan} from '../../services/constructionPlan';
+const router=Router(),role=(r:any)=>String(r.auth?.companyRole||r.auth?.role||'').trim().toUpperCase();const canEdit=(r:any)=>['ADMIN','ADMINISTRATOR','BAULEITER','KALKULATOR'].includes(role(r));
+async function project(req:any,tx:any){const companyId=String(req.auth?.companyId||'').trim(),userId=String(req.auth?.sub||req.auth?.userId||'').trim(),token=String(req.body?.projectId||'').trim();if(!companyId||!userId||!token)throw new PlanError('PROJECT_FORBIDDEN',403);const p=await tx.project.findFirst({where:{companyId,OR:[{id:token},{code:token}],...(['ADMIN','ADMINISTRATOR'].includes(role(req))?{}:{projectMembers:{some:{userId}}})},select:{id:true,companyId:true}});if(!p)throw new PlanError('PROJECT_FORBIDDEN',403);return p;}
+function fail(res:any,e:any){if(e instanceof InputError)return res.status((e as any).status||400).json({ok:false,error:e.message});if(e?.code==='P2002')return res.status(409).json({ok:false,error:'Vorgangs-ID bereits verwendet.'});console.error('Construction plan failed',e?.code||e?.name);res.status(503).json({ok:false,error:'Bauzeitenplan derzeit nicht verfügbar.'});}
+router.post('/load',async(req:any,res)=>{try{const d=await prisma.$transaction(async tx=>{const p=await project(req,tx);await tx.$queryRaw`SELECT id FROM "Project" WHERE id=${p.id} FOR UPDATE`;return loadConstructionPlan(tx,p.id);});res.json({ok:true,...d,canEdit:canEdit(req)});}catch(e){fail(res,e);}});
+router.post('/save',async(req:any,res)=>{try{if(!canEdit(req))throw new PlanError('BAUZEITENPLAN_WRITE_FORBIDDEN',403);if(typeof req.body.expectedVersion!=='string'||!/^[a-f0-9]{64}$/.test(req.body.expectedVersion))throw new InputError('Planversion erforderlich. Bitte laden.');if(req.body.result!==undefined)throw new InputError('Optimierungsergebnis über das Optimierungsmodul speichern.');const data=planInput(req.body);const d=await prisma.$transaction(async tx=>{const p=await project(req,tx);await tx.$queryRaw`SELECT id FROM "Project" WHERE id=${p.id} FOR UPDATE`;const before=await loadConstructionPlan(tx,p.id);if(before.version!==req.body.expectedVersion)throw new PlanError('Plan inzwischen geändert. Änderungen bleiben lokal; zuerst aktuellen Stand prüfen.',409);return storeConstructionPlan(tx,p,req,data,before);},{timeout:15000});res.json({ok:true,...d});}catch(e){fail(res,e);}});
+router.post('/history',async(req:any,res)=>{try{const p=await project(req,prisma);const items=await prisma.auditLog.findMany({where:{companyId:p.companyId,resource:'construction-plan:'+p.id,action:'CONSTRUCTION_PLAN_SAVE'},select:{id:true,createdAt:true,action:true,meta:true},orderBy:[{createdAt:'desc'},{id:'desc'}],take:100});res.json({ok:true,items,limit:100});}catch(e){fail(res,e);}});export default router;

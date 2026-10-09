@@ -295,15 +295,17 @@ function entryGp(entry: KalkulationsErfahrung): number {
 }
 
 function toLvPos(entry: KalkulationsErfahrung): LVPos {
+  const ep = entryEp(entry);
   return {
     id: safeId(),
-    posNr: entry.posNr,
+    // Datenbankeinträge sind Vorlagen. OZ und Projektmenge gehören zum neuen LV.
+    posNr: "",
     kurztext: entry.kurztext,
     langtext: entry.langtext,
     einheit: entry.einheit,
-    menge: entry.menge,
-    preis: entryEp(entry),
-    gesamt: entryGp(entry),
+    menge: 1,
+    preis: ep,
+    gesamt: ep,
     waehrung: "EUR",
     confidence: entry.confidence,
     source: "manual",
@@ -324,12 +326,12 @@ projectName: string)
     kurztext: "",
     langtext: "",
     einheit: "m",
-    menge: 0,
+    menge: 1,
     parameter: {
       gewerk: "",
       leistungsart: "",
       bauverfahren: "",
-      menge: 0,
+      menge: 1,
       einheit: "m",
       baustellenEntfernungKm: 0,
       fahrzeitMin: 0,
@@ -366,9 +368,10 @@ projektName: string)
     kurztext: row.kurztext || "",
     langtext: row.langtext || "",
     einheit: row.einheit || "",
-    menge: n(row.menge),
+    // Bibliothek speichert immer den Preis für genau 1 Einheit.
+    menge: 1,
     finalUnitPrice: n(row.preis),
-    totalNet: n(row.gesamt, n(row.menge) * n(row.preis)),
+    totalNet: n(row.preis),
     confidence: n(row.confidence, 0.6)
   });
 }
@@ -610,7 +613,6 @@ function fallbackResourcesFromEp(entry: KalkulationsErfahrung): KalkulationsRess
 function calculateConfidence(entry: KalkulationsErfahrung): number {
   let score = 0.35;
 
-  if (String(entry.posNr || "").trim()) score += 0.06;
   if (String(entry.kurztext || "").trim().length >= 8) score += 0.10;
   if (String(entry.langtext || "").trim().length >= 25) score += 0.10;
   if (String(entry.einheit || "").trim()) score += 0.08;
@@ -1439,31 +1441,18 @@ export default function KalkulationsDatenbankPage() {
 
       <section className={rlcClass(null, grid6)}>
         <Kpi label="Einträge" value={String(stats.total)} sub={`${stats.filtered} sichtbar`} />
-
         <Kpi
-          label="EP selezionato"
+          label="EP ausgewählt"
           value={selected ? money(entryEp(selected)) : "—"}
-          sub={selected ? selected.posNr : "nessuna posizione"} />
-        
-
-        <Kpi
-          label="GP selezionato"
-          value={selected ? money(entryGp(selected)) : "—"}
-          sub={selected ? `${num(selected.menge, 3)} ${selected.einheit}` : ""} />
-        
-
+          sub={selected ? `Basis 1 ${selected.einheit || "ME"}` : "Keine Auswahl"} />
         <Kpi label="Verwendungen" value={String(selected?.verwendungen ?? 0)} />
-
         <Kpi
           label="Risiko"
           value={selected ? risikoLabel(selected.risiko) : "—"}
           danger={selected?.risiko === "hoch" || selected?.risiko === "kritisch"} />
-        
-
         <Kpi
-          label="Confidence"
+          label="Vertrauen"
           value={selected ? percent(selected.confidence) : "—"} />
-        
       </section>
 
       <section className={rlcClass(null, card)}>
@@ -1471,7 +1460,7 @@ export default function KalkulationsDatenbankPage() {
           <div>
             <h2 className={rlcClass(null, sectionTitle)}>Suche & Filter</h2>
             <div className={rlcClass(null, sectionText)}>
-              Suche nach Position, Text, Gewerk, Bauverfahren, Bodenklasse,
+              Suche nach Text, Gewerk, Bauverfahren, Bodenklasse,
               KI-Prüfhinweis oder Notiz.
             </div>
           </div>
@@ -1482,7 +1471,7 @@ export default function KalkulationsDatenbankPage() {
           input)}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Intelligente Suche… PosNr, Kurztext, Langtext, Gewerk, Bauverfahren" />
+          placeholder="Suche… Kurztext, Langtext, Gewerk, Bauverfahren" />
           
 
           <select className={rlcClass(null,
@@ -1527,10 +1516,8 @@ export default function KalkulationsDatenbankPage() {
           onChange={(e) => setSortKey(e.target.value as SortKey)}>
             
             <option value="updatedAt">Sortierung: zuletzt geändert</option>
-            <option value="posNr">Sortierung: PosNr</option>
             <option value="kurztext">Sortierung: Kurztext</option>
             <option value="epNetto">Sortierung: EP netto</option>
-            <option value="gpNetto">Sortierung: GP netto</option>
             <option value="verwendungen">Sortierung: Verwendungen</option>
             <option value="confidence">Sortierung: Confidence</option>
           </select>
@@ -1600,14 +1587,12 @@ export default function KalkulationsDatenbankPage() {
             <table className={rlcClass(null, table)}>
               <thead>
                 <tr>
-                  <th className={rlcClass(null, th)}>PosNr</th>
                   <th className={rlcClass(null, th)}>Kurztext</th>
-                                    <th className={rlcClass(null, th)}>Projekt</th>
-<th className={rlcClass(null, th)}>Gewerk</th>
+                  <th className={rlcClass(null, th)}>Herkunft</th>
+                  <th className={rlcClass(null, th)}>Gewerk</th>
                   <th className={rlcClass(null, th)}>ME</th>
-                  <th className={rlcClass(null, thRight)}>Menge</th>
+                  <th className={rlcClass(null, thRight)}>Basis</th>
                   <th className={rlcClass(null, thRight)}>EP netto</th>
-                  <th className={rlcClass(null, thRight)}>GP netto</th>
                   <th className={rlcClass(null, th)}>Risiko</th>
                   <th className={rlcClass(null, thRight)}>Conf.</th>
                   <th className={rlcClass(null, thRight)}>Verw.</th>
@@ -1628,8 +1613,6 @@ export default function KalkulationsDatenbankPage() {
                       })}
                       onClick={() => setSelectedId(row.id)}>
                       
-                      <td className={rlcClass(null, tdStrong)}>{row.posNr || "—"}</td>
-
                       <td className={rlcClass(null, tdText)}>
                         <b>{row.kurztext || "Ohne Kurztext"}</b>
                         <div className={rlcClass(null, tiny)}>
@@ -1643,9 +1626,8 @@ export default function KalkulationsDatenbankPage() {
                       </td>
 <td className={rlcClass(null, td)}>{row.parameter?.gewerk || "—"}</td>
                       <td className={rlcClass(null, td)}>{row.einheit || "—"}</td>
-                      <td className={rlcClass(null, tdRight)}>{num(row.menge, 3)}</td>
+                      <td className={rlcClass(null, tdRight)}>1 {row.einheit || "ME"}</td>
                       <td className={rlcClass(null, tdRight)}>{money(entryEp(row))}</td>
-                      <td className={rlcClass(null, tdRight)}>{money(entryGp(row))}</td>
 
                       <td className={rlcClass(null, td)}>
                         <span className={rlcClass(null, riskStyle(row.risiko))}>
@@ -1697,7 +1679,7 @@ export default function KalkulationsDatenbankPage() {
 
                 {!filtered.length ?
                 <tr>
-                    <td colSpan={12} className={rlcClass(null, emptyCell)}>
+                    <td colSpan={9} className={rlcClass(null, emptyCell)}>
                       Keine Kalkulationen gefunden. Lege einen Eintrag an oder
                       übernimm Positionen aus dem LV / der KI-Kalkulation.
                     </td>
@@ -1726,12 +1708,12 @@ function Kpi({
 
 }: {label: string;value: string;sub?: string;danger?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }
@@ -1776,9 +1758,9 @@ function Check({
 
 
 const qualityBar: React.CSSProperties = {
-  marginTop: 14,
+  marginTop: 0,
   display: "flex",
-  gap: 8,
+  gap: 5,
   flexWrap: "wrap",
   alignItems: "center"
 };
@@ -1787,9 +1769,10 @@ const btnFilter: React.CSSProperties = {
   border: "1px solid #CBD5E1",
   background: "#FFFFFF",
   color: "#334155",
-  borderRadius: 999,
-  padding: "7px 11px",
-  fontSize: 12,
+  borderRadius: 8,
+  padding: "5px 8px",
+  minHeight: 30,
+  fontSize: 10.5,
   fontWeight: 700,
   cursor: "pointer"
 };
@@ -1837,8 +1820,8 @@ const actionFeedback: React.CSSProperties = {
 
 const page: React.CSSProperties = {
   display: "grid",
-  gap: 16,
-  padding: 16
+  gap: 10,
+  padding: 12
 };
 
 const heroCard: React.CSSProperties = {
@@ -1885,81 +1868,84 @@ const heroMeta: React.CSSProperties = {
 
 const grid6: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
-  gap: 12
+  gridTemplateColumns: "repeat(5,minmax(140px,1fr))",
+  gap: 8
 };
 
 const kpiCard: React.CSSProperties = {
   background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
-  borderRadius: 16,
-  padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+  border: "1px solid #E2E8F0",
+  borderRadius: 11,
+  padding: "9px 12px",
+  minHeight: 64,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.03)"
 };
 
 const kpiLabel: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 10.5,
   color: "#64748B",
   fontWeight: 700,
   textTransform: "uppercase",
-  letterSpacing: "0.04em"
+  letterSpacing: "0.035em"
 };
 
 const kpiValue: React.CSSProperties = {
-  marginTop: 6,
-  fontSize: 22,
+  marginTop: 2,
+  fontSize: 18,
+  lineHeight: 1.15,
   color: "#0F172A",
-  fontWeight: 700
+  fontWeight: 750
 };
 
 const kpiSub: React.CSSProperties = {
-  marginTop: 3,
-  fontSize: 12,
+  marginTop: 1,
+  fontSize: 10.5,
   color: "#64748B"
 };
 
 const card: React.CSSProperties = {
   background: "#FFFFFF",
-  border: "1px solid #E5E7EB",
-  borderRadius: 16,
-  padding: 16,
-  boxShadow: "0 1px 2px rgba(15,23,42,0.04)"
+  border: "1px solid #E2E8F0",
+  borderRadius: 11,
+  padding: 12,
+  boxShadow: "0 1px 2px rgba(15,23,42,0.03)"
 };
 
 const sectionHead: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
-  gap: 12,
+  gap: 8,
   alignItems: "flex-start",
   flexWrap: "wrap",
-  marginBottom: 12
+  marginBottom: 7
 };
 
 const sectionTitle: React.CSSProperties = {
   margin: 0,
-  fontSize: 17,
+  fontSize: 15.5,
   color: "#0F172A",
-  fontWeight: 700
+  fontWeight: 750
 };
 
 const sectionText: React.CSSProperties = {
-  marginTop: 4,
-  fontSize: 13,
+  marginTop: 2,
+  fontSize: 11,
   color: "#64748B",
-  lineHeight: 1.45
+  lineHeight: 1.3
 };
 
 const filterGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(260px,1fr) 160px 150px 180px 220px",
-  gap: 10
+  gridTemplateColumns: "minmax(300px,1.6fr) 150px 140px 170px 205px",
+  gap: 7
 };
 
 const input: React.CSSProperties = {
-  border: "1px solid #D1D5DB",
-  borderRadius: 10,
-  padding: "9px 11px",
-  fontSize: 13,
+  border: "1px solid #CBD5E1",
+  borderRadius: 8,
+  padding: "6px 9px",
+  minHeight: 34,
+  fontSize: 11.5,
   width: "100%",
   boxSizing: "border-box",
   background: "#FFFFFF"
@@ -1995,13 +1981,13 @@ const tableWrap: React.CSSProperties = {
 
 const table: React.CSSProperties = {
   width: "100%",
-  minWidth: 1220,
+  minWidth: 980,
   borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 9px",
+  padding: "6px 7px",
   fontSize: 12,
   color: "#475569",
   background: "#F8FAFC",
@@ -2016,8 +2002,8 @@ const thRight: React.CSSProperties = {
 };
 
 const td: React.CSSProperties = {
-  padding: "9px",
-  fontSize: 12,
+  padding: "5px 7px",
+  fontSize: 11.5,
   borderBottom: "1px solid #F1F5F9",
   color: "#0F172A",
   verticalAlign: "top"
@@ -2031,7 +2017,7 @@ const tdStrong: React.CSSProperties = {
 
 const tdText: React.CSSProperties = {
   ...td,
-  minWidth: 260
+  minWidth: 210
 };
 
 const tdRight: React.CSSProperties = {
@@ -2050,8 +2036,10 @@ const tiny: React.CSSProperties = {
 
 const actionCol: React.CSSProperties = {
   display: "flex",
-  gap: 6,
-  flexDirection: "column"
+  gap: 4,
+  flexDirection: "row",
+  flexWrap: "wrap",
+  alignItems: "center"
 };
 
 const detailStack: React.CSSProperties = {

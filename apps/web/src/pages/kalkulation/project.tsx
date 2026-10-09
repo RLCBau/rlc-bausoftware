@@ -562,8 +562,8 @@ export default function ProjektPage() {
 function Kpi({ label, value }: {label: string;value: string;}) {
   return (
     <div className={rlcClass(null, kpi)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
     </div>);
 
 }

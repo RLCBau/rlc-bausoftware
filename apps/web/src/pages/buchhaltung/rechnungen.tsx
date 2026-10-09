@@ -1,9 +1,18 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import { savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader } from "../../lib/pdf/companyPdfHeader";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";
+import {
+  savePdfWithCompanyHeader as saveRlcPdfWithCompanyHeader,
+  outputPdfBlobWithCompanyHeader as outputRlcPdfBlobWithCompanyHeader,
+  openPdfBlobPreview,
+  reservePdfPreview
+} from "../../lib/pdf/companyPdfHeader";
+import { archiveWebPdf } from "../../lib/dmsArchive";
 import React, { useEffect, useMemo, useState } from "react";
 import "./styles.css";
 import { useProject } from "../../store/useProject";
 import { apiUrl } from "../../lib/apiBase";
 
+import { renderRlcServerPdf } from "./serverPdfCore";
+import { getAccountingProject } from "./accountingApi";
 type AufmassRow = {
   id: string;
   pos: string;
@@ -34,12 +43,31 @@ type Rechnung = {
   nr: string;
   datum: string;
   faellig?: string;
+  leistungsdatum?: string;
   kunde: string;
+  customerStreet?: string;
+  customerPostalCode?: string;
+  customerCity?: string;
+  customerCountry?: string;
+  customerEmail?: string;
+  buyerReference?: string;
+  customerVatId?: string;
+  taxTreatment?: "STANDARD" | "REVERSE_CHARGE_13B";
+  ust1tgReference?: string;
+  ust1tgValidUntil?: string;
+  recipientType?: "B2B" | "B2G" | "B2C";
+  fiscalStatus?: "ENTWURF" | "AUSGESTELLT" | "STORNIERT" | "KORRIGIERT";
+  issuedAt?: string;
+  issuedBy?: string | null;
+  immutableHash?: string;
+  originalInvoiceNumber?: string;
+  originalInvoiceDate?: string;
+  advanceDeductions?: Array<{ nr: string; datum: string; netto: number; tax: number; brutto: number }>;
   netto: number;
   mwstPct: number;
   gezahlt: number;
   hinweis?: string;
-  typ: "RECHNUNG" | "ABSCHLAG" | "SCHLUSS";
+  typ: "RECHNUNG" | "ABSCHLAG" | "SCHLUSS" | "KORREKTUR";
   projectId?: string;
   projectCode?: string;
   positions: RechnungPos[];
@@ -56,7 +84,14 @@ Number(n || 0).toLocaleString("de-DE", {
   maximumFractionDigits: 2
 });
 
-const brutto = (r: Rechnung) => safeNumber(r.netto) * (1 + safeNumber(r.mwstPct) / 100);
+const invoiceGrossTotal = (r: Rechnung) =>
+  r.taxTreatment === "REVERSE_CHARGE_13B"
+    ? safeNumber(r.netto)
+    : safeNumber(r.netto) * (1 + safeNumber(r.mwstPct) / 100);
+const advanceNet = (r: Rechnung) => (r.advanceDeductions || []).reduce((sum, item) => sum + safeNumber(item.netto), 0);
+const advanceGross = (r: Rechnung) => (r.advanceDeductions || []).reduce((sum, item) => sum + safeNumber(item.brutto), 0);
+const accountingNet = (r: Rechnung) => r.typ === "SCHLUSS" ? Math.max(0, safeNumber(r.netto) - advanceNet(r)) : safeNumber(r.netto);
+const brutto = (r: Rechnung) => r.typ === "SCHLUSS" ? Math.max(0, invoiceGrossTotal(r) - advanceGross(r)) : invoiceGrossTotal(r);
 const offen = (r: Rechnung) => Math.max(0, brutto(r) - safeNumber(r.gezahlt));
 
 const statusOf = (r: Rechnung): Exclude<Status, "ALL"> => {
@@ -97,6 +132,10 @@ function safeNumber(v: unknown, fallback = 0) {
   typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function fiscalLocked(r?: Rechnung | null) {
+  return ["AUSGESTELLT", "STORNIERT", "KORRIGIERT"].includes(String(r?.fiscalStatus || "ENTWURF").toUpperCase());
 }
 
 function escapeHtml(str: string) {
@@ -184,11 +223,32 @@ function normalizeServerRechnung(row: any, index: number): Rechnung {
     id: row?.id ?? index + 1,
     nr: safeTrim(row?.nr || row?.rechnungNr),
     datum: safeTrim(row?.datum || row?.date),
+    leistungsdatum: safeTrim(row?.leistungsdatum || row?.deliveryDate || row?.serviceDate),
     kunde: safeTrim(row?.kunde || row?.customerName),
+    customerStreet: safeTrim(row?.customerStreet || row?.buyerStreet),
+    customerPostalCode: safeTrim(row?.customerPostalCode || row?.buyerPostalCode),
+    customerCity: safeTrim(row?.customerCity || row?.buyerCity),
+    customerCountry: safeTrim(row?.customerCountry || row?.buyerCountry || "DE"),
+    customerEmail: safeTrim(row?.customerEmail || row?.buyerEmail),
+    buyerReference: safeTrim(row?.buyerReference || row?.leitwegId || row?.customerReference),
+    customerVatId: safeTrim(row?.customerVatId || row?.buyerVatId || row?.kundeUstId),
+    taxTreatment: row?.taxTreatment === "REVERSE_CHARGE_13B" ? "REVERSE_CHARGE_13B" : "STANDARD",
+    ust1tgReference: safeTrim(row?.ust1tgReference || row?.reverseChargeEvidence),
+    ust1tgValidUntil: safeTrim(row?.ust1tgValidUntil),
+    recipientType: (["B2B", "B2G", "B2C"].includes(String(row?.recipientType).toUpperCase()) ? String(row.recipientType).toUpperCase() : "B2B") as Rechnung["recipientType"],
+    fiscalStatus: (["AUSGESTELLT", "STORNIERT", "KORRIGIERT"].includes(String(row?.fiscalStatus).toUpperCase()) ? String(row.fiscalStatus).toUpperCase() : "ENTWURF") as Rechnung["fiscalStatus"],
+    issuedAt: safeTrim(row?.issuedAt),
+    issuedBy: row?.issuedBy ? safeTrim(row.issuedBy) : null,
+    immutableHash: safeTrim(row?.immutableHash),
+    advanceDeductions: Array.isArray(row?.advanceDeductions) ? row.advanceDeductions.map((item: any) => ({
+      nr: safeTrim(item?.nr), datum: safeTrim(item?.datum), netto: safeNumber(item?.netto), tax: safeNumber(item?.tax), brutto: safeNumber(item?.brutto)
+    })) : [],
     netto: safeNumber(row?.netto, positions.reduce((sum: number, p: any) => sum + p.total, 0)),
     mwstPct: safeNumber(row?.mwstPct ?? row?.mwst, 19),
     gezahlt: safeNumber(row?.gezahlt, 0),
-    typ: (["ABSCHLAG", "SCHLUSS"].includes(String(row?.typ)) ? row.typ : "RECHNUNG") as Rechnung["typ"],
+    typ: (["ABSCHLAG", "SCHLUSS", "KORREKTUR"].includes(String(row?.typ).toUpperCase()) ? String(row.typ).toUpperCase() : "RECHNUNG") as Rechnung["typ"],
+    originalInvoiceNumber: safeTrim(row?.originalInvoiceNumber),
+    originalInvoiceDate: safeTrim(row?.originalInvoiceDate),
     positions
   };
 }
@@ -394,79 +454,66 @@ function openPrint(html: string) {
   }, 400);
 }
 
-async function downloadSinglePDF(r: Rechnung) {
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-  import("html2canvas"),
-  import("jspdf")]
-  );
+async function downloadSinglePDF(
+  r: Rechnung,
+  projectId: string,
+  preview = false,
+  _previewWindow: Window | null = null
+) {
+  const fileName = `${r.nr || "Rechnung"}.pdf`;
 
-  const wrapper = document.createElement("div");
-  wrapper.style.position = "fixed";
-  wrapper.style.left = "-10000px";
-  wrapper.style.top = "0";
-  wrapper.style.width = "794px";
-  wrapper.style.padding = "24px";
-  wrapper.style.background = "#fff";
-  wrapper.innerHTML = printableInvoiceHTML(r);
-  document.body.appendChild(wrapper);
+  await renderRlcServerPdf({
+    documentType:
+      String(r.typ || "").toLowerCase().includes("schluss")
+        ? "SCHLUSSRECHNUNG"
+        : String(r.typ || "").toLowerCase().includes("abschlag")
+          ? "ABSCHLAGSRECHNUNG"
+          : "RECHNUNG",
 
-  const canvas = await html2canvas(wrapper, { scale: 2 });
-  document.body.removeChild(wrapper);
+    projectId: getAccountingProject(),
 
-  const imgData = canvas.toDataURL("image/png");
-  const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const ratio = Math.min(pageW / canvas.width, pageH / canvas.height);
-  const w = canvas.width * ratio;
-  const h = canvas.height * ratio;
-  const x = (pageW - w) / 2;
-  const y = (pageH - h) / 2;
-  pdf.addImage(imgData, "PNG", x, y, w, h);
-  saveRlcPdfWithCompanyHeader(pdf, `${r.nr}.pdf`);
+    fileName,
+
+    mode: preview
+      ? "preview"
+      : "download",
+
+    payload: {
+      ...r,
+      projectId: getAccountingProject(),
+      projectCode: getAccountingProject(),
+      invoiceNumber: r.nr,
+      number: r.nr
+    }
+  });
 }
 
-async function downloadAllPDF(list: Rechnung[]) {
+async function downloadAllPDF(
+  list: Rechnung[],
+  preview = false,
+  _previewWindow: Window | null = null
+) {
   if (!list.length) {
-    alert("Keine Rechnungen für den PDF-Download vorhanden.");
+    alert("Keine Rechnungen vorhanden.");
     return;
   }
 
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-  import("html2canvas"),
-  import("jspdf")]
-  );
+  await renderRlcServerPdf({
+    documentType: "RECHNUNG",
+    projectId: getAccountingProject(),
+    fileName: "Rechnungen.pdf",
+    mode: preview
+      ? "preview"
+      : "download",
 
-  const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
-
-  for (let idx = 0; idx < list.length; idx++) {
-    const r = list[idx];
-    const wrapper = document.createElement("div");
-    wrapper.style.position = "fixed";
-    wrapper.style.left = "-10000px";
-    wrapper.style.top = "0";
-    wrapper.style.width = "794px";
-    wrapper.style.padding = "24px";
-    wrapper.style.background = "#fff";
-    wrapper.innerHTML = printableInvoiceHTML(r);
-    document.body.appendChild(wrapper);
-
-    const canvas = await html2canvas(wrapper, { scale: 2 });
-    document.body.removeChild(wrapper);
-
-    const imgData = canvas.toDataURL("image/png");
-    if (idx > 0) pdf.addPage();
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const ratio = Math.min(pageW / canvas.width, pageH / canvas.height);
-    const w = canvas.width * ratio;
-    const h = canvas.height * ratio;
-    const x = (pageW - w) / 2;
-    const y = (pageH - h) / 2;
-    pdf.addImage(imgData, "PNG", x, y, w, h);
-  }
-
-  saveRlcPdfWithCompanyHeader(pdf, "Rechnungen.pdf");
+    payload: {
+      projectId: getAccountingProject(),
+      projectCode: getAccountingProject(),
+      rows: list,
+      invoices: list,
+      entries: list
+    }
+  });
 }
 
 function StatusChip({ value }: {value: Exclude<Status, "ALL">;}) {
@@ -504,6 +551,8 @@ export default function Rechnungen() {
   const customerName = safeTrim((project as any)?.client) || "Neuer Kunde";
 
   const [rows, setRows] = useState<Rechnung[]>(() => loadRechnungen());
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<Rechnung["id"] | null>(null);
+  const [invoiceMode, setInvoiceMode] = useState<"view" | "edit" | null>(null);
   const [serverReady, setServerReady] = useState(false);
   const [aufmassRows, setAufmassRows] = useState<AufmassRow[]>([]);
   const [mwstDefault, setMwstDefault] = useState<number>(19);
@@ -594,7 +643,7 @@ export default function Rechnungen() {
     );
   }, [rows, projectId, projectCode, projectKey]);
 
-  const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
+  const [zeitraum, setZeitraum] = useState<Zeitraum>("ALL");
   const [kunde, setKunde] = useState<string>("ALL");
   const [status, setStatus] = useState<Status>("ALL");
 
@@ -631,7 +680,7 @@ export default function Rechnungen() {
   }, [filteredProjectRows, zeitraum, kunde, status]);
 
   const totals = useMemo(() => {
-    const netto = filtered.reduce((s, r) => s + safeNumber(r.netto), 0);
+    const netto = filtered.reduce((s, r) => s + accountingNet(r), 0);
     const brut = filtered.reduce((s, r) => s + brutto(r), 0);
     const gez = filtered.reduce((s, r) => s + safeNumber(r.gezahlt), 0);
     const off = filtered.reduce((s, r) => s + offen(r), 0);
@@ -639,7 +688,50 @@ export default function Rechnungen() {
     return { netto, mwstSum, brut, gez, off };
   }, [filtered]);
 
+  const createManualInvoice = () => {
+    if (!serverReady) { alert("Serververbindung ist für Rechnungsentwürfe erforderlich."); return; }
+    if (!projectId) {
+      alert("Kein Projekt gewählt.");
+      return;
+    }
+
+    const newRow: Rechnung = {
+      id: `manual-${Date.now()}`,
+      nr: nextRechnungNr(rows),
+      datum: new Date().toLocaleDateString("de-DE"),
+      faellig: "",
+      leistungsdatum: "",
+      kunde: customerName || "",
+      customerStreet: "",
+      customerPostalCode: "",
+      customerCity: "",
+      customerCountry: "DE",
+      customerEmail: "",
+      buyerReference: "",
+      customerVatId: "",
+      taxTreatment: "STANDARD",
+      ust1tgReference: "",
+      ust1tgValidUntil: "",
+      recipientType: "B2B",
+      fiscalStatus: "ENTWURF",
+      advanceDeductions: [],
+      netto: 0,
+      mwstPct: mwstDefault,
+      gezahlt: 0,
+      hinweis: "",
+      typ: "RECHNUNG",
+      projectId,
+      projectCode,
+      positions: []
+    };
+
+    setRows((prev) => [...prev, newRow]);
+    setSelectedInvoiceId(newRow.id);
+    setInvoiceMode("edit");
+  };
+
   const createFromAufmass = (typ: Rechnung["typ"]) => {
+    if (!serverReady) { alert("Serververbindung ist für Rechnungsentwürfe erforderlich."); return; }
     if (!projectId) {
       alert("Kein Projekt gewählt.");
       return;
@@ -654,13 +746,43 @@ export default function Rechnungen() {
       const nextId = prev.length ? Math.max(...prev.map((r) => safeNumber(r.id))) + 1 : 1;
       const nr = nextRechnungNr(prev);
       const datum = new Date().toLocaleDateString("de-DE");
+      const projectAdvances = typ === "SCHLUSS"
+        ? prev.filter((row) =>
+            row.typ === "ABSCHLAG" &&
+            row.fiscalStatus === "AUSGESTELLT" &&
+            (safeTrim(row.projectId) === projectId || safeTrim(row.projectCode) === projectCode)
+          ).map((row) => {
+            const gross = invoiceGrossTotal(row);
+            return {
+              nr: row.nr,
+              datum: row.datum,
+              netto: safeNumber(row.netto),
+              tax: Math.max(0, gross - safeNumber(row.netto)),
+              brutto: gross
+            };
+          })
+        : [];
 
       const newRow: Rechnung = {
         id: nextId,
         nr,
         datum,
         faellig: "",
+        leistungsdatum: "",
         kunde: customerName,
+        customerStreet: "",
+        customerPostalCode: "",
+        customerCity: "",
+        customerCountry: "DE",
+        customerEmail: "",
+        buyerReference: "",
+        customerVatId: "",
+        taxTreatment: "STANDARD",
+        ust1tgReference: "",
+        ust1tgValidUntil: "",
+        recipientType: "B2B",
+        fiscalStatus: "ENTWURF",
+        advanceDeductions: projectAdvances,
         netto: Number(currentNetto.toFixed(2)),
         mwstPct: mwstDefault,
         gezahlt: 0,
@@ -681,6 +803,7 @@ export default function Rechnungen() {
   };
 
   const duplicate = (r: Rechnung) => {
+    if (!serverReady) { alert("Serververbindung erforderlich."); return; }
     setRows((prev) => {
       const nextId = prev.length ? Math.max(...prev.map((x) => safeNumber(x.id))) + 1 : 1;
       return [
@@ -689,20 +812,62 @@ export default function Rechnungen() {
         ...r,
         id: nextId,
         nr: nextRechnungNr(prev),
-        datum: new Date().toLocaleDateString("de-DE")
+        datum: new Date().toLocaleDateString("de-DE"),
+        fiscalStatus: "ENTWURF",
+        issuedAt: "",
+        issuedBy: null,
+        immutableHash: ""
       }];
 
     });
   };
 
-  const remove = (id: Rechnung["id"]) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
+  const createCorrection = (original: Rechnung) => {
+    if (!serverReady) { alert("Serververbindung erforderlich."); return; }
+    if (original.fiscalStatus !== "AUSGESTELLT") { alert("Eine Korrekturrechnung kann nur zu einer ausgestellten Rechnung erstellt werden."); return; }
+    setRows((prev) => {
+      const numericIds = prev.map((row) => safeNumber(row.id, 0));
+      const nextId = Math.max(0, ...numericIds) + 1;
+      const correction: Rechnung = {
+        ...original,
+        id: `korrektur-${Date.now()}-${nextId}`,
+        nr: nextRechnungNr(prev),
+        datum: new Date().toLocaleDateString("de-DE"),
+        typ: "KORREKTUR",
+        fiscalStatus: "ENTWURF",
+        issuedAt: "",
+        issuedBy: null,
+        immutableHash: "",
+        originalInvoiceNumber: original.nr,
+        originalInvoiceDate: original.datum,
+        gezahlt: 0,
+        hinweis: `Korrektur zu Rechnung ${original.nr} vom ${original.datum}`
+      };
+      setSelectedInvoiceId(correction.id);
+      setInvoiceMode("edit");
+      return [...prev, correction];
+    });
+  };
+
+  const remove = async (id: Rechnung["id"]) => {
+    const target = rows.find((row) => String(row.id) === String(id));
+    if (fiscalLocked(target)) { alert("Ausgestellte Rechnungen dürfen nicht gelöscht werden. Verwenden Sie Storno/Korrektur."); return; }
+    if (!serverReady || !projectKey) { alert("Serververbindung erforderlich."); return; }
+    if (!window.confirm("Rechnungsentwurf wirklich löschen?")) return;
+    const response = await fetch(apiUrl(`/api/kalkulation/rechnung/${encodeURIComponent(projectKey)}/${encodeURIComponent(String(id))}`), {
+      method: "DELETE", credentials: "include", headers: { Accept: "application/json", ...authHeaders() }
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) { alert(payload?.error || "Entwurf konnte nicht gelöscht werden."); return; }
+    setRows((prev) => prev.filter((r) => String(r.id) !== String(id)));
+    if (String(selectedInvoiceId) === String(id)) { setSelectedInvoiceId(null); setInvoiceMode(null); }
   };
 
   const update = <K extends keyof Rechnung,>(i: number, key: K, val: Rechnung[K]) => {
+    if (!serverReady) return;
     setRows((prev) => {
       const copy = [...prev];
-      if (!copy[i]) return prev;
+      if (!copy[i] || fiscalLocked(copy[i])) return prev;
 
       if (key === "netto" || key === "mwstPct" || key === "gezahlt") {
         (copy[i] as Rechnung)[key] = safeNumber(val, 0) as Rechnung[K];
@@ -712,6 +877,23 @@ export default function Rechnungen() {
 
       return copy;
     });
+  };
+
+  const issueInvoice = async (invoice: Rechnung) => {
+    if (!serverReady || !projectKey) { alert("Serververbindung für die Rechnungsstellung erforderlich."); return; }
+    if (fiscalLocked(invoice)) { alert(`Rechnung ist bereits ${invoice.fiscalStatus}.`); return; }
+    if (!window.confirm(`Rechnung ${invoice.nr} jetzt verbindlich ausstellen? Danach sind Inhalt und Nummer gesperrt.`)) return;
+    const response = await fetch(apiUrl(`/api/kalkulation/rechnung/${encodeURIComponent(projectKey)}/${encodeURIComponent(String(invoice.id))}/issue`), {
+      method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...authHeaders() }, body: "{}"
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      const details = Array.isArray(payload?.errors) ? `\n${payload.errors.join("\n")}` : "";
+      alert(`${payload?.error || "Rechnung konnte nicht ausgestellt werden."}${details}`); return;
+    }
+    setRows((prev) => prev.map((row) => String(row.id) === String(invoice.id) ? normalizeServerRechnung(payload.invoice, 0) : row));
+    setInvoiceMode("view");
+    alert("Rechnung wurde ausgestellt, archiviert und gegen Änderung gesperrt.");
   };
 
   const exportCSV = (useFiltered: boolean) => {
@@ -750,15 +932,59 @@ export default function Rechnungen() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     const href = URL.createObjectURL(blob);
+    const fileName = useFiltered ? "rechnungen_gefiltert.csv" : "rechnungen_alle.csv";
     a.href = href;
-    a.download = useFiltered ? "rechnungen_gefiltert.csv" : "rechnungen_alle.csv";
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(href);
+
+    if (projectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+        .catch((error) => console.warn("[rechnungen:csv:dms]", error));
+    }
   };
 
-  const printSinglePDF = (r: Rechnung) => openPrint(printableInvoiceHTML(r));
-  const printAllPDF = (useFiltered: boolean) =>
-  openPrint(printableReportHTML(useFiltered ? filtered : filteredProjectRows));
+  const printSinglePDF = (r: Rechnung) => {
+    const previewWindow = reservePdfPreview(
+      `Rechnung_${r.nr || "Vorschau"}.pdf`
+    );
+
+    void downloadSinglePDF(
+      r,
+      projectId,
+      true,
+      previewWindow
+    );
+  };
+  const printAllPDF = (useFiltered: boolean) => {
+    const previewWindow =
+      reservePdfPreview("Rechnungen.pdf");
+
+    void downloadAllPDF(
+      useFiltered
+        ? filtered
+        : filteredProjectRows,
+      true,
+      previewWindow
+    );
+  };
+
+  const selectedInvoice = useMemo(
+    () => rows.find((row) => String(row.id) === String(selectedInvoiceId)) || null,
+    [rows, selectedInvoiceId]
+  );
+
+  useEffect(() => {
+    if (selectedInvoiceId === null || selectedInvoiceId === undefined) {
+      sessionStorage.removeItem("rlc_delivery_invoice_id");
+      return;
+    }
+    sessionStorage.setItem("rlc_delivery_invoice_id", String(selectedInvoiceId));
+  }, [selectedInvoiceId]);
+  const selectedIndex = selectedInvoice
+    ? rows.findIndex((row) => String(row.id) === String(selectedInvoice.id))
+    : -1;
 
   return (
     <div className="bh-page">
@@ -777,13 +1003,16 @@ export default function Rechnungen() {
         </div>
 
         <div className="bh-actions">
-          <button className="bh-btn" onClick={() => createFromAufmass("RECHNUNG")}>
-            + Neue Rechnung aus Aufmaß
+          <button className="bh-btn" onClick={createManualInvoice}>
+            + Neue Rechnung
           </button>
-          <button className="bh-btn" onClick={() => createFromAufmass("ABSCHLAG")}>
+          <button className="bh-btn ghost" onClick={() => createFromAufmass("RECHNUNG")}>
+            Aus Aufmaß erstellen
+          </button>
+          <button className="bh-btn ghost" onClick={() => createFromAufmass("ABSCHLAG")}>
             + Abschlagsrechnung
           </button>
-          <button className="bh-btn" onClick={() => createFromAufmass("SCHLUSS")}>
+          <button className="bh-btn ghost" onClick={() => createFromAufmass("SCHLUSS")}>
             + Schlussrechnung
           </button>
 
@@ -889,145 +1118,114 @@ export default function Rechnungen() {
         </div>
       </div>
 
+      {selectedInvoice ? (
+        <section className="bh-card" style={{ marginBottom: 18, padding: 18 }}>
+          <div className="bh-header-row">
+            <div>
+              <div className="bh-note">{invoiceMode === "edit" ? "Rechnung bearbeiten" : "Rechnung geöffnet"}</div>
+              <h3 style={{ margin: "4px 0 0" }}>{selectedInvoice.nr || "Neue Rechnung"} · {selectedInvoice.fiscalStatus || "ENTWURF"}</h3>
+            </div>
+            <div className="bh-actions">
+              {invoiceMode === "edit"
+                ? <button className="bh-btn" onClick={() => setInvoiceMode("view")}>Änderungen übernehmen</button>
+                : !fiscalLocked(selectedInvoice) ? <button className="bh-btn" onClick={() => setInvoiceMode("edit")}>Bearbeiten</button> : null}
+              {!fiscalLocked(selectedInvoice) ? <button className="bh-btn" onClick={() => void issueInvoice(selectedInvoice)}>Rechnung ausstellen</button> : null}
+              <button className="bh-btn ghost" onClick={() => { setSelectedInvoiceId(null); setInvoiceMode(null); }}>Schließen</button>
+            </div>
+          </div>
+
+          {invoiceMode === "edit" && selectedIndex >= 0 ? (
+            <div className="bh-filters">
+              <div><label>Art</label><select value={selectedInvoice.typ} onChange={(e) => update(selectedIndex, "typ", e.target.value as Rechnung["typ"])}><option value="RECHNUNG">Rechnung</option><option value="ABSCHLAG">Abschlagsrechnung</option><option value="SCHLUSS">Schlussrechnung</option><option value="KORREKTUR">Rechnungskorrektur</option></select></div>
+              <div><label>Empfängerart</label><select value={selectedInvoice.recipientType || "B2B"} onChange={(e) => update(selectedIndex, "recipientType", e.target.value as Rechnung["recipientType"])}><option value="B2B">B2B Unternehmen</option><option value="B2G">B2G öffentliche Hand</option><option value="B2C">B2C Privatkunde</option></select></div>
+              <div><label>Rechnungsnummer</label><input value={selectedInvoice.nr} onChange={(e) => update(selectedIndex, "nr", e.target.value)} /></div>
+              {selectedInvoice.typ === "KORREKTUR" ? <>
+                <div><label>Ursprüngliche Rechnung</label><input value={selectedInvoice.originalInvoiceNumber || ""} readOnly /></div>
+                <div><label>Ursprüngliches Datum</label><input value={selectedInvoice.originalInvoiceDate || ""} readOnly /></div>
+              </> : null}
+              <div><label>Datum</label><input value={selectedInvoice.datum} onChange={(e) => update(selectedIndex, "datum", e.target.value)} placeholder="TT.MM.JJJJ" /></div>
+              <div><label>Fällig am</label><input value={selectedInvoice.faellig || ""} onChange={(e) => update(selectedIndex, "faellig", e.target.value)} placeholder="TT.MM.JJJJ" /></div>
+              <div><label>Leistungsdatum</label><input value={selectedInvoice.leistungsdatum || ""} onChange={(e) => update(selectedIndex, "leistungsdatum", e.target.value)} placeholder="TT.MM.JJJJ" /></div>
+              <div><label>Kunde</label><input value={selectedInvoice.kunde} onChange={(e) => update(selectedIndex, "kunde", e.target.value)} /></div>
+              <div><label>Straße</label><input value={selectedInvoice.customerStreet || ""} onChange={(e) => update(selectedIndex, "customerStreet", e.target.value)} /></div>
+              <div><label>PLZ</label><input value={selectedInvoice.customerPostalCode || ""} onChange={(e) => update(selectedIndex, "customerPostalCode", e.target.value)} /></div>
+              <div><label>Ort</label><input value={selectedInvoice.customerCity || ""} onChange={(e) => update(selectedIndex, "customerCity", e.target.value)} /></div>
+              <div><label>Land</label><input value={selectedInvoice.customerCountry || "DE"} onChange={(e) => update(selectedIndex, "customerCountry", e.target.value)} /></div>
+              <div><label>Kunden-E-Mail</label><input type="email" value={selectedInvoice.customerEmail || ""} onChange={(e) => update(selectedIndex, "customerEmail", e.target.value)} /></div>
+              <div><label>BuyerReference / Leitweg-ID</label><input value={selectedInvoice.buyerReference || ""} onChange={(e) => update(selectedIndex, "buyerReference", e.target.value)} /></div>
+              <div><label>Kunden-USt-IdNr.</label><input value={selectedInvoice.customerVatId || ""} onChange={(e) => update(selectedIndex, "customerVatId", e.target.value)} /></div>
+              <div><label>Umsatzsteuer</label><select value={selectedInvoice.taxTreatment || "STANDARD"} onChange={(e) => { const value = e.target.value as Rechnung["taxTreatment"]; update(selectedIndex, "taxTreatment", value); update(selectedIndex, "mwstPct", value === "REVERSE_CHARGE_13B" ? 0 : (selectedInvoice.mwstPct > 0 ? selectedInvoice.mwstPct : mwstDefault)); }}><option value="STANDARD">Regelbesteuerung</option><option value="REVERSE_CHARGE_13B">§ 13b UStG – Bauleistung / Reverse Charge</option></select></div>
+              {selectedInvoice.taxTreatment === "REVERSE_CHARGE_13B" ? <>
+                <div><label>USt 1 TG / Nachweis-Referenz</label><input value={selectedInvoice.ust1tgReference || ""} onChange={(e) => update(selectedIndex, "ust1tgReference", e.target.value)} placeholder="z. B. Bescheinigung / Prüfvermerk" /></div>
+                <div><label>Nachweis gültig bis</label><input value={selectedInvoice.ust1tgValidUntil || ""} onChange={(e) => update(selectedIndex, "ust1tgValidUntil", e.target.value)} placeholder="TT.MM.JJJJ" /></div>
+              </> : null}
+              <div><label>Netto (€)</label><input type="number" step="0.01" value={selectedInvoice.netto} onChange={(e) => update(selectedIndex, "netto", safeNumber(e.target.value, 0))} /></div>
+              <div><label>MwSt. (%)</label><input type="number" step="0.1" value={selectedInvoice.mwstPct} onChange={(e) => update(selectedIndex, "mwstPct", safeNumber(e.target.value, 19))} /></div>
+              <div><label>Hinweis</label><input value={selectedInvoice.hinweis || ""} onChange={(e) => update(selectedIndex, "hinweis", e.target.value)} /></div>
+            </div>
+          ) : (
+            <div className="bh-filters">
+              <div><label>Art</label><div>{selectedInvoice.typ}</div></div>
+              <div><label>Empfängerart</label><div>{selectedInvoice.recipientType || "B2B"}</div></div>
+              {selectedInvoice.typ === "KORREKTUR" ? <div><label>Bezug</label><div>{selectedInvoice.originalInvoiceNumber || "—"} · {selectedInvoice.originalInvoiceDate || "—"}</div></div> : null}
+              <div><label>Fiskalstatus</label><div><b>{selectedInvoice.fiscalStatus || "ENTWURF"}</b>{selectedInvoice.issuedAt ? ` · ${selectedInvoice.issuedAt}` : ""}</div></div>
+              <div><label>Kunde</label><div>{selectedInvoice.kunde || "—"}</div></div>
+              <div><label>Adresse</label><div>{[selectedInvoice.customerStreet, [selectedInvoice.customerPostalCode, selectedInvoice.customerCity].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "—"}</div></div>
+              <div><label>E-Mail</label><div>{selectedInvoice.customerEmail || "—"}</div></div>
+              <div><label>BuyerReference</label><div>{selectedInvoice.buyerReference || "—"}</div></div>
+              <div><label>Umsatzsteuer</label><div>{selectedInvoice.taxTreatment === "REVERSE_CHARGE_13B" ? "§ 13b UStG – Steuerschuldnerschaft des Leistungsempfängers" : `Regelbesteuerung ${fmt(selectedInvoice.mwstPct)} %`}</div></div>
+              {selectedInvoice.taxTreatment === "REVERSE_CHARGE_13B" ? <div><label>Kunden-USt-IdNr.</label><div>{selectedInvoice.customerVatId || "—"}</div></div> : null}
+              <div><label>Datum</label><div>{selectedInvoice.datum || "—"}</div></div>
+              <div><label>Fällig</label><div>{selectedInvoice.faellig || "—"}</div></div>
+              <div><label>Leistungsdatum</label><div>{selectedInvoice.leistungsdatum || "—"}</div></div>
+              <div><label>Brutto</label><div><b>{fmt(brutto(selectedInvoice))} €</b></div></div>
+              <div><label>Offen</label><div><b>{fmt(offen(selectedInvoice))} €</b></div></div>
+              <div><label>Positionen</label><div>{selectedInvoice.positions.length}</div></div>
+              {selectedInvoice.typ === "SCHLUSS" ? <>
+                <div><label>Gesamtleistung netto</label><div>{fmt(selectedInvoice.netto)} €</div></div>
+                <div><label>Abschläge netto</label><div>- {fmt(advanceNet(selectedInvoice))} €</div></div>
+                <div><label>Rest netto</label><div><b>{fmt(accountingNet(selectedInvoice))} €</b></div></div>
+              </> : null}
+            </div>
+          )}
+
+          <div className="bh-actions" style={{ marginTop: 14 }}>
+            <button className="bh-btn ghost" onClick={() => printSinglePDF(selectedInvoice)}>PDF öffnen</button>
+            <button className="bh-btn ghost" onClick={() => downloadSinglePDF(selectedInvoice, projectId)}>PDF herunterladen</button>
+          </div>
+        </section>
+      ) : null}
+
       <table className="bh-table">
         <thead>
           <tr>
-            <th>Aktionen</th>
-            <th>Nr.</th>
-            <th>Typ</th>
-            <th>Datum</th>
-            <th>Fällig</th>
-            <th>Kunde</th>
-            <th>Netto (€)</th>
-            <th>MWSt (%)</th>
-            <th>Brutto (€)</th>
-            <th>Gezahlt (€)</th>
-            <th>Offen (€)</th>
-            <th>Status</th>
-            <th>PDF</th>
+            <th>Nr.</th><th>Art</th><th>Kunde</th><th>Datum</th><th>Fällig</th>
+            <th>Brutto (€)</th><th>Offen (€)</th><th>Status</th><th>Aktionen</th>
           </tr>
         </thead>
-
         <tbody>
-          {filtered.map((r) => {
-            const idx = rows.findIndex((x) => x.id === r.id);
-
-            return (
-              <tr key={r.id}>
-                <td>
-                  <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-271">
-                    <button className="bh-btn ghost" onClick={() => duplicate(r)}>
-                      Duplizieren
-                    </button>
-                    <button
-                      className="bh-btn rlc-migrated-pages-buchhaltung-rechnungen-tsx-272"
-
-                      onClick={() => remove(r.id)}>
-                      
-                      Löschen
-                    </button>
-                  </div>
-                </td>
-
-                <td>{r.nr}</td>
-
-                <td>
-                  <select
-                    value={r.typ}
-                    onChange={(e) => update(idx, "typ", e.target.value as Rechnung["typ"])}>
-                    
-                    <option value="RECHNUNG">Rechnung</option>
-                    <option value="ABSCHLAG">Abschlag</option>
-                    <option value="SCHLUSS">Schluss</option>
-                  </select>
-                </td>
-
-                <td>
-                  <input
-                    type="text"
-                    value={r.datum}
-                    onChange={(e) => update(idx, "datum", e.target.value)} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-273" />
-
-                  
-                </td>
-
-                <td>
-                  <input
-                    type="text"
-                    value={r.faellig || ""}
-                    onChange={(e) => update(idx, "faellig", e.target.value)} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-274" />
-
-                  
-                </td>
-
-                <td>
-                  <input
-                    type="text"
-                    value={r.kunde}
-                    onChange={(e) => update(idx, "kunde", e.target.value)} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-275" />
-
-                  
-                </td>
-
-                <td>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={r.netto}
-                    onChange={(e) => update(idx, "netto", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-276" />
-
-                  
-                </td>
-
-                <td>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={r.mwstPct}
-                    onChange={(e) => update(idx, "mwstPct", safeNumber(e.target.value, 19))} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-277" />
-
-                  
-                </td>
-
-                <td>{fmt(brutto(r))}</td>
-
-                <td>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={r.gezahlt}
-                    onChange={(e) => update(idx, "gezahlt", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-278" />
-
-                  
-                </td>
-
-                <td className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-279">{fmt(offen(r))}</td>
-
-                <td>
-                  <StatusChip value={statusOf(r)} />
-                </td>
-
-                <td>
-                  <div className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-280">
-                    <button className="bh-btn ghost" onClick={() => printSinglePDF(r)}>
-                      PDF
-                    </button>
-                    <button className="bh-btn ghost" onClick={() => downloadSinglePDF(r)}>
-                      Download
-                    </button>
-                  </div>
-                </td>
-              </tr>);
-
-          })}
-
-          {!filtered.length &&
-          <tr>
-              <td colSpan={13} className="rlc-migrated-pages-buchhaltung-rechnungen-tsx-281">
-                Keine Rechnungen für die aktuelle Auswahl gefunden.
+          {filtered.map((r) => (
+            <tr key={r.id}>
+              <td><b>{r.nr}</b></td>
+              <td>{r.typ === "ABSCHLAG" ? "Abschlag" : r.typ === "SCHLUSS" ? "Schlussrechnung" : r.typ === "KORREKTUR" ? "Korrektur" : "Rechnung"}</td>
+              <td>{r.kunde || "—"}</td>
+              <td>{r.datum || "—"}</td>
+              <td>{r.faellig || "—"}</td>
+              <td>{fmt(brutto(r))}</td>
+              <td><b>{fmt(offen(r))}</b></td>
+              <td><StatusChip value={statusOf(r)} /></td>
+              <td>
+                <div className="bh-actions" style={{ gap: 6 }}>
+                  <button className="bh-btn ghost" onClick={() => { setSelectedInvoiceId(r.id); setInvoiceMode("view"); }}>Öffnen</button>
+                  {!fiscalLocked(r) ? <button className="bh-btn ghost" onClick={() => { setSelectedInvoiceId(r.id); setInvoiceMode("edit"); }}>Bearbeiten</button> : null}
+                  {r.fiscalStatus === "AUSGESTELLT" ? <button className="bh-btn ghost" onClick={() => createCorrection(r)}>Korrektur erstellen</button> : null}
+                  <button className="bh-btn ghost" onClick={() => duplicate(r)}>Duplizieren</button>
+                  {!fiscalLocked(r) ? <button className="bh-btn" onClick={() => void remove(r.id)}>Entwurf löschen</button> : <span className="bh-note">{r.fiscalStatus}</span>}
+                </div>
               </td>
             </tr>
-          }
+          ))}
+          {!filtered.length ? <tr><td colSpan={9}>Keine Rechnungen für die aktuelle Auswahl gefunden.</td></tr> : null}
         </tbody>
       </table>
 

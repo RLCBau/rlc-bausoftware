@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma";
+import { filterUsableRlcPriceSources } from "../kalkulation/quality/priceSourceQualityGate";
 
 function norm(v: any) {
   return String(v || "")
@@ -76,13 +77,15 @@ function qualityConfidence(args: {
 async function main() {
   await prisma.rlcGlobalPriceKnowledge.deleteMany();
 
-  const rows = await prisma.kalkulationsDbEntry.findMany({
+  const rowsRaw = await prisma.kalkulationsDbEntry.findMany({
     where: {
       unitPriceNet: { gt: 0 },
       shortText: { not: "" },
     },
     orderBy: { updatedAt: "desc" },
   });
+
+  const rows = filterUsableRlcPriceSources(rowsRaw);
 
   const groups = new Map<string, any[]>();
 

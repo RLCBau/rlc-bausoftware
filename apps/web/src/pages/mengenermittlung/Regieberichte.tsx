@@ -1,5 +1,6 @@
 import { rlcClass } from "../../ui/rlcRuntimeStyle";import { API_BASE } from "../../lib/apiBase";
 import MengPageHeader from "./MengPageHeader";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 // apps/web/src/pages/mengenermittlung/Regieberichte.tsx
 import React from "react";
 import * as XLSX from "xlsx";
@@ -275,8 +276,7 @@ async function urlToDataURL(url: string, preferType = "image/jpeg"): Promise<str
 
 async function readPdfText(file: File): Promise<string> {
   const pdfjsLib: any = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
   const array = new Uint8Array(await file.arrayBuffer());
   const doc = await pdfjsLib.getDocument({ data: array }).promise;
@@ -1982,7 +1982,27 @@ export default function Regieberichte() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Regieberichte");
-    XLSX.writeFile(wb, `Regieberichte_${projectKey || "ohneProjekt"}.xlsx`);
+
+    const fileName = `Regieberichte_${projectKey || "ohneProjekt"}.xlsx`;
+    const blob = new Blob(
+      [XLSX.write(wb, { type: "array", bookType: "xlsx" })],
+      { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    const dmsProjectId = String(
+      selectedProject?.id || (looksLikeUuid(projectId) ? projectId : "") || ""
+    ).trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[regie:xlsx:dms]", error));
+    }
   }
 
   return (

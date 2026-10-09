@@ -3,6 +3,7 @@ import express from "express";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import { prisma } from "../lib/prisma";
 
 // bcrypt (JS-only, no native build)
@@ -13,12 +14,36 @@ import { sendMangelMail } from "../services/mailer";
 
 const r = express.Router();
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TOO_MANY_LOGIN_ATTEMPTS" },
+});
+
+const codeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TOO_MANY_CODE_ATTEMPTS" },
+});
+
+const mailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "TOO_MANY_MAIL_REQUESTS" },
+});
+
 /** =========================
  * Schemas
  * ========================= */
 const RegisterSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(10).max(128),
   mode: z.enum(["NUR_APP", "SERVER_SYNC"]).default("SERVER_SYNC"),
   name: z.string().min(1).optional(),
   role: z.string().min(2).optional(), // legacy/compat
@@ -47,14 +72,19 @@ const PasswordResetRequestSchema = z.object({
 
 const PasswordResetConfirmSchema = z.object({
   token: z.string().min(4),
-  password: z.string().min(6),
+  password: z.string().min(10).max(128),
 });
 
 /** =========================
  * helpers
  * ========================= */
 function jwtSecret() {
-  return process.env.JWT_SECRET || "dev_secret_change_me";
+  const secret = String(process.env.JWT_SECRET || "").trim();
+  if (secret) return secret;
+  if ((process.env.NODE_ENV || "").toLowerCase() === "production") {
+    throw new Error("JWT_SECRET_REQUIRED_IN_PRODUCTION");
+  }
+  return "dev_secret_change_me";
 }
 
 function sha256(s: string) {
@@ -103,13 +133,20 @@ function signToken(
   mode: "NUR_APP" | "SERVER_SYNC",
   extra?: { companyId?: string | null; companyRole?: string | null }
 ) {
-  const companyId = (extra?.companyId ?? process.env.DEV_COMPANY_ID ?? null) as
+  const devAuth = process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on";
+  const companyId = (
+    extra && Object.prototype.hasOwnProperty.call(extra, "companyId")
+      ? extra.companyId
+      : devAuth
+        ? process.env.DEV_COMPANY_ID ?? null
+        : null
+  ) as
     | string
     | null;
 
   const companyRole =
     (extra?.companyRole ?? null) ||
-    (process.env.DEV_ROLE ? String(process.env.DEV_ROLE) : null) ||
+    (devAuth && process.env.DEV_ROLE ? String(process.env.DEV_ROLE) : null) ||
     (u.appRole ? String(u.appRole) : null);
 
   const ev = u.emailVerifiedAt ?? null;
@@ -295,7 +332,7 @@ async function assertInviteUsable(inviteCode: string, email: string) {
 /** =========================
  * POST /api/auth/register
  * ========================= */
-r.post("/register", async (req, res, next) => {
+r.post("/register", mailLimiter, async (req, res, next) => {
   try {
     const body = RegisterSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
@@ -547,7 +584,7 @@ async function doVerify(token: string, mode: "NUR_APP" | "SERVER_SYNC") {
 /** =========================
  * GET /api/auth/verify?token=...
  * ========================= */
-r.get("/verify", async (req, res, next) => {
+r.get("/verify", codeLimiter, async (req, res, next) => {
   try {
     const token = String(req.query?.token || "").trim();
     if (!token) return res.status(400).json({ ok: false, error: "TOKEN_MISSING" });
@@ -571,7 +608,7 @@ r.get("/verify", async (req, res, next) => {
 });
 
 /** POST /api/auth/verify */
-r.post("/verify", async (req, res, next) => {
+r.post("/verify", codeLimiter, async (req, res, next) => {
   try {
     const body = VerifySchema.parse(req.body);
     const mode = body.mode || "SERVER_SYNC";
@@ -588,7 +625,7 @@ r.post("/verify", async (req, res, next) => {
 /** =========================
  * POST /api/auth/resend
  * ========================= */
-r.post("/resend", async (req, res, next) => {
+r.post("/resend", mailLimiter, async (req, res, next) => {
   try {
     const body = ResendSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
@@ -627,7 +664,7 @@ r.post("/resend", async (req, res, next) => {
 /** =========================
  * POST /api/auth/password-reset/request
  * ========================= */
-r.post("/password-reset/request", async (req, res, next) => {
+r.post("/password-reset/request", mailLimiter, async (req, res, next) => {
   try {
     const body = PasswordResetRequestSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
@@ -665,7 +702,7 @@ r.post("/password-reset/request", async (req, res, next) => {
 /** =========================
  * POST /api/auth/password-reset/confirm
  * ========================= */
-r.post("/password-reset/confirm", async (req, res, next) => {
+r.post("/password-reset/confirm", codeLimiter, async (req, res, next) => {
   try {
     const body = PasswordResetConfirmSchema.parse(req.body);
     const tokenHash = sha256(String(body.token || "").trim());
@@ -705,7 +742,7 @@ r.post("/password-reset/confirm", async (req, res, next) => {
 /** =========================
  * POST /api/auth/login
  * ========================= */
-r.post("/login", async (req, res, next) => {
+r.post("/login", loginLimiter, async (req, res, next) => {
   try {
     const body = LoginSchema.parse(req.body);
     const email = body.email.trim().toLowerCase();
@@ -744,12 +781,21 @@ r.post("/login", async (req, res, next) => {
     }
 
     const fullUser = await getUserCompanyPayload(u.id);
+    const isPlatformAccount =
+      String(fullUser?.appRole ?? u.appRole ?? "").toUpperCase() === "PLATFORM_ADMIN";
+
+    const loginCompanyId = isPlatformAccount
+      ? null
+      : (fullUser?.companyId ?? null);
 
     const token = signToken(fullUser ?? u, body.mode, {
-      companyId: fullUser?.companyId ?? null,
-      companyRole:
-        (fullUser?.companyMembers?.[0]?.role as string | null | undefined) ??
-        (fullUser?.appRole ?? u.appRole ?? null),
+      companyId: loginCompanyId,
+      companyRole: isPlatformAccount
+        ? "PLATFORM_ADMIN"
+        : (
+            (fullUser?.companyMembers?.[0]?.role as string | null | undefined) ??
+            (fullUser?.appRole ?? u.appRole ?? null)
+          ),
     });
 
     return res.json({
@@ -760,10 +806,12 @@ r.post("/login", async (req, res, next) => {
         email: u.email,
         appRole: fullUser?.appRole ?? u.appRole,
         emailVerifiedAt: fullUser?.emailVerifiedAt ?? u.emailVerifiedAt,
-        companyId: fullUser?.companyId ?? null,
-        companyRole: fullUser?.companyMembers?.[0]?.role ?? null,
+        companyId: loginCompanyId,
+        companyRole: isPlatformAccount
+          ? "PLATFORM_ADMIN"
+          : (fullUser?.companyMembers?.[0]?.role ?? null),
       },
-      company: fullUser?.company ?? null,
+      company: isPlatformAccount ? null : (fullUser?.company ?? null),
     });
   } catch (e) {
     next(e);

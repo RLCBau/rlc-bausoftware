@@ -53,6 +53,13 @@ export type LVPos = {
   langtext: string;
   bemerkung?: string;
 
+  // GAEB Positionssemantik
+  gaebAlnGroupNo?: number | null;
+  gaebAlnSerNo?: number | null;
+  gaebProvis?: string | null;
+  gaebProvisAccpt?: string | null;
+  gaebAccepted?: string | null;
+
   // quantità / unità
   einheit: string;
   menge: number;
@@ -66,6 +73,7 @@ export type LVPos = {
   materialCost?: number;
   laborCost?: number;
   machineCost?: number;
+  transportCost?: number;
   subcontractorCost?: number;
   disposalCost?: number;
   overheadCost?: number;
@@ -75,9 +83,16 @@ export type LVPos = {
   baseUnitPrice?: number;
   suggestedUnitPrice?: number;
   finalUnitPrice?: number;
+  urkalkulationUnitPrice?: number;
+  urkalkulationTotal?: number;
+  rlcKiUnitPrice?: number;
+  rlcKiTotal?: number;
+  totalNet?: number;
+  ep?: number;
+  gp?: number;
 
   riskLevel?: "low" | "medium" | "high";
-  calculationStatus?: "ok" | "warning" | "critical" | "manual";
+  calculationStatus?: "ok" | "warning" | "critical" | "manual" | "needs_review";
 
   gewerk?: string;
   leistungsart?: string;
@@ -87,6 +102,7 @@ export type LVPos = {
   aiReason?: string;
 
   priceBreakdown?: PriceBreakdownLine[];
+  recipeLines?: any[];
 
 
   // RLC Preisbibliothek / Plausibilitätsrange
@@ -112,6 +128,63 @@ export type LVPos = {
 
   meta?: any;
 };
+
+export function gaebPositionTypeLabel(row: Partial<LVPos> | any): string {
+  const provis = String(row?.gaebProvis || "").trim().toLowerCase();
+  const accepted = String(row?.gaebAccepted || "").trim().toLowerCase();
+  const serRaw = row?.gaebAlnSerNo;
+  const ser = serRaw === null || serRaw === undefined || serRaw === "" ? null : Number(serRaw);
+
+  if (provis === "withouttotal") return "Bedarf · ohne GB";
+  if (provis === "withtotal") return "Bedarfsposition";
+  if (Number.isFinite(ser) && Number(ser) > 0) {
+    return accepted === "altaccept" ? "Alternative · beauftragt" : "Alternativposition";
+  }
+  if (Number.isFinite(ser) && Number(ser) === 0) {
+    return accepted === "basreject" ? "Grundposition · verworfen" : "Grundposition";
+  }
+
+  // Legacy imports before GAEB position metadata was persisted:
+  // show a review hint only; NEVER change the total without explicit GAEB metadata.
+  const legacyText = String(
+    [row?.kurztext, row?.langtext].filter(Boolean).join(" ")
+  ).toLowerCase();
+  if (/wie\s+pos\.?\s+vor.*jedoch|wie\s+vor.*jedoch/.test(legacyText)) {
+    return "Legacy · mögliche Alternative prüfen";
+  }
+  if (
+    legacyText.includes("gegen nachweis zur ausführung kommen") ||
+    legacyText.includes("gegen nachweis zur anwendung kommen") ||
+    legacyText.includes("material gegen rechnungsnachweis")
+  ) {
+    return "Legacy · Bedarf/Regie prüfen";
+  }
+  return "";
+}
+
+export function gaebPositionCountsInTotal(row: Partial<LVPos> | any): boolean {
+  const provis = String(row?.gaebProvis || "").trim().toLowerCase();
+  const provisAccpt = String(row?.gaebProvisAccpt || "").trim().toLowerCase();
+  const accepted = String(row?.gaebAccepted || "").trim().toLowerCase();
+  const serRaw = row?.gaebAlnSerNo;
+  const ser = serRaw === null || serRaw === undefined || serRaw === "" ? null : Number(serRaw);
+
+  // GAEB: Bedarfsposition ohne GB = nur Einheitspreis.
+  if (provis === "withouttotal") return false;
+
+  // In Auftragsphasen kann eine Bedarfsposition explizit nicht beauftragt sein.
+  if (provis && provisAccpt === "no") return false;
+
+  // Explizite Vergabeentscheidung hat Vorrang bei Grund-/Alternativpositionen.
+  if (accepted === "altaccept") return true;
+  if (accepted === "basreject") return false;
+
+  // ALNSerNo 0 = Grundausführung; 1..9 = alternative Ausführung.
+  // Alternativen werden angeboten/kalkuliert, aber nicht zusätzlich summiert.
+  if (Number.isFinite(ser) && Number(ser) > 0) return false;
+
+  return true;
+}
 
 export type CadPayload = Partial<LVPos>;
 
@@ -429,10 +502,17 @@ function dedupeAuftraege(rows: Auftrag[]): Auftrag[] {
   return out;
 }
 
+// Die Auftragsstruktur ist UI-Metadaten. Sie darf niemals das Öffnen einer
+// Kalkulation verhindern, wenn der Browser-Speicher durch große LV-Daten voll ist.
+const auftraegeMemory = new Map<string, Auftrag[]>();
+
 function readAuftraege(): Auftrag[] {
   try {
     const key = auftragKey();
     if (!key) return [];
+
+    const inMemory = auftraegeMemory.get(key);
+    if (inMemory?.length) return sortAuftraege(dedupeAuftraege(inMemory));
 
     const raw = localStorage.getItem(key);
     if (!raw) return [];
@@ -440,7 +520,9 @@ function readAuftraege(): Auftrag[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
 
-    return sortAuftraege(dedupeAuftraege(parsed.map(makeAuftrag)));
+    const rows = sortAuftraege(dedupeAuftraege(parsed.map(makeAuftrag)));
+    auftraegeMemory.set(key, rows);
+    return rows;
   } catch {
     return [];
   }
@@ -450,10 +532,19 @@ function writeAuftraege(rows: Auftrag[]) {
   const key = auftragKey();
   if (!key) return;
 
-  localStorage.setItem(
-    key,
-    JSON.stringify(sortAuftraege(dedupeAuftraege(rows)))
-  );
+  const normalized = sortAuftraege(dedupeAuftraege(rows));
+  // Immer zuerst im Speicher halten: localStorage kann bei großen Projekten
+  // voll sein, die Seite muss dennoch vollständig nutzbar bleiben.
+  auftraegeMemory.set(key, normalized);
+
+  try {
+    localStorage.setItem(key, JSON.stringify(normalized));
+  } catch (error) {
+    console.warn(
+      "[Auftrag] Browser-Speicher voll oder nicht verfügbar. Auftragsstruktur bleibt für diese Sitzung im Speicher.",
+      error
+    );
+  }
 }
 
 function findAuftrag(id?: string): Auftrag | undefined {
@@ -494,6 +585,12 @@ function makeRow(row: Partial<LVPos>): LVPos {
     langtext: normalizeText(row.langtext),
     bemerkung: normalizeText(row.bemerkung),
 
+    gaebAlnGroupNo: Number.isFinite(Number((row as any).gaebAlnGroupNo)) ? Number((row as any).gaebAlnGroupNo) : null,
+    gaebAlnSerNo: Number.isFinite(Number((row as any).gaebAlnSerNo)) ? Number((row as any).gaebAlnSerNo) : null,
+    gaebProvis: normalizeText((row as any).gaebProvis) || null,
+    gaebProvisAccpt: normalizeText((row as any).gaebProvisAccpt) || null,
+    gaebAccepted: normalizeText((row as any).gaebAccepted) || null,
+
     einheit: normalizeText(row.einheit),
     menge,
 
@@ -504,6 +601,7 @@ function makeRow(row: Partial<LVPos>): LVPos {
     materialCost: toNumber(row.materialCost),
     laborCost: toNumber(row.laborCost),
     machineCost: toNumber(row.machineCost),
+    transportCost: toNumber((row as any).transportCost),
     subcontractorCost: toNumber(row.subcontractorCost),
     disposalCost: toNumber(row.disposalCost),
     overheadCost: toNumber(row.overheadCost),
@@ -513,6 +611,13 @@ function makeRow(row: Partial<LVPos>): LVPos {
     baseUnitPrice: toNumber(row.baseUnitPrice),
     suggestedUnitPrice: toNumber(row.suggestedUnitPrice),
     finalUnitPrice,
+    urkalkulationUnitPrice: toNumber((row as any).urkalkulationUnitPrice),
+    urkalkulationTotal: toNumber((row as any).urkalkulationTotal),
+    rlcKiUnitPrice: toNumber((row as any).rlcKiUnitPrice),
+    rlcKiTotal: toNumber((row as any).rlcKiTotal),
+    totalNet: toNumber((row as any).totalNet),
+    ep: toNumber((row as any).ep),
+    gp: toNumber((row as any).gp),
 
     riskLevel: sanitizeRiskLevel(row.riskLevel),
     calculationStatus: sanitizeCalcStatus(row.calculationStatus),
@@ -522,7 +627,9 @@ function makeRow(row: Partial<LVPos>): LVPos {
     bauverfahren: normalizeText(row.bauverfahren),
 
     warning: normalizeText(row.warning),
-    aiReason: normalizeText(row.aiReason),    priceBreakdown,
+    aiReason: normalizeText(row.aiReason),
+    priceBreakdown,
+    recipeLines: Array.isArray((row as any).recipeLines) ? (row as any).recipeLines : [],
 
     rlcPreisMin: toNumber((row as any).rlcPreisMin),
     rlcPreisAvg: toNumber((row as any).rlcPreisAvg),
@@ -555,6 +662,12 @@ function parseStoredRow(input: any): LVPos {
     langtext: input?.langtext,
     bemerkung: input?.bemerkung,
 
+    gaebAlnGroupNo: input?.gaebAlnGroupNo,
+    gaebAlnSerNo: input?.gaebAlnSerNo,
+    gaebProvis: input?.gaebProvis,
+    gaebProvisAccpt: input?.gaebProvisAccpt,
+    gaebAccepted: input?.gaebAccepted,
+
     einheit: input?.einheit,
     menge: input?.menge,
 
@@ -565,6 +678,7 @@ function parseStoredRow(input: any): LVPos {
     materialCost: input?.materialCost,
     laborCost: input?.laborCost,
     machineCost: input?.machineCost,
+    transportCost: input?.transportCost,
     subcontractorCost: input?.subcontractorCost,
     disposalCost: input?.disposalCost,
     overheadCost: input?.overheadCost,
@@ -574,6 +688,13 @@ function parseStoredRow(input: any): LVPos {
     baseUnitPrice: input?.baseUnitPrice,
     suggestedUnitPrice: input?.suggestedUnitPrice,
     finalUnitPrice: input?.finalUnitPrice,
+    urkalkulationUnitPrice: input?.urkalkulationUnitPrice,
+    urkalkulationTotal: input?.urkalkulationTotal,
+    rlcKiUnitPrice: input?.rlcKiUnitPrice,
+    rlcKiTotal: input?.rlcKiTotal,
+    totalNet: input?.totalNet,
+    ep: input?.ep,
+    gp: input?.gp,
 
     riskLevel: input?.riskLevel,
     calculationStatus: input?.calculationStatus,
@@ -583,7 +704,9 @@ function parseStoredRow(input: any): LVPos {
     bauverfahren: input?.bauverfahren,
 
     warning: input?.warning,
-    aiReason: input?.aiReason,    priceBreakdown: input?.priceBreakdown,
+    aiReason: input?.aiReason,
+    priceBreakdown: input?.priceBreakdown,
+    recipeLines: input?.recipeLines,
 
     rlcPreisMin: (input as any)?.rlcPreisMin,
     rlcPreisAvg: (input as any)?.rlcPreisAvg,

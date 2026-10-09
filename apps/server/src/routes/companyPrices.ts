@@ -7,33 +7,23 @@ import { prisma } from "../lib/prisma";
  * ensureCompanyId (stesso approccio di projects.ts)
  * =======================================================*/
 async function ensureCompanyId(req: any): Promise<string> {
-  const auth: any = req?.auth;
-
-  // 1) Auth company
-  if (auth && typeof auth.company === "string") {
-    const found = await prisma.company.findUnique({ where: { id: auth.company } });
-    if (found) return found.id;
-  }
-
-  // 2) DEV company
-  if (process.env.DEV_COMPANY_ID) {
-    const found = await prisma.company.findUnique({ where: { id: process.env.DEV_COMPANY_ID } });
-    if (found) return found.id;
-  }
-
-  // 3) First company fallback
-  const first = await prisma.company.findFirst();
-  if (first) return first.id;
-
-  // 4) Create default if nothing exists
-  const created = await prisma.company.create({
-    data: { name: "Standard Firma", code: "STANDARD" },
-  });
-
-  return created.id;
+  const auth = req?.auth || {};
+  const companyId = String(auth.companyId || auth.company || "").trim();
+  if (!companyId) throw new Error("COMPANY_REQUIRED");
+  const found = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+  if (!found) throw new Error("AUTH_COMPANY_NOT_FOUND");
+  return found.id;
 }
 
 const router = Router();
+
+function requireCompanyPriceWrite(req: any, res: any, next: any) {
+  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+  if (!["ADMIN", "ADMINISTRATOR", "KALKULATOR"].includes(role)) {
+    return res.status(403).json({ ok: false, error: "COMPANY_PRICE_WRITE_FORBIDDEN" });
+  }
+  return next();
+}
 
 /* =========================================================
  * POST /api/company-prices/bulk-upsert
@@ -67,7 +57,7 @@ const bulkUpsertSchema = z.object({
     .min(1),
 });
 
-router.post("/bulk-upsert", async (req, res) => {
+router.post("/bulk-upsert", requireCompanyPriceWrite, async (req, res) => {
   try {
     const parsed = bulkUpsertSchema.parse(req.body || {});
     const reqCompanyId = await ensureCompanyId(req);

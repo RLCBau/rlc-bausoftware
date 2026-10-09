@@ -50,6 +50,21 @@ company?: CompanyPayload | null)
   try {
     for (const key of AUTH_KEYS) localStorage.removeItem(key);
 
+    for (const key of [
+      "rlc_company_id",
+      "rlc_company",
+      "rlc_company_profile",
+      "companyProfile",
+      "rlc_projectId",
+      "rlc_active_project",
+      "rlc_active_project_id",
+      "projectId",
+      "projectKey",
+    ]) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
+
     localStorage.setItem("rlc_token", token);
 
     if (user?.companyId) {
@@ -272,6 +287,7 @@ export default function Login() {
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [name, setName] = React.useState("");
   const [inviteCode, setInviteCode] = React.useState("");
 
@@ -280,9 +296,14 @@ export default function Login() {
   const [info, setInfo] = React.useState<string | null>(null);
   const [canResend, setCanResend] = React.useState(false);
 
+  const isCloudLogin = React.useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("mode") === "cloud";
+  }, [location.search]);
+
   const redirectTo = React.useMemo(
-    () => getRedirectTarget(location.state),
-    [location.state]
+    () => isCloudLogin ? "/cloud" : getRedirectTarget(location.state),
+    [isCloudLogin, location.state]
   );
 
   async function handleLogin(e?: React.FormEvent) {
@@ -324,6 +345,19 @@ export default function Login() {
       }
 
       setAuth(data.token, data.user, data.company ?? null);
+
+      const normalizedEmail = String(data.user?.email || "").trim().toLowerCase();
+      const normalizedRole = String(data.user?.appRole || "").trim().toUpperCase();
+      const isPlatformAdmin =
+        normalizedRole === "PLATFORM_ADMIN" ||
+        normalizedEmail === "info@rlcbausoftware.com" ||
+        normalizedEmail === "info@rlcbausoftware";
+
+      if (isPlatformAdmin) {
+        window.location.replace("/portal?release=portal-v1");
+        return;
+      }
+
       nav(redirectTo, { replace: true });
     } catch (err: any) {
       setError(err?.message || "Login fehlgeschlagen.");
@@ -557,13 +591,30 @@ export default function Login() {
             <label className={rlcClass(null, label)}>Passwort</label>
             <input className={rlcClass(null,
             input)}
-            type="password"
+            type={showPassword ? "text" : "password"}
             autoComplete={
             mode === "login" ? "current-password" : "new-password"
             }
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Passwort" />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              style={{
+                marginTop: 7,
+                border: 0,
+                background: "transparent",
+                padding: 0,
+                color: "#2563eb",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: 12,
+              }}
+            >
+              {showPassword ? "Passwort ausblenden" : "Passwort anzeigen"}
+            </button>
             
           </div>
 

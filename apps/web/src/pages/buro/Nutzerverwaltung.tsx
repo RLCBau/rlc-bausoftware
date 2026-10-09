@@ -105,6 +105,28 @@ type HeaderPatchResponse = {
   error?: string;
 };
 
+type EInvoiceProfile = {
+  street: string;
+  postalCode: string;
+  city: string;
+  country: string;
+  vatId: string;
+  taxNumber: string;
+  iban: string;
+  bic: string;
+  bankName: string;
+  contactName: string;
+  phone: string;
+  email: string;
+};
+
+type PrivacyProfile = {
+  employeeGpsEnabled: boolean;
+  employeeGpsPurpose: string;
+  employeeGpsLegalBasis: string;
+  employeeGpsRetentionDays: number;
+};
+
 type InviteCreateResponse = {
   ok: boolean;
   invite?: InviteDto;
@@ -113,7 +135,7 @@ type InviteCreateResponse = {
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "11px 12px",
+  padding: "8px 10px",
   borderBottom: "1px solid #dbe4ef",
   fontSize: 12,
   fontWeight: 700,
@@ -123,7 +145,7 @@ const th: React.CSSProperties = {
 };
 
 const td: React.CSSProperties = {
-  padding: "10px 12px",
+  padding: "7px 10px",
   borderBottom: "1px solid #e7edf5",
   fontSize: 13,
   verticalAlign: "middle",
@@ -132,8 +154,8 @@ const td: React.CSSProperties = {
 
 const inp: React.CSSProperties = {
   border: "1px solid #cbd5e1",
-  borderRadius: 10,
-  padding: "9px 11px",
+  borderRadius: 8,
+  padding: "7px 10px",
   fontSize: 13,
   width: "100%",
   boxSizing: "border-box",
@@ -177,21 +199,21 @@ const badge = (bg: string, color = "#111827"): React.CSSProperties => ({
 const sectionCard: React.CSSProperties = {
   background: "#ffffff",
   border: "1px solid #dbe4ef",
-  borderRadius: 16,
-  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+  borderRadius: 12,
+  boxShadow: "0 4px 16px rgba(15, 23, 42, 0.05)",
   overflow: "hidden"
 };
 
 const sectionHeader: React.CSSProperties = {
-  padding: "14px 16px",
+  padding: "10px 14px",
   borderBottom: "1px solid #e2e8f0",
   background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)"
 };
 
 const statCard: React.CSSProperties = {
   border: "1px solid #dbe4ef",
-  borderRadius: 14,
-  padding: 14,
+  borderRadius: 10,
+  padding: 10,
   background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
   boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)"
 };
@@ -338,6 +360,28 @@ export default function Nutzerverwaltung() {
     email: ""
   });
 
+  const [eInvoiceProfile, setEInvoiceProfile] = React.useState<EInvoiceProfile>({
+    street: "",
+    postalCode: "",
+    city: "",
+    country: "DE",
+    vatId: "",
+    taxNumber: "",
+    iban: "",
+    bic: "",
+    bankName: "",
+    contactName: "",
+    phone: "",
+    email: ""
+  });
+
+  const [privacyProfile, setPrivacyProfile] = React.useState<PrivacyProfile>({
+    employeeGpsEnabled: false,
+    employeeGpsPurpose: "",
+    employeeGpsLegalBasis: "",
+    employeeGpsRetentionDays: 0
+  });
+
   const [inviteEmail, setInviteEmail] = React.useState("");
   const [inviteRole, setInviteRole] = React.useState("MITARBEITER");
 
@@ -380,6 +424,43 @@ export default function Nutzerverwaltung() {
     );
   }, []);
 
+  const loadEInvoiceProfile = React.useCallback(async () => {
+    const res = await fetch(apiUrl("/api/company/einvoice-profile"), {
+      method: "GET",
+      headers: authHeaders()
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || "E-Rechnung-Profil konnte nicht geladen werden.");
+    const profile = data?.profile || {};
+    setEInvoiceProfile({
+      street: String(profile.street || ""),
+      postalCode: String(profile.postalCode || ""),
+      city: String(profile.city || ""),
+      country: String(profile.country || "DE"),
+      vatId: String(profile.vatId || ""),
+      taxNumber: String(profile.taxNumber || ""),
+      iban: String(profile.iban || ""),
+      bic: String(profile.bic || ""),
+      bankName: String(profile.bankName || ""),
+      contactName: String(profile.contactName || ""),
+      phone: String(profile.phone || ""),
+      email: String(profile.email || "")
+    });
+  }, []);
+
+  const loadPrivacyProfile = React.useCallback(async () => {
+    const res = await fetch(apiUrl("/api/company/privacy-profile"), { method: "GET", headers: authHeaders() });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) throw new Error(data?.error || "Datenschutz-Profil konnte nicht geladen werden.");
+    const profile = data?.profile || {};
+    setPrivacyProfile({
+      employeeGpsEnabled: profile.employeeGpsEnabled === true,
+      employeeGpsPurpose: String(profile.employeeGpsPurpose || ""),
+      employeeGpsLegalBasis: String(profile.employeeGpsLegalBasis || ""),
+      employeeGpsRetentionDays: Number(profile.employeeGpsRetentionDays || 0)
+    });
+  }, []);
+
   const loadDashboard = React.useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -401,7 +482,7 @@ export default function Nutzerverwaltung() {
       setSeats(data.seats ?? { used: 0, limit: 0, available: 0 });
       setMembers(data.members ?? []);
       setInvites(data.invites ?? []);
-      await loadMobileLicensesFromServer();
+      await Promise.all([loadMobileLicensesFromServer(), loadEInvoiceProfile(), loadPrivacyProfile()]);
       persistSharedCompanyProfile(data.company ?? null);
 
       setForm({
@@ -415,7 +496,7 @@ export default function Nutzerverwaltung() {
     } finally {
       setLoading(false);
     }
-  }, [loadMobileLicensesFromServer]);
+  }, [loadMobileLicensesFromServer, loadEInvoiceProfile, loadPrivacyProfile]);
 
   React.useEffect(() => {
     loadDashboard();
@@ -500,6 +581,49 @@ export default function Nutzerverwaltung() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveEInvoiceProfile() {
+    setSaving(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch(apiUrl("/api/company/einvoice-profile"), {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify(eInvoiceProfile)
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "E-Rechnung-Profil konnte nicht gespeichert werden.");
+      setEInvoiceProfile((prev) => ({ ...prev, ...(data.profile || {}) }));
+      setInfo("E-Rechnung-Profil gespeichert. XRechnung verwendet ab jetzt diese Daten.");
+    } catch (err: any) {
+      setError(err?.message || "E-Rechnung-Profil konnte nicht gespeichert werden.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function savePrivacyProfile() {
+    setSaving(true); setError(null); setInfo(null);
+    try {
+      const res = await fetch(apiUrl("/api/company/privacy-profile"), {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify(privacyProfile)
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        if (data?.error === "GPS_PRIVACY_CONFIGURATION_INCOMPLETE") {
+          throw new Error("Für Mitarbeiter-GPS müssen Zweck, Rechtsgrundlage und eine Löschfrist von mindestens 1 Tag angegeben werden.");
+        }
+        throw new Error(data?.error || "Datenschutz-Profil konnte nicht gespeichert werden.");
+      }
+      setPrivacyProfile((prev) => ({ ...prev, ...(data.profile || {}) }));
+      setInfo("Datenschutz-Profil gespeichert. Mitarbeiter-GPS ist privacy-by-default gesteuert.");
+    } catch (err: any) {
+      setError(err?.message || "Datenschutz-Profil konnte nicht gespeichert werden.");
+    } finally { setSaving(false); }
   }
 
   async function uploadLogo(file: File) {
@@ -733,31 +857,71 @@ export default function Nutzerverwaltung() {
       <style>{`
         .rlc-admin-grid {
           display: grid;
-          gap: 16px;
+          gap: 10px;
         }
 
         .rlc-admin-two {
           display: grid;
           grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-          gap: 16px;
+          gap: 10px;
         }
 
         .rlc-admin-invite {
           display: grid;
           grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-          gap: 16px;
+          gap: 10px;
         }
 
         .rlc-admin-mobile-form {
           display: grid;
-          grid-template-columns: 150px minmax(160px, 1fr) minmax(180px, 1fr) minmax(160px, 1fr) auto;
-          gap: 10px;
+          grid-template-columns: 140px minmax(140px, .8fr) minmax(180px, 1fr) minmax(150px, .8fr) auto;
+          gap: 8px;
           align-items: end;
         }
 
         .rlc-admin-table-wrap {
           overflow: auto;
         }
+
+        .rlc-admin-grid > * {
+          min-width: 0;
+        }
+
+        .rlc-admin-two > *,
+        .rlc-admin-invite > * {
+          min-width: 0;
+        }
+
+        .rlc-admin-table-wrap table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .rlc-admin-table-wrap button {
+          min-height: 34px;
+        }
+
+        .rlc-admin-mobile-form input,
+        .rlc-admin-mobile-form select,
+        .rlc-admin-mobile-form button {
+          min-height: 36px;
+        }
+
+        .rlc-admin-mobile-form label {
+          margin-bottom: 3px;
+        }
+
+        @media (max-width: 1150px) {
+          .rlc-admin-two,
+          .rlc-admin-invite {
+            grid-template-columns: 1fr;
+          }
+
+          .rlc-admin-mobile-form {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+
 
         .rlc-admin-table tbody tr:hover {
           background: #f8fbff;
@@ -779,6 +943,154 @@ export default function Nutzerverwaltung() {
             grid-template-columns: 1fr;
           }
         }
+
+        /* RLC NUTZERVERWALTUNG SAFE UNIFIED V3 */
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-355 {
+          display: grid;
+          gap: 10px;
+          padding-top: 0 !important;
+          margin-top: 0 !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-355 > .rlc-page-hero {
+          margin-top: 0 !important;
+          margin-bottom: 0 !important;
+        }
+
+        /* Firmendaten kompakt */
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-361 {
+          display: grid !important;
+          grid-template-columns: 130px minmax(0,1fr) !important;
+          gap: 7px 10px !important;
+          align-items: center !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-363 {
+          min-height: 64px !important;
+          padding: 6px 8px !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 10px !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-364 {
+          height: 52px !important;
+          min-height: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-365 {
+          max-height: 50px !important;
+          max-width: 120px !important;
+          width: auto !important;
+          object-fit: contain !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-367 {
+          margin: 0 !important;
+        }
+
+        /* Erklärung Web/Mobile kompakter */
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-375,
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-376 {
+          font-weight: 700;
+          font-size: 14px;
+        }
+
+        /* Web-Bereich und Mobile-Bereich gleiche Kartenlogik */
+        .rlc-admin-invite > div,
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-380 {
+          border: 1px solid #dbe4ef !important;
+          border-radius: 12px !important;
+          background: #fff !important;
+          box-shadow: 0 4px 16px rgba(15,23,42,.05) !important;
+        }
+
+        .rlc-admin-invite {
+          gap: 10px !important;
+          align-items: stretch !important;
+        }
+
+        .rlc-admin-invite > div {
+          height: 100%;
+        }
+
+        /* Web-Code Formular kompakter */
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-377 {
+          display: grid !important;
+          grid-template-columns: 120px minmax(0,1fr) !important;
+          gap: 8px 10px !important;
+          align-items: center !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-378 {
+          margin-top: 10px !important;
+        }
+
+        /* Mobile Header exakt wie Web */
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-380 {
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-381 {
+          padding: 10px 14px !important;
+          border-bottom: 1px solid #e2e8f0 !important;
+          background: linear-gradient(180deg,#fff 0%,#f8fafc 100%) !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-383 {
+          padding: 12px 14px !important;
+          gap: 8px !important;
+        }
+
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-384 {
+          overflow-x: auto !important;
+          border-top: 1px solid #e2e8f0 !important;
+        }
+
+        /* Tabellen identiche */
+        .rlc-admin-table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+        }
+
+        .rlc-admin-table th {
+          height: 34px;
+        }
+
+        .rlc-admin-table td {
+          height: 38px;
+        }
+
+        /* Lizenzübersicht weniger vuota */
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-369 {
+          align-content: start !important;
+        }
+
+        /* Mitglieder */
+        .rlc-migrated-pages-buro-nutzerverwaltung-tsx-388 {
+          width: 100% !important;
+        }
+
+        @media (max-width: 1100px) {
+          .rlc-admin-two,
+          .rlc-admin-invite {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
+        @media (max-width: 720px) {
+          .rlc-migrated-pages-buro-nutzerverwaltung-tsx-361,
+          .rlc-migrated-pages-buro-nutzerverwaltung-tsx-377 {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
       `}</style>
 
       <div className="rlc-page-hero rlc-page-hero--split">
@@ -1016,6 +1328,68 @@ export default function Nutzerverwaltung() {
         </div>
       </div>
 
+      <div className={rlcClass(null, { ...sectionCard, padding: 16 })}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div>
+            <div className={rlcClass(null, sectionTitle)}>E-Rechnung / XRechnung</div>
+            <div className={rlcClass(null, muted)}>Pflichtdaten für XRechnung 3.0.2 / EN16931 und Rechnungs-PDF.</div>
+          </div>
+          <button className="btn primary" onClick={() => void saveEInvoiceProfile()} disabled={saving}>
+            {saving ? "Speichert..." : "E-Rechnung-Profil speichern"}
+          </button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 10 }}>
+          {([
+            ["street","Straße"],["postalCode","PLZ"],["city","Ort"],["country","Land (ISO)"],
+            ["vatId","USt-IdNr."],["taxNumber","Steuernummer"],["iban","IBAN"],["bic","BIC"],
+            ["bankName","Bank"],["contactName","Ansprechpartner"],["phone","Telefon"],["email","E-Mail / Endpoint"]
+          ] as Array<[keyof EInvoiceProfile,string]>).map(([key,label]) => (
+            <label key={key} style={{ display: "grid", gap: 5 }}>
+              <span className={rlcClass(null, lbl)}>{label}</span>
+              <input className={rlcClass(null, inp)} value={eInvoiceProfile[key]} onChange={(e) => setEInvoiceProfile((prev) => ({ ...prev, [key]: e.target.value }))} />
+            </label>
+          ))}
+        </div>
+        <div className={rlcClass(null, { ...muted, marginTop: 10 })}>
+          Für XRechnung müssen mindestens Firmenname, Straße, PLZ, Ort, E-Mail, USt-IdNr. oder Steuernummer sowie IBAN vorhanden sein.
+        </div>
+      </div>
+
+      <div className={rlcClass(null, { ...sectionCard, padding: 16 })}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div>
+            <div className={rlcClass(null, sectionTitle)}>Datenschutz · Mitarbeiter-GPS</div>
+            <div className={rlcClass(null, muted)}>Standard: AUS. GPS aus Arbeitszeiten wird nur bei dokumentierter Firmenregel verarbeitet und getrennt vom Arbeitszeitnachweis gespeichert.</div>
+          </div>
+          <button className="btn primary" onClick={() => void savePrivacyProfile()} disabled={saving}>
+            {saving ? "Speichert..." : "Datenschutz-Profil speichern"}
+          </button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 1fr 180px", gap: 10, alignItems: "end" }}>
+          <label style={{ display: "grid", gap: 5 }}>
+            <span className={rlcClass(null, lbl)}>Mitarbeiter-GPS</span>
+            <select className={rlcClass(null, inp)} value={privacyProfile.employeeGpsEnabled ? "ON" : "OFF"} onChange={(e) => setPrivacyProfile((prev) => ({ ...prev, employeeGpsEnabled: e.target.value === "ON" }))}>
+              <option value="OFF">AUS</option><option value="ON">EIN</option>
+            </select>
+          </label>
+          <label style={{ display: "grid", gap: 5 }}>
+            <span className={rlcClass(null, lbl)}>Zweck</span>
+            <input className={rlcClass(null, inp)} disabled={!privacyProfile.employeeGpsEnabled} value={privacyProfile.employeeGpsPurpose} onChange={(e) => setPrivacyProfile((prev) => ({ ...prev, employeeGpsPurpose: e.target.value }))} placeholder="z. B. Plausibilisierung Baustellen-Anwesenheit" />
+          </label>
+          <label style={{ display: "grid", gap: 5 }}>
+            <span className={rlcClass(null, lbl)}>Rechtsgrundlage / betriebliche Regelung</span>
+            <input className={rlcClass(null, inp)} disabled={!privacyProfile.employeeGpsEnabled} value={privacyProfile.employeeGpsLegalBasis} onChange={(e) => setPrivacyProfile((prev) => ({ ...prev, employeeGpsLegalBasis: e.target.value }))} placeholder="dokumentierte Rechtsgrundlage" />
+          </label>
+          <label style={{ display: "grid", gap: 5 }}>
+            <span className={rlcClass(null, lbl)}>Löschfrist (Tage)</span>
+            <input className={rlcClass(null, inp)} type="number" min={1} max={365} disabled={!privacyProfile.employeeGpsEnabled} value={privacyProfile.employeeGpsRetentionDays || ""} onChange={(e) => setPrivacyProfile((prev) => ({ ...prev, employeeGpsRetentionDays: Math.max(0, Number(e.target.value || 0)) }))} />
+          </label>
+        </div>
+        <div className={rlcClass(null, { ...muted, marginTop: 10 })}>
+          GPS-Koordinaten werden nicht in den zweijährig aufzubewahrenden Arbeitszeitnachweis übernommen. Nach Ablauf der eingestellten Frist werden separate GPS-Nachweise automatisch entfernt, sobald der Workflow darauf zugreift.
+        </div>
+      </div>
+
       <div className={rlcClass(null,
       {
         ...sectionCard,
@@ -1041,7 +1415,7 @@ export default function Nutzerverwaltung() {
 
       <div className="rlc-admin-invite">
         <div className={rlcClass(null, { ...sectionCard, padding: 16 })}>
-          <div className={rlcClass(null, { ...sectionTitle, marginBottom: 14 })}>Web-Einladungscode erzeugen</div>
+          <div className={rlcClass(null, { ...sectionTitle, marginBottom: 14 })}>Web-Zugang erstellen</div>
 
           <div className="rlc-migrated-pages-buro-nutzerverwaltung-tsx-377">
             <label className={rlcClass(null, lbl)}>E-Mail</label>
@@ -1144,7 +1518,7 @@ export default function Nutzerverwaltung() {
 
           
           <div>
-            <div className={rlcClass(null, sectionTitle)}>Mobile-Lizenzen & Mobile-Aktivierungscodes</div>
+            <div className={rlcClass(null, sectionTitle)}>Mobile-Lizenzen</div>
             <div className={rlcClass(null, muted)}>
               Rollenbezogene Codes für Bauleiter, Polier, Fahrer, Maschinist,
               Vermesser und Mitarbeiter.
@@ -1211,7 +1585,7 @@ export default function Nutzerverwaltung() {
           </label>
 
           <button className="btn primary" onClick={createMobileLicense}>
-            Mobile-Web-Code erstellen
+            Mobile-Code erstellen
           </button>
         </div>
 

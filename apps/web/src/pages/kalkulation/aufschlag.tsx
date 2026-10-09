@@ -427,7 +427,8 @@ summary: {
 },
 projectKey: string,
 projectName: string,
-params: Params)
+params: Params,
+projectId: string)
 {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -598,12 +599,14 @@ params: Params)
     });
   }
 
-  saveRlcPdfWithCompanyHeader(doc, `Preisaufschlag_${safeFileName(projectKey || "Projekt")}.pdf`);
+  saveRlcPdfWithCompanyHeader(doc, `Preisaufschlag_${safeFileName(projectKey || "Projekt")}.pdf`, projectId);
 }
 
 export default function AufschlagPage() {
   const nav = useNavigate();
   const projectCtx: any = useProject();
+  const project = getProject(projectCtx);
+  const projectId = String(project?.id || projectCtx?.projectId || "").trim();
   const projectKey = getProjectKey(projectCtx);
   const projectTitle = getProjectTitle(projectCtx);
   const projectName = getProjectName(projectCtx);
@@ -690,15 +693,20 @@ export default function AufschlagPage() {
     const blob = new Blob([toCSV(calculated)], {
       type: "text/csv;charset=utf-8"
     });
+    const fileName = `Preisaufschlag_${safeFileName(projectKey || "Projekt")}.csv`;
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-
     a.href = url;
-    a.download = `Preisaufschlag_${safeFileName(projectKey || "Projekt")}.csv`;
+    a.download = fileName;
     a.click();
-
     URL.revokeObjectURL(url);
+
+    if (projectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(projectId, fileName, blob))
+        .catch((error) => console.error("[Aufschlag:CSV:DMS]", error));
+    }
   }
 
   function resetManualOverrides() {
@@ -794,7 +802,7 @@ export default function AufschlagPage() {
           <button className={rlcClass(null,
           btnSecondary)}
           onClick={() =>
-          exportPdfReport(visibleRows, summary, projectKey, projectName, params)
+          exportPdfReport(visibleRows, summary, projectKey, projectName, params, projectId)
           }
           disabled={!visibleRows.length}>
             
@@ -1135,12 +1143,12 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;danger?: boolean;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", { ...kpiValue, color: danger ? "#B91C1C" : "#0F172A" })}>
         {value}
       </div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }

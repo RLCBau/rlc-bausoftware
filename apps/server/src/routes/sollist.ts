@@ -3,6 +3,7 @@ import { Router, type Request, type Response } from "express";
 import fs from "fs";
 import path from "path";
 import { prisma } from "../lib/prisma";
+import { requireProjectMember } from "../middleware/guards";
 
 const router = Router();
 
@@ -86,6 +87,36 @@ function getFilePath(fsKey: string) {
   return path.join(PROJECTS_ROOT, fsKey, "sollist.json");
 }
 
+async function resolveTenantSafeStore(req: Request) {
+  const projectId = String((req as any).resolvedProjectId || req.params.projectId || "").trim();
+  const projectCode = String((req as any).resolvedProjectCode || "").trim();
+  if (!projectId) throw new Error("resolved project id missing");
+
+  const canonicalKey = projectId.replace(/[^A-Za-z0-9_-]/g, "_");
+  const canonicalFile = getFilePath(canonicalKey);
+
+  if (!fs.existsSync(canonicalFile) && projectCode) {
+    const legacyKey = projectCode.replace(/[^A-Za-z0-9_-]/g, "_");
+    const legacyFile = getFilePath(legacyKey);
+    if (fs.existsSync(legacyFile)) {
+      const duplicates = await prisma.project.count({ where: { code: projectCode } });
+      if (duplicates === 1) {
+        fs.mkdirSync(path.dirname(canonicalFile), { recursive: true });
+        fs.copyFileSync(legacyFile, canonicalFile);
+        console.log("[sollist] migrated unique legacy store", { projectId, projectCode });
+      } else {
+        console.warn("[sollist] legacy store ignored because project code is not globally unique", {
+          projectId,
+          projectCode,
+          duplicates,
+        });
+      }
+    }
+  }
+
+  return canonicalKey;
+}
+
 function readFile(fsKey: string): FileFormat {
   const file = getFilePath(fsKey);
   if (!fs.existsSync(file)) {
@@ -124,7 +155,7 @@ function writeFile(fsKey: string, data: FileFormat) {
  *   history: { ts:number, count:number }[]
  * }
  */
-router.get("/:projectId", async (req: Request, res: Response) => {
+router.get("/:projectId", requireProjectMember("projectId"), async (req: Request, res: Response) => {
   try {
     const projectId = req.params.projectId;
     if (!projectId) {
@@ -133,8 +164,8 @@ router.get("/:projectId", async (req: Request, res: Response) => {
         .json({ ok: false, error: "projectId fehlt in URL" });
     }
 
-    const fsKey = await getFsProjectKey(projectId);
-    console.log("[sollist] GET", { projectId, fsKey });
+    const fsKey = await resolveTenantSafeStore(req);
+    console.log("[sollist] GET", { projectId: (req as any).resolvedProjectId || projectId, fsKey });
 
     const store = readFile(fsKey);
     const tsParam = req.query.ts ? Number(req.query.ts) : undefined;
@@ -173,7 +204,7 @@ router.get("/:projectId", async (req: Request, res: Response) => {
  *
  * Speichert aktuellen Stand + fügt Snapshot im Verlauf hinzu.
  */
-router.post("/:projectId/save", async (req: Request, res: Response) => {
+router.post("/:projectId/save", requireProjectMember("projectId"), async (req: Request, res: Response) => {
   try {
     const projectId = req.params.projectId;
     if (!projectId) {
@@ -182,8 +213,8 @@ router.post("/:projectId/save", async (req: Request, res: Response) => {
         .json({ ok: false, error: "projectId fehlt in URL" });
     }
 
-    const fsKey = await getFsProjectKey(projectId);
-    console.log("[sollist] SAVE", { projectId, fsKey });
+    const fsKey = await resolveTenantSafeStore(req);
+    console.log("[sollist] SAVE", { projectId: (req as any).resolvedProjectId || projectId, fsKey });
 
     const rows = (req.body?.rows as SollIstRow[]) || [];
     const data = readFile(fsKey);

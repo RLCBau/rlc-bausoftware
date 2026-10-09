@@ -1,5 +1,6 @@
 import type { jsPDF } from "jspdf";
 import { apiUrl } from "../apiBase";
+import { archiveWebPdf } from "../dmsArchive";
 
 export type CompanyPdfData = {
   id?: string;
@@ -391,11 +392,24 @@ export async function applyCompanyPdfHeaderToAllPages(
 export function savePdfWithCompanyHeader(
   doc: jsPDF,
   fileName: string,
+  projectId?: string | null,
 ): void {
   const preview = reservePdfPreview(fileName);
+  const dmsProjectId = String(projectId || "").trim();
 
   void applyCompanyPdfHeaderToAllPages(doc)
-    .then(() => openPdfBlobPreview(doc.output("blob"), fileName, preview))
+    .then(() => {
+      const blob = doc.output("blob");
+
+      // L'anteprima non aspetta mai il DMS e non viene bloccata da un errore DMS.
+      openPdfBlobPreview(blob, fileName, preview);
+
+      if (dmsProjectId) {
+        void archiveWebPdf(dmsProjectId, fileName, blob).catch((error) => {
+          console.error("[Web PDF:DMS] Archivierung fehlgeschlagen:", error);
+        });
+      }
+    })
     .catch((error) => {
       console.error("PDF-Firmenkopf konnte nicht erzeugt werden:", error);
       openPdfBlobPreview(doc.output("blob"), fileName, preview);

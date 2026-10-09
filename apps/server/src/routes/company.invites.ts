@@ -79,7 +79,7 @@ async function getSeatInfo(companyId: string) {
 }
 
 function requireCompanyAdmin(req: any, res: any, next: any) {
-  if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
+  if (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
 
   const roleRaw = String(
     req?.auth?.role || req?.auth?.companyRole || req?.auth?.appRole || ""

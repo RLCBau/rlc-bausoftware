@@ -10,6 +10,8 @@ export type RlcAutonomousProjectContext = {
   durationRisk: RlcRiskLevel;
   marketFactor: number;
   distanceFactor: number;
+  bgkRate?: number;
+  profitRate?: number;
   confidence: number;
   warnings: string[];
 };

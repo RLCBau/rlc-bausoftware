@@ -1,103 +1,67 @@
-import React, { useMemo } from "react";
-import { useRechnungen, useZahlungen, useLieferscheine } from "./stores";
+
+import React, { useEffect, useState } from "react";
+import { accountingApi, euro } from "./accountingApi";
 import "./styles.css";
 
-function safeNumber(v: unknown, fallback = 0) {
-  if (v === null || v === undefined || v === "") return fallback;
-  const normalized =
-    typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-const fmt = (n: number) =>
-  safeNumber(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
 export default function Uebersicht() {
-  const [re] = useRechnungen();
-  const [za] = useZahlungen();
-  const [ls] = useLieferscheine();
+  const [data, setData] = useState<any>(null);
+  const [error, setError] = useState("");
 
-  const sumRe = useMemo(
-    () =>
-      (re || []).reduce(
-        (s, r: any) => s + safeNumber(r.betragBrutto ?? r.brutto ?? 0),
-        0
-      ),
-    [re]
-  );
+  const load = async () => {
+    try {
+      setError("");
+      setData(await accountingApi("/api/accounting/summary"));
+    } catch (e: any) {
+      setError(e?.message || "Fehler");
+    }
+  };
 
-  const sumReNetto = useMemo(
-    () =>
-      (re || []).reduce(
-        (s, r: any) => s + safeNumber(r.betragNetto ?? r.netto ?? 0),
-        0
-      ),
-    [re]
-  );
+  useEffect(() => {
+    void load();
+  }, []);
 
-  const sumZa = useMemo(
-    () =>
-      (za || []).reduce((s, z: any) => s + safeNumber(z.betrag ?? 0), 0),
-    [za]
-  );
-
-  const sumLs = useMemo(
-    () =>
-      (ls || []).reduce(
-        (s, l: any) => s + safeNumber(l.kosten ?? l.betrag ?? 0),
-        0
-      ),
-    [ls]
-  );
-
-  const offen = Math.max(0, sumRe - sumZa);
-  const cash = sumZa - sumLs;
-  const guv = sumReNetto - sumLs;
+  const cards = [
+    ["Ausgangsrechnungen", data?.invoicesGross],
+    ["Eingangsrechnungen", data?.billsGross],
+    ["Zahlungseingänge", data?.incoming],
+    ["Offene Forderungen", data?.openReceivables],
+    ["Offene Verbindlichkeiten", data?.openPayables],
+    ["Cashflow", data?.cashflow]
+  ];
 
   return (
     <div className="bh-page">
-      <h2>Übersicht</h2>
-
-      <div className="bh-cards">
-        <div className="bh-card">
-          <div className="k">Rechnungen (Brutto)</div>
-          <div className="v">{fmt(sumRe)} €</div>
+      <div className="bh-header-row">
+        <div>
+          <h2>Übersicht</h2>
+          <div className="bh-note">
+            Projekt: {data?.project?.code || "—"} · {data?.project?.name || ""}
+          </div>
         </div>
 
-        <div className="bh-card">
-          <div className="k">Zahlungen</div>
-          <div className="v">{fmt(sumZa)} €</div>
-        </div>
+        <button className="bh-btn ghost" onClick={load}>
+          Aktualisieren
+        </button>
+      </div>
 
-        <div className="bh-card">
-          <div className="k">Offene Posten</div>
-          <div className="v">{fmt(offen)} €</div>
-        </div>
+      {error && <div className="bh-note">{error}</div>}
 
-        <div className="bh-card">
-          <div className="k">Kosten (Lieferscheine)</div>
-          <div className="v">{fmt(sumLs)} €</div>
-        </div>
-
-        <div className="bh-card">
-          <div className="k">Cashflow</div>
-          <div className="v">{fmt(cash)} €</div>
-        </div>
-
-        <div className="bh-card">
-          <div className="k">GuV (≈ Umsatz − Kosten)</div>
-          <div className="v">{fmt(guv)} €</div>
-        </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(6,minmax(0,1fr))",
+          gap: 10
+        }}
+      >
+        {cards.map(([label, value]) => (
+          <div className="bh-card" key={label as string}>
+            <div className="bh-note">{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800 }}>
+              {euro(value)} €
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
-
-
-
-
-

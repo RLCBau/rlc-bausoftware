@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { filterUsableRlcPriceSources } from "../quality/priceSourceQualityGate";
 
 const db = prisma as any;
 
@@ -419,9 +420,24 @@ export async function analyzeMarketCandidateImpact(
   const change = resolveChangePct(event);
 
   if (change.appliedPct == null || change.appliedPct === 0) {
+    const entriesRaw = await db.kalkulationsDbEntry.findMany({
+      where: { companyId, unitPriceNet: { gt: 0 } },
+      orderBy: { updatedAt: "desc" },
+      take: 10000,
+    });
+    const entries = filterUsableRlcPriceSources(entriesRaw);
+    const costGroup = detectCostGroup(event);
+    const affectedPositions = entries
+      .map((entry: any) => ({ entry, match: calculateMatchScore(entry, event) }))
+      .filter(({ match }: any) => match.score >= 0.45)
+      .map(({ entry, match }: any) => buildPositionImpact(entry, event, 0, costGroup, match))
+      .sort((left: any, right: any) => right.matchScore - left.matchScore)
+      .slice(0, 500);
+    const projectIds = new Set(affectedPositions.map((position: any) => position.projectId).filter(Boolean));
+
     const result = {
       version: "1.0",
-      status: "NO_QUANTIFIED_CHANGE",
+      status: affectedPositions.length ? "POTENTIAL_MATCHES" : "NO_MATCHES",
       analyzedAt: new Date().toISOString(),
       candidateId,
       companyId,
@@ -429,18 +445,18 @@ export async function analyzeMarketCandidateImpact(
       minChangePct: change.minPct,
       maxChangePct: change.maxPct,
       appliedChangePct: null,
-      affectedCostGroup: detectCostGroup(event),
-      affectedPositions: [],
+      affectedCostGroup: costGroup,
+      affectedPositions,
       summary: {
-        positions: 0,
-        projects: 0,
+        positions: affectedPositions.length,
+        projects: projectIds.size,
         currentTotal: 0,
         suggestedTotal: 0,
         estimatedDelta: 0,
         averageIncreasePct: 0,
       },
       note:
-        "Das Marktereignis enthält noch keine belastbare prozentuale Preisänderung. Es wurden keine Preise geschätzt oder geändert.",
+        "Potenziell betroffene LV-Positionen wurden ermittelt. Da keine belastbare prozentuale Marktänderung vorliegt, wurden keine Preise geschätzt oder geändert.",
     };
 
     const oldData =
@@ -463,7 +479,7 @@ export async function analyzeMarketCandidateImpact(
     return result;
   }
 
-  const entries = await db.kalkulationsDbEntry.findMany({
+  const entriesRaw = await db.kalkulationsDbEntry.findMany({
     where: {
       companyId,
       unitPriceNet: { gt: 0 },
@@ -473,6 +489,8 @@ export async function analyzeMarketCandidateImpact(
     },
     take: 10000,
   });
+
+  const entries = filterUsableRlcPriceSources(entriesRaw);
 
   const costGroup = detectCostGroup(event);
 

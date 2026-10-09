@@ -1,10 +1,12 @@
-﻿import React from "react";
+import React from "react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import QRCode from "qrcode";
 import * as XLSX from "xlsx";
 import { useKiSuggest } from "./useKiSuggest";
 import { LV, LVPos } from "./store.lv";
+import { useProject } from "../../store/useProject";
+import { archiveWebFile, archiveWebPdf } from "../../lib/dmsArchive";
 
 /* ====== STILI ====== */
 const th: React.CSSProperties = { textAlign:"left", padding:"8px 10px", borderBottom:"1px solid var(--line)", fontSize:13, whiteSpace:"nowrap" };
@@ -12,8 +14,22 @@ const td: React.CSSProperties = { padding:"6px 10px", borderBottom:"1px solid va
 const inp: React.CSSProperties = { border:"1px solid var(--line)", borderRadius:6, padding:"6px 8px", fontSize:13 };
 const lbl: React.CSSProperties = { fontSize:12, opacity:.8 };
 
+
+
+function activeProjectId(projectCtx: any): string {
+  const project =
+    projectCtx?.project ||
+    projectCtx?.currentProject ||
+    projectCtx?.selectedProject ||
+    projectCtx?.current ||
+    projectCtx ||
+    {};
+  return String(project?.id || projectCtx?.projectId || "").trim();
+}
 /* ====== COMPONENTE ====== */
 export default function AutoLV() {
+  const projectCtx: any = useProject();
+  const projectId = activeProjectId(projectCtx);
   const [rows, setRows] = React.useState<(LVPos & { rabatt?: number })[]>([]);
   const { suggest, loading } = useKiSuggest();
 
@@ -284,9 +300,9 @@ export default function AutoLV() {
 
       {/* Export */}
       <div className="card" style={{ padding:"10px 16px", display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-        <button className="btn" onClick={() => download("text/csv;charset=utf-8", "lv.csv", LV.exportCSV(rows))}>Export CSV</button>
+        <button className="btn" onClick={() => download("text/csv;charset=utf-8", "lv.csv", LV.exportCSV(rows), projectId)}>Export CSV</button>
         <button className="btn" onClick={() => pickFile(async f => { const n = LV.importCSV(await f.text()); alert(`Importiert: ${n} Positionen`); setRows(LV.list()); })}>Import CSV</button>
-        <button className="btn" onClick={() => exportXLSX({ rows, kapRabatt, kapMarkup, kapTotals, netto, aufschlag, mwst, brutto, company, client, offer })}>Export XLSX</button>
+        <button className="btn" onClick={() => exportXLSX({ rows, kapRabatt, kapMarkup, kapTotals, netto, aufschlag, mwst, brutto, company, client, offer, projectId })}>Export XLSX</button>
       </div>
 
       {/* IVA + Aufschlag */}
@@ -319,7 +335,8 @@ export default function AutoLV() {
           <button className="btn" onClick={() => exportPDF({
             rows, kapRabatt, kapMarkup, kapTotals, netto, aufschlag, mwst, brutto,
             company, client, offer, watermark,
-            sigBauleiter, sigAuftraggeber, bauleiterName, auftraggeberName, pdfColors
+            sigBauleiter, sigAuftraggeber, bauleiterName, auftraggeberName, pdfColors,
+            projectId
           })}>
             ðŸ“„ Angebot (PDF) generieren
           </button>
@@ -360,7 +377,19 @@ function ProgressBar({ value }: { value: number }) {
   </div>);
 }
 function pickFile(onPick: (f: File) => void) { const i = document.createElement("input"); i.type = "file"; i.onchange = () => { const f = i.files?.[0]; if (f) onPick(f); }; i.click(); }
-function download(type: string, name: string, data: string) { const b = new Blob([data], { type }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; a.click(); URL.revokeObjectURL(a.href); }
+function download(type: string, name: string, data: string, projectId = "") {
+  const blob = new Blob([data], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  if (projectId) {
+    void archiveWebFile(projectId, name, blob)
+      .catch((error) => console.warn("[autolv:csv:dms]", error));
+  }
+}
 
 /* ===== SignPad ===== */
 function SignPad({ title, onSave }: { title: string; onSave: (dataUrl: string | null) => void }) {
@@ -397,9 +426,9 @@ function exportXLSX(opts: {
   kapMarkup: Record<string, number>;
   kapTotals: Record<string, { sumRaw: number; sumAfterLineDisc: number; rabattKap: number; sumAfterKap: number; markupKap:number; sumFinalKap: number }>;
   netto: number; aufschlag: number; mwst: number; brutto: number;
-  company: any; client: any; offer: any;
+  company: any; client: any; offer: any; projectId?: string;
 }) {
-  const { rows, kapRabatt, kapMarkup, kapTotals, netto, aufschlag, mwst, brutto, company, client, offer } = opts;
+  const { rows, kapRabatt, kapMarkup, kapTotals, netto, aufschlag, mwst, brutto, company, client, offer, projectId } = opts;
 
   const data1: Array<Array<string | number>> = [["Kapitel","Pos-Nr","Kurztext","Einheit","Menge","E-Preis","Rabatt %","Zeilen-€ nach Rabatt","Confidence %"]];
   for (const r of rows) {
@@ -445,9 +474,15 @@ function exportXLSX(opts: {
   const blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `Angebot_${offer.number}.xlsx`;
+  const fileName = `Angebot_${offer.number}.xlsx`;
+  a.download = fileName;
   a.click();
   URL.revokeObjectURL(a.href);
+
+  if (projectId) {
+    void archiveWebFile(projectId, fileName, blob)
+      .catch((error) => console.warn("[autolv:xlsx:dms]", error));
+  }
 }
 
 /* ===== PDF ===== */
@@ -464,9 +499,19 @@ async function exportPDF(opts: {
   sigBauleiter: string | null; sigAuftraggeber: string | null;
   bauleiterName: string; auftraggeberName: string;
   pdfColors: { head:[number,number,number]; chap:[number,number,number] };
+  projectId?: string;
 }) {
   const doc = await buildPdfDoc(opts);
-  doc.save(`Angebot_${opts.offer.number}.pdf`);
+  const fileName = `Angebot_${opts.offer.number}.pdf`;
+  const blob = doc.output("blob");
+
+  doc.save(fileName);
+
+  if (opts.projectId) {
+    void archiveWebPdf(opts.projectId, fileName, blob).catch((error) => {
+      console.error("[AutoLV:DMS] Archivierung fehlgeschlagen:", error);
+    });
+  }
 }
 
 async function buildPdfDoc(opts: {

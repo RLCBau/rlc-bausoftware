@@ -1,587 +1,484 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
-import { MachinesDB } from "./store.machines";
-import { Machine, MaintRecord, MachAttachment } from "./types";
+import React from "react";
+import { useSearchParams } from "react-router-dom";
+import { apiUrl } from "../../lib/apiBase";
+import MaschinenCore from "./maschinenCore";
+import Einsatzplanung from "./ressourcenplanung";
+import MaschinenWartung from "./MaschinenWartung";
+import MachineDeadlines from "./MachineDeadlines";
+import MaschinenKosten from "./MaschinenKosten";
 
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 10px",
-  borderBottom: "1px solid var(--line)",
-  fontSize: 13,
-  whiteSpace: "nowrap"
+type Tab =
+  | "overview"
+  | "maschinen"
+  | "fristen"
+  | "wartung"
+  | "einsatz"
+  | "kosten";
+
+type Machine = {
+  id: string;
+  name: string;
+  type?: string | null;
+  serial?: string | null;
+  projectId?: string | null;
+  location?: string | null;
+  status?: string | null;
+  hours?: number;
+  hourlyRate?: number;
+  lastService?: string | null;
+  nextService?: string | null;
+  serviceIntervalDays?: number;
 };
 
-const td: React.CSSProperties = {
-  padding: "6px 10px",
-  borderBottom: "1px solid var(--line)",
-  fontSize: 13,
-  verticalAlign: "middle"
-};
+function getAuthToken(): string {
+  const keys = [
+    "rlc_token",
+    "token",
+    "authToken",
+    "accessToken",
+    "rlc_auth_token"
+  ];
 
-const inp: React.CSSProperties = {
-  border: "1px solid var(--line)",
-  borderRadius: 6,
-  padding: "6px 8px",
-  fontSize: 13
-};
+  for (const storage of [localStorage, sessionStorage]) {
+    for (const key of keys) {
+      const value = storage.getItem(key);
+      if (value?.trim()) return value.trim();
+    }
+  }
 
-const lbl: React.CSSProperties = {
-  fontSize: 12,
-  opacity: 0.8
-};
+  return "";
+}
+
+async function request(path: string) {
+  const token = getAuthToken();
+
+  const response = await fetch(apiUrl(path), {
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      ...(token
+        ? { Authorization: `Bearer ${token}` }
+        : {})
+    }
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || data?.ok === false) {
+    throw new Error(
+      data?.error ||
+      data?.message ||
+      `HTTP ${response.status}`
+    );
+  }
+
+  return data;
+}
+
+function daysLeft(value?: string | null) {
+  if (!value) return null;
+
+  return Math.round((Date.parse(String(value).slice(0,10)+"T00:00:00Z")-Date.parse(new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Berlin",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())+"T00:00:00Z"))/86400000);
+}
 
 export default function Maschinenverwaltung() {
-  const [all, setAll] = React.useState<Machine[]>(MachinesDB.list());
-  const [selId, setSelId] = React.useState<string | null>(MachinesDB.list()[0]?.id ?? null);
-  const [q, setQ] = React.useState("");
-  const [proj, setProj] = React.useState("");
-  const [onlyDue, setOnlyDue] = React.useState(false);
+  const [params, setParams] = useSearchParams();
 
-  const refresh = React.useCallback(() => {
-    const next = MachinesDB.list();
-    setAll(next);
-    setSelId((prev) => {
-      if (prev && next.some((x) => x.id === prev)) return prev;
-      return next[0]?.id ?? null;
-    });
+  const area = String(
+    params.get("bereich") || ""
+  );
+
+  const resolveTab = (): Tab => {
+    if (area === "maschinen") return "maschinen";
+    if (area === "fristen") return "fristen";
+    if (area === "wartung") return "wartung";
+    if (area === "einsatz") return "einsatz";
+    if (area === "kosten") return "kosten";
+    return "overview";
+  };
+
+  const [tab, setTab] =
+    React.useState<Tab>(resolveTab);
+
+  const [actualCost,setActualCost]=React.useState(0),[maintenanceIncluded,setMaintenanceIncluded]=React.useState(false);
+  const [maintenanceDirty,setMaintenanceDirty]=React.useState(false);
+  const [machines, setMachines] =
+    React.useState<Machine[]>([]);
+
+  const [loading, setLoading] =
+    React.useState(false);
+
+  const [error, setError] =
+    React.useState("");
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const [data,costs] = await Promise.all([request("/api/resource-costs/machines"),request("/api/resource-costs/machine-costs")]);
+      setActualCost(Number(costs.totals?.totalCost||0));setMaintenanceIncluded(!!costs.maintenanceIncluded);
+
+      setMachines(
+        Array.isArray(data?.items)
+          ? data.items
+          : []
+      );
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Maschinendaten konnten nicht geladen werden."
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const sel = React.useMemo(
-    () => all.find((x) => x.id === selId) ?? null,
-    [all, selId]
+  React.useEffect(() => {
+    void load();
+  }, [load]);
+
+  React.useEffect(() => {
+    setTab(resolveTab());
+  }, [area]);
+
+  const open = (next: Tab) => {
+    if(tab==="wartung"&&next!==tab&&maintenanceDirty&&!window.confirm("Ungespeicherte Wartung verwerfen?"))return;
+    setTab(next);
+
+    const nextParams =
+      new URLSearchParams(params);
+
+    if (next === "overview") {
+      nextParams.delete("bereich");
+    } else {
+      nextParams.set("bereich", next);
+    }
+
+    setParams(nextParams);
+  };
+
+  const dueMachines = machines.filter(
+    (machine) => {
+      const days = daysLeft(
+        machine.nextService
+      );
+
+      return (
+        machine.status === "Wartung" ||
+        (days !== null && days <= 14)
+      );
+    }
   );
 
-  const filtered = React.useMemo(() => {
-    const qq = q.trim().toLowerCase();
+  const operating = machines.filter(
+    (machine) =>
+      machine.status !== "Außer Betrieb"
+  ).length;
 
-    return all.filter((m) => {
-      const s = `${m.name} ${m.type ?? ""} ${m.serial ?? ""} ${m.projectId ?? ""}`.toLowerCase();
-      const okQ = !qq || s.includes(qq);
-      const okP = !proj || (m.projectId ?? "") === proj;
-      const due = isDue(m);
-      const okD = !onlyDue || due;
-      return okQ && okP && okD;
-    });
-  }, [all, q, proj, onlyDue]);
+  const assignedProjects = new Set(
+    machines
+      .map((machine) => machine.projectId)
+      .filter(Boolean)
+  ).size;
 
-  const projects = React.useMemo(
-    () => Array.from(new Set(all.map((m) => m.projectId).filter(Boolean))) as string[],
-    [all]
+  const hourlyCost = machines.reduce(
+    (sum, machine) =>
+      sum +
+      Number(machine.hourlyRate || 0),
+    0
   );
 
-  const add = React.useCallback(() => {
-    const m = MachinesDB.create();
-    refresh();
-    setSelId(m.id);
-  }, [refresh]);
+  const operatingValue = machines.reduce(
+    (sum, machine) =>
+      sum +
+      Number(machine.hours || 0) *
+        Number(machine.hourlyRate || 0),
+    0
+  );
 
-  const del = React.useCallback(() => {
-    if (!sel) return;
-    if (!confirm("Maschine löschen?")) return;
-    MachinesDB.remove(sel.id);
-    refresh();
-  }, [sel, refresh]);
-
-  const up = React.useCallback(
-    (p: Partial<Machine>) => {
-      if (!sel) return;
-      const next: Machine = { ...sel, ...p, updatedAt: Date.now() };
-      MachinesDB.upsert(next);
-      setSelId(next.id);
-      refresh();
+  const cards = [
+    {
+      key: "maschinen" as Tab,
+      title: "Maschinen",
+      value: machines.length,
+      text: `${operating} aktiv`
     },
-    [sel, refresh]
-  );
-
-  const addMaint = React.useCallback(() => {
-    if (!sel) return;
-    const r: MaintRecord = {
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      hours: sel.hours || 0,
-      notes: ""
-    };
-    up({ maintenance: [r, ...(sel.maintenance || [])] });
-  }, [sel, up]);
-
-  const delMaint = React.useCallback(
-    (id: string) => {
-      if (!sel) return;
-      up({ maintenance: (sel.maintenance || []).filter((x) => x.id !== id) });
+    {
+      key: "wartung" as Tab,
+      title: "Wartung",
+      value: dueMachines.length,
+      text: "fällig oder innerhalb 14 Tagen"
     },
-    [sel, up]
-  );
-
-  const onDrop = React.useCallback(
-    async (ev: React.DragEvent) => {
-      ev.preventDefault();
-      if (!sel) return;
-      const f = ev.dataTransfer.files?.[0];
-      if (!f) return;
-      await MachinesDB.attach(sel.id, f);
-      refresh();
+    {
+      key: "einsatz" as Tab,
+      title: "Einsatz",
+      value: assignedProjects,
+      text: "zugeordnete Projekte"
     },
-    [sel, refresh]
-  );
-
-  const open = React.useCallback((a: MachAttachment) => {
-    const w = window.open(a.dataURL, "_blank");
-    if (!w) alert("Popup blockiert.");
-  }, []);
-
-  const importCSV = React.useCallback(() => {
-    pickFile(async (f) => {
-      const n = MachinesDB.importCSV(await f.text());
-      alert(`Import: ${n} Maschinen.`);
-      refresh();
-    });
-  }, [refresh]);
-
-  const exportCSV = React.useCallback(() => {
-    download(
-      "text/csv;charset=utf-8",
-      "maschinen.csv",
-      MachinesDB.exportCSV(filtered)
-    );
-  }, [filtered]);
-
-  const exportJSON = React.useCallback(() => {
-    download("application/json", "maschinen_backup.json", MachinesDB.exportJSON());
-  }, []);
-
-  const importJSON = React.useCallback(() => {
-    pickFile(async (f) => {
-      const n = MachinesDB.importJSON(await f.text());
-      alert(`Backup importiert: ${n}.`);
-      refresh();
-    });
-  }, [refresh]);
-
-  const recalcNext = React.useCallback(() => {
-    if (!sel) return;
-    const last = sel.lastService ?? new Date().toISOString();
-    const days = sel.serviceIntervalDays ?? 180;
-    const next = new Date(new Date(last).getTime() + days * 86400000).toISOString();
-    up({ nextService: next });
-  }, [sel, up]);
+    {
+      key: "kosten" as Tab,
+      title: "Kosten",
+      value: `${hourlyCost.toFixed(2)} €`,
+      text: "Summe hinterlegte Stundensätze"
+    }
+  ];
 
   return (
-    <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-536">
-      <div
-        className="card rlc-migrated-pages-buro-maschinenverwaltung-tsx-537">
+    <div style={{ display: "grid", gap: 14 }}>
+      <style>{`
+        .maschinen-hub-module {
+          display: grid;
+          gap: 12px;
+        }
 
-        
-        <button className="btn" onClick={add}>
-          + Maschine
-        </button>
-        <button className="btn" onClick={del} disabled={!sel}>
-          Löschen
-        </button>
+        .maschinen-hub-module .rlc-page-hero {
+          display: none !important;
+        }
 
-        <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-538" />
+        .maschinen-hub-module > div {
+          margin-top: 0 !important;
+        }
+      `}</style>
+      <section className="rlc-page-hero rlc-page-hero--split">
+        <div>
+          <div className="rlc-page-hero__eyebrow">
+            Verwaltung · Maschinen
+          </div>
 
-        <input
-          placeholder="Suche Name / Typ / Seriennr. / Projekt…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
-          { ...inp, width: 300 })} />
-        
+          <h1 style={{ margin: "3px 0 4px" }}>
+            Maschinenverwaltung
+          </h1>
 
-        <select
-          value={proj}
-          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
-          { ...inp, width: 160 })}>
-          
-          <option value="">Alle Projekte</option>
-          {projects.map((p) =>
-          <option key={p} value={p}>
-              {p}
-            </option>
-          )}
-        </select>
-
-        <label className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-539">
-          <input
-            type="checkbox"
-            checked={onlyDue}
-            onChange={(e) => setOnlyDue(e.target.checked)} />
-          
-          <span className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-540">nur fällige</span>
-        </label>
-
-        <button className="btn" onClick={importCSV}>
-          Import CSV
-        </button>
-        <button className="btn" onClick={exportCSV}>
-          Export CSV
-        </button>
-        <button className="btn" onClick={importJSON}>
-          Import JSON
-        </button>
-        <button className="btn" onClick={exportJSON}>
-          Export JSON
-        </button>
-      </div>
-
-      <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-541">
-
-
-
-
-
-
-        
-        <div className="card rlc-migrated-pages-buro-maschinenverwaltung-tsx-542">
-          <table className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-543">
-            <thead>
-              <tr>
-                <th className={rlcClass(null, th)}>Name</th>
-                <th className={rlcClass(null, th)}>Typ</th>
-                <th className={rlcClass(null, th)}>Seriennr.</th>
-                <th className={rlcClass(null, th)}>Projekt</th>
-                <th className={rlcClass(null, th)}>Stunden</th>
-                <th className={rlcClass(null, th)}>nächster Service</th>
-                <th className={rlcClass(null, th)}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((m) => {
-                const due = isDue(m);
-                const days = daysLeft(m.nextService);
-
-                return (
-                  <tr
-                    key={m.id}
-                    onClick={() => setSelId(m.id)} className={rlcClass(null,
-                    {
-                      cursor: "pointer",
-                      background: sel?.id === m.id ? "#f1f5ff" : undefined
-                    })}>
-                    
-                    <td className={rlcClass(null, td)}>
-                      <b>{m.name}</b>
-                    </td>
-                    <td className={rlcClass(null, td)}>{m.type || "—"}</td>
-                    <td className={rlcClass(null, td)}>{m.serial || "—"}</td>
-                    <td className={rlcClass(null, td)}>{m.projectId || "—"}</td>
-                    <td className={rlcClass(null, td)}>{m.hours ?? 0}</td>
-                    <td className={rlcClass(null, td)}>
-                      {m.nextService ? fmt(m.nextService) : "—"}
-                      {m.nextService &&
-                      <span className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-544">
-                          ({days} Tg)
-                        </span>
-                      }
-                    </td>
-                    <td className={rlcClass(null, td)}>{due ? "⚠️ fällig" : m.status || "Betrieb"}</td>
-                  </tr>);
-
-              })}
-
-              {filtered.length === 0 &&
-              <tr>
-                  <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={7}>
-                    Keine Maschinen.
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
+          <div style={{ opacity: 0.9 }}>
+            Maschinen, Wartung, Einsatz und Kosten zentral steuern.
+          </div>
         </div>
 
+        <div className="rlc-page-hero__actions">
+          <button
+            className="rlc-page-hero__button"
+            onClick={() => void load()}
+          >
+            Aktualisieren
+          </button>
+        </div>
+      </section>
+
+      <section
+        className="card"
+        style={{
+          display: "flex",
+          gap: 6,
+          flexWrap: "wrap"
+        }}
+      >
+        {[
+          ["overview", "Übersicht"],
+          ["maschinen", "Maschinen"],
+          ["wartung", "Wartung"],
+          ["fristen", "Fristen / Prüfungen"],
+          ["einsatz", "Einsatz"],
+          ["kosten", "Kosten"]
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            className={
+              tab === key
+                ? "btn btn-primary"
+                : "btn"
+            }
+            onClick={() =>
+              open(key as Tab)
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </section>
+
+      {error && (
         <div
-          className="card rlc-migrated-pages-buro-maschinenverwaltung-tsx-545"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}>
+          className="card"
+          style={{ color: "#b42318" }}
+        >
+          {error}
+        </div>
+      )}
 
-          
-          {!sel ?
-          <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-546">Links Maschine wählen oder neu anlegen.</div> :
-
-          <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-547">
-
-
-
-
-
-            
-              <label className={rlcClass(null, lbl)}>Name</label>
-              <input className={rlcClass(null,
-            inp)}
-            value={sel.name}
-            onChange={(e) => up({ name: e.target.value })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Typ</label>
-              <input className={rlcClass(null,
-            inp)}
-            value={sel.type ?? ""}
-            onChange={(e) => up({ type: e.target.value })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Seriennr.</label>
-              <input className={rlcClass(null,
-            inp)}
-            value={sel.serial ?? ""}
-            onChange={(e) => up({ serial: e.target.value })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Projekt-ID</label>
-              <input className={rlcClass(null,
-            inp)}
-            value={sel.projectId ?? ""}
-            onChange={(e) => up({ projectId: e.target.value })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Standort</label>
-              <input className={rlcClass(null,
-            inp)}
-            value={sel.location ?? ""}
-            onChange={(e) => up({ location: e.target.value })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Status</label>
-              <select className={rlcClass(null,
-            inp)}
-            value={sel.status ?? "Betrieb"}
-            onChange={(e) => up({ status: e.target.value as any })}>
-              
-                <option>Betrieb</option>
-                <option>Wartung</option>
-                <option>Außer Betrieb</option>
-              </select>
-
-              <label className={rlcClass(null, lbl)}>Betriebsstunden</label>
-              <input
-              type="number" className={rlcClass(null,
-              inp)}
-              value={sel.hours ?? 0}
-              onChange={(e) => up({ hours: Number(e.target.value) || 0 })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Letzter Service</label>
-              <input
-              type="date" className={rlcClass(null,
-              inp)}
-              value={toDateInput(sel.lastService)}
-              onChange={(e) => up({ lastService: fromDateInput(e.target.value) })} />
-            
-
-              <label className={rlcClass(null, lbl)}>Intervall (Tage)</label>
-              <input
-              type="number" className={rlcClass(null,
-              inp)}
-              value={sel.serviceIntervalDays ?? 180}
-              onChange={(e) =>
-              up({ serviceIntervalDays: Number(e.target.value) || 0 })
-              } />
-            
-
-              <label className={rlcClass(null, lbl)}>Nächster Service</label>
-              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-548">
-                <input
-                type="date" className={rlcClass(null,
-                { ...inp, flex: 1 })}
-                value={toDateInput(sel.nextService)}
-                onChange={(e) => up({ nextService: fromDateInput(e.target.value) })} />
-              
-                <button className="btn" onClick={recalcNext}>
-                  Berechnen
-                </button>
-              </div>
-
-              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>Wartungsprotokolle</label>
-              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-549">
-                <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-550">
-                  <button className="btn" onClick={addMaint}>
-                    + Eintrag
-                  </button>
+      {tab === "overview" && (
+        <>
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(4,minmax(0,1fr))",
+              gap: 10
+            }}
+          >
+            {cards.map((card) => (
+              <button
+                key={card.key}
+                className="card"
+                onClick={() =>
+                  open(card.key)
+                }
+                style={{
+                  minHeight: 130,
+                  textAlign: "left",
+                  cursor: "pointer",
+                  background: "#fff",
+                  border:
+                    "1px solid #dbe3ee"
+                }}
+              >
+                <div className="muted">
+                  {card.title}
                 </div>
 
-                <table className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-551">
-                  <thead>
-                    <tr>
-                      <th className={rlcClass(null, th)}>Datum</th>
-                      <th className={rlcClass(null, th)}>Std.</th>
-                      <th className={rlcClass(null, th)}>Notizen</th>
-                      <th className={rlcClass(null, th)}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(sel.maintenance || []).map((r) =>
-                  <tr key={r.id}>
-                        <td className={rlcClass(null, td)}>
-                          <input
-                        type="date" className={rlcClass(null,
-                        inp)}
-                        value={toDateInput(r.date)}
-                        onChange={(e) =>
-                        up({
-                          maintenance: (sel.maintenance || []).map((x) =>
-                          x.id === r.id ?
-                          { ...r, date: fromDateInput(e.target.value) } :
-                          x
-                          )
-                        })
-                        } />
-                      
-                        </td>
-                        <td className={rlcClass(null, td)}>
-                          <input
-                        type="number" className={rlcClass(null,
-                        inp)}
-                        value={r.hours ?? 0}
-                        onChange={(e) =>
-                        up({
-                          maintenance: (sel.maintenance || []).map((x) =>
-                          x.id === r.id ?
-                          { ...r, hours: Number(e.target.value) || 0 } :
-                          x
-                          )
-                        })
-                        } />
-                      
-                        </td>
-                        <td className={rlcClass(null, td)}>
-                          <input className={rlcClass(null,
-                      { ...inp, width: "100%" })}
-                      value={r.notes ?? ""}
-                      onChange={(e) =>
-                      up({
-                        maintenance: (sel.maintenance || []).map((x) =>
-                        x.id === r.id ? { ...r, notes: e.target.value } : x
-                        )
-                      })
-                      } />
-                      
-                        </td>
-                        <td className={rlcClass(null, { ...td, whiteSpace: "nowrap" })}>
-                          <button className="btn" onClick={() => delMaint(r.id)}>
-                            Entfernen
-                          </button>
-                        </td>
-                      </tr>
-                  )}
+                <div
+                  style={{
+                    fontSize: 27,
+                    fontWeight: 800,
+                    marginTop: 6
+                  }}
+                >
+                  {card.value}
+                </div>
 
-                    {(sel.maintenance || []).length === 0 &&
-                  <tr>
-                        <td className={rlcClass(null, { ...td, opacity: 0.6 })} colSpan={4}>
-                          Keine Einträge.
-                        </td>
-                      </tr>
-                  }
-                  </tbody>
-                </table>
-              </div>
+                <div
+                  className="muted"
+                  style={{ marginTop: 7 }}
+                >
+                  {card.text}
+                </div>
+              </button>
+            ))}
+          </section>
 
-              <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>
-                Dokumente / Fotos (Drag&amp;Drop)
-              </label>
-              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-552">
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "1fr 1fr",
+              gap: 12
+            }}
+          >
+            <div className="card">
+              <strong>
+                Maschinenstatus
+              </strong>
 
-
-
-
-
-
-              
-                {(sel.attachments || []).map((a) =>
               <div
-                key={a.id} className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-553">
-
-
-
-
-
-
-                
-                    <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-554">
-
-
-
-
-
-
-
-                  
-                      <b
-
-
-
-
-
-                    title={a.name} className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-555">
-                    
-                        {a.name}
-                      </b>
-                      <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-556" />
-                      <button className="btn" onClick={() => open(a)}>
-                        Öffnen
-                      </button>
-                    </div>
-
-                    {(a.mime || "").startsWith("image/") &&
-                <img
-                  src={a.dataURL}
-                  alt={a.name} className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-557" />
-
-
-                }
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "1fr 1fr",
+                  gap: 10,
+                  marginTop: 12
+                }}
+              >
+                <div>
+                  <div className="muted">
+                    Gesamt
                   </div>
-              )}
+                  <b style={{ fontSize: 24 }}>
+                    {machines.length}
+                  </b>
+                </div>
 
-                {(sel.attachments || []).length === 0 &&
-              <div className="rlc-migrated-pages-buro-maschinenverwaltung-tsx-558">Keine Anhänge.</div>
-              }
+                <div>
+                  <div className="muted">
+                    Aktiv
+                  </div>
+                  <b style={{ fontSize: 24 }}>
+                    {operating}
+                  </b>
+                </div>
+
+                <div>
+                  <div className="muted">
+                    Wartung fällig
+                  </div>
+                  <b style={{ fontSize: 24 }}>
+                    {dueMachines.length}
+                  </b>
+                </div>
+
+                <div>
+                  <div className="muted">
+                    Projekte
+                  </div>
+                  <b style={{ fontSize: 24 }}>
+                    {assignedProjects}
+                  </b>
+                </div>
               </div>
             </div>
-          }
+
+            <div className="card">
+              <strong>
+                Maschinenkosten
+              </strong>
+
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 800,
+                  marginTop: 12
+                }}
+              >
+                {actualCost.toFixed(2)} €
+              </div>
+
+              <div className="muted">
+                Gebuchte Geräteeinsätze{maintenanceIncluded?" und erledigte Wartungen im Firmenbericht":" in den zugänglichen Projekten"}.
+              </div>
+
+              <button
+                className="btn"
+                style={{ marginTop: 12 }}
+                onClick={() =>
+                  open("kosten")
+                }
+              >
+                Kosten öffnen
+              </button>
+            </div>
+          </section>
+        </>
+      )}
+
+      {tab === "maschinen" && (
+        <div className="maschinen-hub-module">
+          <MaschinenCore />
         </div>
-      </div>
-    </div>);
+      )}
 
-}
+      {tab === "einsatz" && (
+        <div className="maschinen-hub-module">
+          <Einsatzplanung />
+        </div>
+      )}
 
-function toDateInput(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const p = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+      {tab === "fristen" && <MachineDeadlines />}
+      {tab === "wartung" && (
+        <div className="maschinen-hub-module">
+          <MaschinenWartung onDirtyChange={setMaintenanceDirty} />
+        </div>
+      )}
 
-function fromDateInput(v: string) {
-  if (!v) return "";
-  return `${v}T12:00:00.000Z`;
-}
+      {tab === "kosten" && (
+        <div className="maschinen-hub-module">
+          <MaschinenKosten />
+        </div>
+      )}
 
-function fmt(iso?: string) {
-  return iso ? new Date(iso).toLocaleDateString() : "—";
-}
-
-function daysLeft(iso?: string) {
-  if (!iso) return NaN;
-  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
-}
-
-function isDue(m: Machine) {
-  const d = daysLeft(m.nextService);
-  return !isNaN(d) && d <= 14 || m.status === "Wartung";
-}
-
-function pickFile(onPick: (f: File) => void) {
-  const i = document.createElement("input");
-  i.type = "file";
-  i.onchange = () => {
-    const f = i.files?.[0];
-    if (f) onPick(f);
-  };
-  i.click();
-}
-
-function download(type: string, name: string, data: string) {
-  const b = new Blob([data], { type });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(b);
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
+      {loading && (
+        <div className="muted">
+          Maschinendaten werden geladen…
+        </div>
+      )}
+    </div>
+  );
 }

@@ -72,6 +72,7 @@ async function requestJson(path, init, fallbackError) {
 export async function fetchProjects() {
     return requestJson("/api/projects", {
         method: "GET",
+        cache: "no-store",
     }, "Fehler beim Laden der Projekte");
 }
 // ==================== project.json importieren ====================
@@ -103,6 +104,18 @@ export async function createProject(payload) {
             place: safeTrim(payload.place),
         }),
     }, "Fehler beim Erstellen des Projekts");
+}
+// ==================== Aufträge ====================
+export async function fetchContracts(projectId = "") {
+    const q = safeTrim(projectId) ? `?projectId=${encodeURIComponent(safeTrim(projectId))}` : "";
+    return requestJson(`/api/contracts${q}`, { method: "GET", cache: "no-store" }, "Fehler beim Laden der Aufträge");
+}
+export async function createContract(payload) {
+    return requestJson("/api/contracts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    }, "Fehler beim Anlegen des Auftrags");
 }
 // ==================== Projekt löschen ====================
 export async function deleteProject(projectId) {

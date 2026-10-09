@@ -95,12 +95,8 @@ const AREAS: MobileArea[] = [
   reportType: "TAGESBERICHT",
   requiredStages: ["inbox", "final"],
   endpoints: {
-    inbox: [
-    "/api/tagesbericht/inbox/list?projectId={project}",
-    "/api/regie/inbox/list?projectId={project}"],
-
-    approved: ["/api/regie/freigegeben/list?projectId={project}"],
-    final: ["/api/regie/list?projectId={project}"]
+    inbox: ["/api/tagesbericht/inbox/list?projectId={project}"],
+    final: ["/api/tagesbericht/list?projectId={project}"]
   }
 },
 {
@@ -112,9 +108,9 @@ const AREAS: MobileArea[] = [
   reportType: "BAUTAGEBUCH",
   requiredStages: ["inbox", "final"],
   endpoints: {
-    inbox: ["/api/regie/inbox/list?projectId={project}"],
-    approved: ["/api/regie/freigegeben/list?projectId={project}"],
-    final: ["/api/regie/list?projectId={project}"]
+    inbox: ["/api/inbox/{project}/BAUTAGEBUCH"],
+    approved: ["/api/inbox/{project}/BAUTAGEBUCH/approved"],
+    final: ["/api/inbox/{project}/BAUTAGEBUCH/final"]
   }
 },
 {
@@ -148,13 +144,11 @@ const AREAS: MobileArea[] = [
   description: "Mobile Kalkulationsstände im zentralen Kalkulationsmodul weiterbearbeiten.",
   to: "/kalkulation/mit-ki",
   group: "Kaufmännisch",
-  workflow: false,
-  requiredStages: ["final"],
+  requiredStages: ["inbox", "approved", "final"],
   endpoints: {
-    final: [
-    "/api/kalkulation/{project}/ki",
-    "/api/kalkulation/ki-handoff/{project}"]
-
+    inbox: ["/api/inbox/{project}/KALKULATION"],
+    approved: ["/api/inbox/{project}/KALKULATION/approved"],
+    final: ["/api/inbox/{project}/KALKULATION/final"]
   }
 },
 {
@@ -448,21 +442,30 @@ export default function MobileUebersicht() {
     setLoading(true);
 
     try {
-      const entries = await Promise.all(
-        AREAS.map(async (area) => {
-          try {
-            return [area.key, await loadAreaCounts(area, projectKey)] as const;
-          } catch (error: any) {
-            return [
-            area.key,
-            {
-              ...EMPTY_COUNTS,
-              error: error?.message || "Daten konnten nicht geladen werden."
-            }] as
-            const;
-          }
-        })
-      );
+      const entries: Array<readonly [string, StageCounts]> = [];
+      const batchSize = 4;
+
+      for (let i = 0; i < AREAS.length; i += batchSize) {
+        const batch = AREAS.slice(i, i + batchSize);
+
+        const batchEntries = await Promise.all(
+          batch.map(async (area) => {
+            try {
+              return [area.key, await loadAreaCounts(area, projectKey)] as const;
+            } catch (error: any) {
+              return [
+                area.key,
+                {
+                  ...EMPTY_COUNTS,
+                  error: error?.message || "Daten konnten nicht geladen werden."
+                }
+              ] as const;
+            }
+          })
+        );
+
+        entries.push(...batchEntries);
+      }
 
       setCounts(Object.fromEntries(entries));
       setLastUpdated(Date.now());
@@ -521,6 +524,17 @@ export default function MobileUebersicht() {
             refreshButtonStyle)}>
             
             {loading ? "Server wird geprüft…" : "Aktualisieren"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/mobile/arbeitszeiten/mitarbeiter";
+            }}
+            disabled={!projectKey}
+            className={rlcClass(null, refreshButtonStyle)}
+          >
+            Eingänge nach Mitarbeiter
           </button>
         </div>
       </section>

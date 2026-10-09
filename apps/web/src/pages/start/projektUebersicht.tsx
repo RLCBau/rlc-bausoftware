@@ -540,9 +540,9 @@ function InfoKpi({
 
 }: {label: string;value: string;badge?: ProjectStatus;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>
         {badge ? <span className={rlcClass(null, statusBadge(badge))}>{value}</span> : value}
       </div>
     </div>);

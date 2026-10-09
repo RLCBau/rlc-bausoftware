@@ -19,6 +19,7 @@ async function main() {
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(pdfBuffer),
       disableWorker: true,
+      isEvalSupported: false,
     });
 
     const pdf = await loadingTask.promise;

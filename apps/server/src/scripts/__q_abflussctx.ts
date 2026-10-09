@@ -1,0 +1,2 @@
+import{PrismaClient}from'@prisma/client';const p=new PrismaClient();
+(async()=>{const pr=await p.project.findFirst({where:{code:'GAEB-LV-KS-BERCHTESGADEN-GAEB90'},select:{lvSets:{take:1,orderBy:{version:'desc'},select:{positions:{where:{position:{in:['01.03.0006','01.03.0007','01.03.0008','01.03.0009','01.03.0018','01.03.0019','01.03.0022','01.03.0023']}},select:{position:true,kurztext:true,langtext:true,einheit:true,menge:true}}}}}});console.log(JSON.stringify(pr?.lvSets[0]?.positions,null,2));await p.$disconnect()})()

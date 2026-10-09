@@ -4,6 +4,7 @@ import path from "path";
 import { prisma } from "../lib/prisma";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
 import { COMPANIES_ROOT } from "../lib/companiesRoot";
+import { archiveProjectFileVersion } from "../services/dmsArchive";
 import { loadRlcPdfCompanyFromRequest } from "../services/pdf/pdfCompanyContext";
 import {
   compileVorlageText,
@@ -22,11 +23,19 @@ import { seedStandardVorlagen } from "../vorlagen/seedStandardVorlagen";
 
 const router = Router();
 
+function requireVorlagenManageRole(req: any, res: any, next: any) {
+  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+  if (!["ADMIN", "ADMINISTRATOR", "BAULEITER"].includes(role)) {
+    return res.status(403).json({ ok: false, error: "VORLAGEN_MANAGE_FORBIDDEN" });
+  }
+  return next();
+}
+
 function companyIdFromRequest(req: Express.Request): string {
   return String(
     (req.auth as any)?.companyId ??
       (req.auth as any)?.company ??
-      process.env.DEV_COMPANY_ID ??
+      (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on" ? process.env.DEV_COMPANY_ID : "") ??
       ""
   ).trim();
 }
@@ -55,8 +64,15 @@ function accessibleTemplateWhere(companyId: string, id?: string) {
   };
 }
 
-async function loadProjectContext(companyId: string, projectToken: string) {
+async function loadProjectContext(
+  companyId: string,
+  projectToken: string,
+  userId: string,
+  role: string
+) {
   if (!projectToken) return null;
+  const normalizedRole = String(role || "").trim().toUpperCase();
+  const isAdmin = normalizedRole === "ADMIN" || normalizedRole === "ADMINISTRATOR";
   return prisma.project.findFirst({
     where: {
       companyId,
@@ -65,6 +81,7 @@ async function loadProjectContext(companyId: string, projectToken: string) {
         { code: projectToken },
         { slug: projectToken },
       ],
+      ...(isAdmin ? {} : { members: { some: { userId } } }),
     },
     select: {
       id: true,
@@ -84,6 +101,7 @@ async function buildValues(
 ): Promise<{ values: VorlageValueMap; project: Awaited<ReturnType<typeof loadProjectContext>> }> {
   const companyId = companyIdFromRequest(req);
   const userId = userIdFromRequest(req);
+  const role = String((req as any)?.auth?.companyRole || (req as any)?.auth?.role || "").trim();
   const [company, project, user] = await Promise.all([
     prisma.company.findUnique({
       where: { id: companyId },
@@ -94,12 +112,16 @@ async function buildValues(
         email: true,
       },
     }),
-    loadProjectContext(companyId, projectToken),
+    loadProjectContext(companyId, projectToken, userId, role),
     prisma.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true },
     }).catch(() => null),
   ]);
+
+  if (projectToken && !project) {
+    throw new Error("PROJECT_FORBIDDEN");
+  }
 
   const date = new Intl.DateTimeFormat("de-DE", {
     day: "2-digit",
@@ -179,11 +201,30 @@ router.get("/categories", async (req, res) => {
 
 router.get("/documents", async (req, res) => {
   const companyId = companyIdFromRequest(req);
-  const projectId = text(req.query.projectId);
+  const userId = userIdFromRequest(req);
+  const role = String((req as any)?.auth?.companyRole || (req as any)?.auth?.role || "").trim();
+  const projectToken = text(req.query.projectId);
+  let projectIds: string[] | null = null;
+
+  if (projectToken) {
+    const project = await loadProjectContext(companyId, projectToken, userId, role);
+    if (!project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
+    projectIds = [project.id];
+  } else {
+    const normalizedRole = role.toUpperCase();
+    const isAdmin = normalizedRole === "ADMIN" || normalizedRole === "ADMINISTRATOR";
+    if (!isAdmin) {
+      projectIds = (await prisma.project.findMany({
+        where: { companyId, projectMembers: { some: { userId } } },
+        select: { id: true },
+      })).map((x) => x.id);
+    }
+  }
+
   const documents = await prisma.vorlageDocument.findMany({
     where: {
       companyId,
-      ...(projectId ? { projectId } : {}),
+      ...(projectIds ? { OR: [{ projectId: null }, { projectId: { in: projectIds } }] } : {}),
     },
     orderBy: { updatedAt: "desc" },
     take: 100,
@@ -195,7 +236,14 @@ router.post("/documents", async (req, res) => {
   const companyId = companyIdFromRequest(req);
   const userId = userIdFromRequest(req);
   const templateId = text(req.body?.templateId) || null;
-  const projectId = text(req.body?.projectId) || null;
+  const projectToken = text(req.body?.projectId);
+  let projectId: string | null = null;
+  if (projectToken) {
+    const role = String((req as any)?.auth?.companyRole || (req as any)?.auth?.role || "").trim();
+    const project = await loadProjectContext(companyId, projectToken, userId, role);
+    if (!project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
+    projectId = project.id;
+  }
   const title = text(req.body?.title);
   const content = asContent(req.body?.content);
 
@@ -333,7 +381,7 @@ router.post("/:id/favorite", async (req, res) => {
   res.json({ ok: true, favorite: true });
 });
 
-router.post("/:id/copy", async (req, res) => {
+router.post("/:id/copy", requireVorlagenManageRole, async (req, res) => {
   const companyId = companyIdFromRequest(req);
   const userId = userIdFromRequest(req);
   const source = await prisma.vorlageTemplate.findFirst({
@@ -412,7 +460,7 @@ router.post("/:id/export", async (req, res) => {
       : asContent(template.content);
   const compiledContent = compileVorlageText(sourceContent, values);
   const baseName = safeVorlageFileName(title);
-  const directory = exportDirectory(companyId, project?.code ?? projectToken);
+  const directory = exportDirectory(companyId, project?.id ?? null);
   fs.mkdirSync(directory, { recursive: true });
   const fileName = `${baseName}_${new Date().toISOString().replace(/[:.]/g, "-")}.${format}`;
   const filePath = path.join(directory, fileName);
@@ -423,7 +471,7 @@ router.post("/:id/export", async (req, res) => {
       pdfPath: filePath,
       title,
       content: compiledContent,
-      projectId: project?.code ?? projectToken,
+      projectId: project?.id ?? projectToken,
       projectName: project?.name,
       company,
     });
@@ -431,6 +479,23 @@ router.post("/:id/export", async (req, res) => {
     fs.writeFileSync(filePath, createVorlageDocx(title, compiledContent));
   } else {
     fs.writeFileSync(filePath, await createVorlageXlsx(title, compiledContent, values));
+  }
+
+  const dmsProjectId = String(project?.id || projectToken || "").trim();
+  if (dmsProjectId) {
+    void archiveProjectFileVersion({
+      projectIdOrCode: dmsProjectId,
+      filename: fileName,
+      kind: format === "pdf" ? "PDF" : "DOC",
+      localPath: filePath,
+      uploadedBy: userId || null,
+      meta: {
+        module: "VORLAGEN",
+        source: "vorlagen.export",
+        templateId: template.id,
+        format
+      }
+    }).catch((error) => console.error("[vorlagen:export:dms]", error));
   }
 
   await Promise.all([
@@ -464,7 +529,7 @@ router.post("/:id/export", async (req, res) => {
   res.sendFile(filePath);
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireVorlagenManageRole, async (req, res) => {
   const companyId = companyIdFromRequest(req);
   const current = await prisma.vorlageTemplate.findFirst({
     where: { id: text(req.params.id), companyId, isActive: true },
@@ -494,7 +559,7 @@ router.put("/:id", async (req, res) => {
   res.json({ ok: true, template });
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireVorlagenManageRole, async (req, res) => {
   const companyId = companyIdFromRequest(req);
   const current = await prisma.vorlageTemplate.findFirst({
     where: { id: text(req.params.id), companyId, isActive: true },

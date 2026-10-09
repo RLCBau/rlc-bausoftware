@@ -4,7 +4,10 @@ import OpenAI from "openai";
 import { toFile } from "openai/uploads";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
 
 function getOpenAI() {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -48,9 +51,9 @@ router.post("/stt", upload.single("audio"), async (req, res) => {
     });
   } catch (e: any) {
     console.error("[copilot:stt]", e?.message || e);
-    return res.status(500).json({
+    return res.status(502).json({
       ok: false,
-      error: e?.message || "STT failed",
+      error: "STT_PROVIDER_ERROR",
     });
   }
 });

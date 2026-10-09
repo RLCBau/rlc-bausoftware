@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim AS libredwg-builder
+FROM debian:bookworm-slim AS libredwg-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -29,7 +29,7 @@ RUN git clone --depth 1 https://github.com/LibreDWG/libredwg.git \
     && make install DESTDIR=/install
 
 
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
@@ -46,6 +46,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 \
     libpcre2-8-0 \
     zlib1g \
+    p7zip-full \
+    openjdk-17-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=libredwg-builder /install/usr/local /usr/local
@@ -59,6 +61,7 @@ RUN npm ci --include=dev
 
 COPY apps/server/prisma ./prisma
 COPY apps/server ./
+RUN node scripts/patchAwsXmlParserCompat.cjs
 
 ENV RLC_CAD_CONVERTER_COMMAND="dwg2dxf --overwrite --file {output} {input}"
 

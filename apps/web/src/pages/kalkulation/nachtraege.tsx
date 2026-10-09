@@ -59,6 +59,18 @@ type NachtragRow = ChangeRow & {
   warning?: string;
   aiReason?: string;
   priceBreakdown?: any[];
+
+  contractBasis?: "BGB" | "VOBB" | "OTHER";
+  changeRequestDate?: string;
+  changeRequestReceivedAt?: string;
+  bgbAgreementDeadline?: string;
+  agreementStatus?: "PENDING" | "AGREED" | "ORDERED" | "DISPUTED";
+  orderDate?: string;
+  orderTextFormConfirmed?: boolean;
+  orderReference?: string;
+  priceBasis?: "ACTUAL_COSTS_650C" | "URKALKULATION" | "VOBB" | "OTHER";
+  planningProvided?: boolean;
+  legalNote?: string;
 };
 
 type ProjectLike = {
@@ -172,6 +184,17 @@ type ServerNachtrag = {
   total: number;
   status: ServerNachtragStatus;
   note?: string;
+  contractBasis?: "BGB" | "VOBB" | "OTHER";
+  changeRequestDate?: string;
+  changeRequestReceivedAt?: string;
+  bgbAgreementDeadline?: string;
+  agreementStatus?: "PENDING" | "AGREED" | "ORDERED" | "DISPUTED";
+  orderDate?: string;
+  orderTextFormConfirmed?: boolean;
+  orderReference?: string;
+  priceBasis?: "ACTUAL_COSTS_650C" | "URKALKULATION" | "VOBB" | "OTHER";
+  planningProvided?: boolean;
+  legalNote?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -378,6 +401,51 @@ function loadKalkulationBasis(projectKey: string): KalkulationBasisRow[] {
       //
     }}
   return [];
+}
+
+function normalizePosText(value: unknown): string {
+  return String(value ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+function posLeafDigits(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw || /[A-Za-z]/.test(raw)) return "";
+  const parts = raw.split(/[.\-_/]/).filter(Boolean);
+  const leaf = String(parts[parts.length - 1] || raw).replace(/\D/g, "");
+  if (!leaf) return "";
+  return String(Number(leaf));
+}
+
+function canonicalNachtragPosNr(row: NachtragRow, basis: KalkulationBasisRow[]): string {
+  const current = String(row.posNr || "").trim();
+  if (!current || !basis.length) return current;
+
+  const exact = basis.find((b) => String(b.posNr || "").trim() === current);
+  if (exact?.posNr) return String(exact.posNr).trim();
+
+  // Alphanumerische neue Nachtragspositionen dürfen nicht auf eine LV-Position umgebogen werden.
+  if (/[A-Za-z]/.test(current)) return current;
+
+  const leaf = posLeafDigits(current);
+  if (!leaf) return current;
+
+  const textKey = normalizePosText(row.kurztext || row.langtext);
+  const unitKey = String(row.einheit || "").trim().toLowerCase().replace(/\s+/g, "");
+  const leafCandidates = basis.filter((b) => posLeafDigits(b.posNr) === leaf);
+  if (!leafCandidates.length) return current;
+
+  const strong = leafCandidates.filter((b) => {
+    const bText = normalizePosText(b.kurztext || b.langtext);
+    const bUnit = String(b.einheit || "").trim().toLowerCase().replace(/\s+/g, "");
+    return Boolean(textKey && bText && textKey === bText && (!unitKey || !bUnit || unitKey === bUnit));
+  });
+  if (strong.length === 1) return String(strong[0].posNr || current).trim();
+
+  const textOnly = leafCandidates.filter((b) => normalizePosText(b.kurztext || b.langtext) === textKey && Boolean(textKey));
+  if (textOnly.length === 1) return String(textOnly[0].posNr || current).trim();
+
+  if (leafCandidates.length === 1) return String(leafCandidates[0].posNr || current).trim();
+  return current;
 }
 
 function kalkulationBasisNet(rows: KalkulationBasisRow[]): number {
@@ -590,7 +658,19 @@ function normalizeRow(row: Partial<NachtragRow>): NachtragRow {
 
     warning: String(row.warning || ""),
     aiReason: String(row.aiReason || ""),
-    priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : []
+    priceBreakdown: Array.isArray(row.priceBreakdown) ? row.priceBreakdown : [],
+
+    contractBasis: row.contractBasis,
+    changeRequestDate: String(row.changeRequestDate || ""),
+    changeRequestReceivedAt: String(row.changeRequestReceivedAt || ""),
+    bgbAgreementDeadline: String(row.bgbAgreementDeadline || ""),
+    agreementStatus: row.agreementStatus || "PENDING",
+    orderDate: String(row.orderDate || ""),
+    orderTextFormConfirmed: Boolean(row.orderTextFormConfirmed),
+    orderReference: String(row.orderReference || ""),
+    priceBasis: row.priceBasis,
+    planningProvided: Boolean(row.planningProvided),
+    legalNote: String(row.legalNote || "")
   };
 }
 
@@ -604,7 +684,18 @@ function fromServer(row: ServerNachtrag): NachtragRow {
     mengeDelta: n(row.qty),
     preis: n(row.ep),
     status: toUiStatus(row.status),
-    begruendung: row.note || ""
+    begruendung: row.note || "",
+    contractBasis: row.contractBasis,
+    changeRequestDate: row.changeRequestDate || "",
+    changeRequestReceivedAt: row.changeRequestReceivedAt || "",
+    bgbAgreementDeadline: row.bgbAgreementDeadline || "",
+    agreementStatus: row.agreementStatus || "PENDING",
+    orderDate: row.orderDate || "",
+    orderTextFormConfirmed: Boolean(row.orderTextFormConfirmed),
+    orderReference: row.orderReference || "",
+    priceBasis: row.priceBasis,
+    planningProvided: Boolean(row.planningProvided),
+    legalNote: row.legalNote || ""
   });
 }
 
@@ -631,6 +722,17 @@ existingCreatedAt?: string)
     total: round2(qty * ep),
     status: toServerStatus((row.status || "Entwurf") as ChangeStatus),
     note: String(row.begruendung || ""),
+    contractBasis: row.contractBasis,
+    changeRequestDate: row.changeRequestDate || "",
+    changeRequestReceivedAt: row.changeRequestReceivedAt || "",
+    bgbAgreementDeadline: row.bgbAgreementDeadline || "",
+    agreementStatus: row.agreementStatus || "PENDING",
+    orderDate: row.orderDate || "",
+    orderTextFormConfirmed: Boolean(row.orderTextFormConfirmed),
+    orderReference: row.orderReference || "",
+    priceBasis: row.priceBasis,
+    planningProvided: Boolean(row.planningProvided),
+    legalNote: row.legalNote || "",
     createdAt: existingCreatedAt || now,
     updatedAt: now
   };
@@ -990,6 +1092,31 @@ function StatusPill({ status }: {status: ChangeStatus;}) {
 
 /* ================= COMPONENT ================= */
 
+
+function showNachtragLangtextModal(text: string) {
+  const old = document.getElementById("rlc-nachtrag-langtext-modal");
+  if (old) old.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "rlc-nachtrag-langtext-modal";
+  Object.assign(overlay.style, { position:"fixed", inset:"0", zIndex:"999999", background:"rgba(15,23,42,.55)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px" });
+  const box = document.createElement("div");
+  Object.assign(box.style, { width:"min(820px,96vw)", maxHeight:"82vh", background:"#fff", borderRadius:"18px", boxShadow:"0 24px 80px rgba(15,23,42,.32)", border:"1px solid #dbe4f0", overflow:"hidden", fontFamily:"inherit" });
+  const head = document.createElement("div");
+  Object.assign(head.style, { padding:"18px 22px", background:"linear-gradient(135deg,#10204a,#2457d6)", color:"white", fontWeight:"900", fontSize:"18px" });
+  head.textContent = "Langtext / Positionssumme";
+  const body = document.createElement("pre");
+  Object.assign(body.style, { margin:"0", padding:"22px", maxHeight:"56vh", overflow:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word", fontFamily:"inherit", fontSize:"15px", lineHeight:"1.55", color:"#0f172a", background:"#f8fafc" });
+  body.textContent = text;
+  const footer = document.createElement("div");
+  Object.assign(footer.style, { padding:"14px 22px", display:"flex", justifyContent:"flex-end", background:"#fff", borderTop:"1px solid #e5e7eb" });
+  const close = document.createElement("button");
+  close.type = "button"; close.textContent = "Schließen";
+  Object.assign(close.style, { border:"1px solid #cbd5e1", borderRadius:"12px", background:"#fff", color:"#0f172a", fontWeight:"800", padding:"10px 18px", cursor:"pointer" });
+  close.onclick = () => overlay.remove();
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  footer.appendChild(close); box.appendChild(head); box.appendChild(body); box.appendChild(footer); overlay.appendChild(box); document.body.appendChild(overlay);
+}
+
 export default function NachtraegePage() {
   const projectCtx: any = useProject();
   const currentProject = getCurrentProject(projectCtx);
@@ -1021,6 +1148,8 @@ export default function NachtraegePage() {
   );
   const [sortKey, setSortKey] = useState<"pos" | "status" | "value">("pos");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<NachtragRow | null>(null);
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [qualityFilter, setQualityFilter] = useState<NachtragQualityFilter>("alle");
@@ -1066,8 +1195,12 @@ export default function NachtraegePage() {
       [];
 
       const merged = mergeRowsKeepLocal(localRows, incoming);
+      const canonicalMerged = merged.map((row) => normalizeRow({
+        ...row,
+        posNr: canonicalNachtragPosNr(row, kalkulationBasis) || row.posNr || ""
+      }));
 
-      saveLocal(merged);
+      saveLocal(canonicalMerged);
       setSelected({});
       setInfo("");
     } catch (e: any) {
@@ -1091,7 +1224,10 @@ export default function NachtraegePage() {
   }
 
   async function saveServerNow(customRows?: NachtragRow[]) {
-    const sourceRows = (customRows ?? rows).map(normalizeRow);
+    const sourceRows = (customRows ?? rows).map((row) => normalizeRow({
+      ...row,
+      posNr: canonicalNachtragPosNr(row, kalkulationBasis) || row.posNr || ""
+    }));
 
     saveLocal(sourceRows);
 
@@ -1330,6 +1466,52 @@ export default function NachtraegePage() {
     const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
     return rows.filter((row) => ids.has(row.id)).map(normalizeRow);
   }, [rows, selected]);
+
+  async function openGaebExport() {
+    const sourceRows = (selectedRows.length ? selectedRows : rows).map(normalizeRow);
+    if (!sourceRows.length) { setInfo("Keine Nachtragspositionen für GAEB-Export vorhanden."); return; }
+
+    let canonicalBasis = kalkulationBasis;
+    const projectKey = serverProjectKey || apiKey || "";
+    if (projectKey) {
+      try {
+        const serverSnapshot: any = await apiJson(`/api/kalkulation/storage/ki/${encodeURIComponent(projectKey)}`);
+        const rawRows =
+          (Array.isArray(serverSnapshot?.data?.rows) && serverSnapshot.data.rows) ||
+          (Array.isArray(serverSnapshot?.rows) && serverSnapshot.rows) ||
+          (Array.isArray(serverSnapshot?.data?.data?.rows) && serverSnapshot.data.data.rows) ||
+          [];
+        const mapped = rawRows.map((r: any) => ({
+          ...r,
+          posNr: String(r?.posNr || r?.pos || r?.positionNumber || "").trim(),
+          kurztext: String(r?.kurztext || r?.shortText || r?.title || "").trim(),
+          langtext: String(r?.langtext || r?.longText || "").trim(),
+          einheit: String(r?.einheit || r?.unit || "").trim(),
+          menge: n(r?.menge ?? r?.quantity),
+          preis: n(r?.rlcKiUnitPrice ?? r?.finalUnitPrice ?? r?.preis ?? r?.unitPrice)
+        })).filter((r: any) => r.posNr || r.kurztext);
+        if (mapped.length) canonicalBasis = mapped;
+      } catch {
+        // Fallback auf lokale Kalkulationsbasis.
+      }
+    }
+
+    const exportRows = sourceRows.map((row) => ({
+      posNr: canonicalNachtragPosNr(row, canonicalBasis) || row.posNr || "",
+      kurztext: row.kurztext || "",
+      langtext: row.langtext || "",
+      einheit: row.einheit || "",
+      menge: n(row.mengeDelta),
+      preis: n(row.preis),
+      gesamt: n(row.mengeDelta) * n(row.preis)
+    }));
+    sessionStorage.setItem("rlc_gaeb_export_handoff_v1", JSON.stringify({
+      source: "nachtraege", sourceLabel: selectedRows.length ? "Ausgewählte Nachträge" : "Alle Nachträge",
+      projectCode: serverProjectKey || apiKey || "", projectName: String((currentProject as any)?.name || (currentProject as any)?.title || ""),
+      mode: "X84", rows: exportRows, createdAt: new Date().toISOString()
+    }));
+    navigate(`/kalkulation/gaeb?projectCode=${encodeURIComponent(serverProjectKey || apiKey || "")}&source=nachtraege&mode=X84`);
+  }
 
   const totals = useMemo(() => {
     const netto = viewRows.reduce(
@@ -1624,6 +1806,23 @@ export default function NachtraegePage() {
     setInfo("");
   }
 
+  function createManualNachtrag() {
+    const row = normalizeRow({
+      id: safeId(),
+      posNr: "",
+      kurztext: "",
+      langtext: "",
+      einheit: "m",
+      mengeDelta: 0,
+      preis: 0,
+      status: "Entwurf",
+      begruendung: ""
+    });
+    setEditingId(row.id);
+    setEditDraft(row);
+    setInfo("");
+  }
+
   function save(patch: Partial<NachtragRow> & {id: string;}) {
     const next = rows.map((row) =>
     row.id === patch.id ? normalizeRow({ ...row, ...patch }) : row
@@ -1631,6 +1830,58 @@ export default function NachtraegePage() {
 
     saveLocal(next);
     setInfo("");
+  }
+
+  function startEdit(row: NachtragRow) {
+    setEditingId(row.id);
+    setEditDraft({ ...row });
+  }
+
+  function updateEdit(patch: Partial<NachtragRow>) {
+    setEditDraft((current) => current ? normalizeRow({ ...current, ...patch }) : current);
+  }
+
+  function commitEdit() {
+    if (!editDraft) return;
+    const exists = rows.some((row) => row.id === editDraft.id);
+    if (exists) {
+      save(editDraft);
+    } else {
+      saveLocal([normalizeRow(editDraft), ...rows]);
+      setInfo("Nachtrag erstellt.");
+    }
+    setEditingId(null);
+    setEditDraft(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft(null);
+  }
+
+  function openEditInUrkalkulation() {
+    if (!editDraft) return;
+    // Den aktuellen Nachtrag lokal sichern und exakt diese Position an die
+    // Urkalkulation übergeben. Keine generische/erste LV-Position laden.
+    save(editDraft);
+    try {
+      sessionStorage.setItem(RECIPE_CONTEXT_KEY, JSON.stringify({
+        source: "nachtraege",
+        returnTo: "/kalkulation/nachtraege",
+        ts: new Date().toISOString(),
+        nachtragId: editDraft.id,
+        initialDraft: {
+          id: "",
+          posNr: String(editDraft.posNr || ""),
+          kurztext: String(editDraft.kurztext || ""),
+          langtext: String(editDraft.langtext || ""),
+          einheit: String(editDraft.einheit || "m"),
+          menge: Math.max(Math.abs(n(editDraft.mengeDelta)), 1),
+          preis: n(editDraft.preis),
+        },
+      }));
+    } catch {}
+    navigate("/kalkulation/rezepte");
   }
 
   function del(id: string) {
@@ -1882,7 +2133,15 @@ export default function NachtraegePage() {
     join("\n");
 
     const blob = new Blob([lines], { type: "text/csv;charset=utf-8" });
-    downloadBlob(blob, "nachtraege.csv");
+    const fileName = "nachtraege.csv";
+    downloadBlob(blob, fileName);
+
+    const dmsProjectId = String(currentProject?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[nachtraege:csv:dms]", error));
+    }
   }
 
   function openAngebotWithRows(sourceRows: NachtragRow[], modeLabel: string) {
@@ -2108,61 +2367,19 @@ export default function NachtraegePage() {
         </div>
 
         <div className={rlcClass(null, heroActions)}>
-          <button className={rlcClass(null, btnPrimary)} onClick={addFromKalkulationBasis}>
-            + Nachtrag
+          <button className={rlcClass(null, btnPrimary)} onClick={createManualNachtrag}>
+            Nachtrag erstellen
           </button>
 
-          {recipeDraft ?
-          <button className={rlcClass(null, btnPrimary)} onClick={() => setRecipeOpen(!recipeOpen)}>
+          <button className={rlcClass(null, btnSecondary)} onClick={addFromKalkulationBasis}>
+            Aus LV übernehmen
+          </button>
+
+          {recipeDraft ? (
+            <button className={rlcClass(null, btnSecondary)} onClick={() => setRecipeOpen(!recipeOpen)}>
               Rezept prüfen / übernehmen
-            </button> :
-          null}
-
-          <button className={rlcClass(null,
-          btnSecondary)}
-          onClick={() => navigate("/kalkulation/rezepte")}>
-            
-            Zur Urkalkulation
-          </button>
-
-          <button className={rlcClass(null,
-          btnSecondary)}
-          onClick={() => navigate("/kalkulation/mit-ki")}>
-            
-            Zur Kalkulation
-          </button>
-
-          <button className={rlcClass(null,
-          btnPrimary)}
-          onClick={openAngebotFromSelection}
-          disabled={!selectedRows.length}>
-            
-            Angebot aus Auswahl
-          </button>
-
-          <button className={rlcClass(null,
-          btnSecondary)}
-          onClick={openAngebotFromAllNachtraege}
-          disabled={!rows.length}>
-            
-            Angebot alle Nachträge
-          </button>
-
-          <button className={rlcClass(null, btnSecondary)} onClick={() => void exportPDF()} disabled={!rows.length}>
-            PDF Export
-          </button>
-
-          <button className={rlcClass(null, btnSecondary)} onClick={() => void load()} disabled={loading}>
-            {loading ? "Lädt…" : "Server laden"}
-          </button>
-
-          <button className={rlcClass(null,
-          btnSecondary)}
-          onClick={() => void saveServerNow()}
-          disabled={loading || rows.length === 0}>
-            
-            {loading ? "Speichert…" : "Server speichern"}
-          </button>
+            </button>
+          ) : null}
         </div>
 
         <div className={rlcClass(null, heroMeta)}>
@@ -2248,14 +2465,14 @@ export default function NachtraegePage() {
             <table className={rlcClass(null, { ...table, minWidth: 1320 })}>
               <thead>
                 <tr>
-                  <th className={rlcClass(null, thSmall)}></th>
-                  <th className={rlcClass(null, th)}>PosNr</th>
-                  <th className={rlcClass(null, th)}>Kurztext</th>
-                  <th className={rlcClass(null, th)}>Langtext</th>
-                  <th className={rlcClass(null, th)}>ME</th>
-                  <th className={rlcClass(null, thRight)}>Menge</th>
-                  <th className={rlcClass(null, thRight)}>EP netto</th>
-                  <th className={rlcClass(null, th)}>Begründung</th>
+                  <th className={rlcClass("rlc-row-th", thSmall)}></th>
+                  <th className={rlcClass("rlc-row-th", th)}>PosNr</th>
+                  <th className={rlcClass("rlc-row-th", th)}>Kurztext</th>
+                  <th className={rlcClass("rlc-row-th", th)}>Langtext</th>
+                  <th className={rlcClass("rlc-row-th", th)}>ME</th>
+                  <th className={rlcClass("rlc-row-th rlc-row-th--right", thRight)}>Menge</th>
+                  <th className={rlcClass("rlc-row-th rlc-row-th--right", thRight)}>EP netto</th>
+                  <th className={rlcClass("rlc-row-th", th)}>Begründung</th>
                 </tr>
               </thead>
 
@@ -2282,7 +2499,7 @@ export default function NachtraegePage() {
 
                 return (
                   <tr key={index}>
-                      <td className={rlcClass(null, tdCenter)}>
+                      <td className={rlcClass("rlc-row-td", tdCenter)}>
                         <input
                         type="checkbox"
                         checked={!!recipeSel[index]}
@@ -2295,7 +2512,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, td)}>
+                      <td className={rlcClass("rlc-row-td", td)}>
                         <input className={rlcClass(null,
                       cellInput)}
                       value={posNr}
@@ -2305,7 +2522,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, td)}>
+                      <td className={rlcClass("rlc-row-td", td)}>
                         <input className={rlcClass(null,
                       cellInput)}
                       value={kurztext}
@@ -2315,7 +2532,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, td)}>
+                      <td className={rlcClass("rlc-row-td", td)}>
                         <textarea className={rlcClass(null,
                       cellTextarea)}
                       value={langtext}
@@ -2325,7 +2542,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, td)}>
+                      <td className={rlcClass("rlc-row-td", td)}>
                         <input className={rlcClass(null,
                       { ...cellInput, width: 70 })}
                       value={einheit}
@@ -2335,7 +2552,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, tdRight)}>
+                      <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}>
                         <input
                         type="number" className={rlcClass(null,
                         { ...cellInput, width: 100, textAlign: "right" })}
@@ -2348,7 +2565,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, tdRight)}>
+                      <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}>
                         <input
                         type="number" className={rlcClass(null,
                         { ...cellInput, width: 100, textAlign: "right" })}
@@ -2361,7 +2578,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, td)}>
+                      <td className={rlcClass("rlc-row-td", td)}>
                         <textarea className={rlcClass(null,
                       cellTextarea)}
                       value={begruendung}
@@ -2452,13 +2669,13 @@ export default function NachtraegePage() {
             <table className={rlcClass(null, { ...table, minWidth: 1250 })}>
               <thead>
                 <tr>
-                  <th className={rlcClass(null, thSmall)}></th>
-                  <th className={rlcClass(null, th)}>PosNr</th>
-                  <th className={rlcClass(null, th)}>Kurztext</th>
-                  <th className={rlcClass(null, th)}>Langtext</th>
-                  <th className={rlcClass(null, th)}>ME</th>
-                  <th className={rlcClass(null, thRight)}>Δ-Menge</th>
-                  <th className={rlcClass(null, th)}>Begründung</th>
+                  <th className={rlcClass("rlc-row-th", thSmall)}></th>
+                  <th className={rlcClass("rlc-row-th", th)}>PosNr</th>
+                  <th className={rlcClass("rlc-row-th", th)}>Kurztext</th>
+                  <th className={rlcClass("rlc-row-th", th)}>Langtext</th>
+                  <th className={rlcClass("rlc-row-th", th)}>ME</th>
+                  <th className={rlcClass("rlc-row-th rlc-row-th--right", thRight)}>Δ-Menge</th>
+                  <th className={rlcClass("rlc-row-th", th)}>Begründung</th>
                 </tr>
               </thead>
 
@@ -2526,7 +2743,7 @@ export default function NachtraegePage() {
                       
                       </td>
 
-                      <td className={rlcClass(null, tdRight)}>
+                      <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}>
                         <input
                         type="number" className={rlcClass(null,
                         { ...cellInput, width: 100, textAlign: "right" })}
@@ -2651,6 +2868,10 @@ export default function NachtraegePage() {
             PDF Export
           </button>
 
+          <button className={rlcClass(null, btnSecondary)} onClick={openGaebExport} disabled={!rows.length}>
+            GAEB Export
+          </button>
+
           <button className={rlcClass(null,
           btnPrimary)}
           onClick={openAngebotFromSelection}
@@ -2671,8 +2892,8 @@ export default function NachtraegePage() {
             Angebot öffnen
           </button>
 
-          <button className={rlcClass(null, btnSecondary)} onClick={() => navigate("/kalkulation/rezepte")}>
-            Urkalkulation
+          <button className={rlcClass(null, btnSecondary)} onClick={() => void load()} disabled={loading}>
+            {loading ? "Lädt…" : "Server laden"}
           </button>
 
           <button className={rlcClass(null,
@@ -2727,184 +2948,85 @@ export default function NachtraegePage() {
         </div>
 
         <div className={rlcClass(null, tableWrap)}>
-          <table className={rlcClass(null, table)}>
+          <table className={rlcClass("rlc-row-table", table)}>
+            <colgroup>
+              <col style={{ width: "3%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "34%" }} />
+              <col style={{ width: "5%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "7%" }} />
+            </colgroup>
             <thead>
               <tr>
-                <th className={rlcClass(null, thSmall)}></th>
-                <th className={rlcClass(null, th)}>PosNr</th>
-                <th className={rlcClass(null, th)}>Kurztext</th>
-                <th className={rlcClass(null, th)}>Langtext</th>
-                <th className={rlcClass(null, th)}>ME</th>
-                <th className={rlcClass(null, thRight)}>Δ-Menge</th>
-                <th className={rlcClass(null, thRight)}>EP netto</th>
-                <th className={rlcClass(null, th)}>Status</th>
-                <th className={rlcClass(null, th)}>Begründung</th>
-                <th className={rlcClass(null, thRight)}>Zeilen-Netto</th>
-                <th className={rlcClass(null, th)}>Aktion</th>
+                <th className={rlcClass("rlc-row-th", thSmall)}></th>
+                <th className={rlcClass("rlc-row-th", th)}>Pos.</th>
+                <th className={rlcClass("rlc-row-th", th)}>Kurztext</th>
+                <th className={rlcClass("rlc-row-th", th)}>ME</th>
+                <th className={rlcClass("rlc-row-th rlc-row-th--right", thRight)}>Δ-Menge</th>
+                <th className={rlcClass("rlc-row-th rlc-row-th--right", thRight)}>EP netto</th>
+                <th className={rlcClass("rlc-row-th", th)}>Status</th>
+                <th className={rlcClass("rlc-row-th", th)}>Begründung</th>
+                <th className={rlcClass("rlc-row-th rlc-row-th--right", thRight)}>Zeilen-Netto</th>
+                <th className={rlcClass("rlc-row-th", th)}>Aktion</th>
               </tr>
             </thead>
 
             <tbody>
               {viewRows.map((row, index) => {
-                const total = n(row.mengeDelta) * n(row.preis);
                 const isSelected = !!selected[row.id];
+                const total = n(row.mengeDelta) * n(row.preis);
 
                 return (
-                  <tr
-                    key={row.id} className={rlcClass(null,
-                    {
-                      background: isSelected ?
-                      "#EAF2FF" :
-                      index % 2 ?
-                      "#FCFCFC" :
-                      "#FFFFFF"
+                  <tr key={row.id}
+                    className={rlcClass(isSelected ? "rlc-row rlc-row--selected" : "rlc-row", {
+                      background: isSelected ? "#EAF2FF" : index % 2 ? "#FCFCFC" : "#FFFFFF"
                     })}>
-                    
-                    <td className={rlcClass(null, tdCenter)}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) =>
-                        setSelected((s) => ({
-                          ...s,
-                          [row.id]: e.target.checked
-                        }))
-                        } />
-                      
+                    <td className={rlcClass("rlc-row-td", tdCenter)}>
+                      <input type="checkbox" checked={isSelected}
+                        onChange={(e) => setSelected((state) => ({ ...state, [row.id]: e.target.checked }))} />
                     </td>
-
-                    <td className={rlcClass(null, td)}>
-                      <input className={rlcClass(null,
-                      { ...cellInput, width: 100 })}
-                      value={row.posNr || ""}
-                      onChange={(e) =>
-                      save({ id: row.id, posNr: e.target.value })
-                      } />
-                      
-                    </td>
-
-                    <td className={rlcClass(null, td)}>
-                      <input className={rlcClass(null,
-                      cellInput)}
-                      value={row.kurztext || ""}
-                      onChange={(e) =>
-                      save({ id: row.id, kurztext: e.target.value })
-                      } />
-                      
-                    </td>
-
-                    <td className={rlcClass(null, td)}>
-                      <textarea className={rlcClass(null,
-                      cellTextarea)}
-                      value={row.langtext || ""}
-                      placeholder="Langtext / ausführliche Leistungsbeschreibung"
-                      onChange={(e) =>
-                      save({ id: row.id, langtext: e.target.value })
-                      } />
-                      
-                    </td>
-
-                    <td className={rlcClass(null, td)}>
-                      <input className={rlcClass(null,
-                      { ...cellInput, width: 62 })}
-                      value={row.einheit || "m"}
-                      onChange={(e) =>
-                      save({ id: row.id, einheit: e.target.value })
-                      } />
-                      
-                    </td>
-
-                    <td className={rlcClass(null, tdRight)}>
-                      <input
-                        type="number" className={rlcClass(null,
-                        {
-                          ...cellInput,
-                          width: 95,
-                          textAlign: "right",
-                          background:
-                          n(row.mengeDelta) > 0 ?
-                          "#F0FDF4" :
-                          n(row.mengeDelta) < 0 ?
-                          "#FEF2F2" :
-                          "#FFFFFF"
-                        })}
-                        value={row.mengeDelta ?? 0}
-                        onChange={(e) =>
-                        save({ id: row.id, mengeDelta: n(e.target.value) })
-                        } />
-                      
-                    </td>
-
-                    <td className={rlcClass(null, tdRight)}>
-                      <input
-                        type="number" className={rlcClass(null,
-                        { ...cellInput, width: 95, textAlign: "right" })}
-                        value={row.preis ?? 0}
-                        onChange={(e) =>
-                        save({ id: row.id, preis: n(e.target.value) })
-                        } />
-                      
-                    </td>
-
-                    <td className={rlcClass(null, td)}>
-                      <div className="rlc-migrated-pages-kalkulation-nachtraege-tsx-919">
-
-
-
-
-
-                        
-                        <select
-                          value={row.status || "Entwurf"}
-                          onChange={(e) =>
-                          save({
-                            id: row.id,
-                            status: e.target.value as ChangeStatus
-                          })
-                          } className={rlcClass(null,
-                          { ...cellInput, width: 130 })}>
-                          
-                          {STATI.map((s) =>
-                          <option key={s}>{s}</option>
-                          )}
-                        </select>
-
-                        <StatusPill
-                          status={(row.status || "Entwurf") as ChangeStatus} />
-                        
+                    <td className={rlcClass("rlc-row-td", td)}>{row.posNr || "—"}</td>
+                    <td className={rlcClass("rlc-row-td", td)}>
+                      <div className={rlcClass(null, textCell)}>
+                        <strong>{row.kurztext || "—"}</strong>
+                        {row.langtext?.trim() ? <div className={rlcClass("rlc-row-lang-preview", langPreview)}>
+                          {row.langtext.slice(0, 135)}{row.langtext.length > 135 ? "…" : ""}
+                        </div> : null}
+                        <button type="button" className={rlcClass("rlc-row-action", btnTextMini)}
+                          onClick={() => showNachtragLangtextModal([
+                            `Position: ${row.posNr || "—"}`,
+                            `Kurztext: ${row.kurztext || "—"}`, "", "Langtext:", row.langtext || "—", "",
+                            `Menge: ${n(row.mengeDelta)} ${row.einheit || "EH"}`,
+                            `EP netto: ${money(row.preis)}`,
+                            `Zeilen-Netto: ${money(total)}`
+                          ].join("\\n"))}>Langtext / Summe</button>
                       </div>
                     </td>
-
-                    <td className={rlcClass(null, td)}>
-                      <input className={rlcClass(null,
-                      cellInput)}
-                      value={row.begruendung || ""}
-                      onChange={(e) =>
-                      save({ id: row.id, begruendung: e.target.value })
-                      } />
-                      
-                    </td>
-
-                    <td className={rlcClass(null, tdRight)}>{money(total)}</td>
-
-                    <td className={rlcClass(null, td)}>
+                    <td className={rlcClass("rlc-row-td", td)}>{row.einheit || "—"}</td>
+                    <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}><strong>{n(row.mengeDelta).toLocaleString("de-DE")}</strong></td>
+                    <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}><strong>{n(row.preis).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+                    <td className={rlcClass("rlc-row-td", td)}><StatusPill status={(row.status || "Entwurf") as ChangeStatus} /></td>
+                    <td className={rlcClass("rlc-row-td", td)}><span title={row.begruendung || ""}>{row.begruendung || "—"}</span></td>
+                    <td className={rlcClass("rlc-row-td rlc-row-td--right", tdRight)}><strong>{money(total)}</strong></td>
+                    <td className={rlcClass("rlc-row-td", td)}>
                       <div className={rlcClass(null, buttonRowCompact)}>
-                        <button className={rlcClass(null, btnMini)} onClick={() => duplicate(row)}>
-                          Duplizieren
-                        </button>
-
-                        <button className={rlcClass(null, btnDangerMini)} onClick={() => del(row.id)}>
-                          Löschen
-                        </button>
+                        {row.status === "Beauftragt" ? <span className={rlcClass(null, muted)}>gesperrt</span> : <button className={rlcClass("rlc-row-action", btnEditMini)} onClick={() => startEdit(row)}>Bearbeiten</button>}
+                        <button className={rlcClass(null, btnDuplicateMini)} onClick={() => duplicate(row)} title="Position duplizieren">⧉</button>
+                        {row.status === "Beauftragt" ? null : <button className={rlcClass("rlc-row-delete", btnDeleteLink)} onClick={() => del(row.id)}>Löschen</button>}
                       </div>
                     </td>
-                  </tr>);
-
+                  </tr>
+                );
               })}
 
               {!viewRows.length ?
               <tr>
-                  <td colSpan={11} className={rlcClass(null, emptyCell)}>
+                  <td colSpan={10} className={rlcClass(null, emptyCell)}>
                     Noch keine Nachträge vorhanden.
                   </td>
                 </tr> :
@@ -2913,6 +3035,54 @@ export default function NachtraegePage() {
           </table>
         </div>
       </section>
+
+      {editingId && editDraft ? (
+        <div className={rlcClass(null, editOverlay)} onMouseDown={(e) => { if (e.target === e.currentTarget) cancelEdit(); }}>
+          <section className={rlcClass(null, editModal)}>
+            <div className={rlcClass(null, editModalHead)}>
+              <div>
+                <div className={rlcClass(null, editEyebrow)}>NACHTRAGSPOSITION</div>
+                <h2 className={rlcClass(null, editTitle)}>Position bearbeiten</h2>
+                <div className={rlcClass(null, editSub)}>{editDraft.posNr || "—"} · {editDraft.kurztext || "Ohne Kurztext"}</div>
+              </div>
+              <button className={rlcClass(null, btnSecondary)} onClick={cancelEdit}>Schließen</button>
+            </div>
+
+            <div className={rlcClass(null, editGrid)}>
+              <label className={rlcClass(null, editField)}><span>Pos.</span><input className={rlcClass(null, input)} value={editDraft.posNr || ""} onChange={(e) => updateEdit({ posNr: e.target.value })} /></label>
+              <label className={rlcClass(null, editField)}><span>ME</span><input className={rlcClass(null, input)} value={editDraft.einheit || "m"} onChange={(e) => updateEdit({ einheit: e.target.value })} /></label>
+              <label className={rlcClass(null, editField)}><span>Δ-Menge</span><input type="number" className={rlcClass(null, input)} value={editDraft.mengeDelta ?? 0} onChange={(e) => updateEdit({ mengeDelta: n(e.target.value) })} /></label>
+              <label className={rlcClass(null, editField)}><span>EP netto</span><input type="number" className={rlcClass(null, input)} value={editDraft.preis ?? 0} onChange={(e) => updateEdit({ preis: n(e.target.value) })} /></label>
+              <label className={rlcClass(null, editField)}><span>Status</span><select className={rlcClass(null, input)} value={editDraft.status || "Entwurf"} onChange={(e) => updateEdit({ status: e.target.value as ChangeStatus })}>{STATI.map((status) => <option key={status}>{status}</option>)}</select></label>
+              <div className={rlcClass(null, editSummary)}><span>Zeilen-Netto</span><strong>{money(n(editDraft.mengeDelta) * n(editDraft.preis))}</strong></div>
+            </div>
+
+            <div className={rlcClass(null, editGrid)}>
+              <label className={rlcClass(null, editField)}><span>Vertragsgrundlage</span><select className={rlcClass(null, input)} value={editDraft.contractBasis || ""} onChange={(e) => updateEdit({ contractBasis: (e.target.value || undefined) as NachtragRow["contractBasis"] })}><option value="">Bitte wählen</option><option value="BGB">BGB Bauvertrag (§§ 650a ff.)</option><option value="VOBB">VOB/B (vertraglich vereinbart)</option><option value="OTHER">Sonstige Grundlage</option></select></label>
+              <label className={rlcClass(null, editField)}><span>Vergütungs-/Preisbasis</span><select className={rlcClass(null, input)} value={editDraft.priceBasis || ""} onChange={(e) => updateEdit({ priceBasis: (e.target.value || undefined) as NachtragRow["priceBasis"] })}><option value="">Bitte wählen</option><option value="ACTUAL_COSTS_650C">§ 650c BGB – tatsächlich erforderliche Kosten</option><option value="URKALKULATION">Urkalkulation / hinterlegte Preisansätze</option><option value="VOBB">VOB/B-Vertragsgrundlage</option><option value="OTHER">Sonstige Grundlage</option></select></label>
+              <label className={rlcClass(null, editField)}><span>Status Einigung/Anordnung</span><select className={rlcClass(null, input)} value={editDraft.agreementStatus || "PENDING"} onChange={(e) => updateEdit({ agreementStatus: e.target.value as NachtragRow["agreementStatus"] })}><option value="PENDING">Einigung offen</option><option value="AGREED">Einvernehmlich vereinbart</option><option value="ORDERED">Angeordnet</option><option value="DISPUTED">Streitig</option></select></label>
+              <label className={rlcClass(null, editField)}><span>Änderungsbegehren vom</span><input type="date" className={rlcClass(null, input)} value={(editDraft.changeRequestDate || "").slice(0,10)} onChange={(e) => updateEdit({ changeRequestDate: e.target.value })} /></label>
+              <label className={rlcClass(null, editField)}><span>Eingang Änderungsbegehren</span><input type="date" className={rlcClass(null, input)} value={(editDraft.changeRequestReceivedAt || "").slice(0,10)} onChange={(e) => updateEdit({ changeRequestReceivedAt: e.target.value })} /></label>
+              <label className={rlcClass(null, editField)}><span>BGB 30-Tage-Frist</span><input className={rlcClass(null, input)} readOnly value={editDraft.bgbAgreementDeadline ? new Date(editDraft.bgbAgreementDeadline).toLocaleDateString("de-DE") : "wird serverseitig berechnet"} /></label>
+              <label className={rlcClass(null, editField)}><span>Anordnung vom</span><input type="date" className={rlcClass(null, input)} value={(editDraft.orderDate || "").slice(0,10)} onChange={(e) => updateEdit({ orderDate: e.target.value })} /></label>
+              <label className={rlcClass(null, editField)}><span>Anordnungs-/Freigabereferenz</span><input className={rlcClass(null, input)} value={editDraft.orderReference || ""} onChange={(e) => updateEdit({ orderReference: e.target.value })} /></label>
+              <label className={rlcClass(null, editField)} style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={Boolean(editDraft.orderTextFormConfirmed)} onChange={(e) => updateEdit({ orderTextFormConfirmed: e.target.checked })} /> Anordnung in Textform dokumentiert</label>
+              <label className={rlcClass(null, editField)} style={{display:"flex",alignItems:"center",gap:8}}><input type="checkbox" checked={Boolean(editDraft.planningProvided)} onChange={(e) => updateEdit({ planningProvided: e.target.checked })} /> Erforderliche Planung liegt vor / wurde bereitgestellt</label>
+            </div>
+
+            <label className={rlcClass(null, editField)}><span>Kurztext</span><input className={rlcClass(null, input)} value={editDraft.kurztext || ""} onChange={(e) => updateEdit({ kurztext: e.target.value })} /></label>
+            <label className={rlcClass(null, editField)}><span>Langtext / Leistungsbeschreibung</span><textarea className={rlcClass(null, editTextarea)} value={editDraft.langtext || ""} onChange={(e) => updateEdit({ langtext: e.target.value })} /></label>
+            <label className={rlcClass(null, editField)}><span>Begründung</span><textarea className={rlcClass(null, editReason)} value={editDraft.begruendung || ""} onChange={(e) => updateEdit({ begruendung: e.target.value })} /></label>
+            <label className={rlcClass(null, editField)}><span>Rechtliche / vertragliche Dokumentation</span><textarea className={rlcClass(null, editReason)} value={editDraft.legalNote || ""} onChange={(e) => updateEdit({ legalNote: e.target.value })} placeholder="z. B. Änderungsbegehren, Einigung, Anordnung, VOB/B-Vertragsbezug, Schriftverkehr" /></label>
+
+            <div className={rlcClass(null, editFooter)}>
+              <button className={rlcClass(null, btnSecondary)} onClick={cancelEdit}>Abbrechen</button>
+              <button className={rlcClass(null, btnSecondary)} onClick={openEditInUrkalkulation}>Urkalkulation öffnen</button>
+              <button className={rlcClass(null, btnPrimary)} onClick={commitEdit}>Speichern</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>);
 
 }
@@ -2929,10 +3099,10 @@ function KpiCard({
 
 }: {label: string;value: string;sub?: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
-      {sub ? <div className={rlcClass(null, kpiSub)}>{sub}</div> : null}
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
+      {sub ? <div className={rlcClass("rlc-global-kpi-sub", kpiSub)}>{sub}</div> : null}
     </div>);
 
 }
@@ -3124,21 +3294,23 @@ const input: React.CSSProperties = {
 };
 
 const tableWrap: React.CSSProperties = {
-  overflow: "auto",
+  overflowX: "hidden",
   border: "1px solid #E5E7EB",
   borderRadius: 12
 };
 
 const table: React.CSSProperties = {
   width: "100%",
-  minWidth: 1460,
+  minWidth: 0,
+  maxWidth: "100%",
+  tableLayout: "fixed",
   borderCollapse: "collapse"
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 9px",
-  fontSize: 12,
+  padding: "4px 3px",
+  fontSize: 9.2,
   color: "#475569",
   background: "#F8FAFC",
   borderBottom: "1px solid #E5E7EB",
@@ -3158,8 +3330,8 @@ const thSmall: React.CSSProperties = {
 };
 
 const td: React.CSSProperties = {
-  padding: "8px 9px",
-  fontSize: 12,
+  padding: "3px 2px",
+  fontSize: 11.5,
   borderBottom: "1px solid #F1F5F9",
   verticalAlign: "middle"
 };
@@ -3201,28 +3373,67 @@ const cellTextarea: React.CSSProperties = {
   lineHeight: 1.35
 };
 
+const textCell: React.CSSProperties = { display: "grid", gap: 4, minWidth: 0 };
+
+const langPreview: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: 11.5,
+  color: "#0F172A",
+  lineHeight: 1.35,
+  whiteSpace: "normal",
+  overflow: "hidden",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical"
+};
+
+const btnTextMini: React.CSSProperties = {
+  justifySelf: "start",
+  minHeight: 26,
+  border: "1px solid #93C5FD",
+  background: "#EFF6FF",
+  color: "#0B5BD3",
+  borderRadius: 7,
+  padding: "3px 8px",
+  fontSize: 9.5,
+  lineHeight: 1.05,
+  fontWeight: 700,
+  cursor: "pointer"
+};
+
+
 const buttonRow: React.CSSProperties = {
   display: "flex",
-  gap: 8,
-  flexWrap: "wrap",
+  gap: 5,
+  flexWrap: "nowrap",
   alignItems: "center",
-  marginTop: 12
+  marginTop: 8,
+  width: "100%",
+  minWidth: 0,
+  overflow: "visible"
 };
 
 const buttonRowCompact: React.CSSProperties = {
   display: "flex",
-  gap: 6,
-  flexWrap: "wrap"
+  gap: 4,
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "flex-start",
+  maxWidth: "100%",
+  overflow: "visible"
 };
 
 const btnBase: React.CSSProperties = {
   border: "1px solid #D1D5DB",
-  borderRadius: 10,
-  padding: "9px 13px",
-  fontSize: 13,
+  borderRadius: 8,
+  padding: "6px 8px",
+  minHeight: 34,
+  fontSize: 11,
+  lineHeight: 1.05,
   fontWeight: 700,
   cursor: "pointer",
-  whiteSpace: "nowrap"
+  whiteSpace: "nowrap",
+  flex: "0 0 auto"
 };
 
 const btnPrimary: React.CSSProperties = {
@@ -3243,6 +3454,49 @@ const btnDanger: React.CSSProperties = {
   border: "1px solid #FECACA",
   background: "#FEF2F2",
   color: "#B91C1C"
+};
+
+const editOverlay: React.CSSProperties = {
+  position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15,23,42,.55)",
+  display: "flex", alignItems: "center", justifyContent: "center", padding: 24
+};
+const editModal: React.CSSProperties = {
+  width: "min(980px,96vw)", maxHeight: "90vh", overflowY: "auto", background: "#FFFFFF",
+  border: "1px solid #DCE4EF", borderRadius: 16, boxShadow: "0 24px 80px rgba(15,23,42,.32)", padding: 16
+};
+const editModalHead: React.CSSProperties = {
+  display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12,
+  paddingBottom: 10, marginBottom: 12, borderBottom: "1px solid #E2E8F0"
+};
+const editEyebrow: React.CSSProperties = { fontSize: 9.5, fontWeight: 800, letterSpacing: ".06em", color: "#146EF5" };
+const editTitle: React.CSSProperties = { margin: "2px 0", fontSize: 21, lineHeight: 1.1, color: "#0F172A" };
+const editSub: React.CSSProperties = { fontSize: 11.5, color: "#64748B" };
+const editGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(6,minmax(0,1fr))", gap: 8, marginBottom: 8 };
+const editField: React.CSSProperties = { display: "grid", gap: 4, marginBottom: 8, fontSize: 10.5, fontWeight: 700, color: "#475569" };
+const editTextarea: React.CSSProperties = { ...input, minHeight: 150, resize: "vertical", lineHeight: 1.45, fontFamily: "inherit" };
+const editReason: React.CSSProperties = { ...input, minHeight: 72, resize: "vertical", lineHeight: 1.4, fontFamily: "inherit" };
+const editSummary: React.CSSProperties = { display: "grid", gap: 3, alignContent: "center", padding: "6px 10px", border: "1px solid #DBEAFE", background: "#EFF6FF", borderRadius: 8, fontSize: 10.5, color: "#475569" };
+const editFooter: React.CSSProperties = { display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 10, borderTop: "1px solid #E2E8F0" };
+
+const editLangtext: React.CSSProperties = {
+  width: "100%", minHeight: 68, padding: "7px 8px", border: "1px solid #CBD5E1",
+  borderRadius: 8, background: "#FFFFFF", color: "#0F172A", fontSize: 11.5,
+  lineHeight: 1.4, resize: "vertical", boxSizing: "border-box"
+};
+const btnEditMini: React.CSSProperties = { minWidth: 72 };
+const btnSaveMini: React.CSSProperties = { minWidth: 68 };
+const btnCancelMini: React.CSSProperties = {
+  border: "1px solid #CBD5E1", background: "#FFFFFF", color: "#334155", borderRadius: 7,
+  padding: "3px 7px", minHeight: 26, fontSize: 9.5, fontWeight: 700, cursor: "pointer"
+};
+
+const btnDuplicateMini: React.CSSProperties = {
+  border: 0, background: "transparent", color: "#0B5BD3", cursor: "pointer",
+  fontSize: 14, padding: "2px 4px", lineHeight: 1
+};
+const btnDeleteLink: React.CSSProperties = {
+  border: 0, background: "transparent", color: "#B91C1C", cursor: "pointer",
+  fontSize: 11.5, padding: "2px 0", textDecoration: "underline"
 };
 
 const btnMini: React.CSSProperties = {

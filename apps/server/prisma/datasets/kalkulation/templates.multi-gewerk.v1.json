@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "key": "TROCKENBAU_GK_INNENWAND",
+      "title": "Gipskarton-Innenwand herstellen",
+      "category": "TROCKENBAU",
+      "unit": "m2",
+      "description": "Innenwand in Trockenbauweise mit Gipskartonbeplankung herstellen.",
+      "tags": ["trockenbau", "gipskarton", "innenwand", "ständerwand", "gk"],
+      "components": [
+        {
+          "type": "LABOR",
+          "refKey": "LABOR:TROCKENBAUER",
+          "qtyFormula": "0.45",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 10,
+          "note": "Arbeitszeit je m2; durch CompanyProductivity überschreibbar"
+        },
+        {
+          "type": "MATERIAL",
+          "refKey": "MATERIAL:GK_WANDSYSTEM",
+          "qtyFormula": "1",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 20,
+          "note": "Materialsystem je m2"
+        }
+      ]
+    },
+    {
+      "key": "ELEKTRO_STECKDOSE_STANDARD",
+      "title": "Steckdose installieren",
+      "category": "ELEKTRO",
+      "unit": "St",
+      "description": "Steckdose der Elektroinstallation betriebsfertig herstellen.",
+      "tags": ["elektro", "steckdose", "steckdosen", "installation"],
+      "components": [
+        {
+          "type": "LABOR",
+          "refKey": "LABOR:ELEKTRIKER",
+          "qtyFormula": "0.35",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 10,
+          "note": "Arbeitszeit je Stück; durch CompanyProductivity überschreibbar"
+        },
+        {
+          "type": "MATERIAL",
+          "refKey": "MATERIAL:STECKDOSE_STANDARD",
+          "qtyFormula": "1",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 20,
+          "note": "Steckdose je Stück"
+        }
+      ]
+    },
+    {
+      "key": "ELEKTRO_LEUCHTE_STANDARD",
+      "title": "Leuchte installieren",
+      "category": "ELEKTRO",
+      "unit": "St",
+      "description": "Leuchte der Elektroinstallation betriebsfertig herstellen.",
+      "tags": ["elektro", "leuchte", "leuchten", "beleuchtung", "installation"],
+      "components": [
+        {
+          "type": "LABOR",
+          "refKey": "LABOR:ELEKTRIKER",
+          "qtyFormula": "0.4",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 10,
+          "note": "Arbeitszeit je Stück; durch CompanyProductivity überschreibbar"
+        },
+        {
+          "type": "MATERIAL",
+          "refKey": "MATERIAL:LEUCHTE_STANDARD",
+          "qtyFormula": "1",
+          "mandatory": true,
+          "riskFactor": "1.0000",
+          "sort": 20,
+          "note": "Leuchte je Stück"
+        }
+      ]
+    }
+  ]
+}

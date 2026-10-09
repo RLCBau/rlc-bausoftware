@@ -3,8 +3,31 @@
 
 import { Router } from "express";
 import { jsPDF } from "jspdf";
+import { archiveProjectBufferVersion } from "../services/dmsArchive";
+import { requireProjectMember } from "../middleware/guards";
 
 const r = Router();
+
+const requireOptionalNachtragProjectAccess = async (req:any,res:any,next:any) => {
+  const projectData = req.body?.project || {};
+  const token = String(
+    req.body?.projectId ||
+    req.body?.projectKey ||
+    projectData?.id ||
+    projectData?.projectId ||
+    projectData?.code ||
+    ""
+  ).trim();
+  if (!token) return next();
+  req.params = req.params || {};
+  req.params.__nachtragProject = token;
+  return requireProjectMember("__nachtragProject")(req,res,(err?:any)=>{
+    if(err) return next(err);
+    req.resolvedNachtragProjectId = String(req.resolvedProjectId || "").trim();
+    req.resolvedNachtragProjectCode = String(req.resolvedProjectCode || "").trim();
+    return next();
+  });
+};
 
 /** helpers */
 const euro = (n: any) =>
@@ -48,11 +71,22 @@ function ensureSpace(doc: any, y: number, needed: number) {
 /**
  * POST /api/pdf/nachtraege
  */
-r.post("/pdf/nachtraege", async (req, res) => {
+r.post("/pdf/nachtraege", requireOptionalNachtragProjectAccess, async (req:any, res) => {
   try {
     const mwst = num(req.body?.mwst ?? 19);
+    const projectData = req.body?.project || {};
+    const requestedProject = textOr(
+      req.body?.projectId ||
+      req.body?.projectKey ||
+      projectData?.id ||
+      projectData?.projectId ||
+      projectData?.code
+    );
+    const projectIdOrCode = requestedProject
+      ? textOr(req.resolvedNachtragProjectId || req.resolvedNachtragProjectCode)
+      : "";
 
-    const projectName = textOr(req.body?.project?.name);
+    const projectName = textOr(projectData?.name);
     const projectNr = textOr(req.body?.project?.number);
     const projectOrt = textOr(req.body?.project?.location);
 
@@ -277,6 +311,30 @@ r.post("/pdf/nachtraege", async (req, res) => {
     doc.text(`Gesamt Brutto: ${euro(totalsBrutto)}`, sumX + 4, y + 14);
 
     const pdf = Buffer.from(doc.output("arraybuffer"));
+
+    if (projectIdOrCode) {
+      void archiveProjectBufferVersion({
+        projectIdOrCode,
+        filename: "Nachtraege.pdf",
+        kind: "PDF",
+        buffer: pdf,
+        uploadedBy: String(
+          req?.auth?.email ||
+          req?.auth?.userId ||
+          req?.auth?.sub ||
+          ""
+        ).trim() || null,
+        meta: {
+          module: "KALKULATION",
+          source: "pdf.nachtraege"
+        }
+      }).catch((error) => {
+        console.error("[pdf:nachtraege:dms]", error);
+      });
+    } else {
+      console.warn("[pdf:nachtraege:dms] projectId fehlt");
+    }
+
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'attachment; filename="Nachtraege.pdf"');
     return res.status(200).send(pdf);

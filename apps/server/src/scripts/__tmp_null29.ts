@@ -1,0 +1,24 @@
+import { PrismaClient } from "@prisma/client";
+import { calculateTiefbauFamilyCatalog as calc } from "../kalkulation/autonomous/tiefbauFamilyCatalog";
+const prisma=new PrismaClient();
+const ctx:any={projectId:"audit",region:"DE-BY",year:2026};
+const norm=(s:string)=>String(s||"").toLowerCase().replace(/[0-9]+([.,][0-9]+)?/g,"#").replace(/[^a-zäöüß#]+/g," ").replace(/\s+/g," ").trim().slice(0,180);
+(async()=>{
+ const ps=await prisma.project.findMany({select:{code:true,lvSets:{take:1,orderBy:{version:"desc"},select:{positions:{select:{id:true,position:true,kurztext:true,langtext:true,einheit:true,menge:true,x84UnitPrice:true}}}}}});
+ const pure:Record<string,any>={}; let count=0;
+ for(const p of ps){
+  const rows=p.lvSets[0]?.positions||[];
+  const all:any[]=rows.map((r:any)=>({id:r.id,posNr:r.position,kurztext:r.kurztext,langtext:r.langtext||"",einheit:r.einheit,menge:Number(r.menge)}));
+  for(let i=0;i<rows.length;i++){
+   const r:any=rows[i]; const raw=String(r.kurztext||r.langtext||"").trim(); if(!raw) continue;
+   const x:any=calc(all[i],ctx,all);
+   if(!x || String(x.calculationStatus||"unresolved")==="unresolved"){
+    count++; const k=norm(raw); const q=pure[k]||(pure[k]={count:0,x84:0,examples:[]});
+    q.count++; if(r.x84UnitPrice!==null) q.x84++;
+    if(q.examples.length<1) q.examples.push({project:p.code,pos:r.position,unit:r.einheit,text:raw.slice(0,240),lang:String(r.langtext||"").slice(0,700),x84:r.x84UnitPrice===null?null:Number(r.x84UnitPrice)});
+   }
+  }
+ }
+ console.log(JSON.stringify({count,top:Object.entries(pure).sort((a:any,b:any)=>b[1].count-a[1].count).slice(0,140)},null,2));
+ await prisma.$disconnect();
+})();

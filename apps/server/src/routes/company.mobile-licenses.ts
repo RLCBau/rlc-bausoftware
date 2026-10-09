@@ -20,7 +20,7 @@ const ALLOWED_MOBILE_ROLES = new Set([
 const ALLOWED_STATUSES = new Set(["FREE", "ACTIVE", "BLOCKED"]);
 
 function requireCompanyAdmin(req: any, res: any, next: any) {
-  if ((process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
+  if (process.env.NODE_ENV !== "production" && (process.env.DEV_AUTH || "").toLowerCase() === "on") return next();
 
   const role = String(
     req?.auth?.role || req?.auth?.companyRole || req?.auth?.appRole || ""

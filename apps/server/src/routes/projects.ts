@@ -4,16 +4,24 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 import { prisma } from "../lib/prisma";
+import { activeDmsRetention } from "../services/dmsArchive";
 
 // ✅ FIX: usa il requireAuth “vero” (con DEV_AUTH bypass) dal middleware/auth.ts
 import { requireAuth } from "../middleware/auth";
 import { ensureProjectStructure } from "../lib/ensureProjectStructure";
 
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { archiveProjectBufferVersion } from "../services/dmsArchive";
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
-const pdfUpload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+});
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
 
 /* =========================================================
  * helpers
@@ -126,6 +134,8 @@ function normalizeProjectForClient(p: any) {
     place: p?.place ?? "",
     ort: p?.ort ?? p?.place ?? "",
     createdAt: p?.createdAt ?? undefined,
+    year: p?.year !== null && p?.year !== undefined && Number.isFinite(Number(p.year)) ? Number(p.year) : null,
+    totalNet: p?.totalNet !== null && p?.totalNet !== undefined && Number.isFinite(Number(p.totalNet)) ? Number(p.totalNet) : null,
   };
 }
 
@@ -167,48 +177,137 @@ function dedupeProjectsStable(list: any[]) {
  * =======================================================*/
 async function ensureCompanyId(req: Request): Promise<string> {
   const auth: any = (req as any).auth;
+  const candidate =
+    typeof auth?.companyId === "string"
+      ? auth.companyId
+      : typeof auth?.company === "string"
+        ? auth.company
+        : "";
 
-  if (auth && typeof auth.company === "string") {
-    const found = await prisma.company.findUnique({ where: { id: auth.company } });
-    if (found) return found.id;
+  const companyId = String(candidate || "").trim();
+
+  if (!companyId) {
+    const error: any = new Error("COMPANY_CONTEXT_REQUIRED");
+    error.status = 403;
+    throw error;
   }
 
-  if (process.env.DEV_COMPANY_ID) {
-    const found = await prisma.company.findUnique({ where: { id: process.env.DEV_COMPANY_ID } });
-    if (found) return found.id;
-  }
-
-  const first = await prisma.company.findFirst();
-  if (first) return first.id;
-
-  const created = await prisma.company.create({
-    data: { name: "Standard Firma", code: "STANDARD" },
+  const found = await prisma.company.findUnique({
+    where: { id: companyId },
   });
 
-  return created.id;
+  if (!found) {
+    const error: any = new Error("COMPANY_NOT_FOUND");
+    error.status = 403;
+    throw error;
+  }
+
+  return found.id;
 }
 
+function projectRole(req: any): string {
+  return String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+}
+
+function projectUserId(req: any): string {
+  return String(req?.auth?.sub || req?.auth?.userId || "").trim();
+}
+
+function projectAdmin(req: any): boolean {
+  return ["ADMIN", "ADMINISTRATOR"].includes(projectRole(req));
+}
+
+function requireProjectManageRole(req: any, res: any, next: any) {
+  if (!["ADMIN", "ADMINISTRATOR", "BAULEITER", "KALKULATOR"].includes(projectRole(req))) {
+    return res.status(403).json({ ok: false, error: "PROJECT_MANAGE_FORBIDDEN" });
+  }
+  return next();
+}
+
+function requireProjectAdminRole(req: any, res: any, next: any) {
+  if (!projectAdmin(req)) {
+    return res.status(403).json({ ok: false, error: "PROJECT_ADMIN_REQUIRED" });
+  }
+  return next();
+}
+
+async function resolveAccessibleProject(req: any, token: string) {
+  const companyId = await ensureCompanyId(req);
+  const value = String(token || "").trim();
+  if (!value) return null;
+
+  const project = await prisma.project.findFirst({
+    where: { companyId, OR: [{ id: value }, { code: value }] },
+    select: { id: true, code: true, name: true, companyId: true },
+  });
+  if (!project) return null;
+  if (projectAdmin(req)) return project;
+
+  const uid = projectUserId(req);
+  if (!uid) return null;
+  const member = await prisma.projectMember.findFirst({
+    where: { projectId: project.id, userId: uid },
+    select: { id: true },
+  });
+  return member ? project : null;
+}
+
+function requireProjectParamAccess(paramName: string) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const project = await resolveAccessibleProject(req, req.params?.[paramName]);
+      if (!project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
+      req.resolvedProject = project;
+      return next();
+    } catch (error: any) {
+      return res.status(Number(error?.status) === 403 ? 403 : 500).json({
+        ok: false,
+        error: error?.message || "PROJECT_ACCESS_CHECK_FAILED",
+      });
+    }
+  };
+}
+
+function canonicalProjectDir(project: { id: string; code?: string | null }, allowLegacyRead = false) {
+  const canonical = path.join(PROJECTS_ROOT, safeFsName(project.id));
+  if (!allowLegacyRead || fs.existsSync(canonical)) return canonical;
+
+  const code = safeFsName(String(project.code || ""));
+  if (!code) return canonical;
+  const legacy = readProjectJsonFromFs(code);
+  if (legacy?.data && String(legacy.data.id || "").trim() === project.id) {
+    return legacy.folder;
+  }
+  return canonical;
+}
 /* =========================================================
  * generator BA-YYYY-XXX
  * =======================================================*/
 async function generateProjectCode(companyId: string) {
   const year = new Date().getFullYear();
+  const prefix = `BA-${year}-`;
 
-  const last = await prisma.project.findFirst({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
+  // Never derive the next code from "last created": imports and manual codes
+  // may be out of sequence. Read all BA codes for the current year and pick
+  // the first free number after the real maximum.
+  const rows = await prisma.project.findMany({
+    where: { companyId, code: { startsWith: prefix } },
     select: { code: true },
   });
 
-  let nextNumber = 1;
-  if (last?.code) {
-    const match = last.code.match(/^BA-(\d{4})-(\d{3})$/);
-    if (match) {
-      const lastYear = parseInt(match[1], 10);
-      const lastNum = parseInt(match[2], 10);
-      if (lastYear === year && Number.isFinite(lastNum)) nextNumber = lastNum + 1;
-    }
+  let maxNumber = 0;
+  const used = new Set<number>();
+  for (const row of rows) {
+    const match = String(row.code || "").match(new RegExp(`^BA-${year}-(\\d{3})$`));
+    if (!match) continue;
+    const n = Number(match[1]);
+    if (!Number.isFinite(n)) continue;
+    used.add(n);
+    if (n > maxNumber) maxNumber = n;
   }
+
+  let nextNumber = maxNumber + 1;
+  while (used.has(nextNumber)) nextNumber += 1;
 
   return `BA-${year}-${String(nextNumber).padStart(3, "0")}`;
 }
@@ -220,8 +319,12 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const companyId = await ensureCompanyId(req);
 
+    const uid = projectUserId(req);
     const db = await prisma.project.findMany({
-      where: { companyId },
+      where: {
+        companyId,
+        ...(projectAdmin(req) ? {} : { projectMembers: { some: { userId: uid } } }),
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -234,51 +337,78 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
       },
     });
 
-    const fsProjectsRaw = readAllFsProjects();
-    const dbIds = new Set(db.map((p) => String(p.id)));
-    const dbCodes = new Set(db.map((p) => String(p.code || "").trim()).filter(Boolean));
-
-    const fsExtras = fsProjectsRaw
-      .map((x) => x?.data || null)
-      .filter(Boolean)
-      .filter((p) => {
-        const id = String(p?.id || "").trim();
-        const code = String(p?.code || "").trim();
-        if (id && dbIds.has(id)) return false;
-        if (code && dbCodes.has(code)) return false;
-        return true;
-      })
-      .map((p) => ({
-        id: String(p?.id || "").trim() || `fs-${safeFsName(String(p?.code || "PROJECT"))}`,
-        code: String(p?.code || "").trim() || undefined,
-        name: String(p?.name || "").trim() || undefined,
-        number: p?.number ?? null,
-        client: String(p?.client || "").trim(),
-        place: String(p?.place || "").trim(),
-        createdAt: p?.createdAt || undefined,
-        source: "FS",
-      }));
-
-    const merged = [...db, ...fsExtras];
-    const deduped = dedupeProjectsStable(merged);
-    const out = deduped.map(normalizeProjectForClient);
+    const metrics: any[] = await prisma.$queryRawUnsafe(
+      `WITH latest AS (
+         SELECT DISTINCT ON (h."projectId") h.id, h."projectId", h."priceDate", h.version
+         FROM "LVHeader" h
+         JOIN "Project" pr ON pr.id = h."projectId"
+         WHERE pr."companyId" = $1
+         ORDER BY h."projectId", h.version DESC
+       )
+       SELECT l."projectId" AS "projectId",
+              l."priceDate" AS "priceDate",
+              SUM(COALESCE(p."x84Total", p.gesamt))::float8 AS "totalNet"
+       FROM latest l
+       LEFT JOIN "LVPosition" p ON p."lvId" = l.id
+       GROUP BY l."projectId", l."priceDate"`,
+      companyId
+    );
+    const metricByProject = new Map(metrics.map((row: any) => [String(row.projectId), row]));
+    const out = db.map((project: any) => {
+      const metric: any = metricByProject.get(project.id) || {};
+      const priceDate = metric.priceDate ? new Date(metric.priceDate) : null;
+      const explicitYear = priceDate && Number.isFinite(priceDate.getTime()) ? priceDate.getUTCFullYear() : null;
+      const yearSource = String(`${project.code || ""} ${project.name || ""}`);
+      const fourDigitYear = yearSource.match(/\b(20(?:2[0-9]|3[0-5]))\b/)?.[1];
+      const twoDigitYear = yearSource.match(/(?:^|[^0-9])(2[0-9])(?:[^0-9]|$)/)?.[1];
+      const inferredYear = fourDigitYear
+        ? Number(fourDigitYear)
+        : twoDigitYear
+          ? 2000 + Number(twoDigitYear)
+          : null;
+      const fallbackYear = !String(project.code || "").startsWith("GAEB-")
+        ? new Date(project.createdAt).getUTCFullYear()
+        : null;
+      return normalizeProjectForClient({
+        ...project,
+        year: explicitYear || inferredYear || fallbackYear,
+        totalNet: metric.totalNet == null ? null : Number(metric.totalNet),
+      });
+    });
 
     res.json({ ok: true, projects: out });
   } catch (err: any) {
     console.error("GET /api/projects error:", err);
-    res.status(500).json({ ok: false, error: err?.message || "Fehler beim Laden der Projekte" });
+    const status = Number(err?.status) === 403 ? 403 : 500;
+    res.status(status).json({
+      ok: false,
+      error: err?.message || "Fehler beim Laden der Projekte",
+    });
   }
 });
 
 /* =========================================================
  * POST /api/projects – create project
  * =======================================================*/
-router.post("/", requireAuth, async (req: Request, res: Response) => {
+router.post("/", requireAuth, requireProjectManageRole, async (req: Request, res: Response) => {
   try {
     const companyId = await ensureCompanyId(req);
-    const { name, client, place, number } = req.body || {};
+    const { code: requestedCode, name, client, place, number } = req.body || {};
 
-    const code = await generateProjectCode(companyId);
+    const normalizedRequestedCode = String(requestedCode ?? "").trim().toUpperCase();
+    const code = normalizedRequestedCode || await generateProjectCode(companyId);
+
+    const duplicate = await prisma.project.findFirst({
+      where: { companyId, code },
+      select: { id: true, code: true, name: true },
+    });
+    if (duplicate) {
+      return res.status(409).json({
+        ok: false,
+        error: `Projektnummer ${code} ist bereits vorhanden.`,
+        projectId: duplicate.id,
+      });
+    }
 
     const project = await prisma.project.create({
       data: {
@@ -291,8 +421,8 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       },
     });
     
-  const fsKey = safeFsName(project.code || "");
-if (!fsKey) throw new Error("Project code missing - cannot create FS folder.");
+  const fsKey = safeFsName(project.id);
+if (!fsKey) throw new Error("Project id missing - cannot create FS folder.");
 
 const folderByCode = ensureProjectStructure(fsKey);
 
@@ -303,6 +433,22 @@ console.log("[PROJECT CREATE] folderByCode=", folderByCode);
 console.log("[PROJECT CREATE] exists after ensure=", fs.existsSync(folderByCode));
 
 writeProjectJson(folderByCode, project);
+
+const creatorRole = projectRole(req);
+const creatorUserId = projectUserId(req);
+if (creatorUserId && !projectAdmin(req)) {
+  const memberRole = creatorRole === "KALKULATOR" ? "KALKULATOR" : "BAULEITER";
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: creatorUserId } },
+    update: { role: memberRole as any },
+    create: {
+      projectId: project.id,
+      userId: creatorUserId,
+      role: memberRole as any,
+      canDownload: true,
+    },
+  });
+}
 
 console.log(
   "[PROJECT CREATE] project.json exists=",
@@ -374,15 +520,31 @@ async function importProjectFromAny(req: Request) {
     },
   });
 
-  const fsKey = uniqueFolderByCode(project.code);
-  const folder = path.join(PROJECTS_ROOT, fsKey);
-  ensureDir(folder);
+  const fsKey = safeFsName(project.id);
+  if (!fsKey) throw new Error("Project id missing - cannot create FS folder.");
+  const folder = ensureProjectStructure(fsKey);
   writeProjectJson(folder, project);
+
+  const creatorRole = projectRole(req);
+  const creatorUserId = projectUserId(req);
+  if (creatorUserId && !projectAdmin(req)) {
+    const memberRole = creatorRole === "KALKULATOR" ? "KALKULATOR" : "BAULEITER";
+    await prisma.projectMember.upsert({
+      where: { projectId_userId: { projectId: project.id, userId: creatorUserId } },
+      update: { role: memberRole as any },
+      create: {
+        projectId: project.id,
+        userId: creatorUserId,
+        role: memberRole as any,
+        canDownload: true,
+      },
+    });
+  }
 
   return { project, fsKey };
 }
 
-router.post("/import-json", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
+router.post("/import-json", requireAuth, requireProjectManageRole, upload.single("file"), async (req: Request, res: Response) => {
   try {
     const out = await importProjectFromAny(req);
     res.json({ ok: true, ...out });
@@ -395,6 +557,7 @@ router.post("/import-json", requireAuth, upload.single("file"), async (req: Requ
 router.post(
   ["/import", "/importJson", "/import_project_json", "/import-project-json"],
   requireAuth,
+  requireProjectManageRole,
   upload.fields([
     { name: "file", maxCount: 1 },
     { name: "project", maxCount: 1 },
@@ -416,6 +579,7 @@ router.post(
 router.post(
   ["/import-json-body", "/importBody"],
   requireAuth,
+  requireProjectManageRole,
   express.json({ limit: "10mb" }),
   async (req, res) => {
     try {
@@ -478,14 +642,12 @@ function collectProjectPdfFiles(rootAbs: string) {
   return items;
 }
 
-router.get("/:fsKey/pdfs", requireAuth, async (req: Request, res: Response) => {
+router.get("/:fsKey/pdfs", requireAuth, requireProjectParamAccess("fsKey"), async (req: Request, res: Response) => {
   try {
-    const fsKey = safeFsName(String(req.params.fsKey || "").trim());
-    if (!fsKey) {
-      return res.status(400).json({ ok: false, error: "Missing fsKey" });
-    }
-
-    const projectDir = path.join(PROJECTS_ROOT, fsKey);
+    const project = (req as any).resolvedProject;
+    if (!project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
+    const fsKey = safeFsName(project.id);
+    const projectDir = canonicalProjectDir(project, true);
     if (!fs.existsSync(projectDir)) {
       return res.json({ ok: true, fsKey, items: [] });
     }
@@ -507,16 +669,20 @@ router.get("/:fsKey/pdfs", requireAuth, async (req: Request, res: Response) => {
 router.post(
   "/:fsKey/pdfs/upload",
   requireAuth,
+  requireProjectManageRole,
+  requireProjectParamAccess("fsKey"),
   pdfUpload.single("file"),
   async (req: Request, res: Response) => {
     try {
-      const fsKey = safeFsName(String(req.params.fsKey || "").trim());
-      if (!fsKey) {
-        return res.status(400).json({ ok: false, error: "Missing fsKey" });
-      }
+      const project = (req as any).resolvedProject;
+      if (!project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
+      const fsKey = safeFsName(project.id);
 
       if (!req.file?.buffer) {
         return res.status(400).json({ ok: false, error: "Missing PDF file" });
+      }
+      if (req.file.buffer.length < 5 || req.file.buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+        return res.status(415).json({ ok: false, error: "Ungültige PDF-Datei" });
       }
 
       const kindFolderRaw = String(req.body?.kindFolder || "").trim().toLowerCase();
@@ -527,8 +693,8 @@ router.post(
           ? kindFolderRaw
           : "regie";
 
-      const projectDir = path.join(PROJECTS_ROOT, fsKey);
-      ensureDir(projectDir);
+      const projectDir = ensureProjectStructure(fsKey);
+      writeProjectJson(projectDir, project);
 
       const targetDir = path.join(projectDir, kindFolder);
       ensureDir(targetDir);
@@ -539,6 +705,16 @@ router.post(
 
       const target = path.join(targetDir, fileName);
       fs.writeFileSync(target, req.file.buffer);
+
+      const auth = (req as any).auth || {};
+      void archiveProjectBufferVersion({
+        projectIdOrCode: fsKey,
+        filename: fileName,
+        kind: "PDF",
+        buffer: req.file.buffer,
+        uploadedBy: String(auth.email || auth.userId || auth.sub || "").trim() || null,
+        meta: { module: "PROJEKTE", source: "projects.pdf.upload", folder: kindFolder }
+      }).catch((error) => console.error("[projects:pdf-upload:dms]", error));
 
       const st = fs.statSync(target);
       const rel = path.relative(projectDir, target).replace(/\\/g, "/");
@@ -564,53 +740,78 @@ router.post(
   }
 );
 
+
+/* =========================================================
+ * POST /api/projects/:projectIdOrCode/documents/upload
+ * Upload generico Mobile/Web: archivia direttamente nel DMS.
+ * =======================================================*/
+router.post(
+  "/:projectIdOrCode/documents/upload",
+  requireAuth,
+  requireProjectManageRole,
+  requireProjectParamAccess("projectIdOrCode"),
+  pdfUpload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const project = (req as any).resolvedProject;
+      if (!project) return res.status(403).json({ ok: false, error: "PROJECT_FORBIDDEN" });
+      const projectIdOrCode = project.id;
+
+      if (!req.file?.buffer) {
+        return res.status(400).json({ ok: false, error: "Datei fehlt." });
+      }
+
+      const fileName =
+        String(req.file.originalname || "export.bin")
+          .replace(/[^\w.-]+/g, "_")
+          .replace(/_+/g, "_")
+          .slice(0, 180) || "export.bin";
+
+      const kind =
+        /\.pdf$/i.test(fileName)
+          ? "PDF"
+          : /\.(x31|d11|x83|x84|d83|p83)$/i.test(fileName)
+            ? "LV"
+            : "OTHER";
+
+      const auth = (req as any).auth || {};
+
+      await archiveProjectBufferVersion({
+        projectIdOrCode,
+        filename: fileName,
+        kind,
+        buffer: req.file.buffer,
+        uploadedBy: String(auth.email || auth.userId || auth.sub || "").trim() || null,
+        meta: {
+          module: String(req.body?.module || "MOBILE_EXPORT"),
+          source: "projects.documents.upload",
+          mime: String(req.file.mimetype || "application/octet-stream"),
+        },
+      });
+
+      return res.json({ ok: true, fileName, kind });
+    } catch (error: any) {
+      console.error("[projects:documents-upload:dms]", error);
+      return res.status(500).json({
+        ok: false,
+        error: error?.message || "Datei konnte nicht im DMS archiviert werden.",
+      });
+    }
+  }
+);
+
 router.get("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const companyId = await ensureCompanyId(req);
     const key = String(req.params.id || "").trim();
     if (!key) return res.status(400).json({ ok: false, error: "Missing id" });
 
-    let proj = null as any;
-
-    if (isUuidLike(key)) {
-      proj = await prisma.project.findFirst({ where: { id: key, companyId } });
-    }
-
-    if (!proj) {
-      proj = await prisma.project.findFirst({ where: { code: key, companyId } });
-    }
-
-    if (!proj) {
-      const fsFound = readProjectJsonFromFs(key);
-      if (fsFound?.data) {
-        const code = String(fsFound.data.code || key).trim();
-        const name = String(fsFound.data.name ?? "Projekt");
-        const client = String(fsFound.data.client ?? "");
-        const place = String(fsFound.data.place ?? "");
-        const number = fsFound.data.number ?? null;
-
-        const existing = await prisma.project.findFirst({ where: { companyId, code } });
-
-        if (existing) {
-          proj = existing;
-        } else {
-          proj = await prisma.project.create({
-            data: { code, name, client, place, number, companyId },
-          });
-        }
-
-        ensureDir(fsFound.folder);
-        writeProjectJson(fsFound.folder, proj);
-      }
-    }
-
+    const proj = await resolveAccessibleProject(req, key);
     if (!proj) return res.status(404).json({ ok: false, error: "Projekt nicht gefunden" });
 
-    const fsKey = safeFsName(proj.code || "");
+    const fsKey = safeFsName(proj.id);
     if (fsKey) {
-      const folderByCode = path.join(PROJECTS_ROOT, fsKey);
-      ensureDir(folderByCode);
-      writeProjectJson(folderByCode, proj);
+      const folder = ensureProjectStructure(fsKey);
+      writeProjectJson(folder, proj);
     }
 
     res.json({ ok: true, project: proj, fsKey });
@@ -623,7 +824,7 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
 /* =========================================================
  * DELETE /api/projects/:id
  * =======================================================*/
-router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, requireProjectAdminRole, async (req: Request, res: Response) => {
   try {
     const companyId = await ensureCompanyId(req);
     const id = String(req.params.id);
@@ -634,9 +835,36 @@ router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
     });
     if (!proj) return res.status(404).json({ ok: false, error: "Projekt nicht gefunden" });
 
-    await prisma.project.delete({ where: { id: proj.id } });
+    const retainedDocuments = await prisma.document.findMany({
+      where: { projectId: proj.id, deletedAt: null },
+      select: { id:true, name:true, meta:true }
+    });
+    const activeRetention = retainedDocuments
+      .map((doc:any) => ({ doc, retention: activeDmsRetention(doc.meta) }))
+      .filter((x:any) => x.retention.locked);
+    if (activeRetention.length) {
+      await prisma.project.update({ where:{id:proj.id}, data:{status:"archived"} });
+      return res.status(409).json({
+        ok:false,
+        error:"PROJECT_LEGAL_RETENTION_LOCK",
+        message:"Projekt enthält aufbewahrungspflichtige Dokumente und wurde daher archiviert statt gelöscht.",
+        archived:true,
+        retainedDocuments:activeRetention.slice(0,50).map((x:any)=>({id:x.doc.id,name:x.doc.name,retentionUntil:x.retention.until,reason:x.retention.reason}))
+      });
+    }
 
-    const fsKey = safeFsName(proj.code || "");
+    // A project can be referenced as the current project of one or more users.
+    // Clear that pointer first; all project-owned data then follows the schema's
+    // cascade rules.
+    await prisma.$transaction([
+      prisma.user.updateMany({
+        where: { currentProjectId: proj.id },
+        data: { currentProjectId: null },
+      }),
+      prisma.project.delete({ where: { id: proj.id } }),
+    ]);
+
+    const fsKey = safeFsName(proj.id);
     if (fsKey) {
       const folder = path.join(PROJECTS_ROOT, fsKey);
       const rootResolved = path.resolve(PROJECTS_ROOT);

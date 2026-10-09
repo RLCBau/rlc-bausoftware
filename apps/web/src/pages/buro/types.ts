@@ -185,6 +185,7 @@ export type MatMove = {
   dir: "IN" | "OUT";
   qty: number;
   projectId?: string;
+  costCenter?: string;
   note?: string;
 };
 
@@ -193,6 +194,7 @@ export type MaterialItem = {
   name: string;
   code?: string;
   projectId?: string;
+  costCenter?: string;
   location?: string;
   unit?: string;
   stock?: number;
@@ -227,9 +229,11 @@ export type Machine = {
   type?: string;
   serial?: string;
   projectId?: string;
+  costCenter?: string;
   location?: string;
   status?: "Betrieb" | "Wartung" | "Außer Betrieb";
   hours?: number;
+  hourlyRate?: number;
   lastService?: string;
   serviceIntervalDays?: number;
   nextService?: string;

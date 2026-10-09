@@ -1,32 +1,57 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
-import { KommsDB } from "./store.komms";
-import { KThread, KMessage, KAttachment } from "./types";
+import React from "react";
+import BuroWorkTabs from "./BuroWorkTabs";
 
-const th: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 10px",
-  borderBottom: "1px solid var(--line)",
-  fontSize: 13,
-  whiteSpace: "nowrap"
+import { API_BASE } from "../../lib/apiBase";
+import { useProject } from "../../store/useProject";
+
+import {
+  detectKind,
+  initDocument,
+  uploadFileDirect
+} from "../../api/files";
+
+type Message = {
+  id: string;
+  threadId: string;
+  fromName: string;
+  toList: string[];
+  ccList: string[];
+  subject?: string | null;
+  body: string;
+  createdAt: string;
 };
 
-const td: React.CSSProperties = {
-  padding: "6px 10px",
-  borderBottom: "1px solid var(--line)",
-  fontSize: 13,
-  verticalAlign: "middle"
+type AttachmentVersion = {
+  id: string;
+  version: number;
+  createdAt?: string;
 };
 
-const inp: React.CSSProperties = {
-  border: "1px solid var(--line)",
-  borderRadius: 6,
-  padding: "6px 8px",
-  fontSize: 13
+type Attachment = {
+  id: string;
+  threadId: string;
+  documentId?: string | null;
+  name: string;
+  createdAt: string;
+  document?: {
+    id: string;
+    name: string;
+    kind?: string;
+    versions?: AttachmentVersion[];
+  } | null;
 };
 
-const lbl: React.CSSProperties = {
-  fontSize: 12,
-  opacity: 0.8
+type Thread = {
+  id: string;
+  companyId: string;
+  projectId: string;
+  subject: string;
+  participants: string[];
+  unreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+  messages: Message[];
+  attachments: Attachment[];
 };
 
 type ComposeState = {
@@ -43,588 +68,1362 @@ const EMPTY_COMPOSE: ComposeState = {
   body: ""
 };
 
-function pickFile(cb: (file: File) => void | Promise<void>) {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.multiple = false;
-  input.onchange = async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    await cb(file);
-  };
-  input.click();
+function api(path: string) {
+  return `${API_BASE}${path}`;
+}
+
+function getToken(): string {
+  try {
+    const directKeys = [
+      "rlc_token",
+      "token",
+      "authToken",
+      "accessToken",
+      "rlc_auth_token",
+      "rlc_access_token",
+      "rlc.auth.token",
+      "rlc_mobile_token"
+    ];
+
+    for (const key of directKeys) {
+      for (const storage of [localStorage, sessionStorage]) {
+        const value = storage.getItem(key);
+
+        if (value?.trim()) {
+          return value.trim();
+        }
+      }
+    }
+
+    for (const key of [
+      "rlc_auth",
+      "auth",
+      "user",
+      "session",
+      "rlc_session"
+    ]) {
+      for (const storage of [localStorage, sessionStorage]) {
+        const raw = storage.getItem(key);
+        if (!raw) continue;
+
+        try {
+          const parsed = JSON.parse(raw);
+
+          const token =
+            parsed?.token ??
+            parsed?.accessToken ??
+            parsed?.authToken ??
+            parsed?.jwt ??
+            parsed?.data?.token ??
+            parsed?.data?.accessToken;
+
+          if (typeof token === "string" && token.trim()) {
+            return token.trim();
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  return "";
+}
+
+async function request<T>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const token = getToken();
+
+  const res = await fetch(api(path), {
+    credentials: "include",
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.body
+        ? { "Content-Type": "application/json" }
+        : {}),
+      ...(token
+        ? { Authorization: `Bearer ${token}` }
+        : {}),
+      ...(init?.headers || {})
+    }
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || data?.ok === false) {
+    throw new Error(
+      data?.error ||
+      data?.message ||
+      `HTTP ${res.status}`
+    );
+  }
+
+  return data as T;
+}
+
+function splitList(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function dateTime(value?: string) {
+  if (!value) return "—";
+
+  const d = new Date(value);
+
+  return Number.isNaN(d.getTime())
+    ? value
+    : d.toLocaleString("de-DE");
 }
 
 export default function Kommunikation() {
-  const [threads, setThreads] = React.useState<KThread[]>(KommsDB.list());
-  const [selId, setSelId] = React.useState<string | null>(
-    KommsDB.list()[0]?.id ?? null
-  );
-  const [q, setQ] = React.useState("");
-  const [onlyUnread, setOnlyUnread] = React.useState(false);
-  const [proj, setProj] = React.useState("");
-  const [compose, setCompose] = React.useState<ComposeState>(EMPTY_COMPOSE);
+  const { getSelectedProject } = useProject();
+  const project = getSelectedProject();
 
-  const refresh = React.useCallback(() => {
-    const next = KommsDB.list();
-    setThreads(next);
-    setSelId((prev) => {
-      if (prev && next.some((t) => t.id === prev)) return prev;
-      return next[0]?.id ?? null;
-    });
-  }, []);
+  const projectId = String(project?.id || "").trim();
+  const projectCode = String(project?.code || "").trim();
 
-  const sel = React.useMemo(
-    () => threads.find((t) => t.id === selId) ?? null,
-    [threads, selId]
-  );
+  const projectLabel =
+    [projectCode, project?.name]
+      .filter(Boolean)
+      .join(" · ") ||
+    projectId ||
+    "—";
 
-  const filtered = React.useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    return threads.filter((t) => {
-      const text = `${t.subject ?? ""} ${(t.participants ?? []).join(" ")} ${
-      t.projectId ?? ""}`.
-      toLowerCase();
-      const okQ = !qq || text.includes(qq);
-      const okUnread = !onlyUnread || (t.unreadCount ?? 0) > 0;
-      const okP = !proj || (t.projectId ?? "") === proj;
-      return okQ && okUnread && okP;
-    });
-  }, [threads, q, onlyUnread, proj]);
+  const [threads, setThreads] =
+    React.useState<Thread[]>([]);
 
-  const projects = React.useMemo(
-    () =>
-    Array.from(
-      new Set(threads.map((t) => t.projectId).filter(Boolean))
-    ) as string[],
-    [threads]
-  );
+  const [selectedId, setSelectedId] =
+    React.useState<string | null>(null);
 
-  const newThread = React.useCallback(() => {
-    const t = KommsDB.createThread();
-    refresh();
-    setSelId(t.id);
-    setCompose(EMPTY_COMPOSE);
-  }, [refresh]);
+  const [query, setQuery] =
+    React.useState("");
 
-  const delThread = React.useCallback(() => {
-    if (!sel) return;
-    if (!window.confirm("Konversation löschen?")) return;
-    KommsDB.removeThread(sel.id);
-    refresh();
-    setCompose(EMPTY_COMPOSE);
-  }, [sel, refresh]);
+  const [onlyUnread, setOnlyUnread] =
+    React.useState(false);
 
-  const update = React.useCallback(
-    (patch: Partial<KThread>) => {
-      if (!sel) return;
-      const next: KThread = {
-        ...sel,
-        ...patch,
-        updatedAt: Date.now()
-      };
-      KommsDB.upsertThread(next);
-      refresh();
-    },
-    [sel, refresh]
-  );
+  const [compose, setCompose] =
+    React.useState<ComposeState>(EMPTY_COMPOSE);
 
-  const uploadNewVersion = React.useCallback(() => {
-    if (!sel) return;
-    pickFile(async (f: File) => {
-      await KommsDB.attach(sel.id, f);
-      refresh();
-    });
-  }, [sel, refresh]);
+  const [subjectDraft, setSubjectDraft] =
+    React.useState("");
 
-  const send = React.useCallback(async () => {
-    if (!sel) return;
+  const [participantsDraft, setParticipantsDraft] =
+    React.useState("");
 
-    const body = compose.body.trim();
-    if (!body) return;
+  const [loading, setLoading] =
+    React.useState(false);
 
-    const subject = (compose.subject || sel.subject || "(ohne Betreff)").trim();
+  const [saving, setSaving] =
+    React.useState(false);
 
-    const toList: string[] = compose.to ?
-    compose.to.
-    split(",").
-    map((s) => s.trim()).
-    filter(Boolean) :
-    [];
+  const [error, setError] =
+    React.useState("");
 
-    const ccList: string[] = compose.cc ?
-    compose.cc.
-    split(",").
-    map((s) => s.trim()).
-    filter(Boolean) :
-    [];
+  const selected =
+    threads.find((row) => row.id === selectedId) ||
+    null;
 
-    const msg: KMessage = {
-      id: crypto.randomUUID(),
-      when: Date.now(),
-      from: "Ich",
-      to: toList,
-      cc: ccList,
-      subject,
-      body,
-      attachments: []
-    };
+  const load = React.useCallback(async () => {
+    if (!projectId) {
+      setThreads([]);
+      setSelectedId(null);
+      return;
+    }
 
-    await KommsDB.addMessage(sel.id, msg);
+    setLoading(true);
+    setError("");
 
-    const existingParticipants: string[] = Array.isArray(sel.participants) ?
-    sel.participants :
-    [];
+    try {
+      const data = await request<{
+        ok: true;
+        items: Thread[];
+      }>(
+        `/api/communication?projectId=${encodeURIComponent(projectId)}`
+      );
 
-    const participantSet = new Set<string>([
-    ...existingParticipants,
-    ...toList,
-    ...ccList]
-    );
+      const items =
+        Array.isArray(data.items)
+          ? data.items
+          : [];
 
-    KommsDB.upsertThread({
-      ...sel,
-      subject,
-      participants: Array.from(participantSet),
-      updatedAt: Date.now()
-    });
+      setThreads(items);
 
-    setCompose((prev) => ({
-      ...prev,
-      subject,
-      body: ""
-    }));
+      setSelectedId((current) => {
+        if (
+          current &&
+          items.some((row) => row.id === current)
+        ) {
+          return current;
+        }
 
-    refresh();
-  }, [sel, compose, refresh]);
-
-  const onDrop = React.useCallback(
-    async (ev: React.DragEvent<HTMLDivElement>) => {
-      ev.preventDefault();
-      if (!sel) return;
-      const f = ev.dataTransfer.files?.[0];
-      if (!f) return;
-      await KommsDB.attach(sel.id, f);
-      refresh();
-    },
-    [sel, refresh]
-  );
-
-  const markAllRead = React.useCallback(() => {
-    if (!sel) return;
-    KommsDB.upsertThread({
-      ...sel,
-      unreadCount: 0,
-      updatedAt: Date.now()
-    });
-    refresh();
-  }, [sel, refresh]);
+        return items[0]?.id || null;
+      });
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Kommunikation konnte nicht geladen werden."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
 
   React.useEffect(() => {
-    if (!sel) {
+    void load();
+  }, [load]);
+
+  React.useEffect(() => {
+    if (!selected) {
+      setSubjectDraft("");
+      setParticipantsDraft("");
       setCompose(EMPTY_COMPOSE);
       return;
     }
 
+    setSubjectDraft(selected.subject || "");
+    setParticipantsDraft(
+      (selected.participants || []).join(", ")
+    );
+
     setCompose((prev) => ({
       ...prev,
-      subject: prev.subject || sel.subject || ""
+      subject:
+        prev.subject ||
+        selected.subject ||
+        ""
     }));
-  }, [selId, sel]);
+  }, [selectedId, selected?.updatedAt]);
+
+  async function createThread() {
+    if (!projectId) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const data = await request<{
+        ok: true;
+        item: Thread;
+      }>("/api/communication", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId,
+          subject: "Neue Konversation",
+          participants: []
+        })
+      });
+
+      await load();
+      setSelectedId(data.item.id);
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Konversation konnte nicht erstellt werden."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveThread() {
+    if (!selected) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await request(
+        `/api/communication/${encodeURIComponent(selected.id)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            subject: subjectDraft,
+            participants:
+              splitList(participantsDraft)
+          })
+        }
+      );
+
+      await load();
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Konversation konnte nicht gespeichert werden."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteThread() {
+    if (!selected) return;
+
+    if (
+      !window.confirm(
+        `Konversation "${selected.subject}" wirklich löschen?`
+      )
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await request(
+        `/api/communication/${encodeURIComponent(selected.id)}`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      setSelectedId(null);
+      await load();
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Konversation konnte nicht gelöscht werden."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function markRead() {
+    if (!selected) return;
+
+    try {
+      await request(
+        `/api/communication/${encodeURIComponent(selected.id)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            unreadCount: 0
+          })
+        }
+      );
+
+      await load();
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Status konnte nicht geändert werden."
+      );
+    }
+  }
+
+  async function createTaskFromThread() {
+    if (!selected) return;
+
+    const latestMessage =
+      [...(selected.messages || [])]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() -
+            new Date(a.createdAt).getTime()
+        )[0];
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await request("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: selected.projectId,
+          title: selected.subject || "Aufgabe aus Kommunikation",
+          description: latestMessage?.body || "",
+          priority: "med",
+          tags: ["Kommunikation"],
+          sourceType: "communication",
+          sourceId: selected.id
+        })
+      });
+
+      window.alert("Aufgabe wurde erstellt.");
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Aufgabe konnte nicht erstellt werden."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function createCalendarFromThread() {
+    if (!selected) return;
+
+    const latestMessage =
+      [...(selected.messages || [])]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() -
+            new Date(a.createdAt).getTime()
+        )[0];
+
+    sessionStorage.setItem(
+      "rlc.calendar.prefill",
+      JSON.stringify({
+        projectId: selected.projectId,
+        title:
+          selected.subject ||
+          "Termin aus Kommunikation",
+        attendees:
+          (selected.participants || []).join(", "),
+        notes: latestMessage?.body || "",
+        category: "Besprechung",
+        sourceType: "communication",
+        sourceId: selected.id
+      })
+    );
+
+    window.location.assign("/buro/outlook?new=1");
+  }
+
+  async function sendMessage() {
+    if (!selected) return;
+
+    const body = compose.body.trim();
+
+    if (!body) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await request(
+        `/api/communication/${encodeURIComponent(selected.id)}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            fromName: "Ich",
+            toList: splitList(compose.to),
+            ccList: splitList(compose.cc),
+            subject:
+              compose.subject ||
+              selected.subject,
+            body
+          })
+        }
+      );
+
+      setCompose((prev) => ({
+        ...prev,
+        body: ""
+      }));
+
+      await load();
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Nachricht konnte nicht gespeichert werden."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function uploadAttachment() {
+    if (!selected || !projectId) return;
+
+    pickFile(async (file) => {
+      setSaving(true);
+      setError("");
+
+      try {
+        const initialized = await initDocument(
+          projectId,
+          detectKind(file),
+          file.name
+        );
+
+        await uploadFileDirect(
+          initialized.documentId,
+          file
+        );
+
+        await request(
+          `/api/communication/${encodeURIComponent(selected.id)}/attachments`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              documentId:
+                initialized.documentId,
+              name: file.name
+            })
+          }
+        );
+
+        await load();
+      } catch (e: any) {
+        setError(
+          e?.message ||
+          "Datei konnte nicht gespeichert werden."
+        );
+      } finally {
+        setSaving(false);
+      }
+    });
+  }
+
+  async function onDrop(
+    ev: React.DragEvent<HTMLElement>
+  ) {
+    ev.preventDefault();
+
+    const file =
+      ev.dataTransfer.files?.[0];
+
+    if (!file || !selected || !projectId) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const initialized =
+        await initDocument(
+          projectId,
+          detectKind(file),
+          file.name
+        );
+
+      await uploadFileDirect(
+        initialized.documentId,
+        file
+      );
+
+      await request(
+        `/api/communication/${encodeURIComponent(selected.id)}/attachments`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            documentId:
+              initialized.documentId,
+            name: file.name
+          })
+        }
+      );
+
+      await load();
+    } catch (e: any) {
+      setError(
+        e?.message ||
+        "Datei konnte nicht gespeichert werden."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const filtered =
+    React.useMemo(() => {
+      const q =
+        query.trim().toLowerCase();
+
+      return threads.filter((thread) => {
+        const text = [
+          thread.subject,
+          ...(thread.participants || [])
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return (
+          (!q || text.includes(q)) &&
+          (!onlyUnread ||
+            Number(thread.unreadCount || 0) > 0)
+        );
+      });
+    }, [
+      threads,
+      query,
+      onlyUnread
+    ]);
+
+  const unreadTotal =
+    threads.reduce(
+      (sum, thread) =>
+        sum +
+        Number(thread.unreadCount || 0),
+      0
+    );
+
+  const messageTotal =
+    threads.reduce(
+      (sum, thread) =>
+        sum +
+        Number(thread.messages?.length || 0),
+      0
+    );
+
+  const attachmentTotal =
+    threads.reduce(
+      (sum, thread) =>
+        sum +
+        Number(thread.attachments?.length || 0),
+      0
+    );
 
   return (
-    <div className="rlc-migrated-pages-buro-kommunikation-tsx-485">
+    <div className="card">
 
+      <header className="rlc-page-hero rlc-page-hero--split">
+        <div>
+          <div className="rlc-page-hero__eyebrow">
+            Büro & Verwaltung
+          </div>
 
+          <h1>Kommunikation</h1>
 
+          <p>
+            Projektbezogene Konversationen,
+            Nachrichten und Anhänge zentral
+            verwalten · Projekt {projectLabel}
+          </p>
+        </div>
 
+        <div className="rlc-page-hero__actions">
+          <button
+            type="button"
+            className="rlc-page-hero__button"
+            onClick={() =>
+              void createThread()
+            }
+            disabled={!projectId || saving}
+          >
+            + Neue Konversation
+          </button>
 
+          <button
+            type="button"
+            className="rlc-page-hero__button"
+            onClick={() =>
+              void uploadAttachment()
+            }
+            disabled={!selected || saving}
+          >
+            + Datei
+          </button>
+        </div>
+      </header>
 
-      
-      <div
-        className="card rlc-migrated-pages-buro-kommunikation-tsx-486">
+      <BuroWorkTabs active="kommunikation" />
 
+      {error ? (
+        <div
+          className="card"
+          style={{
+            marginBottom: 12,
+            borderColor: "#dc2626"
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
 
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(4,minmax(0,1fr))",
+          gap: 10,
+          marginBottom: 10
+        }}
+      >
+        <Kpi
+          label="Konversationen"
+          value={String(threads.length)}
+        />
 
+        <Kpi
+          label="Nachrichten"
+          value={String(messageTotal)}
+        />
 
+        <Kpi
+          label="Ungelesen"
+          value={String(unreadTotal)}
+        />
 
+        <Kpi
+          label="Anhänge"
+          value={String(attachmentTotal)}
+        />
+      </section>
 
-
-        
-        <button className="btn" onClick={newThread}>
-          + Neue Konversation
-        </button>
-        <button className="btn" onClick={delThread} disabled={!sel}>
-          Löschen
-        </button>
-        <button className="btn" onClick={uploadNewVersion} disabled={!sel}>
-          Datei anhängen
-        </button>
-
-        <div className="rlc-migrated-pages-buro-kommunikation-tsx-487" />
-
+      <div className="rlc-page-toolbar">
         <input
-          placeholder="Suche Betreff / Teilnehmer / Projekt…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)} className={rlcClass(null,
-          { ...inp, width: 300 })} />
-        
+          className="rlc-page-toolbar__search"
+          value={query}
+          onChange={(e) =>
+            setQuery(e.target.value)
+          }
+          placeholder="Betreff oder Teilnehmer suchen..."
+        />
 
-        <select
-          value={proj}
-          onChange={(e) => setProj(e.target.value)} className={rlcClass(null,
-          { ...inp, width: 160 })}>
-          
-          <option value="">Alle Projekte</option>
-          {projects.map((p) =>
-          <option key={p} value={p}>
-              {p}
-            </option>
-          )}
-        </select>
-
-        <label className="rlc-migrated-pages-buro-kommunikation-tsx-488">
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7
+          }}
+        >
           <input
             type="checkbox"
             checked={onlyUnread}
-            onChange={(e) => setOnlyUnread(e.target.checked)} />
-          
-          <span className="rlc-migrated-pages-buro-kommunikation-tsx-489">Nur ungelesene</span>
+            onChange={(e) =>
+              setOnlyUnread(
+                e.target.checked
+              )
+            }
+          />
+
+          Nur ungelesene
         </label>
+
+        <button
+          className="btn"
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          Aktualisieren
+        </button>
       </div>
 
-      <div className="rlc-migrated-pages-buro-kommunikation-tsx-490">
+      <div
+        className="rlc-page-workspace"
+        style={{
+          gridTemplateColumns:
+            "330px minmax(0,1fr)",
+          alignItems: "start"
+        }}
+      >
+        <section className="rlc-page-list">
+          <div className="rlc-page-section-head">
+            <strong>
+              Konversationen
+            </strong>
 
+            <span>
+              {loading
+                ? "Lädt..."
+                : `${filtered.length} Einträge`}
+            </span>
+          </div>
 
+          <div className="rlc-page-document-list">
+            {filtered.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                className={
+                  selectedId === thread.id
+                    ? "rlc-page-document-row is-active"
+                    : "rlc-page-document-row"
+                }
+                onClick={() =>
+                  setSelectedId(thread.id)
+                }
+              >
+                <div className="rlc-page-document-icon">
+                  KOM
+                </div>
 
+                <div className="rlc-page-document-copy">
+                  <strong>
+                    {thread.subject ||
+                      "(ohne Betreff)"}
+                  </strong>
 
+                  <div className="rlc-page-document-meta">
+                    <span>
+                      {thread.participants
+                        ?.slice(0, 2)
+                        .join(", ") ||
+                        "Keine Teilnehmer"}
+                    </span>
 
+                    <span>
+                      {thread.messages?.length ||
+                        0}{" "}
+                      Nachricht(en)
+                    </span>
 
-        
-        <div className="card rlc-migrated-pages-buro-kommunikation-tsx-491">
-          <table className="rlc-migrated-pages-buro-kommunikation-tsx-492">
-            <thead>
-              <tr>
-                <th className={rlcClass(null, th)}>Betreff</th>
-                <th className={rlcClass(null, th)}>Projekt</th>
-                <th className={rlcClass(null, th)}>Teilnehmer</th>
-                <th className={rlcClass(null, th)}>Ungelesen</th>
-                <th className={rlcClass(null, th)}>Aktualisiert</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ?
-              <tr>
-                  <td className={rlcClass(null, { ...td, opacity: 0.7 })} colSpan={5}>
-                    Keine Konversationen gefunden.
-                  </td>
-                </tr> :
+                    <span>
+                      {thread.attachments
+                        ?.length || 0}{" "}
+                      Datei(en)
+                    </span>
+                  </div>
+                </div>
 
-              filtered.map((t) =>
-              <tr
-                key={t.id}
-                onClick={() => setSelId(t.id)} className={rlcClass(null,
-                {
-                  cursor: "pointer",
-                  background: t.id === selId ? "#f1f5ff" : undefined
-                })}>
-                
-                    <td className={rlcClass(null, td)} title={t.subject}>
-                      <b>{t.subject || "(ohne Betreff)"}</b>
-                    </td>
-                    <td className={rlcClass(null, td)}>{t.projectId || "—"}</td>
-                    <td className={rlcClass(null, td)} title={(t.participants || []).join(", ")}>
-                      {(t.participants || []).slice(0, 3).join(", ")}
-                      {(t.participants || []).length > 3 ? "…" : ""}
-                    </td>
-                    <td className={rlcClass(null, td)}>{t.unreadCount ?? 0}</td>
-                    <td className={rlcClass(null, td)}>{new Date(t.updatedAt).toLocaleString()}</td>
-                  </tr>
-              )
-              }
-            </tbody>
-          </table>
-        </div>
+                {thread.unreadCount > 0 ? (
+                  <div className="rlc-page-document-version">
+                    {thread.unreadCount}
+                  </div>
+                ) : null}
+              </button>
+            ))}
 
-        <div
-          className="card rlc-migrated-pages-buro-kommunikation-tsx-493"
+            {!loading &&
+            !filtered.length ? (
+              <div className="rlc-page-empty">
+                <strong>
+                  Keine Konversationen
+                </strong>
 
+                <span>
+                  Neue Konversation
+                  anlegen.
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </section>
 
+        <section
+          className="rlc-page-detail"
+          style={{
+            minHeight: 0,
+            overflow: "hidden"
+          }}
+          onDragOver={(e) =>
+            e.preventDefault()
+          }
+          onDrop={(e) =>
+            void onDrop(e)
+          }
+        >
+          {!selected ? (
+            <div className="rlc-page-empty">
+              <strong>
+                Konversation auswählen
+              </strong>
 
+              <span>
+                Links eine Konversation
+                auswählen oder neu anlegen.
+              </span>
+            </div>
+          ) : (
+            <>
+              <div className="rlc-page-detail-head">
+                <div className="rlc-page-detail-kicker">
+                  Kommunikation
+                </div>
 
+                <h2>
+                  {selected.subject ||
+                    "(ohne Betreff)"}
+                </h2>
 
+                <div className="rlc-page-document-meta">
+                  <span>
+                    {selected.messages
+                      ?.length || 0}{" "}
+                    Nachricht(en)
+                  </span>
 
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={onDrop}>
-          
-          {!sel ?
-          <div className="rlc-migrated-pages-buro-kommunikation-tsx-494">
-              Links eine Konversation wählen oder neu erstellen.
-            </div> :
+                  <span>
+                    {selected.attachments
+                      ?.length || 0}{" "}
+                    Datei(en)
+                  </span>
 
-          <>
-              <div className="rlc-migrated-pages-buro-kommunikation-tsx-495">
-
-
-
-
-
-              
-                <label className={rlcClass(null, lbl)}>Betreff</label>
-                <input className={rlcClass(null,
-              inp)}
-              value={sel.subject ?? ""}
-              onChange={(e) => update({ subject: e.target.value })} />
-              
-
-                <label className={rlcClass(null, lbl)}>Projekt-ID</label>
-                <input className={rlcClass(null,
-              inp)}
-              value={sel.projectId ?? ""}
-              onChange={(e) => update({ projectId: e.target.value })} />
-              
-
-                <label className={rlcClass(null, lbl)}>Teilnehmer</label>
-                <input className={rlcClass(null,
-              inp)}
-              placeholder="kommagetrennt"
-              value={(sel.participants ?? []).join(", ")}
-              onChange={(e) =>
-              update({
-                participants: e.target.value.
-                split(",").
-                map((s) => s.trim()).
-                filter(Boolean)
-              })
-              } />
-              
-
-                <div />
-                <div className="rlc-migrated-pages-buro-kommunikation-tsx-496">
-                  <button className="btn" onClick={markAllRead}>
-                    Als gelesen markieren
-                  </button>
+                  <span>
+                    Aktualisiert{" "}
+                    {dateTime(
+                      selected.updatedAt
+                    )}
+                  </span>
                 </div>
               </div>
 
-              {(sel.attachments?.length ?? 0) > 0 &&
-            <div>
-                  <div className="rlc-migrated-pages-buro-kommunikation-tsx-497">Dateien</div>
-                  <div className="rlc-migrated-pages-buro-kommunikation-tsx-498">
+              <div className="rlc-page-detail-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    void saveThread()
+                  }
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Speichert..."
+                    : "Speichern"}
+                </button>
 
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    void markRead()
+                  }
+                >
+                  Als gelesen markieren
+                </button>
 
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    void uploadAttachment()
+                  }
+                >
+                  Datei anhängen
+                </button>
 
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    void createTaskFromThread()
+                  }
+                  disabled={saving}
+                >
+                  Als Aufgabe erstellen
+                </button>
 
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={createCalendarFromThread}
+                >
+                  In Kalender übernehmen
+                </button>
 
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    void deleteThread()
+                  }
+                >
+                  Löschen
+                </button>
+              </div>
 
-                
-                    {(sel.attachments ?? []).map((a) =>
-                <AttachmentPreview key={a.id} a={a} />
-                )}
-                  </div>
-                </div>
-            }
-
-              <div className="rlc-migrated-pages-buro-kommunikation-tsx-499">
-
-
-
-
-
-
-
-              
-                {sel.messages.length === 0 ?
-              <div className="rlc-migrated-pages-buro-kommunikation-tsx-500">Noch keine Nachrichten.</div> :
-
-              sel.messages.
-              slice().
-              sort((a, b) => a.when - b.when).
-              map((m) =>
               <div
-                key={m.id} className="rlc-migrated-pages-buro-kommunikation-tsx-501">
+                style={{
+                  display: "grid",
+                  gridTemplateColumns:
+                    "minmax(0,1fr) minmax(0,1fr)",
+                  gap: 14,
+                  padding: 18
+                }}
+              >
+                <Field label="Betreff">
+                  <input
+                    value={subjectDraft}
+                    onChange={(e) =>
+                      setSubjectDraft(
+                        e.target.value
+                      )
+                    }
+                  />
+                </Field>
 
+                <Field label="Teilnehmer">
+                  <input
+                    value={participantsDraft}
+                    onChange={(e) =>
+                      setParticipantsDraft(
+                        e.target.value
+                      )
+                    }
+                    placeholder="kommagetrennt"
+                  />
+                </Field>
 
+                <Field label="Projekt">
+                  <input
+                    value={projectLabel}
+                    readOnly
+                  />
+                </Field>
+              </div>
 
+              <div className="rlc-page-section-head">
+                <strong>
+                  Anhänge
+                </strong>
 
-                
-                        <div className="rlc-migrated-pages-buro-kommunikation-tsx-502">
+                <span>
+                  DMS ·{" "}
+                  {selected.attachments
+                    ?.length || 0}
+                </span>
+              </div>
 
+              <div
+                style={{
+                  padding: "6px 14px",
+                  display: "grid",
+                  gap: 6
+                }}
+              >
+                {!selected.attachments
+                  ?.length ? (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      textAlign: "left",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      color: "#64748b"
+                    }}
+                  >
+                    <strong style={{ color: "#0f172a" }}>
+                      Keine Anhänge
+                    </strong>
 
+                    <span>
+                      Datei hierher ziehen oder über „Datei anhängen“ hochladen.
+                    </span>
+                  </div>
+                ) : (
+                  selected.attachments.map(
+                    (attachment) => (
+                      <div
+                        key={attachment.id}
+                        className="card"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent:
+                            "space-between",
+                          gap: 12
+                        }}
+                      >
+                        <div>
+                          <strong>
+                            {attachment.name}
+                          </strong>
 
-
-
-                  
-                          <div className="rlc-migrated-pages-buro-kommunikation-tsx-503">{m.from}</div>
-                          <div className="rlc-migrated-pages-buro-kommunikation-tsx-504">
-                            {new Date(m.when).toLocaleString()}
+                          <div className="muted">
+                            DMS ·{" "}
+                            {attachment.document
+                              ?.kind || "OTHER"}{" "}
+                            ·{" "}
+                            {attachment.document
+                              ?.versions?.length ||
+                              0}{" "}
+                            Version(en)
                           </div>
                         </div>
 
-                        {m.subject ?
-                <div className="rlc-migrated-pages-buro-kommunikation-tsx-505">
-                            <b>{m.subject}</b>
-                          </div> :
-                null}
-
-                        <div className="rlc-migrated-pages-buro-kommunikation-tsx-506">
-                          {m.body}
-                        </div>
-
-                        {(m.attachments?.length ?? 0) > 0 ?
-                <div className="rlc-migrated-pages-buro-kommunikation-tsx-507">
-
-
-
-
-
-
-
-                  
-                            {(m.attachments ?? []).map((a) =>
-                  <AttachmentPreview key={a.id} a={a} />
-                  )}
-                          </div> :
-                null}
+                        <span className="muted">
+                          {dateTime(
+                            attachment.createdAt
+                          )}
+                        </span>
                       </div>
-              )
-              }
+                    )
+                  )
+                )}
               </div>
 
-              <div className="rlc-migrated-pages-buro-kommunikation-tsx-508">
+              <div className="rlc-page-section-head">
+                <strong>
+                  Nachrichtenverlauf
+                </strong>
 
+                <span>
+                  {selected.messages
+                    ?.length || 0}
+                </span>
+              </div>
 
+              <div
+                style={{
+                  padding: "6px 14px",
+                  display: "grid",
+                  gap: 8
+                }}
+              >
+                {!selected.messages
+                  ?.length ? (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      textAlign: "left",
+                      color: "#64748b"
+                    }}
+                  >
+                    <strong style={{ color: "#0f172a" }}>
+                      Noch keine Nachrichten
+                    </strong>
+                  </div>
+                ) : (
+                  [...selected.messages]
+                    .sort(
+                      (a, b) =>
+                        new Date(
+                          a.createdAt
+                        ).getTime() -
+                        new Date(
+                          b.createdAt
+                        ).getTime()
+                    )
+                    .map((message) => (
+                      <div
+                        key={message.id}
+                        className="card"
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent:
+                              "space-between",
+                            gap: 12,
+                            marginBottom: 8
+                          }}
+                        >
+                          <strong>
+                            {message.fromName}
+                          </strong>
 
+                          <span className="muted">
+                            {dateTime(
+                              message.createdAt
+                            )}
+                          </span>
+                        </div>
 
+                        {message.subject ? (
+                          <div
+                            style={{
+                              fontWeight: 650,
+                              marginBottom: 6
+                            }}
+                          >
+                            {message.subject}
+                          </div>
+                        ) : null}
 
-              
-                <label className={rlcClass(null, lbl)}>An</label>
-                <input className={rlcClass(null,
-              inp)}
-              value={compose.to}
-              onChange={(e) =>
-              setCompose((p) => ({ ...p, to: e.target.value }))
-              }
-              placeholder="mail1@..., mail2@..." />
-              
+                        <div
+                          style={{
+                            whiteSpace:
+                              "pre-wrap"
+                          }}
+                        >
+                          {message.body}
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
 
-                <label className={rlcClass(null, lbl)}>CC</label>
-                <input className={rlcClass(null,
-              inp)}
-              value={compose.cc}
-              onChange={(e) =>
-              setCompose((p) => ({ ...p, cc: e.target.value }))
-              } />
-              
+              <div className="rlc-page-section-head">
+                <strong>
+                  Neue Nachricht
+                </strong>
+              </div>
 
-                <label className={rlcClass(null, lbl)}>Betreff</label>
-                <input className={rlcClass(null,
-              { ...inp, gridColumn: "2 / -1" })}
-              value={compose.subject}
-              onChange={(e) =>
-              setCompose((p) => ({ ...p, subject: e.target.value }))
-              } />
-              
+              <div
+                style={{
+                  padding: "10px 14px 16px",
+                  display: "grid",
+                  gridTemplateColumns:
+                    "minmax(0,1fr) minmax(0,1fr)",
+                  gap: 12
+                }}
+              >
+                <Field label="An">
+                  <input
+                    value={compose.to}
+                    onChange={(e) =>
+                      setCompose((prev) => ({
+                        ...prev,
+                        to: e.target.value
+                      }))
+                    }
+                    placeholder="mail1@..., mail2@..."
+                  />
+                </Field>
 
-                <label className={rlcClass(null, { ...lbl, gridColumn: "1 / -1" })}>Nachricht</label>
-                <textarea className={rlcClass(null,
-              {
-                ...inp,
-                gridColumn: "1 / -1",
-                minHeight: 120,
-                resize: "vertical"
-              })}
-              value={compose.body}
-              onChange={(e) =>
-              setCompose((p) => ({ ...p, body: e.target.value }))
-              }
-              placeholder="Schreibe eine Nachricht… (Anhänge: Datei auf diesen Bereich ziehen)" />
-              
+                <Field label="CC">
+                  <input
+                    value={compose.cc}
+                    onChange={(e) =>
+                      setCompose((prev) => ({
+                        ...prev,
+                        cc: e.target.value
+                      }))
+                    }
+                  />
+                </Field>
 
-                <div className="rlc-migrated-pages-buro-kommunikation-tsx-509">
+                <div
+                  style={{
+                    gridColumn: "1 / -1"
+                  }}
+                >
+                  <Field label="Betreff">
+                    <input
+                      value={compose.subject}
+                      onChange={(e) =>
+                        setCompose((prev) => ({
+                          ...prev,
+                          subject:
+                            e.target.value
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
 
+                <div
+                  style={{
+                    gridColumn: "1 / -1"
+                  }}
+                >
+                  <Field label="Nachricht">
+                    <textarea
+                      value={compose.body}
+                      onChange={(e) =>
+                        setCompose((prev) => ({
+                          ...prev,
+                          body:
+                            e.target.value
+                        }))
+                      }
+                      placeholder="Nachricht schreiben..."
+                      style={{
+                        minHeight: 120
+                      }}
+                    />
+                  </Field>
+                </div>
 
-
-
-
-
-                
+                <div
+                  style={{
+                    gridColumn: "1 / -1",
+                    display: "flex",
+                    justifyContent:
+                      "flex-start"
+                  }}
+                >
                   <button
-                  className="btn"
-                  onClick={send}
-                  disabled={!compose.body.trim()}>
-                  
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() =>
+                      void sendMessage()
+                    }
+                    disabled={
+                      saving ||
+                      !compose.body.trim()
+                    }
+                  >
                     Senden
                   </button>
                 </div>
               </div>
             </>
-          }
-        </div>
+          )}
+        </section>
       </div>
-    </div>);
-
+    </div>
+  );
 }
 
-function AttachmentPreview({ a }: {a: KAttachment;}) {
-  const isImg = (a.mime || "").startsWith("image/");
-  const isPDF = (a.mime || "").includes("pdf");
-
-  const open = () => {
-    const w = window.open(a.dataURL, "_blank");
-    if (!w) window.alert("Popup blockiert.");
-  };
-
+function Kpi({
+  label,
+  value
+}: {
+  label: string;
+  value: string;
+}) {
   return (
-    <div className="rlc-migrated-pages-buro-kommunikation-tsx-510">
-
-
-
-
-
-
-      
-      <div className="rlc-migrated-pages-buro-kommunikation-tsx-511">
-
-
-
-
-
-
-
-        
-        <span
-
-
-
-
-
-
-          title={a.name} className="rlc-migrated-pages-buro-kommunikation-tsx-512">
-          
-          {a.name}
-        </span>
-        <div className="rlc-migrated-pages-buro-kommunikation-tsx-513" />
-        <button className="btn" onClick={open}>
-          Öffnen
-        </button>
+    <div className="card">
+      <div className="muted">
+        {label}
       </div>
 
-      {isImg ?
-      <img
-        src={a.dataURL}
-        alt={a.name} className="rlc-migrated-pages-buro-kommunikation-tsx-514" /> :
+      <strong
+        style={{
+          fontSize: 23
+        }}
+      >
+        {value}
+      </strong>
+    </div>
+  );
+}
 
+function Field({
+  label,
+  children
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 6,
+        minWidth: 0
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 650,
+          color: "#334155"
+        }}
+      >
+        {label}
+      </div>
 
-      null}
+      <div
+        style={{
+          minWidth: 0,
+          width: "100%"
+        }}
+      >
+        {React.isValidElement(children)
+          ? React.cloneElement(
+              children as React.ReactElement<any>,
+              {
+                style: {
+                  width: "100%",
+                  boxSizing: "border-box",
+                  ...((children.props as any)?.style || {})
+                }
+              }
+            )
+          : children}
+      </div>
+    </div>
+  );
+}
 
-      {isPDF ?
-      <iframe
-        title={a.name}
-        src={a.dataURL} className="rlc-migrated-pages-buro-kommunikation-tsx-515" /> :
+function pickFile(
+  onPick: (file: File) => void
+) {
+  const input =
+    document.createElement("input");
 
+  input.type = "file";
 
-      null}
-    </div>);
+  input.onchange = () => {
+    const file =
+      input.files?.[0];
 
+    if (file) {
+      onPick(file);
+    }
+  };
+
+  input.click();
 }

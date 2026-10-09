@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
+import { archiveProjectBufferVersion } from "../services/dmsArchive";
 import { requirePermission } from "../middleware/rbac";
 import { requireProjectMember } from "../middleware/guards";
 import { z } from "zod";
@@ -37,7 +38,21 @@ router.get("/:projectId/accounting/report/datev", requirePermission("datev:expor
   const ledger = await prisma.ledgerEntry.findMany({ where: { accounting: { projectId } }, orderBy: { date: "asc" } });
   const rows = ["Datum;Konto;Gegenkonto;Betrag;Text"];
   for (const l of ledger) rows.push([l.date.toISOString().slice(0,10), l.account, l.contraAccount, l.amount.toString(), l.text || ""].join(";"));
-  res.header("Content-Type","text/csv; charset=utf-8").attachment(`DATEV_${projectId}.csv`).send(rows.join("\n"));
+  const fileName = `DATEV_${projectId}.csv`;
+  const buffer = Buffer.from(rows.join("\n"), "utf8");
+
+  void archiveProjectBufferVersion({
+    projectIdOrCode: projectId,
+    filename: fileName,
+    kind: "DOC",
+    buffer,
+    meta: { module: "BUCHHALTUNG", source: "accounting.datev.export" },
+  }).catch((error) => console.error("[accounting:datev:dms]", error));
+
+  return res
+    .header("Content-Type", "text/csv; charset=utf-8")
+    .attachment(fileName)
+    .send(buffer);
 });
 
 router.get("/:projectId/accounting/report/ust", requirePermission("ust:report"), requireProjectMember("projectId"), async (req, res) => {

@@ -8,7 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageConfig } from "../config";
-import type { PutInput, StorageHealth, StorageProvider } from "../types";
+import type { PutInput, StorageHealth, StorageObjectStat, StorageProvider } from "../types";
 
 async function streamToBuffer(body: any): Promise<Buffer> {
   if (!body) return Buffer.alloc(0);
@@ -83,6 +83,21 @@ export class S3StorageProvider implements StorageProvider {
     }
   }
 
+  async stat(key: string): Promise<StorageObjectStat | null> {
+    try {
+      const result = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return {
+        size: Number(result.ContentLength || 0),
+        contentType: result.ContentType || undefined,
+        etag: result.ETag || undefined,
+        metadata: result.Metadata || undefined,
+      };
+    } catch (error: any) {
+      if (error?.$metadata?.httpStatusCode === 404 || error?.name === "NotFound") return null;
+      throw error;
+    }
+  }
+
   presignPut(key: string, contentType = "application/octet-stream", expiresIn = 900): Promise<string> {
     return getSignedUrl(this.client, new PutObjectCommand({
       Bucket: this.bucket,
@@ -91,7 +106,11 @@ export class S3StorageProvider implements StorageProvider {
     }), { expiresIn });
   }
 
-  presignGet(key: string, expiresIn = 900): Promise<string> {
-    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), { expiresIn });
+  presignGet(key: string, expiresIn = 900, contentDisposition?: string): Promise<string> {
+    return getSignedUrl(this.client, new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ...(contentDisposition ? { ResponseContentDisposition: contentDisposition } : {}),
+    }), { expiresIn });
   }
 }

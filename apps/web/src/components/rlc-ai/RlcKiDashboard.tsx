@@ -46,8 +46,8 @@ export default function RlcKiDashboard({ row, percent, onSuggestResources }: Pro
 
   if (!hasResources) {
     return (
-      <section className={rlcClass(null, card)}>
-        <div className={rlcClass(null, workflow)}>
+      <section className={rlcClass("rlc-ki-dashboard-card", card)}>
+        <div className={rlcClass("rlc-ki-dashboard-workflow", workflow)}>
           <span>1 Positionsdaten</span>
           <span>2 Ausführungsparameter</span>
           <b>3 KI-Analyse</b>
@@ -58,7 +58,6 @@ export default function RlcKiDashboard({ row, percent, onSuggestResources }: Pro
 
         <div className={rlcClass(null, emptyHero)}>
           <div>
-            <div className={rlcClass(null, eyebrow)}>RLC KI Analyse</div>
             <h2 className={rlcClass(null, title)}>Urkalkulation noch nicht erstellt</h2>
             <p className={rlcClass(null, emptyText)}>
               Starte die KI, damit RLC aus Positionsdaten, Langtext und Ausf�hrungsparametern
@@ -102,8 +101,8 @@ export default function RlcKiDashboard({ row, percent, onSuggestResources }: Pro
   }
 
   return (
-    <section className={rlcClass(null, card)}>
-      <div className={rlcClass(null, workflow)}>
+    <section className={rlcClass("rlc-ki-dashboard-card", card)}>
+      <div className={rlcClass("rlc-ki-dashboard-workflow", workflow)}>
         <span>1 Positionsdaten</span>
         <span>2 Ausführungsparameter</span>
         <b>3 KI-Analyse</b>
@@ -114,8 +113,7 @@ export default function RlcKiDashboard({ row, percent, onSuggestResources }: Pro
 
       <div className={rlcClass(null, head)}>
         <div>
-          <div className={rlcClass(null, eyebrow)}>RLC KI Analyse</div>
-          <h2 className={rlcClass(null, title)}>RLC KI-Analyse</h2>
+          <h2 className={rlcClass("rlc-ki-dashboard-title", title)}>RLC KI-Analyse</h2>
         </div>
 
         <div className={rlcClass(null, confidence)}>
@@ -123,7 +121,7 @@ export default function RlcKiDashboard({ row, percent, onSuggestResources }: Pro
         </div>
       </div>
 
-      <div className={rlcClass(null, meta)}>
+      <div className={rlcClass("rlc-ki-dashboard-meta", meta)}>
         <div><b>Quelle:</b> {ex.source || row?.source || "�"}</div>
         <div><b>Status:</b> {row?.calculationStatus || "�"}</div>
         <div><b>Risiko:</b> {row?.riskLevel || "�"}</div>
@@ -150,7 +148,7 @@ const card: React.CSSProperties = {
   padding: 18,
   borderRadius: 22,
   border: "1px solid #BED6FF",
-  background: "linear-gradient(180deg,#EAF2FF,#FFFFFF)",
+  background: "#EEF5FF",
   boxShadow: "0 12px 30px rgba(15,23,42,0.06)"
 };
 
@@ -196,7 +194,9 @@ const title: React.CSSProperties = {
   margin: 0,
   fontSize: 20,
   fontWeight: 700,
-  color: "#0F172A"
+  color: "#0F172A",
+  WebkitTextFillColor: "#0F172A",
+  opacity: 1
 };
 
 const confidence: React.CSSProperties = {

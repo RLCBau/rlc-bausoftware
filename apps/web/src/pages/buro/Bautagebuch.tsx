@@ -1,4 +1,7 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
+import DiaryTimeExport from "./DiaryTimeExport";
+import {diaryBookSources} from "./diaryBookSources";
+import { rlcClass } from "../../ui/rlcRuntimeStyle";import { archiveWebPdfFromUrl } from "../../lib/dmsArchive";
+import React from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { apiUrl } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
@@ -77,6 +80,7 @@ function normalizeReport(raw: any, projectKey: string): Tagesbericht {
   wrapper;
 
   const sourceDocId = String(
+    wrapper.sourceDocId ||
     wrapper.id ||
     wrapper.docId ||
     report.sourceDocId ||
@@ -139,6 +143,7 @@ function normalizeReport(raw: any, projectKey: string): Tagesbericht {
     workDone:
     report.workDone ||
     report.arbeiten ||
+    report.taetigkeiten ||
     report.taetigkeit ||
     report.comment ||
     wrapper.workDone ||
@@ -153,6 +158,7 @@ function normalizeReport(raw: any, projectKey: string): Tagesbericht {
     "",
     notes:
     report.notes ||
+    report.bemerkungen ||
     report.notizen ||
     wrapper.notes ||
     wrapper.notizen ||
@@ -173,9 +179,9 @@ function normalizeReport(raw: any, projectKey: string): Tagesbericht {
     ) ?
     report.rows :
     [],
-    reportType: "TAGESBERICHT",
+    reportType: "BAUTAGEBUCH",
     workflowStatus:
-    report.workflowStatus ||
+    (wrapper.official ? wrapper.workflowStatus : report.workflowStatus) ||
     wrapper.workflowStatus ||
     wrapper.status ||
     "",
@@ -217,122 +223,53 @@ export default function Bautagebuch() {
   const { getSelectedProject } = useProject();
   const project = getSelectedProject();
   const projectKey = String(
-    project?.code || project?.id || ""
+    project?.id || project?.code || ""
   ).trim();
 
   const [params] = useSearchParams();
   const routeDocId = String(params.get("docId") || "").trim();
+  const routeSource = String(params.get("source") || "").trim().toLowerCase();
+  const routeStage = String(params.get("stage") || "inbox").trim().toLowerCase();
 
   const [items, setItems] = React.useState<Tagesbericht[]>([]);
   const [openDates, setOpenDates] = React.useState<Set<string>>(
     new Set()
   );
-  const [month, setMonth] = React.useState(
-    new Date().toISOString().slice(0, 7)
-  );
+  const [month, setMonth] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
   const [bookPdfUrl, setBookPdfUrl] = React.useState("");
+  const [bookFinalStatus, setBookFinalStatus] = React.useState<any>(null);
+  const [bookFinalizing, setBookFinalizing] = React.useState(false);
   const [bookPdfLoading, setBookPdfLoading] =
   React.useState(false);
 
+  const generation=React.useRef(0),actionOwner=React.useRef(projectKey+'|'+month);actionOwner.current=projectKey+'|'+month;
+  const [detailIds,setDetailIds]=React.useState<Set<string>>(new Set());
   const load = React.useCallback(async () => {
-    if (!projectKey) return;
-
-    setLoading(true);
-    setError("");
-
+    const n=++generation.current;setItems([]);setError('');
+    if(!projectKey){setLoading(false);return;}setLoading(true);
     try {
-      const responses = await Promise.all([
-      request(
-        `/api/regie/inbox/list?projectId=${encodeURIComponent(
-          projectKey
-        )}`
-      ),
-      request(
-        `/api/regie/freigegeben/list?projectId=${encodeURIComponent(
-          projectKey
-        )}`
-      ),
-      request(
-        `/api/regie/final/list?projectId=${encodeURIComponent(
-          projectKey
-        )}`
-      ),
-      request(
-        `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(
-          projectKey
-        )}`
-      )]
-      );
-
-      const all = responses.
-      flatMap(itemsOf).
-      filter((item) => {
-        const first =
-        Array.isArray(item?.rows) && item.rows.length ?
-        item.rows[0] :
-        item;
-
-        return (
-          String(
-            first?.reportType ||
-            item?.reportType ||
-            first?.type ||
-            item?.type ||
-            ""
-          ).toUpperCase() === "TAGESBERICHT");
-
-      }).
-      map((item) => normalizeReport(item, projectKey));
-
-      const unique = Array.from(
-        new Map<string, Tagesbericht>(
-          all.map((item) => [
-          item.sourceDocId || item.id,
-          item]
-          )
-        ).values()
-      ).sort((a, b) =>
-      String(b.date || "").localeCompare(
-        String(a.date || "")
-      )
-      );
-
-      setItems(unique);
-
-      if (routeDocId) {
-        const target =
-        unique.find(
-          (item) =>
-          item.id === routeDocId ||
-          item.sourceDocId === routeDocId
-        ) || null;
-
-        const targetDate = String(target?.date || "").slice(0, 10);
-
-        if (targetDate) {
-          setMonth(targetDate.slice(0, 7));
-          setOpenDates((current) => {
-            const next = new Set(current);
-            next.add(targetDate);
-            return next;
-          });
-        }
+      if(routeSource==='mobile'&&routeDocId){
+        const base='/api/inbox/'+encodeURIComponent(projectKey)+'/BAUTAGEBUCH';
+        const endpoint=routeStage==='approved'?base+'/approved':routeStage==='final'?base+'/final':base;
+        const payload=await request(endpoint);if(n!==generation.current)return;
+        const target=itemsOf(payload).find((r:any)=>String(r.id||r.docId||'')===routeDocId);
+        const normalized=target?[normalizeReport(target,projectKey)]:[];setItems(normalized);
+        if(normalized[0]?.date){setMonth(normalized[0].date.slice(0,7));setOpenDates(new Set([normalized[0].date]));}return;
       }
-    } catch (e: any) {
-      setError(
-        e?.message ||
-        "Bautagebuch konnte nicht geladen werden."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [projectKey, routeDocId]);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
+      const responses=await Promise.allSettled([
+        request('/api/tagesbericht/list?projectId='+encodeURIComponent(projectKey)),
+        request('/api/tagesbericht/inbox/list?projectId='+encodeURIComponent(projectKey))
+      ]);
+      if(n!==generation.current)return;
+      for(const r of responses)if(r.status==='rejected')throw r.reason;
+      const official=itemsOf((responses[0] as PromiseFulfilledResult<any>).value),inbox=itemsOf((responses[1] as PromiseFulfilledResult<any>).value);
+      setItems(diaryBookSources(official,inbox).map(r=>normalizeReport(r,projectKey)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))));
+    }catch(e:any){if(n===generation.current){setItems([]);setError(e.message||'Bautagebuch konnte nicht geladen werden.');}}
+    finally{if(n===generation.current)setLoading(false);}
+  },[projectKey,routeDocId,routeSource,routeStage]);
+  React.useEffect(()=>{setBookPdfUrl('');setBookFinalStatus(null);setDetailIds(new Set());void load();return()=>{generation.current++;};},[load]);
 
   const filtered = items.filter(
     (item) =>
@@ -346,6 +283,29 @@ export default function Bautagebuch() {
   );
 
   const grouped = groupByDate(filtered);
+  const isMobileDocument = routeSource === "mobile" && Boolean(routeDocId);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!projectKey || !/^\d{4}-\d{2}$/.test(month || "")) { setBookFinalStatus(null); return; }
+    void request(`/api/tagesbericht/bautagebuch/final-status?projectId=${encodeURIComponent(projectKey)}&month=${encodeURIComponent(month)}`)
+      .then((data:any) => { if (!cancelled) setBookFinalStatus(data); })
+      .catch(() => { if (!cancelled) setBookFinalStatus(null); });
+    return () => { cancelled = true; };
+  }, [projectKey, month]);
+
+  async function finalizeBook() {
+    if (!projectKey || !/^\d{4}-\d{2}$/.test(month || "")) { setError("Für den Abschluss bitte einen Monat YYYY-MM wählen."); return; }
+    const owner=projectKey+"|"+month;
+    setBookFinalizing(true); setError("");
+    try {
+      const result = await request("/api/tagesbericht/bautagebuch/finalize", { method:"POST", body:JSON.stringify({ projectId:projectKey, projectCode:projectKey, projectName:String(project?.name || projectKey), month }) });
+      if(actionOwner.current!==owner)return;
+      setBookFinalStatus({ finalized:true, manifest:result.manifest });
+      const url = assetUrl(result?.pdfUrl || ""); if (url) setBookPdfUrl(url);
+    } catch (e:any) { if(actionOwner.current===owner)setError(e?.message || "Bautagebuch konnte nicht abgeschlossen werden."); }
+    finally { setBookFinalizing(false); }
+  }
 
   async function createBookPdf(): Promise<string> {
     if (!projectKey) {
@@ -358,6 +318,7 @@ export default function Bautagebuch() {
       );
     }
 
+    const owner=projectKey+"|"+month;
     setBookPdfLoading(true);
     setError("");
 
@@ -393,10 +354,11 @@ export default function Bautagebuch() {
         );
       }
 
+      if(actionOwner.current!==owner)throw new Error("Projekt oder Zeitraum inzwischen geändert.");
       setBookPdfUrl(nextUrl);
       return nextUrl;
     } catch (e: any) {
-      setError(
+      if(actionOwner.current===owner)setError(
         e?.message ||
         "Bautagebuch-PDF Vorschau fehlgeschlagen."
       );
@@ -409,11 +371,24 @@ export default function Bautagebuch() {
   async function exportBookPdf() {
     try {
       const url = await createBookPdf();
+
+      const fileName = `Bautagebuch_${projectKey}_${
+      month || "Gesamt"}.pdf`;
+
+      const dmsProjectId = String(project?.id || "").trim();
+
+      if (dmsProjectId) {
+        await archiveWebPdfFromUrl(
+          dmsProjectId,
+          fileName,
+          url
+        );
+      }
+
       const link = document.createElement("a");
 
       link.href = url;
-      link.download = `Bautagebuch_${projectKey}_${
-      month || "Gesamt"}.pdf`;
+      link.download = fileName;
 
       link.target = "_blank";
       link.rel = "noreferrer";
@@ -465,7 +440,11 @@ export default function Bautagebuch() {
       
       <ModuleHero
         title="Bautagebuch"
-        subtitle="Tagesberichte chronologisch bündeln und immer im zentralen Tagesbericht-Modul öffnen." />
+        subtitle={
+          isMobileDocument
+            ? "Bautagebuch-Eintrag aus der Mobile-App prüfen und weiterbearbeiten."
+            : "Bautagebuch-Einträge chronologisch bündeln und zentral verwalten."
+        } />
       
 
       <div className="rlc-migrated-pages-buro-bautagebuch-tsx-318">
@@ -479,8 +458,8 @@ export default function Bautagebuch() {
           
           <button
             className="btn"
-            onClick={() => void createBookPdf()}
-            disabled={bookPdfLoading || !filtered.length}>
+            onClick={() => void createBookPdf().catch(()=>{})}
+            disabled={loading || bookPdfLoading || !filtered.length}>
             
             PDF Vorschau Bautagebuch
           </button>
@@ -488,19 +467,47 @@ export default function Bautagebuch() {
           <button
             className="btn"
             onClick={() => void exportBookPdf()}
-            disabled={bookPdfLoading || !filtered.length}>
+            disabled={loading || bookPdfLoading || !filtered.length}>
             
             PDF Bautagebuch exportieren
           </button>
 
-          <Link
-            className="btn"
-            to={`/buro/tagesberichte?projectId=${encodeURIComponent(
-              projectKey
-            )}`}>
-            
-            Tagesberichte öffnen
-          </Link>
+          <button
+            className="btn primary"
+            onClick={() => void finalizeBook()}
+            disabled={loading || isMobileDocument || bookFinalizing || !filtered.length || !/^\d{4}-\d{2}$/.test(month || "") || Boolean(bookFinalStatus?.finalized)}
+            title={!month ? "Monat wählen" : bookFinalStatus?.finalized ? "Dieser Monatsabschluss ist bereits gesperrt." : "Nur freigegebene Tagesberichte serverseitig abschließen"}>
+            {bookFinalizing ? "Wird abgeschlossen…" : bookFinalStatus?.finalized ? "Monatsabschluss gesperrt" : "Bautagebuch abschließen"}
+          </button>
+
+          {bookFinalStatus?.finalized ? (
+            <span style={{fontSize:12,color:"#067647",fontWeight:700}}>
+              FINAL · {bookFinalStatus?.manifest?.reportCount || 0} Berichte · SHA-256 gesichert
+            </span>
+          ) : null}
+
+          {!isMobileDocument ? (
+
+
+            <Link
+
+
+              className="btn"
+
+
+              to={`/buro/tagesberichte?projectId=${encodeURIComponent(projectKey)}`}
+
+
+            >
+
+
+              Tagesberichte öffnen
+
+
+            </Link>
+
+
+          ) : null}
 
           <button
             className="btn"
@@ -534,7 +541,7 @@ export default function Bautagebuch() {
 
         
         <Stat
-          label="Tagesberichte"
+          label={isMobileDocument ? "Bautagebuch-Einträge" : "Tagesberichte"}
           value={filtered.length} />
         
         <Stat
@@ -582,10 +589,13 @@ export default function Bautagebuch() {
             setMonth(e.target.value);
             setBookPdfUrl("");
           }}
-          placeholder="YYYY-MM" />
+          type="month"
+          disabled={bookPdfLoading||bookFinalizing} />
         
       </label>
 
+      {!isMobileDocument&&<DiaryTimeExport projectId={projectKey} month={month} />}
+      <p className="muted">Freigegebene Originale und ausdrücklich übernommene Entwürfe. Der Monatsabschluss enthält ausschließlich freigegebene Tagesberichte.</p>
       <BookPdfPreviewPanel
         url={bookPdfUrl}
         loading={bookPdfLoading}
@@ -640,7 +650,11 @@ export default function Bautagebuch() {
 
 
                     
-                    {reports.length} Tagesbericht(e) ·{" "}
+                    {reports.length} {isMobileDocument
+                      ? reports.length === 1
+                        ? "Bautagebuch-Eintrag"
+                        : "Bautagebuch-Einträge"
+                      : "Tagesbericht(e)"} ·{" "}
                     {reports.
                     reduce(
                       (sum, report) =>
@@ -701,7 +715,7 @@ export default function Bautagebuch() {
 
                       
                           <strong>
-                            Tagesbericht {index + 1}
+                            {isMobileDocument ? "Bautagebuch-Eintrag" : "Tagesbericht"} {index + 1}
                           </strong>
 
                           {item.inBautagebuch ?
@@ -784,20 +798,9 @@ export default function Bautagebuch() {
 
 
                     
-                        <Link
-                      className="btn"
-                      to={reportLink(item, "view")}>
-                      
-                          Öffnen
-                        </Link>
-
-                        <Link
-                      className="btn"
-                      to={reportLink(item, "edit")}>
-                      
-                          Bearbeiten
-                        </Link>
+                        {item.official?<><button className="btn" onClick={()=>setDetailIds(old=>{const next=new Set(old);const id=item.filename||item.id;next.has(id)?next.delete(id):next.add(id);return next;})}>Originaldetails</button><span className="muted">Freigegeben · Original gesperrt</span></>:<><Link className="btn" to={reportLink(item,'view')}>Öffnen</Link><Link className="btn" to={reportLink(item,'edit')}>Bearbeiten</Link></>}
                       </div>
+                      {item.official&&detailIds.has(item.filename||item.id)&&<section className="card" style={{padding:14,gridColumn:'1 / -1'}}><h3>Original · {item.filename}</h3><p>{item.workDone}</p><p>Vorkommnisse: {item.issues||'–'}</p><p>Bemerkungen: {item.notes||'–'}</p><div style={{overflowX:'auto'}}><table><thead><tr>{['Von','Bis','Pause Min.','Stunden','Mitarbeiter','Maschine','Ort','Tätigkeit'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{(item.lines||[]).map((r:any,i:number)=><tr key={i}><td>{r.von||r.start||'–'}</td><td>{r.bis||r.end||'–'}</td><td>{r.pauseMin??r.breakMinutes??'–'}</td><td>{r.stunden??r.hours??'–'}</td><td>{r.mitarbeiter||r.employeeName||r.worker||'–'}</td><td>{r.maschine||r.machine||'–'}</td><td>{r.ort||r.location||'–'}</td><td>{r.taetigkeit||r.activity||r.notiz||'–'}</td></tr>)}</tbody></table></div></section>}
                     </article>
                 )}
                 </div> :
@@ -806,7 +809,7 @@ export default function Bautagebuch() {
 
         })}
 
-        {!grouped.length ?
+        {!grouped.length && !error ?
         <div className="rlc-migrated-pages-buro-bautagebuch-tsx-339">
 
 
@@ -814,7 +817,7 @@ export default function Bautagebuch() {
 
 
           
-            Keine Tagesberichte im gewählten Monat.
+            {loading?"Wird geladen …":!projectKey?"Projekt auswählen.":"Keine Tagesberichte im gewählten Monat."}
           </div> :
         null}
       </div>

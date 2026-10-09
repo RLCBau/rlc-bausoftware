@@ -13,7 +13,17 @@ import { parseByExtension } from "../parsers";
 import { parseDXFGeometry } from "../parsers/dxf";
 import { cleanupPreparedCadImport, prepareCadImportBuffer } from "../services/cad-converter.service";
 
+import { archiveProjectFileVersion } from "../services/dmsArchive";
+import { requireProjectMember } from "../middleware/guards";
 const r = Router();
+
+const requireCadProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(req.query?.projectId || req.body?.projectId || "").trim();
+  if (!token) return res.status(400).json({ ok: false, message: "projectId fehlt." });
+  req.params = req.params || {};
+  req.params.__cadProject = token;
+  return requireProjectMember("__cadProject")(req, res, next);
+};
 
 function getProjectId(req: Request) {
   return String(req.query.projectId || "").trim();
@@ -127,6 +137,7 @@ function resolveStoredCadFile(
  */
 r.post(
   "/upload",
+  requireCadProjectAccess,
   cadUpload.any(),
   (req: Request, res: Response) => {
     try {
@@ -167,6 +178,45 @@ r.post(
 
       fs.writeFileSync(targetPath, uploaded.buffer);
 
+      /* CAD_UPLOAD_DMS_V1 */
+      {
+        const ext = path.extname(originalName).toLowerCase();
+
+        const dmsKind =
+          ext === ".pdf"
+            ? "PDF"
+            : ext === ".png" ||
+              ext === ".jpg" ||
+              ext === ".jpeg" ||
+              ext === ".webp"
+            ? "IMAGE"
+            : "CAD";
+
+        void archiveProjectFileVersion({
+          projectIdOrCode: projectId,
+          filename: originalName,
+          kind: dmsKind as any,
+          localPath: targetPath,
+          uploadedBy:
+            String(
+              (req as any)?.auth?.email ||
+              (req as any)?.auth?.userId ||
+              (req as any)?.user?.email ||
+              (req as any)?.user?.id ||
+              ""
+            ).trim() || null,
+          meta: {
+            module: "CAD",
+            source: "cad.upload",
+            originalName,
+            storedName,
+            mimeType: uploaded.mimetype || null
+          }
+        }).catch((dmsError) => {
+          console.error("[cad:upload:dms]", dmsError);
+        });
+      }
+
       return res.status(201).json({
         ok: true,
         message: "CAD-Datei erfolgreich hochgeladen.",
@@ -197,6 +247,7 @@ r.post(
  */
 r.post(
   "/import",
+  requireCadProjectAccess,
   cadUpload.any(),
   async (req: Request, res: Response) => {
     try {
@@ -368,14 +419,14 @@ r.post(
 );
 
 /** Health / Debug: zeigt erwartete Pfade */
-r.get("/paths", (req: Request, res: Response) => {
+r.get("/paths", requireCadProjectAccess, (req: Request, res: Response) => {
   const projectId = getProjectId(req);
   if (!projectId) return jsonError(res, 400, "projectId fehlt.");
   return res.json({ ok: true, paths: getCadImportPaths(projectId) });
 });
 
 /** UTM laden (CSV) */
-r.get("/utm", (req: Request, res: Response) => {
+r.get("/utm", requireCadProjectAccess, (req: Request, res: Response) => {
   const projectId = getProjectId(req);
   if (!projectId) return jsonError(res, 400, "projectId fehlt.");
 
@@ -385,7 +436,7 @@ r.get("/utm", (req: Request, res: Response) => {
 });
 
 /** Takeoff laden (JSON) */
-r.get("/takeoff", (req: Request, res: Response) => {
+r.get("/takeoff", requireCadProjectAccess, (req: Request, res: Response) => {
   const projectId = getProjectId(req);
   if (!projectId) return jsonError(res, 400, "projectId fehlt.");
 
@@ -404,7 +455,7 @@ r.get("/takeoff", (req: Request, res: Response) => {
  * - sonst: snapshot.png falls vorhanden
  * - sonst: neuestes *.png im cad-Ordner
  */
-r.get("/snapshot", (req: Request, res: Response) => {
+r.get("/snapshot", requireCadProjectAccess, (req: Request, res: Response) => {
   const projectId = getProjectId(req);
   if (!projectId) return jsonError(res, 400, "projectId fehlt.");
 
@@ -483,7 +534,7 @@ r.get("/snapshot", (req: Request, res: Response) => {
  * /open?projectId=BA-2025-DEMO&file=cad\\plan.dwg
  * (Protezione: niente assoluti, niente "..")
  */
-r.get("/open", (req: Request, res: Response) => {
+r.get("/open", requireCadProjectAccess, (req: Request, res: Response) => {
   const projectId = getProjectId(req);
   if (!projectId) return jsonError(res, 400, "projectId fehlt.");
 

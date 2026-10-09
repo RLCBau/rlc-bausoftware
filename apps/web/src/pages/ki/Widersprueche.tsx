@@ -398,10 +398,18 @@ export default function Widersprueche({ embedded = false }: {embedded?: boolean;
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
+    const fileName = `Widersprueche_${effectiveProjectId || "ohneProjekt"}.csv`;
     a.href = URL.createObjectURL(blob);
-    a.download = `Widersprueche_${effectiveProjectId || "ohneProjekt"}.csv`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(a.href);
+
+    const dmsProjectId = String(storeProjectId || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[widersprueche:csv:dms]", error));
+    }
   }
 
   function gotoNachtrag(prefill: Partial<Row>) {

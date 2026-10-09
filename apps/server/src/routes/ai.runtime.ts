@@ -8,6 +8,14 @@ import {
 
 const router = Router();
 
+function requireAiRuntimeAdmin(req: any, res: any, next: any) {
+  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
+  if (!["ADMIN", "ADMINISTRATOR"].includes(role)) {
+    return res.status(403).json({ ok: false, error: "AI_RUNTIME_ADMIN_REQUIRED" });
+  }
+  return next();
+}
+
 const TestRequest = z.object({
   message: z.string().min(1).max(2000).default("Antworte nur mit: RLC KI OK"),
   json: z.boolean().optional().default(false),
@@ -23,7 +31,7 @@ router.get("/status", async (_req, res) => {
   });
 });
 
-router.post("/test", async (req, res) => {
+router.post("/test", requireAiRuntimeAdmin, async (req, res) => {
   try {
     const body = TestRequest.parse(req.body || {});
     const result = await completeRlcAiText({

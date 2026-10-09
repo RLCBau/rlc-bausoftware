@@ -1,6 +1,7 @@
 import { Router } from "express";
 import path from "path";
 import fs from "fs";
+import { requireProjectMember } from "../middleware/guards";
 
 const r = Router();
 
@@ -31,8 +32,9 @@ function safeJoin(root: string, ...parts: string[]) {
  * - prima cerca in uploads/<projectId>/<rest...>
  * - fallback in data/projects/<projectId>/<rest...>
  */
-r.get("/:projectId/:rest(*)", (req, res) => {
-  const { projectId, rest } = req.params as { projectId: string; rest?: string };
+r.get("/:projectId/:rest(*)", requireProjectMember("projectId"), (req, res) => {
+  const { rest } = req.params as { projectId: string; rest?: string };
+  const projectId = String((req as any).resolvedProjectId || req.params.projectId);
 
   const restPath = rest || "";
   const safeRest = restPath

@@ -2,8 +2,17 @@
 import { Router, type Request, type Response } from "express";
 import path from "path";
 import fs from "fs";
+import { requireProjectMember } from "../middleware/guards";
 
 const r = Router();
+
+const requireCadProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(req.query?.projectId || req.body?.projectId || "").trim();
+  if (!token) return res.status(400).json({ ok: false, error: "projectId missing" });
+  req.params = req.params || {};
+  req.params.__cadProject = token;
+  return requireProjectMember("__cadProject")(req, res, next);
+};
 
 const PROJECTS_ROOT =
   process.env.PROJECTS_ROOT || path.join(process.cwd(), "data", "projects");
@@ -387,15 +396,15 @@ function saveDrawing(req: Request, res: Response, forceCreateNew: boolean) {
   }
 }
 
-r.get(["/drawings", "/list", "/files"], listDrawings);
-r.get("/drawings/:drawingId", loadDrawing);
-r.get("/load", loadDrawing);
+r.get(["/drawings", "/list", "/files"], requireCadProjectAccess, listDrawings);
+r.get("/drawings/:drawingId", requireCadProjectAccess, loadDrawing);
+r.get("/load", requireCadProjectAccess, loadDrawing);
 
-r.post("/save", (req, res) => saveDrawing(req, res, false));
-r.post("/save-as", (req, res) => saveDrawing(req, res, true));
+r.post("/save", requireCadProjectAccess, (req, res) => saveDrawing(req, res, false));
+r.post("/save-as", requireCadProjectAccess, (req, res) => saveDrawing(req, res, true));
 
 // export for Aufmaß/Massenermittlung
-r.post("/export-aufmass", (req, res) => {
+r.post("/export-aufmass", requireCadProjectAccess, (req, res) => {
   try {
     const { projectId, data } = req.body || {};
     if (!projectId) {

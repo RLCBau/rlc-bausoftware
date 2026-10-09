@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import type { PutInput, StorageHealth, StorageProvider } from "../types";
+import type { PutInput, StorageHealth, StorageObjectStat, StorageProvider } from "../types";
 
 export class LocalStorageProvider implements StorageProvider {
   readonly name = "local";
@@ -36,6 +36,16 @@ export class LocalStorageProvider implements StorageProvider {
   get(key: string): Promise<Buffer> { return fs.promises.readFile(this.resolve(key)); }
   async delete(key: string): Promise<void> { await fs.promises.rm(this.resolve(key), { force: true }); }
   async exists(key: string): Promise<boolean> { try { await fs.promises.access(this.resolve(key)); return true; } catch { return false; } }
+  async stat(key: string): Promise<StorageObjectStat | null> {
+    try {
+      const st = await fs.promises.stat(this.resolve(key));
+      return st.isFile() ? { size: st.size } : null;
+    } catch {
+      return null;
+    }
+  }
   async presignPut(): Promise<string> { throw new Error("Presigned URLs require STORAGE_PROVIDER=s3"); }
-  async presignGet(): Promise<string> { throw new Error("Presigned URLs require STORAGE_PROVIDER=s3"); }
+  async presignGet(_key?: string, _expiresIn?: number, _contentDisposition?: string): Promise<string> {
+    throw new Error("Presigned URLs require STORAGE_PROVIDER=s3");
+  }
 }

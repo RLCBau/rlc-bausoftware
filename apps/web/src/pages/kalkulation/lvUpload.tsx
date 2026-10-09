@@ -535,10 +535,16 @@ export default function LVUpload() {
     ).
     join("\n");
 
-    downloadBlob(
-      new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8" }),
-      `LV_${projectKey}.csv`
-    );
+    const fileName = `LV_${projectKey}.csv`;
+    const blob = new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, fileName);
+
+    const dmsProjectId = String(activeProject?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[lv-upload:csv:dms]", error));
+    }
   }
 
   function exportXlsx() {
@@ -595,10 +601,16 @@ export default function LVUpload() {
     foot +
     `</Table></Worksheet></Workbook>`;
 
-    downloadBlob(
-      new Blob([xml], { type: "application/vnd.ms-excel" }),
-      `LV_${projectKey}.xls`
-    );
+    const fileName = `LV_${projectKey}.xls`;
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    downloadBlob(blob, fileName);
+
+    const dmsProjectId = String(activeProject?.id || "").trim();
+    if (dmsProjectId) {
+      void import("../../lib/dmsArchive")
+        .then(({ archiveWebFile }) => archiveWebFile(dmsProjectId, fileName, blob))
+        .catch((error) => console.warn("[lv-upload:xls:dms]", error));
+    }
   }
 
   function writeToLvStore(): LVPos[] {
@@ -952,9 +964,9 @@ export default function LVUpload() {
 
 function Kpi({ label, value }: {label: string;value: string;}) {
   return (
-    <div className={rlcClass(null, kpiCard)}>
-      <div className={rlcClass(null, kpiLabel)}>{label}</div>
-      <div className={rlcClass(null, kpiValue)}>{value}</div>
+    <div className={rlcClass("rlc-global-kpi-card", kpiCard)}>
+      <div className={rlcClass("rlc-global-kpi-label", kpiLabel)}>{label}</div>
+      <div className={rlcClass("rlc-global-kpi-value", kpiValue)}>{value}</div>
     </div>);
 
 }

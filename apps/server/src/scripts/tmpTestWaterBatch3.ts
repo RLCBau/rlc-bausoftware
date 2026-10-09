@@ -1,0 +1,5 @@
+import { prisma } from "../lib/prisma";
+import { analyzeRlcProjectContext } from "../kalkulation/autonomous/projectContextAnalyzer";
+import { calculateTiefbauFamilyCatalog } from "../kalkulation/autonomous/tiefbauFamilyCatalog";
+const qs=["Badewasserleitungen DN 250","Zulage Einbauten Hydranten","Winkel 30Grad PE","Haltebügel für DN 200","Abdichtung Rohreinführung","Entleerungsarmatur Kugelhahn","Bodenaustausch Rohrgraben","Armaturen ausbauen","Mehrbereichsmuffe","Zählerbügel"];
+(async()=>{for(const q of qs){const v=await prisma.lVPosition.findFirst({where:{kurztext:{contains:q,mode:"insensitive"}},include:{lv:true}});if(!v){console.log("MISS",q);continue;}const all=await prisma.lVPosition.findMany({where:{lvId:v.lvId}});const rows=all.map(x=>({id:x.id,posNr:x.position,kurztext:x.kurztext,langtext:x.langtext||"",einheit:x.einheit,menge:Number(x.menge)}));const row=rows.find(x=>x.id===v.id)!;const ctx=analyzeRlcProjectContext(rows as any[],v.lv.projectId);const x:any=calculateTiefbauFamilyCatalog(row as any,ctx,rows as any[]);console.log(q,"=>",x?.unitPrice,x?.trade,x?.calculationStatus,x?.riskLevel);}await prisma.$disconnect()})();

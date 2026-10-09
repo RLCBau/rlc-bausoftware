@@ -1,457 +1,52 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import React, { useMemo, useState } from "react";
+import {useMasterCatalog} from "../buro/useMasterCatalog";
+import React from "react";
+import {useProject} from "../../store/useProject";
+import {apiUrl} from "../../lib/apiBase";
+import {accountingApi,authToken,getAccountingProject} from "./accountingApi";
+import {analyzeCostCenters,euroCents,csvCell,CostSource} from "./costCenterAnalysis";
 import "./styles.css";
-
-/* =========================
-   TYPES
-   ========================= */
-type Kostenstelle = {
-  id: number;
-  code: string;
-  bezeichnung: string;
-  hauptbereich: string;
-  budget: number;
-  istKosten: number;
-  einheit?: string;
-  bemerkung?: string;
-};
-
-/* =========================
-   HELPERS
-   ========================= */
-const fmt = (n: number) =>
-safeNumber(n).toLocaleString("de-DE", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-});
-
-function safeTrim(v: unknown) {
-  return String(v ?? "").trim();
-}
-
-function safeNumber(v: unknown, fallback = 0) {
-  if (v === null || v === undefined || v === "") return fallback;
-  const normalized =
-  typeof v === "string" ? v.replace(/\s/g, "").replace(",", ".") : v;
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function escapeHtml(str: string) {
-  return String(str ?? "").replace(
-    /[&<>"']/g,
-    (m) =>
-    ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-    })[m]!
-  );
-}
-
-const pct = (a: number, b: number) =>
-b > 0 ? a / b * 100 : 0;
-
-function csvEscape(v: unknown) {
-  return `"${String(v ?? "").replace(/"/g, '""')}"`;
-}
-
-/* =========================
-   COMPONENT
-   ========================= */
-export default function Kostenstellenstruktur() {
-  const [rows, setRows] = useState<Kostenstelle[]>([
-  {
-    id: 1,
-    code: "KS-01",
-    bezeichnung: "Erdarbeiten",
-    hauptbereich: "Baugrube",
-    budget: 80000,
-    istKosten: 60000
-  },
-  {
-    id: 2,
-    code: "KS-02",
-    bezeichnung: "Leitungen / Rohrbau",
-    hauptbereich: "Tiefbau",
-    budget: 65000,
-    istKosten: 42000
-  },
-  {
-    id: 3,
-    code: "KS-03",
-    bezeichnung: "Straßenbau / Asphalt",
-    hauptbereich: "Oberbau",
-    budget: 72000,
-    istKosten: 74000
-  },
-  {
-    id: 4,
-    code: "KS-04",
-    bezeichnung: "Materiallager / Zwischenlager",
-    hauptbereich: "Logistik",
-    budget: 15000,
-    istKosten: 9000
-  },
-  {
-    id: 5,
-    code: "KS-05",
-    bezeichnung: "Vermessung & Dokumentation",
-    hauptbereich: "Vermessung",
-    budget: 10000,
-    istKosten: 3000
-  }]
-  );
-
-  const [bereich, setBereich] = useState<string>("ALL");
-
-  const bereiche = useMemo(
-    () => ["ALL", ...Array.from(new Set(rows.map((r) => r.hauptbereich).filter(Boolean)))],
-    [rows]
-  );
-
-  const filtered = useMemo(
-    () => bereich === "ALL" ? rows : rows.filter((r) => r.hauptbereich === bereich),
-    [rows, bereich]
-  );
-
-  const totals = useMemo(() => {
-    const bud = filtered.reduce((s, r) => s + safeNumber(r.budget), 0);
-    const ist = filtered.reduce((s, r) => s + safeNumber(r.istKosten), 0);
-    return { bud, ist, diff: bud - ist };
-  }, [filtered]);
-
-  /* CRUD */
-  const addRow = () => {
-    const nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1;
-
-    setRows((prev) => [
-    ...prev,
-    {
-      id: nextId,
-      code: `KS-${String(nextId).padStart(2, "0")}`,
-      bezeichnung: "Neue Kostenstelle",
-      hauptbereich: "Allgemein",
-      budget: 0,
-      istKosten: 0
-    }]
-    );
-  };
-
-  const remove = (id: number) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const update = <K extends keyof Kostenstelle,>(
-  i: number,
-  key: K,
-  val: Kostenstelle[K]) =>
-  {
-    setRows((prev) => {
-      const c = [...prev];
-      if (!c[i]) return prev;
-
-      c[i] = {
-        ...c[i],
-        [key]:
-        key === "budget" || key === "istKosten" ?
-        safeNumber(val, 0) :
-        val
-      };
-
-      return c;
-    });
-  };
-
-  /* EXPORT CSV */
-  const exportCSV = (useFiltered: boolean) => {
-    const list = useFiltered ? filtered : rows;
-    if (!list.length) {
-      alert("Keine Daten für den Export vorhanden.");
-      return;
-    }
-
-    const data = list.map((r) => ({
-      Code: r.code,
-      Bezeichnung: r.bezeichnung,
-      Hauptbereich: r.hauptbereich,
-      Budget: fmt(r.budget),
-      IstKosten: fmt(r.istKosten),
-      Abweichung: fmt(safeNumber(r.budget) - safeNumber(r.istKosten)),
-      Prozent: `${fmt(pct(safeNumber(r.istKosten), safeNumber(r.budget)))} %`
-    }));
-
-    const headers = Object.keys(data[0]);
-    const csv = [
-    headers.map(csvEscape).join(";"),
-    ...data.map((d) =>
-    headers.map((h) => csvEscape((d as Record<string, unknown>)[h])).join(";")
-    )].
-    join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    const href = URL.createObjectURL(blob);
-    a.href = href;
-    a.download = useFiltered ?
-    "kostenstellen_gefiltert.csv" :
-    "kostenstellen_alle.csv";
-    a.click();
-    URL.revokeObjectURL(href);
-  };
-
-  /* PRINT */
-  function openPrint(html: string) {
-    const w = window.open("", "_blank", "noopener,noreferrer,width=1000,height=700");
-    if (!w) {
-      alert("Pop-ups blockiert – bitte im Browser zulassen!");
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    setTimeout(() => {
-      try {
-        w.print();
-      } catch {}
-    }, 400);
-  }
-
-  const printAllPDF = (useFiltered: boolean) =>
-  openPrint(printableHTML(useFiltered ? filtered : rows));
-
-  /* =========================
-     RENDER
-     ========================= */
-  return (
-    <div className="bh-page">
-      <div className="bh-header-row">
-        <h2>Projekt-Kostenstellenstruktur</h2>
-        <div className="bh-actions">
-          <button className="bh-btn" onClick={addRow}>
-            + Neue Kostenstelle
-          </button>
-          <button className="bh-btn ghost" onClick={() => exportCSV(true)}>
-            Export CSV (gefiltert)
-          </button>
-          <button className="bh-btn ghost" onClick={() => exportCSV(false)}>
-            Export CSV (alle)
-          </button>
-          <button className="bh-btn ghost" onClick={() => printAllPDF(true)}>
-            PDF (gefiltert)
-          </button>
-          <button className="bh-btn ghost" onClick={() => printAllPDF(false)}>
-            PDF (alle)
-          </button>
-        </div>
-      </div>
-
-      <div className="bh-filters">
-        <div>
-          <label>Hauptbereich</label>
-          <select value={bereich} onChange={(e) => setBereich(e.target.value)}>
-            {bereiche.map((b) =>
-            <option key={b} value={b}>
-                {b === "ALL" ? "Alle" : b}
-              </option>
-            )}
-          </select>
-        </div>
-      </div>
-
-      <table className="bh-table">
-        <thead>
-          <tr>
-            <th>Aktionen</th>
-            <th>Kostenstelle</th>
-            <th>Bezeichnung</th>
-            <th>Hauptbereich</th>
-            <th>Budget (€)</th>
-            <th>Ist-Kosten (€)</th>
-            <th>Abweichung (€)</th>
-            <th>Verbrauch (%)</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {filtered.map((r) => {
-            const i = rows.findIndex((x) => x.id === r.id);
-            const abw = safeNumber(r.budget) - safeNumber(r.istKosten);
-            const per = pct(safeNumber(r.istKosten), safeNumber(r.budget));
-            const farbe = per > 100 ? "#e74c3c" : per > 80 ? "#f39c12" : "#27ae60";
-
-            return (
-              <tr key={r.id}>
-                <td>
-                  <button className="bh-btn ghost" onClick={() => remove(r.id)}>
-                    Löschen
-                  </button>
-                </td>
-
-                <td>{r.code}</td>
-
-                <td>
-                  <input
-                    type="text"
-                    value={r.bezeichnung}
-                    onChange={(e) => update(i, "bezeichnung", e.target.value)} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-228" />
-
-                  
-                </td>
-
-                <td>
-                  <input
-                    type="text"
-                    value={r.hauptbereich}
-                    onChange={(e) => update(i, "hauptbereich", e.target.value)} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-229" />
-
-                  
-                </td>
-
-                <td>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={r.budget}
-                    onChange={(e) => update(i, "budget", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-230" />
-
-                  
-                </td>
-
-                <td>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={r.istKosten}
-                    onChange={(e) => update(i, "istKosten", safeNumber(e.target.value, 0))} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-231" />
-
-                  
-                </td>
-
-                <td className={rlcClass(
-                  "right",
-                  {
-                    color: abw < 0 ? "#c0392b" : "#2c3e50",
-                    fontWeight: 600
-                  })}>
-                  
-                  {fmt(abw)}
-                </td>
-
-                <td>
-                  <div className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-232">
-
-
-
-
-
-
-
-                    
-                    <div className={rlcClass(null,
-                    {
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      height: "100%",
-                      width: `${Math.min(per, 100)}%`,
-                      background: farbe,
-                      borderRadius: 4,
-                      transition: "width .3s"
-                    })}>
-                    </div>
-                  </div>
-                  <div className={rlcClass(null,
-                  {
-                    fontSize: 12,
-                    textAlign: "center",
-                    color: farbe,
-                    fontWeight: 600
-                  })}>
-                    
-                    {fmt(per)} %
-                  </div>
-                </td>
-              </tr>);
-
-          })}
-
-          {filtered.length === 0 &&
-          <tr>
-              <td colSpan={8} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-233">
-                Keine Kostenstellen im aktuellen Filter.
-              </td>
-            </tr>
-          }
-
-          <tr className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-234">
-            <td colSpan={4} className="rlc-migrated-pages-buchhaltung-kostenstellen-tsx-235">
-              Summe (gefiltert):
-            </td>
-            <td className="right">{fmt(totals.bud)}</td>
-            <td className="right">{fmt(totals.ist)}</td>
-            <td className="right">{fmt(totals.diff)}</td>
-            <td className="right">{fmt(pct(totals.ist, totals.bud))} %</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div className="bh-note rlc-migrated-pages-buchhaltung-kostenstellen-tsx-236">
-        *Demo-Daten · Integrierbar mit Kalkulation/Abrechnung → automatische Befüllung per Projekt-ID.
-      </div>
-    </div>);
-
-}
-
-/* =========================
-   PRINTABLE HTML
-   ========================= */
-function printableHTML(list: Kostenstelle[]) {
-  const body = list.
-  map(
-    (r) => `
-    <tr>
-      <td>${escapeHtml(r.code)}</td>
-      <td>${escapeHtml(r.bezeichnung)}</td>
-      <td>${escapeHtml(r.hauptbereich)}</td>
-      <td style="text-align:right">${fmt(r.budget)}</td>
-      <td style="text-align:right">${fmt(r.istKosten)}</td>
-      <td style="text-align:right">${fmt(safeNumber(r.budget) - safeNumber(r.istKosten))}</td>
-      <td style="text-align:right">${fmt(pct(safeNumber(r.istKosten), safeNumber(r.budget)))} %</td>
-    </tr>`
-  ).
-  join("");
-
-  const totalBudget = list.reduce((a, r) => a + safeNumber(r.budget), 0);
-  const totalIst = list.reduce((a, r) => a + safeNumber(r.istKosten), 0);
-
-  return `<!doctype html><html><head><meta charset="utf-8"/><title>Kostenstellenstruktur</title>
-  <style>
-  body{font-family:Arial, sans-serif;margin:32px;color:#222}
-  h1{margin:0 0 10px}
-  table{width:100%;border-collapse:collapse;margin-top:12px}
-  th,td{border-bottom:1px solid #ddd;padding:6px;text-align:left}
-  th{text-align:left;background:#f5f5f5}
-  .right{text-align:right}
-  tfoot td{font-weight:700;background:#f7f7f7}
-  </style></head><body>
-  <h1>Projekt-Kostenstellenstruktur</h1>
-  <table>
-    <thead>
-      <tr><th>Code</th><th>Bezeichnung</th><th>Hauptbereich</th><th class="right">Budget (€)</th><th class="right">Ist (€)</th><th class="right">Abw (€)</th><th class="right">%</th></tr>
-    </thead>
-    <tbody>${body || `<tr><td colspan="7">Keine Daten.</td></tr>`}</tbody>
-    <tfoot>
-      <tr>
-        <td colspan="3" class="right">Summe</td>
-        <td class="right">${fmt(totalBudget)}</td>
-        <td class="right">${fmt(totalIst)}</td>
-        <td class="right">${fmt(totalBudget - totalIst)}</td>
-        <td class="right">${fmt(pct(totalIst, totalBudget))}%</td>
-      </tr>
-    </tfoot>
-  </table>
-  <div style="margin-top:10px;color:#555">Erstellt am ${new Date().toLocaleString("de-DE")}</div>
-  </body></html>`;
+async function api(path:string,init:RequestInit={}){const h=new Headers(init.headers);h.set("Content-Type","application/json");const token=authToken();if(token)h.set("Authorization","Bearer "+token);const res=await fetch(apiUrl(path),{...init,headers:h,credentials:"include"});const d=await res.json().catch(()=>({}));if(!res.ok||d.ok===false)throw new Error(d.error||"HTTP "+res.status);return d;}
+const emptySource=():CostSource=>({available:false,items:[]});
+const blank=(owner:string)=>({owner,id:"",code:"",description:"",mainArea:"Allgemein",budget:"0.00",unit:"",note:"",expectedUpdatedAt:""});
+export default function Kostenstellen(){
+ const areaCatalog=useMasterCatalog("COST_CENTER_AREA");
+ const {getSelectedProject}=useProject();const project=getSelectedProject?.(),projectId=String(project?.id||project?.code||getAccountingProject()||"").trim();
+ const [notice,setNotice]=React.useState("");
+ const [data,setData]=React.useState<any>(),[error,setError]=React.useState(""),[busy,setBusy]=React.useState(false),[saving,setSaving]=React.useState(false),[form,setForm]=React.useState(blank(projectId)),[history,setHistory]=React.useState<any>(),[search,setSearch]=React.useState(""),[area,setArea]=React.useState(""),[showArchived,setShowArchived]=React.useState(false);
+ const drafts=React.useRef<Record<string,ReturnType<typeof blank>>>({});drafts.current[form.owner]=form;
+ const generation=React.useRef(0),writing=React.useRef(false),latestProject=React.useRef(projectId);latestProject.current=projectId;
+ const load=React.useCallback(async()=>{const n=++generation.current;setBusy(true);setError("");if(!projectId){setData(undefined);setBusy(false);return;}
+  const q="?projectId="+encodeURIComponent(projectId);const results=await Promise.allSettled([api("/api/cost-centers"+q+"&includeInactive=true"),accountingApi("/api/accounting/vendor-bills"+q),api("/api/personal/labor-costs"+q),api("/api/resource-costs/summary"+q)]);
+  if(n!==generation.current)return;
+  const source=(i:number,key="items"):CostSource=>{const r=results[i];return r.status==="fulfilled"?{available:true,items:r.value[key]||[]}:{available:false,items:[],error:r.reason?.message||"Nicht verfügbar"};};
+  setData({projectId,masters:source(0),bills:source(1),labor:source(2),machines:source(3,"machineItems")});setBusy(false);
+ },[projectId]);
+ React.useEffect(()=>{setData(undefined);setForm(drafts.current[projectId]||blank(projectId));setHistory(undefined);setNotice("");void load();return()=>{generation.current++;};},[load,projectId]);
+ const current=data?.projectId===projectId?data:undefined;
+ const analysis=React.useMemo(()=>{try{return {...analyzeCostCenters(current?.masters||emptySource(),current?.bills||emptySource(),current?.labor||emptySource(),current?.machines||emptySource()),error:""};}catch(e:any){return {rows:[],billCount:0,draftCount:0,error:e.message};}},[current]);
+ const areas=[...new Set<string>(analysis.rows.map((r:any)=>r.mainArea))].sort();
+ const rows=analysis.rows.filter((r:any)=>(showArchived||r.active)&&(!area||r.mainArea===area)&&[r.code,r.description,r.mainArea].join(" ").toLocaleLowerCase("de-DE").includes(search.toLocaleLowerCase("de-DE")));
+ const total=(key:string):bigint|null=>{const deps:Record<string,string[]>={budget:['masters'],supplier:['bills'],labor:['labor'],machines:['machines'],actual:['bills','labor','machines']};if(!current||analysis.error||(deps[key]||[]).some(k=>!current[k].available)||rows.some((r:any)=>r[key]===null))return null;return rows.reduce((a:bigint,r:any)=>a+r[key],0n);};
+ const doWrite=async(action:()=>Promise<any>,after:(d:any)=>void)=>{if(writing.current)return;writing.current=true;setSaving(true);setError("");setNotice("");const owner=projectId;try{const d=await action();if(latestProject.current===owner){after(d);setNotice("Kostenstelle gespeichert. Die Kostenansicht wird aktualisiert.");await load();}}catch(e:any){if(latestProject.current===owner)setError(e.message);}finally{writing.current=false;setSaving(false);}};
+ const save=()=>{if(form.owner!==projectId)return;const {owner,id,...body}=form;void doWrite(()=>api(id?"/api/cost-centers/"+encodeURIComponent(id):"/api/cost-centers",{method:id?"PUT":"POST",body:JSON.stringify({...body,projectId,...(!id?{expectedUpdatedAt:undefined}:{} )})}),()=>setForm(blank(projectId)));};
+ const edit=(r:any)=>{setHistory(undefined);setForm({owner:projectId,id:r.id||"",code:r.code,description:r.description,mainArea:r.mainArea,budget:r.budget===null?"0.00":(r.budget<0n?"-":"")+(r.budget/100n).toString()+"."+(r.budget%100n).toString().padStart(2,"0"),unit:r.unit||"",note:r.note||"",expectedUpdatedAt:r.updatedAt||""});};
+ const archive=(r:any)=>{if(!window.confirm(r.active?"Kostenstelle archivieren? Vorhandene Zuordnungen und Kosten bleiben erhalten.":"Kostenstelle wieder aktivieren?"))return;void doWrite(()=>api("/api/cost-centers/"+encodeURIComponent(r.id),{method:r.active?"DELETE":"PUT",body:JSON.stringify({projectId,expectedUpdatedAt:r.updatedAt,...(!r.active?{active:true}:{})})}),()=>{setForm(blank(projectId));setHistory(undefined);});};
+ const showHistory=async(r:any)=>{const owner=projectId;setError("");try{const d=await api("/api/cost-centers/"+encodeURIComponent(r.id)+"/history");if(latestProject.current===owner)setHistory({code:r.code,...d});}catch(e:any){if(latestProject.current===owner)setError(e.message);}};
+ const csv=()=>{const output=[["Projekt","Code","Bezeichnung","Bereich","Status","Budget EUR","Lieferanten netto EUR","Personal EUR","Geräte EUR","Kosten EUR","Abweichung EUR"],...rows.map((r:any)=>[project?.code||projectId,r.code,r.description,r.mainArea,r.active?"Aktiv":"Archiviert",...["budget","supplier","labor","machines","actual","variance"].map(k=>r[k]===null?"Nicht verfügbar":euroCents(r[k]).replace(/ €/g,""))])];const url=URL.createObjectURL(new Blob(["\uFEFF"+output.map(r=>r.map(csvCell).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download="Kostenstellen.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ return <div className="bh-page"><div className="bh-header-row"><div><h2>Kostenstellen</h2><div className="bh-note">Projekt: {project?.code||projectId} · Projektbudget und erfasste Kosten</div></div><button className="bh-btn ghost" disabled={busy||saving} onClick={()=>void load()}>{busy?"Lädt …":"Aktualisieren"}</button></div>
+ <div className="bh-note">Lieferantenkosten: gebuchte Eingangsrechnungen netto. Geräte: gebuchte tatsächliche Einsätze. Personal: erfasste Zeiten mit aktuellem Personalstammsatz, auf Cent je Eintrag gerundet. Materialbewegungen werden nicht nochmals addiert. Diese Auswertung ersetzt keinen Buchhaltungsabschluss.</div>
+ <fieldset disabled={saving||form.owner!==projectId||!current?.masters.available} style={{border:0,padding:0}}><div className="bh-filters">
+ {([['code','Code'],['description','Bezeichnung'],['mainArea','Hauptbereich'],['budget','Budget'],['unit','Einheit']] as const).map(([key,label])=><div key={key}><label>{label}</label><input list={key==='mainArea'?'rlc-cost-area-catalog':undefined} value={form[key]} readOnly={key==='code'&&!!form.id} onChange={e=>setForm({...form,[key]:e.target.value})} inputMode={key==='budget'?'decimal':undefined}/></div>)}
+ <datalist id="rlc-cost-area-catalog">{areaCatalog.items.map(x=><option key={x.id} value={x.label}>{x.code}</option>)}</datalist>
+ <div><label>Bemerkung</label><input value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/></div><div style={{alignSelf:'end'}}><button className="bh-btn" onClick={save}>{saving?"Speichert …":form.id?"Änderungen speichern":"+ Kostenstelle anlegen"}</button><button className="bh-btn ghost" onClick={()=>setForm(blank(projectId))}>Abbrechen</button></div></div></fieldset>
+ {areaCatalog.error&&<div className="bh-note">Bereichskatalog nicht verfügbar; vorhandene Bezeichnungen können weiter eingegeben werden.</div>}
+ {notice&&<div className="bh-note" role="status">{notice}</div>}
+ {(error||analysis.error)&&<div className="bh-note" role="alert">{error||analysis.error}</div>}
+ {current&&Object.entries({masters:"Kostenstellen",bills:"Eingangsrechnungen",labor:"Personal",machines:"Geräte"}).map(([key,label])=>!current[key].available&&<div className="bh-note" role="alert" key={key}>{label}: nicht verfügbar · {current[key].error}. Betroffene Beträge werden nicht als Null angezeigt.</div>)}
+ <div className="bh-filters"><div><label>Suchen</label><input value={search} onChange={e=>setSearch(e.target.value)}/></div><div><label>Bereich</label><select value={area} onChange={e=>setArea(e.target.value)}><option value="">Alle Bereiche</option>{areas.map(a=><option key={a}>{a}</option>)}</select></div><label><input type="checkbox" checked={showArchived} onChange={e=>setShowArchived(e.target.checked)}/> Archivierte anzeigen</label><button className="bh-btn ghost" disabled={!current||!!analysis.error||busy} onClick={csv}>CSV exportieren</button></div>
+ <div className="bh-cards">{[['budget','Budget'],['supplier','Lieferanten netto'],['labor','Personal'],['machines','Geräte'],['actual','Kosten gesamt']] .map(([key,label])=><div className="bh-card" key={key}><div className="bh-note">{label} · gefilterte Zeilen</div><b>{euroCents(total(key))}</b></div>)}</div>
+ <div className="bh-note">{current?.bills.available&&!analysis.error?`${analysis.billCount} gebuchte Eingangsrechnungen ausgewertet; ${analysis.draftCount} weitere Belege nicht als gebuchte Kosten berücksichtigt.`:"Belegauswertung nicht verfügbar."} Summen beziehen sich auf die gefilterten Zeilen; archivierte Kostenstellen werden mit „Archivierte anzeigen“ einbezogen.</div>
+ <div style={{overflowX:'auto'}}><table className="bh-table"><thead><tr>{['Aktion','Code','Bezeichnung','Bereich','Status','Budget','Lieferant netto','Personal','Geräte','Kosten','Abweichung'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((r:any)=><tr key={r.code}><td><button className="bh-btn ghost" disabled={saving||busy||!current?.masters.available} onClick={()=>edit(r)}>Bearbeiten</button>{r.id&&<><button className="bh-btn ghost" disabled={saving||busy} onClick={()=>archive(r)}>{r.active?'Archivieren':'Aktivieren'}</button><button className="bh-btn ghost" onClick={()=>void showHistory(r)}>Verlauf</button></>}</td><td>{r.code}</td><td>{r.description}</td><td>{r.mainArea}</td><td>{r.active?'Aktiv':'Archiviert'}</td>{['budget','supplier','labor','machines','actual','variance'].map(k=><td key={k}>{euroCents(r[k])}</td>)}</tr>)}{!rows.length&&<tr><td colSpan={11}>{busy?'Daten werden geladen …':!current?'Projekt auswählen.':analysis.error?'Auswertung nicht verfügbar.':'Keine Zeilen für diesen Filter.'}</td></tr>}</tbody></table></div>
+ {history&&<div className="bh-card"><h3>Verlauf · {history.code}</h3><button className="bh-btn ghost" onClick={()=>setHistory(undefined)}>Schließen</button><div className="bh-note">Bis zu 100 Änderungen; ältere Bestände haben Verlauf ab der nächsten Änderung.</div>{history.items.map((h:any)=><p key={h.id}>{new Date(h.createdAt).toLocaleString('de-DE',{timeZone:'Europe/Berlin'})} · {({'COST_CENTER_CREATE':'Angelegt','COST_CENTER_UPDATE':'Geändert','COST_CENTER_ARCHIVE':'Archiviert','COST_CENTER_RESTORE':'Aktiviert'} as any)[h.action]} · Budget {h.meta?.before?.budget??'–'} → {h.meta?.after?.budget} · {h.meta?.after?.description}</p>)}{!history.items.length&&<p>Noch keine Änderungen aufgezeichnet.</p>}</div>}
+ </div>;
 }

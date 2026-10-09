@@ -60,8 +60,8 @@ const CONFIG: Record<WorkflowType, {title: string;finalTo: string;finalLabel: st
   },
   ARBEITSZEIT: {
     title: "Arbeitszeiten",
-    finalTo: "/mobile/arbeitszeiten",
-    finalLabel: "Arbeitszeiten"
+    finalTo: "/buro/arbeitszeiten",
+    finalLabel: "Arbeitszeiten in Verwaltung"
   }
 };
 
@@ -126,9 +126,18 @@ function reportTypeOf(doc: WorkflowDocument) {
 }
 
 function filterForType(type: WorkflowType, docs: WorkflowDocument[]) {
-  if (type === "REGIE" || type === "TAGESBERICHT" || type === "BAUTAGEBUCH") {
-    return docs.filter((doc) => reportTypeOf(doc) === type);
+  if (type === "REGIE") {
+    return docs.filter((doc) => reportTypeOf(doc) === "REGIE");
   }
+
+  if (type === "TAGESBERICHT") {
+    return docs.filter((doc) => reportTypeOf(doc) === "TAGESBERICHT");
+  }
+
+  if (type === "BAUTAGEBUCH") {
+    return docs;
+  }
+
   return docs;
 }
 
@@ -325,14 +334,14 @@ export default function MobilePruefung() {
       const base = `/api/inbox/${encodedProject}/${encodeURIComponent(type)}`;
 
       const endpoints =
-      type === "REGIE" || type === "TAGESBERICHT" || type === "BAUTAGEBUCH" ?
+      type === "REGIE" ?
       {
-        inbox:
-        type === "TAGESBERICHT" ?
-        `/api/tagesbericht/inbox/list?projectId=${encodedProject}` :
-        `/api/regie/inbox/list?projectId=${encodedProject}`,
-        inboxFallback: `/api/regie/inbox/list?projectId=${encodedProject}`,
+        inbox: `/api/regie/inbox/list?projectId=${encodedProject}`,
         approved: `/api/regie/freigegeben/list?projectId=${encodedProject}`
+      } :
+      type === "TAGESBERICHT" ?
+      {
+        inbox: `/api/tagesbericht/inbox/list?projectId=${encodedProject}`
       } :
       type === "LIEFERSCHEIN" ?
       {
@@ -351,13 +360,15 @@ export default function MobilePruefung() {
         incoming = await request<any>(endpoints.inbox);
       } catch (error) {
         if ("inboxFallback" in endpoints && endpoints.inboxFallback) {
-          incoming = await request<any>(endpoints.inboxFallback);
+          incoming = await request<any>(String((endpoints as any).inboxFallback));
         } else {
           throw error;
         }
       }
 
-      const released = await requestOptional<any>(endpoints.approved);
+      const released = endpoints.approved
+        ? await requestOptional<any>(String(endpoints.approved))
+        : { items: [] };
       setInbox(filterForType(type, itemsOf(incoming)));
       setApproved(filterForType(type, itemsOf(released)));
     } catch (e: any) {
@@ -379,17 +390,19 @@ export default function MobilePruefung() {
     if (!confirm(`„${docTitle(doc)}“ freigeben und ins Fachmodul übernehmen?`)) return;
     try {
       setLoading(true);
-      const usesRegieWorkflow =
-      type === "REGIE" || type === "TAGESBERICHT" || type === "BAUTAGEBUCH";
+      const usesRegieWorkflow = type === "REGIE";
+      const usesTagesberichtWorkflow = type === "TAGESBERICHT";
       const approvePath = usesRegieWorkflow ?
       "/api/regie/inbox/approve" :
+      usesTagesberichtWorkflow ?
+      "/api/tagesbericht/inbox/approve" :
       type === "LIEFERSCHEIN" ?
       "/api/ls/inbox/approve" :
       type === "FOTOS" ?
       "/api/fotos/inbox/approve" :
       `/api/inbox/${encodeURIComponent(projectKey)}/${encodeURIComponent(type)}/${encodeURIComponent(doc.id)}/approve`;
       const approveBody =
-      usesRegieWorkflow || type === "LIEFERSCHEIN" || type === "FOTOS" ?
+      usesRegieWorkflow || usesTagesberichtWorkflow || type === "LIEFERSCHEIN" || type === "FOTOS" ?
       { projectId: projectKey, docId: doc.id, id: doc.id, reportType: type } :
       {};
       await request(approvePath, { method: "POST", body: JSON.stringify(approveBody) });
@@ -405,17 +418,19 @@ export default function MobilePruefung() {
     if (!reason?.trim()) return;
     try {
       setLoading(true);
-      const usesRegieWorkflow =
-      type === "REGIE" || type === "TAGESBERICHT" || type === "BAUTAGEBUCH";
+      const usesRegieWorkflow = type === "REGIE";
+      const usesTagesberichtWorkflow = type === "TAGESBERICHT";
       const rejectPath = usesRegieWorkflow ?
       "/api/regie/inbox/reject" :
+      usesTagesberichtWorkflow ?
+      "/api/tagesbericht/inbox/reject" :
       type === "LIEFERSCHEIN" ?
       "/api/ls/inbox/reject" :
       type === "FOTOS" ?
       "/api/fotos/inbox/reject" :
       `/api/inbox/${encodeURIComponent(projectKey)}/${encodeURIComponent(type)}/${encodeURIComponent(doc.id)}/reject`;
       const rejectBody =
-      usesRegieWorkflow || type === "LIEFERSCHEIN" || type === "FOTOS" ?
+      usesRegieWorkflow || usesTagesberichtWorkflow || type === "LIEFERSCHEIN" || type === "FOTOS" ?
       {
         projectId: projectKey,
         docId: doc.id,

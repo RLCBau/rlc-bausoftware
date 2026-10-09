@@ -2,15 +2,41 @@
 // @ts-nocheck
 
 import { Router } from "express";
+import { requireProjectMember } from "../middleware/guards";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
 import OpenAI from "openai";
+import sharp from "sharp";
 import { prisma } from "../lib/prisma";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
 
 const r = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+
+r.use("/auto-ki/:projectKey", requireProjectMember("projectKey"), async (req:any, _res, next) => {
+  const projectId=String(req.resolvedProjectId||"").trim();
+  const projectCode=String(req.resolvedProjectCode||"").trim();
+  if(!projectId) return next(new Error("RESOLVED_PROJECT_ID_MISSING"));
+  if(projectCode && projectCode!==projectId){
+    try{
+      const duplicates=await prisma.project.count({where:{code:projectCode}});
+      if(duplicates===1){
+        const legacyAuto=path.join(PROJECTS_ROOT,safeProjectKey(projectCode),"auto-ki");
+        const canonicalAuto=path.join(PROJECTS_ROOT,safeProjectKey(projectId),"auto-ki");
+        if(fs.existsSync(legacyAuto)&&!fs.existsSync(canonicalAuto)){fs.mkdirSync(path.dirname(canonicalAuto),{recursive:true});fs.cpSync(legacyAuto,canonicalAuto,{recursive:true});}
+        const legacySoll=path.join(PROJECTS_ROOT,safeProjectKey(projectCode),"soll-ist.json");
+        const canonicalSoll=path.join(PROJECTS_ROOT,safeProjectKey(projectId),"soll-ist.json");
+        if(fs.existsSync(legacySoll)&&!fs.existsSync(canonicalSoll)){fs.mkdirSync(path.dirname(canonicalSoll),{recursive:true});fs.copyFileSync(legacySoll,canonicalSoll);}
+      }
+    }catch(e){console.error("[auto-ki] legacy tenant migration failed",e);}
+  }
+  req.params.projectKey=projectId;
+  next();
+});
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+});
 
 /* ===================== HELPERS ===================== */
 
@@ -136,26 +162,12 @@ type AufmassHistory = {
 
 /* ===================== PROJECT RESOLVE ===================== */
 
-async function resolveProjectKey(projectKey: string) {
-  const key = String(projectKey || "").trim();
-  if (!key) return null;
-
-  // 1) code
-  const byCode = await prisma.project.findFirst({
-    where: { code: key },
-    select: { id: true, code: true, name: true },
-  });
-  if (byCode) return { id: byCode.id, code: byCode.code, fsKey: byCode.code || key };
-
-  // 2) id
-  const byId = await prisma.project.findUnique({
-    where: { id: key },
-    select: { id: true, code: true, name: true },
-  });
-  if (byId) return { id: byId.id, code: byId.code, fsKey: byId.code || key };
-
-  // fallback FS
-  return { id: key, code: key, fsKey: key };
+async function resolveProjectKey(req: any, projectKey: string) {
+  const requested = String(projectKey || "").trim();
+  const id = String(req?.resolvedProjectId || "").trim();
+  const code = String(req?.resolvedProjectCode || "").trim();
+  if (!requested || !id || !code) return null;
+  return { id, code, fsKey: id };
 }
 
 /* ===================== PATHS ===================== */
@@ -186,6 +198,7 @@ async function pdfFirstPageToPngDataUrl(pdfBuffer: Buffer): Promise<string | nul
     const loadingTask = pdfjs.getDocument({
       data: new Uint8Array(pdfBuffer),
       disableWorker: true,
+      isEvalSupported: false,
     });
 
     const pdf = await loadingTask.promise;
@@ -558,7 +571,7 @@ function appendMassLines(
 async function handleLoad(req: any, res: any) {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
-    const p = await resolveProjectKey(projectKey);
+    const p = await resolveProjectKey(req, projectKey);
     if (!p) return res.status(400).json({ ok: false, error: "projectKey missing" });
 
     ensureDir(autoKiDir(p.fsKey));
@@ -584,7 +597,7 @@ r.get("/auto-ki/:projectKey/load", handleLoad);
 r.post("/auto-ki/:projectKey/save", async (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
-    const p = await resolveProjectKey(projectKey);
+    const p = await resolveProjectKey(req, projectKey);
     if (!p) return res.status(400).json({ ok: false, error: "projectKey missing" });
 
     ensureDir(autoKiDir(p.fsKey));
@@ -621,7 +634,7 @@ r.post("/auto-ki/:projectKey/save", async (req, res) => {
 r.get("/auto-ki/:projectKey/aufmass-history", async (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
-    const p = await resolveProjectKey(projectKey);
+    const p = await resolveProjectKey(req, projectKey);
     if (!p) return res.status(400).json({ ok: false, error: "projectKey missing" });
 
     ensureDir(autoKiDir(p.fsKey));
@@ -659,7 +672,7 @@ r.get("/auto-ki/:projectKey/aufmass-history", async (req, res) => {
 r.post("/auto-ki/:projectKey/aufmass-history/snapshot", async (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
-    const p = await resolveProjectKey(projectKey);
+    const p = await resolveProjectKey(req, projectKey);
     if (!p) return res.status(400).json({ ok: false, error: "projectKey missing" });
 
     ensureDir(autoKiDir(p.fsKey));
@@ -700,7 +713,7 @@ r.post("/auto-ki/:projectKey/aufmass-history/snapshot", async (req, res) => {
 r.post("/auto-ki/:projectKey/export-to-aufmass", async (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
-    const p = await resolveProjectKey(projectKey);
+    const p = await resolveProjectKey(req, projectKey);
     if (!p) return res.status(400).json({ ok: false, error: "projectKey missing" });
 
     const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
@@ -735,7 +748,7 @@ r.post("/auto-ki/:projectKey/export-to-aufmass", async (req, res) => {
 r.post("/auto-ki/:projectKey/analyze", upload.single("file"), async (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
-    const p = await resolveProjectKey(projectKey);
+    const p = await resolveProjectKey(req, projectKey);
     if (!p) return res.status(400).json({ ok: false, error: "projectKey missing" });
 
     const note = String(req.body?.note ?? "");
@@ -746,10 +759,37 @@ r.post("/auto-ki/:projectKey/analyze", upload.single("file"), async (req, res) =
 
     const original = String(file.originalname || "upload.bin");
     const lowerName = original.toLowerCase();
-    const isPdf = file.mimetype === "application/pdf" || isPdfName(lowerName);
-    const isImage = file.mimetype?.startsWith("image/") || /\.(png|jpg|jpeg)$/i.test(lowerName);
+    const pdfCandidate = file.mimetype === "application/pdf" || isPdfName(lowerName);
+    const imageCandidate = file.mimetype?.startsWith("image/") || /\.(png|jpg|jpeg|webp)$/i.test(lowerName);
 
-    // 1) save upload
+    const hasPdfMagic =
+      file.buffer.length >= 5 &&
+      file.buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+
+    let isPdf = false;
+    let isImage = false;
+
+    if (pdfCandidate) {
+      if (!hasPdfMagic) {
+        return res.status(415).json({ ok: false, error: "INVALID_PDF_CONTENT" });
+      }
+      isPdf = true;
+    } else if (imageCandidate) {
+      try {
+        const meta = await sharp(file.buffer, { failOn: "error" }).metadata();
+        const format = String(meta.format || "").toLowerCase();
+        if (!["jpeg", "png", "webp"].includes(format)) {
+          return res.status(415).json({ ok: false, error: "UNSUPPORTED_IMAGE_FORMAT" });
+        }
+        isImage = true;
+      } catch {
+        return res.status(415).json({ ok: false, error: "INVALID_IMAGE_CONTENT" });
+      }
+    } else {
+      return res.status(415).json({ ok: false, error: "UNSUPPORTED_FILE_TYPE" });
+    }
+
+    // 1) save upload only after content validation
     ensureDir(uploadsDir(p.fsKey));
     const ts = Date.now();
     const safeName = original.replace(/[^\w.\-]+/g, "_");

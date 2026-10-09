@@ -1,0 +1,3 @@
+import { prisma } from "../lib/prisma";
+const terms=["CONNEX-Anschluss DN/OD 160/162","Abdeckung, BEGU, Klasse D","Schacht 400","Kabelkanal DN 125 des AG verlegen","Viereckschachtabdeck. Kl.B","Dichtigkeitsprüfung Schächte, DN 1000","Schachtabdeck. D400 Durchm. 800mm","Spül-/Kontroll-/Sammelschacht PE DN315","Einlaufschacht aus Ortbeton sanieren","Sickerrohrleitung verlegen - VSR DN 250"];
+(async()=>{for(const t of terms){const v=await prisma.lVPosition.findFirst({where:{kurztext:{contains:t,mode:"insensitive"}}});console.log("\n###",t,"|",v?.position,v?.einheit,v?.kurztext);console.log(String(v?.langtext||"").replace(/\s+/g," ").slice(0,1200));}await prisma.$disconnect()})();

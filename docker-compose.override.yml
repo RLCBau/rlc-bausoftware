@@ -1,0 +1,7 @@
+services:
+  server:
+    environment:
+      RLC_ENFORCE_RESTORE_GATE: "1"
+      RLC_ERASURE_LEDGER_REFERENCE: /app/data/recovery/erasure-ledger.sha256
+    volumes:
+      - /var/lib/rlc-recovery:/app/data/recovery:ro

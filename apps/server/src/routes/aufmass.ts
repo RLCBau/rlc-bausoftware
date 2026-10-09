@@ -4,6 +4,9 @@ import fs from "fs";
 import path from "path";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
 import { prisma } from "../lib/prisma";
+import { InputError } from "../domain/officeAddons";
+import { normalizeRoomTree, roomRevision } from "../domain/roomTree";
+import { requireProjectMember } from "../middleware/guards";
 
 /* ============================================================
    AUFMASS ROUTES
@@ -35,6 +38,71 @@ import { prisma } from "../lib/prisma";
    ============================================================ */
 
 const router = Router();
+
+const requireAufmassProjectAccess = async (req: any, res: any, next: any) => {
+  const token = String(
+    req.params?.projectId ||
+    req.params?.project ||
+    req.query?.projectId ||
+    req.query?.project ||
+    req.body?.projectId ||
+    req.body?.project ||
+    ""
+  ).trim();
+  if (!token) return res.status(400).json({ error: "projectId fehlt" });
+  req.params = req.params || {};
+  req.params.__aufmassProject = token;
+  return requireProjectMember("__aufmassProject")(req, res, async (err?: any) => {
+    if (err) return next(err);
+
+    const resolvedId = String(req.resolvedProjectId || token).trim();
+    const resolvedCode = String(req.resolvedProjectCode || "").trim();
+    if (!resolvedId) return res.status(403).json({ error: "PROJECT_RESOLUTION_FAILED" });
+
+    if (resolvedCode && resolvedCode !== resolvedId) {
+      try {
+        const duplicates = await prisma.project.count({ where: { code: resolvedCode } });
+        if (duplicates === 1) {
+          const legacyRoot = path.join(PROJECTS_ROOT, safeProjectKey(resolvedCode));
+          const canonicalRoot = path.join(PROJECTS_ROOT, safeProjectKey(resolvedId));
+          for (const fileName of ["aufmass.json", "aufmass-history.json", "soll-ist.json"]) {
+            const src = path.join(legacyRoot, fileName);
+            const dst = path.join(canonicalRoot, fileName);
+            if (fs.existsSync(src) && !fs.existsSync(dst)) {
+              fs.mkdirSync(canonicalRoot, { recursive: true });
+              fs.copyFileSync(src, dst);
+            }
+          }
+
+          const store = readStore();
+          if (store[resolvedCode] && !store[resolvedId]) {
+            store[resolvedId] = store[resolvedCode];
+            writeStore(store);
+          }
+        }
+      } catch (migrationError) {
+        console.error("[aufmass] legacy tenant migration failed", migrationError);
+      }
+    }
+
+    if (req.params && typeof req.params === "object") {
+      if (Object.prototype.hasOwnProperty.call(req.params, "projectId")) req.params.projectId = resolvedId;
+      if (Object.prototype.hasOwnProperty.call(req.params, "project")) req.params.project = resolvedId;
+    }
+    try {
+      if (req.query && typeof req.query === "object") {
+        if (Object.prototype.hasOwnProperty.call(req.query, "projectId")) req.query.projectId = resolvedId;
+        if (Object.prototype.hasOwnProperty.call(req.query, "project")) req.query.project = resolvedId;
+      }
+    } catch {}
+    if (req.body && typeof req.body === "object") {
+      if (Object.prototype.hasOwnProperty.call(req.body, "projectId")) req.body.projectId = resolvedId;
+      if (Object.prototype.hasOwnProperty.call(req.body, "project")) req.body.project = resolvedId;
+    }
+
+    return next();
+  });
+};
 
 /* =========================
    1) LEGACY AUFMASS STORE
@@ -79,7 +147,7 @@ function writeStore(store: Store) {
 }
 
 // GET legacy list
-router.get("/", (req: Request, res: Response) => {
+router.get("/", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const project = (req.query.project as string) || "";
   if (!project) return res.status(400).json({ error: "project mancante" });
 
@@ -92,7 +160,7 @@ router.get("/", (req: Request, res: Response) => {
 });
 
 // POST create legacy row
-router.post("/row", (req: Request, res: Response) => {
+router.post("/row", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const project = (req.body.project as string) || "";
   const row = req.body.row as AufmassRow;
 
@@ -122,7 +190,7 @@ router.post("/row", (req: Request, res: Response) => {
 });
 
 // PUT update legacy row + history
-router.put("/row/:id", (req: Request, res: Response) => {
+router.put("/row/:id", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const project = (req.body.project as string) || "";
   const id = req.params.id;
   const patch = req.body.patch as Partial<AufmassRow>;
@@ -163,7 +231,7 @@ router.put("/row/:id", (req: Request, res: Response) => {
 });
 
 // GET legacy history
-router.get("/history/:project/:id", (req: Request, res: Response) => {
+router.get("/history/:project/:id", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const project = req.params.project;
   const id = req.params.id;
 
@@ -176,7 +244,7 @@ router.get("/history/:project/:id", (req: Request, res: Response) => {
 });
 
 // POST legacy bulk save
-router.post("/save", (req: Request, res: Response) => {
+router.post("/save", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const project = (req.body.project as string) || "";
   const rows = (req.body.rows as AufmassRow[]) || [];
 
@@ -236,41 +304,14 @@ function listProjectDirs(): string[] {
  * - Otherwise -> fallback to safeProjectKey(input)
  */
 function resolveProjectKey(input: string): string {
-  const raw = String(input || "").trim();
-  if (!raw) return safeProjectKey(raw);
+  // Access middleware canonicalizes every route to the database project UUID.
+  // Never rediscover by project code here: project codes are not globally unique.
+  return safeProjectKey(String(input || "").trim());
+}
 
-  const direct = safeProjectKey(raw);
-  const directDir = path.join(PROJECTS_ROOT, direct);
-  if (fs.existsSync(directDir)) return direct;
-
-  if (resolveCache.has(raw)) return resolveCache.get(raw)!;
-
-  if (UUID_RE.test(raw)) {
-    const dirs = listProjectDirs();
-
-    for (const d of dirs) {
-      const pj = tryReadJson(path.join(PROJECTS_ROOT, d, "project.json"));
-      const mj = tryReadJson(path.join(PROJECTS_ROOT, d, "meta.json"));
-
-      const candidate = pj || mj;
-      const cid = String(candidate?.id ?? candidate?.projectId ?? "").trim();
-      const ccode = String(candidate?.code ?? candidate?.projectCode ?? "").trim();
-
-      if (cid && cid === raw) {
-        resolveCache.set(raw, d);
-        return d;
-      }
-      // falls in manchen Files statt id nur code steht und raw==code
-      if (ccode && safeProjectKey(ccode) === safeProjectKey(raw)) {
-        resolveCache.set(raw, d);
-        return d;
-      }
-    }
-  }
-
-  // fallback: sanitize
-  resolveCache.set(raw, direct);
-  return direct;
+function candidateProjectDirs(projectIdOrKey: string): string[] {
+  const canonical = resolveProjectKey(projectIdOrKey);
+  return canonical ? [canonical] : [];
 }
 
 function projectDir(projectIdOrKey: string) {
@@ -278,71 +319,6 @@ function projectDir(projectIdOrKey: string) {
   const dir = path.join(PROJECTS_ROOT, key);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
-}
-
-/**
- * If there are TWO folders (uuid + code) with data, we can merge reads:
- * - resolved folder (preferred)
- * - direct sanitized folder (raw->safeProjectKey)
- * - ✅ plus: "linked" folders found via meta/project.json matching code/id in BOTH directions
- */
-function candidateProjectDirs(projectIdOrKey: string): string[] {
-  const raw = String(projectIdOrKey || "").trim();
-  const resolved = resolveProjectKey(raw);
-  const direct = safeProjectKey(raw);
-
-  const out: string[] = [];
-  const rdir = path.join(PROJECTS_ROOT, resolved);
-  const ddir = path.join(PROJECTS_ROOT, direct);
-
-  if (fs.existsSync(rdir)) out.push(resolved);
-  if (direct !== resolved && fs.existsSync(ddir)) out.push(direct);
-
-  // ✅ NEW: bidirectional linking scan
-  // If raw is CODE, include UUID folders whose meta/project.json have code == raw
-  // If raw is UUID, include code folders already handled by resolveProjectKey, but we also add
-  // any other folder whose meta/project.json has id == raw (in case folder name differs).
-  try {
-    const dirs = listProjectDirs();
-    const rawKey = safeProjectKey(raw);
-
-    for (const d of dirs) {
-      const pj = tryReadJson(path.join(PROJECTS_ROOT, d, "project.json"));
-      const mj = tryReadJson(path.join(PROJECTS_ROOT, d, "meta.json"));
-      const candidate = pj || mj;
-      if (!candidate) continue;
-
-      const cid = String(candidate?.id ?? candidate?.projectId ?? "").trim();
-      const ccode = String(candidate?.code ?? candidate?.projectCode ?? "").trim();
-
-      // raw = UUID -> add any folder referencing this id
-      if (UUID_RE.test(raw) && cid && cid === raw) {
-        const dd = path.join(PROJECTS_ROOT, d);
-        if (fs.existsSync(dd)) out.push(d);
-      }
-
-      // raw = CODE -> add any folder referencing this code
-      if (!UUID_RE.test(raw) && ccode && safeProjectKey(ccode) === rawKey) {
-        const dd = path.join(PROJECTS_ROOT, d);
-        if (fs.existsSync(dd)) out.push(d);
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  // ensure at least one
-  if (!out.length) out.push(resolved);
-
-  // unique (preserve order)
-  const uniq: string[] = [];
-  const seen = new Set<string>();
-  for (const k of out) {
-    if (seen.has(k)) continue;
-    seen.add(k);
-    uniq.push(k);
-  }
-  return uniq;
 }
 
 /* =========================
@@ -455,7 +431,7 @@ function readAufmass(projectIdOrKey: string): AufmassJsonRow[] {
   return Array.from(map.values());
 }
 
-router.get("/aufmass/:projectId", (req: Request, res: Response) => {
+router.get("/aufmass/:projectId", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: "projectId mancante" });
 
@@ -468,7 +444,7 @@ router.get("/aufmass/:projectId", (req: Request, res: Response) => {
   }
 });
 
-router.post("/aufmass/:projectId", (req: Request, res: Response) => {
+router.post("/aufmass/:projectId", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: "projectId mancante" });
 
@@ -528,7 +504,7 @@ function writeAufmassHistory(projectIdOrKey: string, data: AufmassHistoryFile) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
 }
 
-router.get("/aufmass-history/:projectId", (req: Request, res: Response) => {
+router.get("/aufmass-history/:projectId", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: "projectId mancante" });
 
@@ -541,7 +517,7 @@ router.get("/aufmass-history/:projectId", (req: Request, res: Response) => {
   }
 });
 
-router.post("/aufmass-history/:projectId", (req: Request, res: Response) => {
+router.post("/aufmass-history/:projectId", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: "projectId mancante" });
 
@@ -644,7 +620,7 @@ function writeSollIst(projectIdOrKey: string, rows: SollIstRow[]) {
   fs.writeFileSync(file, JSON.stringify(Array.isArray(rows) ? rows : [], null, 2), "utf8");
 }
 
-router.get("/soll-ist/:projectId", (req: Request, res: Response) => {
+router.get("/soll-ist/:projectId", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: "projectId mancante" });
 
@@ -657,7 +633,7 @@ router.get("/soll-ist/:projectId", (req: Request, res: Response) => {
   }
 });
 
-router.post("/soll-ist/:projectId", (req: Request, res: Response) => {
+router.post("/soll-ist/:projectId", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: "projectId mancante" });
 
@@ -677,7 +653,7 @@ router.post("/soll-ist/:projectId", (req: Request, res: Response) => {
    POST /api/aufmass/soll-ist/:projectId/append
    body: { rows: Array<{ pos,text,unit, istDelta, ep?, soll? }> }
    ============================================================ */
-router.post("/soll-ist/:projectId/append", (req: Request, res: Response) => {
+router.post("/soll-ist/:projectId/append", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = req.params.projectId;
   if (!projectId) return res.status(400).json({ error: "projectId mancante" });
 
@@ -757,7 +733,7 @@ router.post("/soll-ist/:projectId/append", (req: Request, res: Response) => {
    body: { projectId, row:{pos,text,unit,qty} }
    -> scrive su soll-ist come istDelta
    ============================================================ */
-router.post("/add-from-cad", (req: Request, res: Response) => {
+router.post("/add-from-cad", requireAufmassProjectAccess, (req: Request, res: Response) => {
   const projectId = String(req.body?.projectId ?? "").trim();
   const row = req.body?.row || null;
 
@@ -829,7 +805,7 @@ async function resolveDbProject(projectIdOrCode: string) {
   });
 }
 
-router.get("/orte/:projectId", async (req: Request, res: Response) => {
+router.get("/orte/:projectId", requireAufmassProjectAccess, async (req: Request, res: Response) => {
   try {
     const project = await resolveDbProject(req.params.projectId);
     if (!project) {
@@ -850,6 +826,7 @@ router.get("/orte/:projectId", async (req: Request, res: Response) => {
       ok: true,
       projectId: project.id,
       projectCode: project.code,
+      revision: roomRevision(orte),
       orte: orte.map(({ positions, ...ort }) => ort),
       links: orte.flatMap((ort) => ort.positions),
     });
@@ -859,75 +836,23 @@ router.get("/orte/:projectId", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/orte/:projectId", async (req: Request, res: Response) => {
+router.put("/orte/:projectId", requireAufmassProjectAccess, async (req: Request, res: Response) => {
   try {
     const project = await resolveDbProject(req.params.projectId);
     if (!project) {
       return res.status(404).json({ error: "Projekt nicht gefunden" });
     }
 
-    const incomingOrte: OrtPayload[] = Array.isArray(req.body?.orte)
-      ? req.body.orte
-      : [];
-    const incomingLinks: OrtPositionPayload[] = Array.isArray(req.body?.links)
-      ? req.body.links
-      : [];
-
-    const normalizedOrte = incomingOrte.map((ort, index) => ({
-      id: String(ort?.id || "").trim(),
-      parentId: ort?.parentId ? String(ort.parentId).trim() : null,
-      nummer: String(ort?.nummer || "").trim(),
-      name: String(ort?.name || "").trim(),
-      description: ort?.description ? String(ort.description) : null,
-      color: ort?.color ? String(ort.color) : null,
-      sortOrder: Number.isFinite(Number(ort?.sortOrder))
-        ? Number(ort.sortOrder)
-        : index,
-    }));
-
-    if (normalizedOrte.some((ort) => !ort.id || !ort.nummer || !ort.name)) {
-      return res.status(400).json({
-        error: "Jeder Ort benötigt ID, Nummer und Bezeichnung",
-      });
-    }
-
-    const ortIds = new Set(normalizedOrte.map((ort) => ort.id));
-
-    if (
-      normalizedOrte.some(
-        (ort) => ort.parentId && !ortIds.has(ort.parentId),
-      )
-    ) {
-      return res.status(400).json({
-        error: "Ungültige Parent-ID in der Orte-Struktur",
-      });
-    }
-
-    const normalizedLinks = incomingLinks
-      .map((link) => ({
-        ortId: String(link?.ortId || "").trim(),
-        positionId: String(link?.positionId || "").trim(),
-      }))
-      .filter(
-        (link) =>
-          link.ortId &&
-          link.positionId &&
-          ortIds.has(link.ortId),
-      );
-
-    const uniqueLinks = Array.from(
-      new Map(
-        normalizedLinks.map((link) => [
-          `${link.ortId}:${link.positionId}`,
-          link,
-        ]),
-      ).values(),
-    );
+    const normalized = normalizeRoomTree(req.body);
+    const normalizedOrte = normalized.orte;
+    const uniqueLinks = normalized.links;
+    let revision = "";
 
     await prisma.$transaction(async (tx) => {
-      await tx.aufmassOrt.deleteMany({
-        where: { projectId: project.id },
-      });
+      await tx.$queryRaw`SELECT "id" FROM "Project" WHERE "id" = ${project.id} FOR UPDATE`;
+      const previous = await tx.aufmassOrt.findMany({where:{projectId:project.id},include:{positions:{select:{positionId:true}}}});
+      if (req.body?.baseRevision && req.body.baseRevision !== roomRevision(previous)) throw new Error("ROOM_CONFLICT");
+      const existingIds = new Set(previous.map(r=>r.id));
 
       const pending = [...normalizedOrte];
       const created = new Set<string>();
@@ -942,18 +867,12 @@ router.put("/orte/:projectId", async (req: Request, res: Response) => {
         }
 
         for (const ort of ready) {
-          await tx.aufmassOrt.create({
-            data: {
-              id: ort.id,
-              projectId: project.id,
-              parentId: ort.parentId,
-              nummer: ort.nummer,
-              name: ort.name,
-              description: ort.description,
-              color: ort.color,
-              sortOrder: ort.sortOrder,
-            },
-          });
+          const data = {
+            parentId: ort.parentId, nummer: ort.nummer, name: ort.name,
+            description: ort.description, color: ort.color, sortOrder: ort.sortOrder,
+          };
+          if (existingIds.has(ort.id)) await tx.aufmassOrt.update({where:{id:ort.id},data});
+          else await tx.aufmassOrt.create({data:{...data,id:ort.id,projectId:project.id}});
 
           created.add(ort.id);
           const idx = pending.findIndex((item) => item.id === ort.id);
@@ -961,22 +880,33 @@ router.put("/orte/:projectId", async (req: Request, res: Response) => {
         }
       }
 
+      await tx.aufmassOrt.deleteMany({where:{projectId:project.id,id:{notIn:normalizedOrte.map(r=>r.id)}}});
+      await tx.aufmassOrtPosition.deleteMany({where:{ort:{projectId:project.id}}});
       if (uniqueLinks.length) {
         await tx.aufmassOrtPosition.createMany({
           data: uniqueLinks,
           skipDuplicates: true,
         });
       }
+      const saved=await tx.aufmassOrt.findMany({where:{projectId:project.id},include:{positions:{select:{positionId:true}}}});
+      revision=roomRevision(saved);
+      if (roomRevision(previous)!==revision) await tx.auditLog.create({data:{
+        companyId:String((req as any).auth?.companyId || ""),userId:String((req as any).auth?.sub || (req as any).auth?.userId || "") || null,
+        action:"ROOM_TREE_UPDATE",resource:"project:"+project.id,meta:{before:JSON.parse(JSON.stringify(previous)),after:JSON.parse(JSON.stringify(saved))}
+      }});
     });
 
     return res.json({
       ok: true,
+      revision,
       projectId: project.id,
       projectCode: project.code,
       ortCount: normalizedOrte.length,
       linkCount: uniqueLinks.length,
     });
   } catch (error: any) {
+    if(error instanceof InputError)return res.status(400).json({error:error.message});
+    if(error?.message==="ROOM_CONFLICT" || error?.code==="P2002")return res.status(409).json({error:"Orte wurden gleichzeitig geändert. Bitte neu laden; lokale Änderungen bleiben erhalten."});
     console.error("PUT Orte error", error);
     return res.status(500).json({
       error: error?.message || "Orte konnten nicht gespeichert werden",

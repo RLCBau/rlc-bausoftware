@@ -1,0 +1,11 @@
+[Unit]
+Description=RLC GDPR breach internal deadline alerts
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec rlc-server node -r ts-node/register/transpile-only src/scripts/monitorBreachAlerts.ts
+User=root
+Group=root
+NoNewPrivileges=true

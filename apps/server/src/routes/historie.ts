@@ -4,8 +4,40 @@
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
+import { requireProjectMember } from "../middleware/guards";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
+
+const requireHistorieProjectAccess = async (req:any,res:any,next:any) => {
+  const token=String(req.query?.projectId||req.body?.projectId||"").trim();
+  if(!token) return res.status(400).json({ok:false,error:"projectId fehlt"});
+  req.params=req.params||{};
+  req.params.__historieProject=token;
+  return requireProjectMember("__historieProject")(req,res,async (err?:any)=>{
+    if(err) return next(err);
+    const projectId=String(req.resolvedProjectId||token).trim();
+    const projectCode=String(req.resolvedProjectCode||"").trim();
+    if(!projectId) return res.status(403).json({ok:false,error:"PROJECT_RESOLUTION_FAILED"});
+    if(projectCode && projectCode!==projectId){
+      try{
+        const duplicates=await prisma.project.count({where:{code:projectCode}});
+        if(duplicates===1){
+          const legacyRoot=path.join(PROJECTS_ROOT,projectCode);
+          const canonicalRoot=path.join(PROJECTS_ROOT,projectId);
+          for(const name of ["soll-ist.json","sollist.json","soll-ist-history.json"]){
+            const src=path.join(legacyRoot,name), dst=path.join(canonicalRoot,name);
+            if(fs.existsSync(src)&&!fs.existsSync(dst)){fs.mkdirSync(canonicalRoot,{recursive:true});fs.copyFileSync(src,dst);}
+          }
+        }
+      }catch(e){console.error("[historie] legacy tenant migration failed",e);}
+    }
+    if(req.body && typeof req.body==="object") req.body.projectId=projectId;
+    try{if(req.query && typeof req.query==="object") req.query.projectId=projectId;}catch{}
+    req.resolvedProjectId=projectId;
+    return next();
+  });
+};
 
 const PROJECTS_ROOT =
   process.env.PROJECTS_ROOT || path.join(process.cwd(), "data", "projects");
@@ -55,11 +87,9 @@ function resolveProjectFolder(projectIdRaw: string): string {
   const projectId = String(projectIdRaw || "").trim();
   if (!projectId) return projectId;
 
-  // 1) se la cartella canonica esiste, usala sempre
-  const canonicalDir = path.join(PROJECTS_ROOT, CANONICAL);
-  if (existsDir(canonicalDir)) return CANONICAL;
+  // Never force a global/demo project folder. The caller is tenant/project authorized.
 
-  // 2) se non è UUID e la dir esiste, usala
+  // If it is not a UUID and the directory exists, use it
   const direct = path.join(PROJECTS_ROOT, projectId);
   if (!isUuidLike(projectId) && existsDir(direct)) return projectId;
 
@@ -89,20 +119,20 @@ function resolveProjectFolder(projectIdRaw: string): string {
 
 /* ========================= ROUTES ========================= */
 
-router.get("/historie", (req, res) => {
+router.get("/historie", requireHistorieProjectAccess, (req, res) => {
   const projectId = String(req.query.projectId || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
 
-  const folder = resolveProjectFolder(projectId);
+  const folder = String((req as any).resolvedProjectId || projectId);
   const items = readJson<any[]>(historyPath(folder), []);
   return res.json({ ok: true, items, resolvedProjectId: folder });
 });
 
-router.get("/historie/current", (req, res) => {
+router.get("/historie/current", requireHistorieProjectAccess, (req, res) => {
   const projectId = String(req.query.projectId || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
 
-  const folder = resolveProjectFolder(projectId);
+  const folder = String((req as any).resolvedProjectId || projectId);
 
   const dir = projectDir(folder);
   const legacy = path.join(dir, "sollist.json");
@@ -118,23 +148,23 @@ router.get("/historie/current", (req, res) => {
 });
 
 // (opzionale) salva current direttamente
-router.post("/historie/current", (req, res) => {
+router.post("/historie/current", requireHistorieProjectAccess, (req, res) => {
   const projectId = String(req.query.projectId || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
 
-  const folder = resolveProjectFolder(projectId);
+  const folder = String((req as any).resolvedProjectId || projectId);
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
 
   writeJson(currentSollIstPath(folder), rows);
   return res.json({ ok: true, resolvedProjectId: folder });
 });
 
-router.post("/historie", (req, res) => {
+router.post("/historie", requireHistorieProjectAccess, (req, res) => {
   const v = req.body || {};
   const projectId = String(v.projectId || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
 
-  const folder = resolveProjectFolder(projectId);
+  const folder = String((req as any).resolvedProjectId || projectId);
 
   const file = historyPath(folder);
   const items = readJson<any[]>(file, []);
@@ -145,12 +175,12 @@ router.post("/historie", (req, res) => {
   return res.json({ ok: true, resolvedProjectId: folder });
 });
 
-router.post("/historie/restore", (req, res) => {
+router.post("/historie/restore", requireHistorieProjectAccess, (req, res) => {
   const v = req.body || {};
   const projectId = String(v.projectId || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
 
-  const folder = resolveProjectFolder(projectId);
+  const folder = String((req as any).resolvedProjectId || projectId);
   const data = Array.isArray(v.data) ? v.data : [];
 
   writeJson(currentSollIstPath(folder), data);
@@ -159,13 +189,13 @@ router.post("/historie/restore", (req, res) => {
 });
 
 // ✅ DELETE singola versione
-router.delete("/historie/:id", (req, res) => {
+router.delete("/historie/:id", requireHistorieProjectAccess, (req, res) => {
   const projectId = String(req.query.projectId || "").trim();
   const id = String(req.params.id || "").trim();
   if (!projectId) return res.status(400).json({ ok: false, error: "projectId fehlt" });
   if (!id) return res.status(400).json({ ok: false, error: "id fehlt" });
 
-  const folder = resolveProjectFolder(projectId);
+  const folder = String((req as any).resolvedProjectId || projectId);
   const file = historyPath(folder);
   const items = readJson<any[]>(file, []);
 

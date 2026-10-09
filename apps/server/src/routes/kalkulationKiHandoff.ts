@@ -4,8 +4,34 @@ import fs from "fs";
 import path from "path";
 import { z } from "zod";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
+import { requireProjectMember } from "../middleware/guards";
+import { prisma } from "../lib/prisma";
 
 const router = Router();
+
+const requireHandoffProjectAccess = async (req:any,res:any,next:any) => {
+  return requireProjectMember("projectKey")(req,res,async (err?:any)=>{
+    if(err) return next(err);
+    const projectId=String(req.resolvedProjectId||"").trim();
+    const projectCode=String(req.resolvedProjectCode||"").trim();
+    if(!projectId) return res.status(403).json({ok:false,error:"PROJECT_RESOLUTION_FAILED"});
+    if(projectCode && projectCode!==projectId){
+      try{
+        const duplicates=await prisma.project.count({where:{code:projectCode}});
+        if(duplicates===1){
+          const legacyRoot=path.join(PROJECTS_ROOT,projectCode);
+          const canonicalRoot=path.join(PROJECTS_ROOT,projectId);
+          for(const parts of [["ki","kalkulation_ki_handoff.json"],["kalkulation","ki-kalkulation.json"]]){
+            const src=path.join(legacyRoot,...parts), dst=path.join(canonicalRoot,...parts);
+            if(fs.existsSync(src)&&!fs.existsSync(dst)){fs.mkdirSync(path.dirname(dst),{recursive:true});fs.copyFileSync(src,dst);}
+          }
+        }
+      }catch(e){console.error("[ki-handoff] legacy tenant migration failed",e);}
+    }
+    req.params.projectKey=projectId;
+    return next();
+  });
+};
 
 /* =====================================================================
    Helpers
@@ -49,7 +75,7 @@ const Body = z.object({
   rows: z.array(Row).default([]),
 });
 
-router.get("/kalkulation/ki-handoff/:projectKey", (req, res) => {
+router.get("/kalkulation/ki-handoff/:projectKey", requireHandoffProjectAccess, (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
     if (!projectKey) return res.status(400).json({ ok: false, error: "projectKey missing" });
@@ -65,7 +91,7 @@ router.get("/kalkulation/ki-handoff/:projectKey", (req, res) => {
   }
 });
 
-router.post("/kalkulation/ki-handoff/:projectKey", (req, res) => {
+router.post("/kalkulation/ki-handoff/:projectKey", requireHandoffProjectAccess, (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
     if (!projectKey) return res.status(400).json({ ok: false, error: "projectKey missing" });
@@ -139,7 +165,7 @@ function kiKalkulationFile(projectKey: string) {
   return path.join(dir, "ki-kalkulation.json");
 }
 
-router.get("/kalkulation/:projectKey/ki", (req, res) => {
+router.get("/kalkulation/:projectKey/ki", requireHandoffProjectAccess, (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
     if (!projectKey) return res.status(400).json({ ok: false, error: "projectKey missing" });
@@ -158,7 +184,7 @@ router.get("/kalkulation/:projectKey/ki", (req, res) => {
   }
 });
 
-router.post("/kalkulation/:projectKey/ki/save", (req, res) => {
+router.post("/kalkulation/:projectKey/ki/save", requireHandoffProjectAccess, (req, res) => {
   try {
     const projectKey = String(req.params.projectKey || "").trim();
     if (!projectKey) return res.status(400).json({ ok: false, error: "projectKey missing" });
