@@ -17,6 +17,15 @@ const normalizeOperation = (raw: unknown) => {
 };
 /** Advisory only; conflicting verbs remain unresolved instead of choosing a price family. */
 export function inferV3Operation(shortText: string, longText: string, aiWork: string, aiOperation: string) {
+  // Non-priceable independent operations: surcharges need a linked base position.
+  const principalScope = shortText.toLocaleLowerCase("de-DE").replace(/(?:width:\s*\d+pt|color:rgb\([^)]*\))/g, " ").trim();
+  if (/\b(?:zulage|zuschlag|erschwerniszuschlag)\b/.test(principalScope))
+    return { operation: "unknown" as const, evidence: "dependent_surcharge_requires_base_position", ambiguity: false,
+      longtextSignals: [] as string[] };
+  // Explicit holding and maintenance must not be confused with an installation price family.
+  if (/\b(?:vorhalt\w*|längervorhaltung|laengervorhaltung|unterhalt\w*|betreib\w*)\b/.test(principalScope))
+    return { operation: "unknown" as const, evidence: "temporary_service_requires_duration", ambiguity: false,
+      longtextSignals: [] as string[] };
   const explicit = normalizeOperation(aiOperation);
   const short = operationPatterns.filter(([,re]) => re.test(shortText)).map(([op]) => op);
   const work = operationPatterns.filter(([,re]) => re.test(aiWork)).map(([op]) => op);
