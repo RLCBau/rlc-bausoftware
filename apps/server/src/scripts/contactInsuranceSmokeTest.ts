@@ -19,6 +19,7 @@ async function main(){
  for(const patch of [{title:''},{insurer:''},{policyNumber:''},{type:'Unknown'},{status:'Aktiv'},{validFrom:'2026-02-29'},{validFrom:''},{validUntil:'1999-12-31'},{cancellationUntil:'2001-01-01'},{coverage:'-1'},{annualPremium:12.34},{coverage:'1.001'},{annualPremium:'1e3'},{notes:'bad\u0000text'}])assert.equal((await call(base,{...b,...patch},'POST')).status,400,JSON.stringify(patch));
  assert.equal(insuranceInput({...b,validFrom:'2024-02-29',validUntil:'',cancellationUntil:'',coverage:'0,00',annualPremium:''}).coverage,'0.00');
  const made=await call(base,b,'POST',{'x-role':'BUCHHALTUNG'});assert.equal(made.status,201,JSON.stringify(made.data));assert.equal(made.data.item.coverage,'1200000.25');assert.equal(made.data.item.annualPremium,'1234.56');assert.equal(made.data.item.expiry,'Abgelaufen');assert.equal(made.data.item.cancellation,'Abgelaufen');assert.match(made.headers.get('Cache-Control')||'',/no-store/);
+ const future=await call(base,{...b,policyNumber:'FUTURE',validFrom:'2099-01-01',validUntil:'2099-12-31',cancellationUntil:'2099-09-30'},'POST');assert.equal(future.status,201);assert.equal(future.data.item.expiry,'Beginn in Zukunft');
  const id=made.data.item.id,path=base+'/'+id;
  assert.equal((await call(base,{...b,insurer:'FIKTIVER VERSICHERER',policyNumber:'test-001'},'POST')).status,409);
  const pair=await Promise.all([call(base,{...b,policyNumber:'Parallel'},'POST'),call(base,{...b,policyNumber:'Parallel'},'POST')]);assert.deepEqual(pair.map(x=>x.status).sort(),[201,409]);
