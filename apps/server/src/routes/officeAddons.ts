@@ -28,16 +28,28 @@ async function project(req: any, token: unknown, tx: any = prisma) {
     ...(["ADMIN", "ADMINISTRATOR", "BUCHHALTUNG"].includes(role(req)) ? {} : { projectMembers: { some: { userId: uid(req) } } }),
   }, select: { id: true, code: true, name: true } });
 }
-async function links(req: any, projectId: string, data: any) {
+async function links(req: any, projectId: string, data: any, tx: any = prisma) {
   if (data.contractId) {
-    const c = await prisma.contract.findFirst({ where: { id: data.contractId, companyId: cid(req), projectId } });
+    const c = await tx.contract.findFirst({ where: { id: data.contractId, companyId: cid(req), projectId } });
     if (!c) throw new InputError("Vertrag gehört nicht zu diesem Projekt.");
     if (data.certificate && !["Nachunternehmervertrag", "Liefervertrag"].includes(c.contractType)) throw new InputError("Nachweis benötigt einen Liefer- oder Nachunternehmervertrag.");
   }
-  if (data.documentId && !await prisma.document.findFirst({ where: { id: data.documentId, projectId, deletedAt: null, project: { companyId: cid(req) } } })) {
+  if (data.documentId && !await tx.document.findFirst({ where: { id: data.documentId, projectId, deletedAt: null, project: { companyId: cid(req) } } })) {
     throw new InputError("Dokument gehört nicht zu diesem Projekt.");
   }
 }
+
+async function certificateSupplier(tx:any,req:any,data:any,current?:any) {
+  await tx.$queryRawUnsafe('SELECT id FROM "Company" WHERE id=$1 FOR UPDATE',cid(req));
+  if(current && !Object.prototype.hasOwnProperty.call(data,'supplierPartyId'))data.supplierPartyId=current.supplierPartyId;
+  if(current?.status==='Geprüft' && data.supplierPartyId!==current.supplierPartyId && data.status==='Geprüft')throw new InputError('Lieferant geändert: zunächst als Ungeprüft speichern und erneut prüfen.');
+  if(!data.supplierPartyId)return;
+  await tx.$queryRawUnsafe('SELECT id FROM "Party" WHERE id=$1 AND "companyId"=$2 FOR SHARE',data.supplierPartyId,cid(req));
+  const supplier=await tx.party.findFirst({where:{id:data.supplierPartyId,companyId:cid(req),type:'SUPPLIER'},include:{contactProfile:true}});
+  if(!supplier)throw new InputError('Lieferant gehört nicht zur aktuellen Firma.');
+  if(supplier.contactProfile?.archived && data.supplierPartyId!==current?.supplierPartyId)throw new InputError('Archivierte Lieferanten können nicht neu zugeordnet werden.');
+}
+
 function dto(item: any) { return { ...item, ...(item.amount !== undefined ? { amount: String(item.amount) } : {}), expiry: expiryStatus(item.validUntil) }; }
 function fail(res: any, e: any) {
   if (e instanceof InputError) return res.status(400).json({ ok: false, error: e.message });
@@ -62,7 +74,7 @@ for (const kind of ["guarantees", "certificates"] as const) {
       if (!p) return res.status(404).json({ ok: false, error: "Projekt nicht verfügbar." });
       const items = await (prisma as any)[model].findMany({ where: { companyId: cid(req), projectId: p.id },
         orderBy: [{ validUntil: "asc" }, { updatedAt: "desc" }], take: 2000,
-        include: { contract: { select: { title: true, partner: true, contractNumber: true } }, document: { select: { name: true } } } });
+        include: { ...(kind==="certificates"?{supplierParty:{select:{id:true,name:true}}}:{}), contract: { select: { title: true, partner: true, contractNumber: true } }, document: { select: { name: true } } } });
       res.json({ ok: true, project: p, items: items.map(dto) });
     } catch (e) { fail(res, e); }
   });
@@ -73,8 +85,9 @@ for (const kind of ["guarantees", "certificates"] as const) {
       const data = input(kind, req.body);
       const initial = kind === "guarantees" ? "Entwurf" : "Ungeprüft";
       if (data.status !== initial) throw new InputError("Neue Unterlagen müssen zunächst als " + initial + " gespeichert werden.");
-      await links(req, p.id, { ...data, certificate: kind === "certificates" });
       const item = await prisma.$transaction(async tx => {
+        if(kind==="certificates")await certificateSupplier(tx,req,data);
+        await links(req,p.id,{...data,certificate:kind==="certificates"},tx);
         const row = await (tx as any)[model].create({ data: { ...data, companyId: cid(req), projectId: p.id } });
         await tx.auditLog.create({ data: { companyId: cid(req), userId: uid(req), action: "OFFICE_ADDON_CREATE", resource: kind + ":" + row.id,
           meta: { projectId: p.id, revision: row.revision, status: row.status, after: JSON.parse(JSON.stringify(row)) } } });
@@ -99,8 +112,9 @@ for (const kind of ["guarantees", "certificates"] as const) {
           if (a !== b && !(key === "amount" && Number(a) === Number(b))) throw new InputError("Zurückgegebene oder archivierte Unterlagen sind gegen Änderungen gesperrt.");
         }
       }
-      await links(req, current.projectId, { ...data, certificate: kind === "certificates" });
       const result = await prisma.$transaction(async tx => {
+        if(kind==="certificates")await certificateSupplier(tx,req,data,current);
+        await links(req,current.projectId,{...data,certificate:kind==="certificates"},tx);
         const count = await (tx as any)[model].updateMany({ where: { id: current.id, companyId: cid(req), revision: current.revision },
           data: { ...data, revision: { increment: 1 }, ...(kind === "certificates" ? {
             reviewedBy: data.status === "Geprüft" ? uid(req) : null,

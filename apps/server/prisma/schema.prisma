@@ -827,6 +827,7 @@ model ProjectSectionState {
 }
 
 model Party {
+  supplierCertificates ContractCertificate[]
   contactProfile PartyContactProfile?
   id                    String       @id @default(uuid())
   companyId             String
@@ -2014,6 +2015,8 @@ model ProjectGuarantee {
 }
 
 model ContractCertificate {
+  supplierPartyId String?
+  supplierParty Party? @relation(fields: [supplierPartyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   id String @id @default(uuid())
   companyId String
   projectId String
@@ -2037,6 +2040,7 @@ model ContractCertificate {
   document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
   @@index([companyId, projectId, validUntil])
   @@index([companyId, contractId])
+  @@index([companyId, supplierPartyId, projectId])
 }
 
 

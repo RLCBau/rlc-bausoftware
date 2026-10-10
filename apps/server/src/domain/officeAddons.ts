@@ -33,7 +33,7 @@ export function input(kind: "guarantees" | "certificates", b: any) {
   if (common.validFrom && common.validUntil && common.validUntil < common.validFrom) throw new InputError("Enddatum liegt vor dem Beginn.");
   if (kind === "certificates") {
     if (!common.contractId) throw new InputError("Liefer- oder Nachunternehmervertrag erforderlich.");
-    return { ...common, issuer: text(b.issuer, "Aussteller", 250), type: choice(b.type, certificateTypes, "Nachweisart"),
+    return { ...common, ...(Object.prototype.hasOwnProperty.call(b,"supplierPartyId") ? {supplierPartyId:text(b.supplierPartyId,"Lieferant",100)||null} : {}), issuer: text(b.issuer, "Aussteller", 250), type: choice(b.type, certificateTypes, "Nachweisart"),
       status: choice(b.status, certificateStatuses, "Status") };
   }
   const amount = b.amount;
