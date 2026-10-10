@@ -16,8 +16,27 @@ import * as ciPath from "node:path";
 import { COMPANIES_ROOT } from "../lib/companiesRoot";
 import { completeRlcAiText, completeRlcMarketReviewWithWeb } from "../services/ai/rlcAiGateway";
 import { requireProjectMember } from "../middleware/guards";
+import { previewGaebResourceCosts } from "../kalkulation/autonomous/v3GaebCostPreview";
+import { z } from "zod";
 
 const router = Router();
+const v3PreviewSchema = z.object({
+ projectCode: z.string().min(1).max(128),
+ position: z.object({id:z.string().min(1).max(128),position:z.string().min(1).max(128),unit:z.string().min(1).max(24),quantity:z.union([z.number(),z.string().max(40)])}),
+ recipe: z.object({id:z.string().min(1).max(128),gaebPosition:z.string().min(1).max(128),components:z.array(z.object({type:z.enum(["material","labour","equipment","transport","disposal"]),quantityPerUnit:z.number().finite().nullable(),rateEUR:z.number().finite().nullable(),evidenceId:z.string().max(256).nullable().optional(),approved:z.boolean().optional()})).max(100),productivity:z.object({quantityPerHour:z.number().finite().nullable(),evidenceId:z.string().max(256).nullable().optional(),approved:z.boolean().optional()}).optional()})
+});
+/** Authenticated, project-scoped; client cannot grant cost evidence approval. */
+router.post("/v3/resource-preview",requireMarketReviewAccess,requireOptionalKalkulationProjectAccess,(req,res)=>{
+ const parsed=v3PreviewSchema.safeParse(req.body);
+ if(!parsed.success)return res.status(400).json({ok:false,error:"INVALID_V3_PREVIEW_INPUT"});
+ try {
+  const {position,recipe}=parsed.data;
+  const untrustedRecipe={...recipe,components:recipe.components.map(c=>({...c,evidenceId:null,approved:false})),productivity:recipe.productivity?{...recipe.productivity,evidenceId:null,approved:false}:undefined};
+  const result=previewGaebResourceCosts(position,untrustedRecipe);
+  return res.json({ok:true,preview:result,evidenceStatus:"client_data_unverified",writeAllowed:false});
+ }catch{return res.status(400).json({ok:false,error:"V3_RECIPE_POSITION_MISMATCH"});}
+});
+
 
 function marketRole(req: any): string {
   return String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
@@ -49,7 +68,7 @@ const requireOptionalMarketProjectAccess = async (req: any, res: any, next: any)
   });
 };
 
-const requireOptionalKalkulationProjectAccess = async (req:any,res:any,next:any) => {
+async function requireOptionalKalkulationProjectAccess(req:any,res:any,next:any) {
   const token = String(req.body?.projectCode || req.body?.projectKey || "").trim();
   if (!token) return next();
   req.params = req.params || {};
