@@ -47,7 +47,7 @@ export function resolveV3GaebReference(
       currentFeatures.nominalDiameter.replace(/\s+/g, "").toUpperCase() !== candidateFeatures.nominalDiameter.replace(/\s+/g, "").toUpperCase()) ||
       (currentFeatures.material && candidateFeatures.material &&
         currentFeatures.material.toUpperCase() !== candidateFeatures.material.toUpperCase());
-    if (conflicts) return { ...base, status: "incompatible_previous", evidence: "technical_parameters_conflict" };
+    if (conflicts) return { ...base, status: "incompatible_previous", basePosition: String(candidate.posNr || "") || null, evidence: "technical_parameters_conflict_candidate_only" };
     return { ...base, status: "candidate_previous", basePosition: String(candidate.posNr || "") || null,
       evidence: "implicit_reference_requires_verification" };
   }
