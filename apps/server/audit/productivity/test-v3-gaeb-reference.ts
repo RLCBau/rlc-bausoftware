@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { resolveV3GaebReference } from '../../src/kalkulation/autonomous/v3GaebReferenceResolver';
+const parent={posNr:'01.01.0001',kurztext:'Rohrleitung PP DN 300',langtext:'',einheit:'m'};
+const explicit={posNr:'01.01.0002',kurztext:'Zulage zu Pos. 01.01.0001',langtext:'',einheit:'m'};
+const compatible={posNr:'01.01.0003',kurztext:'Zulage wie Vorposition PP DN 300',langtext:'',einheit:'m'};
+const differing={posNr:'01.01.0004',kurztext:'Zulage wie Vorposition PVC DN 400',langtext:'',einheit:'m'};
+assert.equal(resolveV3GaebReference(explicit,[parent,explicit]).status,'resolved_explicit');
+assert.equal(resolveV3GaebReference(compatible,[parent,compatible]).status,'candidate_previous');
+assert.equal(resolveV3GaebReference(differing,[parent,differing]).status,'incompatible_previous');
+for(const row of [explicit,compatible,differing]) assert.equal(resolveV3GaebReference(row,[parent,row]).approvedForEP,false);
+console.log('V3_GAEB_REFERENCE_TEST_PASS');
