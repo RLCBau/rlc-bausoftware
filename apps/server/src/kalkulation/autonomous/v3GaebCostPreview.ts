@@ -18,7 +18,9 @@ export function previewGaebResourceCosts(gaeb:CostPosition,recipe:CostRecipe){
   subtotal+=cost;lines.push({type:c.type,costPerUnitEUR:Math.round(cost*100)/100,missing:null});
  }
  if(!recipe.productivity?.approved||!recipe.productivity.evidenceId||!Number.isFinite(recipe.productivity.quantityPerHour)||recipe.productivity.quantityPerHour!<=0)missing.push('productivity_unverified');
- if(!Number.isFinite(subtotal))missing.push('subtotal_overflow');
+ if(!Number.isFinite(subtotal)||!Number.isSafeInteger(Math.round(subtotal*100)))missing.push('subtotal_overflow');
+ const total= basis.contractQuantityUsable ? subtotal*basis.contractQuantity! : NaN;
+ if(basis.contractQuantityUsable&&(!Number.isFinite(total)||!Number.isSafeInteger(Math.round(total*100))))missing.push('contract_cost_overflow');
  const complete=missing.length===0;
- return {id:gaeb.id,contractQuantity:basis.contractQuantity,unit:gaeb.unit,lines,documentedSubtotalEUR:Math.round(subtotal*100)/100,completeDirectCostPerUnitEUR:complete?Math.round(subtotal*100)/100:null,completeContractCostEUR:complete?Math.round(subtotal*basis.contractQuantity!*100)/100:null,missing,unitPriceEUR:null,productionWriteAllowed:false,status:'needs_review' as const};
+ return {id:gaeb.id,contractQuantity:basis.contractQuantity,unit:gaeb.unit,lines,documentedSubtotalEUR:Number.isFinite(subtotal)&&Number.isSafeInteger(Math.round(subtotal*100))?Math.round(subtotal*100)/100:null,completeDirectCostPerUnitEUR:complete?Math.round(subtotal*100)/100:null,completeContractCostEUR:complete?Math.round(total*100)/100:null,missing,unitPriceEUR:null,productionWriteAllowed:false,status:'needs_review' as const};
 }
