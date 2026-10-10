@@ -4,9 +4,9 @@ import { diagnoseV3LunaCandidate } from "./v3LunaMotorBridge";
 
 const operationPatterns: Array<[string, RegExp]> = [
   ["remove", /\b(?:abbruch|abbrechen|rueckbau|rückbau|rueckbauen|rückbauen|demont\w*|remove|demolish|ausbau\w*|ausbauen|abtragen|entsorg\w*|aufnehm\w*)\b/i],
-  ["install", /\b(?:verleg\w*|einbau\w*|einbauen|montier\w*|install\w*|anschlie\w*|setzen|versetz\w*)\b/i],
-  ["construct", /\b(?:herstell\w*|bau\w*|construct\w*|aufbring\w*|sanier\w*|versiegel\w*|verdicht\w*)\b/i],
-  ["supply", /\b(?:liefer\w*|supply|delivery|bereitstell\w*|vorhalt\w*)\b/i],
+  ["install", /\b(?:verleg\w*|einbau\w*|einbauen|montier\w*|install\w*|anschlie\w*|aufsetz\w*|aufstell\w*|setz\w*|versetz\w*)\b/i],
+  ["construct", /\b(?:herstell\w*|bau\w*|construct\w*|aufbring\w*|sanier\w*|versiegel\w*|verdicht\w*|nachverdicht\w*|planier\w*|ausgleich\w*|nachbesser\w*|sicher\w*|schütz\w*|schuetz\w*)\b/i],
+  ["supply", /\b(?:liefer\w*|supply|delivery|bereitstell\w*|vorhalt\w*|transport\w*|fördern|foerdern)\b/i],
   ["inspect", /\b(?:prüf\w*|prüfung\w*|pruef\w*|pruefung\w*|inspect\w*|mess\w*|testing|untersuch\w*)\b/i]
 ];
 const normalizeOperation = (raw: unknown) => {
@@ -26,6 +26,12 @@ export function inferV3Operation(shortText: string, longText: string, aiWork: st
   if (/\b(?:vorhalt\w*|längervorhaltung|laengervorhaltung|unterhalt\w*|betreib\w*)\b/.test(principalScope))
     return { operation: "unknown" as const, evidence: "temporary_service_requires_duration", ambiguity: false,
       longtextSignals: [] as string[] };
+  // Combined delivery + installation is one composite scope, not a pure material delivery.
+  const mixText = principalScope + " " + aiWork.toLocaleLowerCase("de-DE");
+  if (/\b(?:liefer\w*|materialliefer\w*)\b/.test(principalScope) &&
+      /\b(?:einbau\w*|verleg\w*|montier\w*|aufstell\w*)\b/.test(mixText))
+    return { operation: "unknown" as const, evidence: "mixed_delivery_and_installation",
+      ambiguity: true, longtextSignals: [] as string[] };
   const explicit = normalizeOperation(aiOperation);
   const short = operationPatterns.filter(([,re]) => re.test(shortText)).map(([op]) => op);
   const work = operationPatterns.filter(([,re]) => re.test(aiWork)).map(([op]) => op);
