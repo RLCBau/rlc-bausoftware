@@ -2,15 +2,31 @@ import { z } from "zod";
 import { completeRlcAiText } from "../../services/ai/rlcAiGateway";
 import { diagnoseV3LunaCandidate } from "./v3LunaMotorBridge";
 
+const operationPatterns: Array<[string, RegExp]> = [
+  ["remove", /\b(?:abbruch|abbrechen|rueckbau|rückbau|rueckbauen|rückbauen|demont\w*|remove|demolish|ausbau\w*|ausbauen|abtragen|entsorg\w*|aufnehm\w*)\b/i],
+  ["install", /\b(?:verleg\w*|einbau\w*|einbauen|montier\w*|install\w*|anschlie\w*|setzen|versetz\w*)\b/i],
+  ["construct", /\b(?:herstell\w*|bau\w*|construct\w*|aufbring\w*|sanier\w*|versiegel\w*|verdicht\w*)\b/i],
+  ["supply", /\b(?:liefer\w*|supply|delivery|bereitstell\w*|vorhalt\w*)\b/i],
+  ["inspect", /\b(?:prüf\w*|prüfung\w*|pruef\w*|pruefung\w*|inspect\w*|mess\w*|testing|untersuch\w*)\b/i]
+];
 const normalizeOperation = (raw: unknown) => {
   const value = String(raw || "").toLowerCase().trim();
-  if (/\b(abbruch|rueckbau|rückbau|demont|remove|demolish|ausbauen|abtragen|entsorgen)\b/.test(value)) return "remove";
-  if (/\b(verleg|einbau|montier|install|laying|connecting)\w*/.test(value)) return "install";
-  if (/\b(herstell|bau|construct|aufbring|sanier|versiegel)\w*/.test(value)) return "construct";
-  if (/\b(liefer|supply|delivery|bereitstell)\w*/.test(value)) return "supply";
-  if (/\b(prüf|pruef|inspect|mess|testing)\w*/.test(value)) return "inspect";
+  for (const [operation, pattern] of operationPatterns)
+    if (pattern.test(value)) return operation;
   return "unknown";
 };
+/** Advisory only; conflicting verbs remain unresolved instead of choosing a price family. */
+export function inferV3Operation(shortText: string, longText: string, aiWork: string, aiOperation: string) {
+  const explicit = normalizeOperation(aiOperation);
+  const short = operationPatterns.filter(([,re]) => re.test(shortText)).map(([op]) => op);
+  const work = operationPatterns.filter(([,re]) => re.test(aiWork)).map(([op]) => op);
+  // Kurztext defines the principal scope. Longtext may include auxiliary disposal/supply.
+  const principal = short.length === 1 ? short[0] : work.length === 1 ? work[0] : null;
+  const operation = principal || (short.length === 0 && work.length === 0 ? explicit : "unknown");
+  return { operation, evidence: principal ? "short_or_main_work" : explicit !== "unknown" && operation !== "unknown" ? "ai_operation" : "unresolved",
+    ambiguity: short.length > 1 || (!principal && work.length > 1),
+    longtextSignals: operationPatterns.filter(([,re]) => re.test(longText.slice(0, 1500))).map(([op]) => op) };
+}
 const normalizeResourceType = (raw: unknown) => {
   const value = String(raw || "").toLowerCase().trim();
   if (/material|baustoff/.test(value)) return "material";
@@ -68,11 +84,13 @@ export async function analyzeWithLunaV3(input: {
     ]
   });
   const interpretation = normalizeV3Interpretation(JSON.parse(response.text.replace(/^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$/g, "")));
+  const operationEvidence = inferV3Operation(input.kurztext, input.langtext, interpretation.mainWork, interpretation.operation);
+  interpretation.operation = operationEvidence.operation as typeof interpretation.operation;
   const candidate = diagnoseV3LunaCandidate({
     kurztext: input.kurztext, langtext: input.langtext, einheit: input.einheit
   }, input.trade, interpretation);
   return {
-    interpretation, candidate,
+    interpretation, operationEvidence, candidate,
     provider: response.provider, model: response.model,
     authority: "RLC_MOTOR" as const,
     approvedForEP: false as const, unitPrice: null, totalPrice: null,
