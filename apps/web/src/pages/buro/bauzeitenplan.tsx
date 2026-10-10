@@ -1,3 +1,4 @@
+import PlanResourceHandoff from './PlanResourceHandoff';
 import React from "react";
 
 import { apiUrl } from "../../lib/apiBase";
@@ -226,6 +227,7 @@ export default function Bauzeitenplan() {
   const [error, setError] =
     React.useState("");
 
+  const [resourceTask,setResourceTask]=React.useState('');
   const [version,setVersion]=React.useState(''),[canEdit,setCanEdit]=React.useState(false),[history,setHistory]=React.useState<any>();
   const generation=React.useRef(0),saveGuard=React.useRef(false),owner=React.useRef(projectId),versionRef=React.useRef(version),loadedOwner=React.useRef('');owner.current=projectId;versionRef.current=version;
   const signature=JSON.stringify({start:planStart,tasks,capacity}),signatureRef=React.useRef(signature);signatureRef.current=signature;
@@ -235,7 +237,7 @@ export default function Bauzeitenplan() {
     ) || null;
 
   const load = React.useCallback(async () => {
-    const n=++generation.current;loadedOwner.current="";setVersion("");setCanEdit(false);setTasks([]);setCapacity({});setDirty(false);setSelectedId(null);
+    const n=++generation.current;loadedOwner.current="";setVersion("");setCanEdit(false);setTasks([]);setCapacity({});setDirty(false);setSelectedId(null);setResourceTask('');
     if (!projectId) {
       setTasks([]);
       setSelectedId(null);
@@ -1127,6 +1129,8 @@ export default function Bauzeitenplan() {
             </>
           )}
           </fieldset>
+          {selected&&canEdit&&<button className="btn" disabled={saving||dirty||loading||!selected.start||!selected.end} onClick={()=>setResourceTask(selected.id)}>In Einsatzplanung übernehmen</button>}
+          {selected&&resourceTask===selected.id&&<PlanResourceHandoff key={projectId+':'+selected.id+':'+version} projectId={projectId} task={selected} version={version} disabled={dirty||saving||!canEdit||loadedOwner.current!==projectId} onClose={()=>setResourceTask('')}/>}
         </aside>
       </div>
     </div>
