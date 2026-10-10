@@ -5,7 +5,7 @@ const outfile='/tmp/rlc-v3-100-ai-results.jsonl';
 const previous=fs.existsSync(outfile)?fs.readFileSync(outfile,'utf8').trim().split('\n').filter(Boolean).map(s=>JSON.parse(s)):[];
 const entries=new Array(src.length);
 for(const row of previous) entries[row.index]=row;
-const pending=src.map((_,i)=>i).filter(i=>!entries[i]).slice(0,15);
+const pending=src.map((_,i)=>i).filter(i=>!entries[i] || !entries[i].ok).slice(0,15);
 let next=0,done=0;
 async function worker(){
  while(next<pending.length){
