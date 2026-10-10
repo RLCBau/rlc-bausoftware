@@ -9,6 +9,7 @@ import type { KalkulationAgentsResult } from "./agents/types";
 import { calculateAutonomousUrkalkulation } from "./autonomous/autonomousUrkalkulationEngine";
 import { analyzeRlcProjectContext } from "./autonomous/projectContextAnalyzer";
 import { diagnoseV3LunaCandidate } from "./autonomous/v3LunaMotorBridge";
+import { resolveV3GaebReference } from "./autonomous/v3GaebReferenceResolver";
 import type { RlcAutonomousCalcInput, RlcAutonomousCalcResult, RlcAutonomousProjectContext } from "./autonomous/types";
 
 export type RlcAutonomousResolveResult = {
@@ -16,6 +17,7 @@ export type RlcAutonomousResolveResult = {
   agents: KalkulationAgentsResult;
   result: RlcAutonomousCalcResult | null;
   v3Diagnosis?: ReturnType<typeof diagnoseV3LunaCandidate>;
+  v3GaebReference?: ReturnType<typeof resolveV3GaebReference>;
 };
 
 /*
@@ -103,6 +105,9 @@ export function resolveRlcAutonomousCalculation(
     agents,
     result,
     v3Diagnosis,
+    v3GaebReference: result?.calculationStatus === "needs_review" &&
+      /\b(?:zulage|zuschlag|wie vor|vorposition|bezugsposition)\b/i.test(String(row.kurztext || "") + " " + String(row.langtext || ""))
+      ? resolveV3GaebReference(row, contextRows) : undefined,
   };
 }
 
