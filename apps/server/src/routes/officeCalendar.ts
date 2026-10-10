@@ -176,6 +176,7 @@ router.post("/", async (req: any, res) => {
       });
     }
 
+    if(['bauzeitenplan','task'].includes(req.body?.sourceType)) return res.status(409).json({ok:false,error:'Bitte die Übernahme im Bauzeitenplan/Aufgabenmodul verwenden.'});
     if(protectedType(req.body?.sourceType)) return res.status(409).json({ok:false,error:"Ruhetage über die Feiertage-Verwaltung bearbeiten."});
     const title = String(req.body?.title || "").trim();
     const start = new Date(req.body?.start);
@@ -267,6 +268,8 @@ router.put("/:id", async (req: any, res) => {
         error: "NOT_FOUND"
       });
     }
+    if(['bauzeitenplan','task'].includes(req.body?.sourceType)&&req.body.sourceType!==current.sourceType) return res.status(409).json({ok:false,error:'Quellverknüpfung über das Quellmodul erstellen.'});
+    if(['bauzeitenplan','task'].includes(current.sourceType||'') && ((req.body?.sourceType!==undefined&&req.body.sourceType!==current.sourceType)||(req.body?.sourceId!==undefined&&req.body.sourceId!==current.sourceId)||(req.body?.projectId!==undefined&&req.body.projectId!==current.projectId))) return res.status(409).json({ok:false,error:'Quellverknüpfung darf nicht geändert werden.'});
     if(protectedType(current.sourceType)||protectedType(req.body?.sourceType)) return res.status(409).json({ok:false,error:"Ruhetage über die Feiertage-Verwaltung bearbeiten."});
     if (!current.projectId && !requireCompanyWideCalendarAdmin(req, res)) return;
     if (current.projectId && !(await canAccessProject(req,cid,current.projectId))) {

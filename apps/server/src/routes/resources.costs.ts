@@ -1,3 +1,5 @@
+import {lockPlanningResource,assertPlanningCapacity} from '../services/planningCapacity';
+import {PlanError} from '../domain/constructionPlan';
 import { Router } from "express";
 import {bookedMachineItems,machineCostReport} from "../services/machineCostSummary";
 import {moneyText,usageDecimal} from "../domain/machineUsage";
@@ -1519,6 +1521,8 @@ function planningHandler(fn:(req:any,res:any)=>Promise<any>) {
     if(error?.message==="MAINTENANCE_EVIDENCE_LOCKED")return res.status(409).json({ok:false,error:"BETRSICHV_EVIDENCE_LOCKED"});
     if(error?.message==="MAINTENANCE_CONFLICT")return res.status(409).json({ok:false,error:"MAINTENANCE_CONFLICT",message:"Wartung wurde geändert. Bitte neu laden."});
     if(error?.message==="PLANNING_CONFLICT")return res.status(409).json({ok:false,error:"PLANNING_CONFLICT",message:"Einsatz wurde geändert. Bitte neu laden."});
+    if(error?.code==='P2002')return res.status(409).json({ok:false,error:'PLANNING_CONFLICT'});
+    if(error instanceof PlanError)return res.status(error.status).json({ok:false,error:error.message});
     if(error instanceof InputError) return res.status(400).json({ok:false,error:"INVALID_PLANNING_INPUT",message:error.message});
     return next(error);
   });
@@ -1549,21 +1553,13 @@ router.post("/assignments", planningHandler(async (req:any,res) => {
   if(!exists)return res.status(404).json({ok:false,error:"RESOURCE_NOT_FOUND"});
   const requestId=typeof b.id==="string" && /^new-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(b.id)?b.id.slice(4):undefined;
   const data={companyId:cid,resourceType,resourceId,date:new Date(date+"T12:00:00.000Z"),projectId:project.projectId,hours,notes};
-  const replay=async()=>{
-    if(!requestId)return null;
-    const existing=await prisma.resourceAssignment.findFirst({where:{id:requestId,companyId:cid}});
-    if(!existing)return null;
-    if(existing.resourceType!==resourceType || existing.resourceId!==resourceId || existing.projectId!==project.projectId || existing.date.getTime()!==data.date.getTime() || existing.hours!==hours || existing.notes!==notes)throw new Error("PLANNING_CONFLICT");
-    return existing;
-  };
-  let item=await replay();
-  if(!item){
-    try{item=await prisma.resourceAssignment.create({data:{...data,...(requestId?{id:requestId}:{})}});}
-    catch(error:any){
-      if(error?.code!=="P2002" || !requestId)throw error;
-      item=await replay();if(!item)throw new Error("PLANNING_CONFLICT");
-    }
-  }
+  const item=await prisma.$transaction(async tx=>{
+    await lockPlanningResource(tx,cid,resourceType,resourceId);
+    if(requestId){const existing=await tx.resourceAssignment.findFirst({where:{id:requestId,companyId:cid}});if(existing){if(existing.resourceType!==resourceType||existing.resourceId!==resourceId||existing.projectId!==project.projectId||existing.date.getTime()!==data.date.getTime()||existing.hours!==hours||existing.notes!==notes)throw new Error('PLANNING_CONFLICT');return existing;}}
+    await assertPlanningCapacity(tx,cid,resourceType,resourceId,data.date,hours);
+    const item=await tx.resourceAssignment.create({data:{...data,...(requestId?{id:requestId}:{})}});
+    await tx.auditLog.create({data:{companyId:cid,userId:resourceUserId(req),action:'RESOURCE_ASSIGNMENT_CREATE',resource:'resource-assignment:'+item.id,meta:JSON.parse(JSON.stringify({after:item}))}});return item;
+  });
   return res.json({ok:true,item:{...item,date:item.date.toISOString().slice(0,10)}});
 }));
 
@@ -1579,11 +1575,11 @@ router.put("/assignments/:id", planningHandler(async (req:any,res) => {
   const notes=b.notes!==undefined?planningNotes(b.notes):undefined;
   if(b.updatedAt!==undefined && b.updatedAt!==existing.updatedAt.toISOString())throw new Error("PLANNING_CONFLICT");
   const item=await prisma.$transaction(async tx=>{
-    const changed=await tx.resourceAssignment.updateMany({where:{id,companyId:cid,...visibility,updatedAt:existing.updatedAt},data:{
-      projectId:b.projectId!==undefined?target.projectId:undefined,hours,notes
-    }});
-    if(changed.count!==1)throw new Error("PLANNING_CONFLICT");
-    return tx.resourceAssignment.findUniqueOrThrow({where:{id}});
+    await lockPlanningResource(tx,cid,existing.resourceType,existing.resourceId);
+    const current=await tx.resourceAssignment.findFirst({where:{id,companyId:cid,...visibility}});if(!current||current.updatedAt.getTime()!==existing.updatedAt.getTime())throw new Error('PLANNING_CONFLICT');
+    await assertPlanningCapacity(tx,cid,current.resourceType,current.resourceId,current.date,hours===undefined?current.hours:hours,id);
+    const item=await tx.resourceAssignment.update({where:{id},data:{projectId:b.projectId!==undefined?target.projectId:undefined,hours,notes,updatedAt:new Date(Math.max(Date.now(),current.updatedAt.getTime()+1))}});
+    await tx.auditLog.create({data:{companyId:cid,userId:resourceUserId(req),action:'RESOURCE_ASSIGNMENT_UPDATE',resource:'resource-assignment:'+id,meta:JSON.parse(JSON.stringify({before:current,after:item}))}});return item;
   });
   return res.json({ok:true,item:{...item,date:item.date.toISOString().slice(0,10)}});
 }));
