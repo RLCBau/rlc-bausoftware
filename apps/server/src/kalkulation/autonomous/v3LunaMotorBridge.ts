@@ -17,8 +17,21 @@ export function diagnoseV3LunaCandidate(row: RlcAutonomousCalcInput, trade: stri
     names = raw.families.map(entry => entry.family);
   }
   const diagnosis = rankTechnicalFamilies(trade, String(row.kurztext || ""), String(row.langtext || ""), String(row.einheit || ""), ai, cached, names);
+  // V3 operation is advisory, but contradictory routing must fail closed.
+  const candidates = diagnosis.candidates.map(candidate => {
+    const name = candidate.family.toLocaleLowerCase("de-DE");
+    const operation = ai.operation || "unknown";
+    const contradicts =
+      (operation === "remove" && /wiedereinbau|wiederverleg|neumontage/.test(name)) ||
+      (operation === "install" && /asphaltausbau|rückbau|abbruch|demontage/.test(name));
+    return contradicts
+      ? { ...candidate, eligible: false, issues: [...candidate.issues, "v3_operation_family_conflict"] }
+      : candidate;
+  });
   return {
     ...diagnosis,
+    candidates,
+    eligibleCount: candidates.filter(candidate => candidate.eligible).length,
     authority: "RLC_MOTOR" as const,
     modelCalled: false as const,
     priceApproved: false as const,
