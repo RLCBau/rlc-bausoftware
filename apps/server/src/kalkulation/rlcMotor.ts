@@ -101,7 +101,19 @@ export function calculateRlcMotorWithContext(
   allRows: RlcAutonomousCalcInput[] = []
 ): RlcAutonomousCalcResult | null {
   const result = calculateAutonomousUrkalkulation(row, context, allRows);
-  if (!result || result.calculationStatus === "needs_review" || (result.unitPrice === 0 && result.total === 0 && result.costLines.length === 0)) return result;
+  if (!result) return null; // Non convertire titoli/righe strutturali senza soluzione in prezzi.
+  if (result.calculationStatus === "needs_review") {
+    return { ...result, unitPrice: 0, total: 0, costLines: [],
+      confidence: 0, riskLevel: "high",
+      warnings: [...result.warnings, "RLC_MOTOR_REVIEW_PRICE_BLOCKED"] };
+  }
+  // Una lavorazione riconosciuta senza EP non può restare in stato "warning" o "ok".
+  if (!(result.unitPrice > 0)) {
+    return { ...result, unitPrice: 0, total: 0, costLines: [],
+      calculationStatus: "needs_review", confidence: 0, riskLevel: "high",
+      warnings: [...result.warnings, "RLC_MOTOR_MISSING_VALID_EP"],
+      aiReason: `${result.aiReason} RLC Motor: keine belastbare Urkalkulation; EP/GP gesperrt.` };
+  }
   const amountValid = (value: number) => Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100));
   const linesValid = result.costLines.length > 0 && result.costLines.every(line =>
     amountValid(line.total) && amountValid(line.unitPrice) &&
