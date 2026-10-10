@@ -132,5 +132,12 @@ export function previewRlcMotorV3(position: CostPosition, recipe: CostRecipe) {
     components: recipe.components.map(component => ({...component, approved:false, evidenceId:null})),
     productivity: recipe.productivity ? {...recipe.productivity, approved:false, evidenceId:null} : undefined,
   };
-  return previewGaebResourceCosts(position, untrusted);
+  const preview = previewGaebResourceCosts(position, untrusted);
+  return {
+    ...preview,
+    authority: "RLC_MOTOR",
+    approvalSource: "server_evidence_not_configured" as const,
+    productionWriteAllowed: false as const,
+    missing: [...new Set([...preview.missing, "server_approved_resource_evidence_missing", "server_approved_productivity_evidence_missing"])],
+  };
 }
