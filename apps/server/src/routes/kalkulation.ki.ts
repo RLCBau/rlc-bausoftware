@@ -5884,32 +5884,11 @@ export async function applyGlobalKnowledgeHint(row: InputRow, result: any): Prom
       gkMax > 0 &&
       resultEp > gkMax * 3;
 
-    const boostedConfidence = gkOutlier
-      ? Math.min(n((result as any).confidence), 0.45)
-      : gkStrong
-        ? Math.min(
-            0.92,
-            Math.max(
-              n((result as any).confidence),
-              gkConfidence,
-              n((result as any).confidence) + 0.08
-            )
-          )
-        : n((result as any).confidence);
-
-    const boostedRiskLevel =
-      gkOutlier
-        ? "high"
-        : gkStrong && s((result as any).riskLevel) === "high"
-          ? "medium"
-          : (result as any).riskLevel;
-
-    const boostedStatus =
-      gkOutlier
-        ? "needs_review"
-        : gkStrong && s((result as any).calculationStatus) === "critical"
-          ? "warning"
-          : (result as any).calculationStatus;
+    // Global Knowledge is diagnostic evidence only. It cannot approve, demote,
+    // or override the technical confidence/risk/review verdict from the price engine.
+    const boostedConfidence = (result as any).confidence;
+    const boostedRiskLevel = (result as any).riskLevel;
+    const boostedStatus = (result as any).calculationStatus;
 
     const trustNote = gkStrong
       ? gkOutlier
