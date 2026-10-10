@@ -129,6 +129,8 @@ export default function TasksPage() {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
 
+  const [canEdit,setCanEdit]=React.useState(false),[dirty,setDirty]=React.useState(false),[history,setHistory]=React.useState<any>();
+  const generation=React.useRef(0),owner=React.useRef(projectId),loadedOwner=React.useRef(''),writeGuard=React.useRef(false);owner.current=projectId;
   const selected =
     items.find((item) => item.id === selectedId) || null;
 
@@ -141,6 +143,7 @@ export default function TasksPage() {
   });
 
   const load = React.useCallback(async () => {
+    const n=++generation.current;loadedOwner.current='';setCanEdit(false);setItems([]);setSelectedId(null);setHistory(undefined);setDirty(false);
     if (!projectId) {
       setItems([]);
       return;
@@ -152,12 +155,13 @@ export default function TasksPage() {
     try {
       const data = await request<{
         ok: true;
-        items: Task[];
+        items: Task[]; canEdit: boolean;
       }>(
         `/api/tasks?projectId=${encodeURIComponent(projectId)}`
       );
 
-      setItems(data.items || []);
+      if(n!==generation.current||owner.current!==projectId)return;
+      loadedOwner.current=projectId;setCanEdit(data.canEdit===true);setItems(data.items || []);
 
       setSelectedId((current) => {
         if (
@@ -170,9 +174,9 @@ export default function TasksPage() {
         return data.items?.[0]?.id || null;
       });
     } catch (e: any) {
-      setError(e?.message || "Aufgaben konnten nicht geladen werden.");
+      if(n===generation.current&&owner.current===projectId)setError(e?.message || 'Aufgaben konnten nicht geladen werden.');
     } finally {
-      setLoading(false);
+      if(n===generation.current)setLoading(false);
     }
   }, [projectId]);
 
@@ -181,6 +185,7 @@ export default function TasksPage() {
   }, [load]);
 
   React.useEffect(() => {
+    setDirty(false);setHistory(undefined);
     if (!selected) {
       setForm({
         title: "",
@@ -201,142 +206,31 @@ export default function TasksPage() {
     });
   }, [selectedId, selected?.updatedAt]);
 
-  async function createTask() {
-    if (!projectId) return;
-
-    setSaving(true);
-
-    try {
-      const data = await request<{
-        ok: true;
-        item: Task;
-      }>("/api/tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          projectId,
-          title: "Neue Aufgabe",
-          priority: "med",
-          tags: []
-        })
-      });
-
-      await load();
-      setSelectedId(data.item.id);
-    } catch (e: any) {
-      setError(e?.message || "Aufgabe konnte nicht erstellt werden.");
-    } finally {
-      setSaving(false);
-    }
+  async function mutate(operation:()=>Promise<void>){
+    if(!canEdit||saving||writeGuard.current||loadedOwner.current!==projectId)return;
+    writeGuard.current=true;setSaving(true);setError('');const id=projectId;
+    try{await operation();}catch(e:any){if(owner.current===id)setError(e.message||'Änderung fehlgeschlagen.');}
+    finally{writeGuard.current=false;setSaving(false);}
   }
-
-  async function saveTask() {
-    if (!selected) return;
-
-    setSaving(true);
-
-    try {
-      await request(
-        `/api/tasks/${encodeURIComponent(selected.id)}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            title: form.title,
-            due: form.due || null,
-            assignee: form.assignee || null,
-            priority: form.priority,
-            tags: form.tags
-              .split(",")
-              .map((x) => x.trim())
-              .filter(Boolean)
-          })
-        }
-      );
-
-      await load();
-    } catch (e: any) {
-      setError(e?.message || "Aufgabe konnte nicht gespeichert werden.");
-    } finally {
-      setSaving(false);
-    }
+  async function createTask(){
+    if(dirty&&!window.confirm('Ungespeicherte Änderungen verwerfen?'))return;
+    await mutate(async()=>{const data=await request<{item:Task}>('/api/tasks',{method:'POST',body:JSON.stringify({projectId,title:'Neue Aufgabe',priority:'med',tags:[]})});if(owner.current!==projectId)return;await load();if(owner.current===projectId)setSelectedId(data.item.id);});
   }
-
-  async function toggleDone(task: Task) {
-    await request(
-      `/api/tasks/${encodeURIComponent(task.id)}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({
-          done: !task.done
-        })
-      }
-    );
-
-    await load();
-  }
-
-  async function moveTaskToCalendar() {
-    if (!selected) return;
-
-    if (!selected.due) {
-      window.alert("Bitte zuerst ein Fälligkeitsdatum festlegen.");
-      return;
-    }
-
-    const start = new Date(selected.due);
-
-    if (Number.isNaN(start.getTime())) {
-      window.alert("Das Fälligkeitsdatum ist ungültig.");
-      return;
-    }
-
-    start.setHours(9, 0, 0, 0);
-
-    const end = new Date(start);
-    end.setHours(10, 0, 0, 0);
-
-    try {
-      await request("/api/calendar", {
-        method: "POST",
-        body: JSON.stringify({
-          projectId: selected.projectId,
-          title: selected.title,
-          start: start.toISOString(),
-          end: end.toISOString(),
-          allDay: false,
-          attendees: [],
-          notes: (selected as any).description || "",
-          category: "Projekt",
-          busyStatus: "busy",
-          reminderMinutes: 15,
-          sourceType: "task",
-          sourceId: selected.id
-        })
-      });
-
-      window.location.assign("/buro/outlook");
-    } catch (e: any) {
-      setError(
-        e?.message ||
-        "Termin konnte nicht erstellt werden."
-      );
-    }
-  }
-
-  async function removeTask() {
-    if (!selected) return;
-
-    if (!window.confirm(`Aufgabe "${selected.title}" löschen?`)) {
-      return;
-    }
-
-    await request(
-      `/api/tasks/${encodeURIComponent(selected.id)}`,
-      { method: "DELETE" }
-    );
-
-    setSelectedId(null);
-    await load();
-  }
+  async function saveTask(){if(!selected)return;await mutate(async()=>{
+    const data=await request<{item:Task}>(`/api/tasks/${encodeURIComponent(selected.id)}`,{method:'PUT',body:JSON.stringify({expectedUpdatedAt:selected.updatedAt,title:form.title,due:form.due||null,assignee:form.assignee||null,priority:form.priority,tags:form.tags.split(',').map(x=>x.trim()).filter(Boolean)})});
+    if(owner.current!==projectId)return;setItems(rows=>rows.map(row=>row.id===data.item.id?data.item:row));setDirty(false);
+  });}
+  async function toggleDone(task:Task){if(dirty){setError('Änderungen zuerst speichern.');return;}await mutate(async()=>{
+    const data=await request<{item:Task}>(`/api/tasks/${encodeURIComponent(task.id)}`,{method:'PUT',body:JSON.stringify({done:!task.done,expectedUpdatedAt:task.updatedAt})});if(owner.current===projectId)setItems(rows=>rows.map(row=>row.id===data.item.id?data.item:row));
+  });}
+  async function moveTaskToCalendar(){if(!selected)return;if(dirty){setError('Änderungen zuerst speichern.');return;}await mutate(async()=>{
+    const result=await request<{created:boolean}>(`/api/tasks/${encodeURIComponent(selected.id)}/calendar`,{method:'POST',body:JSON.stringify({expectedUpdatedAt:selected.updatedAt})});if(owner.current!==projectId)return;window.alert(result.created?'Ganztägiger Termin wurde erstellt.':'Termin ist bereits vorhanden. Änderungen im Kalender bleiben erhalten.');
+  });}
+  async function removeTask(){if(!selected||!window.confirm(`Aufgabe "${selected.title}" löschen? Zugehörige Termine bleiben erhalten.`))return;await mutate(async()=>{
+    await request(`/api/tasks/${encodeURIComponent(selected.id)}`,{method:'DELETE',body:JSON.stringify({expectedUpdatedAt:selected.updatedAt})});if(owner.current===projectId)await load();
+  });}
+  async function showHistory(){if(!selected)return;const id=selected.id,p=projectId;try{const data=await request<{items:any[]}>(`/api/tasks/${encodeURIComponent(id)}/history`);if(owner.current===p)setHistory({id,items:data.items});}catch(e:any){if(owner.current===p)setError(e.message);}}
+  React.useEffect(()=>{const fn=(e:BeforeUnloadEvent)=>{if(dirty){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',fn);return()=>window.removeEventListener('beforeunload',fn);},[dirty]);
 
   const filtered = items.filter((item) => {
     const q = query.toLowerCase().trim();
@@ -376,7 +270,7 @@ export default function TasksPage() {
           <button
             className="rlc-page-hero__button"
             onClick={() => void createTask()}
-            disabled={!projectId || saving}
+            disabled={!canEdit || !projectId || saving || loading}
           >
             + Neue Aufgabe
           </button>
@@ -422,7 +316,7 @@ export default function TasksPage() {
           Nur offene
         </label>
 
-        <button className="btn" onClick={() => void load()}>
+        <button className="btn" onClick={() => {if(!dirty||window.confirm('Ungespeicherte Änderungen verwerfen?'))void load();}}>
           Aktualisieren
         </button>
       </div>
@@ -449,7 +343,7 @@ export default function TasksPage() {
                     ? "rlc-page-document-row is-active"
                     : "rlc-page-document-row"
                 }
-                onClick={() => setSelectedId(task.id)}
+                onClick={() => {if(!saving&&(!dirty||window.confirm('Ungespeicherte Änderungen verwerfen?')))setSelectedId(task.id);}}
               >
                 <div className="rlc-page-document-icon">
                   {task.done ? "✓" : "A"}
@@ -490,6 +384,7 @@ export default function TasksPage() {
                 <h2>{selected.title}</h2>
               </div>
 
+              <fieldset disabled={!canEdit || saving || loading || loadedOwner.current!==projectId} onChangeCapture={()=>setDirty(true)} style={{border:0,padding:0,margin:0,minWidth:0}}>
               <div className="rlc-page-detail-actions">
                 <button
                   className="btn btn-primary"
@@ -583,6 +478,10 @@ export default function TasksPage() {
                   </Field>
                 </div>
               </div>
+              </fieldset>
+              <button className="btn" onClick={()=>void showHistory()}>Änderungsverlauf</button>
+              {dirty&&<p className="muted">Ungespeicherte Änderungen</p>}
+              {history?.id===selected.id&&<div className="card">{history.items.length===0?'Noch keine protokollierten Änderungen.':history.items.map((h:any)=><div key={h.id}>{new Date(h.createdAt).toLocaleString('de-DE')} · {h.action}</div>)}</div>}
             </>
           )}
         </section>

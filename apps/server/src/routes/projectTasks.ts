@@ -1,153 +1,33 @@
-import { Router } from "express";
-import { prisma } from "../lib/prisma";
-
-function companyId(req: any) {
-  return String(req.auth?.companyId || "").trim();
+import { Router } from 'express';
+import { prisma } from '../lib/prisma';
+import { InputError } from '../domain/officeAddons';
+import { PlanError, planDay } from '../domain/constructionPlan';
+import { scopedTaskProject, requireTaskWrite, taskWriteAllowed, taskVersion, taskAudit, handoffFailure, createTaskCalendar } from '../services/planHandoff';
+const router=Router();
+function taskInput(body:any,current:any={}){
+ const data:any={};
+ for(const [key,max,required] of [['title',250,true],['description',5000,false],['assignee',250,false],['sourceType',120,false],['sourceId',120,false]] as const){
+  if(body[key]===undefined&&current.id)continue;
+  const value=body[key]??'';if(typeof value!=='string'||value.length>max||(required&&!value.trim()))throw new InputError(key+': ungültiger Text.');data[key]=value.trim()||(required?'':null);
+ }
+ if(current.id&&(body.sourceType!==undefined||body.sourceId!==undefined)){
+  if((body.sourceType!==undefined&&(data.sourceType||null)!==current.sourceType)||(body.sourceId!==undefined&&(data.sourceId||null)!==current.sourceId))throw new InputError('Quellverknüpfung darf nicht geändert werden.');
+ }
+ if(body.done!==undefined){if(typeof body.done!=='boolean')throw new InputError('done: Wahrheitswert erforderlich.');data.done=body.done;}
+ if(body.priority!==undefined||!current.id){data.priority=body.priority??'med';if(!['low','med','high'].includes(data.priority))throw new InputError('Priorität ungültig.');}
+ if(body.tags!==undefined||!current.id){const value=body.tags??[];if(!Array.isArray(value)||value.length>50||value.some((t:any)=>typeof t!=='string'||t.length>120))throw new InputError('Tags ungültig.');data.tags=Array.from(new Set(value.map((t:string)=>t.trim()).filter(Boolean)));}
+ if(body.due!==undefined||!current.id){if(body.due!==undefined&&body.due!==null&&typeof body.due!=='string')throw new InputError('Fälligkeit: Datum erforderlich.');data.due=body.due?planDay(body.due):null;}
+ return data;
 }
-
-function userId(req: any) {
-  return String(req?.auth?.sub || req?.auth?.userId || "").trim();
+async function currentTask(req:any,tx:any){
+ const cid=String(req.auth?.companyId||'');const current=await tx.projectTask.findFirst({where:{id:String(req.params.id||''),companyId:cid}});if(!current)throw new PlanError('NOT_FOUND',404);
+ const project=await scopedTaskProject(req,tx,current.projectId);await tx.$queryRaw`SELECT id FROM "Project" WHERE id=${project.id} FOR UPDATE`;
+ const locked=await tx.projectTask.findUnique({where:{id:current.id}});if(!locked)throw new PlanError('NOT_FOUND',404);return {current:locked,project};
 }
-
-function isAdmin(req: any) {
-  const role = String(req?.auth?.companyRole || req?.auth?.role || "").trim().toUpperCase();
-  return role === "ADMIN" || role === "ADMINISTRATOR";
-}
-
-async function projectForCompany(req: any, cid: string, input: any) {
-  const value = String(input || "").trim();
-  if (!value) return null;
-  const uid = userId(req);
-  if (!uid) return null;
-
-  return prisma.project.findFirst({
-    where: {
-      companyId: cid,
-      OR: [{ id: value }, { code: value }],
-      ...(isAdmin(req) ? {} : { members: { some: { userId: uid } } })
-    },
-    select: { id: true }
-  });
-}
-
-async function canAccessProject(req: any, cid: string, projectId: string) {
-  const uid = userId(req);
-  if (!uid) return false;
-  const project = await prisma.project.findFirst({
-    where: {
-      id: projectId,
-      companyId: cid,
-      ...(isAdmin(req) ? {} : { members: { some: { userId: uid } } })
-    },
-    select: { id: true }
-  });
-  return Boolean(project);
-}
-
-function tags(value: any): string[] {
-  if (!Array.isArray(value)) return [];
-  return Array.from(new Set(
-    value.map((x) => String(x || "").trim()).filter(Boolean)
-  ));
-}
-
-
-const router = Router();
-
-router.get("/", async (req: any, res) => {
-  try {
-    const cid = companyId(req);
-    const project = await projectForCompany(req, cid, req.query.projectId);
-    if (!project) return res.status(400).json({ ok: false, error: "PROJECT_REQUIRED" });
-
-    const items = await prisma.projectTask.findMany({
-      where: { companyId: cid, projectId: project.id },
-      orderBy: [{ done: "asc" }, { due: "asc" }, { updatedAt: "desc" }]
-    });
-
-    return res.json({ ok: true, items });
-  } catch (e: any) {
-    return res.status(500).json({ ok: false, error: e?.message || "TASK_LIST_FAILED" });
-  }
-});
-
-router.post("/", async (req: any, res) => {
-  try {
-    const cid = companyId(req);
-    const project = await projectForCompany(req, cid, req.body?.projectId);
-    if (!project) return res.status(400).json({ ok: false, error: "PROJECT_REQUIRED" });
-
-    const title = String(req.body?.title || "").trim();
-    if (!title) return res.status(400).json({ ok: false, error: "TITLE_REQUIRED" });
-
-    const item = await prisma.projectTask.create({
-      data: {
-        companyId: cid,
-        projectId: project.id,
-        title,
-        description: String(req.body?.description || "") || null,
-        sourceType: String(req.body?.sourceType || "") || null,
-        sourceId: String(req.body?.sourceId || "") || null,
-        due: req.body?.due ? new Date(req.body.due) : null,
-        done: Boolean(req.body?.done),
-        assignee: String(req.body?.assignee || "") || null,
-        priority: String(req.body?.priority || "med"),
-        tags: tags(req.body?.tags)
-      }
-    });
-
-    return res.json({ ok: true, item });
-  } catch (e: any) {
-    return res.status(500).json({ ok: false, error: e?.message || "TASK_CREATE_FAILED" });
-  }
-});
-
-router.put("/:id", async (req: any, res) => {
-  try {
-    const cid = companyId(req);
-    const id = String(req.params.id || "");
-
-    const current = await prisma.projectTask.findFirst({ where: { id, companyId: cid } });
-    if (!current || !(await canAccessProject(req, cid, current.projectId))) {
-      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-    }
-
-    const item = await prisma.projectTask.update({
-      where: { id },
-      data: {
-        title: req.body?.title !== undefined ? String(req.body.title || "").trim() : undefined,
-        description: req.body?.description !== undefined ? String(req.body.description || "") || null : undefined,
-        sourceType: req.body?.sourceType !== undefined ? String(req.body.sourceType || "") || null : undefined,
-        sourceId: req.body?.sourceId !== undefined ? String(req.body.sourceId || "") || null : undefined,
-        due: req.body?.due !== undefined ? (req.body.due ? new Date(req.body.due) : null) : undefined,
-        done: req.body?.done !== undefined ? Boolean(req.body.done) : undefined,
-        assignee: req.body?.assignee !== undefined ? String(req.body.assignee || "") || null : undefined,
-        priority: req.body?.priority !== undefined ? String(req.body.priority || "med") : undefined,
-        tags: req.body?.tags !== undefined ? tags(req.body.tags) : undefined
-      }
-    });
-
-    return res.json({ ok: true, item });
-  } catch (e: any) {
-    return res.status(500).json({ ok: false, error: e?.message || "TASK_UPDATE_FAILED" });
-  }
-});
-
-router.delete("/:id", async (req: any, res) => {
-  try {
-    const cid = companyId(req);
-    const id = String(req.params.id || "");
-
-    const current = await prisma.projectTask.findFirst({ where: { id, companyId: cid } });
-    if (!current || !(await canAccessProject(req, cid, current.projectId))) {
-      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-    }
-
-    await prisma.projectTask.delete({ where: { id } });
-    return res.json({ ok: true });
-  } catch (e: any) {
-    return res.status(500).json({ ok: false, error: e?.message || "TASK_DELETE_FAILED" });
-  }
-});
-
+router.get('/',async(req:any,res)=>{try{const project=await scopedTaskProject(req,prisma,req.query.projectId);const items=await prisma.projectTask.findMany({where:{companyId:project.companyId,projectId:project.id},orderBy:[{done:'asc'},{due:'asc'},{updatedAt:'desc'}]});res.json({ok:true,items,canEdit:taskWriteAllowed(req)});}catch(e){handoffFailure(res,e);}});
+router.post('/',async(req:any,res)=>{try{requireTaskWrite(req);const data=taskInput(req.body);if(data.sourceType==='bauzeitenplan')throw new PlanError('Bitte gespeicherten Bauzeitenplan über die Planübernahme verwenden.',409);const item=await prisma.$transaction(async tx=>{const project=await scopedTaskProject(req,tx,req.body?.projectId);await tx.$queryRaw`SELECT id FROM "Project" WHERE id=${project.id} FOR UPDATE`;const item=await tx.projectTask.create({data:{...data,companyId:project.companyId,projectId:project.id}});await taskAudit(tx,req,project,'PROJECT_TASK_CREATE','project-task:'+item.id,null,item);return item;});res.json({ok:true,item});}catch(e){handoffFailure(res,e);}});
+router.put('/:id',async(req:any,res)=>{try{requireTaskWrite(req);const item=await prisma.$transaction(async tx=>{const {current,project}=await currentTask(req,tx);taskVersion(req.body,current);const data=taskInput(req.body,current);data.updatedAt=new Date(Math.max(Date.now(),current.updatedAt.getTime()+1));const item=await tx.projectTask.update({where:{id:current.id},data});await taskAudit(tx,req,project,'PROJECT_TASK_UPDATE','project-task:'+item.id,current,item);return item;});res.json({ok:true,item});}catch(e){handoffFailure(res,e);}});
+router.post('/:id/calendar',async(req:any,res)=>{try{requireTaskWrite(req);const data=await prisma.$transaction(async tx=>{const {current,project}=await currentTask(req,tx);return createTaskCalendar(tx,req,project,current);});res.json({ok:true,...data});}catch(e){handoffFailure(res,e);}});
+router.get('/:id/history',async(req:any,res)=>{try{const current=await prisma.projectTask.findFirst({where:{id:String(req.params.id),companyId:String(req.auth?.companyId||'')}});if(!current)throw new PlanError('NOT_FOUND',404);const project=await scopedTaskProject(req,prisma,current.projectId);const items=await prisma.auditLog.findMany({where:{companyId:project.companyId,resource:'project-task:'+current.id},select:{id:true,action:true,meta:true,createdAt:true},orderBy:[{createdAt:'desc'},{id:'desc'}],take:100});res.json({ok:true,items,limit:100});}catch(e){handoffFailure(res,e);}});
+router.delete('/:id',async(req:any,res)=>{try{requireTaskWrite(req);await prisma.$transaction(async tx=>{const {current,project}=await currentTask(req,tx);taskVersion(req.body,current);await taskAudit(tx,req,project,'PROJECT_TASK_DELETE','project-task:'+current.id,current,null);await tx.projectTask.delete({where:{id:current.id}});});res.json({ok:true});}catch(e){handoffFailure(res,e);}});
 export default router;

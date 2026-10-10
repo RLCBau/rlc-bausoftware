@@ -408,65 +408,16 @@ export default function Bauzeitenplan() {
     setDirty(true);
   }
 
-  function moveSelectedToCalendar() {
-    if (!selected) return;
-
-    sessionStorage.setItem(
-      "rlc.calendar.prefill",
-      JSON.stringify({
-        projectId,
-        title: selected.name,
-        notes: selected.notes || "",
-        category: selected.milestone
-          ? "Frist"
-          : "Projekt",
-        sourceType: "bauzeitenplan",
-        sourceId: selected.id,
-        start: selected.start || "",
-        end: selected.end || "",
-        attendees: selected.assignee || ""
-      })
-    );
-
-    window.location.assign("/buro/outlook?new=1");
-  }
-
-  async function createTaskFromPlan() {
-    if (!selected) return;
-
-    setSaving(true);
-    setError("");
-
+  async function handoffSelected(target: 'task'|'calendar') {
+    if(!selected||saving||saveGuard.current||!canEdit||loadedOwner.current!==projectId)return;
+    if(dirty){setError('Bitte Änderungen zuerst mit „Plan speichern“ speichern.');return;}
+    saveGuard.current=true;setSaving(true);setError('');const ownerId=projectId;
     try {
-      await request("/api/tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          projectId,
-          title: selected.name,
-          description: selected.notes || "",
-          due: selected.end || selected.start || null,
-          assignee: selected.assignee || null,
-          priority: selected.milestone ? "high" : "med",
-          tags: [
-            "Bauzeitenplan",
-            ...(selected.milestone
-              ? ["Meilenstein"]
-              : [])
-          ],
-          sourceType: "bauzeitenplan",
-          sourceId: selected.id
-        })
-      });
-
-      window.alert("Aufgabe wurde erstellt.");
-    } catch (e: any) {
-      setError(
-        e?.message ||
-        "Aufgabe konnte nicht erstellt werden."
-      );
-    } finally {
-      setSaving(false);
-    }
+      const result=await request<{created:boolean}>("/api/buero/bauzeitenplan/handoff",{method:'POST',body:JSON.stringify({projectId,taskId:selected.id,target,expectedVersion:versionRef.current})});
+      if(owner.current!==ownerId)return;
+      window.alert(result.created?(target==='task'?'Aufgabe wurde erstellt.':'Ganztägiger Termin wurde erstellt.'):'Verknüpfung ist bereits vorhanden. Änderungen im Zielmodul bleiben erhalten.');
+    }catch(e:any){if(owner.current===ownerId)setError(e.message||'Übernahme fehlgeschlagen.');}
+    finally{saveGuard.current=false;setSaving(false);}
   }
 
   function removeSelected() {
@@ -673,7 +624,7 @@ export default function Bauzeitenplan() {
       </header>
 
       <div className="rlc-page-toolbar"><span className="muted">{canEdit?'Änderungen mit „Plan speichern“ sichern. Neue Änderungen während des Speicherns bleiben lokal erhalten.':'Plan in Leseansicht.'}</span><button className="btn" disabled={loading||saving||!version} onClick={()=>void showHistory()}>Änderungsverlauf</button></div>
-      {history&&<section className="card"><h2>Planverlauf</h2><button className="btn" onClick={()=>setHistory(undefined)}>Schließen</button><p className="muted">Bis zu 100 Speicherstände; für ältere Pläne ab der nächsten Änderung.</p>{history.items.map((h:any)=><p key={h.id}>{new Date(h.createdAt).toLocaleString('de-DE',{timeZone:'Europe/Berlin'})} · {h.meta?.after?.tasks?.length||0} Vorgänge · Start {h.meta?.before?.start||'–'} → {h.meta?.after?.start||'–'}</p>)}</section>}
+      {history&&<section className="card"><h2>Planverlauf</h2><button className="btn" onClick={()=>setHistory(undefined)}>Schließen</button><p className="muted">Bis zu 100 Änderungen und Kalenderübernahmen; ältere Pläne ab der nächsten Änderung.</p>{history.items.map((h:any)=><p key={h.id}>{new Date(h.createdAt).toLocaleString('de-DE',{timeZone:'Europe/Berlin'})} · {h.action==='PLAN_HANDOFF_CREATE'?`Kalenderübernahme: ${h.meta?.after?.sourceTask?.name||'Vorgang'}`:`${h.meta?.after?.tasks?.length||0} Vorgänge · Start ${h.meta?.before?.start||'–'} → ${h.meta?.after?.start||'–'}`}</p>)}</section>}
       {error ? (
         <div
           className="card"
@@ -1148,7 +1099,8 @@ export default function Bauzeitenplan() {
 
                 <button
                   className="btn"
-                  onClick={moveSelectedToCalendar}
+                  onClick={() => void handoffSelected('calendar')}
+                  disabled={saving || dirty}
                 >
                   In Kalender übernehmen
                 </button>
@@ -1156,9 +1108,9 @@ export default function Bauzeitenplan() {
                 <button
                   className="btn"
                   onClick={() =>
-                    void createTaskFromPlan()
+                    void handoffSelected('task')
                   }
-                  disabled={saving}
+                  disabled={saving || dirty}
                 >
                   Als Aufgabe erstellen
                 </button>
