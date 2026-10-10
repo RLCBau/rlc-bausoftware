@@ -9,6 +9,7 @@ import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreis
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
 import { annotateExistingCalculation } from "../kalkulation/constructionIntelligenceEngine";
 import { resolveRlcAutonomousCalculation, previewRlcMotorV3 } from "../kalkulation/rlcMotor";
+import { analyzeWithLunaV3 } from "../kalkulation/autonomous/v3LunaAiAnalysis";
 import { runRlcGenerativeKalkulation } from "../kalkulation/generative/rlcGenerativeKalkulation";
 import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalculationPipeline";
 import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
@@ -20,6 +21,24 @@ import { requireProjectMember } from "../middleware/guards";
 import { z } from "zod";
 
 const router = Router();
+const v3LunaSchema = z.object({
+  projectCode: z.string().min(1).max(128),
+  trade: z.string().max(100).default("UNRESOLVED"),
+  kurztext: z.string().max(1000).default(""),
+  langtext: z.string().max(8000).default(""),
+  einheit: z.string().max(24).default("")
+}).refine(row => !!(row.kurztext.trim() || row.langtext.trim()));
+router.post("/v3/luna-analyze", requireMarketReviewAccess, requireOptionalKalkulationProjectAccess, async (req, res) => {
+  const parsed = v3LunaSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok:false, error:"INVALID_LUNA_INPUT" });
+  try {
+    const result = await analyzeWithLunaV3(parsed.data);
+    return res.json({ok:true, ...result});
+  } catch {
+    return res.status(503).json({ok:false,error:"LUNA_ANALYSIS_UNAVAILABLE",approvedForEP:false});
+  }
+});
+
 const v3PreviewSchema = z.object({
  projectCode: z.string().min(1).max(128),
  position: z.object({id:z.string().min(1).max(128),position:z.string().min(1).max(128),unit:z.string().min(1).max(24),quantity:z.union([z.number(),z.string().max(40)])}),
