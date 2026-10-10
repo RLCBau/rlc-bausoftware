@@ -614,6 +614,7 @@ model Contract {
 }
 
 model CommunicationThread {
+  contactLinks PartyCommunicationLink[]
   id           String   @id @default(uuid())
   companyId    String
   projectId    String
@@ -828,6 +829,7 @@ model ProjectSectionState {
 }
 
 model Party {
+  communicationLinks PartyCommunicationLink[]
   insurancePolicies PartyInsurancePolicy[]
   supplierCertificates ContractCertificate[]
   contactProfile PartyContactProfile?
@@ -2304,4 +2306,19 @@ model PartyInsurancePolicy {
  @@unique([partyId,insurer,policyNumber])
  @@index([companyId,partyId,status])
  @@index([companyId,validUntil])
+}
+
+model PartyCommunicationLink {
+ partyId String
+ threadId String
+ companyId String
+ archived Boolean @default(false)
+ revision Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ party Party @relation(fields:[partyId],references:[id],onDelete:Restrict)
+ thread CommunicationThread @relation(fields:[threadId],references:[id],onDelete:Restrict)
+ @@id([partyId,threadId])
+ @@index([companyId,partyId,archived])
+ @@index([threadId])
 }

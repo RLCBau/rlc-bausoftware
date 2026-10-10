@@ -1,3 +1,4 @@
+import contactCommunicationRouter from './contactCommunication';
 import contactInsuranceRouter from './contactInsurance';
 import {Router} from 'express';import {prisma} from '../lib/prisma';import {InputError,expiryStatus} from '../domain/officeAddons';import {contactInput,ContactError} from '../domain/businessContacts';import {planVersion} from '../services/constructionPlan';
 const router=Router(),cid=(r:any)=>String(r.auth?.companyId||'').trim(),uid=(r:any)=>String(r.auth?.sub||r.auth?.userId||'').trim(),role=(r:any)=>String(r.auth?.companyRole||r.auth?.role||'').trim().toUpperCase();
@@ -12,6 +13,7 @@ async function audit(tx:any,req:any,action:string,before:any,after:any){await tx
 router.get('/',async(req:any,res)=>{try{const q=req.query.q??'';if(typeof q!=='string'||q.length>200)throw new InputError('Suchbegriff zu lang.');const type=req.query.type??'';if(type&&!['CUSTOMER','SUPPLIER','PARTNER'].includes(type))throw new InputError('Kontaktart ungültig.');const items=await prisma.party.findMany({where:{companyId:cid(req),...(type?{type}:{}),AND:[...(q?[{OR:[{name:{contains:q,mode:'insensitive' as const}},{email:{contains:q,mode:'insensitive' as const}}]}]:[]),...(req.query.includeArchived==='true'?[]:[{OR:[{contactProfile:{is:null}},{contactProfile:{is:{archived:false}}}]}])]},include:readInclude,orderBy:[{name:'asc'},{id:'asc'}],take:2001});if(items.length>2000)throw new InputError('Mehr als 2000 Kontakte. Suche oder Kontaktart eingrenzen.');res.json({ok:true,items:items.map(dto),canEdit:canWrite(req),canReadCertificates:['ADMIN','ADMINISTRATOR','BUCHHALTUNG','BAULEITER'].includes(role(req))});}catch(e){fail(res,e);}});
 
 router.use('/:partyId/insurance',contactInsuranceRouter);
+router.use('/:partyId/communication',contactCommunicationRouter);
 
 router.get('/:id/certificates',async(req:any,res)=>{
  try {
