@@ -98,5 +98,26 @@ export function calculateRlcMotorWithContext(
   context: RlcAutonomousProjectContext,
   allRows: RlcAutonomousCalcInput[] = []
 ): RlcAutonomousCalcResult | null {
-  return calculateAutonomousUrkalkulation(row, context, allRows);
+  const result = calculateAutonomousUrkalkulation(row, context, allRows);
+  if (!result || result.calculationStatus === "needs_review" || (result.unitPrice === 0 && result.total === 0 && result.costLines.length === 0)) return result;
+  const amountValid = (value: number) => Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100));
+  const linesValid = result.costLines.length > 0 && result.costLines.every(line =>
+    amountValid(line.total) && amountValid(line.unitPrice) &&
+    Number.isFinite(line.qty) && line.qty >= 0
+  );
+  const summedCents = result.costLines.reduce((sum, line) => sum + Math.round(line.total * 100), 0);
+  const epCents = Math.round(result.unitPrice * 100);
+  const quantity = Number(row.menge);
+  const gpCents = Math.round(result.total * 100);
+  const expectedGpCents = Math.round(result.unitPrice * Math.max(1, Number.isFinite(quantity) ? quantity : 0) * 100);
+  const economicValid = amountValid(result.unitPrice) && amountValid(result.total) &&
+    linesValid && result.unitPrice > 0 &&
+    Number.isSafeInteger(summedCents) && Math.abs(summedCents - epCents) <= 2 &&
+    Number.isSafeInteger(expectedGpCents) && Math.abs(expectedGpCents - gpCents) <= 1;
+  if (economicValid) return result;
+  return { ...result, unitPrice: 0, total: 0, costLines: [],
+    calculationStatus: "needs_review", confidence: 0, riskLevel: "high",
+    warnings: [...result.warnings, "RLC_MOTOR_ECONOMIC_INTEGRITY_FAILED"],
+    aiReason: `${result.aiReason} RLC Motor: wirtschaftliche Konsistenzprüfung fehlgeschlagen; EP/GP gesperrt.` };
+
 }
