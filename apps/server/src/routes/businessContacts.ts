@@ -1,3 +1,4 @@
+import contactInsuranceRouter from './contactInsurance';
 import {Router} from 'express';import {prisma} from '../lib/prisma';import {InputError,expiryStatus} from '../domain/officeAddons';import {contactInput,ContactError} from '../domain/businessContacts';import {planVersion} from '../services/constructionPlan';
 const router=Router(),cid=(r:any)=>String(r.auth?.companyId||'').trim(),uid=(r:any)=>String(r.auth?.sub||r.auth?.userId||'').trim(),role=(r:any)=>String(r.auth?.companyRole||r.auth?.role||'').trim().toUpperCase();
 const canWrite=(r:any)=>['ADMIN','ADMINISTRATOR','BUCHHALTUNG'].includes(role(r));
@@ -9,6 +10,8 @@ const readInclude={contactProfile:true,_count:{select:{invoicesAsCustomer:true,v
 function dto(row:any){const {contactProfile,_count,...party}=row;return {...party,profile:contactProfile||{website:'',trade:'',notes:'',subcontractor:false,contacts:[],sites:[],archived:false},version:planVersion(snapshot({contactProfile,...party})),linkedToAccounting:Boolean(_count?.invoicesAsCustomer||_count?.vendorBillsAsSupplier),legacyAddress:row.address!=null&&(typeof row.address!=='object'||Array.isArray(row.address))};}
 async function audit(tx:any,req:any,action:string,before:any,after:any){await tx.auditLog.create({data:{companyId:cid(req),userId:uid(req),action,resource:'business-contact:'+after.id,meta:{before:before?snapshot(before):null,after:snapshot(after)}}});}
 router.get('/',async(req:any,res)=>{try{const q=req.query.q??'';if(typeof q!=='string'||q.length>200)throw new InputError('Suchbegriff zu lang.');const type=req.query.type??'';if(type&&!['CUSTOMER','SUPPLIER','PARTNER'].includes(type))throw new InputError('Kontaktart ungültig.');const items=await prisma.party.findMany({where:{companyId:cid(req),...(type?{type}:{}),AND:[...(q?[{OR:[{name:{contains:q,mode:'insensitive' as const}},{email:{contains:q,mode:'insensitive' as const}}]}]:[]),...(req.query.includeArchived==='true'?[]:[{OR:[{contactProfile:{is:null}},{contactProfile:{is:{archived:false}}}]}])]},include:readInclude,orderBy:[{name:'asc'},{id:'asc'}],take:2001});if(items.length>2000)throw new InputError('Mehr als 2000 Kontakte. Suche oder Kontaktart eingrenzen.');res.json({ok:true,items:items.map(dto),canEdit:canWrite(req),canReadCertificates:['ADMIN','ADMINISTRATOR','BUCHHALTUNG','BAULEITER'].includes(role(req))});}catch(e){fail(res,e);}});
+
+router.use('/:partyId/insurance',contactInsuranceRouter);
 
 router.get('/:id/certificates',async(req:any,res)=>{
  try {

@@ -8,6 +8,7 @@ datasource db {
 }
 
 model Company {
+  contactInsurancePolicies PartyInsurancePolicy[]
   catalogAssignments CompanyCatalogAssignment[]
 
   masterCatalog CompanyMasterCatalog[]
@@ -827,6 +828,7 @@ model ProjectSectionState {
 }
 
 model Party {
+  insurancePolicies PartyInsurancePolicy[]
   supplierCertificates ContractCertificate[]
   contactProfile PartyContactProfile?
   id                    String       @id @default(uuid())
@@ -2277,4 +2279,29 @@ model PartyContactProfile {
  updatedAt DateTime @updatedAt
  party Party @relation(fields:[partyId], references:[id], onDelete:Cascade)
  @@index([archived])
+}
+
+model PartyInsurancePolicy {
+ id String @id @default(uuid())
+ companyId String
+ partyId String
+ title String
+ insurer String
+ policyNumber String
+ type String
+ status String @default("Entwurf")
+ validFrom DateTime @db.Date
+ validUntil DateTime? @db.Date
+ cancellationUntil DateTime? @db.Date
+ coverage Decimal? @db.Decimal(18,2)
+ annualPremium Decimal? @db.Decimal(18,2)
+ notes String @default("")
+ revision Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ company Company @relation(fields:[companyId],references:[id],onDelete:Restrict)
+ party Party @relation(fields:[partyId],references:[id],onDelete:Restrict)
+ @@unique([partyId,insurer,policyNumber])
+ @@index([companyId,partyId,status])
+ @@index([companyId,validUntil])
 }
