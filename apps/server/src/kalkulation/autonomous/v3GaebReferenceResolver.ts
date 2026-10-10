@@ -1,7 +1,7 @@
 import type { RlcAutonomousCalcInput } from "./types";
 
 export type GaebReferenceDiagnosis = {
-  status: "resolved_explicit" | "candidate_previous" | "missing_reference" | "ambiguous_reference";
+  status: "resolved_explicit" | "candidate_previous" | "missing_reference" | "ambiguous_reference" | "incompatible_previous";
   basePosition: string | null;
   evidence: string;
   technicalEvidence: { nominalDiameter: string | null; layerThickness: string | null; material: string | null };
@@ -40,7 +40,15 @@ export function resolveV3GaebReference(
       evidence: "explicit_position_not_unique_or_not_found" };
   }
   if (/\b(?:vorposition|vorherige\s+position|wie\s+vor|wie\s+pos\.?\s+vor)\b/i.test(text) && prior.length) {
-    return { ...base, status: "candidate_previous", basePosition: String(prior[prior.length - 1].posNr || "") || null,
+    const candidate = prior[prior.length - 1];
+    const candidateFeatures = features(String(candidate.kurztext || "") + " " + String(candidate.langtext || ""));
+    const currentFeatures = features(text);
+    const conflicts = (currentFeatures.nominalDiameter && candidateFeatures.nominalDiameter &&
+      currentFeatures.nominalDiameter.replace(/\s+/g, "").toUpperCase() !== candidateFeatures.nominalDiameter.replace(/\s+/g, "").toUpperCase()) ||
+      (currentFeatures.material && candidateFeatures.material &&
+        currentFeatures.material.toUpperCase() !== candidateFeatures.material.toUpperCase());
+    if (conflicts) return { ...base, status: "incompatible_previous", evidence: "technical_parameters_conflict" };
+    return { ...base, status: "candidate_previous", basePosition: String(candidate.posNr || "") || null,
       evidence: "implicit_reference_requires_verification" };
   }
   return { ...base, status: "missing_reference", evidence: "no_unambiguous_explicit_reference" };
