@@ -10,5 +10,6 @@ export function familyContradictions(shortText:string,longText:string,family:str
  if(/einbauen|wiedereinbau/.test(text)&&/belasteter.boden/.test(name)&&!/belastet|kontamin|schadstoff/.test(text))issues.push('contamination_unproven');
  if(/ausbauen|abtragen|abbrechen|entsorgen/.test(text)&&/wiedereinbau|wiederverwend/.test(name)&&!/wiedereinbau|wiederverwend|erneut einbau/.test(text))issues.push('removal_mapped_to_reinstallation');
  if(/erstbefüllung|befüllung.*netz|fernwärme/.test(text)&&/isybau|dokumentation/.test(name)&&!/dokumentation|isybau/.test(text))issues.push('network_filling_mapped_to_documentation');
+ if(/\blwl\b|lichtwellenleiter|glasfaser/.test(text)&&/einziehen|kabelzug|\bziehen\b/.test(text)&&/muffenschrank|kabelschrank|verteilerschrank|außengehäuse|aussengehaeuse/.test(name)&&!/schrank|gehäuse|gehaeuse/.test(text))issues.push('fibre_cable_pulling_mapped_to_cabinet');
  return issues;
 }

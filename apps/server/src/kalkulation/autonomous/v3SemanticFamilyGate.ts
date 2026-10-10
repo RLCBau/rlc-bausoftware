@@ -1,3 +1,4 @@
+import {familyContradictions} from './v3FamilyContradictionGate';
 import {shortlistLunaFamilies,LunaInterpretation} from './v3LunaFamilyMatcher';
 import {loadFamilyProductivityCoverage} from './v3FamilyProductivityCoverage';
 const norm=(s:string)=>s.toLocaleLowerCase('de-DE');
@@ -8,7 +9,7 @@ export function rankTechnicalFamilies(trade:string,shortText:string,longText:str
  const raw=shortlistLunaFamilies(trade,shortText,longText,ai,archive,families);
  const scope=norm(shortText+' '+longText), op=ai.operation||'unknown';
  const candidates=raw.candidates.map(c=>{
-  const name=norm(c.family), issues:string[]=[];
+  const name=norm(c.family), issues:string[]=familyContradictions(shortText,longText,c.family);
   if(op==='remove'&&installation.test(name)&&!removal.test(name))issues.push('operation_conflict');
   if(['construct','install','supply'].includes(op)&&removal.test(name)&&!installation.test(name))issues.push('operation_conflict');
   if(removal.test(scope)&&installation.test(name)&&!removal.test(name))issues.push('scope_conflict');
