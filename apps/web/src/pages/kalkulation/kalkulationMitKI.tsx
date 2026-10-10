@@ -3677,6 +3677,25 @@ export default function KalkulationMitKI() {
     [filteredRows, selectedId]
   );
 
+  const [v3Preview, setV3Preview] = React.useState<any>(null);
+  const [v3PreviewBusy, setV3PreviewBusy] = React.useState(false);
+  const [v3PreviewError, setV3PreviewError] = React.useState("");
+  React.useEffect(() => { setV3Preview(null); setV3PreviewError(""); }, [selectedRow?.id]);
+  async function runV3Preview() {
+    if (!selectedRow || !projectKey) return;
+    setV3PreviewBusy(true); setV3PreviewError(""); setV3Preview(null);
+    try {
+      const position = {id:String(selectedRow.id),position:String(selectedRow.posNr || selectedRow.id),unit:String(selectedRow.einheit || ""),quantity:Number(selectedRow.menge || 0)};
+      const response = await fetch(apiUrl("/api/kalkulation/ki/v3/resource-preview"),{
+        method:"POST",headers:authJsonHeaders(),body:JSON.stringify({projectCode:projectKey,position,recipe:{id:position.id,gaebPosition:position.position,components:[]}})
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(String(data.error || `HTTP ${response.status}`));
+      setV3Preview(data.preview);
+    } catch (error:any) { setV3PreviewError(String(error?.message || error)); }
+    finally { setV3PreviewBusy(false); }
+  }
+
   const datenbankMatches = React.useMemo(
     () => findDatenbankMatches(selectedRow),
     [selectedRow]
@@ -10947,6 +10966,16 @@ export default function KalkulationMitKI() {
               null}
       </div>
 
+      {selectedRow && <div style={{padding:"8px 12px",borderBottom:"1px solid var(--border, #ccc)"}}>
+        <button type="button" disabled={v3PreviewBusy || !projectKey} onClick={runV3Preview}>{v3PreviewBusy ? "Prüfung läuft…" : "V3 Kosten-Vorschau"}</button>
+        {v3PreviewError && <p role="alert">V3: {v3PreviewError}</p>}
+        {v3Preview && <div role="status" style={{fontSize:12,marginTop:6}}>
+          <strong>Nur Vorschau – kein EP wird übernommen.</strong>
+          <div>GAEB-Menge: {String(v3Preview.contractQuantity ?? "nicht verfügbar")} {selectedRow.einheit}</div>
+          <div>Direktkosten vollständig: {v3Preview.completeDirectCostPerUnitEUR == null ? "Nein" : money(v3Preview.completeDirectCostPerUnitEUR)}</div>
+          <div>Fehlende Nachweise: {(v3Preview.missing || []).join(", ") || "keine"}</div>
+        </div>}
+      </div>}
       {selectedRow ?
             <div className="rlc-migrated-pages-kalkulation-kalkulationmitki-tsx-900">
           <div>
