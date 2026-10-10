@@ -1,3 +1,4 @@
+import { mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
 import { learnCompanyRecipeFromKiRow } from "../kalkulation/companyRecipeLearning";
 import { getBaupreisIndexFactor } from "../kalkulation/priceIndex/baupreisIndexService";
 import { Router } from "express";
@@ -7,7 +8,7 @@ import { filterUsableRlcPriceSources } from "../kalkulation/quality/priceSourceQ
 import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreisBibliothek";
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
 import { annotateExistingCalculation } from "../kalkulation/constructionIntelligenceEngine";
-import { resolveRlcAutonomousCalculation, mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
+import { resolveRlcAutonomousCalculation } from "../kalkulation/rlcMotor";
 import { runRlcGenerativeKalkulation } from "../kalkulation/generative/rlcGenerativeKalkulation";
 import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalculationPipeline";
 import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";

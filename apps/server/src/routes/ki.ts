@@ -1,3 +1,4 @@
+import { mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
 // apps/server/src/routes/ki.ts
 import express from "express";
 import multer from "multer";
@@ -11,7 +12,7 @@ import sharp from "sharp";
 import { z } from "zod";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
 import { analyzeRlcProjectContext } from "../kalkulation/autonomous/projectContextAnalyzer";
-import { resolveRlcAutonomousCalculation, mapAutonomousResultToKiRow } from "../kalkulation/autonomous/rlcAutonomousKalkulator";
+import { resolveRlcAutonomousCalculation } from "../kalkulation/rlcMotor";
 
 const router = express.Router();
 

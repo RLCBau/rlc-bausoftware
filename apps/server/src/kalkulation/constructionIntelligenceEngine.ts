@@ -1,3 +1,4 @@
+import { mapAutonomousResultToKiRow } from "./autonomous/rlcAutonomousKalkulator";
 /**
  * RLC Construction Intelligence Engine
  *
@@ -12,8 +13,7 @@ import { calcRecipeKalkulationRow } from "./kalkulationsRecipeEngine";
 import { validateRecipeFamilyCompatibility } from "./autonomous/recipeFamilyCompatibility";
 import {
   resolveRlcAutonomousCalculation,
-  mapAutonomousResultToKiRow,
-} from "./autonomous/rlcAutonomousKalkulator";
+} from "./rlcMotor";
 import { resolveRlcKnowledgeHub } from "./knowledgeHub";
 
 
