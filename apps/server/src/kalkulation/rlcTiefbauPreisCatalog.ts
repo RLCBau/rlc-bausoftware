@@ -1,6 +1,6 @@
 import { TIEFBAU_COVERAGE_CASES } from "./autonomous/tiefbauCoverageCases";
 import type { RlcPreisGroup, RlcPreisItem } from "./rlcPreisBibliothek";
-import { calculateTiefbauFamilyCatalog } from "./autonomous/tiefbauFamilyCatalog";
+import { calculateRlcMotorWithContext } from "./rlcMotor";
 import {
   BETONROHR_STANDARD_DN_MM,
   BETONSCHACHT_STANDARD_DN_MM,
@@ -422,7 +422,7 @@ export function generateRlcTiefbauPreisCatalog(): RlcPreisItem[] {
       einheit: seed.unit,
       menge: 1,
     };
-    const result = calculateTiefbauFamilyCatalog(row, NEUTRAL_CONTEXT, [row]);
+    const result = calculateRlcMotorWithContext(row, NEUTRAL_CONTEXT, [row]);
     if (!result || !(result.unitPrice > 0)) continue;
 
     const risk = result.riskLevel;

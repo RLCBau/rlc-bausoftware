@@ -57,7 +57,7 @@ export function resolveRlcAutonomousCalculation(
     projectContext: context,
   });
 
-  const engineResult = calculateAutonomousUrkalkulation(
+  const engineResult = calculateRlcMotorWithContext(
     row,
     context,
     allRows.length > 0 ? allRows : [row]
@@ -90,4 +90,13 @@ export function resolveRlcAutonomousCalculation(
     agents,
     result,
   };
+}
+
+/** Central calculation entry for contexts already built by catalog/audit callers. */
+export function calculateRlcMotorWithContext(
+  row: RlcAutonomousCalcInput,
+  context: RlcAutonomousProjectContext,
+  allRows: RlcAutonomousCalcInput[] = []
+): RlcAutonomousCalcResult | null {
+  return calculateAutonomousUrkalkulation(row, context, allRows);
 }
