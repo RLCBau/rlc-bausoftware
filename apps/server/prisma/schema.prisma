@@ -827,6 +827,7 @@ model ProjectSectionState {
 }
 
 model Party {
+  contactProfile PartyContactProfile?
   id                    String       @id @default(uuid())
   companyId             String
   type                  PartyType
@@ -2257,4 +2258,19 @@ model CompanyCatalogAssignment {
  @@unique([employeeId,catalogId])
  @@unique([materialId,catalogId])
  @@index([companyId,kind,active])
+}
+
+model PartyContactProfile {
+ partyId String @id
+ website String @default("")
+ trade String @default("")
+ notes String @default("")
+ subcontractor Boolean @default(false)
+ contacts Json @default("[]")
+ sites Json @default("[]")
+ archived Boolean @default(false)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ party Party @relation(fields:[partyId], references:[id], onDelete:Cascade)
+ @@index([archived])
 }

@@ -66,6 +66,7 @@ const Maschinenverwaltung = React.lazy(() => import("./pages/buro/maschinenverwa
 const Materialverwaltung = React.lazy(() => import("./pages/buro/materialverwaltung"));
 const Sicherheit = React.lazy(() => import("./pages/buro/sicherheit"));
 const CatalogAssignments = React.lazy(() => import("./pages/buro/CatalogAssignments"));
+const BusinessContacts = React.lazy(() => import("./pages/buro/BusinessContacts"));
 const MasterCatalog = React.lazy(() => import("./pages/buro/MasterCatalog"));
 const NonWorkingDays = React.lazy(() => import("./pages/buro/NonWorkingDays"));
 const Einsatzplanung = React.lazy(() => import("./pages/buro/ressourcenplanung"));
@@ -271,6 +272,7 @@ const SECTIONS: Section[] = [
   { key: "maschinenverwaltung", label: "Maschinenverwaltung" },
   { key: "cockpit", label: "Projekt-Cockpit" },
   { key: "feiertage", label: "Feiertage & Betriebsruhe" },
+  { key: "kontakte", label: "Adressen & Kontakte" },
   { key: "stammdaten", label: "Stammdaten-Kataloge" },
   { key: "zuordnungen", label: "Führerscheine / Gefahrenklassen" },
   { key: "versanderfassung", label: "Versanderfassung" },
@@ -844,6 +846,7 @@ function AppShell() {
               {/* BÜRO */}
               <Route path="/buro/geraeteverrechnung" element={<BuroLayout><MachineUsage /></BuroLayout>} />
               <Route path="/buro/personalnachweise" element={<BuroLayout><PersonnelQualifications /></BuroLayout>} />
+              <Route path="/buro/kontakte" element={<BuroLayout><BusinessContacts /></BuroLayout>} />
               <Route path="/buro/stammdaten" element={<BuroLayout><MasterCatalog /></BuroLayout>} />
               <Route path="/buro/zuordnungen" element={<BuroLayout><CatalogAssignments /></BuroLayout>} />
               <Route path="/buro/feiertage" element={<BuroLayout><NonWorkingDays /></BuroLayout>} />

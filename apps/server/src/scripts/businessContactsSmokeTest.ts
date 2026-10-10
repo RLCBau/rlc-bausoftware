@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';import express from 'express';import http from 'http';
+const url=new URL(process.env.DATABASE_URL!);url.pathname='/rlc_contacts_validation_20261010';process.env.DATABASE_URL=url.toString();process.env.DEV_AUTH='off';
+const {prisma}=require('../lib/prisma'),router=require('../routes/businessContacts').default;
+async function main(){
+ await prisma.company.createMany({data:[{id:'bc-a',code:'BC-A',name:'Fiktive Firma A'},{id:'bc-b',code:'BC-B',name:'Fiktive Firma B'}]});
+ await prisma.user.create({data:{id:'bc-user',companyId:'bc-a',email:'contacts@test.invalid',password:'test'}});
+ await prisma.party.createMany({data:[{id:'bc-existing',companyId:'bc-a',type:'CUSTOMER',name:'Bestandskunde',address:{street:'Alt',extra:'Erhalten'}},{id:'bc-legacy',companyId:'bc-a',type:'SUPPLIER',name:'Alte Adresse',address:['Historisch']},{id:'bc-foreign',companyId:'bc-b',type:'CUSTOMER',name:'Fremdfirma'},{id:'bc-linked',companyId:'bc-a',type:'CUSTOMER',name:'Belegkunde'},{id:'bc-vendor',companyId:'bc-a',type:'SUPPLIER',name:'Beleglieferant'}]});
+ await prisma.project.create({data:{id:'bc-p',companyId:'bc-a',code:'BC-P',name:'Fiktives Projekt',accounting:{create:{id:'bc-account'}}}});
+ await prisma.invoice.create({data:{id:'bc-invoice',accountingId:'bc-account',customerId:'bc-linked',number:'I1',date:new Date(),netAmount:'100',taxAmount:'19',grossAmount:'119'}});
+ await prisma.vendorBill.create({data:{id:'bc-bill',accountingId:'bc-account',supplierId:'bc-vendor',number:'V1',date:new Date(),netAmount:'200',taxAmount:'38',grossAmount:'238'}});
+ const accounting=JSON.stringify([await prisma.invoice.findMany(),await prisma.vendorBill.findMany(),await prisma.ledgerEntry.findMany(),await prisma.payment.findMany()]);
+ const app=express();app.use(express.json());app.use((req:any,_res,next)=>{req.auth={sub:req.headers['x-no-user']?'':'bc-user',companyId:req.headers['x-company']||'bc-a',companyRole:req.headers['x-role']||'ADMIN'};next();});app.use('/parties',require('../routes/parties').default);app.use('/contacts',router);const server=http.createServer(app);await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+ async function call(path='',body:any=undefined,method='GET',headers:any={}){const res=await fetch('http://127.0.0.1:'+(server.address() as any).port+'/contacts'+path,{method,headers:{'Content-Type':'application/json',...headers},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:res.status,data:await res.json() as any,headers:res.headers};}
+ const input=(name='Neuer Lieferant')=>({type:'SUPPLIER',name,vatId:'DE123',email:'test@test.invalid',phone:'123',website:'https://example.invalid',trade:'Tiefbau',notes:'Notiz',subcontractor:true,address:{street:'Straße',postalCode:'12345',city:'Ort',country:'DE'},contacts:[{name:'Referent',role:'Bauleitung',email:'ref@test.invalid',phone:'123'}],sites:[{name:'Lager',street:'Weg',postalCode:'12345',city:'Ort',country:'DE'}]});
+ function edit(row:any,extra:any={}){return {...input(),...row,...row.profile,address:row.address||{},expectedVersion:row.version,...extra};}
+ async function row(id:string){return (await call('?includeArchived=true')).data.items.find((x:any)=>x.id===id);}
+ try{
+ assert.equal((await call('',undefined,'GET',{'x-no-user':'1'})).status,401);assert.equal((await call('',undefined,'GET',{'x-role':'GAST'})).status,403);
+ for(const role of ['BAULEITER','KALKULATOR']){assert.equal((await call('',undefined,'GET',{'x-role':role})).status,200);assert.equal((await call('',input(),'POST',{'x-role':role})).status,403);}
+ const legacyA=await fetch('http://127.0.0.1:'+(server.address() as any).port+'/parties'),legacyB=await fetch('http://127.0.0.1:'+(server.address() as any).port+'/parties',{headers:{'x-company':'bc-b'}});assert.equal(legacyA.status,200);assert.equal(legacyB.status,200);assert.equal((await legacyA.json() as any).rows.some((r:any)=>r.companyId!=='bc-a'),false);const foreignList=await legacyB.json() as any;assert.equal(foreignList.total,1);assert.equal(foreignList.rows[0].id,'bc-foreign');
+ assert.equal((await call('?q=Bestands')).data.items.length,1);assert.equal((await call('?q=NichtVorhanden')).data.items.length,0);
+ const foreign=await call('',undefined,'GET',{'x-company':'bc-b'});assert.equal(foreign.data.items.length,1);assert.equal(foreign.data.items[0].id,'bc-foreign');
+ assert.equal((await call('/bc-foreign/history')).status,404);assert.equal((await call('/bc-foreign',input(),'PUT')).status,404);
+ for(const patch of [{email:'bad'},{website:'javascript:alert(1)'},{website:'https://user:secret@example.invalid'},{contacts:[{name:''}]},{sites:Array(21).fill({name:'X'})},{type:'CUSTOMER',subcontractor:true},{name:' '}])assert.equal((await call('',{...input(),...patch},'POST')).status,400);
+ const c=await call('',input(),'POST',{'x-role':'BUCHHALTUNG'});assert.equal(c.status,201);assert.match(c.data.item.version,/^[a-f0-9]{64}$/);assert.match(c.headers.get('Cache-Control')||'',/no-store/);
+ assert.equal((await call('',input('NEUER LIEFERANT'),'POST')).status,409);
+ const pair=await Promise.all([call('',input('Parallel'),'POST'),call('',input('Parallel'),'POST')]);assert.deepEqual(pair.map(x=>x.status).sort(),[201,409]);
+ const old=await row('bc-existing');const count=await prisma.party.count();const u=await call('/bc-existing',edit(old,{subcontractor:false,address:{street:'Neu',postalCode:'123',city:'Ort',country:'DE'}}),'PUT');assert.equal(u.status,200);assert.equal(u.data.item.id,old.id);assert.equal(u.data.item.address.extra,'Erhalten');assert.equal(await prisma.party.count(),count);assert.notEqual(u.data.item.version,old.version);
+ assert.equal((await call('/bc-existing',edit(old),'PUT')).status,409);assert.equal((await call('/bc-existing',edit(u.data.item,{type:'SUPPLIER'}),'PUT')).status,400);
+ const parallel=await Promise.all([call('/bc-existing',edit(u.data.item,{notes:'A'}),'PUT'),call('/bc-existing',edit(u.data.item,{notes:'B'}),'PUT')]);assert.deepEqual(parallel.map(x=>x.status).sort(),[200,409]);
+ const leg=await row('bc-legacy');assert.equal(leg.legacyAddress,true);assert.equal((await call('/bc-legacy',edit(leg,{address:{street:'X'}}),'PUT')).status,409);const preserve=edit(leg);delete preserve.address;assert.equal((await call('/bc-legacy',preserve,'PUT')).status,200);assert.deepEqual((await prisma.party.findUnique({where:{id:leg.id}})).address,['Historisch']);
+ for(const id of ['bc-linked','bc-vendor']){const linked=await row(id);assert.equal(linked.linkedToAccounting,true);assert.equal((await call('/'+id,edit(linked,{name:'Umbenannt',subcontractor:false}),'PUT')).status,409);assert.equal((await call('/'+id,edit(linked,{notes:'Kontaktpflege',subcontractor:false}),'PUT')).status,200);}
+ const before=await row(c.data.item.id);const archive=await call('/'+before.id+'/archive',{expectedVersion:before.version},'POST');assert.equal(archive.status,200);assert.equal(archive.data.item.profile.archived,true);assert.equal((await call('?q=Neuer')).data.items.length,0);assert.equal((await call('?includeArchived=true&q=Neuer')).data.items.length,1);
+ assert.equal((await call('/'+before.id,edit(archive.data.item),'PUT')).status,409);
+ assert.equal((await call('/'+before.id+'/restore',{expectedVersion:before.version},'POST')).status,409);
+ const restored=await call('/'+before.id+'/restore',{expectedVersion:archive.data.item.version},'POST');assert.equal(restored.status,200);assert.notEqual(restored.data.item.version,archive.data.item.version);
+ const noOp=await call('/'+before.id,edit(restored.data.item),'PUT');assert.equal(noOp.status,200);assert.notEqual(noOp.data.item.version,restored.data.item.version);
+ const history=await call('/'+before.id+'/history');assert.ok(history.data.items.some((x:any)=>x.action==='BUSINESS_CONTACT_ARCHIVE'));assert.ok(history.data.items.some((x:any)=>x.action==='BUSINESS_CONTACT_RESTORE'));
+ const rollbackBefore=JSON.stringify(await prisma.party.findUnique({where:{id:before.id},include:{contactProfile:true}}));const auditCount=await prisma.auditLog.count();
+ await prisma.$executeRawUnsafe("CREATE FUNCTION public.reject_contact_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='BUSINESS_CONTACT_UPDATE' THEN RAISE EXCEPTION 'Isolated audit rollback test'; END IF; RETURN NEW; END $$");
+ await prisma.$executeRawUnsafe('CREATE TRIGGER reject_contact_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION public.reject_contact_audit()');
+ try{assert.equal((await call('/'+before.id,edit(noOp.data.item,{name:'Rollback Name',notes:'Rollback'}),'PUT')).status,503);assert.equal(JSON.stringify(await prisma.party.findUnique({where:{id:before.id},include:{contactProfile:true}})),rollbackBefore);assert.equal(await prisma.auditLog.count(),auditCount);}
+ finally{await prisma.$executeRawUnsafe('DROP TRIGGER reject_contact_audit ON "AuditLog"');await prisma.$executeRawUnsafe('DROP FUNCTION public.reject_contact_audit()');}
+ assert.equal(JSON.stringify([await prisma.invoice.findMany(),await prisma.vendorBill.findMany(),await prisma.ledgerEntry.findMany(),await prisma.payment.findMany()]),accounting);
+ console.log('PASS business contacts: isolated schema-only PostgreSQL, tenant and roles, Party reuse, preserved legacy/extra address fields, search plus archive filters, supplier contacts/sites, validated input, duplicate concurrent creates, stale/concurrent edits, linked invoice/vendor names protected, archive/restore/no-op fingerprints, atomic audit failure rollback and unchanged accounting.');
+ }finally{await new Promise<void>(r=>server.close(()=>r()));await prisma.$disconnect();}
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});
