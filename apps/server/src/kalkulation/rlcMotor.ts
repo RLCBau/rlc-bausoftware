@@ -2,6 +2,8 @@
  * Currently delegates to verified V2 while V3 remains diagnostic.
  * No historic-price or X84 fallbacks are permitted here.
  */
+import { previewGaebResourceCosts } from "./autonomous/v3GaebCostPreview";
+import type { CostPosition, CostRecipe } from "./autonomous/v3GaebCostPreview";
 import { runKalkulationAgents } from "./agents/orchestrator";
 import type { KalkulationAgentsResult } from "./agents/types";
 import { calculateAutonomousUrkalkulation } from "./autonomous/autonomousUrkalkulationEngine";
@@ -120,4 +122,15 @@ export function calculateRlcMotorWithContext(
     warnings: [...result.warnings, "RLC_MOTOR_ECONOMIC_INTEGRITY_FAILED"],
     aiReason: `${result.aiReason} RLC Motor: wirtschaftliche Konsistenzprüfung fehlgeschlagen; EP/GP gesperrt.` };
 
+}
+
+/** All unapproved V3 previews are controlled by RLC Motor, never the route.
+ * Client-side approval flags and evidence references cannot authorize an EP. */
+export function previewRlcMotorV3(position: CostPosition, recipe: CostRecipe) {
+  const untrusted: CostRecipe = {
+    ...recipe,
+    components: recipe.components.map(component => ({...component, approved:false, evidenceId:null})),
+    productivity: recipe.productivity ? {...recipe.productivity, approved:false, evidenceId:null} : undefined,
+  };
+  return previewGaebResourceCosts(position, untrusted);
 }

@@ -8,7 +8,7 @@ import { filterUsableRlcPriceSources } from "../kalkulation/quality/priceSourceQ
 import { rlcPreisRangeForText, findRlcPreisItems } from "../kalkulation/rlcPreisBibliothek";
 import { calcRecipeKalkulationRow } from "../kalkulation/kalkulationsRecipeEngine";
 import { annotateExistingCalculation } from "../kalkulation/constructionIntelligenceEngine";
-import { resolveRlcAutonomousCalculation } from "../kalkulation/rlcMotor";
+import { resolveRlcAutonomousCalculation, previewRlcMotorV3 } from "../kalkulation/rlcMotor";
 import { runRlcGenerativeKalkulation } from "../kalkulation/generative/rlcGenerativeKalkulation";
 import { enrichRlcCalculationPipeline } from "../kalkulation/pipeline/rlcCalculationPipeline";
 import { resolveRlcKnowledgeHub } from "../kalkulation/knowledgeHub";
@@ -17,7 +17,6 @@ import * as ciPath from "node:path";
 import { COMPANIES_ROOT } from "../lib/companiesRoot";
 import { completeRlcAiText, completeRlcMarketReviewWithWeb } from "../services/ai/rlcAiGateway";
 import { requireProjectMember } from "../middleware/guards";
-import { previewGaebResourceCosts } from "../kalkulation/autonomous/v3GaebCostPreview";
 import { z } from "zod";
 
 const router = Router();
@@ -32,8 +31,7 @@ router.post("/v3/resource-preview",requireMarketReviewAccess,requireOptionalKalk
  if(!parsed.success)return res.status(400).json({ok:false,error:"INVALID_V3_PREVIEW_INPUT"});
  try {
   const {position,recipe}=parsed.data;
-  const untrustedRecipe={...recipe,components:recipe.components.map(c=>({...c,evidenceId:null,approved:false})),productivity:recipe.productivity?{...recipe.productivity,evidenceId:null,approved:false}:undefined};
-  const result=previewGaebResourceCosts(position,untrustedRecipe);
+  const result=previewRlcMotorV3(position,recipe as any);
   return res.json({ok:true,preview:result,evidenceStatus:"client_data_unverified",writeAllowed:false});
  }catch{return res.status(400).json({ok:false,error:"V3_RECIPE_POSITION_MISMATCH"});}
 });
