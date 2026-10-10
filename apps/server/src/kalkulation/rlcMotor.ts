@@ -101,7 +101,17 @@ export function calculateRlcMotorWithContext(
   allRows: RlcAutonomousCalcInput[] = []
 ): RlcAutonomousCalcResult | null {
   const result = calculateAutonomousUrkalkulation(row, context, allRows);
-  if (!result) return null; // Non convertire titoli/righe strutturali senza soluzione in prezzi.
+  if (!result) {
+    // Righe prive di testo sono strutturali; una posizione testuale non riconosciuta va revisionata.
+    if (!String(row.kurztext || "").trim() && !String(row.langtext || "").trim()) return null;
+    return {
+      unitPrice: 0, total: 0, confidence: 0, riskLevel: "high",
+      source: "rlc-motor-unresolved", calculationStatus: "needs_review",
+      trade: "UNRESOLVED", bauverfahren: "UNRESOLVED", leistungsart: "UNRESOLVED",
+      costLines: [], warnings: ["RLC_MOTOR_NO_MATCH"],
+      aiReason: "RLC Motor: keine passende freigegebene Kalkulationsfamilie gefunden; EP gesperrt.",
+    };
+  }
   if (result.calculationStatus === "needs_review") {
     return { ...result, unitPrice: 0, total: 0, costLines: [],
       confidence: 0, riskLevel: "high",
