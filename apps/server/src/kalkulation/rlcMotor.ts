@@ -8,12 +8,14 @@ import { runKalkulationAgents } from "./agents/orchestrator";
 import type { KalkulationAgentsResult } from "./agents/types";
 import { calculateAutonomousUrkalkulation } from "./autonomous/autonomousUrkalkulationEngine";
 import { analyzeRlcProjectContext } from "./autonomous/projectContextAnalyzer";
+import { diagnoseV3LunaCandidate } from "./autonomous/v3LunaMotorBridge";
 import type { RlcAutonomousCalcInput, RlcAutonomousCalcResult, RlcAutonomousProjectContext } from "./autonomous/types";
 
 export type RlcAutonomousResolveResult = {
   context: RlcAutonomousProjectContext;
   agents: KalkulationAgentsResult;
   result: RlcAutonomousCalcResult | null;
+  v3Diagnosis?: ReturnType<typeof diagnoseV3LunaCandidate>;
 };
 
 /*
@@ -87,10 +89,20 @@ export function resolveRlcAutonomousCalculation(
       }
     : null;
 
+  let v3Diagnosis: ReturnType<typeof diagnoseV3LunaCandidate> | undefined;
+  if (result?.calculationStatus === "needs_review" && String(row.kurztext || row.langtext || "").trim()) {
+    try {
+      v3Diagnosis = diagnoseV3LunaCandidate(row, result.trade || "UNRESOLVED");
+    } catch {
+      // Unavailable diagnostic data may not affect RLC Motor pricing authority.
+    }
+  }
+
   return {
     context,
     agents,
     result,
+    v3Diagnosis,
   };
 }
 
