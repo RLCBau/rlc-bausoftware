@@ -1,3 +1,5 @@
+import {bidComparisonSnapshot} from '../services/bidComparisonSnapshot';
+import {preisspiegelPdf} from '../services/pdf/preisspiegelPdf';
 import { Router } from "express";
 import cockpitRouter from "./operationsCockpit";
 import shipmentsRouter from "./shipments";
@@ -19,10 +21,10 @@ router.use((req: any, res, next) => {
   if (!allowed.includes(role(req))) return res.status(403).json({ ok: false, error: "Berechtigung für kaufmännische Projektunterlagen erforderlich." });
   next();
 });
-async function project(req: any, token: unknown) {
+async function project(req: any, token: unknown, tx: any = prisma) {
   const key = typeof token === "string" ? token.trim() : "";
   if (!key) throw new InputError("Projekt erforderlich.");
-  return prisma.project.findFirst({ where: { companyId: cid(req), OR: [{ id: key }, { code: key }],
+  return tx.project.findFirst({ where: { companyId: cid(req), OR: [{ id: key }, { code: key }],
     ...(["ADMIN", "ADMINISTRATOR", "BUCHHALTUNG"].includes(role(req)) ? {} : { projectMembers: { some: { userId: uid(req) } } }),
   }, select: { id: true, code: true, name: true } });
 }
@@ -172,12 +174,29 @@ router.put("/bids/:id", async(req:any,res)=>{
   }catch(e:any){if(e?.message==="BID_CONFLICT")return res.status(409).json({ok:false,error:"Angebot wurde gleichzeitig geändert."});fail(res,e);}
 });
 router.get("/bids/compare/:baselineId",async(req:any,res)=>{
-  try{
-    const baseline=await prisma.projectBid.findFirst({where:{id:req.params.baselineId,companyId:cid(req)}});
-    if(!baseline || !await project(req,baseline.projectId))return res.status(404).json({ok:false,error:"Vergleichsbasis nicht verfügbar."});
-    const bids=await prisma.projectBid.findMany({where:{companyId:cid(req),projectId:baseline.projectId,packageKey:baseline.packageKey,kind:baseline.kind,status:{not:"Archiviert"}}});
-    res.json({ok:true,...compareBids(bids,baseline.id)});
-  }catch(e){fail(res,e);}
+ try{
+  const data=await prisma.$transaction(async tx=>{
+   const baseline=await tx.projectBid.findFirst({where:{id:req.params.baselineId,companyId:cid(req),status:{not:"Archiviert"}}});
+   if(!baseline||!await project(req,baseline.projectId,tx))return null;
+   return bidComparisonSnapshot(tx,cid(req),baseline.id);
+  },{isolationLevel:"RepeatableRead",timeout:15000});
+  if(!data)return res.status(404).json({ok:false,error:"Vergleichsbasis nicht verfügbar."});
+  res.setHeader("Cache-Control","private, no-store");res.json({ok:true,...data.comparison,snapshot:data.snapshot});
+ }catch(e){fail(res,e);}
+});
+router.post("/bids/compare/:baselineId/pdf",async(req:any,res)=>{
+ try{
+  if(typeof req.body?.fingerprint!=="string"||!/^[a-f0-9]{64}$/.test(req.body.fingerprint))throw new InputError("Aktuellen Vergleich vor PDF-Ausgabe berechnen.");
+  const data=await prisma.$transaction(async tx=>{
+   const baseline=await tx.projectBid.findFirst({where:{id:req.params.baselineId,companyId:cid(req),status:{not:"Archiviert"}}});
+   if(!baseline||!await project(req,baseline.projectId,tx))return null;
+   return bidComparisonSnapshot(tx,cid(req),baseline.id);
+  },{isolationLevel:"RepeatableRead",timeout:15000});
+  if(!data)return res.status(404).json({ok:false,error:"Vergleichsbasis nicht verfügbar."});
+  if(data.snapshot.fingerprint!==req.body.fingerprint)return res.status(409).json({ok:false,error:"Angebote oder Projektangaben geändert. Vergleich erneut berechnen."});
+  const pdf=await preisspiegelPdf(data);
+  res.setHeader("Content-Type","application/pdf");res.setHeader("Content-Disposition",'attachment; filename="Preisspiegel.pdf"');res.setHeader("Cache-Control","private, no-store");res.setHeader("X-Content-Type-Options","nosniff");res.send(pdf);
+ }catch(e){fail(res,e);}
 });
 router.post("/bids/:id/award",async(req:any,res)=>{
   try {

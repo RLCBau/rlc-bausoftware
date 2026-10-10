@@ -47,10 +47,11 @@ export function compareBids(bids: any[], baselineId: string) {
   const baseline=bids.find(b=>b.id===baselineId);
   if(!baseline)throw new InputError("Vergleichsbasis fehlt.");
   const basis=baseline.positions as BidLine[];
+  const basisPositions=new Set(basis.map(r=>r.position));
   const results=bids.map(b=>{
     const positions=b.positions as BidLine[];
     const map=new Map(positions.map(r=>[r.position,r]));
-    const extra=positions.filter(r=>!basis.some(x=>x.position===r.position)).map(r=>r.position);
+    const extra=positions.filter(r=>!basisPositions.has(r.position)).map(r=>r.position);
     const issues:string[]=[];
     const normalized:BidLine[]=[];
     const cells=basis.map(ref=>{
