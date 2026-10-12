@@ -18,16 +18,16 @@ const {inventoryRlcMotorSourceGaps}=require('../../src/kalkulation/autonomous/rl
  const p=new PrismaClient(),sample=[];let cursor;
  try{
  while(sample.length<193){
-  const hs=await p.lVHeader.findMany({take:15,...(cursor?{skip:1,cursor:{id:cursor}}:{}),orderBy:{id:'asc'},select:{id:true,title:true,positions:{select:{position:true,kurztext:true,langtext:true,einheit:true}}}});
+  const hs=await p.lVHeader.findMany({take:15,...(cursor?{skip:1,cursor:{id:cursor}}:{}),orderBy:{id:'asc'},select:{id:true,title:true,positions:{select:{position:true,kurztext:true,langtext:true,einheit:true,menge:true}}}});
   if(!hs.length)break;cursor=hs[hs.length-1].id;
-  for(const h of hs){const a=h.positions.map(r=>({posNr:r.position,kurztext:r.kurztext,langtext:r.langtext||'',einheit:r.einheit}));
+  for(const h of hs){const a=h.positions.map(r=>({posNr:r.position,kurztext:r.kurztext,langtext:r.langtext||'',einheit:r.einheit,menge:Number(r.menge)}));
    for(const row of a){if(!/zulage|zuschlag/i.test(row.kurztext||''))continue;
     const ref=resolveV3GaebReference(row,a);if(ref.status==='incompatible_previous'&&ref.basePosition&&sample.length<193)sample.push({row,a,ref,title:h.title});
    }
   }
  }
  }finally{await p.$disconnect();}
- const summary={sample:sample.length,aiCandidate:valid.size,examined:0,uniqueBase:0,baseFamilyEligible:0,variantFamilyEligible:0,bothEligible:0,missingReference:0,unmatched:0,missingUnit:0,exceptions:0,priceApproved:0,urkBaseWithLines:0,urkVariantWithLines:0,urkBaseReview:0,urkVariantReview:0,technicalGaps:{},resourceEvidenceComplete:0,productivityVerified:0,readyForCostReview:0,possibleDoubleCount:0,overlapByGroup:{},incrementalScreened:0,incrementalApproved:0,scopeEvidenceComplete:0,scopeGapTotals:{},sourceNotes:0,sourceMissing:0,sourceInternal:0,lineArithmeticInvalid:0,sourceExactCandidates:0,sourceStillUnmatched:0,sourceAmbiguous:0,sourceQuality:{}};
+ const summary={sample:sample.length,aiCandidate:valid.size,examined:0,uniqueBase:0,baseFamilyEligible:0,variantFamilyEligible:0,bothEligible:0,missingReference:0,unmatched:0,missingUnit:0,contractQuantityValid:0,contractQuantityInvalid:0,exceptions:0,priceApproved:0,urkBaseWithLines:0,urkVariantWithLines:0,urkBaseReview:0,urkVariantReview:0,technicalGaps:{},resourceEvidenceComplete:0,productivityVerified:0,readyForCostReview:0,possibleDoubleCount:0,overlapByGroup:{},incrementalScreened:0,incrementalApproved:0,scopeEvidenceComplete:0,scopeGapTotals:{},sourceNotes:0,sourceMissing:0,sourceInternal:0,lineArithmeticInvalid:0,sourceExactCandidates:0,sourceStillUnmatched:0,sourceAmbiguous:0,sourceQuality:{}};
  const details=[];const inventoryResults=[];
  for(const [index,record] of sample.entries()){
   if(!valid.has(index))continue;summary.examined++;
@@ -46,6 +46,7 @@ const {inventoryRlcMotorSourceGaps}=require('../../src/kalkulation/autonomous/rl
    if(baseCount&&variantCount)summary.bothEligible++;
   }catch(e){summary.exceptions++;}
   if(!record.row.einheit)summary.missingUnit++;
+  if(Number.isFinite(record.row.menge)&&record.row.menge>0)summary.contractQuantityValid++;else summary.contractQuantityInvalid++;
   const baseCalc=calculateRlcMotorWithContext(base[0],context,record.a);
   const variantCalc=calculateRlcMotorWithContext(record.row,context,record.a);
   inventoryResults.push(baseCalc,variantCalc);
