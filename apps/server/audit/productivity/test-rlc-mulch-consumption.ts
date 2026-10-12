@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import {calculateRlcMotorWithContext} from "../../src/kalkulation/rlcMotor";
+import {analyzeRlcProjectContext} from "../../src/kalkulation/autonomous/projectContextAnalyzer";
+import {inspectRlcMotorConsumptionIntegrity} from "../../src/kalkulation/autonomous/rlcMotorConsumptionIntegrity";
+const row={posNr:"01",kurztext:"Mulchen Pflanzfläche Mulchkompost D 5cm",einheit:"m2",menge:100};
+const context=analyzeRlcProjectContext([row],"Landschaftsbau");
+const result=calculateRlcMotorWithContext(row,context,[row]);
+assert(result);
+const material=result.costLines.find(l=>l.name==="Mulchkompost D 5cm");
+assert(material);
+assert.equal(material.consumption?.status,"recipe_assumption");
+assert.equal(material.consumption?.resourceQtyPerGaebUnit,0.05);
+assert.equal(material.consumption?.resourceUnit,"m3");
+assert.equal(result.unitPrice,6);
+assert.equal(inspectRlcMotorConsumptionIntegrity(result).issues.length,0);
+console.log("RLC_MULCH_PHYSICAL_CONSUMPTION_PASS",result.unitPrice);
