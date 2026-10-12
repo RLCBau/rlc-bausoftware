@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const file=process.argv[2]||'/tmp/rlc-v3-152-technical-audit.json';
+const {summary,details}=JSON.parse(fs.readFileSync(file,'utf8'));
+assert.equal(summary.examined,152,'GAEB regression sample changed');
+assert.equal(summary.exceptions,0,'Unexpected exception');
+assert.equal(summary.priceApproved,0,'Diagnostic authorized an EP');
+assert.equal(summary.incrementalApproved,0,'Incremental diagnostic authorized an EP');
+assert.equal(summary.scopeEvidenceComplete,0,'Unexpected unverified documentary approval');
+assert.equal(details.length,152,'Missing per-position detail');
+const invalid=details.filter(d=>d.scope?.productionWriteAllowed||d.incremental?.productionWriteAllowed||d.scope?.approvedForEP||d.incremental?.approvedForEP);
+assert.equal(invalid.length,0,'V3 allowed an EP write');
+console.log('RLC_MOTOR_GAEB_REGRESSION_PASS',JSON.stringify({examined:summary.examined,exceptions:summary.exceptions,approved:summary.priceApproved}));
