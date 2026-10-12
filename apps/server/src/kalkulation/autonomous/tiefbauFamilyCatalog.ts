@@ -35308,7 +35308,9 @@ export function calculateTiefbauFamilyCatalog(
     return finish(row, ctx, "Wasserbau/Baggerguttransport", "Baggergut laden und abfahren", "Baggerguttransport", lines, riskFrom(ctx, "high"), ["Wassergehalt, Dichte, Transportdistanz, Analytik und Annahmestelle prüfen."]);
   }
 
-  if (hasAny(text, ["bagger", "radlader", "walze", "rüttelplatte", "lkw", "gerät", "maschine", "bohrgerät"])) {
+  // Do not treat compounds (Baggermatten, Baggergut, Maschinenraum etc.)
+  // as equipment hire. Match a standalone equipment noun in the LV short text.
+  if (/\b(?:bagger|radlader|walze|rüttelplatte|ruettelplatte|lkw|gerät|geraet|maschine|bohrgerät|bohrgeraet)\b/i.test(shortText)) {
     return finish(row, ctx, "Maschinen/Geräte/Technische Klärung", "Maschineneinsatz: Geräteklasse/Abrechnung fehlen", "Geräteleistung – technische Klärung", lines, riskFrom(ctx, "high"), ["Geräteklasse, Leistung/Gewicht, Einheit (h/Tag/St), Bedienpersonal, Kraftstoff, Transport, Vorhaltung und Stillstand bestimmen."]);
   }
 
