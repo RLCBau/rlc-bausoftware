@@ -34,8 +34,16 @@ export function checkV3SurchargeScope(input:{
  required(evidence?.quantityEvidenceId,"quantity_evidence_missing");
  required(evidence?.productivityEvidenceId,"productivity_evidence_missing");
  if(!surcharge.einheit||!base.einheit)missing.push("contract_units_missing");
- if(!Number.isFinite(Number(surcharge.menge))||Number(surcharge.menge)<=0)
-   missing.push("contract_quantity_missing");
+ const baseQty=Number(base.menge),surchargeQty=Number(surcharge.menge);
+ if(!Number.isFinite(baseQty)||baseQty<=0)missing.push("base_contract_quantity_missing");
+ if(!Number.isFinite(surchargeQty)||surchargeQty<=0)missing.push("contract_quantity_missing");
+ const normalizeUnit=(unit:unknown)=>String(unit||"").trim().toLowerCase().replace(/\.$/,"").replace("m²","m2").replace("m³","m3");
+ if(base.einheit&&surcharge.einheit&&normalizeUnit(base.einheit)!==normalizeUnit(surcharge.einheit))
+   missing.push("contract_unit_mismatch_requires_scope_evidence");
+ // A surcharge quantity may legitimately differ from the base quantity.
+ // Record the discrepancy for review rather than assuming identical quantities.
+ const quantityRelation=Number.isFinite(baseQty)&&baseQty>0&&Number.isFinite(surchargeQty)&&surchargeQty>0
+   ? (Math.abs(baseQty-surchargeQty)<1e-6?"same":"different") : "unknown";
  const lines=input.surchargeCalculation?.costLines||[];
  if(!lines.length)missing.push("surcharge_cost_lines_missing");
  for(const [i,line] of lines.entries()){
@@ -47,7 +55,7 @@ export function checkV3SurchargeScope(input:{
  for(const index of new Set(overlap.possibleOverlaps.map(x=>x.variantLine)))
    if(!evidence?.overlapResolutionEvidenceIds?.[String(index)])
      missing.push("overlap_resolution_missing:"+index);
- return {missing,documentaryComplete:missing.length===0,overlapCount:overlap.possibleOverlaps.length,
+ return {missing,documentaryComplete:missing.length===0,quantityRelation,overlapCount:overlap.possibleOverlaps.length,
    // This gate only recognizes supplied evidence references; it cannot authenticate them.
    evidenceAuthenticityVerified:false as const,incrementalEP:null,approvedForEP:false as const,
    productionWriteAllowed:false as const};

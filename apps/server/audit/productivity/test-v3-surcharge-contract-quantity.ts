@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import {checkV3SurchargeScope} from "../../src/kalkulation/autonomous/v3SurchargeScopeGate";
+const base={posNr:"01",kurztext:"Rohr",einheit:"m",menge:100};
+const surcharge={posNr:"02",kurztext:"Zulage zum Rohr",einheit:"m",menge:20};
+const evaluate=(b:any=base,s:any=surcharge)=>checkV3SurchargeScope({base:b,surcharge:s,baseCalculation:null,surchargeCalculation:null});
+assert.equal(evaluate().quantityRelation,"different");
+assert(!evaluate().missing.includes("contract_quantity_missing"));
+assert(!evaluate().missing.includes("base_contract_quantity_missing"));
+assert(evaluate({...base,menge:0}).missing.includes("base_contract_quantity_missing"));
+assert(evaluate(base,{...surcharge,menge:0}).missing.includes("contract_quantity_missing"));
+assert(evaluate(base,{...surcharge,einheit:"m²"}).missing.includes("contract_unit_mismatch_requires_scope_evidence"));
+assert.equal(evaluate(base,{...surcharge,einheit:"m",menge:100}).quantityRelation,"same");
+assert.equal(evaluate().approvedForEP,false);
+console.log("RLC_SURCHARGE_CONTRACT_QUANTITY_PASS");
