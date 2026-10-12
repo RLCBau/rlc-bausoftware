@@ -11,6 +11,7 @@ const {checkV3SurchargeScope}=require('../../src/kalkulation/autonomous/v3Surcha
 const {traceV3UrkEvidence}=require('../../src/kalkulation/autonomous/v3UrkEvidenceTrace');
 const {matchV3UrkSourceCandidates}=require('../../src/kalkulation/autonomous/v3UrkSourceCandidates');
 const {inspectRlcMotorEvidence}=require('../../src/kalkulation/autonomous/rlcMotorEvidenceQuality');
+const {inventoryRlcMotorSourceGaps}=require('../../src/kalkulation/autonomous/rlcMotorEvidenceInventory');
 (async()=>{
  const saved=JSON.parse(fs.readFileSync('/tmp/rlc-v3-reference-193-results.json','utf8'));
  const valid=new Map(saved.filter(x=>x.relation==='legitimate_variant').map(x=>[x.index,x]));
@@ -27,7 +28,7 @@ const {inspectRlcMotorEvidence}=require('../../src/kalkulation/autonomous/rlcMot
  }
  }finally{await p.$disconnect();}
  const summary={sample:sample.length,aiCandidate:valid.size,examined:0,uniqueBase:0,baseFamilyEligible:0,variantFamilyEligible:0,bothEligible:0,missingReference:0,unmatched:0,missingUnit:0,exceptions:0,priceApproved:0,urkBaseWithLines:0,urkVariantWithLines:0,urkBaseReview:0,urkVariantReview:0,technicalGaps:{},resourceEvidenceComplete:0,productivityVerified:0,readyForCostReview:0,possibleDoubleCount:0,overlapByGroup:{},incrementalScreened:0,incrementalApproved:0,scopeEvidenceComplete:0,scopeGapTotals:{},sourceNotes:0,sourceMissing:0,sourceInternal:0,lineArithmeticInvalid:0,sourceExactCandidates:0,sourceStillUnmatched:0,sourceAmbiguous:0,sourceQuality:{}};
- const details=[];
+ const details=[];const inventoryResults=[];
  for(const [index,record] of sample.entries()){
   if(!valid.has(index))continue;summary.examined++;
   const base=record.a.slice(0,record.a.indexOf(record.row)).filter(r=>r.posNr===record.ref.basePosition);
@@ -47,6 +48,7 @@ const {inspectRlcMotorEvidence}=require('../../src/kalkulation/autonomous/rlcMot
   if(!record.row.einheit)summary.missingUnit++;
   const baseCalc=calculateRlcMotorWithContext(base[0],context,record.a);
   const variantCalc=calculateRlcMotorWithContext(record.row,context,record.a);
+  inventoryResults.push(baseCalc,variantCalc);
   if(baseCalc?.costLines?.length)summary.urkBaseWithLines++;
   if(variantCalc?.costLines?.length)summary.urkVariantWithLines++;
   if(baseCalc?.calculationStatus==='needs_review')summary.urkBaseReview++;
@@ -74,6 +76,8 @@ const {inspectRlcMotorEvidence}=require('../../src/kalkulation/autonomous/rlcMot
   for(const q of [qualityBase,qualityVariant])for(const [kind,count] of Object.entries(q.counts))summary.sourceQuality[kind]=(summary.sourceQuality[kind]||0)+count;
   details.push({evidenceQuality:{base:qualityBase,variant:qualityVariant},sourceCandidates:{base:sourcesBase,variant:sourcesVariant},evidenceTrace:{base:baseTrace,variant:variantTrace},scope,incremental,overlap,checklist,urkalkulation:{baseStatus:baseCalc?.calculationStatus||"no_recipe",variantStatus:variantCalc?.calculationStatus||"no_recipe",baseGroups:[...new Set((baseCalc?.costLines||[]).map(l=>l.group))],variantGroups:[...new Set((variantCalc?.costLines||[]).map(l=>l.group))],evidenceCertified:false},index,trade,basePosition:record.ref.basePosition,surchargePosition:record.row.posNr,baseFamilyCandidates:baseCount,variantFamilyCandidates:variantCount,needsTechnicalReview:true,epApproved:false});
  }
- fs.writeFileSync('/tmp/rlc-v3-152-technical-audit.json',JSON.stringify({summary,details},null,2));
+ const sourceInventory=inventoryRlcMotorSourceGaps(inventoryResults);
+ summary.sourceInventoryUnique=sourceInventory.entries.length;summary.sourceInventoryMissing=sourceInventory.missingOccurrences;summary.sourceInventoryCandidates=sourceInventory.candidateOccurrences;
+ fs.writeFileSync('/tmp/rlc-v3-152-technical-audit.json',JSON.stringify({summary,details,sourceInventory},null,2));
  console.log('TECHNICAL_AUDIT',JSON.stringify(summary));
 })().catch(e=>{console.error(e.stack);process.exitCode=1});

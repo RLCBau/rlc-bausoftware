@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import {inventoryRlcMotorSourceGaps} from "../../src/kalkulation/autonomous/rlcMotorEvidenceInventory";
+const line=(note?:string,rate=10)=>({id:"1",group:"Lohn",name:"Rohr montieren",unit:"h",qty:1,unitPrice:rate,total:rate,note});
+const result=(...lines:ReturnType<typeof line>[])=>({costLines:lines}) as any;
+const x=inventoryRlcMotorSourceGaps([result(line(),line()),result(line("Tarif-2026"))]);
+assert.equal(x.entries.length,1);
+assert.equal(x.entries[0].withoutNotes,2);
+assert.equal(x.entries[0].sourceStatus,"reference_candidate");
+assert.equal(x.approvedForEP,false);
+assert.equal(x.productionWriteAllowed,false);
+assert.equal(inventoryRlcMotorSourceGaps([result(line(),line(undefined,11))]).entries.length,2);
+console.log("RLC_MOTOR_INVENTORY_PASS");
