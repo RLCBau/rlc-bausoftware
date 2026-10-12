@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {diagnoseRlcAsphaltMarketEvidence as check} from '../../src/kalkulation/autonomous/rlcMarketEvidence2026';
+const a=check({kurztext:'Asphalttragschicht AC 16 T liefern',einheit:'t'});
+assert.equal(a.materialNetEURPerT,103.10);
+assert.equal(a.unitCompatible,true);
+assert.equal(a.contractScopeComparable,false);
+assert.equal(check({kurztext:'AC 16 T D herstellen',einheit:'m2'}).materialNetEURPerT,133.50);
+assert.equal(check({kurztext:'AC 11 D N 4cm einbauen',einheit:'m²'}).reason,'gaeb_unit_not_factory_ton');
+assert.equal(check({kurztext:'Asphaltdeckschicht herstellen',einheit:'m²'}).materialNetEURPerT,null);
+console.log('RLC_MARKET_ASPHALT_EVIDENCE_PASS');
