@@ -9,6 +9,7 @@ const {diagnoseV3VariantCostOverlap}=require('../../src/kalkulation/autonomous/v
 const {auditV3IncrementalCosts}=require('../../src/kalkulation/autonomous/v3VariantIncrementalAudit');
 const {checkV3SurchargeScope}=require('../../src/kalkulation/autonomous/v3SurchargeScopeGate');
 const {traceV3UrkEvidence}=require('../../src/kalkulation/autonomous/v3UrkEvidenceTrace');
+const {matchV3UrkSourceCandidates}=require('../../src/kalkulation/autonomous/v3UrkSourceCandidates');
 (async()=>{
  const saved=JSON.parse(fs.readFileSync('/tmp/rlc-v3-reference-193-results.json','utf8'));
  const valid=new Map(saved.filter(x=>x.relation==='legitimate_variant').map(x=>[x.index,x]));
@@ -24,7 +25,7 @@ const {traceV3UrkEvidence}=require('../../src/kalkulation/autonomous/v3UrkEviden
   }
  }
  }finally{await p.$disconnect();}
- const summary={sample:sample.length,aiCandidate:valid.size,examined:0,uniqueBase:0,baseFamilyEligible:0,variantFamilyEligible:0,bothEligible:0,missingReference:0,unmatched:0,missingUnit:0,exceptions:0,priceApproved:0,urkBaseWithLines:0,urkVariantWithLines:0,urkBaseReview:0,urkVariantReview:0,technicalGaps:{},resourceEvidenceComplete:0,productivityVerified:0,readyForCostReview:0,possibleDoubleCount:0,overlapByGroup:{},incrementalScreened:0,incrementalApproved:0,scopeEvidenceComplete:0,scopeGapTotals:{},sourceNotes:0,sourceMissing:0,sourceInternal:0,lineArithmeticInvalid:0};
+ const summary={sample:sample.length,aiCandidate:valid.size,examined:0,uniqueBase:0,baseFamilyEligible:0,variantFamilyEligible:0,bothEligible:0,missingReference:0,unmatched:0,missingUnit:0,exceptions:0,priceApproved:0,urkBaseWithLines:0,urkVariantWithLines:0,urkBaseReview:0,urkVariantReview:0,technicalGaps:{},resourceEvidenceComplete:0,productivityVerified:0,readyForCostReview:0,possibleDoubleCount:0,overlapByGroup:{},incrementalScreened:0,incrementalApproved:0,scopeEvidenceComplete:0,scopeGapTotals:{},sourceNotes:0,sourceMissing:0,sourceInternal:0,lineArithmeticInvalid:0,sourceExactCandidates:0,sourceStillUnmatched:0,sourceAmbiguous:0};
  const details=[];
  for(const [index,record] of sample.entries()){
   if(!valid.has(index))continue;summary.examined++;
@@ -65,7 +66,10 @@ const {traceV3UrkEvidence}=require('../../src/kalkulation/autonomous/v3UrkEviden
   for(const code of scope.missing)summary.scopeGapTotals[code]=(summary.scopeGapTotals[code]||0)+1;
   const baseTrace=traceV3UrkEvidence(baseCalc),variantTrace=traceV3UrkEvidence(variantCalc);
   for(const trace of [baseTrace,variantTrace]){summary.sourceNotes+=trace.withSourceNote;summary.sourceMissing+=trace.missingSourceNote;summary.sourceInternal+=trace.internalReferences;summary.lineArithmeticInvalid+=trace.invalidArithmetic;}
-  details.push({evidenceTrace:{base:baseTrace,variant:variantTrace},scope,incremental,overlap,checklist,urkalkulation:{baseStatus:baseCalc?.calculationStatus||"no_recipe",variantStatus:variantCalc?.calculationStatus||"no_recipe",baseGroups:[...new Set((baseCalc?.costLines||[]).map(l=>l.group))],variantGroups:[...new Set((variantCalc?.costLines||[]).map(l=>l.group))],evidenceCertified:false},index,trade,basePosition:record.ref.basePosition,surchargePosition:record.row.posNr,baseFamilyCandidates:baseCount,variantFamilyCandidates:variantCount,needsTechnicalReview:true,epApproved:false});
+  const sourcesBase=matchV3UrkSourceCandidates(baseCalc,[variantCalc]);
+  const sourcesVariant=matchV3UrkSourceCandidates(variantCalc,[baseCalc]);
+  for(const sources of [sourcesBase,sourcesVariant]){summary.sourceExactCandidates+=sources.exactCandidates;summary.sourceStillUnmatched+=sources.unmatched;summary.sourceAmbiguous+=sources.ambiguous;}
+  details.push({sourceCandidates:{base:sourcesBase,variant:sourcesVariant},evidenceTrace:{base:baseTrace,variant:variantTrace},scope,incremental,overlap,checklist,urkalkulation:{baseStatus:baseCalc?.calculationStatus||"no_recipe",variantStatus:variantCalc?.calculationStatus||"no_recipe",baseGroups:[...new Set((baseCalc?.costLines||[]).map(l=>l.group))],variantGroups:[...new Set((variantCalc?.costLines||[]).map(l=>l.group))],evidenceCertified:false},index,trade,basePosition:record.ref.basePosition,surchargePosition:record.row.posNr,baseFamilyCandidates:baseCount,variantFamilyCandidates:variantCount,needsTechnicalReview:true,epApproved:false});
  }
  fs.writeFileSync('/tmp/rlc-v3-152-technical-audit.json',JSON.stringify({summary,details},null,2));
  console.log('TECHNICAL_AUDIT',JSON.stringify(summary));

@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import {matchV3UrkSourceCandidates} from "../../src/kalkulation/autonomous/v3UrkSourceCandidates";
+const line=(note?:string,price=20)=>({id:"1",group:"Lohn",name:"Formteil montieren",unit:"h",qty:1,unitPrice:price,total:price,note});
+const result=(...lines:ReturnType<typeof line>[])=>({costLines:lines}) as any;
+const same=matchV3UrkSourceCandidates(result(line()),[result(line("tarif-2026"))]);
+assert.equal(same.exactCandidates,1);
+assert.equal(same.matches[0].candidateSource,"tarif-2026");
+assert.equal(same.matches[0].documentaryEvidenceVerified,false);
+assert.equal(same.approvedForEP,false);
+assert.equal(matchV3UrkSourceCandidates(result(line()),[result(line("tarif-2026",21))]).unmatched,1);
+const ambiguous=matchV3UrkSourceCandidates(result(line()),[result(line("source-A")),result(line("source-B"))]);
+assert.equal(ambiguous.ambiguous,1);
+assert.equal(ambiguous.matches[0].candidateSource,null);
+console.log("V3_SOURCE_CANDIDATES_PASS");
