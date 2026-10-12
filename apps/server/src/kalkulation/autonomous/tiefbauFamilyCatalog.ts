@@ -169,6 +169,14 @@ function addLine(
     unitPrice: round2(unitPrice),
     total: round2(unitPrice),
     note,
+    // A V2 aggregated rate is not one physical unit/hour of resource.
+    consumption: {
+      status: "unverified_lump_rate",
+      resourceQtyPerGaebUnit: null,
+      resourceUnit: null,
+      resourceRateEUR: null,
+      basis: null,
+    },
   });
 }
 

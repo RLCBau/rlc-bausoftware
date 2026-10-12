@@ -33,6 +33,13 @@ export type RlcAutonomousCostLine = {
   unitPrice: number;
   total: number;
   note?: string;
+  consumption?: {
+    status: "unverified_lump_rate" | "measured_consumption";
+    resourceQtyPerGaebUnit: number | null;
+    resourceUnit: string | null;
+    resourceRateEUR: number | null;
+    basis: string | null;
+  };
   provenance?: { origin: "rlc_v2_family_catalog"; family: string; evidenceStatus: "source_note_unverified" | "catalog_rate_unverified" };
 };
 
