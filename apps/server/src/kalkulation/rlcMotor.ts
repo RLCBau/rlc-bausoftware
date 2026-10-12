@@ -123,7 +123,7 @@ export function calculateRlcMotorWithContext(
   const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
   const dependentSurcharge = /\b(?:zulage|zuschlag)\b/i.test(scopeText) &&
     (/\b(?:vorposition|vorherige\s+position|wie\s+vor|bezugsposition)\b/i.test(scopeText) ||
-      /\b(?:zu|zur|für|fuer)\s+(?:pos(?:ition)?\.?\s*(?:nr\.?)?\s*[:#-]?\s*)\d+(?:[.\-/]\d+)*/i.test(scopeText));
+      /\b(?:zu|zur|für|fuer)\s+(?:(?:grund|haupt|basis)?pos(?:ition)?\.?\s*(?:nr\.?)?\s*[:#-]?\s*)\d+(?:[.\-/]\d+)*/i.test(scopeText));
   if (!result) {
     // Righe prive di testo sono strutturali; una posizione testuale non riconosciuta va revisionata.
     if (!String(row.kurztext || "").trim() && !String(row.langtext || "").trim()) return null;
