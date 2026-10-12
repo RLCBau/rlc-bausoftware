@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {auditV3IncrementalCosts} from '../../src/kalkulation/autonomous/v3VariantIncrementalAudit';
+const make=(price:number)=>({costLines:[{group:'Lohn',name:'Rohrleitung einbauen und ausrichten',qty:1,unit:'h',unitPrice:price,total:price}]}) as any;
+const d=auditV3IncrementalCosts(make(100),make(150));
+assert.equal(d.compare.find(x=>x.group==='Lohn')?.arithmeticDifference,50);
+assert.equal(d.incrementalEP,null);
+assert.equal(d.approvedForEP,false);
+assert.equal(d.productionWriteAllowed,false);
+assert(d.flags.includes('possible_base_service_duplication'));
+assert.equal(auditV3IncrementalCosts(null,make(100)).status,'technical_validation_required');
+console.log('V3_INCREMENTAL_FAIL_CLOSED_PASS');
