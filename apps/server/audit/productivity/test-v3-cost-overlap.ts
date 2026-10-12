@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {diagnoseV3VariantCostOverlap} from '../../src/kalkulation/autonomous/v3VariantCostOverlap';
+const calc=(names:string[])=>({costLines:names.map(name=>({name,group:'Lohn',qty:1,unit:'h',unitPrice:10,total:10}))}) as any;
+const same=diagnoseV3VariantCostOverlap(calc(['Rohrleitung einbauen und ausrichten']),calc(['Rohrleitung einbauen und ausrichten']));
+assert.equal(same.status,'possible_double_count');
+assert.equal(same.provenDoubleCount,false);
+assert.equal(same.approvedForEP,false);
+assert.equal(same.productionWriteAllowed,false);
+assert.equal(diagnoseV3VariantCostOverlap(calc(['Aushub ausheben']),calc(['Kabel prüfen'])).status,'no_lexical_overlap_detected');
+assert.equal(diagnoseV3VariantCostOverlap(null,calc(['Kabel prüfen'])).status,'missing_cost_lines');
+console.log('V3_COST_OVERLAP_TEST_PASS');
