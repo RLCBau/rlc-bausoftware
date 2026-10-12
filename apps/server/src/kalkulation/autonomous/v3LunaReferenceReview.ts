@@ -3,11 +3,16 @@ import { completeRlcAiText } from "../../services/ai/rlcAiGateway";
 import { resolveV3GaebReference } from "./v3GaebReferenceResolver";
 import type { RlcAutonomousCalcInput } from "./types";
 
+const safeText = (v: unknown, max: number) =>
+  (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v)).slice(0, max);
+const safeList = (v: unknown, count: number, max: number) =>
+  (Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v) : [])
+    .slice(0, count).map(item => safeText(item, max));
 const responseSchema = z.object({
   relation: z.enum(["same_scope", "legitimate_variant", "separate_scope", "insufficient_evidence"]),
-  reason: z.string().max(1200),
-  supportingQuotes: z.array(z.string().max(200)).max(5),
-  missingParameters: z.array(z.string().max(150)).max(12)
+  reason: z.preprocess(v => safeText(v, 1200), z.string()),
+  supportingQuotes: z.preprocess(v => safeList(v, 5, 200), z.array(z.string())),
+  missingParameters: z.preprocess(v => safeList(v, 12, 150), z.array(z.string()))
 }).strict();
 
 export async function reviewV3LunaReference(
