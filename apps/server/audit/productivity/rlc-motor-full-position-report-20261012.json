@@ -1,0 +1,251 @@
+{
+  "date": "2026-10-12T13:14:04.918Z",
+  "lv": 513,
+  "positions": 82736,
+  "positive": 72874,
+  "zero": 9862,
+  "review": 5786,
+  "unresolved": 1329,
+  "structural": 4076,
+  "exceptions": 0,
+  "positivePctAll": 88.08,
+  "positivePctWork": 92.64,
+  "reviewPctWork": 7.36,
+  "topGroups": [
+    [
+      "UNRESOLVED",
+      {
+        "positions": 1329,
+        "positive": 0,
+        "zero": 1329,
+        "review": 1329
+      }
+    ],
+    [
+      "Kanalbau",
+      {
+        "positions": 9433,
+        "positive": 8754,
+        "zero": 679,
+        "review": 679
+      }
+    ],
+    [
+      "Straßenbau",
+      {
+        "positions": 9755,
+        "positive": 9365,
+        "zero": 390,
+        "review": 390
+      }
+    ],
+    [
+      "Erdbau",
+      {
+        "positions": 10443,
+        "positive": 10139,
+        "zero": 304,
+        "review": 304
+      }
+    ],
+    [
+      "Maschinen",
+      {
+        "positions": 302,
+        "positive": 10,
+        "zero": 292,
+        "review": 292
+      }
+    ],
+    [
+      "Entsorgung",
+      {
+        "positions": 2448,
+        "positive": 2174,
+        "zero": 274,
+        "review": 274
+      }
+    ],
+    [
+      "Pflaster",
+      {
+        "positions": 2972,
+        "positive": 2803,
+        "zero": 169,
+        "review": 169
+      }
+    ],
+    [
+      "Spezialtiefbau",
+      {
+        "positions": 620,
+        "positive": 468,
+        "zero": 152,
+        "review": 152
+      }
+    ],
+    [
+      "Landschaftsbau",
+      {
+        "positions": 3480,
+        "positive": 3335,
+        "zero": 145,
+        "review": 145
+      }
+    ],
+    [
+      "Betonbau",
+      {
+        "positions": 1773,
+        "positive": 1643,
+        "zero": 130,
+        "review": 130
+      }
+    ],
+    [
+      "Nachträge",
+      {
+        "positions": 127,
+        "positive": 0,
+        "zero": 127,
+        "review": 127
+      }
+    ],
+    [
+      "Wasserhaltung",
+      {
+        "positions": 1057,
+        "positive": 931,
+        "zero": 126,
+        "review": 126
+      }
+    ],
+    [
+      "Rohrbau",
+      {
+        "positions": 4630,
+        "positive": 4514,
+        "zero": 116,
+        "review": 116
+      }
+    ],
+    [
+      "Wasserleitungsbau",
+      {
+        "positions": 1692,
+        "positive": 1589,
+        "zero": 103,
+        "review": 103
+      }
+    ],
+    [
+      "Prüfungen",
+      {
+        "positions": 149,
+        "positive": 65,
+        "zero": 84,
+        "review": 84
+      }
+    ],
+    [
+      "Regie",
+      {
+        "positions": 5171,
+        "positive": 5104,
+        "zero": 67,
+        "review": 67
+      }
+    ],
+    [
+      "Baustelleneinrichtung",
+      {
+        "positions": 1806,
+        "positive": 1745,
+        "zero": 61,
+        "review": 61
+      }
+    ],
+    [
+      "HDD",
+      {
+        "positions": 60,
+        "positive": 0,
+        "zero": 60,
+        "review": 60
+      }
+    ],
+    [
+      "Verkehrssicherung",
+      {
+        "positions": 1327,
+        "positive": 1272,
+        "zero": 55,
+        "review": 55
+      }
+    ],
+    [
+      "Abbruch",
+      {
+        "positions": 576,
+        "positive": 523,
+        "zero": 53,
+        "review": 53
+      }
+    ],
+    [
+      "GAEB",
+      {
+        "positions": 52,
+        "positive": 0,
+        "zero": 52,
+        "review": 52
+      }
+    ],
+    [
+      "Wasserbau",
+      {
+        "positions": 421,
+        "positive": 374,
+        "zero": 47,
+        "review": 47
+      }
+    ],
+    [
+      "Baustellenlogistik",
+      {
+        "positions": 2026,
+        "positive": 1985,
+        "zero": 41,
+        "review": 41
+      }
+    ],
+    [
+      "Abdichtung",
+      {
+        "positions": 124,
+        "positive": 85,
+        "zero": 39,
+        "review": 39
+      }
+    ],
+    [
+      "Zaunbau",
+      {
+        "positions": 41,
+        "positive": 5,
+        "zero": 36,
+        "review": 36
+      }
+    ]
+  ],
+  "warningCounts": {
+    "RLC_MOTOR_NO_MATCH": 1329,
+    "RLC_MOTOR_REVIEW_PRICE_BLOCKED": 345,
+    "RLC_MOTOR_MISSING_VALID_EP": 3552,
+    "RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED": 579,
+    "RLC_MOTOR_REFERENCE_CANDIDATE_PREVIOUS": 219,
+    "RLC_MOTOR_REFERENCE_MISSING_REFERENCE": 132,
+    "RLC_MOTOR_REFERENCE_RESOLVED_EXPLICIT": 25,
+    "RLC_MOTOR_REFERENCE_INCOMPATIBLE_PREVIOUS": 184
+  }
+}
