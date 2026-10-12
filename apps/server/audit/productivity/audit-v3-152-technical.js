@@ -4,6 +4,7 @@ const {diagnoseV3LunaCandidate}=require('../../src/kalkulation/autonomous/v3Luna
 const {resolveV3GaebReference}=require('../../src/kalkulation/autonomous/v3GaebReferenceResolver');
 const {analyzeRlcProjectContext}=require('../../src/kalkulation/autonomous/projectContextAnalyzer');
 const {auditV3VariantResources}=require('../../src/kalkulation/autonomous/v3VariantResourceAudit');
+const {calculateRlcMotorWithContext}=require('../../src/kalkulation/rlcMotor');
 (async()=>{
  const saved=JSON.parse(fs.readFileSync('/tmp/rlc-v3-reference-193-results.json','utf8'));
  const valid=new Map(saved.filter(x=>x.relation==='legitimate_variant').map(x=>[x.index,x]));
@@ -19,7 +20,7 @@ const {auditV3VariantResources}=require('../../src/kalkulation/autonomous/v3Vari
   }
  }
  }finally{await p.$disconnect();}
- const summary={sample:sample.length,aiCandidate:valid.size,examined:0,uniqueBase:0,baseFamilyEligible:0,variantFamilyEligible:0,bothEligible:0,missingReference:0,unmatched:0,missingUnit:0,exceptions:0,priceApproved:0,technicalGaps:{},resourceEvidenceComplete:0,productivityVerified:0,readyForCostReview:0};
+ const summary={sample:sample.length,aiCandidate:valid.size,examined:0,uniqueBase:0,baseFamilyEligible:0,variantFamilyEligible:0,bothEligible:0,missingReference:0,unmatched:0,missingUnit:0,exceptions:0,priceApproved:0,urkBaseWithLines:0,urkVariantWithLines:0,urkBaseReview:0,urkVariantReview:0,technicalGaps:{},resourceEvidenceComplete:0,productivityVerified:0,readyForCostReview:0};
  const details=[];
  for(const [index,record] of sample.entries()){
   if(!valid.has(index))continue;summary.examined++;
@@ -38,12 +39,18 @@ const {auditV3VariantResources}=require('../../src/kalkulation/autonomous/v3Vari
    if(baseCount&&variantCount)summary.bothEligible++;
   }catch(e){summary.exceptions++;}
   if(!record.row.einheit)summary.missingUnit++;
+  const baseCalc=calculateRlcMotorWithContext(base[0],context,record.a);
+  const variantCalc=calculateRlcMotorWithContext(record.row,context,record.a);
+  if(baseCalc?.costLines?.length)summary.urkBaseWithLines++;
+  if(variantCalc?.costLines?.length)summary.urkVariantWithLines++;
+  if(baseCalc?.calculationStatus==='needs_review')summary.urkBaseReview++;
+  if(variantCalc?.calculationStatus==='needs_review')summary.urkVariantReview++;
   const checklist=auditV3VariantResources({base:base[0],variant:record.row,baseFamilies:baseCount,variantFamilies:variantCount});
   for(const gap of checklist.gaps)summary.technicalGaps[gap.code]=(summary.technicalGaps[gap.code]||0)+1;
   if(checklist.resources.every(r=>r.verified))summary.resourceEvidenceComplete++;
   if(checklist.productivityVerified)summary.productivityVerified++;
   if(checklist.readyForCostReview)summary.readyForCostReview++;
-  details.push({checklist,index,trade,basePosition:record.ref.basePosition,surchargePosition:record.row.posNr,baseFamilyCandidates:baseCount,variantFamilyCandidates:variantCount,needsTechnicalReview:true,epApproved:false});
+  details.push({checklist,urkalkulation:{baseStatus:baseCalc?.calculationStatus||"no_recipe",variantStatus:variantCalc?.calculationStatus||"no_recipe",baseGroups:[...new Set((baseCalc?.costLines||[]).map(l=>l.group))],variantGroups:[...new Set((variantCalc?.costLines||[]).map(l=>l.group))],evidenceCertified:false},index,trade,basePosition:record.ref.basePosition,surchargePosition:record.row.posNr,baseFamilyCandidates:baseCount,variantFamilyCandidates:variantCount,needsTechnicalReview:true,epApproved:false});
  }
  fs.writeFileSync('/tmp/rlc-v3-152-technical-audit.json',JSON.stringify({summary,details},null,2));
  console.log('TECHNICAL_AUDIT',JSON.stringify(summary));
