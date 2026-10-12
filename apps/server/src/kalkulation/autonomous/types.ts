@@ -34,7 +34,7 @@ export type RlcAutonomousCostLine = {
   total: number;
   note?: string;
   consumption?: {
-    status: "unverified_lump_rate" | "contract_hour_unit" | "measured_consumption";
+    status: "unverified_lump_rate" | "contract_hour_unit" | "contract_nominal_length" | "measured_consumption";
     resourceQtyPerGaebUnit: number | null;
     resourceUnit: string | null;
     resourceRateEUR: number | null;

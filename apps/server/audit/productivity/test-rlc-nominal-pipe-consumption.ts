@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import {calculateRlcMotorWithContext} from "../../src/kalkulation/rlcMotor";
+import {analyzeRlcProjectContext} from "../../src/kalkulation/autonomous/projectContextAnalyzer";
+const rows=[{posNr:"01",kurztext:"PP KG2000 Rohr DN160 liefern und verlegen",einheit:"m",menge:12}];
+const calc=calculateRlcMotorWithContext(rows[0],analyzeRlcProjectContext(rows,"Kanalbau"),rows);
+assert(calc);
+const pipe=calc.costLines.find(l=>l.group==="Material"&&l.consumption?.status==="contract_nominal_length");
+assert(pipe,JSON.stringify({trade:calc.trade,lines:calc.costLines.map(l=>l.name)}));
+assert.equal(pipe.consumption?.resourceQtyPerGaebUnit,1);
+assert.equal(pipe.consumption?.resourceUnit,"m");
+assert.equal(pipe.consumption?.resourceRateEUR,pipe.unitPrice);
+assert(calc.costLines.filter(l=>l.group!=="Material").every(l=>l.consumption?.status!=="contract_nominal_length"));
+console.log("RLC_PIPE_NOMINAL_PASS",calc.unitPrice,pipe.name);

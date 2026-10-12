@@ -2422,6 +2422,21 @@ function finish(
       };
     }
   }
+  // Explicit pipe lengths: 1 nominal metre per GAEB metre, excluding
+  // waste, fittings and construction productivity (still unverified).
+  if (unit.toLowerCase() === "m" && /(?:rohr|leitung)/i.test(trade)) {
+    for (const line of lines) {
+      if (line.group !== "Material" || !/^(?:PE100-RC Druckrohr|PP\/KG2000 Rohr|KG2000 Rohr|PVC\/KG SN8 Rohr|Steinzeugrohr|Betonrohr DN|Duktiles Gussrohr)/i.test(line.name)) continue;
+      if (line.consumption?.status !== "unverified_lump_rate") continue;
+      line.consumption = {
+        status: "contract_nominal_length",
+        resourceQtyPerGaebUnit: 1,
+        resourceUnit: "m",
+        resourceRateEUR: line.unitPrice,
+        basis: "1 m nominales Rohr pro GAEB-m; Verschnitt, Formteile und Produktivität ungeprüft",
+      };
+    }
+  }
   const base = sum(lines);
   // RLC V3: Gemeinkosten und Gewinn werden als kaufmännische Zuschläge angesetzt.
   // Das fachliche Risiko erhöht den EP NICHT mehr pauschal auf jeder Position:
