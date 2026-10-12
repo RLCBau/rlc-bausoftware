@@ -119,6 +119,11 @@ export function calculateRlcMotorWithContext(
   allRows: RlcAutonomousCalcInput[] = []
 ): RlcAutonomousCalcResult | null {
   const result = calculateAutonomousUrkalkulation(row, context, allRows);
+  // Run the dependency guard even if the V2 family is not recognized.
+  const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
+  const dependentSurcharge = /\b(?:zulage|zuschlag)\b/i.test(scopeText) &&
+    (/\b(?:vorposition|vorherige\s+position|wie\s+vor|bezugsposition)\b/i.test(scopeText) ||
+      /\b(?:zu|zur|für|fuer)\s+(?:pos(?:ition)?\.?\s*(?:nr\.?)?\s*[:#-]?\s*)\d+(?:[.\-/]\d+)*/i.test(scopeText));
   if (!result) {
     // Righe prive di testo sono strutturali; una posizione testuale non riconosciuta va revisionata.
     if (!String(row.kurztext || "").trim() && !String(row.langtext || "").trim()) return null;
@@ -126,7 +131,7 @@ export function calculateRlcMotorWithContext(
       unitPrice: 0, total: 0, confidence: 0, riskLevel: "high",
       source: "rlc-motor-unresolved", calculationStatus: "needs_review",
       trade: "UNRESOLVED", bauverfahren: "UNRESOLVED", leistungsart: "UNRESOLVED",
-      costLines: [], warnings: ["RLC_MOTOR_NO_MATCH"],
+      costLines: [], warnings: ["RLC_MOTOR_NO_MATCH", ...(dependentSurcharge ? ["RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED"] : [])],
       aiReason: "RLC Motor: keine passende freigegebene Kalkulationsfamilie gefunden; EP gesperrt.",
     };
   }
@@ -142,10 +147,6 @@ export function calculateRlcMotorWithContext(
   }
   // RLC Motor is the only productive EP authority. A dependent GAEB surcharge
   // must not inherit the complete V2 base-service cost as its incremental EP.
-  const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
-  const dependentSurcharge = /\b(?:zulage|zuschlag)\b/i.test(scopeText) &&
-    (/\b(?:vorposition|vorherige\s+position|wie\s+vor|bezugsposition)\b/i.test(scopeText) ||
-      /\b(?:zu|zur|für|fuer)\s+(?:pos(?:ition)?\.?\s*(?:nr\.?)?\s*[:#-]?\s*)\d+(?:[.\-/]\d+)*/i.test(scopeText));
   if (dependentSurcharge) {
     const ref = resolveV3GaebReference(row, allRows);
     return { ...result, unitPrice: 0, total: 0, costLines: [],
