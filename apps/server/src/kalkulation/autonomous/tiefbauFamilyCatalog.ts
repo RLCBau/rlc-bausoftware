@@ -156,7 +156,8 @@ function addLine(
   name: string,
   unitPrice: number,
   unit: string,
-  note?: string
+  note?: string,
+  recipeConsumption?: { qty: number; resourceUnit: string; rateEUR: number; basis: string }
 ): void {
   if (unitPrice <= 0) return;
 
@@ -170,7 +171,13 @@ function addLine(
     total: round2(unitPrice),
     note,
     // A V2 aggregated rate is not one physical unit/hour of resource.
-    consumption: {
+    consumption: recipeConsumption ? {
+      status: "recipe_assumption",
+      resourceQtyPerGaebUnit: recipeConsumption.qty,
+      resourceUnit: recipeConsumption.resourceUnit,
+      resourceRateEUR: recipeConsumption.rateEUR,
+      basis: recipeConsumption.basis,
+    } : {
       status: "unverified_lump_rate",
       resourceQtyPerGaebUnit: null,
       resourceUnit: null,
@@ -5941,7 +5948,7 @@ function calculateZeroAuditBatch28(
   if (["m","lfm"].includes(u) && hasAny(shortText, ["wasserhaltungskosten 1001-2000 l/min","wasserhaltungskosten 1001 - 2000 l/min"])) {
     const rate=165; // große Pumpen-/Vakuumanlage inkl. Betrieb
     const hoursPerM=0.65; // Referenz, LV verlangt Bieterangabe
-    addLine(lines,"Maschinen","Pumpen-/Vakuumanlage 1001–2000 l/min inkl. Energie/Betrieb",rate*hoursPerM,unit);
+    addLine(lines,"Maschinen","Pumpen-/Vakuumanlage 1001–2000 l/min inkl. Energie/Betrieb",rate*hoursPerM,unit,undefined,{qty:hoursPerM,resourceUnit:"h",rateEUR:rate,basis:"V2 Ansatz 0,65 h/lfm; Bieterangabe erforderlich"});
     addLine(lines,"Lohn","Kontrolle / Umsetzen / Bereitschaft anteilig",18,unit);
     return finish(row,ctx,"Wasserhaltung/Leistungsreferenz",`Wasserhaltung 1001–2000 l/min, Referenz ${hoursPerM.toFixed(2)} h/lfm`,"Wasserhaltung Großleistung",lines,riskFrom(ctx,"high"),
       ["LV fordert verbindliche Bieterangabe Std/lfm. EP ist Referenz und muss mit Bauablauf, Grundwasserandrang und Haltungslänge plausibilisiert werden."]);
@@ -29009,7 +29016,7 @@ export function calculateTiefbauFamilyCatalog(
   if (hasAny(text, ["zwischenplanum"])) {
     const machineRate = 105; // €/h inkl. Fahrer
     const productivityMPerHour = 80; // lfm/h bei Planum im offenen Rohrgraben
-    addLine(lines, "Maschinen", "Bagger/Grader aus Stundenansatz / Produktivität", machineRate / productivityMPerHour, unit);
+    addLine(lines, "Maschinen", "Bagger/Grader aus Stundenansatz / Produktivität", machineRate / productivityMPerHour, unit,undefined,{qty:1/productivityMPerHour,resourceUnit:"h",rateEUR:machineRate,basis:"V2 Referenz 80 lfm/h; projektspezifisch prüfen"});
     addLine(lines, "Lohn", "Höhenkontrolle / Handnacharbeit anteilig", 0.30, unit);
     return finish(
       row,
@@ -29029,7 +29036,7 @@ export function calculateTiefbauFamilyCatalog(
   if (hasAny(text, ["sieblöffel", "vorsortierung", "rückverfüllung", "rueckverfuellung"])) {
     const excavatorRate = 105; // €/h inkl. Fahrer/Betrieb
     const screenedLengthPerHour = 22; // lfm/h bei Rohrzone; projektspezifisch anpassen
-    addLine(lines, "Maschinen", "Bagger mit Sieblöffel aus Stundenansatz / Leistung", excavatorRate / screenedLengthPerHour, unit);
+    addLine(lines, "Maschinen", "Bagger mit Sieblöffel aus Stundenansatz / Leistung", excavatorRate / screenedLengthPerHour, unit,undefined,{qty:1/screenedLengthPerHour,resourceUnit:"h",rateEUR:excavatorRate,basis:"V2 Referenz 22 lfm/h; projektspezifisch prüfen"});
     addLine(lines, "Lohn", "Einweisen / Nachsortierung / Rohrzonenarbeit", 0.9, unit);
     addLine(lines, "Maschinen", "Umsetzen / Zwischenlagerung anteilig", 0.45, unit);
     return finish(
