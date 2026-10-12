@@ -33,7 +33,10 @@ export function diagnoseRlcAsphaltMarketEvidence(input: { kurztext?: string; lan
   // Sort longest first so AC 16 T D cannot incorrectly match AC 16 T.
   const keys = Object.keys(RLC_ASPHALT_EX_WORKS_2026).sort((a,b)=>b.length-a.length);
   const matched = keys.filter(k => new RegExp("(^|[^A-Z0-9])"+k.replace(/ /g,"\\s*")+"(?![A-Z0-9])","i").test(text));
-  const material = matched.length === 1 ? matched[0] : null;
+  // A long grade such as AC 16 T D legitimately contains AC 16 T.
+  // Keep the longest exact grade; reject distinct grades in the same LV.
+  const material = matched.length && matched.every(k => matched[0] === k || matched[0].startsWith(k + " "))
+    ? matched[0] : null;
   const normalizedUnit = String(input.einheit||"").toLowerCase().trim().replace(/\.$/,"");
   const unitCompatible = ["t","to","ton","tonne"].includes(normalizedUnit);
   return {
@@ -41,7 +44,7 @@ export function diagnoseRlcAsphaltMarketEvidence(input: { kurztext?: string; lan
     sourceUrl:material?RLC_MARKET_SOURCES_2026.raedlingerAsphalt.url:null,
     unitCompatible,
     contractScopeComparable:false,
-    reason: matched.length > 1 ? "ambiguous_material_grade"
+    reason: matched.length > 1 && !material ? "ambiguous_material_grade"
       : !material ? "exact_material_grade_missing"
       : !unitCompatible ? "gaeb_unit_not_factory_ton"
       : "material_price_only_scope_and_logistics_unverified",
