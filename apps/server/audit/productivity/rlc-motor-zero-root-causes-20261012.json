@@ -1,0 +1,321 @@
+{
+  "date": "2026-10-12T13:31:41.250Z",
+  "positions": 82736,
+  "positive": 72874,
+  "zero": 9862,
+  "review": 5786,
+  "structural": 4076,
+  "exceptions": 0,
+  "topCauses": [
+    [
+      "UNRESOLVED|RLC_MOTOR_NO_MATCH",
+      1329
+    ],
+    [
+      "Kanalbau|RLC_MOTOR_MISSING_VALID_EP",
+      535
+    ],
+    [
+      "Straßenbau|RLC_MOTOR_MISSING_VALID_EP",
+      332
+    ],
+    [
+      "Maschinen|RLC_MOTOR_MISSING_VALID_EP",
+      289
+    ],
+    [
+      "Entsorgung|RLC_MOTOR_MISSING_VALID_EP",
+      243
+    ],
+    [
+      "Erdbau|RLC_MOTOR_REVIEW_PRICE_BLOCKED",
+      202
+    ],
+    [
+      "Pflaster|RLC_MOTOR_MISSING_VALID_EP",
+      161
+    ],
+    [
+      "Spezialtiefbau|RLC_MOTOR_MISSING_VALID_EP",
+      151
+    ],
+    [
+      "Kanalbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      139
+    ],
+    [
+      "Landschaftsbau|RLC_MOTOR_MISSING_VALID_EP",
+      138
+    ],
+    [
+      "Nachträge|RLC_MOTOR_MISSING_VALID_EP",
+      127
+    ],
+    [
+      "Wasserhaltung|RLC_MOTOR_MISSING_VALID_EP",
+      122
+    ],
+    [
+      "Betonbau|RLC_MOTOR_MISSING_VALID_EP",
+      105
+    ],
+    [
+      "Wasserleitungsbau|RLC_MOTOR_MISSING_VALID_EP",
+      101
+    ],
+    [
+      "Rohrbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      85
+    ],
+    [
+      "Prüfungen|RLC_MOTOR_MISSING_VALID_EP",
+      84
+    ],
+    [
+      "Erdbau|RLC_MOTOR_MISSING_VALID_EP",
+      59
+    ],
+    [
+      "Regie|RLC_MOTOR_MISSING_VALID_EP",
+      59
+    ],
+    [
+      "HDD|RLC_MOTOR_REVIEW_PRICE_BLOCKED",
+      54
+    ],
+    [
+      "Baustelleneinrichtung|RLC_MOTOR_MISSING_VALID_EP",
+      53
+    ],
+    [
+      "GAEB|RLC_MOTOR_MISSING_VALID_EP",
+      50
+    ],
+    [
+      "Wasserbau|RLC_MOTOR_MISSING_VALID_EP",
+      47
+    ],
+    [
+      "Verkehrssicherung|RLC_MOTOR_MISSING_VALID_EP",
+      43
+    ],
+    [
+      "Erdbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      43
+    ],
+    [
+      "Abbruch|RLC_MOTOR_MISSING_VALID_EP",
+      41
+    ],
+    [
+      "Abdichtung|RLC_MOTOR_MISSING_VALID_EP",
+      37
+    ],
+    [
+      "Telekom|RLC_MOTOR_MISSING_VALID_EP",
+      33
+    ],
+    [
+      "Baustellenlogistik|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      33
+    ],
+    [
+      "Elektro|RLC_MOTOR_MISSING_VALID_EP",
+      32
+    ],
+    [
+      "Rohrbau|RLC_MOTOR_MISSING_VALID_EP",
+      30
+    ],
+    [
+      "Betonsanierung|RLC_MOTOR_MISSING_VALID_EP",
+      30
+    ],
+    [
+      "Straßenbau|RLC_MOTOR_REVIEW_PRICE_BLOCKED",
+      30
+    ],
+    [
+      "Erdung|RLC_MOTOR_MISSING_VALID_EP",
+      30
+    ],
+    [
+      "Entsorgung|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      29
+    ],
+    [
+      "Straßenbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      28
+    ],
+    [
+      "Entwaesserung|RLC_MOTOR_MISSING_VALID_EP",
+      28
+    ],
+    [
+      "Material|RLC_MOTOR_MISSING_VALID_EP",
+      28
+    ],
+    [
+      "Außenanlagen|RLC_MOTOR_MISSING_VALID_EP",
+      27
+    ],
+    [
+      "Betonbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      25
+    ],
+    [
+      "Erschwernisse|RLC_MOTOR_MISSING_VALID_EP",
+      23
+    ]
+  ],
+  "examples": {
+    "UNRESOLVED|RLC_MOTOR_NO_MATCH": [
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "1.01.5",
+        "text": "Baugrundverbesserung mit Liefermaterial",
+        "unit": "m³",
+        "quantity": 400
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "1.01.8",
+        "text": "Aushub für Einzelfundamenten bis 50cm",
+        "unit": "m³",
+        "quantity": 100
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "1.01.16",
+        "text": "Zusätzliche Anfahrt für Aushub- oder Hinterfüllarbeiten",
+        "unit": "psch",
+        "quantity": 1
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "2.01.10",
+        "text": "Warnblinkleuchte vorhalten",
+        "unit": "StkW",
+        "quantity": 60
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "2.01.12",
+        "text": "Warnblinkleuchte räumen",
+        "unit": "Stk",
+        "quantity": 15
+      }
+    ],
+    "Kanalbau|RLC_MOTOR_MISSING_VALID_EP": [
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "2.05.10",
+        "text": "Kabelabzweigkasten öffnen",
+        "unit": "St",
+        "quantity": 40
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "3.01.8",
+        "text": "Rohrende verschließen",
+        "unit": "St",
+        "quantity": 1
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "4.04.5",
+        "text": "Schachtringe in ungelochter Ausführung,",
+        "unit": "m",
+        "quantity": 4
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "4.06.3",
+        "text": "Schachtringe in ungelochter Ausführung,",
+        "unit": "m",
+        "quantity": 2
+      },
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "4.09.2",
+        "text": "Spülung Regenwasserkanal bis DN250",
+        "unit": "m",
+        "quantity": 360
+      }
+    ],
+    "Maschinen|RLC_MOTOR_MISSING_VALID_EP": [
+      {
+        "lvId": "00b39899-1acf-4fa1-b8a8-94d6c6d8beb0",
+        "posNr": "7.01.20",
+        "text": "Auslegen von Baggermatten",
+        "unit": "m²",
+        "quantity": 10
+      },
+      {
+        "lvId": "0291d7ae-746d-4375-b9c1-ed1d2805c8d1",
+        "posNr": "1.3.40",
+        "text": "Baustelle für Bodenverfestigung einricht., vorhalten u. räumen",
+        "unit": "Psch",
+        "quantity": 1
+      },
+      {
+        "lvId": "051d62eb-391f-4c33-a2d9-1b512cb89729",
+        "posNr": "01.02.0017",
+        "text": "Nachtarbeit für den Auf- und Abbau der Rohrleitungsbrücke über die B 305:",
+        "unit": "psch",
+        "quantity": 1
+      },
+      {
+        "lvId": "06616582-e25c-4b47-9014-f82cc0705cd8",
+        "posNr": "1.7",
+        "text": "Bereitstellung Hebegerät",
+        "unit": "h",
+        "quantity": 6
+      },
+      {
+        "lvId": "06616582-e25c-4b47-9014-f82cc0705cd8",
+        "posNr": "1.13.8",
+        "text": "Brückenbesichtigungsgerät einsetzen ... Freitext ...*Abnahme Steggerät",
+        "unit": "psch",
+        "quantity": 1
+      }
+    ],
+    "Straßenbau|RLC_MOTOR_MISSING_VALID_EP": [
+      {
+        "lvId": "0207792d-12d5-4ca0-a51c-80ef4691ea73",
+        "posNr": "0109  50",
+        "text": "Bitumenband 30/8 mm liefern, einbauen",
+        "unit": "m",
+        "quantity": 50
+      },
+      {
+        "lvId": "0291d7ae-746d-4375-b9c1-ed1d2805c8d1",
+        "posNr": "1.2.20",
+        "text": "Boden andecken",
+        "unit": "m",
+        "quantity": 50
+      },
+      {
+        "lvId": "0291d7ae-746d-4375-b9c1-ed1d2805c8d1",
+        "posNr": "1.2.10",
+        "text": "Bodenwulst abtragen, lagern",
+        "unit": "m",
+        "quantity": 500
+      },
+      {
+        "lvId": "030c778b-c51a-414c-b8a5-98554b63f3b3",
+        "posNr": "1.4.4",
+        "text": "Schröpfschnitt Neuansaat",
+        "unit": "m2",
+        "quantity": 3500
+      },
+      {
+        "lvId": "030c778b-c51a-414c-b8a5-98554b63f3b3",
+        "posNr": "1.14.2",
+        "text": "Wildschutzzaun herstellen ... Freitext ... ... Freitext ... ... Freitext ... Bodenklasse 3-5 ... Freitext ...",
+        "unit": "m",
+        "quantity": 100
+      }
+    ]
+  }
+}
