@@ -129,6 +129,18 @@ export function calculateRlcMotorWithContext(
       aiReason: "RLC Motor: keine passende freigegebene Kalkulationsfamilie gefunden; EP gesperrt.",
     };
   }
+  // RLC Motor is the only productive EP authority. A dependent GAEB surcharge
+  // must not inherit the complete V2 base-service cost as its incremental EP.
+  const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
+  const dependentSurcharge = /\b(?:zulage|zuschlag)\b/i.test(scopeText) &&
+    /\b(?:vorposition|vorherige\s+position|wie\s+vor|bezugsposition)\b/i.test(scopeText);
+  if (dependentSurcharge) {
+    const ref = resolveV3GaebReference(row, allRows);
+    return { ...result, unitPrice: 0, total: 0, costLines: [],
+      calculationStatus: "needs_review", confidence: 0, riskLevel: "high",
+      warnings: [...result.warnings, "RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED", "RLC_MOTOR_REFERENCE_" + ref.status.toUpperCase()],
+      aiReason: result.aiReason + " RLC Motor: Zulage zur Vorposition nicht als reine Mehrkosten nachgewiesen; EP gesperrt." };
+  }
   if (result.calculationStatus === "needs_review") {
     return { ...result, unitPrice: 0, total: 0, costLines: [],
       confidence: 0, riskLevel: "high",
