@@ -1,0 +1,889 @@
+{
+  "x84Positive": 6011,
+  "comparable": 5482,
+  "over10": 5058,
+  "within10": 424,
+  "motorZero": 529,
+  "exceptions": 0,
+  "over10Above": 2501,
+  "over10Below": 2557,
+  "examples": [
+    {
+      "pos": "02.01.60",
+      "motor": 16.5,
+      "x84": 27.66,
+      "deviationPct": -40.35,
+      "trade": "Straßenbau/Tragschicht"
+    },
+    {
+      "pos": "02.01.61",
+      "motor": 128,
+      "x84": 145.6,
+      "deviationPct": -12.09,
+      "trade": "Straßenbau/AC-TN"
+    },
+    {
+      "pos": "02.01.63",
+      "motor": 1.6,
+      "x84": 39.46,
+      "deviationPct": -95.95,
+      "trade": "Straßenbau/Haftkleber"
+    },
+    {
+      "pos": "02.01.64",
+      "motor": 30.04,
+      "x84": 135.7,
+      "deviationPct": -77.86,
+      "trade": "Straßenbau/Asphaltdeckschicht"
+    },
+    {
+      "pos": "02.01.66",
+      "motor": 20,
+      "x84": 1.29,
+      "deviationPct": 1450.39,
+      "trade": "Erdbau/Erschwernis-Einbauten-normalisiert"
+    },
+    {
+      "pos": "02.01.67",
+      "motor": 13,
+      "x84": 16.82,
+      "deviationPct": -22.71,
+      "trade": "Pflaster/Bord-Rueckbau"
+    },
+    {
+      "pos": "01.02.01.1",
+      "motor": 9,
+      "x84": 3928.47,
+      "deviationPct": -99.77,
+      "trade": "Erdbau/Oberboden-Abtrag"
+    },
+    {
+      "pos": "01.02.01.2",
+      "motor": 22,
+      "x84": 541.02,
+      "deviationPct": -95.93,
+      "trade": "Landschaftsbau/Strauchbestand-Roden-null2"
+    },
+    {
+      "pos": "01.02.01.4",
+      "motor": 165,
+      "x84": 116.15,
+      "deviationPct": 42.06,
+      "trade": "Landschaftsbau/Wurzelstock"
+    },
+    {
+      "pos": "01.02.01.6",
+      "motor": 165,
+      "x84": 462.5,
+      "deviationPct": -64.32,
+      "trade": "Landschaftsbau/Wurzelstock"
+    },
+    {
+      "pos": "01.02.02.1.2",
+      "motor": 713,
+      "x84": 15.04,
+      "deviationPct": 4640.69,
+      "trade": "Baustelleneinrichtung/Räumung"
+    },
+    {
+      "pos": "01.02.02.2.3",
+      "motor": 5.2,
+      "x84": 49.09,
+      "deviationPct": -89.41,
+      "trade": "Erdbau/Böschung"
+    }
+  ],
+  "bands": {
+    "0-10": 424,
+    ">10-15": 202,
+    ">15-20": 229,
+    ">20": 4627
+  },
+  "byTrade": {
+    "Straßenbau": {
+      "comparable": 720,
+      "bands": {
+        "0-10": 59,
+        ">10-15": 22,
+        ">15-20": 36,
+        ">20": 603
+      }
+    },
+    "Erdbau": {
+      "comparable": 715,
+      "bands": {
+        "0-10": 66,
+        ">10-15": 29,
+        ">15-20": 26,
+        ">20": 594
+      }
+    },
+    "Pflaster": {
+      "comparable": 208,
+      "bands": {
+        "0-10": 14,
+        ">10-15": 5,
+        ">15-20": 8,
+        ">20": 181
+      }
+    },
+    "Landschaftsbau": {
+      "comparable": 204,
+      "bands": {
+        "0-10": 8,
+        ">10-15": 6,
+        ">15-20": 4,
+        ">20": 186
+      }
+    },
+    "Baustelleneinrichtung": {
+      "comparable": 194,
+      "bands": {
+        "0-10": 8,
+        ">10-15": 5,
+        ">15-20": 5,
+        ">20": 176
+      }
+    },
+    "Regie": {
+      "comparable": 384,
+      "bands": {
+        "0-10": 95,
+        ">10-15": 34,
+        ">15-20": 37,
+        ">20": 218
+      }
+    },
+    "Wasserhaltung": {
+      "comparable": 53,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 2,
+        ">15-20": 2,
+        ">20": 48
+      }
+    },
+    "Entsorgung": {
+      "comparable": 175,
+      "bands": {
+        "0-10": 8,
+        ">10-15": 9,
+        ">15-20": 8,
+        ">20": 150
+      }
+    },
+    "Pruefung": {
+      "comparable": 117,
+      "bands": {
+        "0-10": 3,
+        ">10-15": 2,
+        ">15-20": 1,
+        ">20": 111
+      }
+    },
+    "Kanalbau": {
+      "comparable": 618,
+      "bands": {
+        "0-10": 30,
+        ">10-15": 25,
+        ">15-20": 22,
+        ">20": 541
+      }
+    },
+    "Dichtung": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 2
+      }
+    },
+    "Querungen": {
+      "comparable": 12,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 12
+      }
+    },
+    "Rohrbau": {
+      "comparable": 349,
+      "bands": {
+        "0-10": 12,
+        ">10-15": 4,
+        ">15-20": 9,
+        ">20": 324
+      }
+    },
+    "Kanalservice": {
+      "comparable": 23,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 1,
+        ">20": 21
+      }
+    },
+    "Prüfwesen": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Baustellenlogistik": {
+      "comparable": 172,
+      "bands": {
+        "0-10": 6,
+        ">10-15": 2,
+        ">15-20": 4,
+        ">20": 160
+      }
+    },
+    "Abbruch": {
+      "comparable": 21,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 3,
+        ">15-20": 2,
+        ">20": 15
+      }
+    },
+    "Ingenieurbau": {
+      "comparable": 7,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 1,
+        ">15-20": 0,
+        ">20": 6
+      }
+    },
+    "Vermessung": {
+      "comparable": 83,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 2,
+        ">15-20": 2,
+        ">20": 79
+      }
+    },
+    "Arbeitsschutz": {
+      "comparable": 17,
+      "bands": {
+        "0-10": 2,
+        ">10-15": 1,
+        ">15-20": 1,
+        ">20": 13
+      }
+    },
+    "Dokumentation": {
+      "comparable": 38,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 2,
+        ">15-20": 0,
+        ">20": 36
+      }
+    },
+    "Gas": {
+      "comparable": 12,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 12
+      }
+    },
+    "Straßenentwässerung": {
+      "comparable": 25,
+      "bands": {
+        "0-10": 3,
+        ">10-15": 2,
+        ">15-20": 1,
+        ">20": 19
+      }
+    },
+    "Leitungsbau": {
+      "comparable": 196,
+      "bands": {
+        "0-10": 6,
+        ">10-15": 1,
+        ">15-20": 7,
+        ">20": 182
+      }
+    },
+    "Hausanschlüsse": {
+      "comparable": 13,
+      "bands": {
+        "0-10": 3,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 10
+      }
+    },
+    "Kanal-": {
+      "comparable": 4,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 4
+      }
+    },
+    "Entwässerung": {
+      "comparable": 26,
+      "bands": {
+        "0-10": 3,
+        ">10-15": 1,
+        ">15-20": 0,
+        ">20": 22
+      }
+    },
+    "Verkehrssicherung": {
+      "comparable": 96,
+      "bands": {
+        "0-10": 3,
+        ">10-15": 3,
+        ">15-20": 2,
+        ">20": 88
+      }
+    },
+    "Arbeitssicherheit": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Entwaesserung": {
+      "comparable": 12,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 1,
+        ">15-20": 2,
+        ">20": 8
+      }
+    },
+    "Wasserbau": {
+      "comparable": 16,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 1,
+        ">20": 14
+      }
+    },
+    "Material": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 1,
+        ">15-20": 0,
+        ">20": 0
+      }
+    },
+    "Baustoffe": {
+      "comparable": 3,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 3
+      }
+    },
+    "Außenanlagen": {
+      "comparable": 20,
+      "bands": {
+        "0-10": 2,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 18
+      }
+    },
+    "Betonbau": {
+      "comparable": 107,
+      "bands": {
+        "0-10": 19,
+        ">10-15": 9,
+        ">15-20": 2,
+        ">20": 77
+      }
+    },
+    "Straßen-": {
+      "comparable": 4,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 4
+      }
+    },
+    "Kabelbau": {
+      "comparable": 144,
+      "bands": {
+        "0-10": 2,
+        ">10-15": 4,
+        ">15-20": 3,
+        ">20": 135
+      }
+    },
+    "Kabeltiefbau": {
+      "comparable": 34,
+      "bands": {
+        "0-10": 2,
+        ">10-15": 0,
+        ">15-20": 3,
+        ">20": 29
+      }
+    },
+    "Telekom": {
+      "comparable": 71,
+      "bands": {
+        "0-10": 11,
+        ">10-15": 4,
+        ">15-20": 3,
+        ">20": 53
+      }
+    },
+    "Strom": {
+      "comparable": 77,
+      "bands": {
+        "0-10": 22,
+        ">10-15": 4,
+        ">15-20": 2,
+        ">20": 49
+      }
+    },
+    "Glasfaser": {
+      "comparable": 56,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 3,
+        ">20": 52
+      }
+    },
+    "Elektro": {
+      "comparable": 20,
+      "bands": {
+        "0-10": 2,
+        ">10-15": 0,
+        ">15-20": 1,
+        ">20": 17
+      }
+    },
+    "Baustellenorganisation": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Bestand": {
+      "comparable": 13,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 13
+      }
+    },
+    "Wasserleitungsbau": {
+      "comparable": 131,
+      "bands": {
+        "0-10": 9,
+        ">10-15": 9,
+        ">15-20": 5,
+        ">20": 108
+      }
+    },
+    "Wasserleitung": {
+      "comparable": 73,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 2,
+        ">20": 71
+      }
+    },
+    "Straßenausstattung": {
+      "comparable": 4,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 4
+      }
+    },
+    "Rückbau": {
+      "comparable": 10,
+      "bands": {
+        "0-10": 3,
+        ">10-15": 1,
+        ">15-20": 0,
+        ">20": 6
+      }
+    },
+    "Baumschutz": {
+      "comparable": 4,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 4
+      }
+    },
+    "Erdung": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "PE-Rohrbau": {
+      "comparable": 12,
+      "bands": {
+        "0-10": 2,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 10
+      }
+    },
+    "Rohrdurchführung": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Regenwasser": {
+      "comparable": 6,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 6
+      }
+    },
+    "Bohr-": {
+      "comparable": 27,
+      "bands": {
+        "0-10": 2,
+        ">10-15": 0,
+        ">15-20": 1,
+        ">20": 24
+      }
+    },
+    "Prüfung": {
+      "comparable": 13,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 2,
+        ">15-20": 0,
+        ">20": 10
+      }
+    },
+    "Verbau": {
+      "comparable": 8,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 7
+      }
+    },
+    "Rohrleitungsbau": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 2
+      }
+    },
+    "Bestandsschutz": {
+      "comparable": 21,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 1,
+        ">15-20": 0,
+        ">20": 19
+      }
+    },
+    "Bauwerksabdichtung": {
+      "comparable": 6,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 2,
+        ">15-20": 4,
+        ">20": 0
+      }
+    },
+    "Hochbau": {
+      "comparable": 12,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 8,
+        ">20": 4
+      }
+    },
+    "Sicherheit": {
+      "comparable": 5,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 4
+      }
+    },
+    "Temporär": {
+      "comparable": 6,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 6
+      }
+    },
+    "Kampfmittel": {
+      "comparable": 5,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 5
+      }
+    },
+    "Wasserleitungsservice": {
+      "comparable": 5,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 2,
+        ">20": 3
+      }
+    },
+    "Wasser-Hausanschluss": {
+      "comparable": 5,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 1,
+        ">15-20": 1,
+        ">20": 2
+      }
+    },
+    "Pumpwerk": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 2
+      }
+    },
+    "Spezialtiefbau": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 2
+      }
+    },
+    "Prüfungen": {
+      "comparable": 4,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 3
+      }
+    },
+    "Schuettgut": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Fernwärme": {
+      "comparable": 9,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 1,
+        ">15-20": 5,
+        ">20": 3
+      }
+    },
+    "Fernwaerme": {
+      "comparable": 4,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 1,
+        ">20": 2
+      }
+    },
+    "Nachweisleistung": {
+      "comparable": 5,
+      "bands": {
+        "0-10": 5,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 0
+      }
+    },
+    "Winterdienst": {
+      "comparable": 7,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 7
+      }
+    },
+    "Baustellenvorbereitung": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Straßenreinigung": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 1,
+        ">20": 0
+      }
+    },
+    "Bestandserkundung": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Ingenieurleistung": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 2
+      }
+    },
+    "Technische Dokumentation": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Verkehrstechnik": {
+      "comparable": 3,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 3
+      }
+    },
+    "Zulagen": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 2
+      }
+    },
+    "Projektsteuerung": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 1,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Baustellensicherung": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 1,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Baustellenprovisorium": {
+      "comparable": 2,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 2
+      }
+    },
+    "Baustellengemeinkosten": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 1
+      }
+    },
+    "Kanalrenovierung": {
+      "comparable": 4,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 4
+      }
+    },
+    "Kanalsanierung": {
+      "comparable": 1,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 1,
+        ">20": 0
+      }
+    },
+    "Abdichtung": {
+      "comparable": 3,
+      "bands": {
+        "0-10": 0,
+        ">10-15": 0,
+        ">15-20": 0,
+        ">20": 3
+      }
+    }
+  },
+  "extremeAbove100": 1649,
+  "extremeBelow90": 507
+}
