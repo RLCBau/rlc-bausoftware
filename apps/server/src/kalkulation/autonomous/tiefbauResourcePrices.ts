@@ -34,7 +34,7 @@ export const INTERNET_PRICE_EVIDENCE_2026 = {
     scope: "Washed 0/4 sand listed at 63.98 EUR gross; regional loose-bulk anchor, logistics separate.",
   },
   bau_tariff_igbau_2026: {
-    url: "https://igbau.de/Lohn-Check-2026.html",
+    url: "https://igbau.de/Bau-Einkommen-35-Jahre-nach-Wiedervereinigung-bundeseinheitlich.html",
     verifiedAt: "2026-09-25",
     scope: "IG BAU public 2026 wage check; internal labour cost adds statutory employer costs separately.",
   },
