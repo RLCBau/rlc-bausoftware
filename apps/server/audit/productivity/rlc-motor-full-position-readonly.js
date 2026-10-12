@@ -3,7 +3,7 @@ const {PrismaClient}=require('@prisma/client');
 const {analyzeRlcProjectContext}=require('../../src/kalkulation/autonomous/projectContextAnalyzer');
 const {calculateRlcMotorWithContext}=require('../../src/kalkulation/rlcMotor');
 (async()=>{
- const p=new PrismaClient(),out={started:new Date().toISOString(),LV:0,positions:0,positive:0,zero:0,review:0,unresolved:0,exceptions:0,structural:0,byTrade:{},warningCounts:{},sampleErrors:[],sumEP:0,processedByLV:[]};
+ const p=new PrismaClient(),out={started:new Date().toISOString(),LV:0,positions:0,positive:0,zero:0,review:0,unresolved:0,exceptions:0,structural:0,byTrade:{},warningCounts:{},zeroCauses:{},zeroExamples:{},sampleErrors:[],sumEP:0,processedByLV:[]};
  let cursor;
  try{
  while(true){
@@ -24,6 +24,12 @@ const {calculateRlcMotorWithContext}=require('../../src/kalkulation/rlcMotor');
    let group=out.byTrade[family]||(out.byTrade[family]={positions:0,positive:0,zero:0,review:0});
    group.positions++;if(r.unitPrice>0)group.positive++;else group.zero++;
    if(r.calculationStatus==='needs_review')group.review++;
+   if(r.unitPrice<=0){
+    const cause=(r.warnings||[]).find(w=>/^RLC_MOTOR_/.test(w))||'ZERO_WITHOUT_MOTOR_CODE';
+    const key=family+'|'+cause;
+    out.zeroCauses[key]=(out.zeroCauses[key]||0)+1;
+    if((out.zeroExamples[key]||[]).length<5)(out.zeroExamples[key]||=[]).push({lvId:h.id,posNr:row.posNr,text:String(row.kurztext||'').slice(0,160),unit:row.einheit,quantity:row.menge});
+   }
    for(const w of r.warnings||[])if(/^RLC_MOTOR_/.test(w))out.warningCounts[w]=(out.warningCounts[w]||0)+1;
   }catch(e){out.exceptions++;out.zero++;if(out.sampleErrors.length<15)out.sampleErrors.push({posNr:row.posNr,error:String(e)});}
  }
