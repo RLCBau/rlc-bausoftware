@@ -2404,6 +2404,24 @@ function finish(
       evidenceStatus: line.note?.trim() ? "source_note_unverified" : "catalog_rate_unverified",
     };
   }
+  // Only a contractually hourly Regie unit implies exactly one resource hour
+  // for explicitly included staff/equipment. It does NOT validate the rate,
+  // actual work performed, or a productivity coefficient for piece/metre units.
+  if (/^Regie\//.test(trade) && ["h", "std", "stunde", "stunden"].includes(unit.toLowerCase())) {
+    for (const line of lines) {
+      if (line.group !== "Lohn" && line.group !== "Maschinen") continue;
+      // Pro-rata vehicle/equipment is not a full equipment operating hour.
+      if (line.group === "Maschinen" && /anteilig|pauschal|zuschlag/i.test(line.name)) continue;
+      if (!line.consumption || line.consumption.status !== "unverified_lump_rate") continue;
+      line.consumption = {
+        status: "contract_hour_unit",
+        resourceQtyPerGaebUnit: 1,
+        resourceUnit: "h",
+        resourceRateEUR: line.unitPrice,
+        basis: "GAEB Regie-Stundeneinheit; kein Produktivitätsnachweis",
+      };
+    }
+  }
   const base = sum(lines);
   // RLC V3: Gemeinkosten und Gewinn werden als kaufmännische Zuschläge angesetzt.
   // Das fachliche Risiko erhöht den EP NICHT mehr pauschal auf jeder Position:
