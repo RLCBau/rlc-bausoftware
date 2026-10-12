@@ -2387,6 +2387,15 @@ function finish(
   const qty = Math.max(1, n(row.menge));
 
   autofillKnownFamilyLines(row, trade, bauverfahren, leistungsart, lines, unit);
+  // Resource origin is recorded even when no external cost evidence exists.
+  // Provenance is NOT certification and MUST NOT authorize an EP.
+  for (const line of lines) {
+    line.provenance = {
+      origin: "rlc_v2_family_catalog",
+      family: trade,
+      evidenceStatus: line.note?.trim() ? "source_note_unverified" : "catalog_rate_unverified",
+    };
+  }
   const base = sum(lines);
   // RLC V3: Gemeinkosten und Gewinn werden als kaufmännische Zuschläge angesetzt.
   // Das fachliche Risiko erhöht den EP NICHT mehr pauschal auf jeder Position:

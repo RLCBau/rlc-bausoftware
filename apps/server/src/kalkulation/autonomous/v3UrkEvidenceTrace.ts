@@ -7,7 +7,7 @@ export function traceV3UrkEvidence(result:RlcAutonomousCalcResult|null){
   const sourcePresent=raw.length>0;
   const generic=/^(?:rlc\s*20\d\d|intern|katalog|schätzung|annahme|pauschal)/i.test(raw);
   const numericValid=Number.isFinite(line.qty)&&line.qty>=0&&Number.isFinite(line.unitPrice)&&line.unitPrice>=0&&Number.isFinite(line.total)&&line.total>=0;
-  return {index,group:line.group,resourceName:line.name,sourceNote:raw||null,sourceStatus:!sourcePresent?"missing":generic?"internal_reference":"unverified_reference",
+  return {index,group:line.group,resourceName:line.name,sourceNote:raw||null,provenance:line.provenance||null,sourceStatus:!sourcePresent?"missing":generic?"internal_reference":"unverified_reference",
    numericalIntegrity:numericValid&&Math.abs(line.qty*line.unitPrice-line.total)<=0.02,
    documentaryEvidenceVerified:false as const};
  });

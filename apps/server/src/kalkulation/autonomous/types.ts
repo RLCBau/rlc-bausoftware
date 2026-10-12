@@ -33,6 +33,7 @@ export type RlcAutonomousCostLine = {
   unitPrice: number;
   total: number;
   note?: string;
+  provenance?: { origin: "rlc_v2_family_catalog"; family: string; evidenceStatus: "source_note_unverified" | "catalog_rate_unverified" };
 };
 
 export type RlcAutonomousCalcInput = {
