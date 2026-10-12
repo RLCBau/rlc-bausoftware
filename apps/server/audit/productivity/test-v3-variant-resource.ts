@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {auditV3VariantResources} from '../../src/kalkulation/autonomous/v3VariantResourceAudit';
+const base={posNr:'01',kurztext:'Rohr PP DN300',langtext:'',einheit:'m'};
+const variant={posNr:'02',kurztext:'Zulage PVC DN400',langtext:'',einheit:'m'};
+const result=auditV3VariantResources({base,variant,baseFamilies:2,variantFamilies:1});
+assert.equal(result.epApproved,false);
+assert.equal(result.productionWriteAllowed,false);
+assert.equal(result.readyForCostReview,false);
+assert(result.gaps.some(g=>g.code==='diameter_difference_requires_design_validation'));
+assert(result.gaps.some(g=>g.code==='material_difference_requires_specification_validation'));
+assert(result.gaps.some(g=>g.code==='productivity_rate_unverified'));
+assert.equal(result.resources.length,5);
+console.log('VARIANT_RESOURCES_FAIL_CLOSED_PASS');
