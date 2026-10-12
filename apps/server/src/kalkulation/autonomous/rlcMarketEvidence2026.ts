@@ -50,3 +50,37 @@ export function diagnoseRlcAsphaltMarketEvidence(input: { kurztext?: string; lan
       : "material_price_only_scope_and_logistics_unverified",
   };
 }
+
+/** Verifiable net ex-works material anchors, not installed GAEB unit prices. */
+export const RLC_AGGREGATES_EX_WORKS_2026 = {
+  source: "https://www.glueck-kies.de/kies-sand-hartsteinsplitt/preise.php",
+  validFrom: "2026-04-01",
+  pricesEURPerT: {
+    "Betonsand 0/4": 24.90,
+    "Kabelsand 0/4": 21.40,
+    "Feinsand 0/1": 16.90,
+    "Frostschutzkies 0/32": 20.00,
+    "Bettungsmaterial 0/5": 26.90,
+  },
+} as const;
+
+export function diagnoseRlcAggregateMarketEvidence(input:{kurztext?:string;langtext?:string;einheit?:string}) {
+ const text=[input.kurztext,input.langtext].filter(Boolean).join(" ").toLowerCase();
+ const candidates=[
+  {name:"Kabelsand 0/4",regex:/\bkabelsand\b[^\n]{0,25}(?:0\s*\/\s*4)?/i},
+  {name:"Betonsand 0/4",regex:/\bbetonsand\b[^\n]{0,25}(?:0\s*\/\s*4)?/i},
+  {name:"Frostschutzkies 0/32",regex:/\bfrostschutzkies\b[^\n]{0,25}0\s*\/\s*32/i},
+  {name:"Bettungsmaterial 0/5",regex:/\bbettungsmaterial\b[^\n]{0,25}0\s*\/\s*5(?!\d)/i},
+  {name:"Feinsand 0/1",regex:/\bfeinsand\b[^\n]{0,25}0\s*\/\s*1(?!\d)/i},
+ ].filter(c=>c.regex.test(text));
+ const name=candidates.length===1?candidates[0].name:null;
+ const unitCompatible=/^(t|to|ton|tonne)$/i.test(String(input.einheit||"").trim());
+ return {
+  material:name,
+  materialNetEURPerT:name?RLC_AGGREGATES_EX_WORKS_2026.pricesEURPerT[name as keyof typeof RLC_AGGREGATES_EX_WORKS_2026.pricesEURPerT]:null,
+  sourceUrl:name?RLC_AGGREGATES_EX_WORKS_2026.source:null,
+  unitCompatible,
+  contractScopeComparable:false as const,
+  reason: candidates.length>1?"ambiguous_material":!name?"specific_material_missing":!unitCompatible?"gaeb_unit_not_factory_ton":"transport_installation_and_scope_unverified"
+ };
+}

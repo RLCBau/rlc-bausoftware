@@ -1,9 +1,9 @@
 const {PrismaClient}=require('@prisma/client');
 const {analyzeRlcProjectContext}=require('../../src/kalkulation/autonomous/projectContextAnalyzer');
 const {calculateRlcMotorWithContext}=require('../../src/kalkulation/rlcMotor');
-const {diagnoseRlcAsphaltMarketEvidence}=require('../../src/kalkulation/autonomous/rlcMarketEvidence2026');
+const {diagnoseRlcAsphaltMarketEvidence,diagnoseRlcAggregateMarketEvidence}=require('../../src/kalkulation/autonomous/rlcMarketEvidence2026');
 (async()=>{
-const p=new PrismaClient();const o={x84Positive:0,comparable:0,over10:0,within10:0,motorZero:0,exceptions:0,over10Above:0,over10Below:0,examples:[],bands:{"0-10":0,">10-15":0,">15-20":0,">20":0},byTrade:{},extremeAbove100:0,extremeBelow90:0,asphaltEvidence:{exactMaterialGrade:0,tonUnit:0,requiresScopeValidation:0,nonComparable:0,byGrade:{}}};let cursor;
+const p=new PrismaClient();const o={x84Positive:0,comparable:0,over10:0,within10:0,motorZero:0,exceptions:0,over10Above:0,over10Below:0,examples:[],bands:{"0-10":0,">10-15":0,">15-20":0,">20":0},byTrade:{},extremeAbove100:0,extremeBelow90:0,aggregateEvidence:{matched:0,tonUnit:0,requiresScopeValidation:0,byMaterial:{}},asphaltEvidence:{exactMaterialGrade:0,tonUnit:0,requiresScopeValidation:0,nonComparable:0,byGrade:{}}};let cursor;
 try{while(true){
 const hs=await p.lVHeader.findMany({take:10,...(cursor?{skip:1,cursor:{id:cursor}}:{}),orderBy:{id:'asc'},select:{id:true,title:true,positions:{select:{position:true,kurztext:true,langtext:true,einheit:true,menge:true,x84UnitPrice:true}}}});
 if(!hs.length)break;cursor=hs[hs.length-1].id;
@@ -14,6 +14,14 @@ for(const h of hs){
  for(let i=0;i<rows.length;i++){const x84=Number(h.positions[i].x84UnitPrice);if(!(x84>0))continue;o.x84Positive++;
  try{const r=calculateRlcMotorWithContext(rows[i],ctx,rows);if(!r||!(r.unitPrice>0)){o.motorZero++;continue;}
  o.comparable++;const deviation=(r.unitPrice-x84)/x84*100;
+ const aggregate=diagnoseRlcAggregateMarketEvidence(rows[i]);
+ if(aggregate.material){
+  o.aggregateEvidence.matched++;
+  if(aggregate.unitCompatible)o.aggregateEvidence.tonUnit++;
+  if(!aggregate.contractScopeComparable)o.aggregateEvidence.requiresScopeValidation++;
+  o.aggregateEvidence.byMaterial[aggregate.material]=(o.aggregateEvidence.byMaterial[aggregate.material]||0)+1;
+ }
+
  if(/asphalt|\bAC\s*\d{1,2}\s*[TDB]/i.test(rows[i].kurztext+' '+rows[i].langtext)){
   const ev=diagnoseRlcAsphaltMarketEvidence(rows[i]);
   if(ev.material){
