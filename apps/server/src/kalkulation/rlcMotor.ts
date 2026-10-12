@@ -10,6 +10,7 @@ import { calculateAutonomousUrkalkulation } from "./autonomous/autonomousUrkalku
 import { analyzeRlcProjectContext } from "./autonomous/projectContextAnalyzer";
 import { diagnoseV3LunaCandidate } from "./autonomous/v3LunaMotorBridge";
 import { resolveV3GaebReference } from "./autonomous/v3GaebReferenceResolver";
+import { inspectRlcMotorConsumptionIntegrity } from "./autonomous/rlcMotorConsumptionIntegrity";
 import type { RlcAutonomousCalcInput, RlcAutonomousCalcResult, RlcAutonomousProjectContext } from "./autonomous/types";
 
 export type RlcAutonomousResolveResult = {
@@ -128,6 +129,16 @@ export function calculateRlcMotorWithContext(
       costLines: [], warnings: ["RLC_MOTOR_NO_MATCH"],
       aiReason: "RLC Motor: keine passende freigegebene Kalkulationsfamilie gefunden; EP gesperrt.",
     };
+  }
+  // Reject dishonest or inconsistent declared consumption. Legacy lines without
+  // consumption metadata remain subject to the existing economic controls.
+  const integrity = inspectRlcMotorConsumptionIntegrity(result);
+  const invalidConsumption = integrity.issues.filter(issue => !issue.startsWith("missing_consumption_metadata:"));
+  if (invalidConsumption.length) {
+    return { ...result, unitPrice: 0, total: 0, costLines: [],
+      calculationStatus: "needs_review", confidence: 0, riskLevel: "high",
+      warnings: [...result.warnings, "RLC_MOTOR_CONSUMPTION_INTEGRITY_BLOCKED", ...invalidConsumption],
+      aiReason: result.aiReason + " RLC Motor: Ressourcenverbrauch widersprüchlich oder nicht nachgewiesen; EP gesperrt." };
   }
   // RLC Motor is the only productive EP authority. A dependent GAEB surcharge
   // must not inherit the complete V2 base-service cost as its incremental EP.

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {inspectRlcMotorConsumptionIntegrity} from '../../src/kalkulation/autonomous/rlcMotorConsumptionIntegrity';
+const build=(c:any,group='Material')=>({costLines:[{id:'1',group,name:'Rohr',qty:1,unit:'m',unitPrice:25,total:25,consumption:c}]}) as any;
+const nominal={status:'contract_nominal_length',resourceQtyPerGaebUnit:1,resourceUnit:'m',resourceRateEUR:25,basis:'nominal'};
+assert.deepEqual(inspectRlcMotorConsumptionIntegrity(build(nominal)).issues,[]);
+assert(inspectRlcMotorConsumptionIntegrity(build({...nominal,resourceQtyPerGaebUnit:1.2})).issues.includes('contract_basis_inconsistent:0'));
+assert(inspectRlcMotorConsumptionIntegrity(build(nominal,'Lohn')).issues.includes('nominal_length_not_material:0'));
+const unverified={status:'unverified_lump_rate',resourceQtyPerGaebUnit:null,resourceUnit:null,resourceRateEUR:null,basis:null};
+assert.deepEqual(inspectRlcMotorConsumptionIntegrity(build(unverified)).issues,[]);
+assert(inspectRlcMotorConsumptionIntegrity(build({...unverified,resourceQtyPerGaebUnit:1})).issues.includes('unverified_with_fabricated_components:0'));
+assert.equal(inspectRlcMotorConsumptionIntegrity(build(nominal)).approvedForEP,false);
+console.log('RLC_CONSUMPTION_INTEGRITY_PASS');
