@@ -2467,6 +2467,14 @@ function finish(
     for (const line of lines) {
       line.unitPrice = round2(n(line.unitPrice) * marketDistanceFactor);
       line.total = round2(n(line.total) * marketDistanceFactor);
+      // Keep the physical coefficient invariant while tracking the adjusted
+      // effective hourly/material rate used by this particular calculation.
+      if (line.consumption?.status === "recipe_assumption" && line.consumption.resourceRateEUR !== null) {
+        line.consumption.resourceRateEUR *= marketDistanceFactor;
+        line.consumption.basis = (line.consumption.basis || "") + "; Projekt-Distanzfaktor " + marketDistanceFactor;
+      } else if (line.consumption?.status === "contract_hour_unit" || line.consumption?.status === "contract_nominal_length") {
+        line.consumption.resourceRateEUR = line.unitPrice;
+      }
     }
   }
   const unitPrice = round2(sum(lines));

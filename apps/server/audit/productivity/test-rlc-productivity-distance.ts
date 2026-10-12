@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {calculateRlcMotorWithContext} from '../../src/kalkulation/rlcMotor';
+import {analyzeRlcProjectContext} from '../../src/kalkulation/autonomous/projectContextAnalyzer';
+import {inspectRlcMotorConsumptionIntegrity} from '../../src/kalkulation/autonomous/rlcMotorConsumptionIntegrity';
+const rows=[{posNr:'1',kurztext:'Zwischenplanum im Rohrgraben herstellen',einheit:'m',menge:100}];
+const ctx=analyzeRlcProjectContext(rows,'Tiefbau');
+const original=calculateRlcMotorWithContext(rows[0],ctx,rows);
+assert(original);
+const modified=calculateRlcMotorWithContext(rows[0],{...ctx,distanceFactor:1.12},rows);
+assert(modified);
+assert(modified.unitPrice>original.unitPrice,'distance factor should affect price');
+assert.notEqual(modified.calculationStatus,'needs_review','valid productivity assumption incorrectly blocked');
+assert.equal(inspectRlcMotorConsumptionIntegrity(modified).issues.length,0);
+const c=modified.costLines.find(l=>l.consumption?.status==='recipe_assumption')?.consumption;
+assert(c && Math.abs(c.resourceQtyPerGaebUnit!*c.resourceRateEUR!-modified.costLines.find(l=>l.consumption?.status==='recipe_assumption')!.unitPrice)<=.015);
+console.log('RLC_PRODUCTIVITY_DISTANCE_PASS',original.unitPrice,modified.unitPrice);

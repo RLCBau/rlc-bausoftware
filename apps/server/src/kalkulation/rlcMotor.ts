@@ -144,7 +144,8 @@ export function calculateRlcMotorWithContext(
   // must not inherit the complete V2 base-service cost as its incremental EP.
   const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
   const dependentSurcharge = /\b(?:zulage|zuschlag)\b/i.test(scopeText) &&
-    /\b(?:vorposition|vorherige\s+position|wie\s+vor|bezugsposition)\b/i.test(scopeText);
+    (/\b(?:vorposition|vorherige\s+position|wie\s+vor|bezugsposition)\b/i.test(scopeText) ||
+      /\b(?:zu|zur|für|fuer)\s+(?:pos(?:ition)?\.?\s*(?:nr\.?)?\s*[:#-]?\s*)\d+(?:[.\-/]\d+)*/i.test(scopeText));
   if (dependentSurcharge) {
     const ref = resolveV3GaebReference(row, allRows);
     return { ...result, unitPrice: 0, total: 0, costLines: [],
