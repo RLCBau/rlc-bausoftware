@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {checkV3SurchargeScope} from '../../src/kalkulation/autonomous/v3SurchargeScopeGate';
+const base={posNr:'01',kurztext:'Rohrleitung DN300',einheit:'m',menge:5};
+const surcharge={posNr:'02',kurztext:'Zulage zu Vorposition DN400',einheit:'m',menge:5};
+const line={id:'1',group:'Lohn',name:'Rohr verlegen und ausrichten',qty:1,unit:'h',unitPrice:20,total:20};
+const calc={costLines:[line]};
+const missing=checkV3SurchargeScope({base,surcharge,baseCalculation:calc as any,surchargeCalculation:calc as any});
+assert(missing.missing.includes('incremental_scope_unverified'));
+assert(missing.missing.some(x=>x.startsWith('overlap_resolution_missing:')));
+assert.equal(missing.approvedForEP,false);
+const evidence={contractBasePosition:'01',contractScopeEvidenceId:'contract1',incrementDescription:'DN400 Mehrarbeit',unitCompatibilityEvidenceId:'unit1',quantityEvidenceId:'quantity1',productivityEvidenceId:'productivity1',resourceEvidenceIds:{'0':'resource1'},overlapResolutionEvidenceIds:{'0':'overlap1'}};
+const complete=checkV3SurchargeScope({base,surcharge,baseCalculation:calc as any,surchargeCalculation:calc as any,evidence});
+assert.equal(complete.documentaryComplete,true);
+assert.equal(complete.evidenceAuthenticityVerified,false);
+assert.equal(complete.approvedForEP,false);
+assert.equal(complete.incrementalEP,null);
+console.log('SURCHARGE_SCOPE_FAIL_CLOSED_PASS');
