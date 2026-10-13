@@ -7,6 +7,7 @@ import type { CostPosition, CostRecipe } from "./autonomous/v3GaebCostPreview";
 import { runKalkulationAgents } from "./agents/orchestrator";
 import type { KalkulationAgentsResult } from "./agents/types";
 import { calculateAutonomousUrkalkulation } from "./autonomous/autonomousUrkalkulationEngine";
+import { calculateRlcNativeRecipe } from "./autonomous/rlcNativeRecipes";
 import { analyzeRlcProjectContext } from "./autonomous/projectContextAnalyzer";
 import { diagnoseV3LunaCandidate } from "./autonomous/v3LunaMotorBridge";
 import { resolveV3GaebReference } from "./autonomous/v3GaebReferenceResolver";
@@ -118,7 +119,7 @@ export function calculateRlcMotorWithContext(
   context: RlcAutonomousProjectContext,
   allRows: RlcAutonomousCalcInput[] = []
 ): RlcAutonomousCalcResult | null {
-  const result = calculateAutonomousUrkalkulation(row, context, allRows);
+  const result = calculateRlcNativeRecipe(row) ?? calculateAutonomousUrkalkulation(row, context, allRows);
   // Run the dependency guard even if the V2 family is not recognized.
   const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
   const dependentSurcharge = /\b(?:zulage|zuschlag)\b/i.test(scopeText) &&
