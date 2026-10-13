@@ -5,6 +5,7 @@
  */
 import type {RlcAutonomousCalcInput,RlcAutonomousCalcResult} from "./types";
 import {composeRlcResourceLines} from "./rlcResourceComposer";
+import {checkRlcNativeScope} from "./rlcNativeScopeGate";
 import {diagnoseRlcAsphaltMarketEvidence,diagnoseRlcAggregateMarketEvidence} from "./rlcMarketEvidence2026";
 import {PERSONNEL_INTERNAL_COST_2026,MACHINE_INTERNAL_COST_2026} from "./tiefbauCostRates2026";
 
@@ -34,10 +35,11 @@ export function calculateRlcNativeRecipe(row:RlcAutonomousCalcInput):RlcAutonomo
         {group:"Lohn",name:"Asphaltkolonne",resourceUnit:"h",quantityPerGaebUnit:materialTonnes*2/16,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,
          basis:"Vorläufig 2 Facharbeiter bei 16 t/h"}
       ]);
+      const scope=checkRlcNativeScope("asphalt_layer",["material","walze","lohn"],lines);
       return {unitPrice:0,total:0,confidence:0.3,riskLevel:"high",source:"rlc-motor-native-resources",
         calculationStatus:"needs_review",trade:"Straßenbau/Asphaltschicht-m2-nativ",
         bauverfahren:"Asphaltlage herstellen",leistungsart:asphalt.material+" "+thicknesses[0]+" cm",
-        costLines:lines,warnings:["RLC_NATIVE_AREA_DENSITY_ASSUMPTION","RLC_NATIVE_PAVER_FREIGHT_NOT_PRICED","RLC_NATIVE_COST_SCOPE_INCOMPLETE"],
+        costLines:lines,warnings:["RLC_NATIVE_AREA_DENSITY_ASSUMPTION","RLC_NATIVE_PAVER_FREIGHT_NOT_PRICED","RLC_NATIVE_COST_SCOPE_INCOMPLETE",...scope.missing.map(key=>"RLC_NATIVE_MISSING_"+key.toUpperCase())],
         aiReason:"Native Ressourcenmengen: "+materialTonnes.toFixed(3)+" t/m² bei "+thicknesses[0]+" cm. Transport, Fertiger und Ausführungsleistung nicht nachgewiesen; EP gesperrt."};
     }
   }
@@ -57,11 +59,12 @@ export function calculateRlcNativeRecipe(row:RlcAutonomousCalcInput):RlcAutonomo
         {group:"Lohn",name:"Facharbeiter Asphaltkolonne je Tonne",resourceUnit:"h",quantityPerGaebUnit:2/16,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Planannahme 2 Facharbeiter bei 16 t/h; Personalbedarf projektspezifisch prüfen"}
       ]);
       const ep=Math.round(lines.reduce((sum,line)=>sum+line.total,0)*100)/100;
+      const scope=checkRlcNativeScope("asphalt_layer",["material","walze","lohn"],lines);
       return {unitPrice:0,total:0,
         confidence:0.35,riskLevel:"high",source:"rlc-motor-native-resources",
         calculationStatus:"needs_review",trade:"Straßenbau/Asphalt-Einbau-nativ",
         bauverfahren:"Asphalt liefern und einbauen",leistungsart:asphalt.material+" liefern und einbauen",
-        costLines:lines,warnings:["RLC_NATIVE_PROVISIONAL_PRODUCTIVITY","RLC_NATIVE_LOGISTICS_AND_PAVER_NOT_PRICED","RLC_NATIVE_COST_SCOPE_INCOMPLETE"],
+        costLines:lines,warnings:["RLC_NATIVE_PROVISIONAL_PRODUCTIVITY","RLC_NATIVE_LOGISTICS_AND_PAVER_NOT_PRICED","RLC_NATIVE_COST_SCOPE_INCOMPLETE",...scope.missing.map(key=>"RLC_NATIVE_MISSING_"+key.toUpperCase())],
         aiReason:"Native Urkalkulation Teilkomponenten (unfreigegebener Zwischenwert "+ep+" EUR/t); Fracht, Fertiger und Baustellenleistung nicht nachgewiesen. EP/GP gesperrt."};
     }
   }
