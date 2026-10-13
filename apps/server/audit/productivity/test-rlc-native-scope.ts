@@ -11,6 +11,6 @@ assert.equal(scope.complete,false);
 assert(preview.warnings.includes('RLC_NATIVE_MISSING_FRACHT'));
 assert(preview.warnings.includes('RLC_NATIVE_MISSING_FERTIGER'));
 assert(preview.warnings.includes('RLC_NATIVE_MISSING_BAUSTELLENLOGISTIK'));
-assert.equal(checkRlcNativeScope('asphalt_layer',['material','fracht','fertiger','walze','lohn','baustellenlogistik'],preview.costLines).complete,true);
+assert.equal(checkRlcNativeScope('asphalt_layer',['material','fracht','fertiger','walze','lohn','baustellenlogistik'],preview.costLines).complete,false);
 assert.equal(checkRlcNativeScope('material_ex_works',['material'],preview.costLines).economicallyApproved,false);
 console.log('RLC_NATIVE_SCOPE_GATE_PASS');

@@ -29,11 +29,11 @@ export function calculateRlcNativeRecipe(row:RlcAutonomousCalcInput):RlcAutonomo
       const materialTonnes=thicknessM*2.4;
       const lines=composeRlcResourceLines("m2",[
         {group:"Material",name:asphalt.material+" Mischgut",resourceUnit:"t",quantityPerGaebUnit:materialTonnes,netRateEUR:asphalt.materialNetEURPerT,
-         basis:thicknesses[0]+"cm × Annahme 2,4 t/m³; Rädlinger 2026 ab Werk; Verdichtung/Einbaumenge kontrollieren"},
+         basis:thicknesses[0]+"cm × Annahme 2,4 t/m³; Rädlinger 2026 ab Werk; Verdichtung/Einbaumenge kontrollieren",note:"[RLC_SCOPE:material]"},
         {group:"Maschinen",name:"Walze Asphaltlage",resourceUnit:"h",quantityPerGaebUnit:materialTonnes/16,netRateEUR:MACHINE_INTERNAL_COST_2026.roller_14t,
-         basis:"Vorläufig 16 t/h Verdichtungsleistung"},
+         basis:"Vorläufig 16 t/h Verdichtungsleistung",note:"[RLC_SCOPE:walze]"},
         {group:"Lohn",name:"Asphaltkolonne",resourceUnit:"h",quantityPerGaebUnit:materialTonnes*2/16,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,
-         basis:"Vorläufig 2 Facharbeiter bei 16 t/h"}
+         basis:"Vorläufig 2 Facharbeiter bei 16 t/h",note:"[RLC_SCOPE:lohn]"}
       ]);
       const scope=checkRlcNativeScope("asphalt_layer",["material","walze","lohn"],lines);
       return {unitPrice:0,total:0,confidence:0.3,riskLevel:"high",source:"rlc-motor-native-resources",
@@ -54,9 +54,9 @@ export function calculateRlcNativeRecipe(row:RlcAutonomousCalcInput):RlcAutonomo
     const asphalt=diagnoseRlcAsphaltMarketEvidence(row);
     if(asphalt.material && asphalt.materialNetEURPerT!==null && asphalt.unitCompatible){
       const lines=composeRlcResourceLines("t",[
-        {group:"Material",name:asphalt.material+" Asphaltmischgut ab Werk",resourceUnit:"t",quantityPerGaebUnit:1,netRateEUR:asphalt.materialNetEURPerT,basis:"Rädlinger 2026 Preis je Tonne; Lieferwerk/Region prüfen"},
-        {group:"Maschinen",name:"Walze je Tonne",resourceUnit:"h",quantityPerGaebUnit:1/16,netRateEUR:MACHINE_INTERNAL_COST_2026.roller_14t,basis:"Planannahme 16 t/h je Walze; Einbaukolonne/Transport separat"},
-        {group:"Lohn",name:"Facharbeiter Asphaltkolonne je Tonne",resourceUnit:"h",quantityPerGaebUnit:2/16,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Planannahme 2 Facharbeiter bei 16 t/h; Personalbedarf projektspezifisch prüfen"}
+        {group:"Material",name:asphalt.material+" Asphaltmischgut ab Werk",resourceUnit:"t",quantityPerGaebUnit:1,netRateEUR:asphalt.materialNetEURPerT,basis:"Rädlinger 2026 Preis je Tonne; Lieferwerk/Region prüfen",note:"[RLC_SCOPE:material]"},
+        {group:"Maschinen",name:"Walze je Tonne",resourceUnit:"h",quantityPerGaebUnit:1/16,netRateEUR:MACHINE_INTERNAL_COST_2026.roller_14t,basis:"Planannahme 16 t/h je Walze; Einbaukolonne/Transport separat",note:"[RLC_SCOPE:walze]"},
+        {group:"Lohn",name:"Facharbeiter Asphaltkolonne je Tonne",resourceUnit:"h",quantityPerGaebUnit:2/16,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Planannahme 2 Facharbeiter bei 16 t/h; Personalbedarf projektspezifisch prüfen",note:"[RLC_SCOPE:lohn]"}
       ]);
       const ep=Math.round(lines.reduce((sum,line)=>sum+line.total,0)*100)/100;
       const scope=checkRlcNativeScope("asphalt_layer",["material","walze","lohn"],lines);
@@ -82,7 +82,8 @@ export function calculateRlcNativeRecipe(row:RlcAutonomousCalcInput):RlcAutonomo
     group:"Material",name:material+" netto ab Werk",resourceUnit:"t",
     quantityPerGaebUnit:1,netRateEUR:price,
     basis:asphalt.material?"Rädlinger 18.05.2026 Materialliste, 1 t je Vertragstonne, Werk und Region zu bestätigen":
-      "Glück Kies Preisliste 2026, 1 t je Vertragstonne, Werk und Region zu bestätigen"
+      "Glück Kies Preisliste 2026, 1 t je Vertragstonne, Werk und Region zu bestätigen",
+    note:"[RLC_SCOPE:material]"
   }]);
   const unitPrice=lines[0].total;
   const qty=Number(row.menge);

@@ -8,8 +8,14 @@ const REQUIRED:Record<NativeScope,readonly string[]>={
   material_ex_works:["material"]
 };
 export function checkRlcNativeScope(scope:NativeScope,covered:readonly string[],lines:readonly RlcAutonomousCostLine[]){
+  // A declared coverage flag is insufficient: every scope component needs
+  // an actual physical cost line bearing the same resource tag.
   const present=new Set(covered);
-  const missing=REQUIRED[scope].filter(key=>!present.has(key));
+  const lineTags=new Set(lines.flatMap(line=>{
+    const note=String(line.note||"");
+    return [...note.matchAll(/\[RLC_SCOPE:([a-z_]+)\]/g)].map(match=>match[1]);
+  }));
+  const missing=REQUIRED[scope].filter(key=>!present.has(key)||!lineTags.has(key));
   const invalid=lines.filter(l=>!l.consumption||
     !(Number(l.consumption.resourceQtyPerGaebUnit)>0)||
     !(Number(l.consumption.resourceRateEUR)>0)||
