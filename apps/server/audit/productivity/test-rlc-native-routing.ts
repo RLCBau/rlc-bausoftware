@@ -15,4 +15,10 @@ for(const text of [
  'Zulage Asphaltmischgut AC 11 D S liefern ab Werk'
 ])assert.equal(calculateRlcNativeRecipe({...row,kurztext:text}),null,text);
 assert.equal(calculateRlcNativeRecipe({...row,einheit:'m2'}),null);
+const sand={...row,kurztext:'Kabelsand 0/4 liefern ab Werk'};
+const sandResult=calculateRlcMotorWithContext(sand,analyzeRlcProjectContext([sand],'Leitungsbau'),[sand]);
+assert.equal(sandResult?.source,'rlc-motor-native-resources');
+assert.equal(sandResult?.unitPrice,21.4);
+assert.equal(calculateRlcNativeRecipe({...sand,kurztext:'Kabelsand 0/8 liefern ab Werk'}),null);
+assert.equal(calculateRlcNativeRecipe({...sand,kurztext:'Kabelsand liefern ab Werk'}),null);
 console.log('RLC_NATIVE_ROUTING_PASS');
