@@ -13196,11 +13196,12 @@ function calculateZeroAuditBatch124(row:RlcAutonomousCalcInput,ctx:RlcAutonomous
  if(["t","to"].includes(u)&&hasAny(text,["asphalt","ac 8","ac8","ac 11","ac11","ac 22","ac22"])&&hasAny(text,["liefern","einbauen","herstellen"])&&!hasAny(text,["entsorg","abbruch","fräs","fraes"])){
   const evidence=diagnoseRlcAsphaltMarketEvidence(row);
   if(evidence.material && evidence.unitCompatible && evidence.materialNetEURPerT!==null) {
-    addLine(lines,"Material",evidence.material+" Asphaltmischgut ab Werk",evidence.materialNetEURPerT,unit,
-      "Rädlinger 2026 Materialpreis netto ab Werk; ohne Fracht/Einbau",{
-        qty:1,resourceUnit:"t",rateEUR:evidence.materialNetEURPerT,
-        basis:"1 t Mischgut je GAEB-t; Rädlinger Preisliste 18.05.2026; Werk, Fracht und Liefergebiet prüfen"
-      });
+    lines.push(...composeRlcResourceLines(unit,[{
+      group:"Material",name:evidence.material+" Asphaltmischgut ab Werk",
+      resourceUnit:"t",quantityPerGaebUnit:1,netRateEUR:evidence.materialNetEURPerT,
+      basis:"1 t Mischgut je GAEB-t; Rädlinger Preisliste 18.05.2026; Werk, Fracht und Liefergebiet prüfen",
+      note:"Nur Material netto ab Werk; Einbau und Fracht separat"
+    }]));
   } else addLine(lines,"Material","Asphaltmischgut (Sorte nicht belegt)",135,unit,
     "V2 Schätzwert ohne materialspezifischen Nachweis; nicht als Marktpreis ausweisen");
   addLine(lines,"Maschinen","Transport/Einbau/Verdichtung",38,unit);
