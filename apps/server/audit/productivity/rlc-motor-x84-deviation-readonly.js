@@ -2,6 +2,7 @@ const {PrismaClient}=require('@prisma/client');
 const {analyzeRlcProjectContext}=require('../../src/kalkulation/autonomous/projectContextAnalyzer');
 const {calculateRlcMotorWithContext}=require('../../src/kalkulation/rlcMotor');
 const {diagnoseRlcAsphaltMarketEvidence,diagnoseRlcAggregateMarketEvidence}=require('../../src/kalkulation/autonomous/rlcMarketEvidence2026');
+const {diagnoseRlcEconomicEvidence}=require('../../src/kalkulation/autonomous/rlcEconomicEvidenceGate');
 (async()=>{
 const p=new PrismaClient();const o={x84Positive:0,comparable:0,over10:0,within10:0,motorZero:0,exceptions:0,over10Above:0,over10Below:0,examples:[],bands:{"0-10":0,">10-15":0,">15-20":0,">20":0},byTrade:{},extremeAbove100:0,extremeBelow90:0,provenance:{allLinesTraceable:0,hasUnverifiedLump:0,hasRecipeAssumption:0,noCostLines:0,over20WithLump:0,exampleUnverified:[],byFamily:{}},aggregateEvidence:{matched:0,tonUnit:0,requiresScopeValidation:0,byMaterial:{}},asphaltEvidence:{exactMaterialGrade:0,tonUnit:0,requiresScopeValidation:0,nonComparable:0,byGrade:{}}};let cursor;
 try{while(true){
@@ -15,7 +16,9 @@ for(const h of hs){
  try{const r=calculateRlcMotorWithContext(rows[i],ctx,rows);if(!r||!(r.unitPrice>0)){o.motorZero++;continue;}
  o.comparable++;const deviation=(r.unitPrice-x84)/x84*100;
  const costLines=Array.isArray(r.costLines)?r.costLines:[];
- const unverified=costLines.filter(z=>z.consumption?.status==="unverified_lump_rate" || !z.consumption);
+ const economic=diagnoseRlcEconomicEvidence(costLines);
+ const unverified=costLines.filter(z=>z.consumption?.status==="unverified_lump_rate" || !z.consumption || !Number.isFinite(z.consumption.resourceQtyPerGaebUnit) || !Number.isFinite(z.consumption.resourceRateEUR));
+ if((economic.unresolvedComponents>0)!==(unverified.length>0))throw new Error("evidence gate/audit mismatch");
  const assumed=costLines.some(z=>z.consumption?.status==="recipe_assumption");
  if(!costLines.length)o.provenance.noCostLines++;
  if(unverified.length)o.provenance.hasUnverifiedLump++;
