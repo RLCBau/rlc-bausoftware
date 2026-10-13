@@ -1,0 +1,36 @@
+{
+  "runDate": "2026-10-13",
+  "x84Positive": 6011,
+  "comparable": 5482,
+  "bands": {
+    "0-10": 424,
+    ">10-15": 202,
+    ">15-20": 229,
+    ">20": 4627
+  },
+  "over10": 5058,
+  "motorZero": 529,
+  "exceptions": 0,
+  "aggregateEvidence": {
+    "matched": 1,
+    "tonUnit": 0,
+    "requiresScopeValidation": 1,
+    "byMaterial": {
+      "Frostschutzkies 0/32": 1
+    }
+  },
+  "asphaltEvidence": {
+    "exactMaterialGrade": 87,
+    "tonUnit": 13,
+    "requiresScopeValidation": 547,
+    "nonComparable": 460,
+    "byGrade": {
+      "AC 32 T": 28,
+      "AC 22 T": 21,
+      "AC 11 D N": 15,
+      "AC 16 T D": 15,
+      "AC 11 D S": 7,
+      "AC 16 T": 1
+    }
+  }
+}
