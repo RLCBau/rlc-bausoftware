@@ -1,4 +1,5 @@
 // @ts-nocheck -- static generated catalog exceeds TypeScript control-flow analysis limit
+import { composeRlcResourceLines } from "./rlcResourceComposer";
 import type {
   RlcAutonomousCalcInput,
   RlcAutonomousCalcResult,
@@ -5824,9 +5825,11 @@ function calculateZeroAuditBatch28(
 
   // Kabel einbauen und einsanden.
   if (["m","lfm"].includes(u) && hasAny(shortText, ["kabel einbauen und einsanden"])) {
-    addLine(lines,"Material","Kabelsand 0/4, Referenz 0,10 m³/m",3.42,unit,"Rezeptannahme: 0,10 m³/m × 1,6 t/m³ × 21,40 EUR/t netto ab Werk", {qty:0.16,resourceUnit:"t",rateEUR:21.40,basis:"Annahme 0,10 m³ je m × Schüttdichte 1,6 t/m³; Glück Kies 2026; Querschnitt/Dichte ungeprüft"});
-    addLine(lines,"Lohn","Kabel auslegen / richten / einsanden",PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4/14,unit,"Arbeitshypothese 14 m/h", {qty:1/14,resourceUnit:"h",rateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Annahme 14 m/h Facharbeiter; Kabelzahl und Randbedingungen prüfen"});
-    addLine(lines,"Maschinen","Verdichtung anteilig",MACHINE_INTERNAL_COST_2026.plate_light/18,unit,"Rüttelplatte ohne Liefertransport", {qty:1/18,resourceUnit:"h",rateEUR:MACHINE_INTERNAL_COST_2026.plate_light,basis:"Annahme 18 m/h Rüttelplatte; Fracht gesondert prüfen"});
+    lines.push(...composeRlcResourceLines(unit,[
+      {group:"Material",name:"Kabelsand 0/4, Referenz 0,10 m³/m",resourceUnit:"t",quantityPerGaebUnit:0.16,netRateEUR:21.40,basis:"Annahme 0,10 m³/m × 1,6 t/m³; Glück Kies 2026; Querschnitt/Dichte prüfen"},
+      {group:"Lohn",name:"Kabel auslegen / richten / einsanden",resourceUnit:"h",quantityPerGaebUnit:1/14,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Annahme 14 m/h Facharbeiter; Kabelzahl prüfen"},
+      {group:"Maschinen",name:"Verdichtung anteilig",resourceUnit:"h",quantityPerGaebUnit:1/18,netRateEUR:MACHINE_INTERNAL_COST_2026.plate_light,basis:"Annahme 18 m/h Rüttelplatte; Fracht separat prüfen"}
+    ]));
     return finish(row,ctx,"Kabeltiefbau/Kabelbettung","Kabel verlegen und einsanden","Kabel einsanden",lines,riskFrom(ctx,"medium"),
       ["Kabelzahl, Sandquerschnitt und Warn-/Abdeckelemente prüfen.", "Fracht/Materialanlieferung sowie Geräteeinsatz und tatsächliche Stundenleistung ergänzen; Produktivitätsansätze sind Annahmen."]);
   }
@@ -6246,9 +6249,11 @@ function calculateZeroAuditBatch28(
 
   // Sand-Einbettung Kabel 30–50 cm je m3.
   if (["m3","m³"].includes(u) && hasAny(shortText, ["sand einbettung kabel einbauen verdichten"])) {
-    addLine(lines,"Material","Kabelsand 0/4, ca. 1,6 t/m³",34.24,unit,"Kabelsand 0/4 Glück Kies 2026 netto ab Werk", {qty:1.6,resourceUnit:"t",rateEUR:21.40,basis:"Annahme 1,6 t/m³ lose; Quelle Glück Kies 2026, Dichte projektspezifisch prüfen"});
-    addLine(lines,"Maschinen","Leicht verdichten mit Rüttelplatte",MACHINE_INTERNAL_COST_2026.plate_light/8,unit,"Einbaugerät und Fracht zusätzlich prüfen", {qty:1/8,resourceUnit:"h",rateEUR:MACHINE_INTERNAL_COST_2026.plate_light,basis:"Annahme 8 m³/h Rüttelplatte; Fracht/Einbaugerät nicht enthalten"});
-    addLine(lines,"Lohn","Handarbeit an Kabeln/Muffen",PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4/7,unit,"Arbeitshypothese 7 m³/h", {qty:1/7,resourceUnit:"h",rateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Annahme 7 m³/h Facharbeiter; Leitungsnähe prüfen"});
+    lines.push(...composeRlcResourceLines(unit,[
+      {group:"Material",name:"Kabelsand 0/4, ca. 1,6 t/m³",resourceUnit:"t",quantityPerGaebUnit:1.6,netRateEUR:21.40,basis:"Annahme 1,6 t/m³; Glück Kies 2026; Schüttdichte prüfen"},
+      {group:"Maschinen",name:"Leicht verdichten mit Rüttelplatte",resourceUnit:"h",quantityPerGaebUnit:1/8,netRateEUR:MACHINE_INTERNAL_COST_2026.plate_light,basis:"Annahme 8 m³/h; Fracht und Einbaugerät nicht enthalten"},
+      {group:"Lohn",name:"Handarbeit an Kabeln/Muffen",resourceUnit:"h",quantityPerGaebUnit:1/7,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Annahme 7 m³/h Facharbeiter; Leitungsnähe prüfen"}
+    ]));
     return finish(row,ctx,"Kabeltiefbau/Sandeinbettung","Kabelsand einbauen und verdichten","Kabelsand m³",lines,riskFrom(ctx,"medium"),["Fracht, Einbaugerät und Schüttdichte prüfen; 8 m³/h Rüttelplatte und 7 m³/h Facharbeiter sind vorläufige Annahmen."]);
   }
 
