@@ -1,0 +1,84 @@
+{
+  "total": 82736,
+  "candidates": 297,
+  "complete": 0,
+  "incomplete": 297,
+  "byTrade": {
+    "Straßenbau/Asphaltschicht-m2-nativ": 297
+  },
+  "examples": [
+    {
+      "position": "06.02.0100",
+      "short": "Asphaltdecksch. aus AC 11 D S herst\r\n       ... Freitext ...*Dicke 4 cm\r\n       Bitumen 50/70",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "0307   3",
+      "short": "ATS aus AC 32 T N herstellen (Fahrbahn)",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "05.07.3",
+      "short": "width:481pt ATS aus AC 32 T N herstellen (Fahrbahn)",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "1.2.0034",
+      "short": "Asphaltdeckschicht AC 11 DN 4 cm",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "07  0040",
+      "short": "Asphalttragsch. aus AC 32 T N herst ... Freitext ... Dicke 10 cm Bitumen 70/100",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "03.07.6",
+      "short": "width:481pt ADS aus AC 11 D N herstellen",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "2.4.56",
+      "short": "ADS aus AC 11 D N herstellen, Einbaudicke 3,5 cm",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "2.1.13",
+      "short": "ATS aus AC 32 TN herstellen",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "01.7.18",
+      "short": "ATS aus AC 32 T N herstellen",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "02    23",
+      "short": "ADS aus AC 11 D N herstellen",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "01.11.19",
+      "short": "width:481pt ADS aus AC 11 DN herstellen - 4 cm",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    },
+    {
+      "position": "002.911.0140",
+      "short": "width:481pt ADS aus AC 11 D N, BK 1,8, Fahrbahn, 50/70, 4cm",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltschicht-m2-nativ"
+    }
+  ],
+  "errors": 0
+}

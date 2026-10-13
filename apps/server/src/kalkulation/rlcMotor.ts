@@ -133,6 +133,7 @@ export function calculateRlcMotorWithContext(
       "RLC_NATIVE_PREVIEW_INCOMPLETE_KEEP_V2_FALLBACK",
       ...nativeCandidate.warnings,
     ]));
+    if (result.calculationStatus === "ok") result.calculationStatus = "warning";
   }
   // Run the dependency guard even if the V2 family is not recognized.
   const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
