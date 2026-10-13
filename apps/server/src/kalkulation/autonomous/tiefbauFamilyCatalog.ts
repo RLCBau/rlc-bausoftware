@@ -32,6 +32,7 @@ import {
   MACHINE_INTERNAL_COST_2026,
   COMMERCIAL_REGIE_2026,
 } from "./tiefbauCostRates2026";
+import { diagnoseRlcAsphaltMarketEvidence } from "./rlcMarketEvidence2026";
 
 function n(v: unknown): number {
   const x = Number(v);
@@ -13187,7 +13188,21 @@ function calculateZeroAuditBatch124(row:RlcAutonomousCalcInput,ctx:RlcAutonomous
  if(["st","stk","stck","st."].includes(u)&&hasAny(text,["schieber"])&&hasAny(text,["flansch","wasserleitung"])){addLine(lines,"Material","Absperrschieber/Flanschzubehör",420,unit);addLine(lines,"Lohn","Montage/Dichtung/Verschraubung",110,unit);return finish(row,ctx,"Wasserleitung/Schieber","Absperrschieber montieren","Schieber",lines,riskFrom(ctx,"high"),["DN, PN, Fabrikat und Einbausituation prüfen."]);}
  if(["st","stk","stck","st."].includes(u)&&hasAny(text,["hydrant"])&&hasAny(text,["einbauen","montieren","setzen"])){addLine(lines,"Material","Hydrant inkl. Anschlusszubehör",520,unit);addLine(lines,"Lohn","Hydrant montieren/setzen",140,unit);return finish(row,ctx,"Wasserleitung/Hydrant","Hydrant einbauen","Hydrant",lines,riskFrom(ctx,"high"),["DN, Bauart, Hersteller und Armaturen prüfen."]);}
  if(hasAny(text,["dichtheitsprüfung","dichtheitspr fung","dichtheitspruefung"])&&hasAny(text,["kanal","rohr","liner"])){addLine(lines,"Nachunternehmer","Dichtheitsprüfung inkl. Protokoll",280,unit);addLine(lines,"Lohn","Koordination/Dokumentation",55,unit);return finish(row,ctx,"Pruefung/Dichtheit","Dichtheitsprüfung durchführen","Dichtheitsprüfung",lines,riskFrom(ctx,"high"),["Prüfverfahren, DN, Abschnittslänge und Norm prüfen."]);}
- if(["t","to"].includes(u)&&hasAny(text,["asphalt","ac 8","ac8","ac 11","ac11","ac 22","ac22"])&&hasAny(text,["liefern","einbauen","herstellen"])&&!hasAny(text,["entsorg","abbruch","fräs","fraes"])){addLine(lines,"Material","Asphaltmischgut",135,unit);addLine(lines,"Maschinen","Transport/Einbau/Verdichtung",38,unit);addLine(lines,"Lohn","Asphaltkolonne/Nacharbeit",18,unit);return finish(row,ctx,"Straßenbau/Asphalt-Einbau","Asphaltmischgut liefern/einbauen","Asphalt Einbau",lines,riskFrom(ctx,"high"),["Mischgutsorte, Bindemittel, Schichtdicke und Kleinmengen prüfen."]);}
+ if(["t","to"].includes(u)&&hasAny(text,["asphalt","ac 8","ac8","ac 11","ac11","ac 22","ac22"])&&hasAny(text,["liefern","einbauen","herstellen"])&&!hasAny(text,["entsorg","abbruch","fräs","fraes"])){
+  const evidence=diagnoseRlcAsphaltMarketEvidence(row);
+  if(evidence.material && evidence.unitCompatible && evidence.materialNetEURPerT!==null) {
+    addLine(lines,"Material",evidence.material+" Asphaltmischgut ab Werk",evidence.materialNetEURPerT,unit,
+      "Rädlinger 2026 Materialpreis netto ab Werk; ohne Fracht/Einbau",{
+        qty:1,resourceUnit:"t",rateEUR:evidence.materialNetEURPerT,
+        basis:"1 t Mischgut je GAEB-t; Rädlinger Preisliste 18.05.2026; Werk, Fracht und Liefergebiet prüfen"
+      });
+  } else addLine(lines,"Material","Asphaltmischgut (Sorte nicht belegt)",135,unit,
+    "V2 Schätzwert ohne materialspezifischen Nachweis; nicht als Marktpreis ausweisen");
+  addLine(lines,"Maschinen","Transport/Einbau/Verdichtung",38,unit);
+  addLine(lines,"Lohn","Asphaltkolonne/Nacharbeit",18,unit);
+  return finish(row,ctx,"Straßenbau/Asphalt-Einbau","Asphaltmischgut liefern/einbauen","Asphalt Einbau",lines,riskFrom(ctx,"high"),
+    ["Einbau, Transport, Baustellenbedingungen und Baustellenleistung bleiben V2-Annahmen; Materialpreis nicht Gesamt-EP."]);
+}
  if(["m2","m²","qm"].includes(u)&&hasAny(text,["asphalt"])&&hasAny(text,["fräsen","fraesen","fräs","fraes"])){addLine(lines,"Maschinen","Asphaltfräse/Kehrtechnik",8.5,unit);addLine(lines,"Lohn","Fräskolonne/Nacharbeit",2.5,unit);return finish(row,ctx,"Straßenbau/Asphalt-Fraesen","Asphalt fräsen","Asphalt fräsen",lines,riskFrom(ctx,"medium"),["Frästiefe, Fläche, Transport und Fräsgutverwertung prüfen."]);}
  if(["m","lfm"].includes(u)&&hasAny(text,["fugenband"])&&hasAny(text,["liefern","einbauen","herstellen"])){addLine(lines,"Material","Bitumen-Fugenband",3.2,unit);addLine(lines,"Lohn","Fugenband einbauen",3.8,unit);return finish(row,ctx,"Straßenbau/Fugenband","Fugenband liefern/einbauen","Fugenband",lines,riskFrom(ctx,"low"));}
  if(["m","lfm"].includes(u)&&hasAny(text,["anschlussfuge"])&&hasAny(text,["asphalt","bitumen"])){addLine(lines,"Material","Fugenverguss/Primer",2.6,unit);addLine(lines,"Lohn","Anschlussfuge herstellen",4.4,unit);return finish(row,ctx,"Straßenbau/Anschlussfuge","Asphalt-Anschlussfuge herstellen","Anschlussfuge",lines,riskFrom(ctx,"low"));}
