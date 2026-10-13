@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {calculateRlcMotorWithContext} from '../../src/kalkulation/rlcMotor';
+import {analyzeRlcProjectContext} from '../../src/kalkulation/autonomous/projectContextAnalyzer';
+const row={posNr:'01',kurztext:'Asphaltdecksch. AC 11 D S liefern einbauen',einheit:'t',menge:10};
+const result=calculateRlcMotorWithContext(row,analyzeRlcProjectContext([row],'Straßenbau'),[row]);
+assert(result);
+const material=result.costLines.find(l=>l.group==='Material'&&l.name.includes('AC 11 D S'));
+assert(material);
+assert.equal(material.unitPrice,140.90);
+assert.equal(material.consumption?.resourceUnit,'t');
+assert.equal(material.consumption?.resourceQtyPerGaebUnit,1);
+assert.equal(result.unitPrice,196.90);
+console.log('RLC_ASPHALT_EARLY_FAMILY_PASS',result.unitPrice);

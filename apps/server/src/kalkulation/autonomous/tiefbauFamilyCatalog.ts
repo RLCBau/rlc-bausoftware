@@ -5656,8 +5656,8 @@ function calculateZeroAuditBatch28(
   // Asphaltmischgut je Tonne: AC16 TS / AC22 TN / AC11 DS / AC5 DL.
   if (["t","to","tonne","tonnen"].includes(u) && hasAny(shortText, ["asphalttragsch.","asphaltdecksch."]) && hasAny(text, ["ac 16 t s","ac 22 t n","ac 11 d s","ac 5 d l"])) {
     const mix=hasAny(text,["ac 16 t s"])?"AC 16 T S":hasAny(text,["ac 22 t n"])?"AC 22 T N":hasAny(text,["ac 11 d s"])?"AC 11 D S":"AC 5 D L";
-    const plant=mix==="AC 16 T S"?78:mix==="AC 22 T N"?76:mix==="AC 11 D S"?95:105;
-    addLine(lines,"Material",`${mix} Asphaltmischgut ab Werk`,plant,unit,"RLC Marktanker Asphalt 2026");
+    const plant=mix==="AC 16 T S"?78:mix==="AC 22 T N"?76:mix==="AC 11 D S"?140.90:105;
+    addLine(lines,"Material",`${mix} Asphaltmischgut ab Werk`,plant,unit,mix==="AC 11 D S"?"Rädlinger Asphaltpreisliste 2026, nur Material netto ab Werk":"V2 Schätzwert ohne aktuelle materialspezifische Lieferantenfreigabe",mix==="AC 11 D S"?{qty:1,resourceUnit:"t",rateEUR:plant,basis:"1 t je GAEB-t; Rädlinger 2026 AC 11 D S; Werk/Fracht noch projektspezifisch prüfen"}:undefined);
     addLine(lines,"Nachunternehmer","Thermotransport Asphaltmischgut",13,unit);
     addLine(lines,"Maschinen","Fertiger/Walze Einbauanteil je Tonne",15,unit);
     addLine(lines,"Lohn","Kolonne / Einbau / Anschlüsse anteilig",9,unit);
