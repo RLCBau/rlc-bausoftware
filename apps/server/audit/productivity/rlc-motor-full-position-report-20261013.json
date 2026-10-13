@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-13T06:26:44.342Z",
+  "lv": 513,
+  "positions": 82736,
+  "positive": 72970,
+  "zero": 9766,
+  "review": 5690,
+  "unresolved": 1436,
+  "structural": 4076,
+  "exceptions": 0,
+  "zeroCauses": [
+    [
+      "UNRESOLVED|RLC_MOTOR_NO_MATCH",
+      1436
+    ],
+    [
+      "Kanalbau|RLC_MOTOR_MISSING_VALID_EP",
+      535
+    ],
+    [
+      "Straßenbau|RLC_MOTOR_MISSING_VALID_EP",
+      332
+    ],
+    [
+      "Entsorgung|RLC_MOTOR_MISSING_VALID_EP",
+      265
+    ],
+    [
+      "Erdbau|RLC_MOTOR_REVIEW_PRICE_BLOCKED",
+      202
+    ],
+    [
+      "Pflaster|RLC_MOTOR_MISSING_VALID_EP",
+      161
+    ],
+    [
+      "Spezialtiefbau|RLC_MOTOR_MISSING_VALID_EP",
+      159
+    ],
+    [
+      "Nachträge|RLC_MOTOR_MISSING_VALID_EP",
+      156
+    ],
+    [
+      "Kanalbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      139
+    ],
+    [
+      "Landschaftsbau|RLC_MOTOR_MISSING_VALID_EP",
+      138
+    ],
+    [
+      "Wasserhaltung|RLC_MOTOR_MISSING_VALID_EP",
+      122
+    ],
+    [
+      "Betonbau|RLC_MOTOR_MISSING_VALID_EP",
+      105
+    ],
+    [
+      "Wasserleitungsbau|RLC_MOTOR_MISSING_VALID_EP",
+      101
+    ],
+    [
+      "Prüfungen|RLC_MOTOR_MISSING_VALID_EP",
+      95
+    ],
+    [
+      "Rohrbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      85
+    ],
+    [
+      "Regie|RLC_MOTOR_MISSING_VALID_EP",
+      60
+    ],
+    [
+      "Erdbau|RLC_MOTOR_MISSING_VALID_EP",
+      59
+    ],
+    [
+      "HDD|RLC_MOTOR_REVIEW_PRICE_BLOCKED",
+      54
+    ],
+    [
+      "Baustelleneinrichtung|RLC_MOTOR_MISSING_VALID_EP",
+      54
+    ],
+    [
+      "GAEB|RLC_MOTOR_MISSING_VALID_EP",
+      50
+    ],
+    [
+      "Wasserbau|RLC_MOTOR_MISSING_VALID_EP",
+      47
+    ],
+    [
+      "Verkehrssicherung|RLC_MOTOR_MISSING_VALID_EP",
+      43
+    ],
+    [
+      "Erdbau|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      43
+    ],
+    [
+      "Abbruch|RLC_MOTOR_MISSING_VALID_EP",
+      41
+    ],
+    [
+      "Abdichtung|RLC_MOTOR_MISSING_VALID_EP",
+      37
+    ],
+    [
+      "Telekom|RLC_MOTOR_MISSING_VALID_EP",
+      33
+    ],
+    [
+      "Baustellenlogistik|RLC_MOTOR_DEPENDENT_SURCHARGE_INCREMENT_UNVERIFIED",
+      33
+    ],
+    [
+      "Elektro|RLC_MOTOR_MISSING_VALID_EP",
+      32
+    ],
+    [
+      "Rohrbau|RLC_MOTOR_MISSING_VALID_EP",
+      30
+    ],
+    [
+      "Betonsanierung|RLC_MOTOR_MISSING_VALID_EP",
+      30
+    ]
+  ]
+}
