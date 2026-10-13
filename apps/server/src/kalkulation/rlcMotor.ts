@@ -8,6 +8,8 @@ import { runKalkulationAgents } from "./agents/orchestrator";
 import type { KalkulationAgentsResult } from "./agents/types";
 import { calculateAutonomousUrkalkulation } from "./autonomous/autonomousUrkalkulationEngine";
 import { calculateRlcNativeRecipe } from "./autonomous/rlcNativeRecipes";
+import { calculateCompleteAsphaltLayerM2 } from "./autonomous/rlcAsphaltProductionModel";
+import type { AsphaltProjectResources } from "./autonomous/rlcAsphaltProductionModel";
 import { analyzeRlcProjectContext } from "./autonomous/projectContextAnalyzer";
 import { diagnoseV3LunaCandidate } from "./autonomous/v3LunaMotorBridge";
 import { resolveV3GaebReference } from "./autonomous/v3GaebReferenceResolver";
@@ -202,6 +204,15 @@ export function calculateRlcMotorWithContext(
     warnings: [...result.warnings, "RLC_MOTOR_ECONOMIC_INTEGRITY_FAILED"],
     aiReason: `${result.aiReason} RLC Motor: wirtschaftliche Konsistenzprüfung fehlgeschlagen; EP/GP gesperrt.` };
 
+}
+
+/** Resource-based native preview. Inputs must be supplied and supported by project evidence.
+ * A complete cost breakdown is not authorization to write or approve an EP. */
+export function previewRlcMotorAsphaltProject(input:AsphaltProjectResources){
+  const preview=calculateCompleteAsphaltLayerM2(input);
+  return {...preview,authority:"RLC_MOTOR" as const,
+    productionWriteAllowed:false as const,
+    approvalSource:"project_evidence_requires_review" as const};
 }
 
 /** All unapproved V3 previews are controlled by RLC Motor, never the route.
