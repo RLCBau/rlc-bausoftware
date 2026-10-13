@@ -13,6 +13,34 @@ export function calculateRlcNativeRecipe(row:RlcAutonomousCalcInput):RlcAutonomo
   const long=String(row.langtext||"").trim();
   const combined=(short+" "+long).toLocaleLowerCase("de-DE");
   const unit=String(row.einheit||"").trim().toLowerCase();
+  // Area-based asphalt layers occur widely in real GAEB. Price physical
+  // components only when explicit mix grade and thickness are both present.
+  if(["m2","m²","qm"].includes(unit)
+     && /asphalt(?:deck|trag|binder)sch(?:icht|\.)|asphaltbeton/i.test(combined)
+     && /\b(?:herstellen|einbauen|herst\.)\b/i.test(combined)
+     && !/\b(?:zulage|zuschlag|fräsen|fraesen|aufbrechen|abbruch|ausbauen|entsorgen|emulsion|haftkleber|reparatur|provisorisch|vorposition|wie vor)\b/i.test(combined)){
+    const asphalt=diagnoseRlcAsphaltMarketEvidence(row);
+    const thicknessTokens=[...combined.matchAll(/(?:dicke|schichtdicke|einbaudicke)\s*(?:von\s*)?(\d{1,2}(?:[,.]\d+)?)\s*cm\b/gi)];
+    const thicknesses=[...new Set(thicknessTokens.map(m=>Number(m[1].replace(",","."))))];
+    if(asphalt.material && asphalt.materialNetEURPerT!==null && thicknesses.length===1 && thicknesses[0]>=2 && thicknesses[0]<=30){
+      const thicknessM=thicknesses[0]/100;
+      // Density is an estimate, not an approved delivery measurement.
+      const materialTonnes=thicknessM*2.4;
+      const lines=composeRlcResourceLines("m2",[
+        {group:"Material",name:asphalt.material+" Mischgut",resourceUnit:"t",quantityPerGaebUnit:materialTonnes,netRateEUR:asphalt.materialNetEURPerT,
+         basis:thicknesses[0]+"cm × Annahme 2,4 t/m³; Rädlinger 2026 ab Werk; Verdichtung/Einbaumenge kontrollieren"},
+        {group:"Maschinen",name:"Walze Asphaltlage",resourceUnit:"h",quantityPerGaebUnit:materialTonnes/16,netRateEUR:MACHINE_INTERNAL_COST_2026.roller_14t,
+         basis:"Vorläufig 16 t/h Verdichtungsleistung"},
+        {group:"Lohn",name:"Asphaltkolonne",resourceUnit:"h",quantityPerGaebUnit:materialTonnes*2/16,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,
+         basis:"Vorläufig 2 Facharbeiter bei 16 t/h"}
+      ]);
+      return {unitPrice:0,total:0,confidence:0.3,riskLevel:"high",source:"rlc-motor-native-resources",
+        calculationStatus:"needs_review",trade:"Straßenbau/Asphaltschicht-m2-nativ",
+        bauverfahren:"Asphaltlage herstellen",leistungsart:asphalt.material+" "+thicknesses[0]+" cm",
+        costLines:lines,warnings:["RLC_NATIVE_AREA_DENSITY_ASSUMPTION","RLC_NATIVE_PAVER_FREIGHT_NOT_PRICED","RLC_NATIVE_COST_SCOPE_INCOMPLETE"],
+        aiReason:"Native Ressourcenmengen: "+materialTonnes.toFixed(3)+" t/m² bei "+thicknesses[0]+" cm. Transport, Fertiger und Ausführungsleistung nicht nachgewiesen; EP gesperrt."};
+    }
+  }
   if(!["t","to","tonne"].includes(unit))return null;
   // Full-work native route: strict asphalt unit-tonne delivery AND installation.
   // Do not infer quantities from LV text; productive hours below are explicit assumptions.

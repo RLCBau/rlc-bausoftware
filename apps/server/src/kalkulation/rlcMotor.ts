@@ -119,7 +119,21 @@ export function calculateRlcMotorWithContext(
   context: RlcAutonomousProjectContext,
   allRows: RlcAutonomousCalcInput[] = []
 ): RlcAutonomousCalcResult | null {
-  const result = calculateRlcNativeRecipe(row) ?? calculateAutonomousUrkalkulation(row, context, allRows);
+  const nativeCandidate = calculateRlcNativeRecipe(row);
+  // Only a complete native recipe may replace the legacy production path.
+  // An incomplete native preview remains diagnostic until all resources exist.
+  const nativeUsable = !!nativeCandidate && nativeCandidate.unitPrice > 0
+    && nativeCandidate.calculationStatus !== "needs_review";
+  const result = nativeUsable
+    ? nativeCandidate
+    : calculateAutonomousUrkalkulation(row, context, allRows);
+  if (nativeCandidate && !nativeUsable && result) {
+    result.warnings = Array.from(new Set([
+      ...result.warnings,
+      "RLC_NATIVE_PREVIEW_INCOMPLETE_KEEP_V2_FALLBACK",
+      ...nativeCandidate.warnings,
+    ]));
+  }
   // Run the dependency guard even if the V2 family is not recognized.
   const scopeText = String(row.kurztext || "") + " " + String(row.langtext || "");
   const dependentSurcharge = /\b(?:zulage|zuschlag)\b/i.test(scopeText) &&
