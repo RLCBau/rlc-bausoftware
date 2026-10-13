@@ -57,7 +57,6 @@ export function calculateRlcNativeRecipe(row:RlcAutonomousCalcInput):RlcAutonomo
         {group:"Lohn",name:"Facharbeiter Asphaltkolonne je Tonne",resourceUnit:"h",quantityPerGaebUnit:2/16,netRateEUR:PERSONNEL_INTERNAL_COST_2026.facharbeiter_lg4,basis:"Planannahme 2 Facharbeiter bei 16 t/h; Personalbedarf projektspezifisch prüfen"}
       ]);
       const ep=Math.round(lines.reduce((sum,line)=>sum+line.total,0)*100)/100;
-      const qty=Number(row.menge);
       return {unitPrice:0,total:0,
         confidence:0.35,riskLevel:"high",source:"rlc-motor-native-resources",
         calculationStatus:"needs_review",trade:"Straßenbau/Asphalt-Einbau-nativ",
