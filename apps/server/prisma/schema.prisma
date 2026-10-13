@@ -8,6 +8,7 @@ datasource db {
 }
 
 model Company {
+  contactInsurancePolicies PartyInsurancePolicy[]
   catalogAssignments CompanyCatalogAssignment[]
 
   masterCatalog CompanyMasterCatalog[]
@@ -613,6 +614,7 @@ model Contract {
 }
 
 model CommunicationThread {
+  contactLinks PartyCommunicationLink[]
   id           String   @id @default(uuid())
   companyId    String
   projectId    String
@@ -827,6 +829,10 @@ model ProjectSectionState {
 }
 
 model Party {
+  communicationLinks PartyCommunicationLink[]
+  insurancePolicies PartyInsurancePolicy[]
+  supplierCertificates ContractCertificate[]
+  contactProfile PartyContactProfile?
   id                    String       @id @default(uuid())
   companyId             String
   type                  PartyType
@@ -854,6 +860,42 @@ model AccountingRoot {
   recurringTemplates RecurringLedgerTemplate[]
   payments    Payment[]
   vendorBills VendorBill[]
+  bankEntries BankStatementEntry[]
+  taxAccountMappings TaxAccountMapping[]
+}
+
+model TaxAccountMapping {
+  id String @id @default(uuid())
+  accountingId String
+  account String
+  chart String
+  category String
+  taxCode String?
+  verifiedBy String
+  verifiedAt DateTime @default(now())
+  accounting AccountingRoot @relation(fields: [accountingId], references: [id], onDelete: Cascade)
+  @@unique([accountingId, account])
+}
+
+model BankStatementEntry {
+  id           String         @id @default(uuid())
+  accountingId String
+  fingerprint  String
+  bookingDate  DateTime
+  amount       Decimal        @db.Decimal(18, 2)
+  purpose      String
+  reference    String?
+  sourceFile   String
+  importedAt   DateTime       @default(now())
+  importedBy   String?
+  matchedType  String?
+  matchedId    String?
+  matchedAt    DateTime?
+  matchedBy    String?
+  accounting   AccountingRoot @relation(fields: [accountingId], references: [id], onDelete: Cascade)
+
+  @@unique([accountingId, fingerprint])
+  @@index([accountingId, bookingDate])
 }
 
 model TaxRate {
@@ -2013,6 +2055,8 @@ model ProjectGuarantee {
 }
 
 model ContractCertificate {
+  supplierPartyId String?
+  supplierParty Party? @relation(fields: [supplierPartyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   id String @id @default(uuid())
   companyId String
   projectId String
@@ -2036,6 +2080,7 @@ model ContractCertificate {
   document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
   @@index([companyId, projectId, validUntil])
   @@index([companyId, contractId])
+  @@index([companyId, supplierPartyId, projectId])
 }
 
 
@@ -2257,4 +2302,59 @@ model CompanyCatalogAssignment {
  @@unique([employeeId,catalogId])
  @@unique([materialId,catalogId])
  @@index([companyId,kind,active])
+}
+
+model PartyContactProfile {
+ partyId String @id
+ website String @default("")
+ trade String @default("")
+ notes String @default("")
+ subcontractor Boolean @default(false)
+ contacts Json @default("[]")
+ sites Json @default("[]")
+ archived Boolean @default(false)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ party Party @relation(fields:[partyId], references:[id], onDelete:Cascade)
+ @@index([archived])
+}
+
+model PartyInsurancePolicy {
+ id String @id @default(uuid())
+ companyId String
+ partyId String
+ title String
+ insurer String
+ policyNumber String
+ type String
+ status String @default("Entwurf")
+ validFrom DateTime @db.Date
+ validUntil DateTime? @db.Date
+ cancellationUntil DateTime? @db.Date
+ coverage Decimal? @db.Decimal(18,2)
+ annualPremium Decimal? @db.Decimal(18,2)
+ notes String @default("")
+ revision Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ company Company @relation(fields:[companyId],references:[id],onDelete:Restrict)
+ party Party @relation(fields:[partyId],references:[id],onDelete:Restrict)
+ @@unique([partyId,insurer,policyNumber])
+ @@index([companyId,partyId,status])
+ @@index([companyId,validUntil])
+}
+
+model PartyCommunicationLink {
+ partyId String
+ threadId String
+ companyId String
+ archived Boolean @default(false)
+ revision Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ party Party @relation(fields:[partyId],references:[id],onDelete:Restrict)
+ thread CommunicationThread @relation(fields:[threadId],references:[id],onDelete:Restrict)
+ @@id([partyId,threadId])
+ @@index([companyId,partyId,archived])
+ @@index([threadId])
 }

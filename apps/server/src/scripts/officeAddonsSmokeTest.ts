@@ -35,6 +35,7 @@ function delegate(key:string) {
   };
 }
 const fake:any={
+  $queryRawUnsafe:async()=>[],
   project: {findFirst:async({where}:any)=>{
     if(where.companyId!=="tenant-a")return null;
     if(where.OR && !where.OR.some((v:any)=>v.id==="p1" || v.code==="BA-001"))return null;

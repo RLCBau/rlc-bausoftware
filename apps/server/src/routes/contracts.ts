@@ -467,7 +467,7 @@ router.post("/:id/document", async (req: any, res) => {
       });
     }
 
-    if (!isDraftContract(contract.status) && contract.documentId && contract.documentId !== documentId) {
+    if (!isDraftContract(contract.status) && contract.documentId !== documentId) {
       return res.status(409).json({ok:false,error:"CONTRACT_LOCKED",message:"Der Vertragsnachweis eines freigegebenen Vertrags darf nicht ausgetauscht werden."});
     }
 

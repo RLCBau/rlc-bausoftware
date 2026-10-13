@@ -1,3 +1,5 @@
+import {bidComparisonSnapshot} from '../services/bidComparisonSnapshot';
+import {preisspiegelPdf} from '../services/pdf/preisspiegelPdf';
 import { Router } from "express";
 import cockpitRouter from "./operationsCockpit";
 import shipmentsRouter from "./shipments";
@@ -19,24 +21,36 @@ router.use((req: any, res, next) => {
   if (!allowed.includes(role(req))) return res.status(403).json({ ok: false, error: "Berechtigung für kaufmännische Projektunterlagen erforderlich." });
   next();
 });
-async function project(req: any, token: unknown) {
+async function project(req: any, token: unknown, tx: any = prisma) {
   const key = typeof token === "string" ? token.trim() : "";
   if (!key) throw new InputError("Projekt erforderlich.");
-  return prisma.project.findFirst({ where: { companyId: cid(req), OR: [{ id: key }, { code: key }],
+  return tx.project.findFirst({ where: { companyId: cid(req), OR: [{ id: key }, { code: key }],
     ...(["ADMIN", "ADMINISTRATOR", "BUCHHALTUNG"].includes(role(req)) ? {} : { projectMembers: { some: { userId: uid(req) } } }),
   }, select: { id: true, code: true, name: true } });
 }
-async function links(req: any, projectId: string, data: any) {
+async function links(req: any, projectId: string, data: any, tx: any = prisma) {
   if (data.contractId) {
-    const c = await prisma.contract.findFirst({ where: { id: data.contractId, companyId: cid(req), projectId } });
+    const c = await tx.contract.findFirst({ where: { id: data.contractId, companyId: cid(req), projectId } });
     if (!c) throw new InputError("Vertrag gehört nicht zu diesem Projekt.");
     if (data.certificate && !["Nachunternehmervertrag", "Liefervertrag"].includes(c.contractType)) throw new InputError("Nachweis benötigt einen Liefer- oder Nachunternehmervertrag.");
   }
-  if (data.documentId && !await prisma.document.findFirst({ where: { id: data.documentId, projectId, deletedAt: null, project: { companyId: cid(req) } } })) {
+  if (data.documentId && !await tx.document.findFirst({ where: { id: data.documentId, projectId, deletedAt: null, project: { companyId: cid(req) } } })) {
     throw new InputError("Dokument gehört nicht zu diesem Projekt.");
   }
 }
-function dto(item: any) { return { ...item, ...(item.amount !== undefined ? { amount: String(item.amount) } : {}), expiry: expiryStatus(item.validUntil) }; }
+
+async function certificateSupplier(tx:any,req:any,data:any,current?:any) {
+  await tx.$queryRawUnsafe('SELECT id FROM "Company" WHERE id=$1 FOR UPDATE',cid(req));
+  if(current && !Object.prototype.hasOwnProperty.call(data,'supplierPartyId'))data.supplierPartyId=current.supplierPartyId;
+  if(current?.status==='Geprüft' && data.supplierPartyId!==current.supplierPartyId && data.status==='Geprüft')throw new InputError('Lieferant geändert: zunächst als Ungeprüft speichern und erneut prüfen.');
+  if(!data.supplierPartyId)return;
+  await tx.$queryRawUnsafe('SELECT id FROM "Party" WHERE id=$1 AND "companyId"=$2 FOR SHARE',data.supplierPartyId,cid(req));
+  const supplier=await tx.party.findFirst({where:{id:data.supplierPartyId,companyId:cid(req),type:'SUPPLIER'},include:{contactProfile:true}});
+  if(!supplier)throw new InputError('Lieferant gehört nicht zur aktuellen Firma.');
+  if(supplier.contactProfile?.archived && data.supplierPartyId!==current?.supplierPartyId)throw new InputError('Archivierte Lieferanten können nicht neu zugeordnet werden.');
+}
+
+function dto(item: any) { const { document, ...rest } = item; return { ...rest, ...(document !== undefined ? { document: document && !document.deletedAt ? { name: document.name } : null } : {}), ...(item.amount !== undefined ? { amount: String(item.amount) } : {}), expiry: expiryStatus(item.validUntil) }; }
 function fail(res: any, e: any) {
   if (e instanceof InputError) return res.status(400).json({ ok: false, error: e.message });
   if (e?.code === "P2002") return res.status(409).json({ ok: false, error: "Diese Bürgschaftsnummer ist im Projekt bereits vorhanden." });
@@ -60,7 +74,7 @@ for (const kind of ["guarantees", "certificates"] as const) {
       if (!p) return res.status(404).json({ ok: false, error: "Projekt nicht verfügbar." });
       const items = await (prisma as any)[model].findMany({ where: { companyId: cid(req), projectId: p.id },
         orderBy: [{ validUntil: "asc" }, { updatedAt: "desc" }], take: 2000,
-        include: { contract: { select: { title: true, partner: true, contractNumber: true } }, document: { select: { name: true } } } });
+        include: { ...(kind==="certificates"?{supplierParty:{select:{id:true,name:true}}}:{}), contract: { select: { title: true, partner: true, contractNumber: true } }, document: { select: { name: true, deletedAt: true } } } });
       res.json({ ok: true, project: p, items: items.map(dto) });
     } catch (e) { fail(res, e); }
   });
@@ -71,8 +85,9 @@ for (const kind of ["guarantees", "certificates"] as const) {
       const data = input(kind, req.body);
       const initial = kind === "guarantees" ? "Entwurf" : "Ungeprüft";
       if (data.status !== initial) throw new InputError("Neue Unterlagen müssen zunächst als " + initial + " gespeichert werden.");
-      await links(req, p.id, { ...data, certificate: kind === "certificates" });
       const item = await prisma.$transaction(async tx => {
+        if(kind==="certificates")await certificateSupplier(tx,req,data);
+        await links(req,p.id,{...data,certificate:kind==="certificates"},tx);
         const row = await (tx as any)[model].create({ data: { ...data, companyId: cid(req), projectId: p.id } });
         await tx.auditLog.create({ data: { companyId: cid(req), userId: uid(req), action: "OFFICE_ADDON_CREATE", resource: kind + ":" + row.id,
           meta: { projectId: p.id, revision: row.revision, status: row.status, after: JSON.parse(JSON.stringify(row)) } } });
@@ -97,8 +112,9 @@ for (const kind of ["guarantees", "certificates"] as const) {
           if (a !== b && !(key === "amount" && Number(a) === Number(b))) throw new InputError("Zurückgegebene oder archivierte Unterlagen sind gegen Änderungen gesperrt.");
         }
       }
-      await links(req, current.projectId, { ...data, certificate: kind === "certificates" });
       const result = await prisma.$transaction(async tx => {
+        if(kind==="certificates")await certificateSupplier(tx,req,data,current);
+        await links(req,current.projectId,{...data,certificate:kind==="certificates"},tx);
         const count = await (tx as any)[model].updateMany({ where: { id: current.id, companyId: cid(req), revision: current.revision },
           data: { ...data, revision: { increment: 1 }, ...(kind === "certificates" ? {
             reviewedBy: data.status === "Geprüft" ? uid(req) : null,
@@ -172,12 +188,29 @@ router.put("/bids/:id", async(req:any,res)=>{
   }catch(e:any){if(e?.message==="BID_CONFLICT")return res.status(409).json({ok:false,error:"Angebot wurde gleichzeitig geändert."});fail(res,e);}
 });
 router.get("/bids/compare/:baselineId",async(req:any,res)=>{
-  try{
-    const baseline=await prisma.projectBid.findFirst({where:{id:req.params.baselineId,companyId:cid(req)}});
-    if(!baseline || !await project(req,baseline.projectId))return res.status(404).json({ok:false,error:"Vergleichsbasis nicht verfügbar."});
-    const bids=await prisma.projectBid.findMany({where:{companyId:cid(req),projectId:baseline.projectId,packageKey:baseline.packageKey,kind:baseline.kind,status:{not:"Archiviert"}}});
-    res.json({ok:true,...compareBids(bids,baseline.id)});
-  }catch(e){fail(res,e);}
+ try{
+  const data=await prisma.$transaction(async tx=>{
+   const baseline=await tx.projectBid.findFirst({where:{id:req.params.baselineId,companyId:cid(req),status:{not:"Archiviert"}}});
+   if(!baseline||!await project(req,baseline.projectId,tx))return null;
+   return bidComparisonSnapshot(tx,cid(req),baseline.id);
+  },{isolationLevel:"RepeatableRead",timeout:15000});
+  if(!data)return res.status(404).json({ok:false,error:"Vergleichsbasis nicht verfügbar."});
+  res.setHeader("Cache-Control","private, no-store");res.json({ok:true,...data.comparison,snapshot:data.snapshot});
+ }catch(e){fail(res,e);}
+});
+router.post("/bids/compare/:baselineId/pdf",async(req:any,res)=>{
+ try{
+  if(typeof req.body?.fingerprint!=="string"||!/^[a-f0-9]{64}$/.test(req.body.fingerprint))throw new InputError("Aktuellen Vergleich vor PDF-Ausgabe berechnen.");
+  const data=await prisma.$transaction(async tx=>{
+   const baseline=await tx.projectBid.findFirst({where:{id:req.params.baselineId,companyId:cid(req),status:{not:"Archiviert"}}});
+   if(!baseline||!await project(req,baseline.projectId,tx))return null;
+   return bidComparisonSnapshot(tx,cid(req),baseline.id);
+  },{isolationLevel:"RepeatableRead",timeout:15000});
+  if(!data)return res.status(404).json({ok:false,error:"Vergleichsbasis nicht verfügbar."});
+  if(data.snapshot.fingerprint!==req.body.fingerprint)return res.status(409).json({ok:false,error:"Angebote oder Projektangaben geändert. Vergleich erneut berechnen."});
+  const pdf=await preisspiegelPdf(data);
+  res.setHeader("Content-Type","application/pdf");res.setHeader("Content-Disposition",'attachment; filename="Preisspiegel.pdf"');res.setHeader("Cache-Control","private, no-store");res.setHeader("X-Content-Type-Options","nosniff");res.send(pdf);
+ }catch(e){fail(res,e);}
 });
 router.post("/bids/:id/award",async(req:any,res)=>{
   try {

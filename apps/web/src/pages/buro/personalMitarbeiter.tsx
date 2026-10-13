@@ -735,9 +735,7 @@ export default function Personalverwaltung() {
     if (!activeEmployee) return;
 
     navigate(
-      `/buro/arbeitszeiten?mitarbeiter=${encodeURIComponent(
-        activeEmployee.name
-      )}`
+      `/buro/arbeitszeiten?employeeId=${encodeURIComponent(activeEmployee.id)}&mitarbeiter=${encodeURIComponent(activeEmployee.name)}`
     );
   }, [navigate, activeEmployee]);
 

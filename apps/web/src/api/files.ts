@@ -272,15 +272,21 @@ export async function updateDocument(
 
 /* ---------------- VIEW URL ---------------- */
 export async function getDocumentViewUrl(documentId: string) {
-  const url = apiUrl(`/api/files/document/${encodeURIComponent(documentId)}/url`);
-
-  return j<{ ok: boolean; url: string }>(
-    await fetch(url, {
-      method: "GET",
-      credentials: "include",
-      headers: authHeaders(),
-    })
-  );
+  const versions = await getDocumentVersions(documentId);
+  const current = versions.versions?.find(v => v.current && v.exists) || versions.versions?.find(v => v.exists);
+  if (!current?.id) throw new Error("Keine verfügbare Dokumentversion vorhanden.");
+  const response = await fetch(apiUrl(`/api/files/download/${encodeURIComponent(current.id)}`), {
+    method: "GET",
+    credentials: "include",
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error?.error || `Dokument-Download fehlgeschlagen (${response.status})`);
+  }
+  const data = await response.blob();
+  if (!data.size) throw new Error("Dokument ist leer.");
+  return { ok: true, url: URL.createObjectURL(data) };
 }
 
 

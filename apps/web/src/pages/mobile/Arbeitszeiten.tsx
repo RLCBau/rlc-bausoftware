@@ -205,6 +205,8 @@ export default function Arbeitszeiten({
     selectedProject?.id ||
     ""
   ).trim();
+  const requestedEmployeeId = String(search.get("employeeId") || "").trim();
+  const requestedEmployeeName = String(search.get("mitarbeiter") || "").trim();
   const requestedDocId = String(search.get("docId") || "").trim();
   const requestedStage = String(
     search.get("stage") || (finalOnly ? "final" : "approved")
@@ -213,6 +215,7 @@ export default function Arbeitszeiten({
   const [stageRows, setStageRows] = React.useState<StageRows>(EMPTY_STAGE_ROWS);
   const [selected, setSelected] = React.useState<Row | null>(null);
   const [employeeFilter, setEmployeeFilter] = React.useState("");
+  React.useEffect(() => { setEmployeeFilter(requestedEmployeeId ? "" : requestedEmployeeName); }, [requestedEmployeeId, requestedEmployeeName]);
   const [dateFilter, setDateFilter] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -379,9 +382,7 @@ export default function Arbeitszeiten({
       const name = String(identity.label || "").trim().toLocaleLowerCase("de-DE");
 
       return (
-        personalRows.find((employee: any) =>
-          String(employee?.name || "").trim().toLocaleLowerCase("de-DE") === name
-        ) || null
+        (identity.employeeId ? personalRows.find((employee: any) => String(employee?.id || "") === identity.employeeId) : personalRows.filter((employee: any) => String(employee?.name || "").trim().toLocaleLowerCase("de-DE") === name).length === 1 ? personalRows.find((employee: any) => String(employee?.name || "").trim().toLocaleLowerCase("de-DE") === name) : null) || null
       );
     },
     [personalRows]
@@ -390,14 +391,17 @@ export default function Arbeitszeiten({
   const filteredRows = React.useMemo(() => {
     return allRows.filter((row) => {
       const identity = resolveMobileEmployee(row);
-      const matchesEmployee =
-        !employeeFilter ||
-        identity.label === employeeFilter;
+      const matchesEmployee = requestedEmployeeId
+        ? identity.employeeId === requestedEmployeeId
+        : !employeeFilter || identity.label === employeeFilter;
       const matchesDate = !dateFilter || row.date === dateFilter;
       return matchesEmployee && matchesDate;
     });
-  }, [allRows, dateFilter, employeeFilter]);
+  }, [allRows, dateFilter, employeeFilter, requestedEmployeeId]);
 
+  const legacyOmitted = requestedEmployeeId ? allRows.filter((row) => { const identity = resolveMobileEmployee(row); return !identity.employeeId && identity.label.trim().toLocaleLowerCase("de-DE") === requestedEmployeeName.toLocaleLowerCase("de-DE"); }).length : 0;
+
+  // Legacy time records without employee IDs are deliberately excluded from an ID-scoped personnel file.
   const employeeGroups = React.useMemo(
     () => groupByMobileEmployee(filteredRows),
     [filteredRows]
@@ -509,6 +513,8 @@ export default function Arbeitszeiten({
         )}
       </div>
 
+      {legacyOmitted > 0 && <div className="card" role="status" style={{borderLeft:"3px solid #b54708"}}>{legacyOmitted} ältere Arbeitszeitnachweise ohne Mitarbeiter-ID sind aus Sicherheitsgründen nicht dieser Personalakte zugeordnet.</div>}
+
       <div
         style={
           finalOnly
@@ -591,6 +597,7 @@ export default function Arbeitszeiten({
             style={input}
             value={employeeFilter}
             onChange={(event) => setEmployeeFilter(event.target.value)}
+            disabled={Boolean(requestedEmployeeId)}
           >
             <option value="">Alle Mitarbeiter</option>
             {employeeOptions.map((employee) => (

@@ -5,9 +5,11 @@ import {journalInput,ledgerText} from "../domain/recurringLedger";
 import {planningDate} from "../domain/resourcePlanning";
 import {berlinToday} from "../domain/machineUsage";
 
+import { paymentCents, paymentOpenCents } from "../domain/paymentControl";
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import fs from "fs";
+import { createHash, randomUUID } from "crypto";
 import path from "path";
 import { PROJECTS_ROOT } from "../lib/projectsRoot";
 import { archiveProjectFileVersion } from "../services/dmsArchive";
@@ -27,6 +29,7 @@ router.use((req: any, res, next) => {
     return res.status(403).json({ ok: false, error: "ACCOUNTING_READ_FORBIDDEN" });
   }
   if(req.path.startsWith("/delivery-review") && req.method==="PUT" && role==="BAULEITER")return next();
+  if(/^\/vendor-bills\/[^/]+\/review$/.test(req.path) && req.method==="POST" && role==="BAULEITER")return next();
   if (!["ADMIN", "ADMINISTRATOR", "BUCHHALTUNG"].includes(role)) {
     return res.status(403).json({ ok: false, error: "ACCOUNTING_WRITE_FORBIDDEN" });
   }
@@ -136,7 +139,7 @@ async function context(req: any) {
 function errorResponse(res: any, error: any) {
   console.error(error);
   const code = error?.message || "ACCOUNTING_FAILED";
-  const status = code === "PROJECT_FORBIDDEN" ? 403 : code === "VENDOR_BILL_CONFLICT" ? 409 : 400;
+  const status = code === "PROJECT_FORBIDDEN" || code.endsWith("_FORBIDDEN") ? 403 : code === "VENDOR_BILL_CONFLICT" ? 409 : 400;
 
   res.status(status).json({ ok: false, error: code });
 }
@@ -218,45 +221,15 @@ router.get("/summary", async (req: any, res) => {
       0
     );
 
-    const incoming = payments
-      .filter(
-        x => String(x.direction).toUpperCase() === "IN"
-      )
-      .reduce(
-        (s, x) => s + num(x.amount),
-        0
-      );
-
-    const outgoing = payments
-      .filter(
-        x => String(x.direction).toUpperCase() === "OUT"
-      )
-      .reduce(
-        (s, x) => s + num(x.amount),
-        0
-      );
-
-    const invoicePayments = payments
-      .filter(
-        x =>
-          x.refType === "INVOICE" &&
-          String(x.direction).toUpperCase() === "IN"
-      )
-      .reduce(
-        (s, x) => s + num(x.amount),
-        0
-      );
-
-    const billPayments = payments
-      .filter(
-        x =>
-          x.refType === "VENDOR_BILL" &&
-          String(x.direction).toUpperCase() === "OUT"
-      )
-      .reduce(
-        (s, x) => s + num(x.amount),
-        0
-      );
+    // Include reversals with their actual direction for net cash movements.
+    const incoming = payments.reduce((s, x) =>
+      s + (String(x.direction).toUpperCase() === "IN" ? num(x.amount) : 0), 0);
+    const outgoing = payments.reduce((s, x) =>
+      s + (String(x.direction).toUpperCase() === "OUT" ? num(x.amount) : 0), 0);
+    const invoicePayments = payments.filter(x => x.refType === "INVOICE")
+      .reduce((s, x) => s + (String(x.direction).toUpperCase() === "IN" ? 1 : -1) * num(x.amount), 0);
+    const billPayments = payments.filter(x => x.refType === "VENDOR_BILL")
+      .reduce((s, x) => s + (String(x.direction).toUpperCase() === "OUT" ? 1 : -1) * num(x.amount), 0);
 
     const ledgerBalance = ledger.reduce(
       (s, x) => s + num(x.amount),
@@ -297,6 +270,42 @@ router.get("/summary", async (req: any, res) => {
   }
 });
 
+/* Read-only document-level reconciliation. No automatic accounting adjustments. */
+router.get("/reconciliation", async (req: any, res) => {
+  try {
+    if (!["ADMIN","ADMINISTRATOR","BUCHHALTUNG"].includes(accountingRole(req)))
+      return res.status(403).json({ok:false,error:"ACCOUNTING_RECONCILIATION_FORBIDDEN"});
+    const {accounting,project}=await context(req);
+    const [invoices,bills,payments,ledger]=await Promise.all([
+      prisma.invoice.findMany({where:{accountingId:accounting.id}}),
+      prisma.vendorBill.findMany({where:{accountingId:accounting.id}}),
+      prisma.payment.findMany({where:{accountingId:accounting.id}}),
+      prisma.ledgerEntry.findMany({where:{accountingId:accounting.id,refType:{in:["PAYMENT","PAYMENT_REVERSAL"]}}})
+    ]);
+    const cents=(n:any)=>Math.round(num(n)*100);
+    const rows=[...invoices.map(x=>({type:"INVOICE",document:x})),...bills.map(x=>({type:"VENDOR_BILL",document:x}))].map(({type,document}:any)=>{
+      const expected=type==="INVOICE"?"IN":"OUT";
+      const attached=payments.filter(p=>p.refType===type&&p.refId===document.id);
+      const paidCents=attached.reduce((sum,p)=>sum+(p.direction===expected?1:-1)*cents(p.amount),0);
+      const dueCents=cents(document.grossAmount);
+      const journalIssues:string[]=[];
+      for(const payment of attached){
+        const entryType=(payment.data as any)?.reversesPaymentId?"PAYMENT_REVERSAL":"PAYMENT";
+        const entries=ledger.filter(l=>l.refId===payment.id&&l.refType===entryType);
+        if(entries.length!==1||cents(entries[0]?.amount)!==(payment.direction==="IN"?1:-1)*cents(payment.amount))
+          journalIssues.push(payment.id);
+      }
+      return {type,id:document.id,number:document.number,status:document.status,
+        gross:dueCents/100,paid:paidCents/100,open:(dueCents-paidCents)/100,
+        paymentCount:attached.length,journalIssueCount:journalIssues.length,
+        journalIssuePaymentIds:journalIssues,overpaid:paidCents>dueCents};
+    });
+    return res.json({ok:true,project:{id:project.id,code:project.code},
+      items:rows,summary:{documents:rows.length,journalIssues:rows.reduce((n,r)=>n+r.journalIssueCount,0),
+      overpaid:rows.filter(r=>r.overpaid).length}});
+  }catch(e){errorResponse(res,e);}
+});
+
 /* =========================================================
    INVOICES
 ========================================================= */
@@ -321,8 +330,7 @@ router.get("/invoices", async (req: any, res) => {
     const payments = await prisma.payment.findMany({
       where: {
         accountingId: accounting.id,
-        refType: "INVOICE",
-        direction: "IN"
+        refType: "INVOICE"
       }
     });
 
@@ -334,7 +342,7 @@ router.get("/invoices", async (req: any, res) => {
       paidMap.set(
         payment.refId,
         (paidMap.get(payment.refId) || 0) +
-          num(payment.amount)
+          (payment.direction === "IN" ? 1 : -1) * num(payment.amount)
       );
     }
 
@@ -384,8 +392,7 @@ router.get("/vendor-bills", async (req: any, res) => {
     const payments = await prisma.payment.findMany({
       where: {
         accountingId: accounting.id,
-        refType: "VENDOR_BILL",
-        direction: "OUT"
+        refType: "VENDOR_BILL"
       }
     });
 
@@ -397,12 +404,12 @@ router.get("/vendor-bills", async (req: any, res) => {
       paidMap.set(
         payment.refId,
         (paidMap.get(payment.refId) || 0) +
-          num(payment.amount)
+          (payment.direction === "IN" ? 1 : -1) * num(payment.amount)
       );
     }
 
     const items = bills.map((bill: any) => {
-      const paid = paidMap.get(bill.id) || 0;
+      const paid = -(paidMap.get(bill.id) || 0);
 
       return {
         ...bill,
@@ -543,6 +550,7 @@ router.patch("/vendor-bills/:id", async (req: any, res) => {
     }
 
     const b = req.body || {};
+    // Any invoice edit invalidates earlier approvals (enforced again at booking).
 
     let supplierId = old.supplierId;
 
@@ -632,6 +640,7 @@ router.patch("/vendor-bills/:id", async (req: any, res) => {
           ...oldMeta,
           ...patchMeta,
           ...deliveryMetadata,
+          approvals: {},
           editRevision:Number(oldMeta.editRevision||0)+1,
 
           dueDate:
@@ -683,6 +692,40 @@ router.patch("/vendor-bills/:id", async (req: any, res) => {
   }
 });
 
+// Two-role approval stages, persisted in VendorBill.data and audited.
+router.post("/vendor-bills/:id/review", async (req:any,res)=>{
+ try{
+  const {project,accounting}=await context(req);
+  const actor=String(req.auth?.sub||req.auth?.userId||"").trim();
+  if(!actor)throw Error("VENDOR_APPROVAL_ACTOR_REQUIRED");
+  const role=accountingRole(req);
+  const stage=String(req.body?.stage||"").toUpperCase();
+  if(stage!=="TECHNICAL"&&stage!=="ACCOUNTING")throw Error("VENDOR_APPROVAL_STAGE_INVALID");
+  if(stage==="TECHNICAL"&&!["BAULEITER","ADMIN","ADMINISTRATOR"].includes(role))throw Error("VENDOR_TECH_REVIEW_FORBIDDEN");
+  if(stage==="ACCOUNTING"&&!["BUCHHALTUNG","ADMIN","ADMINISTRATOR"].includes(role))throw Error("VENDOR_ACCOUNTING_REVIEW_FORBIDDEN");
+  const item=await prisma.$transaction(async tx=>{
+   await tx.$queryRawUnsafe('SELECT id FROM "VendorBill" WHERE id = $1 FOR UPDATE',req.params.id);
+   const current=await tx.vendorBill.findFirst({where:{id:req.params.id,accountingId:accounting.id}});
+   if(!current)throw Error("VENDOR_BILL_NOT_FOUND");
+   if(isVendorBillLocked(current))throw Error("VENDOR_BILL_FISCALLY_LOCKED");
+   const meta=jsonObject(current.data);
+   if(String(meta.documentType||"").toUpperCase()==="GUTSCHRIFT_14")throw Error("USE_SELF_BILLING_ISSUE");
+   if(!current.pdfDocId)throw Error("VENDOR_BILL_ORIGINAL_DOCUMENT_REQUIRED");
+   const existing=jsonObject(meta.approvals);
+   if(stage==="TECHNICAL"&&existing.technical)throw Error("VENDOR_TECH_REVIEW_ALREADY_APPROVED");
+   if(stage==="ACCOUNTING"&&existing.accounting)throw Error("VENDOR_ACCOUNTING_REVIEW_ALREADY_APPROVED");
+   if(stage==="ACCOUNTING"&&!existing.technical)throw Error("VENDOR_TECH_REVIEW_REQUIRED");
+   if(stage==="ACCOUNTING"&&String(existing.technical?.userId||"")===actor)throw Error("VENDOR_FOUR_EYES_REQUIRED");
+   const approvals={...existing,[stage==="TECHNICAL"?"technical":"accounting"]:{userId:actor,at:new Date().toISOString(),role}};
+   if(stage==="TECHNICAL")delete approvals.accounting;
+   const updated=await tx.vendorBill.update({where:{id:current.id},data:{data:{...meta,approvals}}});
+   await tx.auditLog.create({data:{companyId:project.companyId,userId:actor,action:"VENDOR_BILL_"+stage+"_APPROVE",resource:"vendor-bill:"+current.id,meta:{stage,previous:existing,next:approvals}}});
+   return updated;
+  });
+  res.json({ok:true,item});
+ }catch(e){errorResponse(res,e);}
+});
+
 router.post("/vendor-bills/:id/book", async (req: any, res) => {
   try {
     const { project, accounting } = await context(req);
@@ -706,11 +749,17 @@ router.post("/vendor-bills/:id/book", async (req: any, res) => {
     if (String(meta.documentType || "").toUpperCase() === "GUTSCHRIFT_14") {
       throw new Error("USE_SELF_BILLING_ISSUE");
     }
+    const approval=jsonObject(meta.approvals);
+    if(!approval.technical||!approval.accounting)throw Error("VENDOR_TWO_STAGE_APPROVAL_REQUIRED");
+    if(String(approval.technical.userId)===String(approval.accounting.userId))throw Error("VENDOR_FOUR_EYES_REQUIRED");
     const actor = String(req?.auth?.email || req?.auth?.userId || req?.auth?.sub || "").trim();
     const booked=await prisma.$transaction(async tx=>{
      await tx.$queryRawUnsafe('SELECT id FROM "VendorBill" WHERE id = $1 FOR UPDATE',item.id);
      const current=await tx.vendorBill.findUnique({where:{id:item.id}});
      if(!current || vendorVersion(current)!==vendorVersion(item))throw new Error("VENDOR_BILL_CONFLICT");
+     const lockedApprovals=jsonObject(jsonObject(current.data).approvals);
+     if(!lockedApprovals.technical||!lockedApprovals.accounting)throw new Error("VENDOR_TWO_STAGE_APPROVAL_REQUIRED");
+     if(String(lockedApprovals.technical.userId)===String(lockedApprovals.accounting.userId))throw new Error("VENDOR_FOUR_EYES_REQUIRED");
      const row = await tx.vendorBill.update({
       where: { id: item.id },
       data: {
@@ -880,6 +929,79 @@ router.delete("/vendor-bills/:id", async (req: any, res) => {
    PAYMENTS
 ========================================================= */
 
+// Bank CSV staging: immutable source records; no automatic Payment/LedgerEntry writes.
+router.get("/bank-entries", async (req: any, res) => {
+  try {
+    const {accounting}=await context(req);
+    const items=await prisma.bankStatementEntry.findMany({
+      where:{accountingId:accounting.id},orderBy:[{bookingDate:"desc"},{importedAt:"desc"}],take:1000
+    });
+    res.json({ok:true,items});
+  } catch(e){errorResponse(res,e);}
+});
+
+router.post("/bank-entries/import", async (req: any, res) => {
+  try {
+    const {accounting}=await context(req);
+    const body=req.body||{};
+    const rows=body.rows;
+    if(!Array.isArray(rows)||rows.length<1||rows.length>1000)throw Error("BANK_IMPORT_ROWS_INVALID");
+    const filename=String(body.filename||"Bankauszug.csv").trim().slice(0,180);
+    const actor=String(req.auth?.sub||req.auth?.userId||"").trim();
+    const normalized=rows.map((raw:any)=>{
+      const date=String(raw.date||"");
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw Error("BANK_IMPORT_DATE_INVALID");
+      const dateObj=new Date(date+"T12:00:00.000Z");
+      if(Number.isNaN(dateObj.getTime())||dateObj.toISOString().slice(0,10)!==date)throw Error("BANK_IMPORT_DATE_INVALID");
+      if(typeof raw.amount!=="number"||!Number.isFinite(raw.amount)||raw.amount===0||Math.abs(raw.amount)>1e10)throw Error("BANK_IMPORT_AMOUNT_INVALID");
+      const cents=Math.round(raw.amount*100);
+      if(Math.abs(raw.amount*100-cents)>0.001)throw Error("BANK_IMPORT_AMOUNT_PRECISION_INVALID");
+      const purpose=String(raw.text||"").trim().slice(0,500);
+      const reference=String(raw.reference||"").trim().slice(0,180);
+      if(!purpose&&!reference)throw Error("BANK_IMPORT_DESCRIPTION_REQUIRED");
+      const bankId=String(raw.bankId||"").trim().slice(0,180);
+      const fingerprint=createHash("sha256").update(JSON.stringify(bankId?["bank-id",bankId]:["movement",date,cents,purpose.toLowerCase(),reference.toLowerCase()])).digest("hex");
+      return {id:randomUUID(),accountingId:accounting.id,fingerprint,bookingDate:dateObj,amount:cents/100,purpose,reference:reference||null,sourceFile:filename,importedBy:actor||null};
+    });
+    const seen=new Set<string>();
+    let duplicatesInFile=0;
+    const unique=normalized.filter((x:any)=>{if(seen.has(x.fingerprint)){duplicatesInFile++;return false;}seen.add(x.fingerprint);return true;});
+    const saved=await prisma.bankStatementEntry.createMany({data:unique,skipDuplicates:true});
+    res.status(201).json({ok:true,received:rows.length,inserted:saved.count,duplicates:rows.length-saved.count,duplicatesInFile,note:"NO_ACCOUNTING_ENTRIES_CREATED"});
+  }catch(e){errorResponse(res,e);}
+});
+
+router.post("/bank-entries/:id/match", async (req:any,res) => {
+ try {
+  const {accounting,project}=await context(req);
+  const kind=String(req.body?.refType||"").toUpperCase();
+  const refId=String(req.body?.refId||"").trim();
+  if(!["INVOICE","VENDOR_BILL"].includes(kind)||!refId)throw Error("BANK_MATCH_REFERENCE_INVALID");
+  const actor=String(req.auth?.sub||req.auth?.userId||"").trim();
+  const matched=await prisma.$transaction(async tx=>{
+   await tx.$queryRawUnsafe('SELECT id FROM "BankStatementEntry" WHERE id = $1 FOR UPDATE',req.params.id);
+   const entry=await tx.bankStatementEntry.findFirst({where:{id:req.params.id,accountingId:accounting.id}});
+   if(!entry)throw Error("BANK_ENTRY_NOT_FOUND");
+   if(entry.matchedId)throw Error("BANK_ENTRY_ALREADY_MATCHED");
+   const invoice=kind==="INVOICE"?await tx.invoice.findFirst({where:{id:refId,accountingId:accounting.id}}):null;
+   const bill=kind==="VENDOR_BILL"?await tx.vendorBill.findFirst({where:{id:refId,accountingId:accounting.id}}):null;
+   const target:any=invoice||bill;
+   if(!target)throw Error("BANK_MATCH_DOCUMENT_NOT_FOUND");
+   if(kind==="VENDOR_BILL"&&vendorBillStatus(target.status)!=="booked")throw Error("BANK_MATCH_BILL_NOT_BOOKED");
+   if(kind==="INVOICE"&&!["ausgestellt","issued","open","partial","paid"].includes(String(target.status||"").toLowerCase()))throw Error("BANK_MATCH_INVOICE_NOT_ISSUED");
+   const amount=Number(entry.amount);
+   if((kind==="INVOICE"&&amount<=0)||(kind==="VENDOR_BILL"&&amount>=0))throw Error("BANK_MATCH_DIRECTION_MISMATCH");
+   if(Math.abs(Math.abs(amount)-num(target.grossAmount))>0.011)throw Error("BANK_MATCH_AMOUNT_MISMATCH");
+   const already=await tx.bankStatementEntry.findFirst({where:{accountingId:accounting.id,matchedType:kind,matchedId:refId}});
+   if(already)throw Error("BANK_MATCH_DOCUMENT_ALREADY_LINKED");
+   const row=await tx.bankStatementEntry.update({where:{id:entry.id},data:{matchedType:kind,matchedId:refId,matchedAt:new Date(),matchedBy:actor||null}});
+   await tx.auditLog.create({data:{companyId:project.companyId,userId:actor,action:"BANK_ENTRY_MATCH",resource:"bank-entry:"+entry.id,meta:{entryId:entry.id,refType:kind,refId,amount:String(entry.amount),note:"REFERENCE_ONLY_NO_PAYMENT_OR_LEDGER"}}});
+   return row;
+  });
+  res.json({ok:true,item:matched,note:"NO_PAYMENT_OR_LEDGER_CREATED"});
+ }catch(e){errorResponse(res,e);}
+});
+
 router.get("/payments", async (req: any, res) => {
   try {
     const { accounting } = await context(req);
@@ -904,25 +1026,24 @@ router.get("/payments", async (req: any, res) => {
 
 router.post("/payments", async (req: any, res) => {
   try {
-    const { accounting } = await context(req);
+    const { accounting, project } = await context(req);
     const b = req.body || {};
 
     const refType = String(b.refType || "").toUpperCase();
     const refId = String(b.refId || "").trim();
     const direction = String(b.direction || "IN").toUpperCase();
-    const amount = num(b.amount);
+    const amount = Number(b.amount);
     const paymentDate = b.date ? new Date(b.date) : new Date();
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      throw new Error("PAYMENT_AMOUNT_INVALID");
-    }
+    const amountInCents = paymentCents(b.amount);
     if (!["IN", "OUT"].includes(direction)) {
       throw new Error("PAYMENT_DIRECTION_INVALID");
     }
+    if ((refType && !refId) || (!refType && refId)) throw new Error("PAYMENT_REFERENCE_INCOMPLETE");
     if (refType && !["VENDOR_BILL", "INVOICE"].includes(refType)) {
       throw new Error("PAYMENT_REF_TYPE_INVALID");
     }
-    if (Number.isNaN(paymentDate.getTime())) {
+    if (Number.isNaN(paymentDate.getTime()) || paymentDate.getTime()>Date.now()+86400000) {
       throw new Error("PAYMENT_DATE_INVALID");
     }
     if (refType === "VENDOR_BILL" && direction !== "OUT") {
@@ -946,6 +1067,20 @@ router.post("/payments", async (req: any, res) => {
     }
 
     const item = await prisma.$transaction(async (tx) => {
+      if(refType && refId){
+        // Serialize payment creation per invoice to prevent concurrent overpayment.
+        const table=refType==="INVOICE"?"Invoice":"VendorBill";
+        await tx.$queryRawUnsafe('SELECT id FROM "'+table+'" WHERE id = $1 FOR UPDATE',refId);
+        const target=refType==="INVOICE"
+          ? await tx.invoice.findFirst({where:{id:refId,accountingId:accounting.id}})
+          : await tx.vendorBill.findFirst({where:{id:refId,accountingId:accounting.id}});
+        if(!target)throw new Error("PAYMENT_DOCUMENT_NOT_FOUND");
+        if(refType==="INVOICE"&& !["ausgestellt","issued","open","partial","paid"].includes(String(target.status||"").toLowerCase()))throw Error("INVOICE_NOT_ISSUED");
+        if(refType==="VENDOR_BILL"&&vendorBillStatus(target.status)!=="booked")throw Error("VENDOR_BILL_NOT_BOOKED");
+        const history=await tx.payment.findMany({where:{accountingId:accounting.id,refType,refId}});
+        const openCents=paymentOpenCents(target.grossAmount,history,direction);
+        if(amountInCents>openCents)throw Error("PAYMENT_EXCEEDS_OPEN_AMOUNT");
+      }
       const created = await tx.payment.create({
         data: {
           accountingId: accounting.id,
@@ -986,6 +1121,7 @@ router.post("/payments", async (req: any, res) => {
         }
       });
 
+      await tx.auditLog.create({data:{companyId:project.companyId,userId:String(req.auth?.sub||req.auth?.userId||""),action:"PAYMENT_BOOK",resource:"payment:"+created.id,meta:{id:created.id,refType,refId,direction,amount,method:created.method}}});
       return created;
     });
 
@@ -1216,8 +1352,7 @@ router.get("/mahnwesen", async (req: any, res) => {
     const payments = await prisma.payment.findMany({
       where: {
         accountingId: accounting.id,
-        refType: "INVOICE",
-        direction: "IN"
+        refType: "INVOICE"
       }
     });
 
@@ -1229,7 +1364,7 @@ router.get("/mahnwesen", async (req: any, res) => {
       paidMap.set(
         payment.refId,
         (paidMap.get(payment.refId) || 0) +
-          num(payment.amount)
+          (String(payment.direction).toUpperCase()==="IN"?1:-1)*num(payment.amount)
       );
     }
 
@@ -1264,12 +1399,13 @@ router.get("/mahnwesen", async (req: any, res) => {
             num(meta.dunningFee),
 
           interestRate:
-            num(meta.interestRate || 5)
+            num(meta.interestRate ?? 0)
         };
       })
         .filter(
           x => {
             if (x.openAmount <= 0.009) return false;
+            if (!["ausgestellt","issued","open","partial"].includes(String(x.status||"").toLowerCase()))return false;
 
             const rawDueDate = String(x.dueDate || "").trim();
             if (!rawDueDate) return false;
@@ -1332,7 +1468,7 @@ router.post("/invoices/:id/dunning", async (req: any, res) => {
             num(b.dunningFee),
 
           interestRate:
-            num(b.interestRate || 5)
+            num(b.interestRate ?? 0)
         }
       }
     });
@@ -1352,24 +1488,37 @@ router.post("/invoices/:id/dunning", async (req: any, res) => {
 
 router.get("/ust", async (req: any, res) => {
   try {
+    const period = String(req.query?.period || "").trim();
+    if (period && !/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      return res.status(400).json({ok:false,error:"UST_PERIOD_INVALID"});
+    }
+    const periodStart = period ? new Date(`${period}-01T00:00:00.000Z`) : null;
+    const periodEnd = periodStart ? new Date(Date.UTC(periodStart.getUTCFullYear(),periodStart.getUTCMonth()+1,1)) : null;
+    const documentDate = periodStart && periodEnd ? {gte:periodStart,lt:periodEnd} : undefined;
     const { accounting } = await context(req);
 
     const [invoices, bills] = await Promise.all([
       prisma.invoice.findMany({
         where: {
-          accountingId: accounting.id
+          accountingId: accounting.id,
+          ...(documentDate ? {date:documentDate} : {})
         }
       }),
 
       prisma.vendorBill.findMany({
         where: {
-          accountingId: accounting.id
+          accountingId: accounting.id,
+          ...(documentDate ? {date:documentDate} : {})
         }
       })
     ]);
 
+    // Provisional tax overview: exclude drafts and non-booked vendor documents.
+    // This is NOT an official UStVA calculation or a substitute for tax review.
+    const eligibleInvoices = invoices.filter((x:any) => !["draft","entwurf","captured","cancelled","storniert","void"].includes(String(x.status||"").toLowerCase()));
+    const eligibleBills = bills.filter((x:any) => String(x.status||"").toLowerCase()==="booked");
     const rows = [
-      ...invoices.map((x: any) => ({
+      ...eligibleInvoices.map((x: any) => ({
         id: `I-${x.id}`,
         type: "Einnahme",
         date: x.date,
@@ -1390,7 +1539,7 @@ router.get("/ust", async (req: any, res) => {
             : 0
       })),
 
-      ...bills.map((x: any) => ({
+      ...eligibleBills.map((x: any) => ({
         id: `V-${x.id}`,
         type: "Ausgabe",
         date: x.date,
@@ -1412,12 +1561,21 @@ router.get("/ust", async (req: any, res) => {
       }))
     ];
 
-    const umsatzsteuer = invoices.reduce(
+    // Diagnostic flags only: a zero-rated document must not automatically be
+    // assumed to be §13b. The tax code must be confirmed from source evidence.
+    const taxReview = rows.filter((row:any) =>
+      Math.abs(row.netAmount)>0.009 && Math.abs(row.taxAmount)<0.009
+    ).map((row:any)=>({
+      id:row.id,number:row.number,type:row.type,
+      reason:"NULLSTEUER_PRUEFEN",
+      note:"0 % / 0 EUR Steuer: §13b, Steuerbefreiung oder abweichende Steuerbehandlung anhand des Originalbelegs prüfen."
+    }));
+    const umsatzsteuer = eligibleInvoices.reduce(
       (s, x) => s + num(x.taxAmount),
       0
     );
 
-    const vorsteuer = bills.reduce(
+    const vorsteuer = eligibleBills.reduce(
       (s, x) => s + num(x.taxAmount),
       0
     );
@@ -1425,6 +1583,13 @@ router.get("/ust", async (req: any, res) => {
     res.json({
       ok: true,
       rows,
+      excluded: {
+        invoices: invoices.length-eligibleInvoices.length,
+        vendorBills: bills.length-eligibleBills.length
+      },
+      preliminary: true,
+      taxReview,
+      taxReviewCount: taxReview.length,
       umsatzsteuer,
       vorsteuer,
       zahllast:
@@ -1438,6 +1603,46 @@ router.get("/ust", async (req: any, res) => {
 /* =========================================================
    DATEV
 ========================================================= */
+
+router.get("/tax-account-mappings",async(req:any,res)=>{
+ try{
+  if(!["ADMIN","ADMINISTRATOR","BUCHHALTUNG"].includes(accountingRole(req)))return res.status(403).json({ok:false,error:"TAX_MAPPING_READ_FORBIDDEN"});
+  const {accounting}=await context(req);
+  const items=await prisma.taxAccountMapping.findMany({where:{accountingId:accounting.id},orderBy:{account:"asc"}});
+  res.json({ok:true,items});
+ }catch(e){errorResponse(res,e);}
+});
+router.get("/tax-account-mappings/:account/history",async(req:any,res)=>{
+ try{
+  if(!["ADMIN","ADMINISTRATOR","BUCHHALTUNG"].includes(accountingRole(req)))return res.status(403).json({ok:false,error:"TAX_MAPPING_HISTORY_FORBIDDEN"});
+  const {accounting,project}=await context(req);
+  const account=String(req.params.account||"").trim();
+  if(!/^\d{3,8}$/.test(account))return res.status(400).json({ok:false,error:"TAX_MAPPING_ACCOUNT_INVALID"});
+  const items=await prisma.auditLog.findMany({where:{companyId:project.companyId,action:"TAX_ACCOUNT_MAPPING_SAVE",resource:"tax-account:"+accounting.id+":"+account},orderBy:{createdAt:"desc"},take:50,select:{id:true,createdAt:true,userId:true,meta:true}});
+  res.json({ok:true,items});
+ }catch(e){errorResponse(res,e);}
+});
+
+router.put("/tax-account-mappings/:account",async(req:any,res)=>{
+ try{
+  const {accounting,project}=await context(req);
+  const account=String(req.params.account||"").trim();
+  const chart=String(req.body?.chart||"").trim().toUpperCase();
+  const category=String(req.body?.category||"").trim().toUpperCase();
+  const taxCode=String(req.body?.taxCode||"").trim().toUpperCase();
+  const actor=String(req.auth?.sub||req.auth?.userId||"").trim();
+  if(!/^\d{3,8}$/.test(account)||!["SKR03","SKR04","CUSTOM"].includes(chart)||!["REVENUE","EXPENSE","INPUT_TAX","OUTPUT_TAX","OTHER","BANK","RECEIVABLE","PAYABLE"].includes(category)||taxCode||!actor)throw Error("TAX_MAPPING_INVALID");
+  const valid=await prisma.ledgerEntry.findFirst({where:{accountingId:accounting.id,OR:[{account},{contraAccount:account}]}});
+  if(!valid)throw Error("TAX_MAPPING_ACCOUNT_NOT_USED");
+  const item=await prisma.$transaction(async tx=>{
+   const before=await tx.taxAccountMapping.findUnique({where:{accountingId_account:{accountingId:accounting.id,account}}});
+   const row=await tx.taxAccountMapping.upsert({where:{accountingId_account:{accountingId:accounting.id,account}},create:{accountingId:accounting.id,account,chart,category,taxCode:taxCode||null,verifiedBy:actor},update:{chart,category,taxCode:taxCode||null,verifiedBy:actor,verifiedAt:new Date()}});
+   await tx.auditLog.create({data:{companyId:project.companyId,userId:actor,action:"TAX_ACCOUNT_MAPPING_SAVE",resource:"tax-account:"+accounting.id+":"+account,meta:{before,after:row}}});
+   return row;
+  });
+  res.json({ok:true,item});
+ }catch(e){errorResponse(res,e);}
+});
 
 router.get("/datev", async (req: any, res) => {
   try {

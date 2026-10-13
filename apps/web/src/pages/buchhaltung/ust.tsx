@@ -12,11 +12,12 @@ export default function USt() {
   });
 
   const [error, setError] = useState("");
+  const [period, setPeriod] = useState("");
 
   const load = async () => {
     try {
       setError("");
-      setData(await accountingApi("/api/accounting/ust"));
+      setData(await accountingApi("/api/accounting/ust" + (period ? "?period=" + encodeURIComponent(period) : "")));
     } catch (e:any) {
       setError(e?.message || "Fehler");
     }
@@ -58,9 +59,8 @@ export default function USt() {
     <div className="bh-page">
       <div className="bh-header-row">
         <h2>Umsatzsteuer-Übersicht</h2>
-        <button className="bh-btn ghost" onClick={load}>
-          Aktualisieren
-        </button>
+        <label>Belegmonat (vorläufig) <input type="month" value={period} onChange={e=>setPeriod(e.target.value)} /></label>
+        <button className="bh-btn ghost" onClick={load}>Aktualisieren</button>
       </div>
 
       <div style={{
@@ -84,7 +84,17 @@ export default function USt() {
         </div>
       </div>
 
-      {error && <div className="bh-note">{error}</div>}
+      <div className="bh-card" role="note">
+        <strong>Vorläufige Umsatzsteuer-Auswertung – keine USt-Voranmeldung</strong>
+        <p className="bh-note">Diese Übersicht verwendet ausgestellte bzw. nicht als Entwurf markierte Ausgangsrechnungen und ausschließlich gebuchte Eingangsrechnungen. Der Monatsfilter berücksichtigt ausschließlich das Belegdatum, nicht den verbindlichen Steuerentstehungszeitpunkt. § 13b, Steuerperioden, Vorsteuerabzugsberechtigung und Korrekturen müssen vor einer steuerlichen Meldung separat geprüft werden.</p>
+        <div className="bh-note">Nicht berücksichtigt: {Number(data.excluded?.invoices||0)} Ausgangsrechnungen und {Number(data.excluded?.vendorBills||0)} Eingangsrechnungen.</div>
+      </div>
+      <div className="bh-card">
+        <strong>Steuerprüfung · 0 %-Belege ({Number(data.taxReviewCount||0)})</strong>
+        <p className="bh-note">0 % ist nicht automatisch § 13b UStG. Prüfen Sie Originalbeleg, Rechtsgrundlage und Steuerkennzeichen. Diese Liste ändert keine Buchung und berechnet keine Reverse-Charge-Steuer.</p>
+        {(data.taxReview||[]).length>0&&<div style={{overflowX:"auto"}}><table className="bh-table"><thead><tr><th>Beleg</th><th>Typ</th><th>Prüfhinweis</th></tr></thead><tbody>{(data.taxReview||[]).map((r:any)=><tr key={r.id}><td>{r.number}</td><td>{r.type}</td><td>{r.note}</td></tr>)}</tbody></table></div>}
+      </div>
+      {error && <div className="bh-note" role="alert">{error}</div>}
 
       <h3>Belege</h3>
 

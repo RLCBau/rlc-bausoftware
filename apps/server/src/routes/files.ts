@@ -126,6 +126,8 @@ r.post("/init", async (req, res) => {
     });
 
     const { projectId, kind, name, meta } = schema.parse(req.body);
+    const blocked = validateDmsUpload(name, "");
+    if (blocked) return res.status(415).json({ error: blocked });
     if (!(await ensureProjectAccess(req, res, projectId))) return;
     await ensureBucket();
 
@@ -582,6 +584,28 @@ r.post("/document/:documentId/version/:versionId/restore", async (req, res) => {
     res.status(500).json({
       error: e?.message || "Version konnte nicht wiederhergestellt werden"
     });
+  }
+});
+
+// Authenticated, same-origin download avoids browser access to internal S3/MinIO endpoints.
+r.get("/download/:versionId", async (req, res) => {
+  try {
+    const version = await prisma.fileVersion.findUnique({
+      where: { id: String(req.params.versionId || "") },
+      include: { storage: true, document: { select: { projectId: true, name: true } } }
+    });
+    if (!version?.storage || !version.document) return res.status(404).json({ error: "Version nicht gefunden" });
+    if (!(await ensureProjectAccess(req, res, version.document.projectId))) return;
+    const data = await storage.get(version.storage.key);
+    const safeName = safeUploadFilename(version.document.name || "document.bin");
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.send(data);
+  } catch (e: any) {
+    console.error("[files] authenticated download error:", e?.message || e);
+    return res.status(500).json({ error: "Dokument konnte nicht geladen werden" });
   }
 });
 

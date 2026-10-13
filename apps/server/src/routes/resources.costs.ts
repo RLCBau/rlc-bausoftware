@@ -1,9 +1,13 @@
+import {lockPlanningResource,assertPlanningCapacity} from '../services/planningCapacity';
+import {PlanError} from '../domain/constructionPlan';
 import { Router } from "express";
 import {bookedMachineItems,machineCostReport} from "../services/machineCostSummary";
 import {moneyText,usageDecimal} from "../domain/machineUsage";
 import { InputError } from "../domain/officeAddons";
 import { planningDate, planningRange, planningHours, planningNotes } from "../domain/resourcePlanning";
 import crypto from "crypto";
+import { deliverySource, orderFingerprint } from "../services/deliveryAccounting";
+import { allocationInput, deliveryQuantity, quantityText } from "../domain/deliveryReconciliation";
 import fs from "fs";
 import path from "path";
 import multer from "multer";
@@ -503,37 +507,111 @@ router.post("/materials/:id/moves", async (req: any, res) => {
   const moveProject=await canonicalOptionalProject(req,cid,b.projectId || material.projectId);
   if(!moveProject.ok) return res.status(403).json({ok:false,error:"PROJECT_FORBIDDEN"});
 
-  const direction = String(b.dir || b.direction || "").toUpperCase() === "OUT" ? "OUT" : "IN";
-  const qty = Number(b.qty || 0);
+  const direction = String(b.dir || b.direction || "").toUpperCase();
+  if (!["IN", "OUT"].includes(direction)) return res.status(400).json({ ok: false, error: "DIRECTION_INVALID" });
+  const qty = Number(b.qty);
+  if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json({ ok: false, error: "QTY_REQUIRED" });
+  const date = b.date ? new Date(b.date) : new Date();
+  if (!Number.isFinite(date.getTime())) return res.status(400).json({ ok: false, error: "DATE_INVALID" });
 
-  if (!(qty > 0)) {
-    return res.status(400).json({ ok: false, error: "QTY_REQUIRED" });
+  try {
+    const move = await prisma.$transaction(async (tx) => {
+      const updated = await tx.companyMaterial.updateMany({
+        where: { id, companyId: cid, active: true, ...(direction === "OUT" ? { stock: { gte: qty } } : {}) },
+        data: { stock: { increment: direction === "IN" ? qty : -qty } }
+      });
+      if (updated.count !== 1) return null;
+      return tx.companyMaterialMove.create({
+        data: {
+          materialId: id,
+          projectId: moveProject.projectId,
+          costCenter: String(b.costCenter || material.costCenter || "") || null,
+          direction,
+          qty,
+          note: String(b.note || "") || null,
+          date
+        }
+      });
+    });
+    if (!move) return res.status(409).json({ ok: false, error: "INSUFFICIENT_STOCK_OR_CHANGED", message: "Bestand nicht ausreichend oder Material inzwischen geändert." });
+    return res.json({ ok: true, item: { ...move, dir: move.direction } });
+  } catch (error) {
+    console.error("[material-moves]", error);
+    return res.status(500).json({ ok: false, error: "MATERIAL_MOVE_FAILED" });
   }
-
-  const move = await prisma.companyMaterialMove.create({
-    data: {
-      materialId: id,
-      projectId: moveProject.projectId,
-      costCenter: String(b.costCenter || material.costCenter || "") || null,
-      direction,
-      qty,
-      note: String(b.note || "") || null,
-      date: b.date ? new Date(b.date) : new Date()
-    }
-  });
-
-  const delta = direction === "IN" ? qty : -qty;
-
-  await prisma.companyMaterial.update({
-    where: { id },
-    data: {
-      stock: Math.max(0, Number(material.stock || 0) + delta)
-    }
-  });
-
-  res.json({ ok: true, item: { ...move, dir: move.direction } });
 });
 
+
+router.get("/materials/:id/reviewed-receipts", async (req:any,res) => {
+  const cid=cidOr403(req,res);if(!cid)return;
+  try {
+    const material=await prisma.companyMaterial.findFirst({where:{id:String(req.params.id),companyId:cid,active:true}});
+    if(!material)return res.status(404).json({ok:false,error:"MATERIAL_NOT_FOUND"});
+    if(material.projectId && !(await canonicalOptionalProject(req,cid,material.projectId)).ok)return res.status(403).json({ok:false,error:"PROJECT_FORBIDDEN"});
+    const orders=await prisma.companyPurchaseOrder.findMany({where:{companyId:cid,lines:{some:{materialId:material.id}}},include:{lines:true},take:500});
+    const out:any[]=[];
+    for(const order of orders){
+      const project=order.projectId?await resolveResourceProject(req,cid,order.projectId):null;
+      if(!project)continue;
+      const reviews=await prisma.deliveryReview.findMany({where:{companyId:cid,projectId:project.id,orderId:order.id,status:"GEKLAERT",supplierConfirmed:true,quantityConfirmed:true},take:500});
+      for(const review of reviews){
+        let note:any;
+        try {note=await deliverySource(project,review.deliveryKey);}catch{continue;}
+        if(note.sourceHash!==review.sourceHash||orderFingerprint(order)!==orderFingerprint(review.orderSnapshot))continue;
+        let allocations:any[];
+        try{allocations=allocationInput(review.allocations,note,order);}catch{continue;}
+        for(const line of order.lines.filter((l:any)=>l.materialId===material.id)){
+          const assigned=allocations.filter((x:any)=>x.orderLineId===line.id);if(!assigned.length)continue;
+          const qty=Number(quantityText(assigned.reduce((sum:bigint,x:any)=>sum+deliveryQuantity(x.quantity),0n)));
+          const marker="RLC_DELIVERY:"+review.id+":"+line.id;
+          const booked=await prisma.companyMaterialMove.findFirst({where:{materialId:material.id,note:marker},select:{id:true}});
+          out.push({reviewId:review.id,orderLineId:line.id,orderNumber:order.number,deliveryNumber:note.number||note.filename,projectCode:project.code,quantity:qty,unit:line.unit||"",booked:!!booked});
+        }
+      }
+    }
+    return res.json({ok:true,items:out.slice(0,500)});
+  }catch(error:any){console.error("[reviewed-receipts]",error?.code||error?.name);return res.status(500).json({ok:false,error:"RECEIPTS_UNAVAILABLE"});}
+});
+
+router.post("/materials/:id/receive-reviewed", async (req: any, res) => {
+  const cid = cidOr403(req,res); if (!cid) return;
+  const materialId=String(req.params.id), reviewId=String(req.body?.reviewId||""), lineId=String(req.body?.orderLineId||"");
+  if(!reviewId||!lineId)return res.status(400).json({ok:false,error:"REVIEW_AND_LINE_REQUIRED"});
+  try{
+    const review=await prisma.deliveryReview.findFirst({where:{id:reviewId,companyId:cid,status:"GEKLAERT",supplierConfirmed:true,quantityConfirmed:true}});
+    if(!review||!review.orderId)return res.status(404).json({ok:false,error:"VERIFIED_DELIVERY_NOT_FOUND"});
+    const access=await canonicalOptionalProject(req,cid,review.projectId);
+    if(!access.ok)return res.status(403).json({ok:false,error:"PROJECT_FORBIDDEN"});
+    const project=await prisma.project.findFirst({where:{id:review.projectId,companyId:cid}});
+    const order=await prisma.companyPurchaseOrder.findFirst({where:{id:review.orderId,companyId:cid,projectId:{in:[review.projectId,project?.code||""]}},include:{lines:true}});
+    const line=order?.lines.find((l:any)=>l.id===lineId);
+    if(!project||!order||!line||line.materialId!==materialId)return res.status(400).json({ok:false,error:"ORDER_MATERIAL_MISMATCH"});
+    const note=await deliverySource(project,review.deliveryKey);
+    if(note.sourceHash!==review.sourceHash||orderFingerprint(order)!==orderFingerprint(review.orderSnapshot))return res.status(409).json({ok:false,error:"SOURCE_OR_ORDER_CHANGED"});
+    const allocations=allocationInput(review.allocations,note,order).filter((x:any)=>x.orderLineId===lineId);
+    if(!allocations.length)return res.status(400).json({ok:false,error:"LINE_NOT_ALLOCATED"});
+    const qty=Number(quantityText(allocations.reduce((sum:bigint,x:any)=>sum+deliveryQuantity(x.quantity),0n)));
+    if(!Number.isFinite(qty)||qty<=0)return res.status(400).json({ok:false,error:"INVALID_RECEIPT_QTY"});
+    const marker="RLC_DELIVERY:"+review.id+":"+lineId;
+    const outcome=await prisma.$transaction(async tx=>{
+      await tx.$queryRawUnsafe('SELECT id FROM "CompanyMaterial" WHERE id=$1 FOR UPDATE',materialId);
+      const material=await tx.companyMaterial.findFirst({where:{id:materialId,companyId:cid,active:true}});
+      if(!material)return {status:"material_missing"};
+      if(material.projectId && material.projectId!==project.id)return {status:"material_project_mismatch"};
+      const existing=await tx.companyMaterialMove.findFirst({where:{materialId,note:marker}});
+      if(existing)return {status:"duplicate",move:existing};
+      const current=await tx.deliveryReview.findUnique({where:{id:reviewId}});
+      if(!current||current.revision!==review.revision||current.status!=="GEKLAERT")return {status:"changed"};
+      await tx.companyMaterial.update({where:{id:materialId},data:{stock:{increment:qty}}});
+      const move=await tx.companyMaterialMove.create({data:{materialId,projectId:project.id,costCenter:material.costCenter||order.costCenter,direction:"IN",qty,note:marker}});
+      await tx.auditLog.create({data:{companyId:cid,userId:resourceUserId(req),action:"MATERIAL_RECEIVE_VERIFIED_DELIVERY",resource:"material-receipt:"+move.id,meta:{reviewId,lineId,orderId:order.id,projectId:project.id,qty}}});
+      return {status:"created",move};
+    });
+    if(outcome.status==="duplicate")return res.status(409).json({ok:false,error:"DELIVERY_ALREADY_BOOKED",moveId:outcome.move?.id});
+    if(outcome.status!=="created")return res.status(409).json({ok:false,error:outcome.status});
+    return res.json({ok:true,item:outcome.move});
+  }catch(e:any){if(e instanceof InputError)return res.status(400).json({ok:false,error:e.message});console.error("[material-receipt]",e?.code||e?.name);return res.status(500).json({ok:false,error:"MATERIAL_RECEIPT_FAILED"});}
+});
 
 /* =========================================================
    PURCHASE ORDERS
@@ -1519,6 +1597,8 @@ function planningHandler(fn:(req:any,res:any)=>Promise<any>) {
     if(error?.message==="MAINTENANCE_EVIDENCE_LOCKED")return res.status(409).json({ok:false,error:"BETRSICHV_EVIDENCE_LOCKED"});
     if(error?.message==="MAINTENANCE_CONFLICT")return res.status(409).json({ok:false,error:"MAINTENANCE_CONFLICT",message:"Wartung wurde geändert. Bitte neu laden."});
     if(error?.message==="PLANNING_CONFLICT")return res.status(409).json({ok:false,error:"PLANNING_CONFLICT",message:"Einsatz wurde geändert. Bitte neu laden."});
+    if(error?.code==='P2002')return res.status(409).json({ok:false,error:'PLANNING_CONFLICT'});
+    if(error instanceof PlanError)return res.status(error.status).json({ok:false,error:error.message});
     if(error instanceof InputError) return res.status(400).json({ok:false,error:"INVALID_PLANNING_INPUT",message:error.message});
     return next(error);
   });
@@ -1549,21 +1629,13 @@ router.post("/assignments", planningHandler(async (req:any,res) => {
   if(!exists)return res.status(404).json({ok:false,error:"RESOURCE_NOT_FOUND"});
   const requestId=typeof b.id==="string" && /^new-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(b.id)?b.id.slice(4):undefined;
   const data={companyId:cid,resourceType,resourceId,date:new Date(date+"T12:00:00.000Z"),projectId:project.projectId,hours,notes};
-  const replay=async()=>{
-    if(!requestId)return null;
-    const existing=await prisma.resourceAssignment.findFirst({where:{id:requestId,companyId:cid}});
-    if(!existing)return null;
-    if(existing.resourceType!==resourceType || existing.resourceId!==resourceId || existing.projectId!==project.projectId || existing.date.getTime()!==data.date.getTime() || existing.hours!==hours || existing.notes!==notes)throw new Error("PLANNING_CONFLICT");
-    return existing;
-  };
-  let item=await replay();
-  if(!item){
-    try{item=await prisma.resourceAssignment.create({data:{...data,...(requestId?{id:requestId}:{})}});}
-    catch(error:any){
-      if(error?.code!=="P2002" || !requestId)throw error;
-      item=await replay();if(!item)throw new Error("PLANNING_CONFLICT");
-    }
-  }
+  const item=await prisma.$transaction(async tx=>{
+    await lockPlanningResource(tx,cid,resourceType,resourceId);
+    if(requestId){const existing=await tx.resourceAssignment.findFirst({where:{id:requestId,companyId:cid}});if(existing){if(existing.resourceType!==resourceType||existing.resourceId!==resourceId||existing.projectId!==project.projectId||existing.date.getTime()!==data.date.getTime()||existing.hours!==hours||existing.notes!==notes)throw new Error('PLANNING_CONFLICT');return existing;}}
+    await assertPlanningCapacity(tx,cid,resourceType,resourceId,data.date,hours);
+    const item=await tx.resourceAssignment.create({data:{...data,...(requestId?{id:requestId}:{})}});
+    await tx.auditLog.create({data:{companyId:cid,userId:resourceUserId(req),action:'RESOURCE_ASSIGNMENT_CREATE',resource:'resource-assignment:'+item.id,meta:JSON.parse(JSON.stringify({after:item}))}});return item;
+  });
   return res.json({ok:true,item:{...item,date:item.date.toISOString().slice(0,10)}});
 }));
 
@@ -1579,11 +1651,11 @@ router.put("/assignments/:id", planningHandler(async (req:any,res) => {
   const notes=b.notes!==undefined?planningNotes(b.notes):undefined;
   if(b.updatedAt!==undefined && b.updatedAt!==existing.updatedAt.toISOString())throw new Error("PLANNING_CONFLICT");
   const item=await prisma.$transaction(async tx=>{
-    const changed=await tx.resourceAssignment.updateMany({where:{id,companyId:cid,...visibility,updatedAt:existing.updatedAt},data:{
-      projectId:b.projectId!==undefined?target.projectId:undefined,hours,notes
-    }});
-    if(changed.count!==1)throw new Error("PLANNING_CONFLICT");
-    return tx.resourceAssignment.findUniqueOrThrow({where:{id}});
+    await lockPlanningResource(tx,cid,existing.resourceType,existing.resourceId);
+    const current=await tx.resourceAssignment.findFirst({where:{id,companyId:cid,...visibility}});if(!current||current.updatedAt.getTime()!==existing.updatedAt.getTime())throw new Error('PLANNING_CONFLICT');
+    await assertPlanningCapacity(tx,cid,current.resourceType,current.resourceId,current.date,hours===undefined?current.hours:hours,id);
+    const item=await tx.resourceAssignment.update({where:{id},data:{projectId:b.projectId!==undefined?target.projectId:undefined,hours,notes,updatedAt:new Date(Math.max(Date.now(),current.updatedAt.getTime()+1))}});
+    await tx.auditLog.create({data:{companyId:cid,userId:resourceUserId(req),action:'RESOURCE_ASSIGNMENT_UPDATE',resource:'resource-assignment:'+id,meta:JSON.parse(JSON.stringify({before:current,after:item}))}});return item;
   });
   return res.json({ok:true,item:{...item,date:item.date.toISOString().slice(0,10)}});
 }));

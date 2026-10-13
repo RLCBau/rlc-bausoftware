@@ -1378,6 +1378,8 @@ app.use("/api/notes", requireAuth, requireCompany, requireActiveSubscription, pr
 app.use("/api/calendar", requireAuth, requireCompany, requireActiveSubscription, officeCalendarRoutes);
 app.use("/api/resource-costs", requireAuth, requireCompany, requireActiveSubscription, resourceCostsRoutes);
 import catalogAssignmentRoutes from "./routes/catalogAssignments";
+import businessContactsRoutes from "./routes/businessContacts";
+app.use("/api/business-contacts", requireAuth, requireCompany, requireActiveSubscription, businessContactsRoutes);
 import masterCatalogRoutes from "./routes/masterCatalog";
 app.use("/api/master-catalog", requireAuth, requireCompany, requireActiveSubscription, masterCatalogRoutes);
 app.use("/api/catalog-assignments", requireAuth, requireCompany, requireActiveSubscription, catalogAssignmentRoutes);

@@ -58,6 +58,7 @@ const VerifySchema = z.object({
 
 const LoginSchema = z.object({
   email: z.string().email(),
+  inviteCode: z.string().min(4).optional(),
   password: z.string().min(1),
   mode: z.enum(["NUR_APP", "SERVER_SYNC"]).default("SERVER_SYNC"),
 });
@@ -271,7 +272,11 @@ async function getUserCompanyPayload(userId: string) {
         },
       },
       companyMembers: {
-        where: { active: true },
+        // A role from another tenant must never be used in this company's JWT.
+        where: {
+          active: true,
+          company: { users: { some: { id: userId } } },
+        },
         select: { role: true, companyId: true },
         take: 1,
       },
@@ -778,6 +783,38 @@ r.post("/login", loginLimiter, async (req, res, next) => {
         error: "EMAIL_NOT_VERIFIED",
         canResend: true,
       });
+    }
+
+    // Existing users may redeem a tenant-bound Web invitation during login.
+    // The appRole is intentionally retained (e.g. BAULEITER).
+    if (body.inviteCode?.trim()) {
+      const code = body.inviteCode.trim().toUpperCase();
+      try {
+        await prisma.$transaction(async (tx) => {
+          const invite = await tx.companyInvite.findUnique({where:{code}});
+          if (!invite || !invite.isActive || invite.expiresAt <= new Date() || invite.usedCount >= invite.maxUses)
+            throw new Error("WEB_CODE_INVALID_OR_EXPIRED");
+          if (!invite.email || invite.email.trim().toLowerCase() !== email)
+            throw new Error("WEB_CODE_EMAIL_MISMATCH");
+          const account = await tx.user.findUnique({where:{id:u.id},select:{companyId:true}});
+          if (!account?.companyId || account.companyId !== invite.companyId)
+            throw new Error("WEB_CODE_COMPANY_MISMATCH");
+          const member = await tx.companyMember.findUnique({where:{companyId_userId:{companyId:invite.companyId,userId:u.id}}});
+          if (!member?.active) throw new Error("WEB_CODE_ACTIVE_MEMBERSHIP_REQUIRED");
+          const claim = await tx.companyInvite.updateMany({where:{
+            id:invite.id,isActive:true,usedCount:{lt:invite.maxUses},expiresAt:{gt:new Date()}
+          },data:{usedCount:{increment:1},acceptedAt:new Date(),activatedByUserId:u.id}});
+          if (claim.count !== 1) throw new Error("WEB_CODE_ALREADY_USED");
+          await tx.companyMember.update({where:{companyId_userId:{companyId:invite.companyId,userId:u.id}},data:{role:invite.role}});
+          await tx.auditLog.create({data:{userId:u.id,companyId:invite.companyId,
+            action:"WEB_INVITE_EXISTING_MEMBER_REDEEMED",resource:invite.id,
+            meta:{previousRole:member.role,newRole:invite.role,appRoleRetained:u.appRole}}});
+        });
+      } catch (e: any) {
+        const code = String(e?.message || "");
+        const safe = code.startsWith("WEB_CODE_") ? code : "WEB_CODE_REDEMPTION_FAILED";
+        return res.status(400).json({ok:false,error:safe});
+      }
     }
 
     const fullUser = await getUserCompanyPayload(u.id);

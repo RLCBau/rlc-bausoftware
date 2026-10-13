@@ -47,6 +47,51 @@ async function requirePlatformAdmin(req: any, res: any, next: any) {
 }
 
 /**
+ * PATCH /api/platform/admin/companies/:companyId/members/:userId/role
+ * Only a verified platform administrator may perform tenant role recovery.
+ * Retains the user's application role (e.g. BAULEITER).
+ */
+r.patch(
+  "/companies/:companyId/members/:userId/role",
+  requireAuth,
+  requirePlatformAdmin,
+  async (req: any, res) => {
+    const companyId = String(req.params.companyId || "").trim();
+    const userId = String(req.params.userId || "").trim();
+    const role = String(req.body?.role || "").trim().toUpperCase();
+    if (!companyId || !userId || !["ADMIN", "BAULEITER", "BUCHHALTUNG", "MITARBEITER", "CAPOCANTIERE", "KALKULATOR", "GAST"].includes(role)) {
+      return res.status(400).json({ok:false,error:"INVALID_COMPANY_ROLE_REQUEST"});
+    }
+    try {
+      const outcome = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findFirst({where:{id:userId,companyId},select:{id:true,appRole:true}});
+        if (!user) return {status:404,error:"COMPANY_USER_NOT_FOUND"};
+        const member = await tx.companyMember.findUnique({where:{companyId_userId:{companyId,userId}}});
+        if (!member || !member.active) return {status:409,error:"ACTIVE_COMPANY_MEMBERSHIP_REQUIRED"};
+        if (member.role === role) return {status:200,unchanged:true,role:member.role,appRole:user.appRole};
+        const updated = await tx.companyMember.update({
+          where:{companyId_userId:{companyId,userId}},
+          data:{role:role as any},
+          select:{role:true}
+        });
+        await tx.auditLog.create({data:{
+          userId:req.platformAdmin.userId,companyId,
+          action:"PLATFORM_COMPANY_ROLE_CHANGED",
+          resource:userId,
+          ip:String(req.ip || ""),
+          meta:{previousRole:member.role,newRole:updated.role,targetUserId:userId,appRoleRetained:user.appRole}
+        }});
+        return {status:200,unchanged:false,role:updated.role,appRole:user.appRole};
+      });
+      if (outcome.status !== 200) return res.status(outcome.status).json({ok:false,error:outcome.error});
+      return res.json({ok:true,companyId,userId,role:outcome.role,appRole:outcome.appRole,unchanged:outcome.unchanged,requiresRelogin:true});
+    } catch {
+      return res.status(503).json({ok:false,error:"COMPANY_ROLE_UPDATE_FAILED"});
+    }
+  }
+);
+
+/**
  * GET /api/platform/admin/companies
  */
 r.get(

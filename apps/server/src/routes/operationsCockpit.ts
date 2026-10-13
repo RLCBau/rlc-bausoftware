@@ -10,6 +10,7 @@ export default function cockpitRouter(deps:{cid:(req:any)=>string;project:(req:a
    const p=await deps.project(req,req.query.projectId);if(!p)return res.status(404).json({ok:false,error:"Projekt nicht verfügbar."});
    const companyId=deps.cid(req),where={companyId,projectId:p.id},today=berlinToday(),end=new Date(today+"T00:00:00Z");end.setUTCDate(end.getUTCDate()+6);const through=end.toISOString().slice(0,10);
    const queries:Record<string,()=>Promise<any[]>>={
+    contracts:()=>prisma.contract.findMany({where:{...where,status:{notIn:["Archiviert","Beendet"]}},select:{id:true,title:true,status:true,endDate:true,cancellationDays:true}}),
     guarantees:()=>prisma.projectGuarantee.findMany({where:{...where,status:{notIn:["Archiviert","Zurückgegeben"]}},select:{id:true,title:true,status:true,validFrom:true,validUntil:true}}),
     certificates:()=>prisma.contractCertificate.findMany({where:{...where,status:{not:"Archiviert"}},select:{id:true,title:true,status:true,validFrom:true,validUntil:true}}),
     bids:()=>prisma.projectBid.findMany({where:{...where,status:{not:"Archiviert"}},select:{id:true,title:true,status:true,awardedAt:true}}),

@@ -118,14 +118,18 @@ router.put("/:id", async (req: any, res) => {
     }
 
     if (req.body?.text !== undefined && !String(req.body.text || "").trim()) return res.status(400).json({ ok: false, error: "TEXT_REQUIRED" });
-    const item = await prisma.projectNote.update({
-      where: { id },
+    const expected = req.body?.expectedUpdatedAt;
+    if (typeof expected !== "string" || !Number.isFinite(Date.parse(expected))) return res.status(400).json({ok:false,error:"NOTE_VERSION_REQUIRED"});
+    const changed = await prisma.projectNote.updateMany({
+      where: { id, companyId: cid, updatedAt: new Date(expected) },
       data: {
         text: req.body?.text !== undefined ? String(req.body.text || "").trim() : undefined,
-        tags: req.body?.tags !== undefined ? tags(req.body.tags) : undefined
+        tags: req.body?.tags !== undefined ? tags(req.body.tags) : undefined,
+        updatedAt: new Date(Math.max(Date.now(),current.updatedAt.getTime()+1))
       }
     });
-
+    if (!changed.count) return res.status(409).json({ok:false,error:"NOTE_CHANGED_RELOAD"});
+    const item = await prisma.projectNote.findUnique({where:{id}});
     return res.json({ ok: true, item });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e?.message || "NOTE_UPDATE_FAILED" });
@@ -142,7 +146,10 @@ router.delete("/:id", async (req: any, res) => {
       return res.status(404).json({ ok: false, error: "NOT_FOUND" });
     }
 
-    await prisma.projectNote.delete({ where: { id } });
+    const expected = req.body?.expectedUpdatedAt;
+    if (typeof expected !== "string" || !Number.isFinite(Date.parse(expected))) return res.status(400).json({ok:false,error:"NOTE_VERSION_REQUIRED"});
+    const deleted = await prisma.projectNote.deleteMany({where:{id,companyId:cid,updatedAt:new Date(expected)}});
+    if(!deleted.count)return res.status(409).json({ok:false,error:"NOTE_CHANGED_RELOAD"});
     return res.json({ ok: true });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e?.message || "NOTE_DELETE_FAILED" });

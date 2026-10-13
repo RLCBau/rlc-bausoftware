@@ -1,3 +1,4 @@
+import "./infoProfessional.css";
 import { rlcClass } from "../../ui/rlcRuntimeStyle";import { API_BASE } from "../../lib/apiBase";
 import React, { useEffect, useState } from "react";
 
@@ -123,21 +124,13 @@ export default function Systemstatus() {
     };
   }, []);
 
-  const clearAll = () => {
-    if (confirm("Lokalen Speicher wirklich leeren?")) {
-      localStorage.clear();
-      alert("Lokale Daten gelöscht.");
-      loadInfo();
-    }
-  };
-
   const openSupport = () => {
     window.location.href = "/info/support";
   };
 
   return (
-    <div className={rlcClass(null, shell)}>
-      <h2>Systemstatus</h2>
+    <div className={`rlc-info-pro rlc-info-status ${rlcClass(null, shell)}`}>
+      <header className="rlc-page-hero"><span>RLC DIAGNOSE</span><h1>Systemstatus</h1><p>Verbindungsstatus und Browserumgebung prüfen. Ihre Projektdaten werden dabei nicht verändert.</p></header>
 
       <div className={rlcClass(null, box)}>
         <b>API-Status:</b> {loading ? "Prüfung läuft..." : info.api}
@@ -164,9 +157,6 @@ export default function Systemstatus() {
           Status aktualisieren
         </button>
 
-        <button className={rlcClass(null, btn)} onClick={clearAll} type="button">
-          Lokale Daten löschen
-        </button>
       </div>
 
       <button className={rlcClass(null, supportBtn)} onClick={openSupport} type="button">
