@@ -1,0 +1,12 @@
+{
+  "total": 82736,
+  "candidates": 297,
+  "complete": 0,
+  "incomplete": 297,
+  "missingResources": {
+    "RLC_NATIVE_MISSING_FRACHT": 297,
+    "RLC_NATIVE_MISSING_FERTIGER": 297,
+    "RLC_NATIVE_MISSING_BAUSTELLENLOGISTIK": 297
+  },
+  "errors": 0
+}
