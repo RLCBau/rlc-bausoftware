@@ -1,4 +1,4 @@
-﻿// apps/mobile/src/lib/api.ts  (FULL FILE – merged, nothing deleted)
+// apps/mobile/src/lib/api.ts  (FULL FILE – merged, nothing deleted)
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
 import { getToken } from "./auth";
@@ -1343,6 +1343,38 @@ export async function projectPdfs(
  * PHOTOS / NOTIZEN (SERVER routes/fotos.ts)
  * ========================= */
 
+export async function uploadProjectArtifactToDms(params: {
+  projectIdOrCode: string;
+  fileUri: string;
+  fileName: string;
+  mimeType: string;
+  module?: string;
+}): Promise<any> {
+  const projectIdOrCode = String(params.projectIdOrCode || "").trim();
+  if (!projectIdOrCode) throw new Error("Projekt fehlt für DMS-Archivierung.");
+
+  const uploadUri = await asUploadableUri(String(params.fileUri || ""));
+  const fileName =
+    String(params.fileName || "export.bin")
+      .replace(/[^\w.-]+/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 180) || "export.bin";
+
+  const fd = new FormData();
+  fd.append("module", String(params.module || "MOBILE_EXPORT"));
+
+  // @ts-ignore React-Native FormData-Datei
+  fd.append("file", {
+    uri: uploadUri,
+    name: fileName,
+    type: String(params.mimeType || "application/octet-stream"),
+  });
+
+  return request<any>(
+    `/api/projects/${encodeURIComponent(projectIdOrCode)}/documents/upload`,
+    { method: "POST", body: fd }
+  );
+}
 function fotosNotesEndpoint(projectId: string) {
   return `/api/fotos/projects/${encodeURIComponent(projectId)}/fotos/notes`;
 }
@@ -2741,47 +2773,45 @@ export const api = {
 
   async submitTagesberichtInbox(projectIdOrCode: string, payload: any) {
     const projectKey = await resolveProjectCode(projectIdOrCode);
-    return request<any>(regieSubmitEndpoint(), {
+
+    return request<any>(tagesberichtInboxSubmitEndpoint(), {
       method: "POST",
       body: JSON.stringify({
         ...(payload || {}),
         projectId: projectKey,
         projectCode: projectKey,
         reportType: "TAGESBERICHT",
+        docType: "TAGESBERICHT",
+        workflowStatus: "EINGEREICHT",
       }),
     });
   },
 
   async tagesberichtInboxList(projectIdOrCode: string) {
     const projectKey = await resolveProjectCode(projectIdOrCode);
-    const result = await request<any>(
-      `/api/regie/inbox/list?projectId=${encodeURIComponent(projectKey)}`,
+
+    return request<any>(
+      `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(projectKey)}`,
       { method: "GET" }
     );
-    const items = Array.isArray(result?.items)
-      ? result.items.filter((item: any) => item?.reportType === "TAGESBERICHT")
-      : [];
-    return { ...result, items };
-},
+  },
 
   async tagesberichtReject(
-  projectIdOrCode: string,
-  docId: string,
-  reason: string
-) {
-  const projectKey = await resolveProjectCode(projectIdOrCode);
+    projectIdOrCode: string,
+    docId: string,
+    reason: string
+  ) {
+    const projectKey = await resolveProjectCode(projectIdOrCode);
 
-  const body = {
-    projectId: projectKey,
-    docId,
-    reason,
-  };
-
-  return request<any>("/api/regie/inbox/reject", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-},
+    return request<any>("/api/tagesbericht/inbox/reject", {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: projectKey,
+        docId,
+        reason,
+      }),
+    });
+  },
 
    async commitTagesbericht(projectIdOrCode: string, payload: any) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
@@ -2815,8 +2845,9 @@ export const api = {
 
 async tagesberichtInboxRead(projectIdOrCode: string, docId: string) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
+
   return request<any>(
-    `/api/regie/inbox/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
+    `/api/tagesbericht/inbox/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
     { method: "GET" }
   );
 },
@@ -2828,15 +2859,13 @@ async tagesberichtApprove(
 ) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
 
-  const body = {
-    projectId: projectKey,
-    docId,
-    approvedBy: approvedBy || undefined,
-  };
-
-  return request<any>("/api/regie/inbox/approve", {
+  return request<any>("/api/tagesbericht/inbox/approve", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      projectId: projectKey,
+      docId,
+      approvedBy: approvedBy || undefined,
+    }),
   });
 },
 

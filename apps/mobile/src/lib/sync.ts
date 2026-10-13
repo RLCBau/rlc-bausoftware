@@ -269,21 +269,44 @@ async function syncOne(item: QueueItem) {
     return (api as any).pushRegieToServer(pk, payload);
   }
 
-  // Tagesbericht e Bautagebuch condividono il workflow Regie sul server.
-  if (item.kind === "TAGESBERICHT" || item.kind === "BAUTAGEBUCH") {
-    const p: any = item.payload || {};
-    const row = p?.row ?? p;
-    return serverRequest("/api/regie", {
-      method: "POST",
-      body: JSON.stringify({
-        ...row,
-        projectId: pk,
-        projectCode: pk,
-        date: String(row?.date || new Date().toISOString().slice(0, 10)),
-        reportType: item.kind,
-        workflowStatus: "EINGEREICHT",
-      }),
+  // =========================
+  // TAGESBERICHT
+  // =========================
+  if (item.kind === "TAGESBERICHT") {
+    const payload: any = item.payload || {};
+    const row = payload?.row ?? payload;
+
+    return (api as any).pushTagesberichtToServer(pk, {
+      ...row,
+      projectId: pk,
+      projectCode: pk,
+      reportType: "TAGESBERICHT",
+      docType: "TAGESBERICHT",
+      workflowStatus: "EINGEREICHT",
     });
+  }
+
+  // =========================
+  // BAUTAGEBUCH
+  // =========================
+  if (item.kind === "BAUTAGEBUCH") {
+    const payload: any = item.payload || {};
+    const row = payload?.row ?? payload;
+
+    return serverRequest(
+      `/api/inbox/${encodeURIComponent(pk)}/BAUTAGEBUCH/submit`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...row,
+          projectId: pk,
+          projectCode: pk,
+          reportType: "BAUTAGEBUCH",
+          docType: "BAUTAGEBUCH",
+          workflowStatus: "EINGEREICHT",
+        }),
+      }
+    );
   }
 
   // =========================

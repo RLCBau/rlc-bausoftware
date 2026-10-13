@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import * as XLSX from "xlsx";
+import { uploadProjectArtifactToDms } from "../lib/api";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
@@ -432,6 +433,18 @@ async function exportOfferExcel(params: {
   await FileSystem.writeAsStringAsync(uri, base64, {
     encoding: FileSystem.EncodingType.Base64
   });
+  try {
+    await uploadProjectArtifactToDms({
+      projectIdOrCode: doc.projectId,
+      fileUri: uri,
+      fileName,
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      module: "ANGEBOT",
+    });
+  } catch (error) {
+    console.warn("[angebot-editor:xlsx:dms]", error);
+  }
+
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
     await Sharing.shareAsync(uri, {
