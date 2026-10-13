@@ -1,3 +1,5 @@
+import PlanSchedule from './PlanSchedule';
+import PlanResourceHandoff from './PlanResourceHandoff';
 import React from "react";
 
 import { apiUrl } from "../../lib/apiBase";
@@ -226,6 +228,9 @@ export default function Bauzeitenplan() {
   const [error, setError] =
     React.useState("");
 
+  const [resourceName,setResourceName]=React.useState('');
+  const [scheduleOpen,setScheduleOpen]=React.useState(false),[scheduleBusy,setScheduleBusy]=React.useState(false);
+  const [resourceTask,setResourceTask]=React.useState('');
   const [version,setVersion]=React.useState(''),[canEdit,setCanEdit]=React.useState(false),[history,setHistory]=React.useState<any>();
   const generation=React.useRef(0),saveGuard=React.useRef(false),owner=React.useRef(projectId),versionRef=React.useRef(version),loadedOwner=React.useRef('');owner.current=projectId;versionRef.current=version;
   const signature=JSON.stringify({start:planStart,tasks,capacity}),signatureRef=React.useRef(signature);signatureRef.current=signature;
@@ -235,7 +240,7 @@ export default function Bauzeitenplan() {
     ) || null;
 
   const load = React.useCallback(async () => {
-    const n=++generation.current;loadedOwner.current="";setVersion("");setCanEdit(false);setTasks([]);setCapacity({});setDirty(false);setSelectedId(null);
+    const n=++generation.current;loadedOwner.current="";setVersion("");setCanEdit(false);setTasks([]);setCapacity({});setDirty(false);setSelectedId(null);setResourceTask('');setScheduleOpen(false);setScheduleBusy(false);
     if (!projectId) {
       setTasks([]);
       setSelectedId(null);
@@ -341,7 +346,7 @@ export default function Bauzeitenplan() {
   }, [load]);
 
   function newTask() {
-    if(!canEdit||loading||loadedOwner.current!==projectId)return;
+    if(!canEdit||loading||scheduleBusy||loadedOwner.current!==projectId)return;
     const start =
       new Date();
 
@@ -374,7 +379,7 @@ export default function Bauzeitenplan() {
   function updateSelected(
     patch: Partial<PlanTask>
   ) {
-    if (!selectedId||!canEdit||loading||loadedOwner.current!==projectId) return;
+    if (!selectedId||!canEdit||loading||scheduleBusy||loadedOwner.current!==projectId) return;
 
     setTasks((current) =>
       current.map((task) => {
@@ -408,69 +413,20 @@ export default function Bauzeitenplan() {
     setDirty(true);
   }
 
-  function moveSelectedToCalendar() {
-    if (!selected) return;
-
-    sessionStorage.setItem(
-      "rlc.calendar.prefill",
-      JSON.stringify({
-        projectId,
-        title: selected.name,
-        notes: selected.notes || "",
-        category: selected.milestone
-          ? "Frist"
-          : "Projekt",
-        sourceType: "bauzeitenplan",
-        sourceId: selected.id,
-        start: selected.start || "",
-        end: selected.end || "",
-        attendees: selected.assignee || ""
-      })
-    );
-
-    window.location.assign("/buro/outlook?new=1");
-  }
-
-  async function createTaskFromPlan() {
-    if (!selected) return;
-
-    setSaving(true);
-    setError("");
-
+  async function handoffSelected(target: 'task'|'calendar') {
+    if(!selected||scheduleBusy||saving||saveGuard.current||!canEdit||loadedOwner.current!==projectId)return;
+    if(dirty){setError('Bitte Änderungen zuerst mit „Plan speichern“ speichern.');return;}
+    saveGuard.current=true;setSaving(true);setError('');const ownerId=projectId;
     try {
-      await request("/api/tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          projectId,
-          title: selected.name,
-          description: selected.notes || "",
-          due: selected.end || selected.start || null,
-          assignee: selected.assignee || null,
-          priority: selected.milestone ? "high" : "med",
-          tags: [
-            "Bauzeitenplan",
-            ...(selected.milestone
-              ? ["Meilenstein"]
-              : [])
-          ],
-          sourceType: "bauzeitenplan",
-          sourceId: selected.id
-        })
-      });
-
-      window.alert("Aufgabe wurde erstellt.");
-    } catch (e: any) {
-      setError(
-        e?.message ||
-        "Aufgabe konnte nicht erstellt werden."
-      );
-    } finally {
-      setSaving(false);
-    }
+      const result=await request<{created:boolean}>("/api/buero/bauzeitenplan/handoff",{method:'POST',body:JSON.stringify({projectId,taskId:selected.id,target,expectedVersion:versionRef.current})});
+      if(owner.current!==ownerId)return;
+      window.alert(result.created?(target==='task'?'Aufgabe wurde erstellt.':'Ganztägiger Termin wurde erstellt.'):'Verknüpfung ist bereits vorhanden. Änderungen im Zielmodul bleiben erhalten.');
+    }catch(e:any){if(owner.current===ownerId)setError(e.message||'Übernahme fehlgeschlagen.');}
+    finally{saveGuard.current=false;setSaving(false);}
   }
 
   function removeSelected() {
-    if (!selected) return;
+    if (!selected||scheduleBusy) return;
 
     if (
       !window.confirm(
@@ -505,7 +461,7 @@ export default function Bauzeitenplan() {
   }
 
   async function save() {
-    if (!projectId||!canEdit||loading||saveGuard.current||loadedOwner.current!==projectId||!versionRef.current) return;
+    if (!projectId||!canEdit||loading||scheduleBusy||saveGuard.current||loadedOwner.current!==projectId||!versionRef.current) return;
     const sentSignature=signatureRef.current, sentVersion=versionRef.current;
 
     for (const task of tasks) {
@@ -647,7 +603,7 @@ export default function Bauzeitenplan() {
           <button
             className="rlc-page-hero__button"
             onClick={newTask}
-            disabled={!projectId||loading||!canEdit}
+            disabled={!projectId||loading||scheduleBusy||!canEdit}
           >
             + Neuer Vorgang
           </button>
@@ -658,7 +614,7 @@ export default function Bauzeitenplan() {
               void save()
             }
             disabled={
-              !projectId || loading || !canEdit ||
+              !projectId || loading || scheduleBusy || !canEdit ||
               saving ||
               !dirty
             }
@@ -673,7 +629,10 @@ export default function Bauzeitenplan() {
       </header>
 
       <div className="rlc-page-toolbar"><span className="muted">{canEdit?'Änderungen mit „Plan speichern“ sichern. Neue Änderungen während des Speicherns bleiben lokal erhalten.':'Plan in Leseansicht.'}</span><button className="btn" disabled={loading||saving||!version} onClick={()=>void showHistory()}>Änderungsverlauf</button></div>
-      {history&&<section className="card"><h2>Planverlauf</h2><button className="btn" onClick={()=>setHistory(undefined)}>Schließen</button><p className="muted">Bis zu 100 Speicherstände; für ältere Pläne ab der nächsten Änderung.</p>{history.items.map((h:any)=><p key={h.id}>{new Date(h.createdAt).toLocaleString('de-DE',{timeZone:'Europe/Berlin'})} · {h.meta?.after?.tasks?.length||0} Vorgänge · Start {h.meta?.before?.start||'–'} → {h.meta?.after?.start||'–'}</p>)}</section>}
+      <details className="card" style={{marginBottom:12}}><summary>Planressourcen und Kapazitäten ({Object.keys(capacity).length})</summary><p className="muted">Verfügbare Anzahl pro Kalendertag für dieses Projekt. Benannte Teams oder Gerätegruppen; konkrete Personen und Maschinen werden in der Einsatzplanung zugeordnet.</p><fieldset disabled={!canEdit||loading||scheduleBusy} style={{border:0,padding:0,margin:0}}>{Object.entries(capacity).map(([name,count])=><div key={name} style={{display:'flex',gap:8,marginBottom:8,alignItems:'center'}}><label>{name} <input type="number" min="0" max="100000" step="0.01" value={count} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)&&n>=0&&n<=100000){setCapacity(v=>({...v,[name]:n}));setDirty(true);}}}/></label><button className="btn" disabled={tasks.some(t=>(t.ressourcen[name]||0)>0)} onClick={()=>{setCapacity(v=>{const next={...v};delete next[name];return next;});setDirty(true);}}>Entfernen</button></div>)}<div style={{display:'flex',gap:8}}><input value={resourceName} maxLength={120} placeholder="Neue Planressource, z. B. Tiefbauteam" onChange={e=>setResourceName(e.target.value)}/><button className="btn" onClick={()=>{const name=resourceName.trim();if(!name||['__proto__','prototype','constructor'].includes(name)||Object.prototype.hasOwnProperty.call(capacity,name)){setError('Eindeutigen Ressourcennamen eingeben.');return;}setCapacity(v=>({...v,[name]:1}));setResourceName('');setDirty(true);}}>Kapazität hinzufügen</button></div></fieldset></details>
+      <div className="rlc-page-toolbar"><button className="btn" disabled={loading||saving||scheduleBusy||dirty||!canEdit||!version} onClick={()=>setScheduleOpen(v=>!v)}>{scheduleOpen?'Terminvorschlag schließen':'Terminvorschlag prüfen'}</button><span className="muted">Vor der Terminierung Änderungen speichern.</span></div>
+      {scheduleOpen&&<PlanSchedule key={projectId+':'+version} projectId={projectId} version={version} start={planStart} disabled={dirty||saving||!canEdit||loadedOwner.current!==projectId} onBusy={v=>{if(owner.current===projectId)setScheduleBusy(v);}} onApplied={d=>{if(owner.current!==projectId)return;setTasks(d.tasks);setCapacity(d.capacity);setPlanStart(d.start);setVersion(d.version);setDirty(false);setHistory(undefined);setResourceTask('');setScheduleOpen(false);}}/>}
+      {history&&<section className="card"><h2>Planverlauf</h2><button className="btn" onClick={()=>setHistory(undefined)}>Schließen</button><p className="muted">Bis zu 100 Änderungen und Kalenderübernahmen; ältere Pläne ab der nächsten Änderung.</p>{history.items.map((h:any)=><p key={h.id}>{new Date(h.createdAt).toLocaleString('de-DE',{timeZone:'Europe/Berlin'})} · {h.action==='CONSTRUCTION_PLAN_SCHEDULE'?'Terminvorschlag übernommen':h.action==='PLAN_HANDOFF_CREATE'?`Kalenderübernahme: ${h.meta?.after?.sourceTask?.name||'Vorgang'}`:`${h.meta?.after?.tasks?.length||0} Vorgänge · Start ${h.meta?.before?.start||'–'} → ${h.meta?.after?.start||'–'}`}</p>)}</section>}
       {error ? (
         <div
           className="card"
@@ -764,7 +723,7 @@ export default function Bauzeitenplan() {
         <button
           className="btn"
           onClick={() => {if(dirty&&!window.confirm("Ungespeicherte Änderungen verwerfen und aktuellen Serverstand laden?"))return;void load();}}
-          disabled={loading||saving}
+          disabled={loading||saving||scheduleBusy}
         >
           Aktualisieren
         </button>
@@ -893,7 +852,7 @@ export default function Bauzeitenplan() {
             overflowX: "hidden"
           }}
         >
-          <fieldset disabled={!canEdit||loading} style={{border:0,padding:0,margin:0,minWidth:0}}>
+          <fieldset disabled={!canEdit||loading||scheduleBusy} style={{border:0,padding:0,margin:0,minWidth:0}}>
 
           {!selected ? (
             <div
@@ -1107,6 +1066,7 @@ export default function Bauzeitenplan() {
                   </select>
                 </Field>
 
+                <div><strong>Bedarf pro Kalendertag</strong><p className="muted">Anzahl aus den Planressourcen, keine Arbeitsstunden.</p>{Object.entries(selected.ressourcen).map(([name,count])=><div key={name} style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}><label>{name} <input type="number" min="0" max="100000" step="0.01" value={count} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)&&n>=0&&n<=100000)updateSelected({ressourcen:{...selected.ressourcen,[name]:n}});}}/></label><button className="btn" onClick={()=>{const next={...selected.ressourcen};delete next[name];updateSelected({ressourcen:next});}}>Entfernen</button></div>)}<select value="" onChange={e=>{if(e.target.value)updateSelected({ressourcen:{...selected.ressourcen,[e.target.value]:1}});}}><option value="">Planbedarf hinzufügen…</option>{Object.keys(capacity).filter(n=>!Object.prototype.hasOwnProperty.call(selected.ressourcen,n)).map(n=><option key={n} value={n}>{n}</option>)}</select></div>
                 <Field label="Notizen">
                   <textarea
                     value={
@@ -1148,7 +1108,8 @@ export default function Bauzeitenplan() {
 
                 <button
                   className="btn"
-                  onClick={moveSelectedToCalendar}
+                  onClick={() => void handoffSelected('calendar')}
+                  disabled={saving || dirty}
                 >
                   In Kalender übernehmen
                 </button>
@@ -1156,9 +1117,9 @@ export default function Bauzeitenplan() {
                 <button
                   className="btn"
                   onClick={() =>
-                    void createTaskFromPlan()
+                    void handoffSelected('task')
                   }
-                  disabled={saving}
+                  disabled={saving || dirty}
                 >
                   Als Aufgabe erstellen
                 </button>
@@ -1175,6 +1136,8 @@ export default function Bauzeitenplan() {
             </>
           )}
           </fieldset>
+          {selected&&canEdit&&<button className="btn" disabled={scheduleBusy||saving||dirty||loading||!selected.start||!selected.end} onClick={()=>setResourceTask(selected.id)}>In Einsatzplanung übernehmen</button>}
+          {selected&&resourceTask===selected.id&&<PlanResourceHandoff key={projectId+':'+selected.id+':'+version} projectId={projectId} task={selected} version={version} disabled={scheduleBusy||dirty||saving||!canEdit||loadedOwner.current!==projectId} onClose={()=>setResourceTask('')}/>}
         </aside>
       </div>
     </div>

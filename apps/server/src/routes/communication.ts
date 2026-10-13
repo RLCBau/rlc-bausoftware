@@ -24,7 +24,7 @@ async function projectForCompany(req: any, cid: string, input: any) {
     where: {
       companyId: cid,
       OR: [{ id: value }, { code: value }],
-      ...(isAdmin(req) ? {} : { members: { some: { userId: uid } } })
+      ...(isAdmin(req) ? {} : { projectMembers: { some: { userId: uid } } })
     },
     select: { id: true }
   });
@@ -37,7 +37,7 @@ async function canAccessProject(req: any, cid: string, projectId: string) {
     where: {
       id: projectId,
       companyId: cid,
-      ...(isAdmin(req) ? {} : { members: { some: { userId: uid } } })
+      ...(isAdmin(req) ? {} : { projectMembers: { some: { userId: uid } } })
     },
     select: { id: true }
   });
@@ -151,21 +151,23 @@ router.delete("/:id", async (req: any, res) => {
       return res.status(404).json({ ok: false, error: "NOT_FOUND" });
     }
 
-    const [messageCount, attachments] = await Promise.all([
+    const [messageCount, attachments, contactLinkCount] = await Promise.all([
       prisma.communicationMessage.count({ where: { threadId: id } }),
       prisma.communicationAttachment.findMany({
         where: { threadId: id },
         include: { document: { select: { id: true, name: true, meta: true } } }
-      })
+      }),
+      prisma.partyCommunicationLink.count({where:{threadId:id}})
     ]);
 
-    if (messageCount > 0 || attachments.length > 0) {
+    if (messageCount > 0 || attachments.length > 0 || contactLinkCount > 0) {
       return res.status(409).json({
         ok: false,
         error: "COMMUNICATION_NOT_EMPTY",
         message: "Kommunikationsvorgänge mit Nachrichten oder Dokumenten dürfen nicht destruktiv gelöscht werden. Aufbewahrung und Löschung müssen über die Dokument-/Datenschutzregeln erfolgen.",
         messageCount,
-        attachmentCount: attachments.length
+        attachmentCount: attachments.length,
+        contactLinkCount
       });
     }
 

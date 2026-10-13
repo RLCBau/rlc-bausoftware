@@ -1,5 +1,7 @@
 import { rlcClass } from "../../ui/rlcRuntimeStyle";import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
+import { listDocuments, getDocumentViewUrl, initDocument, uploadFileDirect, detectKind, type DocumentDto } from "../../api/files";
+import { accountingApi, getAccountingProject } from "./accountingApi";
 
 type ReportTyp =
 "Rechnung" |
@@ -80,48 +82,59 @@ const isSameMonth = (d: Date, ref: Date) =>
 d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 
 function csvEscape(v: unknown) {
-  return `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const raw = String(v ?? "");
+  const safe = /^[\s\u0000-\u001f]*[=+@-]/.test(raw) && !/^-?\d+(?:[.,]\d+)?$/.test(raw.trim()) ? "'" + raw : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 export default function Reports() {
-  const [rows, setRows] = useState<Report[]>([
-  {
-    id: 1,
-    nummer: "RPT-001",
-    titel: "Abrechnung Oktober",
-    typ: "Abrechnung",
-    projekt: "BA III",
-    kostenstelle: "Erdarbeiten",
-    datum: "25.10.2025",
-    version: 1,
-    bearbeiter: "Müller",
-    status: "in Prüfung"
-  },
-  {
-    id: 2,
-    nummer: "RPT-002",
-    titel: "Regiebericht 12.10",
-    typ: "Regiebericht",
-    projekt: "Parkplatz Süd",
-    kostenstelle: "Leitungen",
-    datum: "12.10.2025",
-    version: 1,
-    bearbeiter: "Kraus",
-    status: "abgeschlossen"
-  },
-  {
-    id: 3,
-    nummer: "RPT-003",
-    titel: "Nachtrag DN200",
-    typ: "Nachtrag",
-    projekt: "BA IV",
-    kostenstelle: "Rohrbau",
-    datum: "20.10.2025",
-    version: 2,
-    bearbeiter: "Schmidt",
-    status: "offen"
-  }]
-  );
+  // No fictional accounting reports in the production workspace.
+  const [rows, setRows] = useState<Report[]>([]);
+  const [dmsRows, setDmsRows] = useState<DocumentDto[]>([]);
+  const [dmsBusy, setDmsBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dmsError, setDmsError] = useState("");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const projectKey = getAccountingProject();
+  const [projectId, setProjectId] = useState("");
+  useEffect(() => {
+    let active = true;
+    setProjectId(""); setDmsRows([]);
+    accountingApi("/api/accounting/projects").then(result => {
+      if (!active) return;
+      const found = (result.items || []).find((p: any) => p.id === projectKey || p.code === projectKey);
+      if (!found?.id) throw new Error("Projekt nicht verfügbar oder kein Zugriff.");
+      setProjectId(String(found.id));
+    }).catch(error => { if (active) setDmsError(error?.message || "Projekt nicht verfügbar"); });
+    return () => { active = false; };
+  }, [projectKey]);
+  const reloadDms = async () => {
+    if (!projectId) return;
+    setDmsBusy(true); setDmsError("");
+    try { setDmsRows((await listDocuments(projectId)).filter(d => !d.deletedAt)); }
+    catch (error: any) { setDmsRows([]); setDmsError(error?.message || "DMS nicht erreichbar"); }
+    finally { setDmsBusy(false); }
+  };
+  useEffect(() => { void reloadDms(); }, [projectId]);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const openDmsDocument = async (id: string, name: string) => {
+    if (downloadingId) return;
+    setDownloadingId(id); setDmsError(""); setUploadMessage("");
+    try {
+      const result = await getDocumentViewUrl(id);
+      if (!result?.url) throw new Error("Download-Link nicht verfügbar.");
+      const link = document.createElement("a");
+      link.href = result.url;
+      link.download = name.replace(/[\\/]/g, "_") || "dokument";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setUploadMessage(`Download für ${name} an den Browser übergeben.`);
+      window.setTimeout(() => URL.revokeObjectURL(result.url), 60000);
+    } catch (error: any) {
+      setDmsError(error?.message || "Dokument konnte nicht heruntergeladen werden.");
+    } finally { setDownloadingId(null); }
+  };
 
   const [zeitraum, setZeitraum] = useState<Zeitraum>("THIS_MONTH");
   const [typ, setTyp] = useState<ReportTyp | "ALL">("ALL");
@@ -178,29 +191,27 @@ export default function Reports() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [hover, setHover] = useState(false);
 
-  const addFiles = (files: FileList | null) => {
-    if (!files?.length) return;
-
-    let nextId = rows.length ? Math.max(...rows.map((r) => r.id)) + 1 : 1;
-
-    const added: Report[] = Array.from(files).map((f) => {
-      const currentId = nextId++;
-      return {
-        id: currentId,
-        nummer: `RPT-${String(currentId).padStart(3, "0")}`,
-        titel: f.name.replace(/\.[^.]+$/, ""),
-        typ: "Sonstiges",
-        datum: fmtDate(),
-        version: 1,
-        status: "offen",
-        bearbeiter: "System",
-        dateiname: f.name,
-        size: f.size,
-        url: URL.createObjectURL(f)
-      };
-    });
-
-    setRows((p) => [...added, ...p]);
+  const addFiles = async (files: FileList | null) => {
+    if (!files?.length || uploading) return;
+    if (!projectId) { setDmsError("Bitte zuerst ein verfügbares Projekt auswählen."); return; }
+    setUploading(true);
+    setDmsError("");
+    setUploadMessage("");
+    const errors: string[] = [];
+    let saved = 0;
+    try {
+      for (const file of Array.from(files)) {
+        try {
+          const created = await initDocument(projectId, detectKind(file), file.name);
+          if (!created.documentId) throw new Error("Dokument-ID fehlt");
+          await uploadFileDirect(created.documentId, file);
+          saved += 1;
+        } catch (error: any) { errors.push(`${file.name}: ${error?.message || "Upload fehlgeschlagen"}`); }
+      }
+      await reloadDms();
+      if (saved) setUploadMessage(`${saved} Datei(en) im Projekt-DMS gespeichert.`);
+      if (errors.length) setDmsError(errors.join(" · "));
+    } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -306,11 +317,21 @@ export default function Reports() {
 
   return (
     <div className="bh-page">
+      <section className="bh-card">
+        <div className="bh-header-row"><h3>Projekt-DMS · gespeicherte Dokumente</h3><button className="bh-btn ghost" disabled={dmsBusy} onClick={() => void reloadDms()}>Aktualisieren</button></div>
+        <div className="bh-note">Projekt: {projectId} · Dokumente aus dem zentralen DMS. Neue Dateien werden über den gesicherten DMS-Upload gespeichert; die Report-Arbeitsliste darunter ist separat.</div>
+        {uploadMessage && <div role="status" className="bh-note">{uploadMessage}</div>}
+        {dmsError && <div role="alert" className="bh-note">{dmsError}</div>}
+        <div style={{overflowX:"auto"}}><table className="bh-table"><thead><tr><th>Dokument</th><th>Typ</th><th>Aktualisiert</th><th>Aktion</th></tr></thead><tbody>
+          {dmsRows.map(doc => <tr key={doc.id}><td>{doc.name}</td><td>{doc.kind}</td><td>{doc.updatedAt ? new Date(doc.updatedAt).toLocaleDateString("de-DE") : "—"}</td><td><button className="bh-btn ghost" disabled={!!downloadingId} onClick={() => void openDmsDocument(doc.id, doc.name)}>{downloadingId === doc.id ? "Lädt…" : "Herunterladen"}</button></td></tr>)}
+          {!dmsRows.length && <tr><td colSpan={4}>{dmsBusy ? "Lade Dokumente…" : "Keine gespeicherten Dokumente gefunden."}</td></tr>}
+        </tbody></table></div>
+      </section>
       <div className="bh-header-row">
-        <h2>Reports verwalten</h2>
+        <h2>Report-Arbeitsliste · temporäre Einträge</h2>
         <div className="bh-actions">
-          <button className="bh-btn" onClick={() => fileRef.current?.click()}>
-            + Datei hochladen
+          <button className="bh-btn" disabled={uploading} onClick={() => fileRef.current?.click()}>
+            {uploading ? "DMS-Upload läuft…" : "+ Im DMS speichern"}
           </button>
           <button className="bh-btn ghost" onClick={() => exportCSV(true)}>
             Export CSV (gefiltert)
@@ -348,7 +369,7 @@ export default function Reports() {
           })}
         onClick={() => fileRef.current?.click()}>
         
-        📎 Datei hier ablegen oder klicken zum Hochladen
+        📎 Datei hier ablegen oder klicken, um im Projekt-DMS zu speichern
       </div>
 
       <div className="bh-filters">

@@ -1,3 +1,4 @@
+import "./infoProfessional.css";
 import { rlcClass } from "../../ui/rlcRuntimeStyle";import { API_BASE } from "../../lib/apiBase";
 import React, { useMemo, useRef, useState } from "react";
 import { buildRlcKnowledgeContext } from "../../copilot/RlcSoftwareKnowledge";
@@ -439,8 +440,8 @@ export default function Support() {
   }
 
   return (
-    <div className={rlcClass(null, shell)}>
-      <div className={rlcClass(null, headerCard)}>
+    <div className={`rlc-info-pro rlc-info-support ${rlcClass(null, shell)}`}>
+      <div className={`rlc-page-hero rlc-info-support-header ${rlcClass(null, headerCard)}`}>
         <div
           style={{
             display: "flex",
@@ -451,7 +452,7 @@ export default function Support() {
           }}
         >
           <div>
-            <h2 style={{ margin: "0 0 5px" }}>Support / Kontakt</h2>
+            <h2 style={{ margin: "0 0 5px" }}>RLC Support & Feedback</h2>
             <div style={{ color: "#64748b", fontSize: 13 }}>
               Fragen, technische Probleme oder Verbesserungsvorschläge direkt an den RLC Support senden.
             </div>

@@ -1,4 +1,5 @@
 ﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken } from "./auth";
 import * as FileSystem from "expo-file-system/legacy";
 import { api } from "./api";
 
@@ -49,7 +50,7 @@ function filenameFromUrl(url: string) {
 async function getTokenSafe() {
   try {
     const t =
-      (await AsyncStorage.getItem("auth_token")) ||
+      (await getToken()) ||
       (await AsyncStorage.getItem("token")) ||
       "";
     return String(t || "").trim();

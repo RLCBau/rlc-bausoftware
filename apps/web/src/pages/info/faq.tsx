@@ -1,106 +1,12 @@
-import { rlcClass } from "../../ui/rlcRuntimeStyle";import React from "react";
-
-/* ================= STYLE ================= */
-
-const shell = {
-  maxWidth: 900,
-  margin: "0 auto",
-  padding: "12px 16px 40px",
-  fontFamily: "Inter,system-ui,Arial",
-  color: "#0f172a"
-} as const;
-
-const qa = {
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
-  padding: 12,
-  margin: "10px 0",
-  background: "#fff"
-} as const;
-
-const q = { fontWeight: 600, marginBottom: 4 } as const;
-const a = { color: "#334155", lineHeight: 1.5 } as const;
-
-const supportBtn = {
-  position: "fixed",
-  right: 20,
-  bottom: 20,
-  background: "#0ea5e9",
-  color: "#fff",
-  border: "none",
-  borderRadius: 999,
-  padding: "12px 18px",
-  fontWeight: 600,
-  cursor: "pointer",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-} as const;
-
-/* ================= COMPONENT ================= */
-
-export default function FAQ() {
-  const openSupport = () => {
-    alert("Support Chat wird geöffnet (Integration folgt)");
-  };
-
-  return (
-    <div className={rlcClass(null, shell)}>
-      <h2>FAQ</h2>
-
-      <div className={rlcClass(null, qa)}>
-        <div className={rlcClass(null, q)}>Wie funktionieren Mengen-Formeln?</div>
-        <div className={rlcClass(null, a)}>
-          Es werden einfache mathematische Ausdrücke unterstützt, z. B.:
-          <br />
-          <code>10*2+5</code>, <code>(12+8)/2</code>
-        </div>
-      </div>
-
-      <div className={rlcClass(null, qa)}>
-        <div className={rlcClass(null, q)}>Was passiert mit meinen Daten?</div>
-        <div className={rlcClass(null, a)}>
-          Aktuell werden alle Daten lokal im Browser gespeichert (LocalStorage).
-          Beim Löschen des Browser-Caches gehen die Daten verloren.
-        </div>
-      </div>
-
-      <div className={rlcClass(null, qa)}>
-        <div className={rlcClass(null, q)}>Welche Exportmöglichkeiten gibt es?</div>
-        <div className={rlcClass(null, a)}>
-          Aktuell verfügbar: CSV, SVG, JSON.
-          <br />
-          Geplant: GAEB, DXF, DWG, PDF (erweitert).
-        </div>
-      </div>
-
-      <div className={rlcClass(null, qa)}>
-        <div className={rlcClass(null, q)}>Unterstützt das System mehrere Benutzer?</div>
-        <div className={rlcClass(null, a)}>
-          Aktuell: Single-User (lokal).
-          <br />
-          Geplant: Multi-User mit Rollenverwaltung (Cloud-Version).
-        </div>
-      </div>
-
-      <div className={rlcClass(null, qa)}>
-        <div className={rlcClass(null, q)}>Funktioniert die Software auch mobil?</div>
-        <div className={rlcClass(null, a)}>
-          Ja. Die Mobile-App (iOS & Android) unterstützt Regieberichte,
-          Lieferscheine, Fotos und Offline-Synchronisation.
-        </div>
-      </div>
-
-      <div className={rlcClass(null, qa)}>
-        <div className={rlcClass(null, q)}>Ist meine Verbindung sicher?</div>
-        <div className={rlcClass(null, a)}>
-          Ja. Die Cloud-Version nutzt HTTPS (SSL/TLS), Reverse Proxy (Nginx)
-          sowie serverseitige Sicherheitsmechanismen.
-        </div>
-      </div>
-
-      {/* SUPPORT BUTTON */}
-      <button className={rlcClass(null, supportBtn)} onClick={openSupport}>
-        Support Chat
-      </button>
-    </div>);
-
-}
+import React,{useMemo,useState} from "react";
+import {Link} from "react-router-dom";
+import "./infoProfessional.css";
+import faqCatalog from "./faqCatalog.json";
+const faq: {group:string;q:string;a:string;path:string}[] = faqCatalog;
+export default function FAQ(){
+const [search,setSearch]=useState("");const [group,setGroup]=useState("Alle");const [open,setOpen]=useState<number|null>(0);
+const groups=["Alle",...new Set(faq.map(x=>x.group))];
+const results=useMemo(()=>faq.map((x,i)=>({...x,i})).filter(x=>(group==="Alle"||x.group===group)&&[x.q,x.a,x.group].join(" ").toLocaleLowerCase("de").includes(search.toLocaleLowerCase("de"))),[search,group]);
+return <main className="rlc-info-pro"><header className="rlc-page-hero"><span>RLC WISSENSDATENBANK</span><h1>Häufige Fragen</h1><p>139 Fragen zu allen Web-Modulen, Mobile, RLC Copilot und den Verbindungen zwischen den Bereichen.</p><input aria-label="FAQ durchsuchen" placeholder="Frage oder Stichwort suchen …" value={search} onChange={e=>setSearch(e.target.value)}/></header>
+<div className="rlc-info-chips">{groups.map(g=><button key={g} type="button" className={group===g?"active":""} onClick={()=>{setGroup(g);setOpen(null)}}>{g}</button>)}</div>
+<section className="rlc-info-panel"><div className="rlc-info-panel-head"><h2>Fragen und Antworten</h2><small>{results.length} Einträge</small></div>{results.map(x=><div className="rlc-info-faq" key={x.i}><button type="button" aria-expanded={open===x.i} onClick={()=>setOpen(open===x.i?null:x.i)}><span><small>{x.group}</small><strong>{x.q}</strong></span><b>{open===x.i?"−":"+"}</b></button>{open===x.i&&<div className="rlc-info-answer"><p>{x.a}</p><Link className="rlc-info-answer-link" to={x.path}>Bereich öffnen →</Link></div>}</div>)}{!results.length&&<p>Keine Treffer. Andere Suchbegriffe eingeben oder den Support kontaktieren.</p>}</section><footer className="rlc-info-footer"><span>Weitere Hilfe benötigt?</span><Link to="/info/hilfe">Anleitungen</Link><Link to="/info/support">Support & Feedback →</Link></footer></main>}

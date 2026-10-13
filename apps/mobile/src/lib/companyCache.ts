@@ -3,12 +3,29 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { Buffer } from "buffer";
 import { api, request } from "./api";
+import { getAuthMode, getAuthState } from "./auth";
 
 const KEY_HEADER = "rlc_company_header_v1";
 const KEY_LOGO_URI = "rlc_company_logo_uri_v1";
 
 // persistente
-const DIR = `${FileSystem.documentDirectory || ""}rlc_company/`;
+const DIR_BASE = `${FileSystem.documentDirectory || ""}rlc_company/`;
+
+async function accountScope(): Promise<string> {
+  const mode = await getAuthMode();
+  const state = await getAuthState(mode);
+  const email = String(state?.email || "").trim().toLowerCase();
+  if (!email) throw new Error("COMPANY_CACHE_IDENTITY_REQUIRED");
+  const company = mode === "SERVER_SYNC" ? String(state?.companyId || "").trim() : "LOCAL";
+  if (!company) throw new Error("COMPANY_CACHE_COMPANY_REQUIRED");
+  return `${mode}:${encodeURIComponent(company)}:${encodeURIComponent(email)}`;
+}
+async function cacheKey(base: string): Promise<string> {
+  return `${base}:${await accountScope()}`;
+}
+async function companyDir(): Promise<string> {
+  return `${DIR_BASE}${encodeURIComponent(await accountScope())}/`;
+}
 const LOGO_FILE_BASE = "logo"; // estensione aggiunta dopo (logo.png / logo.jpg / ...)
 
 function safeJsonParse<T>(s: string | null): T | null {
@@ -20,16 +37,11 @@ function safeJsonParse<T>(s: string | null): T | null {
   }
 }
 
-async function ensureDir() {
-  if (!DIR) return;
-  try {
-    const info = await FileSystem.getInfoAsync(DIR);
-    if (!info.exists) {
-      await FileSystem.makeDirectoryAsync(DIR, { intermediates: true });
-    }
-  } catch {
-    // ignore
-  }
+async function ensureDir(): Promise<string> {
+  const dir = await companyDir();
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+  return dir;
 }
 
 function guessExtFromHeaders(contentType?: string) {
@@ -53,13 +65,13 @@ function guessExtFromUri(uri?: string) {
 
 async function cleanupOldLogoFiles() {
   try {
-    await ensureDir();
-    const listing = await FileSystem.readDirectoryAsync(DIR);
+    const dir = await ensureDir();
+    const listing = await FileSystem.readDirectoryAsync(dir);
     const prefix = `${LOGO_FILE_BASE}.`;
     const hits = listing.filter((n) => n.toLowerCase().startsWith(prefix));
     for (const n of hits) {
       try {
-        await FileSystem.deleteAsync(`${DIR}${n}`, { idempotent: true });
+        await FileSystem.deleteAsync(`${dir}${n}`, { idempotent: true });
       } catch {}
     }
   } catch {
@@ -73,7 +85,7 @@ async function cleanupOldLogoFiles() {
  */
 async function downloadLogoToPersistentFile(): Promise<string | null> {
   try {
-    await ensureDir();
+    const dir = await ensureDir();
 
     const url = await api.absUrlAsync("/api/company/logo");
 
@@ -106,13 +118,13 @@ async function downloadLogoToPersistentFile(): Promise<string | null> {
     const buf = await res.arrayBuffer();
     const base64 = Buffer.from(buf).toString("base64");
 
-    const target = `${DIR}${LOGO_FILE_BASE}${ext}`;
+    const target = `${dir}${LOGO_FILE_BASE}${ext}`;
 
     await FileSystem.writeAsStringAsync(target, base64, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    await AsyncStorage.setItem(KEY_LOGO_URI, target);
+    await AsyncStorage.setItem(await cacheKey(KEY_LOGO_URI), target);
     return target;
   } catch {
     return null;
@@ -125,10 +137,10 @@ async function downloadLogoToPersistentFile(): Promise<string | null> {
 export async function setCompanyHeaderCached(header: any | null): Promise<void> {
   try {
     if (!header) {
-      await AsyncStorage.removeItem(KEY_HEADER);
+      await AsyncStorage.removeItem(await cacheKey(KEY_HEADER));
       return;
     }
-    await AsyncStorage.setItem(KEY_HEADER, JSON.stringify(header));
+    await AsyncStorage.setItem(await cacheKey(KEY_HEADER), JSON.stringify(header));
   } catch {
     // ignore
   }
@@ -143,17 +155,17 @@ export async function saveCompanyLogoToPersistentFile(
 ): Promise<string | null> {
   try {
     if (!sourceUri) return null;
-    await ensureDir();
+    const dir = await ensureDir();
 
     // pulisci vecchi logo.*
     await cleanupOldLogoFiles();
 
     const ext = guessExtFromUri(sourceUri);
-    const target = `${DIR}${LOGO_FILE_BASE}${ext}`;
+    const target = `${dir}${LOGO_FILE_BASE}${ext}`;
 
     // Android content:// -> copia in cache temporanea e poi copia
     if (sourceUri.startsWith("content://")) {
-      const tmp = `${FileSystem.cacheDirectory || DIR}tmp_logo${ext}`;
+      const tmp = `${FileSystem.cacheDirectory || dir}tmp_logo${ext}`;
       await FileSystem.copyAsync({ from: sourceUri, to: tmp });
       await FileSystem.copyAsync({ from: tmp, to: target });
       try {
@@ -163,7 +175,7 @@ export async function saveCompanyLogoToPersistentFile(
       await FileSystem.copyAsync({ from: sourceUri, to: target });
     }
 
-    await AsyncStorage.setItem(KEY_LOGO_URI, target);
+    await AsyncStorage.setItem(await cacheKey(KEY_LOGO_URI), target);
     return target;
   } catch {
     return null;
@@ -206,7 +218,7 @@ export async function syncCompanyHeaderAndLogo(): Promise<{
     // accetta vari shape
     header = j?.company || j?.data?.company || j?.header || null;
     if (header) {
-      await AsyncStorage.setItem(KEY_HEADER, JSON.stringify(header));
+      await AsyncStorage.setItem(await cacheKey(KEY_HEADER), JSON.stringify(header));
     }
   } catch {
     // ignore -> fallback cache
@@ -214,14 +226,14 @@ export async function syncCompanyHeaderAndLogo(): Promise<{
 
   // 2) fallback header cache
   if (!header) {
-    header = safeJsonParse<any>(await AsyncStorage.getItem(KEY_HEADER)) || null;
+    try { header = safeJsonParse<any>(await AsyncStorage.getItem(await cacheKey(KEY_HEADER))) || null; } catch { header = null; }
   }
 
   // 3) logo: se già c’è uri locale valido -> ok, altrimenti scarica
   let logoUri: string | null = null;
 
   try {
-    const cachedLogo = (await AsyncStorage.getItem(KEY_LOGO_URI)) || "";
+    const cachedLogo = (await AsyncStorage.getItem(await cacheKey(KEY_LOGO_URI))) || "";
     if (cachedLogo) {
       const info = await FileSystem.getInfoAsync(cachedLogo);
       if (info.exists) logoUri = cachedLogo;
@@ -242,13 +254,14 @@ export async function syncCompanyHeaderAndLogo(): Promise<{
  * Solo lettura cache (offline)
  */
 export async function getCompanyHeaderCached(): Promise<any | null> {
-  return safeJsonParse<any>(await AsyncStorage.getItem(KEY_HEADER));
+  try { return safeJsonParse<any>(await AsyncStorage.getItem(await cacheKey(KEY_HEADER))); }
+  catch { return null; }
 }
 
 export async function getCompanyLogoUriCached(): Promise<string | null> {
-  const u = (await AsyncStorage.getItem(KEY_LOGO_URI)) || "";
-  if (!u) return null;
   try {
+    const u = (await AsyncStorage.getItem(await cacheKey(KEY_LOGO_URI))) || "";
+    if (!u) return null;
     const info = await FileSystem.getInfoAsync(u);
     return info.exists ? u : null;
   } catch {
@@ -269,10 +282,10 @@ export async function refreshCompanyLogo(): Promise<string | null> {
  */
 export async function clearCompanyCache(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(KEY_HEADER);
+    await AsyncStorage.removeItem(await cacheKey(KEY_HEADER));
 
-    const u = (await AsyncStorage.getItem(KEY_LOGO_URI)) || "";
-    await AsyncStorage.removeItem(KEY_LOGO_URI);
+    const u = (await AsyncStorage.getItem(await cacheKey(KEY_LOGO_URI))) || "";
+    await AsyncStorage.removeItem(await cacheKey(KEY_LOGO_URI));
 
     // pulizia file locali
     if (u) {

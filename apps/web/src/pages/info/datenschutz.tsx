@@ -1,3 +1,4 @@
+import "./infoProfessional.css";
 import React from "react";
 import { Link } from "react-router-dom";
 import { apiUrl } from "../../lib/apiBase";
@@ -84,7 +85,7 @@ export default function Datenschutz() {
   const saveRequest=async(finalize=false)=>{if(!selected)return;try{const payload={...selected,status:finalize?"COMPLETED":selected.status||"OPEN"};const r=await api(`/api/privacy-compliance/${selected.id}`,{method:"PUT",body:JSON.stringify(payload)});await load();setSelected(r.item);setMessage(finalize?"Betroffenenanfrage abgeschlossen und gesperrt.":"Betroffenenanfrage gespeichert.");}catch(e:any){setMessage(e.message);}};
   const patchRequest=(patch:any)=>{if(selected&&!selected.evidenceLock)setSelected({...selected,...patch});};
   return (
-    <div style={shell}>
+    <div className="rlc-info-pro rlc-info-privacy" style={shell}>
       <header className="rlc-page-hero">
         <div className="rlc-page-hero__eyebrow">RLC · Datenschutz</div>
         <h1>Datenschutz und Datenverarbeitung</h1>

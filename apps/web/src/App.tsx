@@ -66,6 +66,7 @@ const Maschinenverwaltung = React.lazy(() => import("./pages/buro/maschinenverwa
 const Materialverwaltung = React.lazy(() => import("./pages/buro/materialverwaltung"));
 const Sicherheit = React.lazy(() => import("./pages/buro/sicherheit"));
 const CatalogAssignments = React.lazy(() => import("./pages/buro/CatalogAssignments"));
+const BusinessContacts = React.lazy(() => import("./pages/buro/BusinessContacts"));
 const MasterCatalog = React.lazy(() => import("./pages/buro/MasterCatalog"));
 const NonWorkingDays = React.lazy(() => import("./pages/buro/NonWorkingDays"));
 const Einsatzplanung = React.lazy(() => import("./pages/buro/ressourcenplanung"));
@@ -124,7 +125,9 @@ const Uebersicht = React.lazy(() => import("./pages/buchhaltung/Uebersicht"));
 const Kostenuebersicht = React.lazy(() => import("./pages/buchhaltung/Kostenuebersicht"));
 const Rechnungen = React.lazy(() => import("./pages/buchhaltung/rechnungen"));
 const Zahlungen = React.lazy(() => import("./pages/buchhaltung/zahlungen"));
+const Zahlungsabgleich = React.lazy(() => import("./pages/buchhaltung/Zahlungsabgleich"));
 const Eingang = React.lazy(() => import("./pages/buchhaltung/eingang"));
+const Belegpruefung = React.lazy(() => import("./pages/buchhaltung/Belegpruefung"));
 const Dauerbuchungen = React.lazy(() => import("./pages/buchhaltung/Dauerbuchungen"));
 const Kassenbuch = React.lazy(() => import("./pages/buchhaltung/kassenbuch"));
 const Kostenstellen = React.lazy(() => import("./pages/buchhaltung/kostenstellen"));
@@ -271,6 +274,7 @@ const SECTIONS: Section[] = [
   { key: "maschinenverwaltung", label: "Maschinenverwaltung" },
   { key: "cockpit", label: "Projekt-Cockpit" },
   { key: "feiertage", label: "Feiertage & Betriebsruhe" },
+  { key: "kontakte", label: "Adressen & Kontakte" },
   { key: "stammdaten", label: "Stammdaten-Kataloge" },
   { key: "zuordnungen", label: "Führerscheine / Gefahrenklassen" },
   { key: "versanderfassung", label: "Versanderfassung" },
@@ -286,16 +290,12 @@ const SECTIONS: Section[] = [
   key: "info",
   title: "6. Info / Hilfe / Videoerklärung",
   items: [
-  { key: "hilfe", label: "Hilfe / Anleitungen" },
-  { key: "faq", label: "FAQ" },
-  { key: "shortcuts", label: "Tastenkürzel" },
-  { key: "changelog", label: "Changelog" },
-  { key: "system", label: "Systemstatus" },
-  { key: "updates", label: "Updates" },
-  { key: "datenschutz", label: "Datenschutz" },
-  { key: "impressum", label: "Impressum" },
-  { key: "support", label: "Support / Feedback" },
-  { key: "ueber", label: "Über die App" }]
+    { key: "hilfe", label: "Hilfe-Center" },
+    { key: "faq", label: "Häufige Fragen (FAQ)" },
+    { key: "support", label: "Support & Feedback" },
+    { key: "system", label: "Systemstatus" },
+    { key: "datenschutz", label: "Datenschutz" },
+    { key: "impressum", label: "Impressum" }]
 
 },
 {
@@ -395,8 +395,8 @@ function SideNav() {
   const [openMenu, setOpenMenu] = React.useState<string | null>(null);
 
   const topItems = [
-  { to: "/start", label: "Projekte öffnen / neu erstellen" },
-  { to: "/projekt/uebersicht", label: "Projekt Übersicht" }];
+  { to: "/start", label: "Projekte" },
+  { to: "/projekt/uebersicht", label: "Übersicht" }];
 
 
   return (
@@ -443,7 +443,7 @@ function SideNav() {
             </button>
 
             {isOpen ?
-            <div className="rlc-top-nav-dropdown">
+            <div className={`rlc-top-nav-dropdown ${section.key === "info" ? "rlc-hilfe-dropdown" : ""}`}>
 
 
 
@@ -460,7 +460,7 @@ function SideNav() {
 
 
               
-                {section.key !== "cad" ? (
+                {section.key !== "cad" && section.key !== "info" ? (
                   <Link
                     className={`s-link ${pathname === `/${section.key}` ? "active" : ""}`}
                     to={`/${section.key}`}
@@ -489,6 +489,16 @@ function SideNav() {
           </div>);
 
       })}
+
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event("rlc:open-copilot"))}
+        title="RLC Copilot öffnen"
+        className="rlc-header-copilot-button"
+      >
+        <span className="rlc-header-copilot-avatar" aria-hidden="true" />
+        <span>RLC Copilot</span>
+      </button>
     </nav>);
 
 }
@@ -667,7 +677,6 @@ function AppShell() {
             </span>
             <span className="rlc-brand-copy">
               <span className="rlc-brand-title">RLC Bausoftware</span>
-              <span className="rlc-brand-subtitle">Bau · Kalkulation · Vermessung</span>
             </span>
           </Link>
 
@@ -689,17 +698,7 @@ function AppShell() {
                 cursor: "pointer",
               }}
             >
-              Senden / Exportieren
-            </button>
-
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event("rlc:open-copilot"))}
-              title="RLC Copilot öffnen"
-              aria-label="RLC Copilot öffnen"
-              className="rlc-header-copilot-button"
-            >
-              <span className="rlc-header-copilot-avatar" aria-hidden="true" />
+              Senden
             </button>
 
             <Link
@@ -715,23 +714,7 @@ function AppShell() {
                 fontSize: 13,
               }}
             >
-              Feedback / Kontakt
-            </Link>
-
-            <Link
-              to="/login"
-              style={{
-                textDecoration: "none",
-                padding: "8px 12px",
-                borderRadius: 9,
-                border: "1px solid #cbd5e1",
-                background: "#fff",
-                color: "#334155",
-                fontWeight: 800,
-                fontSize: 13,
-              }}
-            >
-              Neu anmelden
+              Feedback
             </Link>
 
             <button
@@ -844,6 +827,7 @@ function AppShell() {
               {/* BÜRO */}
               <Route path="/buro/geraeteverrechnung" element={<BuroLayout><MachineUsage /></BuroLayout>} />
               <Route path="/buro/personalnachweise" element={<BuroLayout><PersonnelQualifications /></BuroLayout>} />
+              <Route path="/buro/kontakte" element={<BuroLayout><BusinessContacts /></BuroLayout>} />
               <Route path="/buro/stammdaten" element={<BuroLayout><MasterCatalog /></BuroLayout>} />
               <Route path="/buro/zuordnungen" element={<BuroLayout><CatalogAssignments /></BuroLayout>} />
               <Route path="/buro/feiertage" element={<BuroLayout><NonWorkingDays /></BuroLayout>} />
@@ -1151,7 +1135,9 @@ function AppShell() {
                     element={<AbschlagsrechnungDetail />} />
                   
                 <Route path="zahlungen" element={<Zahlungen />} />
+                <Route path="zahlungsabgleich" element={<Zahlungsabgleich />} />
                 <Route path="eingang" element={<Eingang />} />
+                <Route path="belegpruefung" element={<Belegpruefung />} />
                 <Route path="dauerbuchungen" element={<Dauerbuchungen />} />
                 <Route path="kassenbuch" element={<Kassenbuch />} />
                 <Route path="kostenstellen" element={<Kostenstellen />} />

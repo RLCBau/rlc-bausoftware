@@ -39,6 +39,7 @@ const AUTH_KEYS = [
 "authToken",
 "accessToken",
 "rlc.auth.token",
+"rlc_auth_token",
 "rlc_mobile_token"] as
 const;
 
@@ -48,7 +49,10 @@ user?: AuthUser | null,
 company?: CompanyPayload | null)
 {
   try {
-    for (const key of AUTH_KEYS) localStorage.removeItem(key);
+    for (const key of AUTH_KEYS) {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
 
     for (const key of [
       "rlc_company_id",
@@ -333,6 +337,7 @@ export default function Login() {
         body: JSON.stringify({
           email: cleanEmail,
           password: cleanPassword,
+          inviteCode: inviteCode.trim().toUpperCase() || undefined,
           mode: "SERVER_SYNC"
         })
       });
@@ -618,9 +623,8 @@ export default function Login() {
             
           </div>
 
-          {mode === "register" ?
           <div className="rlc-migrated-pages-auth-login-tsx-62">
-              <label className={rlcClass(null, label)}>Einladungscode der Firma</label>
+              <label className={rlcClass(null, label)}>Web-Lizenzcode (optional)</label>
               <input className={rlcClass(null,
             input)}
             type="text"
@@ -628,8 +632,7 @@ export default function Login() {
             onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
             placeholder="z. B. RLC-7A3F-91BC" />
             
-            </div> :
-          null}
+            </div>
 
           {error ?
           <div className="rlc-migrated-pages-auth-login-tsx-63">

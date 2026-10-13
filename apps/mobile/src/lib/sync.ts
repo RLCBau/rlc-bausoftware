@@ -1,7 +1,19 @@
 ﻿// apps/mobile/src/lib/sync.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getToken } from "./auth";
 import { api } from "./api";
-import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
+import { queueList, queueUpdate, queueLegacyRecoveryPreview, queueRecoverLegacy, QueueItem, DateiMeta } from "./offlineQueue";
+
+/** Legacy migration requires explicit confirmation and a fresh server ACL. */
+export async function recoverLegacyQueueConfirmed(confirmedProjectIds: string[]) {
+  const preview = await queueLegacyRecoveryPreview();
+  const projects = await api.projects();
+  const allowedIds = projects.flatMap((p: any) => [String(p?.id || ""), String(p?.code || "")]).filter(Boolean);
+  if (!preview.projects.length || !preview.projects.every(id => confirmedProjectIds.includes(id) && allowedIds.includes(id))) {
+    throw new Error("RECOVERY_PROJECT_OWNERSHIP_NOT_CONFIRMED");
+  }
+  return queueRecoverLegacy(confirmedProjectIds, allowedIds);
+}
 
 /**
  * ✅ POLICY:
@@ -20,16 +32,13 @@ import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
  *   - main (1)   -> doc root
  *   - files (N)  -> doc/files
  *
- * ✅ MODE SEPARATION:
- * - SERVER_SYNC sends documents only to the server-side Eingang / Prüfung.
- * - NUR_APP uses the offline Inbox via AsyncStorage.
- * - sync.ts must never mirror SERVER_SYNC documents into the offline Inbox.
+ * ✅ NEW FIX (MOBILE UI):
+ * - Dopo sync PHOTO_NOTE, scrive anche nelle 2 AsyncStorage Inbox keys:
+ *   rlc_mobile_inbox_photos:${BA} e rlc_mobile_inbox_fotos:${BA}
+ *   così InboxScreen/Eingangsprüfung vede subito le righe.
  */
 
-let _projectMap: Map<string, string> | null = null;
-
 async function loadProjectMap(): Promise<Map<string, string>> {
-  if (_projectMap) return _projectMap;
 
   const map = new Map<string, string>();
   try {
@@ -45,7 +54,6 @@ async function loadProjectMap(): Promise<Map<string, string>> {
     // best effort
   }
 
-  _projectMap = map;
   return map;
 }
 
@@ -98,13 +106,22 @@ export async function syncAll(
   let ok = 0,
     fail = 0;
 
-  // preload map (best effort)
-  await loadProjectMap();
+  // Fail closed: never replay offline documents to a server that cannot
+  // confirm which projects are visible to the currently authenticated user.
+  const allowedProjects = await loadProjectMap();
+  if (allowedProjects.size === 0) {
+    return { ok: 0, fail: list.filter((item) => item.status !== "DONE").length };
+  }
 
   const targetPk = await projectKeyForTarget(opts);
 
   for (const item of list) {
     if (item.status === "DONE") continue;
+
+    // The local queue is shared by legacy accounts; never transmit an item
+    // unless the current server session explicitly lists its project.
+    const itemProjectCode = allowedProjects.get(String(item.projectId || "").trim());
+    if (!itemProjectCode) { fail++; continue; }
 
     // ✅ filtro per progetto (se richiesto)
     if (targetPk) {
@@ -159,12 +176,62 @@ function uid(prefix = "ph") {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
 }
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+async function loadArray(key: string): Promise<any[]> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveArray(key: string, arr: any[]) {
+  await AsyncStorage.setItem(key, JSON.stringify(arr || []));
+}
+
+function upsertRow(list: any[], row: any) {
+  const next = Array.isArray(list) ? [...list] : [];
+  const idx = next.findIndex(
+    (x) => String(x?.id || "") === String(row?.id || "")
+  );
+  const merged = { ...row, updatedAt: nowIso() };
+  if (idx >= 0) next[idx] = { ...next[idx], ...merged };
+  else next.unshift(merged);
+  return next;
+}
+
+/** Inbox keys for Fotos (keep BOTH) */
+function inboxFotosKey(projectKey: string) {
+  return `rlc_mobile_inbox_fotos:${projectKey}`;
+}
+function inboxPhotosKey(projectKey: string) {
+  return `rlc_mobile_inbox_photos:${projectKey}`;
+}
+
+/** Write Photos rows to Offline-Inbox keys so InboxScreen can display immediately */
+async function writePhotosToOfflineInbox(projectKey: string, row: any) {
+  const k1 = inboxPhotosKey(projectKey);
+  const k2 = inboxFotosKey(projectKey);
+
+  const arr1 = await loadArray(k1);
+  await saveArray(k1, upsertRow(arr1, row));
+
+  const arr2 = await loadArray(k2);
+  await saveArray(k2, upsertRow(arr2, row));
+}
+
 /** token + base url like in screens (hard, no guessing) */
 async function serverRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getToken();
   const headers: Record<string, any> = { ...(init.headers as any) };
 
   // JSON only (NOT for FormData)
@@ -266,24 +333,7 @@ async function syncOne(item: QueueItem) {
       ...(item.payload || {}),
       projectId: pk, // server FS-key
     };
-    return (api as any).pushRegieToServer(pk, payload);
-  }
-
-  // Tagesbericht e Bautagebuch condividono il workflow Regie sul server.
-  if (item.kind === "TAGESBERICHT" || item.kind === "BAUTAGEBUCH") {
-    const p: any = item.payload || {};
-    const row = p?.row ?? p;
-    return serverRequest("/api/regie", {
-      method: "POST",
-      body: JSON.stringify({
-        ...row,
-        projectId: pk,
-        projectCode: pk,
-        date: String(row?.date || new Date().toISOString().slice(0, 10)),
-        reportType: item.kind,
-        workflowStatus: "EINGEREICHT",
-      }),
-    });
+    return (api as any).pushRegieToServer(payload);
   }
 
   // =========================
@@ -392,7 +442,7 @@ async function syncOne(item: QueueItem) {
   }
 
   // =========================
-  // PHOTO_NOTE / FOTOS_NOTIZEN  ✅ SERVER INBOX ONLY
+  // PHOTO_NOTE / FOTOS_NOTIZEN  ✅ FIX: INBOX MULTIPART + LOCAL INBOX WRITE
   // =========================
   if (item.kind === "PHOTO_NOTE" || item.kind === "FOTOS_NOTIZEN") {
     const p: any = item.payload || {};
@@ -423,29 +473,34 @@ async function syncOne(item: QueueItem) {
       boxes: r?.boxes ?? p?.boxes,
     };
 
-    // SERVER_SYNC: upload only to the server-side Eingang / Prüfung.
-    // The offline Inbox is reserved exclusively for NUR_APP mode.
-    return uploadPhotoNoteInbox(pk, payload);
-  }
+    // 1) Upload server inbox
+    const res = await uploadPhotoNoteInbox(pk, payload);
 
-  if (
-    item.kind === "ANGEBOT" ||
-    item.kind === "MENGENERMITTLUNG" ||
-    item.kind === "ABSCHLAGSRECHNUNG" ||
-    item.kind === "RECHNUNG" ||
-    item.kind === "KALKULATION" ||
-    item.kind === "OUTLIER_REPORT"
-  ) {
-    const p: any = item.payload || {};
-    const row = p?.row ?? p;
-    return serverRequest(
-      `/api/inbox/${encodeURIComponent(pk)}/${encodeURIComponent(item.kind)}/submit`,
-      {
-        method: "POST",
-        body: JSON.stringify({ ...row, projectId: pk, projectCode: pk }),
-      }
-    );
+    // 2) ✅ After server success: ensure local Inbox keys contain the row
+    //    so EingangPrüfung/InboxScreen shows it immediately and consistently
+    await writePhotosToOfflineInbox(pk, {
+      id: String(payload?.docId || payload?.id || uid("ph")),
+      kind: "fotos",
+      workflowStatus: "EINGEREICHT",
+      projectCode: pk,
+      projectId: pk,
+      date: String(payload?.date || "").slice(0, 10),
+      kostenstelle: String(payload?.kostenstelle || ""),
+      lvItemPos: payload?.lvItemPos ?? null,
+      comment: String(payload?.comment || ""),
+      bemerkungen: String(payload?.bemerkungen || ""),
+      note: String(payload?.note || payload?.comment || ""),
+      imageUri: payload?.imageUri || null,
+      files: Array.isArray(payload?.files) ? payload.files : [],
+      attachments: Array.isArray(payload?.attachments) ? payload.attachments : [],
+      extras: payload?.extras,
+      boxes: payload?.boxes,
+      syncedAt: nowIso(),
+    });
+
+    return res;
   }
 
   throw new Error("Unknown queue item");
 }
+

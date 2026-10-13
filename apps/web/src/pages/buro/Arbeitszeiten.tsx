@@ -51,6 +51,10 @@ function employeeOf(row: Row) {
   );
 }
 
+function employeeIdOf(row: Row) {
+  return String(row.employeeId || row.mitarbeiterId || row.workerId || row.submittedBy?.employeeId || "").trim();
+}
+
 function hoursOf(row: Row) {
   const value = Number(row.hours ?? row.netHours ?? 0);
   return Number.isFinite(value) ? value : 0;
@@ -63,6 +67,7 @@ export default function Arbeitszeiten() {
   const employeeFilter = String(
     searchParams.get("mitarbeiter") || ""
   ).trim();
+  const employeeIdFilter = String(searchParams.get("employeeId") || "").trim();
 
   const { getSelectedProject } = useProject();
   const project = getSelectedProject();
@@ -100,6 +105,7 @@ export default function Arbeitszeiten() {
   }, [load]);
 
   const visibleRows = React.useMemo(() => {
+    if (employeeIdFilter) return rows.filter((row) => employeeIdOf(row) === employeeIdFilter);
     if (!employeeFilter) return rows;
 
     return rows.filter(
@@ -110,7 +116,11 @@ export default function Arbeitszeiten() {
         employeeFilter
           .toLocaleLowerCase("de-DE")
     );
-  }, [rows, employeeFilter]);
+  }, [rows, employeeFilter, employeeIdFilter]);
+
+  const unassignedLegacyCount = employeeIdFilter
+    ? rows.filter((row) => !employeeIdOf(row) && employeeOf(row).trim().toLocaleLowerCase("de-DE") === employeeFilter.toLocaleLowerCase("de-DE")).length
+    : 0;
 
   const totalHours = visibleRows.reduce(
     (sum, row) => sum + hoursOf(row),
@@ -155,9 +165,7 @@ export default function Arbeitszeiten() {
           {employeeFilter && (
             <Link
               className="rlc-page-hero__button"
-              to={`/buro/personalverwaltung?mitarbeiter=${encodeURIComponent(
-                employeeFilter
-              )}`}
+              to={`/buro/personalverwaltung?${employeeIdFilter ? `employeeId=${encodeURIComponent(employeeIdFilter)}` : `mitarbeiter=${encodeURIComponent(employeeFilter)}`}`}
             >
               Personalakte
             </Link>
@@ -209,6 +217,12 @@ export default function Arbeitszeiten() {
       {!error && loading ? (
         <div className="empty">
           <h3>Arbeitszeiten werden geladen …</h3>
+        </div>
+      ) : null}
+
+      {!error && !loading && unassignedLegacyCount > 0 ? (
+        <div className="card" role="status" style={{borderLeft:"3px solid #b54708"}}>
+          {unassignedLegacyCount} ältere Arbeitszeitnachweise enthalten keine eindeutige Mitarbeiter-ID. Sie werden zur Vermeidung einer falschen Zuordnung nicht in der Personalakte angezeigt.
         </div>
       ) : null}
 

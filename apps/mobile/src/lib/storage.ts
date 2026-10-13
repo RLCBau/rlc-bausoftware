@@ -3,7 +3,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
-import { getApiUrl } from "./api";
+
+const API_URL_STORAGE_KEY = "api_base_url";
 
 /** ============================================================
  * JSON storage (unchanged)
@@ -113,7 +114,12 @@ export function getBaseDirOrThrow(): string {
 }
 
 async function getApiBaseUrlFromStorage(): Promise<string> {
-  return getApiUrl();
+  try {
+    const raw = String((await AsyncStorage.getItem(API_URL_STORAGE_KEY)) || "").trim();
+    if (raw) return raw.replace(/\/$/, "");
+  } catch {}
+  // fallback (keep aligned with api.ts default)
+  return "https://api.rlcbausoftware.com";
 }
 
 /**

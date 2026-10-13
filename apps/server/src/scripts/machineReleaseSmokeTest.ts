@@ -10,6 +10,10 @@ assert.throws(()=>releaseTransition("Bestätigt","Entwurf"));
 const url=new URL(process.env.DATABASE_URL!);url.pathname="/rlc_addon_validation_20261008";process.env.DATABASE_URL=url.toString();process.env.DEV_AUTH="off";
 const {prisma}=require("../lib/prisma"),router=require("../routes/officeAddons").default;
 async function main(){
+ await prisma.company.createMany({data:[{id:'addon-test-a',code:'ADDON-A',name:'Testfirma A'},{id:'addon-test-b',code:'ADDON-B',name:'Testfirma B'}]});
+ await prisma.user.create({data:{id:'addon-member',companyId:'addon-test-a',email:'release@test.invalid',password:'test'}});
+ await prisma.project.createMany({data:[{id:'addon-project-a',companyId:'addon-test-a',code:'ADDON-PA',name:'A'},{id:'addon-project-b',companyId:'addon-test-b',code:'ADDON-PB',name:'B'},{id:'planning-hidden',companyId:'addon-test-a',code:'ADDON-H',name:'Hidden'}]});
+ await prisma.projectMember.create({data:{projectId:'addon-project-a',userId:'addon-member',role:'BAULEITER'}});
  await prisma.companyMachine.createMany({data:[{id:"release-machine-a",name:"Excavator A",companyId:"addon-test-a",projectId:"addon-project-a"},{id:"release-machine-b",name:"Foreign B",companyId:"addon-test-b",projectId:"addon-project-b"},{id:"release-machine-hidden",name:"Hidden",companyId:"addon-test-a",projectId:"planning-hidden"}]});
  await prisma.resourceAssignment.create({data:{companyId:"addon-test-a",resourceType:"MACHINE",resourceId:"release-machine-a",projectId:"addon-project-a",date:new Date("2026-10-02T12:00:00Z"),hours:8}});
  const app=express();app.use(express.json());app.use((req:any,_res,next)=>{req.auth={sub:req.headers["x-user"]||"addon-member",companyId:req.headers["x-company"]||"addon-test-a",companyRole:req.headers["x-role"]||"BAULEITER"};next();});app.use("/addons",router);

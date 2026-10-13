@@ -142,6 +142,13 @@ export default function Eingangsrechnungen() {
     } catch (e: any) { setError(e?.message || "Gutschrift konnte nicht ausgestellt werden."); }
   };
 
+  const approve = async (row:any,stage:"TECHNICAL"|"ACCOUNTING")=>{
+    if(!row.pdfDocId){setError("Zuerst Originalbeleg hochladen.");return;}
+    if(!window.confirm((stage==="TECHNICAL"?"Sachliche Prüfung":"Rechnerische Prüfung")+" für "+row.number+" verbindlich bestätigen?"))return;
+    await accountingApi(`/api/accounting/vendor-bills/${row.id}/review`,{method:"POST",body:JSON.stringify({stage})});
+    await load();
+  };
+
   const book = async (row: any) => {
     try {
       setError("");
@@ -244,7 +251,10 @@ export default function Eingangsrechnungen() {
               <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {!billLocked(row) ? <button className="bh-btn ghost" onClick={() => editRow(row)}>Bearbeiten</button> : null}
                 {!billLocked(row) && meta.documentType === "GUTSCHRIFT_14" ? <button className="bh-btn" onClick={() => void runAction(()=>issueSelfBilling(row))}>Gutschrift ausstellen</button> : null}
-                {!billLocked(row) && meta.documentType !== "GUTSCHRIFT_14" ? <button className="bh-btn" onClick={() => void runAction(()=>book(row))} disabled={!row.pdfDocId}>Buchen</button> : null}
+                {!billLocked(row) && meta.documentType !== "GUTSCHRIFT_14" && <><span className="bh-note">Prüfung: {meta.approvals?.technical?"Sachlich ✓":"Sachlich offen"} · {meta.approvals?.accounting?"Rechnerisch ✓":"Rechnerisch offen"}</span>
+                {!meta.approvals?.technical && <button className="bh-btn ghost" disabled={!row.pdfDocId||busy} onClick={()=>void runAction(()=>approve(row,"TECHNICAL"))}>Sachlich prüfen</button>}
+                {meta.approvals?.technical&&!meta.approvals?.accounting&&<button className="bh-btn ghost" disabled={busy} onClick={()=>void runAction(()=>approve(row,"ACCOUNTING"))}>Rechnerisch prüfen</button>}
+                <button className="bh-btn" onClick={() => void runAction(()=>book(row))} disabled={!row.pdfDocId||!meta.approvals?.technical||!meta.approvals?.accounting||busy}>Buchen</button></>}
                 {String(row.status).toLowerCase() === "booked" && Number(row.openAmount) > 0 ? <button className="bh-btn" onClick={() => void runAction(()=>pay(row))}>Bezahlen</button> : null}
                 {!billLocked(row) && meta.documentType !== "GUTSCHRIFT_14" ? <button className="bh-btn ghost" onClick={() => void runAction(()=>uploadBeleg(row))}>Beleg hochladen</button> : billLocked(row) ? <span className="bh-note">Originalbeleg gesperrt</span> : null}
                 {!billLocked(row) ? <button className="bh-btn ghost" onClick={() => void runAction(()=>remove(row.id))}>Entwurf löschen</button> : null}

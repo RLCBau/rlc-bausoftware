@@ -7,6 +7,7 @@ import "./styles.css";
 export default function Mahnwesen() {
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
 
   const createMahnPdf = async (row: any) => {
     if (Number(row.dunningLevel || 0) < 1) {
@@ -42,24 +43,20 @@ export default function Mahnwesen() {
   }, []);
 
   const setLevel = async (row:any, level:number) => {
-    await accountingApi(`/api/accounting/invoices/${row.id}/dunning`, {
-      method: "POST",
-      body: JSON.stringify({
-        dunningLevel: level,
-        lastDunningDate:
-          level > 0
-            ? new Date().toISOString()
-            : null,
-        dunningFee:
-          level === 1 ? 5 :
-          level === 2 ? 10 :
-          level >= 3 ? 20 : 0,
-        interestRate:
-          level >= 2 ? 9 : 5
-      })
-    });
-
-    await load();
+    if(saving) return;
+    if(level<0||level>3||!Number.isInteger(level))return;
+    if(Number(row.openAmount||0)<=0.009){setError("Vollständig bezahlte Rechnungen dürfen nicht gemahnt werden.");return;}
+    const message = level === 0 ? "Mahnstufe für Rechnung "+row.number+" zurücksetzen?" : "Mahnstufe "+level+" für Rechnung "+row.number+" speichern? Gebühren und Zinsen bleiben unverändert und müssen gesondert geprüft werden.";
+    if(!window.confirm(message))return;
+    setSaving(String(row.id));setError("");
+    try{
+      await accountingApi(`/api/accounting/invoices/${row.id}/dunning`,{
+        method:"POST",
+        body:JSON.stringify({dunningLevel:level,lastDunningDate:level>0?new Date().toISOString():null,dunningFee:Number(row.dunningFee||0),interestRate:Number(row.interestRate||0)})
+      });
+      await load();
+    }catch(e:any){setError(e?.message||"Mahnstufe konnte nicht gespeichert werden.");}
+    finally{setSaving(null);}
   };
 
   return (
@@ -71,7 +68,8 @@ export default function Mahnwesen() {
         </button>
       </div>
 
-      {error && <div className="bh-note">{error}</div>}
+      <div className="bh-note">Mahngebühren und Verzugszinsen werden nicht automatisch festgelegt. Bestehende Werte bleiben erhalten und müssen fachlich geprüft werden.</div>
+      {error && <div className="bh-note" role="alert">{error}</div>}
 
       <table className="bh-table">
         <thead>
@@ -105,6 +103,7 @@ export default function Mahnwesen() {
                   <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
                     <select
                       aria-label="Mahnstufe"
+                      disabled={Boolean(saving)||Number(row.openAmount||0)<=0.009}
                       value={row.dunningLevel}
                       onChange={e=>setLevel(row, Number(e.target.value))}
                     >

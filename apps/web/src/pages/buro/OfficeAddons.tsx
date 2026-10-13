@@ -4,8 +4,8 @@ import { API_BASE } from "../../lib/apiBase";
 import { useProject } from "../../store/useProject";
 
 type Kind = "guarantees" | "certificates";
-type Item = { id: string; title: string; number?: string; issuer: string; amount?: string; type: string; status: string; validFrom?: string | null; validUntil?: string | null; contractId?: string | null; documentId?: string | null; notes?: string | null; revision: number; expiry: string; contract?: {title: string; partner?: string}; document?: {name: string}; reviewedAt?: string | null };
-type Form = { title: string; number: string; issuer: string; amount: string; type: string; status: string; validFrom: string; validUntil: string; contractId: string; documentId: string; notes: string };
+type Item = { supplierPartyId?: string | null; supplierParty?: {id:string;name:string} | null; id: string; title: string; number?: string; issuer: string; amount?: string; type: string; status: string; validFrom?: string | null; validUntil?: string | null; contractId?: string | null; documentId?: string | null; notes?: string | null; revision: number; expiry: string; contract?: {title: string; partner?: string}; document?: {name: string}; reviewedAt?: string | null };
+type Form = { supplierPartyId:string; title: string; number: string; issuer: string; amount: string; type: string; status: string; validFrom: string; validUntil: string; contractId: string; documentId: string; notes: string };
 const guaranteeTypes = ["Vertragserfüllung", "Gewährleistung", "Vorauszahlung", "Sonstige"];
 const guaranteeStatuses = ["Entwurf", "Aktiv", "Freigabe beantragt", "Zurückgegeben", "Archiviert"];
 const certificateTypes = ["Freistellungsbescheinigung", "Unbedenklichkeitsbescheinigung", "Versicherung", "Gewerbeanmeldung", "Qualifikation", "Sonstige"];
@@ -22,8 +22,8 @@ async function request(path: string, init?: RequestInit) {
   if (!r.ok || data.ok === false) throw new Error(data.error || "Vorgang fehlgeschlagen (" + r.status + ").");
   return data;
 }
-function blank(kind: Kind): Form { return {title: "", number: "", issuer: "", amount: "0.00", type: kind === "guarantees" ? guaranteeTypes[0] : certificateTypes[0], status: kind === "guarantees" ? "Entwurf" : "Ungeprüft", validFrom: "", validUntil: "", contractId: "", documentId: "", notes: ""}; }
-function toForm(row: Item, kind: Kind): Form { return { ...blank(kind), ...row, number: row.number || "", amount: row.amount || "0.00", validFrom: row.validFrom?.slice(0,10) || "", validUntil: row.validUntil?.slice(0,10) || "", contractId: row.contractId || "", documentId: row.documentId || "", notes: row.notes || "" }; }
+function blank(kind: Kind): Form { return {supplierPartyId:"", title: "", number: "", issuer: "", amount: "0.00", type: kind === "guarantees" ? guaranteeTypes[0] : certificateTypes[0], status: kind === "guarantees" ? "Entwurf" : "Ungeprüft", validFrom: "", validUntil: "", contractId: "", documentId: "", notes: ""}; }
+function toForm(row: Item, kind: Kind): Form { return { ...blank(kind), ...row, supplierPartyId:row.supplierPartyId||"", number: row.number || "", amount: row.amount || "0.00", validFrom: row.validFrom?.slice(0,10) || "", validUntil: row.validUntil?.slice(0,10) || "", contractId: row.contractId || "", documentId: row.documentId || "", notes: row.notes || "" }; }
 export default function OfficeAddons({kind}: {kind: Kind}) {
   const { getSelectedProject } = useProject();
   const project = getSelectedProject();
@@ -42,6 +42,7 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
   const [query, setQuery] = React.useState("");
   const [showArchived, setShowArchived] = React.useState(false);
   const [contracts, setContracts] = React.useState<any[]>([]);
+  const [suppliers,setSuppliers]=React.useState<any[]>([]);
   const [documents, setDocuments] = React.useState<any[]>([]);
   const selected = items.find(i => i.id === selectedId);
   const contextKey = kind + ":" + projectId;
@@ -49,20 +50,21 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
   const generation = React.useRef(0);
   const load = React.useCallback(async () => {
     const n = ++generation.current;
-    if (!projectId) { setItems([]); setContracts([]); setDocuments([]); return; }
+    if (!projectId) { setItems([]); setContracts([]); setDocuments([]); setSuppliers([]); return; }
     setLoading(true); setError("");
     try {
-      const [data, links] = await Promise.all([
+      const [data, links, supplierData] = await Promise.all([
         request("/api/office-addons/" + kind + "?projectId=" + encodeURIComponent(projectId)),
         request("/api/office-addons/links?projectId=" + encodeURIComponent(projectId)),
+        kind==="certificates"?request("/api/business-contacts?type=SUPPLIER&includeArchived=true"):Promise.resolve({items:[]}),
       ]);
       if (n !== generation.current || activeProject.current !== kind + ":" + projectId) return;
-      setItems(data.items || []); setContracts(links.contracts || []); setDocuments(links.documents || []);
+      setItems(data.items || []); setContracts(links.contracts || []); setDocuments(links.documents || []); setSuppliers(supplierData.items||[]);
     } catch (e: any) { if (n === generation.current) setError(e.message); }
     finally { if (n === generation.current) setLoading(false); }
   }, [projectId, kind]);
   React.useEffect(() => {
-    setItems([]); setSelectedId(""); setForm(blank(kind)); setDirty(false); setMessage("");
+    setItems([]); setSuppliers([]); setSelectedId(""); setForm(blank(kind)); setDirty(false); setMessage("");
     void load();
     return () => { generation.current++; };
   }, [load, kind]);
@@ -94,7 +96,7 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
     const sourceProject = contextKey; setBusy(true); setError(""); setMessage("");
     try {
       const data = await request("/api/office-addons/" + kind + (selected ? "/" + encodeURIComponent(selected.id) : ""), {
-        method: selected ? "PUT" : "POST", body: JSON.stringify({...form, projectId, ...(selected ? {revision: selected.revision} : {})}),
+        method: selected ? "PUT" : "POST", body: JSON.stringify({...form, ...(kind==="guarantees"?{supplierPartyId:undefined}:{}), projectId, ...(selected ? {revision: selected.revision} : {})}),
       });
       if (activeProject.current !== sourceProject) return;
       await load();
@@ -103,11 +105,11 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
     } catch (e: any) { if (activeProject.current === sourceProject) setError(e.message); }
     finally { setBusy(false); }
   }
-  const visible = items.filter(i => (showArchived || i.status !== "Archiviert") && (!query || [i.title, i.number, i.issuer, i.type, i.contract?.partner].join(" ").toLowerCase().includes(query.toLowerCase())));
+  const visible = items.filter(i => (showArchived || i.status !== "Archiviert") && (!query || [i.title, i.number, i.issuer, i.type, i.contract?.partner, i.supplierParty?.name].join(" ").toLowerCase().includes(query.toLowerCase())));
   const due = items.filter(i => i.status !== "Archiviert" && i.status !== "Zurückgegeben" && i.expiry !== "Gültig" && i.expiry !== "Ohne Frist").length;
   const locked = selected?.status === "Archiviert" || selected?.status === "Zurückgegeben";
   function exportCsv() {
-    const rows = [["Bezeichnung","Nummer","Aussteller","Art","Status","Betrag EUR","Gültig ab","Gültig bis","Frist","Vertrag"], ...visible.map(i => [i.title,i.number || "",i.issuer,i.type,i.status,i.amount || "",i.validFrom?.slice(0,10) || "",i.validUntil?.slice(0,10) || "",i.expiry,i.contract?.title || ""])];
+    const rows = [["Bezeichnung","Nummer","Aussteller","Art","Status","Betrag EUR","Gültig ab","Gültig bis","Frist","Vertrag",...(kind==="certificates"?["Lieferant"]:[])], ...visible.map(i => [i.title,i.number || "",i.issuer,i.type,i.status,i.amount || "",i.validFrom?.slice(0,10) || "",i.validUntil?.slice(0,10) || "",i.expiry,i.contract?.title || "",...(kind==="certificates"?[i.supplierParty?.name||""]:[])])];
     const cell = (v: string) => '"' + (/^[=+\-@\t\r]/.test(v) ? "'" : "") + v.replace(/"/g,'""') + '"';
     const blob = new Blob(["\uFEFF" + rows.map(r => r.map(cell).join(";")).join("\r\n")], {type: "text/csv;charset=utf-8"});
     const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = kind + "-" + projectId.replace(/[^a-z0-9_-]/gi,"_") + ".csv"; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000);
@@ -118,7 +120,7 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
       <div className="rlc-page-hero__actions"><button className="rlc-page-hero__button" disabled={!projectId || busy || loading} onClick={() => choose()}>+ Neu anlegen</button></div>
     </header>
     <div className="rlc-page-toolbar" style={{flexWrap:"wrap"}}>
-      <Link className="btn" to="/buro/buero-kommunikation">Büro</Link><Link className="btn" to="/buro/vertraege">Verträge</Link><Link className="btn" to="/buro/dokumente">Dokumente</Link>
+      <Link className="btn" to="/buro/buero-kommunikation">Büro</Link><Link className="btn" to="/buro/vertraege">Verträge</Link><Link className="btn" to="/buro/dokumente">Dokumente</Link>{kind==="certificates"&&<Link className="btn" to="/buro/kontakte">Adressen & Kontakte</Link>}
       <Link className="btn" to={kind === "guarantees" ? "/buro/nachunternehmer" : "/buro/buergschaften"}>{kind === "guarantees" ? "NU-Nachweise" : "Bürgschaften"}</Link>
       <input className="rlc-page-toolbar__search" aria-label="Unterlagen suchen" placeholder="Bezeichnung, Partner oder Aussteller suchen …" value={query} onChange={e => setQuery(e.target.value)} />
       <label><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} /> Archivierte anzeigen</label>
@@ -132,7 +134,7 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
       <section className="rlc-page-list"><div className="rlc-page-list-head">{visible.length} Unterlagen</div><div className="rlc-page-list-scroll">
         {!visible.length && <div className="rlc-page-empty">Keine Unterlagen vorhanden.</div>}
         {visible.map(i => <button type="button" key={i.id} disabled={busy} className={"rlc-page-document" + (i.id === selectedId ? " is-active" : "")} onClick={() => choose(i)}>
-          <strong>{i.title}</strong><div className="rlc-page-document-meta"><span>{i.contract?.partner || i.issuer}</span><span>{i.status}</span></div>
+          <strong>{i.title}</strong><div className="rlc-page-document-meta"><span>{i.supplierParty?.name || i.contract?.partner || i.issuer}</span><span>{i.status}</span></div>
           <div className="rlc-page-document-meta"><span>{i.type}</span><span>{i.validUntil ? new Date(i.validUntil).toLocaleDateString("de-DE") : "Ohne Frist"} · {i.expiry}</span></div>
           {i.amount !== undefined && <div>{Number(i.amount).toLocaleString("de-DE",{style:"currency",currency:"EUR"})}</div>}
         </button>)}
@@ -145,6 +147,7 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
             <Field label={kind === "guarantees" ? "Bürge / Bank / Versicherung" : "Aussteller"}><input required={kind === "guarantees"} maxLength={250} value={form.issuer} onChange={e=>update("issuer",e.target.value)} /></Field>
             <Field label="Art"><select value={form.type} onChange={e=>update("type",e.target.value)}>{types.map(t=><option key={t}>{t}</option>)}</select></Field>
             <Field label="Vertrag"><select required={kind === "certificates"} value={form.contractId} onChange={e=>update("contractId",e.target.value)}><option value="">Bitte auswählen</option>{contracts.filter(c=>kind === "guarantees" || ["Nachunternehmervertrag","Liefervertrag"].includes(c.contractType)).map(c=><option key={c.id} value={c.id}>{[c.partner,c.title].filter(Boolean).join(" · ")}</option>)}</select></Field>
+            {kind==="certificates"&&<Field label="Lieferant aus Adressen & Kontakte"><select value={form.supplierPartyId} onChange={e=>update("supplierPartyId",e.target.value)}><option value="">Noch nicht zugeordnet</option>{suppliers.filter(x=>!x.profile.archived||x.id===form.supplierPartyId).map(x=><option key={x.id} value={x.id}>{x.name}{x.profile.archived?" · archiviert":""}</option>)}{form.supplierPartyId&&!suppliers.some(x=>x.id===form.supplierPartyId)&&<option value={form.supplierPartyId}>{selected?.supplierParty?.name||"Vorhandene Zuordnung"}</option>}</select></Field>}
             <Field label="Gültig ab"><input type="date" value={form.validFrom} onChange={e=>update("validFrom",e.target.value)} /></Field>
             <Field label="Gültig bis"><input type="date" min={form.validFrom || undefined} value={form.validUntil} onChange={e=>update("validUntil",e.target.value)} /></Field>
             <Field label="Dokument aus der Projektakte"><select value={form.documentId} onChange={e=>update("documentId",e.target.value)}><option value="">Kein Dokument verknüpft</option>{documents.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></Field>
@@ -152,7 +155,7 @@ export default function OfficeAddons({kind}: {kind: Kind}) {
           </fieldset>
           <Field label="Status"><select disabled={busy || selected?.status === "Archiviert" || !selected} value={form.status} onChange={e=>update("status",e.target.value)}>{statuses.map(s=><option key={s}>{s}</option>)}</select></Field>
           {locked && <div className="muted">Diese Unterlage ist gegen inhaltliche Änderungen gesperrt.</div>}
-          {kind === "certificates" && <div className="muted">„Geprüft“ dokumentiert Ihre manuelle Prüfung. Die Gültigkeitsfrist wird separat angezeigt.</div>}
+          {kind === "certificates" && <div className="muted">„Geprüft“ dokumentiert Ihre manuelle Prüfung. Bei Lieferantenwechsel zuerst als „Ungeprüft“ speichern und erneut prüfen. Die Zuordnung erfolgt bewusst durch Auswahl; bestehende Verträge und Dokumente bleiben erhalten.</div>}
           {selected?.reviewedAt && <div className="muted">Zuletzt geprüft: {new Date(selected.reviewedAt).toLocaleString("de-DE")}</div>}
           <div className="rlc-page-detail-actions"><button className="btn btn-primary" disabled={busy || selected?.status === "Archiviert" || (!!selected && !dirty)} type="submit">{busy ? "Wird gespeichert …" : "Speichern"}</button>
           {dirty && <button className="btn" type="button" disabled={busy} onClick={()=>choose(selected)}>Änderungen verwerfen</button>}</div>

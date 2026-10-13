@@ -3,7 +3,7 @@ import {Link} from "react-router-dom";
 import {useProject} from "../../store/useProject";
 import {officeAddonRequest as request} from "./OfficeAddons";
 const modules:Record<string,{title:string;to:string}>={
- guarantees:{title:"Bürgschaften",to:"/buro/buergschaften"},certificates:{title:"NU-Nachweise",to:"/buro/nachunternehmer"},bids:{title:"Angebotsvergleich",to:"/kalkulation/preisspiegel"},releases:{title:"Freimeldungen",to:"/buro/freimeldungen"},usage:{title:"Geräteeinsätze im Entwurf",to:"/buro/geraeteverrechnung"},shipments:{title:"Offene Sendungen",to:"/buro/versanderfassung"},planning:{title:"Einsatzplanung",to:"/buro/ressourcenplanung"},recurring:{title:"Dauerbuchungen",to:"/buchhaltung/dauerbuchungen"}
+ contracts:{title:"Verträge & Kündigungsfristen",to:"/buro/vertraege"},guarantees:{title:"Bürgschaften",to:"/buro/buergschaften"},certificates:{title:"NU-Nachweise",to:"/buro/nachunternehmer"},bids:{title:"Angebotsvergleich",to:"/kalkulation/preisspiegel"},releases:{title:"Freimeldungen",to:"/buro/freimeldungen"},usage:{title:"Geräteeinsätze im Entwurf",to:"/buro/geraeteverrechnung"},shipments:{title:"Offene Sendungen",to:"/buro/versanderfassung"},planning:{title:"Einsatzplanung",to:"/buro/ressourcenplanung"},recurring:{title:"Dauerbuchungen",to:"/buchhaltung/dauerbuchungen"}
 };
 export default function OperationsCockpit(){
  const {getSelectedProject}=useProject();const project=getSelectedProject(),projectId=String(project?.id||project?.code||"");

@@ -460,9 +460,11 @@ router.post(
         evidenceLocked:true,
         lockReason:"Bautagebuch Monatsabschluss – nur freigegebene Tagesberichte",
       };
-      writeJson(manifestPath, manifest);
-      await archiveProjectFileVersion({ projectIdOrCode:projectId, filename:pdfName, kind:"PDF", localPath:pdfPath, uploadedBy:approvedBy, meta:{source:"bautagebuch-final",month,evidenceLocked:true,evidenceHash:manifest.pdfSha256,reportCount:reportRefs.length} });
-      await archiveProjectFileVersion({ projectIdOrCode:projectId, filename:manifestName, kind:"DOC", localPath:manifestPath, uploadedBy:approvedBy, meta:{source:"bautagebuch-final-manifest",month,evidenceLocked:true,evidenceHash:manifest.snapshotHash,reportCount:reportRefs.length} });
+      const stagingManifestPath = manifestPath + ".staging";
+      writeJson(stagingManifestPath, manifest);
+      await archiveProjectFileVersion({ projectIdOrCode:projectId, filename:pdfName, kind:"PDF", localPath:pdfPath, uploadedBy:approvedBy, meta:{source:"bautagebuch-final",month,evidenceLocked:true,evidenceHash:manifest.pdfSha256,evidenceSnapshot:manifest.snapshotHash,reportCount:reportRefs.length} });
+      await archiveProjectFileVersion({ projectIdOrCode:projectId, filename:manifestName, kind:"DOC", localPath:stagingManifestPath, uploadedBy:approvedBy, meta:{source:"bautagebuch-final-manifest",month,evidenceLocked:true,evidenceHash:manifest.snapshotHash,evidenceSnapshot:manifest.snapshotHash,reportCount:reportRefs.length} });
+      fs.renameSync(stagingManifestPath, manifestPath);
       return res.json({ ok:true, manifest, pdfUrl:pdfResult.pdfUrl, fileName:pdfName });
     } catch (e:any) {
       console.error("POST /api/tagesbericht/bautagebuch/finalize failed:", e);

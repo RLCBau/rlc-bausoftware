@@ -149,6 +149,9 @@ export default function Lager() {
 
   const [error, setError] =
     React.useState("");
+  const [receipts, setReceipts] = React.useState<any[]>([]);
+  const [receiptsBusy, setReceiptsBusy] = React.useState(false);
+  const [receiptMessage, setReceiptMessage] = React.useState("");
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -341,6 +344,33 @@ export default function Lager() {
     await load();
   };
 
+  React.useEffect(() => {
+    let active=true;
+    setReceipts([]);
+    setReceiptMessage("");
+    if(!selectedId)return;
+    setReceiptsBusy(true);
+    void request("/api/resource-costs/materials/"+encodeURIComponent(selectedId)+"/reviewed-receipts")
+      .then((result:any)=>{if(active)setReceipts(result.items||[]);})
+      .catch((e:any)=>{if(active)setError(e.message||"Lieferscheine konnten nicht geladen werden.");})
+      .finally(()=>{if(active)setReceiptsBusy(false);});
+    return ()=>{active=false;};
+  },[selectedId,items]);
+
+  const bookReceipt=async (receipt:any)=>{
+    if(!selectedId||dirty||receiptsBusy)return;
+    if(!window.confirm("Geprüften Lieferschein als Wareneingang buchen? Der Lagerbestand wird erhöht."))return;
+    setReceiptsBusy(true);setReceiptMessage("");setError("");
+    try{
+      await request("/api/resource-costs/materials/"+encodeURIComponent(selectedId)+"/receive-reviewed",{
+        method:"POST",body:JSON.stringify({reviewId:receipt.reviewId,orderLineId:receipt.orderLineId})
+      });
+      setReceiptMessage("Wareneingang gespeichert: "+receipt.quantity+" "+receipt.unit+".");
+      await load();
+    }catch(e:any){setError(e.message||"Wareneingang konnte nicht gebucht werden.");}
+    finally{setReceiptsBusy(false);}
+  };
+
   const move = async (direction: "IN" | "OUT") => {
     if (!draft) return;
 
@@ -511,7 +541,7 @@ export default function Lager() {
         style={{
           display: "grid",
           gridTemplateColumns:
-            "repeat(4,minmax(0,1fr))",
+            "repeat(auto-fit,minmax(min(100%,190px),1fr))",
           gap: 10
         }}
       >
@@ -636,14 +666,15 @@ export default function Lager() {
             style={{
               display: "grid",
               gridTemplateColumns:
-                "minmax(620px,1.1fr) minmax(480px,.9fr)",
+                "repeat(auto-fit,minmax(min(100%,520px),1fr))",
               gap: 12
             }}
           >
-            <div className="card">
+            <div className="card" style={{minWidth:0,overflowX:"auto"}}>
               <table
                 style={{
                   width: "100%",
+                  minWidth: 490,
                   borderCollapse: "collapse"
                 }}
               >
@@ -787,8 +818,8 @@ export default function Lager() {
                     style={{
                       display: "grid",
                       gridTemplateColumns:
-                        "1fr 1fr",
-                      gap: 9
+                        "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+                      gap: 16
                     }}
                   >
                     {[
@@ -929,6 +960,19 @@ export default function Lager() {
                     </button>
                   </div>
 
+                  <section style={{marginTop:16,padding:"16px 18px",border:"1px solid var(--border, #dce4ef)",borderRadius:12,background:"var(--rlc-surface, var(--surface, transparent))"}}>
+                    <h3 style={{margin:"0 0 8px",fontSize:16}}>Geprüfte Lieferscheine · Wareneingang</h3>
+                    <p className="muted">Nur bestätigte Lieferpositionen mit Zuordnung zur Bestellung. Buchung erst nach manueller Freigabe; doppelte Buchungen sind gesperrt.</p>
+                    {receiptMessage && <p role="status">{receiptMessage}</p>}
+                    {receiptsBusy && <p className="muted">Wird geladen …</p>}
+                    {!receiptsBusy && !receipts.length && <p className="muted">Keine buchbaren Lieferscheine zu diesem Material.</p>}
+                    {receipts.map((receipt:any)=><div key={receipt.reviewId+":"+receipt.orderLineId} style={{display:"flex",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:12,padding:"12px 0",borderTop:"1px solid var(--border, #e2e8f0)"}}>
+                      <span>{receipt.deliveryNumber} · {receipt.orderNumber} · {receipt.projectCode} · {receipt.quantity} {receipt.unit}</span>
+                      <button type="button" className="btn" disabled={dirty||receiptsBusy||receipt.booked} onClick={()=>void bookReceipt(receipt)}>
+                        {receipt.booked?"Bereits gebucht":"Wareneingang buchen"}
+                      </button>
+                    </div>)}
+                  </section>
                   <div>
                     <strong>
                       Letzte Bewegungen

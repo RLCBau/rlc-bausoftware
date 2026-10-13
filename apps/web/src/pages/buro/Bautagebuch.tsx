@@ -443,7 +443,7 @@ export default function Bautagebuch() {
         subtitle={
           isMobileDocument
             ? "Bautagebuch-Eintrag aus der Mobile-App prüfen und weiterbearbeiten."
-            : "Bautagebuch-Einträge chronologisch bündeln und zentral verwalten."
+            : "Bautagebuch-Einträge chronologisch bündeln und zentral verwalten." + (project ? " · Projekt: " + [project.code, project.name].filter(Boolean).join(" · ") : " · Bitte Projekt auswählen.")
         } />
       
 

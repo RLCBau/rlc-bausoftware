@@ -25,7 +25,7 @@ export function getAccountingProject() {
 
   return (
     candidates.find(v => v && v.startsWith("BA-")) ||
-    "BA-2026-028"
+    ""
   );
 }
 
@@ -35,25 +35,9 @@ export function setAccountingProject(value: string) {
 }
 
 export function authToken() {
-  const keys = [
-    "rlc_token",
-    "token",
-    "authToken",
-    "accessToken",
-    "rlc_auth_token"
-  ];
-
-  for (const storage of [localStorage, sessionStorage]) {
-    for (const key of keys) {
-      const value = storage.getItem(key);
-
-      if (value && value.trim()) {
-        return value.trim();
-      }
-    }
-  }
-
-  return "";
+  // Only the token from the canonical web login is accepted for accounting.
+  // Legacy/mobile tokens can belong to a different account or tenant.
+  return localStorage.getItem("rlc_token")?.trim() || "";
 }
 
 export async function accountingApi(

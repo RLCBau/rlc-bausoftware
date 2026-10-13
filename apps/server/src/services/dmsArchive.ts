@@ -140,6 +140,14 @@ export async function archiveProjectFileVersion(opts: {
 
   const buffer = await fs.promises.readFile(localPath);
   const fileSha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+  // A retried Bautagebuch close must not create duplicate DMS versions for identical evidence.
+  if (last && (meta?.source === "bautagebuch-final" || meta?.source === "bautagebuch-final-manifest")) {
+    const previous = await prisma.storageObject.findUnique({where:{id:last.storageId},select:{sha256:true,key:true}});
+    const sameSnapshot = Boolean(meta?.evidenceSnapshot && dmsMetaObject(doc.meta).evidenceSnapshot === meta.evidenceSnapshot && dmsMetaObject(doc.meta).source === meta.source);
+    if (previous && (previous.sha256 === fileSha256 || sameSnapshot)) {
+      return {documentId:doc.id,versionId:last.id,version:last.version,key:previous.key};
+    }
+  }
   const storageId = crypto.randomUUID();
 
   let contentType = "application/octet-stream";

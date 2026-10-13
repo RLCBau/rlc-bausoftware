@@ -703,6 +703,23 @@ r.get(
   }
 );
 
+async function requireMembershipRoleAdmin(req: any, res: any, next: any) {
+  const companyId = String(req.auth?.companyId || "").trim();
+  const userId = String(req.auth?.sub || "").trim();
+  if (!companyId || !userId) return res.status(403).json({ok:false,error:"COMPANY_ADMIN_REQUIRED"});
+  try {
+    const member = await prisma.companyMember.findUnique({
+      where: { companyId_userId: {companyId,userId}},
+      select: {active:true,role:true}
+    });
+    if (!member?.active || member.role !== "ADMIN")
+      return res.status(403).json({ok:false,error:"COMPANY_ADMIN_REQUIRED"});
+    return next();
+  } catch {
+    return res.status(503).json({ok:false,error:"COMPANY_ADMIN_CHECK_FAILED"});
+  }
+}
+
 /**
  * PATCH /api/company/admin/members/:userId
  */
@@ -711,7 +728,7 @@ r.patch(
   requireAuth,
   requireVerifiedEmail,
   requireCompany,
-  requireCompanyAdmin,
+  requireMembershipRoleAdmin,
   async (req: any, res) => {
     try {
       const companyId = String(req.auth.companyId || "").trim();
@@ -723,7 +740,13 @@ r.patch(
 
       const data: any = {};
       if (typeof req.body?.active === "boolean") data.active = !!req.body.active;
-      if (req.body?.role) data.role = String(req.body.role).toUpperCase();
+      if (req.body?.role) {
+        const role = String(req.body.role).toUpperCase();
+        if (!["ADMIN","BAULEITER","BUCHHALTUNG","MITARBEITER","CAPOCANTIERE","KALKULATOR","GAST"].includes(role))
+          return res.status(400).json({ok:false,error:"COMPANY_ROLE_INVALID"});
+        data.role = role;
+      }
+      if (!Object.keys(data).length) return res.status(400).json({ok:false,error:"NO_CHANGES"});
 
       const updated = await prisma.companyMember.update({
         where: { companyId_userId: { companyId, userId } },

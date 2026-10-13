@@ -1,4 +1,5 @@
 import React from "react";
+import { NavLink } from "react-router-dom";
 
 type Active = "kommunikation" | "aufgaben" | "notizen";
 
@@ -37,26 +38,18 @@ export default function BuroWorkTabs({
         position: "sticky",
         top: 8,
         zIndex: 20,
-        background: "#ffffff"
+        background: "var(--rlc-surface, var(--surface, inherit))"
       }}
     >
       {items.map((item) => (
-        <button
+        <NavLink
           key={item.key}
-          type="button"
-          className={
-            active === item.key
-              ? "btn btn-primary"
-              : "btn"
-          }
-          onClick={() => {
-            if (window.location.pathname !== item.path) {
-              window.location.assign(item.path);
-            }
-          }}
+          to={item.path}
+          aria-current={active === item.key ? "page" : undefined}
+          className={active === item.key ? "btn btn-primary" : "btn"}
         >
           {item.label}
-        </button>
+        </NavLink>
       ))}
     </div>
   );

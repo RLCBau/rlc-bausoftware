@@ -175,6 +175,7 @@ export default function NotizenPage() {
         method: "PUT",
         body: JSON.stringify({
           text: form.text,
+          expectedUpdatedAt: selected.updatedAt,
           author: form.author || null,
           tags: form.tags
             .split(",")
@@ -224,7 +225,7 @@ export default function NotizenPage() {
 
     await request(
       `/api/notes/${encodeURIComponent(selected.id)}`,
-      { method: "DELETE" }
+      { method: "DELETE", body: JSON.stringify({ expectedUpdatedAt: selected.updatedAt }) }
     );
 
     setSelectedId(null);

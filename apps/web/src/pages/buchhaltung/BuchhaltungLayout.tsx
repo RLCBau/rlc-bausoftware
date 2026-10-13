@@ -5,7 +5,7 @@ import {
   getAccountingProject,
   setAccountingProject
 } from "./accountingApi";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 
 const groups = [
   {
@@ -19,13 +19,15 @@ const groups = [
     items: [
       { to: "/buchhaltung/rechnungen", label: "Ausgangsrechnungen" },
       { to: "/buchhaltung/abschlagsrechnungen", label: "Abschlagsrechnungen" },
-      { to: "/buchhaltung/eingang", label: "Eingangsrechnungen" }
+      { to: "/buchhaltung/eingang", label: "Eingangsrechnungen" },
+      { to: "/buchhaltung/belegpruefung", label: "Belegprüfung" }
     ]
   },
   {
     label: "Zahlungen",
     items: [
       { to: "/buchhaltung/zahlungen", label: "Zahlungen & Offene Posten" },
+      { to: "/buchhaltung/zahlungsabgleich", label: "Zahlungsabgleich" },
       { to: "/buchhaltung/mahnwesen", label: "Mahnwesen" },
       { to: "/buchhaltung/kassenbuch", label: "Kassenbuch" },
       { to: "/buchhaltung/dauerbuchungen", label: "Dauerbuchungen" }
@@ -43,7 +45,8 @@ const groups = [
     label: "Steuern & Export",
     items: [
       { to: "/buchhaltung/ust", label: "USt." },
-      { to: "/buchhaltung/datev", label: "DATEV / Export" }
+      { to: "/buchhaltung/datev", label: "DATEV / Export" },
+      { to: "/buchhaltung/reports", label: "Reports / Auswertungen" }
     ]
   }
 ];
@@ -55,22 +58,31 @@ export default function BuchhaltungLayout() {
   const [accountingProject, setProject] =
     useState(getAccountingProject());
 
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [projectError, setProjectError] = useState("");
+
   useEffect(() => {
+    let mounted = true;
     accountingApi("/api/accounting/projects")
       .then((data) => {
+        if (!mounted) return;
         const list = data.items || [];
         setProjects(list);
-
-        if (!getAccountingProject() && list.length) {
-          const preferred =
-            list.find((p: any) => p.code === "BA-2026-028") ||
-            list[0];
-
+        const current = getAccountingProject();
+        const valid = list.find((p: any) => p.code === current || p.id === current);
+        const preferred = valid || list[0];
+        if (preferred && (!valid || current !== preferred.code)) {
           setAccountingProject(preferred.code);
           setProject(preferred.code);
+        } else if (!preferred) {
+          setProject("");
         }
       })
-      .catch(console.error);
+      .catch((error) => {
+        if (mounted) setProjectError(error?.message || "Projekte konnten nicht geladen werden.");
+      })
+      .finally(() => { if (mounted) setLoadingProjects(false); });
+    return () => { mounted = false; };
   }, []);
 
   const changeProject = (value: string) => {
@@ -100,7 +112,7 @@ export default function BuchhaltungLayout() {
               fontSize: 13
             }}
           >
-            Aktives Buchhaltungsprojekt: {getAccountingProject()}
+            Aktives Buchhaltungsprojekt: {accountingProject || "Bitte wählen"}
           </div>
         </div>
 
@@ -126,6 +138,7 @@ export default function BuchhaltungLayout() {
                 padding: "0 10px"
               }}
             >
+              {!accountingProject && <option value="">Projekt wählen</option>}
               {projects.map((p: any) => (
                 <option key={p.id} value={p.code}>
                   {p.code} · {p.name}
@@ -173,8 +186,22 @@ export default function BuchhaltungLayout() {
         ))}
       </section>
 
+      <section className="card rlc-accounting-connections">
+        <strong>Verbundene Arbeitsbereiche</strong>
+        <div className="rlc-page-toolbar" style={{ flexWrap: "wrap", marginTop: 9 }}>
+          <Link className="btn" to="/kalkulation/angebot">Angebote</Link>
+          <Link className="btn" to="/kalkulation/nachtraege">Nachträge</Link>
+          <Link className="btn" to="/mengenermittlung/aufmasseditor">Aufmaß</Link>
+          <Link className="btn" to="/buro/kontakte">Kunden & Lieferanten</Link>
+          <Link className="btn" to="/mobile/abschlagsrechnungen">Mobile-Abschläge</Link>
+          <Link className="btn" to="/buchhaltung/reports">Auswertungen</Link>
+        </div>
+      </section>
       <div className="rlc-accounting-module">
-        <Outlet />
+        {loadingProjects ? <div className="card">Buchhaltungsprojekte werden geladen …</div>
+          : projectError ? <div className="card" role="alert">Projektzuordnung nicht prüfbar: {projectError}. Keine Buchhaltungsdaten werden automatisch geladen.</div>
+          : !accountingProject || !projects.some((p: any) => p.code === accountingProject) ? <div className="card" role="alert">Kein gültiges Buchhaltungsprojekt ausgewählt.</div>
+          : <Outlet />}
       </div>
     </div>
   );

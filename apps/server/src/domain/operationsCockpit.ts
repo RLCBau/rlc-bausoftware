@@ -13,7 +13,14 @@ export function operationsCard(key:string,rows:any[],today:string,through:string
  let label="Vorgänge",total=rows.length;
  for(const r of rows){
   counts[r.status||"AKTIV"]=(counts[r.status||"AKTIV"]||0)+1;
-  if(key==="guarantees"){
+  if(key==="contracts"){
+   const until=day(r.endDate);
+   const notice=until?new Date(Date.parse(until+"T00:00:00Z")-Math.max(0,Number(r.cancellationDays||0))*86400000).toISOString().slice(0,10):"";
+   if(until&&until<today)add(r,"Vertrag abgelaufen","danger",until);
+   else if(notice&&notice<=today)add(r,"Kündigungsfrist erreicht oder überschritten","warning",notice);
+   else if(notice&&notice<=new Date(Date.parse(today+"T00:00:00Z")+30*86400000).toISOString().slice(0,10))add(r,"Kündigungsfrist innerhalb von 30 Tagen","warning",notice);
+   else if(r.status==="Entwurf")add(r,"Vertrag im Entwurf");
+  }else if(key==="guarantees"){
    const issue=["Aktiv","Freigabe beantragt"].includes(r.status)?expiryIssue(r,today):null;
    if(issue)details.push(issue);else if(r.status==="Entwurf")add(r,"Entwurf vervollständigen");else if(r.status==="Freigabe beantragt")add(r,"Rückgabe / Freigabe prüfen","warning");
   }else if(key==="certificates"){

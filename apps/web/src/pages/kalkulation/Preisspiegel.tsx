@@ -1,3 +1,4 @@
+import {apiUrl} from '../../lib/apiBase';
 import React from "react";
 import {Link} from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -14,6 +15,7 @@ export default function Preisspiegel() {
  const [form,setForm]=React.useState(empty);const [dirty,setDirty]=React.useState(false);const [busy,setBusy]=React.useState(false);const [error,setError]=React.useState("");const [message,setMessage]=React.useState("");
  const [baselineId,setBaselineId]=React.useState("");const [comparison,setComparison]=React.useState<any>(null);const [tab,setTab]=React.useState<"offers"|"compare">("offers");const [documents,setDocuments]=React.useState<any[]>([]);
  const active=React.useRef(projectId);active.current=projectId;const generation=React.useRef(0);const importGeneration=React.useRef(0);const compareGeneration=React.useRef(0);
+ const pdfGuard=React.useRef(false);const comparisonRef=React.useRef(comparison);comparisonRef.current=comparison;
  const selected=bids.find(b=>b.id===selectedId);
  const load=React.useCallback(async()=>{
   const n=++generation.current;if(!projectId)return;setBusy(true);setError("");
@@ -64,6 +66,20 @@ export default function Preisspiegel() {
    field("positions",positions);setMessage(positions.length+" Positionen als Entwurf geladen. Bitte prüfen und speichern.");
   }catch(e:any){if(active.current===source && n===importGeneration.current)setError(e.message || "Import fehlgeschlagen.");}finally{if(active.current===source && n===importGeneration.current)setBusy(false);}
  }
+ async function exportPdf(){
+  if(!comparison?.snapshot?.fingerprint||busy||dirty||pdfGuard.current)return;
+  pdfGuard.current=true;const source=projectId,captured=comparison;setBusy(true);setError("");
+  try{
+   let token="";try{token=localStorage.getItem("rlc_token")||JSON.parse(localStorage.getItem("rlc_auth")||"{}").token||"";}catch{}
+   const res=await fetch(apiUrl("/api/office-addons/bids/compare/"+encodeURIComponent(captured.baselineId)+"/pdf"),{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",...(token?{Authorization:"Bearer "+token}:{})},body:JSON.stringify({fingerprint:captured.snapshot.fingerprint})});
+   if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.error||"PDF konnte nicht erstellt werden.");}
+   if(!res.headers.get("Content-Type")?.includes("application/pdf"))throw new Error("PDF-Antwort ungültig.");
+   const blob=await res.blob();if(active.current!==source||comparisonRef.current!==captured)return;
+   const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="Preisspiegel.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+   setMessage("PDF aus gespeicherten Angeboten erstellt. Angebotsdaten und Auswahl bleiben erhalten.");
+  }catch(e:any){if(active.current===source&&comparisonRef.current===captured)setError(e.message);}
+  finally{pdfGuard.current=false;if(active.current===source)setBusy(false);}
+ }
  function exportComparison(){
   if(!comparison)return;
   const rows=[["Position","Kurztext","Einheit","Bezugsmenge",...comparison.offers.map((b:any)=>b.supplier+" · EP")],
@@ -101,8 +117,10 @@ export default function Preisspiegel() {
    </form></section>
   </div>:
   <section className="rlc-page-detail" style={{padding:18}}>
-   <div className="rlc-page-toolbar"><label>Vergleichsbasis <select disabled={busy} value={baselineId} onChange={e=>{setBaselineId(e.target.value);setComparison(null);}}><option value="">Angebot auswählen</option>{bids.filter(b=>b.status!=="Archiviert").map(b=><option key={b.id} value={b.id}>{b.packageKey} · {b.supplier} · {b.title}</option>)}</select></label><button className="btn btn-primary" disabled={busy || !baselineId} onClick={()=>void compare()}>Vergleichen</button><button className="btn" disabled={!comparison} onClick={exportComparison}>CSV exportieren</button></div>
+   <div className="rlc-page-toolbar"><label>Vergleichsbasis <select disabled={busy} value={baselineId} onChange={e=>{setBaselineId(e.target.value);setComparison(null);}}><option value="">Angebot auswählen</option>{bids.filter(b=>b.status!=="Archiviert").map(b=><option key={b.id} value={b.id}>{b.packageKey} · {b.supplier} · {b.title}</option>)}</select></label><button className="btn btn-primary" disabled={busy || !baselineId} onClick={()=>void compare()}>Vergleichen</button><button className="btn" disabled={busy||!comparison} onClick={exportComparison}>CSV exportieren</button><button className="btn" disabled={busy||dirty||!comparison?.snapshot?.fingerprint} onClick={()=>void exportPdf()}>PDF herunterladen</button></div>
    <p className="muted">Vergleich auf Basis derselben Positionen, Einheiten und Bezugsmengen. Abweichende Mengen und Texte werden gekennzeichnet. Unvollständige Angebote werden nicht gerankt.</p>
+   {dirty&&<p className="muted">Ungespeicherte Änderungen zuerst speichern; PDF verwendet ausschließlich gespeicherte Angebote.</p>}
+   {comparison?.snapshot&&<p className="muted">PDF im Querformat: bis zu 500 Positionen und 20 Angebote, vier Anbieter pro Gruppe. EP und GP vor Nachlass, Gesamtsummen nach Nachlass; alle Beträge netto in EUR.</p>}
    {comparison&&<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th>Position</th><th>Kurztext</th><th>Menge / Einheit</th>{comparison.offers.map((b:any)=><th key={b.id}>{b.supplier}<div>{b.status}</div><div>{b.discountPercent} % Nachlass</div></th>)}</tr></thead><tbody>{comparison.positions.map((r:Line,i:number)=><tr key={r.position}><td style={{padding:8}}>{r.position}</td><td>{r.title}</td><td>{r.quantity} {r.unit}</td>{comparison.offers.map((b:any)=><td key={b.id} style={{padding:8}}>{b.cells[i]?.comparable?<>{money(b.cells[i].unitPrice)}<div className="muted">GP {money(b.cells[i].amount)} {b.cells[i].quantityDiff?"· Menge abweichend":""} {b.cells[i].textDiff?"· Text abweichend":""}</div></>:b.cells[i]?.reason}</td>)}</tr>)}</tbody><tfoot><tr><th colSpan={3}>Vergleichssumme netto</th>{comparison.offers.map((b:any)=><td key={b.id}><strong>{b.comparable?money(b.normalizedTotal):"Nicht vergleichbar"}</strong>{b.issues.map((s:string)=><div className="muted" key={s}>{s}</div>)}<div>Eigene Angebotsmenge: {money(b.offeredTotal)}</div>{b.status==="Eingereicht"&&b.comparable&&<button className="btn" disabled={busy} onClick={()=>void award(b.id,!!b.awardedAt)}>{b.awardedAt?"Auswahl aufheben":"Angebot auswählen"}</button>}</td>)}</tr></tfoot></table></div>}
   </section>}
  </div>;

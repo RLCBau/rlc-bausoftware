@@ -2,7 +2,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
 import { getToken } from "./auth";
-import { getVerifiedServerApiUrl } from "./serverProfile";
 
 import * as FileSystem from "expo-file-system/legacy";
 import { Asset } from "expo-asset";
@@ -158,7 +157,7 @@ async function downloadCompanyLogoIfNeeded(logoUrlRel: string, updatedAt?: strin
 
     const target = logoLocalPath(extGuess);
 
-    const absUrl = await apiResolveUrl(logoUrlRel);
+    const absUrl = apiResolveUrl(logoUrlRel); // must exist in your api layer
     const dl = await FileSystem.downloadAsync(absUrl, target, {
       headers: await apiAuthHeaders(), // must return Authorization header
     });
@@ -170,11 +169,13 @@ async function downloadCompanyLogoIfNeeded(logoUrlRel: string, updatedAt?: strin
 }
 
 /**
- * Base URL resolution order:
- * 1) verified RLC Cloud/private-server profile (QR or cloud identity)
- * 2) EXPO_PUBLIC_API_URL
- * 3) legacy development override
- * 4) RLC Cloud fallback
+ * Base URL resolution order (DEV):
+ * 1) EXPO_PUBLIC_API_URL (env)
+ * 2) AsyncStorage override (api_base_url)  [DEV ONLY]
+ * 3) fallback https://api.rlcbausoftware.com (Cloudflare Tunnel)
+ *
+ * Production hardening:
+ * - In PROD, AsyncStorage override is ignored.
  */
 const ENV_API_URL_RAW = (process.env.EXPO_PUBLIC_API_URL?.trim() || "").replace(
   /\/$/,
@@ -187,9 +188,9 @@ console.log("[RLC] ENV_API_URL_RAW =", ENV_API_URL_RAW);
 const FALLBACK_API_URL = "https://api.rlcbausoftware.com";
 
 /** Keep a sync default (used for api.apiUrl field), real requests use getApiUrl() */
-const API_URL = String(ENV_API_URL_RAW || "").trim()
-  ? ENV_API_URL_RAW!.replace(/\/$/, "")
-  : FALLBACK_API_URL.replace(/\/$/, "");
+const API_URL = ENV_API_URL_RAW && (/^https:\/\//i.test(ENV_API_URL_RAW) || __DEV__)
+  ? ENV_API_URL_RAW.replace(/\/$/, "")
+  : FALLBACK_API_URL;
 
 /** PROD hardening switch */
 export const IS_DEV = typeof __DEV__ !== "undefined" ? __DEV__ : false;
@@ -319,20 +320,20 @@ function coerceApiHost(v: string): string {
 }
 
 function isValidBaseUrl(v: string): boolean {
-  return /^https?:\/\/.+/i.test(v);
+  return IS_DEV ? /^https?:\/\/.+/i.test(v) : /^https:\/\/.+/i.test(v);
 }
 
 /**
- * Production accepts only a server profile verified through the RLC pairing
- * endpoint. The unrestricted legacy URL override remains development-only.
+ * Returns the effective API URL:
+ * - env var if present
+ * - else AsyncStorage override if set (DEV ONLY)
+ * - else fallback
+ *
+ * ✅ PROD hardening:
+ * - AsyncStorage override is ignored in PROD builds.
  */
 export async function getApiUrl(): Promise<string> {
-  try {
-    const verified = await getVerifiedServerApiUrl();
-    if (verified) return coerceApiHost(verified);
-  } catch {}
-
-  if (ENV_API_URL_RAW) return coerceApiHost(ENV_API_URL_RAW);
+  if (ENV_API_URL_RAW && isValidBaseUrl(ENV_API_URL_RAW)) return coerceApiHost(ENV_API_URL_RAW);
 
   if (!IS_DEV) return coerceApiHost(FALLBACK_API_URL);
 
@@ -472,7 +473,8 @@ function isPublicEndpoint(path: string) {
   return (
     p.startsWith("/api/auth/") ||
     p === "/api/health" ||
-    p === "/health"
+    p === "/health" ||
+    p.startsWith("/api/license/")
   );
 }
 
@@ -1476,11 +1478,11 @@ async function apiAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
-async function apiResolveUrl(relOrAbs: string): Promise<string> {
+function apiResolveUrl(relOrAbs: string): string {
   const raw = String(relOrAbs || "").trim();
   if (!raw) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
-  const base = (await getApiUrl()).replace(/\/$/, "");
+  const base = coerceApiHost(API_URL).replace(/\/$/, "");
   if (raw.startsWith("/")) return `${base}${raw}`;
   return `${base}/${raw}`;
 }
@@ -1547,12 +1549,14 @@ export const api = {
     return getPdfTemplateUri({ mode: mode || "SERVER_SYNC" });
   },
 
-  async absUrl(relOrAbs: string): Promise<string> {
+  absUrl(relOrAbs: string): string {
     const raw = String(relOrAbs || "").trim();
     if (!raw) return raw;
     if (/^https?:\/\//i.test(raw)) return raw;
 
-    const base = (await getApiUrl()).replace(/\/$/, "");
+    // usa la base "statica" migliore possibile MA coerente col fallback
+    // (per runtime override usa absUrlAsync)
+    const base = coerceApiHost(API_URL).replace(/\/$/, "");
     if (raw.startsWith("/")) return `${base}${raw}`;
     return `${base}/${raw}`;
   },
@@ -2741,27 +2745,35 @@ export const api = {
 
   async submitTagesberichtInbox(projectIdOrCode: string, payload: any) {
     const projectKey = await resolveProjectCode(projectIdOrCode);
-    return request<any>(regieSubmitEndpoint(), {
+    return request<any>(tagesberichtSubmitEndpoint(), {
       method: "POST",
       body: JSON.stringify({
         ...(payload || {}),
         projectId: projectKey,
         projectCode: projectKey,
-        reportType: "TAGESBERICHT",
       }),
     });
   },
 
   async tagesberichtInboxList(projectIdOrCode: string) {
-    const projectKey = await resolveProjectCode(projectIdOrCode);
-    const result = await request<any>(
-      `/api/regie/inbox/list?projectId=${encodeURIComponent(projectKey)}`,
-      { method: "GET" }
-    );
-    const items = Array.isArray(result?.items)
-      ? result.items.filter((item: any) => item?.reportType === "TAGESBERICHT")
-      : [];
-    return { ...result, items };
+  const projectKey = await resolveProjectCode(projectIdOrCode);
+
+  const candidates = [
+    tagesberichtInboxListEndpoint(projectKey),
+    tagesberichtInboxListEndpointPlural(projectKey),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, { method: "GET" });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht inbox list failed");
 },
 
   async tagesberichtReject(
@@ -2777,10 +2789,25 @@ export const api = {
     reason,
   };
 
-  return request<any>("/api/regie/inbox/reject", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  const candidates = [
+    tagesberichtInboxRejectEndpoint(),
+    tagesberichtInboxRejectEndpointPlural(),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht reject failed");
 },
 
    async commitTagesbericht(projectIdOrCode: string, payload: any) {
@@ -2815,10 +2842,23 @@ export const api = {
 
 async tagesberichtInboxRead(projectIdOrCode: string, docId: string) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
-  return request<any>(
-    `/api/regie/inbox/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
-    { method: "GET" }
-  );
+
+  const candidates = [
+    tagesberichtInboxReadEndpoint(projectKey, docId),
+    tagesberichtInboxReadEndpointPlural(projectKey, docId),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, { method: "GET" });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht inbox read failed");
 },
 
 async tagesberichtApprove(
@@ -2834,10 +2874,25 @@ async tagesberichtApprove(
     approvedBy: approvedBy || undefined,
   };
 
-  return request<any>("/api/regie/inbox/approve", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  const candidates = [
+    tagesberichtInboxApproveEndpoint(),
+    tagesberichtInboxApproveEndpointPlural(),
+  ];
+
+  let lastErr: any = null;
+
+  for (const path of candidates) {
+    try {
+      return await request<any>(path, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } catch (e: any) {
+      lastErr = e;
+    }
+  }
+
+  throw lastErr || new Error("Tagesbericht approve failed");
 },
 
   async pushTagesberichtToServer(projectIdOrCode: string, row: any) {
