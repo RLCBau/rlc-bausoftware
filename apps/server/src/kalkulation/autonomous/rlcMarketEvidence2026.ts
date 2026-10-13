@@ -66,13 +66,21 @@ export const RLC_AGGREGATES_EX_WORKS_2026 = {
 
 export function diagnoseRlcAggregateMarketEvidence(input:{kurztext?:string;langtext?:string;einheit?:string}) {
  const text=[input.kurztext,input.langtext].filter(Boolean).join(" ").toLowerCase();
- const candidates=[
-  {name:"Kabelsand 0/4",regex:/\bkabelsand\b[^\n]{0,25}(?:0\s*\/\s*4)?/i},
-  {name:"Betonsand 0/4",regex:/\bbetonsand\b[^\n]{0,25}(?:0\s*\/\s*4)?/i},
-  {name:"Frostschutzkies 0/32",regex:/\bfrostschutzkies\b[^\n]{0,25}0\s*\/\s*32/i},
-  {name:"Bettungsmaterial 0/5",regex:/\bbettungsmaterial\b[^\n]{0,25}0\s*\/\s*5(?!\d)/i},
-  {name:"Feinsand 0/1",regex:/\bfeinsand\b[^\n]{0,25}0\s*\/\s*1(?!\d)/i},
- ].filter(c=>c.regex.test(text));
+ const definitions=[
+  {name:"Kabelsand 0/4",term:/\bkabelsand\b/i,grade:"0/4"},
+  {name:"Betonsand 0/4",term:/\bbetonsand\b/i,grade:"0/4"},
+  {name:"Frostschutzkies 0/32",term:/\bfrostschutzkies\b/i,grade:"0/32"},
+  {name:"Bettungsmaterial 0/5",term:/\bbettungsmaterial\b/i,grade:"0/5"},
+  {name:"Feinsand 0/1",term:/\bfeinsand\b/i,grade:"0/1"},
+ ];
+ const candidates=definitions.filter(d=>{
+   const match=d.term.exec(text);
+   if(!match)return false;
+   const nearby=text.slice(match.index+match[0].length,match.index+match[0].length+35);
+   const explicit=nearby.match(/\b(\d{1,2})\s*\/\s*(\d{1,2})\b/);
+   // No grade in the contract text = no reliable material/price match.
+   return !!explicit && explicit[1]+"/"+explicit[2]===d.grade;
+ });
  const name=candidates.length===1?candidates[0].name:null;
  const unitCompatible=/^(t|to|ton|tonne)$/i.test(String(input.einheit||"").trim());
  return {

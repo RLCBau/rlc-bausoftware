@@ -8,4 +8,7 @@ const b=check({kurztext:"Frostschutzkies 0/32 einbauen",einheit:"m3"});
 assert.equal(b.materialNetEURPerT,20);
 assert.equal(b.unitCompatible,false);
 assert.equal(check({kurztext:"Sand einbauen",einheit:"t"}).materialNetEURPerT,null);
+assert.equal(check({kurztext:"Kabelsand 0/8 liefern",einheit:"t"}).materialNetEURPerT,null);
+assert.equal(check({kurztext:"Kabelsand liefern",einheit:"t"}).materialNetEURPerT,null);
+assert.equal(check({kurztext:"Frostschutzkies 0/22 liefern",einheit:"t"}).materialNetEURPerT,null);
 console.log("RLC_AGGREGATE_MARKET_PASS");
