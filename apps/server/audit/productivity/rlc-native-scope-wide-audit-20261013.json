@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-13",
+  "LV": 513,
+  "positions": 82736,
+  "positive": 72970,
+  "zero": 9766,
+  "review": 5690,
+  "unresolved": 1436,
+  "exceptions": 0,
+  "structural": 4076,
+  "native": {
+    "priced": 0,
+    "blocked": 0,
+    "byTrade": {}
+  }
+}
