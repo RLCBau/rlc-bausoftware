@@ -1,0 +1,111 @@
+{
+  "comparable": 5482,
+  "unverified": 5169,
+  "over20": 4627,
+  "over20Unverified": 4453,
+  "examples": [
+    {
+      "pos": "02.01.60",
+      "short": "width:481pt ATS aus AC 32 TN herstellen",
+      "unit": "m2",
+      "trade": "Straßenbau/Tragschicht",
+      "motor": 16.5,
+      "x84": 27.66,
+      "deviationPct": -40.3,
+      "unverified": [
+        {
+          "name": "Tragschicht/Frostschutzmaterial",
+          "ep": 10.5
+        },
+        {
+          "name": "Einbauen/profilieren/verdichten",
+          "ep": 4.5
+        },
+        {
+          "name": "Höhenkontrolle/Nacharbeit",
+          "ep": 1.5
+        }
+      ]
+    },
+    {
+      "pos": "02.01.63",
+      "short": "width:481pt Schichtenverbund herstellen",
+      "unit": "m2",
+      "trade": "Straßenbau/Haftkleber",
+      "motor": 1.6,
+      "x84": 39.46,
+      "deviationPct": -95.9,
+      "unverified": [
+        {
+          "name": "Bitumenemulsion/Haftkleber",
+          "ep": 0.9
+        },
+        {
+          "name": "Anspritzen/Verteilen",
+          "ep": 0.7
+        }
+      ]
+    },
+    {
+      "pos": "02.01.64",
+      "short": "width:481pt ADS aus AC 8 DN herstellen",
+      "unit": "m2",
+      "trade": "Straßenbau/Asphaltdeckschicht",
+      "motor": 30.04,
+      "x84": 135.7,
+      "deviationPct": -77.9,
+      "unverified": [
+        {
+          "name": "Asphaltdeckschicht AC 8 D N",
+          "ep": 14.04
+        },
+        {
+          "name": "Asphalt einbauen und verdichten",
+          "ep": 8.5
+        },
+        {
+          "name": "Fertiger/Walze anteilig",
+          "ep": 7.5
+        }
+      ]
+    },
+    {
+      "pos": "02.01.66",
+      "short": "width:481pt Erschwernis infolge Einbauten",
+      "unit": "St",
+      "trade": "Erdbau/Erschwernis-Einbauten-normalisiert",
+      "motor": 20,
+      "x84": 1.29,
+      "deviationPct": 1450.4,
+      "unverified": [
+        {
+          "name": "Handarbeit / Freilegen / Sichern von Einbauten",
+          "ep": 14
+        },
+        {
+          "name": "Minderleistung Bagger / Kleingerät",
+          "ep": 6
+        }
+      ]
+    },
+    {
+      "pos": "02.01.67",
+      "short": "width:481pt Erschwernis infolge Einfassunge/Mauern",
+      "unit": "m",
+      "trade": "Pflaster/Bord-Rueckbau",
+      "motor": 13,
+      "x84": 16.82,
+      "deviationPct": -22.7,
+      "unverified": [
+        {
+          "name": "Einfassung lösen/aufnehmen",
+          "ep": 4.5
+        },
+        {
+          "name": "Ausbauen/sortieren/laden",
+          "ep": 8.5
+        }
+      ]
+    }
+  ]
+}

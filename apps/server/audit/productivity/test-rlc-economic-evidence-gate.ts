@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {diagnoseRlcEconomicEvidence as check} from '../../src/kalkulation/autonomous/rlcEconomicEvidenceGate';
+const x=check([{name:'Bagger',consumption:{status:'unverified_lump_rate'}}]);
+assert.equal(x.eligibleForAutomaticEconomicApproval,false);
+assert.equal(x.status,'unverified_lump_components');
+assert.equal(x.unresolvedComponents,1);
+const y=check([{name:'Kabelsand',consumption:{status:'recipe_assumption',resourceQtyPerGaebUnit:1.6,resourceRateEUR:21.4,basis:'density assumption'}}]);
+assert.equal(y.status,'recipe_assumptions_require_validation');
+assert.equal(y.assumptions,1);
+assert.equal(check([]).status,'no_cost_breakdown');
+console.log('RLC_ECONOMIC_EVIDENCE_GATE_PASS');
