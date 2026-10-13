@@ -13,7 +13,7 @@ export function inspectRlcMotorConsumptionIntegrity(result:RlcAutonomousCalcResu
   }
   if(c.status==="recipe_assumption"){
    const amount=c.resourceQtyPerGaebUnit,rate=c.resourceRateEUR;
-   if(!(typeof amount==="number"&&Number.isFinite(amount)&&amount>0&&typeof rate==="number"&&Number.isFinite(rate)&&rate>0&&["h","m3"].includes(c.resourceUnit||"")&&
+   if(!(typeof amount==="number"&&Number.isFinite(amount)&&amount>0&&typeof rate==="number"&&Number.isFinite(rate)&&rate>0&&["h","m3","t"].includes(c.resourceUnit||"")&&
      typeof c.basis==="string"&&c.basis.length>0&&Math.abs(amount*rate-line.unitPrice)<=0.015))
       issues.push("invalid_recipe_assumption:"+i);
    // A consistent calculation is not independent proof of productivity.
