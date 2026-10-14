@@ -1,0 +1,27 @@
+
+/* Service center: operational actions, not a duplicate FAQ catalogue. */
+.rlc-service-center .rlc-help-hero{margin-bottom:18px!important}
+.rlc-service-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px}
+.rlc-service-card{min-width:0;background:#fff;border:1px solid #dce5f1;border-radius:12px;padding:22px 19px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:8px;text-decoration:none;color:#16253b;cursor:pointer;font:inherit;min-height:210px}
+.rlc-service-card:hover{border-color:#78aaf0;box-shadow:0 7px 20px #102c5212}
+.rlc-service-card-icon{background:#e7f0ff;color:#145dcc;border-radius:10px;display:grid;place-items:center;width:39px;height:39px;font-size:23px;font-weight:750}
+.rlc-service-card h2{font-size:17px;margin:3px 0;color:#18283f}
+.rlc-service-card p{font-size:13px;line-height:1.55;color:#607187;margin:0;flex:1}
+.rlc-service-card strong{font-size:12.5px;color:#145fce}
+.rlc-service-diagnostic{border:1px solid #dce5f1;border-radius:12px;background:#fff;padding:22px}
+.rlc-service-diagnostic>p{font-size:13px;color:#607187}
+.rlc-service-diagnostic-options{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.rlc-service-diagnostic-options button{border:1px solid #cddcef;border-radius:8px;padding:10px 13px;background:#f8fbff;color:#243e63;cursor:pointer;font-weight:600}
+.rlc-service-diagnostic-options button.selected{background:#146ef5;color:white;border-color:#146ef5}
+.rlc-service-diagnostic-result{border-top:1px solid #e2e8f0;margin-top:18px;padding-top:14px}
+.rlc-service-diagnostic-result h3{font-size:16px;margin:0}
+.rlc-service-diagnostic-result li{font-size:13px;line-height:1.7;margin:7px 0}
+.rlc-service-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.rlc-service-actions>a:not(.rlc-help-action){color:#146ef5;font-size:13px}
+.rlc-service-bottom{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:18px}
+.rlc-service-bottom>div{padding:20px;border:1px solid #dce5f1;border-radius:12px;background:#fff}
+.rlc-service-bottom h2{font-size:16px;margin:0 0 9px}
+.rlc-service-bottom p{font-size:13px;line-height:1.55;color:#617084}
+.rlc-service-bottom a{font-weight:700;font-size:12.5px;color:#146ef5}
+@media(max-width:1050px){.rlc-service-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.rlc-service-grid,.rlc-service-bottom{grid-template-columns:1fr}.rlc-service-card{min-height:unset}}

@@ -1,0 +1,836 @@
+[
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wo finde ich „Kalkulationszentrale“ im Bereich Kalkulation & GAEB?",
+    "a": "Öffnen Sie im Hauptmenü „Kalkulation“ und wählen Sie „Kalkulationszentrale“. Direkter Bereich: /kalkulation/kalkulationszentrale. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/kalkulation/kalkulationszentrale"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was muss ich vor „Kalkulationszentrale“ im Bereich Kalkulation & GAEB prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Kalkulationszentrale“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/kalkulation/kalkulationszentrale"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wo finde ich „LV / Positionen“ im Bereich Kalkulation & GAEB?",
+    "a": "Öffnen Sie im Hauptmenü „Kalkulation“ und wählen Sie „LV / Positionen“. Direkter Bereich: /kalkulation/lv-import. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/kalkulation/lv-import"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was muss ich vor „LV / Positionen“ im Bereich Kalkulation & GAEB prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „LV / Positionen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/kalkulation/lv-import"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wo finde ich „Kalkulation“ im Bereich Kalkulation & GAEB?",
+    "a": "Öffnen Sie im Hauptmenü „Kalkulation“ und wählen Sie „Kalkulation“. Direkter Bereich: /kalkulation/mit-ki. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/kalkulation/mit-ki"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was muss ich vor „Kalkulation“ im Bereich Kalkulation & GAEB prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Kalkulation“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/kalkulation/mit-ki"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wo finde ich „Kalkulationsdatenbank“ im Bereich Kalkulation & GAEB?",
+    "a": "Öffnen Sie im Hauptmenü „Kalkulation“ und wählen Sie „Kalkulationsdatenbank“. Direkter Bereich: /kalkulation/datenbank. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/kalkulation/datenbank"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was muss ich vor „Kalkulationsdatenbank“ im Bereich Kalkulation & GAEB prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Kalkulationsdatenbank“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/kalkulation/datenbank"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wo finde ich „Versionsvergleich / Analyse“ im Bereich Kalkulation & GAEB?",
+    "a": "Öffnen Sie im Hauptmenü „Kalkulation“ und wählen Sie „Versionsvergleich / Analyse“. Direkter Bereich: /kalkulation/versionsvergleich. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/kalkulation/versionsvergleich"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was muss ich vor „Versionsvergleich / Analyse“ im Bereich Kalkulation & GAEB prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Versionsvergleich / Analyse“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/kalkulation/versionsvergleich"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wo finde ich „Preisspiegel / Vergabe“ im Bereich Kalkulation & GAEB?",
+    "a": "Öffnen Sie im Hauptmenü „Kalkulation“ und wählen Sie „Preisspiegel / Vergabe“. Direkter Bereich: /kalkulation/preisspiegel. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/kalkulation/preisspiegel"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was muss ich vor „Preisspiegel / Vergabe“ im Bereich Kalkulation & GAEB prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Preisspiegel / Vergabe“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/kalkulation/preisspiegel"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wo finde ich „CRM / Angebotsverfolgung“ im Bereich Kalkulation & GAEB?",
+    "a": "Öffnen Sie im Hauptmenü „Kalkulation“ und wählen Sie „CRM / Angebotsverfolgung“. Direkter Bereich: /kalkulation/crm. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/kalkulation/crm"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was muss ich vor „CRM / Angebotsverfolgung“ im Bereich Kalkulation & GAEB prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „CRM / Angebotsverfolgung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/kalkulation/crm"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wo finde ich „Aufmaß-Editor“ im Bereich Mengenermittlung?",
+    "a": "Öffnen Sie im Hauptmenü „Mengenermittlung“ und wählen Sie „Aufmaß-Editor“. Direkter Bereich: /mengenermittlung/aufmasseditor. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mengenermittlung/aufmasseditor"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Was muss ich vor „Aufmaß-Editor“ im Bereich Mengenermittlung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Aufmaß-Editor“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mengenermittlung/aufmasseditor"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wo finde ich „Aufmaßvergleich: Soll-Ist“ im Bereich Mengenermittlung?",
+    "a": "Öffnen Sie im Hauptmenü „Mengenermittlung“ und wählen Sie „Aufmaßvergleich: Soll-Ist“. Direkter Bereich: /mengenermittlung/soll-ist. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mengenermittlung/soll-ist"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Was muss ich vor „Aufmaßvergleich: Soll-Ist“ im Bereich Mengenermittlung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Aufmaßvergleich: Soll-Ist“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mengenermittlung/soll-ist"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wo finde ich „KI-Mengenermittlung aus Plan / Foto“ im Bereich Mengenermittlung?",
+    "a": "Öffnen Sie im Hauptmenü „Mengenermittlung“ und wählen Sie „KI-Mengenermittlung aus Plan / Foto“. Direkter Bereich: /mengenermittlung/auto. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mengenermittlung/auto"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Was muss ich vor „KI-Mengenermittlung aus Plan / Foto“ im Bereich Mengenermittlung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „KI-Mengenermittlung aus Plan / Foto“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mengenermittlung/auto"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wo finde ich „Aufmaß-Historie“ im Bereich Mengenermittlung?",
+    "a": "Öffnen Sie im Hauptmenü „Mengenermittlung“ und wählen Sie „Aufmaß-Historie“. Direkter Bereich: /mengenermittlung/historie. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mengenermittlung/historie"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Was muss ich vor „Aufmaß-Historie“ im Bereich Mengenermittlung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Aufmaß-Historie“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mengenermittlung/historie"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wo finde ich „GPS-basierte Positionszuweisung“ im Bereich Mengenermittlung?",
+    "a": "Öffnen Sie im Hauptmenü „Mengenermittlung“ und wählen Sie „GPS-basierte Positionszuweisung“. Direkter Bereich: /mengenermittlung/gps. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mengenermittlung/gps"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Was muss ich vor „GPS-basierte Positionszuweisung“ im Bereich Mengenermittlung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „GPS-basierte Positionszuweisung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mengenermittlung/gps"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wo finde ich „Bilder zum Aufmaß“ im Bereich Mengenermittlung?",
+    "a": "Öffnen Sie im Hauptmenü „Mengenermittlung“ und wählen Sie „Bilder zum Aufmaß“. Direkter Bereich: /mengenermittlung/bilder. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mengenermittlung/bilder"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Was muss ich vor „Bilder zum Aufmaß“ im Bereich Mengenermittlung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Bilder zum Aufmaß“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mengenermittlung/bilder"
+  },
+  {
+    "group": "CAD / Geo",
+    "q": "Wo finde ich „CAD/Geo“ im Bereich CAD / Geo?",
+    "a": "Öffnen Sie im Hauptmenü „CAD / Geo“ und wählen Sie „CAD/Geo“. Direkter Bereich: /cad/viewer. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/cad/viewer"
+  },
+  {
+    "group": "CAD / Geo",
+    "q": "Was muss ich vor „CAD/Geo“ im Bereich CAD / Geo prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „CAD/Geo“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/cad/viewer"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Baustellendokumentation“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Baustellendokumentation“. Direkter Bereich: /buro/baustellendokumentation. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/baustellendokumentation"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Baustellendokumentation“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Baustellendokumentation“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/baustellendokumentation"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Büro & Kommunikation“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Büro & Kommunikation“. Direkter Bereich: /buro/buero-kommunikation. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/buero-kommunikation"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Büro & Kommunikation“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Büro & Kommunikation“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/buero-kommunikation"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Bürgschaftsverwaltung“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Bürgschaftsverwaltung“. Direkter Bereich: /buro/buergschaften. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/buergschaften"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Bürgschaftsverwaltung“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Bürgschaftsverwaltung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/buergschaften"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „NU-Management / Nachweise“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „NU-Management / Nachweise“. Direkter Bereich: /buro/nachunternehmer. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/nachunternehmer"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „NU-Management / Nachweise“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „NU-Management / Nachweise“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/nachunternehmer"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Personal / Nachweise & Fristen“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Personal / Nachweise & Fristen“. Direkter Bereich: /buro/personalnachweise. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/personalnachweise"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Personal / Nachweise & Fristen“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Personal / Nachweise & Fristen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/personalnachweise"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Personalverwaltung“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Personalverwaltung“. Direkter Bereich: /buro/personalverwaltung. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/personalverwaltung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Personalverwaltung“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Personalverwaltung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/personalverwaltung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Maschinenverwaltung“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Maschinenverwaltung“. Direkter Bereich: /buro/maschinenverwaltung. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/maschinenverwaltung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Maschinenverwaltung“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Maschinenverwaltung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/maschinenverwaltung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Projekt-Cockpit“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Projekt-Cockpit“. Direkter Bereich: /buro/cockpit. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/cockpit"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Projekt-Cockpit“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Projekt-Cockpit“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/cockpit"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Feiertage & Betriebsruhe“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Feiertage & Betriebsruhe“. Direkter Bereich: /buro/feiertage. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/feiertage"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Feiertage & Betriebsruhe“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Feiertage & Betriebsruhe“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/feiertage"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Adressen & Kontakte“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Adressen & Kontakte“. Direkter Bereich: /buro/kontakte. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/kontakte"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Adressen & Kontakte“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Adressen & Kontakte“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/kontakte"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Stammdaten-Kataloge“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Stammdaten-Kataloge“. Direkter Bereich: /buro/stammdaten. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/stammdaten"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Stammdaten-Kataloge“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Stammdaten-Kataloge“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/stammdaten"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Führerscheine / Gefahrenklassen“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Führerscheine / Gefahrenklassen“. Direkter Bereich: /buro/zuordnungen. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/zuordnungen"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Führerscheine / Gefahrenklassen“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Führerscheine / Gefahrenklassen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/zuordnungen"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Versanderfassung“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Versanderfassung“. Direkter Bereich: /buro/versanderfassung. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/versanderfassung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Versanderfassung“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Versanderfassung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/versanderfassung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Geräte / Freimeldungen“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Geräte / Freimeldungen“. Direkter Bereich: /buro/freimeldungen. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/freimeldungen"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Geräte / Freimeldungen“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Geräte / Freimeldungen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/freimeldungen"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Geräteverrechnung“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Geräteverrechnung“. Direkter Bereich: /buro/geraeteverrechnung. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/geraeteverrechnung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Geräteverrechnung“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Geräteverrechnung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/geraeteverrechnung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Materialverwaltung“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Materialverwaltung“. Direkter Bereich: /buro/materialverwaltung. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/materialverwaltung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Materialverwaltung“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Materialverwaltung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/materialverwaltung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Sicherheit“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Sicherheit“. Direkter Bereich: /buro/sicherheit. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/sicherheit"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Sicherheit“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Sicherheit“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/sicherheit"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Bauzeitenplan (Gantt)“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Bauzeitenplan (Gantt)“. Direkter Bereich: /buro/bauzeitenplan. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/bauzeitenplan"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Bauzeitenplan (Gantt)“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Bauzeitenplan (Gantt)“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/bauzeitenplan"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wo finde ich „Nutzerverwaltung & Rechte“ im Bereich Büro & Verwaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Büro / Verwaltung“ und wählen Sie „Nutzerverwaltung & Rechte“. Direkter Bereich: /buro/nutzerverwaltung. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buro/nutzerverwaltung"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Was muss ich vor „Nutzerverwaltung & Rechte“ im Bereich Büro & Verwaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Nutzerverwaltung & Rechte“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buro/nutzerverwaltung"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Wo finde ich „Rechnungen“ im Bereich Buchhaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Buchhaltung“ und wählen Sie „Rechnungen“. Direkter Bereich: /buchhaltung/rechnungen. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buchhaltung/rechnungen"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Was muss ich vor „Rechnungen“ im Bereich Buchhaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Rechnungen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buchhaltung/rechnungen"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Wo finde ich „Eingangsrechnungen“ im Bereich Buchhaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Buchhaltung“ und wählen Sie „Eingangsrechnungen“. Direkter Bereich: /buchhaltung/eingang. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buchhaltung/eingang"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Was muss ich vor „Eingangsrechnungen“ im Bereich Buchhaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Eingangsrechnungen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buchhaltung/eingang"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Wo finde ich „Zahlungen & Offene Posten“ im Bereich Buchhaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Buchhaltung“ und wählen Sie „Zahlungen & Offene Posten“. Direkter Bereich: /buchhaltung/zahlungen. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buchhaltung/zahlungen"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Was muss ich vor „Zahlungen & Offene Posten“ im Bereich Buchhaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Zahlungen & Offene Posten“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buchhaltung/zahlungen"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Wo finde ich „Kosten & Kostenstellen“ im Bereich Buchhaltung?",
+    "a": "Öffnen Sie im Hauptmenü „Buchhaltung“ und wählen Sie „Kosten & Kostenstellen“. Direkter Bereich: /buchhaltung/kostenuebersicht. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/buchhaltung/kostenuebersicht"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Was muss ich vor „Kosten & Kostenstellen“ im Bereich Buchhaltung prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Kosten & Kostenstellen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/buchhaltung/kostenuebersicht"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Regieberichte“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Regieberichte“. Direkter Bereich: /mobile/regieberichte. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/regieberichte"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Regieberichte“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Regieberichte“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/regieberichte"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Lieferscheine“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Lieferscheine“. Direkter Bereich: /mobile/lieferscheine. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/lieferscheine"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Lieferscheine“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Lieferscheine“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/lieferscheine"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Fotos / Notizen“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Fotos / Notizen“. Direkter Bereich: /mobile/fotos. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/fotos"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Fotos / Notizen“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Fotos / Notizen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/fotos"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Tagesberichte“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Tagesberichte“. Direkter Bereich: /mobile/tagesberichte. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/tagesberichte"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Tagesberichte“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Tagesberichte“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/tagesberichte"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Bautagebuch“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Bautagebuch“. Direkter Bereich: /mobile/bautagebuch. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/bautagebuch"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Bautagebuch“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Bautagebuch“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/bautagebuch"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Arbeitszeiten“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Arbeitszeiten“. Direkter Bereich: /mobile/arbeitszeiten. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/arbeitszeiten"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Arbeitszeiten“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Arbeitszeiten“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/arbeitszeiten"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Mengenermittlung“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Mengenermittlung“. Direkter Bereich: /mobile/mengenermittlung. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/mengenermittlung"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Mengenermittlung“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Mengenermittlung“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/mengenermittlung"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Kalkulation“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Kalkulation“. Direkter Bereich: /mobile/kalkulation. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/kalkulation"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Kalkulation“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Kalkulation“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/kalkulation"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Angebote“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Angebote“. Direkter Bereich: /mobile/angebote. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/angebote"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Angebote“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Angebote“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/angebote"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Abschlagsrechnungen“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Abschlagsrechnungen“. Direkter Bereich: /mobile/abschlagsrechnungen. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/abschlagsrechnungen"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Abschlagsrechnungen“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Abschlagsrechnungen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/abschlagsrechnungen"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Rechnungen“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Rechnungen“. Direkter Bereich: /mobile/rechnungen. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/rechnungen"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Rechnungen“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Rechnungen“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/rechnungen"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wo finde ich „Outlier Reports“ im Bereich Mobile Web?",
+    "a": "Öffnen Sie im Hauptmenü „Mobile“ und wählen Sie „Outlier Reports“. Direkter Bereich: /mobile/outlier-reports. Die verfügbaren Aktionen richten sich nach Benutzerrechten und Projektkontext.",
+    "path": "/mobile/outlier-reports"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was muss ich vor „Outlier Reports“ im Bereich Mobile Web prüfen?",
+    "a": "Prüfen Sie das richtige Projekt, die zugehörigen Positionen beziehungsweise Datensätze sowie Ihre Berechtigungen. Öffnen Sie anschließend „Outlier Reports“. Vor dem Speichern oder Export kontrollieren Sie die angezeigten Ergebnisse.",
+    "path": "/mobile/outlier-reports"
+  },
+  {
+    "group": "Projekte & Zugang",
+    "q": "Wie starte ich im richtigen Projekt?",
+    "a": "Öffnen Sie Projekte oder Übersicht. Kontrollieren Sie die Projektkennung, bevor Sie Kalkulation, Aufmaß, Buchhaltung oder Mobile-Daten bearbeiten.",
+    "path": "/start"
+  },
+  {
+    "group": "Projekte & Zugang",
+    "q": "Was ist bei einem Rollenwechsel zu beachten?",
+    "a": "Die Zugriffsrechte hängen von der Benutzerrolle und der Projektmitgliedschaft ab. Lassen Sie den Administrator Berechtigungen prüfen; verwenden Sie keine fremden Zugangsdaten.",
+    "path": "/buro/nutzerverwaltung"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wie führt ein GAEB-LV zur Kalkulation?",
+    "a": "Laden und prüfen Sie das Leistungsverzeichnis über LV / Positionen, kontrollieren Sie Ordnungszahlen, Mengen und Einheiten und öffnen Sie anschließend Kalkulation. Freigaben und EP müssen fachlich geprüft werden.",
+    "path": "/kalkulation/lv-import"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Was unterscheidet X83, D83 und X84?",
+    "a": "X83 und D83 sind GAEB-Austauschformate für Leistungsverzeichnisse. X84 kann Angebotsdaten enthalten und als Vergleich oder Benchmark dienen. Importieren Sie nur einen passenden Dokumenttyp; vorhandene Vergleichspreise sind keine automatische Urkalkulation.",
+    "path": "/kalkulation/lv-import"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Warum erzeugt RLC Motor needs_review?",
+    "a": "Fehlt eine fachlich freigegebene Urkalkulation oder eine notwendige Ressourcen-/Produktivitätsgrundlage, muss die Position geprüft werden. Es darf nicht automatisch ein historischer EP eingesetzt werden.",
+    "path": "/kalkulation/mit-ki"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wie nutze ich die Preisbibliothek gegenüber der Urkalkulation?",
+    "a": "Die Kalkulationsdatenbank dient zur Recherche und Prüfung von Positionen. Ein finaler automatisch vorgeschlagener EP muss durch eine gültige Urkalkulation des RLC Motor begründet werden.",
+    "path": "/kalkulation/datenbank"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wie kontrolliere ich Nachträge mit der Hauptkalkulation?",
+    "a": "Prüfen Sie Projektbezug, Positionsnummer, Menge, EP-Grundlage und Nachtragsbegründung. Vergleichen Sie die Basis mit dem Leistungsverzeichnis, bevor Sie den Nachtrag weitergeben.",
+    "path": "/kalkulation/nachtraege"
+  },
+  {
+    "group": "Kalkulation & GAEB",
+    "q": "Wie hängen Preisspiegel und Angebote zusammen?",
+    "a": "Nutzen Sie den Preisspiegel zur Gegenüberstellung von Angeboten und Vergabewerten; prüfen Sie, dass Anbieter, LV-Positionen und Mengen vergleichbar sind. Eine Vergleichsdifferenz ist noch kein validierter EP.",
+    "path": "/kalkulation/preisspiegel"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wie gelangen LV-Positionen ins Aufmaß?",
+    "a": "Wählen Sie im Aufmaß-Editor das korrekte Projekt und die zugehörige Position. Prüfen Sie Mengenansatz und Einheit vor einem Soll-Ist-Vergleich.",
+    "path": "/mengenermittlung/aufmasseditor"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wie hängen Bilder und GPS mit dem Aufmaß zusammen?",
+    "a": "Bilder können der Dokumentation von gemessenen Leistungen dienen; GPS-basierte Zuweisungen benötigen eine überprüfbare Positions- und Projektzuordnung. Prüfen Sie alle erfassten Werte vor der Abrechnung.",
+    "path": "/mengenermittlung/bilder"
+  },
+  {
+    "group": "CAD / Geo",
+    "q": "Kann ich Mengen aus dem CAD ohne Prüfung abrechnen?",
+    "a": "Nein. Prüfen Sie Zeichnung, Bezugssystem, Einheit, Maßstab und Position. Die Berechnung muss vor einer Übernahme ins Aufmaß fachlich verifiziert werden.",
+    "path": "/cad/viewer"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wie verknüpfe ich Lieferanten mit Nachweisen?",
+    "a": "Prüfen Sie zunächst den Lieferanten unter Adressen & Kontakte. In NU-Management / Nachweise können zugehörige Unterlagen projektbezogen kontrolliert werden. Beachten Sie Freigaben und Gültigkeitsfristen.",
+    "path": "/buro/nachunternehmer"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wie unterscheiden sich Personalnachweise und Arbeitszeiten?",
+    "a": "Personalnachweise betreffen Qualifikationen und Fristen; Arbeitszeiten dokumentieren den Zeiteinsatz. Vergleichen Sie Projekt und Mitarbeiter, bevor Daten für weitere kaufmännische Zwecke verwendet werden.",
+    "path": "/buro/personalnachweise"
+  },
+  {
+    "group": "Büro & Verwaltung",
+    "q": "Wofür dienen Geräteverrechnung und Maschinenverwaltung?",
+    "a": "Maschinenverwaltung erfasst den Maschinenkontext; Geräteverrechnung dient der kaufmännischen Zuordnung. Prüfen Sie Stammdaten, Einsatz und Zuordnung, bevor Kosten übernommen werden.",
+    "path": "/buro/geraeteverrechnung"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Wie hängen Rechnungen und Zahlungen zusammen?",
+    "a": "Kontrollieren Sie Rechnungsnummer, Projekt und Belegstatus unter Rechnungen oder Eingangsrechnungen. Gleichen Sie anschließend zugehörige Zahlungen und offene Posten ab.",
+    "path": "/buchhaltung/zahlungen"
+  },
+  {
+    "group": "Buchhaltung",
+    "q": "Was ist bei XRechnung und Reverse Charge zu beachten?",
+    "a": "Prüfen Sie Pflichtfelder, Leistungsbezug, Steuerkategorie und gegebenenfalls die Rechtsgrundlage für §13b UStG. Verlassen Sie sich nicht allein auf eine Formatprüfung: der Sachverhalt muss steuerlich korrekt sein.",
+    "path": "/buchhaltung/rechnungen"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Wie läuft der Weg Mobile-Regiebericht ins Büro?",
+    "a": "Prüfen Sie in Mobile den Regiebericht samt Projektzuordnung und Status. Die Web-Prüfansicht kann für eine nachgelagerte Kontrolle verwendet werden. Synchronisierung und Freigaben sind separat zu überprüfen.",
+    "path": "/mobile/regieberichte"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was kontrolliere ich bei mobilen Arbeitszeiten?",
+    "a": "Prüfen Sie Mitarbeiter, Projekt, Zeitraum und die verfügbaren Freigabestati. Fehlende Daten können mit Synchronisation oder Rechten zusammenhängen.",
+    "path": "/mobile/arbeitszeiten"
+  },
+  {
+    "group": "Mobile Web",
+    "q": "Was unterscheidet die Mobile-App von der Mobile-Webansicht?",
+    "a": "Die Webansicht besitzt Prüf- und Verwaltungsrouten für Mobile-Datentypen. Die eigenständige App läuft auf dem Mobilgerät; tatsächliche Offline- und Synchronisationsfunktionen müssen dort gesondert getestet werden.",
+    "path": "/mobile"
+  },
+  {
+    "group": "RLC Copilot",
+    "q": "Wo öffne ich RLC Copilot?",
+    "a": "In der Hauptleiste befindet sich „RLC Copilot“ hinter Mobile. Der Schalter öffnet den integrierten Assistenten. Teilen Sie keine Passwörter oder Geheimnisse im Chat.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "RLC Copilot",
+    "q": "Kann Copilot einen EP eigenständig freigeben?",
+    "a": "Copilot kann bei Recherche und Erklärung helfen, darf aber die fachlichen Freigaberegeln des RLC Motor nicht umgehen. Fehlende Ressourcen- und Produktivitätsnachweise erfordern Prüfung.",
+    "path": "/kalkulation/mit-ki"
+  },
+  {
+    "group": "RLC Copilot",
+    "q": "Wie stelle ich Copilot eine projektbezogene Frage?",
+    "a": "Nennen Sie Modul, Position und die konkrete Aufgabe, ohne unnötige personenbezogene Daten zu übermitteln. Prüfen Sie Antworten gegen die vorhandenen Projektunterlagen.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "RLC Copilot",
+    "q": "Ist Copilot identisch mit RLC Motor?",
+    "a": "Nein. RLC Motor ist die maßgebliche Instanz für automatische EP-Entscheidungen aus Urkalkulationen; Copilot dient der dialogorientierten Unterstützung. Eine Chatantwort ersetzt keine technische Freigabe.",
+    "path": "/kalkulation/mit-ki"
+  },
+  {
+    "group": "RLC Copilot",
+    "q": "Was mache ich bei einer unzutreffenden Copilot-Antwort?",
+    "a": "Verwenden Sie den Vorschlag nicht ungeprüft. Melden Sie die betroffene Funktion, die fachliche Abweichung und gegebenenfalls eine bereinigte Beispielposition an den Support.",
+    "path": "/info/support"
+  },
+  {
+    "group": "Verbindungen zwischen Modulen",
+    "q": "Wie ist der Ablauf LV → Kalkulation → Angebot → Rechnung?",
+    "a": "Ein Leistungsverzeichnis liefert Positionen und Mengen; die Kalkulation legt die geprüfte Kosten- und Preisbasis fest; ein Angebot nutzt freigegebene Werte. Spätere Rechnungen müssen mit nachgewiesener Leistung und Vertragsgrundlage abgeglichen werden.",
+    "path": "/kalkulation/lv-import"
+  },
+  {
+    "group": "Verbindungen zwischen Modulen",
+    "q": "Wie fließen Aufmaße in Abschlagsrechnungen ein?",
+    "a": "Ermitteln und prüfen Sie ausgeführte Mengen je Position. Gleichen Sie sie mit LV, bisheriger Abrechnung und Vertragsstand ab, bevor eine Abschlagsrechnung erzeugt oder freigegeben wird.",
+    "path": "/buchhaltung/rechnungen"
+  },
+  {
+    "group": "Verbindungen zwischen Modulen",
+    "q": "Wie sind Mobile-Fotos und Baustellendokumentation verbunden?",
+    "a": "Mobile-Fotos dienen als Baustellennachweis. Bei Übernahme ins Büro müssen Projekt, Datum, Urheber und gegebenenfalls die zugehörige Leistung korrekt zugeordnet werden.",
+    "path": "/buro/baustellendokumentation"
+  },
+  {
+    "group": "Verbindungen zwischen Modulen",
+    "q": "Wie hängen Kontakte, CRM und Angebot zusammen?",
+    "a": "Kontakte bilden den Kunden-/Partnerbezug. CRM unterstützt die Angebotsverfolgung; Angebot und Projekt müssen dieselbe eindeutige Kunden- beziehungsweise Projektzuordnung verwenden.",
+    "path": "/kalkulation/crm"
+  },
+  {
+    "group": "Verbindungen zwischen Modulen",
+    "q": "Wie arbeiten Nachträge und Abrechnung zusammen?",
+    "a": "Nachtragspositionen benötigen eine nachvollziehbare Beschreibung, Menge und Preisgrundlage. Erst nach vertragsgemäßer Prüfung fließen freigegebene Leistungen in die Abrechnung ein.",
+    "path": "/kalkulation/nachtraege"
+  },
+  {
+    "group": "Support & Sicherheit",
+    "q": "Wie melde ich einen Importfehler nachvollziehbar?",
+    "a": "Notieren Sie GAEB-Format, betroffene Positionsnummer, Fehlermeldung und den reproduzierbaren Ablauf. Teilen Sie nur freigegebene, bereinigte Beispieldaten.",
+    "path": "/info/support"
+  },
+  {
+    "group": "Support & Sicherheit",
+    "q": "Soll ich bei Anzeigefehlern meinen Browserspeicher löschen?",
+    "a": "Löschen Sie nicht pauschal LocalStorage oder gespeicherte Projektdaten. Dokumentieren Sie zunächst Bildschirm, Zeitpunkt und betroffenes Modul und kontaktieren Sie den Support.",
+    "path": "/info/support"
+  },
+  {
+    "group": "Support & Sicherheit",
+    "q": "Wo überprüfe ich die API-Erreichbarkeit?",
+    "a": "Unter Hilfe > Systemstatus steht eine technische Diagnose der Verbindung zur Verfügung. Ein erfolgreicher API-Check beweist nicht die korrekte Funktion jedes einzelnen Moduls.",
+    "path": "/info/system"
+  },
+  {
+    "group": "Projekte & Zugang",
+    "q": "Wie melde ich mich an und wo finde ich meine Projekte?",
+    "a": "Melden Sie sich über die RLC-Anmeldeseite an. Ihre Projekte finden Sie anschließend unter Projekte beziehungsweise Übersicht. Verfügbare Funktionen hängen von Ihrer Rolle und Projektzuordnung ab.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "Projekte & Zugang",
+    "q": "Warum kann ich eine Funktion oder ein Projekt nicht öffnen?",
+    "a": "Überprüfen Sie zunächst das gewählte Konto und Projekt. Die Zugriffsrechte werden rollenbasiert vergeben; bitten Sie gegebenenfalls Ihren Administrator um Prüfung.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "GAEB & Kalkulation",
+    "q": "Wie importiere ich eine GAEB-Datei?",
+    "a": "Öffnen Sie Kalkulation > LV / Positionen, laden Sie die passende GAEB-Datei und überprüfen Sie die Importvorschau. Kontrollieren Sie Positionen, Ordnungszahlen, Mengen und Fehlermeldungen vor der Übernahme.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "GAEB & Kalkulation",
+    "q": "Woher stammen automatisch berechnete Einheitspreise?",
+    "a": "Automatische EP müssen durch eine fachlich gültige Urkalkulation aus dem RLC Motor begründet sein. Kann keine freigegebene Kalkulation erstellt werden, ist die Position zu prüfen; historische Vergleichswerte dürfen den EP nicht automatisch ersetzen.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "GAEB & Kalkulation",
+    "q": "Was bedeutet needs_review?",
+    "a": "Die Position benötigt eine fachliche Prüfung, beispielsweise wegen fehlender oder nicht belegter Ressourcen, Leistungsangaben oder Produktivitätswerte. Der Status ist keine automatische Preisfreigabe.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "Mengenermittlung",
+    "q": "Wie kontrolliere ich meine Aufmaße?",
+    "a": "Nutzen Sie Mengenermittlung > Aufmaß-Editor zur Erfassung und den Soll-Ist-Vergleich zum Nachvollziehen von Abweichungen. Maße und Positionen sind vor der Abrechnung zu prüfen.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "Mobile",
+    "q": "Warum erscheinen mobile Berichte nicht im Web?",
+    "a": "Prüfen Sie das Projekt auf beiden Geräten, die Verbindung, den Synchronisationsstatus und die Berechtigungen. Bleibt die Abweichung bestehen, melden Sie Projekt, Datentyp und Zeitpunkt an den Support.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "Datenschutz & Sicherheit",
+    "q": "Werden alle Daten ausschließlich im Browser gespeichert?",
+    "a": "Nein. RLC besitzt eine serverbasierte Anwendung und projektbezogene Datenverwaltung. Einzelne lokale Zwischenspeicher können weiterhin verwendet werden; löschen Sie Browserdaten daher nicht unüberlegt. Details finden Sie im Datenschutzbereich.",
+    "path": "/info/hilfe"
+  },
+  {
+    "group": "Datenschutz & Sicherheit",
+    "q": "Wie kann ich ein technisches Problem melden?",
+    "a": "Im Bereich Support & Feedback können Sie eine Anfrage stellen. Beschreiben Sie den Menüpunkt, den Ablauf und die genaue Fehlermeldung. Geben Sie keine Passwörter weiter.",
+    "path": "/info/hilfe"
+  }
+]

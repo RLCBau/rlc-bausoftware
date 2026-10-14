@@ -1,0 +1,42 @@
+
+.rlc-info-pro{max-width:1160px!important;margin:0 auto!important;padding:22px!important;color:#18273f;font-family:Inter,system-ui,Arial,sans-serif}
+/* Use the site-wide .rlc-page-hero instead of a parallel visual system. */
+.rlc-info-pro .rlc-page-hero{max-width:none}
+.rlc-info-pro .rlc-page-hero>span{display:inline-flex;color:#e2edff!important;-webkit-text-fill-color:#e2edff!important;font-size:10px;letter-spacing:1px;font-weight:750}
+.rlc-info-pro .rlc-page-hero h1{color:#fff!important;-webkit-text-fill-color:#fff!important}
+.rlc-info-pro .rlc-page-hero p{color:#e2edff!important;-webkit-text-fill-color:#e2edff!important}
+.rlc-info-pro .rlc-page-hero input{display:block;width:100%;max-width:680px;border:1px solid #bed5f7;border-radius:8px;margin-top:12px;padding:10px 12px;background:#fff;color:#16243a}
+.rlc-info-chips{display:flex;flex-wrap:wrap;gap:8px;margin:17px 0}
+.rlc-info-chips button{border:1px solid #d6e0ee;background:#fff;border-radius:8px;color:#345070;padding:9px 12px;cursor:pointer}
+.rlc-info-chips button.active{background:#146ef5;color:#fff;border-color:#146ef5}
+.rlc-info-panel{border:1px solid #dce5f1;background:white;border-radius:13px;padding:18px 22px}
+.rlc-info-panel-head{display:flex;align-items:center;justify-content:space-between}.rlc-info-panel-head h2{font-size:19px}.rlc-info-panel-head small{color:#66798b}
+.rlc-info-faq{border-top:1px solid #e2e8f0}.rlc-info-faq>button{display:flex;align-items:center;justify-content:space-between;gap:16px;border:0;width:100%;padding:16px 2px;background:transparent;text-align:left;color:#192a44;cursor:pointer}
+.rlc-info-faq>button span{display:grid;gap:6px}.rlc-info-faq small{font-size:11px;color:#2867b4}.rlc-info-faq strong{font-size:14px}.rlc-info-faq b{font-size:23px;color:#146ef5}
+.rlc-info-answer{padding:0 32px 20px 2px;line-height:1.65;font-size:13.5px;color:#54657b}
+.rlc-info-footer{display:flex;flex-wrap:wrap;gap:18px;margin:20px 0;color:#52677f;font-size:13px}.rlc-info-footer a{color:#146ef5;text-decoration:none;font-weight:700}
+.rlc-info-pro.rlc-info-support,.rlc-info-pro.rlc-info-status,.rlc-info-pro.rlc-info-impressum,.rlc-info-pro.rlc-info-privacy{max-width:1110px!important}
+.rlc-info-pro.rlc-info-support>div,.rlc-info-pro.rlc-info-status>div:not(.rlc-info-hero),.rlc-info-pro.rlc-info-impressum>p{border-radius:12px}
+.rlc-info-pro.rlc-info-status>div:not(.rlc-info-hero){border-color:#dce5f1!important;background:#fff!important;padding:16px!important}
+.rlc-info-warning{background:#fff8e7;border:1px solid #edd79a;border-radius:10px;padding:13px 16px;color:#755318;font-size:13px;line-height:1.6}
+@media(max-width:700px){.rlc-info-pro{padding:12px!important}.rlc-info-pro .rlc-info-hero{padding:23px}}
+
+.rlc-info-legal-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,1fr);gap:12px}
+.rlc-info-legal-grid>.card{margin:0;padding:20px;border:1px solid var(--rlc-border,#dce5f1);border-radius:10px}
+.rlc-info-legal-grid h2{font-size:18px;margin:0 0 16px;color:#16253b}
+.rlc-info-legal-grid h3{font-size:15px;margin:22px 0 8px}
+.rlc-info-legal-grid p{font-size:13px;line-height:1.6;color:#42556f}
+.rlc-info-legal-list{display:grid;grid-template-columns:130px 1fr;gap:0;margin:0;font-size:13px}
+.rlc-info-legal-list dt,.rlc-info-legal-list dd{margin:0;padding:13px 7px;border-bottom:1px solid #e5ebf3}
+.rlc-info-legal-list dt{color:#617084;font-weight:700}
+.rlc-info-legal-list dd{font-weight:600}
+.rlc-info-pending{color:#875e1d}
+@media(max-width:750px){.rlc-info-legal-grid{grid-template-columns:1fr}.rlc-info-legal-list{grid-template-columns:110px 1fr}}
+
+.rlc-app-shell .rlc-info-support .rlc-info-support-header{padding:14px 18px!important;margin-bottom:14px!important}
+.rlc-app-shell .rlc-info-support .rlc-info-support-header h2{color:#fff!important;-webkit-text-fill-color:#fff!important;font-size:20px!important}
+.rlc-app-shell .rlc-info-support .rlc-info-support-header div{color:#e4efff!important;-webkit-text-fill-color:#e4efff!important}
+.rlc-info-pro .rlc-page-hero>span{-webkit-text-fill-color:#e2edff!important}
+
+.rlc-info-answer p{margin:4px 0 12px}
+.rlc-info-answer-link{display:inline-flex;border:1px solid #b5d2f8;border-radius:7px;padding:7px 12px;text-decoration:none;color:#125ac4;font-weight:700;font-size:12px;background:#f4f9ff}
