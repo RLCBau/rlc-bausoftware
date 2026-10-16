@@ -280,21 +280,17 @@ async function persistToProjectFileUri(params: {
   const ext = isPhUri(input) || shouldConvertToJpegByExt(ext0) || converted !== input ? "jpg" : ext0;
   const fileNameSafeBase = String(nameHint || "").trim().replace(/[\/\\?%*:|"<>]/g, "-").replace(/\s+/g, "_").slice(0, 80) || "";
   const baseName = fileNameSafeBase ? fileNameSafeBase.replace(/\.(\w{1,6})$/, "") : `${prefix || "f"}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-  const target = `${dir}${baseName}.${ext}`;
+  // Allegati omonimi non devono sovrascriversi (né perdere il precedente).
+  const unique = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const target = `${dir}${baseName}_${unique}.${ext}`;
   try {
-    try {
-      await FileSystem.deleteAsync(target, {
-        idempotent: true
-      });
-    } catch {}
     await FileSystem.copyAsync({
       from: converted,
       to: target
     });
     return target.startsWith("file://") ? target : `file://${target}`;
   } catch {
-    if (isFileUri(converted)) return converted;
-    return input;
+    throw new Error("ANHANG_NICHT_DAUERHAFT_GESPEICHERT");
   }
 }
 async function pickImageFromLibrary(): Promise<DateiMeta | null> {
@@ -745,7 +741,8 @@ export default function LieferscheinScreen({
           nameHint: f.name || `camera_${Date.now()}.jpg`,
           typeHint: f.type || "image/jpeg",
           prefix: "att"
-        });
+        }).catch(() => "");
+        if (!persisted) { Alert.alert("Anhang", "Datei konnte nicht dauerhaft gespeichert werden."); return; }
         setRow(r => ({
           ...r,
           attachments: normalizeFiles([...(r.attachments || []), {
@@ -766,7 +763,8 @@ export default function LieferscheinScreen({
           nameHint: f.name || `photo_${Date.now()}.jpg`,
           typeHint: f.type || "image/jpeg",
           prefix: "att"
-        });
+        }).catch(() => "");
+        if (!persisted) { Alert.alert("Anhang", "Datei konnte nicht dauerhaft gespeichert werden."); return; }
         setRow(r => ({
           ...r,
           attachments: normalizeFiles([...(r.attachments || []), {
@@ -787,7 +785,8 @@ export default function LieferscheinScreen({
           nameHint: f.name || `file_${Date.now()}`,
           typeHint: f.type || "application/octet-stream",
           prefix: "file"
-        });
+        }).catch(() => "");
+        if (!persisted) { Alert.alert("Anhang", "Datei konnte nicht dauerhaft gespeichert werden."); return; }
         setRow(r => ({
           ...r,
           attachments: normalizeFiles([...(r.attachments || []), {
