@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
+let mode='fail',hits=0,lastBody=null;
+global.FormData=class {constructor(){this.fields=[]}append(key,value){this.fields.push({key,value});}};
+const item={id:'ph1',kind:'PHOTO_NOTE',projectId:'BA-2026-QA',status:'PENDING',tries:0,payload:{docId:'photo1',date:'2026-10-16',imageUri:'file:///test/main.jpg',files:[{uri:'file:///test/main.jpg',name:'main.jpg'},{uri:'file:///test/add.jpg',name:'add.jpg'}]}};
+const queue={queueList:async()=>[{...item}],queueUpdate:async(id,patch)=>Object.assign(item,patch)};
+global.fetch=async(url,opts)=>{hits++;lastBody=opts.body;return {ok:true,status:200,text:async()=>JSON.stringify(mode==='fail'?{ok:false,docId:'photo1'}:{ok:true,docId:'photo1'})};};
+const api={api:{projects:async()=>[],getApiUrl:async()=> 'https://test.invalid'}};
+const file=path.resolve(__dirname,'../src/lib/sync.ts');
+const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const mod=new Module(file,module);mod.filename=file;mod.paths=Module._nodeModulePaths(path.dirname(file));
+mod.require=name=>name==='./api'?api:name==='./offlineQueue'?queue:name==='./auth'?{getServerToken:async()=> 'test-token'}:require(name);
+mod._compile(js,file);
+(async()=>{
+let r=await mod.exports.syncAll();assert.equal(r.fail,1);assert.equal(item.status,'ERROR','semantic negative must not mark DONE');
+assert.equal(lastBody.fields.filter(x=>x.key==='main').length,1);
+assert.equal(lastBody.fields.filter(x=>x.key==='files').length,1,'main image must not also appear among attachments');
+item.nextTryAt=0;mode='pass';
+r=await mod.exports.syncAll();assert.equal(r.ok,1);assert.equal(item.status,'DONE');assert.equal(hits,2);
+console.log('PASS photos: one main, deduplicated attachments, semantic server rejection retained for retry');
+})().catch(e=>{console.error(e);process.exitCode=1;});

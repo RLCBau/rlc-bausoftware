@@ -2986,7 +2986,7 @@ async tagesberichtApprove(
       fd.append("files", { uri: uploadUri, name, type });
     }
 
-    return request<any>(lsInboxUploadEndpoint(), { method: "POST", body: fd });
+    return request<any>(`${lsInboxUploadEndpoint()}?projectId=${encodeURIComponent(projectKey)}`, { method: "POST", body: fd });
   },
 
   async lsInboxList(projectIdOrCode: string) {
@@ -3043,7 +3043,7 @@ async tagesberichtApprove(
       fd.append("files", { uri: uploadUri, name, type });
     }
 
-    return request<any>(lsLegacyUploadEndpoint(), { method: "POST", body: fd });
+    return request<any>(`${lsLegacyUploadEndpoint()}?projectId=${encodeURIComponent(projectKey)}`, { method: "POST", body: fd });
   },
 
   async commitLieferscheinLegacy(projectIdOrCode: string, payload: any) {
@@ -3079,12 +3079,13 @@ async tagesberichtApprove(
       });
     } catch (e: any) {
       if (looksLikeMissingEndpoint(e)) {
-        return api.pushLieferscheinToServerLegacy(projectKey, row);
+        throw new Error("LIEFERSCHEIN_INBOX_ENDPOINT_UNAVAILABLE");
       }
       throw e;
     }
 
-    const docId = String(submitRes?.docId || row?.id || "").trim();
+    if (submitRes?.ok !== true) throw new Error("LIEFERSCHEIN_INBOX_NOT_CONFIRMED");
+    const docId = String(submitRes?.docId || "").trim();
     if (!docId) {
       throw new Error("Lieferschein submit fehlgeschlagen: docId fehlt.");
     }
@@ -3108,10 +3109,8 @@ async tagesberichtApprove(
         metaForInbox
       );
       inboxItems = Array.isArray(uploadRes?.items) ? uploadRes.items : [];
-      if (!inboxItems.length) {
-        throw new Error(
-          "Lieferschein Upload (Inbox) fehlgeschlagen: Server hat keine items zurückgegeben."
-        );
+      if (uploadRes?.ok !== true || inboxItems.length !== localFiles.length) {
+        throw new Error("LIEFERSCHEIN_INBOX_UPLOAD_INCOMPLETE");
       }
     }
 
