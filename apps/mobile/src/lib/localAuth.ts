@@ -1,48 +1,84 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
+import * as Crypto from "expo-crypto";
 
 const KEY_EMAIL = "rlc_local_email_v1";
-const KEY_PWHASH = "rlc_local_pwhash_v1";
+const KEY_PWHASH = "rlc_local_pwhash_v1"; // legacy migration only
+const KEY_VERIFIER = "rlc_local_password_verifier_v2";
 const KEY_LOGGED = "rlc_local_logged_v1";
 
-async function sha256(input: string): Promise<string> {
-  // Expo/RN: usa SubtleCrypto se disponibile, fallback semplice (non crittografico) se no.
-  const s = String(input || "");
-  // @ts-ignore
-  if (globalThis?.crypto?.subtle?.digest) {
-    const enc = new TextEncoder().encode(s);
-    // @ts-ignore
-    const buf = await globalThis.crypto.subtle.digest("SHA-256", enc);
-    const arr = Array.from(new Uint8Array(buf));
-    return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
+type Verifier = { salt: string; hash: string; v: 2 };
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function derive(password: string, salt: string): Promise<string> {
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    `${salt}:${String(password || "")}`,
+    { encoding: Crypto.CryptoEncoding.HEX }
+  );
+}
+
+async function createVerifier(password: string): Promise<Verifier> {
+  const salt = bytesToHex(await Crypto.getRandomBytesAsync(16));
+  return { salt, hash: await derive(password, salt), v: 2 };
+}
+
+async function saveVerifier(password: string): Promise<void> {
+  const verifier = await createVerifier(password);
+  await SecureStore.setItemAsync(KEY_VERIFIER, JSON.stringify(verifier));
+  await AsyncStorage.removeItem(KEY_PWHASH).catch(() => {});
+}
+
+async function verifySecure(password: string): Promise<boolean | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(KEY_VERIFIER);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Verifier;
+    if (!v?.salt || !v?.hash) return false;
+    return (await derive(password, v.salt)) === v.hash;
+  } catch {
+    return null;
   }
-  // fallback (minimo): NON perfetto, ma evita blocchi su device vecchi
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return (h >>> 0).toString(16);
+}
+
+async function legacyHash(input: string): Promise<string> {
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    String(input || ""),
+    { encoding: Crypto.CryptoEncoding.HEX }
+  );
 }
 
 export async function localRegister(email: string, password: string) {
   const e = String(email || "").trim().toLowerCase();
   if (!e || !e.includes("@")) throw new Error("E-Mail ungültig.");
   const p = String(password || "");
-  if (p.length < 6) throw new Error("Passwort zu kurz (min. 6).");
-  const hash = await sha256(p);
-  await AsyncStorage.multiSet([
-    [KEY_EMAIL, e],
-    [KEY_PWHASH, hash],
-    [KEY_LOGGED, "1"],
-  ]);
+  if (p.length < 8) throw new Error("Passwort zu kurz (min. 8).");
+  await saveVerifier(p);
+  await AsyncStorage.multiSet([[KEY_EMAIL, e], [KEY_LOGGED, "1"]]);
   return { email: e };
 }
 
 export async function localLogin(email: string, password: string) {
   const e = String(email || "").trim().toLowerCase();
   const storedEmail = (await AsyncStorage.getItem(KEY_EMAIL)) || "";
-  const storedHash = (await AsyncStorage.getItem(KEY_PWHASH)) || "";
-  if (!storedEmail || !storedHash) throw new Error("Kein lokales Konto. Bitte registrieren.");
+  if (!storedEmail) throw new Error("Kein lokales Konto. Bitte registrieren.");
   if (e !== storedEmail) throw new Error("E-Mail stimmt nicht.");
-  const hash = await sha256(String(password || ""));
-  if (hash !== storedHash) throw new Error("Passwort falsch.");
+
+  const secureOk = await verifySecure(password);
+  if (secureOk === false) throw new Error("Passwort falsch.");
+
+  if (secureOk === null) {
+    const legacy = (await AsyncStorage.getItem(KEY_PWHASH)) || "";
+    if (!legacy || (await legacyHash(password)) !== legacy) {
+      throw new Error("Passwort falsch.");
+    }
+    await saveVerifier(password);
+  }
+
   await AsyncStorage.setItem(KEY_LOGGED, "1");
   return { email: e };
 }
@@ -58,4 +94,3 @@ export async function localIsLoggedIn() {
 export async function localUserEmail() {
   return (await AsyncStorage.getItem(KEY_EMAIL)) || "";
 }
-

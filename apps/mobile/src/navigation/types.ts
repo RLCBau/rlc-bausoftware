@@ -86,6 +86,7 @@ export type RootStackParamList = {
   /* ===== CORE ===== */
 
   Start: undefined;
+  Rechtliches: undefined;
 
   Inbox:
     | {

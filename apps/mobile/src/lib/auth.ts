@@ -106,24 +106,30 @@ export async function setToken(token: string) {
     return;
   }
 
-  // AsyncStorage come fallback
-  await AsyncStorage.setItem(TOKEN_KEY, t);
-
+  let tokenStoredSecurely = false;
   try {
     await SecureStore.setItemAsync(TOKEN_KEY, t);
+    tokenStoredSecurely = true;
+    await AsyncStorage.removeItem(TOKEN_KEY);
   } catch {
-    // ignore
+    // SecureStore non disponibile: fallback locale esplicito.
+    await AsyncStorage.setItem(TOKEN_KEY, t);
   }
 
   // NUR_APP usa un token local:... per il proprio login, ma non deve
   // distruggere l'ultima sessione server valida necessaria al PDF Core.
   if (!t.startsWith("local:") && t.split(".").length === 3) {
-    await AsyncStorage.setItem(SERVER_TOKEN_KEY, t);
     try {
       await SecureStore.setItemAsync(SERVER_TOKEN_KEY, t);
+      await AsyncStorage.removeItem(SERVER_TOKEN_KEY);
     } catch {
-      // AsyncStorage rimane il fallback.
+      await AsyncStorage.setItem(SERVER_TOKEN_KEY, t);
     }
+  }
+
+  // Evita copie plaintext residue dopo una migrazione riuscita.
+  if (tokenStoredSecurely) {
+    await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
   }
 }
 

@@ -31,7 +31,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "RLC Mobile benötigt die Kamera, um den QR-Code Ihres privaten RLC Servers zu scannen."
+          "cameraPermission": "RLC Mobile benötigt die Kamera für QR-Serverkopplung und ausdrücklich gestartete Baustellendokumentation."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "RLC Mobile verwendet Ihren Standort nur auf ausdrückliche Anforderung bei Arbeitszeiten bzw. Baustellendokumentation. Eine permanente Hintergrundortung findet nicht statt."
         }
       ],
       [
