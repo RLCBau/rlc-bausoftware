@@ -9,7 +9,7 @@ import { COLORS, RLC_SPACING, RLC_RADIUS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
-import { saveInvoiceDraftOnServer } from "../lib/fiscalInvoice";
+import { saveInvoiceDraftOnServer, getInvoiceFiscalState, issueInvoiceOnServer } from "../lib/fiscalInvoice";
 import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
 import { parseRlcKiSmartDoc } from "../lib/rlcKiSmartParser";
 
@@ -857,6 +857,38 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       setBusy(false);
     }
   }
+  async function issueFiscalInvoice() {
+    if (busy) return;
+    try {
+      if (await getMode() === "NUR_APP") {
+        Alert.alert("Nur App", "Die steuerliche Ausstellung ist nur über den Server möglich.");
+        return;
+      }
+      setBusy(true);
+      const pk = String(doc.projectId || projectId || projectCode);
+      const current = await getInvoiceFiscalState(pk, doc.id);
+      if (current.fiscalStatus !== "ENTWURF") {
+        Alert.alert("Keine Ausstellung möglich", `Serverstatus: ${current.fiscalStatus || "unbekannt"}`);
+        setBusy(false);
+        return;
+      }
+      Alert.alert("Rechnung verbindlich ausstellen?", "Dieser Vorgang erzeugt steuerliche Belege und ein unveränderbares Archiv. Danach ist kein Entwurf-Editieren mehr möglich.", [
+        { text:"Abbrechen", style:"cancel", onPress: () => setBusy(false) },
+        { text:"Verbindlich ausstellen", style:"destructive", onPress: () => { void (async () => {
+          try {
+            const issued = await issueInvoiceOnServer(pk, doc.id);
+            setDoc((prev: any) => ({ ...prev, fiscalStatus:"AUSGESTELLT" }));
+            Alert.alert("Rechnung ausgestellt", issued.reconciliationRequired ? "Steuerlich ausgestellt. Buchhaltungsabgleich erforderlich." : "Der Server hat die steuerliche Ausstellung bestätigt.");
+          } catch (error: any) {
+            Alert.alert("Status prüfen", String(error?.message || "Ausstellung nicht bestätigt.").slice(0, 300) + "\nNicht erneut ausstellen, bevor der Serverstatus geprüft ist.");
+          } finally { setBusy(false); }
+        })(); } }
+      ]);
+    } catch (error: any) {
+      Alert.alert("Serverstatus nicht verfügbar", String(error?.message || error).slice(0, 300));
+      setBusy(false);
+    } finally { /* busy remains set until confirmation is cancelled or issue completes */ }
+  }
   async function openLinkedMengenPdf() {
     try {
       const uri = String(doc?.mengenPdfUri || "").trim();
@@ -1396,7 +1428,10 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         </View>
 
         <Text style={s.sourceText}>Status: Entwurf — Speichern oder PDF erstellen stellt keine Rechnung steuerlich aus. Die verbindliche Ausstellung mit XRechnung und revisionssicherer Ablage erfolgt ausschließlich nach Freigabe im Server-Workflow.</Text>
-        <Pressable style={s.btnSecondary} onPress={() => void syncFiscalDraft()} disabled={busy}>
+        <Pressable style={s.btnSecondary} onPress={() => void issueFiscalInvoice()} disabled={busy || String(doc.fiscalStatus || "ENTWURF") !== "ENTWURF"}>
+          <Text style={s.btnTxt}>Rechnung verbindlich ausstellen (Server)</Text>
+        </Pressable>
+        <Pressable style={s.btnSecondary} onPress={() => void syncFiscalDraft()} disabled={busy || String(doc.fiscalStatus || "") === "AUSGESTELLT"}>
           <Text style={s.btnTxt}>Entwurf am Server speichern</Text>
         </Pressable>
         <Pressable style={s.save} onPress={save} disabled={busy}>

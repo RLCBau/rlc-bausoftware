@@ -21,13 +21,37 @@ export async function saveInvoiceDraftOnServer(projectKey: string, draft: Record
   return result;
 }
 
-/** Explicit issue call only. A 202 means issued but accounting reconciliation is still required. */
+/** Read-only server state: a network failure after /issue must never trigger blind reissue. */
+export async function getInvoiceFiscalState(projectKey: string, invoiceId: string) {
+  const project = safeSegment(projectKey, "PROJECT");
+  const id = safeSegment(invoiceId, "INVOICE_ID");
+  const invoices = await request<Array<Record<string, any>>>(`/api/kalkulation/rechnung/${project}`);
+  if (!Array.isArray(invoices)) throw new Error("FISCAL_LIST_UNAVAILABLE");
+  const invoice = invoices.find(x => String(x?.id) === id);
+  if (!invoice) throw new Error("FISCAL_INVOICE_NOT_FOUND");
+  return invoice;
+}
+
+/** Explicit issue only. An ambiguous response must be verified by GET, never retried automatically. */
 export async function issueInvoiceOnServer(projectKey: string, invoiceId: string) {
   const project = safeSegment(projectKey, "PROJECT");
   const id = safeSegment(invoiceId, "INVOICE_ID");
-  const result = await request<{ok?:boolean;fiscalStatus?:string;error?:string;[k:string]:unknown}>(
-    `/api/kalkulation/rechnung/${project}/${id}/issue`, {method:"POST"}
-  );
-  if (result?.fiscalStatus !== "AUSGESTELLT") throw new Error("FISCAL_ISSUE_NOT_CONFIRMED");
-  return {issued:true, reconciliationRequired:result.error==="ACCOUNTING_RECONCILIATION_REQUIRED", result};
+  let result: {ok?:boolean;fiscalStatus?:string;invoice?:{fiscalStatus?:string};error?:string;[k:string]:unknown};
+  try {
+    result = await request(`/api/kalkulation/rechnung/${project}/${id}/issue`, {method:"POST"});
+  } catch (error) {
+    // The request may have reached WORM storage before the response was lost.
+    const checked = await getInvoiceFiscalState(projectKey, invoiceId).catch(() => null);
+    if (checked?.fiscalStatus === "AUSGESTELLT") {
+      return {issued:true, reconciliationRequired:true, result:checked, verifiedAfterError:true};
+    }
+    throw new Error("FISCAL_ISSUE_STATUS_UNCERTAIN_CHECK_SERVER");
+  }
+  if (result?.invoice?.fiscalStatus === "AUSGESTELLT" && result?.ok === true) {
+    return {issued:true, reconciliationRequired:false, result, verifiedAfterError:false};
+  }
+  if (result?.fiscalStatus === "AUSGESTELLT" && result?.error === "ACCOUNTING_RECONCILIATION_REQUIRED") {
+    return {issued:true, reconciliationRequired:true, result, verifiedAfterError:false};
+  }
+  throw new Error("FISCAL_ISSUE_NOT_CONFIRMED");
 }
