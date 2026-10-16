@@ -760,6 +760,9 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
   const rest = useMemo(() => Math.max(0, brutto - bezahlt), [brutto, bezahlt]);
   async function persistDoc(nextDoc?: any) {
     const base = nextDoc || doc;
+    if (["AUSGESTELLT", "KORRIGIERT", "STORNIERT"].includes(String(base?.fiscalStatus || "").toUpperCase())) {
+      throw new Error("FISCAL_DOCUMENT_IMMUTABLE");
+    }
     const normalizedRows = Array.isArray(base?.rows) && base.rows.length ? base.rows.map((r: any, i: number) => normalizeRow(r, i)) : [normalizeRow({}, 0)];
     const tempDoc = {
       ...base,
@@ -800,6 +803,8 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       netto: calcNetto,
       mwst: calcMwst,
       brutto: calcBrutto,
+      // Speichern erzeugt ausschließlich einen Entwurf; keine steuerliche Ausstellung.
+      fiscalStatus: "ENTWURF",
       abschlaege: Array.isArray(tempDoc.abschlaege) ? tempDoc.abschlaege.map((a: any, i: number) => normalizeAbschlag(a, i)) : [],
       rows: normalizedRows
     };
@@ -817,7 +822,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       title: normalized.rechnungNr || "Rechnung",
       doc: normalized,
       pdfUri: normalized.pdfUri || null,
-      status: "EINGEREICHT",
+      status: "DRAFT",
       sourceScreen: "RechnungEditor"
     });
     setDoc(normalized);
@@ -1373,6 +1378,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         </Pressable>
         </View>
 
+        <Text style={s.sourceText}>Status: Entwurf — Speichern oder PDF erstellen stellt keine Rechnung steuerlich aus. Die verbindliche Ausstellung mit XRechnung und revisionssicherer Ablage erfolgt ausschließlich nach Freigabe im Server-Workflow.</Text>
         <Pressable style={s.save} onPress={save} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? "Bitte warten..." : "Speichern"}</Text>
         </Pressable>
