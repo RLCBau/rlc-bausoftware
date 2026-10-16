@@ -106,15 +106,9 @@ export async function setToken(token: string) {
     return;
   }
 
-  let tokenStoredSecurely = false;
-  try {
-    await SecureStore.setItemAsync(TOKEN_KEY, t);
-    tokenStoredSecurely = true;
-    await AsyncStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // SecureStore non disponibile: fallback locale esplicito.
-    await AsyncStorage.setItem(TOKEN_KEY, t);
-  }
+  // Fail closed: i token di accesso non devono mai essere salvati in chiaro.
+  await SecureStore.setItemAsync(TOKEN_KEY, t);
+  await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
 
   // NUR_APP usa un token local:... per il proprio login, ma non deve
   // distruggere l'ultima sessione server valida necessaria al PDF Core.
@@ -123,14 +117,13 @@ export async function setToken(token: string) {
       await SecureStore.setItemAsync(SERVER_TOKEN_KEY, t);
       await AsyncStorage.removeItem(SERVER_TOKEN_KEY);
     } catch {
-      await AsyncStorage.setItem(SERVER_TOKEN_KEY, t);
+      // Non duplicare mai una credenziale server in AsyncStorage.
+      await AsyncStorage.removeItem(SERVER_TOKEN_KEY).catch(() => {});
     }
   }
 
-  // Evita copie plaintext residue dopo una migrazione riuscita.
-  if (tokenStoredSecurely) {
-    await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
-  }
+  // Ripulisci eventuali credenziali legacy dopo il salvataggio sicuro.
+  await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
 }
 
 export async function getToken(): Promise<string> {
@@ -141,8 +134,15 @@ export async function getToken(): Promise<string> {
     // ignore
   }
 
-  const a = normalizeToken(await AsyncStorage.getItem(TOKEN_KEY));
-  return a;
+  const legacy = normalizeToken(await AsyncStorage.getItem(TOKEN_KEY));
+  if (!legacy) return "";
+  try {
+    await SecureStore.setItemAsync(TOKEN_KEY, legacy);
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    return legacy;
+  } catch {
+    return ""; // credenziali legacy non utilizzabili senza archivio sicuro
+  }
 }
 
 export async function getTokenOrNull(): Promise<string | null> {
@@ -168,7 +168,13 @@ export async function getServerToken(): Promise<string> {
     const stored = normalizeToken(
       await AsyncStorage.getItem(SERVER_TOKEN_KEY)
     );
-    if (stored && !stored.startsWith("local:")) return stored;
+    if (stored && !stored.startsWith("local:")) {
+      try {
+        await SecureStore.setItemAsync(SERVER_TOKEN_KEY, stored);
+        await AsyncStorage.removeItem(SERVER_TOKEN_KEY);
+        return stored;
+      } catch { return ""; }
+    }
   } catch {
     // fallback sotto
   }
