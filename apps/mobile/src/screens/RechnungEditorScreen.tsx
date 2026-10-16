@@ -11,6 +11,11 @@ import { api } from "../lib/api";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
 import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
 import { parseRlcKiSmartDoc } from "../lib/rlcKiSmartParser";
+
+const devLog = (...args: any[]) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console["log"](...args);
+};
+
 type Props = NativeStackScreenProps<RootStackParamList, "RechnungEditor">;
 const KEY = "rlc_rechnung_list:";
 const OFFER_KEY = "rlc_angebot_list:";
@@ -391,7 +396,7 @@ export default function RechnungEditorScreen({
       setAngebotList(normalized);
       return normalized;
     } catch (e) {
-      console.log("loadAngebote server fallback -> local", e);
+      devLog("loadAngebote server fallback -> local", e);
       const raw = await AsyncStorage.getItem(OFFER_KEY + projectCode);
       const list = raw ? JSON.parse(raw) : [];
       const normalized = Array.isArray(list) ? list : [];
@@ -415,7 +420,7 @@ export default function RechnungEditorScreen({
       setMengenList(normalized);
       return normalized;
     } catch (e) {
-      console.log("loadMengen server fallback -> local", e);
+      devLog("loadMengen server fallback -> local", e);
       const raw = await AsyncStorage.getItem(MENGEN_KEY + projectCode);
       const list = raw ? JSON.parse(raw) : [];
       const normalized = Array.isArray(list) ? list : [];
@@ -439,7 +444,7 @@ export default function RechnungEditorScreen({
       await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(normalized));
       return normalized;
     } catch (e) {
-      console.log("loadRechnungen server fallback -> local", e);
+      devLog("loadRechnungen server fallback -> local", e);
       const raw = await AsyncStorage.getItem(KEY + projectCode);
       const list = raw ? JSON.parse(raw) : [];
       return Array.isArray(list) ? list : [];
@@ -619,7 +624,7 @@ export default function RechnungEditorScreen({
         fromMengenId: mengenId || null
       }));
     } catch (e) {
-      console.log("LOAD RECHNUNG ERROR", e);
+      devLog("LOAD RECHNUNG ERROR", e);
       Alert.alert("Fehler", "Rechnung konnte nicht geladen werden.");
     } finally {
       setLoading(false);
@@ -646,7 +651,7 @@ export default function RechnungEditorScreen({
         abschlaege: Array.isArray(prev?.abschlaege) ? prev.abschlaege : []
       }));
     } catch (e) {
-      console.log("IMPORT ANGEBOT ERROR", e);
+      devLog("IMPORT ANGEBOT ERROR", e);
       Alert.alert("Fehler", "Angebot konnte nicht übernommen werden.");
     }
   }
@@ -679,7 +684,7 @@ export default function RechnungEditorScreen({
         projectCode: String(prev?.projectCode || projectCode || "")
       }));
     } catch (e) {
-      console.log("IMPORT MENGEN ERROR", e);
+      devLog("IMPORT MENGEN ERROR", e);
       Alert.alert("Fehler", "Mengenermittlung konnte nicht übernommen werden.");
     }
   }
@@ -824,7 +829,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       await persistDoc();
       navigation.goBack();
     } catch (e) {
-      console.log("SAVE RECHNUNG ERROR", e);
+      devLog("SAVE RECHNUNG ERROR", e);
       Alert.alert("Fehler", "Rechnung konnte nicht gespeichert werden.");
     } finally {
       setBusy(false);
@@ -845,7 +850,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         documentType: "MENGENERMITTLUNG"
       });
     } catch (e) {
-      console.log("SHARE LINKED MENGEN PDF ERROR", e);
+      devLog("SHARE LINKED MENGEN PDF ERROR", e);
       Alert.alert("Fehler", "Mengenermittlung-PDF konnte nicht geteilt werden.");
     }
   }
@@ -914,7 +919,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         });
       }
     } catch (e) {
-      console.log("PDF RECHNUNG ERROR", e);
+      devLog("PDF RECHNUNG ERROR", e);
       Alert.alert("Fehler", "PDF konnte nicht erstellt werden.");
     } finally {
       setBusy(false);
@@ -981,7 +986,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         });
       }
     } catch (e) {
-      console.log("PDF SCHLUSSRECHNUNG ERROR", e);
+      devLog("PDF SCHLUSSRECHNUNG ERROR", e);
       Alert.alert("Fehler", "Schlussrechnung-PDF konnte nicht erstellt werden.");
     } finally {
       setBusy(false);
@@ -1094,7 +1099,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         });
       }
     } catch (e) {
-      console.log("PDF ABSCHLAG ERROR", e);
+      devLog("PDF ABSCHLAG ERROR", e);
       Alert.alert("Fehler", "Abschlag-PDF konnte nicht erstellt werden.");
     } finally {
       setBusy(false);
@@ -1141,7 +1146,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       setAbschlagNoteInput("");
       Alert.alert("Erfolg", "Abschlag wurde gespeichert. Jetzt kannst du das PDF erstellen.");
     } catch (e) {
-      console.log("ADD ABSCHLAG ERROR", e);
+      devLog("ADD ABSCHLAG ERROR", e);
       Alert.alert("Fehler", "Abschlag konnte nicht gespeichert werden.");
     }
   }
@@ -1165,7 +1170,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
           setDoc(nextDoc);
           await persistDoc(nextDoc);
         } catch (e) {
-          console.log("DELETE ABSCHLAG ERROR", e);
+          devLog("DELETE ABSCHLAG ERROR", e);
           Alert.alert("Fehler", "Abschlag konnte nicht gelöscht werden.");
         }
       }

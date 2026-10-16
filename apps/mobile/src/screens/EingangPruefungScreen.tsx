@@ -15,6 +15,7 @@ import { hydrateRowForPreview } from "../lib/hydratePreview";
 
 // API
 import { api } from "../lib/api";
+import { getServerToken } from "../lib/auth";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { buildBautagebuchPdf } from "../lib/exporters/bautagebuchPdfBuilder";
 
@@ -287,7 +288,7 @@ function splitEmails(v: any): string[] {
  * Server request helper (token + JSON)
  * ========================= */
 async function serverRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getServerToken();
   const headers: Record<string, string> = {
     ...(init.headers as any)
   };
@@ -338,7 +339,7 @@ async function downloadToCacheIfNeeded(uriRaw: string, nameHint?: string): Promi
   const isHttp = /^https?:\/\//i.test(uri);
   const isRel = uri.startsWith("/");
   if (!isHttp && !isRel) return uri;
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getServerToken();
   const base = await getApiBase();
   const url = isHttp ? uri : `${base}${uri}`;
   const cacheDir = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ""}rlc_inbox_cache/`;

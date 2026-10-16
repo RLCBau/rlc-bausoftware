@@ -162,6 +162,9 @@ export default function StartScreen({
           </View>
         </View>
 
+        <Pressable onPress={() => navigation.navigate("Rechtliches")} style={s.legalLink}>
+          <Text style={s.legalText}>Datenschutz · Impressum · Rechtliches</Text>
+        </Pressable>
         <Text style={s.footer}>© 2026 RLC Bausoftware</Text>
       </View>
     </SafeAreaView>;
@@ -413,8 +416,20 @@ const s = createRlcStyles("StartScreen", {
     lineHeight: 17,
     fontWeight: "400"
   },
-  footer: {
+  legalLink: {
     marginTop: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 34
+  },
+  legalText: {
+    color: COLORS.accentDark,
+    fontWeight: "600",
+    fontSize: 12,
+    textDecorationLine: "underline"
+  },
+  footer: {
+    marginTop: 4,
     textAlign: "center",
     color: COLORS.sub,
     fontWeight: "600",

@@ -12,6 +12,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { api, looksLikeProjectCode } from "../lib/api";
+import { getServerToken } from "../lib/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { exportRegiePdfToProject, emailPdf } from "../lib/exporters/projectExport";
 import { hydrateRowForPreview } from "../lib/hydratePreview";
@@ -409,7 +410,7 @@ function normalizeKiResult(raw: any) {
   };
 }
 async function serverReadRegieInbox(projectFsKey: string, docId: string) {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getServerToken();
   let base = "";
   try {
     base = String((api as any)?.getApiUrl ? await (api as any).getApiUrl() : (api as any)?.apiUrl || "").replace(/\/$/, "");
@@ -570,7 +571,7 @@ export default function RegieScreen({
   }, []);
   const readAuthToken = useCallback(async () => {
     try {
-      const t = String((await AsyncStorage.getItem("auth_token")) || "").trim();
+      const t = String((await getServerToken()) || "").trim();
       setAuthToken(t);
     } catch {
       setAuthToken("");

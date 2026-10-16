@@ -422,6 +422,16 @@ export default function ArbeitszeitenScreen({ route }: Props) {
           </View>
 
           <View style={s.card}>
+            <Text style={s.sectionTitle}>Datenschutz bei GPS-Zeitbuchungen</Text>
+            <Text style={s.meta}>
+              Bei Arbeitsbeginn, Pause/Fortsetzung und Arbeitsende wird nach Ihrer Aktion die aktuelle
+              GPS-Position zusammen mit Zeitpunkt und Genauigkeit gespeichert. Es findet keine
+              Hintergrundortung statt. Die betriebliche Rechtsgrundlage und ggf. Mitbestimmung legt
+              Ihr Arbeitgeber fest.
+            </Text>
+          </View>
+
+          <View style={s.card}>
             <Text style={s.sectionTitle}>Zeitstatus</Text>
             <View style={s.statusRow}>
               <View>

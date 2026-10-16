@@ -81,6 +81,7 @@ import CompanyImportScreen from "./src/screens/CompanyImportScreen";
 /* ================= SUPPORT ================= */
 
 import SupportChatScreen from "./src/screens/SupportChatScreen";
+import RechtlichesScreen from "./src/screens/RechtlichesScreen";
 
 /* ================= API ================= */
 
@@ -369,6 +370,9 @@ export default function App() {
         {/* SUPPORT */}
         <Stack.Screen name="SupportChat" component={SupportChatWithKi} options={{
         title: "Support"
+      }} />
+        <Stack.Screen name="Rechtliches" component={RechtlichesScreen} options={{
+        title: "Rechtliches & Datenschutz"
       }} />
 
         {/* PDF */}

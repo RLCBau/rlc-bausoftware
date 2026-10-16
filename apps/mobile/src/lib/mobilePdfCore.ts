@@ -2,6 +2,13 @@ import * as FileSystem from "expo-file-system/legacy";
 import { getAuthMode, getServerToken } from "./auth";
 import { getApiUrl } from "./api";
 
+const devLog = (...args: any[]) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console["log"](...args);
+};
+const devWarn = (...args: any[]) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console["warn"](...args);
+};
+
 export type MobilePdfDocumentType =
   | "REGIE"
   | "LIEFERSCHEIN"
@@ -79,7 +86,7 @@ async function enrichLocalAssets(value: unknown): Promise<unknown> {
         };
       }
     } catch (error) {
-      console.warn("[PDF STRING ASSET BASE64]", localUri, error);
+      devWarn("[PDF STRING ASSET BASE64]", localUri, error);
     }
   }
 
@@ -133,7 +140,7 @@ async function enrichLocalAssets(value: unknown): Promise<unknown> {
           "Foto";
       }
     } catch (error) {
-      console.warn("[PDF ASSET BASE64]", localUri, error);
+      devWarn("[PDF ASSET BASE64]", localUri, error);
     }
   }
 
@@ -178,14 +185,14 @@ export async function renderMobilePdfViaServer(input: RenderInput): Promise<Rend
     );
   }
 
-  console.log("[PDF SERVER AUTH]", {
+  devLog("[PDF SERVER AUTH]", {
     mode,
     tokenLength: token.length,
     tokenType: token.split(".").length === 3 ? "JWT" : "UNKNOWN",
   });
 
   const apiUrl = String(await getApiUrl()).replace(/\/$/, "");
-  console.log("[PDF SERVER]", {
+  devLog("[PDF SERVER]", {
     apiUrl,
     tokenLength: token.length,
     tokenType: token.startsWith("local:") ? "LOCAL" : token.split(".").length === 3 ? "JWT" : "UNKNOWN",
@@ -193,7 +200,7 @@ export async function renderMobilePdfViaServer(input: RenderInput): Promise<Rend
   const target = await ensureOutputPath(input.projectFsKey, input.fileName);
   const preparedPayload = await enrichLocalAssets(input.payload);
 
-  console.log("[PDF ASSETS PREPARED]");
+  devLog("[PDF ASSETS PREPARED]");
 
   const response = await fetch(`${apiUrl}/api/pdf/mobile-render`, {
     method: "POST",
@@ -211,7 +218,7 @@ export async function renderMobilePdfViaServer(input: RenderInput): Promise<Rend
     }),
   });
 
-  console.log("[PDF SERVER RESPONSE]", response.status, response.url);
+  devLog("[PDF SERVER RESPONSE]", response.status, response.url);
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
